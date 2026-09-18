@@ -129,11 +129,13 @@ separate: the writer must stay inside the finalize transaction while the drainer
 ### Transport results
 
 **A network fault must never silently degrade into a business refusal.** That invariant is what keeps
-a POS terminal honest when the backend is unreachable, and every outbound path encodes it as a typed
-union rather than an exception — none of these clients reject, and none surface a raw response body
-(P7).
+a POS terminal honest when the backend is unreachable. It holds across POS, but it is **not**
+implemented by one shared mechanism — so read the table below as describing these three clients, not
+as a rule about every outbound path.
 
-There is **no single shared union**; each path models the outcomes it actually has:
+For the three clients listed here the invariant is encoded as a **typed result union**: they never
+reject, and they never surface a raw response body (P7). There is no single shared union; each models
+the outcomes it actually has:
 
 | Path | Result type | Members |
 |:--|:--|:--|
@@ -154,6 +156,14 @@ manufactured locally from a connection failure. `refused` always carries a close
 For sale-sync specifically: `transient` and `no_connection` back off and retry, `permanent`
 dead-letters rather than spinning, and `duplicate` is treated as success (the backend already has
 the sale).
+
+**Pairing is outside this table and uses a different transport API.** `src/main/pairing/network.ts`
+throws a typed `TransportError` on a transport failure rather than returning a union member. It
+upholds the same invariant by a different route — a `TransportError` explicitly means *the request
+did not reach a usable response*, which the caller must not conflate with a backend failure envelope
+— and it is built so the message and its `toJSON()` can never carry the pairing code, a token, or an
+inner cause. So when adding an outbound client, check the API of the specific module you are calling;
+do not assume a result union.
 
 ---
 
