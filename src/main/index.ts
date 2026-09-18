@@ -84,6 +84,7 @@ import { dispatchFirstPrintOnFinalize } from './receipts/dispatch-first-print-on
 import { createDrawerKickDispatcher } from './drawer/drawer-kick.js';
 import { randomUUID } from 'node:crypto';
 import { createWorkerRegistry } from './app/bootstrap-workers.js';
+import { createWindowFactory } from './app/bootstrap-window.js';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -200,67 +201,23 @@ function resolveRendererOrigin(): string {
     : pathToFileURL(path.join(__dirname, '../renderer/')).toString();
 }
 
-function createWindow(): void {
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-      preload: path.join(__dirname, '../preload/index.js'),
-    },
-  });
-
-  // Renderer origin allow-list (single source of truth — see resolveRendererOrigin).
-  const rendererOrigin = resolveRendererOrigin();
-
-  // Deny navigation to any URL outside the renderer origin (defense-in-depth against
-  // injected redirects, drag-drop URLs, file:// traversal).
-  win.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(rendererOrigin)) event.preventDefault();
-  });
-
-  // Deny all new-window requests. POS terminals have no pop-out windows.
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-
-  // Second CSP layer — Electron session headers (first layer is the HTML meta tag).
-  // Dev mode allows localhost:5173 so Vite assets and HMR socket are reachable.
-  const csp = isDev
-    ? [
-        "default-src 'self' http://localhost:5173;",
-        // 'unsafe-inline' required for @vitejs/plugin-react preamble injection
-        // (inline <script type="module"> in <head>) — dev only, never in prod.
-        "script-src 'self' 'unsafe-inline' http://localhost:5173;",
-        "style-src 'self' 'unsafe-inline' http://localhost:5173;",
-        "img-src 'self' data:;",
-        "connect-src 'self' ws://localhost:5173 http://localhost:5173;",
-      ].join(' ')
-    : [
-        "default-src 'self';",
-        "script-src 'self';",
-        "style-src 'self' 'unsafe-inline';",
-        "img-src 'self' data:;",
-        "connect-src 'self';",
-      ].join(' ');
-
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [csp],
-      },
-    });
-  });
-
-  if (isDev) {
-    void win.loadURL('http://localhost:5173');
-    win.webContents.openDevTools();
-  } else {
-    void win.loadFile(path.join(__dirname, '../renderer/index.html'));
-  }
-}
+/**
+ * Window construction and the renderer trust boundary now live in
+ * `app/bootstrap-window.ts` (021 S3). The security policy is unchanged — it
+ * moved verbatim — but it is now independently testable without launching a
+ * real BrowserWindow. `resolveRendererOrigin` is INJECTED rather than moved so
+ * it stays the single source of truth (#370) shared with the IPC sender guard
+ * wired in `whenReady`.
+ */
+const createWindow = createWindowFactory({
+  isDev,
+  BrowserWindow,
+  session,
+  resolveRendererOrigin,
+  preloadPath: path.join(__dirname, '../preload/index.js'),
+  rendererFilePath: path.join(__dirname, '../renderer/index.html'),
+  devServerUrl: 'http://localhost:5173',
+});
 
 /**
  * Enumerate the system printers via a live window's webContents
