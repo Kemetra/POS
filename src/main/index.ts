@@ -83,6 +83,7 @@ import { createPrintDispatcher } from './receipts/print-dispatcher.js';
 import { dispatchFirstPrintOnFinalize } from './receipts/dispatch-first-print-on-finalize.js';
 import { createDrawerKickDispatcher } from './drawer/drawer-kick.js';
 import { randomUUID } from 'node:crypto';
+import { createWorkerRegistry } from './app/bootstrap-workers.js';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -308,21 +309,19 @@ function resolveMigrationsDir(): string {
 let dbHandle: DatabaseHandle | null = null;
 
 /**
- * 008 (T094c) — process-lifetime AD-2 finalize worker. Started in
- * `app.whenReady()` behind the `sale_finalization` flag, stopped on quit so
- * the setInterval driver never outlives the process. `null` when the flag
- * is off or before bootstrap.
+ * 021 S1 — process-lifetime background-worker teardown.
+ *
+ * Owns the stop callbacks for the 008 finalize listener, the 010 read-down
+ * driver, and the 011 sale-sync interval: fixed stop ordering, failure
+ * isolation, and idempotency all live in `app/bootstrap-workers.ts`.
+ *
+ * Construction stays below, inside the branches that gate each worker (the
+ * `sale_finalization` flag; the paired-terminal branch), so a worker that is
+ * never started is never registered and `stopAll()` has nothing to stop for it.
+ * `closeDbHandle()` drains this registry BEFORE closing the DB handle, so a
+ * mid-flight background tick can never run against a closed handle.
  */
-let finalizeListenerStop: (() => void) | null = null;
-
-/**
- * 010 read-down driver (T039) + 011 sale-sync engine interval — process-lifetime
- * background workers started in `app.whenReady()` inside the paired branch, stopped
- * on quit so their setInterval drivers never outlive the process. `null` when
- * unpaired or before bootstrap.
- */
-let readDownDriverStop: (() => void) | null = null;
-let saleSyncIntervalStop: (() => void) | null = null;
+const workerRegistry = createWorkerRegistry({ logger: console });
 
 app
   .whenReady()
@@ -773,9 +772,9 @@ app
     if (readDownDriver !== undefined) {
       const driver = readDownDriver;
       driver.start();
-      readDownDriverStop = () => {
+      workerRegistry.register('read-down driver', () => {
         driver.stop();
-      };
+      });
       mainLogger.info(
         {
           tenant_id:
@@ -1257,9 +1256,9 @@ app
         // a prior crash), then install the steady-state tick driver.
         finalizeListener.runStartupRecovery();
         finalizeListener.start();
-        finalizeListenerStop = () => {
+        workerRegistry.register('finalize listener', () => {
           finalizeListener.stop();
-        };
+        });
         mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'finalize_listener:started');
 
         // 011 S5 (T061/T062, #349 cleared) — wire the live sale-sync engine. It
@@ -1325,9 +1324,9 @@ app
             });
           }
         }, SALE_SYNC_INTERVAL_MS);
-        saleSyncIntervalStop = () => {
+        workerRegistry.register('sale-sync interval', () => {
           clearInterval(saleSyncInterval);
-        };
+        });
         mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'sale_sync_engine:started');
       } else {
         mainLogger.info('finalize_listener:skipped_unpaired');
@@ -1350,25 +1349,13 @@ app
     app.exit(1);
   });
 
-/** Runs a stored stop callback (if set), logging failures rather than throwing. */
-function runStopper(stop: (() => void) | null, what: string): null {
-  if (stop !== null) {
-    try {
-      stop();
-    } catch (err) {
-      console.error(`[pos-pulse] failed to stop ${what}:`, err);
-    }
-  }
-  return null;
-}
-
 function closeDbHandle(): void {
-  // 008 (T094c) — stop the AD-2 finalize worker, 010 read-down driver, and
-  // 011 sale-sync interval BEFORE closing the DB so a mid-flight background
-  // tick cannot run against a closed handle.
-  finalizeListenerStop = runStopper(finalizeListenerStop, 'finalize listener');
-  readDownDriverStop = runStopper(readDownDriverStop, 'read-down driver');
-  saleSyncIntervalStop = runStopper(saleSyncIntervalStop, 'sale-sync interval');
+  // 008 (T094c) / 021 S1 — stop the AD-2 finalize worker, 010 read-down driver,
+  // and 011 sale-sync interval BEFORE closing the DB so a mid-flight background
+  // tick cannot run against a closed handle. Stop ordering, failure isolation,
+  // and idempotency are owned by the worker registry; this function preserves
+  // the sequencing (drain, then close).
+  workerRegistry.stopAll();
   if (dbHandle !== null) {
     try {
       dbHandle.close();
