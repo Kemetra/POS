@@ -85,7 +85,8 @@ import { createDrawerKickDispatcher } from './drawer/drawer-kick.js';
 import { randomUUID } from 'node:crypto';
 import { createWorkerRegistry } from './app/bootstrap-workers.js';
 import { createWindowFactory } from './app/bootstrap-window.js';
-import { openDatabase, type DatabaseHandle } from './db/client.js';
+import { createDatabaseHolder } from './app/bootstrap-db.js';
+import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
 import { createLogger } from './logging/logger.js';
@@ -259,11 +260,18 @@ function resolveMigrationsDir(): string {
 }
 
 /**
- * Process-lifetime DB handle. Opened once in `app.whenReady()`, used by
- * the migration runner and the SecretStore, closed on app quit (R9).
- * Accessed only from the main process — never exposed to the renderer.
+ * 021 S2 — process-lifetime DB handle OWNERSHIP.
+ *
+ * Opened once in `app.whenReady()`, used by the migration runner and the
+ * SecretStore, closed on app quit (R9). Accessed only from the main process —
+ * never exposed to the renderer.
+ *
+ * The handle lives in a holder rather than a module-scope `let` so the
+ * shutdown path (which runs outside `whenReady()`) can reach it while every
+ * in-`whenReady()` consumer uses a plain local `const db`. Close ordering,
+ * failure isolation, and idempotency are owned by the holder.
  */
-let dbHandle: DatabaseHandle | null = null;
+const dbHolder = createDatabaseHolder({ logger: console });
 
 /**
  * 021 S1 — process-lifetime background-worker teardown.
@@ -320,11 +328,12 @@ app
     // the handle alive for the SecretStore. Failure during migrations
     // rethrows into the .catch below, which calls app.exit(1).
     const dbPath = path.join(app.getPath('userData'), 'pos-pulse.db');
-    dbHandle = openDatabase(dbPath);
+    const db = openDatabase(dbPath);
+    dbHolder.set(db);
     mainLogger.info({ dbPath }, 'db:opened');
 
     const files = readMigrationsFromDisk(resolveMigrationsDir());
-    runMigrations({ db: bindMigrationsDb(dbHandle), files });
+    runMigrations({ db: bindMigrationsDb(db), files });
     mainLogger.info({ count: files.length }, 'db:migrations-applied');
 
     // 009 T049b — dev-only catalogue fixture seed. Fail-closed: no-op in any
@@ -335,7 +344,7 @@ app
     applyDevSeedCatalogueIfRequested({
       isPackaged: app.isPackaged,
       env: process.env,
-      db: dbHandle,
+      db: db,
       logger: mainLogger,
     });
 
@@ -344,7 +353,7 @@ app
     // into .catch below per R8). 002 US1 retains the reference because
     // the pairing store now consumes it.
     const secretStore = createSecretStore({
-      handle: dbHandle,
+      handle: db,
       safeStorage,
       isPackaged: app.isPackaged,
     });
@@ -357,7 +366,7 @@ app
     // that touches both halves of pairing state.
     const pairingStore = createPairingStore({
       secretStore,
-      db: bindPairingStoreDb(dbHandle),
+      db: bindPairingStoreDb(db),
       deviceTokenKey: DEVICE_TOKEN_KEY,
     });
 
@@ -508,7 +517,7 @@ app
       backend: operatorBackend,
     });
     const operatorCashierSignInHandler = new CashierSignInHandler({
-      db: dbHandle,
+      db: db,
       safeStorage,
       sessionManager: operatorSessionManager,
       checkActiveSession: checkActiveSessionHandler,
@@ -557,7 +566,7 @@ app
     // T048 — construct the audit-events outbox chain on the shared DB handle.
     // Lazy statement preparation in bindAuditEventsStoreDb ensures migration
     // T045 has already run before the first emit call.
-    const auditEventsStore = bindAuditEventsStoreDb(dbHandle);
+    const auditEventsStore = bindAuditEventsStoreDb(db);
     const auditEmitter = new AuditEmitter(auditEventsStore);
 
     const operatorTakeoverHandler = new TakeoverHandler({
@@ -575,7 +584,7 @@ app
     });
 
     const operatorPinManagementHandler = new PinManagementHandler({
-      db: dbHandle,
+      db: db,
       safeStorage,
       sessionManager: operatorSessionManager,
       pairingStore,
@@ -610,7 +619,7 @@ app
       takeoverHandler: operatorTakeoverHandler,
       pinManagementHandler: operatorPinManagementHandler,
       forcedCloseHandler: new ForcedCloseHandler({
-        db: dbHandle,
+        db: db,
         sessionManager: operatorSessionManager,
         pairingStore,
         auditEmitter,
@@ -630,7 +639,7 @@ app
     // The dev fixture still wins in an unpackaged build with the fixture flag
     // set (see wire-cart-handlers.ts precedence); this is the production path.
     const catalogueResolver = createCatalogueResolver({
-      repo: createProductRepo(dbHandle),
+      repo: createProductRepo(db),
       // `linesAdd` gates `no_session` before the resolver runs, so a null
       // session never reaches here; coalesce defensively so the closure's
       // `string` return is total and never throws.
@@ -639,7 +648,7 @@ app
 
     // 005-sales-cart S2 — register `cart:*` IPC with DB-backed CartStore.
     const cartBridgeHandlers = createCartBridgeHandlers({
-      dbHandle,
+      dbHandle: db,
       getCurrentSession: () => operatorSessionManager.getCurrent(),
       // #380 (F-007) — stamp cart rows with the real terminal_id, not branch_id.
       getTerminalId: () => pairingStore.getCurrentTerminalId(),
@@ -663,8 +672,8 @@ app
     // runs a background snapshot pull on an interval. When paired, `refresh` admits
     // a real tick; when unpaired, the driver is omitted and `refresh` still refuses
     // (never a fake "started"). The freshness reads below are independent of all this.
-    const catalogueRepo = createProductRepo(dbHandle);
-    const catalogueSyncStateRepo = createCatalogueSyncStateRepo(dbHandle);
+    const catalogueRepo = createProductRepo(db);
+    const catalogueSyncStateRepo = createCatalogueSyncStateRepo(db);
 
     const catalogueApiBaseUrl = resolveApiBaseUrl();
     const cataloguePairingStatus = await pairingStore.getStatus();
@@ -682,7 +691,7 @@ app
       });
       readDownDriver = createReadDownDriver({
         client: readDownClient,
-        writer: createReadDownWriter({ db: dbHandle, syncStateRepo: catalogueSyncStateRepo }),
+        writer: createReadDownWriter({ db: db, syncStateRepo: catalogueSyncStateRepo }),
         tenantId: cataloguePairingStatus.tenant_id,
         branchId: cataloguePairingStatus.branch_id,
         now: () => new Date().toISOString(),
@@ -749,18 +758,18 @@ app
     // helper + audit-emitter pair. payments.discardOnSessionEnd is
     // instantiated but NOT registered on ipcMain — it's an internal
     // handler called by the operator-session-end signal.
-    const paymentsAttemptsRepo = bindPaymentAttemptsRepository(dbHandle);
-    const paymentsLinesRepo = bindPaymentTenderLinesRepository(dbHandle);
-    const paymentsOutboxRepo = bindPaymentActionOutboxRepository(dbHandle);
+    const paymentsAttemptsRepo = bindPaymentAttemptsRepository(db);
+    const paymentsLinesRepo = bindPaymentTenderLinesRepository(db);
+    const paymentsOutboxRepo = bindPaymentActionOutboxRepository(db);
 
     const paymentAttemptFsm = createPaymentAttemptFsm({
-      db: dbHandle,
+      db: db,
       attempts: paymentsAttemptsRepo,
       lines: paymentsLinesRepo,
       outbox: paymentsOutboxRepo,
     });
     const tenderLineFsm = createTenderLineFsm({
-      db: dbHandle,
+      db: db,
       attempts: paymentsAttemptsRepo,
       lines: paymentsLinesRepo,
       outbox: paymentsOutboxRepo,
@@ -972,9 +981,9 @@ app
     // reach a POS surface at all (the renderer is walled at /pairing), so a
     // non-paired status here means "nothing to finalize" and we skip start.
     if (getAppConfig().features?.saleFinalization === true) {
-      const salesRepo = bindSalesRepository(dbHandle);
-      const printEventsRepo = bindPrintEventsRepository(dbHandle);
-      const drawerEventsRepo = bindDrawerEventsRepository(dbHandle);
+      const salesRepo = bindSalesRepository(db);
+      const printEventsRepo = bindPrintEventsRepository(db);
+      const drawerEventsRepo = bindDrawerEventsRepository(db);
 
       // Read-only `sales.*` + `receipts.preview` bridges for the renderer.
       // Registered UNCONDITIONALLY whenever the flag is on — NOT gated on
@@ -1000,7 +1009,7 @@ app
         drawerEventsRepo,
         // Snapshot-subscribe projector (008 follow-up): sales.subscribe returns
         // the current banner_state / recent projection; the renderer polls it.
-        bannerStateProjector: bindBannerStateProjector(dbHandle),
+        bannerStateProjector: bindBannerStateProjector(db),
         newSubscriptionToken: () => randomUUID(),
       });
       registerSalesHandlers(guardedIpcMain, { salesBridge });
@@ -1115,13 +1124,13 @@ app
       // settled-but-unfinalized rows then, so nothing is lost.
       const pairingStatus = await pairingStore.getStatus();
       if (pairingStatus.kind === 'paired') {
-        const outboxRepo = bindSaleSyncOutboxRepository(dbHandle);
-        const allocator = bindSaleNumberAllocator(dbHandle);
+        const outboxRepo = bindSaleSyncOutboxRepository(db);
+        const allocator = bindSaleNumberAllocator(db);
         // saleAuditEmitter + printPipeline + printDispatcher are hoisted above
         // the receipts-bridge registration (T094c — unconditional handlers);
         // the paired branch reuses them for the finalize-listener wiring.
         const finalizeTransaction = bindFinalizeTransaction({
-          db: dbHandle,
+          db: db,
           salesRepo,
           outboxRepo,
           allocator,
@@ -1139,7 +1148,7 @@ app
         // (T273) — NOT part of the atomic transaction; the Sale is already
         // durable. Idempotent replays do NOT re-print (extracted + unit-tested
         // in dispatch-first-print-on-finalize.ts).
-        const finalizeDb = dbHandle;
+        const finalizeDb = db;
         const dispatch = (handoff_action_id: string): void => {
           const projected = buildFinalizeInput({ db: finalizeDb, handoff_action_id });
           if (projected.kind === 'refused') {
@@ -1173,7 +1182,7 @@ app
         // the adapter flip — pinned by finalize-listener.f007-scope.test.ts.
         const payments006TerminalId = pairingStatus.terminal_id;
         const finalizeListener = createFinalizeListener({
-          db: dbHandle,
+          db: db,
           tenant_id: pairingStatus.tenant_id,
           branch_id: pairingStatus.branch_id,
           terminal_id: payments006TerminalId,
@@ -1225,7 +1234,7 @@ app
         // resumes on the next tick once a session returns. Idempotency, retry/
         // backoff, and dead-letter are owned by the engine + state repo (unchanged);
         // the live client only transforms the payload + maps HTTP outcomes.
-        const saleSyncStateRepo = createSaleSyncStateRepo(dbHandle);
+        const saleSyncStateRepo = createSaleSyncStateRepo(db);
         // 016 (D5/D7 + review HIGH): the sale-sync POST authenticates with the
         // opaque pos_operator ENVELOPE only (`operatorAuthorization` scheme) — read
         // in-process per POST through the SEPARATE envelope holder. This is the only
@@ -1313,14 +1322,7 @@ function closeDbHandle(): void {
   // and idempotency are owned by the worker registry; this function preserves
   // the sequencing (drain, then close).
   workerRegistry.stopAll();
-  if (dbHandle !== null) {
-    try {
-      dbHandle.close();
-    } catch (err) {
-      console.error('[pos-pulse] failed to close DB handle:', err);
-    }
-    dbHandle = null;
-  }
+  dbHolder.close();
 }
 
 app.on('window-all-closed', () => {
