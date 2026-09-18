@@ -40,5 +40,9 @@ flowchart LR
 The cross-repo control plane and full program view live in the
 [Retail-Tower-Orchestrator](https://github.com/ahmed-shaaban-94/Retail-Tower-Orchestrator).
 
-> Architecture is stable; this document does not assert feature/merge status. See the repo's
-> `specs/**` and `CLAUDE.md` for the authoritative implementation state.
+> Architecture is stable; this document does not assert feature/merge status.
+>
+> This file owns the **cross-repo synchronization boundary** only. For POS-Pulse's current internal
+> architecture, see [`current.md`](./current.md) — the canonical reference. For whether a given spec
+> still describes current behaviour, see [`../../specs/README.md`](../../specs/README.md).
+> `specs/**` are historical design records, not the authority for current implementation state.
