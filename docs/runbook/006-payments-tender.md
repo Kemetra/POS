@@ -109,7 +109,7 @@ If V-A is unreachable (network/transport failure) during:
 ### Implementation references
 
 - Renderer: [`src/renderer/ui/payments/VoucherEntry.tsx`](../../src/renderer/ui/payments/VoucherEntry.tsx)
-- V-A client: [`src/main/payments/voucher-authority/`](../../src/main/payments/voucher-authority/) (`validate.ts`, `redeem.ts`, `reverse.ts`, `refusal-mapping.ts`, `error-body.ts`)
+- V-A client: [`src/main/payments/voucher-authority-client/`](../../src/main/payments/voucher-authority-client/) (`validate.ts`, `redeem.ts`, `reverse.ts`, `refusal-mapping.ts`, `error-body.ts`)
 - Handler chain: [`tender-apply.ts`](../../src/main/payments/handlers/tender-apply.ts) → [`apply-voucher-line.ts`](../../src/main/payments/handlers/apply-voucher-line.ts) → V-A
 - Generic refusal copy enforcement: [`tests/unit/renderer/payments/VoucherEntry.refusal-copy.test.tsx`](../../tests/unit/renderer/payments/VoucherEntry.refusal-copy.test.tsx)
 

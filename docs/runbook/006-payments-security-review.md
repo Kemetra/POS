@@ -47,7 +47,7 @@ The renderer reaches the main process EXCLUSIVELY through the typed preload brid
 
 ### Refusal envelope (closed-set)
 
-Every bridge method's response carries `{ kind: 'ok', ... } | { kind: 'refused', reason: RefusalReason }`. `RefusalReason` is a closed string union defined in `src/shared/payments/types.ts`. The renderer can therefore exhaustively switch on the reason; no free-text refusal strings cross the bridge. §A4-B finding **F-A4B-001** pinned this via `mapRefusalCode` in `src/main/payments/voucher-authority/refusal-mapping.ts`.
+Every bridge method's response carries `{ kind: 'ok', ... } | { kind: 'refused', reason: RefusalReason }`. `RefusalReason` is a closed string union defined in `src/shared/payments/types.ts`. The renderer can therefore exhaustively switch on the reason; no free-text refusal strings cross the bridge. §A4-B finding **F-A4B-001** pinned this via `mapRefusalCode` in `src/main/payments/voucher-authority-client/refusal-mapping.ts`.
 
 ---
 
@@ -126,12 +126,12 @@ The voucher intent token (`voucher_redemption_intent_token`) is the most sensiti
 | Stage | Token state | Source location |
 |:--|:--|:--|
 | 1. Renderer enters voucher code | No token yet — only the cashier-visible code string | `src/renderer/ui/payments/VoucherEntry.tsx` |
-| 2. `tender.apply` → `vouchers.validate` (V-A) | V-A returns `{ kind: 'validated', redemption_intent_token: '...' }` | `src/main/payments/voucher-authority/validate.ts` |
+| 2. `tender.apply` → `vouchers.validate` (V-A) | V-A returns `{ kind: 'validated', redemption_intent_token: '...' }` | `src/main/payments/voucher-authority-client/validate.ts` |
 | 3. FSM `apply(voucher_outcome)` | Token persisted in `payment_tender_lines.voucher_redemption_intent_token` (main-side database column only) | `src/main/payments/fsm/tender-line-fsm.ts` apply branch |
 | 4. `tender.apply` response | Response shape: `{ kind: 'ok', tender_line_id: string, applied_at: string }` — **no token field** | `src/shared/bridge-api.ts` `TenderApplyResponse` |
 | 5. `payments.confirm` → `vouchers.redeem` (V-A) | Handler reads token from lines repo, passes to `redeemVoucher`, V-A returns `redemption_id` | `src/main/payments/handlers/payments-confirm.ts` voucher branch |
 | 6. Settled | `voucher_authority_redemption_id` (opaque) MAY appear in audit payload + repo. Token NEVER returned in `payments.confirm` response or `payment.settled` audit. | `src/main/payments/audit-emitter.ts` `emitPaymentSettled` |
-| 7. Compensating reverse (CR-3) | `redemption_id` (opaque) is passed to `reverseVoucher`. Token is never re-used. | `src/main/payments/voucher-authority/reverse.ts` |
+| 7. Compensating reverse (CR-3) | `redemption_id` (opaque) is passed to `reverseVoucher`. Token is never re-used. | `src/main/payments/voucher-authority-client/reverse.ts` |
 
 ### §A4-B reviewer decisions (closed)
 

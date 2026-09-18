@@ -15,7 +15,7 @@ This audit covers every observable sink reachable by Slice 3 + Slice 4 payment f
 | `payment_action_outbox.action_payload_hash` (SHA-256 only; plaintext never stored) | `src/main/payments/repositories/payment-action-outbox.repository.ts` |
 | `payment_action_outbox.acting_operator_id` (operator id only) | same |
 | `console.log` / `console.warn` / `console.error` ad-hoc logging | (none — see baseline finding) |
-| Structured logger calls (`logger.warn`, `logger.info`, `logger.error`) | `src/main/payments/deferred-reversal-resolver.ts`, `src/main/payments/voucher-authority/*.ts`, `src/main/payments/handlers/apply-voucher-line.ts` |
+| Structured logger calls (`logger.warn`, `logger.info`, `logger.error`) | `src/main/payments/deferred-reversal-resolver.ts`, `src/main/payments/voucher-authority-client/*.ts`, `src/main/payments/handlers/apply-voucher-line.ts` |
 | Sentry main-process breadcrumbs | `src/main/observability/sentry-main.ts` |
 | Sentry renderer breadcrumbs | `src/renderer/observability/sentry-renderer.ts` |
 

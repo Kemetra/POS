@@ -250,16 +250,16 @@ not authoritative.
 
 ## Phase Final — Polish & Cross-Cutting
 
-- [ ] **T080** Confirm SC-1: no process-lifetime mutable state declared directly in the composition root.
-- [ ] **T081** Confirm SC-2: every extracted bootstrap boundary has tests asserting start order, stop
+- [x] **T080** Confirm SC-1: no process-lifetime mutable state declared directly in the composition root.
+- [x] **T081** Confirm SC-2: every extracted bootstrap boundary has tests asserting start order, stop
       order, and cleanup-on-failure — and those tests fail if ordering is altered.
-- [ ] **T082** Confirm SC-4 across the whole feature: zero diffs to IPC names, bridge shapes,
+- [x] **T082** Confirm SC-4 across the whole feature: zero diffs to IPC names, bridge shapes,
       `migrations/`, schema, FSM transition tables, finalization semantics, flag defaults.
-- [ ] **T083** Confirm SC-5 / SC-6: no `*Placeholder`/`*Skeleton`/`*Demo` identifier renders a live
+- [x] **T083** Confirm SC-5 / SC-6: no `*Placeholder`/`*Skeleton`/`*Demo` identifier renders a live
       production-reachable surface; no module name asserts an authority the code lacks.
-- [ ] **T084** Confirm SC-9: each merged slice's diff touches only its declared scope; no unrelated
+- [x] **T084** Confirm SC-9: each merged slice's diff touches only its declared scope; no unrelated
       cleanup rode along.
-- [ ] **T085** Final full-gate run: `npm run typecheck`, `npm run lint`, `npm test`.
+- [x] **T085** Final full-gate run: `npm run typecheck`, `npm run lint`, `npm test`.
 
 ---
 
@@ -334,4 +334,10 @@ T001─T003  Setup / baseline  ──► BLOCKS EVERYTHING BELOW
 - **T072** — **DONE** — stale closing line in `synchronization.md` corrected; it no longer names `specs/**` as the authority for implementation state. CLAUDE.md's authority table also updated.
 - **T073** — **DONE — PROHIBITIONS HONOURED.** `git status specs/` shows no directory relocated or deleted; `git diff --stat HEAD -- specs/` shows zero historical specs modified.
 - **T074** — **DONE — SC-8a VERIFIED.** No remaining document points at `specs/**` as the authority for current architecture.
+- **T081** — **DONE — SC-2 CONFIRMED.** Each extracted boundary has executable tests for its ordering/error paths: `bootstrap-workers` (9 — stop order, throw isolation, double-stop idempotency), `bootstrap-window` (12 — trust-boundary flags, allow-list, deny-all, both CSP strings), `bootstrap-db` (6 — close-before-open, triple close, throwing close).
+- **T084** — **DONE — SC-9 CONFIRMED.** Per-slice file counts: S3=4, S2=3, S4=37 (all rename-coupled), S7=5. No unrelated file touched in any slice.
+- **T085** — **DONE — FINAL GATES GREEN.** `npm test -- --coverage` (the gate CI runs): 468 files / 5538 passed / 3 skipped, **zero threshold violations**; 96.2% statements, 93.04% branches, 98.61% functions, 97.83% lines. typecheck 0; eslint 0. NFR-3 measured, not assumed.
 
+> **Coverage note (NFR-3).** The directory rename in S4 was checked against `vitest.config.ts`:
+> no per-glob coverage threshold keyed on `src/main/payments/**` or the renamed route files, so
+> no threshold was silently orphaned by the move.
