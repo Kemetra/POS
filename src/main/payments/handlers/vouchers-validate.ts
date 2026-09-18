@@ -36,7 +36,7 @@ import type {
 import type {
   ValidateVoucherInput,
   ValidateVoucherOutcome,
-} from '../voucher-authority/validate.js';
+} from '../voucher-authority-client/validate.js';
 
 import { applyVoucherLine } from './apply-voucher-line.js';
 

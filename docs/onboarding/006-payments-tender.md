@@ -109,7 +109,7 @@ The 006 test surface is large. Where to look first by need:
 | Concurrent start race | [`tests/integration/payments/concurrent-start-race.test.ts`](../../tests/integration/payments/concurrent-start-race.test.ts) | Wave 6b T306 — partial unique index `payment_attempts_one_started_per_terminal` |
 | Restart survival | [`tests/integration/payments/restart-survival.test.ts`](../../tests/integration/payments/restart-survival.test.ts) | The smoke-test reference; section 3 above describes how to reproduce live |
 | Migration runner opt-out behaviour | [`src/main/db/__tests__/migrate.test.ts`](../../src/main/db/__tests__/migrate.test.ts) | Wave 5e tests for `-- @no-wrap-transaction` marker |
-| V-A client unit tests | `tests/unit/main/payments/voucher-authority/` | Per-endpoint tests; reference for what each V-A response shape should look like |
+| V-A client unit tests | `tests/unit/main/payments/voucher-authority-client/` | Per-endpoint tests; reference for what each V-A response shape should look like |
 | Renderer payment-surface tests | `tests/unit/renderer/payments/` | Cash entry, external card entry, voucher entry, force-fail surface |
 
 ---
@@ -121,7 +121,7 @@ The 006 test surface is large. Where to look first by need:
 | How does payment-attempt state work? | [`src/main/payments/fsm/payment-attempt-fsm.ts`](../../src/main/payments/fsm/payment-attempt-fsm.ts) — state machine and transitions documented at top of file |
 | How does tender-line state work (including voucher reversal pending)? | [`src/main/payments/fsm/tender-line-fsm.ts`](../../src/main/payments/fsm/tender-line-fsm.ts) |
 | What's the bridge surface? | [`src/shared/bridge-api.ts`](../../src/shared/bridge-api.ts) lines 740-779 — `PaymentsBridgeAPI`, `TenderBridgeAPI`, `VouchersBridgeAPI` |
-| How do refusal reasons work? | [`src/main/payments/voucher-authority/refusal-mapping.ts`](../../src/main/payments/voucher-authority/refusal-mapping.ts) — closed-set mapping (§A4-B F-A4B-001) |
+| How do refusal reasons work? | [`src/main/payments/voucher-authority-client/refusal-mapping.ts`](../../src/main/payments/voucher-authority-client/refusal-mapping.ts) — closed-set mapping (§A4-B F-A4B-001) |
 | How are audit events shaped? | [`src/main/payments/audit-emitter.ts`](../../src/main/payments/audit-emitter.ts) — every payment + tender audit emit lives here |
 | What gets redacted in audit/log/breadcrumb sinks? | [`docs/runbook/006-payments-redaction-audit.md`](../runbook/006-payments-redaction-audit.md) — T301 evidence-based audit |
 | How does the security model work? | [`docs/runbook/006-payments-security-review.md`](../runbook/006-payments-security-review.md) — T302 trust-boundary + FSM + idempotency + voucher + force-fail review packet |

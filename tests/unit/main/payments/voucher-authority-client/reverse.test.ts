@@ -23,7 +23,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { reverseVoucher } from '../../../../../src/main/payments/voucher-authority/reverse.js';
+import { reverseVoucher } from '../../../../../src/main/payments/voucher-authority-client/reverse.js';
 
 import {
   BASE_URL,

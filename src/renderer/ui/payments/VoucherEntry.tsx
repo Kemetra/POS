@@ -13,7 +13,7 @@ import { parseCurrencyToMinor } from './parse-currency-to-minor.js';
  * voucher code + the cashier-supplied amount.
  *
  * The bridge handler (T263 — extended in Wave 4) routes the call to
- * the voucher-authority V-A client (T250 — Wave 3) which validates
+ * the voucher-authority-client V-A client (T250 — Wave 3) which validates
  * against Data-Pulse-2. On success the line is persisted with state
  * `applied` and the intent token stays main-side (FR-017).
  *

@@ -4,7 +4,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const mainSource = readFileSync(path.join(__dirname, '..', 'main', 'index.ts'), 'utf8');
+/**
+ * The BrowserWindow security flags moved from `main/index.ts` to
+ * `main/app/bootstrap-window.ts` in 021 S3 (composition-root extraction). The
+ * policy is unchanged — only its address is — so this guard follows it.
+ */
+const mainSource = readFileSync(
+  path.join(__dirname, '..', 'main', 'app', 'bootstrap-window.ts'),
+  'utf8',
+);
 
 /**
  * T028 — Constitution Principle III regression guard.

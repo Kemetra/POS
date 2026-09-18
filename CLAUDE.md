@@ -8,6 +8,9 @@ the POS surface of the platform, packaged as an Electron application targeting W
 | Document | Purpose |
 |:--|:--|
 | `.specify/memory/constitution.md` | Project constitution (v1.3.0). Highest-priority document; principles, hardware matrix, platform integration, governance. |
+| [`docs/architecture/current.md`](docs/architecture/current.md) | **Canonical current internal architecture.** How POS-Pulse works today. Read before changing main-process wiring. |
+| [`docs/architecture/synchronization.md`](docs/architecture/synchronization.md) | The cross-repo boundary: POS ↔ Data-Pulse-2 ↔ Connector ↔ ERPNext. |
+| [`specs/README.md`](specs/README.md) | Spec status index — which specs are Active / Implemented / Deferred / Superseded. `specs/**` are historical design records, **not** the authority for current behaviour. |
 | `_reference/Data-Pulse/` | Read-only legacy reference. Gitignored. **Never copy-paste from here** (Constitution Principle IX). |
 
 ## Active feature

@@ -4,7 +4,7 @@
  * Provides `captureFetch` (used in 004 backend-client tests) and a
  * `makeLogger` factory matching the pino-style `(fields, msg)` shape
  * used by `src/main/observability/sentry-main.ts`. Local to the
- * voucher-authority test directory; not exported beyond it.
+ * voucher-authority-client test directory; not exported beyond it.
  */
 import { vi } from 'vitest';
 

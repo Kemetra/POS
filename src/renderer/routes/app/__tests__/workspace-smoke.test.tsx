@@ -4,8 +4,8 @@ import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import { DashboardPlaceholder } from '../DashboardPlaceholder';
-import { SalesPlaceholder } from '../SalesPlaceholder';
-import { CartPlaceholder } from '../CartPlaceholder';
+import { SalesWorkspace } from '../SalesWorkspace';
+import { CartWorkspace } from '../CartWorkspace';
 import { InventoryPlaceholder } from '../InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 import { CheckoutPlaceholder } from '../checkout/CheckoutPlaceholder';
@@ -34,13 +34,13 @@ describe('Workspace smoke tests (T070a)', () => {
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
   });
 
-  it('SalesPlaceholder renders inside a Workspace', () => {
-    renderInRouter(SalesPlaceholder);
+  it('SalesWorkspace renders inside a Workspace', () => {
+    renderInRouter(SalesWorkspace);
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
   });
 
-  it('CartPlaceholder renders inside a Workspace', () => {
-    renderInRouter(CartPlaceholder);
+  it('CartWorkspace renders inside a Workspace', () => {
+    renderInRouter(CartWorkspace);
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
   });
 
@@ -62,8 +62,8 @@ describe('Workspace smoke tests (T070a)', () => {
   it('each placeholder contains exactly one Workspace', () => {
     const components = [
       DashboardPlaceholder,
-      SalesPlaceholder,
-      CartPlaceholder,
+      SalesWorkspace,
+      CartWorkspace,
       InventoryPlaceholder,
       SettingsHelpPlaceholder,
       CheckoutPlaceholder,

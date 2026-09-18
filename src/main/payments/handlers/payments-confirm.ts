@@ -48,8 +48,14 @@ import type {
   PaymentsConfirmRequest,
   PaymentsConfirmResponse,
 } from '../../../shared/bridge-api.js';
-import type { RedeemVoucherInput, RedeemVoucherOutcome } from '../voucher-authority/redeem.js';
-import type { ReverseVoucherInput, ReverseVoucherOutcome } from '../voucher-authority/reverse.js';
+import type {
+  RedeemVoucherInput,
+  RedeemVoucherOutcome,
+} from '../voucher-authority-client/redeem.js';
+import type {
+  ReverseVoucherInput,
+  ReverseVoucherOutcome,
+} from '../voucher-authority-client/reverse.js';
 
 export interface PaymentsConfirmHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;

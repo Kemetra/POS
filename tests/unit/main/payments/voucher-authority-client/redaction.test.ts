@@ -20,9 +20,9 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { redeemVoucher } from '../../../../../src/main/payments/voucher-authority/redeem.js';
-import { reverseVoucher } from '../../../../../src/main/payments/voucher-authority/reverse.js';
-import { validateVoucher } from '../../../../../src/main/payments/voucher-authority/validate.js';
+import { redeemVoucher } from '../../../../../src/main/payments/voucher-authority-client/redeem.js';
+import { reverseVoucher } from '../../../../../src/main/payments/voucher-authority-client/reverse.js';
+import { validateVoucher } from '../../../../../src/main/payments/voucher-authority-client/validate.js';
 
 import {
   BASE_URL,

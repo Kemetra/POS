@@ -6,7 +6,7 @@
  * V-A (Data-Pulse-2 voucher authority) is the only seam stubbed —
  * `validateVoucher` / `redeemVoucher` / `reverseVoucher` are
  * function-injection points that production wires to HTTP clients in
- * `src/main/payments/voucher-authority/*.ts`.
+ * `src/main/payments/voucher-authority-client/*.ts`.
  *
  * Three scenarios:
  *
@@ -56,7 +56,7 @@ import { createDeferredReversalResolver } from '../../../src/main/payments/defer
 import type {
   ReverseVoucherInput,
   ReverseVoucherOutcome,
-} from '../../../src/main/payments/voucher-authority/reverse.js';
+} from '../../../src/main/payments/voucher-authority-client/reverse.js';
 import type { PaymentTenderLineRow } from '../../../src/main/payments/repositories/payment-tender-lines.repository.js';
 
 const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));

@@ -3,8 +3,8 @@ import { render, screen, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
-import { SalesPlaceholder } from '../SalesPlaceholder';
-import { CartPlaceholder } from '../CartPlaceholder';
+import { SalesWorkspace } from '../SalesWorkspace';
+import { CartWorkspace } from '../CartWorkspace';
 import { InventoryPlaceholder } from '../InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 
@@ -14,11 +14,11 @@ afterEach(() => vi.unstubAllGlobals());
 /**
  * T037 — Placeholder pane tests: default state; no fetch/IPC/persistence.
  */
-describe('SalesPlaceholder (T037)', () => {
+describe('SalesWorkspace (T037)', () => {
   it('renders default state', () => {
     render(
       <MemoryRouter>
-        <SalesPlaceholder />
+        <SalesWorkspace />
       </MemoryRouter>,
     );
     expect(screen.getByRole('heading', { name: /sales/i })).toBeInTheDocument();
@@ -29,18 +29,18 @@ describe('SalesPlaceholder (T037)', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(
       <MemoryRouter>
-        <SalesPlaceholder />
+        <SalesWorkspace />
       </MemoryRouter>,
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
-describe('CartPlaceholder (T037)', () => {
+describe('CartWorkspace (T037)', () => {
   it('renders default state', () => {
     render(
       <MemoryRouter>
-        <CartPlaceholder />
+        <CartWorkspace />
       </MemoryRouter>,
     );
     expect(screen.getByRole('heading', { name: /cart/i })).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe('CartPlaceholder (T037)', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(
       <MemoryRouter>
-        <CartPlaceholder />
+        <CartWorkspace />
       </MemoryRouter>,
     );
     expect(fetchMock).not.toHaveBeenCalled();

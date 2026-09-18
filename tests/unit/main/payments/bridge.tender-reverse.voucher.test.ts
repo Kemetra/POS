@@ -45,7 +45,7 @@ import type { TenderReverseRequest } from '../../../../src/shared/bridge-api.js'
 import type {
   ReverseVoucherInput,
   ReverseVoucherOutcome,
-} from '../../../../src/main/payments/voucher-authority/reverse.js';
+} from '../../../../src/main/payments/voucher-authority-client/reverse.js';
 
 function validRequest(overrides: Partial<TenderReverseRequest> = {}): TenderReverseRequest {
   return {

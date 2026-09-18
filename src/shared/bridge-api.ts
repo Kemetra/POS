@@ -806,7 +806,7 @@ export type TenderReadResponse =
 
 // ── vouchers.validate (Slice 4 / Wave 4) ─────────────────────────────────────
 //
-// Bridge surface for the voucher-authority (V-A) `posValidateVoucher`
+// Bridge surface for the voucher-authority-client (V-A) `posValidateVoucher`
 // operation. The bridge persists a `payment_tender_lines` row with
 // `state='applied'` + `voucher_redemption_intent_token` on success
 // (data-model §"PaymentTenderLine" Invariant 4). On any V-A refusal the
