@@ -108,6 +108,17 @@
   reach a cashier session (dev bypass is hardcoded `role: 'manager'`) → **T0C2** routes cashier
   capture through the local-only cashier PIN path; quickstart warns a manager screenshot is not a
   substitute.
+- **Follow-up review fixes 2026-09-19** — 3 further findings, all verified against source, all fixed
+  (→ **84 tasks**): **(R4)** Arabic-first coverage stopped at the settled branch while the *working*
+  tender flow still had English-only strings (`PaymentSurface.tsx:396,437`;
+  `PaymentCartSummary.tsx:42,62`) → **T076–T079** require zero English-only operator strings across
+  the working flow, copy-only, with split tender and all payment behaviour preserved. **(R5)** the
+  token guard covered colour alone though FR-8/SC-1 name five value families → **T025** extended to
+  spacing/radius/type-size/elevation, with **T025a** recording a *closed* structural exception list
+  (hairlines, breakpoints, component geometry, the 44×44 floor). **(R6)** T002 demanded a
+  `catalogue.dev_seed.active` line that correctly never appears on an already-populated dev DB →
+  T002 now accepts the seed line **or** verified evidence of usable products, while keeping the
+  operator-bypass line mandatory.
 - **Plan phase 2026-09-18** — [`plan.md`](../plan.md), [`research.md`](../research.md),
   [`quickstart.md`](../quickstart.md) authored. No `data-model.md` (no persisted entity) and no
   `contracts/` (no IPC/bridge/backend change, P8) — matching 007, the closest UI-only precedent.

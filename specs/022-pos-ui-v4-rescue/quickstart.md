@@ -61,22 +61,40 @@ are never modified** — these are per-process env vars for a dev build only.
 
 ## 3. Verify the bypass actually engaged — do not skip
 
-Launching is not evidence the bypass worked. Confirm the warn lines in the main-process log
-**before** trusting what is on screen:
+Launching is not evidence the bypass worked. Two separate checks, with **different pass conditions**.
+
+### (a) Operator bypass — the log line is REQUIRED
 
 ```
 operator.dev_bypass.active     — "DEV BYPASS: auto-signing-in with fixture manager session…"
+```
+
+If this line is absent, the session is **not** the fixture operator and the surface on screen is not
+the one you think you reached. **STOP.**
+
+*Why this step exists:* during the 022 audit, Electron launched cleanly and stayed running, but this
+line never appeared — so no screenshot could be honestly attributed. That is the exact failure this
+check prevents.
+
+### (b) Catalogue — EITHER the log line OR verified data
+
+```
 catalogue.dev_seed.active      — "DEV SEED: inserting fixture catalogue rows…"
 ```
 
-If they are absent, the surface on screen is **not** the one you think you reached.
+**Do not treat the absence of this line as a failure.** `applyDevSeedCatalogueIfRequested` **no-ops
+and returns `false` when the catalogue is already populated** (`dev-seed-catalogue.ts` —
+`if (alreadyPopulated(deps.db)) return false`), so on any re-run against an existing dev DB it will
+legitimately never appear.
 
-*Why this step exists:* during the 022 audit, Electron launched cleanly and stayed running, but
-neither line ever appeared — so no screenshot could be honestly attributed to a surface. That is the
-exact failure this check prevents.
+Pass condition is **either**:
 
-Note: `applyDevSeedCatalogueIfRequested` also no-ops when the catalogue is **already populated**, so
-absence of the seed line is not automatically a failure — confirm which case applies.
+- the seed line appears (fixtures inserted this launch); **or**
+- you verify the catalogue **already holds usable products** — a barcode/SKU lookup or a search
+  returning results in the running app, or a direct row-count read of the dev DB.
+
+Record which check you used. What matters is that usable catalogue data is **present**, not that it
+was inserted on this particular launch. An **empty** catalogue with no seed line is a STOP.
 
 ---
 
