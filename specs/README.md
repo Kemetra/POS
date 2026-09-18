@@ -38,7 +38,7 @@ given spec still describes how POS-Pulse works**.
 | [008-sale-finalization-and-receipts](./008-sale-finalization-and-receipts/) | Implemented | ⚠️ §A5 covers an internal/dev MVP only — **VAT is deferred to 012**, so customer-facing fiscal use remains blocked |
 | [009-product-search-and-barcode-lookup](./009-product-search-and-barcode-lookup/) | Implemented | Ships the empty read model 010 fills |
 | [010-pos-catalog-read-down-consumption](./010-pos-catalog-read-down-consumption/) | Implemented | Functionally complete + perf-cleared; only rollout-time §A5 remains |
-| [011-sale-sync-capture-up](./011-sale-sync-capture-up/) | Active | Capture-up path is wired end-to-end in source: `createSaleSyncClient` + engine + drain interval are live in the composition root. Remaining: §A5 production readiness (no readiness artifact authored yet) |
+| [011-sale-sync-capture-up](./011-sale-sync-capture-up/) | Active | Capture-up path is wired end-to-end in source: `createSaleSyncClient` + engine + drain interval are live in the composition root. Remaining: **§A4/T063** live-wiring security re-check (verify the operator token never crosses the bridge in the wired path; refresh `security-review/s4-review.md`), then **§A5** production readiness |
 | [012-vat-fiscal-receipt](./012-vat-fiscal-receipt/) | Deferred | Blocks customer-facing fiscal use of 008 |
 | [013-inventory-awareness](./013-inventory-awareness/) | Deferred | |
 | [014-returns-refunds-voids](./014-returns-refunds-voids/) | Deferred | |
