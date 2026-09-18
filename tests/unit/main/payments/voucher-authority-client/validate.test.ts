@@ -18,11 +18,11 @@
  *      and emit a `logger.warn` for observability (defence-in-depth so
  *      a brand-new server-side code never silently slips past).
  *
- * Wave 3 RED. Forward-references `src/main/payments/voucher-authority/validate.ts`.
+ * Wave 3 RED. Forward-references `src/main/payments/voucher-authority-client/validate.ts`.
  */
 import { describe, expect, it } from 'vitest';
 
-import { validateVoucher } from '../../../../../src/main/payments/voucher-authority/validate.js';
+import { validateVoucher } from '../../../../../src/main/payments/voucher-authority-client/validate.js';
 
 import {
   BASE_URL,

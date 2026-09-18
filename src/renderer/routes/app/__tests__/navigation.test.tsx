@@ -6,8 +6,8 @@ import { MemoryRouter, Route, Routes, Navigate } from 'react-router-dom';
 
 import { AppShell } from '../../../shell/AppShell';
 import { DashboardPlaceholder } from '../DashboardPlaceholder';
-import { SalesPlaceholder } from '../SalesPlaceholder';
-import { CartPlaceholder } from '../CartPlaceholder';
+import { SalesWorkspace } from '../SalesWorkspace';
+import { CartWorkspace } from '../CartWorkspace';
 import { InventoryPlaceholder } from '../InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 
@@ -44,8 +44,8 @@ function renderApp(initialPath = '/app/dashboard') {
         <Route path="/app" element={<AppShell />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPlaceholder />} />
-          <Route path="sales" element={<SalesPlaceholder />} />
-          <Route path="cart" element={<CartPlaceholder />} />
+          <Route path="sales" element={<SalesWorkspace />} />
+          <Route path="cart" element={<CartWorkspace />} />
           <Route path="inventory" element={<InventoryPlaceholder />} />
           <Route path="settings" element={<SettingsHelpPlaceholder />} />
         </Route>
@@ -58,7 +58,7 @@ function renderApp(initialPath = '/app/dashboard') {
  * T038 — Navigation: each NavRail entry reachable via click.
  */
 describe('navigation test (T038)', () => {
-  it('clicking Sales nav entry shows SalesPlaceholder', async () => {
+  it('clicking Sales nav entry shows SalesWorkspace', async () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(screen.getByRole('link', { name: 'Sales' }));
@@ -67,9 +67,9 @@ describe('navigation test (T038)', () => {
     );
   });
 
-  it('clicking the Sale (cart) nav entry shows CartPlaceholder', async () => {
+  it('clicking the Sale (cart) nav entry shows CartWorkspace', async () => {
     // POS v3.5: the cart entry's English accessible name is "Sale" (Arabic
-    // visible label "نقطة البيع"); it still routes to /app/cart → CartPlaceholder
+    // visible label "نقطة البيع"); it still routes to /app/cart → CartWorkspace
     // whose Workspace heading remains "Cart".
     const user = userEvent.setup();
     renderApp();

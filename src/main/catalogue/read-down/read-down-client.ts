@@ -7,7 +7,7 @@
  * transport outcome onto the contract union (`ok` / `no_connection` / `failed`).
  *
  * Established repo pattern (mirrors `operator/backend-client.ts` + the
- * voucher-authority clients):
+ * voucher-authority-client clients):
  *   • Factory `{ baseUrl, fetch, getDeviceToken, timeoutMs }`; `fetch` injected
  *     (production binds `globalThis.fetch`).
  *   • `AbortSignal.timeout(timeoutMs)`.

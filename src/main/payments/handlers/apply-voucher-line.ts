@@ -41,7 +41,7 @@ import type { PaymentAttemptRow } from '../repositories/payment-attempts.reposit
 import type {
   ValidateVoucherInput,
   ValidateVoucherOutcome,
-} from '../voucher-authority/validate.js';
+} from '../voucher-authority-client/validate.js';
 
 export interface ApplyVoucherLineDeps {
   validateVoucher: (input: ValidateVoucherInput) => Promise<ValidateVoucherOutcome>;

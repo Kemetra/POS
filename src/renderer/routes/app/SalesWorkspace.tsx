@@ -1,5 +1,5 @@
 /**
- * T043 — SalesPlaceholder with US3 state-variant support.
+ * T043 — SalesWorkspace with US3 state-variant support.
  *
  * In dev builds, reads `?state=` from the URL and renders the matching state
  * primitive. Production builds tree-shake the dev branch via the
@@ -18,7 +18,7 @@ function resolveDevState(): string {
   return '';
 }
 
-export function SalesPlaceholder(): JSX.Element {
+export function SalesWorkspace(): JSX.Element {
   const devState = resolveDevState();
 
   if (devState === 'loading') {

@@ -1,5 +1,5 @@
 /**
- * T043 — CartPlaceholder with US3 state-variant support.
+ * T043 — CartWorkspace with US3 state-variant support.
  *
  * In dev builds, reads `?state=` from the URL and renders the matching state
  * primitive. Production builds tree-shake the dev branch via the
@@ -26,7 +26,7 @@ function resolveDevState(): string {
   return '';
 }
 
-export function CartPlaceholder(): JSX.Element {
+export function CartWorkspace(): JSX.Element {
   const cartFlag = useFeatureFlagsStore((s) => s.cart);
   const productSearchFlag = useFeatureFlagsStore((s) => s.productSearch);
   const devState = resolveDevState();
@@ -49,7 +49,7 @@ export function CartPlaceholder(): JSX.Element {
   }
 
   if (cartFlag) {
-    return <CartWorkspace showCatalogue={productSearchFlag} />;
+    return <SaleLayout showCatalogue={productSearchFlag} />;
   }
 
   return (
@@ -69,7 +69,7 @@ export function CartPlaceholder(): JSX.Element {
  * `CatalogueSalePane`, so a confirmed add flows search → confirm → CartPane's
  * line list — the single write path (FR-20). No parallel cart mutation.
  */
-function CartWorkspace({ showCatalogue }: { showCatalogue: boolean }): JSX.Element {
+function SaleLayout({ showCatalogue }: { showCatalogue: boolean }): JSX.Element {
   const navigate = useNavigate();
   const addLineRef = useRef<((res: AddedLineResult) => void) | null>(null);
   const registerAddLine = useCallback((addLine: (res: AddedLineResult) => void): void => {

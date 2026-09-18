@@ -11,8 +11,8 @@ import { PairingScreen } from './routes/pairing/PairingScreen';
 import { PairedScreen } from './routes/paired/PairedScreen';
 import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
-import { SalesPlaceholder } from './routes/app/SalesPlaceholder';
-import { CartPlaceholder } from './routes/app/CartPlaceholder';
+import { SalesWorkspace } from './routes/app/SalesWorkspace';
+import { CartWorkspace } from './routes/app/CartWorkspace';
 import { ReturnsPlaceholder } from './routes/app/ReturnsPlaceholder';
 import { AuditPlaceholder } from './routes/app/AuditPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
@@ -174,8 +174,8 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       children: [
         { index: true, element: <Navigate to="dashboard" replace /> },
         { path: 'dashboard', element: <DashboardRoute /> },
-        { path: 'sales', element: <SalesPlaceholder /> },
-        { path: 'cart', element: <CartPlaceholder /> },
+        { path: 'sales', element: <SalesWorkspace /> },
+        { path: 'cart', element: <CartWorkspace /> },
         { path: 'checkout', element: <CheckoutRoute /> },
         // POS v3.5 Slice 1 — new nav entries route to thin "coming soon"
         // placeholders. Returns is Phase-7 blocked; Audit is a later display

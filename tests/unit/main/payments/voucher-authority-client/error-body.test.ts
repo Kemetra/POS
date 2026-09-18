@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { extractErrorCode } from '../../../../../src/main/payments/voucher-authority/error-body.js';
+import { extractErrorCode } from '../../../../../src/main/payments/voucher-authority-client/error-body.js';
 
 describe('extractErrorCode', () => {
   it('returns the code on a well-formed Error envelope', () => {

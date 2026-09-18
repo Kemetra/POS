@@ -22,7 +22,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { redeemVoucher } from '../../../../../src/main/payments/voucher-authority/redeem.js';
+import { redeemVoucher } from '../../../../../src/main/payments/voucher-authority-client/redeem.js';
 
 import {
   BASE_URL,

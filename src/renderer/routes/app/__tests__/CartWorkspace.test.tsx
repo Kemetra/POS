@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
-import { CartPlaceholder } from '../CartPlaceholder';
+import { CartWorkspace } from '../CartWorkspace';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
 import { useCartStore } from '../../../stores/cart-store';
@@ -35,7 +35,7 @@ function makeCatalogueBridge(): CatalogueBridgeAPI {
 function renderPlaceholder() {
   return render(
     <MemoryRouter>
-      <CartPlaceholder />
+      <CartWorkspace />
     </MemoryRouter>,
   );
 }
@@ -67,7 +67,7 @@ afterEach(() => {
   delete (window as unknown as { api?: unknown }).api;
 });
 
-describe('CartPlaceholder — catalogue surface gating (T049a)', () => {
+describe('CartWorkspace — catalogue surface gating (T049a)', () => {
   it('mounts the catalogue surface when cart AND productSearch are on', () => {
     useFeatureFlagsStore.getState().hydrate({ cart: true, productSearch: true });
     renderPlaceholder();
@@ -87,7 +87,7 @@ describe('CartPlaceholder — catalogue surface gating (T049a)', () => {
   });
 });
 
-describe('CartPlaceholder — POS v3.5 two-column sale-layout (Phase 2)', () => {
+describe('CartWorkspace — POS v3.5 two-column sale-layout (Phase 2)', () => {
   it('wraps catalogue + cart in a sale-layout container when both surfaces show', () => {
     useFeatureFlagsStore.getState().hydrate({ cart: true, productSearch: true });
     renderPlaceholder();

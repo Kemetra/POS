@@ -35,21 +35,21 @@ function setSearch(search: string) {
 async function importPanes() {
   const [
     { DashboardPlaceholder },
-    { SalesPlaceholder },
-    { CartPlaceholder },
+    { SalesWorkspace },
+    { CartWorkspace },
     { InventoryPlaceholder },
     { SettingsHelpPlaceholder },
   ] = await Promise.all([
     import('../DashboardPlaceholder'),
-    import('../SalesPlaceholder'),
-    import('../CartPlaceholder'),
+    import('../SalesWorkspace'),
+    import('../CartWorkspace'),
     import('../InventoryPlaceholder'),
     import('../SettingsHelpPlaceholder'),
   ]);
   return {
     DashboardPlaceholder,
-    SalesPlaceholder,
-    CartPlaceholder,
+    SalesWorkspace,
+    CartWorkspace,
     InventoryPlaceholder,
     SettingsHelpPlaceholder,
   };
@@ -60,8 +60,8 @@ type PaneName = keyof Pane;
 
 const PANE_NAMES: PaneName[] = [
   'DashboardPlaceholder',
-  'SalesPlaceholder',
-  'CartPlaceholder',
+  'SalesWorkspace',
+  'CartWorkspace',
   'InventoryPlaceholder',
   'SettingsHelpPlaceholder',
 ];

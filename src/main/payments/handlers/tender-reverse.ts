@@ -24,7 +24,10 @@ import type { PaymentAuditEmitter } from '../audit-emitter.js';
 import type { PaymentAttemptsRepository } from '../repositories/payment-attempts.repository.js';
 import type { PaymentTenderLinesRepository } from '../repositories/payment-tender-lines.repository.js';
 import type { TenderReverseRequest, TenderReverseResponse } from '../../../shared/bridge-api.js';
-import type { ReverseVoucherInput, ReverseVoucherOutcome } from '../voucher-authority/reverse.js';
+import type {
+  ReverseVoucherInput,
+  ReverseVoucherOutcome,
+} from '../voucher-authority-client/reverse.js';
 
 export interface TenderReverseHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;

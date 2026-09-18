@@ -50,11 +50,11 @@ import type { PaymentsConfirmRequest } from '../../../../src/shared/bridge-api.j
 import type {
   RedeemVoucherInput,
   RedeemVoucherOutcome,
-} from '../../../../src/main/payments/voucher-authority/redeem.js';
+} from '../../../../src/main/payments/voucher-authority-client/redeem.js';
 import type {
   ReverseVoucherInput,
   ReverseVoucherOutcome,
-} from '../../../../src/main/payments/voucher-authority/reverse.js';
+} from '../../../../src/main/payments/voucher-authority-client/reverse.js';
 
 function validRequest(overrides: Partial<PaymentsConfirmRequest> = {}): PaymentsConfirmRequest {
   return {

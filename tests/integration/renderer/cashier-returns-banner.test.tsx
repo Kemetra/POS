@@ -9,7 +9,7 @@ import { registerOperatorHandlers } from '../../../src/main/ipc/operator.js';
 import { OPERATOR_IPC_CHANNELS } from '../../../src/shared/operator/channels.js';
 import { ShiftClosedBanner } from '../../../src/renderer/ui/operator/ShiftClosedBanner.js';
 import { AppShell } from '../../../src/renderer/shell/AppShell.js';
-import { SalesPlaceholder } from '../../../src/renderer/routes/app/SalesPlaceholder.js';
+import { SalesWorkspace } from '../../../src/renderer/routes/app/SalesWorkspace.js';
 import { useOperatorSessionStore } from '../../../src/renderer/stores/operator-session-store.js';
 import type { OperatorSessionView } from '../../../src/renderer/stores/operator-session-store.js';
 import {
@@ -259,7 +259,7 @@ function renderAllowedShellRoute(): void {
     <MemoryRouter initialEntries={['/app/sales']}>
       <Routes>
         <Route element={<AppShell />}>
-          <Route path="/app/sales" element={<SalesPlaceholder />} />
+          <Route path="/app/sales" element={<SalesWorkspace />} />
         </Route>
       </Routes>
     </MemoryRouter>,

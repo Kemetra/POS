@@ -48,7 +48,7 @@ import {
 import type {
   ReverseVoucherInput,
   ReverseVoucherOutcome,
-} from '../../../../src/main/payments/voucher-authority/reverse.js';
+} from '../../../../src/main/payments/voucher-authority-client/reverse.js';
 import type { PaymentTenderLineRow } from '../../../../src/main/payments/repositories/payment-tender-lines.repository.js';
 
 function makeReverseVoucherDouble(...outcomes: ReadonlyArray<ReverseVoucherOutcome>) {

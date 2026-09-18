@@ -47,7 +47,7 @@ import {
   reverseVoucher,
   type ReverseVoucherInput,
   type ReverseVoucherOutcome,
-} from './payments/voucher-authority/reverse.js';
+} from './payments/voucher-authority-client/reverse.js';
 import type { ActionCategory as Audit004ActionCategory } from '../shared/audit/event-shape.js';
 import type { OperatorSessionForPayments } from './payments/require-operator-session.js';
 import { resolveSessionScope } from './operator/resolve-session-scope.js';

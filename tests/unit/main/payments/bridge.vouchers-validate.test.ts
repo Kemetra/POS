@@ -36,7 +36,7 @@
  *      outcome reconstructed from the persisted line; mismatch refuses
  *      with `idempotency_payload_mismatch`.
  *   7. **F-A4B-001:** unknown V-A refusal codes are mapped via the
- *      voucher-authority client; the bridge layer trusts the closed
+ *      voucher-authority-client client; the bridge layer trusts the closed
  *      enum returned and forwards refusals untouched (no parallel
  *      mapping path).
  */
@@ -60,7 +60,7 @@ import type { VouchersValidateRequest } from '../../../../src/shared/bridge-api.
 import type {
   ValidateVoucherOutcome,
   ValidateVoucherInput,
-} from '../../../../src/main/payments/voucher-authority/validate.js';
+} from '../../../../src/main/payments/voucher-authority-client/validate.js';
 
 function validRequest(overrides: Partial<VouchersValidateRequest> = {}): VouchersValidateRequest {
   return {

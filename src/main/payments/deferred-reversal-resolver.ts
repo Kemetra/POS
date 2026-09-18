@@ -52,7 +52,10 @@ import type {
 import type { PaymentAttemptsRepository } from './repositories/payment-attempts.repository.js';
 import type { TenderLineFsm } from './fsm/tender-line-fsm.js';
 import type { PaymentAuditEmitter } from './audit-emitter.js';
-import type { ReverseVoucherInput, ReverseVoucherOutcome } from './voucher-authority/reverse.js';
+import type {
+  ReverseVoucherInput,
+  ReverseVoucherOutcome,
+} from './voucher-authority-client/reverse.js';
 
 export interface ResolverLogger {
   info(payload: Record<string, unknown>, message: string): void;
