@@ -49,6 +49,7 @@ given spec still describes how POS-Pulse works**.
 | [019-cashier-pin-provisioning](./019-cashier-pin-provisioning/) | Implemented | Born-neutral provisioning; sole writer of cashier PIN rows |
 | [020-pos-credit-and-third-party-tender-flow](./020-pos-credit-and-third-party-tender-flow/) | Deferred | |
 | [021-pos-maintainability-rescue](./021-pos-maintainability-rescue/) | Implemented | Composition-root extraction (S1–S3), naming cleanup (S4), and documentation authority (S7) all merged. S5/S6 dropped on evidence under FR-13 — the correct outcome, not outstanding work |
+| [022-pos-ui-v4-rescue](./022-pos-ui-v4-rescue/) | Active | POS UI v4.0 visual convergence. Spec chain complete (specify→clarify→plan→tasks→analyze); **no implementation yet**. Establishes v4.0 as the governing **visual** authority (light-first, pharmacy-teal primary), superseding POS v3.5 on three visual axes; v3.5 remains valid implementation/structural context. Visual-only except one approved role-aware `/app` landing correction (cashier → `/app/cart`) |
 | [0xx-insurance-copay](./0xx-insurance-copay/) | Deferred | Unnumbered — not yet scheduled |
 
 ---
