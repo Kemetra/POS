@@ -16,7 +16,7 @@
 | HIGH findings | **3** (all fixed in this pass) |
 | MEDIUM findings | **3** (all fixed in this pass) |
 | LOW findings | **2** (1 fixed, 1 accepted) |
-| External review findings (Codex, PR #444) | **3** — 1 × P1, 2 × P2, **all verified correct and fixed** (see Addendum) |
+| External review findings | **6** — 1 × P1, 5 × P2 (3 on PR #444 + 3 follow-ups), **all verified against source, all correct, all fixed** (see Addendum) |
 | Duplicate task IDs | 0 |
 | Constitution violations | 0 |
 | Open questions | 0 |
@@ -32,7 +32,7 @@
 | FR with a mapped task | 43 / 47 | **47 / 47** |
 | NFR with a mapped task | 6 / 7 | **7 / 7** |
 | SC with a verification task | 17 / 20 | **20 / 20** |
-| Tasks | 73 | **76** (+T019a, T034, T106) → **79** after external review |
+| Tasks | 73 | **76** (+T019a, T034, T106) → **79** (R1–R3) → **84** (R4–R6) |
 
 *Traceability note:* many requirements were **covered in substance but not cited by ID**, which made
 coverage unverifiable by inspection. Finding A2 addresses this.
@@ -164,8 +164,10 @@ Both sets re-walked. No task introduces a violation.
 
 ## Addendum — External review (Codex, PR #444, 2026-09-18)
 
-Three findings raised on the spec chain by the automated reviewer. **All three were verified against
-source and all three were correct.** All are fixed.
+Findings raised on the spec chain by review. **Every one was verified against source before acting,
+and every one was correct.** All are fixed. R1–R3 came from the PR #444 review; R4–R6 are the
+follow-up findings (Arabic checkout coverage, token-guard completeness, catalogue launch
+verification).
 
 ### R1 — [P1] Success copy not gated on the finalized sale record ✅ FIXED
 
@@ -206,11 +208,52 @@ bypass unset, provision a cashier PIN row, sign in at `/sign-in`. Both the task 
 acceptable substitute** for a cashier-role acceptance capture. Where a cashier session cannot be
 reached honestly, the capture is recorded as absent rather than substituted.
 
+### R4 — [P2] Arabic-first coverage stopped at the settled branch ✅ FIXED
+
+US4a repairs the *settled* surface, but the **working** tender flow retains English-only operator
+strings — verified in source: `PaymentSurface.tsx:396` and `:437` render `<h2>Payment</h2>`, and
+`PaymentCartSummary.tsx:42,62` render `Order summary` / `Subtotal`. FR-19 and SC-4 demand
+Arabic-first across the cashier journey, so checkout would have shipped half-converted.
+
+**Fix:** **T076** (RED — zero English-only operator strings across the whole working tender flow),
+**T077** (`PaymentSurface` working phases), **T078** (`PaymentCartSummary`), **T079** (remaining
+entry surfaces incl. labels, placeholders, `aria-label`s and validation copy). A warning block marks
+T077–T079 **copy/presentation only** — no FSM, money-math, tender-application or voucher-authority
+change — and T074/T075 still require every payment test to pass unmodified and split tender to
+survive.
+
+### R5 — [P2] Token guard covered only one of FR-8's five value families ✅ FIXED
+
+T025 guarded raw **colour** literals alone, while FR-8 and SC-1 require spacing, radius, typography
+size and elevation to resolve through tokens too. Four families were unprotected — precisely where
+density and rhythm drift.
+
+**Fix:** T025 extended to all five families with a table naming each family's token source, plus
+**T025a** documenting a **closed** structural exception list (`0`/`auto`/`100%`; `1px` hairlines —
+width structural, colour still token-bound; media-query breakpoints owned by `useViewportTier`;
+component-intrinsic geometry; the constitutional 44×44 floor). The exception is explicitly *not* a
+way to silence a failing assertion. The standing-constraints table was widened from "Colour
+literals" to "Raw literals" to match.
+
+### R6 — [P2] T002 required a log line that correctly never appears ✅ FIXED
+
+T002 demanded the `catalogue.dev_seed.active` warn line, but
+`applyDevSeedCatalogueIfRequested` **no-ops and returns `false` when the catalogue is already
+populated** (`dev-seed-catalogue.ts` — `if (alreadyPopulated(deps.db)) return false`). On any re-run
+against an existing dev DB the line legitimately never appears, so the task would have failed a
+perfectly good environment.
+
+**Fix:** T002 split into two checks with different pass conditions — **(a)** the operator bypass line
+remains **mandatory** (its absence means the session is not the fixture operator: STOP), while
+**(b)** catalogue readiness accepts **either** the seed line **or** verified evidence that usable
+products are present (a successful lookup/search, or a row-count read). An *empty* catalogue with no
+seed line remains a STOP. `quickstart.md` §3 restructured to match.
+
 ### Post-review totals
 
 | Metric | After external review |
 |:--|:--:|
-| Tasks | **79** (+T013a, T075, T0C2) |
+| Tasks | **84** (+T013a, T075, T0C2, then +T025a, T076–T079) |
 | FR / NFR / SC coverage | **47/47 · 7/7 · 20/20** (machine-verified) |
 | Duplicate task IDs | 0 |
 | Matrix references to nonexistent tasks | 0 |
@@ -223,5 +266,5 @@ a reference image appears to show.
 
 ---
 
-*Analysis complete. 0 CRITICAL, 0 unresolved findings (8 internal + 3 external, all actioned).
+*Analysis complete. 0 CRITICAL, 0 unresolved findings (8 internal + 6 external, all actioned).
 Cleared for `/speckit-implement`.*

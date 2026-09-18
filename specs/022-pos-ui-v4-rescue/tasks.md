@@ -23,7 +23,7 @@
 | Constraint | Rule |
 |:--|:--|
 | **P8 boundary** | No task may touch `src/main/**`, `src/preload/**`, `src/shared/bridge-api.ts`, or `migrations/**`. Renderer-only. |
-| **Colour literals** | No task introduces a hex/rgb literal in a component. Colour changes happen **only** in `:root` / dark register token values (U0). A needed literal = a missing token → add it in U0. |
+| **Raw literals** | No task introduces a raw **colour, spacing, radius, typography-size or shadow** literal in a component (FR-8, all five families). Those values change **only** in `:root` / dark register token values (U0). A needed literal = a missing token → add it in U0. Narrow structural exceptions (hairlines, breakpoints, component geometry) are the closed list in **T025a**. |
 | **Behavioural tests** | Payment/cart/money/routing-guard tests must pass **unmodified**. Only tests encoding an owner-superseded *design decision* may change (T020–T022 only). |
 | **Flags** | No task changes a production feature-flag default. Gated surfaces are restyled, never ungated. |
 | **Images** | `visual-references/**` govern appearance only. Check the spec's Non-Capability Inventory before treating anything shown as a requirement. |
@@ -36,11 +36,27 @@
 - [ ] T001 Create the screenshot evidence directory `specs/022-pos-ui-v4-rescue/screenshots/` with a
   `README.md` recording the naming convention (`<slice>-<surface>-<before|after>.png`), the ≤400 KB
   budget, and the P7/P17 redaction rule (no secrets/tokens/PII in frame).
-- [ ] T002 Verify the dev launch path end-to-end per [quickstart.md](./quickstart.md): run `npm run dev`
-  with the dev env vars and **confirm the `operator.dev_bypass.active` and
-  `catalogue.dev_seed.active` warn lines appear** in the main-process log. Record the result in the
-  screenshots README. *(If the lines never appear, STOP — surfaces cannot be honestly attributed;
-  this is the audit's observed failure mode.)*
+- [ ] T002 Verify the dev launch path end-to-end per [quickstart.md](./quickstart.md): run
+  `npm run dev` with the dev env vars, then verify **both** of the following and record the results
+  in the screenshots README.
+
+  **(a) Operator bypass — the `operator.dev_bypass.active` warn line MUST appear.**
+  This one is non-negotiable: without it the session is not the fixture operator, and no screenshot
+  can be honestly attributed to a surface. *(This is the audit's observed failure mode — Electron
+  launched cleanly and the line never appeared.)* **If it is absent, STOP.**
+
+  **(b) Catalogue — EITHER of these is acceptable evidence:**
+  - the `catalogue.dev_seed.active` warn line appears (fixtures were just inserted); **OR**
+  - explicit verified evidence that the catalogue **already contains usable products** — e.g. a
+    successful barcode/SKU lookup or a search returning results in the running app, or a direct
+    row-count read of the dev DB. Record which check was used and its result.
+
+  **Why (b) is a disjunction:** `applyDevSeedCatalogueIfRequested` **no-ops and returns `false` when
+  the catalogue is already populated** (`dev-seed-catalogue.ts` — `if (alreadyPopulated(deps.db))
+  return false`). On any re-run against an existing dev DB the seed line will legitimately never
+  appear. Requiring it would fail a perfectly good environment; what actually matters is that
+  **usable catalogue data is present**, not that it was inserted on this particular launch.
+  An empty catalogue with no seed line is still a STOP.
 
 ## Phase 2 — Foundational (Blocking Prerequisites)
 
@@ -170,8 +186,37 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
   (`tailwind.css:135-250`) — (a) retune the ~6 core dark tokens to v4.0 (**recommended**, avoids
   shipping two visual identities) or (b) freeze v3.5 Vault Dark as accepted divergence. Record the
   choice in plan.md §U0; implement token values only.
-- [ ] T025 [US0] RED+GREEN: assert no cashier-journey component introduces a raw colour literal
-  (FR-8) — extend or add a guard test under `src/renderer/styles/__tests__/`.
+- [ ] T025 [US0] RED+GREEN: **token guard across all five FR-8 value families** — assert no
+  cashier-journey surface introduces a raw literal for **colour**, **spacing**, **radius**,
+  **typography size**, or **elevation/shadow**. FR-8 and SC-1 name all five; a colour-only guard
+  would leave four families unprotected and let the system drift exactly where v3.5's density and
+  rhythm decisions live. Extend or add a guard test under `src/renderer/styles/__tests__/`.
+
+  **Detected families and their token sources:**
+
+  | Family | Must resolve through |
+  |:--|:--|
+  | Colour | `--color-*` |
+  | Spacing (margin/padding/gap) | `--space-*` |
+  | Radius | `--radius-*` |
+  | Typography size | `--font-size-*` / `--line-height-*` |
+  | Elevation / shadow | `--shadow-*` |
+
+- [ ] T025a [US0] **Document the guard's narrow structural exception.** Some values are *structural*,
+  not design-system values, and tokenizing them would be noise rather than consistency. The guard
+  MUST allow, and the exception list MUST be written into the test file as a comment so it stays
+  auditable:
+  - **`0` and `100%`/`auto`/`inherit`** — not design values.
+  - **`1px` hairline borders and outlines** — the rule *width* is structural; its **colour** is
+    still token-bound (77 `1px solid` occurrences exist today).
+  - **Media-query breakpoints** (`1023px`, `1279px`, `1280px`, `1180px`, …) — viewport-tier
+    boundaries owned by `useViewportTier`, not spacing tokens.
+  - **Component-intrinsic dimensions** (`width`/`height`/`flex-basis`/`grid-template`, e.g. the
+    56px top bar, nav-rail widths) — layout geometry, not the spacing scale.
+  - **The ≥44×44 touch floor** — a constitutional minimum (P14), asserted by its own invariant test.
+
+  Anything **not** on this list is in scope for the guard. The exception is a closed list: adding to
+  it is a deliberate, reviewed act, not a way to silence a failing assertion.
 
 ### Typography
 
@@ -302,9 +347,17 @@ exactly one primary action; no decorative dashboard treatment.
 
 ## Phase 7 — US3: Checkout / tender (P1)
 
-**Goal:** Amount due unmistakable, supported tender selection obvious, refusals honest.
+**Goal:** Amount due unmistakable, supported tender selection obvious, refusals honest, and the
+whole working tender flow Arabic-first.
 **Independent test:** cash/card/voucher selectable and settle correctly; amount due dominant;
-refusal states readable; payment FSM and money math untouched.
+refusal states readable; **zero English-only operator-facing strings anywhere in the working tender
+flow**; payment FSM, money math and split tender untouched.
+
+> **Arabic-first scope (FR-19).** US4a repairs only the *settled* branch. The **working** tender
+> flow — everything before settlement — still carries English-only operator strings, verified in
+> source: `PaymentSurface.tsx:396` and `:437` render `<h2>Payment</h2>`, and
+> `PaymentCartSummary.tsx:42,62` render `Order summary` / `Subtotal`. U3 closes that gap, so that
+> after US4a + U3 the entire checkout journey is Arabic-first.
 
 - [ ] T070 [US3] RED+GREEN: amount-due hierarchy (dominant numeric, FR-16) in
   `src/renderer/ui/payments/PaymentSurface.tsx`, `PaymentCartSummary.tsx`.
@@ -323,8 +376,32 @@ refusal states readable; payment FSM and money math untouched.
   survives — a part-payment still reopens tender selection, and the applied-lines list stays visible.
   **Do not treat split tender as a Non-Capability item** (spec Non-Capability Inventory, corrected
   row).
+### Arabic-first working tender flow (FR-19 / SC-4)
+
+- [ ] T076 [US3] RED: test asserting **zero English-only operator-facing strings** across the
+  working (pre-settlement) tender flow — `PaymentSurface` (tender-selection + entry + confirm
+  phases), `PaymentCartSummary`, `TenderSelection`, `CashEntry`, `AmountPad`, `VoucherEntry`,
+  `ExternalCardTerminalEntry`, `MoneyRoll`. Add to
+  `src/renderer/ui/payments/__tests__/` as an Arabic-first coverage assertion over the rendered
+  operator-visible text.
+- [ ] T077 [US3] GREEN: give `PaymentSurface`'s working phases Arabic-first copy — the surface
+  header (`PaymentSurface.tsx:396`, `:437` — today `<h2>Payment</h2>`), the tender-state status
+  line, the confirm action, and the refusal copy. Make the `PaymentSurface` half of T076 pass.
+- [ ] T078 [US3] GREEN: give `PaymentCartSummary` Arabic-first copy — today `Order summary`
+  (`:42`) and `Subtotal` (`:62`) are English-only. Money values stay `dir="ltr"` mono (FR-21).
+  Make the `PaymentCartSummary` half of T076 pass.
+- [ ] T079 [P] [US3] GREEN: audit and complete Arabic-first copy in the remaining entry surfaces
+  (`CashEntry`, `AmountPad`, `VoucherEntry`, `ExternalCardTerminalEntry`, `MoneyRoll`), including
+  labels, placeholders, `aria-label`s and validation/refusal messages. **Copy only** — no change to
+  amount parsing, tender application, or any bridge call.
+
+> ⚠️ **T077–T079 are copy + presentation changes only.** They must not alter the payment FSM,
+> money math, tender application, voucher authority, or the split-tender return-to-selection
+> behaviour (T075). Every payment test must still pass **unmodified** (T074).
+
 - [ ] T0E1 [US3] Gates + capture `u3-checkout-before/after.png`; compare against
-  `visual-references/04-checkout-tender.png`.
+  `visual-references/04-checkout-tender.png`. Confirm no English-only operator string remains
+  visible in the captured working flow.
 
 ---
 
@@ -476,7 +553,7 @@ Every FR, NFR and SC maps to at least one verifying task (analysis finding A2). 
 | FR-5 navy text/structure | T023 | FR-29 receipt presented | T016, T017 |
 | FR-6 orange/red reserved | T023, T031 | FR-30 new-sale preserved | **T019a** |
 | FR-7 blue informational | T023 | FR-31 no unconfirmed success | T018, T019, **T013a** |
-| FR-8 tokens only | T023, T025 | FR-32 no invented channel | T082 |
+| FR-8 tokens only | T023, **T025**, **T025a** | FR-32 no invented channel | T082 |
 | FR-9 borders over shadows | T023, T032 | FR-33 no nested cards | **T106** |
 | FR-10 intentional Arabic face | T026, T028 | FR-34 no gradients/glow | **T106** |
 | FR-11 single type scale | T026 | FR-35 no marketing hero | **T106** |
@@ -484,10 +561,10 @@ Every FR, NFR and SC maps to at least one verifying task (analysis finding A2). 
 | FR-13 mixed AR/Latin | T026, T027 | FR-37 no fabricated numbers | T019, T082, **T106** |
 | FR-14 one primary action | T104 | FR-38 no competing primaries | T104, **T106** |
 | FR-15 cart dominant | T060, T063 | FR-39 minimal motion | T105, **T106** |
-| FR-16 amount hierarchy | T014, T015, T070 | FR-40 no behaviour change | T053, T065, T074, **T075**, T111 |
+| FR-16 amount hierarchy | T014, T015, T070 | FR-40 no behaviour change | T053, T065, T074, **T075**, T111 (U3 copy tasks T077–T079 are presentation-only) |
 | FR-17 destructive separated | T029 | FR-41 no flag defaults | T112 |
 | FR-18 quiet secondary text | T023, T102 | FR-42 no Non-Capability | T064, T071, T082, T112 |
-| FR-19 Arabic-first strings | T012, T013, T054, T092 | FR-43 restyle without ungating | T092, T112 |
+| FR-19 Arabic-first strings | T012, T013, T054, T092, **T076–T079** | FR-43 restyle without ungating | T092, T112 |
 | FR-20 RTL composition | T060, T104 | FR-44 role-aware landing | T050, T052 |
 | FR-21 LTR isolation | T013, T027 | FR-45 DashboardRoute intact | T051, T053 |
 | FR-22 directional icons | T104 | FR-46 no auth/flag change | T053, T112 |
@@ -510,10 +587,10 @@ Every FR, NFR and SC maps to at least one verifying task (analysis finding A2). 
 
 | SC | Verified by | SC | Verified by |
 |:--|:--|:--|:--|
-| SC-1 tokens resolve | T025 | SC-11 no fabricated values | T019, **T106** |
+| SC-1 tokens resolve | **T025**, **T025a** | SC-11 no fabricated values | T019, **T106** |
 | SC-2 light paints | T020–T022 | SC-12 distinct states | T090–T095 |
 | SC-3 one primary/surface | T104 | SC-13 truthful completion | T012–T019 (incl. **T013a**) |
-| SC-4 Arabic-first strings | T012, T054, T092 | SC-14 screenshots per slice | T0A2, T0B2, T0C1, **T0C2**, T0D1, T0E1, T0F1, T113 |
+| SC-4 Arabic-first strings | T012, T054, T092, **T076–T079** | SC-14 screenshots per slice | T0A2, T0B2, T0C1, **T0C2**, T0D1, T0E1, T0F1, T113 |
 | SC-5 dominant amounts | T014, T070 | SC-15 suite green | T003, T110 |
 | SC-6 LTR isolation | T013, T027 | SC-16 no Non-Capability | T112 |
 | SC-7 44×44 | T103 | SC-17 no P8 paths touched | T111 |
