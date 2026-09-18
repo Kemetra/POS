@@ -38,7 +38,7 @@ given spec still describes how POS-Pulse works**.
 | [008-sale-finalization-and-receipts](./008-sale-finalization-and-receipts/) | Implemented | ⚠️ §A5 covers an internal/dev MVP only — **VAT is deferred to 012**, so customer-facing fiscal use remains blocked |
 | [009-product-search-and-barcode-lookup](./009-product-search-and-barcode-lookup/) | Implemented | Ships the empty read model 010 fills |
 | [010-pos-catalog-read-down-consumption](./010-pos-catalog-read-down-consumption/) | Implemented | Functionally complete + perf-cleared; only rollout-time §A5 remains |
-| [011-sale-sync-capture-up](./011-sale-sync-capture-up/) | Active | S1–S4 merged; S5 (live HTTP client wiring) + §A5 readiness outstanding |
+| [011-sale-sync-capture-up](./011-sale-sync-capture-up/) | Active | Capture-up path is wired end-to-end in source: `createSaleSyncClient` + engine + drain interval are live in the composition root. Remaining: §A5 production readiness (no readiness artifact authored yet) |
 | [012-vat-fiscal-receipt](./012-vat-fiscal-receipt/) | Deferred | Blocks customer-facing fiscal use of 008 |
 | [013-inventory-awareness](./013-inventory-awareness/) | Deferred | |
 | [014-returns-refunds-voids](./014-returns-refunds-voids/) | Deferred | |
@@ -48,7 +48,7 @@ given spec still describes how POS-Pulse works**.
 | [018-pos-cashier-flow-state-machine-and-smoke-contract](./018-pos-cashier-flow-state-machine-and-smoke-contract/) | Deferred | |
 | [019-cashier-pin-provisioning](./019-cashier-pin-provisioning/) | Implemented | Born-neutral provisioning; sole writer of cashier PIN rows |
 | [020-pos-credit-and-third-party-tender-flow](./020-pos-credit-and-third-party-tender-flow/) | Deferred | |
-| [021-pos-maintainability-rescue](./021-pos-maintainability-rescue/) | Active | This feature. R1 (S1–S3) complete; R2 in progress |
+| [021-pos-maintainability-rescue](./021-pos-maintainability-rescue/) | Implemented | Composition-root extraction (S1–S3), naming cleanup (S4), and documentation authority (S7) all merged. S5/S6 dropped on evidence under FR-13 — the correct outcome, not outstanding work |
 | [0xx-insurance-copay](./0xx-insurance-copay/) | Deferred | Unnumbered — not yet scheduled |
 
 ---

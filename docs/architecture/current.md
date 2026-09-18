@@ -126,11 +126,34 @@ Both legs are one-directional and go only to Data-Pulse-2.
 transaction (enqueue-only); `src/main/sales-sync/` is 011's drain engine. They are deliberately
 separate: the writer must stay inside the finalize transaction while the drainer must not.
 
-**Transport results are a three-state union** — `ok` / `refused` / `authority_unreachable`. A network
-fault must never silently degrade into a business refusal; that distinction is what keeps a POS
-terminal honest when the backend is unreachable.
+### Transport results
 
-Failed sends back off and retry; permanent failures dead-letter rather than spin.
+**A network fault must never silently degrade into a business refusal.** That invariant is what keeps
+a POS terminal honest when the backend is unreachable, and every outbound path encodes it as a typed
+union rather than an exception — none of these clients reject, and none surface a raw response body
+(P7).
+
+There is **no single shared union**; each path models the outcomes it actually has:
+
+| Path | Result type | Members |
+|:--|:--|:--|
+| Catalogue read-down | `ReadDownFetchResult` | `ok` · `no_connection` · `failed` |
+| Sale capture-up | `SaleSyncResult` | `ok` · `duplicate` · `transient` · `permanent` · `no_connection` |
+| Voucher authority client | `ValidateVoucherOutcome` / `RedeemVoucherOutcome` / `ReverseVoucherOutcome` | `validated` \| `redeemed` \| `reversed` · `refused` · `authority_unreachable` |
+
+Read them as three expressions of the same invariant. Read-down separates *unreachable*
+(`no_connection`) from *reached but failed* (`failed`). Sale-sync separates *unreachable* from a
+backend-issued rejection, and additionally splits retryable (`transient`) from terminal
+(`permanent`) and idempotent-success (`duplicate`) — the distinctions its retry policy needs.
+
+The `refused` / `authority_unreachable` pair belongs specifically to the **authority-client**
+interactions, where a refusal is a genuine business decision made by Data-Pulse-2 and must never be
+manufactured locally from a connection failure. `refused` always carries a closed-set
+`VoucherRefusalReason`; no free-text refusal crosses the bridge.
+
+For sale-sync specifically: `transient` and `no_connection` back off and retry, `permanent`
+dead-letters rather than spinning, and `duplicate` is treated as success (the backend already has
+the sale).
 
 ---
 
