@@ -16,11 +16,12 @@
 | HIGH findings | **3** (all fixed in this pass) |
 | MEDIUM findings | **3** (all fixed in this pass) |
 | LOW findings | **2** (1 fixed, 1 accepted) |
+| External review findings (Codex, PR #444) | **3** — 1 × P1, 2 × P2, **all verified correct and fixed** (see Addendum) |
 | Duplicate task IDs | 0 |
 | Constitution violations | 0 |
 | Open questions | 0 |
 
-**Cleared for implementation** after the fixes recorded below.
+**Cleared for implementation** after the fixes recorded below and in the Addendum.
 
 ---
 
@@ -31,7 +32,7 @@
 | FR with a mapped task | 43 / 47 | **47 / 47** |
 | NFR with a mapped task | 6 / 7 | **7 / 7** |
 | SC with a verification task | 17 / 20 | **20 / 20** |
-| Tasks | 73 | **76** (+T019a, T034, T106) |
+| Tasks | 73 | **76** (+T019a, T034, T106) → **79** after external review |
 
 *Traceability note:* many requirements were **covered in substance but not cited by ID**, which made
 coverage unverifiable by inspection. Finding A2 addresses this.
@@ -161,4 +162,66 @@ Both sets re-walked. No task introduces a violation.
 
 ---
 
-*Analysis complete. 0 CRITICAL, 0 unresolved findings. Cleared for `/speckit-implement`.*
+## Addendum — External review (Codex, PR #444, 2026-09-18)
+
+Three findings raised on the spec chain by the automated reviewer. **All three were verified against
+source and all three were correct.** All are fixed.
+
+### R1 — [P1] Success copy not gated on the finalized sale record ✅ FIXED
+
+**The finding was right, and it exposed a hole in my own NFR-6 enforcement.**
+`setPhase('settled')` fires on `payments.confirm` alone (`PaymentSurface.tsx:359-364`) — **before**
+the sale is finalized; the finalized record arrives later via the recent-sale poll. T013 as written
+would have replaced the settled-phase message with unconditional Arabic *success* copy, asserting a
+completed sale without the finalized record NFR-6 and constitution **P2** require. T018/T019 only
+omitted the *detail block*; the success claim itself was left unconditional.
+
+**Fix:** **T013a** splits the settled phase into two truthful states — (a) *payment settled, sale not
+yet finalized* (no success claim, no receipt, no fabricated number; also the resting state when
+`saleFinalization` is off or the poll fails) and (b) *sale finalized* (full success + receipt). A
+warning block ties T013's definition of done to T013a so the split cannot be skipped.
+
+### R2 — [P2] Split tender wrongly listed as a non-capability ✅ FIXED
+
+**Correct, and materially so.** Split/multi-tender **is shipped** (006 T154):
+`PaymentSurface.handleLineApplied` returns the cashier to tender selection while the applied-line sum
+is below the subtotal (`PaymentSurface.tsx:282-313`). Listing it as a Non-Capability item would have
+directed implementers — via FR-42 / SC-16 / T112 — to reject or remove a working payment flow, in
+direct conflict with FR-40's preservation requirement.
+
+**Fix:** the Non-Capability row is corrected in place (struck through, with the shipping evidence and
+a pointer that unsupported tender *types* remain non-capability), and **T075** added to U3 asserting
+split tender survives the restyle of that exact surface.
+
+### R3 — [P2] Documented capture path cannot reach a cashier session ✅ FIXED
+
+**Correct.** `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1` seeds a fixture hardcoded to `role: 'manager'`
+(`dev-skip-operator-signin.ts:40-47`) with no role override, so the quickstart path cannot evidence
+FR-44's **cashier** landing — the very behaviour T0C1 accepted.
+
+**Fix:** **T0C2** added, routing cashier capture through the **cashier PIN path**, which is
+local-only and needs no backend (`sign-in-handler.ts:362` — `backend_session_id: ''`): leave the
+bypass unset, provision a cashier PIN row, sign in at `/sign-in`. Both the task and
+`quickstart.md` now warn that the bypass is manager-only and that **a manager screenshot is not an
+acceptable substitute** for a cashier-role acceptance capture. Where a cashier session cannot be
+reached honestly, the capture is recorded as absent rather than substituted.
+
+### Post-review totals
+
+| Metric | After external review |
+|:--|:--:|
+| Tasks | **79** (+T013a, T075, T0C2) |
+| FR / NFR / SC coverage | **47/47 · 7/7 · 20/20** (machine-verified) |
+| Duplicate task IDs | 0 |
+| Matrix references to nonexistent tasks | 0 |
+
+**Reflection:** R1 and R2 are the kind of error this spec exists to prevent — one would have shipped
+a fake success state (P2), the other would have deleted a working payment flow (FR-40). Both came
+from reasoning about the code at one remove instead of reading the settle/apply paths directly. The
+Non-Capability Inventory in particular must be built from source verification per row, not from what
+a reference image appears to show.
+
+---
+
+*Analysis complete. 0 CRITICAL, 0 unresolved findings (8 internal + 3 external, all actioned).
+Cleared for `/speckit-implement`.*

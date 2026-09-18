@@ -79,6 +79,23 @@ surface says honestly that no receipt exists and fabricates nothing.
   "Payment settled." / "Sale {n}" / "New sale" / header "Payment") with Arabic-first copy, keeping
   the sale number `dir="ltr"` mono (FR-21). Make T012 pass.
 
+> ⚠️ **T013 MUST NOT make the success claim unconditional.** `setPhase('settled')` fires on
+> `payments.confirm` alone (`PaymentSurface.tsx:359-364`) — **before** the sale is finalized; the
+> finalized record arrives later via the recent-sale poll. Rendering "the sale is complete" on the
+> settled phase alone would assert success without the finalized record NFR-6 requires. The
+> two-state split in **T013a** is therefore part of T013's definition of done, not optional polish.
+
+- [ ] T013a [US4a] RED+GREEN (**NFR-6 / P2 — load-bearing**): split the settled phase into **two
+  truthful states**, keyed on whether the matching finalized sale record has arrived:
+  - **(a) payment settled, sale not yet finalized** (`sale_id === null`) — say exactly that: the
+    payment is taken, the sale record is still being written. **No "sale complete" claim, no
+    receipt, no fabricated sale number.** This is also the resting state when `saleFinalization` is
+    off (T018) or the poll fails/times out (T019).
+  - **(b) sale finalized** (`sale_id` present, `finalized_at >= settled_at`) — the full Arabic-first
+    success state with the receipt (T017) and the settled-amount hierarchy (T015).
+  Both states are honest; neither is an error. The distinction is *what the system knows*, and the
+  copy must not blur it.
+
 ### Totals hierarchy
 
 - [ ] T014 [US4a] RED: test asserting the settled amount is the dominant numeric element on the
@@ -242,8 +259,20 @@ still receives the existing rejection.
 
 ### US1 acceptance
 
-- [ ] T0C1 [US1] Gates + capture `u1-sign-in-after.png`, `u1-landing-cashier-after.png`; compare
-  against `visual-references/02-sign-in.png`.
+- [ ] T0C1 [US1] Gates + capture `u1-sign-in-after.png`; compare against
+  `visual-references/02-sign-in.png`.
+- [ ] T0C2 [US1] **Capture the cashier landing (`u1-landing-cashier-after.png`) via a genuine cashier
+  session.** ⚠️ `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1` cannot serve this: its fixture is hardcoded
+  `role: 'manager'` (`src/main/operator/dev-skip-operator-signin.ts:40-47`) with **no role override**,
+  so the bypass lands on the manager path and would prove nothing about FR-44's cashier branch.
+  Use the **cashier PIN path**, which is local-only — no backend required
+  (`sign-in-handler.ts:362` — `backend_session_id: ''`):
+  1. leave `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN` **unset**;
+  2. provision a cashier PIN row for the dev tenant/branch/terminal (019's provisioning path);
+  3. sign in at `/sign-in` as that cashier and capture the landing surface.
+  Record the exact steps used in the screenshots README. **If a cashier session cannot be reached
+  honestly, record that and leave the capture absent — do not substitute a manager screenshot**,
+  which would not evidence the behaviour under acceptance.
 
 ---
 
@@ -288,6 +317,12 @@ refusal states readable; payment FSM and money math untouched.
   voucher authority**; authority stays main-process.
 - [ ] T074 [US3] Verify `payments/__tests__/**`, `parse-currency-to-minor.test.ts`, and the FSM
   tests pass **unmodified**.
+- [ ] T075 [US3] **Preserve split tender (FR-40).** Multi-line tender is a **shipped capability**
+  (006 T154): `handleLineApplied` returns to tender selection while the applied sum is below the
+  subtotal (`PaymentSurface.tsx:282-313`). U3 restyles that surface, so assert the behaviour
+  survives — a part-payment still reopens tender selection, and the applied-lines list stays visible.
+  **Do not treat split tender as a Non-Capability item** (spec Non-Capability Inventory, corrected
+  row).
 - [ ] T0E1 [US3] Gates + capture `u3-checkout-before/after.png`; compare against
   `visual-references/04-checkout-tender.png`.
 
@@ -440,7 +475,7 @@ Every FR, NFR and SC maps to at least one verifying task (analysis finding A2). 
 | FR-4 teal fill permitted | T023, T029 | FR-28 Arabic completion | T012, T013 |
 | FR-5 navy text/structure | T023 | FR-29 receipt presented | T016, T017 |
 | FR-6 orange/red reserved | T023, T031 | FR-30 new-sale preserved | **T019a** |
-| FR-7 blue informational | T023 | FR-31 no unconfirmed success | T018, T019 |
+| FR-7 blue informational | T023 | FR-31 no unconfirmed success | T018, T019, **T013a** |
 | FR-8 tokens only | T023, T025 | FR-32 no invented channel | T082 |
 | FR-9 borders over shadows | T023, T032 | FR-33 no nested cards | **T106** |
 | FR-10 intentional Arabic face | T026, T028 | FR-34 no gradients/glow | **T106** |
@@ -449,7 +484,7 @@ Every FR, NFR and SC maps to at least one verifying task (analysis finding A2). 
 | FR-13 mixed AR/Latin | T026, T027 | FR-37 no fabricated numbers | T019, T082, **T106** |
 | FR-14 one primary action | T104 | FR-38 no competing primaries | T104, **T106** |
 | FR-15 cart dominant | T060, T063 | FR-39 minimal motion | T105, **T106** |
-| FR-16 amount hierarchy | T014, T015, T070 | FR-40 no behaviour change | T053, T065, T074, T111 |
+| FR-16 amount hierarchy | T014, T015, T070 | FR-40 no behaviour change | T053, T065, T074, **T075**, T111 |
 | FR-17 destructive separated | T029 | FR-41 no flag defaults | T112 |
 | FR-18 quiet secondary text | T023, T102 | FR-42 no Non-Capability | T064, T071, T082, T112 |
 | FR-19 Arabic-first strings | T012, T013, T054, T092 | FR-43 restyle without ungating | T092, T112 |
@@ -468,7 +503,7 @@ Every FR, NFR and SC maps to at least one verifying task (analysis finding A2). 
 | NFR-3 WCAG AA contrast | T102 |
 | NFR-4 axe smoke clean | T101 |
 | NFR-5 first-paint budget | **T034** |
-| NFR-6 confirmed-settlement only | T018, T019 |
+| NFR-6 confirmed-settlement only | **T013a**, T018, T019 |
 | NFR-7 Windows desktop target | T028, T0B2 |
 
 ### Success criteria
@@ -477,13 +512,13 @@ Every FR, NFR and SC maps to at least one verifying task (analysis finding A2). 
 |:--|:--|:--|:--|
 | SC-1 tokens resolve | T025 | SC-11 no fabricated values | T019, **T106** |
 | SC-2 light paints | T020–T022 | SC-12 distinct states | T090–T095 |
-| SC-3 one primary/surface | T104 | SC-13 truthful completion | T012–T019 |
-| SC-4 Arabic-first strings | T012, T054, T092 | SC-14 screenshots per slice | T0A2, T0B2, T0C1, T0D1, T0E1, T0F1, T113 |
+| SC-3 one primary/surface | T104 | SC-13 truthful completion | T012–T019 (incl. **T013a**) |
+| SC-4 Arabic-first strings | T012, T054, T092 | SC-14 screenshots per slice | T0A2, T0B2, T0C1, **T0C2**, T0D1, T0E1, T0F1, T113 |
 | SC-5 dominant amounts | T014, T070 | SC-15 suite green | T003, T110 |
 | SC-6 LTR isolation | T013, T027 | SC-16 no Non-Capability | T112 |
 | SC-7 44×44 | T103 | SC-17 no P8 paths touched | T111 |
 | SC-8 keyboard complete | T100 | SC-18 v3.5 traceable | T040, T041 |
-| SC-9 axe clean | T101 | SC-19 cashier landing | T050, T051 |
+| SC-9 axe clean | T101 | SC-19 cashier landing | T050, T051, **T0C2** |
 | SC-10 AA contrast | T102 | SC-20 references pixel-identical | T001 |
 
 ---

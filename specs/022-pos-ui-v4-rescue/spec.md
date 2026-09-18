@@ -124,7 +124,7 @@ Everything below appears in a reference image and is classified
 | 15% VAT line | VAT deferred to spec 012; 008 hardcodes tax 0. Cart already renders an honest `—` / `tax-pending` placeholder (`CartPane.tsx:611-620`; register D-007) |
 | Saudi Riyal, Riyadh, fictional pharmacies | Product is Egyptian; v3.5 names 14% VAT and tenant "Rahma Qanater" |
 | mada / credit / insurance / digital wallet / gift-card tenders | Only `cash`, `external_card_terminal`, `internal_voucher` exist (`TenderSelection.tsx:26`). Prototype insurance/credit were explicitly rejected (register D-009) |
-| Split / multi-tender payment rows | Not a current capability |
+| ~~Split / multi-tender payment rows~~ | **CORRECTED 2026-09-18 — this IS a current capability and is NOT a Non-Capability item.** 006 T154 ships split tender: `PaymentSurface.handleLineApplied` returns the cashier to tender selection while the applied-line sum is below the subtotal (`src/renderer/ui/payments/PaymentSurface.tsx:282-313`). It MUST be preserved (FR-40), not rejected. The reference images' *unsupported* tender **types** (mada, insurance, credit, wallet, gift card) remain non-capability — see the row above |
 | Loyalty points, customer CRM, registered-customer records | Not current capabilities |
 | Prescription (Rx) workflow | Display-only badge; enforcement out of scope (register D-005) |
 | SMS / WhatsApp / email receipt dispatch | No receipt delivery channel exists |

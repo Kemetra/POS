@@ -87,6 +87,18 @@ absence of the seed line is not automatically a failure — confirm which case a
 | Pairing | `/pairing` | unset `POS_PULSE_DEV_SKIP_PAIRING` | |
 | Sign-in | `/sign-in` | unset `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN` | roster + PIN pad |
 | Landing | `/app` | after sign-in | **today:** dashboard for all roles; **after U1:** cashier → `/app/cart` |
+
+> ⚠️ **The dev bypass signs you in as a MANAGER, not a cashier.**
+> `DEV_OPERATOR_FIXTURE_SESSION_INPUT` is hardcoded `role: 'manager'`
+> (`src/main/operator/dev-skip-operator-signin.ts:40-47`) and there is no role-override env var. So
+> the bypass **cannot** evidence any cashier-specific behaviour — including FR-44's cashier landing
+> and every cashier-role gated state.
+>
+> To reach a genuine **cashier** session: leave `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN` unset, provision
+> a cashier PIN row for the dev tenant/branch/terminal, and sign in through the PIN pad. That path is
+> **local-only** — no backend needed (`sign-in-handler.ts:362`, `backend_session_id: ''`).
+>
+> A manager screenshot is **not** an acceptable substitute for a cashier-role acceptance capture.
 | Sale workspace | `/app/cart` | nav or landing | needs `CART` + `PRODUCT_SEARCH` |
 | Checkout / tender | `/app/checkout` | "continue to payment" from a non-empty cart | needs `PAYMENTS` |
 | Sale success | `/app/checkout` (settled) | settle a payment | needs `SALE_FINALIZATION` for a receipt |

@@ -98,6 +98,16 @@
   Highest-leverage find: FR-34/35/36 (no gradients / **no marketing hero** / no decorative icon
   tiles) had **no verification task** — the direct defence against the reference images' marketing
   chrome reaching the terminal; fixed as T106.
+- **External review 2026-09-18 (Codex, PR #444)** — 3 findings, **all verified against source, all
+  correct, all fixed** (→ **79 tasks**): **(P1)** success copy was not gated on the finalized sale
+  record — `setPhase('settled')` fires on `payments.confirm` alone, so T013 would have asserted a
+  completed sale without the record NFR-6/P2 require → **T013a** splits the settled phase into two
+  truthful states. **(P2)** split tender was wrongly listed as a Non-Capability item though 006 T154
+  ships it (`PaymentSurface.tsx:282-313`), which would have directed implementers to remove a working
+  payment flow → row corrected + **T075** protects it. **(P2)** the documented capture path could not
+  reach a cashier session (dev bypass is hardcoded `role: 'manager'`) → **T0C2** routes cashier
+  capture through the local-only cashier PIN path; quickstart warns a manager screenshot is not a
+  substitute.
 - **Plan phase 2026-09-18** — [`plan.md`](../plan.md), [`research.md`](../research.md),
   [`quickstart.md`](../quickstart.md) authored. No `data-model.md` (no persisted entity) and no
   `contracts/` (no IPC/bridge/backend change, P8) — matching 007, the closest UI-only precedent.
