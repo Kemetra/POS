@@ -9,13 +9,13 @@ import { describe, it, expect } from 'vitest';
  * unprotected and let the system drift exactly where v3.5's density and
  * rhythm decisions live, so all five are asserted:
  *
- *   | Family                      | Must resolve through          |
- *   |-----------------------------|-------------------------------|
- *   | Colour                      | --color-*                     |
- *   | Spacing (margin/padding/gap)| --space-*                     |
- *   | Radius                      | --radius-*                    |
- *   | Typography size             | --font-size-* / --line-height-*|
- *   | Elevation / shadow          | --shadow-*                    |
+ *   | Family                      | Must resolve through           |
+ *   |-----------------------------|--------------------------------|
+ *   | Colour                      | --color-*                      |
+ *   | Spacing (margin/padding/gap)| --space-*                      |
+ *   | Radius                      | --radius-*                     |
+ *   | Typography size            | --font-size-* / --line-height-*|
+ *   | Elevation / shadow          | --shadow-*                     |
  *
  * SCOPE: inline `style={{ … }}` objects in renderer components. That is where
  * a raw value can be introduced by a single edit without review. Values in
@@ -52,29 +52,127 @@ const UI_DIR = resolve(__dirname, '../../ui');
 const SPACING_PROPS =
   /^(margin|padding|gap|rowGap|columnGap|inset|top|right|bottom|left|marginBlock|marginInline|paddingBlock|paddingInline)/;
 
+type StyleBlock = {
+  file: string;
+  source: string;
+};
+
+type Pair = {
+  prop: string;
+  value: string;
+};
+
+type FamilyRule = {
+  name: string;
+  guidance: string;
+  findLiterals: (source: string) => string[];
+};
+
 function collectComponentFiles(dir: string): string[] {
-  const out: string[] = [];
-  function walk(current: string): void {
-    for (const entry of readdirSync(current)) {
-      const full = join(current, entry);
-      if (statSync(full).isDirectory()) {
-        if (entry === '__tests__') continue;
-        walk(full);
-      } else if (['.ts', '.tsx'].includes(extname(entry))) {
-        out.push(full);
-      }
+  return readdirSync(dir).flatMap((entry) => {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      return entry === '__tests__' ? [] : collectComponentFiles(full);
     }
-  }
-  walk(dir);
-  return out;
+    return ['.ts', '.tsx'].includes(extname(entry)) ? [full] : [];
+  });
 }
 
 /** Extract the body of every inline `style={{ … }}` object in a source file. */
 function extractStyleBlocks(source: string): string[] {
-  return [...source.matchAll(/style=\{\{(.*?)\}\}/gs)].map((m) => m[1] ?? '');
+  return [...source.matchAll(/style=\{\{(.*?)\}\}/gs)].map((match) => match[1] ?? '');
 }
 
+function matchPairs(source: string, pattern: RegExp): Pair[] {
+  return [...source.matchAll(pattern)].map((match) => ({
+    prop: match[1] ?? '',
+    value: match[2] ?? '',
+  }));
+}
+
+function findColourLiterals(source: string): string[] {
+  return [
+    ...(source.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []),
+    ...(source.match(/\b(?:rgba?|hsla?)\s*\(/g) ?? []),
+  ];
+}
+
+function findSpacingLiterals(source: string): string[] {
+  return matchPairs(source, /(\w+)\s*:\s*'([^']*)'/g).flatMap(({ prop, value }) => {
+    if (!SPACING_PROPS.test(prop)) return [];
+    return (value.match(/(?<![\w-])(\d+)px/g) ?? [])
+      .filter((px) => px !== '0px' && px !== '1px')
+      .map((px) => `${prop}: ${px}`);
+  });
+}
+
+function findRadiusLiterals(source: string): string[] {
+  return matchPairs(source, /(borderRadius\w*)\s*:\s*'([^']*)'/g)
+    .filter(({ value }) => !value.includes('var(--radius-'))
+    .filter(({ value }) => !/^(0|none|inherit)$/.test(value.trim()))
+    .map(({ prop, value }) => `${prop}: ${value}`);
+}
+
+function findTypographyLiterals(source: string): string[] {
+  return matchPairs(source, /(fontSize|lineHeight|fontWeight)\s*:\s*([^,}]+)/g)
+    .map(({ prop, value }) => ({ prop, value: value.trim() }))
+    .filter(({ value }) => !value.includes('var(--font-size-'))
+    .filter(({ value }) => !value.includes('var(--line-height-'))
+    .filter(({ value }) => !value.includes('var(--font-weight-'))
+    .filter(({ value }) => !/^(inherit|'inherit')$/.test(value))
+    .map(({ prop, value }) => `${prop}: ${value}`);
+}
+
+function findShadowLiterals(source: string): string[] {
+  return matchPairs(source, /(boxShadow|textShadow)\s*:\s*'([^']*)'/g)
+    .filter(({ value }) => !value.includes('var(--shadow-'))
+    .filter(({ value }) => !/^(none|inherit)$/.test(value.trim()))
+    .map(({ prop, value }) => `${prop}: ${value}`);
+}
+
+const FAMILY_RULES: FamilyRule[] = [
+  {
+    name: 'COLOUR',
+    guidance: 'Raw colour literals (use var(--color-*); a missing token is added in U0)',
+    findLiterals: findColourLiterals,
+  },
+  {
+    name: 'SPACING',
+    guidance: 'Raw spacing literals (use var(--space-*))',
+    findLiterals: findSpacingLiterals,
+  },
+  {
+    name: 'RADIUS',
+    guidance: 'Raw radius literals (use var(--radius-*))',
+    findLiterals: findRadiusLiterals,
+  },
+  {
+    name: 'TYPOGRAPHY-SIZE',
+    guidance:
+      'Raw typography literals (use var(--font-size-*) / var(--line-height-*) / var(--font-weight-*))',
+    findLiterals: findTypographyLiterals,
+  },
+  {
+    name: 'ELEVATION/SHADOW',
+    guidance: 'Raw shadow literals (use var(--shadow-*); FR-33 forbids stacked elevation anyway)',
+    findLiterals: findShadowLiterals,
+  },
+];
+
 const files = collectComponentFiles(UI_DIR);
+
+const styleBlocks: StyleBlock[] = files.flatMap((file) =>
+  extractStyleBlocks(readFileSync(file, 'utf-8')).map((source) => ({
+    file: file.replace(UI_DIR, 'ui'),
+    source,
+  })),
+);
+
+function collectViolations(rule: FamilyRule): string[] {
+  return styleBlocks.flatMap(({ file, source }) =>
+    rule.findLiterals(source).map((literal) => `${file}: ${literal}`),
+  );
+}
 
 describe('022 T025 — design-token guard (all five FR-8 value families)', () => {
   it('scans a non-trivial number of renderer components (guard is actually wired)', () => {
@@ -82,111 +180,8 @@ describe('022 T025 — design-token guard (all five FR-8 value families)', () =>
     expect(files.length).toBeGreaterThan(20);
   });
 
-  it('introduces no raw COLOUR literal in an inline style', () => {
-    const violations: string[] = [];
-    for (const file of files) {
-      const source = readFileSync(file, 'utf-8');
-      for (const block of extractStyleBlocks(source)) {
-        // Hex, rgb()/rgba(), hsl()/hsla() — all must come from --color-*.
-        const hits = [
-          ...(block.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []),
-          ...(block.match(/\b(?:rgba?|hsla?)\s*\(/g) ?? []),
-        ];
-        for (const hit of hits) {
-          violations.push(`${file.replace(UI_DIR, 'ui')}: ${hit}`);
-        }
-      }
-    }
-    expect(
-      violations,
-      `Raw colour literals (use var(--color-*); a missing token is added in U0):\n${violations.join('\n')}`,
-    ).toEqual([]);
-  });
-
-  it('introduces no raw SPACING literal in an inline style', () => {
-    const violations: string[] = [];
-    for (const file of files) {
-      const source = readFileSync(file, 'utf-8');
-      for (const block of extractStyleBlocks(source)) {
-        // Match `property: '<value>'` pairs and check only spacing properties,
-        // so component-intrinsic width/height (exception 4) is not flagged.
-        for (const m of block.matchAll(/(\w+)\s*:\s*'([^']*)'/g)) {
-          const prop = m[1] ?? '';
-          const value = m[2] ?? '';
-          if (!SPACING_PROPS.test(prop)) continue;
-          for (const px of value.match(/(?<![\w-])(\d+)px/g) ?? []) {
-            // Exception 1 + 2: `0` and 1px hairlines are structural.
-            if (px === '0px' || px === '1px') continue;
-            violations.push(`${file.replace(UI_DIR, 'ui')}: ${prop}: ${px}`);
-          }
-        }
-      }
-    }
-    expect(
-      violations,
-      `Raw spacing literals (use var(--space-*)):\n${violations.join('\n')}`,
-    ).toEqual([]);
-  });
-
-  it('introduces no raw RADIUS literal in an inline style', () => {
-    const violations: string[] = [];
-    for (const file of files) {
-      const source = readFileSync(file, 'utf-8');
-      for (const block of extractStyleBlocks(source)) {
-        for (const m of block.matchAll(/(borderRadius\w*)\s*:\s*'([^']*)'/g)) {
-          const value = m[2] ?? '';
-          const prop = m[1] ?? '';
-          if (value.includes('var(--radius-')) continue;
-          if (/^(0|none|inherit)$/.test(value.trim())) continue;
-          violations.push(`${file.replace(UI_DIR, 'ui')}: ${prop}: ${value}`);
-        }
-      }
-    }
-    expect(
-      violations,
-      `Raw radius literals (use var(--radius-*)):\n${violations.join('\n')}`,
-    ).toEqual([]);
-  });
-
-  it('introduces no raw TYPOGRAPHY-SIZE literal in an inline style', () => {
-    const violations: string[] = [];
-    for (const file of files) {
-      const source = readFileSync(file, 'utf-8');
-      for (const block of extractStyleBlocks(source)) {
-        for (const m of block.matchAll(/(fontSize|lineHeight|fontWeight)\s*:\s*([^,}]+)/g)) {
-          const prop = m[1] ?? '';
-          const value = (m[2] ?? '').trim();
-          if (value.includes('var(--font-size-')) continue;
-          if (value.includes('var(--line-height-')) continue;
-          if (value.includes('var(--font-weight-')) continue;
-          if (/^(inherit|'inherit')$/.test(value)) continue;
-          violations.push(`${file.replace(UI_DIR, 'ui')}: ${prop}: ${value}`);
-        }
-      }
-    }
-    expect(
-      violations,
-      `Raw typography literals (use var(--font-size-*) / var(--line-height-*) / var(--font-weight-*)):\n${violations.join('\n')}`,
-    ).toEqual([]);
-  });
-
-  it('introduces no raw ELEVATION/SHADOW literal in an inline style', () => {
-    const violations: string[] = [];
-    for (const file of files) {
-      const source = readFileSync(file, 'utf-8');
-      for (const block of extractStyleBlocks(source)) {
-        for (const m of block.matchAll(/(boxShadow|textShadow)\s*:\s*'([^']*)'/g)) {
-          const value = m[2] ?? '';
-          const prop = m[1] ?? '';
-          if (value.includes('var(--shadow-')) continue;
-          if (/^(none|inherit)$/.test(value.trim())) continue;
-          violations.push(`${file.replace(UI_DIR, 'ui')}: ${prop}: ${value}`);
-        }
-      }
-    }
-    expect(
-      violations,
-      `Raw shadow literals (use var(--shadow-*); FR-33 forbids stacked elevation anyway):\n${violations.join('\n')}`,
-    ).toEqual([]);
+  it.each(FAMILY_RULES)('introduces no raw $name literal in an inline style', (rule) => {
+    const violations = collectViolations(rule);
+    expect(violations, `${rule.guidance}:\n${violations.join('\n')}`).toEqual([]);
   });
 });
