@@ -11,6 +11,7 @@ import { PairingScreen } from './routes/pairing/PairingScreen';
 import { PairedScreen } from './routes/paired/PairedScreen';
 import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
+import { AppIndexRedirect } from './routes/app/AppIndexRedirect';
 import { SalesWorkspace } from './routes/app/SalesWorkspace';
 import { CartWorkspace } from './routes/app/CartWorkspace';
 import { ReturnsPlaceholder } from './routes/app/ReturnsPlaceholder';
@@ -172,7 +173,12 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       path: '/app',
       element: guardedShell,
       children: [
-        { index: true, element: <Navigate to="dashboard" replace /> },
+        // 022 US1 / FR-44 — role-aware landing. A cashier lands on the till
+        // (/app/cart) instead of /app/dashboard, which rejects the cashier
+        // role and made an ERROR STATE the first screen of a shift.
+        // Navigation only: DashboardRoute's role check, OperatorRouteGuard,
+        // every allow list and every flag are untouched (FR-45/FR-47).
+        { index: true, element: <AppIndexRedirect /> },
         { path: 'dashboard', element: <DashboardRoute /> },
         { path: 'sales', element: <SalesWorkspace /> },
         { path: 'cart', element: <CartWorkspace /> },

@@ -33,10 +33,10 @@
 
 ## Phase 1 — Setup
 
-- [ ] T001 Create the screenshot evidence directory `specs/022-pos-ui-v4-rescue/screenshots/` with a
+- [x] T001 Create the screenshot evidence directory `specs/022-pos-ui-v4-rescue/screenshots/` with a
   `README.md` recording the naming convention (`<slice>-<surface>-<before|after>.png`), the ≤400 KB
   budget, and the P7/P17 redaction rule (no secrets/tokens/PII in frame).
-- [ ] T002 Verify the dev launch path end-to-end per [quickstart.md](./quickstart.md): run
+- [x] T002 Verify the dev launch path end-to-end per [quickstart.md](./quickstart.md): run
   `npm run dev` with the dev env vars, then verify **both** of the following and record the results
   in the screenshots README.
 
@@ -60,7 +60,7 @@
 
 ## Phase 2 — Foundational (Blocking Prerequisites)
 
-- [ ] T003 Capture the **baseline** full-suite result (`npm test`) and record it in the screenshots
+- [x] T003 Capture the **baseline** full-suite result (`npm test`) and record it in the screenshots
   README as the regression reference (expected: 468 files / 5538 passed / 3 skipped / 0 failed).
 
 ---
@@ -79,19 +79,19 @@ surface says honestly that no receipt exists and fabricates nothing.
 
 ### Retain the sale id (the enabling change)
 
-- [ ] T010 [US4a] RED: test asserting `PaymentSurface` retains `sale_id` (not only `sale_number`)
+- [x] T010 [US4a] RED: test asserting `PaymentSurface` retains `sale_id` (not only `sale_number`)
   from the `sales.subscribe({topic:'recent'})` poll once settled, in
   `src/renderer/ui/payments/__tests__/PaymentSurface.settled-receipt.test.tsx` (new).
-- [ ] T011 [US4a] GREEN: store the polled `sale_id` alongside `settledSaleNumber` in
+- [x] T011 [US4a] GREEN: store the polled `sale_id` alongside `settledSaleNumber` in
   `src/renderer/ui/payments/PaymentSurface.tsx`. `RecentSaleSummary` already carries it
   (`src/shared/sales/types.ts:165`) — **no bridge change** (research.md §4). Make T010 pass.
 
 ### Arabic-first completion copy
 
-- [ ] T012 [US4a] RED: test asserting the settled branch renders Arabic primary copy for the success
+- [x] T012 [US4a] RED: test asserting the settled branch renders Arabic primary copy for the success
   statement, the sale reference label, and the next action (no English-only operator string), in
   `PaymentSurface.settled-receipt.test.tsx`.
-- [ ] T013 [US4a] GREEN: replace the English-only settled strings (`PaymentSurface.tsx:392-431` —
+- [x] T013 [US4a] GREEN: replace the English-only settled strings (`PaymentSurface.tsx:392-431` —
   "Payment settled." / "Sale {n}" / "New sale" / header "Payment") with Arabic-first copy, keeping
   the sale number `dir="ltr"` mono (FR-21). Make T012 pass.
 
@@ -101,7 +101,7 @@ surface says honestly that no receipt exists and fabricates nothing.
 > settled phase alone would assert success without the finalized record NFR-6 requires. The
 > two-state split in **T013a** is therefore part of T013's definition of done, not optional polish.
 
-- [ ] T013a [US4a] RED+GREEN (**NFR-6 / P2 — load-bearing**): split the settled phase into **two
+- [ ] T013a [US4a] **BLOCKED — collapsed to ONE state; see below.** RED+GREEN (**NFR-6 / P2 — load-bearing**): split the settled phase into **two
   truthful states**, keyed on whether the matching finalized sale record has arrived:
   - **(a) payment settled, sale not yet finalized** (`sale_id === null`) — say exactly that: the
     payment is taken, the sale record is still being written. **No "sale complete" claim, no
@@ -112,31 +112,98 @@ surface says honestly that no receipt exists and fabricates nothing.
   Both states are honest; neither is an error. The distinction is *what the system knows*, and the
   copy must not blur it.
 
+  > **⛔ BLOCKED — the two-state split is unimplementable against the current wire contract
+  > (external review round 2, P1). Collapsed to ONE honest state.**
+  >
+  > State (b) requires knowing the finalized record belongs to **this** payment. The terminal
+  > cannot know that: `RecentSaleSummary` carries no attempt/handoff identifier and
+  > `payments.confirm` returns only `settled_at`, so `finalized_at >= settled_at` is the only
+  > available test — and a **prior** sale finalizing late satisfies it.
+  >
+  > Round 1 removed the receipt (T017) but **kept** an `isFinalized` branch rendering
+  > "تم إتمام البيع" from that same uncorrelated row: the symptom was fixed and the assertion
+  > left standing. A late-finalizing prior sale could still make the surface claim THIS sale
+  > completed, and show that sale's number inside a success frame.
+  >
+  > **Resolution:** the settled phase renders the one state the terminal can support — the
+  > payment was taken (`تم استلام المبلغ` + dominant amount + new sale). The sale number still
+  > shows when the poll returns one, but **outside any completion frame**, exactly as `main` did
+  > (006 invariant 13). So this is no worse than the surface it replaces while claiming strictly
+  > less — which is the whole point of the slice.
+  >
+  > **T013a and T017 share one unblock condition:** an identifier on the `recent` projection (or
+  > a sibling read) tying the finalized sale to this payment. 011 already derives a deterministic
+  > one from `envelope_handoff_action_id`, so it exists main-side — a backend/contract task, not
+  > a renderer one. NFR-6 as written depends on it.
+  >
+  > **Round 3 extended this to the SALE NUMBER itself.** Round 2 left the number visible on
+  > "no worse than `main`" grounds, and simultaneously replaced the 10-attempt poll cap with an
+  > uncapped backoff — which made that justification false: `main`'s exposure was bounded at ~2s,
+  > the backoff's was unbounded, so *any* later-finalizing prior sale would be adopted. The number
+  > rested on exactly the evidence that already disqualified the receipt and the completion claim.
+  >
+  > **The recent-sale poll is removed entirely**, along with `settledSaleNumber`, `settledSaleId`
+  > and `settledAt`. The settled surface shows only `تم استلام المبلغ` + the envelope amount +
+  > "new sale".
+  >
+  > **This CONTRADICTS 006 invariant 13**, which asserts the finalized sale number displays. That
+  > is a deliberate reduction *below* `main`, accepted on safety grounds: a wrong cashier-quotable
+  > reference is worse than none. The two 006 tests that encoded invariant 13 were converted into
+  > explicit superseded markers rather than deleted, so the removal of a shipped behaviour stays
+  > auditable in the suite. Invariant 13 reverts together with T013a and T017 when the projection
+  > carries a correlating identifier.
+
 ### Totals hierarchy
 
-- [ ] T014 [US4a] RED: test asserting the settled amount is the dominant numeric element on the
+- [x] T014 [US4a] RED: test asserting the settled amount is the dominant numeric element on the
   completion surface (FR-16) and is `dir="ltr"`-isolated.
-- [ ] T015 [US4a] GREEN: apply the settled-amount hierarchy in `PaymentSurface.tsx` using existing
+- [x] T015 [US4a] GREEN: apply the settled-amount hierarchy in `PaymentSurface.tsx` using existing
   semantic tokens/classes only. Make T014 pass.
 
 ### Mount the existing receipt
 
-- [ ] T016 [US4a] RED: test asserting `ReceiptPreview` is mounted on the completion path for a
+- [x] T016 [US4a] RED: test asserting `ReceiptPreview` is mounted on the completion path for a
   finalized sale (passing the retained `sale_id`), in `PaymentSurface.settled-receipt.test.tsx`.
-- [ ] T017 [US4a] GREEN: mount `ReceiptPreview` from
-  `src/renderer/ui/receipts/ReceiptPreview.tsx` in the settled branch of `PaymentSurface.tsx`.
-  It calls the existing `receipts.preview` channel itself — a **new consumer of an existing
-  channel**, not a bridge-surface change (P8, plan Constitution Check). Make T016 pass.
+- [ ] T017 [US4a] **BLOCKED — the receipt is deliberately NOT mounted (see below).** GREEN: mount
+  `ReceiptPreview` from `src/renderer/ui/receipts/ReceiptPreview.tsx` in the settled branch of
+  `PaymentSurface.tsx`. It calls the existing `receipts.preview` channel itself — a **new consumer
+  of an existing channel**, not a bridge-surface change (P8, plan Constitution Check).
+
+  > **BLOCKED by an uncorrelatable `recent` projection (external review P1, verified in source).**
+  >
+  > `RecentSaleSummary` carries **no** payment, attempt or envelope identifier — only `sale_id`,
+  > `sale_number`, `finalized_at` — and `payments.confirm` returns only `settled_at`. So
+  > `finalized_at >= settled_at` is the ONLY discriminator available renderer-side, and a **prior**
+  > sale finalizing late (a worker retry succeeding while this sale is delayed or refused)
+  > satisfies it. Mounting a receipt on that `sale_id` would show **the previous customer's
+  > receipt**.
+  >
+  > **The gap pre-dates this slice.** `main` already displayed `settledSaleNumber` from the same
+  > unverified `recent` (006 invariant 13) — verified against `58acd5c`. What T017 added was a
+  > *receipt document* for a sale the terminal cannot prove is this one, turning a wrong number
+  > into a wrong receipt.
+  >
+  > **There is no renderer-only fix.** The correlating key does not exist on the wire, and adding
+  > one is a bridge change, which 022 forbids (P8). A tighter time window or an amount-match would
+  > be a heuristic dressed as a fix — precisely what this slice exists to refuse.
+  >
+  > **Decision: un-amplify.** The receipt is not mounted; the sale number still shows, exactly as
+  > on `main` — no better, but no worse. The completion surface stays honest about what it knows.
+  >
+  > **Unblocks when** the `recent` projection (or a sibling read) carries an identifier tying the
+  > finalized sale to *this* payment. 011 already derives a deterministic `externalId` from
+  > `envelope_handoff_action_id`, so the identifier exists main-side — this is a backend/contract
+  > task, not a renderer one.
 
 ### Honest degradation (P2 — mandatory, not optional polish)
 
-- [ ] T018 [US4a] RED: test asserting that when `saleFinalization` is **off** (fail-closed default,
+- [x] T018 [US4a] RED: test asserting that when `saleFinalization` is **off** (fail-closed default,
   so 008's finalize listener short-circuits and no receipt exists) the surface states that honestly
   and renders **no** receipt placeholder.
-- [ ] T019 [US4a] RED+GREEN: test asserting that when `sale_id`/`sale_number` is `null` (poll failed,
+- [x] T019 [US4a] RED+GREEN: test asserting that when `sale_id`/`sale_number` is `null` (poll failed,
   bridge absent, or unmounted) the completion detail block stays **omitted** — no fabricated sale
   number, no invented receipt. Preserve today's omission behaviour. Make T018+T019 pass.
-- [ ] T019a [US4a] RED+GREEN (**FR-30**): test asserting the existing **"new sale" behaviour is
+- [x] T019a [US4a] RED+GREEN (**FR-30**): test asserting the existing **"new sale" behaviour is
   preserved** through the settled-branch rewrite — `onNewSale` still resets the payment store **and**
   the cart store and navigates to `/app/cart` (`CheckoutRoute.handleNewSale`). This is the button
   most easily broken by rewriting the branch that owns it, and losing it strands the cashier on a
@@ -144,7 +211,7 @@ surface says honestly that no receipt exists and fabricates nothing.
 
 ### US4a acceptance
 
-- [ ] T0A1 [US4a] Run targeted tests → `npm run typecheck` → `npm run lint` → `npm test` (no
+- [x] T0A1 [US4a] Run targeted tests → `npm run typecheck` → `npm run lint` → `npm test` (no
   regression vs T003 baseline).
 - [ ] T0A2 [US4a] Capture `u4a-sale-success-after.png`; compare against
   `visual-references/05-sale-success.png`; note in the PR which reference was used.
@@ -165,28 +232,28 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
 
 ### Token values (`:root` + dark register ONLY — no `@layer components` edits)
 
-- [ ] T020 [US0] RED: update `src/renderer/styles/__tests__/theme-contract.test.ts` — invert the
+- [x] T020 [US0] RED: update `src/renderer/styles/__tests__/theme-contract.test.ts` — invert the
   **three** hardcoded dark-default assertions (index.html attribute, store default, default-theme
   expectations) to light. **Preserve** the structural guards: dark register exists, token-value
   overrides only (no forked components), RTL/`lang="ar"` systemic. This is the single
   owner-sanctioned test change (spec A2); name the superseding decision in the PR.
-- [ ] T021 [US0] GREEN: set the light default in `src/renderer/index.html` (line 14 `data-theme`),
+- [x] T021 [US0] GREEN: set the light default in `src/renderer/index.html` (line 14 `data-theme`),
   keeping `lang="ar" dir="rtl"` and the static flash-free attribute (meta CSP is `script-src 'self'`,
   so no inline pre-paint script).
-- [ ] T022 [US0] GREEN: set `DEFAULT_THEME: Theme = 'light'` in
+- [x] T022 [US0] GREEN: set `DEFAULT_THEME: Theme = 'light'` in
   `src/renderer/stores/theme-store.ts`; review `stores/__tests__/theme-store.test.ts` for any
   genuinely hardcoded `'dark'` default (most assert via the `DEFAULT_THEME` symbol and follow
   automatically). Make T020 pass.
-- [ ] T023 [US0] Retune `:root` colour token **values** in `src/renderer/styles/tailwind.css`
+- [x] T023 [US0] Retune `:root` colour token **values** in `src/renderer/styles/tailwind.css`
   (lines 3–133) to v4.0: light clinical background/surface, **pharmacy green-teal**
   `--color-primary*`, navy `--color-text`/structure, controlled blue `--color-info*`, orange
   `--color-warning*`, red `--color-danger*`, neutral `--color-border*`, restrained `--shadow-*`.
   **No new token names unless a genuine semantic gap exists** (token-name parity test must stay green).
-- [ ] T024 [US0] **Owner decision + implementation:** dark-register disposition
+- [x] T024 [US0] **Owner decision + implementation:** dark-register disposition
   (`tailwind.css:135-250`) — (a) retune the ~6 core dark tokens to v4.0 (**recommended**, avoids
   shipping two visual identities) or (b) freeze v3.5 Vault Dark as accepted divergence. Record the
   choice in plan.md §U0; implement token values only.
-- [ ] T025 [US0] RED+GREEN: **token guard across all five FR-8 value families** — assert no
+- [x] T025 [US0] RED+GREEN: **token guard across all five FR-8 value families** — assert no
   cashier-journey surface introduces a raw literal for **colour**, **spacing**, **radius**,
   **typography size**, or **elevation/shadow**. FR-8 and SC-1 name all five; a colour-only guard
   would leave four families unprotected and let the system drift exactly where v3.5's density and
@@ -202,7 +269,7 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
   | Typography size | `--font-size-*` / `--line-height-*` |
   | Elevation / shadow | `--shadow-*` |
 
-- [ ] T025a [US0] **Document the guard's narrow structural exception.** Some values are *structural*,
+- [x] T025a [US0] **Document the guard's narrow structural exception.** Some values are *structural*,
   not design-system values, and tokenizing them would be noise rather than consistency. The guard
   MUST allow, and the exception list MUST be written into the test file as a comment so it stays
   auditable:
@@ -220,36 +287,51 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
 
 ### Typography
 
-- [ ] T026 [US0] Set `--font-family-sans` to the declared Arabic-first system stack
+- [x] T026 [US0] Set `--font-family-sans` to the declared Arabic-first system stack
   (`'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif`) in `tailwind.css`, replacing the
   currently-unresolvable `'Inter Variable', Inter` (research.md §1). **No package, no `@font-face`,
   no bundled file** — `no-brand-font.test.ts` guards `@font-face` only and stays green.
-- [ ] T027 [US0] Confirm money/identifier treatment: `--font-family-mono` + tabular numerals for
+- [x] T027 [US0] Confirm money/identifier treatment: `--font-family-mono` + tabular numerals for
   money, barcodes, SKUs, sale numbers (FR-12), `dir="ltr"`-isolated (FR-21).
-- [ ] T028 [US0] **Verification on target hardware (Windows 10/11 x64):** render Arabic UI copy,
+- [x] T028 [US0] **Verification on target hardware (Windows 10/11 x64):** render Arabic UI copy,
   mixed Arabic/Latin, dense cart rows and large totals; confirm the stack resolves to Dubai (or the
   intended fallback). **If quality fails, STOP and escalate** — bundling a webfont is an owner
   decision, not an in-slice fix (research.md §1 Gate).
 
+  > **✅ PASS — verified by the owner on target Windows hardware, 2026-09-19.** Arabic renders
+  > cleanly through the configured `'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif`
+  > stack, against the running v4.0 build (the same launch that cleared T002).
+  >
+  > **Consequence — the typography approval gate is NOT triggered.** research.md §1 makes the
+  > webfont question conditional: *"An approval gate is triggered **only if** U0's
+  > on-target-hardware verification shows the system stack cannot meet FR-10/FR-11 quality."*
+  > It met the bar, so bundling a webfont (Noto Kufi Arabic / Cairo / Tajawal) stays **rejected**
+  > and no owner decision is owed. The system-stack approach needed no approval in the first place.
+  >
+  > This also closes the one open risk in T026: the stack previously led with `'Inter Variable',
+  > Inter`, which resolves to nothing here, so Arabic fell through to uncontrolled OS fallback.
+  > That defect is now both fixed and verified on the hardware it ships to — **no package, no
+  > `@font-face`, no bundled file**, so `no-brand-font` stays green.
+
 ### Shared primitives
 
-- [ ] T029 [P] [US0] RED+GREEN: primary/secondary/**destructive** button treatment in
+- [x] T029 [P] [US0] RED+GREEN: primary/secondary/**destructive** button treatment in
   `src/renderer/ui/primitives/Button/` — teal fill permitted for primary (FR-4), destructive visually
   separated and never carrying the primary treatment (FR-17).
-- [ ] T030 [P] [US0] RED+GREEN: input/search treatment in `src/renderer/ui/primitives/Input/`.
-- [ ] T031 [P] [US0] RED+GREEN: status-chip treatment in `src/renderer/ui/primitives/Badge/`
+- [x] T030 [P] [US0] RED+GREEN: input/search treatment in `src/renderer/ui/primitives/Input/`.
+- [x] T031 [P] [US0] RED+GREEN: status-chip treatment in `src/renderer/ui/primitives/Badge/`
   (icon/text + colour, never colour alone — FR-26).
-- [ ] T032 [P] [US0] RED+GREEN: table/row treatment in `src/renderer/ui/primitives/Table/`; panel
+- [x] T032 [P] [US0] RED+GREEN: table/row treatment in `src/renderer/ui/primitives/Table/`; panel
   treatment in `Card/` (borders + spacing, not shadow stacking — FR-9/FR-33).
-- [ ] T033 [US0] Verify the global `:focus-visible` rule renders visibly against the new light
+- [x] T033 [US0] Verify the global `:focus-visible` rule renders visibly against the new light
   surfaces (NFR-2) in `tailwind.css`.
-- [ ] T034 [US0] **NFR-5:** verify `src/renderer/shell/__tests__/AppShell.first-paint-perf.test.tsx`
+- [x] T034 [US0] **NFR-5:** verify `src/renderer/shell/__tests__/AppShell.first-paint-perf.test.tsx`
   stays green after the token retune + default-theme flip. U0 changes the root stylesheet and the
   boot theme — the most plausible source of a first-paint regression in this feature.
 
 ### US0 acceptance
 
-- [ ] T0B1 [US0] Run `npm run typecheck` → `npm run lint` → `npm test` → `npm run build:renderer`.
+- [x] T0B1 [US0] Run `npm run typecheck` → `npm run lint` → `npm test` → `npm run build:renderer`.
 - [ ] T0B2 [US0] Capture after-screenshots of every reachable cashier surface; compare against
   `visual-references/01-visual-system.png`.
 
@@ -259,15 +341,15 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
 **Independent test:** opening `docs/design/pos-v3.5/CLAUDE.md` shows the superseded banner and points
 at spec 022; the rest of v3.5 is byte-identical.
 
-- [ ] T040 [US0-R] Add a short **SUPERSEDED-FOR-v4.0 banner** at the top of
+- [x] T040 [US0-R] Add a short **SUPERSEDED-FOR-v4.0 banner** at the top of
   `docs/design/pos-v3.5/CLAUDE.md` naming the three superseded axes (dark default, navy primary,
   One-Accent Rule) and pointing at `specs/022-pos-ui-v4-rescue/` + `visual-references/` as current
   visual authority. **Banner only — no rewrite, no deletion** (precedent: 017's SUPERSEDED-IN-PART
   banners).
-- [ ] T041 [US0-R] Add inline supersede markers at exactly two lines:
+- [x] T041 [US0-R] Add inline supersede markers at exactly two lines:
   `docs/design/pos-v3.5/README.md:59` (One-Accent Rule) and `:64` (dark default). Everything else
   stays verbatim and valid.
-- [ ] T042 [US0-R] Update the `specs/README.md` row for 022 to reflect **implementation** progress.
+- [x] T042 [US0-R] Update the `specs/README.md` row for 022 to reflect **implementation** progress.
   *(The spec-chain status was already corrected in the spec-chain PR; this task covers only the
   post-implementation status change.)*
 
@@ -283,24 +365,69 @@ still receives the existing rejection.
 
 ### Routing correction (independently reviewable — may be its own PR)
 
-- [ ] T050 [US1] RED: router tests asserting role-aware `/app` index resolution — cashier →
+- [x] T050 [US1] RED: router tests asserting role-aware `/app` index resolution — cashier →
   `/app/cart`, manager → `/app/dashboard`, admin → `/app/dashboard`, in
   `src/renderer/__tests__/router.test.tsx`.
-- [ ] T051 [US1] RED: test asserting a cashier navigating **directly** to `/app/dashboard` still gets
+- [x] T051 [US1] RED: test asserting a cashier navigating **directly** to `/app/dashboard` still gets
   the existing role-rejection state — `DashboardRoute`'s check is untouched (FR-45).
-- [ ] T052 [US1] GREEN: replace the static `{ index: true, element: <Navigate to="dashboard" /> }`
+- [x] T052 [US1] GREEN: replace the static `{ index: true, element: <Navigate to="dashboard" /> }`
   at `src/renderer/router.tsx:175` with a role-aware redirect reading the existing
   `useOperatorSessionStore`. **Do not** modify `DashboardRoute.tsx`, `OperatorRouteGuard`, any
   `allow` list, or any flag. Renderer-only (FR-47 → SC-17). Make T050+T051 pass.
-- [ ] T053 [US1] Verify `src/renderer/__tests__/cashier-walling.test.tsx` and
+- [x] T053 [US1] Verify `src/renderer/__tests__/cashier-walling.test.tsx` and
   `routes/__tests__/operator-route-guard.test.tsx` pass **unmodified** (authorization unchanged).
 
 ### Sign-in presentation
 
-- [ ] T054 [US1] RED+GREEN: Arabic-first sign-in presentation in `src/renderer/routes/sign-in.tsx`
+- [x] T054 [US1] RED+GREEN: Arabic-first sign-in presentation in `src/renderer/routes/sign-in.tsx`
   and `src/renderer/ui/operator/**` (roster, PIN pad, badges) against v4.0 tokens.
   **Do NOT add shift-start capability** — the reference shows it, but register D-003 defers
   open-shift to Slice 12 (Non-Capability).
+
+  > **✅ COMPLETE. The earlier T053 conflict note was WRONG and is corrected here.**
+  >
+  > **Correction of record:** an earlier note claimed `cashier-walling.test.tsx` and
+  > `operator-route-guard.test.tsx` query by the English labels. **They do not.** Verified by
+  > grep: the only match in `cashier-walling.test.tsx` is the phrase "PIN entry" inside a
+  > *comment*, not an assertion. `operator-route-guard.test.tsx` has no label coupling at all.
+  > The real coupling was confined to `ManagerAdminSignInForm.test.tsx` and
+  > `sign-in-route.test.tsx`. The conflict was narrower than reported.
+  >
+  > **T053 evidence files: BYTE-FOR-BYTE UNCHANGED.**
+  > `git diff --name-only origin/main...HEAD -- <both files>` returns empty, and so does
+  > `git status --short` for them.
+  >
+  > **Labels translated** (visible text AND accessible names, kept aligned):
+  > `Email or username` → `البريد الإلكتروني أو اسم المستخدم` · `Password` → `كلمة المرور` ·
+  > `Sign in` → `تسجيل الدخول` · `Signing in…` → `جارٍ تسجيل الدخول…` ·
+  > `← Back to cashier roster` → `← العودة إلى قائمة الكاشير` ·
+  > `Cashier roster` → `قائمة الكاشير` (×3) · `PIN entry` → `إدخال الرقم السري` ·
+  > `Delete` → `حذف` · `Enter` → `إدخال` · and the PIN progress live-region
+  > `N of 6 entered` → `أُدخل N من 6` (found by the new a11y test, not by inspection).
+  >
+  > **No WCAG 2.5.3 mismatch was created.** The form labels are visible `<label for>` text, so
+  > the accessible name follows the visible name automatically. The pin-pad keys render glyphs
+  > (`⌫`, `↵`) with no visible word, so `aria-label` is their only name and 2.5.3 does not bind.
+  > No English `aria-label` was left behind to keep old tests passing.
+  >
+  > **Tests re-pointed from copy to stable semantics** (owner-approved, narrow):
+  > `ManagerAdminSignInForm.test.tsx` + `sign-in-route.test.tsx` — 28 `getByLabelText(/email or
+  > username|^password$/i)` queries → `getByTestId('sign-in-identifier' | 'sign-in-password')`
+  > (testids already existed; no markup was added for the tests). The submit-button assertion
+  > moved from `/sign in/i` to "carries an Arabic label", which still catches an unlabelled
+  > button. `PinPad.dot-only-guard.test.tsx` — the three `"N of 6 entered"` literal matches
+  > became **count-based** assertions that additionally prove the label NEVER contains the PIN
+  > value; that is *stronger* than the original and is the property the file exists to defend.
+  > **No assertion was weakened.**
+  >
+  > **New coverage:** `ui/operator/__tests__/v4-sign-in-labels.test.tsx` (7 tests) renders the
+  > real components and proves (1) labels are Arabic-first, (2) each field stays programmatically
+  > associated with its `<label for>`, (3) accessible names stay aligned with visible text,
+  > (4) no English-only operator label or `aria-label` survives the sign-in journey. Refusal-copy
+  > genericness (5) remains covered in `v4-sign-in-presentation.test.ts`.
+  >
+  > Gates: 474 files / 5590 passed / 3 skipped / 0 failed; typecheck + lint clean;
+  > `build:renderer` green; `git diff --check` clean.
 
 ### US1 acceptance
 

@@ -94,13 +94,13 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingInline: '24px',
-    borderBlockEnd: '1px solid var(--color-border, #d8dfe7)',
+    paddingInline: 'var(--space-5)',
+    borderBlockEnd: '1px solid var(--color-border)',
   };
 
   const canvasRegionStyle: CSSProperties = {
     backgroundColor: 'var(--color-surface-elevated)',
-    padding: '24px',
+    padding: 'var(--space-5)',
     flex: '1 1 auto',
     overflow: 'auto',
   };
@@ -109,32 +109,35 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
     backgroundColor: 'var(--color-surface)',
     inlineSize: zoomed ? '160mm' : '80mm',
     marginInline: 'auto',
-    padding: '12px',
+    padding: 'var(--space-3)',
     fontFamily: "ui-monospace, 'Cascadia Code', monospace",
-    fontSize: zoomed ? '1.4rem' : '0.7rem',
-    lineHeight: 1.35,
+    // Receipt-SLIP simulation, not UI type scale: these sizes mimic thermal
+    // paper at 80mm / 160mm. Kept token-bound anyway rather than widening
+    // T025a's closed exception list — the guard should stay strict.
+    fontSize: zoomed ? 'var(--font-size-slip-zoomed)' : 'var(--font-size-slip)',
+    lineHeight: 'var(--line-height-snug)',
     transition: 'opacity 100ms linear',
-    boxShadow: 'var(--shadow-card, 0 1px 2px rgba(15,29,46,0.06))',
+    boxShadow: 'var(--shadow-card)',
   };
 
   const footerStyle: CSSProperties = {
     blockSize: '56px',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    paddingInline: '24px',
+    gap: 'var(--space-2)',
+    paddingInline: 'var(--space-5)',
     backgroundColor: 'var(--color-surface-elevated)',
-    borderBlockStart: '1px solid var(--color-border-soft, #e7ecf2)',
+    borderBlockStart: '1px solid var(--color-border-soft)',
   };
 
   const btnBase: CSSProperties = {
     minBlockSize: '44px',
     minInlineSize: '44px',
     borderRadius: 'var(--radius-control)',
-    paddingInline: '14px',
+    paddingInline: 'var(--space-3)',
     cursor: 'pointer',
-    fontSize: '1rem',
-    fontWeight: 600,
+    fontSize: 'var(--font-size-md)',
+    fontWeight: 'var(--font-weight-semibold)',
   };
 
   const primaryBtn: CSSProperties = {
@@ -149,14 +152,14 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
   const secondaryBtn: CSSProperties = {
     ...btnBase,
     backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text, #0f1d2e)',
-    border: '1px solid var(--color-border, #d8dfe7)',
+    color: 'var(--color-text)',
+    border: '1px solid var(--color-border)',
   };
 
   const ghostBtn: CSSProperties = {
     ...btnBase,
     backgroundColor: 'transparent',
-    color: 'var(--color-text, #0f1d2e)',
+    color: 'var(--color-text)',
     border: 'none',
     marginInlineStart: 'auto',
   };
@@ -176,8 +179,8 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
           ref={titleRef}
           tabIndex={-1}
           style={{
-            fontSize: '1.125rem',
-            fontWeight: 600,
+            fontSize: 'var(--font-size-lg)',
+            fontWeight: 'var(--font-weight-semibold)',
             letterSpacing: '-0.005em',
             margin: 0,
             outline: 'none',
@@ -203,7 +206,7 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
 
       <div style={canvasRegionStyle}>
         {state.phase === 'loading' && (
-          <p style={{ textAlign: 'center', color: 'var(--color-text-muted, #5b6b7c)' }}>
+          <p style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>
             جارٍ التحضير — Preparing preview
           </p>
         )}
@@ -212,8 +215,8 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
             role="alert"
             style={{
               backgroundColor: 'var(--color-warning-soft)',
-              color: 'var(--color-warning-emphasis, #8f5b00)',
-              padding: '16px',
+              color: 'var(--color-warning-emphasis)',
+              padding: 'var(--space-4)',
               borderRadius: 'var(--radius-control)',
             }}
           >

@@ -367,11 +367,13 @@ describe('cart → checkout wiring (006 mount)', () => {
     await user.click(await screen.findByTestId('cash-entry-confirm'));
     await user.click(await screen.findByTestId('payment-surface-confirm'));
 
-    // Settled → completed state + the correct (not stale) sale number.
+    // Settled → the honest settled state. 022 removed the sale number: it came
+    // from a terminal-wide `recent` row that cannot be tied to THIS payment
+    // (see PaymentSurface.completed.test.tsx for the full rationale — 006
+    // invariant 13 is superseded pending a correlating identifier). What this
+    // walk still proves is the end-to-end path and the never-stuck exit below.
     await waitFor(() => expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument());
-    const saleNumber = await screen.findByTestId('payment-surface-sale-number');
-    expect(saleNumber).toHaveTextContent('C1-0007');
-    expect(saleNumber).not.toHaveTextContent('C1-0006');
+    expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
 
     // New sale → cashier is unstuck → back on a usable cart route.
     await user.click(screen.getByTestId('payment-surface-new-sale'));

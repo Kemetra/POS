@@ -126,11 +126,11 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
           data-testid="sign-in-back"
           onClick={onBack}
         >
-          ← Back to cashier roster
+          ← العودة إلى قائمة الكاشير
         </button>
       )}
       <div className="sign-in-form__field">
-        <label htmlFor={identifierId}>Email or username</label>
+        <label htmlFor={identifierId}>البريد الإلكتروني أو اسم المستخدم</label>
         <input
           id={identifierId}
           ref={identifierRef}
@@ -145,7 +145,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
         />
       </div>
       <div className="sign-in-form__field">
-        <label htmlFor={passwordId}>Password</label>
+        <label htmlFor={passwordId}>كلمة المرور</label>
         <input
           id={passwordId}
           ref={passwordRef}
@@ -159,7 +159,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
 
       <div className="sign-in-form__feedback" role="status" aria-live="polite">
         {isSubmitting ? (
-          <span data-testid="sign-in-spinner">Signing in…</span>
+          <span data-testid="sign-in-spinner">جارٍ تسجيل الدخول…</span>
         ) : refusalCategory !== undefined ? (
           <span
             role="alert"
@@ -186,7 +186,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
         data-testid="sign-in-submit"
         className="sign-in-form__submit"
       >
-        {isSubmitting ? 'Signing in…' : 'Sign in'}
+        {isSubmitting ? 'جارٍ تسجيل الدخول…' : 'تسجيل الدخول'}
       </button>
     </form>
   );
