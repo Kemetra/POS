@@ -155,8 +155,8 @@ describe('AppRouter + /sign-in (T022)', () => {
       <AppRouter pairing={pairedBridge()} operator={operatorBridge({})} initialEntry="/sign-in" />,
     );
     await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
-    await user.type(screen.getByLabelText(/email or username/i), 'manager@x.test');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
     await waitFor(() => {
       const state = useOperatorSessionStore.getState().state;
@@ -173,8 +173,8 @@ describe('AppRouter + /sign-in (T022)', () => {
       <AppRouter pairing={pairedBridge()} operator={operatorBridge({})} initialEntry="/sign-in" />,
     );
     await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
-    await user.type(screen.getByLabelText(/email or username/i), 'manager@x.test');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
     // Phase 4: the dashboard now renders the v3.5 skeleton; assert it mounted
     // via its stable testid (copy-independent) rather than the old welcome copy.
@@ -203,8 +203,8 @@ describe('AppRouter + /sign-in (T022)', () => {
     });
     render(<AppRouter pairing={pairedBridge()} operator={bridge} initialEntry="/sign-in" />);
     await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
-    await user.type(screen.getByLabelText(/email or username/i), 'manager@x.test');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
     // Takeover prompt appears; confirm it.
     await waitFor(() => expect(screen.getByTestId('takeover-prompt-confirm')).toBeInTheDocument());

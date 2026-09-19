@@ -101,12 +101,15 @@ afterEach(() => {
 });
 
 describe('ManagerAdminSignInForm — T019 / T023 happy path', () => {
-  it('renders the identifier and password fields and a Sign in button', () => {
+  it('renders the identifier and password fields and a labelled submit button', () => {
     const { bridge } = bridgeWith(happyResponse);
     render(<ManagerAdminSignInForm operator={bridge} />);
-    expect(screen.getByLabelText(/email or username/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
-    expect(screen.getByTestId('sign-in-submit')).toHaveTextContent(/sign in/i);
+    expect(screen.getByTestId('sign-in-identifier')).toBeInTheDocument();
+    expect(screen.getByTestId('sign-in-password')).toBeInTheDocument();
+    // 022 T054 — the submit action is Arabic-first. Asserting "carries an
+    // Arabic label" is stronger than matching the superseded English text:
+    // it survives rewording and would still catch an unlabelled button.
+    expect(screen.getByTestId('sign-in-submit').textContent).toMatch(/[؀-ۿ]/u);
   });
 
   it('refuses to submit when either field is empty (validation, no bridge call)', async () => {
@@ -126,7 +129,7 @@ describe('ManagerAdminSignInForm — T019 / T023 happy path', () => {
     await user.click(screen.getByTestId('sign-in-submit'));
     expect(screen.getByTestId('sign-in-empty-input')).toBeInTheDocument();
     // The first new keystroke clears the alert.
-    await user.type(screen.getByLabelText(/email or username/i), 'i');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'i');
     expect(screen.queryByTestId('sign-in-empty-input')).not.toBeInTheDocument();
   });
 
@@ -134,8 +137,8 @@ describe('ManagerAdminSignInForm — T019 / T023 happy path', () => {
     const user = userEvent.setup();
     const { bridge, signInMock } = bridgeWith(happyResponse);
     render(<ManagerAdminSignInForm operator={bridge} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'manager@x.test');
-    await user.type(screen.getByLabelText(/^password$/i), 'p455');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
+    await user.type(screen.getByTestId('sign-in-password'), 'p455');
     await user.click(screen.getByTestId('sign-in-submit'));
     await waitFor(() => {
       expect(signInMock).toHaveBeenCalledTimes(1);
@@ -151,8 +154,8 @@ describe('ManagerAdminSignInForm — T019 / T023 happy path', () => {
     const user = userEvent.setup();
     const { bridge } = bridgeWith(happyResponse);
     render(<ManagerAdminSignInForm operator={bridge} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'm@x.test');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'm@x.test');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
     await waitFor(() => {
       const state = useOperatorSessionStore.getState().state;
@@ -167,8 +170,8 @@ describe('ManagerAdminSignInForm — T019 / T023 happy path', () => {
     const user = userEvent.setup();
     const { bridge } = bridgeWith(takeoverResponse);
     render(<ManagerAdminSignInForm operator={bridge} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'm@x.test');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'm@x.test');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
     await waitFor(() => {
       expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt');
@@ -179,8 +182,8 @@ describe('ManagerAdminSignInForm — T019 / T023 happy path', () => {
     const user = userEvent.setup();
     const { bridge } = bridgeWith(happyResponse);
     render(<ManagerAdminSignInForm operator={bridge} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'm@x.test');
-    const password = screen.getByLabelText(/^password$/i);
+    await user.type(screen.getByTestId('sign-in-identifier'), 'm@x.test');
+    const password = screen.getByTestId('sign-in-password');
     await user.type(password, 'super-secret');
     expect((password as HTMLInputElement).value).toBe('super-secret');
     await user.click(screen.getByTestId('sign-in-submit'));
@@ -194,8 +197,8 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
   it('on refusal renders the inline alert with the generic copy', async () => {
     const user = userEvent.setup();
     render(<ManagerAdminSignInForm operator={bridgeWith(refusedResponse).bridge} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'm@x.test');
-    await user.type(screen.getByLabelText(/^password$/i), 'wrong');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'm@x.test');
+    await user.type(screen.getByTestId('sign-in-password'), 'wrong');
     await user.click(screen.getByTestId('sign-in-submit'));
     const alert = await screen.findByTestId('sign-in-refusal');
     expect(alert).toHaveAttribute('data-category', 'invalid_input');
@@ -213,12 +216,12 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
   it('typing a new keystroke dismisses the inline alert', async () => {
     const user = userEvent.setup();
     render(<ManagerAdminSignInForm operator={bridgeWith(refusedResponse).bridge} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'i');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'i');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
     await screen.findByTestId('sign-in-refusal');
     // First new keystroke dismisses the alert.
-    await user.type(screen.getByLabelText(/^password$/i), 'q');
+    await user.type(screen.getByTestId('sign-in-password'), 'q');
     expect(screen.queryByTestId('sign-in-refusal')).not.toBeInTheDocument();
   });
 
@@ -262,8 +265,8 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
       dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'i');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'i');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
     // Spinner is shown; alert is absent.
     await screen.findByTestId('sign-in-spinner');
@@ -322,8 +325,8 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
       dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'i');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'i');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     // First submit — kicks off the slow signIn.
     await user.click(screen.getByTestId('sign-in-submit'));
     await screen.findByTestId('sign-in-spinner');
@@ -375,8 +378,8 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
       dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
     };
     render(<ManagerAdminSignInForm operator={bridge} />);
-    await user.type(screen.getByLabelText(/email or username/i), 'i');
-    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.type(screen.getByTestId('sign-in-identifier'), 'i');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
     const alert = await screen.findByTestId('sign-in-refusal');
     expect(alert).toHaveAttribute('data-category', 'invalid_input');

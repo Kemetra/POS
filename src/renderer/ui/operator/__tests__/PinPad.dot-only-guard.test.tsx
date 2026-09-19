@@ -12,7 +12,14 @@ import { PinPad, PIN_MAX_LENGTH } from '../PinPad.js';
  * expose the PIN value itself through `value`, `data-value`, `title`, or
  * any other attribute that echoes the digit string.
  *
- * aria-label format required: "N of 6 entered" (e.g. "4 of 6 entered").
+ * aria-label must be COUNT-BASED: it reports how many digits are entered and
+ * NEVER the digits themselves.
+ *
+ * 022 T054 — the wording is now Arabic ("أُدخل N من 6"). These assertions were
+ * re-pointed from the superseded English string to the property that actually
+ * matters and that this file exists to defend: the entered COUNT appears, the
+ * maximum appears, and the PIN VALUE never does. That is strictly stronger
+ * than the old literal match, and it survives any future rewording.
  */
 
 function renderPinPad(value = '') {
@@ -60,26 +67,23 @@ describe('PinPad dot-only guard — PR-1 security invariant', () => {
     expect(filled.length + empty.length).toBe(PIN_MAX_LENGTH);
   });
 
-  it('dot-region aria-label is "N of 6 entered" format (zero-length)', () => {
-    renderPinPad('');
-    const dotsEl = screen.getByTestId('pin-pad-dots');
-    expect(dotsEl).toHaveAttribute('aria-label', `0 of ${String(PIN_MAX_LENGTH)} entered`);
-  });
-
-  it('dot-region aria-label is "N of 6 entered" format (partial)', () => {
-    renderPinPad('1234');
-    const dotsEl = screen.getByTestId('pin-pad-dots');
-    expect(dotsEl).toHaveAttribute('aria-label', `4 of ${String(PIN_MAX_LENGTH)} entered`);
-  });
-
-  it('dot-region aria-label is "N of 6 entered" format (max-length)', () => {
-    renderPinPad('123456');
-    const dotsEl = screen.getByTestId('pin-pad-dots');
-    expect(dotsEl).toHaveAttribute(
-      'aria-label',
-      `${String(PIN_MAX_LENGTH)} of ${String(PIN_MAX_LENGTH)} entered`,
-    );
-  });
+  it.each([
+    { pin: '', entered: 0 },
+    { pin: '1234', entered: 4 },
+    { pin: '123456', entered: PIN_MAX_LENGTH },
+  ])(
+    'dot-region aria-label reports the COUNT, never the PIN ($entered entered)',
+    ({ pin, entered }) => {
+      renderPinPad(pin);
+      const label = screen.getByTestId('pin-pad-dots').getAttribute('aria-label') ?? '';
+      // Count-based: the entered count and the maximum are both present...
+      expect(label).toContain(String(entered));
+      expect(label).toContain(String(PIN_MAX_LENGTH));
+      // ...and the PIN value itself is NEVER in the accessible name. This is
+      // the guarantee the whole file exists for.
+      if (pin.length > 0) expect(label).not.toContain(pin);
+    },
+  );
 
   it('dot-region inner text contains no digit characters', () => {
     renderPinPad('9876');

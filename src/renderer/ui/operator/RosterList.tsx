@@ -43,7 +43,7 @@ export function RosterList(props: RosterListProps): JSX.Element {
   if (inert === true || cashiers.length === 0) {
     return (
       <section
-        aria-label="Cashier roster"
+        aria-label="قائمة الكاشير"
         data-testid="roster-list"
         data-state="inert"
         className="roster-list roster-list--inert"
@@ -60,7 +60,7 @@ export function RosterList(props: RosterListProps): JSX.Element {
 
   return (
     <section
-      aria-label="Cashier roster"
+      aria-label="قائمة الكاشير"
       data-testid="roster-list"
       data-state="active"
       className="roster-list"

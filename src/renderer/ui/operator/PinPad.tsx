@@ -18,7 +18,7 @@ import { useEffect, type JSX, type KeyboardEvent } from 'react';
  * Accessibility:
  *   - Each digit key is a `<button type="button">` — pointer + keyboard
  *     activatable, ≥44×44 px via CSS class `pin-pad__key`.
- *   - Backspace key is labelled "Delete" via aria-label.
+ *   - Backspace key is labelled "حذف" (Delete) via aria-label (022 T054).
  *   - Enter key is `aria-disabled` (NOT `disabled`) when PIN < 4 digits
  *     so it remains focusable and screen readers can announce the state.
  *   - Hardware numpad (keydown event) is wired while the component is
@@ -97,12 +97,12 @@ export function PinPad(props: PinPadProps): JSX.Element {
         role="group"
         className="pin-pad__dots"
         data-testid="pin-pad-dots"
-        aria-label={`${String(value.length)} of ${String(PIN_MAX_LENGTH)} entered`}
+        aria-label={`أُدخل ${String(value.length)} من ${String(PIN_MAX_LENGTH)}`}
       >
         {dots}
       </div>
 
-      <div className="pin-pad__grid" role="group" aria-label="PIN entry" dir="ltr">
+      <div className="pin-pad__grid" role="group" aria-label="إدخال الرقم السري" dir="ltr">
         {DIGIT_KEYS.map((key, idx) => {
           if (key === '⌫') {
             return (
@@ -111,7 +111,7 @@ export function PinPad(props: PinPadProps): JSX.Element {
                 type="button"
                 className="pin-pad__key pin-pad__key--backspace"
                 data-testid="pin-pad-backspace"
-                aria-label="Delete"
+                aria-label="حذف"
                 disabled={disabled}
                 onClick={handleBackspace}
                 onKeyDown={(e: KeyboardEvent<HTMLButtonElement>) => {
@@ -132,7 +132,7 @@ export function PinPad(props: PinPadProps): JSX.Element {
                 type="button"
                 className="pin-pad__key pin-pad__key--enter"
                 data-testid="pin-pad-enter"
-                aria-label="Enter"
+                aria-label="إدخال"
                 aria-disabled={!canSubmit || disabled}
                 disabled={disabled}
                 onClick={handleEnter}

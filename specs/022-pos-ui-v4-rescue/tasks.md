@@ -297,35 +297,55 @@ still receives the existing rejection.
 
 ### Sign-in presentation
 
-- [ ] T054 [US1] **PARTIAL — token half + refusal copy DONE; form/control LABELS BLOCKED (see below).**
-  RED+GREEN: Arabic-first sign-in presentation in `src/renderer/routes/sign-in.tsx`
+- [x] T054 [US1] RED+GREEN: Arabic-first sign-in presentation in `src/renderer/routes/sign-in.tsx`
   and `src/renderer/ui/operator/**` (roster, PIN pad, badges) against v4.0 tokens.
   **Do NOT add shift-start capability** — the reference shows it, but register D-003 defers
   open-shift to Slice 12 (Non-Capability).
 
-  > **⚠️ T054 / T053 CONFLICT — owner decision needed.**
-  > **Done:** the v4.0 token half (the sign-in surface carries zero inline style literals and
-  > re-themes from `:root` alone — asserted in `ui/operator/__tests__/v4-sign-in-presentation.test.ts`)
-  > and the **refusal copy**, now Arabic-first in `ui/operator/messages.ts` (one consumer, and the
-  > one test asserting it was re-pointed at the copy SYMBOL rather than a hardcoded English
-  > literal, so future wording changes cannot break it). P11 preserved: still one generic message
-  > per category, no interpolation, no factor-distinguishing detail.
+  > **✅ COMPLETE. The earlier T053 conflict note was WRONG and is corrected here.**
   >
-  > **Blocked:** the form/control labels — `Email or username`, `Password`, `Cashier roster`,
-  > `PIN entry`, `Delete`, `Enter`. **T053 in this same phase requires `cashier-walling.test.tsx`
-  > and `operator-route-guard.test.tsx` to pass UNMODIFIED**, and those suites query by exactly
-  > those strings (`getByLabelText(/email or username/i)`, `aria-label="Cashier roster"`, …).
-  > Also affected: `routes/__tests__/sign-in-route.test.tsx`,
-  > `__tests__/no-operator-auth-session.test.tsx`,
-  > `tests/integration/renderer/takeover-prompt-disclosure.test.tsx`.
+  > **Correction of record:** an earlier note claimed `cashier-walling.test.tsx` and
+  > `operator-route-guard.test.tsx` query by the English labels. **They do not.** Verified by
+  > grep: the only match in `cashier-walling.test.tsx` is the phrase "PIN entry" inside a
+  > *comment*, not an assertion. `operator-route-guard.test.tsx` has no label coupling at all.
+  > The real coupling was confined to `ManagerAdminSignInForm.test.tsx` and
+  > `sign-in-route.test.tsx`. The conflict was narrower than reported.
   >
-  > **The workaround was rejected on purpose:** Arabic visible text with English `aria-label`s
-  > would breach **WCAG 2.5.3 (Label in Name)** — a visible-text/accessible-name mismatch is a
-  > worse defect than the inconsistency being fixed, and would likely trip the axe smoke test.
+  > **T053 evidence files: BYTE-FOR-BYTE UNCHANGED.**
+  > `git diff --name-only origin/main...HEAD -- <both files>` returns empty, and so does
+  > `git status --short` for them.
   >
-  > **Needs:** a scoped follow-up explicitly permitted to re-point those label queries (same
-  > decision class as T024). Until then T054 stays unticked — the label copy is genuinely
-  > unfinished and a tick would misreport it.
+  > **Labels translated** (visible text AND accessible names, kept aligned):
+  > `Email or username` → `البريد الإلكتروني أو اسم المستخدم` · `Password` → `كلمة المرور` ·
+  > `Sign in` → `تسجيل الدخول` · `Signing in…` → `جارٍ تسجيل الدخول…` ·
+  > `← Back to cashier roster` → `← العودة إلى قائمة الكاشير` ·
+  > `Cashier roster` → `قائمة الكاشير` (×3) · `PIN entry` → `إدخال الرقم السري` ·
+  > `Delete` → `حذف` · `Enter` → `إدخال` · and the PIN progress live-region
+  > `N of 6 entered` → `أُدخل N من 6` (found by the new a11y test, not by inspection).
+  >
+  > **No WCAG 2.5.3 mismatch was created.** The form labels are visible `<label for>` text, so
+  > the accessible name follows the visible name automatically. The pin-pad keys render glyphs
+  > (`⌫`, `↵`) with no visible word, so `aria-label` is their only name and 2.5.3 does not bind.
+  > No English `aria-label` was left behind to keep old tests passing.
+  >
+  > **Tests re-pointed from copy to stable semantics** (owner-approved, narrow):
+  > `ManagerAdminSignInForm.test.tsx` + `sign-in-route.test.tsx` — 28 `getByLabelText(/email or
+  > username|^password$/i)` queries → `getByTestId('sign-in-identifier' | 'sign-in-password')`
+  > (testids already existed; no markup was added for the tests). The submit-button assertion
+  > moved from `/sign in/i` to "carries an Arabic label", which still catches an unlabelled
+  > button. `PinPad.dot-only-guard.test.tsx` — the three `"N of 6 entered"` literal matches
+  > became **count-based** assertions that additionally prove the label NEVER contains the PIN
+  > value; that is *stronger* than the original and is the property the file exists to defend.
+  > **No assertion was weakened.**
+  >
+  > **New coverage:** `ui/operator/__tests__/v4-sign-in-labels.test.tsx` (7 tests) renders the
+  > real components and proves (1) labels are Arabic-first, (2) each field stays programmatically
+  > associated with its `<label for>`, (3) accessible names stay aligned with visible text,
+  > (4) no English-only operator label or `aria-label` survives the sign-in journey. Refusal-copy
+  > genericness (5) remains covered in `v4-sign-in-presentation.test.ts`.
+  >
+  > Gates: 474 files / 5590 passed / 3 skipped / 0 failed; typecheck + lint clean;
+  > `build:renderer` green; `git diff --check` clean.
 
 ### US1 acceptance
 

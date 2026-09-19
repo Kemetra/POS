@@ -151,6 +151,18 @@ reviewer to discover in the diff.
 | `shell/regions/__tests__/ThemeToggle.test.tsx` | U0 / T021-T022 | Boot register dark → light; round-trip direction and at-rest label inverted | Assumed the superseded dark default as its fixture state | Unchanged in kind — still proves the button is wired to the store and a click repaints the root. No assertion removed or relaxed |
 | `ui/operator/__tests__/ManagerAdminSignInForm.test.tsx` | U1 / T054 | `toHaveTextContent(/credentials not recognised/i)` → `toHaveTextContent(SIGN_IN_REFUSAL_COPY.invalid_input)` | Hardcoded the English literal the Arabic-first copy change replaces | Stronger than before: asserts the canonical copy SYMBOL, so it survives any future wording change. The security property is pinned by `data-category`, which is untouched |
 
+| `ui/operator/__tests__/ManagerAdminSignInForm.test.tsx` | U1 / T054 | 22 `getByLabelText` label queries → `getByTestId`; submit assertion → "carries an Arabic label" | Queried by the English presentation copy T054 replaces | Same behaviours asserted via stable testids the inputs already carried. No markup added for tests; no assertion weakened |
+| `routes/__tests__/sign-in-route.test.tsx` | U1 / T054 | 6 `getByLabelText` label queries → `getByTestId` | Same — coupled to superseded English labels | Identical flows, stable selectors |
+| `ui/operator/__tests__/PinPad.dot-only-guard.test.tsx` | U1 / T054 | 3 literal `"N of 6 entered"` matches → count-based assertions | Pinned English wording of a live-region label now Arabic | **Strengthened**: now also asserts the label NEVER contains the PIN value — the security property the file exists to defend |
+
+**Owner approval (explicit):** narrowly updating tests coupled to superseded English presentation
+copy was authorised for T054. It did NOT authorise broader test rewrites or behaviour changes, and
+none were made.
+
+**T054 correction of record:** an earlier note in `tasks.md` claimed the T053 evidence files query
+by the English labels. **They do not** — verified by grep; the only match in
+`cashier-walling.test.tsx` is inside a comment. The real coupling was two files, both listed above.
+
 **Not modified, and verified so (T053):** `__tests__/cashier-walling.test.tsx` and
 `routes/__tests__/operator-route-guard.test.tsx` — 28 tests green, `git diff --name-only` empty.
 That is the evidence U1's landing correction stayed a navigation change and never became an

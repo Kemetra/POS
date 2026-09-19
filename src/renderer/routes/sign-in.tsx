@@ -212,7 +212,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
             <ManagerAdminSignInForm operator={operator} />
           </section>
 
-          <aside className="sign-in-route__roster" aria-label="Cashier roster">
+          <aside className="sign-in-route__roster" aria-label="قائمة الكاشير">
             <h2 className="sign-in-route__sub-heading">
               صيادلة هذا الفرع · Cashiers on this branch
             </h2>
