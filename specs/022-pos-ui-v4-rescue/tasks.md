@@ -165,28 +165,28 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
 
 ### Token values (`:root` + dark register ONLY — no `@layer components` edits)
 
-- [ ] T020 [US0] RED: update `src/renderer/styles/__tests__/theme-contract.test.ts` — invert the
+- [x] T020 [US0] RED: update `src/renderer/styles/__tests__/theme-contract.test.ts` — invert the
   **three** hardcoded dark-default assertions (index.html attribute, store default, default-theme
   expectations) to light. **Preserve** the structural guards: dark register exists, token-value
   overrides only (no forked components), RTL/`lang="ar"` systemic. This is the single
   owner-sanctioned test change (spec A2); name the superseding decision in the PR.
-- [ ] T021 [US0] GREEN: set the light default in `src/renderer/index.html` (line 14 `data-theme`),
+- [x] T021 [US0] GREEN: set the light default in `src/renderer/index.html` (line 14 `data-theme`),
   keeping `lang="ar" dir="rtl"` and the static flash-free attribute (meta CSP is `script-src 'self'`,
   so no inline pre-paint script).
-- [ ] T022 [US0] GREEN: set `DEFAULT_THEME: Theme = 'light'` in
+- [x] T022 [US0] GREEN: set `DEFAULT_THEME: Theme = 'light'` in
   `src/renderer/stores/theme-store.ts`; review `stores/__tests__/theme-store.test.ts` for any
   genuinely hardcoded `'dark'` default (most assert via the `DEFAULT_THEME` symbol and follow
   automatically). Make T020 pass.
-- [ ] T023 [US0] Retune `:root` colour token **values** in `src/renderer/styles/tailwind.css`
+- [x] T023 [US0] Retune `:root` colour token **values** in `src/renderer/styles/tailwind.css`
   (lines 3–133) to v4.0: light clinical background/surface, **pharmacy green-teal**
   `--color-primary*`, navy `--color-text`/structure, controlled blue `--color-info*`, orange
   `--color-warning*`, red `--color-danger*`, neutral `--color-border*`, restrained `--shadow-*`.
   **No new token names unless a genuine semantic gap exists** (token-name parity test must stay green).
-- [ ] T024 [US0] **Owner decision + implementation:** dark-register disposition
+- [x] T024 [US0] **Owner decision + implementation:** dark-register disposition
   (`tailwind.css:135-250`) — (a) retune the ~6 core dark tokens to v4.0 (**recommended**, avoids
   shipping two visual identities) or (b) freeze v3.5 Vault Dark as accepted divergence. Record the
   choice in plan.md §U0; implement token values only.
-- [ ] T025 [US0] RED+GREEN: **token guard across all five FR-8 value families** — assert no
+- [x] T025 [US0] RED+GREEN: **token guard across all five FR-8 value families** — assert no
   cashier-journey surface introduces a raw literal for **colour**, **spacing**, **radius**,
   **typography size**, or **elevation/shadow**. FR-8 and SC-1 name all five; a colour-only guard
   would leave four families unprotected and let the system drift exactly where v3.5's density and
@@ -202,7 +202,7 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
   | Typography size | `--font-size-*` / `--line-height-*` |
   | Elevation / shadow | `--shadow-*` |
 
-- [ ] T025a [US0] **Document the guard's narrow structural exception.** Some values are *structural*,
+- [x] T025a [US0] **Document the guard's narrow structural exception.** Some values are *structural*,
   not design-system values, and tokenizing them would be noise rather than consistency. The guard
   MUST allow, and the exception list MUST be written into the test file as a comment so it stays
   auditable:
@@ -220,11 +220,11 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
 
 ### Typography
 
-- [ ] T026 [US0] Set `--font-family-sans` to the declared Arabic-first system stack
+- [x] T026 [US0] Set `--font-family-sans` to the declared Arabic-first system stack
   (`'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif`) in `tailwind.css`, replacing the
   currently-unresolvable `'Inter Variable', Inter` (research.md §1). **No package, no `@font-face`,
   no bundled file** — `no-brand-font.test.ts` guards `@font-face` only and stays green.
-- [ ] T027 [US0] Confirm money/identifier treatment: `--font-family-mono` + tabular numerals for
+- [x] T027 [US0] Confirm money/identifier treatment: `--font-family-mono` + tabular numerals for
   money, barcodes, SKUs, sale numbers (FR-12), `dir="ltr"`-isolated (FR-21).
 - [ ] T028 [US0] **Verification on target hardware (Windows 10/11 x64):** render Arabic UI copy,
   mixed Arabic/Latin, dense cart rows and large totals; confirm the stack resolves to Dubai (or the
@@ -233,23 +233,23 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
 
 ### Shared primitives
 
-- [ ] T029 [P] [US0] RED+GREEN: primary/secondary/**destructive** button treatment in
+- [x] T029 [P] [US0] RED+GREEN: primary/secondary/**destructive** button treatment in
   `src/renderer/ui/primitives/Button/` — teal fill permitted for primary (FR-4), destructive visually
   separated and never carrying the primary treatment (FR-17).
-- [ ] T030 [P] [US0] RED+GREEN: input/search treatment in `src/renderer/ui/primitives/Input/`.
-- [ ] T031 [P] [US0] RED+GREEN: status-chip treatment in `src/renderer/ui/primitives/Badge/`
+- [x] T030 [P] [US0] RED+GREEN: input/search treatment in `src/renderer/ui/primitives/Input/`.
+- [x] T031 [P] [US0] RED+GREEN: status-chip treatment in `src/renderer/ui/primitives/Badge/`
   (icon/text + colour, never colour alone — FR-26).
-- [ ] T032 [P] [US0] RED+GREEN: table/row treatment in `src/renderer/ui/primitives/Table/`; panel
+- [x] T032 [P] [US0] RED+GREEN: table/row treatment in `src/renderer/ui/primitives/Table/`; panel
   treatment in `Card/` (borders + spacing, not shadow stacking — FR-9/FR-33).
-- [ ] T033 [US0] Verify the global `:focus-visible` rule renders visibly against the new light
+- [x] T033 [US0] Verify the global `:focus-visible` rule renders visibly against the new light
   surfaces (NFR-2) in `tailwind.css`.
-- [ ] T034 [US0] **NFR-5:** verify `src/renderer/shell/__tests__/AppShell.first-paint-perf.test.tsx`
+- [x] T034 [US0] **NFR-5:** verify `src/renderer/shell/__tests__/AppShell.first-paint-perf.test.tsx`
   stays green after the token retune + default-theme flip. U0 changes the root stylesheet and the
   boot theme — the most plausible source of a first-paint regression in this feature.
 
 ### US0 acceptance
 
-- [ ] T0B1 [US0] Run `npm run typecheck` → `npm run lint` → `npm test` → `npm run build:renderer`.
+- [x] T0B1 [US0] Run `npm run typecheck` → `npm run lint` → `npm test` → `npm run build:renderer`.
 - [ ] T0B2 [US0] Capture after-screenshots of every reachable cashier surface; compare against
   `visual-references/01-visual-system.png`.
 
@@ -259,15 +259,15 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
 **Independent test:** opening `docs/design/pos-v3.5/CLAUDE.md` shows the superseded banner and points
 at spec 022; the rest of v3.5 is byte-identical.
 
-- [ ] T040 [US0-R] Add a short **SUPERSEDED-FOR-v4.0 banner** at the top of
+- [x] T040 [US0-R] Add a short **SUPERSEDED-FOR-v4.0 banner** at the top of
   `docs/design/pos-v3.5/CLAUDE.md` naming the three superseded axes (dark default, navy primary,
   One-Accent Rule) and pointing at `specs/022-pos-ui-v4-rescue/` + `visual-references/` as current
   visual authority. **Banner only — no rewrite, no deletion** (precedent: 017's SUPERSEDED-IN-PART
   banners).
-- [ ] T041 [US0-R] Add inline supersede markers at exactly two lines:
+- [x] T041 [US0-R] Add inline supersede markers at exactly two lines:
   `docs/design/pos-v3.5/README.md:59` (One-Accent Rule) and `:64` (dark default). Everything else
   stays verbatim and valid.
-- [ ] T042 [US0-R] Update the `specs/README.md` row for 022 to reflect **implementation** progress.
+- [x] T042 [US0-R] Update the `specs/README.md` row for 022 to reflect **implementation** progress.
   *(The spec-chain status was already corrected in the spec-chain PR; this task covers only the
   post-implementation status change.)*
 

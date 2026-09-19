@@ -5,13 +5,15 @@
     the root, so component CSS (logical properties throughout) flips without
     per-leaf dir spot-fixes. Operator copy stays English in this slice
     (translation is out of scope); the layout direction is what changes.
-  - data-theme="dark"    — dark is the default register; baked statically so
-    dark users get a flash-free boot. main.tsx (initTheme) repaints to light
-    only when the operator persisted that choice. The shipped meta CSP is
-    `script-src 'self'`, so an inline pre-paint script is not an option — the
-    static default attribute is the flash-free path.
+  - data-theme="light"   — spec 022 (POS UI v4.0) is LIGHT-FIRST; baked
+    statically so the default boot is flash-free. main.tsx (initTheme)
+    repaints to dark only when the operator persisted that choice. The
+    shipped meta CSP is `script-src 'self'`, so an inline pre-paint script is
+    not an option — the static default attribute is the flash-free path.
+    (Supersedes ADR-0004's dark default; the dark register itself remains,
+    retuned to the v4.0 teal identity.)
 -->
-<html lang="ar" dir="rtl" data-theme="dark">
+<html lang="ar" dir="rtl" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

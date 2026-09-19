@@ -1,3 +1,22 @@
+> ## ⚠️ SUPERSEDED FOR v4.0 — READ BEFORE FOLLOWING ANYTHING BELOW
+>
+> This document remains the **historical v3.5 design record** and is still valid for
+> *structure, component inventory, copy, flows and implementation guidance*.
+>
+> **Three VISUAL axes are superseded** by [`specs/022-pos-ui-v4-rescue/`](../../../specs/022-pos-ui-v4-rescue/):
+>
+> | Axis | v3.5 (below) | v4.0 (governing) |
+> |:--|:--|:--|
+> | Theme default | dark default | **light default** |
+> | Primary colour | navy `#1f4e7a` | **pharmacy green-teal `#0f766e`** |
+> | Accent rule | One-Accent Rule — "teal … never a fill" | **teal MAY fill large primary actions** |
+>
+> Current visual authority is spec 022 plus its
+> [`visual-references/`](../../../specs/022-pos-ui-v4-rescue/visual-references/).
+> The dark register still exists, retuned to the v4.0 teal identity.
+>
+> Everything else in this file stands. Banner only — nothing below was rewritten or deleted.
+
 # CLAUDE.md — POS v3.0 terminal implementation
 
 You are implementing **POS v3.0**, an Arabic-first (RTL) pharmacy/retail point-of-sale terminal

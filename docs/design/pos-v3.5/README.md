@@ -57,12 +57,16 @@ authoritative spec for behavior and exact strings.
   (toasts). Operational state (offline/degraded/syncing) is **always a persistent banner, never a
   toast.**
 - **One-Accent Rule:** teal (`--color-accent`) appears only as the nav active-tab marker and focus
-  rings — never a fill. **Status-Color Containment:** success/warning/danger/info appear only on
+  rings — never a fill.
+  > ⚠️ **SUPERSEDED for v4.0** (spec 022): teal is the *primary* colour and **MAY fill large
+  > primary actions**. Status-Color Containment (next sentence) still stands. **Status-Color Containment:** success/warning/danger/info appear only on
   badges, banners, callouts — never decorative.
 - **Money is sacred:** minor units (piasters) internally, mono + tabular numerals, never rounded
   for aesthetics. 14% VAT on `vatable:true` lines; medicines (`vatable:false`) are VAT-exempt.
 - **Two themes:** **dark is the default** (Vault Dark register — see token table); a light toggle
   flips token values only (no new components). Theme persists in `localStorage`.
+  > ⚠️ **SUPERSEDED for v4.0** (spec 022): **light is the default**; dark remains as a token-only
+  > register, retuned to the v4.0 teal identity. Token-values-only and persistence are unchanged.
 
 ---
 

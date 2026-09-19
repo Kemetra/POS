@@ -70,9 +70,35 @@ T002 requires a human-observed Electron launch. Per quickstart §3 there are two
 Record the result here when run:
 
 ```
-(a) operator.dev_bypass.active : [ ] observed   [ ] ABSENT → STOP
+(a) operator.dev_bypass.active : [ ] observed   [ ] ABSENT -> STOP
 (b) catalogue readiness        : [ ] seed line  [ ] verified data (method: ______ )
 ```
+
+### Attempt 2026-09-19 (agent) — INCONCLUSIVE, not a pass and not a failure
+
+An agent-driven launch was attempted with the full quickstart env-var block. It could **not**
+produce an honest T002 result, for a tooling reason rather than an app reason:
+
+| Attempt | Result |
+|:--|:--|
+| `npm run dev`, stdout redirected | Only vite/build output captured. `scripts/dev-electron.cjs:91` spawns Electron with `stdio: 'inherit'`, so main-process output goes to the attached console, not the pipe. |
+| Electron launched directly, no vite | `ERR_CONNECTION_REFUSED` on `http://localhost:5173/` — renderer never loaded, so boot never reached operator sign-in. |
+| vite + Electron together, output piped | Vite confirmed up (HTTP 200 on 5173); Electron launched and stayed running, but emitted **zero** lines to the redirected pipe. On Windows a GUI Electron process does not write to a redirected stdout. |
+
+**Conclusion: the absence of `operator.dev_bypass.active` in these logs is NOT evidence the bypass
+failed.** No main-process log line of any kind was captured in any attempt, so the log is silent
+about everything, not just the bypass. Treating this silence as the documented STOP condition would
+be a false negative.
+
+**T002 therefore remains OPEN and still requires a human-observed launch** — someone who can see the
+terminal console (and the window) while `npm run dev` runs. The check is unchanged: the
+`operator.dev_bypass.active` warn line MUST appear.
+
+> Note: `applyDevSkipOperatorSignInIfRequested` (`src/main/operator/dev-skip-operator-signin.ts:73-78`)
+> also returns `false` **without logging** when a session already exists
+> (`deps.sessionManager.getCurrent() !== null`). So on a dev DB that already holds a session, an
+> absent line can be legitimate — the same shape as the catalogue seed's already-populated no-op.
+> Worth checking session state before treating a missing line as a hard STOP.
 
 ### ⚠️ The dev bypass signs in as MANAGER, not cashier
 
