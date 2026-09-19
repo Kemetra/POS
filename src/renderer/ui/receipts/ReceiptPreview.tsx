@@ -131,10 +131,10 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
     minBlockSize: '44px',
     minInlineSize: '44px',
     borderRadius: 'var(--radius-control)',
-    paddingInline: '14px',
+    paddingInline: 'var(--space-3)',
     cursor: 'pointer',
-    fontSize: '1rem',
-    fontWeight: 600,
+    fontSize: 'var(--font-size-md)',
+    fontWeight: 'var(--font-weight-semibold)',
   };
 
   const primaryBtn: CSSProperties = {
@@ -176,8 +176,8 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
           ref={titleRef}
           tabIndex={-1}
           style={{
-            fontSize: '1.125rem',
-            fontWeight: 600,
+            fontSize: 'var(--font-size-lg)',
+            fontWeight: 'var(--font-weight-semibold)',
             letterSpacing: '-0.005em',
             margin: 0,
             outline: 'none',
@@ -203,7 +203,7 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
 
       <div style={canvasRegionStyle}>
         {state.phase === 'loading' && (
-          <p style={{ textAlign: 'center', color: 'var(--color-text-muted, #5b6b7c)' }}>
+          <p style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>
             جارٍ التحضير — Preparing preview
           </p>
         )}
@@ -212,8 +212,8 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
             role="alert"
             style={{
               backgroundColor: 'var(--color-warning-soft)',
-              color: 'var(--color-warning-emphasis, #8f5b00)',
-              padding: '16px',
+              color: 'var(--color-warning-emphasis)',
+              padding: 'var(--space-4)',
               borderRadius: 'var(--radius-control)',
             }}
           >

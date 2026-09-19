@@ -12,19 +12,26 @@ import type { RefusalCategory } from '../../../shared/audit/event-shape.js';
  * Reachable in S4. The S1 surface never produces it; the string
  * exists here so the mapping is complete and a future S4 reviewer can
  * find the canonical copy in one place.
+ *
+ * 022 US1 T054 — copy is Arabic-first: the terminal is an Arabic-first
+ * product (`<html lang="ar" dir="rtl">`) and an English-only sign-in refusal
+ * was one of the inconsistencies 022 exists to remove. The P11 property that
+ * matters is UNCHANGED: still exactly one generic message per category, with
+ * no factor-distinguishing detail and no interpolated user input — an
+ * attacker learns nothing from which string is shown.
  */
 
 export const SIGN_IN_REFUSAL_COPY: Readonly<Record<RefusalCategory, string>> = Object.freeze({
-  invalid_input: 'Credentials not recognised. Please try again.',
-  no_connection: "Can't reach the server. Please try again.",
-  rate_limited: 'Too many attempts. Please wait and try again.',
-  role_mismatch: 'You do not have access to this surface.',
-  not_signed_in: 'Please sign in to continue.',
-  state_invalid: 'Action cannot be completed in the current state.',
+  invalid_input: 'بيانات الدخول غير صحيحة. حاول مرة أخرى.',
+  no_connection: 'تعذّر الوصول إلى الخادم. حاول مرة أخرى.',
+  rate_limited: 'محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.',
+  role_mismatch: 'لا تملك صلاحية الوصول إلى هذه الشاشة.',
+  not_signed_in: 'سجّل الدخول للمتابعة.',
+  state_invalid: 'لا يمكن تنفيذ هذا الإجراء في الحالة الحالية.',
   // 019-cashier-pin-provisioning FR-11 — truthful degraded state (P9): the
   // cashier has no provider-neutral identifier yet, so provisioning is not
   // possible. Never presented as a failed attempt.
-  not_ready: 'This cashier is not ready to provision yet.',
+  not_ready: 'لا يمكن تفعيل هذا الكاشير بعد.',
 });
 
-export const EMPTY_INPUT_MESSAGE = 'Enter your credentials to sign in.';
+export const EMPTY_INPUT_MESSAGE = 'أدخل بيانات الدخول للمتابعة.';

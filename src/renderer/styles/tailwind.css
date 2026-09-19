@@ -3,45 +3,49 @@
 :root {
   /* ── Colour tokens — aligned to POS Pulse 003 design spec ───────────── */
 
-  /* Workspace + surface */
-  --color-background: #fbfcfd; /* workspace surface */
+  /* Workspace + surface — v4.0 light clinical (022 T023) */
+  --color-background: #f7f9fa; /* workspace surface */
   --color-surface: #ffffff; /* card / panel */
   --color-surface-elevated: #f3f6fa; /* inert tile, slot-id chip, banner band */
   --color-surface-muted: #f3f6fa; /* alias kept for backward compat */
 
   /* Ink */
-  --color-text: #0f1d2e;
-  --color-text-muted: #5b6b7c;
+  --color-text: #0f1d2e; /* navy retained — ink + structure (17.0:1 AAA) */
+  --color-text-muted: #53647a; /* 6.05:1 AA (was #5b6b7c, 4.9:1) */
   --color-text-inverse: #ffffff;
 
-  /* Brand primary — deep enterprise navy */
-  --color-primary: #1f4e7a;
-  --color-primary-emphasis: #163d61;
-  --color-primary-soft: #e6eef6;
+  /* Brand primary — v4.0 PHARMACY GREEN-TEAL (022 T023, supersedes the v3.5
+     navy #1f4e7a and the One-Accent Rule: teal MAY fill large primary
+     actions). White-on-teal 5.47:1 AA; emphasis-on-white 7.95:1 AAA. */
+  --color-primary: #0f766e;
+  --color-primary-emphasis: #0b5b55;
+  --color-primary-soft: #e6f4f1;
   --color-primary-on: #ffffff;
 
-  /* Accent (active-row tab, eyebrow, decorative ink) */
-  --color-accent: #2e7da3;
+  /* Accent — same green-teal family as primary. The v3.5 value #2e7da3 was a
+     blue-cyan; v4.0 is deliberately a DIFFERENT hue family (spec Hue note). */
+  --color-accent: #0f766e;
 
   /* Semantic state colours */
-  --color-success: #1f8a5b;
-  --color-success-emphasis: #176944;
+  /* #1f8a5b failed AA as a fill (white-on-it 4.33:1); #15774d is 5.56:1. */
+  --color-success: #15774d;
+  --color-success-emphasis: #10603d;
   --color-success-soft: #e7f5ee;
   --color-success-on: #ffffff;
 
-  --color-warning: #b87600;
-  --color-warning-emphasis: #8f5b00;
-  --color-warning-soft: #fbf0db;
+  --color-warning: #a35a00; /* orange — warnings only (5.22:1 AA) */
+  --color-warning-emphasis: #7d4500;
+  --color-warning-soft: #fdf1e0;
   --color-warning-on: #ffffff;
 
-  --color-danger: #b32e36;
-  --color-danger-emphasis: #8e2329;
-  --color-danger-soft: #f7e2e3;
+  --color-danger: #b3261e; /* red — destructive/error only (6.54:1 AA) */
+  --color-danger-emphasis: #8c1d18;
+  --color-danger-soft: #fbe9e7;
   --color-danger-on: #ffffff;
 
-  --color-info: #1e6f8c;
-  --color-info-emphasis: #175670;
-  --color-info-soft: #e1f0f5;
+  --color-info: #1b6ca8; /* controlled blue — informational/selection only */
+  --color-info-emphasis: #145184;
+  --color-info-soft: #e4f0f9;
   --color-info-on: #ffffff;
 
   /* Neutral (legacy syncing intent in ConnectionIndicator) */
@@ -74,8 +78,18 @@
   --space-8: 64px;
 
   /* ── Typography ─────────────────────────────────────────────────────── */
-  --font-family-sans: 'Inter Variable', Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-family-mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', monospace;
+  /* 022 T026 — Arabic-first SYSTEM stack. 'Inter Variable'/Inter were
+     unresolvable (no package, no @font-face, no bundled file), so Arabic fell
+     through to uncontrolled OS fallback. Dubai ships with Windows 10/11 and
+     renders Arabic properly; Segoe UI / Tahoma are the ordered fallbacks.
+     Still NO package, NO @font-face, NO bundled file — so `no-brand-font`
+     stays green and no approval gate is triggered (research.md §1). */
+  --font-family-sans: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif;
+  /* 022 T027 — money / barcodes / SKUs / sale numbers (FR-12). Paired with
+     `font-variant-numeric: tabular-nums` so digits align in dense cart rows
+     and totals do not jitter as values change. dir="ltr" isolation is applied
+     at the call site (FR-21). */
+  --font-family-mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
 
   --font-weight-regular: 400;
   --font-weight-medium: 500;
@@ -168,14 +182,17 @@
   --color-text-muted: #93a5b7;
   --color-text-inverse: #0f1d2e;
 
-  /* Brand primary — lifted for contrast on dark surfaces */
-  --color-primary: #3b7ab2;
-  --color-primary-emphasis: #4f8ec6;
-  --color-primary-soft: rgba(79, 142, 198, 0.14);
-  --color-primary-on: #ffffff;
+  /* Brand primary — v4.0 pharmacy teal adapted for dark surfaces (022 T024
+     option (a), owner-ratified: ONE visual identity across both registers).
+     6.68:1 on --color-surface; navy-on-teal 6.83:1 for filled controls. */
+  --color-primary: #14b8a6;
+  --color-primary-emphasis: #2dd4bf;
+  --color-primary-soft: rgba(20, 184, 166, 0.14);
+  /* Dark teal is a LIGHT fill, so its on-colour is the navy ink, not white. */
+  --color-primary-on: #0f1d2e;
 
-  /* Accent (nav active tab + focus rings ONLY) */
-  --color-accent: #52abd2;
+  /* Accent — same teal family as primary (v3.5's #52abd2 was blue-cyan). */
+  --color-accent: #14b8a6;
 
   /* Semantic state colours */
   --color-success: #41b283;

@@ -1,18 +1,19 @@
 import { create } from 'zustand';
 
 /**
- * POS v3.5 Phase 1 — terminal theme store (ADR-0004).
+ * POS v3.5 Phase 1 — terminal theme store (ADR-0004, default superseded by 022).
  *
- * Two themes only: `dark` (the terminal default per the v3.5 handoff) and
- * `light` (the design-system base, reachable via a token-only override).
- * Switching themes flips CSS custom-property VALUES on the document root
- * (`<html data-theme="…">`) — no component is forked, no class family is
- * added. Hand-written component CSS and Tailwind `var(--color-*)`-backed
- * utilities both re-theme through the same custom properties.
+ * Two themes only: `light` (the v4.0 default — spec 022 is light-first) and
+ * `dark` (retained as a token-only override, retuned to the v4.0 teal
+ * identity). Switching themes flips CSS custom-property VALUES on the
+ * document root (`<html data-theme="…">`) — no component is forked, no class
+ * family is added. Hand-written component CSS and Tailwind
+ * `var(--color-*)`-backed utilities both re-theme through the same custom
+ * properties.
  *
  * The selection persists in `localStorage` so a paired terminal keeps the
- * operator's choice across launches. `dark` is the default whenever no
- * valid value is stored (Arabic-first pharmacy terminal, dark register).
+ * operator's choice across launches. `light` is the default whenever no valid
+ * value is stored (022 owner decision A: a light, clinical pharmacy terminal).
  *
  * State management mirrors the repo idiom (`feature-flags-store.ts`):
  * a plain Zustand `create` store, no middleware. Persistence is explicit
@@ -22,7 +23,7 @@ import { create } from 'zustand';
 export type Theme = 'dark' | 'light';
 
 /** Default theme when nothing valid is persisted. */
-export const DEFAULT_THEME: Theme = 'dark';
+export const DEFAULT_THEME: Theme = 'light';
 
 /** localStorage key for the persisted theme selection. */
 export const THEME_STORAGE_KEY = 'pos-pulse.theme';

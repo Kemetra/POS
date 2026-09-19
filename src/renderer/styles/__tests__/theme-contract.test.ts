@@ -6,13 +6,20 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
  * POS v3.5 Phase 1 — theme-contract guard (ADR-0004).
  *
  * REPLACES the legacy T019 "no-dark-mode" guard. T019 forbade any dark
- * register at all (the terminal was light-only). ADR-0004 reopens that
- * product decision: dark is now the DEFAULT register and light is a
- * token-only toggle target. This guard enforces the NEW contract so the
- * decision cannot silently regress:
+ * register at all (the terminal was light-only). ADR-0004 then made dark the
+ * default with light as the toggle target.
+ *
+ * SUPERSEDED IN PART by spec 022 (POS UI v4.0), owner decision A/§A2: v4.0 is
+ * LIGHT-FIRST. The default flips back to light; the dark register REMAINS and
+ * is retuned to the v4.0 teal identity (022 T024 option (a)) rather than
+ * frozen. This is the single owner-sanctioned test change in 022 — only the
+ * DEFAULT-register assertions move. Every structural guard below (dark
+ * register exists, token-VALUE overrides only, no forked components, RTL
+ * systemic, persistence) is preserved verbatim, because those are what stop
+ * the theme system rotting regardless of which register is default.
  *
  *   1. The dark register exists and is keyed on the document root attribute.
- *   2. Dark is the DEFAULT — baked into index.html and the store default.
+ *   2. LIGHT is the DEFAULT (022) — baked into index.html and the store default.
  *   3. The toggle flips token VALUES ONLY — every declaration in the dark
  *      block is a `--*` custom property (plus the one allowlisted
  *      `color-scheme`), and the block introduces NO new component-class
@@ -38,7 +45,7 @@ function extractDarkBlock(css: string): string {
   return match?.[1] ?? '';
 }
 
-describe('theme contract — dark default + light toggle (ADR-0004, replaces T019)', () => {
+describe('theme contract — light default + dark toggle (022 v4.0; supersedes ADR-0004 default)', () => {
   // 1 — dark register present, keyed on the root attribute
   it('defines a dark register on :root[data-theme="dark"]', () => {
     expect(tailwindCss).toMatch(/:root\[data-theme=['"]dark['"]\]\s*\{/);
@@ -52,9 +59,9 @@ describe('theme contract — dark default + light toggle (ADR-0004, replaces T01
     expect(block).toMatch(/--color-primary:/);
   });
 
-  // 2 — dark is the DEFAULT
-  it('index.html bakes data-theme="dark" on <html> as the flash-free default', () => {
-    expect(indexHtml).toMatch(/<html[^>]*\bdata-theme=['"]dark['"]/);
+  // 2 — LIGHT is the DEFAULT (022 v4.0; supersedes ADR-0004's dark default)
+  it('index.html bakes data-theme="light" on <html> as the flash-free default (022)', () => {
+    expect(indexHtml).toMatch(/<html[^>]*\bdata-theme=['"]light['"]/);
   });
 
   // 3 — token-VALUE overrides only: no forked components, no stray properties
@@ -103,42 +110,42 @@ describe('theme store — default, toggle, persistence (ADR-0004)', () => {
     localStorage.clear();
   });
 
-  it('defaults to dark when nothing is persisted', async () => {
+  it('defaults to light when nothing is persisted (022)', async () => {
     const { readPersistedTheme, DEFAULT_THEME } = await import('../../stores/theme-store');
-    expect(DEFAULT_THEME).toBe('dark');
-    expect(readPersistedTheme()).toBe('dark');
+    expect(DEFAULT_THEME).toBe('light');
+    expect(readPersistedTheme()).toBe('light');
   });
 
   it('initTheme applies the default and sets the root attribute', async () => {
     const { initTheme, useThemeStore } = await import('../../stores/theme-store');
     initTheme();
-    expect(useThemeStore.getState().theme).toBe('dark');
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(useThemeStore.getState().theme).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
-  it('toggling flips dark → light, persists, and repaints the root', async () => {
+  it('toggling flips light → dark, persists, and repaints the root', async () => {
     const { initTheme, useThemeStore, THEME_STORAGE_KEY } =
       await import('../../stores/theme-store');
     initTheme();
     useThemeStore.getState().toggleTheme();
-    expect(useThemeStore.getState().theme).toBe('light');
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
+    expect(useThemeStore.getState().theme).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
   });
 
-  it('re-hydrates the persisted light choice on next boot', async () => {
+  it('re-hydrates the persisted dark choice on next boot (non-default beats the default)', async () => {
     const { initTheme, useThemeStore, THEME_STORAGE_KEY } =
       await import('../../stores/theme-store');
-    localStorage.setItem(THEME_STORAGE_KEY, 'light');
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const applied = initTheme();
-    expect(applied).toBe('light');
-    expect(useThemeStore.getState().theme).toBe('light');
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(applied).toBe('dark');
+    expect(useThemeStore.getState().theme).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('falls back to dark on a corrupt persisted value', async () => {
+  it('falls back to light on a corrupt persisted value (022)', async () => {
     const { readPersistedTheme, THEME_STORAGE_KEY } = await import('../../stores/theme-store');
     localStorage.setItem(THEME_STORAGE_KEY, 'midnight');
-    expect(readPersistedTheme()).toBe('dark');
+    expect(readPersistedTheme()).toBe('light');
   });
 });
