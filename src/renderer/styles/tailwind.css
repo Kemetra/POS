@@ -2073,9 +2073,37 @@ body {
     block-size: 100%;
   }
 
-  /* Narrow terminals: stack catalogue over cart; the workspace scrolls as one. */
+  /*
+   * 022 U2 / T060 — FR-15: the cart's line items and running total are the
+   * visually dominant elements OF THE SALE WORKSPACE (the whole two-region
+   * surface, not just the cart pane's internals).
+   *
+   * The v3.5 tracks (`1fr 380px`) gave the CATALOGUE the flexible major region
+   * and left the cart a fixed 380px rail — backwards for FR-15. Inverting the
+   * tracks makes the cart flexible/major and the catalogue the fixed rail.
+   *
+   * Side placement falls out of the same change, and matches the governing
+   * reference (visual-references/03-sale-workspace.png): the grid flows along
+   * the inline axis, so under the root `dir="rtl"` track 1 is the visual RIGHT.
+   * Track 1 = the catalogue rail (right, as in the reference's
+   * "الأصناف والمنتجات" panel) and track 2 = the cart (the larger left region
+   * holding the line table + totals). No direction-specific rule needed.
+   *
+   * DOM order is deliberately unchanged (catalogue first, cart second) so the
+   * RTL focus order stays as authored; only the track sizing moves. The rail
+   * width is component geometry — T025a's closed exception list.
+   */
+  .sale-layout[data-cart-dominant='true'] {
+    grid-template-columns: 380px 1fr;
+  }
+
+  /* Narrow terminals: stack catalogue over cart; the workspace scrolls as one.
+     The attribute selector above is more specific than a bare `.sale-layout`,
+     so the stacking rule must match it too or a narrow terminal would keep the
+     two-track layout. */
   @media (max-width: 1023px) {
-    .sale-layout {
+    .sale-layout,
+    .sale-layout[data-cart-dominant='true'] {
       grid-template-columns: 1fr;
     }
   }
@@ -4109,9 +4137,19 @@ body {
   color: var(--color-text);
   font-weight: var(--font-weight-bold);
 }
+/*
+ * 022 U2 / T063 — FR-15: the running total is a visually dominant element of
+ * the sale workspace, so it must outrank the subordinate rows by more than the
+ * one step (sm → md) the v3.5 pass gave it. `--font-size-2xl` matches the
+ * weight U4a gave the settled amount for FR-16 (`--font-size-3xl` on the
+ * completion surface, which has no competing content); the cart total sits one
+ * step below it because it shares the footer with the continue action.
+ * Token-bound — no raw type literals (FR-8).
+ */
 .totals-row--grand .cart-pane__subtotal-value {
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
 }
 
 /* Action row: hold (disabled shell) + hand-off (primary, flexes to fill). */

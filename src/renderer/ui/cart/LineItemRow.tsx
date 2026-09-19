@@ -166,7 +166,11 @@ export function LineItemRow({
           aria-label="Add note"
           onClick={onNoteOpen}
         >
-          Add note
+          {/* 022 U2 / T063 — FR-19 Arabic-first visible copy. The aria-label is
+              left in English deliberately: accessible-name language is U6's
+              convergence pass, and changing it here would churn the a11y
+              snapshots U6 owns. */}
+          إضافة ملاحظة
         </button>
       )}
     </div>
