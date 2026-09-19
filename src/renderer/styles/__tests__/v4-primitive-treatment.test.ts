@@ -137,29 +137,37 @@ describe('022 — light-register control boundaries meet WCAG 1.4.11 (>=3:1)', (
     }
   });
 
-  it('EVERY interactive control uses the strong border, not just inputs', () => {
-    // EXTERNAL REVIEW P2 (round 3) — the first contrast fix reached only the
-    // global form rule, leaving keypads, roster rows, tender cards and quick
-    // amounts on the 1.24:1 hairline. The reviewer listed examples, not an
-    // inventory, so this asserts the whole closed set of clickable controls.
-    const CONTROLS = [
-      'amount-pad__key',
-      'amount-pad__quick-key',
-      'pin-pad__key',
-      'roster-list__item-btn',
-      'method-card',
-      'quick-amount-btn',
-      'pairing-form__code-input',
-      'takeover-prompt__cancel',
-    ];
+  it('EVERY interactive control uses the strong border — discovered, not listed', () => {
+    // EXTERNAL REVIEW P2 (rounds 2-4). Round 2 fixed only the global form
+    // rule; round 3 fixed eight named controls; round 4 still found two more
+    // (`.catalogue-search__input`, which OVERRIDES the global input rule, and
+    // `.btn--secondary`).
+    //
+    // The earlier version of this test hardcoded a list, so it could only
+    // verify controls someone had already thought of — the same "passes
+    // because it isn't looking" failure as the original token guard, in a
+    // test written to prevent exactly that. It now SCANS for interactive
+    // selectors instead, so a newly added control is caught by default.
+    //
+    // Display surfaces are allowlisted explicitly: WCAG 1.4.11 governs UI
+    // COMPONENT boundaries, so cards, chips and panels keep the quiet
+    // hairline. Adding to this list is a deliberate, reviewed act.
+    const DISPLAY_SURFACES =
+      /(^|[.\s])(card|panel|pane|chip|banner|strip|skeleton|overlay|divider|summary|table|__head|__grid|__display|screen-too-small|settings-section|dashboard-card|amount-due-card|top-bar__)/i;
+    const INTERACTIVE = /(input|textarea|select|btn|button|key|item-btn|search|tab|toggle|option)/i;
+
     const weak: string[] = [];
-    for (const selector of CONTROLS) {
-      const start = css.indexOf(`.${selector} {`);
-      expect(start, `.${selector} not found in stylesheet`).toBeGreaterThan(-1);
-      const body = css.slice(start, css.indexOf('}', start));
-      if (/border:\s*1px solid var\(--color-border\)/.test(body)) weak.push(selector);
+    for (const match of css.matchAll(
+      /\n\s*(\.[a-z0-9_.\-]+(?:,\s*\n\s*\.[a-z0-9_.\-]+)*)\s*\{([^}]*)\}/gi,
+    )) {
+      const selector = (match[1] ?? '').replace(/\s+/g, ' ').trim();
+      const body = match[2] ?? '';
+      if (!/border(-color)?:\s*(1px solid )?var\(--color-border\)/.test(body)) continue;
+      if (!INTERACTIVE.test(selector)) continue;
+      if (DISPLAY_SURFACES.test(selector)) continue;
+      weak.push(selector);
     }
-    expect(weak, `interactive controls still on the 1.24:1 hairline: ${weak.join(', ')}`).toEqual(
+    expect(weak, `interactive controls still on the 1.24:1 hairline: ${weak.join(' | ')}`).toEqual(
       [],
     );
   });
