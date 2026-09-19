@@ -93,3 +93,61 @@ describe('022 T026 — Arabic-first typography', () => {
     expect(withoutComments).not.toMatch(/@font-face\s*\{/);
   });
 });
+
+/** WCAG relative luminance / contrast ratio for two #rrggbb colours. */
+function contrastRatio(a: string, b: string): number {
+  const channel = (v: number): number => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string): number => {
+    const h = hex.replace('#', '');
+    const [r, g, bl] = [0, 2, 4].map((i) => channel(parseInt(h.slice(i, i + 2), 16)));
+    return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (bl ?? 0);
+  };
+  const [la, lb] = [luminance(a), luminance(b)];
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** Read a token's value from the light `:root` block. */
+function lightToken(name: string): string {
+  const root = css.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+  return root.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1] ?? '';
+}
+
+describe('022 — light-register control boundaries meet WCAG 1.4.11 (>=3:1)', () => {
+  /**
+   * EXTERNAL REVIEW P2 (round 2): `--color-border` (#d8dfe7) gives only
+   * 1.24:1 on `--color-surface-elevated`, so control outlines were effectively
+   * invisible once light became the default. Controls now use
+   * `--color-border-strong`; this pins it so the boundary cannot silently
+   * regress below the non-text threshold.
+   */
+  it('--color-border-strong clears 3:1 on every light surface it borders', () => {
+    const strong = lightToken('--color-border-strong');
+    expect(strong, 'light --color-border-strong not found').toMatch(/^#[0-9a-fA-F]{6}$/);
+    for (const surface of ['--color-surface', '--color-surface-elevated', '--color-background']) {
+      const bg = lightToken(surface);
+      expect(bg, `${surface} not found`).toMatch(/^#[0-9a-fA-F]{6}$/);
+      const ratio = contrastRatio(strong, bg);
+      expect(
+        ratio,
+        `${strong} on ${surface} (${bg}) is ${ratio.toFixed(2)}:1, need >=3`,
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('form controls use the STRONG border token, not the decorative hairline', () => {
+    // The global control rule (input/select/textarea) is the boundary WCAG
+    // 1.4.11 governs; decorative `--color-border` dividers are out of scope.
+    // Anchor on the GLOBAL selector list (line-start + two-space indent), not
+    // any scoped variant — `.pairing-screen__field input[type='text'],` also
+    // contains this substring and would match first.
+    const start = css.indexOf("\n  input[type='text'],");
+    expect(start, 'global control rule not found').toBeGreaterThan(-1);
+    const controlRule = css.slice(start, css.indexOf('}', start));
+    expect(controlRule).toMatch(/border:\s*1px solid var\(--color-border-strong\)/);
+    // And it must NOT fall back to the decorative hairline.
+    expect(controlRule).not.toMatch(/border:\s*1px solid var\(--color-border\)/);
+  });
+});

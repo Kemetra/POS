@@ -141,15 +141,15 @@ export function PaymentSurface({
   // recent-sale poll resolves (or forever, if sales is absent / the worker is
   // slow — the completed state + New sale never depend on it).
   const [settledSaleNumber, setSettledSaleNumber] = useState<string | null>(null);
-  // 022 US4a (T011) — the finalized sale's id, retained alongside the number so
-  // the completion surface can mount ReceiptPreview for THIS sale.
-  // `RecentSaleSummary` already carries it (shared/sales/types.ts), so this is
-  // a new use of existing poll data — no bridge change (P8).
+  // 022 US4a (T011) — the sale id is NO LONGER retained.
   //
-  // It is also the discriminator for the two truthful settled states (T013a):
-  // null → payment settled, sale not yet finalized; non-null → sale finalized.
-  // It is never rendered as text (FR-035), only passed to ReceiptPreview.
-  const [settledSaleId, setSettledSaleId] = useState<string | null>(null);
+  // It existed to mount ReceiptPreview and to discriminate T013a's two settled
+  // states. External review round 2 established that neither use is sound: the
+  // `recent` row cannot be tied to THIS payment, so an id taken from it could
+  // belong to a prior sale. Both the receipt (T017) and the completion claim
+  // (T013a) are blocked on a correlating identifier, so holding the id would
+  // be dead state inviting the same mistake again. Re-introduce it together
+  // with the correlation key, not before.
   // `settled_at` from payments.confirm, used to discriminate THIS sale's
   // `recent` snapshot from a prior sale's. The AD-2 worker finalizes THIS sale
   // AFTER confirm returns, so a `recent` whose finalized_at predates this
@@ -180,7 +180,6 @@ export function PaymentSurface({
     setIsStarting(false);
     setReversalPending(false);
     setSettledSaleNumber(null);
-    setSettledSaleId(null);
     setSettledAt(null);
     usePaymentStore.getState().clearAttempt();
   }, [sessionState.kind, envelopeHandoffId]);
@@ -236,11 +235,10 @@ export function PaymentSurface({
           // snapshot (finalized before settled_at) is ignored — keep polling.
           response.recent.finalized_at >= settledAt
         ) {
-          // 022 US4a (T011) — retain BOTH. The id drives the receipt mount and
-          // the finalized/not-yet-finalized discrimination; the number is the
-          // cashier-quotable reference.
+          // Only the cashier-quotable number is retained (006 invariant 13).
+          // The sale_id is deliberately NOT kept — see the note at the
+          // settledSaleNumber declaration.
           setSettledSaleNumber(response.recent.sale_number);
-          setSettledSaleId(response.recent.sale_id);
           return;
         }
       } catch {
@@ -437,32 +435,27 @@ export function PaymentSurface({
     : 0;
 
   if (phase === 'settled') {
-    // 022 US4a (T013a) — NFR-6 / P2. `setPhase('settled')` fires on
-    // payments.confirm ALONE, before the AD-2 worker finalizes the sale, so
-    // the settled phase carries two genuinely different meanings. We render
-    // whichever one is TRUE, and never blur them:
+    // 022 US4a — NFR-6 / P2, as REVISED by external review round 2.
     //
-    //   (a) isFinalized === false — the payment is taken; the sale record is
-    //       still being written. No "sale complete" claim, no receipt, no
-    //       fabricated sale number. This is also the resting state when
-    //       saleFinalization is off (no receipt will ever exist) and when the
-    //       poll fails, times out, or the sales bridge is absent.
-    //   (b) isFinalized === true — the finalized record for THIS sale has
-    //       arrived (the poll already enforces finalized_at >= settled_at, so
-    //       a stale prior sale can never land here). Full success state.
+    // The original design split this phase in two: "payment taken, sale not
+    // yet finalized" vs "sale finalized". That split required knowing the
+    // finalized record belongs to THIS payment — and the terminal cannot know
+    // that. `RecentSaleSummary` carries no attempt/handoff identifier and
+    // `payments.confirm` returns only `settled_at`, so `finalized_at >=
+    // settled_at` is the only available test and a PRIOR sale finalizing late
+    // satisfies it.
     //
-    // Neither is an error state; the difference is what the system knows.
+    // Round 1 dropped the receipt but kept the "sale complete" headline on
+    // that same evidence — fixing the symptom while keeping the assertion.
+    // So the states collapse to the ONE the terminal can actually support:
+    // the payment was taken. The sale number still shows when the poll
+    // returns one, but OUTSIDE any completion frame — exactly as `main` did
+    // (006 invariant 13), so this is no worse than the surface it replaces
+    // while claiming strictly less.
     //
-    // Two INDEPENDENT facts, deliberately not conflated:
-    //   • `isFinalized` — did the finalized record for THIS sale arrive? That
-    //     comes from the sales poll alone. A returned record IS the proof the
-    //     sale was finalized, so it also licenses quoting the sale number
-    //     (006 invariant 13).
-    //   • the RECEIPT is not shown at all — see the CODEX REVIEW P1 note in
-    //     the finalized branch. The flag still governs the honesty copy below:
-    //     with saleFinalization off, 008's listener short-circuits and no
-    //     receipt will ever exist, which the surface states plainly (T018).
-    const isFinalized = settledSaleId !== null && settledSaleNumber !== null;
+    // T013a and T017 are both unticked, blocked on the same backend gap: an
+    // identifier on the `recent` projection tying the finalized sale to this
+    // payment. 011 already derives one from `envelope_handoff_action_id`.
 
     return (
       <main
@@ -482,93 +475,61 @@ export function PaymentSurface({
             truthful states below; the wrapper's meaning is unchanged, so those
             tests keep passing unmodified. */}
         <div className="payment-surface__settled" data-testid="payment-surface-settled">
-          {isFinalized ? (
-            <div
-              className="payment-surface__finalized"
-              data-testid="payment-surface-finalized"
-              role="status"
-              aria-live="polite"
-            >
-              <p className="payment-surface__settled-headline">تم إتمام البيع</p>
-              {/* FR-16: the settled amount is the dominant numeric element.
-                dir="ltr" isolates the numeral run inside RTL copy (FR-21). */}
-              <p
-                className="payment-surface__settled-amount"
-                data-testid="payment-surface-settled-amount"
-                dir="ltr"
-                // FR-16 hierarchy via EXISTING typography tokens — no raw
-                // literals (022 standing constraint: sizes change only in
-                // :root). U0/T083 re-reviews this against the v4.0 scale.
-                style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'var(--font-weight-bold)' }}
-              >
-                {formatMinorUnits(envelope.subtotal_minor)}
-              </p>
-              {/* T018: the sale is finalized, but with 008's listener gated off
-                  no receipt was written. Say so rather than leave the absence
-                  of a receipt unexplained. */}
-              {!saleFinalizationFlag && (
-                <p
-                  className="payment-surface__settled-detail"
-                  data-testid="payment-surface-no-receipt"
-                >
-                  لا يوجد إيصال لهذا البيع.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div
-              className="payment-surface__settled-pending"
-              data-testid="payment-surface-settled-pending"
-              // role="status", never "alert" — this is a truthful intermediate
-              // state, not an error.
-              role="status"
-              aria-live="polite"
-            >
-              <p className="payment-surface__settled-headline">تم استلام المبلغ</p>
-              {/* With the flag ON this is a genuinely transitional state: the
-                  finalize worker is running and the record is on its way.
-                  With it OFF the whole 008 stack is unregistered
-                  (src/main/index.ts:441, :983) — the record will NEVER be
-                  written, so promising one would be a fake-pending claim. The
-                  honest flag-off message is terminal: money taken, nothing
-                  further recorded. */}
-              {/* CODEX REVIEW P2 — "Avoid promising finalization after
-                  in-process pairing". The AD-2 finalize worker starts only for
-                  a terminal that was ALREADY paired at boot
-                  (src/main/index.ts:1120-1126); one paired mid-session picks it
-                  up on the next launch. The renderer cannot see pairing-at-boot
-                  state, so the flag-on copy must not promise recording is
-                  underway — that would be a fake-PENDING, the same dishonesty
-                  the two-state split exists to remove.
+          {/* EXTERNAL REVIEW P1 (round 2) — "Require correlation before
+              declaring the current sale complete".
+              
+              Round 1 removed the receipt but LEFT an `isFinalized` branch that
+              rendered "تم إتمام البيع" (the sale is complete) from the SAME
+              uncorrelated `recent` row. That fixed the symptom and kept the
+              assertion: a prior sale finalizing late still promoted an
+              unrelated record into proof that THIS sale completed.
 
-                  It says the payment is recorded and the receipt has not issued
-                  YET, which is true in both cases: the worker is running (it
-                  arrives shortly), or it starts next launch and the startup
-                  recovery scan re-fires any settled-but-unfinalized rows — so
-                  the sale is deferred, never lost. */}
-              <p className="payment-surface__settled-detail">
-                {saleFinalizationFlag
-                  ? 'تم تسجيل المبلغ. لم يصدر إيصال بعد.'
-                  : 'لن يُسجَّل هذا البيع ولا يوجد إيصال له.'}
-              </p>
-              <p
-                className="payment-surface__settled-amount"
-                data-testid="payment-surface-settled-amount"
-                dir="ltr"
-                // Same token-based hierarchy as the finalized state: the amount
-                // taken is the dominant number in BOTH truthful states.
-                style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'var(--font-weight-bold)' }}
-              >
-                {formatMinorUnits(envelope.subtotal_minor)}
-              </p>
-            </div>
-          )}
+              The terminal cannot establish that correlation — `recent` carries
+              no attempt/handoff identifier and `confirm` returns only
+              `settled_at` — so it must not claim completion at all. The two
+              truthful states of T013a collapse into the one the terminal can
+              actually support: the payment was taken.
+
+              Unblocks with T017, on the same backend identifier. */}
+          <div
+            className="payment-surface__settled-pending"
+            data-testid="payment-surface-settled-pending"
+            // role="status", never "alert" — a truthful terminal state, not an
+            // error and not a failure.
+            role="status"
+            aria-live="polite"
+          >
+            <p className="payment-surface__settled-headline">تم استلام المبلغ</p>
+            {/* The flag governs what can be said about the RECEIPT only.
+                ON: 008's listener may write one, but the worker also starts
+                only for a terminal paired at boot (src/main/index.ts:1120-1126),
+                so we say no receipt has issued YET rather than promising one is
+                underway — true whether it arrives shortly or next launch, since
+                the startup recovery scan re-fires settled-but-unfinalized rows.
+                OFF: the whole 008 stack is unregistered (:441, :983), so no
+                receipt will ever exist and the copy says exactly that. */}
+            <p className="payment-surface__settled-detail">
+              {saleFinalizationFlag
+                ? 'تم تسجيل المبلغ. لم يصدر إيصال بعد.'
+                : 'لن يُسجَّل هذا البيع ولا يوجد إيصال له.'}
+            </p>
+            {/* FR-16: the settled amount is the dominant numeric element.
+                dir="ltr" isolates the numeral run inside RTL copy (FR-21). */}
+            <p
+              className="payment-surface__settled-amount"
+              data-testid="payment-surface-settled-amount"
+              dir="ltr"
+              style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'var(--font-weight-bold)' }}
+            >
+              {formatMinorUnits(envelope.subtotal_minor)}
+            </p>
+          </div>
         </div>
 
         {/* Preserved omission behaviour (T019): with no finalized record there
             is no number to quote, so the block stays absent rather than
             fabricating one. */}
-        {isFinalized && (
+        {settledSaleNumber !== null && (
           <div className="payment-surface__sale-number" role="status" aria-live="polite">
             <span className="payment-surface__sale-number-label">رقم البيع</span>{' '}
             <span

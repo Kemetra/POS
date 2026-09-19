@@ -121,6 +121,22 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
  *
  * Storage failure is non-fatal: the terminal must launch regardless, so any
  * throw degrades to "migration not performed" and the default applies anyway.
+ *
+ * ── ACCEPTED TRADE-OFF (external review round 2, P2) ──────────────────────
+ *
+ * This also clears a theme the operator EXPLICITLY chose under v3.5, not just
+ * an auto-persisted default. That is unavoidable, not an oversight: the old
+ * `initTheme()` called `applyTheme()` unconditionally and `applyTheme`
+ * persists, so an explicit `dark` and an untouched default are BYTE-IDENTICAL
+ * in storage. No provenance exists to tell them apart — there is no theme
+ * audit event either, and reading main-side state would be a bridge change
+ * (P8). "Preserve explicit preferences" and "deliver light-first to existing
+ * terminals" are therefore mutually exclusive given the data.
+ *
+ * Owner decision: accept ONE reset per terminal. v4.0 is a deliberate
+ * redesign, the toggle is one click away, and the alternative is that the
+ * light default never reaches any existing terminal at all — which is the
+ * defect this migration was written to fix.
  */
 function migrateLegacyThemeOnce(): void {
   try {

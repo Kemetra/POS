@@ -101,7 +101,7 @@ surface says honestly that no receipt exists and fabricates nothing.
 > settled phase alone would assert success without the finalized record NFR-6 requires. The
 > two-state split in **T013a** is therefore part of T013's definition of done, not optional polish.
 
-- [x] T013a [US4a] RED+GREEN (**NFR-6 / P2 — load-bearing**): split the settled phase into **two
+- [ ] T013a [US4a] **BLOCKED — collapsed to ONE state; see below.** RED+GREEN (**NFR-6 / P2 — load-bearing**): split the settled phase into **two
   truthful states**, keyed on whether the matching finalized sale record has arrived:
   - **(a) payment settled, sale not yet finalized** (`sale_id === null`) — say exactly that: the
     payment is taken, the sale record is still being written. **No "sale complete" claim, no
@@ -111,6 +111,30 @@ surface says honestly that no receipt exists and fabricates nothing.
     success state with the receipt (T017) and the settled-amount hierarchy (T015).
   Both states are honest; neither is an error. The distinction is *what the system knows*, and the
   copy must not blur it.
+
+  > **⛔ BLOCKED — the two-state split is unimplementable against the current wire contract
+  > (external review round 2, P1). Collapsed to ONE honest state.**
+  >
+  > State (b) requires knowing the finalized record belongs to **this** payment. The terminal
+  > cannot know that: `RecentSaleSummary` carries no attempt/handoff identifier and
+  > `payments.confirm` returns only `settled_at`, so `finalized_at >= settled_at` is the only
+  > available test — and a **prior** sale finalizing late satisfies it.
+  >
+  > Round 1 removed the receipt (T017) but **kept** an `isFinalized` branch rendering
+  > "تم إتمام البيع" from that same uncorrelated row: the symptom was fixed and the assertion
+  > left standing. A late-finalizing prior sale could still make the surface claim THIS sale
+  > completed, and show that sale's number inside a success frame.
+  >
+  > **Resolution:** the settled phase renders the one state the terminal can support — the
+  > payment was taken (`تم استلام المبلغ` + dominant amount + new sale). The sale number still
+  > shows when the poll returns one, but **outside any completion frame**, exactly as `main` did
+  > (006 invariant 13). So this is no worse than the surface it replaces while claiming strictly
+  > less — which is the whole point of the slice.
+  >
+  > **T013a and T017 share one unblock condition:** an identifier on the `recent` projection (or
+  > a sibling read) tying the finalized sale to this payment. 011 already derives a deterministic
+  > one from `envelope_handoff_action_id`, so it exists main-side — a backend/contract task, not
+  > a renderer one. NFR-6 as written depends on it.
 
 ### Totals hierarchy
 

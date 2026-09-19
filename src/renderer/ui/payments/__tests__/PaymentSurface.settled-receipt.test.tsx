@@ -218,11 +218,12 @@ describe('US4a T010 — PaymentSurface retains sale_id from the recent poll', ()
       finalized_at: FINALIZED_AT,
     });
     await renderSettled(bridge);
-    // The retained sale_id drives the finalized/not-yet-finalized split; it is
-    // never rendered (FR-035), so the observable consequence is the finalized
-    // state plus its quotable number.
-    expect(await screen.findByTestId('payment-surface-finalized')).toBeInTheDocument();
-    expect(screen.getByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
+    // Review round 2: the id no longer drives any renderable CLAIM — the
+    // terminal cannot tie the finalized record to this payment, so it never
+    // asserts completion. The observable consequence of a resolved poll is
+    // the quotable number, shown outside any success frame.
+    expect(await screen.findByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
+    expect(screen.queryByTestId('payment-surface-finalized')).not.toBeInTheDocument();
   });
 
   it('ignores a STALE recent snapshot (finalized_at < settled_at)', async () => {
@@ -292,7 +293,7 @@ describe('US4a T013a — two truthful settled states', () => {
     expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
   });
 
-  it('(b) sale finalized: success state with the quotable sale number', async () => {
+  it('(b) a returned recent row yields a NUMBER but never a completion claim', async () => {
     const bridge = makeBridge({
       sale_id: SALE_ID,
       sale_number: SALE_NUMBER,
@@ -300,10 +301,12 @@ describe('US4a T013a — two truthful settled states', () => {
     });
     await renderSettled(bridge);
 
-    expect(await screen.findByTestId('payment-surface-finalized')).toBeInTheDocument();
-    expect(screen.queryByTestId('payment-surface-settled-pending')).not.toBeInTheDocument();
-    // No receipt: see the T016 block — the sale cannot be correlated to this
-    // payment, so mounting one could show a prior customer's document.
+    // EXTERNAL REVIEW P1 (round 2): a prior sale finalizing late satisfies the
+    // only available check, so the row cannot prove THIS sale completed. The
+    // surface stays on the one state it can support and shows the number
+    // outside any success frame — exactly as `main` did.
+    expect(await screen.findByTestId('payment-surface-settled-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-finalized')).not.toBeInTheDocument();
     expect(screen.getByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
   });
 
@@ -371,11 +374,12 @@ describe('US4a T016 (REVISED) — the receipt is NOT mounted on an uncorrelated 
       finalized_at: FINALIZED_AT,
     });
     await renderSettled(bridge);
-    // The finalized state still renders...
-    expect(await screen.findByTestId('payment-surface-finalized')).toBeInTheDocument();
-    // ...but no receipt, because it could be a prior customer's.
+    // No receipt, and (round 2) no completion claim either — both rested on
+    // the same uncorrelated row.
+    expect(await screen.findByTestId('payment-surface-settled-pending')).toBeInTheDocument();
     expect(screen.queryByTestId('payment-surface-receipt')).not.toBeInTheDocument();
     expect(screen.queryByTestId('receipt-preview')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-finalized')).not.toBeInTheDocument();
   });
 
   it('never renders the internal sale UUID anywhere in the DOM (FR-035)', async () => {
