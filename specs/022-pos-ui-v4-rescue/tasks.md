@@ -226,10 +226,25 @@ colour through `var(--color-*)`; Arabic renders in the declared stack; full suit
   no bundled file** — `no-brand-font.test.ts` guards `@font-face` only and stays green.
 - [x] T027 [US0] Confirm money/identifier treatment: `--font-family-mono` + tabular numerals for
   money, barcodes, SKUs, sale numbers (FR-12), `dir="ltr"`-isolated (FR-21).
-- [ ] T028 [US0] **Verification on target hardware (Windows 10/11 x64):** render Arabic UI copy,
+- [x] T028 [US0] **Verification on target hardware (Windows 10/11 x64):** render Arabic UI copy,
   mixed Arabic/Latin, dense cart rows and large totals; confirm the stack resolves to Dubai (or the
   intended fallback). **If quality fails, STOP and escalate** — bundling a webfont is an owner
   decision, not an in-slice fix (research.md §1 Gate).
+
+  > **✅ PASS — verified by the owner on target Windows hardware, 2026-09-19.** Arabic renders
+  > cleanly through the configured `'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif`
+  > stack, against the running v4.0 build (the same launch that cleared T002).
+  >
+  > **Consequence — the typography approval gate is NOT triggered.** research.md §1 makes the
+  > webfont question conditional: *"An approval gate is triggered **only if** U0's
+  > on-target-hardware verification shows the system stack cannot meet FR-10/FR-11 quality."*
+  > It met the bar, so bundling a webfont (Noto Kufi Arabic / Cairo / Tajawal) stays **rejected**
+  > and no owner decision is owed. The system-stack approach needed no approval in the first place.
+  >
+  > This also closes the one open risk in T026: the stack previously led with `'Inter Variable',
+  > Inter`, which resolves to nothing here, so Arabic fell through to uncontrolled OS fallback.
+  > That defect is now both fixed and verified on the hardware it ships to — **no package, no
+  > `@font-face`, no bundled file**, so `no-brand-font` stays green.
 
 ### Shared primitives
 

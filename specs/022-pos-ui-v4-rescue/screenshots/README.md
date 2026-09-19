@@ -122,6 +122,44 @@ surface those lines. They were in a file the whole time.
 > it appears in the rotating log. Checking the terminal alone yields a FALSE STOP — which is exactly
 > what happened here until the logger was traced.
 
+---
+
+## ✅ T028 VERIFIED — Arabic typography on target hardware (2026-09-19, PASS)
+
+**Verified by the owner** on target Windows hardware, against the running v4.0 build — the same
+launch that cleared T002 above.
+
+**Result:** Arabic renders **cleanly** through the configured stack:
+
+```
+--font-family-sans: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif;
+```
+
+### What this closes
+
+T026 replaced a stack that led with `'Inter Variable', Inter` — faces that resolve to **nothing**
+in this app (no package, no `@font-face`, no bundled file), so Arabic fell through to uncontrolled
+OS fallback. That was the original defect. It is now both fixed and confirmed on the hardware the
+terminal actually ships to, still with **no package, no `@font-face` and no bundled file** — so the
+`no-brand-font` guard stays green.
+
+### The approval gate is NOT triggered
+
+[`research.md` §1](../research.md) makes the webfont question strictly conditional:
+
+> *"No approval is required for the system-stack approach. An approval gate is triggered **only if**
+> U0's on-target-hardware verification shows the system stack cannot meet FR-10/FR-11 quality — at
+> which point bundling a webfont becomes an owner decision, raised before any package is added."*
+
+The stack met the bar, so:
+
+- bundling a webfont (Noto Kufi Arabic / Cairo / Tajawal) remains **rejected**;
+- **no owner decision is owed**, and none should be raised;
+- no dependency, `@font-face` rule or font file enters the build.
+
+Had it failed, the task's instruction was explicit — **STOP and escalate**, never fix it in-slice.
+It passed, so U0's typography work is complete as shipped.
+
 ### ⚠️ The dev bypass signs in as MANAGER, not cashier
 
 `DEV_OPERATOR_FIXTURE_SESSION_INPUT` is hardcoded `role: 'manager'`
