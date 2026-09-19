@@ -2,7 +2,10 @@ import { useEffect, useState, type JSX } from 'react';
 
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../stores/payment-store.js';
+import { useFeatureFlagsStore } from '../../stores/feature-flags-store.js';
 import { OperatorBadge } from '../operator/OperatorBadge.js';
+import { ReceiptPreview } from '../receipts/ReceiptPreview.js';
+import { format as formatMoney, of as moneyOf } from '../../../shared/money.js';
 import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
 import { CashEntry } from './CashEntry.js';
@@ -67,6 +70,20 @@ export interface PaymentSurfaceProps {
 
 type Phase = 'tender_selection' | 'entry' | 'settled';
 
+/**
+ * Minor-units → display string, via the shared money module (Constitution §II
+ * — integer minor units, `Number.isSafeInteger` guarded, ≥95% covered). Using
+ * `money.format` rather than a local copy keeps the completion surface on the
+ * same currency rendering as the rest of the app. A non-safe integer renders
+ * as an em dash rather than a wrong number.
+ */
+function formatMinorUnits(minor: number): string {
+  if (!Number.isSafeInteger(minor)) {
+    return '—';
+  }
+  return formatMoney(moneyOf(minor, 'EGP'));
+}
+
 interface ResolvedBridge {
   payments: PaymentsBridgeAPI;
   tender: TenderBridgeAPI;
@@ -125,11 +142,28 @@ export function PaymentSurface({
   // recent-sale poll resolves (or forever, if sales is absent / the worker is
   // slow — the completed state + New sale never depend on it).
   const [settledSaleNumber, setSettledSaleNumber] = useState<string | null>(null);
+  // 022 US4a (T011) — the finalized sale's id, retained alongside the number so
+  // the completion surface can mount ReceiptPreview for THIS sale.
+  // `RecentSaleSummary` already carries it (shared/sales/types.ts), so this is
+  // a new use of existing poll data — no bridge change (P8).
+  //
+  // It is also the discriminator for the two truthful settled states (T013a):
+  // null → payment settled, sale not yet finalized; non-null → sale finalized.
+  // It is never rendered as text (FR-035), only passed to ReceiptPreview.
+  const [settledSaleId, setSettledSaleId] = useState<string | null>(null);
   // `settled_at` from payments.confirm, used to discriminate THIS sale's
   // `recent` snapshot from a prior sale's. The AD-2 worker finalizes THIS sale
   // AFTER confirm returns, so a `recent` whose finalized_at predates this
   // settled_at is a stale prior sale and must be ignored.
   const [settledAt, setSettledAt] = useState<string | null>(null);
+  // Local dismissal of the completion receipt. Re-openable (the sale is
+  // finalized and the document still exists), and reset per attempt below.
+  const [receiptDismissed, setReceiptDismissed] = useState<boolean>(false);
+
+  // 008's finalize listener is gated on this flag. With it off no receipt is
+  // ever written, so the completion surface must say so rather than imply a
+  // document is on its way.
+  const saleFinalizationFlag = useFeatureFlagsStore((s) => s.saleFinalization);
 
   const bridge = resolveBridge(_testBridge);
 
@@ -151,7 +185,9 @@ export function PaymentSurface({
     setIsStarting(false);
     setReversalPending(false);
     setSettledSaleNumber(null);
+    setSettledSaleId(null);
     setSettledAt(null);
+    setReceiptDismissed(false);
     usePaymentStore.getState().clearAttempt();
   }, [sessionState.kind, envelopeHandoffId]);
 
@@ -194,7 +230,11 @@ export function PaymentSurface({
           // snapshot (finalized before settled_at) is ignored — keep polling.
           response.recent.finalized_at >= settledAt
         ) {
+          // 022 US4a (T011) — retain BOTH. The id drives the receipt mount and
+          // the finalized/not-yet-finalized discrimination; the number is the
+          // cashier-quotable reference.
           setSettledSaleNumber(response.recent.sale_number);
+          setSettledSaleId(response.recent.sale_id);
           return;
         }
       } catch {
@@ -390,30 +430,170 @@ export function PaymentSurface({
     : 0;
 
   if (phase === 'settled') {
+    // 022 US4a (T013a) — NFR-6 / P2. `setPhase('settled')` fires on
+    // payments.confirm ALONE, before the AD-2 worker finalizes the sale, so
+    // the settled phase carries two genuinely different meanings. We render
+    // whichever one is TRUE, and never blur them:
+    //
+    //   (a) isFinalized === false — the payment is taken; the sale record is
+    //       still being written. No "sale complete" claim, no receipt, no
+    //       fabricated sale number. This is also the resting state when
+    //       saleFinalization is off (no receipt will ever exist) and when the
+    //       poll fails, times out, or the sales bridge is absent.
+    //   (b) isFinalized === true — the finalized record for THIS sale has
+    //       arrived (the poll already enforces finalized_at >= settled_at, so
+    //       a stale prior sale can never land here). Full success state.
+    //
+    // Neither is an error state; the difference is what the system knows.
+    //
+    // Two INDEPENDENT facts, deliberately not conflated:
+    //   • `isFinalized` — did the finalized record for THIS sale arrive? That
+    //     comes from the sales poll alone. A returned record IS the proof the
+    //     sale was finalized, so it also licenses quoting the sale number
+    //     (006 invariant 13).
+    //   • `showReceipt` — does a receipt document exist to show? That is 008's
+    //     finalize listener, gated on saleFinalization. With the flag off the
+    //     sale can still finalize and still have a quotable number; what does
+    //     not exist is the receipt (T018) — so we say that, and mount nothing.
+    const isFinalized = settledSaleId !== null && settledSaleNumber !== null;
+    const showReceipt = isFinalized && saleFinalizationFlag;
+
     return (
-      <main className="payment-surface" data-testid="payment-surface" aria-label="Payment">
+      <main
+        className="payment-surface payment-surface--settled"
+        data-testid="payment-surface"
+        aria-label="الدفع"
+      >
         <header className="payment-surface__header">
-          <h2 className="payment-surface__title">Payment</h2>
+          <h2 className="payment-surface__title">الدفع</h2>
           <OperatorBadge display_name={display_name} role={role} />
         </header>
-        <div
-          className="payment-surface__settled"
-          data-testid="payment-surface-settled"
-          role="status"
-          aria-live="polite"
-        >
-          Payment settled.
+
+        {/* `payment-surface-settled` is the STABLE marker for "the settled
+            phase is on screen" — the contract existing tests assert (006
+            FR-031, invariant 14's never-stuck check, and the cart→checkout
+            integration walk). 022 US4a splits what is *inside* it into the two
+            truthful states below; the wrapper's meaning is unchanged, so those
+            tests keep passing unmodified. */}
+        <div className="payment-surface__settled" data-testid="payment-surface-settled">
+          {isFinalized ? (
+            <div
+              className="payment-surface__finalized"
+              data-testid="payment-surface-finalized"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="payment-surface__settled-headline">تم إتمام البيع</p>
+              {/* FR-16: the settled amount is the dominant numeric element.
+                dir="ltr" isolates the numeral run inside RTL copy (FR-21). */}
+              <p
+                className="payment-surface__settled-amount"
+                data-testid="payment-surface-settled-amount"
+                dir="ltr"
+                // FR-16 hierarchy via EXISTING typography tokens — no raw
+                // literals (022 standing constraint: sizes change only in
+                // :root). U0/T083 re-reviews this against the v4.0 scale.
+                style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'var(--font-weight-bold)' }}
+              >
+                {formatMinorUnits(envelope.subtotal_minor)}
+              </p>
+              {/* T018: the sale is finalized, but with 008's listener gated off
+                  no receipt was written. Say so rather than leave the absence
+                  of a receipt unexplained. */}
+              {!saleFinalizationFlag && (
+                <p
+                  className="payment-surface__settled-detail"
+                  data-testid="payment-surface-no-receipt"
+                >
+                  لا يوجد إيصال لهذا البيع.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div
+              className="payment-surface__settled-pending"
+              data-testid="payment-surface-settled-pending"
+              // role="status", never "alert" — this is a truthful intermediate
+              // state, not an error.
+              role="status"
+              aria-live="polite"
+            >
+              <p className="payment-surface__settled-headline">تم استلام المبلغ</p>
+              {/* With the flag ON this is a genuinely transitional state: the
+                  finalize worker is running and the record is on its way.
+                  With it OFF the whole 008 stack is unregistered
+                  (src/main/index.ts:441, :983) — the record will NEVER be
+                  written, so promising one would be a fake-pending claim. The
+                  honest flag-off message is terminal: money taken, nothing
+                  further recorded. */}
+              <p className="payment-surface__settled-detail">
+                {saleFinalizationFlag
+                  ? 'يجري تسجيل البيع. لم يصدر إيصال بعد.'
+                  : 'لن يُسجَّل هذا البيع ولا يوجد إيصال له.'}
+              </p>
+              <p
+                className="payment-surface__settled-amount"
+                data-testid="payment-surface-settled-amount"
+                dir="ltr"
+                // Same token-based hierarchy as the finalized state: the amount
+                // taken is the dominant number in BOTH truthful states.
+                style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'var(--font-weight-bold)' }}
+              >
+                {formatMinorUnits(envelope.subtotal_minor)}
+              </p>
+            </div>
+          )}
         </div>
-        {settledSaleNumber !== null && (
-          <div
-            className="payment-surface__sale-number"
-            data-testid="payment-surface-sale-number"
-            role="status"
-            aria-live="polite"
-          >
-            Sale {settledSaleNumber}
+
+        {/* Preserved omission behaviour (T019): with no finalized record there
+            is no number to quote, so the block stays absent rather than
+            fabricating one. */}
+        {isFinalized && (
+          <div className="payment-surface__sale-number" role="status" aria-live="polite">
+            <span className="payment-surface__sale-number-label">رقم البيع</span>{' '}
+            <span
+              className="payment-surface__sale-number-value"
+              data-testid="payment-surface-sale-number"
+              dir="ltr"
+            >
+              {settledSaleNumber}
+            </span>
           </div>
         )}
+
+        {showReceipt && !receiptDismissed && (
+          <div className="payment-surface__receipt" data-testid="payment-surface-receipt">
+            {/* A new consumer of the EXISTING receipts.preview channel — not a
+                bridge-surface change (P8). ReceiptPreview calls the channel
+                itself. */}
+            {/* No bridge prop: ReceiptPreview resolves `window.api.receipts`
+                itself, which is the ONLY path in production. Forwarding one
+                would add a second route to the same channel and leave the real
+                path untested. */}
+            <ReceiptPreview
+              saleId={settledSaleId}
+              onClose={() => {
+                setReceiptDismissed(true);
+              }}
+            />
+          </div>
+        )}
+
+        {/* Dismissing the receipt must not strand the cashier without a way
+            back to it — the sale is finalized and the document still exists. */}
+        {showReceipt && receiptDismissed && (
+          <button
+            type="button"
+            className="payment-surface__receipt-reopen"
+            data-testid="payment-surface-receipt-reopen"
+            onClick={() => {
+              setReceiptDismissed(false);
+            }}
+          >
+            عرض الإيصال
+          </button>
+        )}
+
         <button
           type="button"
           className="payment-surface__new-sale"
@@ -425,7 +605,7 @@ export function PaymentSurface({
             onNewSale?.();
           }}
         >
-          New sale
+          بيع جديد
         </button>
       </main>
     );

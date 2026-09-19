@@ -33,7 +33,7 @@
 
 ## Phase 1 — Setup
 
-- [ ] T001 Create the screenshot evidence directory `specs/022-pos-ui-v4-rescue/screenshots/` with a
+- [x] T001 Create the screenshot evidence directory `specs/022-pos-ui-v4-rescue/screenshots/` with a
   `README.md` recording the naming convention (`<slice>-<surface>-<before|after>.png`), the ≤400 KB
   budget, and the P7/P17 redaction rule (no secrets/tokens/PII in frame).
 - [ ] T002 Verify the dev launch path end-to-end per [quickstart.md](./quickstart.md): run
@@ -60,7 +60,7 @@
 
 ## Phase 2 — Foundational (Blocking Prerequisites)
 
-- [ ] T003 Capture the **baseline** full-suite result (`npm test`) and record it in the screenshots
+- [x] T003 Capture the **baseline** full-suite result (`npm test`) and record it in the screenshots
   README as the regression reference (expected: 468 files / 5538 passed / 3 skipped / 0 failed).
 
 ---
@@ -79,19 +79,19 @@ surface says honestly that no receipt exists and fabricates nothing.
 
 ### Retain the sale id (the enabling change)
 
-- [ ] T010 [US4a] RED: test asserting `PaymentSurface` retains `sale_id` (not only `sale_number`)
+- [x] T010 [US4a] RED: test asserting `PaymentSurface` retains `sale_id` (not only `sale_number`)
   from the `sales.subscribe({topic:'recent'})` poll once settled, in
   `src/renderer/ui/payments/__tests__/PaymentSurface.settled-receipt.test.tsx` (new).
-- [ ] T011 [US4a] GREEN: store the polled `sale_id` alongside `settledSaleNumber` in
+- [x] T011 [US4a] GREEN: store the polled `sale_id` alongside `settledSaleNumber` in
   `src/renderer/ui/payments/PaymentSurface.tsx`. `RecentSaleSummary` already carries it
   (`src/shared/sales/types.ts:165`) — **no bridge change** (research.md §4). Make T010 pass.
 
 ### Arabic-first completion copy
 
-- [ ] T012 [US4a] RED: test asserting the settled branch renders Arabic primary copy for the success
+- [x] T012 [US4a] RED: test asserting the settled branch renders Arabic primary copy for the success
   statement, the sale reference label, and the next action (no English-only operator string), in
   `PaymentSurface.settled-receipt.test.tsx`.
-- [ ] T013 [US4a] GREEN: replace the English-only settled strings (`PaymentSurface.tsx:392-431` —
+- [x] T013 [US4a] GREEN: replace the English-only settled strings (`PaymentSurface.tsx:392-431` —
   "Payment settled." / "Sale {n}" / "New sale" / header "Payment") with Arabic-first copy, keeping
   the sale number `dir="ltr"` mono (FR-21). Make T012 pass.
 
@@ -101,7 +101,7 @@ surface says honestly that no receipt exists and fabricates nothing.
 > settled phase alone would assert success without the finalized record NFR-6 requires. The
 > two-state split in **T013a** is therefore part of T013's definition of done, not optional polish.
 
-- [ ] T013a [US4a] RED+GREEN (**NFR-6 / P2 — load-bearing**): split the settled phase into **two
+- [x] T013a [US4a] RED+GREEN (**NFR-6 / P2 — load-bearing**): split the settled phase into **two
   truthful states**, keyed on whether the matching finalized sale record has arrived:
   - **(a) payment settled, sale not yet finalized** (`sale_id === null`) — say exactly that: the
     payment is taken, the sale record is still being written. **No "sale complete" claim, no
@@ -114,29 +114,29 @@ surface says honestly that no receipt exists and fabricates nothing.
 
 ### Totals hierarchy
 
-- [ ] T014 [US4a] RED: test asserting the settled amount is the dominant numeric element on the
+- [x] T014 [US4a] RED: test asserting the settled amount is the dominant numeric element on the
   completion surface (FR-16) and is `dir="ltr"`-isolated.
-- [ ] T015 [US4a] GREEN: apply the settled-amount hierarchy in `PaymentSurface.tsx` using existing
+- [x] T015 [US4a] GREEN: apply the settled-amount hierarchy in `PaymentSurface.tsx` using existing
   semantic tokens/classes only. Make T014 pass.
 
 ### Mount the existing receipt
 
-- [ ] T016 [US4a] RED: test asserting `ReceiptPreview` is mounted on the completion path for a
+- [x] T016 [US4a] RED: test asserting `ReceiptPreview` is mounted on the completion path for a
   finalized sale (passing the retained `sale_id`), in `PaymentSurface.settled-receipt.test.tsx`.
-- [ ] T017 [US4a] GREEN: mount `ReceiptPreview` from
+- [x] T017 [US4a] GREEN: mount `ReceiptPreview` from
   `src/renderer/ui/receipts/ReceiptPreview.tsx` in the settled branch of `PaymentSurface.tsx`.
   It calls the existing `receipts.preview` channel itself — a **new consumer of an existing
   channel**, not a bridge-surface change (P8, plan Constitution Check). Make T016 pass.
 
 ### Honest degradation (P2 — mandatory, not optional polish)
 
-- [ ] T018 [US4a] RED: test asserting that when `saleFinalization` is **off** (fail-closed default,
+- [x] T018 [US4a] RED: test asserting that when `saleFinalization` is **off** (fail-closed default,
   so 008's finalize listener short-circuits and no receipt exists) the surface states that honestly
   and renders **no** receipt placeholder.
-- [ ] T019 [US4a] RED+GREEN: test asserting that when `sale_id`/`sale_number` is `null` (poll failed,
+- [x] T019 [US4a] RED+GREEN: test asserting that when `sale_id`/`sale_number` is `null` (poll failed,
   bridge absent, or unmounted) the completion detail block stays **omitted** — no fabricated sale
   number, no invented receipt. Preserve today's omission behaviour. Make T018+T019 pass.
-- [ ] T019a [US4a] RED+GREEN (**FR-30**): test asserting the existing **"new sale" behaviour is
+- [x] T019a [US4a] RED+GREEN (**FR-30**): test asserting the existing **"new sale" behaviour is
   preserved** through the settled-branch rewrite — `onNewSale` still resets the payment store **and**
   the cart store and navigates to `/app/cart` (`CheckoutRoute.handleNewSale`). This is the button
   most easily broken by rewriting the branch that owns it, and losing it strands the cashier on a
@@ -144,7 +144,7 @@ surface says honestly that no receipt exists and fabricates nothing.
 
 ### US4a acceptance
 
-- [ ] T0A1 [US4a] Run targeted tests → `npm run typecheck` → `npm run lint` → `npm test` (no
+- [x] T0A1 [US4a] Run targeted tests → `npm run typecheck` → `npm run lint` → `npm test` (no
   regression vs T003 baseline).
 - [ ] T0A2 [US4a] Capture `u4a-sale-success-after.png`; compare against
   `visual-references/05-sale-success.png`; note in the PR which reference was used.
