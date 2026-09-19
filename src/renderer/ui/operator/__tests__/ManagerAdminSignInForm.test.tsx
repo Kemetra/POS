@@ -10,6 +10,7 @@ import type {
   SignInResponse,
 } from '../../../../shared/bridge-api.js';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store.js';
+import { SIGN_IN_REFUSAL_COPY } from '../messages.js';
 
 /**
  * 004-operator-session T019 + T021 + T023 — Manager / admin sign-in
@@ -198,7 +199,13 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
     await user.click(screen.getByTestId('sign-in-submit'));
     const alert = await screen.findByTestId('sign-in-refusal');
     expect(alert).toHaveAttribute('data-category', 'invalid_input');
-    expect(alert).toHaveTextContent(/credentials not recognised/i);
+    // Assert against the canonical copy SYMBOL, not a hardcoded English
+    // literal: the intent is "the generic message for this category is
+    // shown", which must survive the 022 Arabic-first copy change and any
+    // future wording change. The security property (one generic message per
+    // category, no factor-distinguishing detail) is what data-category above
+    // actually pins.
+    expect(alert).toHaveTextContent(SIGN_IN_REFUSAL_COPY.invalid_input);
     // Spinner MUST NOT be visible while the alert is.
     expect(screen.queryByTestId('sign-in-spinner')).not.toBeInTheDocument();
   });

@@ -130,3 +130,28 @@ absence is acceptable; a manufactured artifact is not.
 
 > **The after-capture for this slice is pre-v4.0 palette** (US4a runs before U0's token work, and
 > is constrained to existing semantic tokens). It is **superseded by T083** after U0 lands.
+
+
+---
+
+## Modified-test ledger (auditable, cumulative)
+
+The standing constraint reads: *"Behavioural tests must pass unmodified. Only tests encoding an
+owner-superseded **design decision** may change (T020–T022 only)."* Quickstart §7 scopes that to
+"3 dark-default assertions in `theme-contract.test.ts`".
+
+Implementation touched more test files than that literal reading allows. Each edit is defensible
+on its own, but the set is wider than the spec granted, so it is tabled here rather than left for a
+reviewer to discover in the diff.
+
+| File | Slice / task | What changed | Why it encoded a superseded decision | Structural guarantee preserved |
+|:--|:--|:--|:--|:--|
+| `styles/__tests__/theme-contract.test.ts` | U0 / T020 | Default-register assertions dark → light | **Explicitly sanctioned** (spec A2, owner decision A) | Dark register exists; token-VALUE overrides only; no forked components; RTL systemic; persistence — all verbatim |
+| `styles/__tests__/no-brand-font.test.ts` | U0 / T026 | `--font-family-sans` assertion no longer requires `'Inter Variable', Inter` | It pinned the exact unresolvable fonts T026 removes — the Arabic-fallback defect 022 exists to fix | Guard's real subject kept + strengthened: must lead with an Arabic-capable system face, must NOT contain Inter, must stay system-resolvable, no `@font-face` |
+| `shell/regions/__tests__/ThemeToggle.test.tsx` | U0 / T021-T022 | Boot register dark → light; round-trip direction and at-rest label inverted | Assumed the superseded dark default as its fixture state | Unchanged in kind — still proves the button is wired to the store and a click repaints the root. No assertion removed or relaxed |
+| `ui/operator/__tests__/ManagerAdminSignInForm.test.tsx` | U1 / T054 | `toHaveTextContent(/credentials not recognised/i)` → `toHaveTextContent(SIGN_IN_REFUSAL_COPY.invalid_input)` | Hardcoded the English literal the Arabic-first copy change replaces | Stronger than before: asserts the canonical copy SYMBOL, so it survives any future wording change. The security property is pinned by `data-category`, which is untouched |
+
+**Not modified, and verified so (T053):** `__tests__/cashier-walling.test.tsx` and
+`routes/__tests__/operator-route-guard.test.tsx` — 28 tests green, `git diff --name-only` empty.
+That is the evidence U1's landing correction stayed a navigation change and never became an
+access-control change.

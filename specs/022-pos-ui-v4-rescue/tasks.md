@@ -283,24 +283,49 @@ still receives the existing rejection.
 
 ### Routing correction (independently reviewable — may be its own PR)
 
-- [ ] T050 [US1] RED: router tests asserting role-aware `/app` index resolution — cashier →
+- [x] T050 [US1] RED: router tests asserting role-aware `/app` index resolution — cashier →
   `/app/cart`, manager → `/app/dashboard`, admin → `/app/dashboard`, in
   `src/renderer/__tests__/router.test.tsx`.
-- [ ] T051 [US1] RED: test asserting a cashier navigating **directly** to `/app/dashboard` still gets
+- [x] T051 [US1] RED: test asserting a cashier navigating **directly** to `/app/dashboard` still gets
   the existing role-rejection state — `DashboardRoute`'s check is untouched (FR-45).
-- [ ] T052 [US1] GREEN: replace the static `{ index: true, element: <Navigate to="dashboard" /> }`
+- [x] T052 [US1] GREEN: replace the static `{ index: true, element: <Navigate to="dashboard" /> }`
   at `src/renderer/router.tsx:175` with a role-aware redirect reading the existing
   `useOperatorSessionStore`. **Do not** modify `DashboardRoute.tsx`, `OperatorRouteGuard`, any
   `allow` list, or any flag. Renderer-only (FR-47 → SC-17). Make T050+T051 pass.
-- [ ] T053 [US1] Verify `src/renderer/__tests__/cashier-walling.test.tsx` and
+- [x] T053 [US1] Verify `src/renderer/__tests__/cashier-walling.test.tsx` and
   `routes/__tests__/operator-route-guard.test.tsx` pass **unmodified** (authorization unchanged).
 
 ### Sign-in presentation
 
-- [ ] T054 [US1] RED+GREEN: Arabic-first sign-in presentation in `src/renderer/routes/sign-in.tsx`
+- [ ] T054 [US1] **PARTIAL — token half + refusal copy DONE; form/control LABELS BLOCKED (see below).**
+  RED+GREEN: Arabic-first sign-in presentation in `src/renderer/routes/sign-in.tsx`
   and `src/renderer/ui/operator/**` (roster, PIN pad, badges) against v4.0 tokens.
   **Do NOT add shift-start capability** — the reference shows it, but register D-003 defers
   open-shift to Slice 12 (Non-Capability).
+
+  > **⚠️ T054 / T053 CONFLICT — owner decision needed.**
+  > **Done:** the v4.0 token half (the sign-in surface carries zero inline style literals and
+  > re-themes from `:root` alone — asserted in `ui/operator/__tests__/v4-sign-in-presentation.test.ts`)
+  > and the **refusal copy**, now Arabic-first in `ui/operator/messages.ts` (one consumer, and the
+  > one test asserting it was re-pointed at the copy SYMBOL rather than a hardcoded English
+  > literal, so future wording changes cannot break it). P11 preserved: still one generic message
+  > per category, no interpolation, no factor-distinguishing detail.
+  >
+  > **Blocked:** the form/control labels — `Email or username`, `Password`, `Cashier roster`,
+  > `PIN entry`, `Delete`, `Enter`. **T053 in this same phase requires `cashier-walling.test.tsx`
+  > and `operator-route-guard.test.tsx` to pass UNMODIFIED**, and those suites query by exactly
+  > those strings (`getByLabelText(/email or username/i)`, `aria-label="Cashier roster"`, …).
+  > Also affected: `routes/__tests__/sign-in-route.test.tsx`,
+  > `__tests__/no-operator-auth-session.test.tsx`,
+  > `tests/integration/renderer/takeover-prompt-disclosure.test.tsx`.
+  >
+  > **The workaround was rejected on purpose:** Arabic visible text with English `aria-label`s
+  > would breach **WCAG 2.5.3 (Label in Name)** — a visible-text/accessible-name mismatch is a
+  > worse defect than the inconsistency being fixed, and would likely trip the axe smoke test.
+  >
+  > **Needs:** a scoped follow-up explicitly permitted to re-point those label queries (same
+  > decision class as T024). Until then T054 stays unticked — the label copy is genuinely
+  > unfinished and a tick would misreport it.
 
 ### US1 acceptance
 
