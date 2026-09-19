@@ -210,19 +210,25 @@ afterEach(() => {
 // T010 — retain sale_id (the enabling change)
 // ---------------------------------------------------------------------------
 
-describe('US4a T010 — PaymentSurface retains sale_id from the recent poll', () => {
-  it('retains the finalized sale_id, not only the sale_number', async () => {
+describe('US4a T010 (SUPERSEDED) — nothing is retained from the recent poll', () => {
+  /**
+   * T010/T011 originally retained `sale_id` so the completion surface could
+   * mount a receipt. Review rounds 1-3 established that no field of the
+   * terminal-wide `recent` row can be tied to THIS payment, so the poll and
+   * every value derived from it are gone. These cases now pin the ABSENCE.
+   */
+  it('retains nothing — no receipt, no claim, no number', async () => {
     const bridge = makeBridge({
       sale_id: SALE_ID,
       sale_number: SALE_NUMBER,
       finalized_at: FINALIZED_AT,
     });
     await renderSettled(bridge);
-    // Review round 2: the id no longer drives any renderable CLAIM — the
-    // terminal cannot tie the finalized record to this payment, so it never
-    // asserts completion. The observable consequence of a resolved poll is
-    // the quotable number, shown outside any success frame.
-    expect(await screen.findByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
+    // Review round 3: NOTHING from the uncorrelated `recent` row reaches the
+    // surface — not the receipt, not a completion claim, not the number. The
+    // poll itself is gone. Only what the terminal can prove is shown.
+    expect(await screen.findByTestId('payment-surface-settled-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
     expect(screen.queryByTestId('payment-surface-finalized')).not.toBeInTheDocument();
   });
 
@@ -261,16 +267,18 @@ describe('US4a T012 — Arabic-first completion copy', () => {
     expect(screen.getByTestId('payment-surface-new-sale').textContent).toMatch(/[؀-ۿ]/u);
   });
 
-  it('keeps the sale number dir="ltr" (FR-21)', async () => {
+  it('renders no sale number at all (round 3 — uncorrelatable)', async () => {
     const bridge = makeBridge({
       sale_id: SALE_ID,
       sale_number: SALE_NUMBER,
       finalized_at: FINALIZED_AT,
     });
     await renderSettled(bridge);
-    const num = await screen.findByTestId('payment-surface-sale-number');
-    expect(num).toHaveAttribute('dir', 'ltr');
-    expect(num).toHaveTextContent(SALE_NUMBER);
+    await screen.findByTestId('payment-surface-settled-pending');
+    // FR-21's dir="ltr" money isolation still applies to the AMOUNT, which is
+    // sourced from the envelope and always correlated.
+    expect(screen.getByTestId('payment-surface-settled-amount')).toHaveAttribute('dir', 'ltr');
+    expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
   });
 });
 
@@ -293,7 +301,7 @@ describe('US4a T013a — two truthful settled states', () => {
     expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
   });
 
-  it('(b) a returned recent row yields a NUMBER but never a completion claim', async () => {
+  it('(b) a returned recent row changes NOTHING on the surface', async () => {
     const bridge = makeBridge({
       sale_id: SALE_ID,
       sale_number: SALE_NUMBER,
@@ -301,13 +309,13 @@ describe('US4a T013a — two truthful settled states', () => {
     });
     await renderSettled(bridge);
 
-    // EXTERNAL REVIEW P1 (round 2): a prior sale finalizing late satisfies the
-    // only available check, so the row cannot prove THIS sale completed. The
-    // surface stays on the one state it can support and shows the number
-    // outside any success frame — exactly as `main` did.
+    // EXTERNAL REVIEW P1 (rounds 2+3): a prior sale finalizing late satisfies
+    // the only available check, so the row proves nothing about THIS sale —
+    // not completion, not the number. The surface is identical whether or not
+    // a recent row exists.
     expect(await screen.findByTestId('payment-surface-settled-pending')).toBeInTheDocument();
     expect(screen.queryByTestId('payment-surface-finalized')).not.toBeInTheDocument();
-    expect(screen.getByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
+    expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
   });
 
   it('both states are non-error: the pending state never uses role="alert"', async () => {
@@ -399,14 +407,20 @@ describe('US4a T016 (REVISED) — the receipt is NOT mounted on an uncorrelated 
     }
   });
 
-  it('still shows the cashier-quotable sale number (unchanged from main)', async () => {
+  it('shows NO sale number — a deliberate reduction below main (round 3)', async () => {
     const bridge = makeBridge({
       sale_id: SALE_ID,
       sale_number: SALE_NUMBER,
       finalized_at: FINALIZED_AT,
     });
     await renderSettled(bridge);
-    expect(await screen.findByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
+    await screen.findByTestId('payment-surface-settled-pending');
+    // This CONTRADICTS 006 invariant 13, which asserts the number displays.
+    // Accepted on safety grounds: the number came from a terminal-wide row
+    // with no tie to this payment, so a wrong cashier-quotable reference is
+    // worse than none. It returns with the correlating identifier.
+    expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface')).not.toHaveTextContent(SALE_NUMBER);
   });
 });
 

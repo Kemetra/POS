@@ -216,7 +216,25 @@ describe('PaymentSurface — settled completion (P0 dead-end fix)', () => {
     expect(onNewSale).toHaveBeenCalledTimes(1);
   });
 
-  it('polls sales.subscribe(recent) and shows the finalized sale number (invariant 13)', async () => {
+  /**
+   * 022 SUPERSEDES 006 INVARIANT 13 — recorded here rather than deleted, so
+   * the removal of a shipped behaviour stays auditable.
+   *
+   * Invariant 13 asserted the completion surface shows the finalized sale
+   * number, polled from `sales.subscribe({topic:'recent'})`. External review
+   * (rounds 1-3) established that this terminal-wide row cannot be tied to
+   * THIS payment: `RecentSaleSummary` carries no attempt/handoff identifier
+   * and `payments.confirm` returns only `settled_at`, so `finalized_at >=
+   * settled_at` is the only available test — and a PRIOR sale finalizing late
+   * satisfies it, surfacing another customer's reference.
+   *
+   * A wrong cashier-quotable number is worse than none, so the poll and the
+   * number are both removed. This is a DELIBERATE REDUCTION below `main`,
+   * accepted on safety grounds. It reverts when the projection carries a
+   * correlating identifier (011 derives one from `envelope_handoff_action_id`),
+   * at which point invariant 13, T013a and T017 all unblock together.
+   */
+  it('022: does NOT show a sale number, and does not poll for one (supersedes invariant 13)', async () => {
     const user = userEvent.setup();
     const subscribe = vi.fn<(req: SalesSubscribeRequest) => Promise<SalesSubscribeResponse>>(
       async () =>
@@ -237,12 +255,14 @@ describe('PaymentSurface — settled completion (P0 dead-end fix)', () => {
 
     await user.click(await screen.findByTestId('payment-surface-confirm'));
 
-    const saleNumber = await screen.findByTestId('payment-surface-sale-number');
-    expect(saleNumber).toHaveTextContent('C1-20260611-0007');
-    expect(subscribe).toHaveBeenCalledWith({ topic: 'recent' });
+    // Settled surface renders, but the uncorrelatable number never appears...
+    await screen.findByTestId('payment-surface-settled');
+    expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
+    // ...and nothing polls for it: no unbounded window for a late prior sale.
+    expect(subscribe).not.toHaveBeenCalled();
   });
 
-  it('ignores a stale prior-sale recent snapshot and shows THIS sale once finalized', async () => {
+  it('022: a stale prior-sale recent snapshot cannot reach the surface at all', async () => {
     // Timing reality: the AD-2 worker finalizes THIS sale ~200ms AFTER confirm,
     // so the first `recent` poll can return the PREVIOUS sale (finalized_at
     // before this attempt's settled_at). Showing that number would be wrong.
@@ -278,10 +298,16 @@ describe('PaymentSurface — settled completion (P0 dead-end fix)', () => {
 
     await user.click(await screen.findByTestId('payment-surface-confirm'));
 
-    // Eventually shows THIS sale's number — never the prior one.
-    const saleNumber = await screen.findByTestId('payment-surface-sale-number');
-    expect(saleNumber).toHaveTextContent('C1-20260611-0007');
-    expect(saleNumber).not.toHaveTextContent('C1-20260611-0006');
+    // 022: neither number reaches the surface. The original test proved the
+    // STALE one was filtered by timestamp — but that filter is exactly what
+    // review showed to be insufficient (a prior sale finalizing late passes
+    // it). With the poll removed, no `recent` row can surface at all, which
+    // is strictly stronger than filtering.
+    await screen.findByTestId('payment-surface-settled');
+    expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
+    const surface = screen.getByTestId('payment-surface');
+    expect(surface).not.toHaveTextContent('C1-20260611-0007');
+    expect(surface).not.toHaveTextContent('C1-20260611-0006');
   });
 
   it('still shows the completed state + New sale when sales.subscribe refuses (graceful)', async () => {

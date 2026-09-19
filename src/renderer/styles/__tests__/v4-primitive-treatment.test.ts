@@ -137,6 +137,33 @@ describe('022 — light-register control boundaries meet WCAG 1.4.11 (>=3:1)', (
     }
   });
 
+  it('EVERY interactive control uses the strong border, not just inputs', () => {
+    // EXTERNAL REVIEW P2 (round 3) — the first contrast fix reached only the
+    // global form rule, leaving keypads, roster rows, tender cards and quick
+    // amounts on the 1.24:1 hairline. The reviewer listed examples, not an
+    // inventory, so this asserts the whole closed set of clickable controls.
+    const CONTROLS = [
+      'amount-pad__key',
+      'amount-pad__quick-key',
+      'pin-pad__key',
+      'roster-list__item-btn',
+      'method-card',
+      'quick-amount-btn',
+      'pairing-form__code-input',
+      'takeover-prompt__cancel',
+    ];
+    const weak: string[] = [];
+    for (const selector of CONTROLS) {
+      const start = css.indexOf(`.${selector} {`);
+      expect(start, `.${selector} not found in stylesheet`).toBeGreaterThan(-1);
+      const body = css.slice(start, css.indexOf('}', start));
+      if (/border:\s*1px solid var\(--color-border\)/.test(body)) weak.push(selector);
+    }
+    expect(weak, `interactive controls still on the 1.24:1 hairline: ${weak.join(', ')}`).toEqual(
+      [],
+    );
+  });
+
   it('form controls use the STRONG border token, not the decorative hairline', () => {
     // The global control rule (input/select/textarea) is the boundary WCAG
     // 1.4.11 governs; decorative `--color-border` dividers are out of scope.

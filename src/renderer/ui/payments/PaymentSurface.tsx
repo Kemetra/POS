@@ -137,10 +137,6 @@ export function PaymentSurface({
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [reversalPending, setReversalPending] = useState<boolean>(false);
-  // The cashier-quotable number of the just-finalized sale. Null until the
-  // recent-sale poll resolves (or forever, if sales is absent / the worker is
-  // slow — the completed state + New sale never depend on it).
-  const [settledSaleNumber, setSettledSaleNumber] = useState<string | null>(null);
   // 022 US4a (T011) — the sale id is NO LONGER retained.
   //
   // It existed to mount ReceiptPreview and to discriminate T013a's two settled
@@ -150,11 +146,10 @@ export function PaymentSurface({
   // (T013a) are blocked on a correlating identifier, so holding the id would
   // be dead state inviting the same mistake again. Re-introduce it together
   // with the correlation key, not before.
-  // `settled_at` from payments.confirm, used to discriminate THIS sale's
-  // `recent` snapshot from a prior sale's. The AD-2 worker finalizes THIS sale
-  // AFTER confirm returns, so a `recent` whose finalized_at predates this
-  // settled_at is a stale prior sale and must be ignored.
-  const [settledAt, setSettledAt] = useState<string | null>(null);
+  // `settled_at` is no longer retained: it existed solely to discriminate the
+  // recent-sale poll's results, and that poll is gone (round-3 P1 above). It
+  // returns with the correlating identifier, if the correlation ends up
+  // needing it.
   // 008's finalize listener is gated on this flag. With it off no receipt is
   // ever written, so the completion surface must say so rather than imply a
   // document is on its way.
@@ -179,84 +174,28 @@ export function PaymentSurface({
     setIsCancelling(false);
     setIsStarting(false);
     setReversalPending(false);
-    setSettledSaleNumber(null);
-    setSettledAt(null);
     usePaymentStore.getState().clearAttempt();
   }, [sessionState.kind, envelopeHandoffId]);
 
-  // On entering the settled phase, poll the terminal's most-recently-finalized
-  // sale to surface the cashier-quotable sale number. The sale finalizes
-  // asynchronously in the main process (~200ms after confirm via the AD-2
-  // worker); `payments.confirm` returns only `settled_at`. We poll
-  // `sales.subscribe({ topic: 'recent' })` (a snapshot poll, no push) a few
-  // times to ride out that gap. Graceful: any refusal / absent sales bridge /
-  // unmount simply leaves the number unset — the completed surface + New sale
-  // do not depend on it (invariant 14 holds regardless).
+  // EXTERNAL REVIEW P1 (round 3) — "Stop polling until finalized sales can be
+  // correlated". The recent-sale poll is REMOVED, not merely capped.
   //
-  // CODEX REVIEW P2 — "Continue checking for late finalization". The original
-  // cap gave up after ~2s, so a sale finalizing later (a worker draining many
-  // batches, or a transient projection refusal that clears) could never be
-  // reported: the surface stayed on "being recorded" forever even once the
-  // sale existed. We now BACK OFF rather than stop — fast polls to catch the
-  // common ~200ms case, then a slow cadence that keeps watching for the rest
-  // of the completion surface's life. The effect is bounded by unmount, which
-  // happens on "new sale", so this cannot leak beyond the settled screen.
-  const salesBridge = bridge?.sales;
-  useEffect(() => {
-    if (
-      phase !== 'settled' ||
-      salesBridge === undefined ||
-      settledAt === null ||
-      settledSaleNumber !== null
-    ) {
-      return;
-    }
-    let cancelled = false;
-    let attempts = 0;
-    // Fast phase: ride out the ~200ms AD-2 worker gap.
-    const FAST_ATTEMPTS = 10;
-    const FAST_INTERVAL_MS = 200;
-    // Slow phase: keep watching for a late finalization without busy-polling.
-    const SLOW_INTERVAL_MS = 3000;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const poll = async (): Promise<void> => {
-      attempts += 1;
-      try {
-        const response = await salesBridge.subscribe({ topic: 'recent' });
-        if (cancelled) return;
-        if (
-          response.kind === 'ok' &&
-          'recent' in response &&
-          response.recent !== null &&
-          // Discriminate THIS sale from a stale prior one: the AD-2 worker
-          // finalizes THIS sale AFTER confirm, so only a recent whose
-          // finalized_at is at/after our settled_at is ours. A prior sale's
-          // snapshot (finalized before settled_at) is ignored — keep polling.
-          response.recent.finalized_at >= settledAt
-        ) {
-          // Only the cashier-quotable number is retained (006 invariant 13).
-          // The sale_id is deliberately NOT kept — see the note at the
-          // settledSaleNumber declaration.
-          setSettledSaleNumber(response.recent.sale_number);
-          return;
-        }
-      } catch {
-        // Bridge rejection — treat as "not yet available"; keep polling until
-        // the attempt cap, then give up silently (no DOM error surfaced).
-      }
-      if (!cancelled) {
-        const delay = attempts < FAST_ATTEMPTS ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS;
-        timer = setTimeout(() => void poll(), delay);
-      }
-    };
-    void poll();
-
-    return () => {
-      cancelled = true;
-      if (timer !== null) clearTimeout(timer);
-    };
-  }, [phase, salesBridge, settledAt, settledSaleNumber]);
+  // Round 2 replaced a 10-attempt cap with a backoff that kept watching for the
+  // life of the settled surface. That fixed "late finalization is never seen"
+  // and, in doing so, widened the miscorrelation window from a bounded ~2s to
+  // UNBOUNDED: any prior sale finalizing at any later point satisfies
+  // `finalized_at >= settled_at` and would be adopted as this sale's number.
+  //
+  // The number rested on exactly the evidence that already disqualified the
+  // receipt (T017) and the completion claim (T013a) — a terminal-wide row with
+  // no tie to this payment. It survived earlier rounds only on "no worse than
+  // `main`", and the uncapped poll made that false: `main` was bounded.
+  //
+  // So the surface shows no sale number, and nothing polls for one. This is a
+  // DELIBERATE REDUCTION below `main` (it contradicts 006 invariant 13, which
+  // asserts the number displays) accepted on safety grounds: a wrong
+  // cashier-quotable reference is worse than none. It returns with the
+  // correlating identifier, alongside T013a and T017.
 
   if (sessionState.kind !== 'signedIn' || envelope === null) {
     return null;
@@ -402,10 +341,6 @@ export function PaymentSurface({
         idempotency_key: crypto.randomUUID(),
       });
       if (response.kind === 'ok') {
-        // Capture settled_at so the recent-sale poll can tell THIS sale's
-        // finalized snapshot from a stale prior one (the worker finalizes
-        // after this returns).
-        setSettledAt(response.settled_at);
         setPhase('settled');
       } else {
         setBridgeRefusalCopy('This payment could not be settled. Please try again.');
@@ -525,42 +460,6 @@ export function PaymentSurface({
             </p>
           </div>
         </div>
-
-        {/* Preserved omission behaviour (T019): with no finalized record there
-            is no number to quote, so the block stays absent rather than
-            fabricating one. */}
-        {settledSaleNumber !== null && (
-          <div className="payment-surface__sale-number" role="status" aria-live="polite">
-            <span className="payment-surface__sale-number-label">رقم البيع</span>{' '}
-            <span
-              className="payment-surface__sale-number-value"
-              data-testid="payment-surface-sale-number"
-              dir="ltr"
-            >
-              {settledSaleNumber}
-            </span>
-          </div>
-        )}
-
-        {/* CODEX REVIEW P1 — the receipt is deliberately NOT mounted here.
-            `RecentSaleSummary` carries no payment/attempt/envelope key and
-            `payments.confirm` returns only `settled_at`, so `finalized_at >=
-            settled_at` is the only discriminator available renderer-side — and
-            a PRIOR sale finalizing late (a worker retry succeeding while this
-            sale is delayed) satisfies it. Mounting a receipt on that would show
-            the previous customer's document.
-
-            The correlation gap pre-dates this slice (`main` already showed the
-            number from the same unverified `recent`, 006 invariant 13); what
-            US4a added was a receipt for a sale the terminal cannot prove is
-            this one. There is no renderer-only fix — the key does not exist on
-            the wire and adding one is a bridge change (P8). A tighter time
-            window or amount-match would be a heuristic dressed as a fix.
-
-            So the number stays (no worse than main) and the receipt waits for a
-            correlatable identifier on the `recent` projection. T017 is untieked
-            and the gap is filed; 011 already derives one from
-            `envelope_handoff_action_id`, so it exists main-side. */}
 
         <button
           type="button"

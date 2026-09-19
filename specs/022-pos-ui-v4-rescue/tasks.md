@@ -135,6 +135,23 @@ surface says honestly that no receipt exists and fabricates nothing.
   > a sibling read) tying the finalized sale to this payment. 011 already derives a deterministic
   > one from `envelope_handoff_action_id`, so it exists main-side — a backend/contract task, not
   > a renderer one. NFR-6 as written depends on it.
+  >
+  > **Round 3 extended this to the SALE NUMBER itself.** Round 2 left the number visible on
+  > "no worse than `main`" grounds, and simultaneously replaced the 10-attempt poll cap with an
+  > uncapped backoff — which made that justification false: `main`'s exposure was bounded at ~2s,
+  > the backoff's was unbounded, so *any* later-finalizing prior sale would be adopted. The number
+  > rested on exactly the evidence that already disqualified the receipt and the completion claim.
+  >
+  > **The recent-sale poll is removed entirely**, along with `settledSaleNumber`, `settledSaleId`
+  > and `settledAt`. The settled surface shows only `تم استلام المبلغ` + the envelope amount +
+  > "new sale".
+  >
+  > **This CONTRADICTS 006 invariant 13**, which asserts the finalized sale number displays. That
+  > is a deliberate reduction *below* `main`, accepted on safety grounds: a wrong cashier-quotable
+  > reference is worse than none. The two 006 tests that encoded invariant 13 were converted into
+  > explicit superseded markers rather than deleted, so the removal of a shipped behaviour stays
+  > auditable in the suite. Invariant 13 reverts together with T013a and T017 when the projection
+  > carries a correlating identifier.
 
 ### Totals hierarchy
 
