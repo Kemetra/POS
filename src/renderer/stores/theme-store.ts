@@ -28,6 +28,13 @@ export const DEFAULT_THEME: Theme = 'light';
 /** localStorage key for the persisted theme selection. */
 export const THEME_STORAGE_KEY = 'pos-pulse.theme';
 
+/**
+ * 022 U0 — marker proving the one-time v4.0 theme migration has run on this
+ * terminal. Its presence is what makes the migration a ONE-SHOT rather than a
+ * recurring override of the operator's choice.
+ */
+export const THEME_V4_MIGRATION_KEY = 'pos-pulse.theme.v4-migrated';
+
 /** The DOM attribute the dark register is keyed on (`<html data-theme>`). */
 export const THEME_ATTRIBUTE = 'data-theme';
 
@@ -95,12 +102,46 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 }));
 
 /**
+ * 022 U0 — one-time v4.0 theme migration.
+ *
+ * U0 made LIGHT the v4.0 default, but a persisted preference legitimately
+ * beats a default — and every terminal that ran v3.5 has `"dark"` stored. Left
+ * alone, no existing terminal would ever see the v4.0 light default: the
+ * headline change would ship invisible in the field. (Automated tests all
+ * passed, because jsdom starts with empty storage; only a real machine with
+ * history exposed this.)
+ *
+ * So on the FIRST v4.0 boot we retire the pre-v4 stored value once and record a
+ * marker. This is deliberately narrow:
+ *   - it runs exactly once per terminal;
+ *   - a theme the operator chooses AFTER v4.0 persists normally and is never
+ *     touched again (asserted in theme-v4-migration.test.ts);
+ *   - it is not "ignore the user" — it retires a choice made against a design
+ *     that no longer exists.
+ *
+ * Storage failure is non-fatal: the terminal must launch regardless, so any
+ * throw degrades to "migration not performed" and the default applies anyway.
+ */
+function migrateLegacyThemeOnce(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem(THEME_V4_MIGRATION_KEY) !== null) return;
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    localStorage.setItem(THEME_V4_MIGRATION_KEY, '1');
+  } catch {
+    // Storage unavailable — fall through; the v4.0 default still applies.
+  }
+}
+
+/**
  * Boot-time initialiser — called once from `main.tsx` before React mounts.
- * Reconciles the store + DOM with the persisted value. The static
- * `data-theme="dark"` baked into `index.html` covers dark users with no
- * flash; this call only re-paints to `light` for operators who chose it.
+ * Runs the one-time v4.0 migration, then reconciles the store + DOM with the
+ * persisted value. The static `data-theme="light"` baked into `index.html`
+ * covers the v4.0 default with no flash; this call only re-paints to `dark`
+ * for operators who chose it under v4.0.
  */
 export function initTheme(): Theme {
+  migrateLegacyThemeOnce();
   const theme = readPersistedTheme();
   applyTheme(theme);
   useThemeStore.setState({ theme });

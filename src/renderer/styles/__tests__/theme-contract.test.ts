@@ -134,8 +134,13 @@ describe('theme store — default, toggle, persistence (ADR-0004)', () => {
   });
 
   it('re-hydrates the persisted dark choice on next boot (non-default beats the default)', async () => {
-    const { initTheme, useThemeStore, THEME_STORAGE_KEY } =
+    const { initTheme, useThemeStore, THEME_STORAGE_KEY, THEME_V4_MIGRATION_KEY } =
       await import('../../stores/theme-store');
+    // A terminal that has ALREADY run the one-time 022 v4.0 migration — i.e.
+    // this `dark` is a choice the operator made UNDER v4.0, not a leftover
+    // v3.5 value. Without the marker the migration would (correctly) retire
+    // it; see theme-v4-migration.test.ts for that path.
+    localStorage.setItem(THEME_V4_MIGRATION_KEY, '1');
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const applied = initTheme();
     expect(applied).toBe('dark');
