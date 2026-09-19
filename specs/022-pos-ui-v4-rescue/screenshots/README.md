@@ -54,10 +54,11 @@ touch the settled surface pass **unmodified** (see `u4a` note below).
 
 ## T002 — dev launch verification
 
-> ⏳ **NOT YET RUN — blocking for every screenshot task, not for source work.**
+> ✅ **VERIFIED PASS — 2026-09-19. No longer blocking.** Full evidence below.
 
-T002 requires a human-observed Electron launch. Per quickstart §3 there are two checks with
-**different** pass conditions:
+T002 requires an actual Electron launch, with the result read from the **rotating main-process log
+file** (see the root-cause note below — NOT from terminal stdout). Per quickstart §3 there are two
+checks with **different** pass conditions:
 
 - **(a) Operator bypass — REQUIRED.** The `operator.dev_bypass.active` warn line MUST appear.
   If absent, the session is not the fixture operator and no screenshot can be honestly
