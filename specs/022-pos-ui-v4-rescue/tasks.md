@@ -36,7 +36,7 @@
 - [x] T001 Create the screenshot evidence directory `specs/022-pos-ui-v4-rescue/screenshots/` with a
   `README.md` recording the naming convention (`<slice>-<surface>-<before|after>.png`), the ≤400 KB
   budget, and the P7/P17 redaction rule (no secrets/tokens/PII in frame).
-- [ ] T002 Verify the dev launch path end-to-end per [quickstart.md](./quickstart.md): run
+- [x] T002 Verify the dev launch path end-to-end per [quickstart.md](./quickstart.md): run
   `npm run dev` with the dev env vars, then verify **both** of the following and record the results
   in the screenshots README.
 
