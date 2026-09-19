@@ -123,10 +123,36 @@ surface says honestly that no receipt exists and fabricates nothing.
 
 - [x] T016 [US4a] RED: test asserting `ReceiptPreview` is mounted on the completion path for a
   finalized sale (passing the retained `sale_id`), in `PaymentSurface.settled-receipt.test.tsx`.
-- [x] T017 [US4a] GREEN: mount `ReceiptPreview` from
-  `src/renderer/ui/receipts/ReceiptPreview.tsx` in the settled branch of `PaymentSurface.tsx`.
-  It calls the existing `receipts.preview` channel itself — a **new consumer of an existing
-  channel**, not a bridge-surface change (P8, plan Constitution Check). Make T016 pass.
+- [ ] T017 [US4a] **BLOCKED — the receipt is deliberately NOT mounted (see below).** GREEN: mount
+  `ReceiptPreview` from `src/renderer/ui/receipts/ReceiptPreview.tsx` in the settled branch of
+  `PaymentSurface.tsx`. It calls the existing `receipts.preview` channel itself — a **new consumer
+  of an existing channel**, not a bridge-surface change (P8, plan Constitution Check).
+
+  > **BLOCKED by an uncorrelatable `recent` projection (external review P1, verified in source).**
+  >
+  > `RecentSaleSummary` carries **no** payment, attempt or envelope identifier — only `sale_id`,
+  > `sale_number`, `finalized_at` — and `payments.confirm` returns only `settled_at`. So
+  > `finalized_at >= settled_at` is the ONLY discriminator available renderer-side, and a **prior**
+  > sale finalizing late (a worker retry succeeding while this sale is delayed or refused)
+  > satisfies it. Mounting a receipt on that `sale_id` would show **the previous customer's
+  > receipt**.
+  >
+  > **The gap pre-dates this slice.** `main` already displayed `settledSaleNumber` from the same
+  > unverified `recent` (006 invariant 13) — verified against `58acd5c`. What T017 added was a
+  > *receipt document* for a sale the terminal cannot prove is this one, turning a wrong number
+  > into a wrong receipt.
+  >
+  > **There is no renderer-only fix.** The correlating key does not exist on the wire, and adding
+  > one is a bridge change, which 022 forbids (P8). A tighter time window or an amount-match would
+  > be a heuristic dressed as a fix — precisely what this slice exists to refuse.
+  >
+  > **Decision: un-amplify.** The receipt is not mounted; the sale number still shows, exactly as
+  > on `main` — no better, but no worse. The completion surface stays honest about what it knows.
+  >
+  > **Unblocks when** the `recent` projection (or a sibling read) carries an identifier tying the
+  > finalized sale to *this* payment. 011 already derives a deterministic `externalId` from
+  > `envelope_handoff_action_id`, so the identifier exists main-side — this is a backend/contract
+  > task, not a renderer one.
 
 ### Honest degradation (P2 — mandatory, not optional polish)
 

@@ -218,9 +218,11 @@ describe('US4a T010 — PaymentSurface retains sale_id from the recent poll', ()
       finalized_at: FINALIZED_AT,
     });
     await renderSettled(bridge);
-    // The retained sale_id is observable via the receipt mount (T016) — the
-    // only honest way to assert it without rendering an id as text (FR-035).
-    expect(await screen.findByTestId('payment-surface-receipt')).toBeInTheDocument();
+    // The retained sale_id drives the finalized/not-yet-finalized split; it is
+    // never rendered (FR-035), so the observable consequence is the finalized
+    // state plus its quotable number.
+    expect(await screen.findByTestId('payment-surface-finalized')).toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
   });
 
   it('ignores a STALE recent snapshot (finalized_at < settled_at)', async () => {
@@ -231,7 +233,7 @@ describe('US4a T010 — PaymentSurface retains sale_id from the recent poll', ()
     });
     await renderSettled(bridge);
     // A prior sale's snapshot must never be adopted as this sale's result.
-    expect(screen.queryByTestId('payment-surface-receipt')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-finalized')).not.toBeInTheDocument();
     expect(screen.queryByText(SALE_NUMBER)).not.toBeInTheDocument();
   });
 });
@@ -290,7 +292,7 @@ describe('US4a T013a — two truthful settled states', () => {
     expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
   });
 
-  it('(b) sale finalized: success state with receipt and sale number', async () => {
+  it('(b) sale finalized: success state with the quotable sale number', async () => {
     const bridge = makeBridge({
       sale_id: SALE_ID,
       sale_number: SALE_NUMBER,
@@ -300,7 +302,9 @@ describe('US4a T013a — two truthful settled states', () => {
 
     expect(await screen.findByTestId('payment-surface-finalized')).toBeInTheDocument();
     expect(screen.queryByTestId('payment-surface-settled-pending')).not.toBeInTheDocument();
-    expect(screen.getByTestId('payment-surface-receipt')).toBeInTheDocument();
+    // No receipt: see the T016 block — the sale cannot be correlated to this
+    // payment, so mounting one could show a prior customer's document.
+    expect(screen.getByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
   });
 
   it('both states are non-error: the pending state never uses role="alert"', async () => {
@@ -334,63 +338,71 @@ describe('US4a T014 — settled amount is the dominant numeric element', () => {
 // T016 — mount the existing receipt
 // ---------------------------------------------------------------------------
 
-describe('US4a T016 — ReceiptPreview mounted on the finalized path', () => {
-  it('mounts ReceiptPreview for the finalized sale', async () => {
+describe('US4a T016 (REVISED) — the receipt is NOT mounted on an uncorrelated sale', () => {
+  /**
+   * CODEX REVIEW P1 — "Correlate the finalized receipt to this payment".
+   *
+   * The `recent` projection is terminal-scoped and carries NO payment,
+   * attempt or envelope identifier (`RecentSaleSummary` = sale_id +
+   * sale_number + finalized_at), and `payments.confirm` returns only
+   * `settled_at`. So `finalized_at >= settled_at` is the ONLY discriminator
+   * available renderer-side — and a PRIOR sale that finalizes late (a worker
+   * retry succeeding while this sale is still delayed) satisfies it.
+   *
+   * That gap PRE-DATES this slice: `main` already displayed `settledSaleNumber`
+   * from the same unverified `recent` (006 invariant 13). What US4a added was a
+   * RECEIPT for a sale the terminal cannot prove is this one — turning a wrong
+   * number into the previous customer's full receipt document.
+   *
+   * There is no renderer-only correlation fix: the needed key does not exist on
+   * the wire, and adding one is a bridge change (P8 forbids it in 022). Any
+   * tighter time window or amount-match would be a heuristic dressed as a fix,
+   * which is precisely what this slice exists to refuse.
+   *
+   * So we UN-AMPLIFY: the receipt is not mounted. The sale number still shows,
+   * exactly as on `main` — no better, but no worse. T017 is untieked and the
+   * correlation gap is filed for the backend/spec (011 already derives an
+   * identifier from `envelope_handoff_action_id`, so the key exists main-side).
+   */
+  it('does NOT mount ReceiptPreview — the sale cannot be correlated to this payment', async () => {
     const bridge = makeBridge({
       sale_id: SALE_ID,
       sale_number: SALE_NUMBER,
       finalized_at: FINALIZED_AT,
     });
     await renderSettled(bridge);
-    expect(await screen.findByTestId('payment-surface-receipt')).toBeInTheDocument();
-    // Assert the CHILD's own contract, not just the wrapper we render around
-    // it — a wrapper-only assertion would pass even if ReceiptPreview were
-    // rendering its error state.
-    expect(await screen.findByTestId('receipt-preview')).toBeInTheDocument();
-  });
-
-  it('dismissing the receipt leaves a way back to it (no dead end)', async () => {
-    const bridge = makeBridge({
-      sale_id: SALE_ID,
-      sale_number: SALE_NUMBER,
-      finalized_at: FINALIZED_AT,
-    });
-    await renderSettled(bridge);
-    expect(await screen.findByTestId('payment-surface-receipt')).toBeInTheDocument();
-
-    // Dismiss via Escape — ReceiptPreview's own documented close path.
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-      await Promise.resolve();
-    });
+    // The finalized state still renders...
+    expect(await screen.findByTestId('payment-surface-finalized')).toBeInTheDocument();
+    // ...but no receipt, because it could be a prior customer's.
     expect(screen.queryByTestId('payment-surface-receipt')).not.toBeInTheDocument();
-
-    // The sale is finalized and the document still exists, so the cashier must
-    // be able to bring it back rather than losing it for good.
-    const reopen = await screen.findByTestId('payment-surface-receipt-reopen');
-    expect(reopen.textContent).toMatch(/[؀-ۿ]/u);
-    await act(async () => {
-      reopen.click();
-      await Promise.resolve();
-    });
-    expect(await screen.findByTestId('payment-surface-receipt')).toBeInTheDocument();
+    expect(screen.queryByTestId('receipt-preview')).not.toBeInTheDocument();
   });
 
-  it('never renders a receipt ERROR inside the success state', async () => {
-    // ReceiptPreview resolves its own bridge and falls into `phase: 'error'`
-    // (a role="alert" region) when none is present. A failure alert nested
-    // under "تم إتمام البيع" would be the exact dishonesty this slice exists
-    // to remove — the success claim must not host a failure notice.
+  it('never renders the internal sale UUID anywhere in the DOM (FR-035)', async () => {
+    // CODEX REVIEW P2 — the UUID reached ReceiptPreview's aria-label. With the
+    // receipt unmounted it cannot leak at all; this asserts the whole surface,
+    // including accessible names, so a future re-mount cannot reintroduce it.
     const bridge = makeBridge({
       sale_id: SALE_ID,
       sale_number: SALE_NUMBER,
       finalized_at: FINALIZED_AT,
     });
     await renderSettled(bridge);
-    const finalized = await screen.findByTestId('payment-surface-finalized');
-    expect(finalized.querySelector('[role="alert"]')).toBeNull();
-    const surface = screen.getByTestId('payment-surface');
-    expect(surface.querySelector('[role="alert"]')).toBeNull();
+    const surface = await screen.findByTestId('payment-surface');
+    expect(surface.innerHTML).not.toContain(SALE_ID);
+    for (const el of Array.from(surface.querySelectorAll('[aria-label]'))) {
+      expect(el.getAttribute('aria-label') ?? '').not.toContain(SALE_ID);
+    }
+  });
+
+  it('still shows the cashier-quotable sale number (unchanged from main)', async () => {
+    const bridge = makeBridge({
+      sale_id: SALE_ID,
+      sale_number: SALE_NUMBER,
+      finalized_at: FINALIZED_AT,
+    });
+    await renderSettled(bridge);
+    expect(await screen.findByTestId('payment-surface-sale-number')).toHaveTextContent(SALE_NUMBER);
   });
 });
 

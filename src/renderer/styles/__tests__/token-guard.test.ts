@@ -78,9 +78,32 @@ function collectComponentFiles(dir: string): string[] {
   });
 }
 
-/** Extract the body of every inline `style={{ … }}` object in a source file. */
+/**
+ * Extract every style object in a source file — BOTH forms.
+ *
+ * CODEX REVIEW P2 — "Scan assigned style objects in the token guard". The
+ * original extractor recognised only the literal JSX form `style={{ … }}`, so
+ * it silently skipped this repo's equally common
+ * `const x: CSSProperties = { … }; <div style={x}>` pattern. That made the
+ * "hard zero" claim false: `ReceiptPreview` carried 12 raw values across
+ * `titleBandStyle`, `canvasRegionStyle` and `slipStyle` while the guard
+ * reported no violation.
+ *
+ * A guard that passes because it stopped looking is worse than no guard, so
+ * both forms are scanned now. (A full AST walk would be stricter still; these
+ * two patterns cover every style object present in `src/renderer/ui` today,
+ * verified by sweep — and the `scans a non-trivial number` assertion plus the
+ * mutation check below guard against the extractor silently going blind.)
+ */
 function extractStyleBlocks(source: string): string[] {
-  return [...source.matchAll(/style=\{\{(.*?)\}\}/gs)].map((match) => match[1] ?? '');
+  return [
+    // Literal JSX: style={{ … }}
+    ...[...source.matchAll(/style=\{\{(.*?)\}\}/gs)].map((match) => match[1] ?? ''),
+    // Assigned object: const x: CSSProperties = { … };
+    ...[...source.matchAll(/:\s*CSSProperties\s*=\s*\{(.*?)\n\s*\};/gs)].map(
+      (match) => match[1] ?? '',
+    ),
+  ];
 }
 
 function matchPairs(source: string, pattern: RegExp): Pair[] {

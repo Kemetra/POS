@@ -105,6 +105,13 @@
   --font-size-2xl: 1.5rem; /* 24px */
   --font-size-3xl: 1.875rem; /* 30px */
 
+  /* Receipt-slip simulation (ReceiptPreview): mimics thermal paper at 80mm and
+     160mm. Deliberately outside the UI type scale — it represents PRINTED
+     output, not interface text — but tokenized so the guard stays strict and
+     the values live in one place. */
+  --font-size-slip: 0.7rem;
+  --font-size-slip-zoomed: 1.4rem;
+
   --line-height-tight: 1.25;
   --line-height-snug: 1.375;
   --line-height-normal: 1.5;

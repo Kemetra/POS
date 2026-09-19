@@ -4,7 +4,6 @@ import { useOperatorSessionStore } from '../../stores/operator-session-store.js'
 import { usePaymentStore } from '../../stores/payment-store.js';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store.js';
 import { OperatorBadge } from '../operator/OperatorBadge.js';
-import { ReceiptPreview } from '../receipts/ReceiptPreview.js';
 import { format as formatMoney, of as moneyOf } from '../../../shared/money.js';
 import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
@@ -156,10 +155,6 @@ export function PaymentSurface({
   // AFTER confirm returns, so a `recent` whose finalized_at predates this
   // settled_at is a stale prior sale and must be ignored.
   const [settledAt, setSettledAt] = useState<string | null>(null);
-  // Local dismissal of the completion receipt. Re-openable (the sale is
-  // finalized and the document still exists), and reset per attempt below.
-  const [receiptDismissed, setReceiptDismissed] = useState<boolean>(false);
-
   // 008's finalize listener is gated on this flag. With it off no receipt is
   // ever written, so the completion surface must say so rather than imply a
   // document is on its way.
@@ -187,7 +182,6 @@ export function PaymentSurface({
     setSettledSaleNumber(null);
     setSettledSaleId(null);
     setSettledAt(null);
-    setReceiptDismissed(false);
     usePaymentStore.getState().clearAttempt();
   }, [sessionState.kind, envelopeHandoffId]);
 
@@ -196,9 +190,18 @@ export function PaymentSurface({
   // asynchronously in the main process (~200ms after confirm via the AD-2
   // worker); `payments.confirm` returns only `settled_at`. We poll
   // `sales.subscribe({ topic: 'recent' })` (a snapshot poll, no push) a few
-  // times to ride out that gap, then stop. Graceful: any refusal / absent
-  // sales bridge / unmount simply leaves the number unset — the completed
-  // surface + New sale do not depend on it (invariant 14 holds regardless).
+  // times to ride out that gap. Graceful: any refusal / absent sales bridge /
+  // unmount simply leaves the number unset — the completed surface + New sale
+  // do not depend on it (invariant 14 holds regardless).
+  //
+  // CODEX REVIEW P2 — "Continue checking for late finalization". The original
+  // cap gave up after ~2s, so a sale finalizing later (a worker draining many
+  // batches, or a transient projection refusal that clears) could never be
+  // reported: the surface stayed on "being recorded" forever even once the
+  // sale existed. We now BACK OFF rather than stop — fast polls to catch the
+  // common ~200ms case, then a slow cadence that keeps watching for the rest
+  // of the completion surface's life. The effect is bounded by unmount, which
+  // happens on "new sale", so this cannot leak beyond the settled screen.
   const salesBridge = bridge?.sales;
   useEffect(() => {
     if (
@@ -211,8 +214,11 @@ export function PaymentSurface({
     }
     let cancelled = false;
     let attempts = 0;
-    const MAX_ATTEMPTS = 10;
-    const POLL_INTERVAL_MS = 200;
+    // Fast phase: ride out the ~200ms AD-2 worker gap.
+    const FAST_ATTEMPTS = 10;
+    const FAST_INTERVAL_MS = 200;
+    // Slow phase: keep watching for a late finalization without busy-polling.
+    const SLOW_INTERVAL_MS = 3000;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async (): Promise<void> => {
@@ -241,8 +247,9 @@ export function PaymentSurface({
         // Bridge rejection — treat as "not yet available"; keep polling until
         // the attempt cap, then give up silently (no DOM error surfaced).
       }
-      if (!cancelled && attempts < MAX_ATTEMPTS) {
-        timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
+      if (!cancelled) {
+        const delay = attempts < FAST_ATTEMPTS ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS;
+        timer = setTimeout(() => void poll(), delay);
       }
     };
     void poll();
@@ -451,12 +458,11 @@ export function PaymentSurface({
     //     comes from the sales poll alone. A returned record IS the proof the
     //     sale was finalized, so it also licenses quoting the sale number
     //     (006 invariant 13).
-    //   • `showReceipt` — does a receipt document exist to show? That is 008's
-    //     finalize listener, gated on saleFinalization. With the flag off the
-    //     sale can still finalize and still have a quotable number; what does
-    //     not exist is the receipt (T018) — so we say that, and mount nothing.
+    //   • the RECEIPT is not shown at all — see the CODEX REVIEW P1 note in
+    //     the finalized branch. The flag still governs the honesty copy below:
+    //     with saleFinalization off, 008's listener short-circuits and no
+    //     receipt will ever exist, which the surface states plainly (T018).
     const isFinalized = settledSaleId !== null && settledSaleNumber !== null;
-    const showReceipt = isFinalized && saleFinalizationFlag;
 
     return (
       <main
@@ -526,9 +532,23 @@ export function PaymentSurface({
                   written, so promising one would be a fake-pending claim. The
                   honest flag-off message is terminal: money taken, nothing
                   further recorded. */}
+              {/* CODEX REVIEW P2 — "Avoid promising finalization after
+                  in-process pairing". The AD-2 finalize worker starts only for
+                  a terminal that was ALREADY paired at boot
+                  (src/main/index.ts:1120-1126); one paired mid-session picks it
+                  up on the next launch. The renderer cannot see pairing-at-boot
+                  state, so the flag-on copy must not promise recording is
+                  underway — that would be a fake-PENDING, the same dishonesty
+                  the two-state split exists to remove.
+
+                  It says the payment is recorded and the receipt has not issued
+                  YET, which is true in both cases: the worker is running (it
+                  arrives shortly), or it starts next launch and the startup
+                  recovery scan re-fires any settled-but-unfinalized rows — so
+                  the sale is deferred, never lost. */}
               <p className="payment-surface__settled-detail">
                 {saleFinalizationFlag
-                  ? 'يجري تسجيل البيع. لم يصدر إيصال بعد.'
+                  ? 'تم تسجيل المبلغ. لم يصدر إيصال بعد.'
                   : 'لن يُسجَّل هذا البيع ولا يوجد إيصال له.'}
               </p>
               <p
@@ -561,38 +581,25 @@ export function PaymentSurface({
           </div>
         )}
 
-        {showReceipt && !receiptDismissed && (
-          <div className="payment-surface__receipt" data-testid="payment-surface-receipt">
-            {/* A new consumer of the EXISTING receipts.preview channel — not a
-                bridge-surface change (P8). ReceiptPreview calls the channel
-                itself. */}
-            {/* No bridge prop: ReceiptPreview resolves `window.api.receipts`
-                itself, which is the ONLY path in production. Forwarding one
-                would add a second route to the same channel and leave the real
-                path untested. */}
-            <ReceiptPreview
-              saleId={settledSaleId}
-              onClose={() => {
-                setReceiptDismissed(true);
-              }}
-            />
-          </div>
-        )}
+        {/* CODEX REVIEW P1 — the receipt is deliberately NOT mounted here.
+            `RecentSaleSummary` carries no payment/attempt/envelope key and
+            `payments.confirm` returns only `settled_at`, so `finalized_at >=
+            settled_at` is the only discriminator available renderer-side — and
+            a PRIOR sale finalizing late (a worker retry succeeding while this
+            sale is delayed) satisfies it. Mounting a receipt on that would show
+            the previous customer's document.
 
-        {/* Dismissing the receipt must not strand the cashier without a way
-            back to it — the sale is finalized and the document still exists. */}
-        {showReceipt && receiptDismissed && (
-          <button
-            type="button"
-            className="payment-surface__receipt-reopen"
-            data-testid="payment-surface-receipt-reopen"
-            onClick={() => {
-              setReceiptDismissed(false);
-            }}
-          >
-            عرض الإيصال
-          </button>
-        )}
+            The correlation gap pre-dates this slice (`main` already showed the
+            number from the same unverified `recent`, 006 invariant 13); what
+            US4a added was a receipt for a sale the terminal cannot prove is
+            this one. There is no renderer-only fix — the key does not exist on
+            the wire and adding one is a bridge change (P8). A tighter time
+            window or amount-match would be a heuristic dressed as a fix.
+
+            So the number stays (no worse than main) and the receipt waits for a
+            correlatable identifier on the `recent` projection. T017 is untieked
+            and the gap is filed; 011 already derives one from
+            `envelope_handoff_action_id`, so it exists main-side. */}
 
         <button
           type="button"
