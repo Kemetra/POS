@@ -455,20 +455,36 @@ running total dominate.
 **Independent test:** scan/search → confirm → line appears in cart; totals legible at a glance;
 exactly one primary action; no decorative dashboard treatment.
 
-- [ ] T060 [US2] RED+GREEN: two-region sale layout in
+- [x] T060 [US2] RED+GREEN: two-region sale layout in
   `src/renderer/routes/app/CartWorkspace.tsx` (catalogue ↔ cart), cart visually dominant (FR-15).
-- [ ] T061 [P] [US2] RED+GREEN: search/scan field prominence + focus behaviour in
+- [x] T061 [P] [US2] RED+GREEN: search/scan field prominence + focus behaviour in
   `src/renderer/ui/catalogue/ProductSearchInput.tsx`, `ScanCaptureField.tsx`.
-- [ ] T062 [P] [US2] RED+GREEN: result rows + confirm panel in
+- [x] T062 [P] [US2] RED+GREEN: result rows + confirm panel in
   `src/renderer/ui/catalogue/SearchResultRow.tsx`, `SearchResultList.tsx`, `ProductConfirmPanel.tsx`.
-- [ ] T063 [P] [US2] RED+GREEN: cart line rows, quantity stepper (≥44×44), totals block in
+- [x] T063 [P] [US2] RED+GREEN: cart line rows, quantity stepper (≥44×44), totals block in
   `src/renderer/ui/cart/LineItemRow.tsx`, `QuantityStepper.tsx`, `CartPane.tsx`.
-- [ ] T064 [US2] Assert the honest VAT placeholder (`—` / `tax-pending`) is **preserved exactly**
+- [x] T064 [US2] Assert the honest VAT placeholder (`—` / `tax-pending`) is **preserved exactly**
   (D-007) and no 15% VAT line is introduced (Non-Capability).
-- [ ] T065 [US2] Assert the **single cart mutation path** is preserved — `CartPane`'s
+- [x] T065 [US2] Assert the **single cart mutation path** is preserved — `CartPane`'s
   register-callback into `CatalogueSalePane` (005's `resolveItemRef` seam). No parallel mutation.
 - [ ] T0D1 [US2] Gates + capture `u2-sale-workspace-before/after.png`; compare against
   `visual-references/03-sale-workspace.png`.
+  > ⏸️ **DEFERRED 2026-09-20 → [#448](https://github.com/Kemetra/POS/issues/448).** Checkbox stays
+  > **unticked**: the rest of U2 merged (PR #447, `2b4b8be`) but this capture did not happen, so
+  > **FR-15 remains visually unverified** and U2 is not visually complete on source review alone.
+  > Launch gates passed on the day (`operator.dev_bypass.active` observed; catalogue
+  > 50 products / 49 barcodes) — a historical record only: **re-verify both gates on each capture
+  > launch**, since #448 needs new launches (one from `e7390f9`) and the dev DB may be reset in
+  > between. T060–T065 above are ticked; only this capture is outstanding. Blocked on two things by
+  > design: capture is manual per spec §Screenshot Acceptance (no Playwright/Puppeteer without
+  > separate approval), and an **empty cart cannot evidence FR-15** — no dev fixture seeds cart
+  > lines, so a product must be search-and-confirm-added by hand first. #448 adds **one** capture
+  > beyond this task's literal `before/after` — the **lone-cart** case (the PR #447 P1 fix, still
+  > never rendered), so **3 captures in total**. A narrow-terminal capture was considered and
+  > **dropped as impossible**: the workspace does not render below 1024px (`AppShell` returns
+  > `ScreenTooSmall` instead of its `<Outlet />`), so the `@media (max-width: 1023px)` rule is
+  > unreachable and no screenshot can contain it. That dead-rule question is
+  > [#450](https://github.com/Kemetra/POS/issues/450), not #448.
 
 ---
 

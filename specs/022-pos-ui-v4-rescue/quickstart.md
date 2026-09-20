@@ -30,7 +30,12 @@ placeholders rather than the till. Reaching them for visual work uses existing d
 export POS_PULSE_DEV_SKIP_PAIRING=1
 export POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1
 export POS_PULSE_DEV_SEED_CATALOGUE=1
-export POS_PULSE_DEV_ITEM_RESOLVER=1
+
+# ⛔ ACTIVELY UNSET — do not merely omit. It conflicts with the seed above
+#    (see the note below), and a shell that ran an earlier version of this
+#    block still has it exported, where commenting out a line changes
+#    nothing. Only set it for the fixture-SKU-only path in the table below.
+unset POS_PULSE_DEV_ITEM_RESOLVER
 
 # cashier-journey feature flags
 export POS_PULSE_FEATURE_CART=1
@@ -40,6 +45,26 @@ export POS_PULSE_FEATURE_PRODUCT_SEARCH=1
 
 npm run dev
 ```
+
+> ### ⛔ `DEV_SEED_CATALOGUE` and `DEV_ITEM_RESOLVER` conflict — pick one
+>
+> They are **mutually exclusive resolvers, not layers.** `createCartBridgeHandlers` selects the
+> five-SKU **fixture** resolver whenever the build is unpackaged *and*
+> `POS_PULSE_DEV_ITEM_RESOLVER` is truthy; otherwise it uses 009's **catalogue-backed** resolver
+> (`wire-cart-handlers.ts:68-77`).
+>
+> The catalogue confirm action submits the seeded `product_id`
+> (`CatalogueAddController.tsx:94-97`) — `dev-p-001`… — but the fixture map knows only
+> `SKU-PARA-500`, `SKU-IBUP-400`, `SKU-AMOX-250`, `SKU-VITA-C`, `SKU-OMEP-20`
+> (`resolve-item-ref.ts:23-31`). Set both and **every catalogue add is refused `unknown_item`**, so
+> no cart can be populated through the 009 search → confirm path.
+>
+> | Goal | `DEV_SEED_CATALOGUE` | `DEV_ITEM_RESOLVER` |
+> |:--|:--:|:--:|
+> | Add a **real catalogue** product via search/scan (any capture needing a non-empty cart) | `1` | **unset** |
+> | Exercise 005's fixture SKU path alone, no catalogue | unset | `1` |
+>
+> *(Caught by Codex review on PR #449 — an earlier draft of the #448 capture instructions set both.)*
 
 ### Why this is safe (verified in source)
 

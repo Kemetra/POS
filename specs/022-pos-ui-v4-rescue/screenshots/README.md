@@ -194,6 +194,139 @@ absence is acceptable; a manufactured artifact is not.
 
 ---
 
+### u2 — Sale workspace (cart-dominant layout)
+
+> ⏸️ **DEFERRED 2026-09-20 → [#448](https://github.com/Kemetra/POS/issues/448).**
+> U2 merged via PR #447 (`2b4b8be`) **without** its capture, so **FR-15 is visually unverified**
+> and this slice is not visually accepted. See spec §Screenshot Acceptance → Outstanding captures.
+
+| Capture | Status |
+|:--|:--|
+| `u2-sale-workspace-before.png` | ⏸️ deferred → #448 |
+| `u2-sale-workspace-after.png` | ⏸️ deferred → #448 |
+| `u2-sale-workspace-lone-cart-after.png` | ⏸️ deferred → #448 (P1 fix — never rendered) |
+| ~~`u2-sale-workspace-narrow-after.png`~~ | ❌ **IMPOSSIBLE — dropped.** See [#450](https://github.com/Kemetra/POS/issues/450) |
+
+**Reference image:** `visual-references/03-sale-workspace.png`.
+
+**Before-capture:** a real one IS available — U2's merge-base is `e7390f9`. Record
+`no before-capture available` only if that turns out to be unbuildable; it is not the first slice.
+
+#### ✅ T002 gates verified on 2026-09-20 — historical record, NOT a standing pass
+
+> ⚠️ **Re-verify both gates on every capture launch.** This result certifies only the `dbe14d4`
+> launch below. #448 needs **new** launches — at least one from a *different revision* (`e7390f9`
+> for the before-capture) — and the dev DB can be reset or repopulated in between. Quickstart §3
+> requires observing `operator.dev_bypass.active` and confirming current catalogue data precisely
+> because an absent bypass or a reset database invalidates the surface: evidence could otherwise be
+> attributed to the wrong session or captured against unusable data. Keep this record for
+> reference; do not treat it as clearance for a later launch.
+
+What passed on that launch:
+
+```
+(a) operator.dev_bypass.active : [x] OBSERVED (role=manager) -> PASS (no STOP)
+(b) catalogue readiness        : [x] verified data (direct row-count read of the dev DB)
+                                     products = 50 · product_barcodes = 49
+```
+
+Launched on `main` @ `dbe14d4` with `POS_PULSE_DEV_SKIP_PAIRING`,
+`POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN`, `POS_PULSE_FEATURE_CART`,
+`POS_PULSE_FEATURE_PRODUCT_SEARCH` all `=1`. Boot was healthy:
+`pairing.dev_bypass.active` → `operator.dev_bypass.active` → `cart.create.ok`.
+
+#### ⛔ `POS_PULSE_DEV_ITEM_RESOLVER` MUST be **unset** for a catalogue-seeded capture
+
+The two resolvers are mutually exclusive, not layered. `createCartBridgeHandlers` picks the
+**five-SKU fixture** resolver whenever the build is unpackaged *and* `POS_PULSE_DEV_ITEM_RESOLVER`
+is truthy, otherwise 009's catalogue-backed production resolver
+(`wire-cart-handlers.ts:68-77`).
+
+The confirm action submits the **catalogue** `product_id` (`CatalogueAddController.tsx:94-97`) —
+seeded rows are `dev-p-001`… — but the fixture map knows only `SKU-PARA-500`, `SKU-IBUP-400`,
+`SKU-AMOX-250`, `SKU-VITA-C`, `SKU-OMEP-20` (`resolve-item-ref.ts:23-31`). With the flag set, every
+searched product is refused `unknown_item` and **the non-empty cart the capture requires cannot be
+reached**.
+
+The launch block for #448 — copy verbatim; every name is read only in its full `POS_PULSE_*` form
+(`dev-skip-pairing.ts`, `dev-skip-operator-signin.ts`, `main/index.ts`, `dev-seed-catalogue.ts`), so
+an abbreviation silently does nothing and leaves the app pairing-gated with an empty catalogue:
+
+```bash
+export POS_PULSE_DEV_SKIP_PAIRING=1
+export POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1
+export POS_PULSE_FEATURE_CART=1
+export POS_PULSE_FEATURE_PRODUCT_SEARCH=1
+export POS_PULSE_DEV_SEED_CATALOGUE=1
+
+# ACTIVELY unset — omitting is not enough if an earlier launch exported it
+# in this shell (a commented-out export clears nothing).
+unset POS_PULSE_DEV_ITEM_RESOLVER
+
+npm run dev
+```
+
+**Verified 2026-09-20 by executing this block** in a shell that already had
+`POS_PULSE_DEV_ITEM_RESOLVER=1` exported (the returning-executor case): the `unset` cleared it,
+`pairing.dev_bypass.active` + `operator.dev_bypass.active` both fired, and the catalogue-backed
+resolver was selected. 0 of the 50 seeded `product_id`s overlap the five fixture SKUs — which is
+exactly why the flag must stay unset.
+
+(The alternative — fixture resolver on, catalogue seed off, adding a fixture SKU — does not exercise
+the 009 search → confirm → cart path the capture is meant to show.)
+
+##### Captures #2 and #3 need a DIFFERENT launch
+
+The block above serves captures **#1** and **#4** only. `CartWorkspace` passes
+`showCatalogue={productSearchFlag}`, so with `POS_PULSE_FEATURE_PRODUCT_SEARCH=1` the catalogue is
+always rendered and the lone-cart state is unreachable.
+
+- **#2 lone cart** — relaunch with product search **off**:
+
+  ```bash
+  export POS_PULSE_DEV_SKIP_PAIRING=1
+  export POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1
+  export POS_PULSE_FEATURE_CART=1
+  unset POS_PULSE_FEATURE_PRODUCT_SEARCH   # <- the point of this capture
+  unset POS_PULSE_DEV_ITEM_RESOLVER
+  npm run dev
+  ```
+
+  ⚠️ **Known limitation — this capture will show an EMPTY lone cart.** With search off there is no
+  in-app way to add a catalogue line, and **you cannot carry one over from the block above**:
+  each launch creates a *new* cart rather than resuming the previous one (verified 2026-09-20 —
+  consecutive launches produced distinct `cart_id`s, both `state=empty`).
+
+  That is acceptable for this capture's **purpose**, which is the P1 fix — showing the lone cart
+  fills the workspace instead of collapsing into a 380px rail beside dead space. Dominance of an
+  empty region is still visible. It is **not** FR-15 evidence; capture #1 carries that.
+
+  Do **not** hand-edit the DB to fake a populated lone cart. A manufactured artifact is worse than
+  an honestly empty one (spec §Screenshot Acceptance requires the surface be *reached honestly*).
+
+- **#3 narrow terminal — ❌ DROPPED, cannot be captured.** `useViewportTier` treats anything under
+  **1024px** as `too-small` (`useViewportTier.ts:6`) and `AppShell` then renders `ScreenTooSmall`
+  **instead of** its `<Outlet />` (`AppShell.tsx:63-74` vs `:121`). `/app/cart` is a child of that
+  outlet (`router.tsx:167-183`), so below 1024px `.sale-layout` does not render at all and the shot
+  cannot contain it. `@media (max-width: 1023px)` and the supported tier `>= 1024px` are exactly
+  complementary — **the rule is unreachable, so there is no window width that shows both.**
+
+  No workaround is legitimate: DevTools device emulation drives `matchMedia` identically, and
+  raising the tier floor to force the view would be *editing code to manufacture the view*, which
+  §Screenshot Acceptance requirement 2 forbids. Tracked as a code question in
+  [#450](https://github.com/Kemetra/POS/issues/450) (4 such `max-width: 1023px` blocks exist; the
+  fix is delete-the-dead-rules or lower the tier floor, an owner call). **#448 is 3 captures, not 4.**
+
+#### ⚠️ An empty cart cannot evidence FR-15 — new constraint, applies to future slices too
+
+Verified against the live dev DB during this launch: the boot cart is `state: "empty"` with **0
+lines**, and **no dev fixture seeds cart lines** — `POS_PULSE_DEV_SEED_CATALOGUE` populates the
+*catalogue* only (`dev-seed-catalogue.ts`). FR-15 is about line items and the running total
+dominating, so the capture requires a product **searched and confirm-added by hand** first. A
+launch-and-shoot of the empty workspace would not evidence the requirement.
+
+---
+
 ## Modified-test ledger (auditable, cumulative)
 
 The standing constraint reads: *"Behavioural tests must pass unmodified. Only tests encoding an

@@ -417,6 +417,32 @@ implementation slice MUST be accepted against:
 harness is NOT a prerequisite for starting this feature, and Playwright/Puppeteer or equivalent MUST
 NOT be added to satisfy this requirement without separate approval.
 
+> ### ⏸️ Outstanding captures
+>
+> **Scope of this list: U2 only.** It is not a complete audit of every merged slice — it records the
+> one deferral that has been formally tracked. Other slices also carry outstanding captures
+> (`tasks.md` leaves **T0A2**, **T0B2**, **T0C1** and **T0C2** unchecked although U4a, U0 and U1
+> merged in `f417ea7`) and were **not** audited here. `tasks.md` is the authority for their status —
+> `screenshots/README.md` currently holds slice sections for **u4a and u2 only**, so there is no U0
+> or U1 record to consult. Absence from this list is therefore **not** evidence a slice is visually
+> accepted.
+>
+> | Slice | Task | Status | Tracking |
+> |:--|:--|:--|:--|
+> | U2 — sale workspace | T0D1 | ⏸️ **Deferred 2026-09-20.** Merged via PR #447 (`2b4b8be`) with **FR-15 visually unverified** | [#448](https://github.com/Kemetra/POS/issues/448) |
+>
+> **Two constraints learned while attempting U2's capture, applicable to every future slice:**
+>
+> 1. **An empty cart cannot evidence FR-15.** No dev fixture seeds cart lines —
+>    `POS_PULSE_DEV_SEED_CATALOGUE` populates the *catalogue* only, and the boot cart is
+>    `state: "empty"`. Any capture claiming line-item or running-total dominance requires a product
+>    searched and confirm-added by hand first.
+> 2. **Gate (a) is read from the rotating log FILE, not the terminal.** The main logger never writes
+>    to stdout, so checking the console yields a false STOP. See `screenshots/README.md`.
+>
+> Because capture is deliberately manual here, a slice can pass every automated gate and still be
+> visually unaccepted. A green CI run is **not** evidence under this clause.
+
 ---
 
 ## Key Entities
