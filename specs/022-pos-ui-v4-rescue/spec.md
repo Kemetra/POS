@@ -417,10 +417,14 @@ implementation slice MUST be accepted against:
 harness is NOT a prerequisite for starting this feature, and Playwright/Puppeteer or equivalent MUST
 NOT be added to satisfy this requirement without separate approval.
 
-> ### ⏸️ Outstanding captures (live ledger)
+> ### ⏸️ Outstanding captures
 >
-> This clause is **not yet satisfied for every merged slice.** Tracked so a merged slice is never
-> mistaken for a visually accepted one:
+> **Scope of this list: U2 only.** It is not a complete audit of every merged slice — it records the
+> one deferral that has been formally tracked. Other slices also carry outstanding captures
+> (`tasks.md` leaves **T0A2**, **T0B2**, **T0C1** and **T0C2** unchecked although U4a, U0 and U1
+> merged in `f417ea7`); their status lives in their own `screenshots/README.md` sections and was
+> **not** audited here. Absence from this list is therefore **not** evidence a slice is visually
+> accepted — check `tasks.md` and the README section for the slice you care about.
 >
 > | Slice | Task | Status | Tracking |
 > |:--|:--|:--|:--|

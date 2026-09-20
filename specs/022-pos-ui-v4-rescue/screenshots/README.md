@@ -212,9 +212,17 @@ absence is acceptable; a manufactured artifact is not.
 **Before-capture:** a real one IS available — U2's merge-base is `e7390f9`. Record
 `no before-capture available` only if that turns out to be unbuildable; it is not the first slice.
 
-#### ✅ T002 gates RE-VERIFIED for this slice — 2026-09-20 (agent-run launch, PASS)
+#### ✅ T002 gates verified on 2026-09-20 — historical record, NOT a standing pass
 
-Environment was cleared, so **only the manual capture is outstanding** — do not re-run these gates:
+> ⚠️ **Re-verify both gates on every capture launch.** This result certifies only the `dbe14d4`
+> launch below. #448 needs **new** launches — at least one from a *different revision* (`e7390f9`
+> for the before-capture) — and the dev DB can be reset or repopulated in between. Quickstart §3
+> requires observing `operator.dev_bypass.active` and confirming current catalogue data precisely
+> because an absent bypass or a reset database invalidates the surface: evidence could otherwise be
+> attributed to the wrong session or captured against unusable data. Keep this record for
+> reference; do not treat it as clearance for a later launch.
+
+What passed on that launch:
 
 ```
 (a) operator.dev_bypass.active : [x] OBSERVED (role=manager) -> PASS (no STOP)
