@@ -39,9 +39,33 @@ and the **mada** brand mark.
 Geometry, hierarchy, spacing, typography, control sizing, RTL composition and visual density —
 subject to §C (tokens) and §E (viewport) of RECONCILIATION.
 
-**Three-column composition.** `392px` / `flex:1, min-width:0` / `400px`, gap `16`, padding `0 18 18`.
-Source order left→right is cart summary → methods → amount panel (RTL rule 1: page shells are
-ordered in source, not mirrored by `dir` alone). Content blocks inside each column are `dir="rtl"`.
+**Three-column composition.** `392px` / `flex:1, min-width:0` / `400px`, gap `16`, padding `0 18 18`
+— **these are the ≥1280px `expanded`-tier values only.** Content blocks inside each column are
+`dir="rtl"`.
+
+> ⚠️ **The fixed widths do NOT fit the supported 1024px tier — a reflow is required.**
+> `392 + 400 + (2×16 gaps) + (2×18 padding) = 860px`. At 1024px that leaves **164px** for the centre
+> column before the AppShell rail, and the rail is **84px** in the `icon-only` tier
+> (`tailwind.css:523`) — so the real budget is about **80px**. Three 44px tender targets plus two
+> 16px gaps need 164px on their own, with nothing left for padding, borders, icons or labels.
+> `useViewportTier` still renders the app at 1024px, so this would overflow or collapse on a
+> supported resolution.
+>
+> **Specify a reflow** (e.g. the fixed side columns stack or the amount panel moves below the
+> methods between 1024–1279px) as part of T070/T071. **Do not change the 1024px viewport floor** —
+> §E is unchanged; this is a layout requirement *within* the supported range.
+
+> ⚠️ **DOM order must follow the RTL visual order — FR-23.**
+> The designer's README says page shells are ordered left→right in source (summary → methods →
+> amount) and not mirrored by `dir` alone. **Do not carry that rule over as-is.** Tab order follows
+> DOM order, and neither CSS positioning nor `dir="rtl"` on individual cards changes it, so LTR
+> source order would send focus to the centre methods before the visually-preceding right-hand
+> amount panel — violating [`../spec.md`](../spec.md) **FR-23: _"Keyboard focus traversal order MUST
+> follow the RTL visual order."_**
+>
+> Use RTL DOM order, or an equivalent layout that preserves **both** the screenshot placement **and**
+> sequential keyboard navigation. The prototype had no keyboard-accessibility requirement; this
+> product does.
 
 **Amount-due hierarchy (T070, FR-16).** This is the single most load-bearing value in the brief —
 the amount due is the dominant numeric on the surface:
@@ -126,6 +150,23 @@ source **against the current tree**:
 | `aria-label="Payment"` | `PaymentSurface.tsx:482` | same `<main>`; translate with it |
 | `Order summary` | `PaymentCartSummary.tsx:42` (+ `aria-label` `:40`) | |
 | `Subtotal` | `PaymentCartSummary.tsx:62` | |
+| `aria-label="Cart items"` | `PaymentCartSummary.tsx:44` | **AT-only** — no visible text |
+| `aria-label="quantity"` | `PaymentCartSummary.tsx:48` | **AT-only** |
+| `aria-label="Select payment method"` | `TenderSelection.tsx:45` | **AT-only** |
+| `aria-label="Cash entry"` | `CashEntry.tsx:142` | **AT-only** |
+| `aria-label="Quick amounts"` · `"Delete last digit"` | `AmountPad.tsx:63`, `:119` | **AT-only** |
+| `aria-label="Apply voucher"` · `"Voucher applied"` | `VoucherEntry.tsx:159`, `:208` | **AT-only** |
+| `aria-label="External card terminal entry"` | `ExternalCardTerminalEntry.tsx:123` | **AT-only** |
+
+> ⚠️ **The `aria-label`s are part of FR-19, not a nice-to-have.** They are operator-facing output
+> for screen-reader users and carry no visible text, so translating only the visible copy would
+> leave the surface English-only in assistive technology while *looking* fully Arabic — passing a
+> naive visual check and still failing the zero-English requirement.
+>
+> **T076's RED assertion must cover `aria-label` / `aria-describedby` / `title` and live-region text,
+> not just rendered text nodes**, or it cannot detect this class of gap. The list above was audited
+> across the working-flow components; re-grep before implementing, since line numbers drift (see the
+> anchor-rot note above). `MoneyRoll.tsx` had no English `aria-label` at audit time.
 
 > ⚠️ **Do not use the `PaymentSurface.tsx:396` / `:437` anchors** that `tasks.md` T077 carried — they
 > are stale. `PaymentSurface.tsx` drifted after US4a added the settled branch above the working
