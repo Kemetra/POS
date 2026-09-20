@@ -3,7 +3,10 @@
 **Status:** PREPARED, **NOT STARTED**. No US3 code has been written.
 **Target:** [`../tasks.md`](../tasks.md) → **Phase 7 — US3: Checkout / tender (P1)** (T070–T079, T0E1)
 **Visual authority:** [`../visual-references/04-checkout-tender.png`](../visual-references/04-checkout-tender.png)
-plus `design-files/Retail Tower POS v4.dc.html` (screen `03 الدفع`)
+— the rendered authority. `design-files/Retail Tower POS v4.dc.html` (screen `03 الدفع`) is the
+precise source for **values**, but ⚠️ **it does not render** (missing `support.js` — see
+[`RECONCILIATION.md`](./RECONCILIATION.md) §Contents). Read it as source text; do not expect to open
+screen 03 in a browser.
 **Governing rules:** [`RECONCILIATION.md`](./RECONCILIATION.md) §A–§E
 
 > This brief adds **mockup-derived visual detail** to the existing US3 tasks. It does not replace,

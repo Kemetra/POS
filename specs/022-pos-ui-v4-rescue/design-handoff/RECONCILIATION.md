@@ -159,13 +159,24 @@ Do **not** reinterpret the handoff note as permission to change the tier floor, 
 
 ---
 
-## Wordmark
+## Wordmark — bundle-only, NOT authorised in the product
 
-`Retail Tower POS` is the **approved English wordmark** (owner decision, 2026-09-20) and appears
-throughout the bundle — login hero, header, receipt.
+`Retail Tower POS` appears throughout the bundle (login hero, header, receipt). It is the
+designer's wordmark, and **`Retail Tower POS` is its approved English form** (owner decision,
+2026-09-20) — so when reading the bundle, do not treat the wordmark as an error to be corrected.
+Any Arabic transliteration of it (e.g. the welcome line) is **placeholder only** and is not
+approved copy.
 
-Any Arabic transliteration in the mockup (e.g. the welcome line) is **placeholder only** and is not
-approved copy. Do not ship a transliteration from this bundle without owner approval.
+> ⚠️ **This does NOT authorise the wordmark in the product.**
+> [`../spec.md`](../spec.md) §Non-Capability Inventory classifies
+> *"'Retail Tower POS' branding, marketing hero imagery, taglines"* as **not POS-Pulse identity —
+> marketing chrome is prohibited in the working terminal**. That spec is **rank 3** and outranks
+> this document (**rank 4b**) per [`../plan.md`](../plan.md) and §A above, so the prohibition
+> stands: **no slice may rebrand the header, receipt or any working surface from this bundle.**
+
+The owner decision settles **how to read the bundle**, not what the terminal ships. If the terminal
+is ever intended to carry this wordmark, that is an amendment to `spec.md`'s Non-Capability
+Inventory and a separate owner decision — **this handoff does not grant it.**
 
 ---
 
@@ -175,8 +186,8 @@ approved copy. Do not ship a transliteration from this bundle without owner appr
 | :--- | :--------- | :-------- |
 | [`HANDOFF-README.md`](./HANDOFF-README.md) | Designer 31 KB written spec — per-screen values, component/props table, state model | yes (incl. its mapping error — see §D) |
 | [`tokens.css`](./tokens.css) | Designer machine-readable token list | yes — **provenance only**, see §C |
-| [`design-files/Retail Tower POS v4.dc.html`](./design-files/) | **Approved** mockup — the visual authority | yes |
-| [`design-files/Retail Tower POS v1 (reference-faithful).dc.html`](./design-files/) | First-pass recreation, kept for comparison | yes |
+| [`design-files/Retail Tower POS v4.dc.html`](./design-files/) | **Approved** mockup — the precise source for values. ⚠️ **does not render** (missing `support.js`; see below) | yes |
+| [`design-files/Retail Tower POS v1 (reference-faithful).dc.html`](./design-files/) | First-pass recreation, kept for comparison. ⚠️ same missing runtime | yes |
 | [`forward-references/returns-014.png`](./forward-references/) | Returns screen → `specs/014` **only** | cropped capture |
 | [`forward-references/shift-close-015.png`](./forward-references/) | Shift close / Z-report → `specs/015` **only** | cropped capture |
 
@@ -185,10 +196,37 @@ narrower than the 1448px canvas, so the right edge is cropped — and both show 
 screen-switcher pill. That pill is a prototype affordance and **must not be implemented**. Read them
 for structure only; the HTML mockup is the accurate source.
 
-**Opening the HTML mockups:** they run in any browser with no build step. They fetch fonts from
-Google Fonts, so Arabic renders with the designer faces only when online; offline they fall back.
-That is a property of the prototype, not a requirement — 022 T026/T028 settled the shipped font
-stack (system stack, verified on target hardware; no webfont, no `@font-face`).
+### ⚠️ The `.dc.html` mockups do NOT render as committed
+
+Both files open with `<script src="./support.js"></script>`, and **`support.js` was never shipped
+in the designer's bundle** — it is absent from that bundle and from this repository (verified).
+Without it the custom `<x-dc>` / `<sc-if>` elements, the `{…}` interpolation and the
+`type="text/x-dc"` state script are never evaluated, so the page does not render, and the screen
+switcher and interactions do not work.
+
+[`HANDOFF-README.md:15`](./HANDOFF-README.md) says *"Open them by double-clicking; they run in any
+browser with no build step."* **That is not true of the bundle as delivered** — the same
+verbatim-vendoring rule as §D applies, so the claim is preserved in that file and corrected here.
+
+**Read them as source text, not as a running prototype** — which is what the designer's own README
+also instructs: *"Read it for **values** (hex codes, pixel measurements, copy), not for
+architecture."*
+That use is unaffected: every value in `HANDOFF-README.md` was taken from these files, and they
+remain the most precise record of hex codes, measurements, grid tracks and Arabic copy.
+
+**[`../visual-references/*.png`](../visual-references/) are the rendered visual authority.** They
+are what the approved design actually looks like, and they render fine.
+
+The missing runtime is an **open question for the designer** — vendoring it, or an export that is
+self-contained, would make the mockups browsable. Neither is attempted here: this directory's value
+rests on the files being byte-identical to the designer's bundle (see §Line endings), and rewriting
+them to render would forfeit that.
+
+Their Google-Fonts `<link>` is moot for the same reason. Either way it would not be a requirement —
+022 T026/T028 settled the shipped font stack (system stack, verified on target hardware; no
+webfont, no `@font-face`).
+
+`tokens.css` is **unaffected** — it is plain CSS with no runtime dependency and is readable as-is.
 
 **Prettier:** this directory is covered by the existing `specs/` and `*.md` entries in
 `.prettierignore`, so these files are never reformatted. That is deliberate and matches the repo's
