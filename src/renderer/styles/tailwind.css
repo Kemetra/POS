@@ -2114,7 +2114,19 @@ body {
      Deliberately NOT `[data-cart-dominant='true'][data-catalogue='true']`:
      that would be (0,3,0) and outrank this guard, re-opening the same
      specificity trap from the other side. The two-track template is keyed on
-     ONE attribute so this rule can always win. */
+     ONE attribute so this rule can always win.
+
+     ⚠️ DO NOT DELETE AS DEAD CSS (#450/#451). It looks unreachable: below
+     1024px `useViewportTier` reports `too-small` and `AppShell` renders
+     `ScreenTooSmall` instead of its `<Outlet />`, so at STEADY STATE this
+     layout never mounts where the query matches. That reasoning is right and
+     incomplete — `useViewportTier` DEBOUNCES tier changes by 100 ms. CSS
+     applies the instant the viewport crosses 1024px; React re-renders a
+     debounce later. In that ~100 ms gap the outlet is still mounted while this
+     query already matches, and the gap re-opens on every crossing. Without
+     this rule the workspace renders two-column there — the transient broken
+     layout it exists to prevent. Guarded behaviourally by
+     shell/__tests__/viewport-transition.test.tsx. */
   @media (max-width: 1023px) {
     .sale-layout,
     .sale-layout[data-catalogue='true'] {
@@ -2134,6 +2146,11 @@ body {
     gap: var(--space-3);
   }
 
+  /* ⚠️ DO NOT DELETE AS DEAD CSS (#450/#451) — same reason as the
+     `.sale-layout` narrow rule above: `/app/checkout` is a child of the same
+     gated outlet, so this looks unreachable at steady state but IS reachable
+     throughout a debounced resize transition. See that comment for the
+     evidence. */
   @media (max-width: 1023px) {
     .tender-method-grid {
       grid-template-columns: 1fr;
