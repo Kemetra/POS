@@ -87,6 +87,19 @@
   --space-7: 48px;
   --space-8: 64px;
 
+  /* 022 US3 (T070/T071) — checkout COMPONENT GEOMETRY from the design handoff.
+     Deliberately NOT named `--space-*`: that prefix is a governed scale whose
+     every member must have a matching TS export (tokens.test.ts T008 parity),
+     and these are not steps on the spacing scale. They are mockup-specified
+     pairs — the tender tile's 18x14 padding, the confirm action's 15x40 —
+     used only by checkout CSS, with no TS consumer. Adding scale members and
+     TS exports nobody reads to carry component geometry would weaken the
+     scale's meaning, so they live here as their own tokens instead. */
+  --checkout-tile-padding-block: 18px;
+  --checkout-tile-padding-inline: 14px;
+  --checkout-action-padding-block: 15px;
+  --checkout-action-padding-inline: 40px;
+
   /* ── Typography ─────────────────────────────────────────────────────── */
   /* 022 T026 — Arabic-first SYSTEM stack. 'Inter Variable'/Inter were
      unresolvable (no package, no @font-face, no bundled file), so Arabic fell
@@ -114,6 +127,18 @@
   --font-size-xl: 1.25rem; /* 20px */
   --font-size-2xl: 1.5rem; /* 24px */
   --font-size-3xl: 1.875rem; /* 30px */
+  --font-size-4xl: 2.75rem; /* 44px */
+
+  /* 022 US3 (T070) — checkout type steps taken from the approved design
+     handoff. They are intermediate steps the base scale does not carry, and
+     the amount-due hierarchy depends on the exact ratios between them:
+     44 (amount due, dominant) > 30 (remaining) > 26 (received) > 24 (summary
+     amount) > 19 (section titles) > 15 (tender tile label). Values are design
+     evidence from the mockup; they introduce no new COLOUR and so do not touch
+     the measured-contrast tokens (RECONCILIATION §C). */
+  --font-size-checkout-received: 1.625rem; /* 26px */
+  --font-size-checkout-section: 1.1875rem; /* 19px */
+  --font-size-checkout-tile: 0.9375rem; /* 15px */
 
   /* Receipt-slip simulation (ReceiptPreview): mimics thermal paper at 80mm and
      160mm. Deliberately outside the UI type scale — it represents PRINTED
@@ -2155,6 +2180,195 @@ body {
     .tender-method-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  /*
+   * 022 US3 T070 — checkout three-column composition.
+   *
+   * Expanded tier (>=1280px) reproduces the approved mockup: a fixed amount
+   * panel, a fluid methods column, and a fixed summary. Source order is
+   * amount -> methods -> summary (RTL visual order) so keyboard traversal
+   * matches what the cashier sees — FR-23. `grid` places, it does not reorder.
+   */
+  .payment-surface {
+    container-type: inline-size;
+    container-name: payment-surface;
+  }
+
+  .payment-surface__body {
+    display: grid;
+    grid-template-columns: 400px minmax(0, 1fr) 392px;
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  /*
+   * The reflow: the amount panel drops FULL WIDTH BELOW the methods, and
+   * methods + summary share the row above, whenever the expanded composition
+   * would not fit.
+   *
+   * ⚠️ THIS IS A CONTAINER QUERY, NOT A VIEWPORT MEDIA QUERY — deliberately.
+   *
+   * A viewport breakpoint cannot see what actually constrains this layout. The
+   * available width is:
+   *
+   *     viewport - nav-rail - 96px workspace padding, capped at
+   *     .workspace max-inline-size: 1280px
+   *
+   * and the rail JUMPS from 84px to 248px at exactly 1280px. So a `max-width:
+   * 1279px` reflow is wrong in the worst way: crossing 1280px simultaneously
+   * widens the rail by 164px AND re-imposes the 824px of fixed columns, leaving
+   * the methods column ~112px — below the ~164px that three 44px tender targets
+   * plus gaps need. The tiles collapse or overflow at 1280px, a common terminal
+   * width. (Caught in review on PR #454; the first attempt used max-width:1279px
+   * and was wrong. The arithmetic: 1280 - 248 rail - 96 padding = 936 inner,
+   * minus 824 fixed = 112.)
+   *
+   * A container query measures the box that actually exists, so it is correct
+   * at every viewport, every rail tier, and during the rail's 200ms width
+   * transition — no breakpoint bookkeeping to keep in sync.
+   *
+   * 1216px = 824 fixed columns + 164 minimum methods + 228 headroom, so the
+   * three-column form is only used where the tiles are comfortable, not merely
+   * where they fit.
+   *
+   * ⚠️ DO NOT DELETE AS DEAD CSS and do not replace with a `useViewportTier`
+   * branch — see the two rules above (#450/#451). The hook debounces tier
+   * changes by 100ms while CSS applies instantly, so a React-gated reflow
+   * leaves ~100ms of broken layout on every crossing. A container query has no
+   * such gap. The 1024px floor is unchanged (RECONCILIATION §E).
+   */
+  @container payment-surface (max-width: 1216px) {
+    .payment-surface__body {
+      grid-template-columns: minmax(0, 1fr) 392px;
+    }
+    .payment-surface__amount {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+  }
+
+  @container payment-surface (max-width: 768px) {
+    .payment-surface__body {
+      grid-template-columns: 1fr;
+    }
+    .payment-surface__amount {
+      grid-column: auto;
+      grid-row: auto;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .payment-surface__body {
+      grid-template-columns: 1fr;
+    }
+    .payment-surface__amount {
+      grid-column: auto;
+      grid-row: auto;
+    }
+  }
+
+  .payment-surface__amount {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-sunken);
+  }
+
+  .payment-surface__amount-label {
+    font-size: var(--font-size-checkout-section);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-muted);
+  }
+
+  /* FR-16 — the dominant numeric on the surface. */
+  .payment-surface__amount-value {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+    /* Left-aligned in its card per the handoff, even under RTL: the value is
+       LTR money and reads from its own leading edge. */
+    text-align: left;
+  }
+
+  /*
+   * Tender tile — mockup geometry. Radius 14 is already `--radius-card`; the
+   * 18x14 padding needed new steps. The selected border is 2px, heavier than
+   * the 1.5px used for selected rows elsewhere; that emphasis is intentional.
+   */
+  .tender-method-grid .method-card {
+    padding: var(--checkout-tile-padding-block) var(--checkout-tile-padding-inline);
+    gap: var(--space-2);
+  }
+
+  .tender-method-grid .method-card .tender-selection__option-label {
+    font-size: var(--font-size-checkout-tile);
+    font-weight: var(--font-weight-bold);
+  }
+
+  .tender-method-grid .method-card--selected {
+    border-width: 2px;
+  }
+
+  /* Check badge: 20px, at the tile's inline-start top corner (RTL-aware). */
+  .method-card {
+    position: relative;
+  }
+
+  /*
+   * 022 US3 T072 — quick-amount buttons. Radius 10 is already
+   * `--radius-control`; the mockup's 10x4 padding is the tighter chip shape.
+   * The 44px minimum touch target is preserved — the mockup's padding must not
+   * shrink the hit area below the hardware-matrix floor.
+   *
+   * The mockup groups the chips 4-up then 3-up; that grouping is presentational
+   * and adapts to the supported denominations, so it is NOT reproduced as a
+   * fixed cage. Presentation only — no client-side money arithmetic (T072).
+   */
+  .quick-amounts .quick-amount-btn {
+    padding-block: var(--space-2);
+    padding-inline: var(--space-1);
+    min-inline-size: 76px;
+  }
+
+  /*
+   * 022 US3 T072 — the primary confirm action. Padding 15x40, label 16/700.
+   * The cancel action turns red on hover per the mockup; it uses the measured
+   * `--color-danger` token, NOT the handoff's stock Tailwind red, because the
+   * repo value was chosen by contrast measurement (RECONCILIATION §C).
+   */
+  .payment-surface__confirm {
+    padding: var(--checkout-action-padding-block) var(--checkout-action-padding-inline);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-bold);
+    border-radius: var(--radius-control);
+  }
+
+  .payment-surface__cancel:hover:not(:disabled) {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+  }
+
+  .method-card__check {
+    position: absolute;
+    inset-block-start: var(--space-2);
+    inset-inline-start: var(--space-2);
+    inline-size: 20px;
+    block-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-pill);
+    background: var(--color-primary);
+    color: var(--color-primary-on);
+    font-size: var(--font-size-2xs);
+    line-height: 1;
   }
 
   /* Cash keypad (AmountPad). */

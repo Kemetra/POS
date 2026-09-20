@@ -485,14 +485,92 @@ export function PaymentSurface({
         <OperatorBadge display_name={display_name} role={role} />
       </header>
 
-      <div className="payment-surface__body">
-        <TenderSelection
-          envelope={envelope}
-          onTenderSelect={(tender) => {
-            void handleTenderSelect(tender);
-          }}
-        />
-        <PaymentCartSummary envelope={envelope} />
+      {/*
+        022 US3 T070 — three-column composition.
+
+        DOM ORDER IS AMOUNT → METHODS → SUMMARY, and that is load-bearing, not
+        incidental. Tab order follows DOM order; neither CSS placement nor
+        `dir="rtl"` reorders it. The design handoff's own README orders page
+        shells left-to-right in source (summary → methods → amount), which would
+        send keyboard focus to the centre methods column before the visually
+        preceding amount panel — violating spec FR-23 ("Keyboard focus traversal
+        order MUST follow the RTL visual order"). The prototype had no keyboard
+        requirement; this product does, so the source order is RTL here and the
+        stylesheet does not re-order it.
+
+        The 1024–1279px reflow (amount panel drops below the methods) is a media
+        query on `.payment-surface__body`, NOT a `useViewportTier` branch — the
+        hook debounces tier changes by 100ms while CSS applies instantly, so a
+        React-gated reflow would leave ~100ms of broken layout on every
+        crossing. Same reasoning as the `.sale-layout` / `.tender-method-grid`
+        narrow rules, which #450/#451 documented as NOT dead CSS.
+      */}
+      <div className="payment-surface__body" data-testid="payment-surface-body">
+        <section className="payment-surface__amount" aria-label="المبلغ المستحق">
+          <span
+            className="payment-surface__amount-label"
+            data-testid="payment-surface-amount-label"
+          >
+            المبلغ المستحق
+          </span>
+          <span
+            className="payment-surface__amount-value"
+            data-testid="payment-surface-amount-due"
+            dir="ltr"
+          >
+            {formatMinorUnits(remainingBalanceMinor)}
+          </span>
+        </section>
+
+        <div className="payment-surface__methods">
+          <TenderSelection
+            envelope={envelope}
+            selectedTender={selectedTender}
+            onTenderSelect={(tender) => {
+              void handleTenderSelect(tender);
+            }}
+          />
+
+          {/* S3d mode: entry component for the selected tender. */}
+          {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
+            <div className="payment-surface__entry" data-testid="payment-surface-entry">
+              {selectedTender === 'cash' && (
+                <CashEntry
+                  remainingBalanceMinor={remainingBalanceMinor}
+                  paymentAttemptId={paymentAttemptId}
+                  tenderApply={(req) => bridge.tender.apply(req)}
+                  onApplied={() => {
+                    void handleLineApplied();
+                  }}
+                />
+              )}
+              {selectedTender === 'external_card_terminal' && (
+                <ExternalCardTerminalEntry
+                  remainingBalanceMinor={remainingBalanceMinor}
+                  paymentAttemptId={paymentAttemptId}
+                  tenderApply={(req) => bridge.tender.apply(req)}
+                  onApplied={() => {
+                    void handleLineApplied();
+                  }}
+                />
+              )}
+              {selectedTender === 'internal_voucher' && (
+                <VoucherEntry
+                  remainingBalanceMinor={remainingBalanceMinor}
+                  paymentAttemptId={paymentAttemptId}
+                  tenderApply={(req) => bridge.tender.apply(req)}
+                  onApplied={() => {
+                    void handleLineApplied();
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="payment-surface__summary">
+          <PaymentCartSummary envelope={envelope} />
+        </div>
       </div>
 
       {/* Slice-1 mode: status banner only (no bridge wiring). */}
@@ -508,42 +586,6 @@ export function PaymentSurface({
             : selectedTender === 'external_card_terminal'
               ? 'تم اختيار جهاز الشبكة'
               : 'تم اختيار القسيمة'}
-        </div>
-      )}
-
-      {/* S3d mode: entry component for the selected tender. */}
-      {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
-        <div className="payment-surface__entry" data-testid="payment-surface-entry">
-          {selectedTender === 'cash' && (
-            <CashEntry
-              remainingBalanceMinor={remainingBalanceMinor}
-              paymentAttemptId={paymentAttemptId}
-              tenderApply={(req) => bridge.tender.apply(req)}
-              onApplied={() => {
-                void handleLineApplied();
-              }}
-            />
-          )}
-          {selectedTender === 'external_card_terminal' && (
-            <ExternalCardTerminalEntry
-              remainingBalanceMinor={remainingBalanceMinor}
-              paymentAttemptId={paymentAttemptId}
-              tenderApply={(req) => bridge.tender.apply(req)}
-              onApplied={() => {
-                void handleLineApplied();
-              }}
-            />
-          )}
-          {selectedTender === 'internal_voucher' && (
-            <VoucherEntry
-              remainingBalanceMinor={remainingBalanceMinor}
-              paymentAttemptId={paymentAttemptId}
-              tenderApply={(req) => bridge.tender.apply(req)}
-              onApplied={() => {
-                void handleLineApplied();
-              }}
-            />
-          )}
         </div>
       )}
 
