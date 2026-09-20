@@ -66,8 +66,16 @@ selected rows elsewhere — that emphasis is intentional.
 4-up then 3-up; that grouping is presentational and may adapt to the supported denominations.
 **Presentation only — no client-side money arithmetic** (T072 is explicit).
 
-**Footer bar.** Note field `flex:0 0 360`; toggle track `44×24` radius `999` with an `18px` knob;
-cancel action turns red on hover; primary confirm padding `15 40`, label `16/700`.
+**Footer bar — the two existing actions only.** Cancel action turns red on hover; primary confirm
+padding `15 40`, label `16/700`.
+
+> ⚠️ **Do NOT build the mockup's note field or its toggles.** They are a transaction-note control
+> and a print-receipt control, and **neither capability exists**: `PaymentSurface` exposes no note
+> input and no toggle, and `PaymentsConfirmRequest` carries only `payment_attempt_id` +
+> `idempotency_key` (`src/shared/bridge-api.ts:692-695`) — there is nowhere to send a note. First
+> print already happens automatically after finalization. Building them would add either inert
+> controls or unauthorised behaviour, against §A. The `44×24` toggle spec is recorded in
+> `HANDOFF-README.md` if a *supported* toggle is ever needed; it is not licence to add one here.
 
 **Numerals.** Latin digits, two decimals, thousands separators, `tabular-nums`, and `dir="ltr"` on
 money spans (FR-21 already requires the `dir="ltr"` mono treatment).
@@ -84,7 +92,7 @@ money spans (FR-21 already requires the `dir="ltr"` mono treatment).
 | Credit / insurance / wallet / gift-card tiles | **DROP** (T071). |
 | `عميل مسجل` registered-customer row | **DROP** — no such capability. |
 | `إرسال نسخة رقمية` (SMS/email receipt) toggle | **DROP** — no dispatch capability (see T082's prohibition in US4). |
-| Payment-details table with `**** 4582` masked PAN | **ADAPT.** Keep the applied-lines table — it is how split tender stays visible (T075) — but POS-Pulse holds an external reference (`^[A-Z0-9]{0,6}$`), **not** card digits. Never render a PAN. |
+| Payment-details table with `**** 4582` masked PAN | **ADAPT — and note this is NEW work, not preservation.** The renderer does **not** render applied tender lines today: `paymentSlice.tender_lines` is only filtered and summed (`PaymentSurface.tsx:355-366`) — `appliedLines` never reaches JSX — so after a partial payment the surface reopens tender selection without showing the prior line. Displaying them must be **added and tested explicitly**, not assumed. When built: POS-Pulse holds an external reference (`^[A-Z0-9]{0,6}$`), **not** card digits — never render a PAN. |
 | Six-tile 3×2 grid | **ADAPT** to three tiles (§1). |
 
 ---
@@ -94,8 +102,11 @@ money spans (FR-21 already requires the `dir="ltr"` mono treatment).
 - **Payment FSM, money math, tender application, voucher authority.** T074 requires
   `payments/__tests__/**`, `parse-currency-to-minor.test.ts` and the FSM tests pass **unmodified**.
 - **Split tender (T075, FR-40).** A shipped capability (006 T154): a part-payment returns to tender
-  selection while the applied sum is below subtotal, and the applied-lines list stays visible.
-  Restyling must preserve it. It is **not** a Non-Capability item.
+  selection while the applied sum is below subtotal. Restyling must preserve that **control flow**.
+  It is **not** a Non-Capability item.
+  > Precision: what ships today is the *flow*, not a visible applied-lines list — `appliedLines` is
+  > computed but never rendered (§3). So T075 = "do not break the return-to-selection behaviour",
+  > while *showing* the applied lines is **new work** to be added and tested, not preserved.
 - **Voucher authority stays main-process** (T073). No client-side voucher validation.
 - **Viewport floor** (§E). Unchanged at 1024px.
 - **Tokens** (§C). Any new value lands as a `--*` definition in `tailwind.css`, never inline;
