@@ -2106,14 +2106,33 @@ body {
     grid-template-columns: 380px 1fr;
   }
 
-  /* No narrow-terminal stacking rule here, deliberately (#450). Below 1024px
-     `useViewportTier` reports `too-small` and `AppShell` renders
-     `ScreenTooSmall` INSTEAD of its `<Outlet />`, so `/app/cart` — and this
-     layout with it — never mounts at a width a `max-width: 1023px` rule could
-     match. Such a rule is unreachable, and worse, reads as responsive coverage
-     that does not exist. `< 1024px` is not a target production viewport
-     (specs/003-pos-ui-shell/spec.md:42, FR-2, NFR-3); if that ever changes,
-     the 003 spec moves first and the rule comes back with it. */
+  /* Narrow terminals: stack catalogue over cart; the workspace scrolls as one.
+     The attribute selector above is (0,2,0) and a bare `.sale-layout` is
+     (0,1,0), so the stacking rule must match the attribute too or a narrow
+     terminal would keep the two-track layout.
+
+     Deliberately NOT `[data-cart-dominant='true'][data-catalogue='true']`:
+     that would be (0,3,0) and outrank this guard, re-opening the same
+     specificity trap from the other side. The two-track template is keyed on
+     ONE attribute so this rule can always win.
+
+     ⚠️ DO NOT DELETE AS DEAD CSS (#450/#451). It looks unreachable: below
+     1024px `useViewportTier` reports `too-small` and `AppShell` renders
+     `ScreenTooSmall` instead of its `<Outlet />`, so at STEADY STATE this
+     layout never mounts where the query matches. That reasoning is right and
+     incomplete — `useViewportTier` DEBOUNCES tier changes by 100 ms, and
+     clears the timer on every `change`, so a continuous drag resets it
+     indefinitely. Throughout the drag the outlet still renders while this
+     query already matches. Proven by a fake-timer test: 800 ms into a
+     continuous resize below 1024px the shell was still rendering its outlet.
+     Without this rule the workspace stays two-column at any narrow width for
+     the whole drag — the transient broken layout it exists to prevent. */
+  @media (max-width: 1023px) {
+    .sale-layout,
+    .sale-layout[data-catalogue='true'] {
+      grid-template-columns: 1fr;
+    }
+  }
 
   /*
    * POS v3.5 Phase 3 — tender surface (safe tenders only: cash, card, voucher).
@@ -2127,9 +2146,16 @@ body {
     gap: var(--space-3);
   }
 
-  /* No narrow-terminal rule here either (#450) — `/app/checkout` is a child of
-     the same gated outlet as the cart, so below 1024px this grid never renders.
-     See the `.sale-layout` note above. */
+  /* ⚠️ DO NOT DELETE AS DEAD CSS (#450/#451) — same reason as the
+     `.sale-layout` narrow rule above: `/app/checkout` is a child of the same
+     gated outlet, so this looks unreachable at steady state but IS reachable
+     throughout a debounced resize transition. See that comment for the
+     evidence. */
+  @media (max-width: 1023px) {
+    .tender-method-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 
   /* Cash keypad (AmountPad). */
   .amount-pad {
