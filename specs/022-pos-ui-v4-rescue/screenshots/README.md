@@ -248,10 +248,26 @@ seeded rows are `dev-p-001`… — but the fixture map knows only `SKU-PARA-500`
 searched product is refused `unknown_item` and **the non-empty cart the capture requires cannot be
 reached**.
 
-So for #448, export `SKIP_PAIRING`, `SKIP_OPERATOR_SIGNIN`, `FEATURE_CART`, `FEATURE_PRODUCT_SEARCH`
-and `DEV_SEED_CATALOGUE` — and leave `POS_PULSE_DEV_ITEM_RESOLVER` **unset**. (The alternative —
-fixture resolver on, catalogue seed off, adding a fixture SKU — does not exercise the 009 search →
-confirm → cart path the capture is meant to show.)
+The launch block for #448 — copy verbatim; every name is read only in its full `POS_PULSE_*` form
+(`dev-skip-pairing.ts`, `dev-skip-operator-signin.ts`, `main/index.ts`, `dev-seed-catalogue.ts`), so
+an abbreviation silently does nothing and leaves the app pairing-gated with an empty catalogue:
+
+```bash
+export POS_PULSE_DEV_SKIP_PAIRING=1
+export POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1
+export POS_PULSE_FEATURE_CART=1
+export POS_PULSE_FEATURE_PRODUCT_SEARCH=1
+export POS_PULSE_DEV_SEED_CATALOGUE=1
+
+# ACTIVELY unset — omitting is not enough if an earlier launch exported it
+# in this shell (a commented-out export clears nothing).
+unset POS_PULSE_DEV_ITEM_RESOLVER
+
+npm run dev
+```
+
+(The alternative — fixture resolver on, catalogue seed off, adding a fixture SKU — does not exercise
+the 009 search → confirm → cart path the capture is meant to show.)
 
 #### ⚠️ An empty cart cannot evidence FR-15 — new constraint, applies to future slices too
 

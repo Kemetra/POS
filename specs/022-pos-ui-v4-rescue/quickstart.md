@@ -30,10 +30,12 @@ placeholders rather than the till. Reaching them for visual work uses existing d
 export POS_PULSE_DEV_SKIP_PAIRING=1
 export POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1
 export POS_PULSE_DEV_SEED_CATALOGUE=1
-# ⛔ Leave POS_PULSE_DEV_ITEM_RESOLVER UNSET when you need to ADD a seeded
-#    catalogue product to the cart — it conflicts with the line above. See
-#    the note below before enabling it.
-# export POS_PULSE_DEV_ITEM_RESOLVER=1
+
+# ⛔ ACTIVELY UNSET — do not merely omit. It conflicts with the seed above
+#    (see the note below), and a shell that ran an earlier version of this
+#    block still has it exported, where commenting out a line changes
+#    nothing. Only set it for the fixture-SKU-only path in the table below.
+unset POS_PULSE_DEV_ITEM_RESOLVER
 
 # cashier-journey feature flags
 export POS_PULSE_FEATURE_CART=1
