@@ -157,16 +157,30 @@ source **against the current tree**:
 | `aria-label="Quick amounts"` · `"Delete last digit"` | `AmountPad.tsx:63`, `:119` | **AT-only** |
 | `aria-label="Apply voucher"` · `"Voucher applied"` | `VoucherEntry.tsx:159`, `:208` | **AT-only** |
 | `aria-label="External card terminal entry"` | `ExternalCardTerminalEntry.tsx:123` | **AT-only** |
+| `placeholder="e.g. T1A2B3"` | `ExternalCardTerminalEntry.tsx:231` | **visible**, but invisible to a text scan |
+| `placeholder="VCH-000"` | `VoucherEntry.tsx:190` | **visible**; decide whether a format token is copy or a literal |
 
 > ⚠️ **The `aria-label`s are part of FR-19, not a nice-to-have.** They are operator-facing output
 > for screen-reader users and carry no visible text, so translating only the visible copy would
 > leave the surface English-only in assistive technology while *looking* fully Arabic — passing a
 > naive visual check and still failing the zero-English requirement.
 >
-> **T076's RED assertion must cover `aria-label` / `aria-describedby` / `title` and live-region text,
-> not just rendered text nodes**, or it cannot detect this class of gap. The list above was audited
-> across the working-flow components; re-grep before implementing, since line numbers drift (see the
-> anchor-rot note above). `MoneyRoll.tsx` had no English `aria-label` at audit time.
+> **T076's RED assertion must cover `aria-label` / `aria-describedby` / `title` / `placeholder` and
+> live-region text, not just rendered text nodes**, or it cannot detect this class of gap.
+>
+> **`placeholder` is the trap worth naming separately.** Unlike the `aria-label`s, the two
+> placeholders above are **visible on screen** — yet a rendered-text scan does not inspect them
+> either, because they are an attribute rather than a text node. So the external-card and voucher
+> surfaces could show English to a sighted operator with the test green. Assert over attributes, not
+> just text.
+>
+> `VCH-000` and `e.g. T1A2B3` are **format hints**, so decide deliberately whether each is
+> translatable copy or a literal format token that should stay Latin — but make it a decision, not an
+> omission. (`^[A-Z0-9]{0,6}$` is the real constraint for the external reference.)
+>
+> The list above was audited across the working-flow components; re-grep before implementing, since
+> line numbers drift (see the anchor-rot note above). `MoneyRoll.tsx` had no English `aria-label` or
+> placeholder at audit time, and no `title` attribute exists anywhere in the working flow.
 
 > ⚠️ **Do not use the `PaymentSurface.tsx:396` / `:437` anchors** that `tasks.md` T077 carried — they
 > are stale. `PaymentSurface.tsx` drifted after US4a added the settled branch above the working
