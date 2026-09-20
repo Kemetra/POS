@@ -478,9 +478,13 @@ exactly one primary action; no decorative dashboard treatment.
   > between. T060–T065 above are ticked; only this capture is outstanding. Blocked on two things by
   > design: capture is manual per spec §Screenshot Acceptance (no Playwright/Puppeteer without
   > separate approval), and an **empty cart cannot evidence FR-15** — no dev fixture seeds cart
-  > lines, so a product must be search-and-confirm-added by hand first. #448 also adds two captures
-  > beyond this task's literal `before/after`: the **lone-cart** case (the PR #447 P1 fix, still
-  > never rendered) and the narrow-terminal `@media` case.
+  > lines, so a product must be search-and-confirm-added by hand first. #448 adds **one** capture
+  > beyond this task's literal `before/after` — the **lone-cart** case (the PR #447 P1 fix, still
+  > never rendered), so **3 captures in total**. A narrow-terminal capture was considered and
+  > **dropped as impossible**: the workspace does not render below 1024px (`AppShell` returns
+  > `ScreenTooSmall` instead of its `<Outlet />`), so the `@media (max-width: 1023px)` rule is
+  > unreachable and no screenshot can contain it. That dead-rule question is
+  > [#450](https://github.com/Kemetra/POS/issues/450), not #448.
 
 ---
 
