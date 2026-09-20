@@ -123,15 +123,11 @@ export function ExternalCardTerminalEntry({
       aria-label="إدخال مرجع جهاز الشبكة"
     >
       {/*
-        POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
-        Value is dir="ltr" mono (D-006 — money is never bidi-reordered).
+        022 Phase C — the amount due is NOT rendered here; `PaymentSurface` owns
+        it as the surface's dominant numeric (FR-16). See the equivalent note in
+        `CashEntry.tsx` for the full rationale. `remainingBalanceMinor` is still
+        received and still used; only the duplicate presentation is gone.
       */}
-      <div className="amount-due-card">
-        <span className="amount-due-card__label">المطلوب دفعه (Amount due)</span>
-        <span className="amount-due-card__value" dir="ltr">
-          {formatMinorUnits(remainingBalanceMinor)}
-        </span>
-      </div>
 
       {/*
         v3.5 tender-slots / tender-row layout for the card terminal path.

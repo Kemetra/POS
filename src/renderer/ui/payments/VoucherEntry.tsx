@@ -52,16 +52,13 @@ const GENERIC_VOUCHER_REFUSAL_COPY = 'تعذّر استخدام هذه القس�
 
 const VOUCHER_CODE_PATTERN = /^[A-Z0-9_-]+$/;
 
-function formatMinorUnits(minor: number): string {
-  if (!Number.isSafeInteger(minor)) {
-    return '—';
-  }
-  const whole = Math.floor(minor / 100);
-  const frac = Math.abs(minor % 100)
-    .toString()
-    .padStart(2, '0');
-  return `¤${whole.toString()}.${frac}`;
-}
+/*
+ * 022 Phase C — `formatMinorUnits` was removed with the duplicate
+ * `.amount-due-card`. It existed solely to render that panel's value; the
+ * voucher path displays no money of its own (the applied indicator is a check
+ * mark, and FR-017 forbids surfacing a voucher balance). `PaymentSurface` owns
+ * the amount due and does its own formatting.
+ */
 
 function generateIdempotencyKey(): string {
   return globalThis.crypto.randomUUID();
@@ -158,15 +155,11 @@ export function VoucherEntry({
   return (
     <section className="voucher-entry" data-testid="voucher-entry" aria-label="تطبيق القسيمة">
       {/*
-        POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
-        Value is dir="ltr" mono (D-006 — money is never bidi-reordered).
+        022 Phase C — the amount due is NOT rendered here; `PaymentSurface` owns
+        it as the surface's dominant numeric (FR-16). See the equivalent note in
+        `CashEntry.tsx` for the full rationale. `remainingBalanceMinor` is still
+        received and still used; only the duplicate presentation is gone.
       */}
-      <div className="amount-due-card">
-        <span className="amount-due-card__label">المطلوب دفعه (Amount due)</span>
-        <span className="amount-due-card__value" dir="ltr" data-testid="voucher-entry-remaining">
-          {formatMinorUnits(remainingBalanceMinor)}
-        </span>
-      </div>
 
       {/*
         v3.5 tender-slots / tender-row layout for the voucher path.

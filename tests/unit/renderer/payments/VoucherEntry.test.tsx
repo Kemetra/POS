@@ -55,12 +55,20 @@ function makeBridge(response: TenderApplyResponse): {
 }
 
 describe('T290 — VoucherEntry happy path', () => {
-  it('renders the remaining-balance display, both inputs, and a confirm button', () => {
+  it('renders both inputs and a confirm button', () => {
     const { bridge } = makeBridge(makeOkResponse());
     render(
       <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={bridge} />,
     );
-    expect(screen.getByTestId('voucher-entry-remaining')).toHaveTextContent('50.00');
+    /*
+     * RETARGETED by 022 Phase C. The remaining-balance display assertion is
+     * dropped HERE because this test renders VoucherEntry standalone, with no
+     * PaymentSurface above it — and the amount due is now owned solely by the
+     * surface (FR-16). The value's presence is asserted where it is actually
+     * rendered, in `PaymentSurface.voucher.test.tsx` and
+     * `single-amount-due.test.tsx`. The remaining assertions — the component's
+     * own inputs and confirm affordance — are unchanged.
+     */
     expect(screen.getByTestId('voucher-entry-code-input')).toBeInTheDocument();
     expect(screen.getByTestId('voucher-entry-amount-input')).toBeInTheDocument();
     expect(screen.getByTestId('voucher-entry-confirm')).toBeInTheDocument();
