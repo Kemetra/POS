@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#EEF1F4;font-family:'Noto Kufi Arabic','Inter',system-ui,sans-serif;}
+a{color:#0F766E;text-decoration:none}a:hover{color:#10B981}
+input{font-family:inherit}
+</style>
+</helmet>
+<div style="width:1448px;margin:0 auto;padding:0 0 76px;color:#0F172A;font-family:'Noto Kufi Arabic','Inter',sans-serif;">
+
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+<div style="background:#FFFFFF;border-radius:2px;overflow:hidden;box-shadow:0 8px 40px rgba(15,23,42,.10)">
+  <div style="display:flex;align-items:center;justify-content:space-between;height:38px;padding:0 14px;background:#FFFFFF;border-bottom:1px solid #EEF1F4">
+    <div style="display:flex;align-items:center;gap:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 20V9l5-3v14M11 20V4l5 3v13M17 20v-8l3 2v6" stroke="#0F766E" stroke-width="2" stroke-linejoin="round"/></svg>
+      <span style="font-size:12px;font-weight:600;color:#0F172A">Retail Tower POS</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:18px;color:#64748B">
+      <span style="font-size:15px;line-height:1">&#8211;</span><span style="font-size:11px">&#9723;</span><span style="font-size:14px">&#10005;</span>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:stretch;background:#FFFFFF;border-bottom:1px solid #E5E7EB">
+    <div style="flex:0 0 430px;display:flex;align-items:center;gap:16px;padding:20px 26px">
+      <svg width="54" height="54" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21M17 21v-9l4 2.5V21" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 3l6 3.5V21h-3V6.2z" fill="#14B8A6" opacity=".35"/></svg>
+      <div>
+        <div style="font-family:'Inter',sans-serif;font-size:30px;font-weight:700;letter-spacing:-.5px;color:#0F172A">Retail Tower POS</div>
+        <div style="font-size:14px;color:#0F766E;margin-top:2px">نظام الصيدلية المتكامل لنمو أعمالك</div>
+        <div style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B;margin-top:8px;display:flex;gap:10px"><span>Simple</span><span>&#183;</span><span>Secure</span><span>&#183;</span><span>Smarter Pharmacy</span></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 20px;border-right:1px solid #EEF1F4;border-left:1px solid #EEF1F4">
+      <div style="font-size:26px;font-weight:700;color:#0F172A">مرحباً بك في ريتيل تاور</div>
+      <div style="font-size:14px;color:#64748B;margin-top:6px">معاً لصحة مجتمع أكثر إشراقاً</div>
+      <div dir="rtl" style="display:flex;gap:26px;margin-top:16px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:110px;text-align:center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-45 12 12)" stroke="#0F766E" stroke-width="1.8"/></svg>
+          <div style="font-size:12px;font-weight:600">خدمة أسرع</div><div style="font-size:11px;color:#64748B;margin-top:-4px">لعملائك</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:110px;text-align:center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 20s7-3.5 7-9V6l-7-2-7 2v5c0 5.5 7 9 7 9z" stroke="#10B981" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <div style="font-size:12px;font-weight:600">بيئة أكثر أماناً</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:130px;text-align:center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="12" width="4" height="8" fill="#0F766E"/><rect x="10" y="8" width="4" height="12" fill="#14B8A6"/><rect x="16" y="4" width="4" height="16" fill="#3B82F6"/></svg>
+          <div style="font-size:12px;font-weight:600">مستقبل أفضل</div><div style="font-size:11px;color:#64748B;margin-top:-4px">لصيدليتك</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:0 0 510px;position:relative;background:repeating-linear-gradient(135deg,#0F766E,#0F766E 10px,#115E59 10px,#115E59 20px);display:flex;align-items:center;justify-content:flex-start;padding:22px 26px">
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,118,110,.92),rgba(15,118,110,.55))"></div>
+      <div style="position:relative;color:#FFFFFF;text-align:right;width:100%">
+        <div style="font-size:20px;font-weight:700">معاً لصحة</div>
+        <div style="font-size:20px;font-weight:700;margin-top:2px">مجتمع أكثر إشراقاً</div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;margin-top:10px;opacity:.9">Pharmacy Today</div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;opacity:.9">A Healthier Tomorrow</div>
+        <div style="position:absolute;top:0;left:0;font-family:'Inter',sans-serif;font-size:10px;letter-spacing:1px;opacity:.75;background:rgba(255,255,255,.14);padding:4px 8px;border-radius:4px">PHARMACIST PHOTO</div>
+      </div>
+    </div>
+    <div style="flex:0 0 96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:16px 10px;text-align:center">
+      <div style="font-size:14px;font-weight:600;line-height:1.7">كل<br/>وصفة<br/>تبدأ بثقة</div>
+      <div style="width:26px;height:3px;border-radius:2px;background:#0F766E;margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:16px;padding:18px;background:#FAFBFC;align-items:flex-start">
+    <div style="flex:0 0 412px;display:flex;flex-direction:column;gap:14px">
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px">
+        <div style="width:46px;height:46px;border-radius:12px;background:#F1F5F9;display:flex;align-items:center;justify-content:center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-5h6v5" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        </div>
+        <div dir="rtl" style="flex:1;text-align:right">
+          <div style="font-size:16px;font-weight:700">فرع الرياض - حي النرجس</div>
+          <div style="font-size:13px;color:#64748B;margin-top:3px">صيدلية ريتيل تاور النموذجية</div>
+          <div style="font-size:12px;color:#94A3B8;margin-top:8px;display:flex;align-items:center;gap:5px;justify-content:flex-start">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z" stroke="#94A3B8" stroke-width="1.8"/><circle cx="12" cy="10" r="2.4" stroke="#94A3B8" stroke-width="1.8"/></svg>
+            <span>الرياض، المملكة العربية السعودية</span>
+          </div>
+        </div>
+        <span style="color:#94A3B8;font-size:18px">&#8249;</span>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:44px;height:44px;border-radius:12px;background:#F1F5F9;display:flex;align-items:center;justify-content:center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="12" rx="2" stroke="#0F766E" stroke-width="1.8"/><path d="M8 20h8" stroke="#0F766E" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <div style="font-size:16px;font-weight:700">جهاز نقطة البيع</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;background:#DCFCE7;color:#15803D;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600">
+            <span style="width:7px;height:7px;border-radius:99px;background:#16A34A"></span><span>متصل</span>
+          </div>
+        </div>
+        <div dir="rtl" style="margin-top:14px;display:flex;flex-direction:column;gap:9px;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">اسم الجهاز</span><span style="font-family:'Inter',sans-serif;font-weight:600">POS-01</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">عنوان IP</span><span style="font-family:'Inter',sans-serif;font-weight:600">192.168.1.45</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">آخر مزامنة</span><span style="font-weight:600">اليوم 08:42 ص</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="color:#64748B">حالة النظام</span><span style="display:flex;align-items:center;gap:6px;color:#15803D;font-weight:600"><span style="width:7px;height:7px;border-radius:99px;background:#16A34A"></span>جميع الخدمات تعمل بشكل طبيعي</span></div>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+        <div dir="rtl" style="display:flex;align-items:flex-start;justify-content:space-between">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#64748B">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="#64748B" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="#64748B" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <span>الثلاثاء، 3 يونيو 2025</span>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:34px;font-weight:700;margin-top:8px">09:24 <span style="font-family:'Noto Kufi Arabic';font-size:20px">ص</span></div>
+          </div>
+          <div style="text-align:center">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.5" fill="#F59E0B"/><g stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></g></svg>
+            <div style="font-size:13px;font-weight:600;margin-top:4px">صباح الخير</div>
+          </div>
+        </div>
+        <div dir="rtl" style="font-size:12px;color:#64748B;margin-top:6px;text-align:right">لنبدأ يوماً جديداً من العطاء الصحي</div>
+      </div>
+
+      <div style="border-radius:14px;padding:20px 18px;background:linear-gradient(90deg,#ECFDF5,#F0FDFA);border:1px solid #D1FAE5;display:flex;align-items:center;justify-content:space-between">
+        <div dir="rtl" style="text-align:right">
+          <div style="font-size:20px;font-weight:700;color:#0F766E;line-height:1.5">صحة أفضل ..<br/>حياة أجمل .</div>
+          <div style="font-size:12px;color:#64748B;margin-top:8px">معاً نخدم مجتمعنا</div>
+        </div>
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none"><path d="M12 20c0-5 3-8 8-8 0 5-3 8-8 8z" fill="#10B981" opacity=".8"/><path d="M12 20c-4 0-7-3-7-7 4 0 7 3 7 7z" fill="#0F766E" opacity=".55"/></svg>
+      </div>
+    </div>
+
+    <div style="flex:1;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:22px 24px">
+      <div dir="rtl" style="display:flex;align-items:flex-start;justify-content:flex-start;gap:0;padding:0 6px 4px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:104px">
+          <div style="width:34px;height:34px;border-radius:99px;background:#0F766E;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-weight:700;font-size:15px">1</div>
+          <div style="font-size:12px;font-weight:600;color:#0F766E">تسجيل الدخول</div>
+        </div>
+        <div style="flex:1;height:2px;background:#E5E7EB;margin-top:17px"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:104px">
+          <div style="width:34px;height:34px;border-radius:99px;background:#F1F5F9;color:#94A3B8;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-weight:700;font-size:15px">2</div>
+          <div style="font-size:12px;color:#94A3B8">بدء الوردية</div>
+        </div>
+        <div style="flex:1;height:2px;background:#E5E7EB;margin-top:17px"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:104px">
+          <div style="width:34px;height:34px;border-radius:99px;background:#F1F5F9;color:#94A3B8;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-weight:700;font-size:15px">3</div>
+          <div style="font-size:12px;color:#94A3B8">جاهز للبيع</div>
+        </div>
+      </div>
+
+      <div dir="rtl" style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:22px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.6" stroke="#0F766E" stroke-width="1.9"/><path d="M4.5 20c1.6-3.6 4.4-5.2 7.5-5.2S18 16.4 19.5 20" stroke="#0F766E" stroke-width="1.9" stroke-linecap="round"/></svg>
+        <span style="font-size:22px;font-weight:700">اختر موظفك</span>
+      </div>
+      <div style="text-align:center;font-size:13px;color:#64748B;margin-top:6px">اختر اسمك من القائمة أو ابحث للعثور على حسابك</div>
+
+      <div dir="rtl" style="margin-top:16px;display:flex;align-items:center;gap:10px;border:1px solid #E5E7EB;border-radius:12px;padding:12px 14px;background:#FFFFFF">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#94A3B8" stroke-width="1.9"/><path d="M16 16l4.5 4.5" stroke="#94A3B8" stroke-width="1.9" stroke-linecap="round"/></svg>
+        <span style="font-size:13px;color:#94A3B8">البحث بالاسم أو الرقم الوظيفي...</span>
+      </div>
+
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ employees }}" as="emp" hint-placeholder-count="4">
+          <div dir="rtl" onClick="{{ emp.pick }}" style="{{ emp.rowStyle }}">
+            <div style="width:44px;height:44px;border-radius:99px;background:#E2E8F0;display:flex;align-items:center;justify-content:center">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.4" fill="#94A3B8"/><path d="M5 20c1.5-3.4 4.2-5 7-5s5.5 1.6 7 5" fill="#94A3B8"/></svg>
+            </div>
+            <div style="flex:1;text-align:right">
+              <div style="font-size:15px;font-weight:700">{{ emp.name }}</div>
+              <div style="font-size:12px;color:#64748B;margin-top:2px">{{ emp.role }}</div>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">{{ emp.id }}</div>
+            <div style="{{ emp.checkStyle }}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div dir="rtl" style="margin-top:12px;border:1.5px dashed #CBD5E1;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:600">موظف غير موجود؟</div>
+          <div style="font-size:12px;color:#64748B;margin-top:3px">تواصل مع المدير لإنشاء حساب جديد</div>
+        </div>
+        <div style="width:38px;height:38px;border-radius:99px;background:#F1F5F9;display:flex;align-items:center;justify-content:center;color:#0F766E;font-size:20px">+</div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 480px;display:flex;flex-direction:column;gap:14px">
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:20px">
+        <div dir="rtl" style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:42px;height:42px;border-radius:12px;background:#ECFDF5;display:flex;align-items:center;justify-content:center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="10" rx="2" stroke="#0F766E" stroke-width="1.9"/><path d="M8 10V7.5a4 4 0 118 0V10" stroke="#0F766E" stroke-width="1.9"/></svg>
+            </div>
+            <div>
+              <div style="font-size:19px;font-weight:700">أدخل كلمة المرور</div>
+              <div style="font-size:12px;color:#64748B;margin-top:3px">أدخل الرقم السري لبدء الوردية</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;border:1px solid #E5E7EB;border-radius:8px;padding:6px 10px;font-size:11px;color:#64748B">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2" stroke="#64748B" stroke-width="1.7"/></svg>
+            <span>لوحة مفاتيح آمنة</span>
+          </div>
+        </div>
+
+        <div dir="ltr" style="display:flex;gap:12px;justify-content:center;margin-top:18px">
+          <sc-for list="{{ pinDots }}" as="d" hint-placeholder-count="4">
+            <div style="{{ d.style }}"><span style="{{ d.dot }}"></span></div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px">
+          <sc-for list="{{ keys }}" as="k" hint-placeholder-count="12">
+            <div onClick="{{ k.press }}" style="{{ k.style }}">{{ k.label }}</div>
+          </sc-for>
+        </div>
+
+        <div dir="rtl" style="display:flex;justify-content:flex-start;margin-top:14px">
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#0F766E">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="10" rx="2" stroke="#0F766E" stroke-width="1.8"/><path d="M8 10V7.5a4 4 0 118 0" stroke="#0F766E" stroke-width="1.8"/></svg>
+            <span>نسيت كلمة المرور؟</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:20px">
+        <div dir="rtl" style="display:flex;align-items:center;gap:12px">
+          <div style="width:38px;height:38px;border-radius:99px;background:#ECFDF5;display:flex;align-items:center;justify-content:center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 5.5l11 6.5-11 6.5z" fill="#0F766E"/></svg>
+          </div>
+          <div style="font-size:18px;font-weight:700">ملخص بدء الوردية</div>
+        </div>
+        <div dir="rtl" style="margin-top:14px;display:flex;flex-direction:column;gap:11px;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">الموظف المختار</span><span style="font-weight:700">{{ empName }}</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">الوظيفة</span><span style="font-weight:700">{{ empRole }}</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">الفرع</span><span style="font-weight:700">فرع الرياض - حي النرجس</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">وقت البدء</span><span style="font-weight:700">اليوم 09:24 ص</span></div>
+        </div>
+        <div onClick="{{ goCart }}" style="margin-top:16px;background:#0F766E;color:#FFFFFF;border-radius:12px;height:54px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:16px;font-weight:700;cursor:pointer" style-hover="background:#115E59">
+          <span>بدء الوردية والدخول للنظام</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 6l6 6-6 6M19 12H5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div dir="rtl" style="display:flex;align-items:center;justify-content:space-between;padding:12px 22px;background:#FFFFFF;border-top:1px solid #E5E7EB">
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 20c0-5 3-8 8-8 0 5-3 8-8 8z" fill="#10B981" opacity=".8"/></svg>
+      <span style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600">Retail Tower POS</span>
+      <span style="font-family:'Inter',sans-serif;font-size:12px;color:#94A3B8">v3.6.1</span>
+      <span style="font-size:12px;color:#64748B">معاً لصحة أفضل</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:22px;font-size:12px;color:#64748B">
+      <span style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#64748B" stroke-width="1.8"/><circle cx="12" cy="12" r="8.5" stroke="#64748B" stroke-width="1.8"/></svg>الإعدادات</span>
+      <span style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#64748B" stroke-width="1.8"/><path d="M12 11v5M12 8h.01" stroke="#64748B" stroke-width="1.8" stroke-linecap="round"/></svg>مساعدة</span>
+      <span style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 14v-2a8 8 0 1116 0v2" stroke="#64748B" stroke-width="1.8"/><rect x="2.5" y="13" width="4" height="6" rx="1.6" stroke="#64748B" stroke-width="1.8"/><rect x="17.5" y="13" width="4" height="6" rx="1.6" stroke="#64748B" stroke-width="1.8"/></svg>الدعم الفني</span>
+      <span style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#64748B" stroke-width="1.8"/><path d="M3.5 12h17M12 3.5c2.5 2.6 2.5 14.4 0 17M12 3.5c-2.5 2.6-2.5 14.4 0 17" stroke="#64748B" stroke-width="1.5"/></svg>العربية</span>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isCart }}">
+<div style="background:#FAFBFC;border-radius:2px;overflow:hidden;box-shadow:0 8px 40px rgba(15,23,42,.10)">
+  <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:#FFFFFF;border-bottom:1px solid #E5E7EB">
+    <div style="display:flex;align-items:center;gap:12px;flex:0 0 auto">
+      <svg width="42" height="42" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21M17 21v-9l4 2.5V21" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 3l6 3.5V21h-3V6.2z" fill="#14B8A6" opacity=".35"/></svg>
+      <div>
+        <div style="font-family:'Inter',sans-serif;font-size:21px;font-weight:700;letter-spacing:-.4px">Retail Tower POS</div>
+        <div style="font-size:11px;color:#0F766E;margin-top:1px">نظام الصيدلية المتكامل لنمو أعمالك</div>
+        <div style="font-family:'Inter',sans-serif;font-size:10px;color:#94A3B8;margin-top:5px;display:flex;gap:8px"><span>Simple</span><span>&#183;</span><span>Secure</span><span>&#183;</span><span>Smarter Pharmacy</span></div>
+      </div>
+    </div>
+    <div dir="rtl" style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:1.5px solid #E5E7EB;border-radius:14px;padding:10px 14px;background:#FFFFFF;max-width:520px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#94A3B8" stroke-width="1.9"/><path d="M16 16l4.5 4.5" stroke="#94A3B8" stroke-width="1.9" stroke-linecap="round"/></svg>
+      <span style="flex:1;font-size:13px;color:#94A3B8">ابحث عن منتج بالاسم أو الباركود ...</span>
+      <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#0F766E;background:#ECFDF5;border-radius:6px;padding:4px 8px">F2</span>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#3B82F6" stroke-width="1.7"/><g stroke="#3B82F6" stroke-width="1.6"><path d="M7 8.5v7M9.5 8.5v7M12 8.5v7M15 8.5v7M17.5 8.5v7"/></g></svg>
+    </div>
+    <div dir="rtl" style="display:flex;align-items:center;gap:10px;border:1px solid #E5E7EB;border-radius:12px;padding:8px 12px;min-width:170px">
+      <div style="width:34px;height:34px;border-radius:10px;background:#EFF6FF;display:flex;align-items:center;justify-content:center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.4" stroke="#3B82F6" stroke-width="1.8"/><path d="M5 20c1.5-3.4 4.2-5 7-5s5.5 1.6 7 5" stroke="#3B82F6" stroke-width="1.8"/></svg>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#64748B">العميل الحالي</div>
+        <div style="font-size:14px;font-weight:700;margin-top:1px">أحمد محمد</div>
+        <div style="font-size:11px;color:#15803D;margin-top:3px;display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:99px;background:#16A34A;display:inline-flex;align-items:center;justify-content:center;color:#FFFFFF;font-size:8px">&#10003;</span>عميل نقدي</div>
+      </div>
+    </div>
+    <div dir="rtl" style="display:flex;align-items:center;gap:10px;border:1px solid #E5E7EB;border-radius:12px;padding:8px 12px;min-width:180px">
+      <div style="width:34px;height:34px;border-radius:10px;background:#ECFDF5;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-weight:700;color:#0F766E;font-size:14px">Rx</div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#64748B">الوصفة الطبية</div>
+        <div style="font-size:13px;font-weight:700;margin-top:1px">يوجد وصفة طبية</div>
+        <div style="font-size:11px;color:#94A3B8;margin-top:3px">2 أصناف</div>
+      </div>
+    </div>
+    <div style="position:relative">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 16v-5a6 6 0 1112 0v5l1.5 2.5h-15z" stroke="#64748B" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 19.5a2 2 0 004 0" stroke="#64748B" stroke-width="1.8"/></svg>
+      <span style="position:absolute;top:-6px;right:-6px;background:#EF4444;color:#FFFFFF;font-family:'Inter',sans-serif;font-size:10px;font-weight:700;border-radius:99px;width:17px;height:17px;display:flex;align-items:center;justify-content:center">3</span>
+    </div>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#64748B" stroke-width="1.8"/><circle cx="12" cy="12" r="8.5" stroke="#64748B" stroke-width="1.8"/></svg>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:130px">
+      <div style="display:flex;align-items:center;gap:16px;color:#64748B">
+        <span style="font-size:14px">&#8211;</span><span style="font-size:11px">&#9723;</span><span style="font-size:13px">&#10005;</span>
+      </div>
+      <div style="text-align:left">
+        <div style="font-family:'Inter',sans-serif;font-size:19px;font-weight:700">09:24 <span style="font-family:'Noto Kufi Arabic';font-size:12px">ص</span></div>
+        <div style="font-size:10px;color:#94A3B8">الثلاثاء، 3 يونيو 2025</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:14px;padding:14px;align-items:flex-start">
+    <div style="flex:0 0 186px;display:flex;flex-direction:column;gap:10px;min-height:940px">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+        <div style="{{ n.style }}">
+          <span style="{{ n.iconWrap }}">{{ n.icon }}</span>
+          <span style="flex:1;text-align:right;font-size:14px;font-weight:600">{{ n.label }}</span>
+          <span style="{{ n.badgeStyle }}">{{ n.badge }}</span>
+        </div>
+      </sc-for>
+      <div style="flex:1"></div>
+      <div dir="rtl" style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:14px;padding:16px;text-align:center">
+        <div style="width:40px;height:40px;border-radius:99px;background:#ECFDF5;display:flex;align-items:center;justify-content:center;margin:0 auto">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 14v-2a8 8 0 1116 0v2" stroke="#0F766E" stroke-width="1.8"/><rect x="2.5" y="13" width="4" height="6" rx="1.6" stroke="#0F766E" stroke-width="1.8"/><rect x="17.5" y="13" width="4" height="6" rx="1.6" stroke="#0F766E" stroke-width="1.8"/></svg>
+        </div>
+        <div style="font-size:13px;font-weight:700;margin-top:10px">هل تحتاج مساعدة؟</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.6">تواصل مع الدعم الفني</div>
+        <div style="margin-top:10px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:9px;padding:8px;font-size:12px;font-weight:600;cursor:pointer" style-hover="border-color:#0F766E;color:#0F766E">فتح التذكرة</div>
+      </div>
+      <div dir="rtl" style="text-align:center;padding:10px 0 4px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 20c0-5 3-8 8-8 0 5-3 8-8 8z" fill="#10B981" opacity=".8"/></svg>
+        <div style="font-size:12px;font-weight:600;color:#0F766E;margin-top:4px">معاً لصحة أفضل</div>
+        <div style="font-family:'Inter',sans-serif;font-size:10px;color:#94A3B8;margin-top:4px">Retail Tower POS</div>
+        <div style="font-family:'Inter',sans-serif;font-size:10px;color:#CBD5E1">v3.2.1</div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:10px" dir="rtl">
+        <div style="flex:1;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:10px;background:#EFF6FF;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.4" stroke="#3B82F6" stroke-width="1.8"/><path d="M5 20c1.5-3.4 4.2-5 7-5s5.5 1.6 7 5" stroke="#3B82F6" stroke-width="1.8"/></svg></div>
+          <div style="text-align:right"><div style="font-size:11px;color:#64748B">معلومات العميل</div><div style="font-size:13px;font-weight:700;margin-top:2px">أحمد محمد عبدالله</div><div style="font-family:'Inter',sans-serif;font-size:11px;color:#64748B;margin-top:2px">0501234567</div></div>
+        </div>
+        <div style="flex:1;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:10px;background:#ECFDF5;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8.5" r="3.2" stroke="#0F766E" stroke-width="1.8"/><path d="M3 19c1.3-3 3.6-4.4 6-4.4S13.7 16 15 19" stroke="#0F766E" stroke-width="1.8"/><path d="M16 9h5M18.5 6.5v5" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div style="text-align:right"><div style="font-size:11px;color:#64748B">نوع العميل</div><div style="font-size:13px;font-weight:700;margin-top:2px">عميل نقدي</div></div>
+        </div>
+        <div style="flex:1;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:10px;background:#FEF3C7;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 4h8v4a4 4 0 11-8 0z" stroke="#F59E0B" stroke-width="1.8"/><path d="M10 14h4v3h-4zM8 20h8" stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div style="text-align:right"><div style="font-size:11px;color:#64748B">نقاط الولاء</div><div style="font-size:13px;font-weight:700;margin-top:2px">320 نقطة</div></div>
+        </div>
+        <div style="flex:1;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:10px;background:#ECFDF5;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#0F766E" stroke-width="1.8"/><path d="M9 8h6M9 12h6M9 16h3" stroke="#0F766E" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div style="text-align:right"><div style="font-size:11px;color:#64748B">الوصفة الطبية</div><div style="font-size:13px;font-weight:700;margin-top:2px">وصفة نشطة</div><div style="font-size:11px;color:#64748B;margin-top:2px">2 صنف</div></div>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:14px 16px 16px">
+        <div dir="rtl" style="display:flex;align-items:center;gap:12px">
+          <div style="position:relative;display:flex;align-items:center;gap:10px">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M3 4h2l2.5 11h10L20 7H6.5" stroke="#0F766E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="19" r="1.6" fill="#0F766E"/><circle cx="17" cy="19" r="1.6" fill="#0F766E"/></svg>
+            <span style="font-size:19px;font-weight:700">سلة المشتريات</span>
+            <span style="position:absolute;bottom:-14px;right:4px;background:#0F766E;color:#FFFFFF;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;border-radius:99px;width:20px;height:20px;display:flex;align-items:center;justify-content:center">{{ count }}</span>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid #E5E7EB;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:600;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#3B82F6" stroke-width="1.8"/><path d="M9 9h6M9 13h6" stroke="#3B82F6" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span>ملاحظة للفاتورة</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid #BFDBFE;background:#EFF6FF;color:#1D4ED8;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:600;cursor:pointer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M19 5L5 19" stroke="#1D4ED8" stroke-width="1.9" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="2.2" stroke="#1D4ED8" stroke-width="1.7"/><circle cx="16.5" cy="16.5" r="2.2" stroke="#1D4ED8" stroke-width="1.7"/></svg>
+            <span>خصم للعميل</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid #E5E7EB;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:600;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 4h11l3 3v13H5z" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 4h7v5H8zM8 13h8v7H8z" stroke="#0F766E" stroke-width="1.6"/></svg>
+            <span>حفظ الفاتورة</span>
+          </div>
+          <div onClick="{{ clearCart }}" style="display:flex;align-items:center;gap:8px;border:1px solid #FECACA;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:600;cursor:pointer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="#DC2626" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>إفراغ السلة</span>
+          </div>
+        </div>
+
+        <div dir="rtl" style="margin-top:16px;display:grid;grid-template-columns:36px minmax(0,1fr) 80px 112px 84px 84px;align-items:center;padding:10px 6px;border-bottom:1px solid #E5E7EB;font-size:12px;color:#64748B;font-weight:600">
+          <div>#</div><div>الصنف</div><div>السعر</div><div style="text-align:center">الكمية</div><div>الإجمالي</div><div>إجراءات</div>
+        </div>
+        <sc-for list="{{ items }}" as="it" hint-placeholder-count="5">
+          <div dir="rtl" style="display:grid;grid-template-columns:36px minmax(0,1fr) 80px 112px 84px 84px;align-items:center;padding:12px 6px;border-bottom:1px solid #F1F5F9">
+            <div style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B">{{ it.no }}</div>
+            <div style="display:flex;align-items:center;gap:12px;min-width:0">
+              <div style="width:58px;height:58px;flex:0 0 58px;border-radius:10px;border:1px solid #E5E7EB;background:repeating-linear-gradient(45deg,#F8FAFC,#F8FAFC 5px,#EEF2F6 5px,#EEF2F6 10px);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-size:8px;color:#94A3B8;text-align:center;line-height:1.2;padding:3px">{{ it.shot }}</div>
+              <div style="text-align:right;min-width:0">
+                <div style="font-size:14px;font-weight:600">{{ it.name }}</div>
+                <div style="font-size:11px;color:#94A3B8;margin-top:4px;display:flex;flex-wrap:wrap;min-width:0;overflow:hidden;gap:8px;align-items:center;direction:rtl"><span>{{ it.pack }}</span><span>&#8226;</span><span style="font-family:'Inter',sans-serif">{{ it.barcode }}</span></div>
+              </div>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600">{{ it.price }}</div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+              <div onClick="{{ it.inc }}" style="width:30px;height:30px;border-radius:8px;border:1px solid #E5E7EB;display:flex;align-items:center;justify-content:center;color:#0F766E;font-size:16px;cursor:pointer" style-hover="border-color:#0F766E;background:#ECFDF5">+</div>
+              <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;min-width:22px;text-align:center">{{ it.qty }}</div>
+              <div onClick="{{ it.dec }}" style="width:30px;height:30px;border-radius:8px;border:1px solid #E5E7EB;display:flex;align-items:center;justify-content:center;color:#64748B;font-size:16px;cursor:pointer" style-hover="border-color:#0F766E">&#8722;</div>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700">{{ it.line }}</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:32px;height:32px;border-radius:8px;border:1px solid #E5E7EB;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="border-color:#0F766E"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 20l4-1 10-10-3-3L5 16z" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+              <div onClick="{{ it.remove }}" style="width:32px;height:32px;border-radius:8px;border:1px solid #FEE2E2;background:#FEF2F2;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="#EF4444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            </div>
+          </div>
+        </sc-for>
+
+        <div dir="rtl" style="display:flex;align-items:center;gap:10px;padding-top:14px">
+          <span style="font-size:13px;color:#64748B">عدد الأصناف : {{ count }}</span>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid #E5E7EB;border-radius:10px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 20l4-1 10-10-3-3L5 16z" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/></svg><span>تعديل الكميات</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid #FECACA;background:#FEF2F2;color:#DC2626;border-radius:10px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="#DC2626" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>حذف المحدد</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <div style="flex:0 0 320px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px" dir="rtl">
+          <div style="display:flex;align-items:center;gap:8px;justify-content:flex-start;font-size:14px;font-weight:700">
+            <span>كود الخصم</span>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:12px">
+            <div style="flex:1;border:1px solid #E5E7EB;border-radius:10px;padding:11px 12px;font-size:12px;color:#94A3B8">أدخل كود الخصم ...</div>
+            <div style="background:#0F766E;color:#FFFFFF;border-radius:10px;padding:11px 18px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M19 5L5 19" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="2.2" stroke="#FFFFFF" stroke-width="1.7"/></svg>
+              <span>تطبيق</span>
+            </div>
+          </div>
+        </div>
+        <div style="flex:1;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px" dir="rtl">
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:14px">
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748B">المجموع الفرعي</span><span style="font-family:'Inter',sans-serif;font-weight:600">{{ subtotal }} <span style="font-family:'Noto Kufi Arabic';font-size:12px">ر.س</span></span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748B">الخصم</span><span style="font-family:'Inter',sans-serif;font-weight:600;color:#10B981">-10.00 <span style="font-family:'Noto Kufi Arabic';font-size:12px">ر.س</span></span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748B">ضريبة القيمة المضافة (15%)</span><span style="font-family:'Inter',sans-serif;font-weight:600">{{ vat }} <span style="font-family:'Noto Kufi Arabic';font-size:12px">ر.س</span></span></div>
+            <div style="background:#ECFDF5;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:2px">
+              <span style="font-size:15px;font-weight:700;color:#0F766E">المجموع الكلي</span>
+              <span style="font-family:'Inter',sans-serif;font-size:22px;font-weight:700;color:#0F766E">{{ total }} <span style="font-family:'Noto Kufi Arabic';font-size:13px">ر.س</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <div style="flex:0 0 190px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px;display:flex;align-items:center;gap:10px;justify-content:center;cursor:pointer" style-hover="border-color:#0F766E">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M7 9V4h10v5M7 18H5v-6h14v6h-2M7 15h10v5H7z" stroke="#0F172A" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          <span style="font-size:14px;font-weight:600">طباعة الفاتورة</span>
+          <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#64748B;background:#F1F5F9;border-radius:6px;padding:4px 7px">F10</span>
+        </div>
+        <div onClick="{{ goPay }}" style="flex:1;background:#0F766E;color:#FFFFFF;border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center;gap:16px;cursor:pointer" style-hover="background:#115E59">
+          <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;background:rgba(255,255,255,.18);border-radius:6px;padding:4px 8px">F12</span>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:14px">
+            <span style="font-size:19px;font-weight:700">المتابعة إلى الدفع</span>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M11 6l-6 6 6 6M5 12h14" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 500px;display:flex;flex-direction:column;gap:12px">
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:14px">
+        <div dir="rtl" style="display:flex;align-items:center;gap:10px">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" stroke="#0F766E" stroke-width="1.6"/></svg>
+          <span style="font-size:18px;font-weight:700;flex:1">الأصناف والمنتجات</span>
+          <div style="width:36px;height:36px;border-radius:10px;border:1px solid #E5E7EB;display:flex;align-items:center;justify-content:center">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#94A3B8" stroke-width="1.9"/><path d="M16 16l4.5 4.5" stroke="#94A3B8" stroke-width="1.9" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+        <div dir="rtl" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <sc-for list="{{ cats }}" as="c" hint-placeholder-count="5">
+            <div onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</div>
+          </sc-for>
+        </div>
+        <div dir="rtl" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px">
+          <sc-for list="{{ catTiles }}" as="t" hint-placeholder-count="8">
+            <div onClick="{{ t.pick }}" style="{{ t.style }}">
+              <span style="{{ t.iconStyle }}">{{ t.icon }}</span>
+              <span style="font-size:11px;font-weight:600;text-align:center">{{ t.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:14px">
+        <div dir="rtl" style="display:flex;align-items:center;gap:10px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3c1 3.5-1.5 4.5-1.5 7A3.5 3.5 0 0014 13c0-2 1-3 1-3 1.5 1.8 2.5 3.4 2.5 5.5A5.5 5.5 0 0112 21a5.5 5.5 0 01-5.5-5.5C6.5 10 12 8 12 3z" fill="#F59E0B"/></svg>
+          <span style="font-size:17px;font-weight:700;flex:1">الأكثر مبيعاً</span>
+          <div style="background:#F1F5F9;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:600">الأحدث</div>
+          <div style="background:#F1F5F9;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:600">العروض</div>
+        </div>
+        <div dir="rtl" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+          <sc-for list="{{ products }}" as="p" hint-placeholder-count="6">
+            <div style="border:1px solid #E5E7EB;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:flex-start">
+              <div style="flex:1;text-align:right">
+                <div style="font-size:13px;font-weight:700;line-height:1.5">{{ p.name }}</div>
+                <div style="font-size:11px;color:#94A3B8;margin-top:2px">{{ p.form }}</div>
+                <div style="font-family:'Inter',sans-serif;font-size:17px;font-weight:700;color:#0F766E;margin-top:8px">{{ p.price }} <span style="font-family:'Noto Kufi Arabic';font-size:11px;color:#64748B">ر.س</span></div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                  <div style="display:flex;align-items:center;gap:5px;background:#ECFDF5;color:#15803D;border-radius:99px;padding:4px 9px;font-size:10px;font-weight:600"><span style="width:6px;height:6px;border-radius:99px;background:#16A34A"></span>متوفر</div>
+                  <div style="flex:1"></div>
+                  <div onClick="{{ p.add }}" style="width:30px;height:30px;border-radius:9px;background:#0F766E;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer" style-hover="background:#115E59">+</div>
+                </div>
+              </div>
+              <div style="width:74px;height:74px;border-radius:10px;border:1px solid #E5E7EB;background:repeating-linear-gradient(45deg,#F8FAFC,#F8FAFC 5px,#EEF2F6 5px,#EEF2F6 10px);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-size:8px;color:#94A3B8;text-align:center;padding:4px;line-height:1.2">{{ p.shot }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:14px">
+        <div dir="rtl" style="display:flex;align-items:center;gap:10px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="#F59E0B"/></svg>
+          <span style="font-size:17px;font-weight:700">إجراءات سريعة</span>
+        </div>
+        <div dir="rtl" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px">
+          <div style="border:1px solid #FECACA;background:#FEF2F2;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 7L5 11l4 4M5 11h9a5 5 0 010 10h-2" stroke="#EF4444" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size:12px;font-weight:600;color:#DC2626">مرتجع</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="6" y="5" width="4" height="14" rx="1" fill="#0F172A"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#0F172A"/></svg>
+            <span style="font-size:12px;font-weight:600">إيقاف مؤقت</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#0F172A" stroke-width="1.8"/><path d="M9 9h6M9 13h6M9 17h3" stroke="#0F172A" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span style="font-size:12px;font-weight:600">فاتورة جديدة</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#0F172A" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#0F172A" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span style="font-size:12px;font-weight:600">بحث متقدم</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isPay }}">
+<div style="background:#FAFBFC;border-radius:2px;overflow:hidden;box-shadow:0 8px 40px rgba(15,23,42,.10)">
+  <div style="display:flex;align-items:center;gap:16px;padding:14px 18px;background:#FFFFFF;border-bottom:1px solid #E5E7EB">
+    <div style="display:flex;align-items:center;gap:12px">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21M17 21v-9l4 2.5V21" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 3l6 3.5V21h-3V6.2z" fill="#14B8A6" opacity=".35"/></svg>
+      <div>
+        <div style="font-family:'Inter',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.4px">Retail Tower POS</div>
+        <div style="font-size:11px;color:#0F766E;margin-top:1px">نظام الصيدلية المتكامل لنمو أعمالك</div>
+      </div>
+    </div>
+    <div dir="rtl" style="flex:1;max-width:470px;display:flex;align-items:center;gap:12px;border:1.5px solid #E5E7EB;border-radius:14px;padding:12px 14px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#94A3B8" stroke-width="1.9"/><path d="M16 16l4.5 4.5" stroke="#94A3B8" stroke-width="1.9" stroke-linecap="round"/></svg>
+      <span style="flex:1;font-size:13px;color:#94A3B8">البحث عن منتج، مسح الباركود، أو إدخال الاسم...</span>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#93C5FD" stroke-width="1.7"/><g stroke="#3B82F6" stroke-width="1.6"><path d="M7 8.5v7M9.5 8.5v7M12 8.5v7M15 8.5v7M17.5 8.5v7"/></g></svg>
+    </div>
+    <div dir="rtl" style="text-align:right">
+      <div style="font-size:15px;font-weight:700">صيدلية الحياة</div>
+      <div style="font-size:11px;color:#64748B;margin-top:3px">الفرع الرئيسي - الرياض</div>
+    </div>
+    <div style="position:relative;padding:0 6px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 16v-5a6 6 0 1112 0v5l1.5 2.5h-15z" stroke="#64748B" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 19.5a2 2 0 004 0" stroke="#64748B" stroke-width="1.8"/></svg>
+      <span style="position:absolute;top:-7px;right:0;background:#EF4444;color:#FFFFFF;font-family:'Inter',sans-serif;font-size:10px;font-weight:700;border-radius:99px;width:17px;height:17px;display:flex;align-items:center;justify-content:center">3</span>
+    </div>
+    <div dir="rtl" style="display:flex;align-items:center;gap:10px;border:1px solid #E5E7EB;border-radius:12px;padding:8px 12px">
+      <div style="width:32px;height:32px;border-radius:99px;background:#E2E8F0;display:flex;align-items:center;justify-content:center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.4" fill="#94A3B8"/><path d="M5 20c1.5-3.4 4.2-5 7-5s5.5 1.6 7 5" fill="#94A3B8"/></svg></div>
+      <div style="text-align:right"><div style="font-size:13px;font-weight:700">محمد أحمد</div><div style="font-size:11px;color:#64748B;margin-top:2px">أمين الصندوق</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:18px;color:#64748B;padding-right:6px"><span style="font-size:14px">&#8211;</span><span style="font-size:11px">&#9723;</span><span style="font-size:13px">&#10005;</span></div>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px">
+    <div onClick="{{ goCart }}" style="display:flex;align-items:center;gap:10px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="border-color:#0F766E">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M11 6l-6 6 6 6M5 12h14" stroke="#0F172A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>العودة إلى المبيعات</span>
+    </div>
+    <div dir="rtl" style="display:flex;align-items:center;gap:14px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:#94A3B8;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:8px;padding:5px 9px">01</span><span style="font-size:13px;color:#94A3B8">السلة</span></div>
+      <span style="color:#CBD5E1">&#8249;</span>
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:#FFFFFF;background:#0F766E;border-radius:8px;padding:5px 9px">02</span><span style="font-size:14px;font-weight:700;color:#0F766E">الدفع</span></div>
+      <span style="color:#CBD5E1">&#8249;</span>
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:#94A3B8;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:8px;padding:5px 9px">03</span><span style="font-size:13px;color:#94A3B8">إتمام العملية</span></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:16px;padding:0 18px 18px;align-items:flex-start">
+    <div style="flex:0 0 392px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:19px;font-weight:700">ملخص السلة</span>
+        <span style="background:#F1F5F9;color:#0F172A;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;border-radius:99px;padding:3px 10px">4</span>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:6px;color:#0F766E;font-size:13px;font-weight:600;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20l4-1 10-10-3-3L5 16z" stroke="#0F766E" stroke-width="1.9" stroke-linejoin="round"/></svg><span>تعديل</span></div>
+      </div>
+      <div style="margin-top:14px;display:flex;flex-direction:column">
+        <sc-for list="{{ payItems }}" as="p" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #F1F5F9">
+            <div style="width:58px;height:58px;border-radius:10px;border:1px solid #E5E7EB;background:repeating-linear-gradient(45deg,#F8FAFC,#F8FAFC 5px,#EEF2F6 5px,#EEF2F6 10px);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-size:8px;color:#94A3B8;text-align:center;padding:3px;line-height:1.2">{{ p.shot }}</div>
+            <div style="flex:1;text-align:right">
+              <div style="font-size:14px;font-weight:600">{{ p.name }}</div>
+              <div style="font-family:'Inter',sans-serif;font-size:11px;color:#94A3B8;margin-top:4px">{{ p.en }}</div>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">&#215; 1</div>
+            <div style="text-align:left;min-width:64px">
+              <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">{{ p.price }}</div>
+              <div style="font-size:11px;color:#94A3B8">ر.س</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:11px;font-size:13px">
+        <div style="display:flex;justify-content:space-between"><span style="color:#64748B">المجموع الفرعي</span><span style="font-family:'Inter',sans-serif;font-weight:600">173.50 <span style="font-family:'Noto Kufi Arabic';font-size:11px">ر.س</span></span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#64748B">الخصم</span><span style="font-family:'Inter',sans-serif;font-weight:600;color:#10B981">-10.00 <span style="font-family:'Noto Kufi Arabic';font-size:11px">ر.س</span></span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#64748B">ضريبة القيمة المضافة (15%)</span><span style="font-family:'Inter',sans-serif;font-weight:600">24.53 <span style="font-family:'Noto Kufi Arabic';font-size:11px">ر.س</span></span></div>
+      </div>
+      <div style="margin-top:14px;background:#ECFDF5;border:1px solid #D1FAE5;border-radius:12px;padding:16px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:15px;font-weight:700;color:#0F766E">المبلغ المستحق</span>
+        <span style="font-family:'Inter',sans-serif;font-size:24px;font-weight:700;color:#0F766E">188.03 <span style="font-family:'Noto Kufi Arabic';font-size:13px">ر.س</span></span>
+      </div>
+      <div style="margin-top:12px;border:1px solid #E5E7EB;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.4" stroke="#64748B" stroke-width="1.8"/><path d="M5 20c1.5-3.4 4.2-5 7-5s5.5 1.6 7 5" stroke="#64748B" stroke-width="1.8"/></svg>
+        <div style="flex:1;text-align:right"><div style="font-size:13px;font-weight:700">عميل مسجل</div><div style="font-size:12px;color:#64748B;margin-top:3px">سارة عبدالله</div></div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="#64748B" stroke-width="1.7"/><path d="M3 10h18M8 3v4M16 3v4" stroke="#64748B" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;gap:14px">
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:19px;font-weight:700">اختر طريقة الدفع</span>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#15803D">
+            <span style="width:18px;height:18px;border-radius:99px;background:#16A34A;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-size:10px">&#10003;</span>
+            <span>جميع المعاملات آمنة ومشفرة</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px">
+          <div style="position:relative;border:2px solid #0F766E;background:#F0FDFA;border-radius:14px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer">
+            <span style="position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:99px;background:#0F766E;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:11px">&#10003;</span>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke="#0F766E" stroke-width="1.9"/><circle cx="12" cy="12" r="3" stroke="#0F766E" stroke-width="1.9"/></svg>
+            <span style="font-size:15px;font-weight:700">نقداً</span>
+            <span style="font-size:11px;color:#64748B">العملات الورقية والمعدنية</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:14px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <div style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:14px;background:#1D4ED8"></span><span style="width:14px;height:14px;background:#16A34A"></span><span style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;color:#0F172A">mada</span></div>
+            <span style="font-size:15px;font-weight:700">بطاقة مدى</span>
+            <span style="font-size:11px;color:#64748B">بطاقات الصراف المحلي</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:14px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5" stroke="#3B82F6" stroke-width="1.9"/><path d="M2.5 10h19" stroke="#3B82F6" stroke-width="1.9"/></svg>
+            <span style="font-size:15px;font-weight:700">بطاقة ائتمان</span>
+            <span style="font-size:11px;color:#64748B">بطاقات الائتمان</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:14px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 20s7-3.5 7-9V6l-7-2-7 2v5c0 5.5 7 9 7 9z" stroke="#0F766E" stroke-width="1.9" stroke-linejoin="round"/><path d="M9 11.5l2 2 4-4.5" stroke="#0F766E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size:15px;font-weight:700">شركة تأمين</span>
+            <span style="font-size:11px;color:#64748B">مطالبات التأمين الطبي</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:14px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke="#3B82F6" stroke-width="1.9"/><path d="M16 12h3" stroke="#3B82F6" stroke-width="1.9" stroke-linecap="round"/></svg>
+            <span style="font-size:15px;font-weight:700">محفظة رقمية</span>
+            <span style="font-family:'Inter',sans-serif;font-size:11px;color:#64748B">Apple Pay / STC Pay</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:14px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="3" y="9" width="18" height="11" rx="2" stroke="#3B82F6" stroke-width="1.9"/><path d="M3 13h18M12 9v11" stroke="#3B82F6" stroke-width="1.9"/><path d="M12 9c-3.5 0-4.5-4.5-1.5-4.5 1.6 0 1.5 4.5 1.5 4.5zm0 0c3.5 0 4.5-4.5 1.5-4.5-1.6 0-1.5 4.5-1.5 4.5z" stroke="#3B82F6" stroke-width="1.6"/></svg>
+            <span style="font-size:15px;font-weight:700">قسيمة هدية</span>
+            <span style="font-size:11px;color:#64748B">بطاقات الهدايا والقسائم</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:18px;font-weight:700">تفاصيل الدفع</span>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid #E5E7EB;border-radius:10px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer" style-hover="border-color:#0F766E"><span style="color:#0F766E;font-size:15px">+</span><span>إضافة دفعة أخرى</span></div>
+        </div>
+        <div style="margin-top:14px;display:grid;grid-template-columns:1.2fr 1fr 1.2fr 70px;padding:10px 4px;border-bottom:1px solid #E5E7EB;font-size:12px;color:#64748B;font-weight:600">
+          <div>طريقة الدفع</div><div>المبلغ (ر.س)</div><div>المرجع / آخر 4 أرقام</div><div>إجراء</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.2fr 1fr 1.2fr 70px;align-items:center;padding:14px 4px;border-bottom:1px solid #F1F5F9">
+          <div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke="#0F766E" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" stroke="#0F766E" stroke-width="1.8"/></svg><span style="font-size:14px;font-weight:600">نقداً</span></div>
+          <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600">100.00</div>
+          <div style="font-size:14px;color:#64748B">-</div>
+          <div><div style="width:32px;height:32px;border-radius:8px;border:1px solid #FEE2E2;background:#FEF2F2;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="#EF4444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.2fr 1fr 1.2fr 70px;align-items:center;padding:14px 4px;border-bottom:1px solid #F1F5F9">
+          <div style="display:flex;align-items:center;gap:10px"><span style="display:flex;gap:2px"><span style="width:11px;height:11px;background:#1D4ED8"></span><span style="width:11px;height:11px;background:#16A34A"></span></span><span style="font-size:14px;font-weight:600">بطاقة مدى</span></div>
+          <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600">88.03</div>
+          <div style="font-family:'Inter',sans-serif;font-size:14px;color:#64748B">**** 4582</div>
+          <div><div style="width:32px;height:32px;border-radius:8px;border:1px solid #FEE2E2;background:#FEF2F2;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="#EF4444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+        </div>
+        <div style="margin-top:16px;background:#ECFDF5;border:1px solid #D1FAE5;border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px">
+          <span style="width:30px;height:30px;border-radius:99px;background:#16A34A;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:15px">&#10003;</span>
+          <div style="flex:1;text-align:right">
+            <div style="font-size:15px;font-weight:700;color:#0F766E">إجمالي المدفوع</div>
+            <div style="font-family:'Inter',sans-serif;font-size:24px;font-weight:700;color:#0F766E;margin-top:4px">188.03 <span style="font-family:'Noto Kufi Arabic';font-size:13px">ر.س</span></div>
+            <div style="font-size:12px;color:#64748B;margin-top:4px">تم تغطية كامل المبلغ المستحق</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 400px;display:flex;flex-direction:column;gap:14px">
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><ellipse cx="9" cy="8" rx="6" ry="2.6" fill="#F59E0B"/><ellipse cx="15" cy="14" rx="6" ry="2.6" fill="#FBBF24"/></svg>
+          <span style="font-size:16px;font-weight:700">المبلغ المستحق</span>
+        </div>
+        <div style="font-family:'Inter',sans-serif;font-size:44px;font-weight:700;color:#0F172A;text-align:left;margin-top:10px">188.03 <span style="font-family:'Noto Kufi Arabic';font-size:20px;color:#0F172A">ر.س</span></div>
+        <div style="margin-top:14px;background:#ECFDF5;border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px">
+          <span style="flex:1;font-size:14px;font-weight:700;color:#0F766E">جاهز لتأكيد الدفع</span>
+          <span style="width:26px;height:26px;border-radius:99px;background:#16A34A;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:13px">&#10003;</span>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+        <div style="font-size:15px;font-weight:700">المبلغ المستلم (نقداً)</div>
+        <div style="margin-top:12px;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke="#0F766E" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" stroke="#0F766E" stroke-width="1.8"/></svg>
+          <span style="flex:1;font-family:'Inter',sans-serif;font-size:26px;font-weight:700;text-align:left">100.00</span>
+          <span style="font-size:14px;color:#64748B">ر.س</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px">
+          <div style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer" style-hover="border-color:#0F766E"><div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">5</div><div style="font-size:10px;color:#64748B;margin-top:2px">ر.س</div></div>
+          <div style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer" style-hover="border-color:#0F766E"><div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">10</div><div style="font-size:10px;color:#64748B;margin-top:2px">ر.س</div></div>
+          <div style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer" style-hover="border-color:#0F766E"><div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">20</div><div style="font-size:10px;color:#64748B;margin-top:2px">ر.س</div></div>
+          <div style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer" style-hover="border-color:#0F766E"><div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">50</div><div style="font-size:10px;color:#64748B;margin-top:2px">ر.س</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px">
+          <div style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer" style-hover="border-color:#0F766E"><div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">100</div><div style="font-size:10px;color:#64748B;margin-top:2px">ر.س</div></div>
+          <div style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer" style-hover="border-color:#0F766E"><div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">200</div><div style="font-size:10px;color:#64748B;margin-top:2px">ر.س</div></div>
+          <div style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer" style-hover="border-color:#0F766E"><div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">500</div><div style="font-size:10px;color:#64748B;margin-top:2px">ر.س</div></div>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between">
+          <div>
+            <div style="font-size:15px;font-weight:700">الباقي المستحق</div>
+            <div style="font-family:'Inter',sans-serif;font-size:30px;font-weight:700;margin-top:8px">0.00 <span style="font-family:'Noto Kufi Arabic';font-size:15px">ر.س</span></div>
+          </div>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 13c2-2 4-2 6 0s4 2 6 0 4-2 4 0" stroke="#0F766E" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="7" r="2.4" stroke="#0F766E" stroke-width="1.8"/></svg>
+        </div>
+      </div>
+
+      <div style="background:#ECFDF5;border:1px solid #D1FAE5;border-radius:16px;padding:18px;display:flex;align-items:center;gap:12px" dir="rtl">
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:700;color:#0F766E">المبلغ كامل</div>
+          <div style="font-size:12px;color:#64748B;margin-top:5px">شكراً لك!</div>
+        </div>
+        <span style="width:26px;height:26px;border-radius:99px;background:#16A34A;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:13px">&#10003;</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:#FFFFFF;border-top:1px solid #E5E7EB">
+    <div dir="rtl" style="flex:0 0 360px;display:flex;align-items:center;gap:10px;border:1px solid #E5E7EB;border-radius:12px;padding:13px 14px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#94A3B8" stroke-width="1.8"/><path d="M9 9h6M9 13h6" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span style="font-size:13px;color:#94A3B8">ملاحظات على العملية (اختياري)</span>
+    </div>
+    <div dir="rtl" style="display:flex;align-items:center;gap:12px;border:1px solid #E5E7EB;border-radius:12px;padding:10px 14px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M7 9V4h10v5M7 18H5v-6h14v6h-2M7 15h10v5H7z" stroke="#0F172A" stroke-width="1.7" stroke-linejoin="round"/></svg>
+      <div style="text-align:right"><div style="font-size:13px;font-weight:600">طباعة الإيصال</div><div style="font-size:11px;color:#64748B;margin-top:2px">طباعة إيصال للعميل</div></div>
+      <div style="width:44px;height:24px;border-radius:99px;background:#0F766E;position:relative"><span style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:99px;background:#FFFFFF"></span></div>
+    </div>
+    <div dir="rtl" style="display:flex;align-items:center;gap:12px;border:1px solid #E5E7EB;border-radius:12px;padding:10px 14px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#94A3B8" stroke-width="1.7"/><path d="M3.5 6.5L12 13l8.5-6.5" stroke="#94A3B8" stroke-width="1.7"/></svg>
+      <div style="text-align:right"><div style="font-size:13px;font-weight:600">إرسال نسخة رقمية</div><div style="font-size:11px;color:#64748B;margin-top:2px">إرسال عبر الجوال أو البريد</div></div>
+      <div style="width:44px;height:24px;border-radius:99px;background:#E2E8F0;position:relative"><span style="position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:99px;background:#FFFFFF"></span></div>
+    </div>
+    <div style="flex:1"></div>
+    <div onClick="{{ goCart }}" style="display:flex;align-items:center;gap:10px;border:1px solid #E5E7EB;border-radius:12px;padding:15px 26px;font-size:15px;font-weight:600;cursor:pointer" style-hover="border-color:#EF4444;color:#EF4444">
+      <span>إلغاء العملية</span>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+    <div onClick="{{ goDone }}" style="display:flex;align-items:center;gap:12px;background:#0F766E;color:#FFFFFF;border-radius:12px;padding:15px 40px;font-size:16px;font-weight:700;cursor:pointer" style-hover="background:#115E59">
+      <span>إتمام الدفع</span>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDone }}">
+<div style="background:#FAFBFC;border-radius:2px;overflow:hidden;box-shadow:0 8px 40px rgba(15,23,42,.10)">
+  <div style="display:flex;align-items:stretch;background:#FFFFFF;border-bottom:1px solid #E5E7EB">
+    <div style="flex:0 0 430px;display:flex;align-items:center;gap:16px;padding:18px 26px">
+      <svg width="50" height="50" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21M17 21v-9l4 2.5V21" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 3l6 3.5V21h-3V6.2z" fill="#14B8A6" opacity=".35"/></svg>
+      <div>
+        <div style="font-family:'Inter',sans-serif;font-size:28px;font-weight:700;letter-spacing:-.5px">Retail Tower POS</div>
+        <div style="font-size:13px;color:#0F766E;margin-top:2px">نظام الصيدلية المتكامل لنمو أعمالك</div>
+        <div style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B;margin-top:7px;display:flex;gap:10px"><span>Simple</span><span>&#183;</span><span>Secure</span><span>&#183;</span><span>Smarter Pharmacy</span></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;border-right:1px solid #EEF1F4;border-left:1px solid #EEF1F4">
+      <div style="font-size:24px;font-weight:700">بيع أسرع .. رعايـة أفضل</div>
+      <div style="font-size:13px;color:#64748B;margin-top:6px">واجهة نقاط البيع المصممة خصيصاً للصيدليات</div>
+      <div dir="rtl" style="display:flex;gap:30px;margin-top:16px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-45 12 12)" stroke="#0F766E" stroke-width="1.8"/></svg>
+          <div style="font-size:12px;font-weight:600">دقيق</div><div style="font-size:11px;color:#64748B;margin-top:-3px">وموثوق</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 20s-7-4.2-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.8-7 9-7 9z" fill="#10B981"/></svg>
+          <div style="font-size:12px;font-weight:600">آمن</div><div style="font-size:11px;color:#64748B;margin-top:-3px">ومتوافق</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="12" width="4" height="8" fill="#0F766E"/><rect x="10" y="8" width="4" height="12" fill="#14B8A6"/><rect x="16" y="4" width="4" height="16" fill="#3B82F6"/></svg>
+          <div style="font-size:12px;font-weight:600">سهل</div><div style="font-size:11px;color:#64748B;margin-top:-3px">للفريق</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:0 0 510px;position:relative;background:#0F766E;display:flex;align-items:center;padding:20px 26px">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.05) 10px,transparent 10px,transparent 20px)"></div>
+      <div style="position:relative;color:#FFFFFF;text-align:right;width:100%">
+        <div style="font-size:19px;font-weight:700">معاً لصحة</div>
+        <div style="font-size:19px;font-weight:700;margin-top:2px">مجتمع أكثر إشراقاً</div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;margin-top:10px;opacity:.9">Pharmacy Today</div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;opacity:.9">A Healthier Tomorrow</div>
+        <div style="position:absolute;top:0;left:0;font-family:'Inter',sans-serif;font-size:10px;letter-spacing:1px;opacity:.75;background:rgba(255,255,255,.14);padding:4px 8px;border-radius:4px">PHARMACIST PHOTO</div>
+      </div>
+    </div>
+    <div style="flex:0 0 96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center">
+      <div style="font-size:14px;font-weight:600;line-height:1.7">كل<br/>وصفة<br/>تبدأ بثقة</div>
+      <div style="width:26px;height:3px;border-radius:2px;background:#0F766E;margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:16px;padding:18px;align-items:flex-start">
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px">
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:28px 24px;text-align:center" dir="rtl">
+        <div style="width:112px;height:112px;border-radius:99px;background:#ECFDF5;display:flex;align-items:center;justify-content:center;margin:0 auto">
+          <div style="width:78px;height:78px;border-radius:99px;background:#0F766E;display:flex;align-items:center;justify-content:center">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div style="font-size:30px;font-weight:700;margin-top:20px">تمت عملية البيع بنجاح!</div>
+        <div style="font-size:18px;color:#0F766E;margin-top:10px">شكراً لثقة عميلك</div>
+        <div style="font-size:13px;color:#64748B;margin-top:10px">تم إتمام العملية وعرض الإيصال بنجاح</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px">
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke="#3B82F6" stroke-width="1.8"/><path d="M2.5 10h19" stroke="#3B82F6" stroke-width="1.8"/></svg>
+            <span style="font-size:12px;color:#64748B">طريقة الدفع</span><span style="font-size:13px;font-weight:700">نقداً</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.4" stroke="#0F766E" stroke-width="1.8"/><path d="M5 20c1.5-3.4 4.2-5 7-5s5.5 1.6 7 5" stroke="#0F766E" stroke-width="1.8"/></svg>
+            <span style="font-size:12px;color:#64748B">العميل</span><span style="font-size:13px;font-weight:700">عميل نقدي</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#0F766E" stroke-width="1.8"/><path d="M12 7.5V12l3 2" stroke="#0F766E" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span style="font-size:12px;color:#64748B">التاريخ والوقت</span><span style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700">2025/05/03</span><span style="font-size:12px;font-weight:600;margin-top:-4px">09:24 ص</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#0F766E" stroke-width="1.8"/><path d="M9 8h6M9 12h6M9 16h3" stroke="#0F766E" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span style="font-size:12px;color:#64748B">رقم الفاتورة</span><span style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700">#250503-0012</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:20px" dir="rtl">
+        <div style="font-size:19px;font-weight:700;text-align:center">ماذا تريد أن تفعل الآن؟</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px">
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:16px 8px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#3B82F6" stroke-width="1.8"/><path d="M3.5 6.5L12 13l8.5-6.5" stroke="#3B82F6" stroke-width="1.8"/></svg>
+            <span style="font-size:12px;font-weight:600">إرسال على البريد الإلكتروني</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:16px 8px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M7 9V4h10v5M7 18H5v-6h14v6h-2M7 15h10v5H7z" stroke="#0F172A" stroke-width="1.7" stroke-linejoin="round"/></svg>
+            <span style="font-size:12px;font-weight:600">طباعة الإيصال</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:16px 8px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 00-7.7 13.7L3 21l4.5-1.2A9 9 0 1012 3z" stroke="#16A34A" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <span style="font-size:12px;font-weight:600">إرسال عبر واتساب</span>
+          </div>
+          <div style="border:1px solid #E5E7EB;border-radius:12px;padding:16px 8px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer" style-hover="border-color:#0F766E">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H9l-5 4z" stroke="#3B82F6" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <span style="font-size:12px;font-weight:600">إرسال عبر SMS</span>
+          </div>
+        </div>
+        <div onClick="{{ goCart }}" style="margin-top:16px;background:#0F5C56;color:#FFFFFF;border-radius:14px;padding:18px;display:flex;align-items:center;justify-content:center;gap:16px;cursor:pointer" style-hover="background:#0F766E">
+          <span style="font-size:22px">+</span>
+          <div style="text-align:center">
+            <div style="font-size:18px;font-weight:700">عملية بيع جديدة</div>
+            <div style="font-family:'Inter',sans-serif;font-size:12px;opacity:.85;margin-top:4px">بدء فاتورة جديدة (F2)</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;border:1px solid #E5E7EB;border-radius:14px;padding:14px;display:flex;align-items:center;justify-content:center;gap:12px;cursor:pointer" style-hover="border-color:#0F766E">
+          <div style="text-align:center">
+            <div style="font-size:14px;font-weight:600">عرض جميع المبيعات</div>
+            <div style="font-size:11px;color:#64748B;margin-top:3px">الذهاب إلى سجل المبيعات</div>
+          </div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#0F172A" stroke-width="1.7"/><path d="M9 9h6M9 13h6" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 380px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:17px;font-weight:700">معاينة الإيصال</span>
+        <div style="display:flex;align-items:center;gap:8px;border:1px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;color:#0F766E;cursor:pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M7 9V4h10v5M7 18H5v-6h14v6h-2M7 15h10v5H7z" stroke="#0F766E" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          <span>طباعة تجريبية</span>
+        </div>
+      </div>
+      <div style="margin-top:14px;border:1px solid #E5E7EB;border-radius:12px;padding:18px 16px;background:#FFFFFF">
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21M17 21v-9l4 2.5V21" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span style="font-family:'Inter',sans-serif;font-size:17px;font-weight:700">Retail Tower POS</span>
+        </div>
+        <div style="text-align:center;font-size:11px;color:#64748B;margin-top:6px">صيدليتك ... دائماً أقرب لصحتك</div>
+        <div style="text-align:center;margin-top:12px">
+          <div style="font-size:15px;font-weight:700">صيدلية برج التجزئة</div>
+          <div style="font-size:11px;color:#64748B;margin-top:4px">الرياض - المملكة العربية السعودية</div>
+          <div style="font-family:'Inter',sans-serif;font-size:11px;color:#64748B;margin-top:3px">هاتف: 920012345</div>
+        </div>
+        <div style="border-top:1px dashed #CBD5E1;margin:14px 0"></div>
+        <div style="text-align:center">
+          <div style="font-size:14px;font-weight:700">فاتورة بيع</div>
+          <div style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;margin-top:4px">#250503-0012</div>
+        </div>
+        <div style="border-top:1px dashed #CBD5E1;margin:14px 0"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">التاريخ والوقت</span><span style="font-family:'Inter',sans-serif">2025/05/03 ص</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">نوع العملية</span><span>بيع عادي</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">العميل</span><span>عميل نقدي</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">طريقة الدفع</span><span>نقداً</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">الموظف</span><span>محمد أحمد</span></div>
+        </div>
+        <div style="border-top:1px dashed #CBD5E1;margin:14px 0"></div>
+        <div style="display:grid;grid-template-columns:20px 1fr 42px 52px 58px;font-size:11px;color:#64748B;padding-bottom:8px;border-bottom:1px solid #F1F5F9">
+          <div>#</div><div>الصنف</div><div>الكمية</div><div>السعر</div><div>الإجمالي</div>
+        </div>
+        <div style="display:grid;grid-template-columns:20px 1fr 42px 52px 58px;font-size:11px;padding:9px 0;border-bottom:1px solid #F8FAFC;align-items:center">
+          <div style="font-family:'Inter',sans-serif">1</div><div>بنادول 500 مجم أقراص</div><div style="font-family:'Inter',sans-serif">2</div><div style="font-family:'Inter',sans-serif">12.50</div><div style="font-family:'Inter',sans-serif">25.00</div>
+        </div>
+        <div style="display:grid;grid-template-columns:20px 1fr 42px 52px 58px;font-size:11px;padding:9px 0;border-bottom:1px solid #F8FAFC;align-items:center">
+          <div style="font-family:'Inter',sans-serif">2</div><div>فيتامين دي 1000 وحدة</div><div style="font-family:'Inter',sans-serif">1</div><div style="font-family:'Inter',sans-serif">45.00</div><div style="font-family:'Inter',sans-serif">45.00</div>
+        </div>
+        <div style="display:grid;grid-template-columns:20px 1fr 42px 52px 58px;font-size:11px;padding:9px 0;align-items:center">
+          <div style="font-family:'Inter',sans-serif">3</div><div>ماء معقم للعين</div><div style="font-family:'Inter',sans-serif">1</div><div style="font-family:'Inter',sans-serif">18.75</div><div style="font-family:'Inter',sans-serif">18.75</div>
+        </div>
+        <div style="border-top:1px dashed #CBD5E1;margin:12px 0"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">المجموع الفرعي</span><span style="font-family:'Inter',sans-serif">88.75</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">الخصم</span><span style="font-family:'Inter',sans-serif">0.00</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748B">ضريبة القيمة المضافة (15%)</span><span style="font-family:'Inter',sans-serif">0.00</span></div>
+        </div>
+        <div style="margin-top:12px;background:#ECFDF5;border-radius:10px;padding:12px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:700;color:#0F766E">المجموع الكلي</span>
+          <span style="font-family:'Inter',sans-serif;font-size:17px;font-weight:700;color:#0F766E">88.75 <span style="font-family:'Noto Kufi Arabic';font-size:11px">ريال</span></span>
+        </div>
+        <div style="text-align:center;font-size:11px;color:#64748B;margin-top:14px">شكراً لزيارتكم .. صحتكم تهمنا دائماً</div>
+        <div style="display:flex;justify-content:center;margin-top:12px">
+          <div style="display:flex;gap:2px;align-items:flex-end;height:44px">
+            <span style="width:2px;height:44px;background:#0F172A"></span><span style="width:3px;height:44px;background:#0F172A"></span><span style="width:1px;height:44px;background:#0F172A"></span><span style="width:4px;height:44px;background:#0F172A"></span><span style="width:2px;height:44px;background:#0F172A"></span><span style="width:1px;height:44px;background:#0F172A"></span><span style="width:3px;height:44px;background:#0F172A"></span><span style="width:2px;height:44px;background:#0F172A"></span><span style="width:4px;height:44px;background:#0F172A"></span><span style="width:1px;height:44px;background:#0F172A"></span><span style="width:2px;height:44px;background:#0F172A"></span><span style="width:3px;height:44px;background:#0F172A"></span><span style="width:1px;height:44px;background:#0F172A"></span><span style="width:2px;height:44px;background:#0F172A"></span><span style="width:4px;height:44px;background:#0F172A"></span><span style="width:2px;height:44px;background:#0F172A"></span><span style="width:1px;height:44px;background:#0F172A"></span><span style="width:3px;height:44px;background:#0F172A"></span>
+          </div>
+        </div>
+        <div style="text-align:center;font-family:'Inter',sans-serif;font-size:11px;letter-spacing:1px;color:#64748B;margin-top:6px">2505030012</div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 380px;display:flex;flex-direction:column;gap:16px">
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:17px;font-weight:700">أحدث المبيعات اليوم</span>
+          <span style="font-size:12px;color:#0F766E;font-weight:600;cursor:pointer">عرض الكل</span>
+        </div>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ recent }}" as="r" hint-placeholder-count="5">
+            <div style="{{ r.style }}">
+              <div style="width:34px;height:34px;border-radius:9px;background:#F1F5F9;display:flex;align-items:center;justify-content:center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#64748B" stroke-width="1.7"/><path d="M9 9h6M9 13h6" stroke="#64748B" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </div>
+              <div style="flex:1;text-align:right">
+                <div style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">{{ r.no }}</div>
+                <div style="font-size:11px;color:#94A3B8;margin-top:3px">{{ r.time }}</div>
+                <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;margin-top:4px">{{ r.amount }} <span style="font-family:'Noto Kufi Arabic';font-size:11px;font-weight:400">ريال</span></div>
+              </div>
+              <span style="{{ r.chip }}">{{ r.method }}</span>
+              <span style="color:#CBD5E1;font-size:16px">&#8249;</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;padding:18px" dir="rtl">
+        <div style="font-size:17px;font-weight:700">إحصائيات اليوم</div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:34px;height:34px;border-radius:9px;background:#ECFDF5;display:flex;align-items:center;justify-content:center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 4h2l2.5 11h10L20 7H6.5" stroke="#0F766E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="19" r="1.5" fill="#0F766E"/><circle cx="17" cy="19" r="1.5" fill="#0F766E"/></svg></div>
+            <span style="flex:1;font-size:13px;color:#64748B">عدد المبيعات</span>
+            <span style="font-family:'Inter',sans-serif;font-size:19px;font-weight:700">12</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:34px;height:34px;border-radius:9px;background:#EFF6FF;display:flex;align-items:center;justify-content:center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6.5" rx="7" ry="2.8" stroke="#3B82F6" stroke-width="1.7"/><path d="M5 6.5v11c0 1.5 3 2.8 7 2.8s7-1.3 7-2.8v-11" stroke="#3B82F6" stroke-width="1.7"/></svg></div>
+            <span style="flex:1;font-size:13px;color:#64748B">إجمالي المبيعات</span>
+            <span style="font-family:'Inter',sans-serif;font-size:19px;font-weight:700">1,245.50</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:34px;height:34px;border-radius:9px;background:#F5F3FF;display:flex;align-items:center;justify-content:center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8.5" r="3.2" stroke="#A855F7" stroke-width="1.7"/><path d="M3 19c1.3-3 3.6-4.4 6-4.4S13.7 16 15 19" stroke="#A855F7" stroke-width="1.7"/><path d="M16.5 6.2a3.2 3.2 0 010 6" stroke="#A855F7" stroke-width="1.7"/></svg></div>
+            <span style="flex:1;font-size:13px;color:#64748B">متوسط قيمة الفاتورة</span>
+            <span style="font-family:'Inter',sans-serif;font-size:19px;font-weight:700">103.79 <span style="font-family:'Noto Kufi Arabic';font-size:11px;font-weight:400">ريال</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div dir="rtl" style="display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:#FFFFFF;border-top:1px solid #E5E7EB">
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21M17 21v-9l4 2.5V21" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <span style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">Retail Tower POS</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 20c0-5 3-8 8-8 0 5-3 8-8 8z" fill="#10B981" opacity=".8"/></svg>
+      <span style="font-size:13px;color:#0F766E;font-weight:600">صحة أفضل .. حياة أجمل</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;font-size:12px;color:#64748B">
+      <span style="font-family:'Inter',sans-serif">السبت، 03 مايو 2025   09:24 ص</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:99px;background:#16A34A"></span>النظام جاهز للعمل</span>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDs }}">
+<div style="background:#FAFBFC;border-radius:2px;overflow:hidden;box-shadow:0 8px 40px rgba(15,23,42,.10)">
+  <div style="display:flex;align-items:stretch;background:#FFFFFF;border-bottom:1px solid #E5E7EB">
+    <div style="flex:0 0 430px;display:flex;align-items:center;gap:16px;padding:18px 26px">
+      <svg width="50" height="50" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21M17 21v-9l4 2.5V21" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 3l6 3.5V21h-3V6.2z" fill="#14B8A6" opacity=".35"/></svg>
+      <div>
+        <div style="font-family:'Inter',sans-serif;font-size:28px;font-weight:700;letter-spacing:-.5px">Retail Tower POS</div>
+        <div style="font-size:13px;color:#0F766E;margin-top:2px">نظام الصيدلية المتكامل لنمو أعمالك</div>
+        <div style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B;margin-top:7px;display:flex;gap:10px"><span>Simple</span><span>&#183;</span><span>Secure</span><span>&#183;</span><span>Smarter Pharmacy</span></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;border-right:1px solid #EEF1F4;border-left:1px solid #EEF1F4">
+      <div style="font-size:24px;font-weight:700">بيع أسرع .. رعايـة أفضل</div>
+      <div style="font-size:13px;color:#64748B;margin-top:6px">واجهة نقاط البيع المصممة خصيصاً للصيدليات</div>
+      <div dir="rtl" style="display:flex;gap:30px;margin-top:16px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-45 12 12)" stroke="#0F766E" stroke-width="1.8"/></svg>
+          <div style="font-size:12px;font-weight:600">دقيق</div><div style="font-size:11px;color:#64748B;margin-top:-3px">وموثوق</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 20s-7-4.2-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.8-7 9-7 9z" fill="#10B981"/></svg>
+          <div style="font-size:12px;font-weight:600">آمن</div><div style="font-size:11px;color:#64748B;margin-top:-3px">ومتوافق</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="12" width="4" height="8" fill="#0F766E"/><rect x="10" y="8" width="4" height="12" fill="#14B8A6"/><rect x="16" y="4" width="4" height="16" fill="#3B82F6"/></svg>
+          <div style="font-size:12px;font-weight:600">سهل</div><div style="font-size:11px;color:#64748B;margin-top:-3px">للفريق</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:0 0 510px;position:relative;background:#0F766E;display:flex;align-items:center;padding:20px 26px">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.05) 10px,transparent 10px,transparent 20px)"></div>
+      <div style="position:relative;color:#FFFFFF;text-align:right;width:100%">
+        <div style="font-size:19px;font-weight:700">معاً لصحة</div>
+        <div style="font-size:19px;font-weight:700;margin-top:2px">مجتمع أكثر إشراقاً</div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;margin-top:10px;opacity:.9">Pharmacy Today</div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;opacity:.9">A Healthier Tomorrow</div>
+        <div style="position:absolute;top:0;left:0;font-family:'Inter',sans-serif;font-size:10px;letter-spacing:1px;opacity:.75;background:rgba(255,255,255,.14);padding:4px 8px;border-radius:4px">PHARMACIST PHOTO</div>
+      </div>
+    </div>
+    <div style="flex:0 0 96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center">
+      <div style="font-size:14px;font-weight:600;line-height:1.7">كل<br/>وصفة<br/>تبدأ بثقة</div>
+      <div style="width:26px;height:3px;border-radius:2px;background:#0F766E;margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:14px;padding:14px" dir="rtl">
+    <div style="flex:0 0 500px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:16px;font-weight:700">الألوان الرئيسية</span>
+        <span style="font-family:'Inter',sans-serif;font-size:12px;color:#94A3B8">Color Palette</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:14px">
+        <sc-for list="{{ swatches }}" as="c" hint-placeholder-count="12">
+          <div>
+            <div style="{{ c.chip }}"></div>
+            <div style="font-size:11px;font-weight:600;margin-top:6px;text-align:center">{{ c.name }}</div>
+            <div style="font-family:'Inter',sans-serif;font-size:10px;color:#94A3B8;text-align:center;margin-top:2px">{{ c.hex }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="flex:1;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:16px;font-weight:700">الخطوط</span>
+        <span style="font-family:'Inter',sans-serif;font-size:12px;color:#94A3B8">Typography</span>
+        <div style="flex:1"></div>
+        <span style="background:#ECFDF5;color:#0F766E;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;border-radius:8px;padding:5px 10px">Arabic First</span>
+      </div>
+      <div style="display:flex;gap:20px;margin-top:14px;align-items:flex-start">
+        <div style="flex:0 0 190px;text-align:center">
+          <div style="font-size:42px;font-weight:700;line-height:1.3">أبجد هوز</div>
+          <div style="font-family:'Inter',sans-serif;font-size:13px;color:#0F766E;margin-top:8px">Inter + Noto Kufi Arabic</div>
+          <div style="font-size:12px;color:#64748B;margin-top:10px;line-height:1.9">خط واضح وعصري لراحة العين<br/>وقراءة ممتازة في بيئة العمل</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid #F1F5F9"><span style="font-size:19px;font-weight:700">عرض كبير</span><span dir="ltr" style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">32/Bold</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid #F1F5F9"><span style="font-size:17px;font-weight:600">عنوان صفحة</span><span dir="ltr" style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">24/Semibold</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid #F1F5F9"><span style="font-size:15px;font-weight:600">عنوان قسم</span><span dir="ltr" style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">20/Semibold</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid #F1F5F9"><span style="font-size:14px">نص رئيسي</span><span dir="ltr" style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">16/Regular</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid #F1F5F9"><span style="font-size:13px">نص ثانوي</span><span dir="ltr" style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">14/Regular</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0"><span style="font-size:12px">نص صغير</span><span dir="ltr" style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B">12/Regular</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 400px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:16px;font-weight:700">حالات العناصر</span>
+        <span style="font-family:'Inter',sans-serif;font-size:12px;color:#94A3B8">Status Chips</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px">
+        <sc-for list="{{ chips }}" as="c" hint-placeholder-count="8">
+          <div style="{{ c.style }}">
+            <span style="{{ c.dot }}">{{ c.mark }}</span>
+            <span>{{ c.label }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:14px;padding:0 14px 14px" dir="rtl">
+    <div style="flex:0 0 400px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:16px;font-weight:700">الأزرار</span>
+        <span style="font-family:'Inter',sans-serif;font-size:12px;color:#94A3B8">Buttons</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <div style="background:#0F766E;color:#FFFFFF;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 4h2l2.5 11h10L20 7H6.5" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>إتمام البيع</span>
+        </div>
+        <div style="border:1.5px solid #0F766E;color:#0F766E;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px"><span>إضافة إلى السلة</span><span>+</span></div>
+        <div style="border:1px solid #E5E7EB;border-radius:10px;padding:12px 22px;font-size:13px;font-weight:600">إلغاء</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <div style="background:#F1F5F9;border-radius:10px;padding:12px 22px;font-size:13px;font-weight:600">زر ثانوي</div>
+        <div style="background:#F8FAFC;border-radius:10px;padding:12px 22px;font-size:13px;font-weight:600;color:#64748B">زر مسطح</div>
+        <div style="background:#FEF2F2;color:#DC2626;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+          <span>حذف</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="#DC2626" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:16px;font-weight:700">البحث والباركود</span>
+        <span style="font-family:'Inter',sans-serif;font-size:12px;color:#94A3B8">Search &amp; Barcode</span>
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:12px;border:1px solid #E5E7EB;border-radius:12px;padding:13px 14px">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#94A3B8" stroke-width="1.9"/><path d="M16 16l4.5 4.5" stroke="#94A3B8" stroke-width="1.9" stroke-linecap="round"/></svg>
+        <span style="flex:1;font-size:12px;color:#94A3B8">البحث عن صنف، اسم علمي، أو رقم باركود...</span>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#93C5FD" stroke-width="1.7"/><g stroke="#3B82F6" stroke-width="1.6"><path d="M7 8.5v7M9.5 8.5v7M12 8.5v7M15 8.5v7M17.5 8.5v7"/></g></svg>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:12px;border:2px solid #3B82F6;border-radius:12px;padding:13px 14px;background:#F8FAFF">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><g stroke="#3B82F6" stroke-width="1.7"><path d="M4 6v12M7 6v12M10 6v12M13.5 6v12M17 6v12M20 6v12"/></g></svg>
+        <span style="flex:1;font-size:12px;color:#94A3B8">امسح الباركود هنا...</span>
+        <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#3B82F6;background:#EFF6FF;border-radius:6px;padding:4px 8px">F2</span>
+      </div>
+    </div>
+
+    <div style="flex:0 0 360px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:16px;font-weight:700">عنصر سلة المشتريات</span>
+        <span style="font-family:'Inter',sans-serif;font-size:12px;color:#94A3B8">Cart Item</span>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:12px;align-items:flex-start">
+        <div style="width:60px;height:60px;border-radius:10px;border:1px solid #E5E7EB;background:repeating-linear-gradient(45deg,#F8FAFC,#F8FAFC 5px,#EEF2F6 5px,#EEF2F6 10px);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-size:8px;color:#94A3B8;text-align:center;padding:3px">PANADOL</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between">
+            <div>
+              <div style="font-size:13px;font-weight:700">بنادول أقراص 500 مجم</div>
+              <div style="font-family:'Inter',sans-serif;font-size:11px;color:#94A3B8;margin-top:3px">Panadol 500mg Tablets</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+            <span style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700">12.50 <span style="font-family:'Noto Kufi Arabic';font-size:11px;font-weight:400;color:#64748B">ر.س</span></span>
+            <div style="flex:1"></div>
+            <div style="width:26px;height:26px;border-radius:7px;border:1px solid #E5E7EB;display:flex;align-items:center;justify-content:center;font-size:14px;color:#64748B">&#8722;</div>
+            <span style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700">2</span>
+            <div style="width:26px;height:26px;border-radius:7px;border:1px solid #E5E7EB;display:flex;align-items:center;justify-content:center;font-size:14px;color:#0F766E">+</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+            <div style="display:flex;align-items:center;gap:5px;background:#ECFDF5;color:#15803D;border-radius:99px;padding:4px 9px;font-size:10px;font-weight:600"><span style="width:6px;height:6px;border-radius:99px;background:#16A34A"></span>متوفر</div>
+            <span style="font-family:'Inter',sans-serif;font-size:10px;color:#94A3B8">#6281001234567</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 330px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:16px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:16px;font-weight:700">طرق الدفع</span>
+        <span style="font-family:'Inter',sans-serif;font-size:12px;color:#94A3B8">Payment Methods</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:14px">
+        <sc-for list="{{ methods }}" as="m" hint-placeholder-count="8">
+          <div style="{{ m.style }}">
+            <span style="{{ m.iconWrap }}">{{ m.icon }}</span>
+            <span style="font-size:10px;font-weight:600;text-align:center">{{ m.label }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:0 14px 18px" dir="rtl">
+    <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0F766E;background:#ECFDF5;border-radius:8px;padding:5px 9px">01</span>
+        <span style="font-size:13px;font-weight:700">تسجيل الدخول / بداية الوردية</span>
+      </div>
+      <div style="margin-top:12px;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;background:#F1F5F9">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:#FFFFFF;border-bottom:1px solid #EEF1F4">
+          <span style="font-family:'Inter',sans-serif;font-size:8px;font-weight:600;color:#0F766E">Retail Tower POS</span>
+          <span style="font-family:'Inter',sans-serif;font-size:8px;color:#CBD5E1">&#8211; &#9723; &#10005;</span>
+        </div>
+        <div style="height:252px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;position:relative;background:repeating-linear-gradient(135deg,#F8FAFC,#F8FAFC 8px,#F1F5F9 8px,#F1F5F9 16px)">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21M17 21v-9l4 2.5V21" stroke="#0F766E" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <div style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;margin-top:6px">Retail Tower POS</div>
+          <div style="font-size:8px;color:#64748B;margin-top:3px">مرحباً بك في نظام الصيدلية</div>
+          <div style="width:100%;background:#FFFFFF;border-radius:8px;padding:9px;margin-top:10px;box-shadow:0 1px 4px rgba(15,23,42,.06)">
+            <div style="display:flex;align-items:center;gap:6px;border:1px solid #E5E7EB;border-radius:6px;padding:6px 7px;font-size:8px">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.4" stroke="#94A3B8" stroke-width="2"/><path d="M5 20c1.5-3.4 4.2-5 7-5s5.5 1.6 7 5" stroke="#94A3B8" stroke-width="2"/></svg>
+              <span style="flex:1">أحمد محمد</span><span style="color:#CBD5E1">&#8964;</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;border:1px solid #E5E7EB;border-radius:6px;padding:6px 7px;font-size:8px;color:#94A3B8;margin-top:6px">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="10" rx="2" stroke="#94A3B8" stroke-width="2"/><path d="M8 10V7.5a4 4 0 118 0V10" stroke="#94A3B8" stroke-width="2"/></svg>
+              <span>كلمة المرور ...</span>
+            </div>
+            <div style="background:#0F766E;color:#FFFFFF;border-radius:6px;padding:7px;text-align:center;font-size:9px;font-weight:700;margin-top:8px">تسجيل الدخول</div>
+            <div style="text-align:center;font-size:7px;color:#0F766E;margin-top:6px">نسيت كلمة المرور؟</div>
+            <div style="text-align:center;font-size:7px;color:#CBD5E1;margin-top:5px">أو</div>
+            <div style="border:1px solid #E5E7EB;border-radius:6px;padding:6px;text-align:center;font-size:8px;margin-top:5px;display:flex;align-items:center;justify-content:center;gap:5px"><span>&#9673;</span><span>بصمة الموظف</span></div>
+          </div>
+          <div style="position:absolute;bottom:10px;right:12px;text-align:right">
+            <div style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700">09:24 <span style="font-family:'Noto Kufi Arabic';font-size:8px">ص</span></div>
+            <div style="font-size:7px;color:#64748B;margin-top:2px">الثلاثاء، 3 يونيو 2025</div>
+          </div>
+          <div style="position:absolute;bottom:10px;left:12px;display:flex;align-items:center;gap:4px">
+            <span style="font-size:8px;color:#0F766E;font-weight:600">معاً لصحة أفضل</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 20c0-5 3-8 8-8 0 5-3 8-8 8z" fill="#10B981"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0F766E;background:#ECFDF5;border-radius:8px;padding:5px 9px">02</span>
+        <span style="font-size:13px;font-weight:700">شاشة الكاشير / سلة المشتريات</span>
+      </div>
+      <div style="margin-top:12px;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;background:#FAFBFC">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#FFFFFF;border-bottom:1px solid #EEF1F4">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M3 21V8l6-4v17M10 21V3l6 3.5V21" stroke="#0F766E" stroke-width="2"/></svg>
+          <span style="flex:1"></span>
+          <span style="font-family:'Inter',sans-serif;font-size:7px;color:#64748B">F1 المساعدة</span>
+          <span style="font-size:8px;font-weight:600">أحمد محمد</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 20c0-5 3-8 8-8 0 5-3 8-8 8z" fill="#10B981"/></svg>
+        </div>
+        <div style="display:flex;height:252px">
+          <div style="flex:0 0 78px;padding:8px 6px;display:flex;flex-direction:column;gap:5px;border-left:1px solid #EEF1F4">
+            <div style="background:#0F766E;color:#FFFFFF;border-radius:5px;padding:5px;font-size:7px;font-weight:600;display:flex;align-items:center;gap:4px"><span>&#9638;</span><span>جميع الأصناف</span></div>
+            <div style="font-size:7px;color:#64748B;padding:5px;display:flex;align-items:center;gap:4px"><span>&#9638;</span><span>أدوية</span></div>
+            <div style="font-size:7px;color:#64748B;padding:5px;display:flex;align-items:center;gap:4px"><span>&#9638;</span><span>مستلزمات طبية</span></div>
+            <div style="font-size:7px;color:#64748B;padding:5px;display:flex;align-items:center;gap:4px"><span>&#9638;</span><span>عناية شخصية</span></div>
+            <div style="font-size:7px;color:#64748B;padding:5px;display:flex;align-items:center;gap:4px"><span>&#9638;</span><span>فيتامينات ومكملات</span></div>
+            <div style="font-size:7px;color:#64748B;padding:5px;display:flex;align-items:center;gap:4px"><span>&#9638;</span><span>مستلزمات أطفال</span></div>
+            <div style="font-size:7px;color:#64748B;padding:5px;display:flex;align-items:center;gap:4px"><span>&#9638;</span><span>مستحضرات تجميل</span></div>
+          </div>
+          <div style="flex:1;padding:8px;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:5px;border:1px solid #E5E7EB;border-radius:6px;padding:5px 7px;background:#FFFFFF">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#94A3B8" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="#94A3B8" stroke-width="2"/></svg>
+              <span style="flex:1;font-size:7px;color:#94A3B8">البحث عن صنف، اسم علمي، أو رقم باركود...</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><g stroke="#3B82F6" stroke-width="2"><path d="M5 6v12M9 6v12M13 6v12M17 6v12"/></g></svg>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 40px 34px 40px;font-size:7px;color:#64748B;padding:7px 2px 5px;border-bottom:1px solid #E5E7EB"><div>الصنف</div><div>الكمية</div><div>السعر</div><div>الإجمالي</div></div>
+            <div style="display:grid;grid-template-columns:1fr 40px 34px 40px;font-size:7px;padding:6px 2px;border-bottom:1px solid #F1F5F9;align-items:center"><div>بنادول 500 مجم</div><div style="font-family:'Inter',sans-serif">2</div><div style="font-family:'Inter',sans-serif">12.50</div><div style="font-family:'Inter',sans-serif;color:#EF4444">25.00</div></div>
+            <div style="display:grid;grid-template-columns:1fr 40px 34px 40px;font-size:7px;padding:6px 2px;border-bottom:1px solid #F1F5F9;align-items:center"><div>فيتامين J3 1000 وحدة</div><div style="font-family:'Inter',sans-serif">1</div><div style="font-family:'Inter',sans-serif">45.00</div><div style="font-family:'Inter',sans-serif;color:#EF4444">45.00</div></div>
+            <div style="display:grid;grid-template-columns:1fr 40px 34px 40px;font-size:7px;padding:6px 2px;border-bottom:1px solid #F1F5F9;align-items:center"><div>ماء معقم للعين</div><div style="font-family:'Inter',sans-serif">1</div><div style="font-family:'Inter',sans-serif">18.75</div><div style="font-family:'Inter',sans-serif;color:#EF4444">18.75</div></div>
+            <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;font-size:7px">
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748B">عدد الأصناف</span><span style="font-family:'Inter',sans-serif">3</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748B">المجموع الفرعي</span><span style="font-family:'Inter',sans-serif">88.75</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748B">الخصم</span><span style="font-family:'Inter',sans-serif">0.00</span></div>
+              <div style="display:flex;justify-content:space-between;font-weight:700;font-size:9px;color:#0F766E;margin-top:2px"><span>الإجمالي</span><span style="font-family:'Inter',sans-serif">88.75 ر.س</span></div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="display:flex;gap:5px;margin-top:8px">
+              <div style="background:#0F766E;color:#FFFFFF;border-radius:6px;padding:7px;font-size:8px;font-weight:700;flex:1;text-align:center">متابعة الدفع &#8592;</div>
+              <div style="border:1px solid #E5E7EB;border-radius:6px;padding:7px 9px;font-size:8px">خصم</div>
+              <div style="background:#FEF2F2;color:#DC2626;border-radius:6px;padding:7px 9px;font-size:8px">مسح الكل</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0F766E;background:#ECFDF5;border-radius:8px;padding:5px 9px">03</span>
+        <span style="font-size:13px;font-weight:700">شاشة الدفع / إتمام البيع</span>
+      </div>
+      <div style="margin-top:12px;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;background:#FAFBFC">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:#FFFFFF;border-bottom:1px solid #EEF1F4">
+          <span style="font-family:'Inter',sans-serif;font-size:8px;font-weight:600;color:#0F766E">Retail Tower POS</span>
+          <span style="font-family:'Inter',sans-serif;font-size:8px;color:#CBD5E1">&#8211; &#9723; &#10005;</span>
+        </div>
+        <div style="height:252px;padding:10px;display:flex;flex-direction:column">
+          <div style="background:#ECFDF5;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:8px;color:#64748B">المبلغ الإجمالي</div>
+            <div style="font-family:'Inter',sans-serif;font-size:19px;font-weight:700;color:#0F766E;margin-top:3px">88.75 <span style="font-family:'Noto Kufi Arabic';font-size:9px">ر.س</span></div>
+          </div>
+          <div style="font-size:8px;color:#64748B;margin-top:9px">اختر طريقة الدفع</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:6px">
+            <div style="border:1px solid #E5E7EB;border-radius:6px;padding:8px 3px;display:flex;flex-direction:column;align-items:center;gap:4px;background:#FFFFFF"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke="#64748B" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="#64748B" stroke-width="2"/></svg><span style="font-size:7px">نقداً</span></div>
+            <div style="border:1.5px solid #0F766E;border-radius:6px;padding:8px 3px;display:flex;flex-direction:column;align-items:center;gap:4px;background:#F0FDFA"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke="#0F766E" stroke-width="2"/><path d="M2.5 10h19" stroke="#0F766E" stroke-width="2"/></svg><span style="font-size:7px;font-weight:600">بطاقة مدى</span></div>
+            <div style="border:1px solid #E5E7EB;border-radius:6px;padding:8px 3px;display:flex;flex-direction:column;align-items:center;gap:4px;background:#FFFFFF"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke="#3B82F6" stroke-width="2"/></svg><span style="font-size:7px">بطاقة ائتمان</span></div>
+            <div style="border:1px solid #E5E7EB;border-radius:6px;padding:8px 3px;display:flex;flex-direction:column;align-items:center;gap:4px;background:#FFFFFF"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="6" y="3" width="12" height="18" rx="2" stroke="#3B82F6" stroke-width="2"/></svg><span style="font-size:7px">محفظة رقمية</span></div>
+          </div>
+          <div style="font-size:8px;color:#64748B;margin-top:10px">تفاصيل الدفع</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
+            <span style="font-size:7px;color:#64748B;flex:0 0 52px">المبلغ المدفوع</span>
+            <div style="flex:1;border:1px solid #E5E7EB;border-radius:6px;padding:6px 8px;background:#FFFFFF;display:flex;justify-content:space-between"><span style="font-family:'Inter',sans-serif;font-size:10px;font-weight:700">88.75</span><span style="font-size:7px;color:#64748B">ر.س</span></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:6px">
+            <div style="border:1px solid #E5E7EB;border-radius:5px;padding:5px;text-align:center;font-family:'Inter',sans-serif;font-size:8px;background:#FFFFFF">200</div>
+            <div style="border:1px solid #E5E7EB;border-radius:5px;padding:5px;text-align:center;font-family:'Inter',sans-serif;font-size:8px;background:#FFFFFF">100</div>
+            <div style="border:1px solid #E5E7EB;border-radius:5px;padding:5px;text-align:center;font-family:'Inter',sans-serif;font-size:8px;background:#FFFFFF">50</div>
+            <div style="border:1px solid #E5E7EB;border-radius:5px;padding:5px;text-align:center;font-family:'Inter',sans-serif;font-size:8px;background:#FFFFFF">20</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:9px">
+            <span style="font-size:7px;flex:1">طباعة الإيصال</span>
+            <div style="width:22px;height:12px;border-radius:99px;background:#0F766E;position:relative"><span style="position:absolute;top:2px;left:2px;width:8px;height:8px;border-radius:99px;background:#FFFFFF"></span></div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <div style="flex:0 0 68px;border:1px solid #E5E7EB;border-radius:6px;padding:7px;text-align:center;font-size:8px;background:#FFFFFF">رجوع</div>
+            <div style="flex:1;background:#0F766E;color:#FFFFFF;border-radius:6px;padding:7px;text-align:center;font-size:8px;font-weight:700">إتمام البيع &#10003;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:14px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0F766E;background:#ECFDF5;border-radius:8px;padding:5px 9px">04</span>
+        <span style="font-size:13px;font-weight:700">إتمام العملية / الإيصال</span>
+      </div>
+      <div style="margin-top:12px;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;background:#FAFBFC">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:#FFFFFF;border-bottom:1px solid #EEF1F4">
+          <span style="font-family:'Inter',sans-serif;font-size:8px;font-weight:600;color:#0F766E">Retail Tower POS</span>
+          <span style="font-family:'Inter',sans-serif;font-size:8px;color:#CBD5E1">&#8211; &#9723; &#10005;</span>
+        </div>
+        <div style="height:252px;padding:16px 14px;display:flex;flex-direction:column;align-items:center">
+          <div style="width:52px;height:52px;border-radius:99px;background:#0F766E;display:flex;align-items:center;justify-content:center">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:#0F766E;margin-top:12px">تمت العملية بنجاح!</div>
+          <div style="font-size:8px;color:#64748B;margin-top:5px">شكراً لثقتكم</div>
+          <div style="font-family:'Inter',sans-serif;font-size:8px;color:#94A3B8;margin-top:4px">رقم العملية #250603-0012</div>
+          <div style="width:100%;background:#0F766E;color:#FFFFFF;border-radius:7px;padding:8px;text-align:center;font-size:9px;font-weight:700;margin-top:14px;display:flex;align-items:center;justify-content:center;gap:6px"><span>طباعة الإيصال</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M7 9V4h10v5M7 18H5v-6h14v6h-2M7 15h10v5H7z" stroke="#FFFFFF" stroke-width="2" stroke-linejoin="round"/></svg></div>
+          <div style="width:100%;background:#ECFDF5;color:#15803D;border-radius:7px;padding:8px;text-align:center;font-size:9px;font-weight:600;margin-top:7px;display:flex;align-items:center;justify-content:center;gap:6px"><span>إرسال عبر واتساب</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 00-7.7 13.7L3 21l4.5-1.2A9 9 0 1012 3z" stroke="#16A34A" stroke-width="2" stroke-linejoin="round"/></svg></div>
+          <div style="width:100%;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:7px;padding:8px;text-align:center;font-size:9px;font-weight:600;margin-top:7px">عملية جديدة</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 20c0-5 3-8 8-8 0 5-3 8-8 8z" fill="#10B981"/></svg>
+            <span style="font-size:8px;color:#0F766E;font-weight:600">صحة أفضل .. حياة أجمل</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+</div>
+
+<div dir="rtl" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:rgba(15,23,42,.92);border-radius:999px;padding:6px;z-index:50;box-shadow:0 8px 24px rgba(15,23,42,.3)">
+  <sc-for list="{{ screens }}" as="s" hint-placeholder-count="5">
+    <div onClick="{{ s.go }}" style="{{ s.style }}">{{ s.label }}</div>
+  </sc-for>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1448,&quot;height&quot;:1090}}">
+const CATALOG = [
+  {id:"panadol", name:"بنادول 500 مجم أقراص", short:"بنادول 500 مجم", form:"أقراص", price:12.50, pack:"عبوة 20 قرص", barcode:"#6281001234567", shot:"PANADOL"},
+  {id:"amox", name:"أموكسيسيلين 500 مجم", short:"أموكسيسيلين 500 مجم", form:"كبسولات", price:18.75, pack:"عبوة 16 كبسولة", barcode:"#6281009876543", shot:"AMOXICILLIN"},
+  {id:"d3", name:"فيتامين D3 1000 وحدة", short:"فيتامين D3 1000 وحدة", form:"كبسولات", price:45.00, pack:"عبوة 30 كبسولة", barcode:"#6281004567890", shot:"VITAMIN D3"},
+  {id:"advil", name:"أدفيل 200 مجم", short:"أدفيل 200 مجم", form:"أقراص", price:22.00, pack:"عبوة 24 قرص", barcode:"#6281001357924", shot:"ADVIL"},
+  {id:"saline", name:"محلول ملحي للأنف", short:"محلول ملحي للأنف", form:"بخاخ", price:17.50, pack:"عبوة 30 مل", barcode:"#6281002468135", shot:"NASAL SPRAY"},
+  {id:"ors", name:"أو آر أس", short:"أو آر أس", form:"أكياس", price:15.00, pack:"عبوة 10 أكياس", barcode:"#6281003692581", shot:"ORS"},
+  {id:"zyrtec", name:"زيرتك 10 مجم", short:"زيرتك 10 مجم", form:"أقراص", price:19.50, pack:"عبوة 10 أقراص", barcode:"#6281005544332", shot:"ZYRTEC"}
+];
+const GRID = ["advil","panadol","d3","amox","ors","zyrtec"];
+const EMPLOYEES = [
+  {id:"EMP-001", name:"أحمد محمد", role:"صيدلي"},
+  {id:"EMP-002", name:"سارة عبدالله", role:"صيدلانية"},
+  {id:"EMP-003", name:"محمد علي", role:"مساعد صيدلي"},
+  {id:"EMP-004", name:"نورة خالد", role:"أمين صيدلية"}
+];
+const CATS = ["جميع الأصناف","الأدوية","المكملات","العناية الشخصية","الأم والطفل"];
+const TILES = [
+  {label:"جميع الأصناف", key:"grid", color:"#0F766E"},
+  {label:"الأدوية", key:"pill", color:"#10B981"},
+  {label:"المكملات", key:"leaf", color:"#10B981"},
+  {label:"العناية الشخصية", key:"drop", color:"#3B82F6"},
+  {label:"الأم والطفل", key:"baby", color:"#A855F7"},
+  {label:"المستلزمات الطبية", key:"mask", color:"#3B82F6"},
+  {label:"الفيتامينات", key:"heart", color:"#EC4899"},
+  {label:"منتجات أخرى", key:"dots", color:"#64748B"}
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: "login",
+    employee: "EMP-001",
+    pin: 1,
+    cat: "جميع الأصناف",
+    cart: [
+      {id:"panadol", qty:2},{id:"amox", qty:1},{id:"d3", qty:1},{id:"advil", qty:1},{id:"saline", qty:1}
+    ]
+  };
+
+  prod(id){ return CATALOG.find(p => p.id === id); }
+  setQty(id, d){
+    this.setState(s => ({cart: s.cart.map(c => c.id === id ? {...c, qty: Math.max(1, c.qty + d)} : c)}));
+  }
+  remove(id){ this.setState(s => ({cart: s.cart.filter(c => c.id !== id)})); }
+  add(id){
+    this.setState(s => s.cart.some(c => c.id === id)
+      ? {cart: s.cart.map(c => c.id === id ? {...c, qty: c.qty + 1} : c)}
+      : {cart: [...s.cart, {id, qty: 1}]});
+  }
+  go(screen){ this.setState({screen}); }
+
+  icon(key, color){
+    const e = React.createElement;
+    const S = {width:19, height:19, viewBox:"0 0 24 24", fill:"none"};
+    const st = {stroke:color, strokeWidth:1.8, strokeLinecap:"round", strokeLinejoin:"round"};
+    const paths = {
+      grid: [e("rect",{key:1,x:4,y:4,width:7,height:7,rx:1.5,fill:color}),e("rect",{key:2,x:13,y:4,width:7,height:7,rx:1.5,fill:color}),e("rect",{key:3,x:4,y:13,width:7,height:7,rx:1.5,fill:color}),e("rect",{key:4,x:13,y:13,width:7,height:7,rx:1.5,fill:color})],
+      pill: [e("rect",{key:1,x:3,y:9,width:18,height:6,rx:3,transform:"rotate(-45 12 12)",...st})],
+      leaf: [e("path",{key:1,d:"M20 5c0 8-5 12-11 12-2 0-4-1-4-1S6 4 20 5z",...st})],
+      drop: [e("path",{key:1,d:"M12 3s6 7 6 11a6 6 0 11-12 0c0-4 6-11 6-11z",...st})],
+      baby: [e("circle",{key:1,cx:12,cy:8,r:3.5,...st}),e("path",{key:2,d:"M6 20c1.5-3.5 3.6-5 6-5s4.5 1.5 6 5",...st})],
+      mask: [e("path",{key:1,d:"M4 9c3-1.5 13-1.5 16 0v5c0 3-4 5-8 5s-8-2-8-5z",...st})],
+      heart: [e("path",{key:1,d:"M12 20s-7-4.2-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.8-7 9-7 9z",...st})],
+      dots: [e("circle",{key:1,cx:6,cy:12,r:1.8,fill:color}),e("circle",{key:2,cx:12,cy:12,r:1.8,fill:color}),e("circle",{key:3,cx:18,cy:12,r:1.8,fill:color})],
+      cart: [e("path",{key:1,d:"M3 4h2l2.5 11h10L20 7H6.5",...st}),e("circle",{key:2,cx:9.5,cy:19,r:1.6,fill:color}),e("circle",{key:3,cx:17,cy:19,r:1.6,fill:color})],
+      users: [e("circle",{key:1,cx:9,cy:8.5,r:3.2,...st}),e("path",{key:2,d:"M3 19c1.3-3 3.6-4.4 6-4.4S13.7 16 15 19",...st}),e("path",{key:3,d:"M16.5 6.2a3.2 3.2 0 010 6",...st})],
+      box: [e("path",{key:1,d:"M12 3l8 4.5v9L12 21l-8-4.5v-9z",...st}),e("path",{key:2,d:"M4 7.5l8 4.5 8-4.5",...st})],
+      chart: [e("rect",{key:1,x:4,y:12,width:4,height:8,fill:color}),e("rect",{key:2,x:10,y:8,width:4,height:12,fill:color}),e("rect",{key:3,x:16,y:4,width:4,height:16,fill:color})],
+      gear: [e("circle",{key:1,cx:12,cy:12,r:3,...st}),e("circle",{key:2,cx:12,cy:12,r:8.5,...st})]
+    };
+    return e("svg", S, paths[key] || []);
+  }
+
+  payIcon(key, color){
+    const e = React.createElement;
+    const st = {stroke:color, strokeWidth:1.8, fill:"none", strokeLinecap:"round", strokeLinejoin:"round"};
+    const p = {
+      cash: [e("rect",{key:1,x:2.5,y:6,width:19,height:12,rx:2.5,...st}),e("circle",{key:2,cx:12,cy:12,r:3,...st})],
+      card: [e("rect",{key:1,x:2.5,y:5.5,width:19,height:13,rx:2.5,...st}),e("path",{key:2,d:"M2.5 10h19",...st})],
+      wallet: [e("rect",{key:1,x:3,y:6,width:18,height:12,rx:2.5,...st}),e("path",{key:2,d:"M16 12h3",...st})],
+      bank: [e("path",{key:1,d:"M3 9l9-5 9 5M5 9v9M19 9v9M3 20h18M9 12v5M15 12v5",...st})],
+      gift: [e("rect",{key:1,x:3,y:9,width:18,height:11,rx:2,...st}),e("path",{key:2,d:"M3 13h18M12 9v11",...st})],
+      shield: [e("path",{key:1,d:"M12 20s7-3.5 7-9V6l-7-2-7 2v5c0 5.5 7 9 7 9z",...st})],
+      dots: [e("circle",{key:1,cx:6,cy:12,r:1.7,fill:color}),e("circle",{key:2,cx:12,cy:12,r:1.7,fill:color}),e("circle",{key:3,cx:18,cy:12,r:1.7,fill:color})]
+    };
+    return e("svg",{width:20,height:20,viewBox:"0 0 24 24",fill:"none"}, p[key] || []);
+  }
+
+  renderVals(){
+    const e = React.createElement;
+    const s = this.state;
+    const money = n => n.toFixed(2);
+    const items = s.cart.map((c, i) => {
+      const p = this.prod(c.id);
+      return {
+        no: String(i + 1), name: p.name, pack: p.pack, barcode: p.barcode, shot: p.shot,
+        price: money(p.price), qty: String(c.qty), line: money(p.price * c.qty),
+        inc: () => this.setQty(c.id, 1), dec: () => this.setQty(c.id, -1), remove: () => this.remove(c.id)
+      };
+    });
+    const subtotal = s.cart.reduce((a, c) => a + this.prod(c.id).price * c.qty, 0);
+    const discount = 10;
+    const vat = Math.max(0, subtotal - discount) * 0.15;
+    const total = Math.max(0, subtotal - discount) + vat;
+
+    const emp = EMPLOYEES.find(x => x.id === s.employee) || EMPLOYEES[0];
+    const employees = EMPLOYEES.map(x => {
+      const on = x.id === s.employee;
+      return {
+        ...x,
+        pick: () => this.setState({employee: x.id}),
+        rowStyle: "display:flex;align-items:center;gap:12px;border:1.5px solid " + (on ? "#0F766E" : "#E5E7EB") + ";background:" + (on ? "#ECFDF5" : "#FFFFFF") + ";border-radius:14px;padding:12px 14px;cursor:pointer",
+        checkStyle: "width:26px;height:26px;border-radius:99px;display:flex;align-items:center;justify-content:center;border:2px solid " + (on ? "#0F766E" : "#CBD5E1") + ";background:" + (on ? "#0F766E" : "#FFFFFF")
+      };
+    });
+
+    const pinDots = [0,1,2,3].map(i => ({
+      style: "width:62px;height:56px;border-radius:12px;border:1.5px solid " + (i < s.pin ? "#0F766E" : "#E5E7EB") + ";background:" + (i < s.pin ? "#ECFDF5" : "#FFFFFF") + ";display:flex;align-items:center;justify-content:center",
+      dot: "width:12px;height:12px;border-radius:99px;display:block;background:" + (i < s.pin ? "#0F766E" : "#CBD5E1")
+    }));
+    const keyStyle = "height:56px;border:1px solid #E5E7EB;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-size:20px;font-weight:600;cursor:pointer;background:#FFFFFF";
+    const keys = ["1","2","3","4","5","6","7","8","9","del","0","bio"].map(k => ({
+      label: k === "del" ? "⌫" : (k === "bio" ? "◎" : k),
+      style: keyStyle + (k === "del" || k === "bio" ? ";background:#F8FAFC;color:#64748B" : ""),
+      press: () => this.setState(st => ({pin: k === "del" ? Math.max(0, st.pin - 1) : Math.min(4, st.pin + 1)}))
+    }));
+
+    const navDef = [
+      {label:"نقطة البيع", key:"cart", badge:"F1"},
+      {label:"المرضى والعملاء", key:"users", badge:""},
+      {label:"الوصفات الطبية", key:"rx", badge:""},
+      {label:"إدارة الأصناف", key:"box", badge:""},
+      {label:"التقارير", key:"chart", badge:""},
+      {label:"الإعدادات", key:"gear", badge:""}
+    ];
+    const nav = navDef.map((n, i) => {
+      const on = i === 0;
+      return {
+        label: n.label, badge: n.badge,
+        icon: n.key === "rx" ? e("span",{style:{fontFamily:"Inter, sans-serif",fontWeight:700,fontSize:15,color:"#0F172A"}},"Rx") : this.icon(n.key, on ? "#FFFFFF" : "#0F172A"),
+        iconWrap: "display:flex;align-items:center;justify-content:center;width:22px",
+        style: "display:flex;align-items:center;gap:10px;border-radius:12px;padding:14px 12px;cursor:pointer;" + (on ? "background:#0F766E;color:#FFFFFF" : "background:#FFFFFF;border:1px solid #EEF1F4;color:#0F172A"),
+        badgeStyle: n.badge ? "font-family:'Inter',sans-serif;font-size:10px;font-weight:700;background:rgba(255,255,255,.2);border-radius:6px;padding:3px 6px" : "display:none"
+      };
+    });
+
+    const cats = CATS.map(c => ({
+      label: c,
+      pick: () => this.setState({cat: c}),
+      style: "border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (c === s.cat ? "background:#0F766E;color:#FFFFFF" : "background:#FFFFFF;border:1px solid #E5E7EB;color:#0F172A")
+    }));
+    const catTiles = TILES.map(t => {
+      const on = t.label === s.cat;
+      return {
+        label: t.label,
+        pick: () => this.setState({cat: t.label}),
+        icon: this.icon(t.key, t.color),
+        iconStyle: "display:flex;align-items:center;justify-content:center;height:24px",
+        style: "border-radius:12px;padding:14px 6px;display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;" + (on ? "background:#ECFDF5;border:1.5px solid #0F766E" : "background:#FFFFFF;border:1px solid #E5E7EB")
+      };
+    });
+
+    const products = GRID.map(id => {
+      const p = this.prod(id);
+      return {name: p.short, form: p.form, price: money(p.price), shot: p.shot, add: () => this.add(id)};
+    });
+
+    const scr = [
+      {k:"login", l:"01 تسجيل الدخول"},
+      {k:"cart", l:"02 السلة"},
+      {k:"pay", l:"03 الدفع"},
+      {k:"done", l:"04 إتمام البيع"},
+      {k:"ds", l:"نظام التصميم"}
+    ];
+    const screens = scr.map(x => ({
+      label: x.l,
+      go: () => this.go(x.k),
+      style: "border-radius:999px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (s.screen === x.k ? "background:#FFFFFF;color:#0F172A" : "color:#CBD5E1")
+    }));
+
+    const payItems = [
+      {name:"بانادول 500 مجم", en:"Panadol 500mg Tablets", price:"32.00", shot:"PANADOL"},
+      {name:"زيرتك 10 مجم", en:"Zyrtec 10mg", price:"45.00", shot:"ZYRTEC"},
+      {name:"أفاميز بخاخ أنفي", en:"Avamys Nasal Spray", price:"68.00", shot:"AVAMYS"},
+      {name:"فولتارين جل 1 %", en:"Voltaren 1% Gel", price:"28.50", shot:"VOLTAREN"}
+    ];
+    const chipBase = "border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;";
+    const recent = [
+      {no:"#250503-0012", time:"09:24 ص", amount:"88.75", method:"نقداً", on:true, tone:"#F1F5F9,#0F172A"},
+      {no:"#250503-0011", time:"09:17 ص", amount:"124.50", method:"بطاقة مدى", on:false, tone:"#EFF6FF,#1D4ED8"},
+      {no:"#250503-0010", time:"08:58 ص", amount:"67.00", method:"نقداً", on:false, tone:"#F1F5F9,#0F172A"},
+      {no:"#250503-0009", time:"08:42 ص", amount:"210.00", method:"تحويل بنكي", on:false, tone:"#EFF6FF,#1D4ED8"},
+      {no:"#250503-0008", time:"08:26 ص", amount:"36.75", method:"نقداً", on:false, tone:"#ECFDF5,#15803D"}
+    ].map(r => {
+      const t = r.tone.split(",");
+      return {
+        no: r.no, time: r.time, amount: r.amount, method: r.method,
+        style: "display:flex;align-items:center;gap:10px;border-radius:12px;padding:12px;" + (r.on ? "background:#ECFDF5;border:1px solid #D1FAE5" : "border:1px solid #E5E7EB"),
+        chip: chipBase + "background:" + t[0] + ";color:" + t[1]
+      };
+    });
+
+    const swatches = [
+      {name:"أساسي", hex:"#0F766E"},{name:"ثانوي", hex:"#10B981"},{name:"مساند", hex:"#3B82F6"},
+      {name:"معلومات", hex:"#60A5FA"},{name:"تحذير", hex:"#F59E0B"},{name:"خطأ", hex:"#EF4444"},
+      {name:"خلفية", hex:"#FAFBFC"},{name:"سطح", hex:"#FFFFFF"},{name:"حدود", hex:"#E5E7EB"},
+      {name:"نص رئيسي", hex:"#0F172A"},{name:"نص ثانوي", hex:"#64748B"}
+    ].map(c => ({
+      name: c.name, hex: c.hex,
+      chip: "height:54px;border-radius:10px;background:" + c.hex + ";border:1px solid #E5E7EB"
+    }));
+
+    const chips = [
+      {label:"مكتمل", bg:"#DCFCE7", fg:"#15803D", dot:"#16A34A", mark:"✓"},
+      {label:"قيد المعالجة", bg:"#EFF6FF", fg:"#1D4ED8", dot:"#3B82F6", mark:"i"},
+      {label:"معلق", bg:"#FEF3C7", fg:"#B45309", dot:"#F59E0B", mark:"!"},
+      {label:"خطأ", bg:"#FEE2E2", fg:"#DC2626", dot:"#EF4444", mark:"!"},
+      {label:"مسودة", bg:"#F1F5F9", fg:"#475569", dot:"#94A3B8", mark:""},
+      {label:"وصفة طبية", bg:"#EFF6FF", fg:"#1D4ED8", dot:"#3B82F6", mark:"Rx"},
+      {label:"متوفر", bg:"#DCFCE7", fg:"#15803D", dot:"#16A34A", mark:"✓"},
+      {label:"غير متوفر", bg:"#FEE2E2", fg:"#DC2626", dot:"#EF4444", mark:"✕"}
+    ].map(c => ({
+      label: c.label, mark: c.mark,
+      style: "display:flex;align-items:center;gap:7px;border-radius:10px;padding:10px 8px;font-size:11px;font-weight:600;background:" + c.bg + ";color:" + c.fg,
+      dot: "width:17px;height:17px;border-radius:99px;flex:0 0 17px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#FFFFFF;background:" + c.dot
+    }));
+
+    const methods = [
+      {label:"نقداً", key:"cash", color:"#0F766E", on:true},
+      {label:"بطاقة مدى", key:"card", color:"#3B82F6", on:false},
+      {label:"بطاقة ائتمان", key:"card", color:"#3B82F6", on:false},
+      {label:"محفظة رقمية", key:"wallet", color:"#64748B", on:false},
+      {label:"تحويل بنكي", key:"bank", color:"#64748B", on:false},
+      {label:"قسيمة هدية", key:"gift", color:"#EC4899", on:false},
+      {label:"شركات التأمين", key:"shield", color:"#3B82F6", on:false},
+      {label:"أخرى", key:"dots", color:"#64748B", on:false}
+    ].map(m => ({
+      label: m.label,
+      icon: this.payIcon(m.key, m.color),
+      iconWrap: "display:flex;align-items:center;justify-content:center;height:20px",
+      style: "border-radius:10px;padding:11px 4px;display:flex;flex-direction:column;align-items:center;gap:7px;" + (m.on ? "background:#ECFDF5;border:1.5px solid #0F766E" : "background:#FFFFFF;border:1px solid #E5E7EB")
+    }));
+
+    return {
+      payItems, recent, swatches, chips, methods,
+      isLogin: s.screen === "login", isCart: s.screen === "cart", isPay: s.screen === "pay",
+      isDone: s.screen === "done", isDs: s.screen === "ds",
+      items, count: String(s.cart.length), subtotal: money(subtotal), vat: money(vat), total: money(total),
+      employees, empName: emp.name, empRole: emp.role, pinDots, keys, nav, cats, catTiles, products, screens,
+      goCart: () => this.go("cart"), goPay: () => this.go("pay"), goDone: () => this.go("done"),
+      clearCart: () => this.setState({cart: []})
+    };
+  }
+}
+
+</script>
+</body>
+</html>

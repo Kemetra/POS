@@ -40,6 +40,7 @@ When two sources disagree, the higher row wins. This ordering is the spine of th
 | 2 | Current source code + backend contracts | **What the product can do** (functional truth) |
 | 3 | [`spec.md`](./spec.md) (incl. Non-Capability Inventory) | This feature's scope and requirements |
 | 4 | [`visual-references/`](./visual-references/) (5 approved images) | **How it should look** (visual truth only) |
+| 4b | [`design-handoff/`](./design-handoff/) — approved Claude Design bundle (HTML mockup, designer spec, tokens) | **Supplementary** to rank 4, same authority and same limits. Read [`RECONCILIATION.md`](./design-handoff/RECONCILIATION.md) first: filenames shuffled (§D), tokens provenance-only (§C), Saudi/ZATCA/VAT/mada/unsupported tenders forbidden (§B) |
 | 5 | `docs/design/pos-v3.5/**` | Structure, component inventory, copy patterns, honesty behaviour — **except** the three axes v4.0 supersedes |
 
 **The load-bearing split:** rank 2 owns *capability*; rank 4 owns *appearance*. A reference image

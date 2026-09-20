@@ -7,3 +7,12 @@
 # Scope is intentionally narrow — do NOT broaden to the whole repo.
 scripts/openapi-snapshot.json text eol=lf
 src/shared/api-types.ts text eol=lf
+
+# Same rationale for the vendored 022 design handoff: these files are committed
+# VERBATIM and RECONCILIATION.md asserts they are byte-identical to the
+# designer's bundle. Without a pin, autocrlf=true would materialise CRLF on a
+# Windows checkout and that verbatim claim would hold only on some platforms.
+# Binary assets (PNG) are unaffected. Scope stays narrow — this directory only.
+specs/022-pos-ui-v4-rescue/design-handoff/**/*.html text eol=lf
+specs/022-pos-ui-v4-rescue/design-handoff/*.css text eol=lf
+specs/022-pos-ui-v4-rescue/design-handoff/*.md text eol=lf

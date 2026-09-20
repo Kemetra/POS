@@ -27,6 +27,7 @@
 | **Behavioural tests** | Payment/cart/money/routing-guard tests must pass **unmodified**. Only tests encoding an owner-superseded *design decision* may change (T020–T022 only). |
 | **Flags** | No task changes a production feature-flag default. Gated surfaces are restyled, never ungated. |
 | **Images** | `visual-references/**` govern appearance only. Check the spec's Non-Capability Inventory before treating anything shown as a requirement. |
+| **Design handoff** | [`design-handoff/`](./design-handoff/) is **supplementary visual authority** (HTML mockup + designer spec + tokens). It never authorises capability. Read [`design-handoff/RECONCILIATION.md`](./design-handoff/RECONCILIATION.md) first — its filenames are shuffled (§D), its tokens are provenance-only (§C), and its Saudi/ZATCA/VAT/mada/unsupported-tender content is forbidden (§B). |
 | **Screenshots** | Every visual slice ends with a capture task. A slice is not complete on source review alone. |
 
 ---

@@ -15,6 +15,26 @@ the POS surface of the platform, packaged as an Electron application targeting W
 
 ## Active feature
 
+> ⚠️ **CURRENT ACTIVE FEATURE (2026-09-20): [`specs/022-pos-ui-v4-rescue`](specs/022-pos-ui-v4-rescue/) — POS UI v4.0 Rescue / Visual Convergence.**
+> A **visual/UX** convergence onto the owner-approved light, clinical, pharmacy-teal direction. It
+> exposes existing behaviour more clearly and adds **no** business capability (one scoped exception:
+> the role-aware `/app` landing, FR-44).
+>
+> **Status:** implementation landed for **US4a** (sale-success honesty), **US0** (visual foundation /
+> tokens), **US1** (sign-in + role-aware landing) and **US2** (sale workspace, PR #447). Visual-
+> acceptance captures remain outstanding across those slices — U2's is deferred to
+> [#448](https://github.com/Kemetra/POS/issues/448). **Next implementation slice: US3 — Checkout /
+> tender** (`tasks.md` Phase 7).
+>
+> **Supplementary visual authority:** the approved Claude Design handoff is vendored at
+> [`specs/022-pos-ui-v4-rescue/design-handoff/`](specs/022-pos-ui-v4-rescue/design-handoff/).
+> Read its [`RECONCILIATION.md`](specs/022-pos-ui-v4-rescue/design-handoff/RECONCILIATION.md)
+> before using it — it is visual authority only and carries Saudi/ZATCA/15%-VAT/mada content that
+> is **not** authorised for this Egyptian product.
+>
+> **The 010 / 011 blocks below are historical record**, retained for their implementation detail.
+> They are no longer the active feature.
+
 <!-- SPECKIT START -->
 **017/019 arc CLOSED (2026-06-14).** The 2→1→3 unblock sequence is fully merged: Step 2 (POS-019 born-neutral provisioning + additive `user_id` column, migration `0035`, PR #398) → Step 1 (DP-2 034 cashier `user_id` on `PosRosterCashierEntry`, DP-2 #571/#573) → Step 3 (POS-017 PK re-anchor migration `0036`, PR #401, `d1b5778`). See the `017` entry in "Recently closed" for the full record.
 

@@ -1,0 +1,128 @@
+/* Retail Tower POS — design tokens
+   Extracted from the approved mockup: design-files/Retail Tower POS v4.dc.html
+   Values are authoritative. Do not substitute near-equivalents. */
+
+:root {
+  /* ---- Brand / semantic colors (from the design-system sheet) ---- */
+  --rt-primary:        #0F766E; /* أساسي — primary actions, active nav, totals */
+  --rt-primary-hover:  #115E59; /* hover state for primary buttons */
+  --rt-primary-deep:   #0F5C56; /* "عملية بيع جديدة" button on sale-complete */
+  --rt-secondary:      #10B981; /* ثانوي — positive deltas, discount text, leaf mark */
+  --rt-support:        #3B82F6; /* مساند — barcode, card payment icons */
+  --rt-info:           #60A5FA; /* معلومات */
+  --rt-warning:        #F59E0B; /* تحذير */
+  --rt-error:          #EF4444; /* خطأ */
+
+  /* ---- Surfaces ---- */
+  --rt-desk:           #EEF1F4; /* area outside the app window */
+  --rt-bg:             #FAFBFC; /* خلفية — app background */
+  --rt-surface:        #FFFFFF; /* سطح — cards, headers, footers */
+  --rt-surface-alt:    #F8FAFC; /* muted card (help card, denomination rows) */
+  --rt-border:         #E5E7EB; /* حدود — default 1px border */
+  --rt-border-soft:    #F1F5F9; /* table row separators */
+  --rt-border-faint:   #EEF1F4; /* header/nav hairlines */
+
+  /* ---- Text ---- */
+  --rt-text:           #0F172A; /* نص رئيسي */
+  --rt-text-2:         #64748B; /* نص ثانوي */
+  --rt-text-3:         #94A3B8; /* meta, placeholders */
+  --rt-text-4:         #CBD5E1; /* disabled, dashed-line labels */
+
+  /* ---- Tinted backgrounds (chips, states) ---- */
+  --rt-tint-teal:      #ECFDF5;
+  --rt-tint-teal-2:    #F0FDFA; /* selected row / selected payment tile */
+  --rt-tint-teal-bd:   #D1FAE5;
+  --rt-tint-green:     #DCFCE7;
+  --rt-green-text:     #15803D;
+  --rt-green-dot:      #16A34A;
+  --rt-tint-blue:      #EFF6FF;
+  --rt-blue-text:      #1D4ED8;
+  --rt-blue-border:    #BFDBFE;
+  --rt-tint-amber:     #FEF3C7;
+  --rt-amber-text:     #B45309;
+  --rt-amber-deep:     #92400E;
+  --rt-amber-border:   #FDE68A;
+  --rt-amber-bg:       #FFFBEB;
+  --rt-tint-red:       #FEF2F2;
+  --rt-red-chip:       #FEE2E2;
+  --rt-red-text:       #DC2626;
+  --rt-red-border:     #FECACA;
+  --rt-slate-chip:     #F1F5F9;
+  --rt-slate-disabled: #E2E8F0;
+
+  /* ---- Typography ---- */
+  --rt-font-ar: 'Noto Kufi Arabic', system-ui, sans-serif; /* all Arabic text */
+  --rt-font-la: 'Inter', system-ui, sans-serif;            /* Latin + ALL numerals */
+
+  /* Documented scale (design-system sheet) */
+  --rt-fs-display:  32px; /* 700 */
+  --rt-fs-page:     24px; /* 600 */
+  --rt-fs-section:  20px; /* 600 */
+  --rt-fs-body:     16px; /* 400 */
+  --rt-fs-body-sm:  14px; /* 400 */
+  --rt-fs-small:    12px; /* 400 */
+
+  /* Sizes actually used in the working screens */
+  --rt-fs-total:    38px; /* cart grand total */
+  --rt-fs-amount:   44px; /* payment amount due */
+  --rt-fs-refund:   28px; /* return net refund */
+  --rt-fs-title-xl: 30px; /* "تمت عملية البيع بنجاح!" */
+  --rt-fs-title-l:  21px; /* product wordmark in header */
+  --rt-fs-title-m:  19px; /* card titles: سلة المشتريات, اختر طريقة الدفع */
+  --rt-fs-title-s:  17px; /* secondary card titles */
+  --rt-fs-label:    13px;
+  --rt-fs-meta:     11px;
+  --rt-fs-micro:     9px; /* line-level warning chips */
+
+  /* ---- Radii ---- */
+  --rt-r-badge:   6px;  /* F-key badges, Rx badge */
+  --rt-r-xs:      8px;
+  --rt-r-sm:     10px;  /* small buttons, 44px controls */
+  --rt-r-md:     12px;  /* buttons, chips-as-cards, inner cards */
+  --rt-r-lg:     14px;  /* cards */
+  --rt-r-xl:     16px;  /* page-level cards (payment/return/shift) */
+  --rt-r-pill:  999px;
+
+  /* ---- Borders ---- */
+  --rt-bw-hair: 1px;    /* default */
+  --rt-bw-emph: 1.5px;  /* search fields, selected rows/tiles */
+  --rt-bw-sel:  2px;    /* selected payment method, barcode field */
+
+  /* ---- Elevation ---- */
+  --rt-shadow-window: 0 8px 40px rgba(15,23,42,.10); /* the app window only */
+  --rt-shadow-card:   0 1px 2px rgba(15,23,42,.04);  /* optional, rarely used */
+  --rt-shadow-dock:   0 8px 24px rgba(15,23,42,.3);  /* prototype screen switcher */
+  /* Cards are separated by 1px borders, NOT shadows. Do not add card shadows. */
+
+  /* ---- Spacing scale in use ---- */
+  --rt-sp-1:  4px;
+  --rt-sp-2:  6px;
+  --rt-sp-3:  8px;
+  --rt-sp-4: 10px;
+  --rt-sp-5: 12px;
+  --rt-sp-6: 14px;
+  --rt-sp-7: 16px;
+  --rt-sp-8: 18px;
+  --rt-sp-9: 22px;
+
+  /* ---- Fixed dimensions ---- */
+  --rt-app-width:      1448px;
+  --rt-sidebar-w:       186px;
+  --rt-products-w:      500px;
+  --rt-touch:            44px; /* minimum interactive target */
+}
+
+/* Global resets the mockup depends on */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--rt-desk);
+  font-family: var(--rt-font-ar);
+  color: var(--rt-text);
+}
+a { color: var(--rt-primary); text-decoration: none; }
+a:hover { color: var(--rt-secondary); }
+
+/* Numerals: Latin digits in Inter, tabular inside tables and totals */
+.rt-num { font-family: var(--rt-font-la); font-variant-numeric: tabular-nums; }
