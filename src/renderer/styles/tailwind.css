@@ -2106,21 +2106,14 @@ body {
     grid-template-columns: 380px 1fr;
   }
 
-  /* Narrow terminals: stack catalogue over cart; the workspace scrolls as one.
-     The attribute selector above is (0,2,0) and a bare `.sale-layout` is
-     (0,1,0), so the stacking rule must match the attribute too or a narrow
-     terminal would keep the two-track layout.
-
-     Deliberately NOT `[data-cart-dominant='true'][data-catalogue='true']`:
-     that would be (0,3,0) and outrank this guard, re-opening the same
-     specificity trap from the other side. The two-track template is keyed on
-     ONE attribute so this rule can always win. */
-  @media (max-width: 1023px) {
-    .sale-layout,
-    .sale-layout[data-catalogue='true'] {
-      grid-template-columns: 1fr;
-    }
-  }
+  /* No narrow-terminal stacking rule here, deliberately (#450). Below 1024px
+     `useViewportTier` reports `too-small` and `AppShell` renders
+     `ScreenTooSmall` INSTEAD of its `<Outlet />`, so `/app/cart` — and this
+     layout with it — never mounts at a width a `max-width: 1023px` rule could
+     match. Such a rule is unreachable, and worse, reads as responsive coverage
+     that does not exist. `< 1024px` is not a target production viewport
+     (specs/003-pos-ui-shell/spec.md:42, FR-2, NFR-3); if that ever changes,
+     the 003 spec moves first and the rule comes back with it. */
 
   /*
    * POS v3.5 Phase 3 — tender surface (safe tenders only: cash, card, voucher).
@@ -2134,11 +2127,9 @@ body {
     gap: var(--space-3);
   }
 
-  @media (max-width: 1023px) {
-    .tender-method-grid {
-      grid-template-columns: 1fr;
-    }
-  }
+  /* No narrow-terminal rule here either (#450) — `/app/checkout` is a child of
+     the same gated outlet as the cart, so below 1024px this grid never renders.
+     See the `.sale-layout` note above. */
 
   /* Cash keypad (AmountPad). */
   .amount-pad {

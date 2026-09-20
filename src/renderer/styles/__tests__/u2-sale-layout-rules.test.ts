@@ -56,13 +56,21 @@ describe('U2 / T060 — authored sale-layout track rules (FR-15 tripwire)', () =
     );
   });
 
-  it('keeps the narrow-terminal stacking rule matching the attribute selector', () => {
-    // Specificity guard: `.sale-layout[data-catalogue='true']` is (0,2,0) and a
-    // bare `.sale-layout` is (0,1,0), so the media query MUST list both or a
-    // narrow terminal would keep two tracks. The two-track template is keyed on
-    // ONE attribute precisely so this guard can match its specificity.
-    expect(normalised).toContain(
-      ".sale-layout, .sale-layout[data-catalogue='true'] { grid-template-columns: 1fr; }",
-    );
+  it('declares NO narrow-terminal rule, which would be unreachable (#450)', () => {
+    // Replaces an assertion that pinned a `@media (max-width: 1023px)` stacking
+    // rule plus its specificity guard. Both were removed: below 1024px
+    // `useViewportTier` reports `too-small` and `AppShell` renders
+    // `ScreenTooSmall` instead of its `<Outlet />`, so `.sale-layout` never
+    // mounts at a width that query could match. Verified at runtime — rendering
+    // AppShell at /app/cart with no min-width query matching yields no
+    // `.sale-layout` in the DOM at all.
+    //
+    // Asserting the ABSENCE keeps the tripwire honest in both directions: it
+    // now fails if someone re-adds unreachable responsive CSS here, instead of
+    // pinning a rule that could never fire. `< 1024px` is not a target
+    // production viewport (specs/003-pos-ui-shell/spec.md:42) — if that
+    // changes, 003 moves first and this assertion is what flags the revisit.
+    const saleLayoutNarrowRule = /@media\s*\(max-width:\s*1023px\)\s*\{[^}]*\.sale-layout/;
+    expect(normalised).not.toMatch(saleLayoutNarrowRule);
   });
 });
