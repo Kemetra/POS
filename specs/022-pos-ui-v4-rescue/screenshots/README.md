@@ -205,7 +205,7 @@ absence is acceptable; a manufactured artifact is not.
 | `u2-sale-workspace-before.png` | ⏸️ deferred → #448 |
 | `u2-sale-workspace-after.png` | ⏸️ deferred → #448 |
 | `u2-sale-workspace-lone-cart-after.png` | ⏸️ deferred → #448 (P1 fix — never rendered) |
-| `u2-sale-workspace-narrow-after.png` | ⏸️ deferred → #448 (`@media` guard) |
+| ~~`u2-sale-workspace-narrow-after.png`~~ | ❌ **IMPOSSIBLE — dropped.** See [#450](https://github.com/Kemetra/POS/issues/450) |
 
 **Reference image:** `visual-references/03-sale-workspace.png`.
 
@@ -304,7 +304,18 @@ always rendered and the lone-cart state is unreachable.
   Do **not** hand-edit the DB to fake a populated lone cart. A manufactured artifact is worse than
   an honestly empty one (spec §Screenshot Acceptance requires the surface be *reached honestly*).
 
-- **#3 narrow terminal** — same env as #1; just drag the window under ~1023px. No relaunch needed.
+- **#3 narrow terminal — ❌ DROPPED, cannot be captured.** `useViewportTier` treats anything under
+  **1024px** as `too-small` (`useViewportTier.ts:6`) and `AppShell` then renders `ScreenTooSmall`
+  **instead of** its `<Outlet />` (`AppShell.tsx:63-74` vs `:121`). `/app/cart` is a child of that
+  outlet (`router.tsx:167-183`), so below 1024px `.sale-layout` does not render at all and the shot
+  cannot contain it. `@media (max-width: 1023px)` and the supported tier `>= 1024px` are exactly
+  complementary — **the rule is unreachable, so there is no window width that shows both.**
+
+  No workaround is legitimate: DevTools device emulation drives `matchMedia` identically, and
+  raising the tier floor to force the view would be *editing code to manufacture the view*, which
+  §Screenshot Acceptance requirement 2 forbids. Tracked as a code question in
+  [#450](https://github.com/Kemetra/POS/issues/450) (4 such `max-width: 1023px` blocks exist; the
+  fix is delete-the-dead-rules or lower the tier floor, an owner call). **#448 is 3 captures, not 4.**
 
 #### ⚠️ An empty cart cannot evidence FR-15 — new constraint, applies to future slices too
 
