@@ -479,9 +479,9 @@ export function PaymentSurface({
   }
 
   return (
-    <main className="payment-surface" data-testid="payment-surface" aria-label="Payment">
+    <main className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
       <header className="payment-surface__header">
-        <h2 className="payment-surface__title">Payment</h2>
+        <h2 className="payment-surface__title">الدفع</h2>
         <OperatorBadge display_name={display_name} role={role} />
       </header>
 

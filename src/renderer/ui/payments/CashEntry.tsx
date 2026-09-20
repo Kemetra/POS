@@ -139,7 +139,7 @@ export function CashEntry({
   }
 
   return (
-    <section className="cash-entry" data-testid="cash-entry" aria-label="Cash entry">
+    <section className="cash-entry" data-testid="cash-entry" aria-label="إدخال النقد">
       {/*
         POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
         Value is dir="ltr" mono so money is never bidi-reordered (D-006 rule).

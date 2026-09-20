@@ -60,7 +60,7 @@ export function AmountPad({ valueMinor, onChange, totalMinor }: AmountPadProps):
         {formatMinorUnits(current)}
       </div>
 
-      <div className="amount-pad__quick" role="group" aria-label="Quick amounts">
+      <div className="amount-pad__quick" role="group" aria-label="مبالغ سريعة">
         {suggestions.map((amount) => (
           <button
             key={amount}
@@ -116,7 +116,7 @@ export function AmountPad({ valueMinor, onChange, totalMinor }: AmountPadProps):
           type="button"
           className="amount-pad__key amount-pad__key--del"
           data-testid="amount-pad-delete"
-          aria-label="Delete last digit"
+          aria-label="حذف آخر رقم"
           style={{ minHeight: touchTarget.min }}
           onClick={pressDelete}
         >

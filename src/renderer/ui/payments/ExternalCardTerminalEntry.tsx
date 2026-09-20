@@ -120,7 +120,7 @@ export function ExternalCardTerminalEntry({
     <section
       className="external-card-terminal-entry"
       data-testid="external-card-terminal-entry"
-      aria-label="External card terminal entry"
+      aria-label="إدخال مرجع جهاز الشبكة"
     >
       {/*
         POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
@@ -228,7 +228,7 @@ export function ExternalCardTerminalEntry({
         inputMode="text"
         autoComplete="off"
         maxLength={6}
-        placeholder="e.g. T1A2B3"
+        placeholder="مثال: T1A2B3"
         dir="ltr"
         value={referenceInput}
         onChange={(e) => {

@@ -37,15 +37,15 @@ export function PaymentCartSummary({ envelope }: PaymentCartSummaryProps): JSX.E
     <section
       className="payment-cart-summary"
       data-testid="payment-cart-summary"
-      aria-label="Order summary"
+      aria-label="ملخص الطلب"
     >
-      <h3 className="payment-cart-summary__heading">Order summary</h3>
+      <h3 className="payment-cart-summary__heading">ملخص الطلب</h3>
 
-      <ol className="payment-cart-summary__lines" aria-label="Cart items">
+      <ol className="payment-cart-summary__lines" aria-label="أصناف السلة">
         {envelope.lines.map((line, idx) => (
           <li key={line.line_id} className="payment-cart-summary__line">
             <span className="payment-cart-summary__line-name">{line.display_name}</span>
-            <span className="payment-cart-summary__line-qty" aria-label="quantity">
+            <span className="payment-cart-summary__line-qty" aria-label="الكمية">
               ×{line.quantity}
             </span>
             <span
@@ -59,7 +59,7 @@ export function PaymentCartSummary({ envelope }: PaymentCartSummaryProps): JSX.E
       </ol>
 
       <div className="payment-cart-summary__footer">
-        <span className="payment-cart-summary__subtotal-label">Subtotal</span>
+        <span className="payment-cart-summary__subtotal-label">الإجمالي الفرعي</span>
         <span
           className="payment-cart-summary__subtotal-value"
           data-testid="payment-summary-subtotal"
