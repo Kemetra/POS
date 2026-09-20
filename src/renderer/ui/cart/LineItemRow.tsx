@@ -163,13 +163,18 @@ export function LineItemRow({
           type="button"
           className="line-item-row__note-add"
           data-testid="line-note-add-btn"
-          aria-label="Add note"
           onClick={onNoteOpen}
         >
-          {/* 022 U2 / T063 — FR-19 Arabic-first visible copy. The aria-label is
-              left in English deliberately: accessible-name language is U6's
-              convergence pass, and changing it here would churn the a11y
-              snapshots U6 owns. */}
+          {/* 022 U2 / T063 — FR-19 Arabic-first visible copy, and the visible
+              text is what NAMES the button. An earlier pass kept
+              `aria-label="Add note"` here on the grounds that accessible-name
+              language is U6's convergence pass — but aria-label REPLACES
+              descendant text in the accessibility tree, so an English name on
+              Arabic copy meant voice-control users could not say what they saw
+              and AT announced copy absent from the screen (WCAG 2.5.3). U6's
+              deferral covers labels whose visible text is unchanged; this one
+              changed here, so the mismatch is U2's to close. No Arabic
+              aria-label either — it would duplicate the text and can drift. */}
           إضافة ملاحظة
         </button>
       )}

@@ -132,8 +132,21 @@ function SaleLayout({ showCatalogue }: { showCatalogue: boolean }): JSX.Element 
         cart visually dominates. FR-15's real verification is the T0D1
         screenshot comparison; see the CSS rule for the RTL side-placement
         reasoning (track 1 is the visual right under `dir="rtl"`).
+
+        `data-catalogue` gates the TWO-TRACK template, because `cart` and
+        `productSearch` are independent fail-closed flags: `cart: true,
+        productSearch: false` renders the cart ALONE. Grid auto-places a lone
+        child into track 1 — which the FR-15 flip made the fixed 380px rail —
+        so an unconditional two-track template collapsed a solitary cart into a
+        narrow rail beside an empty `1fr` column above 1023px. Dominance stays
+        unconditional; only the track COUNT follows the catalogue.
       */}
-      <div className="sale-layout" data-testid="sale-layout" data-cart-dominant="true">
+      <div
+        className="sale-layout"
+        data-testid="sale-layout"
+        data-cart-dominant="true"
+        data-catalogue={showCatalogue ? 'true' : 'false'}
+      >
         {showCatalogue && <CatalogueSalePane onLineAdded={forwardAddLine} />}
         <CartPane onLineAdded={registerAddLine} onPaymentContinue={handlePaymentContinue} />
       </div>

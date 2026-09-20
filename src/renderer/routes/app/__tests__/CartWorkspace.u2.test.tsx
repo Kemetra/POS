@@ -97,6 +97,36 @@ describe('U2 / T060 — cart-dominant sale workspace (FR-15)', () => {
     expect(layout).toHaveAttribute('data-cart-dominant', 'true');
   });
 
+  it('marks the layout as two-region only when the catalogue is actually rendered', () => {
+    // Codex P1 regression guard. `cart` and `productSearch` are INDEPENDENT
+    // fail-closed flags, so `cart: true, productSearch: false` is a supported
+    // (and default-ish) configuration in which SaleLayout renders the cart
+    // ALONE. The U2 track flip made the first grid track the fixed 380px rail,
+    // and CSS grid auto-places a lone child into track 1 — so a solitary cart
+    // would have collapsed into a narrow rail beside an empty `1fr` column on
+    // viewports wider than 1023px. The two-track template must therefore be
+    // keyed on the catalogue's presence, not applied unconditionally.
+    //
+    // HONEST LIMIT: same as the sibling test above — this proves the CSS HOOK
+    // tracks `showCatalogue`, not that the rendered tracks are correct. jsdom
+    // computes no stylesheet-driven grid tracks. Not FR-15 coverage.
+    useFeatureFlagsStore.getState().hydrate({ cart: true, productSearch: false });
+    renderWorkspace();
+
+    const layout = screen.getByTestId('sale-layout');
+    expect(layout).toHaveAttribute('data-catalogue', 'false');
+    // Dominance is unconditional: a lone cart is trivially the dominant region.
+    expect(layout).toHaveAttribute('data-cart-dominant', 'true');
+  });
+
+  it('marks the layout two-region when the catalogue is present', () => {
+    useFeatureFlagsStore.getState().hydrate({ cart: true, productSearch: true });
+    renderWorkspace();
+
+    const layout = screen.getByTestId('sale-layout');
+    expect(layout).toHaveAttribute('data-catalogue', 'true');
+  });
+
   it('keeps the gated (cart-off) surface Arabic-first (FR-19, plan A9)', () => {
     useFeatureFlagsStore.getState().hydrate({ cart: false, productSearch: false });
     renderWorkspace();

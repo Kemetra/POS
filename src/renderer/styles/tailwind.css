@@ -2058,16 +2058,21 @@ body {
    */
 
   /*
-   * POS v3.5 Phase 2 — two-column sale workspace.
-   * Catalogue column is flexible; the cart column is a fixed rail. The grid
-   * flows along the inline axis, so the root `dir="rtl"` (Phase 1) places the
-   * catalogue at the visual start (right) and the cart rail at the end (left)
-   * without any direction-specific rule. Recreated against POS-Pulse tokens
-   * from the v3.5 design reference — not copied.
+   * POS v3.5 Phase 2 / 022 U2 — the sale workspace grid.
+   *
+   * The BASE is single-track, and that is load-bearing, not a default for its
+   * own sake: `cart` and `productSearch` are independent fail-closed flags, so
+   * `cart: true, productSearch: false` renders the cart as the layout's only
+   * child. Grid auto-places a lone child into track 1, so a two-track base
+   * would put a solitary cart in the fixed 380px rail and leave the flexible
+   * column empty. Single-track by default means a lone cart always fills the
+   * workspace; the second track is opted into below when the catalogue is
+   * actually rendered. Recreated against POS-Pulse tokens from the v3.5 design
+   * reference — not copied.
    */
   .sale-layout {
     display: grid;
-    grid-template-columns: 1fr 380px;
+    grid-template-columns: 1fr;
     flex: 1 1 auto;
     min-block-size: 0;
     block-size: 100%;
@@ -2082,6 +2087,10 @@ body {
    * and left the cart a fixed 380px rail — backwards for FR-15. Inverting the
    * tracks makes the cart flexible/major and the catalogue the fixed rail.
    *
+   * Keyed on `data-catalogue` rather than applied unconditionally: this is the
+   * TWO-REGION template, so it may only apply when both regions exist. See the
+   * base rule above for why a lone cart must not land in the fixed track.
+   *
    * Side placement falls out of the same change, and matches the governing
    * reference (visual-references/03-sale-workspace.png): the grid flows along
    * the inline axis, so under the root `dir="rtl"` track 1 is the visual RIGHT.
@@ -2093,17 +2102,22 @@ body {
    * RTL focus order stays as authored; only the track sizing moves. The rail
    * width is component geometry — T025a's closed exception list.
    */
-  .sale-layout[data-cart-dominant='true'] {
+  .sale-layout[data-catalogue='true'] {
     grid-template-columns: 380px 1fr;
   }
 
   /* Narrow terminals: stack catalogue over cart; the workspace scrolls as one.
-     The attribute selector above is more specific than a bare `.sale-layout`,
-     so the stacking rule must match it too or a narrow terminal would keep the
-     two-track layout. */
+     The attribute selector above is (0,2,0) and a bare `.sale-layout` is
+     (0,1,0), so the stacking rule must match the attribute too or a narrow
+     terminal would keep the two-track layout.
+
+     Deliberately NOT `[data-cart-dominant='true'][data-catalogue='true']`:
+     that would be (0,3,0) and outrank this guard, re-opening the same
+     specificity trap from the other side. The two-track template is keyed on
+     ONE attribute so this rule can always win. */
   @media (max-width: 1023px) {
     .sale-layout,
-    .sale-layout[data-cart-dominant='true'] {
+    .sale-layout[data-catalogue='true'] {
       grid-template-columns: 1fr;
     }
   }
