@@ -181,7 +181,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
   // TakeoverPrompt overlay — rendered when FSM is in takeoverPrompt state.
   if (fsm.kind === 'takeoverPrompt') {
     return (
-      <main data-testid="route-sign-in" className="sign-in-route" dir="rtl">
+      <main data-testid="route-sign-in" className="v4-screen" dir="rtl">
         <TakeoverPrompt operator={operator} pending_takeover_id={fsm.pending_takeover_id} />
       </main>
     );
@@ -194,91 +194,139 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
   }));
 
   return (
-    <main data-testid="route-sign-in" className="sign-in-route" dir="rtl">
-      <div className="sign-in-route__pane sign-in-pane">
-        <header className="sign-in-pane__head">
-          <h1 className="sign-in-pane__title">تسجيل دخول الصيدلي</h1>
-          <p className="sign-in-pane__sub">
-            أدخل كود الموظف ثم الرقم السري المكوّن من ٦ أرقام — كل عمليات الوردية تُسجَّل باسمك.
-            (Staff code, then 6-digit PIN.)
-          </p>
-        </header>
-
-        <div className="sign-in-route__split sign-in-split">
-          <section className="sign-in-route__manager-admin">
-            <p className="sign-in-route__section-label ws-section__label">
-              كود الموظف · Staff code
-            </p>
-            <ManagerAdminSignInForm operator={operator} />
-          </section>
-
-          <aside className="sign-in-route__roster" aria-label="قائمة الكاشير">
-            <h2 className="sign-in-route__sub-heading">
-              صيادلة هذا الفرع · Cashiers on this branch
-            </h2>
-            {rosterError !== undefined && (
-              <p className="sign-in-route__roster-error" role="alert">
-                {rosterError}
-              </p>
-            )}
-            <RosterList
-              cashiers={rosterEntries}
-              inert={cashiers.length === 0}
-              onSelect={handleCashierSelect}
-              selectedId={selectedCashier?.id}
-            />
-            {selectedCashier !== undefined && (
-              <div
-                className="sign-in-route__pin-section"
-                data-testid="pin-section"
-                data-error={cashierError !== undefined || undefined}
-              >
-                <p className="sign-in-route__pin-label">
-                  الرقم السري لـ{' '}
-                  <strong data-testid="pin-cashier-name">{selectedCashier.display_name}</strong>{' '}
-                  <span className="sign-in-route__pin-role">
-                    {ROLE_NAME_AR[selectedCashier.role]}
-                  </span>
-                </p>
-
-                <div className="sign-in-route__pin-feedback" role="status" aria-live="polite">
-                  {isSigningIn ? (
-                    <span data-testid="cashier-sign-in-spinner">جارٍ تسجيل الدخول…</span>
-                  ) : cashierError !== undefined ? (
-                    <span
-                      role="alert"
-                      data-testid="cashier-sign-in-error"
-                      className="sign-in-route__pin-error"
-                    >
-                      {cashierError}
-                    </span>
-                  ) : null}
-                </div>
-
-                <PinPad
-                  value={pin}
-                  onChange={handlePinChange}
-                  onSubmit={handleCashierSubmit}
-                  disabled={isSigningIn}
-                />
-
-                <button
-                  type="button"
-                  className="sign-in-route__pin-cancel"
-                  data-testid="cashier-pin-cancel"
-                  disabled={isSigningIn}
-                  onClick={() => {
-                    setSelectedCashier(undefined);
-                    setPin('');
-                    setCashierError(undefined);
-                  }}
-                >
-                  رجوع · Back
-                </button>
-              </div>
-            )}
-          </aside>
+    // 022 hard reset — v4 composition. Three RTL column tracks, reading from the
+    // inline start: identity/staff-code rail, cashier roster (the widest track,
+    // it carries the primary choice), and the PIN column.
+    //
+    // The v3.5 shape was a two-column split where the PIN pad appeared INLINE
+    // beneath the roster, so choosing a cashier reflowed the surface and pushed
+    // the keypad below the fold. The reference gives the keypad its own
+    // persistent column; that is the structural change, not a restyle.
+    //
+    // Geometry comes from the shared v4 layout vocabulary (`.v4-*`), not from
+    // per-screen BEM. No `sign-in-route__*` / `sign-in-pane__*` / `sign-in-split`
+    // class survives here.
+    <main data-testid="route-sign-in" className="v4-screen" dir="rtl">
+      <header className="v4-screen__header">
+        <div>
+          <h1 className="v4-screen__title">تسجيل دخول الصيدلي</h1>
+          <p className="v4-screen__subtitle">كل عمليات الوردية تُسجَّل باسمك.</p>
         </div>
+        {/* NO STEPPER HERE — deliberate.
+         *
+         * The reference sign-in shows a 3-step progress rail
+         * (تسجيل الدخول → بدء الوردية → جاهز للبيع). That product has a
+         * shift-start step; POS-Pulse does not. `SignInRoute` navigates
+         * straight to `/app` on `signedIn` (see the effect above), and
+         * `specs/015-shift-cash-management` has not shipped — RECONCILIATION
+         * §B lists shift close as explicitly NOT authorised.
+         *
+         * Rendering two pending steps would be a layout filled with a
+         * behaviour claim: RECONCILIATION §A — "it does not invent a
+         * behaviour to fill a layout" — and PRODUCT.md principle 1,
+         * "honest surfaces". The stepper's visual treatment is kept in the
+         * v4 layout layer for checkout, which has a real multi-step flow. */}
+      </header>
+
+      {/* Roster is the widest track: selecting the operator is the primary act.
+          The PIN column holds a fixed 300px so the keypad never reflows. */}
+      <div className="v4-columns v4-columns--sign-in">
+        <section className="v4-panel" aria-labelledby="signin-staff-code">
+          <div className="v4-panel__head">
+            {/* Bilingual section label retained verbatim: `sign-in-route.test.tsx`
+                pins this exact string. The rebuild changes composition, not copy —
+                re-pointing a passing assertion to fit new markup would weaken it. */}
+            <h2 className="v4-panel__title" id="signin-staff-code">
+              كود الموظف · Staff code
+            </h2>
+          </div>
+          <p className="v4-panel__hint">للمدير أو المشرف — الدخول بكود الموظف وكلمة السر.</p>
+          <ManagerAdminSignInForm operator={operator} />
+        </section>
+
+        <section className="v4-panel" aria-label="قائمة الكاشير">
+          <div className="v4-panel__head">
+            <h2 className="v4-panel__title">صيادلة هذا الفرع</h2>
+          </div>
+          {rosterError !== undefined && (
+            <p className="v4-feedback__error" role="alert">
+              {rosterError}
+            </p>
+          )}
+          <RosterList
+            cashiers={rosterEntries}
+            inert={cashiers.length === 0}
+            onSelect={handleCashierSelect}
+            selectedId={selectedCashier?.id}
+          />
+        </section>
+
+        {/* PIN column. Persistent track: it holds its width whether or not a
+            cashier is selected, so selection never reflows the two columns
+            beside it. Before selection it states what it is waiting for. */}
+        <aside className="v4-panel" aria-label="إدخال الرقم السري">
+          {selectedCashier === undefined ? (
+            <>
+              <div className="v4-panel__head">
+                <h2 className="v4-panel__title">الرقم السري</h2>
+              </div>
+              <p className="v4-panel__hint" data-testid="pin-awaiting-selection">
+                اختر صيدليًا من القائمة لإدخال الرقم السري.
+              </p>
+            </>
+          ) : (
+            <div
+              className="v4-stack"
+              data-testid="pin-section"
+              data-error={cashierError !== undefined || undefined}
+            >
+              <div className="v4-panel__head">
+                <h2 className="v4-panel__title" data-testid="pin-cashier-name">
+                  {selectedCashier.display_name}
+                </h2>
+              </div>
+              <p className="v4-panel__hint">{ROLE_NAME_AR[selectedCashier.role]}</p>
+
+              {/* Note 1 invariant — alert XOR spinner. One live region, one
+                  message at a time; the box is reserved so a refusal never
+                  reflows the keypad beneath it. */}
+              <div className="v4-feedback" role="status" aria-live="polite">
+                {isSigningIn ? (
+                  <span data-testid="cashier-sign-in-spinner">جارٍ تسجيل الدخول…</span>
+                ) : cashierError !== undefined ? (
+                  <span
+                    role="alert"
+                    data-testid="cashier-sign-in-error"
+                    className="v4-feedback__error"
+                  >
+                    {cashierError}
+                  </span>
+                ) : null}
+              </div>
+
+              <PinPad
+                value={pin}
+                onChange={handlePinChange}
+                onSubmit={handleCashierSubmit}
+                disabled={isSigningIn}
+              />
+
+              <button
+                type="button"
+                className="btn btn--ghost btn--md"
+                data-testid="cashier-pin-cancel"
+                disabled={isSigningIn}
+                onClick={() => {
+                  setSelectedCashier(undefined);
+                  setPin('');
+                  setCashierError(undefined);
+                }}
+              >
+                رجوع
+              </button>
+            </div>
+          )}
+        </aside>
       </div>
     </main>
   );

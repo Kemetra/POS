@@ -115,21 +115,21 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
   return (
     <form
       onSubmit={handleSubmit}
-      className="sign-in-form"
+      className="v4-stack"
       data-testid="manager-admin-sign-in-form"
       noValidate
     >
       {onBack !== undefined && (
         <button
           type="button"
-          className="sign-in-form__back"
+          className="btn btn--ghost btn--md"
           data-testid="sign-in-back"
           onClick={onBack}
         >
           ← العودة إلى قائمة الكاشير
         </button>
       )}
-      <div className="sign-in-form__field">
+      <div className="v4-field">
         <label htmlFor={identifierId}>البريد الإلكتروني أو اسم المستخدم</label>
         <input
           id={identifierId}
@@ -144,7 +144,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
           data-testid="sign-in-identifier"
         />
       </div>
-      <div className="sign-in-form__field">
+      <div className="v4-field">
         <label htmlFor={passwordId}>كلمة المرور</label>
         <input
           id={passwordId}
@@ -157,7 +157,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
         />
       </div>
 
-      <div className="sign-in-form__feedback" role="status" aria-live="polite">
+      <div className="v4-feedback" role="status" aria-live="polite">
         {isSubmitting ? (
           <span data-testid="sign-in-spinner">جارٍ تسجيل الدخول…</span>
         ) : refusalCategory !== undefined ? (
@@ -165,16 +165,12 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
             role="alert"
             data-testid="sign-in-refusal"
             data-category={refusalCategory}
-            className="sign-in-form__refusal"
+            className="v4-feedback__error"
           >
             {SIGN_IN_REFUSAL_COPY[refusalCategory]}
           </span>
         ) : emptyInputShown ? (
-          <span
-            role="alert"
-            data-testid="sign-in-empty-input"
-            className="sign-in-form__empty-input"
-          >
+          <span role="alert" data-testid="sign-in-empty-input" className="v4-feedback__error">
             {EMPTY_INPUT_MESSAGE}
           </span>
         ) : null}
@@ -184,7 +180,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
         type="submit"
         disabled={isSubmitting}
         data-testid="sign-in-submit"
-        className="sign-in-form__submit"
+        className="btn btn--primary btn--lg"
       >
         {isSubmitting ? 'جارٍ تسجيل الدخول…' : 'تسجيل الدخول'}
       </button>
