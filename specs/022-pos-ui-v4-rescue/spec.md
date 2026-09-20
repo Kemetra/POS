@@ -422,9 +422,10 @@ NOT be added to satisfy this requirement without separate approval.
 > **Scope of this list: U2 only.** It is not a complete audit of every merged slice — it records the
 > one deferral that has been formally tracked. Other slices also carry outstanding captures
 > (`tasks.md` leaves **T0A2**, **T0B2**, **T0C1** and **T0C2** unchecked although U4a, U0 and U1
-> merged in `f417ea7`); their status lives in their own `screenshots/README.md` sections and was
-> **not** audited here. Absence from this list is therefore **not** evidence a slice is visually
-> accepted — check `tasks.md` and the README section for the slice you care about.
+> merged in `f417ea7`) and were **not** audited here. `tasks.md` is the authority for their status —
+> `screenshots/README.md` currently holds slice sections for **u4a and u2 only**, so there is no U0
+> or U1 record to consult. Absence from this list is therefore **not** evidence a slice is visually
+> accepted.
 >
 > | Slice | Task | Status | Tracking |
 > |:--|:--|:--|:--|

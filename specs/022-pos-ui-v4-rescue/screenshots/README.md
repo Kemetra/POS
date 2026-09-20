@@ -266,8 +266,45 @@ unset POS_PULSE_DEV_ITEM_RESOLVER
 npm run dev
 ```
 
+**Verified 2026-09-20 by executing this block** in a shell that already had
+`POS_PULSE_DEV_ITEM_RESOLVER=1` exported (the returning-executor case): the `unset` cleared it,
+`pairing.dev_bypass.active` + `operator.dev_bypass.active` both fired, and the catalogue-backed
+resolver was selected. 0 of the 50 seeded `product_id`s overlap the five fixture SKUs — which is
+exactly why the flag must stay unset.
+
 (The alternative — fixture resolver on, catalogue seed off, adding a fixture SKU — does not exercise
 the 009 search → confirm → cart path the capture is meant to show.)
+
+##### Captures #2 and #3 need a DIFFERENT launch
+
+The block above serves captures **#1** and **#4** only. `CartWorkspace` passes
+`showCatalogue={productSearchFlag}`, so with `POS_PULSE_FEATURE_PRODUCT_SEARCH=1` the catalogue is
+always rendered and the lone-cart state is unreachable.
+
+- **#2 lone cart** — relaunch with product search **off**:
+
+  ```bash
+  export POS_PULSE_DEV_SKIP_PAIRING=1
+  export POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1
+  export POS_PULSE_FEATURE_CART=1
+  unset POS_PULSE_FEATURE_PRODUCT_SEARCH   # <- the point of this capture
+  unset POS_PULSE_DEV_ITEM_RESOLVER
+  npm run dev
+  ```
+
+  ⚠️ **Known limitation — this capture will show an EMPTY lone cart.** With search off there is no
+  in-app way to add a catalogue line, and **you cannot carry one over from the block above**:
+  each launch creates a *new* cart rather than resuming the previous one (verified 2026-09-20 —
+  consecutive launches produced distinct `cart_id`s, both `state=empty`).
+
+  That is acceptable for this capture's **purpose**, which is the P1 fix — showing the lone cart
+  fills the workspace instead of collapsing into a 380px rail beside dead space. Dominance of an
+  empty region is still visible. It is **not** FR-15 evidence; capture #1 carries that.
+
+  Do **not** hand-edit the DB to fake a populated lone cart. A manufactured artifact is worse than
+  an honestly empty one (spec §Screenshot Acceptance requires the surface be *reached honestly*).
+
+- **#3 narrow terminal** — same env as #1; just drag the window under ~1023px. No relaunch needed.
 
 #### ⚠️ An empty cart cannot evidence FR-15 — new constraint, applies to future slices too
 
