@@ -70,7 +70,7 @@ export function TenderSelection({
           }}
         >
           <span className="tender-selection__option-label">نقدي</span>
-          <small>نقداً</small>
+          <small>العملات الورقية والمعدنية</small>
         </button>
 
         <button
@@ -86,7 +86,7 @@ export function TenderSelection({
           }}
         >
           <span className="tender-selection__option-label">بطاقة</span>
-          <small>شبكة</small>
+          <small>جهاز الشبكة الخارجي</small>
         </button>
 
         {/* Wave 5c T291 — voucher slot ENABLED (§A4-B cleared 2026-05-25). */}
@@ -103,7 +103,7 @@ export function TenderSelection({
           }}
         >
           <span className="tender-selection__option-label">قسيمة</span>
-          <small>رصيد</small>
+          <small>قسيمة داخلية</small>
         </button>
       </div>
     </section>

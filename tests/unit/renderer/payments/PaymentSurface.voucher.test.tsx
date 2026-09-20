@@ -159,14 +159,14 @@ afterEach(() => {
 });
 
 describe('PaymentSurface — internal_voucher (Wave 5c coverage)', () => {
-  it('Slice-1 mode: renders the "Voucher selected" status banner on voucher tender pick', async () => {
+  it('Slice-1 mode: renders the voucher tender-selected status banner on voucher tender pick', async () => {
     // No bridge → Slice-1 status-banner mode. Covers line ~336 ternary
-    // third branch ('Voucher selected').
+    // third branch ('تم اختيار القسيمة').
     const user = userEvent.setup();
     render(<PaymentSurface />);
     await user.click(screen.getByTestId('tender-voucher'));
     const banner = await screen.findByTestId('payment-surface-tender-selected');
-    expect(banner).toHaveTextContent('Voucher selected');
+    expect(banner).toHaveTextContent('تم اختيار القسيمة');
   });
 
   it('bridged mode: clicking the voucher tender mounts <VoucherEntry>', async () => {

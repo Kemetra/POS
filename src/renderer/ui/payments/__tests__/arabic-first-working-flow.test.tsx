@@ -19,8 +19,26 @@
  *      text node. A sighted operator reads it; a text scan does not.
  *
  * So the assertion runs over operator-facing ATTRIBUTES (`aria-label`,
- * `aria-describedby` resolved to its target, `title`, `placeholder`) and over
- * live-region text, in addition to rendered text.
+ * `aria-describedby` resolved to its target, `title`, `placeholder`) in
+ * addition to rendered text.
+ *
+ * KNOWN LIMIT — BRANCH COVERAGE, NOT STRING COVERAGE
+ * --------------------------------------------------
+ * These per-component renders exercise each surface in its DEFAULT state. Copy
+ * that only renders inside a conditional branch — refusal banners, empty
+ * states, the Slice-1 (bridge === null) fallback — is NOT reached by them, and
+ * therefore not scanned.
+ *
+ * That gap is not theoretical: three sets of English strings were found this
+ * way rather than by this file's sweep — PaymentSurface's Slice-1 status
+ * banner, its start/cancel/confirm refusal copy, and the entry surfaces'
+ * apply-refusal copy. Two were surfaced by the T075 split-tender test and one
+ * by a full-suite run, not here.
+ *
+ * So: an Arabic-first assertion is only as complete as the STATES it renders.
+ * A surface added to the list below must have its refusal and fallback states
+ * driven deliberately, or its English will pass unseen. The Slice-1 banner case
+ * at the bottom of this file is the worked example.
  *
  * FORMAT TOKENS ARE A DELIBERATE EXEMPTION, NOT AN OMISSION
  * ---------------------------------------------------------
@@ -32,7 +50,7 @@
  * explicitly so the exemption is reviewable rather than silent.
  */
 
-import { render, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 
@@ -42,6 +60,10 @@ import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
 import { MoneyRoll } from '../MoneyRoll.js';
 import { PaymentCartSummary } from '../PaymentCartSummary.js';
+import { useOperatorSessionStore } from '../../../stores/operator-session-store.js';
+import { usePaymentStore } from '../../../stores/payment-store.js';
+import { useFeatureFlagsStore } from '../../../stores/feature-flags-store.js';
+import { PaymentSurface } from '../PaymentSurface.js';
 import { TenderSelection } from '../TenderSelection.js';
 import { VoucherEntry } from '../VoucherEntry.js';
 
@@ -233,6 +255,66 @@ describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () 
   it('MoneyRoll carries no English-only operator-facing string', () => {
     const { container } = render(<MoneyRoll valueMinor={1500} />);
     expectNoEnglishOnlyStrings(container, 'MoneyRoll');
+  });
+
+  /**
+   * PaymentSurface's Slice-1 (bridge === null) status banner.
+   *
+   * Found by the T075 split-tender test, NOT by this file's original sweep:
+   * these three strings ('Cash selected' / 'Card terminal selected' /
+   * 'Voucher selected', PaymentSurface.tsx:507-510) live in a
+   * `role="status" aria-live="polite"` live region that only renders when no
+   * bridge is present. Rendering each component standalone never reaches that
+   * branch, so a per-component sweep cannot see them.
+   *
+   * The lesson is about COVERAGE, not the collector: an Arabic-first assertion
+   * is only as complete as the states it actually renders. Conditional branches
+   * need to be driven deliberately.
+   */
+  it('PaymentSurface Slice-1 status banner carries no English-only string', async () => {
+    useOperatorSessionStore.setState({
+      state: {
+        kind: 'signedIn',
+        session: {
+          id: 'sess-001',
+          operator_id: 'op-001',
+          display_name: 'أحمد',
+          role: 'cashier',
+          tenant_id: 'tenant-001',
+          branch_id: 'branch-001',
+          started_at: '2026-09-19T08:00:00.000Z',
+        },
+      },
+    });
+    usePaymentStore.getState().mount(makeEnvelope());
+    useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+
+    // No `_testBridge` — this is the Slice-1 (bridge === null) branch, the only
+    // state in which the status banner renders.
+    render(<PaymentSurface />);
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    const banner = screen.getByTestId('payment-surface-tender-selected');
+    expect(banner).toBeInTheDocument();
+
+    // Scoped to the banner, NOT the whole container, on purpose.
+    //
+    // Scanning the container also sweeps `<OperatorBadge>`, whose role string
+    // comes from the SHARED `roleDisplayName` (shared/operator/role.ts) and
+    // renders English ("Cashier"). That is a real FR-19 gap, but it belongs to
+    // the shell's role-indicator region (003 FR-020) and is visible on every
+    // screen — not to US3, which is scoped to the checkout surfaces and to copy
+    // only. Translating shared vocabulary from here would widen this slice into
+    // components with their own tests and their own visual acceptance.
+    //
+    // Recorded rather than silently fixed or silently dropped.
+    expectNoEnglishOnlyStrings(banner, 'PaymentSurface (Slice-1 status banner)');
+
+    useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
+    usePaymentStore.getState().reset();
+    useFeatureFlagsStore.getState().reset();
   });
 });
 

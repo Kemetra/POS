@@ -287,7 +287,7 @@ export function CashEntry({
           role="status"
           aria-live="polite"
         >
-          This payment could not be applied. Please try again.
+          تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
         </div>
       )}
 

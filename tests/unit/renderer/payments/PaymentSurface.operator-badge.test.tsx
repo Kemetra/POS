@@ -105,25 +105,25 @@ describe('PaymentSurface — tender selection feedback', () => {
     usePaymentStore.getState().reset();
   });
 
-  it('shows "Cash selected" status after selecting cash', async () => {
+  it('shows the cash tender-selected status after selecting cash', async () => {
     const user = userEvent.setup();
     seedSignedInSession();
     usePaymentStore.getState().mount(makeEnvelope());
     render(<PaymentSurface />);
     await user.click(screen.getByTestId('tender-cash'));
     expect(screen.getByTestId('payment-surface-tender-selected')).toHaveTextContent(
-      'Cash selected',
+      'تم اختيار النقد',
     );
   });
 
-  it('shows "Card terminal selected" status after selecting card', async () => {
+  it('shows the card-terminal tender-selected status after selecting card', async () => {
     const user = userEvent.setup();
     seedSignedInSession();
     usePaymentStore.getState().mount(makeEnvelope());
     render(<PaymentSurface />);
     await user.click(screen.getByTestId('tender-external-card'));
     expect(screen.getByTestId('payment-surface-tender-selected')).toHaveTextContent(
-      'Card terminal selected',
+      'تم اختيار جهاز الشبكة',
     );
   });
 });

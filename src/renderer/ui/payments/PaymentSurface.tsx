@@ -239,7 +239,7 @@ export function PaymentSurface({
       });
 
       if (startResponse.kind === 'refused') {
-        setBridgeRefusalCopy('We could not start this payment. Please try again.');
+        setBridgeRefusalCopy('تعذّر بدء عملية الدفع. يرجى المحاولة مرة أخرى.');
         return;
       }
 
@@ -257,7 +257,7 @@ export function PaymentSurface({
     } catch {
       // Bridge rejection (network / IPC layer error). Treat as a generic
       // refusal — no structured reason crosses into the DOM (FR-005 / FR-017).
-      setBridgeRefusalCopy('We could not start this payment. Please try again.');
+      setBridgeRefusalCopy('تعذّر بدء عملية الدفع. يرجى المحاولة مرة أخرى.');
     } finally {
       setIsStarting(false);
     }
@@ -320,10 +320,10 @@ export function PaymentSurface({
         setPhase('tender_selection');
         usePaymentStore.getState().clearAttempt();
       } else {
-        setBridgeRefusalCopy('This payment could not be cancelled. Please try again.');
+        setBridgeRefusalCopy('تعذّر إلغاء عملية الدفع. يرجى المحاولة مرة أخرى.');
       }
     } catch {
-      setBridgeRefusalCopy('This payment could not be cancelled. Please try again.');
+      setBridgeRefusalCopy('تعذّر إلغاء عملية الدفع. يرجى المحاولة مرة أخرى.');
     } finally {
       setIsCancelling(false);
     }
@@ -343,10 +343,10 @@ export function PaymentSurface({
       if (response.kind === 'ok') {
         setPhase('settled');
       } else {
-        setBridgeRefusalCopy('This payment could not be settled. Please try again.');
+        setBridgeRefusalCopy('تعذّر إتمام عملية الدفع. يرجى المحاولة مرة أخرى.');
       }
     } catch {
-      setBridgeRefusalCopy('This payment could not be settled. Please try again.');
+      setBridgeRefusalCopy('تعذّر إتمام عملية الدفع. يرجى المحاولة مرة أخرى.');
     } finally {
       setIsConfirming(false);
     }
@@ -504,10 +504,10 @@ export function PaymentSurface({
           aria-live="polite"
         >
           {selectedTender === 'cash'
-            ? 'Cash selected'
+            ? 'تم اختيار النقد'
             : selectedTender === 'external_card_terminal'
-              ? 'Card terminal selected'
-              : 'Voucher selected'}
+              ? 'تم اختيار جهاز الشبكة'
+              : 'تم اختيار القسيمة'}
         </div>
       )}
 

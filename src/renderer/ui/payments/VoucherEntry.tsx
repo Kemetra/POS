@@ -48,7 +48,7 @@ export interface VoucherEntryProps {
  * voucher validity, balance, or holder existence by probing codes
  * against the POS surface; only the audit log distinguishes.
  */
-const GENERIC_VOUCHER_REFUSAL_COPY = 'This voucher cannot be used right now.';
+const GENERIC_VOUCHER_REFUSAL_COPY = 'تعذّر استخدام هذه القسيمة حالياً.';
 
 const VOUCHER_CODE_PATTERN = /^[A-Z0-9_-]+$/;
 

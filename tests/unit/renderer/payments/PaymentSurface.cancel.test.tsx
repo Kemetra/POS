@@ -290,7 +290,7 @@ describe('PaymentSurface — payments.cancel wiring (T153)', () => {
     await user.click(screen.getByTestId('payment-surface-cancel'));
 
     const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/could not be cancelled|please try again/i);
+    expect(refusal).toHaveTextContent(/تعذّر إلغاء|يرجى المحاولة/);
     expect(refusal.textContent).not.toMatch(/attempt_terminal/);
   });
 });
