@@ -28,11 +28,22 @@ export type TenderKind = 'cash' | 'external_card_terminal' | 'internal_voucher';
 export interface TenderSelectionProps {
   envelope: Readonly<PaymentIntentEnvelope> | null;
   onTenderSelect: (tender: TenderKind) => void;
+  /**
+   * The currently selected tender, or null while none is chosen.
+   *
+   * 022 US3 T071: the mockup's selected tile carries a 2px primary border, a
+   * tinted fill and a check badge at the tile's inline-start top corner. That
+   * emphasis is heavier than the 1.5px used for selected rows elsewhere and is
+   * intentional — the tender choice is the decision the surface exists to make.
+   * Presentation only; the parent still owns selection state.
+   */
+  selectedTender?: TenderKind | null;
 }
 
 export function TenderSelection({
   envelope,
   onTenderSelect,
+  selectedTender = null,
 }: TenderSelectionProps): JSX.Element | null {
   if (envelope === null) {
     return null;
@@ -60,8 +71,10 @@ export function TenderSelection({
         <button
           type="button"
           role="radio"
-          aria-checked="false"
-          className="tender-selection__option method-card"
+          aria-checked={selectedTender === 'cash' ? 'true' : 'false'}
+          className={`tender-selection__option method-card${
+            selectedTender === 'cash' ? ' method-card--selected' : ''
+          }`}
           data-testid="tender-cash"
           aria-label="نقدي — Cash"
           style={{ minHeight: touchTarget.min }}
@@ -69,6 +82,11 @@ export function TenderSelection({
             onTenderSelect('cash');
           }}
         >
+          {selectedTender === 'cash' && (
+            <span className="method-card__check" aria-hidden="true">
+              ✓
+            </span>
+          )}
           <span className="tender-selection__option-label">نقدي</span>
           <small>العملات الورقية والمعدنية</small>
         </button>
@@ -76,8 +94,10 @@ export function TenderSelection({
         <button
           type="button"
           role="radio"
-          aria-checked="false"
-          className="tender-selection__option method-card"
+          aria-checked={selectedTender === 'external_card_terminal' ? 'true' : 'false'}
+          className={`tender-selection__option method-card${
+            selectedTender === 'external_card_terminal' ? ' method-card--selected' : ''
+          }`}
           data-testid="tender-external-card"
           aria-label="بطاقة — Card terminal"
           style={{ minHeight: touchTarget.min }}
@@ -85,6 +105,11 @@ export function TenderSelection({
             onTenderSelect('external_card_terminal');
           }}
         >
+          {selectedTender === 'external_card_terminal' && (
+            <span className="method-card__check" aria-hidden="true">
+              ✓
+            </span>
+          )}
           <span className="tender-selection__option-label">بطاقة</span>
           <small>جهاز الشبكة الخارجي</small>
         </button>
@@ -93,8 +118,10 @@ export function TenderSelection({
         <button
           type="button"
           role="radio"
-          aria-checked="false"
-          className="tender-selection__option method-card"
+          aria-checked={selectedTender === 'internal_voucher' ? 'true' : 'false'}
+          className={`tender-selection__option method-card${
+            selectedTender === 'internal_voucher' ? ' method-card--selected' : ''
+          }`}
           data-testid="tender-voucher"
           aria-label="قسيمة — Voucher"
           style={{ minHeight: touchTarget.min }}
@@ -102,6 +129,11 @@ export function TenderSelection({
             onTenderSelect('internal_voucher');
           }}
         >
+          {selectedTender === 'internal_voucher' && (
+            <span className="method-card__check" aria-hidden="true">
+              ✓
+            </span>
+          )}
           <span className="tender-selection__option-label">قسيمة</span>
           <small>قسيمة داخلية</small>
         </button>
