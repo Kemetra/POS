@@ -194,6 +194,49 @@ absence is acceptable; a manufactured artifact is not.
 
 ---
 
+### u2 — Sale workspace (cart-dominant layout)
+
+> ⏸️ **DEFERRED 2026-09-20 → [#448](https://github.com/Kemetra/POS/issues/448).**
+> U2 merged via PR #447 (`2b4b8be`) **without** its capture, so **FR-15 is visually unverified**
+> and this slice is not visually accepted. See spec §Screenshot Acceptance → Outstanding captures.
+
+| Capture | Status |
+|:--|:--|
+| `u2-sale-workspace-before.png` | ⏸️ deferred → #448 |
+| `u2-sale-workspace-after.png` | ⏸️ deferred → #448 |
+| `u2-sale-workspace-lone-cart-after.png` | ⏸️ deferred → #448 (P1 fix — never rendered) |
+| `u2-sale-workspace-narrow-after.png` | ⏸️ deferred → #448 (`@media` guard) |
+
+**Reference image:** `visual-references/03-sale-workspace.png`.
+
+**Before-capture:** a real one IS available — U2's merge-base is `e7390f9`. Record
+`no before-capture available` only if that turns out to be unbuildable; it is not the first slice.
+
+#### ✅ T002 gates RE-VERIFIED for this slice — 2026-09-20 (agent-run launch, PASS)
+
+Environment was cleared, so **only the manual capture is outstanding** — do not re-run these gates:
+
+```
+(a) operator.dev_bypass.active : [x] OBSERVED (role=manager) -> PASS (no STOP)
+(b) catalogue readiness        : [x] verified data (direct row-count read of the dev DB)
+                                     products = 50 · product_barcodes = 49
+```
+
+Launched on `main` @ `dbe14d4` with `POS_PULSE_DEV_SKIP_PAIRING`,
+`POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN`, `POS_PULSE_FEATURE_CART`,
+`POS_PULSE_FEATURE_PRODUCT_SEARCH` all `=1`. Boot was healthy:
+`pairing.dev_bypass.active` → `operator.dev_bypass.active` → `cart.create.ok`.
+
+#### ⚠️ An empty cart cannot evidence FR-15 — new constraint, applies to future slices too
+
+Verified against the live dev DB during this launch: the boot cart is `state: "empty"` with **0
+lines**, and **no dev fixture seeds cart lines** — `POS_PULSE_DEV_SEED_CATALOGUE` populates the
+*catalogue* only (`dev-seed-catalogue.ts`). FR-15 is about line items and the running total
+dominating, so the capture requires a product **searched and confirm-added by hand** first. A
+launch-and-shoot of the empty workspace would not evidence the requirement.
+
+---
+
 ## Modified-test ledger (auditable, cumulative)
 
 The standing constraint reads: *"Behavioural tests must pass unmodified. Only tests encoding an

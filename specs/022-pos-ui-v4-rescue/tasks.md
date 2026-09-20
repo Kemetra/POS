@@ -469,6 +469,16 @@ exactly one primary action; no decorative dashboard treatment.
   register-callback into `CatalogueSalePane` (005's `resolveItemRef` seam). No parallel mutation.
 - [ ] T0D1 [US2] Gates + capture `u2-sale-workspace-before/after.png`; compare against
   `visual-references/03-sale-workspace.png`.
+  > ⏸️ **DEFERRED 2026-09-20 → [#448](https://github.com/Kemetra/POS/issues/448).** Checkbox stays
+  > **unticked**: the rest of U2 merged (PR #447, `2b4b8be`) but this capture did not happen, so
+  > **FR-15 remains visually unverified** and U2 is not visually complete on source review alone.
+  > Launch gates were cleared on the day (`operator.dev_bypass.active` observed; catalogue
+  > 50 products / 49 barcodes), so only the manual capture is outstanding. Blocked on two things by
+  > design: capture is manual per spec §Screenshot Acceptance (no Playwright/Puppeteer without
+  > separate approval), and an **empty cart cannot evidence FR-15** — no dev fixture seeds cart
+  > lines, so a product must be search-and-confirm-added by hand first. #448 also adds two captures
+  > beyond this task's literal `before/after`: the **lone-cart** case (the PR #447 P1 fix, still
+  > never rendered) and the narrow-terminal `@media` case.
 
 ---
 
