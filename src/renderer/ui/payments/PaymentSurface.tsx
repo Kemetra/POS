@@ -239,7 +239,7 @@ export function PaymentSurface({
       });
 
       if (startResponse.kind === 'refused') {
-        setBridgeRefusalCopy('We could not start this payment. Please try again.');
+        setBridgeRefusalCopy('تعذّر بدء عملية الدفع. يرجى المحاولة مرة أخرى.');
         return;
       }
 
@@ -257,7 +257,7 @@ export function PaymentSurface({
     } catch {
       // Bridge rejection (network / IPC layer error). Treat as a generic
       // refusal — no structured reason crosses into the DOM (FR-005 / FR-017).
-      setBridgeRefusalCopy('We could not start this payment. Please try again.');
+      setBridgeRefusalCopy('تعذّر بدء عملية الدفع. يرجى المحاولة مرة أخرى.');
     } finally {
       setIsStarting(false);
     }
@@ -320,10 +320,10 @@ export function PaymentSurface({
         setPhase('tender_selection');
         usePaymentStore.getState().clearAttempt();
       } else {
-        setBridgeRefusalCopy('This payment could not be cancelled. Please try again.');
+        setBridgeRefusalCopy('تعذّر إلغاء عملية الدفع. يرجى المحاولة مرة أخرى.');
       }
     } catch {
-      setBridgeRefusalCopy('This payment could not be cancelled. Please try again.');
+      setBridgeRefusalCopy('تعذّر إلغاء عملية الدفع. يرجى المحاولة مرة أخرى.');
     } finally {
       setIsCancelling(false);
     }
@@ -343,10 +343,10 @@ export function PaymentSurface({
       if (response.kind === 'ok') {
         setPhase('settled');
       } else {
-        setBridgeRefusalCopy('This payment could not be settled. Please try again.');
+        setBridgeRefusalCopy('تعذّر إتمام عملية الدفع. يرجى المحاولة مرة أخرى.');
       }
     } catch {
-      setBridgeRefusalCopy('This payment could not be settled. Please try again.');
+      setBridgeRefusalCopy('تعذّر إتمام عملية الدفع. يرجى المحاولة مرة أخرى.');
     } finally {
       setIsConfirming(false);
     }
@@ -479,9 +479,9 @@ export function PaymentSurface({
   }
 
   return (
-    <main className="payment-surface" data-testid="payment-surface" aria-label="Payment">
+    <main className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
       <header className="payment-surface__header">
-        <h2 className="payment-surface__title">Payment</h2>
+        <h2 className="payment-surface__title">الدفع</h2>
         <OperatorBadge display_name={display_name} role={role} />
       </header>
 
@@ -504,10 +504,10 @@ export function PaymentSurface({
           aria-live="polite"
         >
           {selectedTender === 'cash'
-            ? 'Cash selected'
+            ? 'تم اختيار النقد'
             : selectedTender === 'external_card_terminal'
-              ? 'Card terminal selected'
-              : 'Voucher selected'}
+              ? 'تم اختيار جهاز الشبكة'
+              : 'تم اختيار القسيمة'}
         </div>
       )}
 
@@ -559,7 +559,7 @@ export function PaymentSurface({
             void handleConfirm();
           }}
         >
-          Confirm payment
+          تأكيد الدفع
         </button>
       )}
 
@@ -575,7 +575,7 @@ export function PaymentSurface({
             void handleCancel();
           }}
         >
-          Cancel
+          إلغاء
         </button>
       )}
 
@@ -589,7 +589,7 @@ export function PaymentSurface({
           role="status"
           aria-live="polite"
         >
-          Some reversals are pending and will be processed shortly.
+          هناك عمليات عكس قيد المعالجة وستتم قريباً.
         </div>
       )}
 

@@ -50,7 +50,7 @@ afterEach(() => {
   cleanup();
 });
 
-const GENERIC_VOUCHER_REFUSAL_COPY = 'This voucher cannot be used right now.';
+const GENERIC_VOUCHER_REFUSAL_COPY = 'تعذّر استخدام هذه القسيمة حالياً.';
 
 // The 8 voucher-specific refusal reasons enumerated in the contract.
 const VOUCHER_REFUSAL_REASONS = [

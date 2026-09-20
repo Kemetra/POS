@@ -120,7 +120,7 @@ export function ExternalCardTerminalEntry({
     <section
       className="external-card-terminal-entry"
       data-testid="external-card-terminal-entry"
-      aria-label="External card terminal entry"
+      aria-label="إدخال مرجع جهاز الشبكة"
     >
       {/*
         POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
@@ -196,7 +196,7 @@ export function ExternalCardTerminalEntry({
           role="status"
           aria-live="polite"
         >
-          The amount must be exact for a card-terminal payment.
+          يجب أن يكون المبلغ مطابقاً تماماً لدفعة جهاز الشبكة.
         </div>
       )}
 
@@ -207,7 +207,7 @@ export function ExternalCardTerminalEntry({
           role="status"
           aria-live="polite"
         >
-          The amount must match the remaining balance.
+          يجب أن يطابق المبلغ الرصيد المتبقّي.
         </div>
       )}
 
@@ -228,7 +228,7 @@ export function ExternalCardTerminalEntry({
         inputMode="text"
         autoComplete="off"
         maxLength={6}
-        placeholder="e.g. T1A2B3"
+        placeholder="مثال: T1A2B3"
         dir="ltr"
         value={referenceInput}
         onChange={(e) => {
@@ -244,7 +244,7 @@ export function ExternalCardTerminalEntry({
           role="status"
           aria-live="polite"
         >
-          Reference format is invalid. Use up to 6 uppercase letters or digits.
+          صيغة المرجع غير صحيحة. استخدم حتى 6 أحرف إنجليزية كبيرة أو أرقام.
         </div>
       )}
 
@@ -255,7 +255,7 @@ export function ExternalCardTerminalEntry({
           role="status"
           aria-live="polite"
         >
-          This payment could not be applied. Please try again.
+          تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
         </div>
       )}
 
@@ -281,7 +281,7 @@ export function ExternalCardTerminalEntry({
             style={{ minHeight: touchTarget.min }}
             onClick={onBack}
           >
-            Back
+            رجوع
           </button>
         )}
       </div>

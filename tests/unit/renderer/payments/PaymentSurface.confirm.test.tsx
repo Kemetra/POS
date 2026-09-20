@@ -204,7 +204,7 @@ describe('PaymentSurface — payments.start on tender selection (T152)', () => {
     await user.click(screen.getByTestId('tender-cash'));
 
     const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/could not start|please try again/i);
+    expect(refusal).toHaveTextContent(/تعذّر بدء|يرجى المحاولة/);
     expect(refusal.textContent).not.toMatch(/cart_lost/);
   });
 });
@@ -324,7 +324,7 @@ describe('PaymentSurface — payments.confirm button (T152)', () => {
     await user.click(await screen.findByTestId('payment-surface-confirm'));
 
     const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/could not be settled|please try again/i);
+    expect(refusal).toHaveTextContent(/تعذّر إتمام|يرجى المحاولة/);
     expect(refusal.textContent).not.toMatch(/tender_underpaid/);
   });
 
@@ -369,7 +369,7 @@ describe('PaymentSurface — payments.confirm button (T152)', () => {
     // never enters the DOM (FR-005). Surface stays on the payment phase (NOT
     // settled) so the cashier can start a fresh sale.
     const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/could not be settled|please try again/i);
+    expect(refusal).toHaveTextContent(/تعذّر إتمام|يرجى المحاولة/);
     expect(refusal.textContent).not.toMatch(/wrong_owner/);
     expect(screen.queryByTestId('payment-surface-settled')).not.toBeInTheDocument();
   });

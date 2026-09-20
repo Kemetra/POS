@@ -27,7 +27,7 @@ import type { TenderApplyRequest, TenderApplyResponse } from '../../../../src/sh
  * This preserves test fixtures + Slice-2 callers.
  *
  * SECURITY (FR-006 / FR-006B / FR-017):
- *   - Generic refusal copy at the DOM ("This payment could not be applied.").
+ *   - Generic refusal copy at the DOM ("تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.").
  *   - Structured `reason` never appears in the DOM.
  *   - Idempotency key is a UUID v4 (regex-asserted below).
  */
@@ -161,7 +161,7 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
 
     const bridgeRefusal = await screen.findByTestId('cash-entry-bridge-refusal');
     // Generic copy — the structured reason name never enters the DOM.
-    expect(bridgeRefusal).toHaveTextContent(/could not be applied|please try again/i);
+    expect(bridgeRefusal).toHaveTextContent(/تعذّر تطبيق|يرجى المحاولة/);
     expect(bridgeRefusal.textContent).not.toMatch(/idempotency_payload_mismatch/);
   });
 

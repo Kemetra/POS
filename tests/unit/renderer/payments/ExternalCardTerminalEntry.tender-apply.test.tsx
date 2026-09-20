@@ -137,7 +137,7 @@ describe('ExternalCardTerminalEntry — tender.apply wiring (T151)', () => {
     await user.click(screen.getByTestId('external-card-confirm'));
 
     const bridgeRefusal = await screen.findByTestId('external-card-bridge-refusal');
-    expect(bridgeRefusal).toHaveTextContent(/could not be applied|please try again/i);
+    expect(bridgeRefusal).toHaveTextContent(/تعذّر تطبيق|يرجى المحاولة/);
     expect(bridgeRefusal.textContent).not.toMatch(/non_cash_overpayment_refused/);
   });
 

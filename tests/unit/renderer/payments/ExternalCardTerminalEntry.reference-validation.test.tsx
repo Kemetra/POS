@@ -110,7 +110,7 @@ describe('<ExternalCardTerminalEntry> — reference field rejects invalid input'
     const { refInput } = setup();
     fireEvent.change(refInput, { target: { value: 'ABCDEFG' } });
     const err = screen.getByTestId('external-card-reference-error');
-    expect(err).toHaveTextContent(/invalid|format/i);
+    expect(err).toHaveTextContent(/غير صحيحة|صيغة/);
     expect(document.body.innerHTML).not.toContain('invalid_input');
   });
 

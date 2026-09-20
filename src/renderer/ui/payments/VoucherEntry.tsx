@@ -48,7 +48,7 @@ export interface VoucherEntryProps {
  * voucher validity, balance, or holder existence by probing codes
  * against the POS surface; only the audit log distinguishes.
  */
-const GENERIC_VOUCHER_REFUSAL_COPY = 'This voucher cannot be used right now.';
+const GENERIC_VOUCHER_REFUSAL_COPY = 'تعذّر استخدام هذه القسيمة حالياً.';
 
 const VOUCHER_CODE_PATTERN = /^[A-Z0-9_-]+$/;
 
@@ -156,7 +156,7 @@ export function VoucherEntry({
   };
 
   return (
-    <section className="voucher-entry" data-testid="voucher-entry" aria-label="Apply voucher">
+    <section className="voucher-entry" data-testid="voucher-entry" aria-label="تطبيق القسيمة">
       {/*
         POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
         Value is dir="ltr" mono (D-006 — money is never bidi-reordered).
@@ -205,7 +205,7 @@ export function VoucherEntry({
               {/* SECURITY: appliedOk is set only by the bridge ok response.
                   It does NOT reflect any client-side table lookup. */}
               {appliedOk && (
-                <span className="voucher-applied voucher-applied--ok" aria-label="Voucher applied">
+                <span className="voucher-applied voucher-applied--ok" aria-label="تم تطبيق القسيمة">
                   ✓
                 </span>
               )}

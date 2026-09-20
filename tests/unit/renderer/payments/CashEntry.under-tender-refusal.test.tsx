@@ -41,7 +41,7 @@ describe('<CashEntry> — under-tender refusal', () => {
     const { input } = setup(12550);
     fireEvent.change(input, { target: { value: '100.00' } });
     // Generic copy from FR-005 / US1-AS3; bridge-internal `tender_underpaid` MUST NOT appear.
-    expect(screen.getByTestId('cash-entry-refusal')).toHaveTextContent(/not enough/i);
+    expect(screen.getByTestId('cash-entry-refusal')).toHaveTextContent(/غير كافٍ/);
   });
 
   it('hides the refusal copy when amount becomes sufficient again', () => {

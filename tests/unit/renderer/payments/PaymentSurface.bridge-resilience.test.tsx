@@ -219,7 +219,7 @@ describe('PaymentSurface — bridge rejection handling (CR-10)', () => {
     await user.click(screen.getByTestId('tender-cash'));
 
     const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/could not start|please try again/i);
+    expect(refusal).toHaveTextContent(/تعذّر بدء|يرجى المحاولة/);
     expect(refusal.textContent).not.toMatch(/IPC channel|Error/);
   });
 
@@ -247,7 +247,7 @@ describe('PaymentSurface — bridge rejection handling (CR-10)', () => {
     await user.click(await screen.findByTestId('payment-surface-confirm'));
 
     const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/could not be settled|please try again/i);
+    expect(refusal).toHaveTextContent(/تعذّر إتمام|يرجى المحاولة/);
     expect(refusal.textContent).not.toMatch(/main worker|Error/);
   });
 
@@ -266,7 +266,7 @@ describe('PaymentSurface — bridge rejection handling (CR-10)', () => {
     await user.click(screen.getByTestId('payment-surface-cancel'));
 
     const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/could not be cancelled|please try again/i);
+    expect(refusal).toHaveTextContent(/تعذّر إلغاء|يرجى المحاولة/);
     expect(refusal.textContent).not.toMatch(/connection lost|Error/);
   });
 });

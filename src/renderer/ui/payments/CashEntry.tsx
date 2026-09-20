@@ -139,7 +139,7 @@ export function CashEntry({
   }
 
   return (
-    <section className="cash-entry" data-testid="cash-entry" aria-label="Cash entry">
+    <section className="cash-entry" data-testid="cash-entry" aria-label="إدخال النقد">
       {/*
         POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
         Value is dir="ltr" mono so money is never bidi-reordered (D-006 rule).
@@ -276,7 +276,7 @@ export function CashEntry({
           role="status"
           aria-live="polite"
         >
-          The amount is not enough to settle this payment.
+          المبلغ غير كافٍ لإتمام هذه الدفعة.
         </div>
       )}
 
@@ -287,7 +287,7 @@ export function CashEntry({
           role="status"
           aria-live="polite"
         >
-          This payment could not be applied. Please try again.
+          تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
         </div>
       )}
 
@@ -313,7 +313,7 @@ export function CashEntry({
             style={{ minHeight: touchTarget.min }}
             onClick={onBack}
           >
-            Back
+            رجوع
           </button>
         )}
       </div>

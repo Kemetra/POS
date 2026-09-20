@@ -443,7 +443,7 @@ describe('NEGATIVE — rejected prototype behaviours are absent', () => {
     expect(document.querySelector('.voucher-applied')).toBeNull();
     // Generic copy must be shown (not the specific refusal reason)
     const refused = screen.getByTestId('voucher-entry-refused');
-    expect(refused).toHaveTextContent('This voucher cannot be used right now.');
+    expect(refused).toHaveTextContent('تعذّر استخدام هذه القسيمة حالياً.');
     // The structured reason string must NOT appear in the DOM
     expect(screen.queryByText('voucher_not_found')).toBeNull();
   });
