@@ -223,7 +223,7 @@ describe('PaymentSurface — payments.cancel wiring (T153)', () => {
     expect(screen.getByTestId('tender-selection')).toBeInTheDocument();
   });
 
-  it('renders "Some reversals are pending" hint when the response includes pending ids', async () => {
+  it('renders the pending-reversals hint when the response includes pending ids', async () => {
     const user = userEvent.setup();
     const cancel = vi.fn<(req: PaymentsCancelRequest) => Promise<PaymentsCancelResponse>>(
       async () =>
@@ -244,7 +244,7 @@ describe('PaymentSurface — payments.cancel wiring (T153)', () => {
     await user.click(screen.getByTestId('payment-surface-cancel'));
 
     const hint = await screen.findByTestId('payment-surface-reversal-pending-hint');
-    expect(hint).toHaveTextContent(/some reversals are pending/i);
+    expect(hint).toHaveTextContent(/عمليات عكس قيد المعالجة/);
     // Token-minimisation: the actual ids (tl-1, tl-2) NEVER appear in the DOM.
     expect(hint.textContent).not.toMatch(/tl-1|tl-2/);
   });

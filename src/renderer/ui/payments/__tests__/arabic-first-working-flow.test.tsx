@@ -50,11 +50,12 @@
  * explicitly so the exemption is reviewable rather than silent.
  */
 
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, cleanup, act, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import type { PaymentIntentEnvelope } from '../../../../shared/cart/handoff-envelope.js';
+import type { PaymentsBridgeAPI, TenderBridgeAPI } from '../../../../shared/bridge-api.js';
 import { AmountPad } from '../AmountPad.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
@@ -100,6 +101,32 @@ function makeEnvelope(subtotalMinor = 5000): PaymentIntentEnvelope {
     created_at: '2026-06-21T00:00:00.000Z',
     handoff_action_id: 'hid-001',
   };
+}
+
+/** Seed the stores a bridged/Slice-1 PaymentSurface needs in order to render. */
+function seedSignedInPaymentSession(): void {
+  useOperatorSessionStore.setState({
+    state: {
+      kind: 'signedIn',
+      session: {
+        id: 'sess-001',
+        operator_id: 'op-001',
+        display_name: 'أحمد',
+        role: 'cashier',
+        tenant_id: 'tenant-001',
+        branch_id: 'branch-001',
+        started_at: '2026-09-19T08:00:00.000Z',
+      },
+    },
+  });
+  usePaymentStore.getState().mount(makeEnvelope());
+  useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+}
+
+function resetPaymentSession(): void {
+  useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
+  usePaymentStore.getState().reset();
+  useFeatureFlagsStore.getState().reset();
 }
 
 // ---------------------------------------------------------------------------
@@ -315,6 +342,106 @@ describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () 
     useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
     usePaymentStore.getState().reset();
     useFeatureFlagsStore.getState().reset();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CONDITIONAL STATES — the gap the default renders above cannot reach.
+//
+// Added after external review (PR #453) correctly identified that the sweep
+// above renders each surface in its DEFAULT state only, so validation branches,
+// under-tender banners and the bridged action row stayed English while T076 was
+// green. That is the same structural blind spot recorded in this file's header,
+// now closed for the states an operator actually reaches.
+//
+// Each test below DRIVES the branch rather than rendering and hoping.
+// ---------------------------------------------------------------------------
+
+describe('022 US3 T076 — conditional states carry no English-only string', () => {
+  it('ExternalCardTerminalEntry reference-format validation error', () => {
+    const { container } = render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
+    // A lowercase reference violates ^[A-Z0-9]{0,6}$ and reveals the error node.
+    fireEvent.change(screen.getByTestId('external-card-reference-input'), {
+      target: { value: 'bad-ref!' },
+    });
+    expect(screen.getByTestId('external-card-reference-error')).toBeInTheDocument();
+    expectNoEnglishOnlyStrings(container, 'ExternalCardTerminalEntry (reference-format error)');
+  });
+
+  it('ExternalCardTerminalEntry exact-amount refusal', () => {
+    const { container } = render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
+    // Under the remaining balance: card terminal requires an exact amount.
+    fireEvent.change(screen.getByTestId('external-card-amount-input'), {
+      target: { value: '10.00' },
+    });
+    expectNoEnglishOnlyStrings(container, 'ExternalCardTerminalEntry (amount refusal)');
+  });
+
+  it('PaymentSurface bridged action row (confirm / cancel) carries no English-only string', async () => {
+    // The bridged entry+applied state: `Confirm payment` and `Cancel` render
+    // only when a bridge is present and a line has been applied. The Slice-1
+    // assertion below scans the NO-bridge branch, so without this the action
+    // row stayed English while T076 was green (PR #453 review finding).
+    const attempt = {
+      payment_attempt_id: 'pa-001',
+      state: 'started',
+      envelope_subtotal_minor: 5000,
+      started_at: '2026-09-19T09:59:00.000Z',
+      tender_lines: [
+        {
+          tender_line_id: 'tl-1',
+          tender_type: 'cash' as const,
+          state: 'applied' as const,
+          amount_applied_minor: 5000,
+          applied_at: '2026-09-19T09:59:30.000Z',
+          apply_order: 1,
+        },
+      ],
+    };
+    const bridge = {
+      payments: {
+        start: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt_id: 'pa-001' })),
+        read: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt: attempt })),
+        confirm: vi.fn(() =>
+          Promise.resolve({ kind: 'ok' as const, settled_at: '2026-09-19T10:00:00.000Z' }),
+        ),
+        cancel: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+      },
+      tender: { apply: vi.fn(() => Promise.resolve({ kind: 'ok' as const })) },
+    } as unknown as { payments: PaymentsBridgeAPI; tender: TenderBridgeAPI };
+
+    seedSignedInPaymentSession();
+    render(<PaymentSurface _testBridge={bridge} />);
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Scoped per-node, not to the whole surface: the confirm/cancel buttons are
+    // siblings with no shared wrapper, and a container-wide scan also sweeps
+    // <OperatorBadge>'s shared English role string — an out-of-scope FR-19 gap
+    // documented at the Slice-1 test below.
+    expectNoEnglishOnlyStrings(
+      screen.getByTestId('payment-surface-confirm'),
+      'PaymentSurface (bridged confirm action)',
+    );
+    expectNoEnglishOnlyStrings(
+      screen.getByTestId('payment-surface-entry'),
+      'PaymentSurface (bridged entry surface)',
+    );
+    resetPaymentSession();
+  });
+
+  it('CashEntry under-tender banner and back affordance', () => {
+    const { container } = render(<CashEntry remainingBalanceMinor={5000} />);
+    // Less than the remaining balance surfaces the under-tender banner.
+    fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
+      target: { value: '10.00' },
+    });
+    expectNoEnglishOnlyStrings(container, 'CashEntry (under-tender)');
   });
 });
 

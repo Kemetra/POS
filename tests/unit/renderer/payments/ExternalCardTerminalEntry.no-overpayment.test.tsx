@@ -68,7 +68,7 @@ describe('<ExternalCardTerminalEntry> — refuses overpayment', () => {
   it('shows generic "amount must be exact" copy when overpay attempted', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
     fireEvent.change(input, { target: { value: '20000' } });
-    expect(screen.getByTestId('external-card-refusal')).toHaveTextContent(/exact|must match/i);
+    expect(screen.getByTestId('external-card-refusal')).toHaveTextContent(/مطابقاً تماماً|يطابق/);
   });
 
   it('does not leak the structured reason `non_cash_overpayment_refused` to the DOM', () => {
@@ -147,7 +147,7 @@ describe('<ExternalCardTerminalEntry> — safe-integer guard on remaining', () =
   it('refuses an under-amount with the dedicated under-amount refusal copy', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
     fireEvent.change(input, { target: { value: '100.00' } });
-    expect(screen.getByTestId('external-card-refusal-underpay')).toHaveTextContent(/must match/i);
+    expect(screen.getByTestId('external-card-refusal-underpay')).toHaveTextContent(/يطابق/);
   });
 });
 

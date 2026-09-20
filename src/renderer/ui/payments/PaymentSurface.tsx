@@ -559,7 +559,7 @@ export function PaymentSurface({
             void handleConfirm();
           }}
         >
-          Confirm payment
+          تأكيد الدفع
         </button>
       )}
 
@@ -575,7 +575,7 @@ export function PaymentSurface({
             void handleCancel();
           }}
         >
-          Cancel
+          إلغاء
         </button>
       )}
 
@@ -589,7 +589,7 @@ export function PaymentSurface({
           role="status"
           aria-live="polite"
         >
-          Some reversals are pending and will be processed shortly.
+          هناك عمليات عكس قيد المعالجة وستتم قريباً.
         </div>
       )}
 

@@ -196,7 +196,7 @@ export function ExternalCardTerminalEntry({
           role="status"
           aria-live="polite"
         >
-          The amount must be exact for a card-terminal payment.
+          يجب أن يكون المبلغ مطابقاً تماماً لدفعة جهاز الشبكة.
         </div>
       )}
 
@@ -207,7 +207,7 @@ export function ExternalCardTerminalEntry({
           role="status"
           aria-live="polite"
         >
-          The amount must match the remaining balance.
+          يجب أن يطابق المبلغ الرصيد المتبقّي.
         </div>
       )}
 
@@ -244,7 +244,7 @@ export function ExternalCardTerminalEntry({
           role="status"
           aria-live="polite"
         >
-          Reference format is invalid. Use up to 6 uppercase letters or digits.
+          صيغة المرجع غير صحيحة. استخدم حتى 6 أحرف إنجليزية كبيرة أو أرقام.
         </div>
       )}
 
@@ -281,7 +281,7 @@ export function ExternalCardTerminalEntry({
             style={{ minHeight: touchTarget.min }}
             onClick={onBack}
           >
-            Back
+            رجوع
           </button>
         )}
       </div>

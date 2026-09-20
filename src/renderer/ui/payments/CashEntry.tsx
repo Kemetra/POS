@@ -276,7 +276,7 @@ export function CashEntry({
           role="status"
           aria-live="polite"
         >
-          The amount is not enough to settle this payment.
+          المبلغ غير كافٍ لإتمام هذه الدفعة.
         </div>
       )}
 
@@ -313,7 +313,7 @@ export function CashEntry({
             style={{ minHeight: touchTarget.min }}
             onClick={onBack}
           >
-            Back
+            رجوع
           </button>
         )}
       </div>
