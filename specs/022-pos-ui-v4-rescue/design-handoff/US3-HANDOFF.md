@@ -107,8 +107,26 @@ money spans (FR-21 already requires the `dir="ltr"` mono treatment).
 ## 5. Arabic-first copy (T076–T079)
 
 The working (pre-settlement) tender flow still carries English-only operator strings, verified in
-source: `PaymentSurface.tsx:396` and `:437` render `<h2>Payment</h2>`; `PaymentCartSummary.tsx:42,62`
-render `Order summary` / `Subtotal`.
+source **against the current tree**:
+
+| String | Location | Note |
+| :--- | :--- | :--- |
+| `<h2>Payment</h2>` | `PaymentSurface.tsx:484` | the **working** surface — this is the one to translate |
+| `aria-label="Payment"` | `PaymentSurface.tsx:482` | same `<main>`; translate with it |
+| `Order summary` | `PaymentCartSummary.tsx:42` (+ `aria-label` `:40`) | |
+| `Subtotal` | `PaymentCartSummary.tsx:62` | |
+
+> ⚠️ **Do not use the `PaymentSurface.tsx:396` / `:437` anchors** that `tasks.md` T077 carried — they
+> are stale. `PaymentSurface.tsx` drifted after US4a added the settled branch above the working
+> surface. Line 396 is inside the **settled** `<main>`, and line 402 is
+> `<h2 className="payment-surface__title">الدفع</h2>` — **already Arabic**. Following the old anchors
+> lands you in the translated settled branch and hides the string that actually needs changing.
+> (`tasks.md` is corrected in the same commit as this note; `PaymentCartSummary`'s anchors were
+> always correct.)
+>
+> `analysis-report.md` and `checklists/requirements.md` still carry the old anchors and are
+> **deliberately left as-is** — they are dated records of an analysis that was accurate when
+> written, not live instructions. Correcting them would falsify the record.
 
 T076 writes the RED assertion (zero English-only operator-facing strings across the working flow);
 T077–T079 make it pass. **Copy and presentation only** — no change to amount parsing, tender

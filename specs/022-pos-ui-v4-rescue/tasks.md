@@ -499,8 +499,13 @@ flow**; payment FSM, money math and split tender untouched.
 
 > **Arabic-first scope (FR-19).** US4a repairs only the *settled* branch. The **working** tender
 > flow — everything before settlement — still carries English-only operator strings, verified in
-> source: `PaymentSurface.tsx:396` and `:437` render `<h2>Payment</h2>`, and
-> `PaymentCartSummary.tsx:42,62` render `Order summary` / `Subtotal`. U3 closes that gap, so that
+> source: `PaymentSurface.tsx:484` renders `<h2>Payment</h2>` (with `aria-label="Payment"` on the
+> `<main>` at `:482`), and `PaymentCartSummary.tsx:42,62` render `Order summary` / `Subtotal`.
+> **Anchor correction (2026-09-20, PR #452):** this note previously cited `PaymentSurface.tsx:396`
+> and `:437`. Those anchors went stale when US4a added the settled branch above the working surface
+> — `:396` is now inside the **settled** `<main>` and `:402` is already Arabic (`الدفع`), so the old
+> anchors send an implementer into the translated branch. `PaymentCartSummary`'s anchors are
+> unchanged and were always correct. U3 closes that gap, so that
 > after US4a + U3 the entire checkout journey is Arabic-first.
 
 - [ ] T070 [US3] RED+GREEN: amount-due hierarchy (dominant numeric, FR-16) in
@@ -529,7 +534,8 @@ flow**; payment FSM, money math and split tender untouched.
   `src/renderer/ui/payments/__tests__/` as an Arabic-first coverage assertion over the rendered
   operator-visible text.
 - [ ] T077 [US3] GREEN: give `PaymentSurface`'s working phases Arabic-first copy — the surface
-  header (`PaymentSurface.tsx:396`, `:437` — today `<h2>Payment</h2>`), the tender-state status
+  header (`PaymentSurface.tsx:484` — today `<h2>Payment</h2>`; also `aria-label="Payment"` at
+  `:482`. **Not** `:396`/`:437` — stale, see the anchor correction above), the tender-state status
   line, the confirm action, and the refusal copy. Make the `PaymentSurface` half of T076 pass.
 - [ ] T078 [US3] GREEN: give `PaymentCartSummary` Arabic-first copy — today `Order summary`
   (`:42`) and `Subtotal` (`:62`) are English-only. Money values stay `dir="ltr"` mono (FR-21).
