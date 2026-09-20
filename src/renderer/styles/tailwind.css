@@ -2120,13 +2120,13 @@ body {
      1024px `useViewportTier` reports `too-small` and `AppShell` renders
      `ScreenTooSmall` instead of its `<Outlet />`, so at STEADY STATE this
      layout never mounts where the query matches. That reasoning is right and
-     incomplete — `useViewportTier` DEBOUNCES tier changes by 100 ms, and
-     clears the timer on every `change`, so a continuous drag resets it
-     indefinitely. Throughout the drag the outlet still renders while this
-     query already matches. Proven by a fake-timer test: 800 ms into a
-     continuous resize below 1024px the shell was still rendering its outlet.
-     Without this rule the workspace stays two-column at any narrow width for
-     the whole drag — the transient broken layout it exists to prevent. */
+     incomplete — `useViewportTier` DEBOUNCES tier changes by 100 ms. CSS
+     applies the instant the viewport crosses 1024px; React re-renders a
+     debounce later. In that ~100 ms gap the outlet is still mounted while this
+     query already matches, and the gap re-opens on every crossing. Without
+     this rule the workspace renders two-column there — the transient broken
+     layout it exists to prevent. Guarded behaviourally by
+     shell/__tests__/viewport-transition.test.tsx. */
   @media (max-width: 1023px) {
     .sale-layout,
     .sale-layout[data-catalogue='true'] {
