@@ -235,6 +235,24 @@ Launched on `main` @ `dbe14d4` with `POS_PULSE_DEV_SKIP_PAIRING`,
 `POS_PULSE_FEATURE_PRODUCT_SEARCH` all `=1`. Boot was healthy:
 `pairing.dev_bypass.active` → `operator.dev_bypass.active` → `cart.create.ok`.
 
+#### ⛔ `POS_PULSE_DEV_ITEM_RESOLVER` MUST be **unset** for a catalogue-seeded capture
+
+The two resolvers are mutually exclusive, not layered. `createCartBridgeHandlers` picks the
+**five-SKU fixture** resolver whenever the build is unpackaged *and* `POS_PULSE_DEV_ITEM_RESOLVER`
+is truthy, otherwise 009's catalogue-backed production resolver
+(`wire-cart-handlers.ts:68-77`).
+
+The confirm action submits the **catalogue** `product_id` (`CatalogueAddController.tsx:94-97`) —
+seeded rows are `dev-p-001`… — but the fixture map knows only `SKU-PARA-500`, `SKU-IBUP-400`,
+`SKU-AMOX-250`, `SKU-VITA-C`, `SKU-OMEP-20` (`resolve-item-ref.ts:23-31`). With the flag set, every
+searched product is refused `unknown_item` and **the non-empty cart the capture requires cannot be
+reached**.
+
+So for #448, export `SKIP_PAIRING`, `SKIP_OPERATOR_SIGNIN`, `FEATURE_CART`, `FEATURE_PRODUCT_SEARCH`
+and `DEV_SEED_CATALOGUE` — and leave `POS_PULSE_DEV_ITEM_RESOLVER` **unset**. (The alternative —
+fixture resolver on, catalogue seed off, adding a fixture SKU — does not exercise the 009 search →
+confirm → cart path the capture is meant to show.)
+
 #### ⚠️ An empty cart cannot evidence FR-15 — new constraint, applies to future slices too
 
 Verified against the live dev DB during this launch: the boot cart is `state: "empty"` with **0
