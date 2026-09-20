@@ -530,6 +530,42 @@ export function PaymentSurface({
               void handleTenderSelect(tender);
             }}
           />
+
+          {/* S3d mode: entry component for the selected tender. */}
+          {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
+            <div className="payment-surface__entry" data-testid="payment-surface-entry">
+              {selectedTender === 'cash' && (
+                <CashEntry
+                  remainingBalanceMinor={remainingBalanceMinor}
+                  paymentAttemptId={paymentAttemptId}
+                  tenderApply={(req) => bridge.tender.apply(req)}
+                  onApplied={() => {
+                    void handleLineApplied();
+                  }}
+                />
+              )}
+              {selectedTender === 'external_card_terminal' && (
+                <ExternalCardTerminalEntry
+                  remainingBalanceMinor={remainingBalanceMinor}
+                  paymentAttemptId={paymentAttemptId}
+                  tenderApply={(req) => bridge.tender.apply(req)}
+                  onApplied={() => {
+                    void handleLineApplied();
+                  }}
+                />
+              )}
+              {selectedTender === 'internal_voucher' && (
+                <VoucherEntry
+                  remainingBalanceMinor={remainingBalanceMinor}
+                  paymentAttemptId={paymentAttemptId}
+                  tenderApply={(req) => bridge.tender.apply(req)}
+                  onApplied={() => {
+                    void handleLineApplied();
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         <div className="payment-surface__summary">
@@ -550,42 +586,6 @@ export function PaymentSurface({
             : selectedTender === 'external_card_terminal'
               ? 'تم اختيار جهاز الشبكة'
               : 'تم اختيار القسيمة'}
-        </div>
-      )}
-
-      {/* S3d mode: entry component for the selected tender. */}
-      {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
-        <div className="payment-surface__entry" data-testid="payment-surface-entry">
-          {selectedTender === 'cash' && (
-            <CashEntry
-              remainingBalanceMinor={remainingBalanceMinor}
-              paymentAttemptId={paymentAttemptId}
-              tenderApply={(req) => bridge.tender.apply(req)}
-              onApplied={() => {
-                void handleLineApplied();
-              }}
-            />
-          )}
-          {selectedTender === 'external_card_terminal' && (
-            <ExternalCardTerminalEntry
-              remainingBalanceMinor={remainingBalanceMinor}
-              paymentAttemptId={paymentAttemptId}
-              tenderApply={(req) => bridge.tender.apply(req)}
-              onApplied={() => {
-                void handleLineApplied();
-              }}
-            />
-          )}
-          {selectedTender === 'internal_voucher' && (
-            <VoucherEntry
-              remainingBalanceMinor={remainingBalanceMinor}
-              paymentAttemptId={paymentAttemptId}
-              tenderApply={(req) => bridge.tender.apply(req)}
-              onApplied={() => {
-                void handleLineApplied();
-              }}
-            />
-          )}
         </div>
       )}
 

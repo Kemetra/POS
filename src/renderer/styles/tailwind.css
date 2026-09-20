@@ -2190,6 +2190,11 @@ body {
    * amount -> methods -> summary (RTL visual order) so keyboard traversal
    * matches what the cashier sees — FR-23. `grid` places, it does not reorder.
    */
+  .payment-surface {
+    container-type: inline-size;
+    container-name: payment-surface;
+  }
+
   .payment-surface__body {
     display: grid;
     grid-template-columns: 400px minmax(0, 1fr) 392px;
@@ -2198,30 +2203,58 @@ body {
   }
 
   /*
-   * The 1024-1279px reflow: the amount panel drops FULL WIDTH BELOW the
-   * methods, and methods + summary share the row above.
+   * The reflow: the amount panel drops FULL WIDTH BELOW the methods, and
+   * methods + summary share the row above, whenever the expanded composition
+   * would not fit.
    *
-   * Why a reflow is required rather than optional: the expanded tier's fixed
-   * columns total 400 + 392 + 2x16 gap = 824px. At a 1024px viewport, minus the
-   * AppShell rail (84px in the icon-only tier), the methods column would be
-   * left roughly 80px — while three 44px tender targets plus their gaps need
-   * ~164px on their own. The mockup's composition simply does not fit a
-   * SUPPORTED viewport, so it reflows. The 1024px floor itself is unchanged
-   * (RECONCILIATION §E).
+   * ⚠️ THIS IS A CONTAINER QUERY, NOT A VIEWPORT MEDIA QUERY — deliberately.
    *
-   * ⚠️ DO NOT DELETE AS DEAD CSS, and do not replace with a `useViewportTier`
+   * A viewport breakpoint cannot see what actually constrains this layout. The
+   * available width is:
+   *
+   *     viewport - nav-rail - 96px workspace padding, capped at
+   *     .workspace max-inline-size: 1280px
+   *
+   * and the rail JUMPS from 84px to 248px at exactly 1280px. So a `max-width:
+   * 1279px` reflow is wrong in the worst way: crossing 1280px simultaneously
+   * widens the rail by 164px AND re-imposes the 824px of fixed columns, leaving
+   * the methods column ~112px — below the ~164px that three 44px tender targets
+   * plus gaps need. The tiles collapse or overflow at 1280px, a common terminal
+   * width. (Caught in review on PR #454; the first attempt used max-width:1279px
+   * and was wrong. The arithmetic: 1280 - 248 rail - 96 padding = 936 inner,
+   * minus 824 fixed = 112.)
+   *
+   * A container query measures the box that actually exists, so it is correct
+   * at every viewport, every rail tier, and during the rail's 200ms width
+   * transition — no breakpoint bookkeeping to keep in sync.
+   *
+   * 1216px = 824 fixed columns + 164 minimum methods + 228 headroom, so the
+   * three-column form is only used where the tiles are comfortable, not merely
+   * where they fit.
+   *
+   * ⚠️ DO NOT DELETE AS DEAD CSS and do not replace with a `useViewportTier`
    * branch — see the two rules above (#450/#451). The hook debounces tier
-   * changes by 100ms while CSS applies the instant the viewport crosses the
-   * breakpoint, so a React-gated reflow leaves ~100ms of broken layout on every
-   * crossing. A media query has no such gap.
+   * changes by 100ms while CSS applies instantly, so a React-gated reflow
+   * leaves ~100ms of broken layout on every crossing. A container query has no
+   * such gap. The 1024px floor is unchanged (RECONCILIATION §E).
    */
-  @media (max-width: 1279px) {
+  @container payment-surface (max-width: 1216px) {
     .payment-surface__body {
       grid-template-columns: minmax(0, 1fr) 392px;
     }
     .payment-surface__amount {
       grid-column: 1 / -1;
       grid-row: 2;
+    }
+  }
+
+  @container payment-surface (max-width: 768px) {
+    .payment-surface__body {
+      grid-template-columns: 1fr;
+    }
+    .payment-surface__amount {
+      grid-column: auto;
+      grid-row: auto;
     }
   }
 
