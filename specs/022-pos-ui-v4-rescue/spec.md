@@ -84,6 +84,29 @@ and status treatment. They do **not** authorise product capability.
 > tender types. Before treating anything in an image as a requirement, check it against the
 > **Non-Capability Inventory** below. The images are the visual direction, never the feature list.
 
+### Supplementary design handoff (vendored 2026-09-20)
+
+The owner-approved **Claude Design handoff bundle** is vendored at
+[`design-handoff/`](./design-handoff/). It is **richer packaging of this same approved design** —
+the HTML mockup the five reference images were captured from, plus the designer's written
+per-screen spec and token list.
+
+Its five reference PNGs are **pixel-identical** to `visual-references/` above, so they are
+deliberately **not** duplicated. ⚠️ The handoff's own filenames are **shuffled**; the
+`visual-references/` filenames here are authoritative and MUST NOT be renamed to match it. The
+verified mapping is recorded in
+[`design-handoff/RECONCILIATION.md`](./design-handoff/RECONCILIATION.md) §D.
+
+**Authority is visual only — the same rule as the reference images.** The bundle is authored for a
+Saudi pharmacy and contains ZATCA fiscal behaviour, 15% VAT, Saudi Riyal, the mada network and
+three unsupported tenders. None of it is authorised. Read
+[`RECONCILIATION.md`](./design-handoff/RECONCILIATION.md) before using anything in that directory:
+§A authority split · §B non-capabilities · §C accessibility/token rule · §D reference mapping ·
+§E responsive rule.
+
+The Returns and Shift-Close screens are vendored as **forward visual references for `specs/014` and
+`specs/015` only**. Neither is in 022 scope.
+
 ### Relationship to historical POS v3.5
 
 POS v3.5 (`docs/design/pos-v3.5/**`, shipped via PRs #422–#438) is **real, recent, working

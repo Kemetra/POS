@@ -27,6 +27,7 @@
 | **Behavioural tests** | Payment/cart/money/routing-guard tests must pass **unmodified**. Only tests encoding an owner-superseded *design decision* may change (T020–T022 only). |
 | **Flags** | No task changes a production feature-flag default. Gated surfaces are restyled, never ungated. |
 | **Images** | `visual-references/**` govern appearance only. Check the spec's Non-Capability Inventory before treating anything shown as a requirement. |
+| **Design handoff** | [`design-handoff/`](./design-handoff/) is **supplementary visual authority** (HTML mockup + designer spec + tokens). It never authorises capability. Read [`design-handoff/RECONCILIATION.md`](./design-handoff/RECONCILIATION.md) first — its filenames are shuffled (§D), its tokens are provenance-only (§C), and its Saudi/ZATCA/VAT/mada/unsupported-tender content is forbidden (§B). |
 | **Screenshots** | Every visual slice ends with a capture task. A slice is not complete on source review alone. |
 
 ---
@@ -498,8 +499,13 @@ flow**; payment FSM, money math and split tender untouched.
 
 > **Arabic-first scope (FR-19).** US4a repairs only the *settled* branch. The **working** tender
 > flow — everything before settlement — still carries English-only operator strings, verified in
-> source: `PaymentSurface.tsx:396` and `:437` render `<h2>Payment</h2>`, and
-> `PaymentCartSummary.tsx:42,62` render `Order summary` / `Subtotal`. U3 closes that gap, so that
+> source: `PaymentSurface.tsx:484` renders `<h2>Payment</h2>` (with `aria-label="Payment"` on the
+> `<main>` at `:482`), and `PaymentCartSummary.tsx:42,62` render `Order summary` / `Subtotal`.
+> **Anchor correction (2026-09-20, PR #452):** this note previously cited `PaymentSurface.tsx:396`
+> and `:437`. Those anchors went stale when US4a added the settled branch above the working surface
+> — `:396` is now inside the **settled** `<main>` and `:402` is already Arabic (`الدفع`), so the old
+> anchors send an implementer into the translated branch. `PaymentCartSummary`'s anchors are
+> unchanged and were always correct. U3 closes that gap, so that
 > after US4a + U3 the entire checkout journey is Arabic-first.
 
 - [ ] T070 [US3] RED+GREEN: amount-due hierarchy (dominant numeric, FR-16) in
@@ -516,9 +522,17 @@ flow**; payment FSM, money math and split tender untouched.
 - [ ] T075 [US3] **Preserve split tender (FR-40).** Multi-line tender is a **shipped capability**
   (006 T154): `handleLineApplied` returns to tender selection while the applied sum is below the
   subtotal (`PaymentSurface.tsx:282-313`). U3 restyles that surface, so assert the behaviour
-  survives — a part-payment still reopens tender selection, and the applied-lines list stays visible.
+  survives — a part-payment still reopens tender selection.
   **Do not treat split tender as a Non-Capability item** (spec Non-Capability Inventory, corrected
   row).
+  > **Correction (2026-09-20, PR #452):** this task previously also said "and the applied-lines list
+  > stays visible". **There is no such list to preserve** — `paymentSlice.tender_lines` is filtered
+  > into `appliedLines` (`PaymentSurface.tsx:355`) and used only for arithmetic (`:356`, `:364`); it
+  > never reaches JSX, so a partial payment reopens tender selection without showing the prior line.
+  > What is shipped is the **control flow**, and that is what this task preserves. **Displaying the
+  > applied lines is NEW work** — it must be added and tested explicitly (see
+  > [`design-handoff/US3-HANDOFF.md`](./design-handoff/US3-HANDOFF.md) §3), not assumed into
+  > existence by a preservation task, which would leave it with no test of its own.
 ### Arabic-first working tender flow (FR-19 / SC-4)
 
 - [ ] T076 [US3] RED: test asserting **zero English-only operator-facing strings** across the
@@ -526,9 +540,21 @@ flow**; payment FSM, money math and split tender untouched.
   phases), `PaymentCartSummary`, `TenderSelection`, `CashEntry`, `AmountPad`, `VoucherEntry`,
   `ExternalCardTerminalEntry`, `MoneyRoll`. Add to
   `src/renderer/ui/payments/__tests__/` as an Arabic-first coverage assertion over the rendered
-  operator-visible text.
+  operator-visible text **and over operator-facing ATTRIBUTES** — `aria-label`,
+  `aria-describedby`, `title`, `placeholder` — plus live-region text.
+  > **Scope correction (2026-09-20, PR #452):** this task previously asked for an assertion over
+  > "the rendered operator-visible text" alone. **That cannot satisfy its own requirement.** Two
+  > classes of English string are invisible to a text-node scan: AT-only `aria-label`s
+  > (`PaymentCartSummary.tsx:44,48`, `TenderSelection.tsx:45`, `CashEntry.tsx:142`,
+  > `AmountPad.tsx:63,119`, `VoucherEntry.tsx:159,208`, `ExternalCardTerminalEntry.tsx:123`) and
+  > **on-screen-but-attribute** placeholders (`ExternalCardTerminalEntry.tsx:231` `e.g. T1A2B3`,
+  > `VoucherEntry.tsx:190` `VCH-000`). A test written literally to the old wording goes green while
+  > a sighted operator still reads English. Full inventory + the format-token judgement call:
+  > [`design-handoff/US3-HANDOFF.md`](./design-handoff/US3-HANDOFF.md) §5. Re-grep the anchors
+  > before implementing.
 - [ ] T077 [US3] GREEN: give `PaymentSurface`'s working phases Arabic-first copy — the surface
-  header (`PaymentSurface.tsx:396`, `:437` — today `<h2>Payment</h2>`), the tender-state status
+  header (`PaymentSurface.tsx:484` — today `<h2>Payment</h2>`; also `aria-label="Payment"` at
+  `:482`. **Not** `:396`/`:437` — stale, see the anchor correction above), the tender-state status
   line, the confirm action, and the refusal copy. Make the `PaymentSurface` half of T076 pass.
 - [ ] T078 [US3] GREEN: give `PaymentCartSummary` Arabic-first copy — today `Order summary`
   (`:42`) and `Subtotal` (`:62`) are English-only. Money values stay `dir="ltr"` mono (FR-21).
