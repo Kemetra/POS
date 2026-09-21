@@ -5035,24 +5035,46 @@ body {
   /* Sign-in track shape: staff-code rail · roster (widest, primary choice) ·
    * PIN column. The PIN track is fixed so selecting a cashier never reflows
    * the columns beside it. Declared here rather than inline — the route file
-   * is held to a no-inline-style rule (v4-sign-in-presentation.test.ts). */
+   * is held to a no-inline-style rule (v4-sign-in-presentation.test.ts).
+   *
+   * The PIN track has a HARD FLOOR of 306px, and it is arithmetic, not taste:
+   *
+   *   .pin-pad__grid   3 × 64px keys + 2 × 8px gaps  = 208px
+   *   .pin-pad         + 2 × 24px padding            =  48px
+   *   .v4-panel        + 2 × 24px padding + 2 × 1px border = 50px
+   *                                                   ───────
+   *                                                     306px
+   *
+   * Below that the keypad overflows its panel into the roster — destroying the
+   * persistent-PIN-column guarantee this fixed track exists to provide. The pad
+   * is NOT the place to absorb a shortfall: the 64px keys are a touch-target
+   * floor (147 assertions) and `.pin-pad` is shared, so shrinking it is a global
+   * regression to solve a screen-local layout problem. Widen the track instead.
+   *
+   * Enforced by v4-sign-in-track-fit.test.ts, which recomputes the 306px from
+   * these same tokens rather than hard-coding it — change a token and the guard
+   * re-derives the new floor. jsdom computes no layout, so no renderer test can
+   * see this class of break. */
   .v4-columns--sign-in {
-    --v4-cols: 320px 1fr 300px;
+    --v4-cols: 320px 1fr 312px;
   }
 
   /* Below ~1280px the fixed tracks starve the roster. Arithmetic at the 1024px
-   * viewport floor: 1024 − 48 (screen padding) − 48 (two gaps) − 620 (fixed
-   * tracks) = 308px for the `1fr` roster — NARROWER than the 320px staff-code
-   * rail, which inverts the intended hierarchy (the roster carries the primary
-   * choice and must stay the widest track). Narrow the rails so the roster
-   * keeps dominance across the whole supported range, 1024px upward.
+   * viewport floor: 1024 − 48 (screen padding) − 48 (two gaps) − 568 (fixed
+   * tracks) = 360px for the `1fr` roster. That keeps the ordering the hierarchy
+   * requires — roster 360 > PIN 312 > rail 256 — because the roster carries the
+   * primary choice and must stay the widest track. Left at the full-width 320px
+   * rail the roster would drop to 308px and be out-sized by its own rail.
+   *
+   * The PIN track stays at its 306px floor (312px) here: it is the one track
+   * that CANNOT be narrowed to buy room, since the keypad inside it is fixed.
    *
    * This is why track shape is a custom property rather than bespoke CSS: the
    * override is the one line that changes, and `/sign-in` mounts ABOVE `/app/*`
    * so there is no nav rail competing for the same width. */
   @media (max-width: 1279px) {
     .v4-columns--sign-in {
-      --v4-cols: 256px 1fr 272px;
+      --v4-cols: 256px 1fr 312px;
     }
   }
 

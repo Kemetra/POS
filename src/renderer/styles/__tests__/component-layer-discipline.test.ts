@@ -64,6 +64,16 @@ function stripComments(source: string): string {
 
 const scrubbed = stripComments(css).split('\n');
 
+/** Count regex matches on one line. Hoisted so the depth walk stays flat. */
+function countMatches(line: string, pattern: RegExp): number {
+  return (line.match(pattern) ?? []).length;
+}
+
+/** Net brace delta contributed by a single line: openers minus closers. */
+function braceDelta(line: string): number {
+  return countMatches(line, /\{/g) - countMatches(line, /\}/g);
+}
+
 /**
  * Locate `@layer components` and its closing brace by depth counting.
  * Returns 0-based line indices.
@@ -75,8 +85,7 @@ function findComponentLayer(): { open: number; close: number } {
   }
   let depth = 0;
   for (let i = open; i < scrubbed.length; i += 1) {
-    depth += (scrubbed[i]?.match(/\{/g) ?? []).length;
-    depth -= (scrubbed[i]?.match(/\}/g) ?? []).length;
+    depth += braceDelta(scrubbed[i] ?? '');
     if (depth === 0 && i > open) {
       return { open, close: i };
     }
