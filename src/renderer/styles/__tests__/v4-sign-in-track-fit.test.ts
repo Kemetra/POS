@@ -84,6 +84,27 @@ function signInTrackDeclarations(): { cols: string; pin: number }[] {
   return found;
 }
 
+/**
+ * Minimum legible roster card width.
+ *
+ * A roster card is avatar + name + role on one row. The chrome (border,
+ * padding, avatar, inner gaps, role) is fixed, so every pixel below this floor
+ * is taken out of the NAME — the only part that distinguishes one cashier from
+ * another. Ellipsising the names defeats the roster's entire purpose as the
+ * primary choice on this screen.
+ *
+ * Asserted on CARD WIDTH rather than on residual name width on purpose: card
+ * width is exactly derivable from the stylesheet, whereas a name-width
+ * threshold would need a guessed glyph width for the role label and would
+ * encode that guess as a hard gate.
+ */
+const MIN_ROSTER_CARD = 240;
+
+/** Columns `repeat(auto-fit, minmax(Npx, 1fr))` yields in a container. */
+function autoFitColumns(container: number, min: number, gap: number): number {
+  return Math.max(1, Math.floor((container + gap) / (min + gap)));
+}
+
 /** Width the PIN track must have for `.pin-pad` to fit inside `.v4-panel`. */
 function requiredPinTrackWidth(): number {
   const keySize = pxDeclaration('.pin-pad__key', 'inline-size');
@@ -109,6 +130,48 @@ describe('022 US1-R3 — sign-in PIN track fits its keypad', () => {
 
   it.each(signInTrackDeclarations())('contains the keypad at track shape "$cols"', ({ pin }) => {
     expect(pin).toBeGreaterThanOrEqual(requiredPinTrackWidth());
+  });
+
+  /**
+   * The roster's usable width is decided by the two FIXED tracks beside it, not
+   * by the viewport — so its column count must follow its container, not a
+   * media query. A viewport breakpoint got this exactly backwards: at 1279px
+   * the roster ran 2 columns, and crossing UP to 1280px added a third column at
+   * the tightest container width on the whole range, so widening the window
+   * made the names less readable. `auto-fit` + `minmax()` removes the
+   * discontinuity by construction.
+   */
+  const VIEWPORTS = [1024, 1279, 1280, 1440, 1920] as const;
+
+  it('sizes roster columns from the container, not a viewport breakpoint', () => {
+    const rosterGrid = /\.roster-list__items\s*\{([^}]*)\}/.exec(scrubbed);
+    if (rosterGrid === null) throw new Error('.roster-list__items rule not found');
+    expect(rosterGrid[1]).toMatch(/grid-template-columns:\s*repeat\(\s*auto-fit/);
+    // A viewport override would reintroduce the 1279→1280 discontinuity.
+    expect(scrubbed).not.toMatch(
+      /@media[^{]*\{[^}]*\.roster-list__items\s*\{[^}]*grid-template-columns/,
+    );
+  });
+
+  it.each(VIEWPORTS)('keeps roster cards legible at %ipx', (viewport) => {
+    const narrow = signInTrackDeclarations().at(-1);
+    const base = signInTrackDeclarations().at(0);
+    if (narrow === undefined || base === undefined) throw new Error('missing track declarations');
+    const shape = viewport <= 1279 ? narrow : base;
+    const [rail] = shape.cols.split(/\s+/);
+    const railPx = Number(/^(\d+)px$/.exec(rail ?? '')?.[1] ?? NaN);
+
+    const screenPadding = pxDeclaration('.v4-screen', 'padding');
+    const columnGap = pxDeclaration('.v4-columns', 'gap');
+    const panelPadding = pxDeclaration('.v4-panel', 'padding');
+    const cardGap = spaceToken('space-4');
+
+    const track = viewport - screenPadding * 2 - columnGap * 2 - railPx - shape.pin;
+    const inner = track - panelPadding * 2 - 2;
+    const columns = autoFitColumns(inner, MIN_ROSTER_CARD, cardGap);
+    const card = (inner - cardGap * (columns - 1)) / columns;
+
+    expect(card).toBeGreaterThanOrEqual(MIN_ROSTER_CARD);
   });
 
   it('keeps the roster the widest track at the 1024px viewport floor', () => {

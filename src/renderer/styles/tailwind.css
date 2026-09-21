@@ -3353,19 +3353,40 @@ body {
       padding: var(--space-6);
     }
 
+    /* Column count follows the CONTAINER, not the viewport.
+     *
+     * A roster card is avatar + name + role on one row; its chrome is fixed
+     * (2px border + 32px padding + 44px avatar + 24px inner gaps + the role
+     * label), so every pixel below ~240px comes out of the NAME — the only
+     * part that tells two cashiers apart.
+     *
+     * This was a viewport media query (3 columns, dropping to 2 below 1280px)
+     * and it got the dependency backwards: the roster's usable width is set by
+     * the two FIXED tracks beside it, not by the window. That produced a cliff
+     * at exactly 1280px, where the base rule added a THIRD column at the
+     * tightest container width on the whole supported range — so widening the
+     * window made names LESS readable:
+     *
+     *   1279px → 2 cols → 274px card   (comfortable)
+     *   1280px → 3 cols → 157px card   (name ellipsised to ~19px)
+     *
+     * `auto-fit` + `minmax()` removes the discontinuity by construction: the
+     * track count is derived from the space actually available, so the card can
+     * never fall below the floor. At the 1024px viewport the roster renders a
+     * single full-width column — the correct outcome at that width, and a
+     * deliberate density change. A long roster grows the page, which scrolls
+     * normally (`.v4-screen` is `min-block-size`, not a fixed height).
+     *
+     * Enforced by v4-sign-in-track-fit.test.ts, which re-derives the column
+     * count from the track shape at 1024/1279/1280/1440/1920 and fails if a
+     * viewport override is reintroduced. */
     .roster-list__items {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: var(--space-4) var(--space-4);
       list-style: none;
       margin: 0;
       padding: 0;
-    }
-
-    @media (max-width: 1279px) {
-      .roster-list__items {
-        grid-template-columns: repeat(2, 1fr);
-      }
     }
 
     .roster-list__item {
