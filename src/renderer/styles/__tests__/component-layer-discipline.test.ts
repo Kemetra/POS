@@ -155,4 +155,67 @@ describe('022 US0-R2 — component-layer discipline', () => {
     expect(lines.length).toBeGreaterThan(1000);
     expect(css).toContain('@layer components');
   });
+
+  /**
+   * ── A CONDITIONAL AT-RULE MUST NOT SWALLOW A COMPONENT FAMILY ───────────
+   *
+   * Sibling failure mode to the unlayered-rules bug above, and it hid in this
+   * stylesheet for far longer. A misplaced closing brace left
+   * `@media (prefers-reduced-motion: reduce)` spanning 543 lines, so SIX
+   * component families — `.roster-list`, `.pin-pad`, `.takeover-prompt`,
+   * `.operator-badge`, `.sale-sync-status`, `.catalogue-freshness` — only
+   * applied to operators who had reduced motion enabled. Everyone else got
+   * browser-default `<ul>` and button rendering on sign-in.
+   *
+   * Textual assertions cannot catch this: a rule can match a selector search
+   * perfectly and still never apply, because presence in the file says nothing
+   * about the at-rule enclosing it. (v4-sign-in-track-fit.test.ts gave exactly
+   * that false pass — it matched the roster grid while the rule was inert.)
+   *
+   * The invariant is narrow and durable: a `prefers-reduced-motion` block
+   * exists to NEUTRALISE MOTION, so it may only carry motion-related
+   * declarations. A `display`, `grid-template-columns` or `padding` inside one
+   * means a component family has been swallowed by a stray brace.
+   */
+  it('confines prefers-reduced-motion blocks to motion-neutralising declarations', () => {
+    /** Declarations that legitimately appear in a reduced-motion override. */
+    const MOTION_PROPERTIES = new Set([
+      'animation',
+      'animation-duration',
+      'animation-iteration-count',
+      'animation-name',
+      'transition',
+      'transition-duration',
+      'transition-property',
+      'scroll-behavior',
+      // The spinner swaps its ring for a static border when motion is off.
+      'border-color',
+      'border-inline-end-color',
+      'background',
+      'background-image',
+    ]);
+
+    const offenders: string[] = [];
+    scrubbed.forEach((line, index) => {
+      if (!/^\s*@media[^{]*prefers-reduced-motion[^{]*\{/.test(line)) return;
+      let depth = 0;
+      for (let i = index; i < scrubbed.length; i += 1) {
+        depth += braceDelta(scrubbed[i] ?? '');
+        const declaration = /^\s*([a-z-]+)\s*:/.exec(scrubbed[i] ?? '');
+        if (declaration !== null && !MOTION_PROPERTIES.has(declaration[1] ?? '')) {
+          offenders.push(`line ${(i + 1).toString()}: ${(scrubbed[i] ?? '').trim()}`);
+        }
+        if (depth === 0 && i > index) break;
+      }
+    });
+
+    expect(
+      offenders,
+      'Non-motion declarations found inside a `prefers-reduced-motion` block.\n\n' +
+        'That block only runs for operators who have reduced motion ENABLED, so any\n' +
+        'component CSS inside it is dead for everyone else. This is almost always a\n' +
+        'misplaced closing brace rather than a deliberate rule.\n\n' +
+        `${offenders.slice(0, 15).join('\n')}\n`,
+    ).toEqual([]);
+  });
 });

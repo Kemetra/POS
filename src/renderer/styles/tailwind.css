@@ -3337,511 +3337,511 @@ body {
       border-color: currentColor;
       border-inline-end-color: transparent;
     }
-
-    /* ── 007 S5 — Operator session surfaces ─────────────────────────────── */
-
-    /* ── RosterList ──────────────────────────────────────────────────────── */
-
-    .roster-list {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-4);
-      inline-size: 100%;
-    }
-
-    .roster-list--inert {
-      padding: var(--space-6);
-    }
-
-    /* Column count follows the CONTAINER, not the viewport.
-     *
-     * A roster card is avatar + name + role on one row; its chrome is fixed
-     * (2px border + 32px padding + 44px avatar + 24px inner gaps + the role
-     * label), so every pixel below ~240px comes out of the NAME — the only
-     * part that tells two cashiers apart.
-     *
-     * This was a viewport media query (3 columns, dropping to 2 below 1280px)
-     * and it got the dependency backwards: the roster's usable width is set by
-     * the two FIXED tracks beside it, not by the window. That produced a cliff
-     * at exactly 1280px, where the base rule added a THIRD column at the
-     * tightest container width on the whole supported range — so widening the
-     * window made names LESS readable:
-     *
-     *   1279px → 2 cols → 274px card   (comfortable)
-     *   1280px → 3 cols → 157px card   (name ellipsised to ~19px)
-     *
-     * `auto-fit` + `minmax()` removes the discontinuity by construction: the
-     * track count is derived from the space actually available, so the card can
-     * never fall below the floor. At the 1024px viewport the roster renders a
-     * single full-width column — the correct outcome at that width, and a
-     * deliberate density change. A long roster grows the page, which scrolls
-     * normally (`.v4-screen` is `min-block-size`, not a fixed height).
-     *
-     * Enforced by v4-sign-in-track-fit.test.ts, which re-derives the column
-     * count from the track shape at 1024/1279/1280/1440/1920 and fails if a
-     * viewport override is reintroduced. */
-    .roster-list__items {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: var(--space-4) var(--space-4);
-      list-style: none;
-      margin: 0;
-      padding: 0;
-    }
-
-    .roster-list__item {
-      block-size: 84px;
-    }
-
-    .roster-list__item-btn {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-      inline-size: 100%;
-      block-size: 100%;
-      padding-inline: var(--space-4);
-      background-color: var(--color-surface-elevated);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-sm);
-      cursor: pointer;
-      transition:
-        background-color var(--duration-2) var(--ease-out),
-        border-color var(--duration-2) var(--ease-out),
-        box-shadow var(--duration-2) var(--ease-out);
-      text-align: start;
-      overflow: hidden;
-    }
-
-    .roster-list__item-btn:hover {
-      background-color: var(--color-primary-soft);
-      border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
-    }
-
-    .roster-list__item--selected .roster-list__item-btn {
-      background-color: var(--color-primary-soft);
-      border-color: var(--color-primary);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
-    }
-
-    .roster-list__item-btn:focus-visible {
-      outline: 2px solid var(--color-focus-ring);
-      outline-offset: 2px;
-    }
-
-    .roster-list__avatar {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      inline-size: 44px;
-      block-size: 44px;
-      min-inline-size: 44px;
-      border-radius: var(--radius-pill);
-      background-color: var(--color-primary-soft);
-      color: var(--color-primary);
-      font-size: var(--font-size-sm);
-      font-weight: var(--font-weight-bold);
-      font-variant-numeric: tabular-nums;
-      flex-shrink: 0;
-    }
-
-    .roster-list__name {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: var(--font-size-sm);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-text);
-    }
-
-    .roster-list__role {
-      font-size: var(--font-size-xs);
-      font-weight: var(--font-weight-medium);
-      color: var(--color-text-muted);
-      flex-shrink: 0;
-    }
-
-    /* ── PinPad ──────────────────────────────────────────────────────────── */
-
-    .pin-pad {
-      display: inline-flex;
-      flex-direction: column;
-      gap: var(--space-4);
-      align-items: center;
-      padding: var(--space-5);
-      background-color: var(--color-surface-sunken);
-      box-shadow: var(--shadow-inset);
-      border-radius: var(--radius-card);
-    }
-
-    .pin-pad__dots {
-      display: flex;
-      gap: var(--space-3);
-      align-items: center;
-      justify-content: center;
-    }
-
-    .pin-pad__dot {
-      display: inline-block;
-      inline-size: 12px;
-      block-size: 12px;
-      border-radius: var(--radius-pill);
-      background-color: var(--color-border);
-      transition: background-color var(--duration-2) var(--ease-out);
-    }
-
-    .pin-pad__dot[data-state='filled'] {
-      background-color: var(--color-primary);
-    }
-
-    .pin-pad__dot[data-state='error'] {
-      background-color: var(--color-danger);
-    }
-
-    .pin-pad__grid {
-      display: grid;
-      grid-template-columns: repeat(3, 64px);
-      gap: var(--space-2);
-    }
-
-    .pin-pad__key {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      inline-size: 64px;
-      block-size: 64px;
-      border-radius: var(--radius-control);
-      background-color: var(--color-surface-elevated);
-      border: 1px solid var(--color-border-strong);
-      box-shadow: var(--shadow-sm);
-      font-size: 1.25rem;
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-text);
-      cursor: pointer;
-      transition:
-        background-color var(--duration-1) var(--ease-out),
-        box-shadow var(--duration-1) var(--ease-out);
-      user-select: none;
-    }
-
-    .pin-pad__key:hover:not(:disabled) {
-      background-color: var(--color-primary-soft);
-      border-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
-    }
-
-    .pin-pad__key:active:not(:disabled) {
-      background-color: var(--color-primary-soft);
-      box-shadow: var(--shadow-inset);
-    }
-
-    .pin-pad__key:focus-visible {
-      outline: 2px solid var(--color-focus-ring);
-      outline-offset: 2px;
-    }
-
-    .pin-pad__key:disabled,
-    .pin-pad[data-disabled] .pin-pad__key {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-
-    .pin-pad__key--enter[aria-disabled='true'] {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-
-    /* ── TakeoverPrompt ──────────────────────────────────────────────────── */
-
-    .takeover-prompt {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background-color: var(--color-overlay-scrim);
-      z-index: 50;
-    }
-
-    .takeover-prompt__content {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-5);
-      inline-size: 480px;
-      max-inline-size: calc(100vw - var(--space-8));
-      padding: var(--space-7);
-      background-color: var(--color-surface-elevated);
-      border-radius: var(--radius-pane);
-      box-shadow: var(--shadow-overlay);
-    }
-
-    .takeover-prompt__title {
-      font-size: var(--font-size-lg);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-text);
-      margin: 0;
-      line-height: 1.4;
-    }
-
-    .takeover-prompt__body {
-      font-size: var(--font-size-base);
-      color: var(--color-text-muted);
-      margin: 0;
-    }
-
-    .takeover-prompt__feedback {
-      min-block-size: 1.25rem;
-      font-size: var(--font-size-sm);
-    }
-
-    .takeover-prompt__spinner {
-      color: var(--color-text-muted);
-    }
-
-    .takeover-prompt__error {
-      color: var(--color-danger);
-      font-weight: var(--font-weight-medium);
-    }
-
-    .takeover-prompt__actions {
-      display: flex;
-      gap: var(--space-3);
-      justify-content: flex-end;
-    }
-
-    .takeover-prompt__cancel {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding-inline: var(--space-5);
-      block-size: 44px;
-      border-radius: var(--radius-control);
-      background-color: transparent;
-      border: 1px solid var(--color-border-strong);
-      color: var(--color-text);
-      font-size: var(--font-size-sm);
-      font-weight: var(--font-weight-medium);
-      cursor: pointer;
-      transition:
-        background-color var(--duration-2) var(--ease-out),
-        border-color var(--duration-2) var(--ease-out);
-    }
-
-    .takeover-prompt__cancel:hover:not(:disabled) {
-      background-color: var(--color-surface-muted);
-    }
-
-    .takeover-prompt__cancel:focus-visible {
-      outline: 2px solid var(--color-focus-ring);
-      outline-offset: 2px;
-    }
-
-    .takeover-prompt__cancel:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-
-    .takeover-prompt__confirm {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding-inline: var(--space-5);
-      block-size: 44px;
-      border-radius: var(--radius-control);
-      background-color: var(--color-primary);
-      border: 1px solid var(--color-primary);
-      color: var(--color-primary-on);
-      font-size: var(--font-size-sm);
-      font-weight: var(--font-weight-semibold);
-      cursor: pointer;
-      transition:
-        background-color var(--duration-2) var(--ease-out),
-        border-color var(--duration-2) var(--ease-out);
-    }
-
-    .takeover-prompt__confirm:hover:not(:disabled) {
-      background-color: var(--color-primary-emphasis);
-      border-color: var(--color-primary-emphasis);
-    }
-
-    .takeover-prompt__confirm:focus-visible {
-      outline: 2px solid var(--color-focus-ring);
-      outline-offset: 2px;
-    }
-
-    .takeover-prompt__confirm:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-
-    /* ── OperatorBadge ───────────────────────────────────────────────────── */
-
-    .operator-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      overflow: hidden;
-      max-inline-size: 100%;
-    }
-
-    .operator-badge__avatar {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      inline-size: 32px;
-      block-size: 32px;
-      min-inline-size: 32px;
-      border-radius: var(--radius-pill);
-      background-color: var(--color-primary-soft);
-      color: var(--color-primary);
-      font-size: 0.6875rem; /* 11px */
-      font-weight: var(--font-weight-bold);
-      font-variant-numeric: tabular-nums;
-      flex-shrink: 0;
-    }
-
-    .operator-badge__name {
-      font-size: var(--font-size-sm);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .operator-badge__role {
-      display: inline-flex;
-      align-items: center;
-      padding-inline: var(--space-2);
-      block-size: 20px;
-      border-radius: var(--radius-pill);
-      font-size: 0.6875rem; /* 11px */
-      font-weight: var(--font-weight-semibold);
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .operator-badge__role[data-role='cashier'] {
-      background-color: var(--color-info-soft);
-      color: var(--color-info);
-    }
-
-    .operator-badge__role[data-role='manager'] {
-      background-color: var(--color-primary-soft);
-      color: var(--color-primary);
-    }
-
-    .operator-badge__role[data-role='admin'] {
-      background-color: var(--color-warning-soft);
-      color: var(--color-warning);
-    }
-
-    /* ─── 010 catalogue freshness (FR-16) ──────────────────────────────────
-     * A compact INLINE status line, not a card (DESIGN.md bans metric/hero
-     * cards). Muted body text + a small status DOT (icon + text, never
-     * colour-only). The dot colour is driven by `data-state`; the text always
-     * carries the meaning so the state survives a greyscale render. No
-     * side-stripe border (DESIGN.md absolute ban). */
-    .catalogue-freshness {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      min-block-size: 44px;
-      padding-inline: var(--space-2);
-      font-size: var(--font-size-sm);
-      color: var(--color-text-muted);
-    }
-
-    .catalogue-freshness__icon {
-      font-size: 0.75rem;
-      line-height: 1;
-      color: var(--color-text-muted);
-    }
-
-    .catalogue-freshness[data-state='updated'] .catalogue-freshness__icon {
-      color: var(--color-success);
-    }
-
-    .catalogue-freshness[data-state='synced-empty'] .catalogue-freshness__icon {
-      color: var(--color-warning);
-    }
-
-    .catalogue-freshness[data-state='unavailable'] .catalogue-freshness__icon {
-      color: var(--color-danger);
-    }
-
-    .catalogue-freshness__label {
-      color: var(--color-text);
-    }
-
-    .catalogue-freshness[data-state='loading'] .catalogue-freshness__label,
-    .catalogue-freshness[data-state='unavailable'] .catalogue-freshness__label {
-      color: var(--color-text-muted);
-    }
-
-    .catalogue-freshness__label time {
-      font-variant-numeric: tabular-nums;
-    }
-
-    .catalogue-freshness__feedback {
-      color: var(--color-info);
-      font-weight: var(--font-weight-semibold);
-    }
-
-    .catalogue-freshness__refresh {
-      margin-inline-start: auto;
-    }
-
-    /* 011-sale-sync-capture-up — read-only ambient sync-status indicator. Mirrors
-     * .catalogue-freshness: icon + text (never colour-only; the label always
-     * carries the meaning so it survives a greyscale render). No button (read-only),
-     * no side-stripe border (DESIGN.md absolute ban). The icon colour is driven by
-     * data-state, deliberately QUIET: pending = info (in motion, normal offline),
-     * attention = warning (accountability, NOT danger-red panic), all-synced = success. */
-    .sale-sync-status {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      min-block-size: 44px;
-      padding-inline: var(--space-2);
-      font-size: var(--font-size-sm);
-      color: var(--color-text-muted);
-    }
-
-    .sale-sync-status__icon {
-      font-size: 0.75rem;
-      line-height: 1;
-      color: var(--color-text-muted);
-    }
-
-    .sale-sync-status[data-state='all-synced'] .sale-sync-status__icon {
-      color: var(--color-success);
-    }
-
-    .sale-sync-status[data-state='pending'] .sale-sync-status__icon {
-      color: var(--color-info);
-    }
-
-    .sale-sync-status[data-state='attention'] .sale-sync-status__icon {
-      color: var(--color-warning);
-    }
-
-    .sale-sync-status[data-state='unavailable'] .sale-sync-status__icon {
-      color: var(--color-danger);
-    }
-
-    .sale-sync-status__label {
-      color: var(--color-text);
-    }
-
-    .sale-sync-status[data-state='loading'] .sale-sync-status__label,
-    .sale-sync-status[data-state='unavailable'] .sale-sync-status__label {
-      color: var(--color-text-muted);
-    }
-
-    .sale-sync-status__label time {
-      font-variant-numeric: tabular-nums;
-    }
+  }
+
+  /* ── 007 S5 — Operator session surfaces ─────────────────────────────── */
+
+  /* ── RosterList ──────────────────────────────────────────────────────── */
+
+  .roster-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    inline-size: 100%;
+  }
+
+  .roster-list--inert {
+    padding: var(--space-6);
+  }
+
+  /* Column count follows the CONTAINER, not the viewport.
+   *
+   * A roster card is avatar + name + role on one row; its chrome is fixed
+   * (2px border + 32px padding + 44px avatar + 24px inner gaps + the role
+   * label), so every pixel below ~240px comes out of the NAME — the only
+   * part that tells two cashiers apart.
+   *
+   * This was a viewport media query (3 columns, dropping to 2 below 1280px)
+   * and it got the dependency backwards: the roster's usable width is set by
+   * the two FIXED tracks beside it, not by the window. That produced a cliff
+   * at exactly 1280px, where the base rule added a THIRD column at the
+   * tightest container width on the whole supported range — so widening the
+   * window made names LESS readable:
+   *
+   *   1279px → 2 cols → 274px card   (comfortable)
+   *   1280px → 3 cols → 157px card   (name ellipsised to ~19px)
+   *
+   * `auto-fit` + `minmax()` removes the discontinuity by construction: the
+   * track count is derived from the space actually available, so the card can
+   * never fall below the floor. At the 1024px viewport the roster renders a
+   * single full-width column — the correct outcome at that width, and a
+   * deliberate density change. A long roster grows the page, which scrolls
+   * normally (`.v4-screen` is `min-block-size`, not a fixed height).
+   *
+   * Enforced by v4-sign-in-track-fit.test.ts, which re-derives the column
+   * count from the track shape at 1024/1279/1280/1440/1920 and fails if a
+   * viewport override is reintroduced. */
+  .roster-list__items {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--space-4) var(--space-4);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .roster-list__item {
+    block-size: 84px;
+  }
+
+  .roster-list__item-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    inline-size: 100%;
+    block-size: 100%;
+    padding-inline: var(--space-4);
+    background-color: var(--color-surface-elevated);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-2) var(--ease-out),
+      border-color var(--duration-2) var(--ease-out),
+      box-shadow var(--duration-2) var(--ease-out);
+    text-align: start;
+    overflow: hidden;
+  }
+
+  .roster-list__item-btn:hover {
+    background-color: var(--color-primary-soft);
+    border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+
+  .roster-list__item--selected .roster-list__item-btn {
+    background-color: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+
+  .roster-list__item-btn:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .roster-list__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 44px;
+    block-size: 44px;
+    min-inline-size: 44px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+
+  .roster-list__name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+
+  .roster-list__role {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  /* ── PinPad ──────────────────────────────────────────────────────────── */
+
+  .pin-pad {
+    display: inline-flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    align-items: center;
+    padding: var(--space-5);
+    background-color: var(--color-surface-sunken);
+    box-shadow: var(--shadow-inset);
+    border-radius: var(--radius-card);
+  }
+
+  .pin-pad__dots {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pin-pad__dot {
+    display: inline-block;
+    inline-size: 12px;
+    block-size: 12px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-border);
+    transition: background-color var(--duration-2) var(--ease-out);
+  }
+
+  .pin-pad__dot[data-state='filled'] {
+    background-color: var(--color-primary);
+  }
+
+  .pin-pad__dot[data-state='error'] {
+    background-color: var(--color-danger);
+  }
+
+  .pin-pad__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    gap: var(--space-2);
+  }
+
+  .pin-pad__key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 64px;
+    block-size: 64px;
+    border-radius: var(--radius-control);
+    background-color: var(--color-surface-elevated);
+    border: 1px solid var(--color-border-strong);
+    box-shadow: var(--shadow-sm);
+    font-size: 1.25rem;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-1) var(--ease-out),
+      box-shadow var(--duration-1) var(--ease-out);
+    user-select: none;
+  }
+
+  .pin-pad__key:hover:not(:disabled) {
+    background-color: var(--color-primary-soft);
+    border-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+  }
+
+  .pin-pad__key:active:not(:disabled) {
+    background-color: var(--color-primary-soft);
+    box-shadow: var(--shadow-inset);
+  }
+
+  .pin-pad__key:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .pin-pad__key:disabled,
+  .pin-pad[data-disabled] .pin-pad__key {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .pin-pad__key--enter[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ── TakeoverPrompt ──────────────────────────────────────────────────── */
+
+  .takeover-prompt {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-overlay-scrim);
+    z-index: 50;
+  }
+
+  .takeover-prompt__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    inline-size: 480px;
+    max-inline-size: calc(100vw - var(--space-8));
+    padding: var(--space-7);
+    background-color: var(--color-surface-elevated);
+    border-radius: var(--radius-pane);
+    box-shadow: var(--shadow-overlay);
+  }
+
+  .takeover-prompt__title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .takeover-prompt__body {
+    font-size: var(--font-size-base);
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .takeover-prompt__feedback {
+    min-block-size: 1.25rem;
+    font-size: var(--font-size-sm);
+  }
+
+  .takeover-prompt__spinner {
+    color: var(--color-text-muted);
+  }
+
+  .takeover-prompt__error {
+    color: var(--color-danger);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .takeover-prompt__actions {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: flex-end;
+  }
+
+  .takeover-prompt__cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--space-5);
+    block-size: 44px;
+    border-radius: var(--radius-control);
+    background-color: transparent;
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-2) var(--ease-out),
+      border-color var(--duration-2) var(--ease-out);
+  }
+
+  .takeover-prompt__cancel:hover:not(:disabled) {
+    background-color: var(--color-surface-muted);
+  }
+
+  .takeover-prompt__cancel:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .takeover-prompt__cancel:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .takeover-prompt__confirm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--space-5);
+    block-size: 44px;
+    border-radius: var(--radius-control);
+    background-color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary-on);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-2) var(--ease-out),
+      border-color var(--duration-2) var(--ease-out);
+  }
+
+  .takeover-prompt__confirm:hover:not(:disabled) {
+    background-color: var(--color-primary-emphasis);
+    border-color: var(--color-primary-emphasis);
+  }
+
+  .takeover-prompt__confirm:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .takeover-prompt__confirm:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ── OperatorBadge ───────────────────────────────────────────────────── */
+
+  .operator-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    overflow: hidden;
+    max-inline-size: 100%;
+  }
+
+  .operator-badge__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 32px;
+    block-size: 32px;
+    min-inline-size: 32px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: var(--font-weight-bold);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+
+  .operator-badge__name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .operator-badge__role {
+    display: inline-flex;
+    align-items: center;
+    padding-inline: var(--space-2);
+    block-size: 20px;
+    border-radius: var(--radius-pill);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: var(--font-weight-semibold);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .operator-badge__role[data-role='cashier'] {
+    background-color: var(--color-info-soft);
+    color: var(--color-info);
+  }
+
+  .operator-badge__role[data-role='manager'] {
+    background-color: var(--color-primary-soft);
+    color: var(--color-primary);
+  }
+
+  .operator-badge__role[data-role='admin'] {
+    background-color: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  /* ─── 010 catalogue freshness (FR-16) ──────────────────────────────────
+   * A compact INLINE status line, not a card (DESIGN.md bans metric/hero
+   * cards). Muted body text + a small status DOT (icon + text, never
+   * colour-only). The dot colour is driven by `data-state`; the text always
+   * carries the meaning so the state survives a greyscale render. No
+   * side-stripe border (DESIGN.md absolute ban). */
+  .catalogue-freshness {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-block-size: 44px;
+    padding-inline: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+
+  .catalogue-freshness__icon {
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+  }
+
+  .catalogue-freshness[data-state='updated'] .catalogue-freshness__icon {
+    color: var(--color-success);
+  }
+
+  .catalogue-freshness[data-state='synced-empty'] .catalogue-freshness__icon {
+    color: var(--color-warning);
+  }
+
+  .catalogue-freshness[data-state='unavailable'] .catalogue-freshness__icon {
+    color: var(--color-danger);
+  }
+
+  .catalogue-freshness__label {
+    color: var(--color-text);
+  }
+
+  .catalogue-freshness[data-state='loading'] .catalogue-freshness__label,
+  .catalogue-freshness[data-state='unavailable'] .catalogue-freshness__label {
+    color: var(--color-text-muted);
+  }
+
+  .catalogue-freshness__label time {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .catalogue-freshness__feedback {
+    color: var(--color-info);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .catalogue-freshness__refresh {
+    margin-inline-start: auto;
+  }
+
+  /* 011-sale-sync-capture-up — read-only ambient sync-status indicator. Mirrors
+   * .catalogue-freshness: icon + text (never colour-only; the label always
+   * carries the meaning so it survives a greyscale render). No button (read-only),
+   * no side-stripe border (DESIGN.md absolute ban). The icon colour is driven by
+   * data-state, deliberately QUIET: pending = info (in motion, normal offline),
+   * attention = warning (accountability, NOT danger-red panic), all-synced = success. */
+  .sale-sync-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-block-size: 44px;
+    padding-inline: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+
+  .sale-sync-status__icon {
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+  }
+
+  .sale-sync-status[data-state='all-synced'] .sale-sync-status__icon {
+    color: var(--color-success);
+  }
+
+  .sale-sync-status[data-state='pending'] .sale-sync-status__icon {
+    color: var(--color-info);
+  }
+
+  .sale-sync-status[data-state='attention'] .sale-sync-status__icon {
+    color: var(--color-warning);
+  }
+
+  .sale-sync-status[data-state='unavailable'] .sale-sync-status__icon {
+    color: var(--color-danger);
+  }
+
+  .sale-sync-status__label {
+    color: var(--color-text);
+  }
+
+  .sale-sync-status[data-state='loading'] .sale-sync-status__label,
+  .sale-sync-status[data-state='unavailable'] .sale-sync-status__label {
+    color: var(--color-text-muted);
+  }
+
+  .sale-sync-status__label time {
+    font-variant-numeric: tabular-nums;
   }
 
   /* === POS v3.5 prototype port (Phase 0 Task 1) — tender/account/held classes from docs/design/pos-v3.5/design-reference/kit.css === */

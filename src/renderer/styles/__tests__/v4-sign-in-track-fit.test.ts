@@ -147,6 +147,18 @@ describe('022 US1-R3 — sign-in PIN track fits its keypad', () => {
     const rosterGrid = /\.roster-list__items\s*\{([^}]*)\}/.exec(scrubbed);
     if (rosterGrid === null) throw new Error('.roster-list__items rule not found');
     expect(rosterGrid[1]).toMatch(/grid-template-columns:\s*repeat\(\s*auto-fit/);
+    // A rule can MATCH here and still never apply, because a textual search
+    // says nothing about the at-rule enclosing it. This guard gave exactly that
+    // false pass once: the roster grid matched while sitting inside a
+    // `prefers-reduced-motion` block that a stray brace had left 543 lines
+    // long, so it was inert for every operator without reduced motion. Assert
+    // the rule is reachable unconditionally, not merely present.
+    const before = scrubbed.slice(0, scrubbed.indexOf(rosterGrid[0]));
+    const opens = (before.match(/\{/g) ?? []).length;
+    const closes = (before.match(/\}/g) ?? []).length;
+    // Exactly one level deep: `@layer components`. Any deeper means some
+    // conditional at-rule encloses the roster grid and it may not apply.
+    expect(opens - closes).toBe(1);
     // A viewport override would reintroduce the 1279→1280 discontinuity.
     expect(scrubbed).not.toMatch(
       /@media[^{]*\{[^}]*\.roster-list__items\s*\{[^}]*grid-template-columns/,
