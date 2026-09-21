@@ -231,7 +231,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
       {/* Roster is the widest track: selecting the operator is the primary act.
           The PIN column holds a fixed 300px so the keypad never reflows. */}
       <div className="v4-columns v4-columns--sign-in">
-        <section className="v4-panel" aria-labelledby="signin-staff-code">
+        <section className="v4-panel v4-col--rail" aria-labelledby="signin-staff-code">
           <div className="v4-panel__head">
             {/* Bilingual section label retained verbatim: `sign-in-route.test.tsx`
                 pins this exact string. The rebuild changes composition, not copy —
@@ -244,7 +244,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
           <ManagerAdminSignInForm operator={operator} />
         </section>
 
-        <section className="v4-panel" aria-label="قائمة الكاشير">
+        <section className="v4-panel v4-col--roster" aria-label="قائمة الكاشير">
           <div className="v4-panel__head">
             <h2 className="v4-panel__title">صيادلة هذا الفرع</h2>
           </div>
@@ -264,7 +264,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
         {/* PIN column. Persistent track: it holds its width whether or not a
             cashier is selected, so selection never reflows the two columns
             beside it. Before selection it states what it is waiting for. */}
-        <aside className="v4-panel" aria-label="إدخال الرقم السري">
+        <aside className="v4-panel v4-col--pin" aria-label="إدخال الرقم السري">
           {selectedCashier === undefined ? (
             <>
               <div className="v4-panel__head">

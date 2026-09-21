@@ -5077,7 +5077,48 @@ body {
    * re-derives the new floor. jsdom computes no layout, so no renderer test can
    * see this class of break. */
   .v4-columns--sign-in {
-    --v4-cols: 320px 1fr 312px;
+    /* Track order is PAINT order, and under RTL the FIRST track paints at the
+     * RIGHT edge (handoff: "the first declared track paints on the right").
+     * The approved composition is rail-left · roster-centre · PIN-right, so
+     * the PIN's 312px track is declared FIRST and the rail's 320px LAST. */
+    --v4-cols: 312px 1fr 320px;
+  }
+
+  /* ── Sign-in region placement ────────────────────────────────────────────
+   * `<main>` carries `dir="rtl"`, so grid auto-placement would paint the first
+   * DOM child at the RIGHT edge and mirror the whole screen. The handoff warns
+   * about precisely this: "Do not rely on `dir=\"rtl\"` alone to mirror the
+   * page — it will produce the wrong column order."
+   *
+   * DOM order and paint order therefore disagree ON PURPOSE, each correct for
+   * its own axis:
+   *
+   *   DOM   — staff-code → roster → PIN   (task flow: choose a cashier, THEN
+   *                                        type the PIN; keyboard order)
+   *   PAINT — staff-code | roster | PIN    (handoff composition)
+   *
+   * Explicit placement is what lets both hold at once. This does NOT violate
+   * WCAG 2.4.3: that criterion requires focus order to preserve MEANING and
+   * operability, not to mirror visual order — and the DOM keeps the meaningful
+   * sequence. Reordering the DOM instead would put the PIN pad ahead of the
+   * roster in traversal, which inverts the task.
+   *
+   * Scoped to `--sign-in` by the child combinator: `.v4-columns` is the
+   * generic primitive and other screens must not inherit this placement.
+   *
+   * Enforced by v4-sign-in-track-fit.test.ts, which reads the track widths
+   * through these declarations rather than by list position — so the geometry
+   * guards keep measuring the right track if the composition ever changes. */
+  .v4-columns--sign-in > .v4-col--pin {
+    grid-column: 1;
+  }
+
+  .v4-columns--sign-in > .v4-col--roster {
+    grid-column: 2;
+  }
+
+  .v4-columns--sign-in > .v4-col--rail {
+    grid-column: 3;
   }
 
   /* Below ~1280px the fixed tracks starve the roster. Arithmetic at the 1024px
@@ -5095,7 +5136,9 @@ body {
    * so there is no nav rail competing for the same width. */
   @media (max-width: 1279px) {
     .v4-columns--sign-in {
-      --v4-cols: 256px 1fr 312px;
+      /* PIN first (paints right-to-left under RTL), rail last — same order as
+       * the base rule. The PIN keeps its 306px floor; only the rail narrows. */
+      --v4-cols: 312px 1fr 256px;
     }
   }
 

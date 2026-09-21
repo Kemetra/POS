@@ -67,18 +67,60 @@ function pxDeclaration(selector: string, property: string): number {
   throw new Error(`${selector} ${property}: cannot resolve "${value}"`);
 }
 
-/** Every `--v4-cols` declaration for the sign-in track, base rule and overrides. */
-function signInTrackDeclarations(): { cols: string; pin: number }[] {
-  const found: { cols: string; pin: number }[] = [];
+/**
+ * Which grid column each sign-in region is placed in.
+ *
+ * Read from the `grid-column` declarations rather than assumed from source
+ * order, because the two deliberately DISAGREE: the DOM is ordered by task
+ * flow (pick cashier → enter PIN) while the columns are painted in the order
+ * the design handoff specifies. Resolving regions positionally would silently
+ * measure the wrong track the moment that placement changes — see the note on
+ * `signInTrackDeclarations` below.
+ */
+function regionColumns(): { pin: number; rail: number; roster: number } {
+  const read = (region: string): number => {
+    const rule = new RegExp(
+      `\\.v4-columns--sign-in\\s*>\\s*\\.v4-col--${region}\\s*\\{([^}]*)\\}`,
+    ).exec(scrubbed);
+    if (rule === null) throw new Error(`no placement rule for .v4-col--${region}`);
+    const column = /grid-column:\s*(\d+)/.exec(rule[1] ?? '');
+    if (column === null) throw new Error(`.v4-col--${region} declares no grid-column`);
+    return Number(column[1]);
+  };
+  return { pin: read('pin'), rail: read('rail'), roster: read('roster') };
+}
+
+/**
+ * Every `--v4-cols` declaration for the sign-in track, base rule and overrides,
+ * with each track resolved to the REGION that occupies it.
+ *
+ * Tracks are matched to regions through `grid-column`, never by list position.
+ * A positional read (`tracks.at(-1)` as "the PIN track") is exactly the false
+ * pass this suite already shipped once: after the columns were reordered it
+ * would have measured the STAFF RAIL against the keypad floor, passed at the
+ * base shape, and failed at the narrow shape for an unrelated reason. Mapping
+ * by declared placement survives a future reorder instead of inverting.
+ */
+function signInTrackDeclarations(): { cols: string; pin: number; rail: number }[] {
+  const placement = regionColumns();
+  const found: { cols: string; pin: number; rail: number }[] = [];
   const re = /\.v4-columns--sign-in\s*\{[^}]*?--v4-cols:\s*([^;]+);/g;
   let match = re.exec(scrubbed);
   while (match !== null) {
     const cols = (match[1] ?? '').trim();
     const tracks = cols.split(/\s+/);
-    const last = tracks[tracks.length - 1] ?? '';
-    const px = /^(\d+)px$/.exec(last);
-    if (px === null) throw new Error(`PIN track is not a fixed px value: "${cols}"`);
-    found.push({ cols, pin: Number(px[1]) });
+    // `grid-column` is 1-based; the track list is 0-based.
+    const fixedTrack = (column: number, label: string): number => {
+      const raw = tracks[column - 1] ?? '';
+      const px = /^(\d+)px$/.exec(raw);
+      if (px === null) throw new Error(`${label} track is not a fixed px value: "${cols}"`);
+      return Number(px[1]);
+    };
+    found.push({
+      cols,
+      pin: fixedTrack(placement.pin, 'PIN'),
+      rail: fixedTrack(placement.rail, 'staff-code rail'),
+    });
     match = re.exec(scrubbed);
   }
   return found;
@@ -170,8 +212,7 @@ describe('022 US1-R3 — sign-in PIN track fits its keypad', () => {
     const base = signInTrackDeclarations().at(0);
     if (narrow === undefined || base === undefined) throw new Error('missing track declarations');
     const shape = viewport <= 1279 ? narrow : base;
-    const [rail] = shape.cols.split(/\s+/);
-    const railPx = Number(/^(\d+)px$/.exec(rail ?? '')?.[1] ?? NaN);
+    const railPx = shape.rail;
 
     const screenPadding = pxDeclaration('.v4-screen', 'padding');
     const columnGap = pxDeclaration('.v4-columns', 'gap');
@@ -191,12 +232,53 @@ describe('022 US1-R3 — sign-in PIN track fits its keypad', () => {
     // primary choice, so it must never be out-sized by the rails beside it.
     const narrow = signInTrackDeclarations().at(-1);
     if (narrow === undefined) throw new Error('no narrow track declaration');
-    const [rail, , pinTrack] = narrow.cols.split(/\s+/);
-    const railPx = Number(/^(\d+)px$/.exec(rail ?? '')?.[1] ?? NaN);
     const screenPadding = pxDeclaration('.v4-screen', 'padding');
     const columnGap = pxDeclaration('.v4-columns', 'gap');
-    const roster = 1024 - screenPadding * 2 - columnGap * 2 - railPx - narrow.pin;
-    expect(roster).toBeGreaterThan(railPx);
-    expect(roster).toBeGreaterThan(Number(/^(\d+)px$/.exec(pinTrack ?? '')?.[1] ?? NaN));
+    const roster = 1024 - screenPadding * 2 - columnGap * 2 - narrow.rail - narrow.pin;
+    expect(roster).toBeGreaterThan(narrow.rail);
+    expect(roster).toBeGreaterThan(narrow.pin);
+  });
+
+  /**
+   * ── PAINT ORDER IS DECLARED, NOT INHERITED FROM SOURCE ORDER ────────────
+   *
+   * `<main>` carries `dir="rtl"`, so grid auto-placement paints the FIRST
+   * child at the RIGHT edge. Left to auto-placement the screen renders
+   * mirrored against the approved composition — the handoff warns about
+   * exactly this: "Do not rely on `dir=\"rtl\"` alone to mirror the page — it
+   * will produce the wrong column order."
+   *
+   * So DOM order and paint order deliberately disagree, and each is correct
+   * for its own axis:
+   *
+   *   DOM   — staff-code → roster → PIN   (task flow: pick cashier, then PIN;
+   *                                        this is what keyboard users get)
+   *   PAINT — staff-code | roster | PIN    (handoff: rail left, PIN right)
+   *
+   * Explicit `grid-column` is what lets both hold at once. WCAG 2.4.3 asks
+   * focus order to preserve MEANING, not to mirror pixel order — the DOM keeps
+   * the meaningful sequence, so placing regions visually does not violate it.
+   *
+   * LIMIT OF THIS GUARD: jsdom resolves no layout and no writing mode, so no
+   * test here can prove the columns actually PAINT in this order — only that
+   * the placement is declared. Visual confirmation belongs to the owner
+   * capture.
+   */
+  it('places each sign-in region explicitly rather than by RTL auto-placement', () => {
+    const { rail, roster, pin } = regionColumns();
+    // Under RTL, grid line 1 is the RIGHT edge. Painting rail-left/PIN-right
+    // therefore means the PIN takes the FIRST track and the rail the LAST.
+    expect(pin).toBe(1);
+    expect(roster).toBe(2);
+    expect(rail).toBe(3);
+  });
+
+  it('keeps the DOM ordered by task flow, not by paint order', () => {
+    const route = readFileSync(resolve(__dirname, '../../routes/sign-in.tsx'), 'utf-8');
+    const order = ['v4-col--rail', 'v4-col--roster', 'v4-col--pin'].map((c) => route.indexOf(c));
+    expect(order.every((i) => i > -1)).toBe(true);
+    // Ascending source positions: a cashier is chosen BEFORE the PIN is typed,
+    // and keyboard traversal must follow that, whatever the paint order is.
+    expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 });
