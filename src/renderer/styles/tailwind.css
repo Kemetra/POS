@@ -5210,6 +5210,28 @@ body {
     gap: var(--space-3);
   }
 
+  /* Wrong-PIN halo.
+   *
+   * Ported from the retired `.sign-in-route__pin-section[data-error]`: the
+   * rebuild deleted that rule while `data-error` stayed on the markup, so a
+   * refused PIN signalled nothing visually. The textual `role="alert"` is the
+   * accessible channel and is unchanged — this restores the NON-TEXTUAL one,
+   * which is what makes a refusal legible at arm's length on a terminal.
+   *
+   * On `.v4-stack` rather than a per-screen class so the treatment travels
+   * with the vocabulary instead of dying with the next rebuild. Padding and
+   * the negative inline margin keep the halo clear of the content without
+   * shifting it, so a refusal never reflows the keypad beneath.
+   *
+   * Enforced by v4-rebuild-vocabulary.test.ts, which fails when a screen sets
+   * a `data-*` state no stylesheet rule answers. */
+  .v4-stack[data-error] {
+    border-radius: var(--radius-card);
+    box-shadow: 0 0 0 2px var(--color-danger);
+    padding-inline: var(--space-3);
+    margin-inline: calc(var(--space-3) * -1);
+  }
+
   .v4-stack--tight {
     gap: var(--space-2);
   }

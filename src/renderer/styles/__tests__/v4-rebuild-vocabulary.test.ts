@@ -159,4 +159,60 @@ describe('022 hard reset — the v4 layout layer is present and layered', () => 
       [],
     );
   });
+
+  /**
+   * ── A STATE ATTRIBUTE MUST HAVE A STYLE THAT ANSWERS IT ─────────────────
+   *
+   * A rebuild retires per-screen BEM classes, and a state selector written
+   * against a retired class dies with it while the attribute that triggers it
+   * survives in the markup. The result is a state the code believes it is
+   * signalling and the operator never sees.
+   *
+   * That happened here: the rebuild deleted
+   * `.sign-in-route__pin-section[data-error]` — the wrong-PIN halo — while
+   * `data-error` stayed on the rebuilt PIN container, so a refused PIN styled
+   * nothing. A dangling attribute is worse than no attribute, because it reads
+   * as working state to the next reader.
+   *
+   * Cheap, general invariant: every `data-*` STATE attribute set in a rebuilt
+   * screen's markup must be answered by at least one attribute selector in the
+   * stylesheet. `data-testid` is excluded (test seam, never styled), as are
+   * attributes consumed as props rather than as CSS state.
+   */
+  it('answers every state attribute the rebuilt screens set', () => {
+    /**
+     * Attributes that are data, not style state.
+     *
+     * `data-testid` is a test seam. `data-category` marks WHICH refusal
+     * occurred for tests and telemetry — the element already carries
+     * `.v4-feedback__error` for its treatment, and the categories are
+     * deliberately styled alike (a refusal reads the same however it arose).
+     * Both are exposed for reading, never for selecting.
+     */
+    const IGNORED = new Set(['data-testid', 'data-theme', 'data-category']);
+    const unanswered: string[] = [];
+
+    for (const { screen, file } of REBUILT_SCREENS) {
+      const source = readFileSync(resolve(ROOT, file), 'utf-8');
+      const attributes = new Set(source.match(/\bdata-[a-z][a-z0-9-]*(?==)/g) ?? []);
+      for (const attribute of attributes) {
+        if (IGNORED.has(attribute)) continue;
+        // Comments are stripped first: the prose explaining a state selector
+        // must not count as the selector. (Caught by negative-testing this
+        // guard — it passed against a stylesheet whose rule had been renamed,
+        // because the comment above the rule still named the attribute.)
+        if (!stripComments(CSS).includes(`[${attribute}`)) {
+          unanswered.push(`${screen}: ${attribute}`);
+        }
+      }
+    }
+
+    expect(
+      unanswered,
+      'State attributes are set in markup but no stylesheet rule selects them.\n\n' +
+        'Each is a state the screen believes it signals and the operator never sees —\n' +
+        'usually a state selector that died with a retired per-screen class.\n\n' +
+        `${unanswered.join('\n')}\n`,
+    ).toEqual([]);
+  });
 });
