@@ -141,16 +141,19 @@ export function CashEntry({
   return (
     <section className="cash-entry" data-testid="cash-entry" aria-label="إدخال النقد">
       {/*
-        POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
-        Value is dir="ltr" mono so money is never bidi-reordered (D-006 rule).
-        remainingBalanceMinor from the engine — no client-side money math here.
+        022 Phase C — the amount due is NOT rendered here.
+
+        `PaymentSurface` owns it, as `.payment-surface__amount-value` at 44px/700
+        — the dominant numeric on the surface (FR-16 + design handoff). This
+        component mounts inside `.payment-surface__methods`, so the v3.5
+        `.amount-due-card` that used to live here put the same value on screen a
+        second time at 32px with a different label, which structurally defeats
+        the hierarchy FR-16 requires.
+
+        `remainingBalanceMinor` is still received and still drives this
+        component's own logic (over-tender guard, change-due, quick amounts) —
+        only the duplicate PRESENTATION is gone. No money math changed.
       */}
-      <div className="amount-due-card">
-        <span className="amount-due-card__label">المطلوب دفعه (Amount due)</span>
-        <span className="amount-due-card__value" dir="ltr" data-testid="cash-entry-remaining">
-          {formatMinorUnits(remainingBalanceMinor)}
-        </span>
-      </div>
 
       {/*
         v3.5 tender-slots / tender-row layout.

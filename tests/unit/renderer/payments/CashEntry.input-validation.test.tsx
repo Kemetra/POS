@@ -162,11 +162,31 @@ describe('<CashEntry> — accessibility floor', () => {
   });
 });
 
-describe('<CashEntry> — formatMinorUnits safe-integer guard on remaining', () => {
-  it('renders the em-dash placeholder when remainingBalanceMinor is unsafe', () => {
+describe('<CashEntry> — safe-integer guard on remaining', () => {
+  /*
+   * RETARGETED by 022 Phase C — the money-safety guard is NOT weakened.
+   *
+   * This asserted the em-dash placeholder inside CashEntry's own
+   * `.amount-due-card`. `PaymentSurface` now owns the single amount-due
+   * presentation (FR-16), so that card — and its `cash-entry-remaining`
+   * testid — no longer exists here.
+   *
+   * The GUARD it was probing is untouched: `isRemainingValid` still short-
+   * circuits on a non-safe integer, and still governs real behaviour. So the
+   * assertion moves from "the placeholder glyph renders" to the stronger,
+   * behavioural claim — an unsafe remaining balance must not be treated as a
+   * spendable amount, and must not crash the component.
+   */
+  it('does not treat an unsafe remainingBalanceMinor as a valid amount', () => {
     const unsafe = Number.MAX_SAFE_INTEGER + 1;
     render(<CashEntry remainingBalanceMinor={unsafe} onConfirm={vi.fn()} />);
-    expect(screen.getByTestId('cash-entry-remaining')).toHaveTextContent('—');
+
+    // The component renders (no throw) ...
+    expect(screen.getByTestId('cash-entry')).toBeInTheDocument();
+    // ... and offers no quick-amount affordance derived from the bad value.
+    expect(screen.queryAllByTestId('cash-entry-quick-amount')).toHaveLength(0);
+    // ... and cannot be confirmed on it.
+    expect(screen.getByTestId('cash-entry-confirm')).toBeDisabled();
   });
 });
 

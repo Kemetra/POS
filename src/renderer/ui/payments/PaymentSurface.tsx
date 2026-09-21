@@ -589,36 +589,53 @@ export function PaymentSurface({
         </div>
       )}
 
-      {/* S3d mode: confirm button shows once any line is applied. */}
-      {bridge !== null && hasAppliedLine && (
-        <button
-          type="button"
-          className="payment-surface__confirm"
-          data-testid="payment-surface-confirm"
-          disabled={isConfirming}
-          aria-disabled={isConfirming ? 'true' : undefined}
-          onClick={() => {
-            void handleConfirm();
-          }}
-        >
-          تأكيد الدفع
-        </button>
-      )}
+      {/*
+        022 US3-B — footer action bar.
 
-      {/* S3d mode: cancel button visible during the entry phase. */}
-      {bridge !== null && phase === 'entry' && (
-        <button
-          type="button"
-          className="payment-surface__cancel"
-          data-testid="payment-surface-cancel"
-          disabled={isCancelling}
-          aria-disabled={isCancelling ? 'true' : undefined}
-          onClick={() => {
-            void handleCancel();
-          }}
-        >
-          إلغاء
-        </button>
+        The two actions were previously loose siblings of the body grid, so they
+        stacked full-bleed under the columns. The reference pairs them on one
+        row at the foot of the surface, confirm leading. This is a PRESENTATION
+        wrapper only: both buttons keep their class, testid, disabled state and
+        handler exactly as before, and the confirm/cancel conditions are
+        unchanged — so `hasAppliedLine` still gates confirm and the entry phase
+        still gates cancel.
+
+        DOM order stays confirm → cancel: the primary action precedes the
+        escape hatch in traversal, and under RTL the row renders confirm at the
+        inline-start edge as the reference shows.
+      */}
+      {bridge !== null && (hasAppliedLine || phase === 'entry') && (
+        <div className="payment-surface__actions" data-testid="payment-surface-actions">
+          {hasAppliedLine && (
+            <button
+              type="button"
+              className="payment-surface__confirm"
+              data-testid="payment-surface-confirm"
+              disabled={isConfirming}
+              aria-disabled={isConfirming ? 'true' : undefined}
+              onClick={() => {
+                void handleConfirm();
+              }}
+            >
+              تأكيد الدفع
+            </button>
+          )}
+
+          {phase === 'entry' && (
+            <button
+              type="button"
+              className="payment-surface__cancel"
+              data-testid="payment-surface-cancel"
+              disabled={isCancelling}
+              aria-disabled={isCancelling ? 'true' : undefined}
+              onClick={() => {
+                void handleCancel();
+              }}
+            >
+              إلغاء
+            </button>
+          )}
+        </div>
       )}
 
       {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids

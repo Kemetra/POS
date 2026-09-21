@@ -3,13 +3,19 @@
  * structure, bound to the EXISTING engine. Tests cover:
  *
  *   POSITIVE:
- *   1. amount-due-card renders with __label + __value (dir="ltr")
+ *   1. SUPERSEDED by 022 Phase C. This file once required each entry component
+ *      to render its own `.amount-due-card`. FR-16 + the v4 design handoff make
+ *      `PaymentSurface` the sole owner of the amount due, so those three
+ *      assertions are RETARGETED in place to assert its ABSENCE. The positive
+ *      invariant ("exactly one amount-due presentation") lives in
+ *      `single-amount-due.test.tsx`. Item 7 below is superseded with them.
  *   2. method grid uses tender-method-grid (3-method, NOT --four)
  *   3. cash path renders tender-slots + tender-row + MoneyRoll change-due
  *   4. card path renders tender-slots + a tender-row__body instruction row
  *   5. voucher path renders voucher-field input + voucher-error (invalid)
  *   6. quick-amounts + quick-amount-btn render in the cash path
- *   7. RTL/Arabic copy on the amount-due-card label
+ *   7. SUPERSEDED with item 1 — the amount-due label is no longer rendered by
+ *      these components, so there is no label here to carry Arabic copy.
  *   8. Money values (change-due) render dir="ltr" mono
  *
  *   NEGATIVE (rejected prototype behaviours — must NEVER appear):
@@ -121,23 +127,24 @@ describe('TenderSelection — v3.5 visual recompose', () => {
 // ---------------------------------------------------------------------------
 
 describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', () => {
-  it('renders amount-due-card with __label and __value (dir="ltr")', () => {
+  /*
+   * RETARGETED by 022 Phase C — not weakened.
+   *
+   * The two assertions that stood here required CashEntry to render its own
+   * `.amount-due-card`. That was the v3.5 recompose requirement, and it is
+   * SUPERSEDED by FR-16 + the v4 design handoff: `PaymentSurface` owns the
+   * amount due as the surface's single dominant numeric. A per-entry copy put
+   * the same value on screen twice, at two sizes, defeating that hierarchy.
+   *
+   * The corrected invariant is stronger than what it replaces — a global
+   * "exactly one amount-due presentation" count rather than a local "is
+   * present" — and lives in `single-amount-due.test.tsx`. This stub keeps the
+   * supersession visible at the original site so the change reads as a
+   * deliberate retarget rather than a silently dropped assertion.
+   */
+  it('does NOT render its own amount-due card (superseded — see single-amount-due.test.tsx)', () => {
     render(<CashEntry remainingBalanceMinor={5000} />);
-    const card = document.querySelector('.amount-due-card');
-    expect(card).toBeInTheDocument();
-    const label = document.querySelector('.amount-due-card__label');
-    const value = document.querySelector('.amount-due-card__value');
-    expect(label).toBeInTheDocument();
-    expect(value).toBeInTheDocument();
-    // Value must be dir="ltr" (money is LTR mono, never bidi-reordered)
-    expect(value).toHaveAttribute('dir', 'ltr');
-  });
-
-  it('amount-due-card label contains Arabic copy for "amount due"', () => {
-    render(<CashEntry remainingBalanceMinor={5000} />);
-    const label = queryOrThrow('.amount-due-card__label');
-    // Must contain Arabic text — المطلوب or similar prototype copy
-    expect(label.textContent).toMatch(/[ا-ي]/);
+    expect(document.querySelectorAll('.amount-due-card')).toHaveLength(0);
   });
 
   it('renders tender-slots container with a tender-row for cash input', () => {
@@ -241,12 +248,10 @@ describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', (
 // ---------------------------------------------------------------------------
 
 describe('ExternalCardTerminalEntry — v3.5 visual recompose (card tender-slots)', () => {
-  it('renders amount-due-card with __label and __value (dir="ltr")', () => {
+  // RETARGETED by 022 Phase C — see the note in the CashEntry describe above.
+  it('does NOT render its own amount-due card (superseded — see single-amount-due.test.tsx)', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
-    const card = document.querySelector('.amount-due-card');
-    expect(card).toBeInTheDocument();
-    const value = document.querySelector('.amount-due-card__value');
-    expect(value).toHaveAttribute('dir', 'ltr');
+    expect(document.querySelectorAll('.amount-due-card')).toHaveLength(0);
   });
 
   it('renders tender-slots with at least one tender-row for card terminal instruction', () => {
@@ -278,7 +283,8 @@ describe('ExternalCardTerminalEntry — v3.5 visual recompose (card tender-slots
 const MOCK_TENDER_APPLY = vi.fn().mockResolvedValue({ kind: 'ok' });
 
 describe('VoucherEntry — v3.5 visual recompose (voucher-field, voucher-error)', () => {
-  it('renders amount-due-card with __label and __value (dir="ltr")', () => {
+  // RETARGETED by 022 Phase C — see the note in the CashEntry describe above.
+  it('does NOT render its own amount-due card (superseded — see single-amount-due.test.tsx)', () => {
     render(
       <VoucherEntry
         remainingBalanceMinor={5000}
@@ -286,9 +292,7 @@ describe('VoucherEntry — v3.5 visual recompose (voucher-field, voucher-error)'
         tenderApply={MOCK_TENDER_APPLY}
       />,
     );
-    expect(document.querySelector('.amount-due-card')).toBeInTheDocument();
-    const val = document.querySelector('.amount-due-card__value');
-    expect(val).toHaveAttribute('dir', 'ltr');
+    expect(document.querySelectorAll('.amount-due-card')).toHaveLength(0);
   });
 
   it('voucher code input is inside a .voucher-field container', () => {

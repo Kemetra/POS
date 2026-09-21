@@ -166,8 +166,22 @@ describe('PaymentSurface — split-tender UX (T154)', () => {
 
     const entry = await screen.findByTestId('cash-entry');
     expect(entry).toBeInTheDocument();
-    const remaining = screen.getByTestId('cash-entry-remaining');
-    expect(remaining).toHaveTextContent('¤10.00');
+    /*
+     * RETARGETED by 022 Phase C — the T154 invariant is unchanged.
+     *
+     * This asserted the remaining balance via CashEntry's own amount-due card.
+     * `PaymentSurface` now owns the single amount-due presentation (FR-16), so
+     * the same engine-supplied number is read from the surface panel instead.
+     * What is being proven is identical: the FIRST cash entry is handed the
+     * full subtotal as its remaining balance.
+     *
+     * The expected STRING changes because the surface formats money through
+     * `shared/money.format` ("10.00 EGP") whereas the removed v3.5 card used a
+     * local `¤` placeholder helper. Same value, correct presentation — the
+     * surface's is the one the product actually ships.
+     */
+    const remaining = screen.getByTestId('payment-surface-amount-due');
+    expect(remaining).toHaveTextContent('10.00');
   });
 
   it('returns to tender selection after a partial-sum apply (remaining > 0)', async () => {

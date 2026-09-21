@@ -178,7 +178,10 @@ describe('PaymentSurface — internal_voucher (Wave 5c coverage)', () => {
     render(<PaymentSurface _testBridge={bridge} />);
     await user.click(screen.getByTestId('tender-voucher'));
     await screen.findByTestId('voucher-entry');
-    expect(screen.getByTestId('voucher-entry-remaining')).toBeInTheDocument();
+    // RETARGETED by 022 Phase C — the amount due is read from the surface-owned
+    // panel (FR-16), not from a per-entry duplicate. The dispatch branch this
+    // test covers is unchanged: the voucher tender mounts <VoucherEntry>.
+    expect(screen.getByTestId('payment-surface-amount-due')).toBeInTheDocument();
     expect(screen.getByTestId('voucher-entry-code-input')).toBeInTheDocument();
     expect(screen.getByTestId('voucher-entry-amount-input')).toBeInTheDocument();
   });

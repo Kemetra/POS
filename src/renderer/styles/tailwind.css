@@ -2193,6 +2193,31 @@ body {
   .payment-surface {
     container-type: inline-size;
     container-name: payment-surface;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5) var(--space-5);
+  }
+
+  /*
+   * 022 US3-B — surface header. The mockup keeps the screen title quiet and
+   * lets the amount-due panel carry the emphasis; the title is a section-scale
+   * label, not a page-scale one, so it never competes with the 44px numeric.
+   */
+  .payment-surface__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding-block-end: var(--space-3);
+    border-block-end: 1px solid var(--color-border-soft);
+  }
+
+  .payment-surface__title {
+    margin: 0;
+    font-size: var(--font-size-checkout-section);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
   }
 
   .payment-surface__body {
@@ -2353,6 +2378,240 @@ body {
   .payment-surface__cancel:hover:not(:disabled) {
     border-color: var(--color-danger);
     color: var(--color-danger);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+   * 022 US3-B — checkout visual convergence onto the approved v4 handoff.
+   *
+   * Scope note: most of what follows is NEW authoring, not a restyle. Before
+   * this block `.payment-cart-summary*`, `.tender-selection*`,
+   * `.payment-surface__methods`, `.payment-surface__summary` and the three
+   * entry sections carried NO CSS at all — the summary column rendered as a
+   * bare `<ol>` with browser defaults. That absence, more than any token
+   * value, is why the live screen did not resemble
+   * `visual-references/04-checkout-tender.png`.
+   *
+   * Composition is UNCHANGED and deliberately so: the grid is already the
+   * handoff's `400 / fluid / 392`, and DOM order is already amount → methods →
+   * summary, which under RTL renders amount-rightmost exactly as the reference
+   * shows while keeping keyboard traversal in visual order (FR-23, PR #454).
+   * This block converges DETAIL — surface treatment, hierarchy, density,
+   * selected state — not structure.
+   *
+   * Per the handoff's token sheet, cards are separated by 1px borders and
+   * carry NO shadow. Every value resolves through an existing token.
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  .payment-surface__methods {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  /*
+   * Methods + summary are peer cards. The amount panel is deliberately NOT
+   * given the same treatment — it is the emphasis surface and keeps its
+   * sunken fill so the dominant numeric reads as the focal point.
+   */
+  .payment-surface__methods > .tender-selection,
+  .payment-surface__summary > .payment-cart-summary,
+  .payment-surface__entry > * {
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background-color: var(--color-surface);
+  }
+
+  .tender-selection__heading,
+  .payment-cart-summary__heading {
+    margin: 0 0 var(--space-3);
+    font-size: var(--font-size-checkout-section);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+  }
+
+  /* ── Cart summary column ──────────────────────────────────────────────
+   * The reference lists each line as name / quantity / price on one row,
+   * separated by hairlines, with the total set apart on a tinted block.
+   */
+  .payment-cart-summary__lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .payment-cart-summary__line {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding-block: var(--space-3);
+    border-block-end: 1px solid var(--color-border-soft);
+  }
+
+  .payment-cart-summary__line:last-child {
+    border-block-end: none;
+  }
+
+  .payment-cart-summary__line-name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .payment-cart-summary__line-qty {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .payment-cart-summary__line-subtotal {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+
+  /*
+   * Subtotal block. The reference tints this teal and sets the figure well
+   * above body scale — it is the summary column's own focal value, while
+   * remaining subordinate to the 44px amount due (FR-16 hierarchy).
+   */
+  .payment-cart-summary__footer {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-block-start: var(--space-4);
+    padding: var(--space-4);
+    border-radius: var(--radius-control);
+    background-color: var(--color-primary-soft);
+  }
+
+  .payment-cart-summary__subtotal-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary-emphasis);
+  }
+
+  .payment-cart-summary__subtotal-value {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary-emphasis);
+  }
+
+  /* ── Tender tiles ─────────────────────────────────────────────────────
+   * The v3.5 tile centred a 16px label in a 76px box. The reference stacks a
+   * bold 15px label over an 11px muted sub-label with generous vertical
+   * padding, giving a taller, calmer tile. `.method-card`'s own rule now sits
+   * inside this layer (022 US0-R2), so these overrides finally apply.
+   */
+  .tender-method-grid .method-card {
+    min-block-size: 96px;
+    justify-content: center;
+    border-color: var(--color-border);
+    font-size: var(--font-size-checkout-tile);
+  }
+
+  .tender-method-grid .method-card small {
+    font-size: var(--font-size-2xs);
+    line-height: var(--line-height-snug);
+    color: var(--color-text-muted);
+  }
+
+  /*
+   * Selected state. The reference shows a clean 2px teal border over a pale
+   * teal fill plus the check badge — and NO outer glow. The v3.5 rule carried
+   * a 4px `box-shadow` ring that was unreachable from this layer until the
+   * US0-R2 re-home; cancelling it here is the single most visible v3.5→v4
+   * change on this screen.
+   */
+  .tender-method-grid .method-card--selected {
+    box-shadow: none;
+    background-color: var(--color-primary-soft);
+    border-color: var(--color-primary);
+  }
+
+  .tender-method-grid .method-card--selected small {
+    color: var(--color-primary-emphasis);
+  }
+
+  /* ── Entry surfaces ───────────────────────────────────────────────────
+   * The entry component mounts beneath the tender grid. It is a peer card
+   * (rule above); its internal rows get the reference's row rhythm.
+   */
+  .payment-surface__entry .tender-slots {
+    border: none;
+    background: transparent;
+  }
+
+  .payment-surface__entry .tender-row {
+    padding-inline: 0;
+  }
+
+  /* ── Footer actions ───────────────────────────────────────────────────
+   * The reference pairs a filled teal confirm with a quiet outlined cancel,
+   * both on one row at the surface foot.
+   */
+  .payment-surface__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-block-start: var(--space-4);
+    border-block-start: 1px solid var(--color-border-soft);
+  }
+
+  .payment-surface__confirm,
+  .payment-surface__cancel {
+    min-block-size: 44px;
+    border-radius: var(--radius-control);
+    font-family: var(--font-family-sans);
+    font-weight: var(--font-weight-bold);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-2) var(--ease-out),
+      border-color var(--duration-2) var(--ease-out),
+      color var(--duration-2) var(--ease-out);
+  }
+
+  .payment-surface__confirm {
+    background-color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary-on);
+  }
+
+  .payment-surface__confirm:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: var(--color-primary-emphasis);
+    border-color: var(--color-primary-emphasis);
+  }
+
+  .payment-surface__cancel {
+    padding: var(--checkout-action-padding-block) var(--space-5);
+    border: 1px solid var(--color-border-strong);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--font-size-md);
+  }
+
+  .payment-surface__confirm[aria-disabled='true'],
+  .payment-surface__cancel[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .payment-surface__confirm:focus-visible,
+  .payment-surface__cancel:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
   }
 
   .method-card__check {
@@ -3013,49 +3272,71 @@ body {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
   }
-}
 
-/* ─── Reduced motion (T041) ─────────────────────────────────────────────── */
-/* Per spec NFR-007 — animations degrade to immediate state swap under         */
-/* prefers-reduced-motion: reduce.                                             */
+  /* ══════════════════════════════════════════════════════════════════════
+   * 022 US0-R2 — RE-HOMED INTO `@layer components` (was unlayered).
+   *
+   * Everything below this banner previously sat AFTER the layer closed. CSS
+   * cascade layers give unlayered rules priority over EVERY layered rule,
+   * regardless of specificity — so this block silently outranked the whole v4
+   * design system. A layered v4 rule written specifically to override one of
+   * these lost anyway.
+   *
+   * Concretely, that is why 022 US3's checkout convergence could not fully
+   * land: `.tender-method-grid .method-card--selected` (0,2,0) lost to
+   * `.method-card--selected` (0,1,0) purely because the latter was unlayered,
+   * so the v3.5 selected-tile ring survived the v4 restyle.
+   *
+   * The rules are UNCHANGED — only their layer membership moved, plus
+   * indentation. Relative order is preserved, so every intra-block
+   * relationship still resolves exactly as before. What changes is only where
+   * a LAYERED rule now legitimately wins.
+   *
+   * Enforced by `__tests__/component-layer-discipline.test.ts`.
+   * ═════════════════════════════════════════════════════════════════════ */
 
-@media (prefers-reduced-motion: reduce) {
-  /* Skeleton shimmer: stop animation, show static surface */
-  .loading-state__skeleton-row {
-    animation: none;
-    background: var(--color-surface-sunken);
-    background-image: none;
-  }
+  /* ─── Reduced motion (T041) ─────────────────────────────────────────────── */
+  /* Per spec NFR-007 — animations degrade to immediate state swap under         */
+  /* prefers-reduced-motion: reduce.                                             */
 
-  /* Center-stage pulsing dot */
-  .loading-state__dot {
-    animation: none;
-  }
+  @media (prefers-reduced-motion: reduce) {
+    /* Skeleton shimmer: stop animation, show static surface */
+    .loading-state__skeleton-row {
+      animation: none;
+      background: var(--color-surface-sunken);
+      background-image: none;
+    }
 
-  /* StatusBanner syncing pulse dot */
-  .status-banner[data-state='syncing']::before,
-  .connection-indicator--neutral::before,
-  .connection-indicator[data-connection-state='syncing']::before {
-    animation: none;
-  }
+    /* Center-stage pulsing dot */
+    .loading-state__dot {
+      animation: none;
+    }
 
-  /* Toast fade transition */
-  .toast {
-    transition: none;
-  }
+    /* StatusBanner syncing pulse dot */
+    .status-banner[data-state='syncing']::before,
+    .connection-indicator--neutral::before,
+    .connection-indicator[data-connection-state='syncing']::before {
+      animation: none;
+    }
 
-  /* Dialog fade-in */
-  .dialog-panel,
-  .dialog-overlay {
-    transition: none;
-    animation: none;
-  }
+    /* Toast fade transition */
+    .toast {
+      transition: none;
+    }
 
-  /* Spinner */
-  .btn__spinner {
-    animation: none;
-    border-color: currentColor;
-    border-inline-end-color: transparent;
+    /* Dialog fade-in */
+    .dialog-panel,
+    .dialog-overlay {
+      transition: none;
+      animation: none;
+    }
+
+    /* Spinner */
+    .btn__spinner {
+      animation: none;
+      border-color: currentColor;
+      border-inline-end-color: transparent;
+    }
   }
 
   /* ── 007 S5 — Operator session surfaces ─────────────────────────────── */
@@ -3073,19 +3354,40 @@ body {
     padding: var(--space-6);
   }
 
+  /* Column count follows the CONTAINER, not the viewport.
+   *
+   * A roster card is avatar + name + role on one row; its chrome is fixed
+   * (2px border + 32px padding + 44px avatar + 24px inner gaps + the role
+   * label), so every pixel below ~240px comes out of the NAME — the only
+   * part that tells two cashiers apart.
+   *
+   * This was a viewport media query (3 columns, dropping to 2 below 1280px)
+   * and it got the dependency backwards: the roster's usable width is set by
+   * the two FIXED tracks beside it, not by the window. That produced a cliff
+   * at exactly 1280px, where the base rule added a THIRD column at the
+   * tightest container width on the whole supported range — so widening the
+   * window made names LESS readable:
+   *
+   *   1279px → 2 cols → 274px card   (comfortable)
+   *   1280px → 3 cols → 157px card   (name ellipsised to ~19px)
+   *
+   * `auto-fit` + `minmax()` removes the discontinuity by construction: the
+   * track count is derived from the space actually available, so the card can
+   * never fall below the floor. At the 1024px viewport the roster renders a
+   * single full-width column — the correct outcome at that width, and a
+   * deliberate density change. A long roster grows the page, which scrolls
+   * normally (`.v4-screen` is `min-block-size`, not a fixed height).
+   *
+   * Enforced by v4-sign-in-track-fit.test.ts, which re-derives the column
+   * count from the track shape at 1024/1279/1280/1440/1920 and fails if a
+   * viewport override is reintroduced. */
   .roster-list__items {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: var(--space-4) var(--space-4);
     list-style: none;
     margin: 0;
     padding: 0;
-  }
-
-  @media (max-width: 1279px) {
-    .roster-list__items {
-      grid-template-columns: repeat(2, 1fr);
-    }
   }
 
   .roster-list__item {
@@ -3435,272 +3737,6 @@ body {
     color: var(--color-warning);
   }
 
-  /* ── ManagerAdminSignInForm (S5 restyle) ─────────────────────────────── */
-
-  .sign-in-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    inline-size: 100%;
-    max-inline-size: 360px;
-  }
-
-  .sign-in-form__back {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0;
-    background: none;
-    border: none;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    text-decoration: none;
-    transition: color var(--duration-2) var(--ease-out);
-    align-self: flex-start;
-  }
-
-  .sign-in-form__back:hover {
-    color: var(--color-primary);
-  }
-
-  .sign-in-form__back:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-    border-radius: var(--radius-sm);
-  }
-
-  .sign-in-form__field {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .sign-in-form__field label {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text);
-  }
-
-  .sign-in-form__field input {
-    block-size: 40px;
-    padding-inline: var(--space-3);
-    background-color: var(--color-surface-elevated);
-    /* Control boundary — WCAG 1.4.11 (>=3:1); see --color-border-strong. */
-    border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-control);
-    color: var(--color-text);
-    font-size: var(--font-size-sm);
-    outline: none;
-    transition:
-      border-color var(--duration-2) var(--ease-out),
-      box-shadow var(--duration-2) var(--ease-out);
-  }
-
-  .sign-in-form__field input:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
-  }
-
-  .sign-in-form__field input:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    background-color: var(--color-surface-muted);
-  }
-
-  .sign-in-form__feedback {
-    min-block-size: 1.25rem;
-    font-size: var(--font-size-sm);
-  }
-
-  .sign-in-form__refusal,
-  .sign-in-form__empty-input {
-    color: var(--color-danger);
-    font-weight: var(--font-weight-medium);
-  }
-
-  .sign-in-form__submit {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    block-size: 44px;
-    border-radius: var(--radius-control);
-    background-color: var(--color-primary);
-    border: 1px solid var(--color-primary);
-    color: var(--color-primary-on);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    cursor: pointer;
-    transition:
-      background-color var(--duration-2) var(--ease-out),
-      border-color var(--duration-2) var(--ease-out);
-  }
-
-  .sign-in-form__submit:hover:not(:disabled) {
-    background-color: var(--color-primary-emphasis);
-    border-color: var(--color-primary-emphasis);
-  }
-
-  .sign-in-form__submit:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-
-  .sign-in-form__submit:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  /* ── SignInRoute v3.5 recompose (RTL pane, additive — existing tokens only) ── */
-
-  .sign-in-route {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-block-size: 100%;
-    padding: var(--space-6);
-  }
-
-  .sign-in-pane {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-    inline-size: 100%;
-    max-inline-size: 880px;
-    padding: var(--space-6);
-    background-color: var(--color-surface-elevated);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-md);
-  }
-
-  .sign-in-pane__head {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .sign-in-pane__title {
-    font-size: var(--font-size-xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-text);
-    margin: 0;
-  }
-
-  .sign-in-pane__sub {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-    margin: 0;
-  }
-
-  .sign-in-split {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-    gap: var(--space-6);
-    align-items: start;
-  }
-
-  @media (max-width: 1023px) {
-    .sign-in-split {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  .sign-in-route__manager-admin,
-  .sign-in-route__roster {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-
-  .sign-in-route__section-label,
-  .sign-in-route__sub-heading {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-    margin: 0;
-  }
-
-  .sign-in-route__roster-error {
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-    font-weight: var(--font-weight-medium);
-    margin: 0;
-  }
-
-  .sign-in-route__pin-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    align-items: center;
-    padding: var(--space-4);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background-color: var(--color-surface-sunken);
-    transition:
-      border-color var(--duration-2) var(--ease-out),
-      box-shadow var(--duration-2) var(--ease-out);
-  }
-
-  /* Wrong-PIN halo: rendered at the ROUTE level (PinPad prop API is frozen). */
-  .sign-in-route__pin-section[data-error] {
-    border-color: var(--color-danger);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 18%, transparent);
-  }
-
-  .sign-in-route__pin-label {
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    margin: 0;
-    text-align: center;
-  }
-
-  .sign-in-route__pin-role {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-muted);
-  }
-
-  .sign-in-route__pin-feedback {
-    min-block-size: 1.25rem;
-    font-size: var(--font-size-sm);
-  }
-
-  .sign-in-route__pin-error {
-    color: var(--color-danger);
-    font-weight: var(--font-weight-medium);
-  }
-
-  .sign-in-route__pin-cancel {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0;
-    background: none;
-    border: none;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: color var(--duration-2) var(--ease-out);
-  }
-
-  .sign-in-route__pin-cancel:hover:not(:disabled) {
-    color: var(--color-primary);
-  }
-
-  .sign-in-route__pin-cancel:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-    border-radius: var(--radius-sm);
-  }
-
-  .sign-in-route__pin-cancel:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
   /* ─── 010 catalogue freshness (FR-16) ──────────────────────────────────
    * A compact INLINE status line, not a card (DESIGN.md bans metric/hero
    * cards). Muted body text + a small status DOT (icon + text, never
@@ -3807,1141 +3843,1627 @@ body {
   .sale-sync-status__label time {
     font-variant-numeric: tabular-nums;
   }
-}
 
-/* === POS v3.5 prototype port (Phase 0 Task 1) — tender/account/held classes from docs/design/pos-v3.5/design-reference/kit.css === */
-/*
- * STYLE-ONLY port of class vocabulary that later tender-screen work needs.
- * Rules copied verbatim from kit.css and token-mapped onto the production
- * token set (no raw hex, no new token names). These are appended OUTSIDE
- * `@layer components` deliberately — they are additive and must not be
- * silently overridden by the layered rules above; existing rules are left
- * untouched.
- *
- * Dark register: the prototype scoped a dark sheen under per-component
- * dark-theme selectors (kit.css 1689-1699, e.g. method-card / tender-slots).
- * Production's theme contract (ADR-0004) forbids any forked dark-component
- * selector — theme-contract.test.ts fails on any dark-theme attribute
- * followed by a class selector. The production dark register is token-VALUE
- * only, so the base rules below already re-theme through the dark token
- * values keyed on the root attribute. The prototype's gradient/box-shadow
- * sheen forks are therefore INTENTIONALLY NOT ported. The unscoped selected
- * card ring (kit.css 1745-1747) is folded into the base selected-card rule
- * below.
- */
+  /* === POS v3.5 prototype port (Phase 0 Task 1) — tender/account/held classes from docs/design/pos-v3.5/design-reference/kit.css === */
+  /*
+   * STYLE-ONLY port of class vocabulary that later tender-screen work needs.
+   * Rules copied verbatim from kit.css and token-mapped onto the production
+   * token set (no raw hex, no new token names). These are appended OUTSIDE
+   * `@layer components` deliberately — they are additive and must not be
+   * silently overridden by the layered rules above; existing rules are left
+   * untouched.
+   *
+   * Dark register: the prototype scoped a dark sheen under per-component
+   * dark-theme selectors (kit.css 1689-1699, e.g. method-card / tender-slots).
+   * Production's theme contract (ADR-0004) forbids any forked dark-component
+   * selector — theme-contract.test.ts fails on any dark-theme attribute
+   * followed by a class selector. The production dark register is token-VALUE
+   * only, so the base rules below already re-theme through the dark token
+   * values keyed on the root attribute. The prototype's gradient/box-shadow
+   * sheen forks are therefore INTENTIONALLY NOT ported. The unscoped selected
+   * card ring (kit.css 1745-1747) is folded into the base selected-card rule
+   * below.
+   */
 
-/* ── Tender: payment-method grid + cards ──────────────────────────────── */
-.method-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-}
-.method-grid--four {
-  grid-template-columns: repeat(5, 1fr);
-}
-.method-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  min-block-size: 76px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  transition:
-    background-color var(--duration-2) var(--ease-out),
-    border-color var(--duration-2) var(--ease-out),
-    color var(--duration-2) var(--ease-out);
-}
-.method-card small {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-regular);
-  color: var(--color-text-muted);
-}
-.method-card:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
-}
-.method-card--selected {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-  color: var(--color-primary-emphasis);
-  /* kit.css base ring (452) merged with the unscoped outer-ring override (1746). */
-  box-shadow:
-    inset 0 0 0 1px var(--color-primary),
-    0 0 0 4px color-mix(in srgb, var(--color-primary) 14%, transparent);
-}
-.method-card:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
-}
-.method-card svg,
-.method-card [data-lucide] {
-  width: 22px;
-  height: 22px;
-}
-
-/* ── Tender: stacked slot container ───────────────────────────────────── */
-.tender-slots {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  overflow: hidden;
-  background: var(--color-surface);
-}
-
-/* ── Tender: credit-account selector rows ─────────────────────────────── */
-.account-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-block-size: 56px;
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-sans);
-  text-align: start;
-  cursor: pointer;
-  transition:
-    background-color var(--duration-2) var(--ease-out),
-    border-color var(--duration-2) var(--ease-out);
-}
-.account-row:hover {
-  background: var(--color-surface-elevated);
-}
-.account-row--selected {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
-}
-.account-row:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
-}
-.account-row__avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 38px;
-  block-size: 38px;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-elevated);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-.account-row__avatar svg,
-.account-row__avatar [data-lucide] {
-  width: 18px;
-  height: 18px;
-}
-.account-row__main {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.account-row__name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-.account-row__meta {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
-.account-row__kind {
-  margin-inline-start: auto;
-  /* kit.css used the raw 0.6875rem literal; mapped to the existing token. */
-  font-size: var(--font-size-2xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-.account-row__kind--cover {
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
-  border-radius: var(--radius-pill);
-  padding: 3px 10px;
-  font-weight: var(--font-weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Held sales (park & recall) tray + chips ──────────────────────────── */
-.held-tray {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-block-end: 1px solid var(--color-border-soft);
-  background: var(--color-surface-sunken);
-  overflow-x: auto;
-}
-.held-tray__label {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-.held-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-block-size: 36px;
-  padding-inline: var(--space-3);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    border-color var(--duration-1) var(--ease-out),
-    background-color var(--duration-1) var(--ease-out);
-}
-.held-chip:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-}
-.held-chip .mono {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
-
-/* ── Responsive: method grid reflow (kit.css 1872, 1898) ──────────────── */
-@media (max-width: 1180px) {
-  .method-grid--four {
+  /* ── Tender: payment-method grid + cards ──────────────────────────────── */
+  .method-grid {
+    display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
   }
-}
-@media (max-width: 720px) {
   .method-grid--four {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(5, 1fr);
   }
-}
+  .method-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    min-block-size: 76px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-2) var(--ease-out),
+      border-color var(--duration-2) var(--ease-out),
+      color var(--duration-2) var(--ease-out);
+  }
+  .method-card small {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-regular);
+    color: var(--color-text-muted);
+  }
+  .method-card:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  }
+  .method-card--selected {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    color: var(--color-primary-emphasis);
+    /* kit.css base ring (452) merged with the unscoped outer-ring override (1746). */
+    box-shadow:
+      inset 0 0 0 1px var(--color-primary),
+      0 0 0 4px color-mix(in srgb, var(--color-primary) 14%, transparent);
+  }
+  .method-card:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+  .method-card svg,
+  .method-card [data-lucide] {
+    width: 22px;
+    height: 22px;
+  }
 
-/* === POS v3.5 Slice 2 — catalogue sale-pane recompose (SaleScreen, catalogue
- *     side; docs/design/pos-v3.5/design-reference/{pos-app.jsx,kit.css}) ====
- *
- * VISUAL recompose only — the search/scan/add engine + FSM are unchanged. Rules
- * are token-mapped from kit.css onto the production token set (no raw hex, no new
- * token names) and appended OUTSIDE `@layer components`, the same additive
- * posture as the Phase-0 tender port above. The dark register re-themes through
- * the token VALUES keyed on the root attribute (ADR-0004) — these rules add NO
- * dark-scoped component selector (theme-contract.test.ts forbids component forks
- * under the dark register; the token values re-theme everything below).
- */
+  /* ── Tender: stacked slot container ───────────────────────────────────── */
+  .tender-slots {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+    background: var(--color-surface);
+  }
 
-/* The sale pane: a vertical column, RTL/Arabic-first (dir is set on the node). */
-.catalogue-sale-pane {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-height: 0;
-}
+  /* ── Tender: credit-account selector rows ─────────────────────────────── */
+  .account-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-block-size: 56px;
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-family-sans);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--duration-2) var(--ease-out),
+      border-color var(--duration-2) var(--ease-out);
+  }
+  .account-row:hover {
+    background: var(--color-surface-elevated);
+  }
+  .account-row--selected {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    box-shadow: inset 0 0 0 1px var(--color-primary);
+  }
+  .account-row:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+  .account-row__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 38px;
+    block-size: 38px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+  .account-row__avatar svg,
+  .account-row__avatar [data-lucide] {
+    width: 18px;
+    height: 18px;
+  }
+  .account-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+  .account-row__name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+  }
+  .account-row__meta {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+  .account-row__kind {
+    margin-inline-start: auto;
+    /* kit.css used the raw 0.6875rem literal; mapped to the existing token. */
+    font-size: var(--font-size-2xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+  .account-row__kind--cover {
+    color: var(--color-primary);
+    background: var(--color-primary-soft);
+    border-radius: var(--radius-pill);
+    padding: 3px 10px;
+    font-weight: var(--font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
 
-/* Search input — the taller wedge-friendly target from the prototype. */
-.catalogue-search__input {
-  width: 100%;
-  min-height: 52px;
-  padding-inline: var(--space-4);
-  font-size: var(--font-size-md);
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-}
-.catalogue-search__input:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
-  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
-}
-.catalogue-search__hint {
-  margin: 4px 2px 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
+  /* ── Held sales (park & recall) tray + chips ──────────────────────────── */
+  .held-tray {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-block-end: 1px solid var(--color-border-soft);
+    background: var(--color-surface-sunken);
+    overflow-x: auto;
+  }
+  .held-tray__label {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+  .held-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-block-size: 36px;
+    padding-inline: var(--space-3);
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      border-color var(--duration-1) var(--ease-out),
+      background-color var(--duration-1) var(--ease-out);
+  }
+  .held-chip:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+  .held-chip .mono {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
 
-/* In-flight (searching) status line — quiet, no spin glyph (reduced-motion by
- * construction). */
-.catalogue-searching {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
+  /* ── Responsive: method grid reflow (kit.css 1872, 1898) ──────────────── */
+  @media (max-width: 1180px) {
+    .method-grid--four {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 720px) {
+    .method-grid--four {
+      grid-template-columns: 1fr;
+    }
+  }
 
-/* Result list container (kit.css .catalogue-results). */
-.catalogue-results {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-  overflow: hidden;
-}
-.catalogue-results__empty,
-.catalogue-results__refine {
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
+  /* === POS v3.5 Slice 2 — catalogue sale-pane recompose (SaleScreen, catalogue
+   *     side; docs/design/pos-v3.5/design-reference/{pos-app.jsx,kit.css}) ====
+   *
+   * VISUAL recompose only — the search/scan/add engine + FSM are unchanged. Rules
+   * are token-mapped from kit.css onto the production token set (no raw hex, no new
+   * token names) and appended OUTSIDE `@layer components`, the same additive
+   * posture as the Phase-0 tender port above. The dark register re-themes through
+   * the token VALUES keyed on the root attribute (ADR-0004) — these rules add NO
+   * dark-scoped component selector (theme-contract.test.ts forbids component forks
+   * under the dark register; the token values re-theme everything below).
+   */
 
-/* Result row (kit.css .catalogue-result-row): a 2-col grid — name + price on the
- * first line, meta spanning the second. ≥ 56px touch target. */
-.catalogue-result-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-areas:
-    'name price'
-    'meta meta';
-  gap: 2px var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  min-height: 56px;
-  border-bottom: 1px solid var(--color-border-soft);
-  cursor: pointer;
-  text-align: start;
-  background: transparent;
-  transition: background-color var(--duration-2) var(--ease-out);
-}
-.catalogue-result-row:last-child {
-  border-bottom: none;
-}
-.catalogue-result-row:hover {
-  background: var(--color-primary-soft);
-}
-.catalogue-result-row[aria-selected='true'] {
-  background: var(--color-primary-soft);
-  box-shadow: inset 2px 0 0 0 var(--color-primary);
-}
-.catalogue-result-row:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: -2px;
-}
-.catalogue-result-row__name {
-  grid-area: name;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
-.catalogue-result-row__name-en {
-  font-weight: var(--font-weight-regular);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-.catalogue-result-row__price {
-  grid-area: price;
-  align-self: center;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-  font-variant-numeric: tabular-nums;
-}
-.catalogue-result-row__meta {
-  grid-area: meta;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-2xs);
-  color: var(--color-text-muted);
-  letter-spacing: 0.02em;
-}
+  /* The sale pane: a vertical column, RTL/Arabic-first (dir is set on the node). */
+  .catalogue-sale-pane {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-height: 0;
+  }
 
-/* Controlled / Rx awareness badges (display only — gate nothing, C1). Each
- * carries its own text label (never colour-only). Mapped from kit.css .rx-badge:
- * Rx = info register, controlled = warning register (the stronger awareness). */
-.catalogue-result-row__flags,
-.catalogue-confirm__flags {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-.catalogue-flag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  border-radius: var(--radius-pill);
-  font-family: var(--font-family-sans);
-  font-size: 0.625rem;
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.03em;
-}
-.catalogue-flag--rx {
-  background: var(--color-info-soft);
-  color: var(--color-info-emphasis);
-}
-.catalogue-flag--controlled {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-emphasis);
-}
+  /* Search input — the taller wedge-friendly target from the prototype. */
+  .catalogue-search__input {
+    width: 100%;
+    min-height: 52px;
+    padding-inline: var(--space-4);
+    font-size: var(--font-size-md);
+    color: var(--color-text);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-control);
+  }
+  .catalogue-search__input:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  }
+  .catalogue-search__hint {
+    margin: 4px 2px 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
 
-/* Error/empty state surfaces (SC-10 — three visually-distinct treatments; the
- * heading text always carries the meaning, never colour alone). */
-.catalogue-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-5) var(--space-4);
-  text-align: center;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-}
-.catalogue-state__icon {
-  font-size: 1.5rem;
-  line-height: 1;
-}
-.catalogue-state__heading {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
-.catalogue-state__value {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-muted);
-}
-.catalogue-state__hint {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-.catalogue-state--not-found .catalogue-state__icon {
-  color: var(--color-text-muted);
-}
-.catalogue-state--ambiguous .catalogue-state__icon {
-  color: var(--color-warning);
-}
-.catalogue-state--unavailable .catalogue-state__icon {
-  color: var(--color-danger);
-}
+  /* In-flight (searching) status line — quiet, no spin glyph (reduced-motion by
+   * construction). */
+  .catalogue-searching {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
 
-/* Deferred-enrichment honesty shell (POS-013): holds the prototype's
- * browse/stock/expiry/interaction footprint with a truthful "not available yet"
- * placeholder. Quiet, dashed, non-interactive — clearly a slot, not live data. */
-.catalogue-enrichment-shell {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-}
-.catalogue-enrichment-shell__icon {
-  font-size: 1rem;
-  line-height: 1;
-  color: var(--color-text-muted);
-}
-.catalogue-enrichment-shell__label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-.catalogue-enrichment-shell__status {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
+  /* Result list container (kit.css .catalogue-results). */
+  .catalogue-results {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    overflow: hidden;
+  }
+  .catalogue-results__empty,
+  .catalogue-results__refine {
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
 
-/* === POS v3.5 Slice 3 — cart-pane recompose (SaleScreen, cart side;
- *     docs/design/pos-v3.5/design-reference/{pos-app.jsx,kit.css}) ===========
- *
- * VISUAL recompose only — the cart/payment engine + FSM bindings are unchanged.
- * Rules are token-mapped from kit.css onto the production token set (no raw hex,
- * no new token names) and appended OUTSIDE `@layer components`, the same additive
- * posture as Slice 2 above. NO dark-scoped component selector is introduced (the
- * dark register re-themes through token VALUES; theme-contract.test.ts forbids
- * component forks under the dark register).
- *
- * MONEY HONESTY: there is no VAT/total rule that styles a computed figure — the
- * VAT row is a tax-pending placeholder (ADR-0003 / spec §12). */
+  /* Result row (kit.css .catalogue-result-row): a 2-col grid — name + price on the
+   * first line, meta spanning the second. ≥ 56px touch target. */
+  .catalogue-result-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'name price'
+      'meta meta';
+    gap: 2px var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    min-height: 56px;
+    border-bottom: 1px solid var(--color-border-soft);
+    cursor: pointer;
+    text-align: start;
+    background: transparent;
+    transition: background-color var(--duration-2) var(--ease-out);
+  }
+  .catalogue-result-row:last-child {
+    border-bottom: none;
+  }
+  .catalogue-result-row:hover {
+    background: var(--color-primary-soft);
+  }
+  .catalogue-result-row[aria-selected='true'] {
+    background: var(--color-primary-soft);
+    box-shadow: inset 2px 0 0 0 var(--color-primary);
+  }
+  .catalogue-result-row:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: -2px;
+  }
+  .catalogue-result-row__name {
+    grid-area: name;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+  .catalogue-result-row__name-en {
+    font-weight: var(--font-weight-regular);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+  .catalogue-result-row__price {
+    grid-area: price;
+    align-self: center;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .catalogue-result-row__meta {
+    grid-area: meta;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-2xs);
+    color: var(--color-text-muted);
+    letter-spacing: 0.02em;
+  }
 
-/* Bilingual title companion (LTR "· Cart") — quiet, keeps region-name parity. */
-.cart-pane__title-en {
-  font-weight: var(--font-weight-regular, var(--font-weight-medium));
-  color: var(--color-text-muted);
-}
+  /* Controlled / Rx awareness badges (display only — gate nothing, C1). Each
+   * carries its own text label (never colour-only). Mapped from kit.css .rx-badge:
+   * Rx = info register, controlled = warning register (the stronger awareness). */
+  .catalogue-result-row__flags,
+  .catalogue-confirm__flags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+  .catalogue-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-family-sans);
+    font-size: 0.625rem;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.03em;
+  }
+  .catalogue-flag--rx {
+    background: var(--color-info-soft);
+    color: var(--color-info-emphasis);
+  }
+  .catalogue-flag--controlled {
+    background: var(--color-warning-soft);
+    color: var(--color-warning-emphasis);
+  }
 
-/* Line-row enrichment: Rx/controlled awareness badges (display only — gate
- * nothing; mirror the catalogue ControlledFlags register) + per-unit/pack meta. */
-.line-item-row__flags {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin-inline-start: var(--space-2);
-}
-.line-item-row__flag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  border-radius: var(--radius-pill);
-  font-family: var(--font-family-sans);
-  font-size: 0.625rem;
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.03em;
-}
-.line-item-row__flag--rx {
-  background: var(--color-info-soft);
-  color: var(--color-info-emphasis);
-}
-.line-item-row__flag--controlled {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-emphasis);
-}
-.line-item-row__meta-line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
+  /* Error/empty state surfaces (SC-10 — three visually-distinct treatments; the
+   * heading text always carries the meaning, never colour alone). */
+  .catalogue-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-5) var(--space-4);
+    text-align: center;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+  }
+  .catalogue-state__icon {
+    font-size: 1.5rem;
+    line-height: 1;
+  }
+  .catalogue-state__heading {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+  .catalogue-state__value {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+  }
+  .catalogue-state__hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+  .catalogue-state--not-found .catalogue-state__icon {
+    color: var(--color-text-muted);
+  }
+  .catalogue-state--ambiguous .catalogue-state__icon {
+    color: var(--color-warning);
+  }
+  .catalogue-state--unavailable .catalogue-state__icon {
+    color: var(--color-danger);
+  }
 
-/* Drug-interaction enrichment shell — quiet, dashed, non-interactive; clearly a
- * slot, not a live alert. Mirrors .catalogue-enrichment-shell. */
-.cart-interaction-shell {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-inline: var(--space-3);
-  margin-block-end: var(--space-2);
-  padding: var(--space-3);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-}
-.cart-interaction-shell__icon {
-  font-size: 1rem;
-  line-height: 1;
-  color: var(--color-text-muted);
-}
-.cart-interaction-shell__label {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-.cart-interaction-shell__status {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
+  /* Deferred-enrichment honesty shell (POS-013): holds the prototype's
+   * browse/stock/expiry/interaction footprint with a truthful "not available yet"
+   * placeholder. Quiet, dashed, non-interactive — clearly a slot, not live data. */
+  .catalogue-enrichment-shell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+  }
+  .catalogue-enrichment-shell__icon {
+    font-size: 1rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+  }
+  .catalogue-enrichment-shell__label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+  .catalogue-enrichment-shell__status {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
 
-/* Totals footer (prototype .totals-rows). */
-.totals-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.totals-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-.totals-row__label {
-  font-weight: var(--font-weight-semibold);
-}
-.totals-row .mono,
-.totals-row .cart-pane__subtotal-value {
-  color: var(--color-text);
-}
-/* Tax-pending VAT row: a muted placeholder, NOT a money figure. */
-.totals-row__pending {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-1);
-  color: var(--color-text-muted);
-  font-family: var(--font-family-mono);
-}
-.totals-row__pending-note {
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-2xs, 0.625rem);
-  color: var(--color-text-muted);
-}
-.totals-row--grand {
-  margin-block-start: var(--space-1);
-  padding-block-start: var(--space-2);
-  border-block-start: 1px solid var(--color-border-soft);
-  color: var(--color-text);
-  font-weight: var(--font-weight-bold);
-}
-/*
- * 022 U2 / T063 — FR-15: the running total is a visually dominant element of
- * the sale workspace, so it must outrank the subordinate rows by more than the
- * one step (sm → md) the v3.5 pass gave it. `--font-size-2xl` matches the
- * weight U4a gave the settled amount for FR-16 (`--font-size-3xl` on the
- * completion surface, which has no competing content); the cart total sits one
- * step below it because it shares the footer with the continue action.
- * Token-bound — no raw type literals (FR-8).
- */
-.totals-row--grand .cart-pane__subtotal-value {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-tight);
-}
+  /* === POS v3.5 Slice 3 — cart-pane recompose (SaleScreen, cart side;
+   *     docs/design/pos-v3.5/design-reference/{pos-app.jsx,kit.css}) ===========
+   *
+   * VISUAL recompose only — the cart/payment engine + FSM bindings are unchanged.
+   * Rules are token-mapped from kit.css onto the production token set (no raw hex,
+   * no new token names) and appended OUTSIDE `@layer components`, the same additive
+   * posture as Slice 2 above. NO dark-scoped component selector is introduced (the
+   * dark register re-themes through token VALUES; theme-contract.test.ts forbids
+   * component forks under the dark register).
+   *
+   * MONEY HONESTY: there is no VAT/total rule that styles a computed figure — the
+   * VAT row is a tax-pending placeholder (ADR-0003 / spec §12). */
 
-/* Action row: hold (disabled shell) + hand-off (primary, flexes to fill). */
-.cart-actions-row {
-  display: flex;
-  gap: var(--space-2);
-}
-.cart-actions-row > .cart-pane__handoff {
-  flex: 1;
-}
-.cart-pane__hold {
-  min-block-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  transition:
-    background-color var(--duration-1) var(--ease-out),
-    border-color var(--duration-1) var(--ease-out);
-}
-.cart-pane__hold:hover:not(:disabled) {
-  background: var(--color-surface-elevated);
-  border-color: var(--color-border-strong);
-}
-.cart-pane__hold:disabled,
-.cart-pane__hold[aria-disabled='true'] {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
+  /* Bilingual title companion (LTR "· Cart") — quiet, keeps region-name parity. */
+  .cart-pane__title-en {
+    font-weight: var(--font-weight-regular, var(--font-weight-medium));
+    color: var(--color-text-muted);
+  }
 
-/* Branded empty cart (prototype .cart-empty). */
-.cart-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  padding: var(--space-7) var(--space-5);
-  text-align: center;
-  block-size: 100%;
-}
-.cart-empty__mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 64px;
-  block-size: 64px;
-  border-radius: 18px;
-  background: var(--color-surface-sunken);
-  color: var(--color-primary);
-  font-size: 2rem;
-  line-height: 1;
-}
-.cart-empty__title {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-  margin: 0;
-}
-.cart-empty__hint {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  margin: 0;
-  max-inline-size: 32ch;
-}
-.cart-empty__keys {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: center;
-  margin-block-start: var(--space-2);
-}
-.cart-empty__keys .kbd {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
-  border-radius: 7px;
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface-elevated);
-  font-family: var(--font-family-mono);
-  font-size: 0.6875rem;
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
-}
-.cart-empty__keys .kbd small {
-  font-family: var(--font-family-sans);
-  color: var(--color-text-muted);
-}
+  /* Line-row enrichment: Rx/controlled awareness badges (display only — gate
+   * nothing; mirror the catalogue ControlledFlags register) + per-unit/pack meta. */
+  .line-item-row__flags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-inline-start: var(--space-2);
+  }
+  .line-item-row__flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-family-sans);
+    font-size: 0.625rem;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.03em;
+  }
+  .line-item-row__flag--rx {
+    background: var(--color-info-soft);
+    color: var(--color-info-emphasis);
+  }
+  .line-item-row__flag--controlled {
+    background: var(--color-warning-soft);
+    color: var(--color-warning-emphasis);
+  }
+  .line-item-row__meta-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
 
-/* === POS v3.5 Slice 4 — tender-screen visual recompose =====================
- *
- * ADDITIVE CSS block: classes from the v3.5 prototype (kit.css) that were not
- * present in earlier slices. Rules are token-mapped — NO raw hex, NO new
- * custom-property names. Token values re-theme through :root[data-theme='dark']
- * (ADR-0004). NO dark-forked component selectors (theme-contract.test.ts
- * forbids them). Classes already present above (.tender-slots, .method-card,
- * .method-grid, .account-row, .tender-method-grid) are left as-is.
- *
- * Sources: kit.css lines 400-555 (tender screen section), token-mapped.
- * =========================================================================*/
+  /* Drug-interaction enrichment shell — quiet, dashed, non-interactive; clearly a
+   * slot, not a live alert. Mirrors .catalogue-enrichment-shell. */
+  .cart-interaction-shell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-inline: var(--space-3);
+    margin-block-end: var(--space-2);
+    padding: var(--space-3);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+  }
+  .cart-interaction-shell__icon {
+    font-size: 1rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+  }
+  .cart-interaction-shell__label {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+  .cart-interaction-shell__status {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
 
-/* ── Amount-due card (kit.css 400-423) ─────────────────────────────────── */
-.amount-due-card {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  background: var(--color-surface-sunken);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-inset);
-}
-.amount-due-card__label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
-}
-.amount-due-card__value {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 2rem;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text);
-  letter-spacing: -0.01em;
-}
+  /* Totals footer (prototype .totals-rows). */
+  .totals-rows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .totals-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+  .totals-row__label {
+    font-weight: var(--font-weight-semibold);
+  }
+  .totals-row .mono,
+  .totals-row .cart-pane__subtotal-value {
+    color: var(--color-text);
+  }
+  /* Tax-pending VAT row: a muted placeholder, NOT a money figure. */
+  .totals-row__pending {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-family: var(--font-family-mono);
+  }
+  .totals-row__pending-note {
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-2xs, 0.625rem);
+    color: var(--color-text-muted);
+  }
+  .totals-row--grand {
+    margin-block-start: var(--space-1);
+    padding-block-start: var(--space-2);
+    border-block-start: 1px solid var(--color-border-soft);
+    color: var(--color-text);
+    font-weight: var(--font-weight-bold);
+  }
+  /*
+   * 022 U2 / T063 — FR-15: the running total is a visually dominant element of
+   * the sale workspace, so it must outrank the subordinate rows by more than the
+   * one step (sm → md) the v3.5 pass gave it. `--font-size-2xl` matches the
+   * weight U4a gave the settled amount for FR-16 (`--font-size-3xl` on the
+   * completion surface, which has no competing content); the cart total sits one
+   * step below it because it shares the footer with the continue action.
+   * Token-bound — no raw type literals (FR-8).
+   */
+  .totals-row--grand .cart-pane__subtotal-value {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+  }
 
-/* ── Tender rows (kit.css 461-473) ─────────────────────────────────────── */
-/*
- * .tender-slots is already defined above; these are the row-level classes.
- */
-.tender-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  min-height: 56px;
-  border-bottom: 1px solid var(--color-border-soft);
-}
-.tender-row:last-child {
-  border-bottom: none;
-}
-.tender-row--totals {
-  background: var(--color-surface-elevated);
-}
-.tender-row__label {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-  min-width: 140px;
-}
-.tender-row__value {
-  margin-inline-start: auto;
-}
-.tender-row__body {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-/* Muted value modifier — used for deferred/informational amounts. */
-.tender-row__value--muted {
-  color: var(--color-text-muted);
-}
-/* Deferred balance highlight (kit.css 608). */
-.tender-row__value--deferred {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-warning-emphasis);
-}
+  /* Action row: hold (disabled shell) + hand-off (primary, flexes to fill). */
+  .cart-actions-row {
+    display: flex;
+    gap: var(--space-2);
+  }
+  .cart-actions-row > .cart-pane__handoff {
+    flex: 1;
+  }
+  .cart-pane__hold {
+    min-block-size: 44px;
+    padding-inline: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-1) var(--ease-out),
+      border-color var(--duration-1) var(--ease-out);
+  }
+  .cart-pane__hold:hover:not(:disabled) {
+    background: var(--color-surface-elevated);
+    border-color: var(--color-border-strong);
+  }
+  .cart-pane__hold:disabled,
+  .cart-pane__hold[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 
-/* ── Quick-amount chips (kit.css 475-504) ───────────────────────────────── */
-.quick-amounts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-.quick-amount-btn {
-  min-block-size: 52px;
-  min-inline-size: 96px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  transition:
-    background-color var(--duration-1) var(--ease-out),
-    border-color var(--duration-1) var(--ease-out);
-}
-.quick-amount-btn:hover {
-  background: var(--color-primary-soft);
-  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
-}
-.quick-amount-btn--selected {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-  color: var(--color-primary-emphasis);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
-}
-/* Label chip uses sans-serif (Arabic "بالضبط" exact label). */
-.quick-amount-btn--label {
-  font-family: var(--font-family-sans);
-}
-.quick-amount-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
-}
+  /* Branded empty cart (prototype .cart-empty). */
+  .cart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-7) var(--space-5);
+    text-align: center;
+    block-size: 100%;
+  }
+  .cart-empty__mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 64px;
+    block-size: 64px;
+    border-radius: 18px;
+    background: var(--color-surface-sunken);
+    color: var(--color-primary);
+    font-size: 2rem;
+    line-height: 1;
+  }
+  .cart-empty__title {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    margin: 0;
+  }
+  .cart-empty__hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin: 0;
+    max-inline-size: 32ch;
+  }
+  .cart-empty__keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    justify-content: center;
+    margin-block-start: var(--space-2);
+  }
+  .cart-empty__keys .kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 7px;
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-elevated);
+    font-family: var(--font-family-mono);
+    font-size: 0.6875rem;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+  }
+  .cart-empty__keys .kbd small {
+    font-family: var(--font-family-sans);
+    color: var(--color-text-muted);
+  }
 
-/* Change-due positive value (success register). */
-.change-row__value--positive {
-  color: var(--color-success-emphasis);
-  font-weight: var(--font-weight-bold);
-}
+  /* === POS v3.5 Slice 4 — tender-screen visual recompose =====================
+   *
+   * ADDITIVE CSS block: classes from the v3.5 prototype (kit.css) that were not
+   * present in earlier slices. Rules are token-mapped — NO raw hex, NO new
+   * custom-property names. Token values re-theme through :root[data-theme='dark']
+   * (ADR-0004). NO dark-forked component selectors (theme-contract.test.ts
+   * forbids them). Classes already present above (.tender-slots, .method-card,
+   * .method-grid, .account-row, .tender-method-grid) are left as-is.
+   *
+   * Sources: kit.css lines 400-555 (tender screen section), token-mapped.
+   * =========================================================================*/
 
-/* ── Voucher-field wrapper (kit.css 511-524) ────────────────────────────── */
-.voucher-field {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex: 1;
-}
-.voucher-field input {
-  flex: 1;
-  font-family: var(--font-family-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  min-block-size: 44px;
-}
+  /* ── Amount-due card (kit.css 400-423) ─────────────────────────────────── */
+  .amount-due-card {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-inset);
+  }
+  .amount-due-card__label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+  }
+  .amount-due-card__value {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 2rem;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+  }
 
-/* ── Voucher applied indicator (kit.css 525-538) ────────────────────────── */
-.voucher-applied {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-success-emphasis);
-  white-space: nowrap;
-}
-.voucher-applied--ok {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 24px;
-  block-size: 24px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-success) 16%, transparent);
-  color: var(--color-success-emphasis);
-  font-size: 0.8rem;
-}
+  /* ── Tender rows (kit.css 461-473) ─────────────────────────────────────── */
+  /*
+   * .tender-slots is already defined above; these are the row-level classes.
+   */
+  .tender-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    min-height: 56px;
+    border-bottom: 1px solid var(--color-border-soft);
+  }
+  .tender-row:last-child {
+    border-bottom: none;
+  }
+  .tender-row--totals {
+    background: var(--color-surface-elevated);
+  }
+  .tender-row__label {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    min-width: 140px;
+  }
+  .tender-row__value {
+    margin-inline-start: auto;
+  }
+  .tender-row__body {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+  /* Muted value modifier — used for deferred/informational amounts. */
+  .tender-row__value--muted {
+    color: var(--color-text-muted);
+  }
+  /* Deferred balance highlight (kit.css 608). */
+  .tender-row__value--deferred {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-warning-emphasis);
+  }
 
-/* ── Voucher error + hint (kit.css 554-555) ────────────────────────────── */
-.voucher-error {
-  font-size: var(--font-size-xs);
-  color: var(--color-danger);
-  margin: 4px 2px 0;
-}
-.voucher-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
+  /* ── Quick-amount chips (kit.css 475-504) ───────────────────────────────── */
+  .quick-amounts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .quick-amount-btn {
+    min-block-size: 52px;
+    min-inline-size: 96px;
+    padding-inline: var(--space-4);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-1) var(--ease-out),
+      border-color var(--duration-1) var(--ease-out);
+  }
+  .quick-amount-btn:hover {
+    background: var(--color-primary-soft);
+    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  }
+  .quick-amount-btn--selected {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    color: var(--color-primary-emphasis);
+    box-shadow: inset 0 0 0 1px var(--color-primary);
+  }
+  /* Label chip uses sans-serif (Arabic "بالضبط" exact label). */
+  .quick-amount-btn--label {
+    font-family: var(--font-family-sans);
+  }
+  .quick-amount-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
 
-/* ─────────────────────────────────────────────────────────────────────────
- * POS v3.5 Slice 5 — Dashboard surface.
- *
- * Recreated against POS-Pulse tokens from the v3.5 design reference
- * (`docs/design/pos-v3.5/design-reference/kit.css` — workspace header, stat
- * strip, sparkline, top-item rows, definition rows, panel/grid). Behavior-free
- * style port only. Consumed by <DashboardView>; the DEMO banner marks the
- * dev-only sample-data preview (production renders the honest skeleton).
- * ─────────────────────────────────────────────────────────────────────────*/
+  /* Change-due positive value (success register). */
+  .change-row__value--positive {
+    color: var(--color-success-emphasis);
+    font-weight: var(--font-weight-bold);
+  }
 
-/* workspace pad + header (kit.css 651-661) */
-.workspace-pad {
-  padding: var(--space-6) var(--space-7);
-  overflow-y: auto;
-}
-.ws-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  margin-block-end: var(--space-4);
-}
-.ws-head__titles {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.ws-head__title {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: -0.01em;
-  margin: 0;
-  color: var(--color-text);
-}
-.ws-head__title small {
-  font-weight: var(--font-weight-regular);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-md);
-  margin-inline-start: 10px;
-}
-.ws-head__sub {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  margin: 0;
-}
-.ws-head__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
+  /* ── Voucher-field wrapper (kit.css 511-524) ────────────────────────────── */
+  .voucher-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1;
+  }
+  .voucher-field input {
+    flex: 1;
+    font-family: var(--font-family-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    min-block-size: 44px;
+  }
 
-/* grids (kit.css 673-675) */
-.ws-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-}
-.ws-grid-3 {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-4);
-}
-@media (max-width: 1180px) {
-  .ws-grid-3 {
+  /* ── Voucher applied indicator (kit.css 525-538) ────────────────────────── */
+  .voucher-applied {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-success-emphasis);
+    white-space: nowrap;
+  }
+  .voucher-applied--ok {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--color-success) 16%, transparent);
+    color: var(--color-success-emphasis);
+    font-size: 0.8rem;
+  }
+
+  /* ── Voucher error + hint (kit.css 554-555) ────────────────────────────── */
+  .voucher-error {
+    font-size: var(--font-size-xs);
+    color: var(--color-danger);
+    margin: 4px 2px 0;
+  }
+  .voucher-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────
+   * POS v3.5 Slice 5 — Dashboard surface.
+   *
+   * Recreated against POS-Pulse tokens from the v3.5 design reference
+   * (`docs/design/pos-v3.5/design-reference/kit.css` — workspace header, stat
+   * strip, sparkline, top-item rows, definition rows, panel/grid). Behavior-free
+   * style port only. Consumed by <DashboardView>; the DEMO banner marks the
+   * dev-only sample-data preview (production renders the honest skeleton).
+   * ─────────────────────────────────────────────────────────────────────────*/
+
+  /* workspace pad + header (kit.css 651-661) */
+  .workspace-pad {
+    padding: var(--space-6) var(--space-7);
+    overflow-y: auto;
+  }
+  .ws-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    margin-block-end: var(--space-4);
+  }
+  .ws-head__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ws-head__title {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.01em;
+    margin: 0;
+    color: var(--color-text);
+  }
+  .ws-head__title small {
+    font-weight: var(--font-weight-regular);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-md);
+    margin-inline-start: 10px;
+  }
+  .ws-head__sub {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+  .ws-head__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  /* grids (kit.css 673-675) */
+  .ws-grid-2 {
+    display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
   }
-}
-@media (max-width: 820px) {
-  .ws-grid-2,
   .ws-grid-3 {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
   }
-}
+  @media (max-width: 1180px) {
+    .ws-grid-3 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 820px) {
+    .ws-grid-2,
+    .ws-grid-3 {
+      grid-template-columns: 1fr;
+    }
+  }
 
-/* panel / surface card (kit.css 678-707) */
-.panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  padding: var(--space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-/* NOTE: the prototype kit.css forks `.panel`/`.stat-strip` per dark theme with a
- * subtle top-highlight gradient. POS-Pulse forbids `[data-theme=dark] .class`
- * component forks (theme-contract invariant, ADR-0004 — dark is token-only), so
- * that cosmetic gradient is intentionally dropped; base tokens carry the theme. */
-.panel__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.panel__title {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-  margin: 0;
-}
-.panel__title small {
-  display: block;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-regular);
-  color: var(--color-text-muted);
-}
+  /* panel / surface card (kit.css 678-707) */
+  .panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+  /* NOTE: the prototype kit.css forks `.panel`/`.stat-strip` per dark theme with a
+   * subtle top-highlight gradient. POS-Pulse forbids `[data-theme=dark] .class`
+   * component forks (theme-contract invariant, ADR-0004 — dark is token-only), so
+   * that cosmetic gradient is intentionally dropped; base tokens carry the theme. */
+  .panel__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .panel__title {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    margin: 0;
+  }
+  .panel__title small {
+    display: block;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-regular);
+    color: var(--color-text-muted);
+  }
 
-/* definition rows (kit.css 709-724) */
-.def-rows {
-  display: flex;
-  flex-direction: column;
-}
-.def-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding-block: var(--space-2);
-  border-block-end: 1px solid var(--color-border-soft);
-  font-size: var(--font-size-sm);
-}
-.def-row:last-child {
-  border-block-end: none;
-}
-.def-row__k {
-  color: var(--color-text-muted);
-}
-.def-row__v {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
-.def-row__v.mono {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-}
-.def-row--gold .def-row__v {
-  color: var(--color-primary-emphasis);
-}
+  /* definition rows (kit.css 709-724) */
+  .def-rows {
+    display: flex;
+    flex-direction: column;
+  }
+  .def-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-block: var(--space-2);
+    border-block-end: 1px solid var(--color-border-soft);
+    font-size: var(--font-size-sm);
+  }
+  .def-row:last-child {
+    border-block-end: none;
+  }
+  .def-row__k {
+    color: var(--color-text-muted);
+  }
+  .def-row__v {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+  .def-row__v.mono {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .def-row--gold .def-row__v {
+    color: var(--color-primary-emphasis);
+  }
 
-/* stat strip (kit.css 727-747) */
-.stat-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-  margin-block-end: var(--space-5);
-}
-.stat-cell {
-  padding: var(--space-4) var(--space-5);
-  border-inline-start: 1px solid var(--color-border-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.stat-cell:first-child {
-  border-inline-start: none;
-}
-.stat-cell__k {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
-.stat-cell__v {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.5rem;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text);
-  letter-spacing: -0.01em;
-}
-.stat-cell--gold .stat-cell__v {
-  color: var(--color-primary-emphasis);
-}
-@media (max-width: 1180px) {
+  /* stat strip (kit.css 727-747) */
   .stat-strip {
-    grid-template-columns: 1fr 1fr;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    margin-block-end: var(--space-5);
   }
-  .stat-cell:nth-child(odd) {
+  .stat-cell {
+    padding: var(--space-4) var(--space-5);
+    border-inline-start: 1px solid var(--color-border-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .stat-cell:first-child {
     border-inline-start: none;
   }
-}
+  .stat-cell__k {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+  .stat-cell__v {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.5rem;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+  }
+  .stat-cell--gold .stat-cell__v {
+    color: var(--color-primary-emphasis);
+  }
+  @media (max-width: 1180px) {
+    .stat-strip {
+      grid-template-columns: 1fr 1fr;
+    }
+    .stat-cell:nth-child(odd) {
+      border-inline-start: none;
+    }
+  }
 
-/* sparkline (kit.css 1504-1522) */
-.spark {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  block-size: 88px;
-  padding-block-start: var(--space-2);
-}
-.spark__col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.spark__bar {
-  inline-size: 100%;
-  border-radius: 4px 4px 0 0;
-  background: var(--color-primary-soft);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
-  border-block-end: none;
-  min-block-size: 3px;
-  transition: block-size var(--duration-3) var(--ease-out);
-}
-.spark__bar--peak {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-}
-.spark__t {
-  font-family: var(--font-family-mono);
-  font-size: 0.625rem;
-  color: var(--color-text-muted);
-}
+  /* sparkline (kit.css 1504-1522) */
+  .spark {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    block-size: 88px;
+    padding-block-start: var(--space-2);
+  }
+  .spark__col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .spark__bar {
+    inline-size: 100%;
+    border-radius: 4px 4px 0 0;
+    background: var(--color-primary-soft);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-block-end: none;
+    min-block-size: 3px;
+    transition: block-size var(--duration-3) var(--ease-out);
+  }
+  .spark__bar--peak {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+  .spark__t {
+    font-family: var(--font-family-mono);
+    font-size: 0.625rem;
+    color: var(--color-text-muted);
+  }
 
-/* top-item rows (kit.css 1524-1530) */
-.top-item-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding-block: var(--space-2);
-  border-block-end: 1px solid var(--color-border-soft);
-}
-.top-item-row:last-child {
-  border-block-end: none;
-}
-.top-item-row__rank {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-muted);
-  inline-size: 18px;
-  flex-shrink: 0;
-}
-.top-item-row__name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.top-item-row__n {
-  margin-inline-start: auto;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-.top-item-row__bar {
-  block-size: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--color-primary);
-  opacity: 0.75;
-}
+  /* top-item rows (kit.css 1524-1530) */
+  .top-item-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-block: var(--space-2);
+    border-block-end: 1px solid var(--color-border-soft);
+  }
+  .top-item-row:last-child {
+    border-block-end: none;
+  }
+  .top-item-row__rank {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-muted);
+    inline-size: 18px;
+    flex-shrink: 0;
+  }
+  .top-item-row__name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .top-item-row__n {
+    margin-inline-start: auto;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+  .top-item-row__bar {
+    block-size: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--color-primary);
+    opacity: 0.75;
+  }
 
-/* DEMO banner — dev-only sample-data marker (NOT a kit.css class; Slice 5).
- * Loud by design: a pilot must never mistake the demo dashboard for real data. */
-.dashboard-demo-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  margin-block-end: var(--space-4);
-  border: 1px dashed var(--color-warning, var(--color-primary));
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--color-warning, var(--color-primary)) 14%, transparent);
-  color: var(--color-warning-emphasis, var(--color-primary-emphasis));
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.01em;
+  /* DEMO banner — dev-only sample-data marker (NOT a kit.css class; Slice 5).
+   * Loud by design: a pilot must never mistake the demo dashboard for real data. */
+  .dashboard-demo-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    margin-block-end: var(--space-4);
+    border: 1px dashed var(--color-warning, var(--color-primary));
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--color-warning, var(--color-primary)) 14%, transparent);
+    color: var(--color-warning-emphasis, var(--color-primary-emphasis));
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.01em;
+  }
+  /* ── v4 screen scaffold ──────────────────────────────────────────────────
+   * A screen is: an optional header band, then a column track region. Screens
+   * declare their track shape with a `--v4-cols` custom property rather than a
+   * bespoke per-screen grid class, so column geometry is data, not new CSS. */
+  /* ═══════════════════════════════════════════════════════════════════════════
+   * v4 LAYOUT LAYER — 022 hard reset, foundation slice.
+   *
+   * WHY THIS LAYER EXISTS
+   *
+   * The cascade correction (component-layer-discipline guard) fixed WHICH rules
+   * win. It did not retire the v3.5 vocabulary: 237 of the 333 live renderer
+   * classes are screen-geometry classes authored per-screen (`sign-in-route__*`,
+   * `payment-surface__*`, `cart-pane__*`). Deep BEM element classes hard-code
+   * geometry into each screen, so restyling them cannot change the layout — which
+   * is exactly why the incremental attempt read as "old POS with new colours".
+   *
+   * This layer supplies the missing piece: a SCREEN-AGNOSTIC layout vocabulary
+   * that rebuilt screens compose from, so geometry stops living in per-screen
+   * BEM. It adds NO colour tokens — the v4.0 palette (022 T023) already landed
+   * and is measured-contrast authoritative (see RECONCILIATION §C).
+   *
+   * LAYERED ON PURPOSE. Unlayered rules always beat layered ones regardless of
+   * specificity, which is the defect `component-layer-discipline.test.ts` exists
+   * to prevent. Everything here stays inside `@layer components`.
+   *
+   * RTL-NATIVE. Logical properties only (inline-start/end, margin-block,
+   * padding-inline). No left/right physical properties — the terminal is
+   * Arabic-first and `dir="rtl"` is set at the shell root.
+   * ═══════════════════════════════════════════════════════════════════════════ */
+
+  .v4-screen {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    min-block-size: 100%;
+    padding: var(--space-5);
+    background: var(--color-background);
+  }
+
+  .v4-screen__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .v4-screen__title {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+    color: var(--color-text);
+  }
+
+  .v4-screen__subtitle {
+    margin: var(--space-1) 0 0;
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-muted);
+  }
+
+  /* Column region. `--v4-cols` defaults to a single track; screens override it.
+   * `align-items: start` keeps columns independently sized (a short rail must
+   * not stretch to a tall neighbour). */
+  .v4-columns {
+    display: grid;
+    grid-template-columns: var(--v4-cols, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  /* Sign-in track shape: staff-code rail · roster (widest, primary choice) ·
+   * PIN column. The PIN track is fixed so selecting a cashier never reflows
+   * the columns beside it. Declared here rather than inline — the route file
+   * is held to a no-inline-style rule (v4-sign-in-presentation.test.ts).
+   *
+   * The PIN track has a HARD FLOOR of 306px, and it is arithmetic, not taste:
+   *
+   *   .pin-pad__grid   3 × 64px keys + 2 × 8px gaps  = 208px
+   *   .pin-pad         + 2 × 24px padding            =  48px
+   *   .v4-panel        + 2 × 24px padding + 2 × 1px border = 50px
+   *                                                   ───────
+   *                                                     306px
+   *
+   * Below that the keypad overflows its panel into the roster — destroying the
+   * persistent-PIN-column guarantee this fixed track exists to provide. The pad
+   * is NOT the place to absorb a shortfall: the 64px keys are a touch-target
+   * floor (147 assertions) and `.pin-pad` is shared, so shrinking it is a global
+   * regression to solve a screen-local layout problem. Widen the track instead.
+   *
+   * Enforced by v4-sign-in-track-fit.test.ts, which recomputes the 306px from
+   * these same tokens rather than hard-coding it — change a token and the guard
+   * re-derives the new floor. jsdom computes no layout, so no renderer test can
+   * see this class of break. */
+  .v4-columns--sign-in {
+    /* Track order is PAINT order, and under RTL the FIRST track paints at the
+     * RIGHT edge (handoff: "the first declared track paints on the right").
+     * The approved composition is rail-left · roster-centre · PIN-right, so
+     * the PIN's 312px track is declared FIRST and the rail's 320px LAST. */
+    --v4-cols: 312px 1fr 320px;
+  }
+
+  /* ── Sign-in region placement ────────────────────────────────────────────
+   * `<main>` carries `dir="rtl"`, so grid auto-placement would paint the first
+   * DOM child at the RIGHT edge and mirror the whole screen. The handoff warns
+   * about precisely this: "Do not rely on `dir=\"rtl\"` alone to mirror the
+   * page — it will produce the wrong column order."
+   *
+   * DOM order and paint order therefore disagree ON PURPOSE, each correct for
+   * its own axis:
+   *
+   *   DOM   — staff-code → roster → PIN   (task flow: choose a cashier, THEN
+   *                                        type the PIN; keyboard order)
+   *   PAINT — staff-code | roster | PIN    (handoff composition)
+   *
+   * Explicit placement is what lets both hold at once. This does NOT violate
+   * WCAG 2.4.3: that criterion requires focus order to preserve MEANING and
+   * operability, not to mirror visual order — and the DOM keeps the meaningful
+   * sequence. Reordering the DOM instead would put the PIN pad ahead of the
+   * roster in traversal, which inverts the task.
+   *
+   * Scoped to `--sign-in` by the child combinator: `.v4-columns` is the
+   * generic primitive and other screens must not inherit this placement.
+   *
+   * Enforced by v4-sign-in-track-fit.test.ts, which reads the track widths
+   * through these declarations rather than by list position — so the geometry
+   * guards keep measuring the right track if the composition ever changes. */
+  .v4-columns--sign-in > .v4-col--pin {
+    grid-column: 1;
+  }
+
+  .v4-columns--sign-in > .v4-col--roster {
+    grid-column: 2;
+  }
+
+  .v4-columns--sign-in > .v4-col--rail {
+    grid-column: 3;
+  }
+
+  /* Below ~1280px the fixed tracks starve the roster. Arithmetic at the 1024px
+   * viewport floor: 1024 − 48 (screen padding) − 48 (two gaps) − 568 (fixed
+   * tracks) = 360px for the `1fr` roster. That keeps the ordering the hierarchy
+   * requires — roster 360 > PIN 312 > rail 256 — because the roster carries the
+   * primary choice and must stay the widest track. Left at the full-width 320px
+   * rail the roster would drop to 308px and be out-sized by its own rail.
+   *
+   * The PIN track stays at its 306px floor (312px) here: it is the one track
+   * that CANNOT be narrowed to buy room, since the keypad inside it is fixed.
+   *
+   * This is why track shape is a custom property rather than bespoke CSS: the
+   * override is the one line that changes, and `/sign-in` mounts ABOVE `/app/*`
+   * so there is no nav rail competing for the same width. */
+  @media (max-width: 1279px) {
+    .v4-columns--sign-in {
+      /* PIN first (paints right-to-left under RTL), rail last — same order as
+       * the base rule. The PIN keeps its 306px floor; only the rail narrows. */
+      --v4-cols: 312px 1fr 256px;
+    }
+  }
+
+  /* ── v4 panel — the single surface primitive ─────────────────────────────
+   * Replaces per-screen pane/card/section geometry. One surface treatment, one
+   * radius, one shadow. Density is a modifier, not a new class family. */
+  .v4-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5);
+    border: 1px solid var(--color-border, var(--color-surface-elevated));
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .v4-panel--flush {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .v4-panel--quiet {
+    box-shadow: none;
+    background: var(--color-surface-elevated);
+  }
+
+  .v4-panel__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .v4-panel__title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-snug);
+    color: var(--color-text);
+  }
+
+  .v4-panel__hint {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-muted);
+  }
+
+  .v4-panel__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .v4-panel__footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-block-start: auto;
+    padding-block-start: var(--space-4);
+    border-block-start: 1px solid var(--color-border, var(--color-surface-elevated));
+  }
+
+  /* ── v4 stack / row — spacing without bespoke wrappers ───────────────── */
+  .v4-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  /* Wrong-PIN halo.
+   *
+   * Ported from the retired `.sign-in-route__pin-section[data-error]`: the
+   * rebuild deleted that rule while `data-error` stayed on the markup, so a
+   * refused PIN signalled nothing visually. The textual `role="alert"` is the
+   * accessible channel and is unchanged — this restores the NON-TEXTUAL one,
+   * which is what makes a refusal legible at arm's length on a terminal.
+   *
+   * On `.v4-stack` rather than a per-screen class so the treatment travels
+   * with the vocabulary instead of dying with the next rebuild. Padding and
+   * the negative inline margin keep the halo clear of the content without
+   * shifting it, so a refusal never reflows the keypad beneath.
+   *
+   * Enforced by v4-rebuild-vocabulary.test.ts, which fails when a screen sets
+   * a `data-*` state no stylesheet rule answers. */
+  .v4-stack[data-error] {
+    border-radius: var(--radius-card);
+    box-shadow: 0 0 0 2px var(--color-danger);
+    padding-inline: var(--space-3);
+    margin-inline: calc(var(--space-3) * -1);
+  }
+
+  .v4-stack--tight {
+    gap: var(--space-2);
+  }
+
+  .v4-stack--loose {
+    gap: var(--space-5);
+  }
+
+  .v4-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .v4-row--between {
+    justify-content: space-between;
+  }
+
+  /* ── v4 definition row — label/value pairs (summaries, totals) ──────────
+   * The reference's summary panels are label/value rows, not tables. Money and
+   * identifiers re-isolate to LTR inside the value slot via `.v4-def__value--ltr`
+   * so Arabic labels and Latin figures never reorder each other. */
+  .v4-def {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+  }
+
+  .v4-def__label {
+    color: var(--color-text-muted);
+  }
+
+  .v4-def__value {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    text-align: end;
+  }
+
+  .v4-def__value--ltr {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  /* ── v4 stepper — numbered progress (reference sign-in / checkout) ──────
+   * Presentation only. It reflects flow position; it never gates navigation. */
+  .v4-stepper {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .v4-stepper__step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .v4-stepper__mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 26px;
+    block-size: 26px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-elevated);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .v4-stepper__step[aria-current] .v4-stepper__mark {
+    background: var(--color-primary);
+    color: var(--color-primary-on);
+  }
+
+  .v4-stepper__step[aria-current] {
+    color: var(--color-text);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .v4-stepper__rule {
+    inline-size: var(--space-6);
+    block-size: 1px;
+    background: var(--color-border, var(--color-surface-elevated));
+  }
+
+  /* ── v4 field — form control geometry ───────────────────────────────── */
+  .v4-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .v4-field__label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
+  }
+
+  .v4-field__hint {
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-muted);
+  }
+
+  /* Field controls. Ported from the retired `.sign-in-form__field input` rules
+   * so the v4 field carries the same WCAG 1.4.11 control boundary and focus
+   * treatment — but at 44px, not the old 40px, to meet the touch-target NFR.
+   * Scoped to the wrapper so it styles any control a field holds. */
+  .v4-field label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
+  }
+
+  .v4-field input,
+  .v4-field select {
+    block-size: 44px;
+    inline-size: 100%;
+    padding-inline: var(--space-3);
+    background-color: var(--color-surface-elevated);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    font-size: var(--font-size-md);
+    outline: none;
+    transition:
+      border-color var(--duration-2) var(--ease-out),
+      box-shadow var(--duration-2) var(--ease-out);
+  }
+
+  .v4-field input:focus,
+  .v4-field select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+
+  .v4-field input:disabled,
+  .v4-field select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background-color: var(--color-surface-muted);
+  }
+
+  /* ── v4 selectable row — roster entries, list choices ───────────────────
+   * 44px min touch target (NFR). Selection is a filled tint plus a check mark,
+   * never colour alone — colour is not the sole carrier of state (WCAG 1.4.1). */
+  .v4-choice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    inline-size: 100%;
+    min-block-size: 56px;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-border, var(--color-surface-elevated));
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-text);
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .v4-choice:hover:not(:disabled) {
+    background: var(--color-surface-elevated);
+  }
+
+  .v4-choice[data-selected='true'] {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+
+  .v4-choice:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .v4-choice__mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 24px;
+    block-size: 24px;
+    flex: none;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border, var(--color-text-muted));
+    color: transparent;
+    font-size: var(--font-size-xs);
+  }
+
+  .v4-choice[data-selected='true'] .v4-choice__mark {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-primary-on);
+  }
+
+  .v4-choice__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+    flex: 1;
+  }
+
+  .v4-choice__title {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-snug);
+  }
+
+  .v4-choice__meta {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  /* ── v4 live region — one slot, one message (alert XOR spinner) ─────────
+   * Reserves its box so a refusal appearing never reflows the surface beneath
+   * it. Truthfulness invariant: the screen shows progress OR outcome, never both. */
+  .v4-feedback {
+    min-block-size: var(--space-5);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-muted);
+  }
+
+  .v4-feedback__error {
+    color: var(--color-danger-emphasis);
+    font-weight: var(--font-weight-medium);
+  }
 }
