@@ -585,8 +585,15 @@ affordances intact.
   `DrawerFailureBanner.tsx` — restyled, **never suppressed or softened** (Constitution IV).
 - [ ] T082 [US4] Assert no SMS/WhatsApp/email dispatch, confetti/celebration, KPI tiles, or
   fabricated fiscal information were introduced (Non-Capability).
-- [ ] T083 [US4] **Re-capture** `u4a-sale-success-after.png` in the v4.0 palette, superseding the
-  pre-v4.0 capture from T0A2; prune the superseded file.
+- [ ] T083 [US4] Capture `u4a-sale-success-after.png` in the v4.0 palette.
+  > **Correction (2026-09-22):** this task previously read "**Re-capture** … superseding the
+  > pre-v4.0 capture from T0A2; prune the superseded file." **There is no T0A2 capture to supersede
+  > or prune** — `screenshots/` has never held anything but `README.md`, and T0A2 is still open.
+  > Written as-was it sends an implementer looking for a file that does not exist, and the "prune"
+  > step is a no-op that could be mistaken for a missed deliverable. This is the **first** capture
+  > of the surface, taken directly in the v4.0 palette. If T0A2 is captured before US4 lands, the
+  > original re-capture-and-prune wording applies again; if US4 lands first, T0A2 is satisfied by
+  > this capture and should be closed as folded-in rather than left open.
 
 ---
 

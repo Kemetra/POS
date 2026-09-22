@@ -173,6 +173,60 @@ screenshot is not an acceptable substitute for a cashier-role acceptance capture
 
 ---
 
+## T002 — per-capture gate evidence, 2026-09-22
+
+> **T002 itself stays COMPLETED** (historical, verified 2026-09-19). This section records today's
+> readings only, because the gate is **per-capture**: each capture launch must re-observe it.
+
+**(b) Catalogue — PASS, unchanged.** Direct read-only row count of the dev DB
+(`%APPDATA%/pos-pulse/pos-pulse.db`), run through Electron's node because `better-sqlite3` is built
+for Electron's ABI:
+
+```
+products         = 50
+product_barcodes = 49
+```
+
+Same usable dataset as the 09-19 and 09-20 verifications.
+
+> **Resolution gotcha for whoever runs this next.** A probe script placed in a temp/scratchpad
+> directory fails with `Cannot find module 'better-sqlite3'` — `require` resolves from the
+> **script's own directory** upward, and there is no `node_modules` above `AppData\Local\Temp`.
+> Running from the repo cwd does NOT help (cwd is irrelevant to file-based `require` resolution).
+> Pass the repo path in and `path.join` it, or keep the probe inside the repo tree.
+
+**(a) Operator bypass — NOT SATISFIED by today's launches.** The two runs recorded in
+`logs/main-.20260922.1.log` (08:38:54Z and 08:40:12Z) show a healthy boot —
+`db:opened` → `db:migrations-applied (36)` → `read_down_driver:started` → `app:ready` — but
+**no `operator.dev_bypass.active` and no `pairing.dev_bypass.active`**, only
+`operator.clerk.missing_publishable_key`. These were plain `npm run dev` launches **without the
+documented dev env vars**, so the session is not the fixture operator.
+
+**Consequence: no screenshot may be attributed to a surface from these launches.** This is the
+documented STOP, and it is an environment fact, not a defect. **Any future capture requires a fresh
+launch with the documented env block and a newly observed `operator.dev_bypass.active` line** read
+from the rotating log file (not the terminal — see the root-cause note above).
+
+### T0C2 cashier capture — BLOCKED, now with measured evidence
+
+```
+cashier_pin_records = 0 rows
+```
+
+(Table and its indexes exist — `cashier_pin_records`, `idx_cashier_pin_records_clerk` — from
+migration `0036`'s rebuild. They are simply empty.)
+
+Combined with the hardcoded `role: 'manager'` dev bypass, **a genuine cashier session is currently
+unreachable by any means** — this is not merely "awaiting a manual snip". T0C2 cannot be captured
+until a cashier PIN row exists.
+
+> **OWNER RULING 2026-09-22 — do NOT unblock this from inside 022.** No direct `INSERT` of a PIN
+> row, no dev fixture, and no change to `src/main/**`, `src/preload/**`, IPC or `migrations/**`.
+> **POS-019 already owns the secure `provisionCashierPin` write path**; building a usable
+> provisioning UI/path is **outside 022's renderer-only scope**. T0C2 stays blocked and honest.
+
+---
+
 ## Slice captures
 
 ### u4a — Sale-success honesty
@@ -347,6 +401,36 @@ reviewer to discover in the diff.
 | `ui/operator/__tests__/ManagerAdminSignInForm.test.tsx` | U1 / T054 | 22 `getByLabelText` label queries → `getByTestId`; submit assertion → "carries an Arabic label" | Queried by the English presentation copy T054 replaces | Same behaviours asserted via stable testids the inputs already carried. No markup added for tests; no assertion weakened |
 | `routes/__tests__/sign-in-route.test.tsx` | U1 / T054 | 6 `getByLabelText` label queries → `getByTestId` | Same — coupled to superseded English labels | Identical flows, stable selectors |
 | `ui/operator/__tests__/PinPad.dot-only-guard.test.tsx` | U1 / T054 | 3 literal `"N of 6 entered"` matches → count-based assertions | Pinned English wording of a live-region label now Arabic | **Strengthened**: now also asserts the label NEVER contains the PIN value — the security property the file exists to defend |
+
+| `ui/payments/__tests__/tender-surface-recompose.test.tsx` | U3 / Phase C (`94e4864`, `abc8751`) | (a) 3 × `.amount-due-card` **presence** assertions retargeted to **absence** in `CashEntry`, `ExternalCardTerminalEntry`, `VoucherEntry`; (b) 1 voucher-refusal literal `This voucher cannot be used right now.` → `تعذّر استخدام هذه القسيمة حالياً.` | (a) The file required each *entry* component to render its own amount-due card — the v3.5 recompose requirement. FR-16 + the v4 handoff make `PaymentSurface` the **sole** owner of the amount due; a per-entry copy put the same value on screen twice at two sizes, defeating the hierarchy the slice exists to create. (b) Same class as the already-authorised T054 English-copy updates — the literal pinned English wording now Arabic in source (`VoucherEntry.tsx:51`). | (a) **Strengthened, and verified present:** the local "is present" check is replaced by a GLOBAL "exactly one amount-due presentation" count in `single-amount-due.test.tsx` (`:154-155` assert `.amount-due-card` length 0 surface-wide; `:151` asserts the single `payment-surface-amount-due`; `:171-192` re-assert per-entry absence). No assertion dropped — each is retargeted in place with a comment at the original site. (b) The security property is untouched: the test still asserts the structured reason (`voucher_not_found`) NEVER reaches the DOM. |
+
+> ⚠️ **OWNER RULING 2026-09-22 — T074 REMAINS UNCHECKED. Recorded as a spec-reality mismatch.**
+>
+> This fifth row carries **no explicit owner authorization**, unlike the four above it: the standing
+> constraint grants test changes for superseded design decisions **"T020–T022 only"**, and this file
+> was modified under **T070/T076 (Phase C)** citing FR-16 and the design handoff — not an owner
+> decision on record.
+>
+> **T074's literal requirement is that the payment/FSM tests pass "unmodified". PR #455 modified a
+> payment test, so T074 is NOT satisfied as written.** It is therefore left **unchecked**, and was
+> explicitly *not* marked pass-with-exception — a literal requirement either holds or it does not,
+> and grading it on a curve would silently redefine the bar for every later reader.
+>
+> **Disposition: carry into the next `/speckit-analyze` as a spec-reality mismatch**, where the
+> reconciliation is either (a) ratify the Phase C retarget under an amended grant, or (b) record a
+> scoped exception, or (c) restore the original assertions. That is a spec-amendment decision, not
+> a closeout one, and it is deliberately NOT resolved here. Task wording, IDs, labels and the
+> standing constraints are left untouched by this closeout.
+>
+> **The evidence stands on its own** (gathered 2026-09-22, independent of the disposition):
+> the suite is green at **487 files / 5688 passed / 3 skipped / 0 failed**; the money/FSM/guard
+> files T074 names are genuinely **untouched** (`parse-currency-to-minor.test.ts`,
+> `PaymentSurface.money-safety-guards.test.tsx`, `CashEntry.no-overapply.test.tsx`,
+> `CashEntry.currency-input.test.tsx`, `PaymentSurface.settled-receipt.test.tsx`); four of the five
+> changed files are **new additions** mandated by T070/T071/T075/T076, not modifications; and the
+> single modified file is the one tabled in the row above. A green suite cannot answer "unmodified"
+> — that is a git claim, verified here by
+> `git diff 94e4864^..HEAD -- src/renderer/ui/payments/__tests__/**`.
 
 **Owner approval (explicit):** narrowly updating tests coupled to superseded English presentation
 copy was authorised for T054. It did NOT authorise broader test rewrites or behaviour changes, and
