@@ -224,6 +224,7 @@ until a cashier PIN row exists.
 > row, no dev fixture, and no change to `src/main/**`, `src/preload/**`, IPC or `migrations/**`.
 > **POS-019 already owns the secure `provisionCashierPin` write path**; building a usable
 > provisioning UI/path is **outside 022's renderer-only scope**. T0C2 stays blocked and honest.
+> **Tracked as [#457](https://github.com/Kemetra/POS/issues/457)** (`status:blocked`).
 
 ---
 
@@ -416,11 +417,31 @@ reviewer to discover in the diff.
 > explicitly *not* marked pass-with-exception — a literal requirement either holds or it does not,
 > and grading it on a curve would silently redefine the bar for every later reader.
 >
-> **Disposition: carry into the next `/speckit-analyze` as a spec-reality mismatch**, where the
-> reconciliation is either (a) ratify the Phase C retarget under an amended grant, or (b) record a
-> scoped exception, or (c) restore the original assertions. That is a spec-amendment decision, not
-> a closeout one, and it is deliberately NOT resolved here. Task wording, IDs, labels and the
-> standing constraints are left untouched by this closeout.
+> **✅ RECONCILED — `/speckit-analyze` pass, 2026-09-22.** That reconciliation has now run. Outcome,
+> recorded here so this note no longer points forward at itself:
+>
+> - **The mismatch was in T074's premise, not the implementation.** T074 scoped the rule by *path
+>   glob* (`payments/__tests__/**`); the governing rule in `plan.md` §Test-change policy scopes it by
+>   *category* ("payment, cart, money, routing guards"). plan.md's own U3 row lists
+>   `tender-surface-recompose.test.tsx` under "must stay green" **and** assigns "Tender presentation"
+>   updates in that directory — so a presentation test under the payments path was anticipated, and
+>   the glob was never the intended constraint. **T074 was reworded to the category scope**; the file
+>   self-declares as a *"visual recompose"* test in its header and asserts CSS structure, not
+>   behaviour. All four N1–N4 negative behavioural guards are untouched.
+> - **The genuinely open half was NOT waived.** SC-15 requires a superseded-visual-default test change
+>   to be *"explicitly owner-sanctioned"*, which this row still lacks. That is carried as **new task
+>   T074a** (suffix infill — no existing ID renumbered).
+>
+> **✅ T074a RATIFIED under SC-15 (option (i)) — owner-delegated, 2026-09-22.** Ratified only after
+> verifying the replacement invariant is **strictly stronger** than what it replaced: the old check
+> was local presence (a regression would still have passed it in 2 of 3 components); the new one
+> asserts tree-wide absence across all three tender phases, the superseded label `المطلوب دفعه`
+> absent from `document.body` anywhere, the positive surface-owned panel present and `dir="ltr"`,
+> and — in its own block — that the engine value and every calculation survive. **No test weakened.**
+> The ratification is **narrow**: it covers exactly the two changes in this row and broadens no
+> grant. **T074 and T074a are both now ticked.**
+>
+> This row stands as the permanent evidence for that ratification.
 >
 > **The evidence stands on its own** (gathered 2026-09-22, independent of the disposition):
 > the suite is green at **487 files / 5688 passed / 3 skipped / 0 failed**; the money/FSM/guard

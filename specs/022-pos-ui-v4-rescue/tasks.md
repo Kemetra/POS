@@ -443,6 +443,30 @@ still receives the existing rejection.
   1. leave `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN` **unset**;
   2. provision a cashier PIN row for the dev tenant/branch/terminal (019's provisioning path);
   3. sign in at `/sign-in` as that cashier and capture the landing surface.
+
+  > ⛔ **BLOCKED — EXTERNAL PREREQUISITE (`/speckit-analyze` 2026-09-22). Step 2 is not actionable
+  > from inside 022.** Measured on the current dev DB: **`cashier_pin_records` = 0 rows** (the table
+  > and its indexes exist from migration `0036`'s rebuild — they are simply empty). With the dev
+  > bypass hardcoded to `manager`, **a genuine cashier session is currently unreachable by any
+  > means** — this is NOT merely "awaiting a manual snip" like [#448](https://github.com/Kemetra/POS/issues/448),
+  > nor impossible-by-geometry like the dropped narrow capture ([#450](https://github.com/Kemetra/POS/issues/450)).
+  > It is a third class: **blocked on a product capability that does not yet exist.**
+  >
+  > POS-019 owns the secure main-process `operator.provisionCashierPin` write path, but **no shipped
+  > renderer path invokes it**, so a manager cannot provision a cashier today. Building one is a
+  > *capability addition* — squarely outside 022's visual-convergence scope (022 "adds **no** business
+  > capability", CLAUDE.md §Active feature) and outside its renderer-only P8 boundary.
+  >
+  > **Owner ruling 2026-09-22 — do NOT unblock this from inside 022** by any of: a direct SQLite
+  > `INSERT`, an auth fixture, a dev-only main-process bypass, `src/main/**` / `src/preload/**` /
+  > IPC changes, migration changes, or leaking `user_id` to the renderer. **Do not invent a
+  > capability merely to obtain a screenshot.**
+  >
+  > **Correct representation:** T0C2 stays **unchecked and blocked**, tracked as an external
+  > prerequisite on 019's provisioning path. It does **not** gate US4/US5/US6, and it is the one
+  > capture that a future capture session cannot clear. **Recommended (not created by this pass):**
+  > a tracking issue mirroring #448's pattern, labelled `status:blocked` rather than
+  > `status:deferred`, since "deferred" wrongly implies it is reachable today.
   Record the exact steps used in the screenshots README. **If a cashier session cannot be reached
   honestly, record that and leave the capture absent — do not substitute a manager screenshot**,
   which would not evidence the behaviour under acceptance.
@@ -517,8 +541,87 @@ flow**; payment FSM, money math and split tender untouched.
   `AmountPad.tsx`, `MoneyRoll.tsx` — presentation only. **No client-side money arithmetic.**
 - [x] T073 [P] [US3] RED+GREEN: voucher entry presentation in `VoucherEntry.tsx` — **no client-side
   voucher authority**; authority stays main-process.
-- [ ] T074 [US3] Verify `payments/__tests__/**`, `parse-currency-to-minor.test.ts`, and the FSM
-  tests pass **unmodified**.
+- [x] T074 [US3] Verify the **behavioural** payment tests — payment FSM, money math, tender
+  application, voucher authority, routing guards — pass **unmodified**, and that the full suite is
+  green. Named files: `parse-currency-to-minor.test.ts`,
+  `PaymentSurface.money-safety-guards.test.tsx`, `CashEntry.no-overapply.test.tsx`,
+  `CashEntry.currency-input.test.tsx`, `PaymentSurface.settled-receipt.test.tsx`, and the N1–N4
+  negative guards in `tender-surface-recompose.test.tsx` (no insurance/credit label, no
+  `method-grid--four`, no client-side voucher lookup, no client-side change computation).
+
+  > **Reworded by `/speckit-analyze` 2026-09-22 — premise correction, scope unchanged in substance.**
+  > This task previously read: *"Verify `payments/__tests__/**`, `parse-currency-to-minor.test.ts`,
+  > and the FSM tests pass **unmodified**."* That wording scoped the rule by **path glob**, but the
+  > governing rule in [plan.md](./plan.md) §Test-change policy scopes it by **category** —
+  > *"Behavioural tests (payment, cart, money, routing guards) must pass unmodified"* — and the
+  > Standing Constraint above says the same. **The two are not the same set**, and plan.md's own U3
+  > row proves the glob was never the intended constraint: it lists
+  > `tender-surface-recompose.test.tsx` under *"Existing tests that must stay green"* **and**
+  > assigns *"Tender presentation"* updates in that same directory. A presentation test living under
+  > `payments/__tests__/**` was anticipated by the plan; the old T074 text collapsed category into
+  > path and over-reached.
+  >
+  > **The mismatch was in T074's premise, not in the merged implementation.** Verified 2026-09-22:
+  > every behavioural file named above is byte-identical across the whole US3 arc
+  > (`git diff 94e4864^..HEAD`), all four N1–N4 negative guards are untouched, and the suite is
+  > green at **487 files / 5688 passed / 3 skipped / 0 failed**. The one modified file
+  > (`tender-surface-recompose.test.tsx`) self-declares as a *"visual recompose"* test in its header
+  > and asserts CSS class structure, not payment behaviour.
+  >
+  > **Nothing was waived.** The residual — SC-15's requirement that a superseded-visual-default test
+  > change be *"explicitly owner-sanctioned"* — was NOT satisfied by this rewording, so it was
+  > carried as its own task, **T074a** below, and has since been **ratified** (2026-09-22). FR-40,
+  > the payment FSM, money math, tender application and voucher authority are preserved unchanged;
+  > no test was weakened.
+  >
+  > **✅ TICKED 2026-09-22** — both conditions of the reworded task are met and evidenced: the named
+  > behavioural files are byte-identical across `94e4864^..HEAD`, the N1–N4 negative guards are
+  > untouched, and the suite is green at **487 files / 5688 passed / 3 skipped / 0 failed**. The
+  > SC-15 residual that previously blocked this tick is closed by T074a.
+
+- [x] T074a [US3] **SC-15 owner-sanction of the Phase C visual-default supersession** (suffix infill,
+  `/speckit-analyze` 2026-09-22). SC-15 permits a test change only when it is *"limited to those
+  encoding a superseded visual default **and explicitly owner-sanctioned**"*. The Phase C change to
+  `tender-surface-recompose.test.tsx` meets the first clause and **not yet** the second: the four
+  existing Modified-test ledger rows carry explicit owner approval (recorded for T054), this fifth
+  row does not.
+
+  **What needs sanctioning:** (a) three `.amount-due-card` **presence → absence** retargets in
+  `CashEntry`, `ExternalCardTerminalEntry`, `VoucherEntry` — superseded by FR-16 making
+  `PaymentSurface` the sole owner of the amount due, with the positive invariant replaced by a
+  **stronger** global "exactly one amount-due presentation" count in `single-amount-due.test.tsx`;
+  and (b) one voucher-refusal literal updated to the Arabic copy now in source
+  (`VoucherEntry.tsx:51`) — the same class as the already-sanctioned T054 English-copy updates.
+
+  **✅ RATIFIED under SC-15 — owner-delegated decision, 2026-09-22 (option (i)).**
+
+  **Verified before ratifying** (`single-amount-due.test.tsx:142-205`): the replacement is
+  **strictly stronger** than what it replaced, not merely equivalent.
+  - *Old:* `expect(card).toBeInTheDocument()` — a **local presence** check inside one component's
+    render. A regression reintroducing the duplicate card would still have PASSED it in 2 of 3
+    components.
+  - *New:* `querySelectorAll('.amount-due-card')).toHaveLength(0)` across the **whole tree** in the
+    live mounted surface (all three tender phases, `it.each`), **plus** the superseded bilingual
+    label `المطلوب دفعه` asserted absent from `document.body.textContent` anywhere, **plus** the
+    positive `payment-surface-amount-due` asserted present, `dir="ltr"` and carrying the dominant
+    class.
+  - *And* a third block — *"the engine value is still rendered (no behaviour lost)"* — pins that the
+    cleanup removed a duplicate **presentation**, never the number or any calculation.
+
+  **Both halves qualify under SC-15** as *"encoding a superseded visual default"*: (a) the
+  `.amount-due-card` ownership question is settled by FR-16 (`PaymentSurface` is the sole owner —
+  a per-entry copy put the same value on screen twice at two sizes, defeating the hierarchy the
+  slice exists to create); (b) the voucher-refusal literal is the same class as the already-
+  sanctioned T054 English→Arabic copy updates, and still asserts the structured reason
+  (`voucher_not_found`) NEVER reaches the DOM.
+
+  **No test was weakened** — the explicit bar for this task. **FR-40, the payment FSM, money math,
+  tender application and voucher authority are untouched**; all four N1–N4 negative guards in
+  `tender-surface-recompose.test.tsx` remain byte-identical.
+
+  **This ratification is narrow.** It covers exactly the two Phase C changes tabled in Modified-test
+  ledger row 5 ([`screenshots/README.md`](./screenshots/README.md)). It does **not** broaden the
+  T020–T022 grant, and it authorises no further test edits.
 - [x] T075 [US3] **Preserve split tender (FR-40).** Multi-line tender is a **shipped capability**
   (006 T154): `handleLineApplied` returns to tender selection while the applied sum is below the
   subtotal (`PaymentSurface.tsx:282-313`). U3 restyles that surface, so assert the behaviour
@@ -534,6 +637,15 @@ flow**; payment FSM, money math and split tender untouched.
   > [`design-handoff/US3-HANDOFF.md`](./design-handoff/US3-HANDOFF.md) §3), not assumed into
   > existence by a preservation task, which would leave it with no test of its own.
 ### Arabic-first working tender flow (FR-19 / SC-4)
+
+> ⚠️ **ANCHOR STATUS RE-VERIFIED (`/speckit-analyze` 2026-09-22) — T076–T079 are DONE; their
+> "today is English" anchors are now HISTORICAL.** Re-grepped against the post-#455 tree: the line
+> numbers still resolve, but the English strings they cite are **gone, as intended**.
+> `PaymentSurface.tsx:482` is `aria-label="الدفع"` and `:484` is `<h2 …>الدفع</h2>`;
+> `PaymentCartSummary.tsx:42` is `ملخص الطلب` and `:62` is `الإجمالي الفرعي`. The tasks below read
+> as instructions to *change* copy that has already been changed — that is expected for completed
+> tasks and is **not** a defect. Do not "restore" the English to make the wording literal. The
+> live guard against regression is the T076 assertion suite, not these anchors.
 
 - [x] T076 [US3] RED: test asserting **zero English-only operator-facing strings** across the
   working (pre-settlement) tender flow — `PaymentSurface` (tender-selection + entry + confirm
@@ -683,7 +795,7 @@ Setup (T001–T003)
 | US0 | Setup | Foundational token system |
 | US0-R | Setup | Doc authority; bundled with US0 |
 | US1/US2/US3/US5 | US0 | Consume v4.0 tokens |
-| US4 | US0 + US4a | Converges the surface US4a repaired; re-captures its screenshot |
+| US4 | US0 + US4a | Converges the surface US4a repaired; takes the **first** valid v4.0 capture of it (T083 — T0A2's was never taken) |
 | US6 | US1–US5 | Cross-cutting; needs surfaces final |
 
 ## Parallel Execution Examples
@@ -701,6 +813,9 @@ Setup (T001–T003)
 1. **Ship US4a first** — smallest, highest-integrity win; fixes an already-ratified Arabic-first
    violation and a missing receipt, with no bridge change and no palette dependency. Accept that its
    screenshot is pre-v4.0 and is re-captured at T083.
+   > **Premise correction (`/speckit-analyze` 2026-09-22):** T0A2's pre-v4.0 capture was never
+   > taken, so T083 is the **first** valid v4.0 capture of that surface rather than a re-capture.
+   > The ordering rationale is unaffected.
 2. **Then US0 + US0-R together** — the token system plus the authority banner that stops agents
    following superseded rules. This is the widest-blast-radius slice; keep it token-values-only.
 3. **Then US1 → US2 → US3** (or parallel) — surface-by-surface convergence, each independently
