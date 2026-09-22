@@ -268,3 +268,120 @@ a reference image appears to show.
 
 *Analysis complete. 0 CRITICAL, 0 unresolved findings (8 internal + 6 external, all actioned).
 Cleared for `/speckit-implement`.*
+
+---
+
+# Reconciliation Pass — 2026-09-22 (post-Stage-0 `50c0cf1`)
+
+**Scope:** post-implementation reconciliation after US4a/US0/US1/US2/US3 merged (PRs #447, #452,
+#453, #454, #455). Docs/spec only — no `src/**`, `tests/**`, `migrations/**` or `.specify/**` touched.
+**Constitution:** v1.5.1 (verified in `.specify/memory/constitution.md`).
+
+## Verdict
+
+| Metric | Result |
+|:--|:--|
+| CRITICAL | **0** |
+| HIGH | **1** (F-1, reconciled) |
+| MEDIUM | **3** (F-2, F-3, F-4 — reconciled) |
+| LOW | **2** (F-5 reconciled; F-6 flagged, unfixable in scope) |
+| Task IDs renumbered | **0** |
+| Suffix IDs added | **1** (T074a) |
+| Requirements weakened | **0** |
+| Tests modified by this pass | **0** |
+
+---
+
+## F-1 (HIGH) — T074's premise contradicts its own governing rule
+
+**Artifacts:** `tasks.md` T074 · Standing Constraints "Behavioural tests" · `plan.md` §Test-change
+policy (`:460-461`) + U3 test-matrix row · merged history of PRs #453/#455.
+
+**Finding.** T074 scoped "must pass unmodified" by **path glob** (`payments/__tests__/**`); the rule
+it implements scopes it by **category** — *"Behavioural tests (payment, cart, money, routing
+guards)"*. These are different sets. plan.md's **own U3 row** lists
+`tender-surface-recompose.test.tsx` under *"Existing tests that must stay green"* while assigning
+*"Tender presentation"* updates in that same directory — so a presentation test under the payments
+path was anticipated by the plan. The glob was never the intended constraint.
+
+**Evidence (git, not test-run — "unmodified" is a git claim).** Across `94e4864^..HEAD`:
+behavioural files byte-identical (`parse-currency-to-minor.test.ts`,
+`PaymentSurface.money-safety-guards.test.tsx`, `CashEntry.no-overapply.test.tsx`,
+`CashEntry.currency-input.test.tsx`, `PaymentSurface.settled-receipt.test.tsx`); four changed files
+are **new additions** mandated by T070/T071/T075/T076; the single modified file self-declares as a
+*"visual recompose"* test in its header and asserts CSS class structure. **All four N1–N4 negative
+behavioural guards untouched** (no insurance/credit label, no `method-grid--four`, no client-side
+voucher lookup, no client-side change computation). Suite green: 487 files / 5688 passed / 3 skipped.
+
+**Reconciliation.** T074 **reworded** to the category scope with the behavioural files named
+explicitly (premise correction — the mismatch was in the task text, not the implementation).
+FR-40, payment FSM, money math, tender application and voucher authority preserved; no test weakened.
+
+**Residual, deliberately not waived.** SC-15 permits such a change only when *"explicitly
+owner-sanctioned"* — unsatisfied at the time of writing (the four T054 ledger rows carry sanction;
+this fifth did not). Carried as **T074a** (suffix infill).
+
+**✅ RESOLVED same pass (owner-delegated, 2026-09-22): T074a RATIFIED under SC-15, option (i).**
+Verified before ratifying that the replacement invariant is **strictly stronger**, not equivalent:
+the old `toBeInTheDocument()` was a *local presence* check that a regression would still have passed
+in 2 of 3 components; the new one asserts `.amount-due-card` absence **tree-wide across all three
+tender phases**, the superseded label `المطلوب دفعه` absent from `document.body` anywhere, and the
+positive surface-owned panel present with `dir="ltr"` — plus a third block pinning that the engine
+value and every calculation survive. **No test weakened.** Ratification is narrow: it covers exactly
+the two changes in ledger row 5 and broadens no grant. **T074 and T074a both now ticked.**
+
+## F-2 (MEDIUM) — "re-capture" premise false in 6 places
+
+`plan.md:189`, `:379`, `:508`, `:547` and `tasks.md` §Dependencies + §Implementation Strategy all
+assume T0A2's pre-v4.0 capture exists to be superseded and pruned. **It was never taken** —
+`screenshots/` has only ever held `README.md`. **Reconciled:** all six annotated; T083 is the
+**first** valid v4.0 sale-success capture. The U4a-before-U0 *ordering rationale* is unaffected and
+retained; only its consequence never materialised. No screenshot fabricated.
+
+## F-3 (MEDIUM) — T0C2 misclassified as capturable
+
+T0C2 step 2 ("provision a cashier PIN row") reads as actionable. Measured: **`cashier_pin_records`
+= 0 rows**, dev bypass hardcoded `role: 'manager'`. POS-019 owns `provisionCashierPin` but **no
+shipped renderer path invokes it**. **Reconciled:** reclassified as a **blocked external
+prerequisite** — a third class distinct from #448 (deferred/reachable) and #450
+(impossible/dropped). Explicitly walled against the six forbidden unblock routes. **Tracked as
+[#457](https://github.com/Kemetra/POS/issues/457)** (`status:blocked`), created 2026-09-22 under
+owner delegation.
+
+## F-4 (MEDIUM) — historical T002 vs per-capture gate conflated
+
+T002 completed 2026-09-19 reads as standing clearance; the gate is **per-capture**. Today's two
+launches (`08:38:54Z`, `08:40:12Z`) booted healthily but showed **no `operator.dev_bypass.active`** —
+plain `npm run dev` without the dev env vars. Catalogue verified PASS (products=50,
+product_barcodes=49). **Reconciled** in `screenshots/README.md`: T002 stays historically completed;
+every new capture launch must independently re-observe the bypass line **in the rotating log file**.
+
+## F-5 (LOW) — T076–T079 anchors historical post-merge
+
+Anchors still resolve, but the English strings they cite are **gone as intended**
+(`PaymentSurface.tsx:482/484` = `الدفع`; `PaymentCartSummary.tsx:42/62` = `ملخص الطلب` /
+`الإجمالي الفرعي`). **Reconciled** with a status banner: completed tasks reading as change-instructions
+is expected, not a defect; do **not** restore English to make the wording literal.
+
+## F-6 (LOW) — stale Constitution version in project `CLAUDE.md` — **FLAGGED, NOT FIXED**
+
+`CLAUDE.md` cites the constitution as **v1.3.0**; the actual file is **v1.5.1** (this report's
+original header was correct). `CLAUDE.md` is outside this pass's allowed edit scope, so it is
+flagged for owner action rather than fixed.
+
+## Coverage after reconciliation
+
+| Dimension | Result |
+|:--|:--|
+| FR | **47/47** — unchanged; no FR added, removed or reworded |
+| NFR | **7/7** — unchanged |
+| SC | **20/20** — unchanged. SC-15's owner-sanction clause now has an explicit owner in T074a (previously unowned) |
+| Tasks | **85** (84 + T074a); T074 + T074a both ticked |
+| Duplicate task IDs | 0 |
+| Renumbered IDs | 0 |
+
+**Unresolved owner decisions after delegation: 0 blocking.** T074a was ratified in this pass
+(above). **F-6 remains flagged-not-fixed** — the stale Constitution version in `CLAUDE.md` is
+outside every allowed edit scope and needs an owner edit; it blocks nothing.
+
+*Reconciliation complete. 0 CRITICAL. Phase 8 / US4 not started; Maestro preflight not run.*

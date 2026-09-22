@@ -188,6 +188,14 @@ The rework risk is genuinely low, and this was verified rather than assumed:
 1. **U4a's "after" screenshot is captured in the pre-v4.0 (dark/navy) system** and will be
    superseded by U0. It must be **re-captured after U0** to serve as the final visual record. This
    is scheduled, not incidental.
+
+   > **Premise correction (`/speckit-analyze` 2026-09-22).** This cost was **never actually
+   > incurred**: T0A2's pre-v4.0 capture was never taken (`screenshots/` has only ever held
+   > `README.md`), so there is no superseded artifact to replace or prune. T083 is therefore the
+   > **first** valid v4.0 sale-success capture, not a re-capture. The paragraph above is retained as
+   > the historical rationale for the U4a-before-U0 ordering, which still stands on its own merits;
+   > only its *consequence* did not materialise. Every "re-capture" reference below reads the same
+   > way.
 2. **The first shipped slice of a visual-convergence feature will not yet look like v4.0.** This is
    acceptable because U4a's value is *honesty*, not appearance.
 
@@ -376,7 +384,8 @@ plus their tests.
 
 Applies the v4.0 system to the completion surface U4a repaired, plus reprint/print-failure
 affordances (`ReprintAffordance`, `PrinterFailureBanner`, `DrawerFailureBanner`) — restyled, never
-suppressed (Constitution IV). Includes U4a's **screenshot re-capture** in the v4.0 palette.
+suppressed (Constitution IV). Includes the **first** valid v4.0-palette capture of U4a's surface
+(T083 — not a re-capture; T0A2's pre-v4.0 capture was never taken).
 
 ### U5 — Empty / loading / error / offline / gated states
 
@@ -505,7 +514,7 @@ Tasks materialise in `/speckit-tasks`; this is the strategy they derive from.
 | 3 | **U1** | Sign-in presentation + role-aware landing (independently reviewable navigation change) |
 | 4 | **U2** | Sale workspace/catalogue/cart |
 | 5 | **U3** | Checkout/tender |
-| 6 | **U4** | Completion convergence + U4a screenshot re-capture |
+| 6 | **U4** | Completion convergence + the **first** valid v4.0 sale-success capture (T083 — not a re-capture; T0A2's was never taken, see §Two real costs) |
 | 7 | **U5** | State surfaces |
 | 8 | **U6** | Keyboard/a11y/consistency convergence |
 
@@ -544,7 +553,7 @@ rows:
 | R9 | Renderer change accidentally alters payment/cart behaviour | Medium | **Critical** | Behavioural tests must pass **unmodified**; no engine/FSM/money file in scope; U3/U4 restyle presentation only |
 | R10 | Screenshot acceptance claimed without rendered evidence | Medium | High | Mandatory bypass-log verification step; PR states the compared reference; no source-only completion claim |
 | R11 | v3.5 agent instructions override v4.0 decisions | **High** | **High** | U0-R superseded banner in the directory-scoped `CLAUDE.md` + 2 inline markers |
-| R12 | U4a-before-U0 rework | Low | Low | Semantic-token-only constraint; re-capture scheduled in U4; swap order if U4a needs a literal |
+| R12 | U4a-before-U0 rework | Low | Low | Semantic-token-only constraint; capture scheduled in U4 (T083 — first capture, not a re-capture: T0A2's was never taken); swap order if U4a needs a literal |
 
 ---
 
