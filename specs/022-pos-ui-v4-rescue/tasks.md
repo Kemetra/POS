@@ -464,9 +464,11 @@ still receives the existing rejection.
   >
   > **Correct representation:** T0C2 stays **unchecked and blocked**, tracked as an external
   > prerequisite on 019's provisioning path. It does **not** gate US4/US5/US6, and it is the one
-  > capture that a future capture session cannot clear. **Recommended (not created by this pass):**
-  > a tracking issue mirroring #448's pattern, labelled `status:blocked` rather than
-  > `status:deferred`, since "deferred" wrongly implies it is reachable today.
+  > capture that a future capture session cannot clear. **Tracked as
+  > [#457](https://github.com/Kemetra/POS/issues/457)**, labelled `status:blocked` rather than
+  > `status:deferred` — "deferred" would wrongly imply it is reachable today.
+  > **Unblocked by:** a shipped, manager-invocable cashier-PIN provisioning path (019's
+  > `provisionCashierPin`). After that, T0C2 becomes an ordinary manual capture.
   Record the exact steps used in the screenshots README. **If a cashier session cannot be reached
   honestly, record that and leave the capture absent — do not substitute a manager screenshot**,
   which would not evidence the behaviour under acceptance.
