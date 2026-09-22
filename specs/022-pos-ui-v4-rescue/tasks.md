@@ -508,18 +508,18 @@ flow**; payment FSM, money math and split tender untouched.
 > unchanged and were always correct. U3 closes that gap, so that
 > after US4a + U3 the entire checkout journey is Arabic-first.
 
-- [ ] T070 [US3] RED+GREEN: amount-due hierarchy (dominant numeric, FR-16) in
+- [x] T070 [US3] RED+GREEN: amount-due hierarchy (dominant numeric, FR-16) in
   `src/renderer/ui/payments/PaymentSurface.tsx`, `PaymentCartSummary.tsx`.
-- [ ] T071 [P] [US3] RED+GREEN: tender-selection grid for **exactly the three supported tenders** —
+- [x] T071 [P] [US3] RED+GREEN: tender-selection grid for **exactly the three supported tenders** —
   `cash`, `external_card_terminal`, `internal_voucher` (`TenderSelection.tsx:26`). **Do NOT** add
   insurance, credit, mada, wallet, or gift card (D-009 / Non-Capability).
-- [ ] T072 [P] [US3] RED+GREEN: amount entry + quick-amount treatment in `CashEntry.tsx`,
+- [x] T072 [P] [US3] RED+GREEN: amount entry + quick-amount treatment in `CashEntry.tsx`,
   `AmountPad.tsx`, `MoneyRoll.tsx` — presentation only. **No client-side money arithmetic.**
-- [ ] T073 [P] [US3] RED+GREEN: voucher entry presentation in `VoucherEntry.tsx` — **no client-side
+- [x] T073 [P] [US3] RED+GREEN: voucher entry presentation in `VoucherEntry.tsx` — **no client-side
   voucher authority**; authority stays main-process.
 - [ ] T074 [US3] Verify `payments/__tests__/**`, `parse-currency-to-minor.test.ts`, and the FSM
   tests pass **unmodified**.
-- [ ] T075 [US3] **Preserve split tender (FR-40).** Multi-line tender is a **shipped capability**
+- [x] T075 [US3] **Preserve split tender (FR-40).** Multi-line tender is a **shipped capability**
   (006 T154): `handleLineApplied` returns to tender selection while the applied sum is below the
   subtotal (`PaymentSurface.tsx:282-313`). U3 restyles that surface, so assert the behaviour
   survives — a part-payment still reopens tender selection.
@@ -535,7 +535,7 @@ flow**; payment FSM, money math and split tender untouched.
   > existence by a preservation task, which would leave it with no test of its own.
 ### Arabic-first working tender flow (FR-19 / SC-4)
 
-- [ ] T076 [US3] RED: test asserting **zero English-only operator-facing strings** across the
+- [x] T076 [US3] RED: test asserting **zero English-only operator-facing strings** across the
   working (pre-settlement) tender flow — `PaymentSurface` (tender-selection + entry + confirm
   phases), `PaymentCartSummary`, `TenderSelection`, `CashEntry`, `AmountPad`, `VoucherEntry`,
   `ExternalCardTerminalEntry`, `MoneyRoll`. Add to
@@ -552,14 +552,14 @@ flow**; payment FSM, money math and split tender untouched.
   > a sighted operator still reads English. Full inventory + the format-token judgement call:
   > [`design-handoff/US3-HANDOFF.md`](./design-handoff/US3-HANDOFF.md) §5. Re-grep the anchors
   > before implementing.
-- [ ] T077 [US3] GREEN: give `PaymentSurface`'s working phases Arabic-first copy — the surface
+- [x] T077 [US3] GREEN: give `PaymentSurface`'s working phases Arabic-first copy — the surface
   header (`PaymentSurface.tsx:484` — today `<h2>Payment</h2>`; also `aria-label="Payment"` at
   `:482`. **Not** `:396`/`:437` — stale, see the anchor correction above), the tender-state status
   line, the confirm action, and the refusal copy. Make the `PaymentSurface` half of T076 pass.
-- [ ] T078 [US3] GREEN: give `PaymentCartSummary` Arabic-first copy — today `Order summary`
+- [x] T078 [US3] GREEN: give `PaymentCartSummary` Arabic-first copy — today `Order summary`
   (`:42`) and `Subtotal` (`:62`) are English-only. Money values stay `dir="ltr"` mono (FR-21).
   Make the `PaymentCartSummary` half of T076 pass.
-- [ ] T079 [P] [US3] GREEN: audit and complete Arabic-first copy in the remaining entry surfaces
+- [x] T079 [P] [US3] GREEN: audit and complete Arabic-first copy in the remaining entry surfaces
   (`CashEntry`, `AmountPad`, `VoucherEntry`, `ExternalCardTerminalEntry`, `MoneyRoll`), including
   labels, placeholders, `aria-label`s and validation/refusal messages. **Copy only** — no change to
   amount parsing, tender application, or any bridge call.
