@@ -27,7 +27,6 @@ function rail(
 ): Parameters<typeof LiveProductRail>[0] {
   return {
     state,
-    enabled: true,
     freshness: 'never-synced',
     lastSuccessAt: null,
     feedback: 'idle',

@@ -1,7 +1,6 @@
-import { useRef, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import type { CartLineItem, DiscountPlaceholderSeed } from '../../sale/useSaleCartController';
-import { format, of } from '../../../shared/money';
-import { SaleDialog } from './SaleDialog';
+import { CartLineRow, NoteDialog, VoidControl, money } from './LiveCartParts';
 
 interface Props {
   lines: readonly CartLineItem[];
@@ -25,29 +24,10 @@ interface Props {
   onVoid: () => Promise<boolean>;
 }
 
-// Legacy LineNotePopover parity: same length cap, unchanged-save and empty-clear guards.
-const NOTE_MAX_LENGTH = 200;
-
-function money(minor: number): string {
-  return format(of(minor, 'EGP'));
-}
-
 export function LiveSaleCart(props: Props): JSX.Element {
-  const [noteLine, setNoteLine] = useState<string | null>(null);
-  const [noteText, setNoteText] = useState('');
-  const [noteError, setNoteError] = useState(false);
-  const [voidConfirm, setVoidConfirm] = useState(false);
-  const voidBackRef = useRef<HTMLButtonElement>(null);
-  const noteFieldRef = useRef<HTMLTextAreaElement>(null);
-  const editingLine = props.lines.find((item) => item.lineId === noteLine) ?? null;
-  const frozen = props.frozenSubtotalMinor !== null;
-  function saveNote(line: CartLineItem, note: string | null): void {
-    void props.onSaveNote(line, note).then((ok) => {
-      if (ok) setNoteLine(null);
-      else setNoteError(true);
-    });
-  }
-  const shownTotal = props.frozenSubtotalMinor ?? props.subtotalMinor;
+  const [noteLineId, setNoteLineId] = useState<string | null>(null);
+  const editingLine = props.lines.find((item) => item.lineId === noteLineId) ?? null;
+  const editable = props.frozenSubtotalMinor === null && !props.cancelled;
   return (
     <section className="v5-sale-cart" aria-labelledby="v5-live-cart-title">
       <div className="v5-sale-cart-heading">
@@ -59,54 +39,7 @@ export function LiveSaleCart(props: Props): JSX.Element {
           {props.lines.length} أصناف · {props.itemCount} وحدات
         </span>
       </div>
-      {props.canVoid && (
-        <div className="v5-live-toolbar">
-          <button
-            type="button"
-            className="v5-live-void"
-            onClick={() => {
-              setVoidConfirm(true);
-            }}
-          >
-            إلغاء البيع
-          </button>
-        </div>
-      )}
-      {voidConfirm && (
-        <SaleDialog
-          label="تأكيد إلغاء البيع"
-          onDismiss={() => {
-            setVoidConfirm(false);
-          }}
-          initialFocusRef={voidBackRef}
-        >
-          <h3 className="v5-live-dialog-title">إلغاء البيع؟</h3>
-          <p>سيتم إلغاء السلة الحالية.</p>
-          <div>
-            <button
-              ref={voidBackRef}
-              type="button"
-              className="v5-live-btn"
-              onClick={() => {
-                setVoidConfirm(false);
-              }}
-            >
-              العودة
-            </button>
-            <button
-              type="button"
-              className="v5-live-btn v5-live-btn--danger"
-              onClick={() => {
-                void props.onVoid().then((ok) => {
-                  if (ok) setVoidConfirm(false);
-                });
-              }}
-            >
-              تأكيد الإلغاء
-            </button>
-          </div>
-        </SaleDialog>
-      )}
+      {props.canVoid && <VoidControl onVoid={props.onVoid} />}
       <div className="v5-sale-cart-table">
         <div className="v5-sale-cart-columns" aria-hidden="true">
           <span>#</span>
@@ -115,77 +48,13 @@ export function LiveSaleCart(props: Props): JSX.Element {
           <span>الكمية</span>
           <span>الإجمالي</span>
         </div>
-        {props.lines.length === 0 ? (
-          <p className="v5-live-message">لا توجد أصناف في السلة بعد.</p>
-        ) : (
-          <ol className="v5-sale-cart-lines" aria-label="أصناف السلة">
-            {props.lines.map((line, index) => (
-              <li key={line.lineId} className="v5-sale-cart-line">
-                <span className="v5-sale-line-index" dir="ltr">
-                  {index + 1}
-                </span>
-                <div className="v5-sale-line-product">
-                  <strong>{line.displayName}</strong>
-                  {line.note && <span className="v5-sale-line-meta">ملاحظة: {line.note}</span>}
-                  {!frozen && !props.cancelled && (
-                    <div className="v5-live-line-actions">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNoteLine(line.lineId);
-                          setNoteText(line.note ?? '');
-                          setNoteError(false);
-                        }}
-                      >
-                        ملاحظة
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          props.onRemove(line);
-                        }}
-                      >
-                        حذف
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <span className="v5-sale-line-unit" dir="ltr">
-                  {money(line.unitPriceMinor)}
-                </span>
-                <div className="v5-sale-quantity" aria-label={`الكمية ${String(line.quantity)}`}>
-                  {!frozen && !props.cancelled && (
-                    <button
-                      type="button"
-                      aria-label={`إنقاص كمية ${line.displayName}`}
-                      onClick={() => {
-                        if (line.quantity <= 1 && line.note === null) props.onRemove(line);
-                        else props.onDecrement(line);
-                      }}
-                    >
-                      −
-                    </button>
-                  )}
-                  <strong dir="ltr">{line.quantity}</strong>
-                  {!frozen && !props.cancelled && (
-                    <button
-                      type="button"
-                      aria-label={`زيادة كمية ${line.displayName}`}
-                      onClick={() => {
-                        props.onIncrement(line);
-                      }}
-                    >
-                      ＋
-                    </button>
-                  )}
-                </div>
-                <strong className="v5-sale-line-total" dir="ltr">
-                  {money(line.lineSubtotalMinor)}
-                </strong>
-              </li>
-            ))}
-          </ol>
-        )}
+        <CartLines
+          {...props}
+          editable={editable}
+          onOpenNote={(line) => {
+            setNoteLineId(line.lineId);
+          }}
+        />
         {props.discounts.map((discount) => (
           <div key={discount.placeholderId} className="v5-live-discount">
             <span>خصم قيد المعالجة</span>
@@ -201,101 +70,101 @@ export function LiveSaleCart(props: Props): JSX.Element {
         ))}
       </div>
       {editingLine !== null && (
-        <SaleDialog
-          label="ملاحظة الصنف"
-          onDismiss={() => {
-            setNoteLine(null);
+        <NoteDialog
+          key={editingLine.lineId}
+          line={editingLine}
+          onSave={props.onSaveNote}
+          onClose={() => {
+            setNoteLineId(null);
           }}
-          initialFocusRef={noteFieldRef}
-        >
-          <label htmlFor="v5-live-note" className="v5-live-dialog-title">
-            ملاحظة الصنف
-          </label>
-          <textarea
-            ref={noteFieldRef}
-            id="v5-live-note"
-            maxLength={NOTE_MAX_LENGTH}
-            value={noteText}
-            onChange={(event) => {
-              setNoteText(event.target.value);
-            }}
-          />
-          {noteError && <p role="alert">تعذّر حفظ الملاحظة.</p>}
-          <div>
-            <button
-              type="button"
-              className="v5-live-btn"
-              onClick={() => {
-                setNoteLine(null);
-              }}
-            >
-              إلغاء
-            </button>
-            <button
-              type="button"
-              className="v5-live-btn"
-              disabled={editingLine.note === null}
-              onClick={() => {
-                saveNote(editingLine, null);
-              }}
-            >
-              مسح الملاحظة
-            </button>
-            <button
-              type="button"
-              className="v5-live-btn v5-live-btn--primary"
-              disabled={noteText.trim() === (editingLine.note ?? '')}
-              onClick={() => {
-                saveNote(editingLine, noteText.trim() || null);
-              }}
-            >
-              حفظ
-            </button>
-          </div>
-        </SaleDialog>
+        />
       )}
       <footer className="v5-sale-cart-footer">
-        <div className="v5-sale-totals" aria-label="ملخص المبالغ">
-          <div className="v5-sale-total-row">
-            <span>المجموع الفرعي</span>
-            <span dir="ltr">{props.lines.length === 0 && !frozen ? '—' : money(shownTotal)}</span>
-          </div>
-          <div className="v5-sale-total-row v5-sale-tax-row">
-            <span>الضريبة</span>
-            <span>قيد الإضافة · لا تُحسب هنا</span>
-          </div>
-          <div className="v5-sale-grand-total">
-            <span>الإجمالي الحالي</span>
-            <strong dir="ltr">
-              {props.lines.length === 0 && !frozen ? '—' : money(shownTotal)}
-            </strong>
-          </div>
-        </div>
-        <div className="v5-sale-actions">
-          {props.handoffError && <p role="alert">{props.handoffError}</p>}
-          {frozen ? (
-            <button
-              type="button"
-              className="v5-sale-checkout"
-              disabled={!props.canContinue}
-              onClick={props.onContinue}
-            >
-              المتابعة إلى الدفع ←
-            </button>
-          ) : props.cancelled ? (
-            <p>تم إلغاء البيع.</p>
-          ) : (
-            <button
-              type="button"
-              className="v5-sale-checkout"
-              disabled={!props.canHandoff || props.handingOff}
-              onClick={props.onHandoff}
-            >
-              {props.handingOff ? 'جارٍ تسليم السلة…' : 'تسليم السلة للدفع ←'}
-            </button>
-          )}
-        </div>
+        <CartTotals {...props} />
+        <CartActions {...props} />
       </footer>
     </section>
+  );
+}
+
+function CartLines(
+  props: Props & { editable: boolean; onOpenNote: (line: CartLineItem) => void },
+): JSX.Element {
+  if (props.lines.length === 0)
+    return <p className="v5-live-message">لا توجد أصناف في السلة بعد.</p>;
+  return (
+    <ol className="v5-sale-cart-lines" aria-label="أصناف السلة">
+      {props.lines.map((line, index) => (
+        <CartLineRow
+          key={line.lineId}
+          line={line}
+          index={index}
+          editable={props.editable}
+          onIncrement={props.onIncrement}
+          onDecrement={props.onDecrement}
+          onRemove={props.onRemove}
+          onOpenNote={props.onOpenNote}
+        />
+      ))}
+    </ol>
+  );
+}
+
+function CartTotals(props: Props): JSX.Element {
+  const frozen = props.frozenSubtotalMinor !== null;
+  // Before any line exists the total is a placeholder, never a fabricated 0.00.
+  const shown =
+    props.lines.length === 0 && !frozen
+      ? '—'
+      : money(props.frozenSubtotalMinor ?? props.subtotalMinor);
+  return (
+    <div className="v5-sale-totals" aria-label="ملخص المبالغ">
+      <div className="v5-sale-total-row">
+        <span>المجموع الفرعي</span>
+        <span dir="ltr">{shown}</span>
+      </div>
+      <div className="v5-sale-total-row v5-sale-tax-row">
+        <span>الضريبة</span>
+        <span>قيد الإضافة · لا تُحسب هنا</span>
+      </div>
+      <div className="v5-sale-grand-total">
+        <span>الإجمالي الحالي</span>
+        <strong dir="ltr">{shown}</strong>
+      </div>
+    </div>
+  );
+}
+
+function CartActions(props: Props): JSX.Element {
+  return (
+    <div className="v5-sale-actions">
+      {props.handoffError && <p role="alert">{props.handoffError}</p>}
+      <PrimaryAction {...props} />
+    </div>
+  );
+}
+
+function PrimaryAction(props: Props): JSX.Element {
+  if (props.frozenSubtotalMinor !== null)
+    return (
+      <button
+        type="button"
+        className="v5-sale-checkout"
+        disabled={!props.canContinue}
+        onClick={props.onContinue}
+      >
+        المتابعة إلى الدفع ←
+      </button>
+    );
+  if (props.cancelled) return <p>تم إلغاء البيع.</p>;
+  return (
+    <button
+      type="button"
+      className="v5-sale-checkout"
+      disabled={!props.canHandoff || props.handingOff}
+      onClick={props.onHandoff}
+    >
+      {props.handingOff ? 'جارٍ تسليم السلة…' : 'تسليم السلة للدفع ←'}
+    </button>
   );
 }

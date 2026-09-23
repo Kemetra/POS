@@ -195,6 +195,47 @@ describe('live v5 Sale adapter', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('keeps the cart visible without the product rail when product search is off (legacy parity)', () => {
+    signIn();
+    useFeatureFlagsStore.setState({ productSearch: false });
+    const bridges = makeBridges();
+    renderSale(bridges);
+    expect(screen.getByRole('heading', { name: 'سلة المشتريات' })).toBeInTheDocument();
+    expect(screen.getByText(/لا توجد أصناف في السلة/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('searchbox', { name: 'البحث بالاسم أو الباركود' }),
+    ).not.toBeInTheDocument();
+    expect(bridges.fns.create).not.toHaveBeenCalled();
+  });
+
+  it('withholds add confirmation until the cart exists, then offers it', async () => {
+    signIn();
+    const bridges = makeBridges();
+    let resolveCreate: (value: { kind: 'ok'; cart_id: string }) => void = () => undefined;
+    bridges.fns.create.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    renderSale(bridges);
+    const user = userEvent.setup();
+    await user.type(
+      screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
+      '6223004355218{Enter}',
+    );
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('confirm_pending');
+    });
+    expect(screen.queryByRole('dialog', { name: 'تأكيد إضافة الصنف' })).not.toBeInTheDocument();
+    expect(bridges.fns.add).not.toHaveBeenCalled();
+    await act(async () => {
+      resolveCreate({ kind: 'ok', cart_id: 'cart-1' });
+      await Promise.resolve();
+    });
+    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
+    expect(bridges.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-1' }));
+  });
+
   it('starts with an honest empty search and no static demo products or totals', async () => {
     signIn();
     const bridges = makeBridges();

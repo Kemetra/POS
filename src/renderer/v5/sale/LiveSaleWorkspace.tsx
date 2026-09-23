@@ -1,18 +1,14 @@
-import { useCallback, useRef, type JSX } from 'react';
+import type { JSX } from 'react';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
 import { CartState } from '../../../shared/cart/cart-state';
-import { useSaleCartController, type CartLineItem } from '../../sale/useSaleCartController';
-import { useSaleCatalogueController } from '../../sale/useSaleCatalogueController';
-import { useConfirmSaleAdd } from '../../sale/useConfirmSaleAdd';
-import { useCatalogueFreshness } from '../../sale/useCatalogueFreshness';
+import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope';
+import type { Role } from '../../../shared/operator/role';
+import { useSaleCartController } from '../../sale/useSaleCartController';
 import { useCartStore } from '../../stores/cart-store';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
-import { format, of } from '../../../shared/money';
-import { LiveProductRail } from './LiveProductRail';
+import { LiveCatalogueRegion } from './LiveCatalogueRegion';
 import { LiveSaleCart } from './LiveSaleCart';
-import { SaleDialog } from './SaleDialog';
-import { SaleProductFlags } from './SaleProductFlags';
 import './sale-screen.css';
 import './live-sale.css';
 
@@ -34,174 +30,91 @@ export function LiveSaleWorkspace(props: Props): JSX.Element {
         <p className="v5-live-message">سلة البيع غير مفعّلة على هذا الجهاز بعد.</p>
       </main>
     );
-  if (!productSearchEnabled)
-    return (
-      <main className="v5-sale" dir="rtl" lang="ar">
-        <p className="v5-live-message">
-          بحث المنتجات غير مفعّل على هذا الجهاز؛ لا يمكن بدء سلة جديدة هنا.
-        </p>
-      </main>
-    );
-  return <LiveSaleActive {...props} />;
+  // Legacy parity: the cart stays available when only product search is off.
+  return (
+    <LiveSaleActive
+      {...props}
+      catalogueEnabled={productSearchEnabled}
+      role={session.session.role}
+    />
+  );
 }
 
-function LiveSaleActive(props: Props): JSX.Element {
-  const paymentsEnabled = useFeatureFlagsStore((state) => state.payments);
-  const activeCart = useCartStore((state) => state.activeCart);
-  const session = useOperatorSessionStore((state) => state.state);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const addRef = useRef<HTMLButtonElement>(null);
-  const cart = useSaleCartController(props.cartBridge ? { bridge: props.cartBridge } : {});
-  const onResolved = useCallback((): void => {
-    searchRef.current?.focus();
-  }, []);
-  const catalogue = useSaleCatalogueController({
-    ...(props.cartBridge ? { cartBridge: props.cartBridge } : {}),
-    ...(props.catalogueBridge ? { catalogueBridge: props.catalogueBridge } : {}),
-  });
-  const confirm = useConfirmSaleAdd({
-    cartId: catalogue.effectiveCartId,
-    onLineAdded: cart.acceptAddedLine,
-    onResolved,
-    ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
-  });
-  const freshness = useCatalogueFreshness(props.catalogueBridge);
-  const frozen = activeCart?.state === CartState.frozen_handed_off;
-  const cancelled = activeCart?.state === CartState.cancelled;
-  const role = session.kind === 'signedIn' ? session.session.role : null;
-  const canVoid =
-    activeCart !== null &&
-    activeCart.state !== CartState.empty &&
-    !cancelled &&
-    (!frozen || role === 'manager' || role === 'admin');
-  const canHandoff = activeCart?.state === CartState.editing && cart.lines.length > 0;
-  const canContinue = frozen && cart.envelope !== null && paymentsEnabled;
-  const frozenSubtotalMinor = frozen && cart.envelope ? cart.envelope.subtotal_minor : null;
-  const recover = useCallback((): void => {
-    catalogue.recover();
-    onResolved();
-  }, [catalogue, onResolved]);
+function isManagerRole(role: Role): boolean {
+  return role === 'manager' || role === 'admin';
+}
 
-  function onLine(line: CartLineItem, method: 'increment' | 'decrement' | 'remove'): void {
-    if (method === 'increment') void cart.incrementLine(line.lineId, line.version);
-    else if (method === 'decrement') void cart.decrementLine(line.lineId, line.version);
-    else void cart.removeLine(line.lineId, line.version);
-  }
+function canVoidCart(state: CartState | null, role: Role): boolean {
+  if (state === null || state === CartState.empty) return false;
+  if (state === CartState.cancelled) return false;
+  return state !== CartState.frozen_handed_off || isManagerRole(role);
+}
+
+function frozenSubtotal(frozen: boolean, envelope: PaymentIntentEnvelope | null): number | null {
+  return frozen && envelope !== null ? envelope.subtotal_minor : null;
+}
+
+function SaleHeader(): JSX.Element {
+  return (
+    <header className="v5-sale-header">
+      <div className="v5-sale-brand" aria-label="POS Pulse">
+        <span className="v5-sale-brand-mark" aria-hidden="true">
+          ✚
+        </span>
+        <div>
+          <strong dir="ltr">POS Pulse</strong>
+          <span>نقطة البيع</span>
+        </div>
+      </div>
+      <div className="v5-sale-header-copy">
+        <h1>مساحة البيع</h1>
+        <p>بحث واضح، سلة نشطة، وإجمالي ظاهر طوال العملية</p>
+      </div>
+    </header>
+  );
+}
+
+function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }): JSX.Element {
+  const paymentsEnabled = useFeatureFlagsStore((state) => state.payments);
+  const cartState = useCartStore((state) => state.activeCart?.state ?? null);
+  const cart = useSaleCartController(props.cartBridge ? { bridge: props.cartBridge } : {});
+  const frozen = cartState === CartState.frozen_handed_off;
 
   return (
     <main className="v5-sale" dir="rtl" lang="ar" aria-label="مساحة البيع">
-      <header className="v5-sale-header">
-        <div className="v5-sale-brand" aria-label="POS Pulse">
-          <span className="v5-sale-brand-mark" aria-hidden="true">
-            ✚
-          </span>
-          <div>
-            <strong dir="ltr">POS Pulse</strong>
-            <span>نقطة البيع</span>
-          </div>
-        </div>
-        <div className="v5-sale-header-copy">
-          <h1>مساحة البيع</h1>
-          <p>بحث واضح، سلة نشطة، وإجمالي ظاهر طوال العملية</p>
-        </div>
-      </header>
-      <div className="v5-sale-workstation" data-catalogue="true">
-        <LiveProductRail
-          state={catalogue.state}
-          enabled={true}
-          freshness={freshness.state}
-          lastSuccessAt={freshness.lastSuccessAt}
-          feedback={freshness.feedback}
-          refreshing={freshness.refreshing}
-          onRefresh={() => {
-            void freshness.refresh();
-          }}
-          onSearch={(query) => {
-            void catalogue.runTypedSearch(query);
-          }}
-          onScan={(barcode) => {
-            void catalogue.runScan(barcode);
-          }}
-          onSelect={catalogue.selectResult}
-          onRecover={recover}
-          searchRef={searchRef}
-        />
+      <SaleHeader />
+      <div className="v5-sale-workstation" data-catalogue={String(props.catalogueEnabled)}>
+        {props.catalogueEnabled && (
+          <LiveCatalogueRegion
+            onLineAdded={cart.acceptAddedLine}
+            {...(props.cartBridge ? { cartBridge: props.cartBridge } : {})}
+            {...(props.catalogueBridge ? { catalogueBridge: props.catalogueBridge } : {})}
+          />
+        )}
         <LiveSaleCart
           lines={cart.lines}
           discounts={cart.discountPlaceholders}
           subtotalMinor={cart.subtotalMinor}
           itemCount={cart.itemCount}
-          frozenSubtotalMinor={frozenSubtotalMinor}
-          canHandoff={canHandoff}
-          handingOff={activeCart?.state === CartState.handing_off}
-          cancelled={cancelled}
-          canVoid={canVoid}
-          canContinue={canContinue}
+          frozenSubtotalMinor={frozenSubtotal(frozen, cart.envelope)}
+          canHandoff={cartState === CartState.editing && cart.lines.length > 0}
+          handingOff={cartState === CartState.handing_off}
+          cancelled={cartState === CartState.cancelled}
+          canVoid={canVoidCart(cartState, props.role)}
+          canContinue={frozen && cart.envelope !== null && paymentsEnabled}
           handoffError={cart.handoffError}
-          onIncrement={(line) => {
-            onLine(line, 'increment');
-          }}
-          onDecrement={(line) => {
-            onLine(line, 'decrement');
-          }}
-          onRemove={(line) => {
-            onLine(line, 'remove');
-          }}
+          onIncrement={(line) => void cart.incrementLine(line.lineId, line.version)}
+          onDecrement={(line) => void cart.decrementLine(line.lineId, line.version)}
+          onRemove={(line) => void cart.removeLine(line.lineId, line.version)}
           onSaveNote={(line, note) => cart.saveNote(line.lineId, line.version, note)}
-          onRemoveDiscount={(id) => {
-            void cart.removeDiscount(id);
-          }}
-          onHandoff={() => {
-            void cart.handoff();
-          }}
+          onRemoveDiscount={(id) => void cart.removeDiscount(id)}
+          onHandoff={() => void cart.handoff()}
           onContinue={() => {
             cart.continueToPayment(props.onPaymentContinue);
           }}
           onVoid={cart.voidCart}
         />
       </div>
-      {confirm.product && (
-        <SaleDialog
-          label="تأكيد إضافة الصنف"
-          onDismiss={confirm.cancel}
-          initialFocusRef={addRef}
-          restoreFocus={false}
-        >
-          <h2 className="v5-live-dialog-title">تأكيد الصنف</h2>
-          <p className="v5-live-dialog-name">{confirm.product.display_name_ar}</p>
-          {confirm.product.display_name_en && (
-            <p lang="en" dir="ltr" className="v5-live-dialog-secondary">
-              {confirm.product.display_name_en}
-            </p>
-          )}
-          <SaleProductFlags product={confirm.product} />
-          <p dir="ltr" className="v5-live-dialog-price">
-            {format(of(confirm.product.price_minor, 'EGP'))}
-          </p>
-          {confirm.error && <p role="alert">{confirm.error}</p>}
-          <div className="v5-live-dialog-actions">
-            <button
-              type="button"
-              className="v5-live-btn"
-              disabled={confirm.adding}
-              onClick={confirm.cancel}
-            >
-              إلغاء
-            </button>
-            <button
-              ref={addRef}
-              type="button"
-              className="v5-live-btn v5-live-btn--primary"
-              disabled={confirm.adding}
-              onClick={() => {
-                void confirm.confirm();
-              }}
-            >
-              إضافة إلى السلة
-            </button>
-          </div>
-        </SaleDialog>
-      )}
     </main>
   );
 }

@@ -22,14 +22,28 @@ function readBridge(): FreshnessBridge {
   return api.catalogue;
 }
 
+function isResponseShape(raw: unknown): boolean {
+  if (raw === null || typeof raw !== 'object') return false;
+  return 'kind' in raw;
+}
+
+/** True once a deferred re-read sees a newer promote stamp than the one refresh started from. */
+function stampAdvanced(from: { stamp: string | null } | undefined, next: string | null): boolean {
+  if (from === undefined || next === null) return false;
+  return next !== from.stamp;
+}
+
+const REFRESH_FEEDBACK: Record<CatalogueRefreshResponse['kind'], RefreshFeedback> = {
+  started: 'started',
+  already_running: 'already-running',
+  refused: 'idle',
+};
+
 function toState(response: CatalogueFreshnessResponse): {
   state: FreshnessState;
   lastSuccessAt: string | null;
 } {
-  const raw = response as unknown;
-  if (raw === null || typeof raw !== 'object' || !('kind' in raw)) {
-    return { state: 'unavailable', lastSuccessAt: null };
-  }
+  if (!isResponseShape(response)) return { state: 'unavailable', lastSuccessAt: null };
   if (response.kind === 'refused') return { state: 'unavailable', lastSuccessAt: null };
   if (response.last_success_at === null) return { state: 'never-synced', lastSuccessAt: null };
   return {
@@ -60,12 +74,7 @@ export function useCatalogueFreshness(bridge?: FreshnessBridge): {
         const next = toState(await resolveBridge().freshness({}));
         setState(next.state);
         setLastSuccessAt(next.lastSuccessAt);
-        if (
-          advancedFrom !== undefined &&
-          next.lastSuccessAt !== null &&
-          next.lastSuccessAt !== advancedFrom.stamp
-        )
-          setFeedback('idle');
+        if (stampAdvanced(advancedFrom, next.lastSuccessAt)) setFeedback('idle');
       } catch {
         setState('unavailable');
         setLastSuccessAt(null);
@@ -92,9 +101,7 @@ export function useCatalogueFreshness(bridge?: FreshnessBridge): {
     }
     try {
       const result: CatalogueRefreshResponse = await resolveBridge().refresh({});
-      if (result.kind === 'already_running') setFeedback('already-running');
-      else if (result.kind === 'started') setFeedback('started');
-      else setFeedback('idle');
+      setFeedback(REFRESH_FEEDBACK[result.kind]);
       await load();
       if (result.kind === 'started') {
         const stamp = lastSuccessAtRef.current;

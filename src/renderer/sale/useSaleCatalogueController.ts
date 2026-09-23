@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { CartBridgeAPI, CatalogueBridgeAPI, PreloadBridgeAPI } from '../../shared/bridge-api';
+import type {
+  CartBridgeAPI,
+  CatalogueBridgeAPI,
+  CatalogueLookupResponse,
+  CatalogueSearchResponse,
+  PreloadBridgeAPI,
+} from '../../shared/bridge-api';
 import type { ProductSnapshotDisplay } from '../../shared/catalogue/product-snapshot';
 import { useCartStore } from '../stores/cart-store';
 import { useCatalogueSearchStore } from '../stores/catalogueSearchStore';
@@ -14,6 +20,53 @@ function readBridges(): { cart: CartBridgeAPI; catalogue: CatalogueBridgeAPI } {
   const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
   if (!api || !api.catalogue) throw new Error('Sale catalogue: preload bridge not initialised.');
   return { cart: api.cart, catalogue: api.catalogue };
+}
+
+type SearchStore = ReturnType<typeof useCatalogueSearchStore.getState>;
+
+/** Map a typed-search response onto the FSM; `too_short` / `refused` return to idle. */
+function applySearchResponse(store: SearchStore, res: CatalogueSearchResponse): void {
+  switch (res.kind) {
+    case 'results':
+      store.resolveResults(res.items, res.truncated);
+      break;
+    case 'not_found':
+      store.resolveNotFound();
+      break;
+    case 'catalogue_unavailable':
+      store.resolveCatalogueUnavailable();
+      break;
+    case 'too_short':
+    case 'refused':
+      store.clear();
+      break;
+  }
+}
+
+/** Map a barcode lookup onto the FSM; a refusal returns to idle without a reason. */
+function applyScanResponse(store: SearchStore, res: CatalogueLookupResponse): void {
+  switch (res.kind) {
+    case 'one':
+      store.resolveSingleMatch(res.product);
+      break;
+    case 'not_found':
+      store.resolveNotFound();
+      break;
+    case 'ambiguous':
+      store.resolveAmbiguous();
+      break;
+    case 'catalogue_unavailable':
+      store.resolveCatalogueUnavailable();
+      break;
+    case 'refused':
+      store.clear();
+      break;
+  }
+}
+
+function needsCart(cartId: string | undefined, hasActiveCart: boolean, creating: boolean): boolean {
+  if (cartId !== undefined && cartId !== '') return false;
+  return !hasActiveCart && !creating;
 }
 
 export function useSaleCatalogueController(options: SaleCatalogueOptions): {
@@ -34,8 +87,7 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
   );
 
   useEffect(() => {
-    if (options.cartId !== undefined && options.cartId !== '') return;
-    if (activeCart !== null || creatingRef.current) return;
+    if (!needsCart(options.cartId, activeCart !== null, creatingRef.current)) return;
     creatingRef.current = true;
     void getCart()
       .create({ idempotency_key: crypto.randomUUID() })
@@ -53,22 +105,7 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
       useCatalogueSearchStore.getState().beginSearch(query);
       try {
         const res = await getCatalogue().search({ query });
-        const store = useCatalogueSearchStore.getState();
-        switch (res.kind) {
-          case 'results':
-            store.resolveResults(res.items, res.truncated);
-            break;
-          case 'not_found':
-            store.resolveNotFound();
-            break;
-          case 'catalogue_unavailable':
-            store.resolveCatalogueUnavailable();
-            break;
-          case 'too_short':
-          case 'refused':
-            store.clear();
-            break;
-        }
+        applySearchResponse(useCatalogueSearchStore.getState(), res);
       } catch {
         useCatalogueSearchStore.getState().clear();
       }
@@ -81,24 +118,7 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
       useCatalogueSearchStore.getState().beginSearch(barcode);
       try {
         const res = await getCatalogue().lookupBarcode({ barcode });
-        const store = useCatalogueSearchStore.getState();
-        switch (res.kind) {
-          case 'one':
-            store.resolveSingleMatch(res.product);
-            break;
-          case 'not_found':
-            store.resolveNotFound();
-            break;
-          case 'ambiguous':
-            store.resolveAmbiguous();
-            break;
-          case 'catalogue_unavailable':
-            store.resolveCatalogueUnavailable();
-            break;
-          case 'refused':
-            store.clear();
-            break;
-        }
+        applyScanResponse(useCatalogueSearchStore.getState(), res);
       } catch {
         useCatalogueSearchStore.getState().clear();
       }
