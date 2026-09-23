@@ -383,10 +383,8 @@ export function PaymentSurface({
     // Round 1 dropped the receipt but kept the "sale complete" headline on
     // that same evidence — fixing the symptom while keeping the assertion.
     // So the states collapse to the ONE the terminal can actually support:
-    // the payment was taken. The sale number still shows when the poll
-    // returns one, but OUTSIDE any completion frame — exactly as `main` did
-    // (006 invariant 13), so this is no worse than the surface it replaces
-    // while claiming strictly less.
+    // the payment was taken. No sale number or receipt is shown without a
+    // correlation key tying the finalized sale to this attempt.
     //
     // T013a and T017 are both unticked, blocked on the same backend gap: an
     // identifier on the `recent` projection tying the finalized sale to this
@@ -394,12 +392,12 @@ export function PaymentSurface({
 
     return (
       <main
-        className="payment-surface payment-surface--settled"
+        className="v4-screen payment-surface--settled"
         data-testid="payment-surface"
         aria-label="الدفع"
       >
-        <header className="payment-surface__header">
-          <h2 className="payment-surface__title">الدفع</h2>
+        <header className="v4-screen__header">
+          <h2 className="v4-screen__title">الدفع</h2>
           <OperatorBadge display_name={display_name} role={role} />
         </header>
 
@@ -409,7 +407,7 @@ export function PaymentSurface({
             integration walk). 022 US4a splits what is *inside* it into the two
             truthful states below; the wrapper's meaning is unchanged, so those
             tests keep passing unmodified. */}
-        <div className="payment-surface__settled" data-testid="payment-surface-settled">
+        <div className="v4-panel payment-surface__settled" data-testid="payment-surface-settled">
           {/* EXTERNAL REVIEW P1 (round 2) — "Require correlation before
               declaring the current sale complete".
               
@@ -427,13 +425,16 @@ export function PaymentSurface({
 
               Unblocks with T017, on the same backend identifier. */}
           <div
-            className="payment-surface__settled-pending"
+            className="v4-stack payment-surface__settled-pending"
             data-testid="payment-surface-settled-pending"
             // role="status", never "alert" — a truthful terminal state, not an
             // error and not a failure.
             role="status"
             aria-live="polite"
           >
+            <span className="payment-surface__settled-mark" aria-hidden="true">
+              ✓
+            </span>
             <p className="payment-surface__settled-headline">تم استلام المبلغ</p>
             {/* The flag governs what can be said about the RECEIPT only.
                 ON: 008's listener may write one, but the worker also starts
@@ -454,7 +455,6 @@ export function PaymentSurface({
               className="payment-surface__settled-amount"
               data-testid="payment-surface-settled-amount"
               dir="ltr"
-              style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'var(--font-weight-bold)' }}
             >
               {formatMinorUnits(envelope.subtotal_minor)}
             </p>
@@ -463,7 +463,7 @@ export function PaymentSurface({
 
         <button
           type="button"
-          className="payment-surface__new-sale"
+          className="btn btn--lg btn--primary payment-surface__new-sale"
           data-testid="payment-surface-new-sale"
           onClick={() => {
             // Routing + store reset is delegated to the route owner so this

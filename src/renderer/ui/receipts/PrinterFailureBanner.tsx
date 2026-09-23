@@ -186,7 +186,7 @@ export function PrinterFailureBanner({
       aria-live="polite"
       aria-atomic="true"
       aria-describedby={messageId}
-      className="printer-failure-banner"
+      className="v4-row printer-failure-banner"
       data-testid="printer-failure-banner"
       dir="rtl"
     >
@@ -204,14 +204,14 @@ export function PrinterFailureBanner({
           <span lang="en">Retry, or switch to manual receipt</span>
         </span>
       </p>
-      <div className="printer-failure-banner__actions">
+      <div className="v4-row printer-failure-banner__actions">
         <button
           type="button"
           className="btn btn--md btn--primary"
           onClick={handleRetry}
           disabled={mutationPhase !== 'idle'}
           aria-busy={mutationPhase === 'retrying' ? 'true' : undefined}
-          aria-label="Retry print — إعادة المحاولة"
+          aria-label="إعادة المحاولة — Retry print"
         >
           {mutationPhase === 'retrying' && (
             <span className="btn__spinner" role="status" aria-hidden="true" />
@@ -227,11 +227,11 @@ export function PrinterFailureBanner({
           onClick={() => {
             onReprint(printFailure.sale_id);
           }}
-          aria-label="Reprint — نسخة"
+          aria-label="نسخة — Reprint"
           title={
             reprintEnabled
               ? undefined
-              : 'Reprint is available only after a successful print (AD-10)'
+              : 'تتوفر النسخة بعد نجاح الطباعة الأولى — Reprint is available only after a successful print'
           }
         >
           <span lang="ar">نسخة</span>
@@ -244,7 +244,7 @@ export function PrinterFailureBanner({
           onClick={handleManualOverride}
           disabled={mutationPhase !== 'idle'}
           aria-busy={mutationPhase === 'manual_override' ? 'true' : undefined}
-          aria-label="Manual receipt — إيصال يدوي"
+          aria-label="إيصال يدوي — Manual receipt"
         >
           {mutationPhase === 'manual_override' && (
             <span className="btn__spinner" role="status" aria-hidden="true" />
