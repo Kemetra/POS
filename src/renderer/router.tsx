@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode, type JSX } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode, type JSX } from 'react';
 import {
   createMemoryRouter,
   createHashRouter,
   Navigate,
   RouterProvider,
+  useNavigate,
   type RouteObject,
 } from 'react-router-dom';
 
@@ -74,6 +75,30 @@ export interface AppRouterProps {
    * rules.
    */
   initialEntry?: string;
+}
+
+// 023 slice E — DEV-only functional preview of the v5 Sale adapter. The dynamic
+// import sits inside the DEV branch so production builds drop the module and its
+// CSS side effects entirely (verified by a renderer build + grep, not by Vitest).
+const DevLiveSaleWorkspace =
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
+    ? lazy(() =>
+        import('./v5/sale/LiveSaleWorkspace').then((m) => ({ default: m.LiveSaleWorkspace })),
+      )
+    : null;
+
+function DevSaleRoute(): JSX.Element | null {
+  const navigate = useNavigate();
+  if (DevLiveSaleWorkspace === null) return null;
+  return (
+    <Suspense fallback={null}>
+      <DevLiveSaleWorkspace
+        onPaymentContinue={() => {
+          void navigate('/app/checkout');
+        }}
+      />
+    </Suspense>
+  );
 }
 
 type BootStatus =
@@ -182,6 +207,9 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
         { path: 'dashboard', element: <DashboardRoute /> },
         { path: 'sales', element: <SalesWorkspace /> },
         { path: 'cart', element: <CartWorkspace /> },
+        ...((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
+          ? [{ path: 'sale-v5', element: <DevSaleRoute /> }]
+          : []),
         { path: 'checkout', element: <CheckoutRoute /> },
         // POS v3.5 Slice 1 — new nav entries route to thin "coming soon"
         // placeholders. Returns is Phase-7 blocked; Audit is a later display

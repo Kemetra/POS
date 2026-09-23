@@ -57,6 +57,17 @@ describe('T045 — CatalogueFreshness: three truthful states', () => {
     expect(screen.queryByTestId('catalogue-freshness-time')).not.toBeInTheDocument();
   });
 
+  it('an unparseable timestamp renders verbatim instead of throwing', async () => {
+    const bridge = freshnessBridge({
+      freshness: () =>
+        Promise.resolve({ kind: 'ok', last_success_at: 'not-a-date', is_empty: false }),
+    });
+    render(<CatalogueFreshness bridge={bridge} />);
+
+    const time = await screen.findByTestId('catalogue-freshness-time');
+    expect(time).toHaveTextContent('not-a-date');
+  });
+
   it('updated (non-null + is_empty false) → "last updated" + ABSOLUTE timestamp', async () => {
     const bridge = freshnessBridge({
       freshness: () =>

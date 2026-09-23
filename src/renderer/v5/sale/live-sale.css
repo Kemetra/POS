@@ -1,0 +1,233 @@
+.v5-sale-workstation[data-catalogue='false'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.v5-live-message {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.v5-live-freshness,
+.v5-live-toolbar,
+.v5-live-line-actions,
+.v5-live-discount {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.v5-live-freshness {
+  justify-content: space-between;
+  margin-block-start: var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.v5-live-toolbar,
+.v5-live-discount {
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.v5-live-line-actions button,
+.v5-live-freshness button,
+.v5-live-toolbar button,
+.v5-live-discount button,
+.v5-sale-product-tail button {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-live-toolbar {
+  justify-content: flex-end;
+}
+
+.v5-live-toolbar .v5-live-void {
+  border-color: var(--color-danger-soft);
+  color: var(--color-danger-emphasis);
+}
+
+/* Line actions stay a 44px hit area but read as quiet text, not boxed chrome. */
+.v5-live-line-actions button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-primary-emphasis);
+}
+
+.v5-live-line-actions button:hover {
+  background: var(--color-primary-soft);
+}
+
+/* Money never breaks between amount and currency at 1024-class widths. */
+.v5-sale-line-unit,
+.v5-sale-line-total,
+.v5-sale-product-price {
+  white-space: nowrap;
+}
+
+/* The field wrapper carries the focus ring; the live input must not add a second one. */
+.v5-sale-search-field input,
+.v5-sale-search-field input:focus,
+.v5-sale-search-field input:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
+.v5-live-scan-label {
+  margin-block-start: var(--space-3);
+}
+
+.v5-live-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.v5-live-flag {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-live-flag--controlled {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-emphasis);
+}
+
+.v5-live-flag--rx {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+.v5-sale-quantity button {
+  inline-size: 44px;
+  block-size: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-emphasis);
+  font: inherit;
+  cursor: pointer;
+}
+
+.v5-live-dialog-backdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-overlay-scrim);
+}
+
+.v5-live-dialog {
+  display: grid;
+  gap: var(--space-3);
+  inline-size: min(440px, calc(100% - var(--space-5)));
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.v5-live-dialog h2,
+.v5-live-dialog h3,
+.v5-live-dialog p {
+  margin: 0;
+}
+.v5-live-dialog-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-live-dialog-name {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-live-dialog-secondary {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.v5-live-dialog-price {
+  color: var(--color-primary-emphasis);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.v5-live-dialog > div:last-child {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+.v5-live-dialog button {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+}
+
+.v5-live-btn {
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-live-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-live-btn--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-danger-on);
+}
+
+.v5-live-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.v5-live-btn:focus-visible,
+.v5-live-toolbar button:focus-visible,
+.v5-live-line-actions button:focus-visible,
+.v5-live-freshness button:focus-visible,
+.v5-sale-product-tail button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.v5-live-dialog textarea {
+  min-block-size: 100px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  font: inherit;
+  resize: vertical;
+}
+
+.v5-sale-checkout:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
