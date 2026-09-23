@@ -67,7 +67,7 @@ export function DrawerFailureBanner({
       aria-live="polite"
       aria-atomic="true"
       aria-describedby={messageId}
-      className="drawer-failure-banner"
+      className="v4-row drawer-failure-banner"
       data-testid="drawer-failure-banner"
       dir="rtl"
     >
@@ -92,14 +92,14 @@ export function DrawerFailureBanner({
           <span className="drawer-failure-banner__last-open-value">{lastOpened}</span>
         </span>
       </p>
-      <div className="drawer-failure-banner__actions">
+      <div className="v4-row drawer-failure-banner__actions">
         <button
           type="button"
           className="btn btn--md btn--ghost"
           onClick={() => {
             onManualOverride(drawerFailure.sale_id);
           }}
-          aria-label="Manual receipt — إيصال يدوي"
+          aria-label="إيصال يدوي — Manual receipt"
         >
           <span lang="ar">إيصال يدوي</span>
           <span aria-hidden="true">{' / '}</span>

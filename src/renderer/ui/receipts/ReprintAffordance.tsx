@@ -85,21 +85,23 @@ export function ReprintAffordance({
   }
 
   return (
-    <div>
+    <div className="v4-stack v4-stack--tight">
       <button
         type="button"
         // 44×44 touch floor (FR-068); native button ⟹ keyboard-operable (FR-069).
-        className="min-h-11 min-w-11 rounded-md border border-border px-4 py-2 text-sm font-medium"
+        className="btn btn--md btn--secondary min-h-11 min-w-11"
         disabled={phase === 'reprinting'}
         onClick={() => {
           void handleReprint();
         }}
       >
-        {phase === 'reprinting' ? 'Reprinting…' : 'Reprint receipt'}
+        {phase === 'reprinting'
+          ? 'جارٍ إعادة الطباعة / Reprinting…'
+          : 'إعادة طباعة الإيصال / Reprint receipt'}
       </button>
       {feedback?.kind === 'refused' ? (
-        <p role="status" className="mt-1 text-xs text-amber-700">
-          Reprint failed. Please try again.
+        <p role="status" className="receipt-reprint__failure">
+          تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى. / Reprint failed. Please try again.
         </p>
       ) : null}
     </div>

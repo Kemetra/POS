@@ -5466,4 +5466,92 @@ body {
     color: var(--color-danger-emphasis);
     font-weight: var(--font-weight-medium);
   }
+
+  /* 022 US4 — payment-confirmed view. A single information panel and a single
+     primary next action keep the state honest while sale correlation is absent. */
+  .payment-surface--settled {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .payment-surface--settled > .v4-screen__header,
+  .payment-surface__settled,
+  .payment-surface__new-sale {
+    inline-size: min(100%, 48rem);
+  }
+
+  .payment-surface__settled {
+    align-items: center;
+    text-align: center;
+  }
+
+  .payment-surface__settled-pending {
+    align-items: center;
+  }
+
+  .payment-surface__settled-mark {
+    display: grid;
+    place-items: center;
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-pill);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-emphasis);
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+  }
+
+  .payment-surface__settled-headline {
+    margin: 0;
+    color: var(--color-text);
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+  }
+
+  .payment-surface__settled-detail {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-md);
+    line-height: var(--line-height-normal);
+  }
+
+  .payment-surface__settled-amount {
+    margin: var(--space-3) 0 0;
+    color: var(--color-primary-emphasis);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-bold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .payment-surface__new-sale {
+    min-block-size: var(--space-8);
+    font-size: var(--font-size-lg);
+  }
+
+  /* Print and drawer failures remain persistent, distinct, and actionable. */
+  .printer-failure-banner,
+  .drawer-failure-banner {
+    flex-wrap: wrap;
+    border-inline-start: var(--space-1) solid var(--color-warning);
+    border-block-end-color: var(--color-border);
+  }
+
+  .printer-failure-banner__actions,
+  .drawer-failure-banner__actions {
+    flex-wrap: wrap;
+  }
+
+  .printer-failure-banner__actions .btn,
+  .drawer-failure-banner__actions .btn {
+    min-block-size: 44px;
+  }
+
+  .receipt-reprint__failure {
+    margin: 0;
+    color: var(--color-warning-emphasis);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+  }
 }

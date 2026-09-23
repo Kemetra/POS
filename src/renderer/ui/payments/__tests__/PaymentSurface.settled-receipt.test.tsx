@@ -488,6 +488,24 @@ describe('US4a T019 — null sale_id/sale_number fabricates nothing', () => {
   });
 });
 
+describe('022 US4 — completion convergence', () => {
+  it('shows one primary next action without unsupported delivery or fiscal claims', async () => {
+    await renderSettled(makeBridge(null));
+
+    const surface = screen.getByTestId('payment-surface');
+    expect(surface).toHaveClass('v4-screen');
+    expect(screen.getByTestId('payment-surface-settled')).toHaveClass('v4-panel');
+    expect(screen.getByTestId('payment-surface-new-sale')).toHaveClass('btn--primary');
+    expect(surface.querySelectorAll('.btn--primary')).toHaveLength(1);
+    expect(surface).not.toHaveTextContent(
+      /SMS|WhatsApp|email|واتساب|ضريبة|VAT|ZATCA|mada|insurance|loyalty|rewards|KPI|15%|ريال|السعودية/i,
+    );
+    expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-receipt')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('receipt-preview')).not.toBeInTheDocument();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // T019a — FR-30: "new sale" behaviour preserved through the rewrite
 // ---------------------------------------------------------------------------

@@ -693,11 +693,11 @@ flow**; payment FSM, money math and split tender untouched.
 **Goal:** The completion surface U4a repaired now renders in the v4.0 system, with print/reprint
 affordances intact.
 
-- [ ] T080 [US4] RED+GREEN: apply v4.0 tokens to the completion surface built in US4a.
-- [ ] T081 [P] [US4] RED+GREEN: reprint/print-failure affordances in
+- [x] T080 [US4] RED+GREEN: apply v4.0 tokens to the completion surface built in US4a.
+- [x] T081 [P] [US4] RED+GREEN: reprint/print-failure affordances in
   `src/renderer/ui/receipts/ReprintAffordance.tsx`, `PrinterFailureBanner.tsx`,
   `DrawerFailureBanner.tsx` — restyled, **never suppressed or softened** (Constitution IV).
-- [ ] T082 [US4] Assert no SMS/WhatsApp/email dispatch, confetti/celebration, KPI tiles, or
+- [x] T082 [US4] Assert no SMS/WhatsApp/email dispatch, confetti/celebration, KPI tiles, or
   fabricated fiscal information were introduced (Non-Capability).
 - [ ] T083 [US4] Capture `u4a-sale-success-after.png` in the v4.0 palette.
   > **Correction (2026-09-22):** this task previously read "**Re-capture** … superseding the
