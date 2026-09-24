@@ -84,4 +84,59 @@ describe('useSaleCatalogueController', () => {
     expect(search.mock.calls[0]?.[0]).toEqual({ query: 'بنادول' });
     expect(lookupBarcode.mock.calls[0]?.[0]).toEqual({ barcode: '6223004355218' });
   });
+
+  it('ignores a superseded lookup that answers after a newer one began', async () => {
+    useCartStore.getState().applyCartCreated('cart-1');
+    const { cart, catalogue, lookupBarcode } = bridges();
+    const newer = { ...product, product_id: 'product-2', display_name_ar: 'كونجستال' };
+    let answerOld: (value: unknown) => void = () => undefined;
+    let answerNew: (value: unknown) => void = () => undefined;
+    lookupBarcode
+      .mockReturnValueOnce(new Promise((resolve) => (answerOld = resolve)))
+      .mockReturnValueOnce(new Promise((resolve) => (answerNew = resolve)));
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+
+    let oldScan: Promise<void> = Promise.resolve();
+    let newScan: Promise<void> = Promise.resolve();
+    act(() => {
+      oldScan = result.current.runScan('6220000000001');
+      newScan = result.current.runScan('6220000000002');
+    });
+    await act(async () => {
+      answerOld({ kind: 'one', product });
+      await oldScan;
+    });
+    expect(result.current.state).toEqual({ kind: 'searching', query: '6220000000002' });
+
+    await act(async () => {
+      answerNew({ kind: 'one', product: newer });
+      await newScan;
+    });
+    expect(result.current.state).toEqual({ kind: 'confirm_pending', product: newer });
+  });
+
+  it('a superseded lookup that fails does not clear the newer one', async () => {
+    useCartStore.getState().applyCartCreated('cart-1');
+    const { cart, catalogue, search } = bridges();
+    let failOld: (reason: unknown) => void = () => undefined;
+    search
+      .mockReturnValueOnce(new Promise((_, reject) => (failOld = reject)))
+      .mockReturnValueOnce(new Promise(() => undefined));
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+
+    let oldSearch: Promise<void> = Promise.resolve();
+    act(() => {
+      oldSearch = result.current.runTypedSearch('بنا');
+      void result.current.runTypedSearch('بنادول');
+    });
+    await act(async () => {
+      failOld(new Error('ipc down'));
+      await oldSearch;
+    });
+    expect(result.current.state).toEqual({ kind: 'searching', query: 'بنادول' });
+  });
 });
