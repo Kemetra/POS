@@ -2,8 +2,7 @@ import { useCallback, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
-import { usePaymentStore } from '../../../stores/payment-store';
-import { useCartStore } from '../../../stores/cart-store';
+import { resetSaleStores } from '../../../sale/reset-sale-stores';
 import { Workspace } from '../../../shell/regions/Workspace';
 import { PaymentSurface } from '../../../ui/payments/PaymentSurface';
 import { CheckoutPlaceholder } from './CheckoutPlaceholder';
@@ -38,8 +37,7 @@ export function CheckoutRoute(): JSX.Element {
     // so the next sale starts from empty. (The finalized Sale is already
     // durable in the main process; these stores are renderer-only working
     // state.) Then return to the cart to begin ringing the next sale.
-    usePaymentStore.getState().reset();
-    useCartStore.getState().reset();
+    resetSaleStores();
     void navigate('/app/cart');
   }, [navigate]);
 

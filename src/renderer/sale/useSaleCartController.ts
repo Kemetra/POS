@@ -5,6 +5,7 @@ import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope';
 import { CartState } from '../../shared/cart/cart-state';
 import { useCartStore } from '../stores/cart-store';
 import { usePaymentStore } from '../stores/payment-store';
+import { resetSaleStores } from './reset-sale-stores';
 
 export interface CartLineItem {
   lineId: string;
@@ -101,6 +102,7 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
   voidCart: () => Promise<boolean>;
   removeDiscount: (placeholderId: string) => Promise<void>;
   continueToPayment: (onContinue?: () => void) => void;
+  startNewSale: () => void;
 } {
   const [lines, setLines] = useState<CartLineItem[]>(() => [...(options.initialLines ?? [])]);
   const [discountPlaceholders, setDiscountPlaceholders] = useState<DiscountPlaceholderSeed[]>(
@@ -115,7 +117,7 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
 
   // Captured once: only a cart that already existed when this controller
   // mounted is read back; the catalogue's eager create is left alone.
-  const [hydrateCartId] = useState<string | null>(() =>
+  const [hydrateCartId, setHydrateCartId] = useState<string | null>(() =>
     options.hydrateActiveCart === true
       ? (useCartStore.getState().activeCart?.cart_id ?? null)
       : null,
@@ -357,6 +359,21 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
     [envelope],
   );
 
+  /**
+   * Opt-in "New sale": drop the finished cart from the renderer (stores and
+   * this controller's projection). Never calls cart.create and never touches
+   * the persisted cart; the next cart comes from the normal create path.
+   */
+  const startNewSale = useCallback((): void => {
+    resetSaleStores();
+    setHydrateCartId(null);
+    setHydration('ready');
+    setLines([]);
+    setDiscountPlaceholders([]);
+    setEnvelope(null);
+    setHandoffError(null);
+  }, []);
+
   const subtotalMinor = lines.reduce((sum, line) => sum + line.lineSubtotalMinor, 0);
   const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0);
 
@@ -378,5 +395,6 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
     voidCart,
     removeDiscount,
     continueToPayment,
+    startNewSale,
   };
 }
