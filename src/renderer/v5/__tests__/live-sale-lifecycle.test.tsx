@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
@@ -219,6 +219,48 @@ describe('V5 reopens a sale whose payment already settled', () => {
     expect(screen.queryByRole('button', { name: 'بيع جديد' })).not.toBeInTheDocument();
     // The finished cart is never read back again.
     expect(b.fns.snapshot).toHaveBeenCalledOnce();
+  });
+
+  it('New sale clears a pending catalogue confirmation left over from the finished sale', async () => {
+    signIn();
+    leftCheckoutAfterSettle();
+    const b = bridges(() => Promise.resolve({ kind: 'ok', snapshot: frozenSnapshot() }));
+    b.fns.create.mockReturnValue(new Promise(() => undefined));
+    renderSale(b);
+    const user = userEvent.setup();
+    const newSale = await screen.findByRole('button', { name: 'بيع جديد' });
+    act(() => {
+      useCatalogueSearchStore.getState().beginSearch('6221000000011');
+      useCatalogueSearchStore.getState().resolveSingleMatch(PARA);
+    });
+
+    await user.click(newSale);
+
+    expect(useCatalogueSearchStore.getState().state).toEqual({ kind: 'idle' });
+    expect(screen.queryByRole('button', { name: 'إضافة إلى السلة' })).not.toBeInTheDocument();
+  });
+
+  it('New sale discards a catalogue lookup still in flight for the finished sale', async () => {
+    signIn();
+    leftCheckoutAfterSettle();
+    const b = bridges(() => Promise.resolve({ kind: 'ok', snapshot: frozenSnapshot() }));
+    b.fns.create.mockReturnValue(new Promise(() => undefined));
+    renderSale(b);
+    const user = userEvent.setup();
+    const newSale = await screen.findByRole('button', { name: 'بيع جديد' });
+    act(() => {
+      useCatalogueSearchStore.getState().beginSearch('6221000000011');
+    });
+
+    await user.click(newSale);
+    // The stale lookup answers after the reset: the guarded resolver is a no-op.
+    act(() => {
+      useCatalogueSearchStore.getState().resolveSingleMatch(PARA);
+    });
+
+    expect(useCatalogueSearchStore.getState().state).toEqual({ kind: 'idle' });
+    expect(screen.queryByRole('button', { name: 'إضافة إلى السلة' })).not.toBeInTheDocument();
+    expect(b.fns.add).not.toHaveBeenCalled();
   });
 
   it('after New sale, the next add lands in exactly one fresh cart', async () => {

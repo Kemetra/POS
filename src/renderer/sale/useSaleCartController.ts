@@ -4,6 +4,7 @@ import type { CartSnapshot } from '../../shared/cart/bridge-types';
 import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope';
 import { CartState } from '../../shared/cart/cart-state';
 import { useCartStore } from '../stores/cart-store';
+import { useCatalogueSearchStore } from '../stores/catalogueSearchStore';
 import { usePaymentStore } from '../stores/payment-store';
 import { resetSaleStores } from './reset-sale-stores';
 
@@ -363,9 +364,13 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
    * Opt-in "New sale": drop the finished cart from the renderer (stores and
    * this controller's projection). Never calls cart.create and never touches
    * the persisted cart; the next cart comes from the normal create path.
+   * The catalogue FSM is cleared too, so leftover results or a pending
+   * confirmation from the finished sale cannot add into the next cart; its
+   * resolvers guard on `searching`, so an in-flight lookup is discarded.
    */
   const startNewSale = useCallback((): void => {
     resetSaleStores();
+    useCatalogueSearchStore.getState().clear();
     setHydrateCartId(null);
     setHydration('ready');
     setLines([]);
