@@ -1,0 +1,63 @@
+/*
+ * V5 foundation — the minimum shared primitives for v5 screens.
+ *
+ * Aliases only: every value resolves to an existing semantic token from
+ * styles/tailwind.css, so contrast and the light/dark token values stay owned
+ * there. Everything is scoped under .v5-frame; this file never styles :root or
+ * a bare element, because in development the chunk stays loaded after leaving
+ * the preview and must not restyle legacy screens.
+ */
+
+.v5-frame {
+  /* Layout */
+  --v5-nav-inline-size: 208px;
+  --v5-gutter: var(--space-3);
+  --v5-gap: var(--space-3);
+
+  /* Interactive target floor (NFR-1) and focus */
+  --v5-target: 44px;
+  --v5-focus-ring: 2px solid var(--color-focus-ring);
+  --v5-focus-offset: 2px;
+
+  /* Surfaces: page < panel < raised; the nav is a panel, not a dark slab */
+  --v5-surface-page: var(--color-background);
+  --v5-surface-panel: var(--color-surface);
+  --v5-surface-raised: var(--color-surface-elevated);
+  --v5-surface-selected: var(--color-primary-soft);
+
+  /* Dividers */
+  --v5-divider: 1px solid var(--color-border);
+  --v5-divider-soft: 1px solid var(--color-border-soft);
+
+  /* Type hierarchy (ratio ~1.2 between steps, product register) */
+  --v5-text-title: var(--font-size-xl);
+  --v5-text-section: var(--font-size-lg);
+  --v5-text-body: var(--font-size-sm);
+  --v5-text-meta: var(--font-size-xs);
+  --v5-text-muted: var(--color-text-muted);
+
+  font-family: var(--font-family-sans);
+  color: var(--color-text);
+  background: var(--v5-surface-page);
+}
+
+/* 1024–1279px: the POS floor tier. Narrower nav, tighter gutters; labels stay. */
+@media (max-width: 1279px) {
+  .v5-frame {
+    --v5-nav-inline-size: 152px;
+    --v5-gutter: var(--space-2);
+    --v5-gap: var(--space-2);
+  }
+}
+
+/* One visible focus treatment for every v5 control. */
+.v5-frame :focus-visible {
+  outline: var(--v5-focus-ring);
+  outline-offset: var(--v5-focus-offset);
+}
+
+/* Mixed-direction content: codes, SKUs, Latin names and amounts inside RTL. */
+.v5-frame .v5-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

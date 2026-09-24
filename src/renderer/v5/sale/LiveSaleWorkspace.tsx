@@ -23,12 +23,12 @@ export function LiveSaleWorkspace(props: Props): JSX.Element {
   const cartEnabled = useFeatureFlagsStore((state) => state.cart);
   const productSearchEnabled = useFeatureFlagsStore((state) => state.productSearch);
   const session = useOperatorSessionStore((state) => state.state);
-  if (session.kind !== 'signedIn') return <main className="v5-sale" dir="rtl" lang="ar" />;
+  if (session.kind !== 'signedIn') return <section className="v5-sale" dir="rtl" lang="ar" />;
   if (!cartEnabled)
     return (
-      <main className="v5-sale" dir="rtl" lang="ar">
+      <section className="v5-sale" dir="rtl" lang="ar">
         <p className="v5-live-message">سلة البيع غير مفعّلة على هذا الجهاز بعد.</p>
-      </main>
+      </section>
     );
   // Legacy parity: the cart stays available when only product search is off.
   return (
@@ -54,23 +54,17 @@ function frozenSubtotal(frozen: boolean, envelope: PaymentIntentEnvelope | null)
   return frozen && envelope !== null ? envelope.subtotal_minor : null;
 }
 
-function SaleHeader(): JSX.Element {
+const SALE_TITLE_ID = 'v5-sale-title';
+
+/**
+ * Screen title only. Branding and operator identity belong to the app frame
+ * (the v5 frame, or the legacy shell on /app/sale-v5), never to the screen.
+ */
+function SaleTitle(): JSX.Element {
   return (
-    <header className="v5-sale-header">
-      <div className="v5-sale-brand" aria-label="POS Pulse">
-        <span className="v5-sale-brand-mark" aria-hidden="true">
-          ✚
-        </span>
-        <div>
-          <strong dir="ltr">POS Pulse</strong>
-          <span>نقطة البيع</span>
-        </div>
-      </div>
-      <div className="v5-sale-header-copy">
-        <h1>مساحة البيع</h1>
-        <p>بحث واضح، سلة نشطة، وإجمالي ظاهر طوال العملية</p>
-      </div>
-    </header>
+    <div className="v5-live-titlebar">
+      <h1 id={SALE_TITLE_ID}>مساحة البيع</h1>
+    </div>
   );
 }
 
@@ -81,8 +75,8 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
   const frozen = cartState === CartState.frozen_handed_off;
 
   return (
-    <main className="v5-sale" dir="rtl" lang="ar" aria-label="مساحة البيع">
-      <SaleHeader />
+    <section className="v5-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
+      <SaleTitle />
       <div className="v5-sale-workstation" data-catalogue={String(props.catalogueEnabled)}>
         {props.catalogueEnabled && (
           <LiveCatalogueRegion
@@ -115,6 +109,6 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           onVoid={cart.voidCart}
         />
       </div>
-    </main>
+    </section>
   );
 }

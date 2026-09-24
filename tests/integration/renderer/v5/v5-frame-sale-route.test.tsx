@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -13,19 +13,22 @@ import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.j
 import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 
 /**
- * 023 slice E — the DEV-only guarded functional preview `/app/sale-v5`.
- *
- * Driven through the REAL AppRouter so the `/app` OperatorRouteGuard, the
- * feature flags and the existing `/app/checkout` route are all exercised.
- * The production-bundle absence of this route is proven separately by a
- * renderer build + grep (Vitest always runs with DEV = true).
+ * V5 UI foundation — the DEV-only `/v5/sale` preview composes the v5 frame
+ * around the existing live Sale adapter. Driven through the REAL AppRouter so
+ * the operator guard, feature flags, cart/catalogue bridges and the unchanged
+ * `/app/checkout` route are exercised. Production absence is proven by a
+ * renderer build + bundle grep, not here: Vitest always runs with DEV = true,
+ * and `vi.stubEnv('DEV', false)` does not reach the router's cast
+ * `import.meta.env` read (verified: the route still rendered with it stubbed).
  */
 
-const MANAGER_SESSION = {
-  id: 'sess-v5',
-  operator_id: 'op-v5',
-  display_name: 'Manager One',
-  role: 'manager' as const,
+const V5_SALE = '/v5/sale';
+
+const CASHIER_SESSION = {
+  id: 'sess-frame',
+  operator_id: 'op-frame',
+  display_name: 'أمل',
+  role: 'cashier' as const,
   tenant_id: 't1',
   branch_id: 'b1',
   started_at: '2026-09-24T09:00:00.000Z',
@@ -33,8 +36,8 @@ const MANAGER_SESSION = {
 
 const ENVELOPE = {
   envelope_version: 'v1' as const,
-  cart_id: 'cart-v5',
-  handoff_action_id: 'handoff-v5',
+  cart_id: 'cart-frame',
+  handoff_action_id: 'handoff-frame',
   created_at: '2026-09-24T09:05:00.000Z',
   subtotal_minor: 1250,
   currency_code: 'EGP',
@@ -56,7 +59,7 @@ function pairedBridge(): PairingBridgeAPI {
     kind: 'paired',
     tenant_id: 't1',
     branch_id: 'b1',
-    terminal_id: 'term-v5',
+    terminal_id: 'term-frame',
     terminal_label: 'Counter 1',
     paired_at: 1_735_689_600,
   };
@@ -115,11 +118,20 @@ function resetStores(): void {
   useFeatureFlagsStore.getState().reset();
 }
 
+function renderAt(path: string): void {
+  render(<AppRouter pairing={pairedBridge()} operator={operatorBridge()} initialEntry={path} />);
+}
+
+function signInCashier(flags = { cart: true, payments: true, productSearch: true }): void {
+  useFeatureFlagsStore.getState().hydrate(flags);
+  useOperatorSessionStore.getState().hydrateSignedIn(CASHIER_SESSION);
+}
+
 beforeEach(() => {
   resetStores();
   (window as unknown as { api?: unknown }).api = {
     cart: {
-      create: vi.fn().mockResolvedValue({ kind: 'ok', cart_id: 'cart-v5' }),
+      create: vi.fn().mockResolvedValue({ kind: 'ok', cart_id: 'cart-frame' }),
       lines: {
         add: vi.fn().mockResolvedValue({
           kind: 'ok',
@@ -170,34 +182,44 @@ afterEach(() => {
   delete (window as unknown as { api?: unknown }).api;
 });
 
-describe('/app/sale-v5 guarded functional preview (023 slice E)', () => {
+describe('/v5/sale — v5 frame + live Sale (DEV-only preview)', () => {
   it('redirects a signed-out operator to sign-in without touching the cart bridge', async () => {
     useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
-    render(
-      <AppRouter
-        pairing={pairedBridge()}
-        operator={operatorBridge()}
-        initialEntry="/app/sale-v5"
-      />,
-    );
+    renderAt(V5_SALE);
     await waitFor(() => {
       expect(window.location.pathname).toBe('/sign-in');
     });
     expect(api().cart.create).not.toHaveBeenCalled();
-    expect(screen.queryByRole('region', { name: 'مساحة البيع' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
   });
 
-  it('scan → confirm → handoff → Continue reaches the unchanged /app/checkout PaymentSurface', async () => {
-    const user = userEvent.setup();
-    useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
-    useOperatorSessionStore.getState().hydrateSignedIn(MANAGER_SESSION);
-    render(
-      <AppRouter
-        pairing={pairedBridge()}
-        operator={operatorBridge()}
-        initialEntry="/app/sale-v5"
-      />,
+  it('renders the Sale inside one v5 frame: one main, one nav, one brand, no legacy chrome', async () => {
+    signInCashier();
+    renderAt(V5_SALE);
+
+    const sale = await screen.findByRole('region', { name: 'مساحة البيع' });
+    const frame = screen.getByTestId('v5-frame');
+    expect(frame).toHaveAttribute('dir', 'rtl');
+    expect(within(screen.getByRole('main')).getByRole('region', { name: 'مساحة البيع' })).toBe(
+      sale,
     );
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    expect(screen.getAllByRole('navigation')).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getAllByText('POS Pulse')).toHaveLength(1);
+    expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('navigation', { name: 'التنقل الرئيسي' })).getByRole('link', {
+        name: 'نقطة البيع',
+      }),
+    ).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps the existing Sale controllers as the integration path: scan → confirm → handoff → checkout', async () => {
+    const user = userEvent.setup();
+    signInCashier();
+    renderAt(V5_SALE);
 
     await screen.findByRole('region', { name: 'مساحة البيع' });
     await waitFor(() => {
@@ -211,14 +233,13 @@ describe('/app/sale-v5 guarded functional preview (023 slice E)', () => {
       '6221000000001{Enter}',
     );
     await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
+    expect(api().cart.lines.add).toHaveBeenCalledOnce();
     const handoff = await screen.findByRole('button', { name: /تسليم السلة/ });
     await waitFor(() => {
       expect(handoff).toBeEnabled();
     });
     await user.click(handoff);
-    const proceed = await screen.findByRole('button', { name: /المتابعة إلى الدفع/ });
-    expect(proceed).toBeEnabled();
-    await user.click(proceed);
+    await user.click(await screen.findByRole('button', { name: /المتابعة إلى الدفع/ }));
 
     await waitFor(() => {
       expect(screen.getByTestId('payment-surface')).toBeInTheDocument();
@@ -226,5 +247,28 @@ describe('/app/sale-v5 guarded functional preview (023 slice E)', () => {
     expect(window.location.pathname).toBe('/app/checkout');
     expect(api().cart.handoff).toHaveBeenCalledOnce();
     expect(usePaymentStore.getState().envelope).toEqual(ENVELOPE);
+  });
+
+  it('respects the cart flag: off → the existing disabled message, no cart created', async () => {
+    signInCashier({ cart: false, payments: true, productSearch: true });
+    renderAt(V5_SALE);
+    expect(await screen.findByText('سلة البيع غير مفعّلة على هذا الجهاز بعد.')).toBeInTheDocument();
+    expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+    expect(api().cart.create).not.toHaveBeenCalled();
+  });
+
+  it('respects the productSearch flag: off → cart only, no search or scan field', async () => {
+    signInCashier({ cart: true, payments: true, productSearch: false });
+    renderAt(V5_SALE);
+    await screen.findByRole('region', { name: 'مساحة البيع' });
+    expect(screen.queryByRole('textbox', { name: 'حقل التقاط مسح الباركود' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'سلة المشتريات' })).toBeInTheDocument();
+  });
+
+  it('leaves production /app/cart on the legacy shell and legacy Sale screen', async () => {
+    signInCashier();
+    renderAt('/app/cart');
+    expect(await screen.findByTestId('app-shell')).toBeInTheDocument();
+    expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
   });
 });
