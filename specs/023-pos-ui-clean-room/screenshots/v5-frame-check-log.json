@@ -1,0 +1,327 @@
+{
+ "_provenance": "V5 UI foundation, DEV-only #/v5/sale. Real Electron 40 renderer from the Vite dev server, isolated temporary --user-data-dir profile (real profile untouched), DevTools target closed, viewports set with CDP Emulation.setDeviceMetricsOverride at 1024x768 and 1280x800 (innerWidth verified). Dev fixtures: POS_PULSE_DEV_SKIP_PAIRING, POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN (manager, English fixture name), POS_PULSE_DEV_SEED_CATALOGUE. NOTE: the long-name product (dev-p-long, barcode 6221000009999, 187.50 EGP) is NOT in the dev seed; it was inserted into the scratch profile DB only, copying dev-p-001 columns (so its search fold matches Panadol). Captures B = typed-search results; D = long name in results; E = long name in scan confirm.",
+ "v5-frame-sale-1024-initial": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 2,
+  "legacyLeak": [],
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 152,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 60,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 160,
+   "w": 560,
+   "top": 60,
+   "bottom": 760
+  },
+  "total": {
+   "x": 401,
+   "w": 306,
+   "top": 677,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 173,
+   "w": 220,
+   "top": 687,
+   "bottom": 747
+  },
+  "cartScrolls": false,
+  "lines": 0,
+  "small": [],
+  "clipped": [],
+  "axe": []
+ },
+ "v5-frame-sale-1024-search": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 2,
+  "legacyLeak": [],
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 152,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 60,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 160,
+   "w": 560,
+   "top": 60,
+   "bottom": 760
+  },
+  "total": {
+   "x": 401,
+   "w": 306,
+   "top": 677,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 173,
+   "w": 220,
+   "top": 687,
+   "bottom": 747
+  },
+  "cartScrolls": false,
+  "lines": 0,
+  "small": [],
+  "clipped": [],
+  "axe": [
+   "nested-interactive(serious) x1: #v5-live-result-0"
+  ]
+ },
+ "v5-frame-sale-1024-added": [
+  "6221000009999:fa",
+  "6221000000011:fa",
+  "6221000000020:fa",
+  "6221000000037:fa",
+  "6221000000044:fa",
+  "6221000000051:fa",
+  "6221000000068:fa",
+  "6221000000075:fa",
+  "6221000000082:fa",
+  "6221000000099:fa",
+  "6221000000105:fa"
+ ],
+ "v5-frame-sale-1024-lines": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 2,
+  "legacyLeak": [],
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 152,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 60,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 160,
+   "w": 560,
+   "top": 60,
+   "bottom": 760
+  },
+  "total": {
+   "x": 401,
+   "w": 306,
+   "top": 677,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 173,
+   "w": 220,
+   "top": 687,
+   "bottom": 747
+  },
+  "cartScrolls": true,
+  "lines": 11,
+  "small": [],
+  "clipped": [],
+  "axe": []
+ },
+ "v5-frame-sale-1280-initial": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 2,
+  "legacyLeak": [],
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 60,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 60,
+   "bottom": 792
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 709,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 719,
+   "bottom": 779
+  },
+  "cartScrolls": false,
+  "lines": 0,
+  "small": [],
+  "clipped": [],
+  "axe": []
+ },
+ "v5-frame-sale-1280-search": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 2,
+  "legacyLeak": [],
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 60,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 60,
+   "bottom": 792
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 709,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 719,
+   "bottom": 779
+  },
+  "cartScrolls": false,
+  "lines": 0,
+  "small": [],
+  "clipped": [],
+  "axe": [
+   "nested-interactive(serious) x1: #v5-live-result-0"
+  ]
+ },
+ "v5-frame-sale-1280-added": [
+  "6221000009999:fa",
+  "6221000000011:fa",
+  "6221000000020:fa",
+  "6221000000037:fa",
+  "6221000000044:fa",
+  "6221000000051:fa",
+  "6221000000068:fa",
+  "6221000000075:fa",
+  "6221000000082:fa",
+  "6221000000099:fa",
+  "6221000000105:fa"
+ ],
+ "v5-frame-sale-1280-lines": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 2,
+  "legacyLeak": [],
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 60,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 60,
+   "bottom": 792
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 709,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 719,
+   "bottom": 779
+  },
+  "cartScrolls": true,
+  "lines": 11,
+  "small": [],
+  "clipped": [],
+  "axe": []
+ }
+}

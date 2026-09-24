@@ -1,0 +1,153 @@
+/*
+ * V5 frame — layout of the one application frame. Consumes foundation.css
+ * aliases only. Scoped under .v5-frame (see foundation.css for why).
+ */
+
+/* RTL grid: the first track is the right-hand side. Screen first, nav after. */
+.v5-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--v5-nav-inline-size);
+  inline-size: 100%;
+  block-size: 100vh;
+  overflow: hidden;
+}
+
+.v5-frame__body {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.v5-frame__notices {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--v5-gutter) var(--v5-gutter) 0;
+}
+
+.v5-frame__notices:empty {
+  display: none;
+}
+
+/*
+ * The screen gets a definite height so its own regions (cart lines, results)
+ * scroll internally and the total + primary action stay on screen. It is also
+ * a size container, so screens adapt to the space they actually receive
+ * rather than to the viewport.
+ */
+.v5-frame__main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+  container: v5-screen / inline-size;
+}
+
+.v5-frame__main > * {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+/* ── Navigation ─────────────────────────────────────────────────────────── */
+
+.v5-frame__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-block-size: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--v5-gutter);
+  background: var(--v5-surface-panel);
+  border-inline-start: var(--v5-divider);
+}
+
+.v5-frame__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--v5-target);
+  padding-inline: var(--space-2);
+}
+
+.v5-frame__brand-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-frame__brand-name {
+  overflow: hidden;
+  font-size: var(--v5-text-body);
+  font-weight: var(--font-weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v5-frame__links {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-frame__link {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--v5-target);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  font-size: var(--v5-text-body);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  text-decoration: none;
+  transition: background-color 150ms ease-out;
+}
+
+.v5-frame__link:hover {
+  background: var(--color-surface-muted);
+}
+
+.v5-frame__link--active,
+.v5-frame__link--active:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-frame__operator {
+  display: grid;
+  gap: 2px;
+  margin-block-start: auto;
+  padding: var(--space-3) var(--space-2) 0;
+  border-block-start: var(--v5-divider);
+}
+
+.v5-frame__operator-name {
+  overflow: hidden;
+  font-size: var(--v5-text-body);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v5-frame__operator-role {
+  color: var(--v5-text-muted);
+  font-size: var(--v5-text-meta);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v5-frame__link {
+    transition: none;
+  }
+}

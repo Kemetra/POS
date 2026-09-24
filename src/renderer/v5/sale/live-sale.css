@@ -2,6 +2,67 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Screen title only: the app frame owns brand and operator identity. */
+.v5-live-titlebar {
+  display: flex;
+  align-items: center;
+  min-block-size: 52px;
+  padding-inline: var(--space-4);
+  background: var(--color-surface);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.v5-live-titlebar h1 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+/*
+ * Inside the v5 frame the Sale is measured by the space it receives, not by
+ * the viewport: at a 1280px window the nav leaves ~1070px, which needs the
+ * same compact tracks the viewport rule gives a 1024-class window. Outside the
+ * frame (no v5-screen container) the viewport rule in sale-screen.css applies.
+ */
+@container v5-screen (max-width: 1120px) {
+  .v5-live-titlebar {
+    padding-inline: var(--space-3);
+  }
+
+  .v5-sale-workstation {
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .v5-sale-cart-columns,
+  .v5-sale-cart-line {
+    grid-template-columns: 20px minmax(0, 1fr) 76px 136px 84px;
+    gap: var(--space-1);
+    padding-inline: var(--space-2);
+  }
+
+  .v5-sale-cart-footer {
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .v5-sale-grand-total {
+    padding-inline: var(--space-3);
+  }
+
+  .v5-sale-grand-total strong {
+    font-size: var(--font-size-2xl);
+  }
+}
+
+@container v5-screen (max-width: 900px) {
+  .v5-sale-workstation {
+    grid-template-columns: 288px minmax(0, 1fr);
+  }
+}
+
 .v5-live-message {
   margin: 0;
   padding: var(--space-4);
@@ -66,6 +127,21 @@
 
 .v5-live-line-actions button:hover {
   background: var(--color-primary-soft);
+}
+
+/*
+ * A live cart line shows the product name on up to two lines: a one-line
+ * ellipsis hid the strength ("875/125 مجم") of long pharmacy names at 1024.
+ * Search results keep their single-line treatment.
+ */
+.v5-sale-cart-line .v5-sale-line-product strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 /* Money never breaks between amount and currency at 1024-class widths. */

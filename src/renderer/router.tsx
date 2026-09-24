@@ -101,6 +101,30 @@ function DevSaleRoute(): JSX.Element | null {
   );
 }
 
+// V5 UI foundation — DEV-only preview of the v5 frame around the live Sale.
+// Same production isolation as /app/sale-v5: the lazy import (and with it the
+// frame/foundation CSS) sits inside the DEV branch, and the route literal is
+// added only under the inline DEV check below. It is a sibling of /app, not a
+// child, so the legacy AppShell never wraps it.
+const DevV5SalePreview =
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
+    ? lazy(() => import('./v5/preview/V5SalePreview').then((m) => ({ default: m.V5SalePreview })))
+    : null;
+
+function DevV5SaleRoute(): JSX.Element | null {
+  const navigate = useNavigate();
+  if (DevV5SalePreview === null) return null;
+  return (
+    <Suspense fallback={null}>
+      <DevV5SalePreview
+        onPaymentContinue={() => {
+          void navigate('/app/checkout');
+        }}
+      />
+    </Suspense>
+  );
+}
+
 type BootStatus =
   | { phase: 'loading' }
   | {
@@ -194,6 +218,21 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
     { path: '/pairing', element: pairingScreenElement },
     { path: '/paired', element: <PairedScreen pairing={props.pairing} /> },
     { path: '/sign-in', element: signInElement },
+    ...((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
+      ? [
+          {
+            path: '/v5/sale',
+            element:
+              props.operator !== undefined ? (
+                <OperatorRouteGuard>
+                  <DevV5SaleRoute />
+                </OperatorRouteGuard>
+              ) : (
+                <DevV5SaleRoute />
+              ),
+          },
+        ]
+      : []),
     {
       path: '/app',
       element: guardedShell,
