@@ -14,7 +14,9 @@ import type { PaymentAttemptRendererView } from '../../../../src/shared/payments
  * 023 V5 sale lifecycle — after `payments.confirm` succeeds, the renderer
  * payment projection must carry the authoritative settled attempt (re-read
  * through the existing `payments.read`), so a surface reopened later can tell
- * the sale was paid. A failed re-read records nothing: no fabricated settle.
+ * the sale was paid. The confirm response is itself authoritative, so the
+ * projection settles at once; the re-read only refines it, and a late re-read
+ * is discarded once the payment context has changed.
  */
 
 const ENVELOPE: PaymentIntentEnvelope = {
@@ -117,24 +119,51 @@ describe('PaymentSurface records the settled attempt in the payment projection',
     expect(usePaymentStore.getState().envelope?.cart_id).toBe('cart-001');
   });
 
-  it('records nothing new when the re-read is refused, and stays on the settled surface', async () => {
+  it('keeps the sale settled from the confirm response when the re-read is refused', async () => {
     const read = vi.fn(() => Promise.resolve({ kind: 'refused' as const, reason: 'no_session' }));
     await confirmFullyTendered(read);
     await waitFor(() => {
       expect(read).toHaveBeenCalled();
     });
-    expect(usePaymentStore.getState().paymentSlice?.state).toBe('started');
+    const slice = usePaymentStore.getState().paymentSlice;
+    expect(slice?.state).toBe('settled');
+    expect(slice?.settled_at).toBe('2026-09-24T12:00:09.000Z');
+    expect(slice?.payment_attempt_id).toBe('pa-1');
     expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('records nothing new when the re-read transport rejects, and stays settled', async () => {
+  it('keeps the sale settled from the confirm response when the re-read transport rejects', async () => {
     const read = vi.fn(() => Promise.reject(new Error('ipc down')));
     await confirmFullyTendered(read);
     await waitFor(() => {
       expect(read).toHaveBeenCalled();
     });
-    expect(usePaymentStore.getState().paymentSlice?.state).toBe('started');
+    expect(usePaymentStore.getState().paymentSlice?.state).toBe('settled');
     expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument();
+  });
+
+  it('discards a late re-read once the payment context has been reset for a new sale', async () => {
+    let resolveRead: (value: unknown) => void = () => undefined;
+    const read = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    await confirmFullyTendered(read);
+    await waitFor(() => {
+      expect(read).toHaveBeenCalled();
+    });
+    // New sale: stores reset and the next sale's envelope mounts before the
+    // stale read answers.
+    usePaymentStore.getState().reset();
+    usePaymentStore
+      .getState()
+      .mount({ ...ENVELOPE, cart_id: 'cart-002', handoff_action_id: 'handoff-002' });
+    resolveRead({ kind: 'ok', payment_attempt: view('settled') });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    expect(usePaymentStore.getState().envelope?.cart_id).toBe('cart-002');
   });
 });
