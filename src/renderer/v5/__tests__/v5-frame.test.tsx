@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom/vitest';
 import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
@@ -171,8 +171,12 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
         },
       }),
     );
+    // Held open so a second click lands while the first call is in flight.
+    const reprint = vi.fn(() => new Promise(() => undefined));
+    const manualOverride = vi.fn(() => new Promise(() => undefined));
     (window as unknown as { api?: unknown }).api = {
       sales: { subscribe, unsubscribe: vi.fn(() => Promise.resolve()) },
+      receipts: { reprint, manualOverride },
     };
     useOperatorSessionStore.setState({
       state: {
@@ -192,16 +196,74 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
     try {
       render(<V5OperationalNotices />);
       expect(await screen.findByTestId('printer-failure-banner')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'نسخة — Reprint' }));
-      fireEvent.click(
-        within(await screen.findByTestId('drawer-failure-banner')).getByRole('button', {
-          name: 'إيصال يدوي — Manual receipt',
-        }),
+      // Codex P2 (#462): recovery controls must reach the existing receipts
+      // bridge, not a no-op; a double press while in flight fires once.
+      const reprintButton = screen.getByRole('button', { name: 'نسخة — Reprint' });
+      fireEvent.click(reprintButton);
+      fireEvent.click(reprintButton);
+      expect(reprint).toHaveBeenCalledOnce();
+      expect(reprint).toHaveBeenCalledWith({
+        sale_id: 's-1',
+        idempotency_key: expect.any(String) as string,
+      });
+
+      const manualButton = within(await screen.findByTestId('drawer-failure-banner')).getByRole(
+        'button',
+        { name: 'إيصال يدوي — Manual receipt' },
       );
+      fireEvent.click(manualButton);
+      fireEvent.click(manualButton);
+      expect(manualOverride).toHaveBeenCalledOnce();
+      expect(manualOverride).toHaveBeenCalledWith({
+        sale_id: 's-1',
+        idempotency_key: expect.any(String) as string,
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
       const state = useOperatorSessionStore.getState().state;
       expect(state.kind === 'signedIn' && state.forced_close_notice).toBeFalsy();
       expect(subscribe).toHaveBeenCalledWith({ topic: 'banner_state' });
+    } finally {
+      delete (window as unknown as { api?: unknown }).api;
+    }
+  });
+
+  it('releases the in-flight lock after a failed recovery call, so the operator can retry', async () => {
+    (window as unknown as { api?: unknown }).api = {
+      sales: {
+        subscribe: vi.fn(() =>
+          Promise.resolve({
+            kind: 'ok',
+            banner_state: {
+              drawer_failure: { sale_id: 's-2', last_successful_open_at: null },
+            },
+          }),
+        ),
+        unsubscribe: vi.fn(() => Promise.resolve()),
+      },
+      receipts: {
+        reprint: vi.fn(() => Promise.reject(new Error('transport'))),
+        manualOverride: vi.fn(() => Promise.reject(new Error('transport'))),
+      },
+    };
+    const receipts = (
+      window as unknown as { api: { receipts: { manualOverride: ReturnType<typeof vi.fn> } } }
+    ).api.receipts;
+    signIn('cashier');
+    try {
+      render(<V5OperationalNotices />);
+      const button = within(await screen.findByTestId('drawer-failure-banner')).getByRole(
+        'button',
+        { name: 'إيصال يدوي — Manual receipt' },
+      );
+      fireEvent.click(button);
+      await waitFor(() => {
+        expect(receipts.manualOverride).toHaveBeenCalledTimes(1);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      fireEvent.click(button);
+      expect(receipts.manualOverride).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId('drawer-failure-banner')).toBeInTheDocument();
     } finally {
       delete (window as unknown as { api?: unknown }).api;
     }
