@@ -1,0 +1,168 @@
+[
+  {
+    "step": "boot",
+    "landed": "#/app/dashboard"
+  },
+  {
+    "step": "A1",
+    "small": [],
+    "overflow": {
+      "doc": false,
+      "cart": false
+    },
+    "handoffDisabled": true
+  },
+  {
+    "step": "A2",
+    "rows": 6,
+    "emptyMeta": 0,
+    "small": [],
+    "overflow": {
+      "doc": false,
+      "cart": false
+    }
+  },
+  {
+    "step": "B1",
+    "focus": {
+      "tag": "BUTTON",
+      "label": "إضافة إلى السلة",
+      "inDialog": true,
+      "outline": "solid 2px rgb(15, 118, 110)",
+      "shadow": "none"
+    },
+    "small": []
+  },
+  {
+    "step": "B1-escape",
+    "open": false,
+    "focus": {
+      "tag": "INPUT",
+      "label": "v5-live-search",
+      "inDialog": false,
+      "outline": "none 0px rgb(15, 29, 46)",
+      "shadow": "none"
+    }
+  },
+  {
+    "step": "B2",
+    "focus": {
+      "tag": "BUTTON",
+      "label": "إضافة إلى السلة",
+      "inDialog": true,
+      "outline": "solid 2px rgb(15, 118, 110)",
+      "shadow": "none"
+    }
+  },
+  {
+    "step": "B2-added",
+    "focus": {
+      "tag": "INPUT",
+      "label": "v5-live-search",
+      "inDialog": false,
+      "outline": "none 0px rgb(15, 29, 46)",
+      "shadow": "none"
+    },
+    "lines": 1
+  },
+  {
+    "step": "B3",
+    "dialogText": "تأكيد الصنف\n\nترامادول\n\nTramadol 50mg\n\nمادة خاضعة للرقابة\nبوصفة طبية\n\n30.00 EGP\n\nإلغاء\nإضافة إلى السلة"
+  },
+  {
+    "step": "C1",
+    "totals": "المجموع الفرعي\n112.00 EGP\nالضريبة\nقيد الإضافة · لا تُحسب هنا\nالإجمالي الحالي\n112.00 EGP",
+    "small": [],
+    "overflow": {
+      "doc": false,
+      "cart": false
+    }
+  },
+  {
+    "step": "C2",
+    "totals": "المجموع الفرعي\n52.00 EGP\nالضريبة\nقيد الإضافة · لا تُحسب هنا\nالإجمالي الحالي\n52.00 EGP"
+  },
+  {
+    "step": "D1",
+    "focus": {
+      "tag": "TEXTAREA",
+      "label": "v5-live-note",
+      "inDialog": true,
+      "outline": "solid 2px rgb(15, 118, 110)",
+      "shadow": "oklab(0.510931 -0.0854973 -0.00957102 / 0.198599) 0px 0px 0px 2.97898px"
+    },
+    "saveDisabled": true,
+    "clearDisabled": true
+  },
+  {
+    "step": "D1-escape",
+    "open": false,
+    "focus": {
+      "tag": "BUTTON",
+      "label": "ملاحظة",
+      "inDialog": false,
+      "outline": "solid 2px rgb(15, 118, 110)",
+      "shadow": "none"
+    }
+  },
+  {
+    "step": "D2-maxlength",
+    "length": 200
+  },
+  {
+    "step": "D2",
+    "saveDisabled": false,
+    "small": []
+  },
+  {
+    "step": "D3",
+    "focus": {
+      "tag": "BUTTON",
+      "label": "ملاحظة",
+      "inDialog": false,
+      "outline": "none 0px rgb(11, 91, 85)",
+      "shadow": "none"
+    }
+  },
+  {
+    "step": "E1",
+    "focus": {
+      "tag": "BUTTON",
+      "label": "العودة",
+      "inDialog": true,
+      "outline": "none 0px rgb(15, 29, 46)",
+      "shadow": "none"
+    }
+  },
+  {
+    "step": "E1-tab",
+    "focus": {
+      "tag": "BUTTON",
+      "label": "تأكيد الإلغاء",
+      "inDialog": true,
+      "outline": "solid 2px rgb(15, 118, 110)",
+      "shadow": "none"
+    }
+  },
+  {
+    "step": "E1-escape",
+    "open": false,
+    "focus": {
+      "tag": "BUTTON",
+      "label": "إلغاء البيع",
+      "inDialog": false,
+      "outline": "solid 2px rgb(15, 118, 110)",
+      "shadow": "none"
+    }
+  },
+  {
+    "step": "F1",
+    "continueDisabled": false,
+    "totals": "المجموع الفرعي\n52.00 EGP\nالضريبة\nقيد الإضافة · لا تُحسب هنا\nالإجمالي الحالي\n52.00 EGP",
+    "lineControls": false
+  },
+  {
+    "step": "F2",
+    "hash": "#/app/checkout"
+  }
+]

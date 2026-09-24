@@ -14,7 +14,8 @@ import { useCallback, useRef, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
-import { CartPane, type AddedLineResult } from '../../ui/cart/CartPane';
+import { CartPane } from '../../ui/cart/CartPane';
+import type { AddedLineResult } from '../../sale/useSaleCartController';
 import { CatalogueSalePane } from '../../ui/catalogue/CatalogueSalePane';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 

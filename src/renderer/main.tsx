@@ -23,44 +23,50 @@ import { initTheme } from './stores/theme-store';
  * renderer's init posture independently. We cast the `init` reference
  * — not the argument — so the call site is type-safe.
  */
-// POS v3.5 Phase 1 (ADR-0004) — reconcile the theme store + document root
-// with the persisted selection BEFORE React mounts. index.html bakes the
-// `data-theme="dark"` default for a flash-free dark boot; this only repaints
-// to `light` for operators who chose it. Side-effect-isolated + DOM-guarded,
-// so it is safe ahead of the Sentry/flag bootstrap.
-initTheme();
-
-const sentryInit = Sentry.init as unknown as (opts: BrowserOptions) => void;
-
-// Narrow `window.api` explicitly so ESLint's no-unsafe-call rule doesn't
-// trip on the augmented global (the augmentation works at runtime; the
-// inline annotation just makes the type flow obvious to the lint pass).
-const bridge = (window as unknown as { api: PreloadBridgeAPI }).api;
-
-void initSentryRenderer({
-  sentryInit,
-  fetchConfig: () => bridge.appConfig(),
-  console: window.console,
-  appVersion: '0.1.0',
-});
-
-// 005-sales-cart T001 — hydrate feature flags from main once at boot.
-// Failures are non-fatal: flags remain at fail-closed defaults.
-void bridge
-  .appConfig()
-  .then((cfg) => {
-    useFeatureFlagsStore.getState().hydrate(cfg.features ?? {});
-  })
-  .catch(() => undefined);
-
-// 005-sales-cart Q3 — discard cart draft when operator session ends.
-installCartStoreSignOutHook();
-
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element #root not found in DOM');
+const root = ReactDOM.createRoot(rootElement);
 
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+// 023: the static Sale proof is a renderer-only development preview. It takes
+// this branch before application bootstrap, so it reads no bridge, store,
+// pairing state, or feature flag. Vite removes this DEV branch from builds.
+if (
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash === '#/dev/sale-proof'
+) {
+  void import('./v5/sale/SaleScreen').then(({ SaleScreen }) => {
+    root.render(
+      <React.StrictMode>
+        <SaleScreen />
+      </React.StrictMode>,
+    );
+  });
+} else {
+  // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
+  initTheme();
+
+  const sentryInit = Sentry.init as unknown as (opts: BrowserOptions) => void;
+  const bridge = (window as unknown as { api: PreloadBridgeAPI }).api;
+
+  void initSentryRenderer({
+    sentryInit,
+    fetchConfig: () => bridge.appConfig(),
+    console: window.console,
+    appVersion: '0.1.0',
+  });
+
+  // Existing production boot: hydrate flags and install sign-out cleanup.
+  void bridge
+    .appConfig()
+    .then((cfg) => {
+      useFeatureFlagsStore.getState().hydrate(cfg.features ?? {});
+    })
+    .catch(() => undefined);
+  installCartStoreSignOutHook();
+
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+}
