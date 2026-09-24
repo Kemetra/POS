@@ -80,6 +80,10 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
   const state = useCatalogueSearchStore((store) => store.state);
   const activeCart = useCartStore((store) => store.activeCart);
   const creatingRef = useRef(false);
+  // Latest-lookup generation: the FSM guards only on `searching`, so without
+  // this an older lookup answering after a newer one began (or after a New
+  // sale reset and a fresh search) would resolve against the newer request.
+  const lookupGenRef = useRef(0);
   const getCart = useCallback(() => options.cartBridge ?? readBridges().cart, [options.cartBridge]);
   const getCatalogue = useCallback(
     () => options.catalogueBridge ?? readBridges().catalogue,
@@ -102,12 +106,14 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
 
   const runTypedSearch = useCallback(
     async (query: string): Promise<void> => {
+      const gen = ++lookupGenRef.current;
       useCatalogueSearchStore.getState().beginSearch(query);
       try {
         const res = await getCatalogue().search({ query });
+        if (gen !== lookupGenRef.current) return;
         applySearchResponse(useCatalogueSearchStore.getState(), res);
       } catch {
-        useCatalogueSearchStore.getState().clear();
+        if (gen === lookupGenRef.current) useCatalogueSearchStore.getState().clear();
       }
     },
     [getCatalogue],
@@ -115,12 +121,14 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
 
   const runScan = useCallback(
     async (barcode: string): Promise<void> => {
+      const gen = ++lookupGenRef.current;
       useCatalogueSearchStore.getState().beginSearch(barcode);
       try {
         const res = await getCatalogue().lookupBarcode({ barcode });
+        if (gen !== lookupGenRef.current) return;
         applyScanResponse(useCatalogueSearchStore.getState(), res);
       } catch {
-        useCatalogueSearchStore.getState().clear();
+        if (gen === lookupGenRef.current) useCatalogueSearchStore.getState().clear();
       }
     },
     [getCatalogue],

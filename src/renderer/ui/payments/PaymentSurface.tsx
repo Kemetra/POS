@@ -329,6 +329,41 @@ export function PaymentSurface({
     }
   }
 
+  // 023 V5 sale lifecycle — the settled phase above is component state and
+  // dies with this surface, so the payment projection must carry the settle
+  // for a Sale screen reopened later to recognise the sale as paid.
+  // The confirm `ok` is main's authoritative settle: record it at once so a
+  // failed follow-up read can never leave the sale payable again. The re-read
+  // then only refines the projection, and is discarded if the payment context
+  // moved on (New sale / another envelope) while it was in flight.
+  function recordSettledFromConfirm(attemptId: string, settledAt: string): void {
+    const store = usePaymentStore.getState();
+    const slice = store.paymentSlice;
+    if (slice?.payment_attempt_id !== attemptId) return;
+    store.applyAttemptSnapshot({ ...slice, state: 'settled', settled_at: settledAt });
+  }
+
+  async function refineSettledAttempt(attemptId: string): Promise<void> {
+    if (bridge === null) return;
+    const envelopeAtConfirm = usePaymentStore.getState().envelope;
+    try {
+      const readResponse = await bridge.payments.read({ payment_attempt_id: attemptId });
+      const store = usePaymentStore.getState();
+      const sameContext =
+        store.envelope === envelopeAtConfirm &&
+        store.paymentSlice?.payment_attempt_id === attemptId;
+      if (
+        readResponse.kind === 'ok' &&
+        sameContext &&
+        readResponse.payment_attempt.payment_attempt_id === attemptId
+      ) {
+        store.applyAttemptSnapshot(readResponse.payment_attempt);
+      }
+    } catch {
+      // Keep the settle already recorded from the confirm response.
+    }
+  }
+
   async function handleConfirm(): Promise<void> {
     if (bridge === null || paymentAttemptId === null) {
       return;
@@ -342,6 +377,8 @@ export function PaymentSurface({
       });
       if (response.kind === 'ok') {
         setPhase('settled');
+        recordSettledFromConfirm(paymentAttemptId, response.settled_at);
+        void refineSettledAttempt(paymentAttemptId);
       } else {
         setBridgeRefusalCopy('تعذّر إتمام عملية الدفع. يرجى المحاولة مرة أخرى.');
       }

@@ -1,12 +1,13 @@
-import type { JSX } from 'react';
+import { useState, type JSX } from 'react';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
 import { CartState } from '../../../shared/cart/cart-state';
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope';
 import type { Role } from '../../../shared/operator/role';
-import { useSaleCartController } from '../../sale/useSaleCartController';
+import { useSaleCartController, type AddedLineResult } from '../../sale/useSaleCartController';
 import { useCartStore } from '../../stores/cart-store';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
+import { usePaymentStore, type PaymentStore } from '../../stores/payment-store';
 import { LiveCatalogueRegion } from './LiveCatalogueRegion';
 import { LiveSaleCart } from './LiveSaleCart';
 import './sale-screen.css';
@@ -44,14 +45,22 @@ function isManagerRole(role: Role): boolean {
   return role === 'manager' || role === 'admin';
 }
 
-function canVoidCart(state: CartState | null, role: Role): boolean {
-  if (state === null || state === CartState.empty) return false;
+function canVoidCart(state: CartState | null, role: Role, paid: boolean): boolean {
+  if (paid || state === null || state === CartState.empty) return false;
   if (state === CartState.cancelled) return false;
   return state !== CartState.frozen_handed_off || isManagerRole(role);
 }
 
 function frozenSubtotal(frozen: boolean, envelope: PaymentIntentEnvelope | null): number | null {
   return frozen && envelope !== null ? envelope.subtotal_minor : null;
+}
+
+/**
+ * The cart whose payment the renderer projection knows has settled. The
+ * attempt view carries no cart id, so the mounted envelope ties it to a cart.
+ */
+function selectSettledCartId(state: PaymentStore): string | null {
+  return state.paymentSlice?.state === 'settled' ? (state.envelope?.cart_id ?? null) : null;
 }
 
 const SALE_TITLE_ID = 'v5-sale-title';
@@ -92,11 +101,32 @@ function CartHydrationState(props: { failed: boolean; onRetry: () => void }): JS
 function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }): JSX.Element {
   const paymentsEnabled = useFeatureFlagsStore((state) => state.payments);
   const cartState = useCartStore((state) => state.activeCart?.state ?? null);
+  const cartId = useCartStore((state) => state.activeCart?.cart_id ?? null);
+  const settledCartId = usePaymentStore(selectSettledCartId);
+  const [voided, setVoided] = useState(false);
   const cart = useSaleCartController({
     hydrateActiveCart: true,
     ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
   });
   const frozen = cartState === CartState.frozen_handed_off;
+  // Frozen alone is not "paid": only a settled attempt for THIS cart is.
+  const paid = frozen && cartId !== null && settledCartId === cartId;
+
+  // Reset only after the bridge confirms the void; a refusal or rejected
+  // transport keeps the existing cart. The voided cart stays cancelled in the
+  // DB; only the renderer's pointer to it is dropped.
+  const voidThenStartFresh = async (): Promise<boolean> => {
+    const ok = await cart.voidCart().catch(() => false);
+    if (ok) {
+      cart.startNewSale();
+      setVoided(true);
+    }
+    return ok;
+  };
+  const acceptAddedLine = (line: AddedLineResult): void => {
+    setVoided(false);
+    cart.acceptAddedLine(line);
+  };
 
   // An existing cart whose persisted lines are not known yet: show only a
   // small state. No catalogue (so no eager create and no add into an unknown
@@ -116,7 +146,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
       <div className="v5-sale-workstation" data-catalogue={String(props.catalogueEnabled)}>
         {props.catalogueEnabled && (
           <LiveCatalogueRegion
-            onLineAdded={cart.acceptAddedLine}
+            onLineAdded={acceptAddedLine}
             {...(props.cartBridge ? { cartBridge: props.cartBridge } : {})}
             {...(props.catalogueBridge ? { catalogueBridge: props.catalogueBridge } : {})}
           />
@@ -130,8 +160,10 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           canHandoff={cartState === CartState.editing && cart.lines.length > 0}
           handingOff={cartState === CartState.handing_off}
           cancelled={cartState === CartState.cancelled}
-          canVoid={canVoidCart(cartState, props.role)}
-          canContinue={frozen && cart.envelope !== null && paymentsEnabled}
+          canVoid={canVoidCart(cartState, props.role, paid)}
+          canContinue={!paid && frozen && cart.envelope !== null && paymentsEnabled}
+          paid={paid}
+          voided={voided}
           handoffError={cart.handoffError}
           onIncrement={(line) => void cart.incrementLine(line.lineId, line.version)}
           onDecrement={(line) => void cart.decrementLine(line.lineId, line.version)}
@@ -142,7 +174,8 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           onContinue={() => {
             cart.continueToPayment(props.onPaymentContinue);
           }}
-          onVoid={cart.voidCart}
+          onVoid={voidThenStartFresh}
+          onNewSale={cart.startNewSale}
         />
       </div>
     </section>

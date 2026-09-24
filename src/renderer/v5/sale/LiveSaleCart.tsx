@@ -13,6 +13,10 @@ interface Props {
   cancelled: boolean;
   canVoid: boolean;
   canContinue: boolean;
+  /** The frozen cart's payment is known settled: a completed sale, never re-offered to payment. */
+  paid?: boolean;
+  /** The previous sale was just voided; acknowledged until the next line lands. */
+  voided?: boolean;
   handoffError: string | null;
   onIncrement: (line: CartLineItem) => void;
   onDecrement: (line: CartLineItem) => void;
@@ -22,6 +26,7 @@ interface Props {
   onHandoff: () => void;
   onContinue: () => void;
   onVoid: () => Promise<boolean>;
+  onNewSale?: () => void;
 }
 
 export function LiveSaleCart(props: Props): JSX.Element {
@@ -139,12 +144,22 @@ function CartActions(props: Props): JSX.Element {
   return (
     <div className="v5-sale-actions">
       {props.handoffError && <p role="alert">{props.handoffError}</p>}
+      {props.voided === true && <p role="status">تم إلغاء البيع.</p>}
       <PrimaryAction {...props} />
     </div>
   );
 }
 
 function PrimaryAction(props: Props): JSX.Element {
+  if (props.paid === true)
+    return (
+      <>
+        <p role="status">تم الدفع لهذه السلة.</p>
+        <button type="button" className="v5-sale-checkout" onClick={props.onNewSale}>
+          بيع جديد
+        </button>
+      </>
+    );
   if (props.frozenSubtotalMinor !== null)
     return (
       <button
