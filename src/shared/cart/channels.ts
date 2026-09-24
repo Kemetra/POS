@@ -9,6 +9,8 @@ export const CART_IPC_CHANNELS = {
   VOID: 'cart:void',
   HANDOFF: 'cart:handoff',
   SUBSCRIBE: 'cart:subscribe',
+  /** V5 active cart read — read-only, session-gated snapshot of a known cart. */
+  SNAPSHOT: 'cart:snapshot',
 } as const;
 
 export type CartIpcChannel = (typeof CART_IPC_CHANNELS)[keyof typeof CART_IPC_CHANNELS];

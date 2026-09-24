@@ -68,11 +68,47 @@ function SaleTitle(): JSX.Element {
   );
 }
 
+/** Generic, recoverable: never names a refusal reason. */
+function CartHydrationState(props: { failed: boolean; onRetry: () => void }): JSX.Element {
+  if (!props.failed) {
+    return (
+      <div className="v5-live-state">
+        <p role="status" className="v5-live-message">
+          جارٍ تحميل السلة الحالية…
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="v5-live-state" role="alert">
+      <p className="v5-live-message">تعذّر تحميل السلة الحالية.</p>
+      <button type="button" className="v5-live-btn" onClick={props.onRetry}>
+        إعادة المحاولة
+      </button>
+    </div>
+  );
+}
+
 function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }): JSX.Element {
   const paymentsEnabled = useFeatureFlagsStore((state) => state.payments);
   const cartState = useCartStore((state) => state.activeCart?.state ?? null);
-  const cart = useSaleCartController(props.cartBridge ? { bridge: props.cartBridge } : {});
+  const cart = useSaleCartController({
+    hydrateActiveCart: true,
+    ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
+  });
   const frozen = cartState === CartState.frozen_handed_off;
+
+  // An existing cart whose persisted lines are not known yet: show only a
+  // small state. No catalogue (so no eager create and no add into an unknown
+  // projection) and no empty cart that could be mistaken for the real one.
+  if (cart.hydration !== 'ready') {
+    return (
+      <section className="v5-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
+        <SaleTitle />
+        <CartHydrationState failed={cart.hydration === 'failed'} onRetry={cart.retryHydration} />
+      </section>
+    );
+  }
 
   return (
     <section className="v5-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>

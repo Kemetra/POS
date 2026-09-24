@@ -20,6 +20,8 @@ import type {
   CartLinesSetNoteResponse,
   CartLinesUpdateRequest,
   CartLinesUpdateResponse,
+  CartSnapshotRequest,
+  CartSnapshotResponse,
   CartSubscribeRequest,
   CartSubscribeResponse,
   CartVoidRequest,
@@ -1116,6 +1118,77 @@ export class CartBridgeHandlers {
     });
     if (gate.kind !== 'ok') return Promise.resolve(refuse(gate.reason));
     return Promise.resolve(refuse('not_implemented'));
+  }
+
+  // ── cart.snapshot ───────────────────────────────────────────────────
+
+  /**
+   * V5 active cart read. READ-ONLY: no outbox row, no audit event, no write.
+   *
+   * 1. `requireOperatorSession` first (AD-1) — no session / role → refuse.
+   * 2. The cart is looked up by the renderer-held `cart_id` only; scope is
+   *    NEVER taken from the request.
+   * 3. The same ownership/tenant gate every cart handler applies (cashier:
+   *    own session only; manager/admin: same tenant+branch), WITHOUT
+   *    `requireMutable`, so frozen and cancelled carts stay readable.
+   * 4. Returns the display-safe projection: active lines as persisted,
+   *    opaque discount placeholder refs, and the persisted envelope only for
+   *    a handed-off cart.
+   */
+  snapshot(req: CartSnapshotRequest): Promise<CartSnapshotResponse> {
+    const gate = requireOperatorSession({
+      session: this.deps.getCurrentSession(),
+      allowedRoles: ['cashier', 'manager', 'admin'],
+    });
+    if (gate.kind !== 'ok') return Promise.resolve(refuse(gate.reason));
+
+    const store = this.deps.cartStore;
+    if (store === undefined) return Promise.resolve(refuse('not_implemented'));
+
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return Promise.resolve(refuse('wrong_owner'));
+
+    const ownership = requireOperatorSession({
+      session: gate.session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+    });
+    if (ownership.kind !== 'ok') return Promise.resolve(refuse(ownership.reason));
+
+    const state = cart.state as CartState;
+    const envelope =
+      state === CartState.frozen_handed_off && cart.handoff_envelope_json !== null
+        ? freezeEnvelope(
+            JSON.parse(cart.handoff_envelope_json) as Parameters<typeof freezeEnvelope>[0],
+          )
+        : null;
+
+    this.deps.logger?.info({ event: 'cart.snapshot.ok', cart_id: cart.cart_id }, 'cart.snapshot');
+    return Promise.resolve({
+      kind: 'ok',
+      snapshot: {
+        cart_id: cart.cart_id,
+        state,
+        lines: store.getActiveLines(cart.cart_id).map((line) => ({
+          line_id: line.line_id,
+          display_name: line.display_name,
+          quantity: line.quantity,
+          unit_price_minor: line.unit_price_minor,
+          line_subtotal_minor: line.line_subtotal_minor,
+          note: line.note,
+          version: line.version,
+        })),
+        discount_placeholders: store
+          .getDiscountPlaceholdersForCart(cart.cart_id)
+          .map((dp) => ({ placeholder_id: dp.placeholder_id, line_id: dp.line_id })),
+        envelope,
+      },
+    });
   }
 
   // ── Internal gates ──────────────────────────────────────────────────

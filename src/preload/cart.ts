@@ -13,6 +13,7 @@ import type {
   CartVoidRequest,
   CartHandoffRequest,
   CartSubscribeRequest,
+  CartSnapshotRequest,
 } from '../shared/cart/bridge-types.js';
 
 /**
@@ -52,4 +53,6 @@ export const cart: CartBridgeAPI = {
   handoff: (req: CartHandoffRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.HANDOFF, req),
 
   subscribe: (req: CartSubscribeRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.SUBSCRIBE, req),
+
+  snapshot: (req: CartSnapshotRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.SNAPSHOT, req),
 };

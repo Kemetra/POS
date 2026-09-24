@@ -2,12 +2,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { JSX } from 'react';
 import '@testing-library/jest-dom/vitest';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
 import { useCartStore } from '../../stores/cart-store';
+import { installCartStoreSignOutHook } from '../../stores/cart-signout-hook';
 import { useCatalogueSearchStore } from '../../stores/catalogueSearchStore';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
@@ -429,6 +430,10 @@ describe('live v5 Sale adapter', () => {
 
   it('drops local lines on sign-out and does not resurrect them on the next sign-in', async () => {
     signIn();
+    // Production sign-out path (main.tsx installs it): clears the renderer cart
+    // store, so the next sign-in starts without an active cart to reopen.
+    const uninstall = installCartStoreSignOutHook();
+    onTestFinished(uninstall);
     const bridges = makeBridges();
     renderSale(bridges);
     const user = userEvent.setup();
@@ -436,6 +441,7 @@ describe('live v5 Sale adapter', () => {
     act(() => {
       useOperatorSessionStore.getState().reset();
     });
+    expect(useCartStore.getState().activeCart).toBeNull();
     expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
     expect(screen.queryByText('15.00 EGP')).not.toBeInTheDocument();
     act(() => {

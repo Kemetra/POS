@@ -2,6 +2,14 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Existing-cart read in flight or failed: one small, recoverable message. */
+.v5-live-state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
 /* Screen title only: the app frame owns brand and operator identity. */
 .v5-live-titlebar {
   display: flex;
@@ -95,6 +103,7 @@
 .v5-live-freshness button,
 .v5-live-toolbar button,
 .v5-live-discount button,
+.v5-live-state button,
 .v5-sale-product-tail button {
   min-block-size: 44px;
   min-inline-size: 44px;
