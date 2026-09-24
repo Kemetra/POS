@@ -37,6 +37,8 @@ import type {
   CartHandoffResponse,
   CartSubscribeRequest,
   CartSubscribeResponse,
+  CartSnapshotRequest,
+  CartSnapshotResponse,
 } from './cart/bridge-types.js';
 
 /**
@@ -650,6 +652,17 @@ export interface CartBridgeAPI {
   handoff(req: CartHandoffRequest): Promise<CartHandoffResponse>;
   /** Push-style cart state updates (type-only in Phase 2; S1+ runtime). */
   subscribe(req: CartSubscribeRequest): Promise<CartSubscribeResponse>;
+  /**
+   * V5 active cart read — read-only, session-gated, display-safe snapshot of
+   * a cart the renderer already holds. Never writes; never accepts identity.
+   *
+   * Optional on the TYPE only, following the additive-surface precedent of
+   * `payments?` / `sales?` / `receipts?`: the production preload always wires
+   * it, and the sole caller treats absence as a generic read failure (never an
+   * empty cart, never a replacement cart). This keeps every existing fake
+   * `CartBridgeAPI` in the legacy test suites compiling unchanged.
+   */
+  snapshot?(req: CartSnapshotRequest): Promise<CartSnapshotResponse>;
 }
 
 declare global {

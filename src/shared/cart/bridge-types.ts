@@ -1,5 +1,6 @@
 import type { CartRefusal } from './refusal.js';
 import type { PaymentIntentEnvelope } from './handoff-envelope.js';
+import type { CartState } from './cart-state.js';
 
 // ── cart.create ───────────────────────────────────────────────────────────────
 
@@ -141,4 +142,50 @@ export interface CartSubscribeUpdate {
 
 export type CartSubscribeResponse =
   | { readonly kind: 'ok'; readonly update: CartSubscribeUpdate }
+  | CartRefusal;
+
+// ── cart.snapshot ─────────────────────────────────────────────────────────────
+//
+// V5 active cart read. Read-only: the renderer supplies ONLY the id of a cart
+// it already holds; main resolves scope/ownership from the trusted session.
+// The projection is display-safe: no tenant/branch/terminal/operator/session
+// identity, no catalogue item_ref, no attribution, no action ids.
+
+export interface CartSnapshotRequest {
+  readonly cart_id: string;
+}
+
+/** One active (non-removed) line, exactly as persisted. Money in integer minor units. */
+export interface CartSnapshotLine {
+  readonly line_id: string;
+  readonly display_name: string;
+  readonly quantity: number;
+  readonly unit_price_minor: number;
+  readonly line_subtotal_minor: number;
+  readonly note: string | null;
+  /** Persisted optimistic-concurrency version; the next mutation must send it. */
+  readonly version: number;
+}
+
+/** Opaque discount placeholder reference (no magnitude, no attribution). */
+export interface CartSnapshotDiscountPlaceholder {
+  readonly placeholder_id: string;
+  readonly line_id: string;
+}
+
+export interface CartSnapshot {
+  readonly cart_id: string;
+  readonly state: CartState;
+  readonly lines: ReadonlyArray<CartSnapshotLine>;
+  readonly discount_placeholders: ReadonlyArray<CartSnapshotDiscountPlaceholder>;
+  /**
+   * The persisted frozen envelope for a `frozen_handed_off` cart (the same
+   * object `cart.handoff` already returned to the renderer), so a reopened
+   * handed-off sale can continue to payment. `null` in every other state.
+   */
+  readonly envelope: PaymentIntentEnvelope | null;
+}
+
+export type CartSnapshotResponse =
+  | { readonly kind: 'ok'; readonly snapshot: CartSnapshot }
   | CartRefusal;

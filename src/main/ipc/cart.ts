@@ -18,6 +18,8 @@ import type {
   CartLinesSetNoteResponse,
   CartLinesUpdateRequest,
   CartLinesUpdateResponse,
+  CartSnapshotRequest,
+  CartSnapshotResponse,
   CartSubscribeRequest,
   CartSubscribeResponse,
   CartVoidRequest,
@@ -229,6 +231,18 @@ function asSubscribeReq(value: unknown): CartSubscribeRequest | null {
   return { cart_id: v['cart_id'] };
 }
 
+/**
+ * V5 active cart read. Builds a FRESH object holding only `cart_id`, so any
+ * renderer-supplied identity (tenant/branch/operator/session) is dropped here
+ * and scope comes solely from the trusted main-process session.
+ */
+function asSnapshotReq(value: unknown): CartSnapshotRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v['cart_id'] !== 'string' || v['cart_id'] === '') return null;
+  return { cart_id: v['cart_id'] };
+}
+
 export function registerCartHandlers(ipcMain: IpcMain, deps: CartHandlerDeps): void {
   const { handlers } = deps;
 
@@ -325,6 +339,15 @@ export function registerCartHandlers(ipcMain: IpcMain, deps: CartHandlerDeps): v
       const req = asSubscribeReq(request);
       if (req === null) return refuseInvalid();
       return handlers.subscribe(req);
+    },
+  );
+
+  ipcMain.handle(
+    CART_IPC_CHANNELS.SNAPSHOT,
+    async (_event: IpcMainInvokeEvent, request: unknown): Promise<CartSnapshotResponse> => {
+      const req = asSnapshotReq(request);
+      if (req === null) return refuseInvalid();
+      return handlers.snapshot(req);
     },
   );
 }
