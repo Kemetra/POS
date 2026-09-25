@@ -85,6 +85,24 @@ function syncCartStore(snapshot: CartSnapshot): void {
   });
 }
 
+/**
+ * Preconditions for asking main to cancel a frozen cart: its own frozen
+ * envelope carries the authoritative handoff action, and no payment for it is
+ * known to be in progress or settled (main enforces the payment rule too).
+ */
+function canRequestPostHandoffCancel(
+  cartId: string,
+  envelope: PaymentIntentEnvelope | null,
+): envelope is PaymentIntentEnvelope {
+  if (envelope === null || envelope.cart_id !== cartId || envelope.handoff_action_id === '') {
+    return false;
+  }
+  const payment = usePaymentStore.getState();
+  const paymentForThisCart = payment.envelope?.cart_id === cartId;
+  const state = payment.paymentSlice?.state;
+  return !(paymentForThisCart && (state === 'started' || state === 'settled'));
+}
+
 export function useSaleCartController(options: SaleCartControllerOptions = {}): {
   lines: readonly CartLineItem[];
   discountPlaceholders: readonly DiscountPlaceholderSeed[];
@@ -321,17 +339,49 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
     }
   }, [getBridge, lines]);
 
+  /**
+   * One "void" affordance, two main operations. A pre-handoff cart uses
+   * `cart.void`. A `frozen_handed_off` cart uses `cart.cancelPostHandoff`
+   * (main refuses `cart.void` with `frozen`), bound to this cart's frozen
+   * envelope. Main is the authority on role and payment state; the checks
+   * here only avoid a call the renderer can already see must fail, and every
+   * one of them fails closed — never falling back to `cart.void`. Nothing
+   * local changes unless main confirms.
+   */
   const voidCart = useCallback(async (): Promise<boolean> => {
     const cart = useCartStore.getState().activeCart;
     if (!cart) return false;
-    const res = await getBridge().void({
-      cart_id: cart.cart_id,
-      idempotency_key: crypto.randomUUID(),
-    });
-    if (res.kind !== 'ok') return false;
+    const bridge = getBridge();
+    if (cart.state !== CartState.frozen_handed_off) {
+      const res = await bridge.void({
+        cart_id: cart.cart_id,
+        idempotency_key: crypto.randomUUID(),
+      });
+      if (res.kind !== 'ok') return false;
+      useCartStore.getState().applyCancelled();
+      return true;
+    }
+    if (!canRequestPostHandoffCancel(cart.cart_id, envelope) || !bridge.cancelPostHandoff) {
+      return false;
+    }
+    const res = await bridge
+      .cancelPostHandoff({
+        cart_id: cart.cart_id,
+        handoff_action_id: envelope.handoff_action_id,
+        idempotency_key: crypto.randomUUID(),
+      })
+      .catch(() => null);
+    if (res?.kind !== 'ok') return false;
     useCartStore.getState().applyCancelled();
+    // A cancelled cart must never reach checkout: drop its frozen envelope
+    // here and in the payment store (main's payments.start does not re-read
+    // cart state). Another cart's mounted envelope is left alone.
+    if (usePaymentStore.getState().envelope?.cart_id === cart.cart_id) {
+      usePaymentStore.getState().reset();
+    }
+    setEnvelope(null);
     return true;
-  }, [getBridge]);
+  }, [getBridge, envelope]);
 
   const removeDiscount = useCallback(
     async (placeholderId: string): Promise<void> => {

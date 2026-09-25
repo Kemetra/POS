@@ -2,6 +2,8 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import { CART_IPC_CHANNELS } from '../../shared/cart/channels.js';
 import type {
+  CartCancelPostHandoffRequest,
+  CartCancelPostHandoffResponse,
   CartCreateRequest,
   CartCreateResponse,
   CartDiscountPlaceholdersAddRequest,
@@ -200,6 +202,32 @@ function asVoidReq(value: unknown): CartVoidRequest | null {
   return req;
 }
 
+/**
+ * Post-handoff cancel. Builds a FRESH object with only the three request
+ * fields: `attribution_operator_id` is deliberately dropped, so a cashier can
+ * never borrow a manager's authority through this bridge (main then refuses a
+ * cashier with `manager_attribution_required`), and no renderer-supplied
+ * identity reaches the handler. Every field must be a non-empty string.
+ */
+function asCancelPostHandoffReq(value: unknown): CartCancelPostHandoffRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const cartId = v['cart_id'];
+  const handoffActionId = v['handoff_action_id'];
+  const idempotencyKey = v['idempotency_key'];
+  if (
+    typeof cartId !== 'string' ||
+    cartId === '' ||
+    typeof handoffActionId !== 'string' ||
+    handoffActionId === '' ||
+    typeof idempotencyKey !== 'string' ||
+    idempotencyKey === ''
+  ) {
+    return null;
+  }
+  return { cart_id: cartId, handoff_action_id: handoffActionId, idempotency_key: idempotencyKey };
+}
+
 function asHandoffReq(value: unknown): CartHandoffRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -321,6 +349,18 @@ export function registerCartHandlers(ipcMain: IpcMain, deps: CartHandlerDeps): v
       const req = asVoidReq(request);
       if (req === null) return refuseInvalid();
       return handlers.void(req);
+    },
+  );
+
+  ipcMain.handle(
+    CART_IPC_CHANNELS.CANCEL_POST_HANDOFF,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<CartCancelPostHandoffResponse> => {
+      const req = asCancelPostHandoffReq(request);
+      if (req === null) return refuseInvalid();
+      return handlers.cancelPostHandoff(req);
     },
   );
 

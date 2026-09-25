@@ -237,3 +237,18 @@ export function bindPaymentAttemptsRepository(db: DatabaseHandle): PaymentAttemp
     },
   };
 }
+
+/**
+ * Read-only per-cart lookup for the post-handoff cancel guard (spec 005
+ * FR-008/FR-033): true while any attempt for the cart is `started` (payment in
+ * progress) or `settled` (the sale is paid). A cart stays `frozen_handed_off`
+ * after settlement, so the cart row alone cannot tell a paid sale from an
+ * unpaid handoff. Cancelled / failed / force-failed attempts do not block.
+ */
+export function bindCartPaymentGuard(db: DatabaseHandle): (envelope_cart_id: string) => boolean {
+  const stmt = db.prepare(
+    `SELECT 1 AS blocking FROM payment_attempts
+      WHERE envelope_cart_id=? AND state IN ('started', 'settled') LIMIT 1`,
+  ) as PrepareGet<{ blocking: number }>;
+  return (envelope_cart_id) => stmt.get(envelope_cart_id) !== undefined;
+}

@@ -11,6 +11,8 @@ export const CART_IPC_CHANNELS = {
   SUBSCRIBE: 'cart:subscribe',
   /** V5 active cart read — read-only, session-gated snapshot of a known cart. */
   SNAPSHOT: 'cart:snapshot',
+  /** Audited cancel of a `frozen_handed_off` cart (`cart.void` refuses `frozen`). */
+  CANCEL_POST_HANDOFF: 'cart:cancelPostHandoff',
 } as const;
 
 export type CartIpcChannel = (typeof CART_IPC_CHANNELS)[keyof typeof CART_IPC_CHANNELS];

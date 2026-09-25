@@ -171,6 +171,15 @@ export interface CartBridgeHandlersDeps {
    * When omitted, pre-handoff void still works (no audit for cashier_voided).
    */
   auditEmitter?: AuditEmitter;
+  /**
+   * Post-handoff cancel guard: true when the cart has a `started` or
+   * `settled` payment attempt, so `cancelPostHandoff` refuses rather than
+   * cancel a sale that is being paid or already paid. Optional here so unit
+   * fixtures construct unchanged; the production factory
+   * (`createCartBridgeHandlers`) requires it, so a dropped composition-root
+   * wiring cannot silently disable the guard.
+   */
+  hasPaymentForCart?: (cart_id: string) => boolean;
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
@@ -894,6 +903,10 @@ export class CartBridgeHandlers {
     // Only frozen_handed_off carts may be post-handoff cancelled.
     const cancelCartState = cart.state as CartState;
     if (cancelCartState !== CartState.frozen_handed_off) return refuse('closed');
+
+    // A payment in progress or settled closes the sale to cancellation: the
+    // cart row stays frozen after settlement, so ask the payments record.
+    if (this.deps.hasPaymentForCart?.(req.cart_id) === true) return refuse('closed');
 
     const now = this.clock().toISOString();
     const event_id = randomUUID();

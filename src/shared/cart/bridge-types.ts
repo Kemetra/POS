@@ -116,6 +116,24 @@ export interface CartVoidRequest {
 
 export type CartVoidResponse = { readonly kind: 'ok' } | CartRefusal;
 
+// ── cart.cancelPostHandoff ────────────────────────────────────────────────────
+//
+// Cancels a cart already in `frozen_handed_off` (spec 005 FR-033). Main is
+// the authority: it gates the role (manager/admin act directly; a cashier is
+// refused `manager_attribution_required`), refuses while a payment for the
+// cart is started or settled, and emits the `cart.cancel.post_handoff` audit
+// event atomically with the cancellation. The renderer supplies only the cart,
+// the frozen envelope's `handoff_action_id`, and a fresh idempotency key — no
+// attribution crosses this bridge.
+
+export interface CartCancelPostHandoffRequest {
+  readonly cart_id: string;
+  readonly handoff_action_id: string;
+  readonly idempotency_key: string;
+}
+
+export type CartCancelPostHandoffResponse = { readonly kind: 'ok' } | CartRefusal;
+
 // ── cart.handoff ──────────────────────────────────────────────────────────────
 
 export interface CartHandoffRequest {
