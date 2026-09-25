@@ -1,0 +1,1669 @@
+{
+ "_provenance": "023 polish pass (final confirm round), DEV-only #/v5/sale. Real Electron 40 renderer from the Vite dev server; isolated scratch --user-data-dir (real pos-pulse profile untouched); DevTools target closed; viewports via CDP Emulation.setDeviceMetricsOverride (innerWidth verified). Dev fixtures POS_PULSE_DEV_SKIP_PAIRING, POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN (manager), POS_PULSE_DEV_SEED_CATALOGUE; cart/productSearch/payments flags; VITE_API_BASE_URL pointed at dead 127.0.0.1:9. Scratch DB only: dev-p-long (barcode 6221000009999, 187.50 EGP) inserted by copying dev-p-001 columns (its search fold matches Panadol). Input via CDP Input.insertText / dispatchKeyEvent; axe-core from node_modules injected per capture. Renderer reloaded between viewports so 1024 starts on a fresh cart; the 1280 frozen cart is left frozen (main refuses cart.void on frozen carts).",
+ "v5-polish-1280-A-empty": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "BODY",
+  "focusVisible": false
+ },
+ "v5-polish-1280-B-search-results": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [
+   {
+    "id": "nested-interactive",
+    "impact": "serious",
+    "n": 2,
+    "first": "#v5-live-result-0"
+   }
+  ],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1280-C-keyboard-selection": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [
+   {
+    "id": "nested-interactive",
+    "impact": "serious",
+    "n": 2,
+    "first": "#v5-live-result-0"
+   }
+  ],
+  "focus": "نتائج البحث",
+  "focusVisible": true
+ },
+ "v5-polish-1280-D-confirm-typed-search": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": {
+   "x": 420,
+   "w": 440,
+   "top": 261,
+   "bottom": 539
+  },
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-btn v5-live-btn--primary",
+  "focusVisible": true
+ },
+ "v5-polish-1280-E-confirm-scan-long-name": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 106,
+   "bottom": 229
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": {
+   "x": 420,
+   "w": 440,
+   "top": 261,
+   "bottom": 539
+  },
+  "cartScrolls": false,
+  "lines": 1,
+  "linesFullyVisible": 1,
+  "lineHeights": [
+   91
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-btn v5-live-btn--primary",
+  "focusVisible": true
+ },
+ "v5-polish-1280-F-cart-two-lines": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 106,
+   "bottom": 229
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 1,
+  "linesFullyVisible": 1,
+  "lineHeights": [
+   91
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1280-G-confirm-scan-controlled": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 106,
+   "bottom": 373
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": {
+   "x": 420,
+   "w": 440,
+   "top": 258,
+   "bottom": 542
+  },
+  "cartScrolls": false,
+  "lines": 3,
+  "linesFullyVisible": 3,
+  "lineHeights": [
+   91,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-btn v5-live-btn--primary",
+  "focusVisible": true
+ },
+ "v5-polish-1280-H-cart-many-lines": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 642
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": null,
+  "cartScrolls": true,
+  "lines": 11,
+  "linesFullyVisible": 6,
+  "lineHeights": [
+   91,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1280-I-cart-many-lines-scrolled": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 642
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": null,
+  "cartScrolls": true,
+  "lines": 11,
+  "linesFullyVisible": 7,
+  "lineHeights": [
+   91,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1280-J-note-dialog": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 642
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": {
+   "x": 420,
+   "w": 440,
+   "top": 273,
+   "bottom": 527
+  },
+  "cartScrolls": true,
+  "lines": 11,
+  "linesFullyVisible": 6,
+  "lineHeights": [
+   91,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-note",
+  "focusVisible": true
+ },
+ "v5-polish-1280-K-void-dialog": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 642
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": {
+   "x": 420,
+   "w": 440,
+   "top": 315,
+   "bottom": 485
+  },
+  "cartScrolls": true,
+  "lines": 11,
+  "linesFullyVisible": 6,
+  "lineHeights": [
+   109,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-btn",
+  "focusVisible": true
+ },
+ "v5-polish-1280-L-voided-new-sale": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1280-M-frozen-handed-off": {
+  "vw": 1280,
+  "vh": 800,
+  "docScrollW": 1280,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 208,
+   "top": 0,
+   "bottom": 800
+  },
+  "products": {
+   "x": 952,
+   "w": 320,
+   "top": 52,
+   "bottom": 792
+  },
+  "cart": {
+   "x": 216,
+   "w": 728,
+   "top": 52,
+   "bottom": 792
+  },
+  "lineArea": {
+   "x": 217,
+   "w": 726,
+   "top": 106,
+   "bottom": 266
+  },
+  "total": {
+   "x": 504,
+   "w": 428,
+   "top": 723,
+   "bottom": 779
+  },
+  "cta": {
+   "x": 229,
+   "w": 267,
+   "top": 723,
+   "bottom": 779
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 2,
+  "linesFullyVisible": 2,
+  "lineHeights": [
+   64,
+   64
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1024-A-empty": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "BODY",
+  "focusVisible": false
+ },
+ "v5-polish-1024-B-search-results": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [
+   {
+    "id": "nested-interactive",
+    "impact": "serious",
+    "n": 2,
+    "first": "#v5-live-result-0"
+   }
+  ],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1024-C-keyboard-selection": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [
+   {
+    "id": "nested-interactive",
+    "impact": "serious",
+    "n": 2,
+    "first": "#v5-live-result-0"
+   }
+  ],
+  "focus": "نتائج البحث",
+  "focusVisible": true
+ },
+ "v5-polish-1024-D-confirm-typed-search": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": {
+   "x": 292,
+   "w": 440,
+   "top": 245,
+   "bottom": 523
+  },
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-btn v5-live-btn--primary",
+  "focusVisible": true
+ },
+ "v5-polish-1024-E-confirm-scan-long-name": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 106,
+   "bottom": 229
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": {
+   "x": 292,
+   "w": 440,
+   "top": 245,
+   "bottom": 523
+  },
+  "cartScrolls": false,
+  "lines": 1,
+  "linesFullyVisible": 1,
+  "lineHeights": [
+   91
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-btn v5-live-btn--primary",
+  "focusVisible": true
+ },
+ "v5-polish-1024-F-cart-two-lines": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 106,
+   "bottom": 229
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 1,
+  "linesFullyVisible": 1,
+  "lineHeights": [
+   91
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1024-G-confirm-scan-controlled": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 106,
+   "bottom": 373
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": {
+   "x": 292,
+   "w": 440,
+   "top": 242,
+   "bottom": 526
+  },
+  "cartScrolls": false,
+  "lines": 3,
+  "linesFullyVisible": 3,
+  "lineHeights": [
+   91,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-btn v5-live-btn--primary",
+  "focusVisible": true
+ },
+ "v5-polish-1024-H-cart-many-lines": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 610
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": null,
+  "cartScrolls": true,
+  "lines": 11,
+  "linesFullyVisible": 6,
+  "lineHeights": [
+   91,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1024-I-cart-many-lines-scrolled": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 610
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": null,
+  "cartScrolls": true,
+  "lines": 11,
+  "linesFullyVisible": 7,
+  "lineHeights": [
+   91,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1024-J-note-dialog": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 610
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": {
+   "x": 292,
+   "w": 440,
+   "top": 257,
+   "bottom": 511
+  },
+  "cartScrolls": true,
+  "lines": 11,
+  "linesFullyVisible": 6,
+  "lineHeights": [
+   91,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-note",
+  "focusVisible": true
+ },
+ "v5-polish-1024-K-void-dialog": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 610
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": {
+   "x": 292,
+   "w": 440,
+   "top": 299,
+   "bottom": 469
+  },
+  "cartScrolls": true,
+  "lines": 11,
+  "linesFullyVisible": 6,
+  "lineHeights": [
+   109,
+   72,
+   72
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-btn",
+  "focusVisible": true
+ },
+ "v5-polish-1024-L-voided-new-sale": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 105,
+   "bottom": 190
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 0,
+  "linesFullyVisible": 0,
+  "lineHeights": [],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ },
+ "v5-polish-1024-M-frozen-handed-off": {
+  "vw": 1024,
+  "vh": 768,
+  "docScrollW": 1024,
+  "overflowX": false,
+  "mains": 1,
+  "navs": 1,
+  "h1": [
+   "مساحة البيع"
+  ],
+  "brands": 1,
+  "activeNav": "نقطة البيع",
+  "nav": {
+   "x": 0,
+   "w": 140,
+   "top": 0,
+   "bottom": 768
+  },
+  "products": {
+   "x": 728,
+   "w": 288,
+   "top": 52,
+   "bottom": 760
+  },
+  "cart": {
+   "x": 148,
+   "w": 572,
+   "top": 52,
+   "bottom": 760
+  },
+  "lineArea": {
+   "x": 149,
+   "w": 570,
+   "top": 106,
+   "bottom": 266
+  },
+  "total": {
+   "x": 389,
+   "w": 318,
+   "top": 691,
+   "bottom": 747
+  },
+  "cta": {
+   "x": 161,
+   "w": 220,
+   "top": 691,
+   "bottom": 747
+  },
+  "dialog": null,
+  "cartScrolls": false,
+  "lines": 2,
+  "linesFullyVisible": 2,
+  "lineHeights": [
+   64,
+   64
+  ],
+  "small": [],
+  "clipped": [],
+  "axe": [],
+  "focus": "v5-live-search",
+  "focusVisible": true
+ }
+}

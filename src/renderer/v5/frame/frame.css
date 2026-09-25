@@ -81,8 +81,6 @@
   border-radius: var(--radius-control);
   background: var(--color-primary);
   color: var(--color-primary-on);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
 }
 
 .v5-frame__brand-name {
@@ -119,10 +117,15 @@
   background: var(--color-surface-muted);
 }
 
+/*
+ * Selected, but never louder than the Sale's primary action: a soft tint plus
+ * weight. aria-current carries the state for assistive tech.
+ */
 .v5-frame__link--active,
 .v5-frame__link--active:hover {
-  background: var(--color-primary);
-  color: var(--color-primary-on);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+  font-weight: var(--font-weight-bold);
 }
 
 .v5-frame__operator {

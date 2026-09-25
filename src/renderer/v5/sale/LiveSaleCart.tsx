@@ -1,5 +1,6 @@
 import { useState, type JSX } from 'react';
 import type { CartLineItem, DiscountPlaceholderSeed } from '../../sale/useSaleCartController';
+import { V5Icon } from '../foundation/V5Icon';
 import { CartLineRow, NoteDialog, VoidControl, money } from './LiveCartParts';
 
 interface Props {
@@ -36,16 +37,15 @@ export function LiveSaleCart(props: Props): JSX.Element {
   return (
     <section className="v5-sale-cart" aria-labelledby="v5-live-cart-title">
       <div className="v5-sale-cart-heading">
-        <div>
-          <span className="v5-sale-eyebrow">المعاملة الجارية</span>
-          <h2 id="v5-live-cart-title">سلة المشتريات</h2>
-        </div>
+        <h2 id="v5-live-cart-title">سلة المشتريات</h2>
+        <CartStateLabel {...props} />
         <span className="v5-sale-count">
           {props.lines.length} أصناف · {props.itemCount} وحدات
         </span>
+        {props.canVoid && <VoidControl onVoid={props.onVoid} />}
       </div>
-      {props.canVoid && <VoidControl onVoid={props.onVoid} />}
-      <div className="v5-sale-cart-table">
+      {/* Focusable so a frozen cart, which has no line controls, still scrolls by keyboard. */}
+      <div className="v5-sale-cart-table" role="region" aria-label="بنود السلة" tabIndex={0}>
         <div className="v5-sale-cart-columns" aria-hidden="true">
           <span>#</span>
           <span>الصنف</span>
@@ -115,6 +115,30 @@ function CartLines(
   );
 }
 
+type StateTone = 'info' | 'success' | 'neutral';
+
+/**
+ * Where the transaction stands, derived only from props the cart already
+ * receives. Editing needs no label: the editable lines say it. Not a live
+ * region: the actions area announces the change itself.
+ */
+function cartState(props: Props): { label: string; tone: StateTone } | null {
+  if (props.paid === true) return { label: 'مدفوعة', tone: 'success' };
+  if (props.cancelled) return { label: 'ملغاة', tone: 'neutral' };
+  if (props.frozenSubtotalMinor !== null) return { label: 'مُسلّمة للدفع', tone: 'info' };
+  return null;
+}
+
+function CartStateLabel(props: Props): JSX.Element | null {
+  const state = cartState(props);
+  if (state === null) return null;
+  return (
+    <span className="v5-live-cart-state" data-tone={state.tone}>
+      {state.label}
+    </span>
+  );
+}
+
 function CartTotals(props: Props): JSX.Element {
   const frozen = props.frozenSubtotalMinor !== null;
   // Before any line exists the total is a placeholder, never a fabricated 0.00.
@@ -143,8 +167,16 @@ function CartTotals(props: Props): JSX.Element {
 function CartActions(props: Props): JSX.Element {
   return (
     <div className="v5-sale-actions">
-      {props.handoffError && <p role="alert">{props.handoffError}</p>}
-      {props.voided === true && <p role="status">تم إلغاء البيع.</p>}
+      {props.handoffError && (
+        <p role="alert" className="v5-live-notice v5-live-notice--danger">
+          {props.handoffError}
+        </p>
+      )}
+      {props.voided === true && (
+        <p role="status" className="v5-live-notice">
+          تم إلغاء البيع.
+        </p>
+      )}
       <PrimaryAction {...props} />
     </div>
   );
@@ -154,7 +186,9 @@ function PrimaryAction(props: Props): JSX.Element {
   if (props.paid === true)
     return (
       <>
-        <p role="status">تم الدفع لهذه السلة.</p>
+        <p role="status" className="v5-live-notice v5-live-notice--success">
+          تم الدفع لهذه السلة.
+        </p>
         <button type="button" className="v5-sale-checkout" onClick={props.onNewSale}>
           بيع جديد
         </button>
@@ -168,10 +202,11 @@ function PrimaryAction(props: Props): JSX.Element {
         disabled={!props.canContinue}
         onClick={props.onContinue}
       >
-        المتابعة إلى الدفع ←
+        <span>المتابعة إلى الدفع</span>
+        <V5Icon name="forward" size={24} />
       </button>
     );
-  if (props.cancelled) return <p>تم إلغاء البيع.</p>;
+  if (props.cancelled) return <p className="v5-live-notice">تم إلغاء البيع.</p>;
   return (
     <button
       type="button"
@@ -179,7 +214,8 @@ function PrimaryAction(props: Props): JSX.Element {
       disabled={!props.canHandoff || props.handingOff}
       onClick={props.onHandoff}
     >
-      {props.handingOff ? 'جارٍ تسليم السلة…' : 'تسليم السلة للدفع ←'}
+      <span>{props.handingOff ? 'جارٍ تسليم السلة…' : 'تسليم السلة للدفع'}</span>
+      {!props.handingOff && <V5Icon name="forward" size={24} />}
     </button>
   );
 }
