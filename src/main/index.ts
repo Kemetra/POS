@@ -24,7 +24,10 @@ import { createReadDownWriter } from './catalogue/read-down/read-down-writer.js'
 import { createReadDownDriver } from './catalogue/read-down/read-down-driver.js';
 import { registerCatalogueHandlers } from './ipc/catalogue.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
-import { bindPaymentAttemptsRepository } from './payments/repositories/payment-attempts.repository.js';
+import {
+  bindCartPaymentGuard,
+  bindPaymentAttemptsRepository,
+} from './payments/repositories/payment-attempts.repository.js';
 import { bindPaymentTenderLinesRepository } from './payments/repositories/payment-tender-lines.repository.js';
 import { bindPaymentActionOutboxRepository } from './payments/repositories/payment-action-outbox.repository.js';
 import { createPaymentAttemptFsm } from './payments/fsm/payment-attempt-fsm.js';
@@ -656,6 +659,8 @@ app
       auditEmitter,
       isPackaged: app.isPackaged,
       productionResolver: catalogueResolver,
+      // Post-handoff cancel refuses a cart whose payment is started or settled.
+      hasPaymentForCart: bindCartPaymentGuard(db),
     });
     registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
 

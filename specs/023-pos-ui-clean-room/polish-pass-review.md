@@ -96,6 +96,7 @@ In the log, each capture's `lines` value lags the add that preceded it by one.
    - Main refuses that call with `frozen`. The dialog then stays open with no reason shown, confirmed in Electron.
    - Main's `cancelPostHandoff` has no preload or bridge exposure, and legacy `CartPane` uses the same `voidCart`. So production `/app/cart` has the same defect today.
    - It is a correctness item before G, not a V5-only gap.
+   - **Resolved on `fix/v5-post-handoff-void`:** `cart.cancelPostHandoff` is exposed through the typed bridge; the shared controller routes a frozen cart to it. Main also now refuses when the cart has a `started` or `settled` payment, since a paid cart stays `frozen_handed_off`.
 3. **New tab stop:** the line area (`role=region`, `tabIndex=0`) is also a tab stop while editing. Focus order becomes heading → line area → line controls.
 4. **Not re-verified in this pass:**
    - The `/app/sale-v5` legacy-shell preview, the paid state, and the static `#/dev/sale-proof`.

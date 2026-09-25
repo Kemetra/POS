@@ -31,20 +31,26 @@
 
 **Trigger:** Cart has been handed off to the payment terminal and must be recalled.
 
-**Requirement:** Manager-level session or `attribution_operator_id` from a manager.
+**Requirement:** Manager or admin session. The renderer bridge (`cart:cancelPostHandoff`) forwards
+only `cart_id`, `handoff_action_id` and `idempotency_key`; `attribution_operator_id` is dropped at
+the IPC boundary, so a cashier session cannot borrow manager authority from the renderer.
 
 **Normal flow:**
-1. Manager invokes `cart.cancelPostHandoff` with `handoff_action_id` and `attribution_operator_id`.
-2. Bridge verifies state is `frozen_handed_off` and attribution is from a manager.
+1. Manager confirms Void on the frozen cart. The shared Sale cart controller (legacy `/app/cart`
+   and V5) calls `cart.cancelPostHandoff` with the frozen envelope's `handoff_action_id`. It never
+   calls `cart.void` on a frozen cart and never falls back to it.
+2. Bridge verifies the session, cart ownership, `frozen_handed_off` state, and that the cart has
+   no `started` or `settled` payment attempt.
 3. Cart transitions to `cancelled`; audit event `cart.cancel.post_handoff` emitted.
 
 **Refused — `manager_attribution_required`:**
-- Caller is a cashier session with no `attribution_operator_id`.
-- Resolution: Cashier must request manager attribution via ManagerAttributionPrompt before retrying.
+- Caller is a cashier session. The renderer never offers post-handoff Void to a cashier.
 
 **Refused — `closed`:**
-- Cart is not in `frozen_handed_off` state.
-- Resolution: Check current cart state; cancel may already be in progress or complete.
+- The cart is no longer `frozen_handed_off`, or a payment for it is in progress (`started`) or
+  complete (`settled`). A paid sale is never cancelled through this path.
+- Resolution: The cart stays frozen and the confirmation stays open with generic copy. Complete
+  or cancel the payment first, or refetch cart state if it changed.
 
 ---
 

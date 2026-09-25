@@ -35,6 +35,12 @@ export interface CartHandlersDeps {
    * generically) — the prior behaviour.
    */
   productionResolver?: ItemRefResolver;
+  /**
+   * Post-handoff cancel guard (`bindCartPaymentGuard`): true while the cart
+   * has a started or settled payment attempt. Required so production can
+   * never cancel a paid or paying sale through `cart.cancelPostHandoff`.
+   */
+  hasPaymentForCart: (cart_id: string) => boolean;
 }
 
 /**
@@ -82,6 +88,7 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
     cartStore: bindCartStore(deps.dbHandle),
     logger: deps.logger,
     auditEmitter: deps.auditEmitter,
+    hasPaymentForCart: deps.hasPaymentForCart,
   };
 
   // Only attach `resolveItemRef` when one was resolved — omitting it lets

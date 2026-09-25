@@ -33,6 +33,8 @@ import type {
   CartDiscountPlaceholdersRemoveResponse,
   CartVoidRequest,
   CartVoidResponse,
+  CartCancelPostHandoffRequest,
+  CartCancelPostHandoffResponse,
   CartHandoffRequest,
   CartHandoffResponse,
   CartSubscribeRequest,
@@ -646,8 +648,16 @@ export interface CartBridgeAPI {
       req: CartDiscountPlaceholdersRemoveRequest,
     ): Promise<CartDiscountPlaceholdersRemoveResponse>;
   };
-  /** Voids a cart. Post-handoff void requires manager attribution. */
+  /** Voids a pre-handoff cart. Main refuses a `frozen_handed_off` cart (`frozen`). */
   void(req: CartVoidRequest): Promise<CartVoidResponse>;
+  /**
+   * Cancels a `frozen_handed_off` cart: the audited, manager-authorised
+   * post-handoff path. Main refuses a cashier and any cart with a started or
+   * settled payment. Optional on the TYPE only (same precedent as
+   * `snapshot?`): the production preload always wires it, and the sole
+   * caller fails closed when it is absent — never falling back to `void`.
+   */
+  cancelPostHandoff?(req: CartCancelPostHandoffRequest): Promise<CartCancelPostHandoffResponse>;
   /** Freezes the cart and constructs the PaymentIntentEnvelope. */
   handoff(req: CartHandoffRequest): Promise<CartHandoffResponse>;
   /** Push-style cart state updates (type-only in Phase 2; S1+ runtime). */
