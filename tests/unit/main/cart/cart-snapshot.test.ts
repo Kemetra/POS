@@ -80,6 +80,8 @@ async function fixture(): Promise<Fixture> {
     cartStore: bindCartStore(makeSqlJsHandle(db)),
     resolveItemRef: resolver,
     clock: advancingClock(),
+    // Contract since the §A4 review: snapshot needs the payments record.
+    cartPaymentStatus: () => 'none',
   });
   const c = await handlers.create({ idempotency_key: 'k-create' });
   if (c.kind !== 'ok') throw new Error('create failed');
@@ -199,6 +201,7 @@ describe('cart.snapshot — faithful, display-safe projection', () => {
           },
         ],
         discount_placeholders: [],
+        paid: false,
         envelope: null,
       },
     });
@@ -232,7 +235,7 @@ describe('cart.snapshot — faithful, display-safe projection', () => {
     const res = await f.handlers.snapshot({ cart_id: f.cart_id });
     if (res.kind !== 'ok') throw new Error('snapshot refused');
     expect(Object.keys(res.snapshot).sort()).toEqual(
-      ['cart_id', 'discount_placeholders', 'envelope', 'lines', 'state'].sort(),
+      ['cart_id', 'discount_placeholders', 'envelope', 'lines', 'paid', 'state'].sort(),
     );
     for (const line of res.snapshot.lines) {
       expect(Object.keys(line).sort()).toEqual(

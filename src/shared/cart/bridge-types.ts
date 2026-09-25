@@ -166,8 +166,13 @@ export type CartSubscribeResponse =
 //
 // V5 active cart read. Read-only: the renderer supplies ONLY the id of a cart
 // it already holds; main resolves scope/ownership from the trusted session.
-// The projection is display-safe: no tenant/branch/terminal/operator/session
-// identity, no catalogue item_ref, no attribution, no action ids.
+// The top-level projection (lines, placeholders) carries no
+// tenant/branch/terminal/operator/session identity, no catalogue item_ref, no
+// attribution and no action ids. The `envelope` is the exception: for an
+// unpaid handed-off cart it is the same envelope `cart.handoff` returned
+// (lines with item_ref and action ids, the handoff action, and session scope
+// ids), with manager attribution removed. See the §A4 record
+// `specs/023-pos-ui-clean-room/security-review/s-cart-snapshot-review.md`.
 
 export interface CartSnapshotRequest {
   readonly cart_id: string;
@@ -197,9 +202,16 @@ export interface CartSnapshot {
   readonly lines: ReadonlyArray<CartSnapshotLine>;
   readonly discount_placeholders: ReadonlyArray<CartSnapshotDiscountPlaceholder>;
   /**
-   * The persisted frozen envelope for a `frozen_handed_off` cart (the same
-   * object `cart.handoff` already returned to the renderer), so a reopened
-   * handed-off sale can continue to payment. `null` in every other state.
+   * True when main's payments record shows this handed-off cart as settled:
+   * a completed sale. It then carries no envelope and must never be offered
+   * to payment again. Always false for carts that are not handed off.
+   */
+  readonly paid: boolean;
+  /**
+   * The frozen envelope for an unpaid `frozen_handed_off` cart (the same
+   * object `cart.handoff` returned, manager attribution removed), so a
+   * reopened handed-off sale can continue to payment. `null` in every other
+   * state, and for a paid cart.
    */
   readonly envelope: PaymentIntentEnvelope | null;
 }

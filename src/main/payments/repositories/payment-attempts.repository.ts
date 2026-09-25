@@ -239,16 +239,29 @@ export function bindPaymentAttemptsRepository(db: DatabaseHandle): PaymentAttemp
 }
 
 /**
- * Read-only per-cart lookup for the post-handoff cancel guard (spec 005
- * FR-008/FR-033): true while any attempt for the cart is `started` (payment in
- * progress) or `settled` (the sale is paid). A cart stays `frozen_handed_off`
- * after settlement, so the cart row alone cannot tell a paid sale from an
- * unpaid handoff. Cancelled / failed / force-failed attempts do not block.
+ * Where a cart's payment stands, from the payments record alone. A cart row
+ * stays `frozen_handed_off` after settlement, so this is the only way main can
+ * tell a paid sale from an unpaid handoff.
+ *
+ *   - `settled`      — the sale is paid.
+ *   - `started`      — a payment is in progress.
+ *   - `force_failed` — a manager force-failed a stuck attempt; tender may
+ *                      already have been taken, so it is not "no payment".
+ *   - `none`         — no attempt, or only cancelled / failed ones (history).
+ *
+ * Precedence is settled > started > force_failed > none.
  */
-export function bindCartPaymentGuard(db: DatabaseHandle): (envelope_cart_id: string) => boolean {
+export type CartPaymentStatus = 'none' | 'started' | 'settled' | 'force_failed';
+
+/** Read-only lookup of {@link CartPaymentStatus} for one cart. */
+export function bindCartPaymentStatus(
+  db: DatabaseHandle,
+): (envelope_cart_id: string) => CartPaymentStatus {
   const stmt = db.prepare(
-    `SELECT 1 AS blocking FROM payment_attempts
-      WHERE envelope_cart_id=? AND state IN ('started', 'settled') LIMIT 1`,
-  ) as PrepareGet<{ blocking: number }>;
-  return (envelope_cart_id) => stmt.get(envelope_cart_id) !== undefined;
+    `SELECT state FROM payment_attempts
+      WHERE envelope_cart_id = ? AND state IN ('settled', 'started', 'force_failed')
+      ORDER BY CASE state WHEN 'settled' THEN 0 WHEN 'started' THEN 1 ELSE 2 END
+      LIMIT 1`,
+  ) as PrepareGet<{ state: 'settled' | 'started' | 'force_failed' }>;
+  return (envelope_cart_id) => stmt.get(envelope_cart_id)?.state ?? 'none';
 }

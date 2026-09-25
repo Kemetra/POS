@@ -44,6 +44,8 @@ function snapshot(overrides: Partial<CartSnapshot> = {}): CartSnapshot {
   return {
     cart_id: EXISTING,
     state: CartState.editing,
+    // Contract since the §A4 review: main reports a settled cart as paid.
+    paid: false,
     lines: [
       {
         line_id: 'line-a',

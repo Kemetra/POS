@@ -80,6 +80,8 @@ function makeDeps(overrides: Partial<PaymentsStartHandlerDeps>): PaymentsStartHa
     auditEmitter: {} as PaymentsStartHandlerDeps['auditEmitter'],
     uuid: () => 'attempt-B',
     clock: () => new Date('2026-06-19T09:00:00.000Z'),
+    // Required since the §A4 cart-eligibility check; these cases are not about it.
+    checkCartForPayment: () => ({ kind: 'ok' }),
     ...overrides,
   };
 }

@@ -38,6 +38,7 @@ import type { IdempotencyHelper } from '../idempotency.js';
 import type { PaymentAuditEmitter } from '../audit-emitter.js';
 import type { PaymentAttemptsRepository } from '../repositories/payment-attempts.repository.js';
 import type { PaymentsStartRequest, PaymentsStartResponse } from '../../../shared/bridge-api.js';
+import type { CheckCartForPayment } from '../cart-payment-eligibility.js';
 
 export interface PaymentsStartHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
@@ -55,12 +56,26 @@ export interface PaymentsStartHandlerDeps {
   uuid: () => string;
   /** Clock for testability — production wiring uses `() => new Date()`. */
   clock: () => Date;
+  /**
+   * Main-side cart authority (§A4 review): the named cart must be handed off
+   * in this session's tenant/branch, match its persisted envelope, and not be
+   * already paid. Required, so a dropped wiring cannot reopen the path.
+   */
+  checkCartForPayment: CheckCartForPayment;
 }
 
 export type PaymentsStartHandler = (req: PaymentsStartRequest) => Promise<PaymentsStartResponse>;
 
 export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): PaymentsStartHandler {
-  const { getCurrentSession, attemptsRepo, paymentAttemptFsm, idempotency, uuid, clock } = deps;
+  const {
+    getCurrentSession,
+    attemptsRepo,
+    paymentAttemptFsm,
+    idempotency,
+    uuid,
+    clock,
+    checkCartForPayment,
+  } = deps;
 
   return async function paymentsStart(req): Promise<PaymentsStartResponse> {
     // 1. Session gate (no attempt yet — no ownership/isolation check).
@@ -134,6 +149,21 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
       // committed outbox row is impossible in production. Refuse generically
       // rather than fabricate a response.
       return await Promise.resolve({ kind: 'refused', reason: 'internal_error' });
+    }
+
+    // 3a. Cart authority — the renderer supplies the envelope fields, so main
+    // re-derives eligibility from the carts + payments records before any
+    // write (including the stale-attempt cancel below). Synchronous with the
+    // FSM start: no await in between, so no cancel can interleave.
+    const eligibility = checkCartForPayment({
+      envelope_cart_id: req.envelope_cart_id,
+      envelope_handoff_action_id: req.envelope_handoff_action_id,
+      envelope_subtotal_minor: req.envelope_subtotal_minor,
+      tenant_id: session.tenant_id,
+      branch_id: session.branch_id,
+    });
+    if (eligibility.kind === 'refused') {
+      return await Promise.resolve({ kind: 'refused', reason: eligibility.reason });
     }
 
     // 3b. Stale-attempt recovery — a `started` attempt for a DIFFERENT cart on

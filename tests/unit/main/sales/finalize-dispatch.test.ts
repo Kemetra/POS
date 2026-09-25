@@ -427,3 +427,18 @@ describe('T094b — missing-row refusals', () => {
     expect(result.input.local_calendar_day).toBe('TZ:2026-05-27');
   });
 });
+
+describe('§A4 review — a cancelled cart is never finalized', () => {
+  it('refuses cart_envelope_not_found when the cart was cancelled after handoff', () => {
+    seedTerminalAssignment();
+    seedAttempt();
+    seedTenderLines();
+    seedSettledAudit();
+    seedFrozenCart();
+    db.run(`UPDATE carts SET state = 'cancelled' WHERE cart_id = 'cart-1'`);
+    const result = build();
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.reason).toBe('cart_envelope_not_found');
+  });
+});

@@ -210,6 +210,20 @@ export interface CartStore {
     onInserted?: () => void,
   ): void;
   /**
+   * Post-handoff cancel as ONE transaction (§A4 review): re-read the cart
+   * state, ask `isStillCancellable` (the payments record), write the outbox
+   * row, then UPDATE only while the cart is still `frozen_handed_off`. If any
+   * step finds the cart no longer cancellable, nothing is written (the whole
+   * transaction rolls back) and `false` is returned; `onInserted` (the audit
+   * emit) runs only on success, inside the transaction.
+   */
+  cancelFrozenCartAndOutbox(
+    cancel: CancelCartInput,
+    outbox: InsertOutboxInput,
+    isStillCancellable: () => boolean,
+    onInserted?: () => void,
+  ): boolean;
+  /**
    * Atomically writes the outbox row, freezes the cart (state=frozen_handed_off,
    * frozen_at, handoff_envelope_json), and calls `onInserted` inside the same
    * transaction — enabling audit emission to be atomic with the freeze.
@@ -316,6 +330,18 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
             updated_at = ?,
             last_action_id = ?
       WHERE cart_id = ?`,
+  ) as PrepareRun;
+  const cartStateStmt = db.prepare(`SELECT state FROM carts WHERE cart_id = ?`) as PrepareGet<{
+    state: string;
+  }>;
+  const cancelFrozenCartStmt = db.prepare(
+    `UPDATE carts
+        SET state = 'cancelled',
+            cancelled_at = ?,
+            cancellation_reason = ?,
+            updated_at = ?,
+            last_action_id = ?
+      WHERE cart_id = ? AND state = 'frozen_handed_off'`,
   ) as PrepareRun;
   const findLatestHandoffStmt = db.prepare(
     `SELECT action_id FROM cart_action_outbox
@@ -508,6 +534,31 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
         );
         onInserted?.();
       })();
+    },
+
+    cancelFrozenCartAndOutbox(cancel, outbox, isStillCancellable, onInserted): boolean {
+      const notCancellable = new Error('cart no longer cancellable');
+      try {
+        return db.transaction((): boolean => {
+          if (cartStateStmt.get(cancel.cart_id)?.state !== 'frozen_handed_off') return false;
+          if (!isStillCancellable()) return false;
+          writeOutbox(outbox);
+          const result = cancelFrozenCartStmt.run(
+            cancel.cancelled_at,
+            cancel.cancellation_reason,
+            cancel.updated_at,
+            cancel.last_action_id,
+            cancel.cart_id,
+          );
+          // The cart left `frozen_handed_off` after the check: roll back.
+          if (result.changes !== 1) throw notCancellable;
+          onInserted?.();
+          return true;
+        })();
+      } catch (err) {
+        if (err === notCancellable) return false;
+        throw err;
+      }
     },
 
     handoffCartAndOutbox(handoff, outbox, onInserted): void {

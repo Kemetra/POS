@@ -110,8 +110,9 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
     ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
   });
   const frozen = cartState === CartState.frozen_handed_off;
-  // Frozen alone is not "paid": only a settled attempt for THIS cart is.
-  const paid = frozen && cartId !== null && settledCartId === cartId;
+  // Frozen alone is not "paid": only a settled attempt for THIS cart is —
+  // known to the renderer, or reported by main when the cart was reopened.
+  const paid = frozen && cartId !== null && (settledCartId === cartId || cart.hydratedPaid);
 
   // Reset only after the bridge confirms the void; a refusal or rejected
   // transport keeps the existing cart. The voided cart stays cancelled in the

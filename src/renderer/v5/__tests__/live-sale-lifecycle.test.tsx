@@ -64,6 +64,8 @@ function frozenSnapshot(cartId: string = PAID): CartSnapshot {
   return {
     cart_id: cartId,
     state: CartState.frozen_handed_off,
+    // Contract since the §A4 review: main reports a settled cart as paid.
+    paid: false,
     lines: [
       {
         line_id: 'line-a',

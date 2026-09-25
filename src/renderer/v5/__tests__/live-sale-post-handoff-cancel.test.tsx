@@ -31,10 +31,11 @@ afterEach(() => {
   usePaymentStore.getState().reset();
 });
 
-function snapshot(): CartSnapshot {
+function snapshot(paid = false): CartSnapshot {
   return {
     cart_id: FROZEN,
     state: CartState.frozen_handed_off,
+    paid,
     lines: [
       {
         line_id: 'line-a',
@@ -47,24 +48,26 @@ function snapshot(): CartSnapshot {
       },
     ],
     discount_placeholders: [],
-    envelope: {
-      envelope_version: 'v1',
-      cart_id: FROZEN,
-      operator_session_id: 'session-1',
-      owning_operator_id: 'op-1',
-      tenant_id: 'tenant-1',
-      branch_id: 'branch-1',
-      terminal_id: 'terminal-1',
-      handoff_action_id: 'handoff-persisted',
-      created_at: '2026-09-25T09:05:00.000Z',
-      subtotal_minor: 1250,
-      lines: [],
-      discount_placeholders: [],
-    },
+    envelope: paid
+      ? null
+      : {
+          envelope_version: 'v1',
+          cart_id: FROZEN,
+          operator_session_id: 'session-1',
+          owning_operator_id: 'op-1',
+          tenant_id: 'tenant-1',
+          branch_id: 'branch-1',
+          terminal_id: 'terminal-1',
+          handoff_action_id: 'handoff-persisted',
+          created_at: '2026-09-25T09:05:00.000Z',
+          subtotal_minor: 1250,
+          lines: [],
+          discount_placeholders: [],
+        },
   };
 }
 
-function setup(role: Role, cancel: ReturnType<typeof vi.fn>) {
+function setup(role: Role, cancel: ReturnType<typeof vi.fn>, paid = false) {
   useFeatureFlagsStore.setState({ cart: true, productSearch: true, payments: true });
   useOperatorSessionStore.getState().hydrateSignedIn({
     id: 'session-1',
@@ -85,7 +88,7 @@ function setup(role: Role, cancel: ReturnType<typeof vi.fn>) {
   };
   const cart = {
     create: fns.create,
-    snapshot: vi.fn().mockResolvedValue({ kind: 'ok', snapshot: snapshot() }),
+    snapshot: vi.fn().mockResolvedValue({ kind: 'ok', snapshot: snapshot(paid) }),
     lines: { add: vi.fn(), update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
     discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
     void: fns.voidCart,
@@ -161,6 +164,18 @@ describe('V5 post-handoff cancel', () => {
   it('offers a cashier no post-handoff cancel', async () => {
     const fns = setup('cashier', vi.fn());
     await screen.findByRole('list', { name: 'أصناف السلة' });
+    expect(screen.queryByRole('button', { name: 'إلغاء البيع' })).not.toBeInTheDocument();
+    expect(fns.cancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('V5 reopening a sale main reports as paid', () => {
+  it('shows it as paid with New sale, never Continue to payment or Void', async () => {
+    const fns = setup('manager', vi.fn(), true);
+    await screen.findByRole('list', { name: 'أصناف السلة' });
+    expect(await screen.findByText('تم الدفع لهذه السلة.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'بيع جديد' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /المتابعة إلى الدفع/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'إلغاء البيع' })).not.toBeInTheDocument();
     expect(fns.cancel).not.toHaveBeenCalled();
   });

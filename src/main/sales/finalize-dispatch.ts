@@ -107,6 +107,7 @@ interface TerminalAssignmentRow {
 }
 
 interface CartEnvelopeRow {
+  state: string;
   handoff_envelope_json: string | null;
 }
 
@@ -223,10 +224,16 @@ export function buildFinalizeInput(deps: BuildFinalizeInputDeps): BuildFinalizeI
 
   // 5 — the frozen cart envelope → lines snapshot.
   const cartStmt = db.prepare(
-    `SELECT handoff_envelope_json FROM carts WHERE cart_id = ?`,
+    `SELECT state, handoff_envelope_json FROM carts WHERE cart_id = ?`,
   ) as PrepareGet<CartEnvelopeRow>;
   const cartRow = cartStmt.get(cart_id);
-  if (cartRow === undefined || cartRow.handoff_envelope_json === null) {
+  // §A4 review: a cancelled cart is never finalized, even if an attempt for
+  // it settled; only a still-handed-off cart becomes a sale.
+  if (
+    cartRow === undefined ||
+    cartRow.state !== 'frozen_handed_off' ||
+    cartRow.handoff_envelope_json === null
+  ) {
     return { kind: 'refused', reason: 'cart_envelope_not_found' };
   }
   let lines: readonly LineSnapshot[];

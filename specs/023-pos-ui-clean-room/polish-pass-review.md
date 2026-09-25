@@ -52,6 +52,10 @@ Presentation-only polish of the DEV-only `#/v5/sale` composition (V5Frame around
   - Dialogs use the overlay shadow.
   - The Latin secondary name aligns with the Arabic.
 
+## Owner decision
+
+**Approved 2026-09-25.** The owner approved these captures as the visual direction for the V5 Sale + V5Frame composition, which satisfies the `spec.md` gate.
+
 ## Evidence
 
 Evidence was captured in the real Electron 40 renderer (Vite dev server) with an isolated scratch `--user-data-dir`. The run used the dev fixtures (skip pairing, skip sign-in as manager, seed catalogue), the cart, productSearch and payments flags, and a dead API base. Viewports were set via CDP and `innerWidth` was verified. The full provenance is in [`screenshots/v5-polish-check-log.json`](./screenshots/v5-polish-check-log.json).
