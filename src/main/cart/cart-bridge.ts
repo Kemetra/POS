@@ -216,6 +216,51 @@ function parseEnvelope(json: string | null): PaymentIntentEnvelope | null {
   }
 }
 
+/**
+ * Who approves a post-handoff cancel: a manager or admin approves their own;
+ * a cashier needs a manager's attribution. `null` means attribution is
+ * required and missing (the only case a cashier can reach via the bridge,
+ * which drops attribution).
+ */
+function postHandoffApprover(
+  session: Pick<OperatorSessionRecord, 'role' | 'operator_id'>,
+  attributionOperatorId: string | undefined,
+): string | null {
+  if (session.role === 'manager' || session.role === 'admin') return session.operator_id;
+  return attributionOperatorId !== undefined && attributionOperatorId !== ''
+    ? attributionOperatorId
+    : null;
+}
+
+/**
+ * Why a (non-replay) post-handoff cancel cannot proceed, or null. Only a
+ * `frozen_handed_off` cart qualifies, and the renderer-supplied handoff action
+ * must be this cart's persisted handoff, so the audit record can never be
+ * mislabelled.
+ */
+function postHandoffCancelRefusal(
+  store: Pick<CartStore, 'findLatestHandoffActionId'>,
+  cartState: CartState,
+  req: { cart_id: string; handoff_action_id: string },
+): CartRefusalReason | null {
+  if (cartState !== CartState.frozen_handed_off) return 'closed';
+  return store.findLatestHandoffActionId(req.cart_id) === req.handoff_action_id
+    ? null
+    : 'stale_version';
+}
+
+/** A recorded outbox row is a replay of THIS post-handoff cancel (same cart and handoff). */
+function isSameCancelReplay(
+  replay: { action_kind: string; cart_id: string; payload_json: string },
+  req: { cart_id: string; handoff_action_id: string },
+): boolean {
+  return (
+    replay.action_kind === 'cart.cancel.post_handoff' &&
+    replay.cart_id === req.cart_id &&
+    recordedHandoffAction(replay.payload_json) === req.handoff_action_id
+  );
+}
+
 /** The handoff action recorded in a post-handoff cancel outbox payload. */
 function recordedHandoffAction(payloadJson: string): unknown {
   try {
@@ -933,10 +978,8 @@ export class CartBridgeHandlers {
     if (gate.kind !== 'ok') return refuse(gate.reason);
 
     // Cashier must supply attribution; manager/admin may act directly.
-    const isManagerOrAdmin = session.role === 'manager' || session.role === 'admin';
-    if (!isManagerOrAdmin && !req.attribution_operator_id) {
-      return refuse('manager_attribution_required');
-    }
+    const approvingSupervisorId = postHandoffApprover(session, req.attribution_operator_id);
+    if (approvingSupervisorId === null) return refuse('manager_attribution_required');
 
     // Without the payments record main cannot tell a paid sale from an unpaid
     // handoff, so refuse rather than guess.
@@ -948,31 +991,16 @@ export class CartBridgeHandlers {
     // cancel that did not happen.
     const replay = store.getOutboxRow(req.idempotency_key);
     if (replay !== undefined) {
-      if (
-        replay.action_kind !== 'cart.cancel.post_handoff' ||
-        replay.cart_id !== req.cart_id ||
-        recordedHandoffAction(replay.payload_json) !== req.handoff_action_id
-      ) {
-        return refuse('idempotency_payload_mismatch');
-      }
-      return { kind: 'ok' };
+      return isSameCancelReplay(replay, req)
+        ? { kind: 'ok' }
+        : refuse('idempotency_payload_mismatch');
     }
 
-    // Only frozen_handed_off carts may be post-handoff cancelled.
-    const cancelCartState = cart.state as CartState;
-    if (cancelCartState !== CartState.frozen_handed_off) return refuse('closed');
-
-    // The renderer-supplied handoff action must be this cart's persisted
-    // handoff, so the audit record can never be mislabelled.
-    if (store.findLatestHandoffActionId(req.cart_id) !== req.handoff_action_id) {
-      return refuse('stale_version');
-    }
+    const precondition = postHandoffCancelRefusal(store, cart.state as CartState, req);
+    if (precondition !== null) return refuse(precondition);
 
     const now = this.clock().toISOString();
     const event_id = randomUUID();
-    const approvingSupervisorId = isManagerOrAdmin
-      ? session.operator_id
-      : (req.attribution_operator_id ?? session.operator_id);
 
     const cancelled = store.cancelFrozenCartAndOutbox(
       {
@@ -1237,21 +1265,12 @@ export class CartBridgeHandlers {
     if (ownership.kind !== 'ok') return Promise.resolve(refuse(ownership.reason));
 
     const state = cart.state as CartState;
-    let paid = false;
-    let envelope: Readonly<PaymentIntentEnvelope> | null = null;
-    if (state === CartState.frozen_handed_off) {
-      // A settled cart is a completed sale: report it paid and hand back no
-      // payable envelope, so it can never be offered to payment again.
-      const paymentStatus = this.deps.cartPaymentStatus;
-      if (paymentStatus === undefined) return Promise.resolve(refuse('not_implemented'));
-      paid = paymentStatus(cart.cart_id) === 'settled';
-      if (!paid) {
-        const persisted = parseEnvelope(cart.handoff_envelope_json);
-        // Unreadable envelope: refuse generically; never surface parse text.
-        if (persisted === null) return Promise.resolve(refuse('not_implemented'));
-        envelope = rendererEnvelope(persisted);
-      }
-    }
+    const payable =
+      state === CartState.frozen_handed_off
+        ? this.frozenCartPayment(cart.cart_id, cart.handoff_envelope_json)
+        : { paid: false, envelope: null };
+    if (payable === null) return Promise.resolve(refuse('not_implemented'));
+    const { paid, envelope } = payable;
 
     this.deps.logger?.info({ event: 'cart.snapshot.ok', cart_id: cart.cart_id }, 'cart.snapshot');
     return Promise.resolve({
@@ -1275,6 +1294,23 @@ export class CartBridgeHandlers {
         envelope,
       },
     });
+  }
+
+  /**
+   * Payment view of a handed-off cart for `snapshot`. A settled cart is a
+   * completed sale: `paid` and no payable envelope, so it can never be offered
+   * to payment again. `null` (refuse generically) when the payments record is
+   * not wired or the persisted envelope is unreadable — never parse text.
+   */
+  private frozenCartPayment(
+    cart_id: string,
+    envelopeJson: string | null,
+  ): { paid: boolean; envelope: Readonly<PaymentIntentEnvelope> | null } | null {
+    const paymentStatus = this.deps.cartPaymentStatus;
+    if (paymentStatus === undefined) return null;
+    if (paymentStatus(cart_id) === 'settled') return { paid: true, envelope: null };
+    const persisted = parseEnvelope(envelopeJson);
+    return persisted === null ? null : { paid: false, envelope: rendererEnvelope(persisted) };
   }
 
   // ── Internal gates ──────────────────────────────────────────────────

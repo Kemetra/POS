@@ -66,6 +66,47 @@ export interface PaymentsStartHandlerDeps {
 
 export type PaymentsStartHandler = (req: PaymentsStartRequest) => Promise<PaymentsStartResponse>;
 
+/**
+ * Stale-attempt recovery — a `started` attempt for a DIFFERENT cart on this
+ * terminal must not block (or leak into) a new checkout. The FSM's
+ * partial-unique-index on (terminal_id) WHERE state='started' otherwise
+ * refuses `attempt_already_started_on_terminal`, and PaymentSurface would
+ * reuse the orphan's already-settled balance (remaining=0) → the cashier can
+ * never settle cart B. Discard the orphan (LIFO-reverse + cancel) so a clean
+ * attempt can start. A started attempt for the SAME cart is the legitimate
+ * split-tender / duplicate-start case and is left to the FSM.
+ */
+function discardStaleAttemptForOtherCart(
+  deps: Pick<PaymentsStartHandlerDeps, 'attemptsRepo' | 'paymentAttemptFsm'>,
+  terminalId: string,
+  req: PaymentsStartRequest,
+  now: string,
+): void {
+  const existingStarted = deps.attemptsRepo.findStartedByTerminal(terminalId);
+  if (existingStarted?.envelope_cart_id === undefined) return;
+  if (existingStarted.envelope_cart_id === req.envelope_cart_id) return;
+  deps.paymentAttemptFsm.cancel({
+    payment_attempt_id: existingStarted.payment_attempt_id,
+    cancelled_at: now,
+    action_id: `${req.idempotency_key}:stale-cancel`,
+  });
+}
+
+/**
+ * Bridge-boundary input check. The contract types envelope_version as the
+ * literal 'v1', so another value can only come from an out-of-contract caller;
+ * cast through `unknown` so the check is not optimised away. The subtotal must
+ * be a safe non-negative integer (Constitution §II, no floats for money).
+ */
+function isValidStartInput(req: PaymentsStartRequest): boolean {
+  const envelopeVersionRaw = req.envelope_version as unknown;
+  return (
+    envelopeVersionRaw === 'v1' &&
+    Number.isSafeInteger(req.envelope_subtotal_minor) &&
+    req.envelope_subtotal_minor >= 0
+  );
+}
+
 export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): PaymentsStartHandler {
   const {
     getCurrentSession,
@@ -88,19 +129,8 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
     }
     const session = gate.session;
 
-    // 2. Input validation. The renderer-facing contract types
-    // envelope_version as the literal 'v1', so a value other than 'v1'
-    // can only arrive via an out-of-contract caller (e.g., a renderer
-    // that bypasses the typed bridge). The runtime check defends against
-    // that out-of-contract case; the compile-time invariant is the
-    // happy-path guarantee. Cast through `unknown` so eslint's
-    // no-unnecessary-condition rule does not collapse the check away
-    // (it would, because the static type is the singleton 'v1').
-    const envelopeVersionRaw = req.envelope_version as unknown;
-    if (envelopeVersionRaw !== 'v1') {
-      return await Promise.resolve({ kind: 'refused', reason: 'invalid_input' });
-    }
-    if (!Number.isSafeInteger(req.envelope_subtotal_minor) || req.envelope_subtotal_minor < 0) {
+    // 2. Input validation (see isValidStartInput).
+    if (!isValidStartInput(req)) {
       return await Promise.resolve({ kind: 'refused', reason: 'invalid_input' });
     }
 
@@ -166,25 +196,8 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
       return await Promise.resolve({ kind: 'refused', reason: eligibility.reason });
     }
 
-    // 3b. Stale-attempt recovery — a `started` attempt for a DIFFERENT cart on
-    // this terminal must not block (or leak into) a new checkout. The FSM's
-    // partial-unique-index on (terminal_id) WHERE state='started' otherwise
-    // refuses `attempt_already_started_on_terminal`, and PaymentSurface would
-    // reuse the orphan's already-settled balance (remaining=0) → the cashier
-    // can never settle cart B. Discard the orphan (LIFO-reverse + cancel) so a
-    // clean attempt can start. A started attempt for the SAME cart is the
-    // legitimate split-tender / duplicate-start case and is left to the FSM.
-    const existingStarted = attemptsRepo.findStartedByTerminal(session.terminal_id);
-    if (
-      existingStarted !== undefined &&
-      existingStarted.envelope_cart_id !== req.envelope_cart_id
-    ) {
-      paymentAttemptFsm.cancel({
-        payment_attempt_id: existingStarted.payment_attempt_id,
-        cancelled_at: now,
-        action_id: `${req.idempotency_key}:stale-cancel`,
-      });
-    }
+    // 3b. Stale-attempt recovery (see discardStaleAttemptForOtherCart).
+    discardStaleAttemptForOtherCart(deps, session.terminal_id, req, now);
 
     // 4. Fresh path — invoke the FSM. The FSM itself opens a SQLite
     // transaction, inserts the attempt row, and writes the outbox row.

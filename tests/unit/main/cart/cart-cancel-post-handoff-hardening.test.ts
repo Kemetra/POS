@@ -132,18 +132,7 @@ function expectUntouched(f: Fixture): void {
   expect(f.emit).not.toHaveBeenCalled();
 }
 
-describe('cancelPostHandoff — handoff action is verified against the persisted handoff', () => {
-  it('refuses stale_version when the handoff action id does not match', async () => {
-    const f = await frozenCart();
-    const res = await f.as(manager).cancelPostHandoff({
-      cart_id: f.cartId,
-      handoff_action_id: 'handoff-forged',
-      idempotency_key: 'cancel-1',
-    });
-    expect(res).toEqual({ kind: 'refused', reason: 'stale_version' });
-    expectUntouched(f);
-  });
-
+describe('cancelPostHandoff — verified handoff action on success', () => {
   it('records the verified handoff action in the audit payload on success', async () => {
     const f = await frozenCart();
     const res = await f.as(manager).cancelPostHandoff({
@@ -196,51 +185,45 @@ describe('cancelPostHandoff — idempotency replay is bound to the cart', () => 
   });
 });
 
-describe('cancelPostHandoff — payment-status dependency fails closed', () => {
-  it('refuses not_implemented, writing nothing, when no payment-status source is wired', async () => {
-    const f = await frozenCart();
-    const res = await f.as(manager, null).cancelPostHandoff({
-      cart_id: f.cartId,
-      handoff_action_id: HANDOFF,
-      idempotency_key: 'cancel-3',
-    });
-    expect(res).toEqual({ kind: 'refused', reason: 'not_implemented' });
-    expectUntouched(f);
-  });
-});
+interface RefusalCase {
+  readonly actor: OperatorSessionRecord;
+  readonly reason: string;
+  readonly handoff?: string;
+  readonly cartId?: string;
+  readonly noPaymentSource?: boolean;
+}
 
-describe('cancelPostHandoff — ownership and isolation', () => {
-  it.each([
-    [
-      'a manager in another branch',
-      session('manager', 'm-b2', { branch_id: 'branch-2' }),
-      'tenant_isolation',
-    ],
-    [
-      'a manager in another tenant',
-      session('manager', 'm-t2', { tenant_id: 'tenant-2' }),
-      'tenant_isolation',
-    ],
-    ["another session's cashier", session('cashier', 'sess-other-cashier'), 'wrong_owner'],
-  ] as const)('refuses %s', async (_label, actor, reason) => {
-    const f = await frozenCart();
-    const res = await f.as(actor).cancelPostHandoff({
-      cart_id: f.cartId,
-      handoff_action_id: HANDOFF,
-      idempotency_key: `cancel-${actor.id}`,
-    });
-    expect(res).toEqual({ kind: 'refused', reason });
-    expectUntouched(f);
-  });
+const REFUSALS: ReadonlyArray<readonly [string, RefusalCase]> = [
+  [
+    'a forged handoff action (stale_version)',
+    { actor: manager, handoff: 'handoff-forged', reason: 'stale_version' },
+  ],
+  [
+    'a missing payment-status source (fails closed)',
+    { actor: manager, noPaymentSource: true, reason: 'not_implemented' },
+  ],
+  [
+    'a manager in another branch',
+    { actor: session('manager', 'm-b2', { branch_id: 'branch-2' }), reason: 'tenant_isolation' },
+  ],
+  [
+    'a manager in another tenant',
+    { actor: session('manager', 'm-t2', { tenant_id: 'tenant-2' }), reason: 'tenant_isolation' },
+  ],
+  ["another session's cashier", { actor: session('cashier', 'sess-x'), reason: 'wrong_owner' }],
+  ['an unknown cart id', { actor: manager, cartId: 'cart-does-not-exist', reason: 'wrong_owner' }],
+];
 
-  it('refuses wrong_owner for an unknown cart id', async () => {
+describe('cancelPostHandoff — refusals write nothing', () => {
+  it.each(REFUSALS)('refuses %s', async (_label, c) => {
     const f = await frozenCart();
-    const res = await f.as(manager).cancelPostHandoff({
-      cart_id: 'cart-does-not-exist',
-      handoff_action_id: HANDOFF,
-      idempotency_key: 'cancel-unknown',
+    const handlers = c.noPaymentSource === true ? f.as(c.actor, null) : f.as(c.actor);
+    const res = await handlers.cancelPostHandoff({
+      cart_id: c.cartId ?? f.cartId,
+      handoff_action_id: c.handoff ?? HANDOFF,
+      idempotency_key: `cancel-${c.actor.id}`,
     });
-    expect(res).toEqual({ kind: 'refused', reason: 'wrong_owner' });
+    expect(res).toEqual({ kind: 'refused', reason: c.reason });
     expectUntouched(f);
   });
 });

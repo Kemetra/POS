@@ -55,16 +55,9 @@ const SESSION: OperatorSessionRecord = {
 const resolver: ItemRefResolver = () =>
   Promise.resolve({ kind: 'ok', display_name: 'باراسيتامول', unit_price_minor: 1250 });
 
-async function handedOff(status: CartPaymentStatus | null): Promise<{
-  db: SqlJsDatabase;
-  handlers: CartBridgeHandlers;
-  cartId: string;
-  handoffJson: string;
-}> {
-  const db = new SQL.Database();
-  for (const sql of MIGRATIONS) db.run(sql);
+function handlersFor(db: SqlJsDatabase, status: CartPaymentStatus | null): CartBridgeHandlers {
   let t = Date.parse('2026-09-25T10:00:00.000Z');
-  const handlers = new CartBridgeHandlers({
+  return new CartBridgeHandlers({
     getCurrentSession: () => SESSION,
     getTerminalId: () => 'terminal-1',
     cartStore: bindCartStore(makeSqlJsHandle(db)),
@@ -72,6 +65,12 @@ async function handedOff(status: CartPaymentStatus | null): Promise<{
     clock: () => new Date((t += 1000)),
     ...(status === null ? {} : { cartPaymentStatus: () => status }),
   });
+}
+
+/** A cart with one line, created through the real handlers. */
+async function cartWithLine(
+  handlers: CartBridgeHandlers,
+): Promise<{ cartId: string; lineId: string }> {
   const c = await handlers.create({ idempotency_key: 'k-create' });
   if (c.kind !== 'ok') throw new Error('create failed');
   const a = await handlers.linesAdd({
@@ -81,21 +80,38 @@ async function handedOff(status: CartPaymentStatus | null): Promise<{
     idempotency_key: 'k-add',
   });
   if (a.kind !== 'ok') throw new Error('add failed');
-  // A manager-attributed discount placeholder: the attribution is manager identity.
+  return { cartId: c.cart_id, lineId: a.line_id };
+}
+
+/** A manager-attributed discount placeholder: the attribution is manager identity. */
+function seedManagerDiscount(db: SqlJsDatabase, cartId: string, lineId: string): void {
   db.run(
     `INSERT INTO cart_line_discount_placeholders
        (placeholder_id, cart_id, line_id, placeholder_kind, requires_manager_attribution,
         attribution_operator_id, created_at)
      VALUES ('dp-1', ?, ?, 'percent_above_threshold', 1, ?, '2026-09-25T10:00:30.000Z')`,
-    [c.cart_id, a.line_id, MANAGER_SECRET],
+    [cartId, lineId, MANAGER_SECRET],
   );
+}
+
+async function handedOff(status: CartPaymentStatus | null): Promise<{
+  db: SqlJsDatabase;
+  handlers: CartBridgeHandlers;
+  cartId: string;
+  handoffJson: string;
+}> {
+  const db = new SQL.Database();
+  for (const sql of MIGRATIONS) db.run(sql);
+  const handlers = handlersFor(db, status);
+  const { cartId, lineId } = await cartWithLine(handlers);
+  seedManagerDiscount(db, cartId, lineId);
   const h = await handlers.handoff({
-    cart_id: c.cart_id,
-    per_line_versions: [{ line_id: a.line_id, version: 1 }],
+    cart_id: cartId,
+    per_line_versions: [{ line_id: lineId, version: 1 }],
     idempotency_key: 'k-handoff',
   });
   if (h.kind !== 'ok') throw new Error('handoff refused');
-  return { db, handlers, cartId: c.cart_id, handoffJson: JSON.stringify(h) };
+  return { db, handlers, cartId, handoffJson: JSON.stringify(h) };
 }
 
 describe('cart.snapshot — payment aware', () => {

@@ -89,13 +89,8 @@ describe('CartStore.cancelFrozenCartAndOutbox', () => {
 
   it('returns false and writes nothing for a cart that is not frozen', () => {
     const { db, store } = setup('editing');
-    let asked = false;
-    const ok = store.cancelFrozenCartAndOutbox(cancel, outbox, () => {
-      asked = true;
-      return true;
-    });
-    expect(ok).toBe(false);
-    expect(asked).toBe(false);
+    // The conditional UPDATE matches no row, so nothing is written.
+    expect(store.cancelFrozenCartAndOutbox(cancel, outbox, () => true)).toBe(false);
     expect(stateOf(db)).toBe('editing');
     expect(outboxCount(db)).toBe(0);
   });

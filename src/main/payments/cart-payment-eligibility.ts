@@ -43,6 +43,27 @@ function persistedHandoff(
   }
 }
 
+/** The cart exists, is handed off, and belongs to the session's tenant and branch. */
+function isHandedOffInScope(
+  cart: CartForPaymentRow | undefined,
+  req: CartPaymentEligibilityRequest,
+): cart is CartForPaymentRow {
+  return (
+    cart?.state === 'frozen_handed_off' &&
+    cart.tenant_id === req.tenant_id &&
+    cart.branch_id === req.branch_id
+  );
+}
+
+/** The request names exactly the persisted handoff (action and subtotal). */
+function matchesPersistedHandoff(json: string | null, req: CartPaymentEligibilityRequest): boolean {
+  const handoff = persistedHandoff(json);
+  return (
+    handoff?.handoff_action_id === req.envelope_handoff_action_id &&
+    handoff.subtotal_minor === req.envelope_subtotal_minor
+  );
+}
+
 /**
  * Main-side authority for "may this cart be paid now?" (§A4 review,
  * 2026-09-25). `payments.start` receives the envelope fields from the
@@ -67,20 +88,8 @@ export function bindCartPaymentEligibility(db: DatabaseHandle): CheckCartForPaym
 
   return (req) => {
     const cart = cartStmt.get(req.envelope_cart_id);
-    if (
-      cart === undefined ||
-      cart.state !== 'frozen_handed_off' ||
-      cart.tenant_id !== req.tenant_id ||
-      cart.branch_id !== req.branch_id
-    ) {
-      return { kind: 'refused', reason: 'cart_lost' };
-    }
-    const handoff = persistedHandoff(cart.handoff_envelope_json);
-    if (
-      handoff === null ||
-      handoff.handoff_action_id !== req.envelope_handoff_action_id ||
-      handoff.subtotal_minor !== req.envelope_subtotal_minor
-    ) {
+    if (!isHandedOffInScope(cart, req)) return { kind: 'refused', reason: 'cart_lost' };
+    if (!matchesPersistedHandoff(cart.handoff_envelope_json, req)) {
       return { kind: 'refused', reason: 'stale_handoff' };
     }
     if (paymentStatus(req.envelope_cart_id) === 'settled') {
