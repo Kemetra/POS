@@ -553,6 +553,14 @@
   cursor: pointer;
 }
 
+/*
+ * The static proof's arrow span is the CTA's last child; the live CTA uses an
+ * SVG arrow, and while handing off the label span is last. Keep it CTA-sized.
+ */
+.v5-live-sale .v5-sale-checkout span:last-child {
+  font-size: inherit;
+}
+
 .v5-live-sale .v5-sale-checkout:hover:not(:disabled) {
   border-color: var(--color-primary-emphasis);
   background: var(--color-primary-emphasis);

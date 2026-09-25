@@ -169,3 +169,12 @@ describe('v5 Sale polish — frozen cart stays keyboard-scrollable', () => {
     expect(screen.getByRole('region', { name: 'بنود السلة' })).toHaveAttribute('tabindex', '0');
   });
 });
+
+describe('v5 Sale polish — CTA label size', () => {
+  it('keeps the CTA label at the CTA size when the arrow is absent (handing off)', () => {
+    const css = readFileSync(resolve(__dirname, '../sale/live-sale.css'), 'utf8');
+    const rule = /\.v5-live-sale \.v5-sale-checkout span:last-child\s*\{([^}]*)\}/.exec(css);
+    expect(rule, 'live CTA label override').not.toBeNull();
+    expect(rule?.[1]).toMatch(/font-size:\s*inherit/);
+  });
+});
