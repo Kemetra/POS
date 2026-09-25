@@ -3,6 +3,7 @@ import type { CatalogueSearchState } from '../../stores/catalogueSearchStore';
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
 import { useDebouncedSearch } from '../../stores/useDebouncedSearch';
 import type { FreshnessState, RefreshFeedback } from '../../sale/useCatalogueFreshness';
+import { V5Icon } from '../foundation/V5Icon';
 import { LiveSearchResults } from './LiveSearchResults';
 
 interface Props {
@@ -40,6 +41,15 @@ const FRESHNESS_COPY: Record<FreshnessState, (stamp: string) => string> = {
   unavailable: () => 'حالة الكتالوج غير متاحة',
 };
 
+/** States in which search cannot be trusted to find stock: say so, don't whisper it. */
+const FRESHNESS_TONE: Record<FreshnessState, 'warning' | 'neutral'> = {
+  loading: 'neutral',
+  'never-synced': 'warning',
+  'synced-empty': 'warning',
+  updated: 'neutral',
+  unavailable: 'warning',
+};
+
 const FEEDBACK_COPY: Record<RefreshFeedback, string | null> = {
   idle: null,
   started: 'جارٍ التحديث…',
@@ -51,25 +61,26 @@ export function LiveProductRail(props: Props): JSX.Element {
   return (
     <section className="v5-sale-products" aria-labelledby="v5-live-products-title">
       <div className="v5-sale-region-heading">
-        <div>
-          <span className="v5-sale-eyebrow">اكتشاف المنتجات</span>
-          <h2 id="v5-live-products-title">الأصناف والمنتجات</h2>
-        </div>
-        <span className="v5-sale-count">{count} أصناف</span>
+        <h2 id="v5-live-products-title">الأصناف والمنتجات</h2>
       </div>
       <div className="v5-sale-search-area">
         <SearchFields {...props} />
-        <FreshnessBar {...props} />
       </div>
       <div className="v5-sale-list-heading">
-        <span>نتائج البحث</span>
+        <span>
+          نتائج البحث
+          {count > 0 && <span className="v5-live-result-count"> · {count}</span>}
+        </span>
         <span>السعر</span>
       </div>
-      <LiveSearchResults
-        state={props.state}
-        onSelect={props.onSelect}
-        onRecover={props.onRecover}
-      />
+      <div className="v5-live-results">
+        <LiveSearchResults
+          state={props.state}
+          onSelect={props.onSelect}
+          onRecover={props.onRecover}
+        />
+      </div>
+      <FreshnessBar {...props} />
     </section>
   );
 }
@@ -103,7 +114,7 @@ function SearchFields(props: Props): JSX.Element {
       <label htmlFor="v5-live-search">البحث بالاسم أو الباركود</label>
       <div className="v5-sale-search-field">
         <span aria-hidden="true" className="v5-sale-search-icon">
-          ⌕
+          <V5Icon name="search" />
         </span>
         <input
           ref={props.searchRef}
@@ -121,7 +132,10 @@ function SearchFields(props: Props): JSX.Element {
       <label htmlFor="v5-live-scan" className="v5-live-scan-label">
         التقاط مسح الباركود
       </label>
-      <div className="v5-sale-search-field">
+      <div className="v5-live-scan-field">
+        <span aria-hidden="true" className="v5-live-scan-icon">
+          <V5Icon name="scan" />
+        </span>
         <input
           id="v5-live-scan"
           type="text"
@@ -144,7 +158,12 @@ function FreshnessBar(props: Props): JSX.Element {
   const stamp = props.lastSuccessAt === null ? '' : formatStamp(props.lastSuccessAt);
   const feedback = FEEDBACK_COPY[props.feedback];
   return (
-    <div className="v5-live-freshness" role="status" aria-live="polite">
+    <div
+      className="v5-live-freshness"
+      role="status"
+      aria-live="polite"
+      data-tone={FRESHNESS_TONE[props.freshness]}
+    >
       <span>{FRESHNESS_COPY[props.freshness](stamp)}</span>
       {feedback !== null && <span>{feedback}</span>}
       <button type="button" onClick={props.onRefresh} disabled={props.refreshing}>

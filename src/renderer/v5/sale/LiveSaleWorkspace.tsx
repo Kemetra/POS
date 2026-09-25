@@ -24,10 +24,11 @@ export function LiveSaleWorkspace(props: Props): JSX.Element {
   const cartEnabled = useFeatureFlagsStore((state) => state.cart);
   const productSearchEnabled = useFeatureFlagsStore((state) => state.productSearch);
   const session = useOperatorSessionStore((state) => state.state);
-  if (session.kind !== 'signedIn') return <section className="v5-sale" dir="rtl" lang="ar" />;
+  if (session.kind !== 'signedIn')
+    return <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" />;
   if (!cartEnabled)
     return (
-      <section className="v5-sale" dir="rtl" lang="ar">
+      <section className="v5-sale v5-live-sale" dir="rtl" lang="ar">
         <p className="v5-live-message">سلة البيع غير مفعّلة على هذا الجهاز بعد.</p>
       </section>
     );
@@ -133,7 +134,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
   // projection) and no empty cart that could be mistaken for the real one.
   if (cart.hydration !== 'ready') {
     return (
-      <section className="v5-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
+      <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
         <SaleTitle />
         <CartHydrationState failed={cart.hydration === 'failed'} onRetry={cart.retryHydration} />
       </section>
@@ -141,7 +142,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
   }
 
   return (
-    <section className="v5-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
+    <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
       <SaleTitle />
       <div className="v5-sale-workstation" data-catalogue={String(props.catalogueEnabled)}>
         {props.catalogueEnabled && (

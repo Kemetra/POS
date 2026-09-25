@@ -1,6 +1,7 @@
 import { useRef, useState, type JSX } from 'react';
 import type { CartLineItem } from '../../sale/useSaleCartController';
 import { format, of } from '../../../shared/money';
+import { V5Icon } from '../foundation/V5Icon';
 import { SaleDialog } from './SaleDialog';
 
 // Legacy LineNotePopover parity: same length cap, unchanged-save and empty-clear guards.
@@ -73,7 +74,7 @@ function QuantityControl(props: LineProps): JSX.Element {
     <div className="v5-sale-quantity" aria-label={`الكمية ${String(line.quantity)}`}>
       {props.editable && (
         <button type="button" aria-label={`إنقاص كمية ${line.displayName}`} onClick={decrement}>
-          −
+          <V5Icon name="minus" />
         </button>
       )}
       <strong dir="ltr">{line.quantity}</strong>
@@ -85,7 +86,7 @@ function QuantityControl(props: LineProps): JSX.Element {
             props.onIncrement(line);
           }}
         >
-          ＋
+          <V5Icon name="plus" />
         </button>
       )}
     </div>
@@ -101,17 +102,15 @@ export function VoidControl({ onVoid }: { onVoid: () => Promise<boolean> }): JSX
   };
   return (
     <>
-      <div className="v5-live-toolbar">
-        <button
-          type="button"
-          className="v5-live-void"
-          onClick={() => {
-            setOpen(true);
-          }}
-        >
-          إلغاء البيع
-        </button>
-      </div>
+      <button
+        type="button"
+        className="v5-live-void"
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        إلغاء البيع
+      </button>
       {open && (
         <SaleDialog label="تأكيد إلغاء البيع" onDismiss={close} initialFocusRef={backRef}>
           <h3 className="v5-live-dialog-title">إلغاء البيع؟</h3>
@@ -167,7 +166,11 @@ export function NoteDialog(props: {
           setText(event.target.value);
         }}
       />
-      {failed && <p role="alert">تعذّر حفظ الملاحظة.</p>}
+      {failed && (
+        <p role="alert" className="v5-live-notice v5-live-notice--danger">
+          تعذّر حفظ الملاحظة.
+        </p>
+      )}
       <div>
         <button type="button" className="v5-live-btn" onClick={props.onClose}>
           إلغاء

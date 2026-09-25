@@ -44,7 +44,7 @@
 /* 1024–1279px: the POS floor tier. Narrower nav, tighter gutters; labels stay. */
 @media (max-width: 1279px) {
   .v5-frame {
-    --v5-nav-inline-size: 152px;
+    --v5-nav-inline-size: 140px;
     --v5-gutter: var(--space-2);
     --v5-gap: var(--space-2);
   }

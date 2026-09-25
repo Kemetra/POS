@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
+import { V5Icon } from '../foundation/V5Icon';
 import { roleLabelAr, visibleNavEntries } from './nav-model';
 
 /**
@@ -18,7 +19,7 @@ export function V5Navigation(): JSX.Element {
     <nav className="v5-frame__nav" aria-label="التنقل الرئيسي">
       <div className="v5-frame__brand">
         <span className="v5-frame__brand-mark" aria-hidden="true">
-          ✚
+          <V5Icon name="cross" size={18} />
         </span>
         <span className="v5-frame__brand-name v5-ltr">POS Pulse</span>
       </div>

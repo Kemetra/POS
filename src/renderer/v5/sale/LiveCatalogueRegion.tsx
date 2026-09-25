@@ -88,7 +88,11 @@ function ConfirmAddDialog(props: {
       <p dir="ltr" className="v5-live-dialog-price">
         {format(of(product.price_minor, 'EGP'))}
       </p>
-      {confirm.error && <p role="alert">{confirm.error}</p>}
+      {confirm.error && (
+        <p role="alert" className="v5-live-notice v5-live-notice--danger">
+          {confirm.error}
+        </p>
+      )}
       <div className="v5-live-dialog-actions">
         <button
           type="button"
