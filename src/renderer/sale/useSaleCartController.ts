@@ -109,6 +109,8 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
   envelope: PaymentIntentEnvelope | null;
   handoffError: string | null;
   hydration: CartHydration;
+  /** Main reported the hydrated cart as a settled (paid) sale. */
+  hydratedPaid: boolean;
   retryHydration: () => void;
   subtotalMinor: number;
   itemCount: number;
@@ -145,6 +147,7 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
     hydrateCartId === null ? 'ready' : 'loading',
   );
   const [hydrationAttempt, setHydrationAttempt] = useState(0);
+  const [hydratedPaid, setHydratedPaid] = useState(false);
 
   useEffect(() => {
     if (hydrateCartId === null) return;
@@ -176,6 +179,7 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
         })),
       );
       setEnvelope(res.snapshot.envelope);
+      setHydratedPaid(res.snapshot.paid);
       syncCartStore(res.snapshot);
       setHydration('ready');
     }, fail);
@@ -427,6 +431,7 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
     setDiscountPlaceholders([]);
     setEnvelope(null);
     setHandoffError(null);
+    setHydratedPaid(false);
   }, []);
 
   const subtotalMinor = lines.reduce((sum, line) => sum + line.lineSubtotalMinor, 0);
@@ -438,6 +443,7 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
     envelope,
     handoffError,
     hydration,
+    hydratedPaid,
     retryHydration,
     subtotalMinor,
     itemCount,

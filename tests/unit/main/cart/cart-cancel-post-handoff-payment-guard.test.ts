@@ -81,9 +81,17 @@ async function frozenCartUnderManager(
   const created = await creator.create({ idempotency_key: 'create-1' });
   if (created.kind !== 'ok') throw new Error('create failed');
   db.run(`UPDATE carts SET state = 'frozen_handed_off' WHERE cart_id = ?`, [created.cart_id]);
+  // A real persisted handoff: the cancel's handoff_action_id is verified against it.
+  db.run(
+    `INSERT INTO cart_action_outbox
+       (action_id, cart_id, line_id, action_kind, acting_operator_id,
+        attribution_operator_id, operator_session_id, payload_json, applied_at)
+     VALUES ('handoff-1', ?, NULL, 'cart.handoff_to_payment', ?, NULL, ?, '{}', ?)`,
+    [created.cart_id, cashier.operator_id, cashier.id, '2026-09-25T09:00:00.000Z'],
+  );
 
   const emit = vi.fn();
-  const guard = vi.fn(hasPaymentForCart);
+  const guard = vi.fn((cartId: string) => (hasPaymentForCart(cartId) ? 'settled' : 'none'));
   // A cashier actor is the cart's own session, so ownership passes and the role rule decides.
   const manager = actingRole === 'cashier' ? cashier : session(actingRole, 'sess-manager');
   const handlers = createCartBridgeHandlers({
@@ -93,7 +101,7 @@ async function frozenCartUnderManager(
     logger,
     auditEmitter: { emit } as unknown as AuditEmitter,
     isPackaged: true,
-    hasPaymentForCart: guard,
+    cartPaymentStatus: guard,
   });
   return { db, cartId: created.cart_id, handlers, emit, guard };
 }

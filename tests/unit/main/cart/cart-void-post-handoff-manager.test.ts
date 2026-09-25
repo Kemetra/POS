@@ -118,6 +118,8 @@ async function newFrozenCart(): Promise<Fixture> {
     cartStore: store,
     clock: () => new Date('2026-05-16T10:05:00.000Z'),
     auditEmitter,
+    // Contract since the §A4 review: cancel fails closed without the payments record.
+    cartPaymentStatus: () => 'none',
   });
 
   // Simulate frozen_handed_off with a prior handoff_action_id in outbox.

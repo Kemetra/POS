@@ -6,6 +6,7 @@ import { resolveItemRef as fixtureResolver } from './resolve-item-ref.js';
 import type { DatabaseHandle } from '../db/client.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { OperatorSessionRecord } from '../operator/session-manager.js';
+import type { CartPaymentStatus } from '../payments/repositories/payment-attempts.repository.js';
 
 export interface CartHandlersDeps {
   dbHandle: DatabaseHandle;
@@ -36,11 +37,10 @@ export interface CartHandlersDeps {
    */
   productionResolver?: ItemRefResolver;
   /**
-   * Post-handoff cancel guard (`bindCartPaymentGuard`): true while the cart
-   * has a started or settled payment attempt. Required so production can
-   * never cancel a paid or paying sale through `cart.cancelPostHandoff`.
+   * Per-cart payment status (`bindCartPaymentStatus`). Required so production
+   * can never cancel a paid or paying sale, or reopen a paid sale as payable.
    */
-  hasPaymentForCart: (cart_id: string) => boolean;
+  cartPaymentStatus: (cart_id: string) => CartPaymentStatus;
 }
 
 /**
@@ -88,7 +88,7 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
     cartStore: bindCartStore(deps.dbHandle),
     logger: deps.logger,
     auditEmitter: deps.auditEmitter,
-    hasPaymentForCart: deps.hasPaymentForCart,
+    cartPaymentStatus: deps.cartPaymentStatus,
   };
 
   // Only attach `resolveItemRef` when one was resolved — omitting it lets

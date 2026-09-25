@@ -107,7 +107,17 @@ interface TerminalAssignmentRow {
 }
 
 interface CartEnvelopeRow {
+  state: string;
   handoff_envelope_json: string | null;
+}
+
+/**
+ * The envelope JSON of a cart that may become a sale (§A4 review): only a
+ * still-handed-off cart. A cancelled cart is never finalized, even if an
+ * attempt for it settled.
+ */
+function finalizableEnvelopeJson(row: CartEnvelopeRow | undefined): string | null {
+  return row?.state === 'frozen_handed_off' ? row.handoff_envelope_json : null;
 }
 
 function defaultLocalCalendarDay(settled_at: string): string {
@@ -223,15 +233,15 @@ export function buildFinalizeInput(deps: BuildFinalizeInputDeps): BuildFinalizeI
 
   // 5 — the frozen cart envelope → lines snapshot.
   const cartStmt = db.prepare(
-    `SELECT handoff_envelope_json FROM carts WHERE cart_id = ?`,
+    `SELECT state, handoff_envelope_json FROM carts WHERE cart_id = ?`,
   ) as PrepareGet<CartEnvelopeRow>;
-  const cartRow = cartStmt.get(cart_id);
-  if (cartRow === undefined || cartRow.handoff_envelope_json === null) {
+  const envelopeJson = finalizableEnvelopeJson(cartStmt.get(cart_id));
+  if (envelopeJson === null) {
     return { kind: 'refused', reason: 'cart_envelope_not_found' };
   }
   let lines: readonly LineSnapshot[];
   try {
-    const envelope: unknown = JSON.parse(cartRow.handoff_envelope_json);
+    const envelope: unknown = JSON.parse(envelopeJson);
     if (!isObject(envelope) || !Array.isArray(envelope.lines)) {
       return { kind: 'refused', reason: 'cart_envelope_not_found' };
     }

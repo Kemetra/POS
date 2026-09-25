@@ -210,6 +210,20 @@ export interface CartStore {
     onInserted?: () => void,
   ): void;
   /**
+   * Post-handoff cancel as ONE transaction (§A4 review): ask
+   * `isStillCancellable` (the payments record), then UPDATE only while the
+   * cart is still `frozen_handed_off`. The outbox row and `onInserted` (the
+   * audit emit) are written only when that UPDATE changed the row, inside the
+   * same transaction; otherwise nothing is written and `false` is returned.
+   * A throw anywhere rolls the whole transaction back.
+   */
+  cancelFrozenCartAndOutbox(
+    cancel: CancelCartInput,
+    outbox: InsertOutboxInput,
+    isStillCancellable: () => boolean,
+    onInserted?: () => void,
+  ): boolean;
+  /**
    * Atomically writes the outbox row, freezes the cart (state=frozen_handed_off,
    * frozen_at, handoff_envelope_json), and calls `onInserted` inside the same
    * transaction — enabling audit emission to be atomic with the freeze.
@@ -232,6 +246,11 @@ export interface CartStore {
   findActiveLineByItemRef(cart_id: string, item_ref: string): CartLineRow | undefined;
   getOutboxRow(action_id: string): OutboxRow | undefined;
 }
+
+/** Shared SET clause of the two cart-cancel statements. */
+const CANCEL_CART_SQL = `UPDATE carts
+    SET state = 'cancelled', cancelled_at = ?, cancellation_reason = ?, updated_at = ?,
+        last_action_id = ?`;
 
 export function bindCartStore(db: DatabaseHandle): CartStore {
   const insertCart = db.prepare(
@@ -308,14 +327,9 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
   const setCartStateStmt = db.prepare(
     `UPDATE carts SET state = ?, updated_at = ?, last_action_id = ? WHERE cart_id = ?`,
   ) as PrepareRun;
-  const cancelCartStmt = db.prepare(
-    `UPDATE carts
-        SET state = 'cancelled',
-            cancelled_at = ?,
-            cancellation_reason = ?,
-            updated_at = ?,
-            last_action_id = ?
-      WHERE cart_id = ?`,
+  const cancelCartStmt = db.prepare(`${CANCEL_CART_SQL} WHERE cart_id = ?`) as PrepareRun;
+  const cancelFrozenCartStmt = db.prepare(
+    `${CANCEL_CART_SQL} WHERE cart_id = ? AND state = 'frozen_handed_off'`,
   ) as PrepareRun;
   const findLatestHandoffStmt = db.prepare(
     `SELECT action_id FROM cart_action_outbox
@@ -507,6 +521,27 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
           cancel.cart_id,
         );
         onInserted?.();
+      })();
+    },
+
+    cancelFrozenCartAndOutbox(cancel, outbox, isStillCancellable, onInserted): boolean {
+      return db.transaction((): boolean => {
+        if (!isStillCancellable()) return false;
+        // Conditional UPDATE: zero rows means the cart is no longer
+        // `frozen_handed_off`, so nothing (outbox, audit) is written.
+        const updated =
+          cancelFrozenCartStmt.run(
+            cancel.cancelled_at,
+            cancel.cancellation_reason,
+            cancel.updated_at,
+            cancel.last_action_id,
+            cancel.cart_id,
+          ).changes === 1;
+        if (updated) {
+          writeOutbox(outbox);
+          onInserted?.();
+        }
+        return updated;
       })();
     },
 

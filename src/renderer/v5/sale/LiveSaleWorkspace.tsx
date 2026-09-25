@@ -64,6 +64,15 @@ function selectSettledCartId(state: PaymentStore): string | null {
   return state.paymentSlice?.state === 'settled' ? (state.envelope?.cart_id ?? null) : null;
 }
 
+/** This cart's payment is known settled: in the renderer store, or reported by main's snapshot. */
+function isKnownPaid(
+  cartId: string | null,
+  settledCartId: string | null,
+  hydratedPaid: boolean,
+): boolean {
+  return cartId !== null && (settledCartId === cartId || hydratedPaid);
+}
+
 const SALE_TITLE_ID = 'v5-sale-title';
 
 /**
@@ -110,8 +119,9 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
     ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
   });
   const frozen = cartState === CartState.frozen_handed_off;
-  // Frozen alone is not "paid": only a settled attempt for THIS cart is.
-  const paid = frozen && cartId !== null && settledCartId === cartId;
+  // Frozen alone is not "paid": only a settled attempt for THIS cart is —
+  // known to the renderer, or reported by main when the cart was reopened.
+  const paid = frozen && isKnownPaid(cartId, settledCartId, cart.hydratedPaid);
 
   // Reset only after the bridge confirms the void; a refusal or rejected
   // transport keeps the existing cart. The voided cart stays cancelled in the

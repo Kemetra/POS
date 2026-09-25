@@ -25,9 +25,10 @@ import { createReadDownDriver } from './catalogue/read-down/read-down-driver.js'
 import { registerCatalogueHandlers } from './ipc/catalogue.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
 import {
-  bindCartPaymentGuard,
+  bindCartPaymentStatus,
   bindPaymentAttemptsRepository,
 } from './payments/repositories/payment-attempts.repository.js';
+import { bindCartPaymentEligibility } from './payments/cart-payment-eligibility.js';
 import { bindPaymentTenderLinesRepository } from './payments/repositories/payment-tender-lines.repository.js';
 import { bindPaymentActionOutboxRepository } from './payments/repositories/payment-action-outbox.repository.js';
 import { createPaymentAttemptFsm } from './payments/fsm/payment-attempt-fsm.js';
@@ -659,8 +660,8 @@ app
       auditEmitter,
       isPackaged: app.isPackaged,
       productionResolver: catalogueResolver,
-      // Post-handoff cancel refuses a cart whose payment is started or settled.
-      hasPaymentForCart: bindCartPaymentGuard(db),
+      // Post-handoff cancel and the snapshot "paid" flag read the payments record.
+      cartPaymentStatus: bindCartPaymentStatus(db),
     });
     registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
 
@@ -839,6 +840,9 @@ app
       ...paymentsWriteDeps,
       paymentAttemptFsm,
       uuid: paymentsUuid,
+      // §A4: main decides whether the named cart may be paid (handed off, in
+      // scope, envelope matches, not already paid).
+      checkCartForPayment: bindCartPaymentEligibility(db),
     });
     const paymentsConfirm = createPaymentsConfirmHandler({
       ...paymentsWriteDeps,

@@ -51,6 +51,17 @@ function refuseInvalid(): CartRefusal {
   return { kind: 'refused', reason: 'no_session' };
 }
 
+/**
+ * Identifier shape for the §A4-reviewed channels: 1–128 characters of
+ * [A-Za-z0-9_-] (UUIDs and test ids fit). Values persisted into the outbox
+ * and audit log cannot be oversized or carry path/markup characters.
+ */
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
+function isBoundedId(value: unknown): value is string {
+  return typeof value === 'string' && ID_PATTERN.test(value);
+}
+
 function asCreateReq(value: unknown): CartCreateRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -207,7 +218,7 @@ function asVoidReq(value: unknown): CartVoidRequest | null {
  * fields: `attribution_operator_id` is deliberately dropped, so a cashier can
  * never borrow a manager's authority through this bridge (main then refuses a
  * cashier with `manager_attribution_required`), and no renderer-supplied
- * identity reaches the handler. Every field must be a non-empty string.
+ * identity reaches the handler. Every field must be a bounded id.
  */
 function asCancelPostHandoffReq(value: unknown): CartCancelPostHandoffRequest | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -215,14 +226,7 @@ function asCancelPostHandoffReq(value: unknown): CartCancelPostHandoffRequest | 
   const cartId = v['cart_id'];
   const handoffActionId = v['handoff_action_id'];
   const idempotencyKey = v['idempotency_key'];
-  if (
-    typeof cartId !== 'string' ||
-    cartId === '' ||
-    typeof handoffActionId !== 'string' ||
-    handoffActionId === '' ||
-    typeof idempotencyKey !== 'string' ||
-    idempotencyKey === ''
-  ) {
+  if (!isBoundedId(cartId) || !isBoundedId(handoffActionId) || !isBoundedId(idempotencyKey)) {
     return null;
   }
   return { cart_id: cartId, handoff_action_id: handoffActionId, idempotency_key: idempotencyKey };
@@ -267,7 +271,7 @@ function asSubscribeReq(value: unknown): CartSubscribeRequest | null {
 function asSnapshotReq(value: unknown): CartSnapshotRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
-  if (typeof v['cart_id'] !== 'string' || v['cart_id'] === '') return null;
+  if (!isBoundedId(v['cart_id'])) return null;
   return { cart_id: v['cart_id'] };
 }
 

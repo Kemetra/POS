@@ -35,6 +35,8 @@ import type { CartStore, InsertDiscountPlaceholderInput } from './cart-store.js'
 import { AuditEmitter } from '../audit/audit-emitter.js';
 import { buildPaymentIntentEnvelope } from './handoff-envelope-builder.js';
 import { freezeEnvelope } from '../../shared/cart/handoff-envelope.js';
+import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope.js';
+import type { CartPaymentStatus } from '../payments/repositories/payment-attempts.repository.js';
 
 /**
  * 005-sales-cart S2 — `cart.*` bridge handlers (T025/T026 from S1 +
@@ -172,14 +174,103 @@ export interface CartBridgeHandlersDeps {
    */
   auditEmitter?: AuditEmitter;
   /**
-   * Post-handoff cancel guard: true when the cart has a `started` or
-   * `settled` payment attempt, so `cancelPostHandoff` refuses rather than
-   * cancel a sale that is being paid or already paid. Optional here so unit
-   * fixtures construct unchanged; the production factory
-   * (`createCartBridgeHandlers`) requires it, so a dropped composition-root
-   * wiring cannot silently disable the guard.
+   * Where the cart's payment stands (`bindCartPaymentStatus`). A cart row
+   * stays `frozen_handed_off` after settlement, so this is how main tells a
+   * paid sale from an unpaid handoff: `cancelPostHandoff` refuses unless it
+   * is `none`, and `snapshot` reports a settled cart as paid with no
+   * envelope. Optional on the type so unrelated fixtures construct
+   * unchanged, but both handlers FAIL CLOSED (`not_implemented`) without it,
+   * and the production factory requires it.
    */
-  hasPaymentForCart?: (cart_id: string) => boolean;
+  cartPaymentStatus?: (cart_id: string) => CartPaymentStatus;
+}
+
+/**
+ * The envelope as the renderer may see it: identical to the persisted one
+ * except that manager attribution on discount placeholders is removed
+ * (FR-021: manager identity never reaches the cashier UI). The persisted
+ * envelope keeps it for audit and finalize.
+ */
+function rendererEnvelope(envelope: PaymentIntentEnvelope): Readonly<PaymentIntentEnvelope> {
+  return freezeEnvelope({
+    ...envelope,
+    lines: envelope.lines.map((line) => ({ ...line })),
+    discount_placeholders: envelope.discount_placeholders.map((dp) => ({
+      ...dp,
+      attribution_operator_id: null,
+    })),
+  });
+}
+
+/** Parses a persisted envelope; null when absent or unreadable (never throws). */
+function parseEnvelope(json: string | null): PaymentIntentEnvelope | null {
+  if (json === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const env = parsed as Partial<PaymentIntentEnvelope>;
+    if (!Array.isArray(env.lines) || !Array.isArray(env.discount_placeholders)) return null;
+    return parsed as PaymentIntentEnvelope;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Who approves a post-handoff cancel: a manager or admin approves their own;
+ * a cashier needs a manager's attribution. `null` means attribution is
+ * required and missing (the only case a cashier can reach via the bridge,
+ * which drops attribution).
+ */
+function postHandoffApprover(
+  session: Pick<OperatorSessionRecord, 'role' | 'operator_id'>,
+  attributionOperatorId: string | undefined,
+): string | null {
+  if (session.role === 'manager' || session.role === 'admin') return session.operator_id;
+  return attributionOperatorId !== undefined && attributionOperatorId !== ''
+    ? attributionOperatorId
+    : null;
+}
+
+/**
+ * Why a (non-replay) post-handoff cancel cannot proceed, or null. Only a
+ * `frozen_handed_off` cart qualifies, and the renderer-supplied handoff action
+ * must be this cart's persisted handoff, so the audit record can never be
+ * mislabelled.
+ */
+function postHandoffCancelRefusal(
+  store: Pick<CartStore, 'findLatestHandoffActionId'>,
+  cartState: CartState,
+  req: { cart_id: string; handoff_action_id: string },
+): CartRefusalReason | null {
+  if (cartState !== CartState.frozen_handed_off) return 'closed';
+  return store.findLatestHandoffActionId(req.cart_id) === req.handoff_action_id
+    ? null
+    : 'stale_version';
+}
+
+/** A recorded outbox row is a replay of THIS post-handoff cancel (same cart and handoff). */
+function isSameCancelReplay(
+  replay: { action_kind: string; cart_id: string; payload_json: string },
+  req: { cart_id: string; handoff_action_id: string },
+): boolean {
+  return (
+    replay.action_kind === 'cart.cancel.post_handoff' &&
+    replay.cart_id === req.cart_id &&
+    recordedHandoffAction(replay.payload_json) === req.handoff_action_id
+  );
+}
+
+/** The handoff action recorded in a post-handoff cancel outbox payload. */
+function recordedHandoffAction(payloadJson: string): unknown {
+  try {
+    const payload: unknown = JSON.parse(payloadJson);
+    return typeof payload === 'object' && payload !== null
+      ? (payload as Record<string, unknown>)['handoff_action_id']
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
@@ -887,34 +978,31 @@ export class CartBridgeHandlers {
     if (gate.kind !== 'ok') return refuse(gate.reason);
 
     // Cashier must supply attribution; manager/admin may act directly.
-    const isManagerOrAdmin = session.role === 'manager' || session.role === 'admin';
-    if (!isManagerOrAdmin && !req.attribution_operator_id) {
-      return refuse('manager_attribution_required');
-    }
+    const approvingSupervisorId = postHandoffApprover(session, req.attribution_operator_id);
+    if (approvingSupervisorId === null) return refuse('manager_attribution_required');
 
-    // Idempotency check before terminal-state guard.
+    // Without the payments record main cannot tell a paid sale from an unpaid
+    // handoff, so refuse rather than guess.
+    const paymentStatus = this.deps.cartPaymentStatus;
+    if (paymentStatus === undefined) return refuse('not_implemented');
+
+    // Idempotency replay before the terminal-state guard, bound to the SAME
+    // cart and handoff: a key reused for another cart must never report a
+    // cancel that did not happen.
     const replay = store.getOutboxRow(req.idempotency_key);
     if (replay !== undefined) {
-      if (replay.action_kind !== 'cart.cancel.post_handoff')
-        return refuse('idempotency_payload_mismatch');
-      return { kind: 'ok' };
+      return isSameCancelReplay(replay, req)
+        ? { kind: 'ok' }
+        : refuse('idempotency_payload_mismatch');
     }
 
-    // Only frozen_handed_off carts may be post-handoff cancelled.
-    const cancelCartState = cart.state as CartState;
-    if (cancelCartState !== CartState.frozen_handed_off) return refuse('closed');
-
-    // A payment in progress or settled closes the sale to cancellation: the
-    // cart row stays frozen after settlement, so ask the payments record.
-    if (this.deps.hasPaymentForCart?.(req.cart_id) === true) return refuse('closed');
+    const precondition = postHandoffCancelRefusal(store, cart.state as CartState, req);
+    if (precondition !== null) return refuse(precondition);
 
     const now = this.clock().toISOString();
     const event_id = randomUUID();
-    const approvingSupervisorId = isManagerOrAdmin
-      ? session.operator_id
-      : (req.attribution_operator_id ?? session.operator_id);
 
-    store.cancelCartAndOutbox(
+    const cancelled = store.cancelFrozenCartAndOutbox(
       {
         cart_id: req.cart_id,
         cancelled_at: now,
@@ -938,6 +1026,9 @@ export class CartBridgeHandlers {
         ),
         applied_at: now,
       },
+      // Inside the transaction: a started, settled or force-failed payment
+      // closes the sale to cancellation.
+      () => paymentStatus(req.cart_id) === 'none',
       () => {
         this.deps.auditEmitter?.emit({
           event_id,
@@ -957,7 +1048,7 @@ export class CartBridgeHandlers {
         });
       },
     );
-    return { kind: 'ok' };
+    return cancelled ? { kind: 'ok' } : refuse('closed');
   }
 
   // ── cart.handoff ────────────────────────────────────────────────────
@@ -1016,7 +1107,7 @@ export class CartBridgeHandlers {
       const persistedJson = store.getCart(req.cart_id)?.handoff_envelope_json;
       if (persistedJson !== null && persistedJson !== undefined) {
         const parsed = JSON.parse(persistedJson) as Parameters<typeof freezeEnvelope>[0];
-        return { kind: 'ok', envelope: freezeEnvelope(parsed) };
+        return { kind: 'ok', envelope: rendererEnvelope(parsed) };
       }
       /* v8 ignore next — outbox row written but envelope_json null: impossible under atomic tx */
       return refuse('not_implemented');
@@ -1117,8 +1208,8 @@ export class CartBridgeHandlers {
       },
     );
 
-    // Step 8 — return the frozen envelope.
-    return { kind: 'ok', envelope };
+    // Step 8 — return the frozen envelope, without manager attribution.
+    return { kind: 'ok', envelope: rendererEnvelope(envelope) };
   }
 
   // ── cart.subscribe ──────────────────────────────────────────────────
@@ -1174,12 +1265,12 @@ export class CartBridgeHandlers {
     if (ownership.kind !== 'ok') return Promise.resolve(refuse(ownership.reason));
 
     const state = cart.state as CartState;
-    const envelope =
-      state === CartState.frozen_handed_off && cart.handoff_envelope_json !== null
-        ? freezeEnvelope(
-            JSON.parse(cart.handoff_envelope_json) as Parameters<typeof freezeEnvelope>[0],
-          )
-        : null;
+    const payable =
+      state === CartState.frozen_handed_off
+        ? this.frozenCartPayment(cart.cart_id, cart.handoff_envelope_json)
+        : { paid: false, envelope: null };
+    if (payable === null) return Promise.resolve(refuse('not_implemented'));
+    const { paid, envelope } = payable;
 
     this.deps.logger?.info({ event: 'cart.snapshot.ok', cart_id: cart.cart_id }, 'cart.snapshot');
     return Promise.resolve({
@@ -1199,9 +1290,27 @@ export class CartBridgeHandlers {
         discount_placeholders: store
           .getDiscountPlaceholdersForCart(cart.cart_id)
           .map((dp) => ({ placeholder_id: dp.placeholder_id, line_id: dp.line_id })),
+        paid,
         envelope,
       },
     });
+  }
+
+  /**
+   * Payment view of a handed-off cart for `snapshot`. A settled cart is a
+   * completed sale: `paid` and no payable envelope, so it can never be offered
+   * to payment again. `null` (refuse generically) when the payments record is
+   * not wired or the persisted envelope is unreadable — never parse text.
+   */
+  private frozenCartPayment(
+    cart_id: string,
+    envelopeJson: string | null,
+  ): { paid: boolean; envelope: Readonly<PaymentIntentEnvelope> | null } | null {
+    const paymentStatus = this.deps.cartPaymentStatus;
+    if (paymentStatus === undefined) return null;
+    if (paymentStatus(cart_id) === 'settled') return { paid: true, envelope: null };
+    const persisted = parseEnvelope(envelopeJson);
+    return persisted === null ? null : { paid: false, envelope: rendererEnvelope(persisted) };
   }
 
   // ── Internal gates ──────────────────────────────────────────────────

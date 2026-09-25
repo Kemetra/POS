@@ -97,7 +97,7 @@ function handlersFor(opts: { isPackaged: boolean; withProductionResolver: boolea
     auditEmitter: new AuditEmitter({ insertIgnore: () => {} }),
     isPackaged: opts.isPackaged,
     // Required by the factory since the post-handoff cancel payment guard; no payments here.
-    hasPaymentForCart: () => false,
+    cartPaymentStatus: () => 'none',
     ...(productionResolver !== undefined ? { productionResolver } : {}),
   });
 }
