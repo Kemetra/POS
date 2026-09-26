@@ -144,8 +144,25 @@ Each slice below is a future task. No slice is implemented by this document. Run
 
 ## Existing protection to retain
 
-- Search/add: `src/renderer/ui/catalogue/__tests__/CatalogueSalePane.test.tsx`, `CatalogueAddController.test.tsx`, `keyboard-walkthrough.test.tsx`, `duplicate-scan.test.tsx`, `CatalogueFreshness.test.tsx`, and `src/main/catalogue/read-down/__tests__/offline-after-success.test.ts`.
-- Cart and money: `tests/unit/renderer/ui/cart/cart-pane-live-lines.test.tsx`, `cart-pane-handoff.test.tsx`, `quantity-stepper.test.tsx`, `tests/unit/main/cart/cart-lines-mutations.test.ts`, `cart-handoff-subtotal.test.ts`, and `tests/unit/shared/cart/**`.
+Slice H (2026-09-26, RT-22) deleted the legacy Sale suites. Each suite's behaviour moved to the successor listed below before its deletion, or is recorded as not ported. Paths are relative to `src/renderer/` unless they start with `tests/`.
+
+| Retired legacy suite | Successor coverage |
+| --- | --- |
+| `ui/catalogue/__tests__/CatalogueSalePane.test.tsx` | `sale/__tests__/useSaleCatalogueController.test.tsx` covers every search/scan response kind, rejected lookups returning to idle, lazy cart create (#466) and superseded lookups. `v5/__tests__/live-sale-states.test.tsx` covers the not-found, ambiguous and unavailable surfaces and their recovery. `v5/__tests__/live-sale.test.tsx` covers a refused cart create being retryable. |
+| `CatalogueAddController.test.tsx` | `sale/__tests__/useConfirmSaleAdd.test.tsx`: no add before confirmation, refusal, rejected transport releasing the guard, the double-tap guard, cancel with no bridge call, and #466. |
+| `keyboard-walkthrough.test.tsx`, `duplicate-scan.test.tsx`, `scan-terminator.test.tsx` | `v5/__tests__/live-sale.test.tsx`: keyboard-only duplicate scan → confirm → merge, with one lookup per Enter and the scan buffer cleared; focus moving to Add; Escape returning to search; keyboard selection from typed search. Also `live-sale-states` (empty terminator) and `live-sale-hydration` (re-scan merges into a hydrated row). |
+| `CatalogueFreshness.test.tsx` | `sale/__tests__/useCatalogueFreshness.test.tsx`: state mapping, degraded reads, `already_running`, the one-shot deferred re-read and its feedback rule, cancel on unmount. `live-sale-states`: absolute stamp, refresh feedback, an unparseable timestamp. |
+| `SearchResultList`, `ProductSearchInput`, `controlled-flag-surfacing`, `shells`, `recompose`, `format-price` | `live-sale` (real result fields only; controlled/Rx badges) and `live-sale-states` (truncation hint, ArrowUp/ArrowDown). |
+| Catalogue and cart a11y suites (`a11y`, `a11y.full`, `tests/integration/renderer/a11y/cart-*`) | `live-sale` axe pass on the empty, confirm and one-line states; `app-cart-cutover` axe on checkout in the frame; the `v5-frame` axe pass. |
+| `tests/unit/renderer/ui/cart/cart-pane-live-lines`, `line-item-row`, `line-note-popover`, `LineNotePopover.esc` | `sale/__tests__/useSaleCartController.test.tsx` covers the versioned add/merge/quantity/remove/note projection. `live-sale` covers bridge-confirmed quantity, decrement at one, the note-carrying line, the note's 200-character cap, Save and Clear, dialog focus and Escape, and sign-out. |
+| `cart-pane-handoff`, `handoff-summary`, `discount-placeholder-row` | `useSaleCartController` covers the handoff payload (`per_line_versions`), freeze before envelope, and refusal rollback. `live-sale`, `live-sale-states` and `live-sale-polish` cover handoff progress, refusal copy, payments off, the cancelled state and the opaque discount. |
+| `cart-pane-post-handoff-cancel`, `cart-pane-sensitive-actions`, `void-confirmation` | `sale/__tests__/useSaleCartController.post-handoff.test.tsx`; `v5/__tests__/live-sale-post-handoff-cancel.test.tsx`; the void flows in `live-sale` and `live-sale-lifecycle`. |
+| `cart-pane-mount`, `cart-pane-shell-slot`, `cart-pane-recompose`, `routes/app/__tests__/CartWorkspace*.test.tsx` | `tests/integration/renderer/v5/app-cart-cutover.test.tsx`: sign-in redirect, one frame, cart/productSearch/payments flag gating. The D-007 tax honesty rule from `CartWorkspace.u2` is now in `live-sale-states`. |
+| `quantity-stepper` ArrowUp/ArrowDown, `ManagerAttributionPrompt*`, `styles/__tests__/u2-sale-layout-rules` | **Not ported.** Stepper arrow keys are a legacy-only affordance that V5 does not offer. The prompt had no production consumer. `.sale-layout` is retired. None of these has been in production since G. |
+
+Kept unchanged (not Sale presentation):
+- Search/add: `src/main/catalogue/read-down/__tests__/offline-after-success.test.ts`.
+- Cart and money: `tests/unit/main/cart/cart-lines-mutations.test.ts`, `cart-handoff-subtotal.test.ts`, and `tests/unit/shared/cart/**`.
 - Payment handoff: `tests/integration/renderer/ui/cart/cart-to-checkout-wiring.test.tsx`, `tests/integration/main/cart/cart-handoff-offline.test.ts`, and payment surface tests under `src/renderer/ui/payments/__tests__/`.
 - Security/offline: `src/renderer/routes/__tests__/operator-route-guard.test.tsx`, `tests/integration/renderer/stores/cart-signout-clears-store.test.ts`, `tests/unit/main/cart/cart-role-gating.test.ts`, `tests/integration/main/cart/cart-tenant-isolation.test.ts`, `cart-action-outbox-idempotency.test.ts`, `cart-restart-survival.test.ts`, and `tests/integration/cross-process-redaction-cart*.test.ts`.
 - Presentation wall: `src/renderer/v5/__tests__/sale-proof.test.tsx`; extend its scan to new v5 files. Automated tests prove behavior and isolation, not visual quality.
