@@ -174,7 +174,14 @@ export function PaymentSurface({
     setIsCancelling(false);
     setIsStarting(false);
     setReversalPending(false);
-    usePaymentStore.getState().clearAttempt();
+    // Keep a started attempt across a remount for the SAME handoff (leaving
+    // checkout and coming back): main still holds it, so forgetting it would
+    // re-enable sign-out and make the next tender re-run payments.start, which
+    // main refuses. A different handoff, or no session, still clears it.
+    const store = usePaymentStore.getState();
+    if (sessionState.kind !== 'signedIn' || store.attemptHandoffId !== envelopeHandoffId) {
+      store.clearAttempt();
+    }
   }, [sessionState.kind, envelopeHandoffId]);
 
   // EXTERNAL REVIEW P1 (round 3) — "Stop polling until finalized sales can be

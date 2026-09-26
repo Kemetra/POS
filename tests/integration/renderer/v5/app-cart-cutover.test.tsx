@@ -295,6 +295,31 @@ describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
     ).toHaveAttribute('aria-current', 'page');
   });
 
+  it('leaving checkout and coming back keeps sign-out blocked while the payment is open', async () => {
+    signInCashier();
+    usePaymentStore.getState().mount(ENVELOPE as never);
+    usePaymentStore.getState().applyAttemptSnapshot({
+      payment_attempt_id: 'pa-open',
+      state: 'started',
+      envelope_subtotal_minor: 1250,
+      started_at: '2026-09-24T09:06:00.000Z',
+      tender_lines: [],
+    });
+    renderAt('/app/checkout');
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'تسجيل الخروج' })).toBeDisabled();
+    cleanup();
+    // Remount (the cashier left via the Sale entry and came back to checkout).
+    renderAt('/app/checkout');
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface')).toBeInTheDocument();
+    });
+    expect(usePaymentStore.getState().paymentSlice?.state).toBe('started');
+    expect(screen.getByRole('button', { name: 'تسجيل الخروج' })).toBeDisabled();
+  });
+
   it('checkout inside the v5 frame is axe-clean', async () => {
     signInCashier();
     usePaymentStore.getState().mount(ENVELOPE as never);
