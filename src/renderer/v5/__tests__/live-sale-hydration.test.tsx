@@ -357,16 +357,23 @@ describe('V5 active cart read failure', () => {
 });
 
 describe('V5 with no active cart', () => {
-  it('keeps the create-cart path and never reads a snapshot', async () => {
+  it('never reads a snapshot, and creates the cart only on the first confirmed add (#466)', async () => {
     signIn();
     const b = bridges(() => Promise.resolve({ kind: 'ok', snapshot: snapshot() }));
     renderSale(b);
-    await waitFor(() => {
-      expect(b.fns.create).toHaveBeenCalledOnce();
-    });
+    await screen.findByRole('textbox', { name: 'حقل التقاط مسح الباركود' });
+    expect(b.fns.create).not.toHaveBeenCalled();
+    const user = userEvent.setup();
+    await user.type(
+      screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
+      '6221000000011{Enter}',
+    );
+    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
     await waitFor(() => {
       expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-new');
     });
+    expect(b.fns.create).toHaveBeenCalledOnce();
+    expect(b.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-new' }));
     expect(b.fns.snapshot).not.toHaveBeenCalled();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });

@@ -54,7 +54,7 @@ beforeEach(() => {
     branch_id: 'branch-1',
     started_at: new Date().toISOString(),
   });
-  // Stub window.api so CatalogueSalePane's eager-create effect resolves without throwing
+  // Stub window.api so CatalogueSalePane's bridge reads resolve without throwing
   (window as unknown as { api?: unknown }).api = {
     cart: makeCartBridge(),
     catalogue: makeCatalogueBridge(),

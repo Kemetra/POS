@@ -4,7 +4,10 @@ import type { AddedLineResult } from './useSaleCartController';
 import { useCatalogueSearchStore } from '../stores/catalogueSearchStore';
 
 export interface ConfirmSaleAddOptions {
+  /** The active cart, or `''` when none exists yet. */
   cartId: string;
+  /** Creates (or returns) the active cart on the first add; `null` on failure. */
+  ensureCart?: () => Promise<string | null>;
   onLineAdded: (line: AddedLineResult) => void;
   onResolved?: () => void;
   bridge?: CartBridgeAPI;
@@ -44,9 +47,14 @@ export function useConfirmSaleAdd(options: ConfirmSaleAddOptions): {
     setAdding(true);
     setError(null);
     try {
+      const cartId = options.cartId !== '' ? options.cartId : await options.ensureCart?.();
+      if (cartId === undefined || cartId === null || cartId === '') {
+        setError(GENERIC_ADD_ERROR);
+        return;
+      }
       const bridge = options.bridge ?? readCartBridge();
       const response = await bridge.lines.add({
-        cart_id: options.cartId,
+        cart_id: cartId,
         item_ref: pending.product.product_id,
         quantity: options.quantity ?? 1,
         idempotency_key: crypto.randomUUID(),

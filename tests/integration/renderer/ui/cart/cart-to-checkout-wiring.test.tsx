@@ -204,10 +204,8 @@ describe('cart → checkout wiring (006 mount)', () => {
       <AppRouter pairing={pairedBridge()} operator={operatorBridge()} initialEntry="/app/cart" />,
     );
 
-    // Eager cart create resolves → catalogue surface mounts.
-    await waitFor(() => {
-      expect(api.cart.create).toHaveBeenCalled();
-    });
+    // No cart exists yet: the first confirmed add creates it (#466).
+    expect(api.cart.create).not.toHaveBeenCalled();
 
     // Scan → single match → confirm_pending → Add.
     const scan = await screen.findByTestId('scan-capture-field');
@@ -345,11 +343,7 @@ describe('cart → checkout wiring (006 mount)', () => {
       <AppRouter pairing={pairedBridge()} operator={operatorBridge()} initialEntry="/app/cart" />,
     );
 
-    await waitFor(() => {
-      expect((api.cart as { create: ReturnType<typeof vi.fn> }).create).toHaveBeenCalled();
-    });
-
-    // Scan → Add → handoff → Continue → checkout.
+    // Scan → Add (creates the cart, #466) → handoff → Continue → checkout.
     const scan = await screen.findByTestId('scan-capture-field');
     await user.type(scan, '6221000000001');
     fireEvent.keyDown(scan, { key: 'Enter' });

@@ -16,8 +16,8 @@ import { LiveSaleWorkspace } from '../sale/LiveSaleWorkspace';
 /**
  * V5 post-handoff cancel: a manager reopening a handed-off (unpaid) sale can
  * cancel it through `cart.cancelPostHandoff`, bound to the persisted
- * envelope's handoff action. V5's fresh-sale transition (renderer reset and
- * the eager `cart.create` of the next cart) happens only after main confirms.
+ * envelope's handoff action. V5's fresh-sale transition (renderer reset; the
+ * next confirmed add creates the next cart, #466) happens only after main confirms.
  */
 
 const FROZEN = 'cart-frozen';
@@ -128,9 +128,11 @@ describe('V5 post-handoff cancel', () => {
       expect.objectContaining({ cart_id: FROZEN, handoff_action_id: 'handoff-persisted' }),
     );
     expect(fns.voidCart).not.toHaveBeenCalled();
+    // The fresh sale starts with no cart; the next confirmed add creates it (#466).
     await waitFor(() => {
-      expect(fns.create).toHaveBeenCalledOnce();
+      expect(useCartStore.getState().activeCart).toBeNull();
     });
+    expect(fns.create).not.toHaveBeenCalled();
   });
 
   it('keeps the frozen sale and starts nothing new when main refuses', async () => {

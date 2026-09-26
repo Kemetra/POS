@@ -6,6 +6,7 @@ import { ProductConfirmPanel } from './ProductConfirmPanel.js';
 
 export interface CatalogueAddControllerProps {
   cartId: string;
+  ensureCart?: () => Promise<string | null>;
   onLineAdded: (res: AddedLineResult) => void;
   onResolved?: () => void;
   bridge?: CartBridgeAPI;
@@ -15,6 +16,7 @@ export interface CatalogueAddControllerProps {
 /** Legacy presentation retained while the neutral controller serves both Sale screens. */
 export function CatalogueAddController({
   cartId,
+  ensureCart,
   onLineAdded,
   onResolved,
   bridge,
@@ -22,6 +24,7 @@ export function CatalogueAddController({
 }: CatalogueAddControllerProps): JSX.Element | null {
   const { product, error, confirm, cancel } = useConfirmSaleAdd({
     cartId,
+    ...(ensureCart !== undefined ? { ensureCart } : {}),
     onLineAdded,
     ...(onResolved !== undefined ? { onResolved } : {}),
     ...(bridge !== undefined ? { bridge } : {}),

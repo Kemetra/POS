@@ -200,17 +200,17 @@ describe('/app/sale-v5 guarded functional preview (023 slice E)', () => {
     );
 
     await screen.findByRole('region', { name: 'مساحة البيع' });
-    await waitFor(() => {
-      expect(api().cart.create).toHaveBeenCalledOnce();
-    });
-    await waitFor(() => {
-      expect(useCartStore.getState().activeCart).not.toBeNull();
-    });
+    // No cart until the first confirmed add creates it (#466).
+    expect(api().cart.create).not.toHaveBeenCalled();
     await user.type(
       screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
       '6221000000001{Enter}',
     );
     await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
+    await waitFor(() => {
+      expect(useCartStore.getState().activeCart).not.toBeNull();
+    });
+    expect(api().cart.create).toHaveBeenCalledOnce();
     const handoff = await screen.findByRole('button', { name: /تسليم السلة/ });
     await waitFor(() => {
       expect(handoff).toBeEnabled();

@@ -38,7 +38,7 @@ export function CatalogueSalePane({
   catalogueBridge,
   cartBridge,
 }: CatalogueSalePaneProps): JSX.Element {
-  const { state, effectiveCartId, runTypedSearch, runScan, selectResult, recover } =
+  const { state, effectiveCartId, ensureCart, runTypedSearch, runScan, selectResult, recover } =
     useSaleCatalogueController({
       ...(cartId !== undefined ? { cartId } : {}),
       ...(cartBridge !== undefined ? { cartBridge } : {}),
@@ -115,14 +115,13 @@ export function CatalogueSalePane({
           data. Shown only in idle — the search/error surfaces own the pane
           otherwise. */}
       {state.kind === 'idle' && <CatalogueEnrichmentShell />}
-      {effectiveCartId !== '' && (
-        <CatalogueAddController
-          cartId={effectiveCartId}
-          onLineAdded={onLineAdded}
-          onResolved={() => searchInputRef.current?.focus()}
-          {...(cartBridge !== undefined ? { bridge: cartBridge } : {})}
-        />
-      )}
+      <CatalogueAddController
+        cartId={effectiveCartId}
+        ensureCart={ensureCart}
+        onLineAdded={onLineAdded}
+        onResolved={() => searchInputRef.current?.focus()}
+        {...(cartBridge !== undefined ? { bridge: cartBridge } : {})}
+      />
     </div>
   );
 }

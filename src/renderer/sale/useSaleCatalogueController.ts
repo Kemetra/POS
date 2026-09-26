@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import type {
   CartBridgeAPI,
   CatalogueBridgeAPI,
@@ -64,11 +64,6 @@ function applyScanResponse(store: SearchStore, res: CatalogueLookupResponse): vo
   }
 }
 
-function needsCart(cartId: string | undefined, hasActiveCart: boolean, creating: boolean): boolean {
-  if (cartId !== undefined && cartId !== '') return false;
-  return !hasActiveCart && !creating;
-}
-
 export function useSaleCatalogueController(options: SaleCatalogueOptions): {
   state: ReturnType<typeof useCatalogueSearchStore.getState>['state'];
   effectiveCartId: string;
@@ -76,10 +71,15 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
   runScan: (barcode: string) => Promise<void>;
   selectResult: (product: ProductSnapshotDisplay) => void;
   recover: () => void;
+  ensureCart: () => Promise<string | null>;
 } {
   const state = useCatalogueSearchStore((store) => store.state);
   const activeCart = useCartStore((store) => store.activeCart);
-  const creatingRef = useRef(false);
+  // Single-flight cart create. The cart is created lazily by the first
+  // confirmed add (#466), never eagerly on mount or reset: every add attempt
+  // is then a natural retry, and a permanent refusal surfaces as the add's
+  // generic error instead of a silent, never-retried effect.
+  const creatingRef = useRef<Promise<string | null> | null>(null);
   // Latest-lookup generation: the FSM guards only on `searching`, so without
   // this an older lookup answering after a newer one began (or after a New
   // sale reset and a fresh search) would resolve against the newer request.
@@ -90,19 +90,27 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
     [options.catalogueBridge],
   );
 
-  useEffect(() => {
-    if (!needsCart(options.cartId, activeCart !== null, creatingRef.current)) return;
-    creatingRef.current = true;
-    void getCart()
+  const ensureCart = useCallback((): Promise<string | null> => {
+    if (options.cartId !== undefined && options.cartId !== '') {
+      return Promise.resolve(options.cartId);
+    }
+    const existing = useCartStore.getState().activeCart;
+    if (existing !== null) return Promise.resolve(existing.cart_id);
+    if (creatingRef.current !== null) return creatingRef.current;
+    const pending = getCart()
       .create({ idempotency_key: crypto.randomUUID() })
       .then((res) => {
-        if (res.kind === 'ok') useCartStore.getState().applyCartCreated(res.cart_id);
+        if (res.kind !== 'ok') return null;
+        useCartStore.getState().applyCartCreated(res.cart_id);
+        return res.cart_id;
       })
-      .catch(() => undefined)
+      .catch(() => null)
       .finally(() => {
-        creatingRef.current = false;
+        creatingRef.current = null;
       });
-  }, [activeCart, getCart, options.cartId]);
+    creatingRef.current = pending;
+    return pending;
+  }, [getCart, options.cartId]);
 
   const runTypedSearch = useCallback(
     async (query: string): Promise<void> => {
@@ -148,5 +156,6 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
     runScan,
     selectResult,
     recover,
+    ensureCart,
   };
 }

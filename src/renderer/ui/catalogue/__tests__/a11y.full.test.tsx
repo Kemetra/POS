@@ -79,11 +79,9 @@ afterEach(() => {
 });
 
 /**
- * Every case mounts with an explicit `cartId="cart-1"`: it is REQUIRED for
- * confirm_pending (the `CatalogueAddController` mount gate is
- * `effectiveCartId !== ''`), and uniform across cases it also short-circuits the
- * eager `cart.create` effect — so every state renders a stable DOM with no
- * pending create in flight.
+ * Every case mounts with an explicit `cartId="cart-1"`, uniform across cases,
+ * so a confirmed add never needs a lazy `cart.create` (#466) — every state
+ * renders a stable DOM with no pending create in flight.
  */
 describe('T051 — live composition is axe-clean in every FSM state (NFR-5 / SC-1)', () => {
   it('idle (initial render) is axe-clean', async () => {
