@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { V5Icon } from '../foundation/V5Icon';
 import { roleLabelAr, visibleNavEntries } from './nav-model';
+import { V5SignOut } from './V5SignOut';
 
 /**
  * Primary v5 navigation. Owns the only brand mark and the operator identity,
@@ -43,6 +44,7 @@ export function V5Navigation(): JSX.Element {
         <div className="v5-frame__operator" data-testid="v5-frame-operator">
           <span className="v5-frame__operator-name">{session.display_name}</span>
           <span className="v5-frame__operator-role">{roleLabelAr(session.role)}</span>
+          <V5SignOut />
         </div>
       )}
     </nav>
