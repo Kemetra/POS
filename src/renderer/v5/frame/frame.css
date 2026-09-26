@@ -155,6 +155,56 @@
   font-size: var(--v5-text-meta);
 }
 
+/* Sign-out: quiet until asked; the confirm step is the only emphasis. */
+.v5-frame__sign-out {
+  display: grid;
+  gap: var(--space-1);
+  margin-block-start: var(--space-2);
+}
+
+.v5-frame__sign-out button {
+  min-block-size: var(--v5-target);
+  padding-inline: var(--space-2);
+  border: var(--v5-divider);
+  border-radius: var(--radius-md);
+  background: var(--v5-surface-panel);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--v5-text-body);
+  cursor: pointer;
+}
+
+.v5-frame__sign-out button:hover:not(:disabled) {
+  background: var(--v5-surface-selected);
+}
+
+.v5-frame__sign-out button:disabled {
+  color: var(--v5-text-muted);
+  cursor: not-allowed;
+}
+
+.v5-frame__sign-out .v5-frame__sign-out-confirm {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-danger-on);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-frame__sign-out .v5-frame__sign-out-confirm:hover:not(:disabled) {
+  background: var(--color-danger-emphasis);
+}
+
+.v5-frame__sign-out-hint {
+  color: var(--v5-text-muted);
+  font-size: var(--v5-text-meta);
+}
+
+.v5-frame__sign-out-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--v5-text-meta);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .v5-frame__link {
     transition: none;
