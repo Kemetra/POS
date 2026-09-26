@@ -1,6 +1,9 @@
 import type { DatabaseHandle } from '../db/client.js';
 import type { RefusalReason } from '../../shared/payments/types.js';
-import { bindCartPaymentStatus } from './repositories/payment-attempts.repository.js';
+import {
+  bindCartHasForceFailedLiveTender,
+  bindCartPaymentStatus,
+} from './repositories/payment-attempts.repository.js';
 
 interface PrepareGet<Row> {
   get(...params: unknown[]): Row | undefined;
@@ -75,7 +78,10 @@ function matchesPersistedHandoff(json: string | null, req: CartPaymentEligibilit
  *                          editing, …), or outside the session's tenant/branch.
  *   - `stale_handoff`    — the request does not match the persisted envelope
  *                          (handoff action or subtotal), or it is unreadable.
- *   - `attempt_terminal` — the cart already has a settled payment.
+ *   - `attempt_terminal` — the cart already has a settled payment, or a
+ *                          force-failed attempt that still holds live tender
+ *                          (force-fail does not reverse tender, so paying again
+ *                          could charge the customer twice).
  *
  * Synchronous, so the handler can run it immediately before the FSM start
  * with no await in between (main is single-threaded; no interleaving).
@@ -85,6 +91,7 @@ export function bindCartPaymentEligibility(db: DatabaseHandle): CheckCartForPaym
     `SELECT state, tenant_id, branch_id, handoff_envelope_json FROM carts WHERE cart_id = ?`,
   ) as PrepareGet<CartForPaymentRow>;
   const paymentStatus = bindCartPaymentStatus(db);
+  const forceFailedWithLiveTender = bindCartHasForceFailedLiveTender(db);
 
   return (req) => {
     const cart = cartStmt.get(req.envelope_cart_id);
@@ -93,6 +100,9 @@ export function bindCartPaymentEligibility(db: DatabaseHandle): CheckCartForPaym
       return { kind: 'refused', reason: 'stale_handoff' };
     }
     if (paymentStatus(req.envelope_cart_id) === 'settled') {
+      return { kind: 'refused', reason: 'attempt_terminal' };
+    }
+    if (forceFailedWithLiveTender(req.envelope_cart_id)) {
       return { kind: 'refused', reason: 'attempt_terminal' };
     }
     return { kind: 'ok' };

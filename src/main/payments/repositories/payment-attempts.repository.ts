@@ -265,3 +265,41 @@ export function bindCartPaymentStatus(
   ) as PrepareGet<{ state: 'settled' | 'started' | 'force_failed' }>;
   return (envelope_cart_id) => stmt.get(envelope_cart_id)?.state ?? 'none';
 }
+
+/**
+ * Tender line states in which money may have moved and has not been handed
+ * back: in flight, applied, or awaiting a reversal. `refused` and `reversed`
+ * lines are history. Force-fail and a stale-attempt discard do not settle
+ * this on their own, so both guards below read it (§A4 review, 2026-09-26).
+ */
+const LIVE_TENDER_STATES = `('applying', 'applied', 'reversal_pending')`;
+
+/** Read-only: does this attempt hold any live tender? */
+export function bindAttemptHasLiveTender(
+  db: DatabaseHandle,
+): (payment_attempt_id: string) => boolean {
+  const stmt = db.prepare(
+    `SELECT 1 AS live FROM payment_tender_lines
+      WHERE payment_attempt_id = ? AND state IN ${LIVE_TENDER_STATES}
+      LIMIT 1`,
+  ) as PrepareGet<{ live: 1 }>;
+  return (payment_attempt_id) => stmt.get(payment_attempt_id) !== undefined;
+}
+
+/**
+ * Read-only: does this cart have a force-failed attempt that still holds live
+ * tender? Force-fail changes only the attempt state; its applied tender stays,
+ * so money may already have been taken for the cart.
+ */
+export function bindCartHasForceFailedLiveTender(
+  db: DatabaseHandle,
+): (envelope_cart_id: string) => boolean {
+  const stmt = db.prepare(
+    `SELECT 1 AS live FROM payment_attempts a
+       JOIN payment_tender_lines t ON t.payment_attempt_id = a.payment_attempt_id
+      WHERE a.envelope_cart_id = ? AND a.state = 'force_failed'
+        AND t.state IN ${LIVE_TENDER_STATES}
+      LIMIT 1`,
+  ) as PrepareGet<{ live: 1 }>;
+  return (envelope_cart_id) => stmt.get(envelope_cart_id) !== undefined;
+}
