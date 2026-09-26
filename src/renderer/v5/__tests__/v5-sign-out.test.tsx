@@ -44,7 +44,7 @@ function stubBridge(signOut: () => Promise<SignOutResponse>): ReturnType<typeof 
 
 function renderFrame(): void {
   render(
-    <MemoryRouter initialEntries={['/v5/sale']}>
+    <MemoryRouter initialEntries={['/app/cart']}>
       <V5Frame>
         <section aria-labelledby="t">
           <h1 id="t">مساحة البيع</h1>

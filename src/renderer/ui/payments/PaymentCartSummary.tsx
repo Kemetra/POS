@@ -39,7 +39,7 @@ export function PaymentCartSummary({ envelope }: PaymentCartSummaryProps): JSX.E
       data-testid="payment-cart-summary"
       aria-label="ملخص الطلب"
     >
-      <h3 className="payment-cart-summary__heading">ملخص الطلب</h3>
+      <h2 className="payment-cart-summary__heading">ملخص الطلب</h2>
 
       <ol className="payment-cart-summary__lines" aria-label="أصناف السلة">
         {envelope.lines.map((line, idx) => (

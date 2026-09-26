@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import { AppRouter } from '../../../../../src/renderer/router.js';
-import { CartWorkspace } from '../../../../../src/renderer/routes/app/CartWorkspace.js';
-import { CheckoutRoute } from '../../../../../src/renderer/routes/app/checkout/CheckoutRoute.js';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../../../../../src/shared/bridge-api.js';
 import type { PairingStatus } from '../../../../../src/shared/pairing-types.js';
 import { useOperatorSessionStore } from '../../../../../src/renderer/stores/operator-session-store.js';
@@ -156,68 +153,31 @@ afterEach(() => {
   delete (window as unknown as { api?: unknown }).api;
 });
 
+/**
+ * 023 Slice G: /app/cart is the v5 Sale. Scan → confirm Add → hand off →
+ * Continue, through the v5 controls (same controllers as the legacy screen).
+ */
+async function scanAddHandoffContinue(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.type(
+    await screen.findByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
+    '6221000000001{Enter}',
+  );
+  await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
+  const handoffBtn = await screen.findByRole('button', { name: /تسليم السلة/ });
+  await waitFor(() => expect(handoffBtn).toBeEnabled());
+  await user.click(handoffBtn);
+  const continueBtn = await screen.findByRole('button', { name: /المتابعة إلى الدفع/ });
+  expect(continueBtn).toBeEnabled();
+  await user.click(continueBtn);
+}
+
 describe('cart → checkout wiring (006 mount)', () => {
-  it('keeps the legacy Sale rollback route wired through scan, add, handoff and checkout', async () => {
-    const user = userEvent.setup();
-    useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
-    useOperatorSessionStore.getState().hydrateSignedIn(MANAGER_SESSION);
-    const api = (window as unknown as { api: Record<string, unknown> }).api;
-    (api.catalogue as { lookupBarcode: ReturnType<typeof vi.fn> }).lookupBarcode = vi
-      .fn()
-      .mockResolvedValue({
-        kind: 'one',
-        product: {
-          product_id: 'p-1',
-          display_name_ar: 'Paracetamol 500mg Tablets',
-          price_minor: 1250,
-          active: true,
-          controlled_substance: false,
-          prescription_required: false,
-        },
-      });
-    const cartApi = api.cart as {
-      lines: { add: ReturnType<typeof vi.fn> };
-      handoff: ReturnType<typeof vi.fn>;
-    };
-    cartApi.lines.add = vi.fn().mockResolvedValue({
-      kind: 'ok',
-      line_id: 'line-1',
-      display_name: 'Paracetamol 500mg Tablets',
-      unit_price_minor: 1250,
-      line_subtotal_minor: 1250,
-      quantity: 1,
-      version: 1,
-      merged: false,
-    });
-    cartApi.handoff = vi.fn().mockResolvedValue({ kind: 'ok', envelope: makeEnvelope() });
-
-    render(
-      <MemoryRouter initialEntries={['/app/cart']}>
-        <Routes>
-          <Route path="/app/cart" element={<CartWorkspace />} />
-          <Route path="/app/checkout" element={<CheckoutRoute />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    const scan = await screen.findByTestId('scan-capture-field');
-    await user.type(scan, '6221000000001');
-    fireEvent.keyDown(scan, { key: 'Enter' });
-    await user.click(await screen.findByRole('button', { name: /Add/ }));
-    const handoff = await screen.findByTestId('cart-handoff-button');
-    await waitFor(() => expect(handoff).toBeEnabled());
-    await user.click(handoff);
-    await user.click(await screen.findByTestId('handoff-continue-button'));
-    expect(await screen.findByTestId('payment-surface')).toBeInTheDocument();
-    expect(cartApi.lines.add).toHaveBeenCalledOnce();
-    expect(cartApi.handoff).toHaveBeenCalledOnce();
-  });
-
   it('Continue to payment navigates to /app/checkout and mounts PaymentSurface', async () => {
     // Drive the REAL flow end-to-end through AppRouter so the load-bearing seam
-    // — the production Sale adapter wiring Continue → navigate — is exercised,
-    // not stubbed. Use the SCAN path to skip typed-search debounce. The
-    // handoff freezes the envelope before checkout mounts it.
+    // — CartWorkspace actually wiring onPaymentContinue → navigate — is exercised,
+    // not stubbed. Use the SCAN path (lookupBarcode) to skip the typed-search
+    // debounce. The handoff is what hydrates CartPane's LOCAL envelope, which is
+    // why the frozen state can't simply be seeded into the store.
     const user = userEvent.setup();
     useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
     useOperatorSessionStore.getState().hydrateSignedIn(MANAGER_SESSION);
@@ -265,27 +225,14 @@ describe('cart → checkout wiring (006 mount)', () => {
     // No cart exists yet: the first confirmed add creates it (#466).
     expect(api.cart.create).not.toHaveBeenCalled();
 
-    // Scan → single match → confirm_pending → Add.
-    const scan = await screen.findByRole('textbox', { name: 'حقل التقاط مسح الباركود' });
-    await user.type(scan, '6221000000001{Enter}');
-    const addBtn = await screen.findByRole('button', { name: 'إضافة إلى السلة' });
-    await user.click(addBtn);
-
-    // Line added → cart editing → Hand off to payment.
-    const handoffBtn = await screen.findByRole('button', { name: /تسليم السلة/ });
-    await waitFor(() => expect(handoffBtn).toBeEnabled());
-    await user.click(handoffBtn);
-
-    // Frozen → HandoffSummary with the now-enabled Continue button.
-    const continueBtn = await screen.findByRole('button', { name: /المتابعة إلى الدفع/ });
-    expect(continueBtn).toBeEnabled();
-    await user.click(continueBtn);
+    // Scan → confirm Add (creates the cart) → hand off → Continue (enabled).
+    await scanAddHandoffContinue(user);
+    expect(api.cart.create).toHaveBeenCalledOnce();
+    expect(api.cart.handoff).toHaveBeenCalledOnce();
 
     // Load-bearing wiring assertion: the live payment surface mounts on checkout.
     await waitFor(() => expect(screen.getByTestId('payment-surface')).toBeInTheDocument());
     expect(window.location.pathname).toBe('/app/checkout');
-    expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
-    expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
   it('drives the full single-tender path: scan → add → handoff → tender → confirm → settled → New sale → /app/cart', async () => {
@@ -403,13 +350,7 @@ describe('cart → checkout wiring (006 mount)', () => {
     );
 
     // Scan → Add (creates the cart, #466) → handoff → Continue → checkout.
-    const scan = await screen.findByRole('textbox', { name: 'حقل التقاط مسح الباركود' });
-    await user.type(scan, '6221000000001{Enter}');
-    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
-    const handoffBtn = await screen.findByRole('button', { name: /تسليم السلة/ });
-    await waitFor(() => expect(handoffBtn).toBeEnabled());
-    await user.click(handoffBtn);
-    await user.click(await screen.findByRole('button', { name: /المتابعة إلى الدفع/ }));
+    await scanAddHandoffContinue(user);
 
     // Tender → enter exact cash → confirm cash line → confirm payment.
     await waitFor(() => expect(screen.getByTestId('payment-surface')).toBeInTheDocument());
@@ -425,7 +366,6 @@ describe('cart → checkout wiring (006 mount)', () => {
     // invariant 13 is superseded pending a correlating identifier). What this
     // walk still proves is the end-to-end path and the never-stuck exit below.
     await waitFor(() => expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument());
-    expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.queryByTestId('payment-surface-sale-number')).not.toBeInTheDocument();
 
     // New sale → cashier is unstuck → back on a usable cart route.
@@ -434,7 +374,9 @@ describe('cart → checkout wiring (006 mount)', () => {
       expect(window.location.pathname).toBe('/app/cart');
     });
     expect(usePaymentStore.getState().envelope).toBeNull();
-    expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+    // The fresh sale is usable: the v5 Sale is back with an empty cart.
+    expect(await screen.findByRole('region', { name: 'مساحة البيع' })).toBeInTheDocument();
+    expect(screen.getByText(/لا توجد أصناف في السلة/)).toBeInTheDocument();
   });
 
   it('checkout route falls back to the reserved placeholder when payments flag is off', async () => {

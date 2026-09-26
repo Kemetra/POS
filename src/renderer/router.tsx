@@ -1,11 +1,10 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode, type JSX } from 'react';
+import { useEffect, useState, type ReactNode, type JSX } from 'react';
 import {
   createMemoryRouter,
   createHashRouter,
   Navigate,
-  RouterProvider,
-  useNavigate,
   Outlet,
+  RouterProvider,
   type RouteObject,
 } from 'react-router-dom';
 
@@ -25,9 +24,8 @@ import { CashierManagement } from './routes/app/manager/CashierManagement';
 import { StuckShiftSurface } from './ui/operator/ForcedCloseSurface';
 import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
-import { V5Frame } from './v5/frame/V5Frame';
-import { V5OperationalNotices } from './v5/frame/V5OperationalNotices';
-import { LiveSaleWorkspace } from './v5/sale/LiveSaleWorkspace';
+import { V5AppLayout } from './v5/frame/V5AppLayout';
+import { V5SaleRoute } from './v5/sale/V5SaleRoute';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -78,73 +76,6 @@ export interface AppRouterProps {
    * rules.
    */
   initialEntry?: string;
-}
-
-// 023 slice E — DEV-only functional preview of the v5 Sale adapter. The dynamic
-// import sits inside the DEV branch so production builds drop the module and its
-// CSS side effects entirely (verified by a renderer build + grep, not by Vitest).
-const DevLiveSaleWorkspace =
-  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
-    ? lazy(() =>
-        import('./v5/sale/LiveSaleWorkspace').then((m) => ({ default: m.LiveSaleWorkspace })),
-      )
-    : null;
-
-function DevSaleRoute(): JSX.Element | null {
-  const navigate = useNavigate();
-  if (DevLiveSaleWorkspace === null) return null;
-  return (
-    <Suspense fallback={null}>
-      <DevLiveSaleWorkspace
-        onPaymentContinue={() => {
-          void navigate('/app/checkout');
-        }}
-      />
-    </Suspense>
-  );
-}
-
-// V5 UI foundation — DEV-only preview of the v5 frame around the live Sale.
-// Same production isolation as /app/sale-v5: the lazy import (and with it the
-// frame/foundation CSS) sits inside the DEV branch, and the route literal is
-// added only under the inline DEV check below. It is a sibling of /app, not a
-// child, so the legacy AppShell never wraps it.
-const DevV5SalePreview =
-  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
-    ? lazy(() => import('./v5/preview/V5SalePreview').then((m) => ({ default: m.V5SalePreview })))
-    : null;
-
-function DevV5SaleRoute(): JSX.Element | null {
-  const navigate = useNavigate();
-  if (DevV5SalePreview === null) return null;
-  return (
-    <Suspense fallback={null}>
-      <DevV5SalePreview
-        onPaymentContinue={() => {
-          void navigate('/app/checkout');
-        }}
-      />
-    </Suspense>
-  );
-}
-
-function V5AppLayout(): JSX.Element {
-  return (
-    <V5Frame notices={<V5OperationalNotices />} salePath="/app/cart">
-      <Outlet />
-    </V5Frame>
-  );
-}
-
-function V5CartRoute(): JSX.Element {
-  const navigate = useNavigate();
-  return (
-    <LiveSaleWorkspace
-      onPaymentContinue={() => {
-        void navigate('/app/checkout');
-      }}
-    />
-  );
 }
 
 type BootStatus =
@@ -209,7 +140,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // Pairing-bypass guard (T007) stays green: unpaired/invalid terminals
   // still route to /pairing and cannot reach /app/* directly.
   // 004-operator-session T032: `/sign-in` mounts above `/app/*`. The
-  // route outlet is wrapped in `<OperatorRouteGuard>` (no `allow` filter at
+  // shell is wrapped in `<OperatorRouteGuard>` (no `allow` filter at
   // S1 — any signed-in role passes; per-route role gating lands with
   // the manager-only surfaces in S4 / S5). Any deep-link to `/app/*`
   // without an operator session redirects to `/sign-in` (FR-005).
@@ -226,6 +157,10 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       <Navigate to={boot.startPath} replace />
     );
 
+  // 023 Slice G — one operator guard for all of /app. Under it, two layouts:
+  // the v5 frame for the cashier's sale loop (cart + checkout) and the legacy
+  // AppShell for every other screen. The legacy Sale components stay in the
+  // tree as the rollback source (revert this composition between sales).
   const guardedApp =
     props.operator !== undefined ? (
       <OperatorRouteGuard>
@@ -240,25 +175,17 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
     { path: '/pairing', element: pairingScreenElement },
     { path: '/paired', element: <PairedScreen pairing={props.pairing} /> },
     { path: '/sign-in', element: signInElement },
-    ...((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
-      ? [
-          {
-            path: '/v5/sale',
-            element:
-              props.operator !== undefined ? (
-                <OperatorRouteGuard>
-                  <DevV5SaleRoute />
-                </OperatorRouteGuard>
-              ) : (
-                <DevV5SaleRoute />
-              ),
-          },
-        ]
-      : []),
     {
       path: '/app',
       element: guardedApp,
       children: [
+        {
+          element: <V5AppLayout />,
+          children: [
+            { path: 'cart', element: <V5SaleRoute /> },
+            { path: 'checkout', element: <CheckoutRoute /> },
+          ],
+        },
         {
           element: <AppShell />,
           children: [
@@ -270,9 +197,6 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             { index: true, element: <AppIndexRedirect /> },
             { path: 'dashboard', element: <DashboardRoute /> },
             { path: 'sales', element: <SalesWorkspace /> },
-            ...((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
-              ? [{ path: 'sale-v5', element: <DevSaleRoute /> }]
-              : []),
             // POS v3.5 Slice 1 — new nav entries route to thin "coming soon"
             // placeholders. Returns is Phase-7 blocked; Audit is a later display
             // slice. Both are navigation-only (no data, no IPC).
@@ -340,13 +264,6 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
                 </OperatorRouteGuard>
               ),
             },
-          ],
-        },
-        {
-          element: <V5AppLayout />,
-          children: [
-            { path: 'cart', element: <V5CartRoute /> },
-            { path: 'checkout', element: <CheckoutRoute /> },
           ],
         },
       ],

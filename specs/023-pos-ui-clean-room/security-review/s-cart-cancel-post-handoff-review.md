@@ -7,8 +7,8 @@
 | Bridge surface | `cart.cancelPostHandoff` on channel `cart:cancelPostHandoff`, one mutating method added to the existing 005-owned `cart.*` namespace |
 | Review type | Post-implementation walk, then an independent adversarial review (2026-09-25, verdict REVISE), with every finding addressed on `fix/cart-payment-authority` |
 | Base | Merged in #469 (`e4f1721`); hardened on `fix/cart-payment-authority` |
-| Prepared by | implementing agent (Claude Code), 2026-09-25; revised 2026-09-26. **Owner/reviewer sign-off still required.** |
-| Verdict | **Controls observed in code and covered by tests; awaiting reviewer sign-off.** Main is the authority for every claim below, including the money-side ones. |
+| Prepared by | implementing agent (Claude Code), 2026-09-25; revised 2026-09-26. **Sign-off (2026-09-26): accepted under owner delegation.** The owner delegated this decision to the implementing agent ("handle it you are the captain"); it did not personally review the record. Accepted on the basis of the independent re-review (APPROVE-WITH-NOTES, no CRITICAL/HIGH) and the #472 fixes for both MEDIUM findings. The owner may revoke this. |
+| Verdict | **Controls observed in code and covered by tests; accepted under owner delegation (2026-09-26).** Main is the authority for every claim below, including the money-side ones. |
 
 ## Why the channel exists
 

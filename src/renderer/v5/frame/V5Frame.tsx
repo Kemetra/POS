@@ -10,8 +10,6 @@ import './frame.css';
 interface V5FrameProps {
   /** Persistent operational notices (failure is loud, never a toast). */
   notices?: ReactNode;
-  /** The Sale route in this composition; the DEV proof keeps its preview path. */
-  salePath?: string;
   children: ReactNode;
 }
 
@@ -28,7 +26,7 @@ interface V5FrameProps {
  * renders, so the screen (and its bridge calls) never mounts; a non-online
  * connection state shows the same persistent banner as the legacy TopBar.
  */
-export function V5Frame({ notices, salePath, children }: V5FrameProps): JSX.Element {
+export function V5Frame({ notices, children }: V5FrameProps): JSX.Element {
   const tier = useViewportTier();
   const { state: connectionState } = useConnectionState();
 
@@ -56,7 +54,7 @@ export function V5Frame({ notices, salePath, children }: V5FrameProps): JSX.Elem
         )}
         <main className="v5-frame__main">{children}</main>
       </div>
-      <V5Navigation salePath={salePath} />
+      <V5Navigation />
     </div>
   );
 }

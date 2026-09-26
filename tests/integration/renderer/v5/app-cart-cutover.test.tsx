@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
+import { expectNoAxeViolations } from '../../../../src/renderer/ui/primitives/__tests__/axe-config.js';
 
 import { AppRouter } from '../../../../src/renderer/router.js';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../../../../src/shared/bridge-api.js';
@@ -13,16 +14,15 @@ import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.j
 import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 
 /**
- * V5 UI foundation — the DEV-only `/v5/sale` preview composes the v5 frame
- * around the existing live Sale adapter. Driven through the REAL AppRouter so
- * the operator guard, feature flags, cart/catalogue bridges and the unchanged
- * `/app/checkout` route are exercised. Production absence is proven by a
- * renderer build + bundle grep, not here: Vitest always runs with DEV = true,
- * and `vi.stubEnv('DEV', false)` does not reach the router's cast
- * `import.meta.env` read (verified: the route still rendered with it stubbed).
+ * 023 Slice G — `/app/cart` cutover. The production Sale route is the v5
+ * frame around the live Sale adapter, and `/app/checkout` sits in the same
+ * frame so the chrome never changes mid-sale. Every other `/app/*` screen
+ * stays on the legacy AppShell. Driven through the REAL AppRouter so the
+ * operator guard, feature flags, cart/catalogue bridges and the unchanged
+ * checkout surface are exercised. (Formerly the DEV `/v5/sale` preview test.)
  */
 
-const V5_SALE = '/v5/sale';
+const V5_SALE = '/app/cart';
 
 const CASHIER_SESSION = {
   id: 'sess-frame',
@@ -182,19 +182,16 @@ afterEach(() => {
   delete (window as unknown as { api?: unknown }).api;
 });
 
-describe('/v5/sale — v5 frame + live Sale (DEV-only preview)', () => {
-  it.each([V5_SALE, '/app/cart', '/app/checkout'])(
-    'redirects signed-out access to %s before mounting the frame or touching the cart bridge',
-    async (path) => {
-      useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
-      renderAt(path);
-      await waitFor(() => {
-        expect(window.location.pathname).toBe('/sign-in');
-      });
-      expect(api().cart.create).not.toHaveBeenCalled();
-      expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
-    },
-  );
+describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
+  it('redirects a signed-out operator to sign-in without touching the cart bridge', async () => {
+    useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+    renderAt(V5_SALE);
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/sign-in');
+    });
+    expect(api().cart.create).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
+  });
 
   it('renders the Sale inside one v5 frame: one main, one nav, one brand, no legacy chrome', async () => {
     signInCashier();
@@ -257,6 +254,10 @@ describe('/v5/sale — v5 frame + live Sale (DEV-only preview)', () => {
     renderAt(V5_SALE);
     expect(await screen.findByText('سلة البيع غير مفعّلة على هذا الجهاز بعد.')).toBeInTheDocument();
     expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+    // The fail-closed default still carries the screen title (Codex, PR #476).
+    expect(screen.getByRole('region', { name: 'مساحة البيع' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('مساحة البيع');
     expect(api().cart.create).not.toHaveBeenCalled();
   });
 
@@ -268,16 +269,112 @@ describe('/v5/sale — v5 frame + live Sale (DEV-only preview)', () => {
     expect(screen.getByRole('heading', { name: 'سلة المشتريات' })).toBeInTheDocument();
   });
 
-  it('mounts production /app/cart in the v5 frame', async () => {
+  it('renders checkout inside the same v5 frame: one main, one h1, no legacy chrome', async () => {
     signInCashier();
-    renderAt('/app/cart');
-    expect(await screen.findByRole('region', { name: 'مساحة البيع' })).toBeInTheDocument();
-    expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+    usePaymentStore.getState().mount(ENVELOPE as never);
+    renderAt('/app/checkout');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface')).toBeInTheDocument();
+    });
+    const frame = screen.getByTestId('v5-frame');
+    expect(within(frame).getByTestId('payment-surface')).toBeInTheDocument();
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    // One Arabic screen title, no English-only duplicate from the legacy Workspace.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('الدفع');
+    expect(screen.queryByText('Checkout')).not.toBeInTheDocument();
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    // No legacy top bar. (PaymentSurface's own section header is not page chrome.)
+    expect(document.querySelector('.top-bar')).toBeNull();
+    // The Sale entry stays current through checkout: one sale, one place.
+    expect(
+      within(screen.getByRole('navigation', { name: 'التنقل الرئيسي' })).getByRole('link', {
+        name: 'نقطة البيع',
+      }),
+    ).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('leaving checkout and coming back keeps sign-out blocked while the payment is open', async () => {
+    signInCashier();
+    usePaymentStore.getState().mount(ENVELOPE as never);
+    usePaymentStore.getState().applyAttemptSnapshot({
+      payment_attempt_id: 'pa-open',
+      state: 'started',
+      envelope_subtotal_minor: 1250,
+      started_at: '2026-09-24T09:06:00.000Z',
+      tender_lines: [],
+    });
+    renderAt('/app/checkout');
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'تسجيل الخروج' })).toBeDisabled();
+    cleanup();
+    // Remount (the cashier left via the Sale entry and came back to checkout).
+    renderAt('/app/checkout');
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface')).toBeInTheDocument();
+    });
+    expect(usePaymentStore.getState().paymentSlice?.state).toBe('started');
+    expect(screen.getByRole('button', { name: 'تسجيل الخروج' })).toBeDisabled();
+  });
+
+  it('checkout with no handed-off sale returns to the Sale instead of an empty pane', async () => {
+    signInCashier();
+    renderAt('/app/checkout');
+    expect(await screen.findByRole('region', { name: 'مساحة البيع' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/app/cart');
+  });
+
+  it('checkout inside the v5 frame is axe-clean', async () => {
+    signInCashier();
+    usePaymentStore.getState().mount(ENVELOPE as never);
+    renderAt('/app/checkout');
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface')).toBeInTheDocument();
+    });
+    await expectNoAxeViolations(screen.getByTestId('v5-frame'));
+  });
+
+  it('respects the payments flag at checkout: off → the reserved placeholder, still in the frame', async () => {
+    signInCashier({ cart: true, payments: false, productSearch: true });
+    renderAt('/app/checkout');
+    await waitFor(() => {
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('payment-surface')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+  });
+
+  it('keeps every other /app screen on the legacy AppShell', async () => {
+    useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+    useOperatorSessionStore.getState().hydrateSignedIn({ ...CASHIER_SESSION, role: 'manager' });
+    renderAt('/app/dashboard');
+    expect(await screen.findByTestId('app-shell')).toBeInTheDocument();
+    expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
+  });
+
+  it('the v5 Sale entry links to the production route, not a preview', async () => {
+    signInCashier();
+    renderAt(V5_SALE);
+    await screen.findByRole('region', { name: 'مساحة البيع' });
     expect(
       within(screen.getByRole('navigation', { name: 'التنقل الرئيسي' })).getByRole('link', {
         name: 'نقطة البيع',
       }),
     ).toHaveAttribute('href', '/app/cart');
+  });
+
+  it('the DEV previews are retired: /v5/sale and /app/sale-v5 no longer render a Sale', async () => {
+    signInCashier();
+    for (const path of ['/v5/sale', '/app/sale-v5']) {
+      renderAt(path);
+      // The router's no-match outcome, not a Sale that has not loaded yet.
+      expect(await screen.findByText(/404 Not Found/)).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'مساحة البيع' })).not.toBeInTheDocument();
+      expect(api().cart.create).not.toHaveBeenCalled();
+      cleanup();
+    }
   });
 });

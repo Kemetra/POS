@@ -44,8 +44,6 @@ import type {
  */
 
 export interface PaymentSurfaceProps {
-  /** Render a labelled region when the route frame already owns the main landmark. */
-  embedded?: boolean;
   /**
    * Test seam: injects payments + tender (+ optional sales) bridge in place of
    * `window.api`. Mirrors the `_testBridge` pattern from CartPane
@@ -127,9 +125,7 @@ function resolveBridge(testBridge: ResolvedBridge | undefined): ResolvedBridge |
 export function PaymentSurface({
   _testBridge,
   onNewSale,
-  embedded = false,
 }: PaymentSurfaceProps = {}): JSX.Element | null {
-  const Root = embedded ? 'section' : 'main';
   const sessionState = useOperatorSessionStore((s) => s.state);
   const envelope = usePaymentStore((s) => s.envelope);
   const paymentSlice = usePaymentStore((s) => s.paymentSlice);
@@ -172,13 +168,25 @@ export function PaymentSurface({
   const envelopeHandoffId = envelope?.handoff_action_id ?? null;
   useEffect(() => {
     setSelectedTender(null);
-    setPhase('tender_selection');
     setBridgeRefusalCopy(null);
     setIsConfirming(false);
     setIsCancelling(false);
     setIsStarting(false);
     setReversalPending(false);
-    usePaymentStore.getState().clearAttempt();
+    // Resume a same-handoff attempt across a remount (leaving checkout and
+    // coming back): a `started` one is still held by main, so forgetting it
+    // would re-enable sign-out and make the next tender re-run payments.start,
+    // which main refuses; a `settled` one must come back as the settled
+    // screen, never as tender selection. Anything else (another handoff, no
+    // session, or a terminal attempt with nothing to resume) is cleared.
+    const store = usePaymentStore.getState();
+    const kept = store.paymentSlice?.state;
+    const resumable =
+      sessionState.kind === 'signedIn' &&
+      store.attemptHandoffId === envelopeHandoffId &&
+      (kept === 'started' || kept === 'settled');
+    if (!resumable) store.clearAttempt();
+    setPhase(resumable && kept === 'settled' ? 'settled' : 'tender_selection');
   }, [sessionState.kind, envelopeHandoffId]);
 
   // EXTERNAL REVIEW P1 (round 3) — "Stop polling until finalized sales can be
@@ -248,6 +256,17 @@ export function PaymentSurface({
       }
 
       setPhase('entry');
+
+      // Main now holds a started attempt: record it at once, so an open
+      // payment is known (and V5 sign-out blocked) even if the read below is
+      // slow or fails. The read then replaces this with main's snapshot.
+      usePaymentStore.getState().applyAttemptSnapshot({
+        payment_attempt_id: startResponse.payment_attempt_id,
+        state: 'started',
+        envelope_subtotal_minor: envelope.subtotal_minor,
+        started_at: new Date().toISOString(),
+        tender_lines: [],
+      });
 
       // Seed the paymentSlice with an initial read so the surface can react to
       // applied lines as they land. This also populates the paymentAttemptId
@@ -432,13 +451,13 @@ export function PaymentSurface({
     // payment. 011 already derives one from `envelope_handoff_action_id`.
 
     return (
-      <Root
+      <section
         className="v4-screen payment-surface--settled"
         data-testid="payment-surface"
         aria-label="الدفع"
       >
         <header className="v4-screen__header">
-          <h2 className="v4-screen__title">الدفع</h2>
+          <h1 className="v4-screen__title">الدفع</h1>
           <OperatorBadge display_name={display_name} role={role} />
         </header>
 
@@ -515,14 +534,14 @@ export function PaymentSurface({
         >
           بيع جديد
         </button>
-      </Root>
+      </section>
     );
   }
 
   return (
-    <Root className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
+    <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
       <header className="payment-surface__header">
-        <h2 className="payment-surface__title">الدفع</h2>
+        <h1 className="payment-surface__title">الدفع</h1>
         <OperatorBadge display_name={display_name} role={role} />
       </header>
 
@@ -703,6 +722,6 @@ export function PaymentSurface({
           {bridgeRefusalCopy}
         </div>
       )}
-    </Root>
+    </section>
   );
 }
