@@ -4,7 +4,7 @@ import { useOperatorSessionStore } from '../../stores/operator-session-store.js'
 import { usePaymentStore } from '../../stores/payment-store.js';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store.js';
 import { OperatorBadge } from '../operator/OperatorBadge.js';
-import { format as formatMoney, of as moneyOf } from '../../../shared/money.js';
+import { formatCheckoutMoney } from './format-checkout-money.js';
 import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
 import { CashEntry } from './CashEntry.js';
@@ -68,20 +68,6 @@ export interface PaymentSurfaceProps {
 }
 
 type Phase = 'tender_selection' | 'entry' | 'settled';
-
-/**
- * Minor-units → display string, via the shared money module (Constitution §II
- * — integer minor units, `Number.isSafeInteger` guarded, ≥95% covered). Using
- * `money.format` rather than a local copy keeps the completion surface on the
- * same currency rendering as the rest of the app. A non-safe integer renders
- * as an em dash rather than a wrong number.
- */
-function formatMinorUnits(minor: number): string {
-  if (!Number.isSafeInteger(minor)) {
-    return '—';
-  }
-  return formatMoney(moneyOf(minor, 'EGP'));
-}
 
 interface ResolvedBridge {
   payments: PaymentsBridgeAPI;
@@ -516,7 +502,7 @@ export function PaymentSurface({
               data-testid="payment-surface-settled-amount"
               dir="ltr"
             >
-              {formatMinorUnits(envelope.subtotal_minor)}
+              {formatCheckoutMoney(envelope.subtotal_minor)}
             </p>
           </div>
         </div>
@@ -578,7 +564,7 @@ export function PaymentSurface({
             data-testid="payment-surface-amount-due"
             dir="ltr"
           >
-            {formatMinorUnits(remainingBalanceMinor)}
+            {formatCheckoutMoney(remainingBalanceMinor)}
           </span>
         </section>
 
