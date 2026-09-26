@@ -47,21 +47,21 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
         onRecover={recover}
         searchRef={searchRef}
       />
-      {/* Legacy parity: the add path exists only once a real cart id does. */}
-      {catalogue.effectiveCartId !== '' && (
-        <ConfirmAddDialog
-          cartId={catalogue.effectiveCartId}
-          onLineAdded={props.onLineAdded}
-          onResolved={focusSearch}
-          {...(props.cartBridge ? { bridge: props.cartBridge } : {})}
-        />
-      )}
+      {/* The first confirmed add creates the cart (#466). */}
+      <ConfirmAddDialog
+        cartId={catalogue.effectiveCartId}
+        ensureCart={catalogue.ensureCart}
+        onLineAdded={props.onLineAdded}
+        onResolved={focusSearch}
+        {...(props.cartBridge ? { bridge: props.cartBridge } : {})}
+      />
     </>
   );
 }
 
 function ConfirmAddDialog(props: {
   cartId: string;
+  ensureCart: () => Promise<string | null>;
   onLineAdded: (line: AddedLineResult) => void;
   onResolved: () => void;
   bridge?: CartBridgeAPI;

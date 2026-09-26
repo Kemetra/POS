@@ -140,7 +140,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
   };
 
   // An existing cart whose persisted lines are not known yet: show only a
-  // small state. No catalogue (so no eager create and no add into an unknown
+  // small state. No catalogue (so no cart create and no add into an unknown
   // projection) and no empty cart that could be mistaken for the real one.
   if (cart.hydration !== 'ready') {
     return (

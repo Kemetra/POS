@@ -66,4 +66,67 @@ describe('useConfirmSaleAdd', () => {
     expect(useCatalogueSearchStore.getState().state.kind).toBe('confirm_pending');
     expect(onLineAdded).not.toHaveBeenCalled();
   });
+
+  it('with no cart yet, creates one through ensureCart and adds to it', async () => {
+    pending();
+    const add = vi.fn().mockResolvedValue({
+      kind: 'ok',
+      line_id: 'line-1',
+      display_name: 'بنادول',
+      unit_price_minor: 1500,
+      line_subtotal_minor: 1500,
+      quantity: 1,
+      version: 1,
+      merged: false,
+    });
+    const ensureCart = vi.fn().mockResolvedValue('cart-new');
+    const onLineAdded = vi.fn();
+    const bridge = { lines: { add } } as unknown as CartBridgeAPI;
+    const { result } = renderHook(() =>
+      useConfirmSaleAdd({ cartId: '', ensureCart, bridge, onLineAdded }),
+    );
+    await act(async () => result.current.confirm());
+    expect(ensureCart).toHaveBeenCalledOnce();
+    expect(add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-new' }));
+    expect(onLineAdded).toHaveBeenCalledOnce();
+  });
+
+  it('a failed cart create shows the generic error, adds nothing, and Add retries it (#466)', async () => {
+    pending();
+    const add = vi.fn().mockResolvedValue({
+      kind: 'ok',
+      line_id: 'line-1',
+      display_name: 'بنادول',
+      unit_price_minor: 1500,
+      line_subtotal_minor: 1500,
+      quantity: 1,
+      version: 1,
+      merged: false,
+    });
+    const ensureCart = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce('cart-2');
+    const onLineAdded = vi.fn();
+    const bridge = { lines: { add } } as unknown as CartBridgeAPI;
+    const { result } = renderHook(() =>
+      useConfirmSaleAdd({ cartId: '', ensureCart, bridge, onLineAdded }),
+    );
+    await act(async () => result.current.confirm());
+    expect(add).not.toHaveBeenCalled();
+    expect(result.current.error).not.toBeNull();
+    expect(useCatalogueSearchStore.getState().state.kind).toBe('confirm_pending');
+    await act(async () => result.current.confirm());
+    expect(add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-2' }));
+    expect(onLineAdded).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed with no cart id and no way to create one', async () => {
+    pending();
+    const add = vi.fn();
+    const bridge = { lines: { add } } as unknown as CartBridgeAPI;
+    const { result } = renderHook(() =>
+      useConfirmSaleAdd({ cartId: '', bridge, onLineAdded: vi.fn() }),
+    );
+    await act(async () => result.current.confirm());
+    expect(add).not.toHaveBeenCalled();
+    expect(result.current.error).not.toBeNull();
+  });
 });
