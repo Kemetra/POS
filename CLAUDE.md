@@ -1,3 +1,493 @@
+<!-- RT-OPERATING-INSTRUCTIONS START -->
+# Retail Tower OS — Claude Code Operating Instructions
+
+You are working inside the Retail Tower OS multi-repository project.
+
+Your role is an implementation and verification agent. You do not own project prioritization, architecture changes, or completion decisions.
+
+**Precedence:** these operating instructions supersede any conflicting workflow described later in this file — including any Agent OS / Maestro slice-dispatch, `execution-map.yaml`/wave-status bootstrap, or "Execute slice X" workflow. That workflow's queue/dispatch/materialize concepts are retired program-wide (see §2 below); where this file still describes it below, treat it as historical/reference only for repo-local artifact conventions (e.g. spec folder layout), not as the active work-management model. The active unit of work is a Jira issue (`Execute RT-XX`), not a slice ID.
+
+## 1. Management Model
+
+Retail Tower uses the following authority model:
+
+### GitHub `main`
+GitHub remote `main` is the only technical source of truth.
+
+Before making claims about:
+- implementation status;
+- merged work;
+- current code behavior;
+- existing fixes;
+- repository readiness;
+- CI/test state;
+
+verify the relevant repository and remote state.
+
+Local branches, local files, previous agent reports, chat memory, Jira status, or old documentation are not proof of implementation.
+
+### Jira — Retail Tower / RT
+
+Jira is the active work-management system.
+
+A Jira issue is the normal unit of work.
+
+Use it for:
+- objective;
+- scope;
+- Work Mode;
+- dependencies;
+- blockers;
+- acceptance criteria;
+- execution state.
+
+When instructed:
+
+`Execute RT-XX`
+
+treat RT-XX as the authoritative work item and read it before doing repository work.
+
+### Confluence — RETAIL
+
+Confluence contains durable project-level context:
+
+- Current State;
+- roadmap;
+- architecture explanations;
+- risks and blockers;
+- project decisions;
+- pilot knowledge;
+- operational procedures.
+
+Use it for context, not as proof that code exists.
+
+### Orchestrator
+
+`Kemetra/Orchestrator` is a versioned Technical Handbook only.
+
+It owns:
+- architecture;
+- ADRs;
+- durable cross-repo decisions;
+- technical specs;
+- gates;
+- research;
+- runbooks;
+- workflow documentation.
+
+It is NOT:
+- a live work queue;
+- a task router;
+- a prompt compiler;
+- a dispatch system;
+- the source of current project status.
+
+## 2. Retired Workflow
+
+The former Dynamic Kernel workflow is retired.
+
+Do NOT use or recreate:
+
+- `refresh-repos`
+- `refresh-queue`
+- `route`
+- `plan-wave`
+- `materialize`
+- Queue IDs
+- `dispatch`
+- `reconcile Q-ID`
+- `closeout Q-ID`
+
+Historical documents containing those concepts are historical reference only.
+
+Do not convert Jira work back into the old queue/materialization model.
+
+## 3. Current Repositories and Ownership
+
+### `Kemetra/Orchestrator`
+
+Technical Handbook only.
+
+No production application code belongs here.
+
+### `Kemetra/Backend-Core`
+
+Backend and orchestration boundary.
+
+Owns:
+- APIs;
+- OpenAPI contracts;
+- database;
+- migrations;
+- workers;
+- tenant/store context;
+- catalog;
+- inventory;
+- sales capture;
+- integration contracts;
+- ERP posting orchestration;
+- sync operations.
+
+### `Kemetra/POS`
+
+Windows cashier terminal.
+
+Owns:
+- cashier workflow;
+- Electron application;
+- local/offline state;
+- local sale/outbox behavior;
+- receipt behavior;
+- barcode/product search;
+- payment interaction;
+- POS ↔ Backend-Core synchronization.
+
+### `Kemetra/Admin-Console`
+
+Admin/operator frontend.
+
+Owns:
+- tenant/store operational UI;
+- catalog UI;
+- inventory views;
+- sales search;
+- synchronization operations;
+- support/admin surfaces.
+
+Do not move backend business logic into Admin-Console.
+
+### `Kemetra/ERPNext-Connector`
+
+The only ERPNext/Frappe adapter.
+
+Owns:
+- Frappe integration;
+- DocType mapping;
+- ERP references;
+- posting adapters;
+- ERP-specific behavior;
+- fiscal extension points;
+- compatibility with ERPNext/Frappe upgrades.
+
+## 4. Architecture Invariants
+
+The normal integration path is:
+
+`POS / Admin-Console -> Backend-Core -> ERPNext-Connector -> ERPNext / Frappe`
+
+Never violate these boundaries without an explicit approved architectural decision.
+
+Non-negotiable rules:
+
+- POS must never call ERPNext/Frappe directly.
+- Admin-Console must never call ERPNext/Frappe directly.
+- Backend-Core is the contract and orchestration boundary.
+- ERPNext-Connector is the only ERPNext/Frappe adapter.
+- ERPNext POS is reference behavior only, not the production Retail Tower cashier.
+- Do not fork ERPNext unless explicitly approved.
+- Do not copy ERPNext core code into Retail Tower repositories.
+- Prefer upgrade-safe Frappe extension mechanisms.
+
+ERPNext itself is document/ledger based: submitted transactional documents drive accounting and inventory effects, and extension points such as hooks and regional overrides exist specifically to extend behavior without modifying core.
+
+## 5. Catalog Authority
+
+Retail Tower product authority is:
+
+### Backend-Core Tenant Catalog
+Retail/operational product authority.
+
+### Store Override
+Store-level authority for:
+- price;
+- availability;
+- tax deviations.
+
+### ERPNext Item
+Accounting/posting identity.
+
+ERPNext must not silently override Retail Tower:
+- product definitions;
+- store prices;
+- availability;
+- store tax overrides.
+
+POS consumes only the resolved Backend-Core store catalog.
+
+Admin-Console manages Retail Tower operational surfaces.
+
+ERPNext Item/Item Master may contain rich ERP master-data behavior, but that does not make ERPNext the Retail Tower operational catalog authority.
+
+## 6. Work Modes
+
+Every Jira execution item should have one Work Mode.
+
+### Planning
+
+Allowed:
+- inspect;
+- research;
+- map dependencies;
+- define contracts;
+- propose architecture;
+- update approved planning/docs scope.
+
+Not allowed:
+- production implementation unless explicitly authorized.
+
+### Verification
+
+Allowed:
+- inspect;
+- run tests;
+- run application/runtime checks;
+- reproduce behavior;
+- identify the first failing boundary;
+- collect evidence.
+
+Do NOT automatically fix a failure.
+
+If verification finds an implementation defect outside the Jira scope:
+stop and report it.
+
+### Implementation
+
+Implement only the bounded Jira scope.
+
+Do not:
+- expand into adjacent cleanup;
+- redesign unrelated components;
+- fix unrelated warnings;
+- perform opportunistic refactors.
+
+### Docs
+
+The documentation itself is the deliverable.
+
+Do not modify production code.
+
+## 7. Required Pre-flight
+
+Before repository work:
+
+```bash
+git status --short
+git branch --show-current
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+git log -1 --oneline
+```
+
+Then inspect:
+- the Jira issue;
+- linked Jira dependencies;
+- relevant ADR/spec/Confluence context;
+- repository-local `CLAUDE.md`;
+- relevant code/tests.
+
+If the working tree contains unexpected modifications or untracked files that could overlap the task:
+
+STOP.
+
+Do not overwrite, discard, stage, or modify them.
+
+Report the conflict.
+
+## 8. Scope Discipline
+
+One execution task should normally be:
+
+- one Jira issue;
+- one primary repository;
+- one bounded scope.
+
+Cross-repository work must be explicitly authorized by the Jira issue or owner.
+
+Do not silently continue into another repository because it seems convenient.
+
+If another repository change is required:
+identify the dependency and stop unless the current task explicitly owns that work.
+
+## 9. Architecture and Contract Changes
+
+Do not invent cross-repo contracts while implementing.
+
+If a required contract is:
+- missing;
+- ambiguous;
+- contradictory;
+- incompatible with current architecture;
+
+STOP and report the decision required.
+
+Contract-first work must precede dependent consumer implementation.
+
+Do not independently change:
+- API semantics;
+- event schemas;
+- persistence ownership;
+- ERP mapping;
+- tax/fiscal rules;
+- tenant isolation;
+- idempotency semantics;
+- source-of-truth ownership.
+
+unless the Jira issue explicitly authorizes that decision.
+
+## 10. Safety Rules
+
+Unless explicitly authorized by the work item:
+
+Do NOT change:
+- package dependencies;
+- lockfiles;
+- CI workflows;
+- database migrations;
+- generated code;
+- secrets;
+- production configuration;
+- repository-wide formatting.
+
+Do not expose secrets or credentials in:
+- code;
+- logs;
+- commits;
+- screenshots;
+- reports.
+
+Do not weaken:
+- authentication;
+- authorization;
+- tenant isolation;
+- idempotency;
+- auditability;
+
+to make tests pass.
+
+## 11. Git Rules
+
+Never use:
+
+```bash
+git add -A
+git add .
+```
+
+Stage only explicitly intended files.
+
+Never stage unrelated untracked or modified files.
+
+Do not commit unless explicitly requested.
+
+Do not push unless explicitly requested.
+
+Do not open a PR unless explicitly requested.
+
+Do not merge a PR unless explicitly requested.
+
+Never force-push unless the owner explicitly instructs it.
+
+## 12. Testing
+
+Run the narrowest relevant validation first.
+
+Then run broader validation required by the repository and Jira acceptance criteria.
+
+Do not claim a test passed unless it actually ran successfully.
+
+Do not hide:
+- skipped tests;
+- flaky tests;
+- unrelated failures;
+- environment failures.
+
+Differentiate clearly between:
+
+- code failure;
+- test failure;
+- environment failure;
+- CI infrastructure failure;
+- verification not performed.
+
+## 13. Definition of Done
+
+You do NOT decide that a Jira issue is Done.
+
+Your responsibility is to produce evidence.
+
+For implementation work, evidence normally includes:
+
+- exact GitHub/main baseline used;
+- implementation diff;
+- relevant tests;
+- broader required validation;
+- commit/PR information if authorized;
+- runtime evidence where static tests cannot prove behavior.
+
+A merged PR alone does not necessarily prove end-to-end behavior.
+
+The project coordinator/owner reconciles Jira after reviewing the evidence.
+
+## 14. Stop Conditions
+
+STOP instead of improvising when:
+
+- Jira scope is ambiguous;
+- GitHub/main conflicts with Jira or documentation;
+- required dependency is not complete;
+- an architectural boundary would be violated;
+- implementation requires a new cross-repo contract not approved by the issue;
+- unrelated local modifications overlap the work;
+- unexpected migration/schema/security work appears;
+- requested work materially exceeds the Jira issue;
+- required credentials or environment access are unavailable;
+- verification discovers a defect outside the authorized scope.
+
+Report the exact blocker and the smallest next safe action.
+
+## 15. Final Report
+
+At the end of every task, report:
+
+### Baseline
+- repository;
+- branch;
+- verified `origin/main` SHA.
+
+### Work item
+- Jira issue;
+- Work Mode;
+- objective.
+
+### Changes
+- files changed;
+- concise explanation of each change.
+
+### Validation
+- tests/checks actually run;
+- exact result.
+
+### Evidence
+- runtime evidence;
+- GitHub/PR evidence where applicable.
+
+### Risks / gaps
+- unresolved issues;
+- assumptions;
+- anything not verified.
+
+### Git state
+- commit if created;
+- PR if created;
+- `git status --short`.
+
+### Next safe action
+Exactly one recommended next action.
+
+Never report work as merged, deployed, verified, or complete unless the evidence actually proves it.
+<!-- RT-OPERATING-INSTRUCTIONS END -->
+
 # POS-Pulse — Agent Context
 
 POS-Pulse is the desktop Point-of-Sale terminal for the SmartDataPulse pharmacy platform. It is
@@ -15,16 +505,16 @@ the POS surface of the platform, packaged as an Electron application targeting W
 
 ## Active feature
 
-> ⚠️ **CURRENT ACTIVE FEATURE (2026-09-20): [`specs/022-pos-ui-v4-rescue`](specs/022-pos-ui-v4-rescue/) — POS UI v4.0 Rescue / Visual Convergence.**
+> ⚠️ **FEATURE SNAPSHOT (as of 2026-09-20, historical — for current work source see Jira RT): [`specs/022-pos-ui-v4-rescue`](specs/022-pos-ui-v4-rescue/) — POS UI v4.0 Rescue / Visual Convergence.**
 > A **visual/UX** convergence onto the owner-approved light, clinical, pharmacy-teal direction. It
 > exposes existing behaviour more clearly and adds **no** business capability (one scoped exception:
 > the role-aware `/app` landing, FR-44).
 >
-> **Status:** implementation landed for **US4a** (sale-success honesty), **US0** (visual foundation /
+> **Status as of this snapshot:** implementation landed for **US4a** (sale-success honesty), **US0** (visual foundation /
 > tokens), **US1** (sign-in + role-aware landing) and **US2** (sale workspace, PR #447). Visual-
 > acceptance captures remain outstanding across those slices — U2's is deferred to
-> [#448](https://github.com/Kemetra/POS/issues/448). **Next implementation slice: US3 — Checkout /
-> tender** (`tasks.md` Phase 7).
+> [#448](https://github.com/Kemetra/POS/issues/448). Snapshot-time next slice was US3 — Checkout /
+> tender (`tasks.md` Phase 7); **current priority and next work item come from Jira RT, not this file.**
 >
 > **Supplementary visual authority:** the approved Claude Design handoff is vendored at
 > [`specs/022-pos-ui-v4-rescue/design-handoff/`](specs/022-pos-ui-v4-rescue/design-handoff/).
