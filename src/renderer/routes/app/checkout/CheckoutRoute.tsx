@@ -45,8 +45,10 @@ export function CheckoutRoute(): JSX.Element {
     return <CheckoutPlaceholder />;
   }
 
+  // 023 Slice G: checkout renders in the v5 frame, where PaymentSurface's own
+  // Arabic heading is the screen's one title (no English-only Workspace title).
   return (
-    <Workspace title="Checkout">
+    <Workspace>
       <PaymentSurface onNewSale={handleNewSale} />
     </Workspace>
   );

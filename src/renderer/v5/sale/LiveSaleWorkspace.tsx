@@ -77,7 +77,7 @@ const SALE_TITLE_ID = 'v5-sale-title';
 
 /**
  * Screen title only. Branding and operator identity belong to the app frame
- * (the v5 frame, or the legacy shell on /app/sale-v5), never to the screen.
+ * (the v5 frame), never to the screen.
  */
 function SaleTitle(): JSX.Element {
   return (

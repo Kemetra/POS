@@ -77,7 +77,7 @@ describe('PaymentSurface — accessibility', () => {
     render(<PaymentSurface />);
     // main or region role
     const landmark =
-      screen.queryByRole('main') ?? screen.queryByRole('region', { name: /payment/i });
+      screen.queryByRole('main') ?? screen.queryByRole('region', { name: /^(payment|الدفع)$/i });
     expect(landmark).not.toBeNull();
   });
 

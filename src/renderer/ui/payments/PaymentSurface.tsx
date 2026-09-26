@@ -428,13 +428,13 @@ export function PaymentSurface({
     // payment. 011 already derives one from `envelope_handoff_action_id`.
 
     return (
-      <main
+      <section
         className="v4-screen payment-surface--settled"
         data-testid="payment-surface"
         aria-label="الدفع"
       >
         <header className="v4-screen__header">
-          <h2 className="v4-screen__title">الدفع</h2>
+          <h1 className="v4-screen__title">الدفع</h1>
           <OperatorBadge display_name={display_name} role={role} />
         </header>
 
@@ -511,14 +511,14 @@ export function PaymentSurface({
         >
           بيع جديد
         </button>
-      </main>
+      </section>
     );
   }
 
   return (
-    <main className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
+    <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
       <header className="payment-surface__header">
-        <h2 className="payment-surface__title">الدفع</h2>
+        <h1 className="payment-surface__title">الدفع</h1>
         <OperatorBadge display_name={display_name} role={role} />
       </header>
 
@@ -699,6 +699,6 @@ export function PaymentSurface({
           {bridgeRefusalCopy}
         </div>
       )}
-    </main>
+    </section>
   );
 }

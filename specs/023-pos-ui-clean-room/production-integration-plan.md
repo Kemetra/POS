@@ -133,14 +133,14 @@ Each slice below is a future task. No slice is implemented by this document. Run
 
 ## Cutover evidence checklist
 
-- [ ] Search, barcode lookup, selection, confirm-first add and duplicate merge work through the existing bridge and FSM.
-- [ ] Cart create, add, update, remove, note and void use one controller and current version/idempotency contract; quantity guards and generic refusals remain correct.
-- [ ] Displayed integer line values and subtotal match the bridge-confirmed cart projection; frozen summary matches `PaymentIntentEnvelope.subtotal_minor`; tax remains pending.
-- [ ] Handoff freezes before payment-store mount; Continue reaches the unchanged checkout flow only when payments are enabled.
-- [ ] Signed-out, role, tenant and terminal gates remain effective; renderer sees no new secrets; app-shell banners and sign-out cleanup remain present.
-- [ ] Offline local catalogue lookup, cart outbox, frozen envelope and payment handoff tests remain green; no direct renderer network or DB path exists.
-- [ ] Keyboard/scanner focus recovery, 1024/1280 real Electron captures, accessibility checks, full relevant tests, typecheck, lint, build and structural import guard pass.
-- [ ] Owner visual confirmation is obtained again only if functional states materially change the approved appearance.
+- [x] Search, barcode lookup, selection, confirm-first add and duplicate merge work through the existing bridge and FSM. *(G: `app-cart-cutover.test.tsx` scan → confirm → add through the real router; the V5 adapter suites; production Electron run steps 01–03.)*
+- [x] Cart create, add, update, remove, note and void use one controller and current version/idempotency contract; quantity guards and generic refusals remain correct. *(Shared `renderer/sale/` controllers; V5 adapter, lifecycle and post-handoff suites; create is lazy per #466.)*
+- [x] Displayed integer line values and subtotal match the bridge-confirmed cart projection; frozen summary matches `PaymentIntentEnvelope.subtotal_minor`; tax remains pending. *(V5 adapter tests; Electron step 03 shows the tax-pending line.)*
+- [x] Handoff freezes before payment-store mount; Continue reaches the unchanged checkout flow only when payments are enabled. *(`app-cart-cutover.test.tsx` handoff → checkout and payments-off; `cart-to-checkout-wiring.test.tsx` full tender → settle → New sale; Electron steps 04–08.)*
+- [x] Signed-out, role, tenant and terminal gates remain effective; renderer sees no new secrets; app-shell banners and sign-out cleanup remain present. *(One `OperatorRouteGuard` still wraps all of `/app`; every negative case in `cashier-route-enumeration.test.tsx` passes unedited — only the two positive "reached" markers moved from `app-shell` to `v5-frame`. Banners via `V5OperationalNotices` + G0 connection banner; sign-out via #475.)*
+- [x] Offline local catalogue lookup, cart outbox, frozen envelope and payment handoff tests remain green; no direct renderer network or DB path exists. *(Full suite green; renderer-only change; Electron run used a dead API base.)*
+- [x] Keyboard/scanner focus recovery, 1024/1280 real Electron captures, accessibility checks, full relevant tests, typecheck, lint, build and structural import guard pass. *(Production-renderer Electron run PASS at both sizes, `screenshots/g-cutover-log.json`; axe on checkout in the frame; v5 import wall unchanged.)*
+- [x] Owner visual confirmation is obtained again only if functional states materially change the approved appearance. *(Checkout inside the v5 frame is a new composition. Reviewed by the implementing agent under owner delegation: captures `g-cutover-{1024,1280}-05…07`; the owner may still review them.)*
 
 ## Existing protection to retain
 

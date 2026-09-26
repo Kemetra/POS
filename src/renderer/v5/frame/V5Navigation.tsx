@@ -1,8 +1,8 @@
 import type { JSX } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { V5Icon } from '../foundation/V5Icon';
-import { roleLabelAr, visibleNavEntries } from './nav-model';
+import { isNavEntryCurrent, roleLabelAr, visibleNavEntries } from './nav-model';
 import { V5SignOut } from './V5SignOut';
 
 /**
@@ -15,6 +15,7 @@ export function V5Navigation(): JSX.Element {
     s.state.kind === 'signedIn' ? s.state.session : undefined,
   );
   const entries = visibleNavEntries(session?.role);
+  const { pathname } = useLocation();
 
   return (
     <nav className="v5-frame__nav" aria-label="التنقل الرئيسي">
@@ -28,14 +29,13 @@ export function V5Navigation(): JSX.Element {
       <ul className="v5-frame__links">
         {entries.map((entry) => (
           <li key={entry.id}>
-            <NavLink
+            <Link
               to={entry.path}
-              className={({ isActive }) =>
-                `v5-frame__link${isActive ? ' v5-frame__link--active' : ''}`
-              }
+              aria-current={isNavEntryCurrent(entry, pathname) ? 'page' : undefined}
+              className={`v5-frame__link${isNavEntryCurrent(entry, pathname) ? ' v5-frame__link--active' : ''}`}
             >
               {entry.label}
-            </NavLink>
+            </Link>
           </li>
         ))}
       </ul>
