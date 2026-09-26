@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-09-26T11:52:48.388Z",
+  "started_at": "2026-09-26T12:25:00.850Z",
   "mode": "production renderer (NODE_ENV=production, dist/renderer)",
   "viewports": {
     "1024": {
@@ -281,10 +281,10 @@
       ]
     }
   },
-  "renderer_url": "file:///C:/Users/Shaaban/Documents/GitHub/POS/dist/renderer/index.html",
+  "renderer_url": "file:///C:/Users/Shaaban/Documents/GitHub/POS/dist/renderer/index.html#/paired",
   "dev_flag": "n/a (checked via bundle: no /v5/sale route)",
   "result": "PASS",
-  "finished_at": "2026-09-26T11:52:58.574Z",
+  "finished_at": "2026-09-26T12:25:11.571Z",
   "main_log_tail": [
     "Error occurred in handler for 'sales:subscribe': Error: No handler registered for 'sales:subscribe'",
     "Error occurred in handler for 'sales:subscribe': Error: No handler registered for 'sales:subscribe'",

@@ -1,7 +1,8 @@
 import { useCallback, type JSX } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
+import { usePaymentStore } from '../../../stores/payment-store';
 import { resetSaleStores } from '../../../sale/reset-sale-stores';
 import { Workspace } from '../../../shell/regions/Workspace';
 import { PaymentSurface } from '../../../ui/payments/PaymentSurface';
@@ -30,6 +31,7 @@ import { CheckoutPlaceholder } from './CheckoutPlaceholder';
  */
 export function CheckoutRoute(): JSX.Element {
   const paymentsFlag = useFeatureFlagsStore((s) => s.payments);
+  const hasEnvelope = usePaymentStore((s) => s.envelope !== null);
   const navigate = useNavigate();
 
   const handleNewSale = useCallback((): void => {
@@ -43,6 +45,11 @@ export function CheckoutRoute(): JSX.Element {
 
   if (!paymentsFlag) {
     return <CheckoutPlaceholder />;
+  }
+  // No handed-off sale (direct entry, or a renderer reload lost the envelope):
+  // there is nothing to pay here, so return to the Sale instead of an empty pane.
+  if (!hasEnvelope) {
+    return <Navigate to="/app/cart" replace />;
   }
 
   // 023 Slice G: checkout renders in the v5 frame, where PaymentSurface's own

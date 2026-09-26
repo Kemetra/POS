@@ -320,6 +320,13 @@ describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
     expect(screen.getByRole('button', { name: 'تسجيل الخروج' })).toBeDisabled();
   });
 
+  it('checkout with no handed-off sale returns to the Sale instead of an empty pane', async () => {
+    signInCashier();
+    renderAt('/app/checkout');
+    expect(await screen.findByRole('region', { name: 'مساحة البيع' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/app/cart');
+  });
+
   it('checkout inside the v5 frame is axe-clean', async () => {
     signInCashier();
     usePaymentStore.getState().mount(ENVELOPE as never);

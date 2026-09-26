@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -120,5 +120,42 @@ describe('PaymentSurface — remount keeps a started attempt for the same handof
     usePaymentStore.getState().mount({ ...ENVELOPE, handoff_action_id: 'handoff-002' });
     render(<PaymentSurface _testBridge={bridge()} />);
     expect(usePaymentStore.getState().paymentSlice).toBeNull();
+  });
+
+  it('a remount of a settled sale restores the settled screen, not tender selection', () => {
+    usePaymentStore.getState().applyAttemptSnapshot({
+      ...STARTED,
+      state: 'settled',
+      settled_at: '2026-09-26T12:00:05.000Z',
+    });
+    const first = render(<PaymentSurface _testBridge={bridge()} />);
+    first.unmount();
+    render(<PaymentSurface _testBridge={bridge()} />);
+    expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument();
+    expect(screen.queryByTestId('tender-cash')).not.toBeInTheDocument();
+  });
+
+  it.each(['cancelled', 'failed', 'force_failed'] as const)(
+    'a remount clears a %s attempt (nothing to resume)',
+    (state) => {
+      usePaymentStore.getState().applyAttemptSnapshot({ ...STARTED, state });
+      render(<PaymentSurface _testBridge={bridge()} />);
+      expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    },
+  );
+
+  it('records the started attempt as soon as payments.start succeeds, before the read lands', async () => {
+    usePaymentStore.getState().clearAttempt();
+    const b = bridge();
+    (b.payments as unknown as { read: unknown }).read = vi.fn(() =>
+      Promise.reject(new Error('read failed')),
+    );
+    render(<PaymentSurface _testBridge={b} />);
+    await userEvent.setup().click(screen.getByTestId('tender-cash'));
+    await waitFor(() => {
+      expect(usePaymentStore.getState().paymentSlice).toEqual(
+        expect.objectContaining({ payment_attempt_id: 'pa-2', state: 'started' }),
+      );
+    });
   });
 });
