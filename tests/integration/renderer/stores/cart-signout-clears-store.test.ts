@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useOperatorSessionStore } from '../../../../src/renderer/stores/operator-session-store.js';
 import { useCartStore } from '../../../../src/renderer/stores/cart-store.js';
 import { installCartStoreSignOutHook } from '../../../../src/renderer/stores/cart-signout-hook.js';
+import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.js';
 import type { OperatorSessionView } from '../../../../src/renderer/stores/operator-session-store.js';
 
 /**
@@ -35,6 +36,7 @@ beforeEach(() => {
   unsubscribe?.();
   useOperatorSessionStore.getState().reset();
   useCartStore.getState().reset();
+  usePaymentStore.getState().reset();
   unsubscribe = installCartStoreSignOutHook();
 });
 
@@ -114,5 +116,39 @@ describe('cartStore — clears on operator session end', () => {
     useOperatorSessionStore.getState().resolveSignedOut();
 
     expect(useCartStore.getState().activeCart).not.toBeNull();
+  });
+
+  it('also clears the payment store, so the next operator never sees the previous sale (Codex, #476)', () => {
+    useOperatorSessionStore.getState().beginSignIn();
+    useOperatorSessionStore.getState().resolveSignedIn(SAMPLE);
+    usePaymentStore.getState().mount({
+      envelope_version: 'v1',
+      cart_id: 'cart-prev',
+      operator_session_id: 'sess-t023',
+      owning_operator_id: 'cashier-1',
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-1',
+      lines: [],
+      discount_placeholders: [],
+      subtotal_minor: 1500,
+      created_at: '2026-09-26T12:00:00.000Z',
+      handoff_action_id: 'handoff-prev',
+    });
+    usePaymentStore.getState().applyAttemptSnapshot({
+      payment_attempt_id: 'pa-prev',
+      state: 'settled',
+      envelope_subtotal_minor: 1500,
+      started_at: '2026-09-26T12:00:01.000Z',
+      settled_at: '2026-09-26T12:00:05.000Z',
+      tender_lines: [],
+    });
+
+    useOperatorSessionStore.getState().beginSignOut();
+    useOperatorSessionStore.getState().resolveSignedOut();
+
+    expect(usePaymentStore.getState()).toEqual(
+      expect.objectContaining({ envelope: null, paymentSlice: null, attemptHandoffId: null }),
+    );
   });
 });

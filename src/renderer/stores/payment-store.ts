@@ -30,6 +30,12 @@ export interface PaymentState {
    * Null when no attempt is active (initial state, or after `clearAttempt`).
    */
   paymentSlice: Readonly<PaymentAttemptRendererView> | null;
+  /**
+   * The handoff the current attempt belongs to (the envelope mounted when the
+   * snapshot was applied). Lets a remounted checkout keep a started attempt
+   * for the same sale instead of forgetting it while main still holds it.
+   */
+  attemptHandoffId: string | null;
 }
 
 export interface PaymentStore extends PaymentState {
@@ -48,18 +54,23 @@ export interface PaymentStore extends PaymentState {
   reset(): void;
 }
 
-const INITIAL: PaymentState = { envelope: null, paymentSlice: null };
+const INITIAL: PaymentState = { envelope: null, paymentSlice: null, attemptHandoffId: null };
 
 export const usePaymentStore = create<PaymentStore>((set) => ({
   ...INITIAL,
   mount: (envelope) => {
-    set({ envelope: freezeEnvelope(envelope) });
+    // A different sale's envelope never inherits the previous attempt.
+    set((s) =>
+      s.attemptHandoffId !== null && s.attemptHandoffId !== envelope.handoff_action_id
+        ? { envelope: freezeEnvelope(envelope), paymentSlice: null, attemptHandoffId: null }
+        : { envelope: freezeEnvelope(envelope) },
+    );
   },
   applyAttemptSnapshot: (view) => {
-    set({ paymentSlice: view });
+    set((s) => ({ paymentSlice: view, attemptHandoffId: s.envelope?.handoff_action_id ?? null }));
   },
   clearAttempt: () => {
-    set({ paymentSlice: null });
+    set({ paymentSlice: null, attemptHandoffId: null });
   },
   reset: () => {
     set({ ...INITIAL });

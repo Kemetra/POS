@@ -287,7 +287,8 @@ describe('SC-003 path 14 — /app/cart (✅ cashier)', () => {
   it('cashier reaches /app/cart without redirect', async () => {
     await renderAsCashier('/app/cart');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      // 023 Slice G: the sale loop renders in the v5 frame, not AppShell.
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
     });
   });
@@ -297,7 +298,8 @@ describe('SC-003 path 15 — /app/checkout (✅ cashier)', () => {
   it('cashier reaches /app/checkout without redirect', async () => {
     await renderAsCashier('/app/checkout');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      // 023 Slice G: the sale loop renders in the v5 frame, not AppShell.
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
     });
   });

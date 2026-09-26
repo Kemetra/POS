@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -153,6 +153,24 @@ afterEach(() => {
   delete (window as unknown as { api?: unknown }).api;
 });
 
+/**
+ * 023 Slice G: /app/cart is the v5 Sale. Scan → confirm Add → hand off →
+ * Continue, through the v5 controls (same controllers as the legacy screen).
+ */
+async function scanAddHandoffContinue(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.type(
+    await screen.findByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
+    '6221000000001{Enter}',
+  );
+  await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
+  const handoffBtn = await screen.findByRole('button', { name: /تسليم السلة/ });
+  await waitFor(() => expect(handoffBtn).toBeEnabled());
+  await user.click(handoffBtn);
+  const continueBtn = await screen.findByRole('button', { name: /المتابعة إلى الدفع/ });
+  expect(continueBtn).toBeEnabled();
+  await user.click(continueBtn);
+}
+
 describe('cart → checkout wiring (006 mount)', () => {
   it('Continue to payment navigates to /app/checkout and mounts PaymentSurface', async () => {
     // Drive the REAL flow end-to-end through AppRouter so the load-bearing seam
@@ -207,22 +225,10 @@ describe('cart → checkout wiring (006 mount)', () => {
     // No cart exists yet: the first confirmed add creates it (#466).
     expect(api.cart.create).not.toHaveBeenCalled();
 
-    // Scan → single match → confirm_pending → Add.
-    const scan = await screen.findByTestId('scan-capture-field');
-    await user.type(scan, '6221000000001');
-    fireEvent.keyDown(scan, { key: 'Enter' });
-    const addBtn = await screen.findByRole('button', { name: /Add/ });
-    await user.click(addBtn);
-
-    // Line added → cart editing → Hand off to payment.
-    const handoffBtn = await screen.findByTestId('cart-handoff-button');
-    await waitFor(() => expect(handoffBtn).toBeEnabled());
-    await user.click(handoffBtn);
-
-    // Frozen → HandoffSummary with the now-enabled Continue button.
-    const continueBtn = await screen.findByTestId('handoff-continue-button');
-    expect(continueBtn).toBeEnabled();
-    await user.click(continueBtn);
+    // Scan → confirm Add (creates the cart) → hand off → Continue (enabled).
+    await scanAddHandoffContinue(user);
+    expect(api.cart.create).toHaveBeenCalledOnce();
+    expect(api.cart.handoff).toHaveBeenCalledOnce();
 
     // Load-bearing wiring assertion: the live payment surface mounts on checkout.
     await waitFor(() => expect(screen.getByTestId('payment-surface')).toBeInTheDocument());
@@ -344,14 +350,7 @@ describe('cart → checkout wiring (006 mount)', () => {
     );
 
     // Scan → Add (creates the cart, #466) → handoff → Continue → checkout.
-    const scan = await screen.findByTestId('scan-capture-field');
-    await user.type(scan, '6221000000001');
-    fireEvent.keyDown(scan, { key: 'Enter' });
-    await user.click(await screen.findByRole('button', { name: /Add/ }));
-    const handoffBtn = await screen.findByTestId('cart-handoff-button');
-    await waitFor(() => expect(handoffBtn).toBeEnabled());
-    await user.click(handoffBtn);
-    await user.click(await screen.findByTestId('handoff-continue-button'));
+    await scanAddHandoffContinue(user);
 
     // Tender → enter exact cash → confirm cash line → confirm payment.
     await waitFor(() => expect(screen.getByTestId('payment-surface')).toBeInTheDocument());
@@ -375,6 +374,9 @@ describe('cart → checkout wiring (006 mount)', () => {
       expect(window.location.pathname).toBe('/app/cart');
     });
     expect(usePaymentStore.getState().envelope).toBeNull();
+    // The fresh sale is usable: the v5 Sale is back with an empty cart.
+    expect(await screen.findByRole('region', { name: 'مساحة البيع' })).toBeInTheDocument();
+    expect(screen.getByText(/لا توجد أصناف في السلة/)).toBeInTheDocument();
   });
 
   it('checkout route falls back to the reserved placeholder when payments flag is off', async () => {

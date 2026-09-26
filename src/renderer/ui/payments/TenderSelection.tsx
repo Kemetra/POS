@@ -55,7 +55,7 @@ export function TenderSelection({
       data-testid="tender-selection"
       aria-label="اختر طريقة الدفع"
     >
-      <h3 className="tender-selection__heading">طريقة الدفع (Payment method)</h3>
+      <h2 className="tender-selection__heading">طريقة الدفع (Payment method)</h2>
 
       {/*
         POS v3.5 Slice 4 — 3-method grid (cash · card · voucher).

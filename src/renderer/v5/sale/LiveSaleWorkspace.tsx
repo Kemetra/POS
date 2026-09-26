@@ -26,9 +26,12 @@ export function LiveSaleWorkspace(props: Props): JSX.Element {
   const session = useOperatorSessionStore((state) => state.state);
   if (session.kind !== 'signedIn')
     return <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" />;
+  // Fail-closed default: still a titled screen, so heading navigation and the
+  // one-h1 hierarchy hold while the cart rollout is off.
   if (!cartEnabled)
     return (
-      <section className="v5-sale v5-live-sale" dir="rtl" lang="ar">
+      <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
+        <SaleTitle />
         <p className="v5-live-message">سلة البيع غير مفعّلة على هذا الجهاز بعد.</p>
       </section>
     );
@@ -77,7 +80,7 @@ const SALE_TITLE_ID = 'v5-sale-title';
 
 /**
  * Screen title only. Branding and operator identity belong to the app frame
- * (the v5 frame, or the legacy shell on /app/sale-v5), never to the screen.
+ * (the v5 frame), never to the screen.
  */
 function SaleTitle(): JSX.Element {
   return (
