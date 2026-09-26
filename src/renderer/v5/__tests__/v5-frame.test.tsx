@@ -10,11 +10,31 @@ import type { Role } from '../../../shared/operator/role';
 import { V5Frame } from '../frame/V5Frame';
 import { V5_SALE_PATH, v5NavEntries } from '../frame/nav-model';
 import { V5OperationalNotices } from '../frame/V5OperationalNotices';
+import { useConnectionStateStore } from '../../connection/connection-state';
 
 afterEach(() => {
   cleanup();
   useOperatorSessionStore.getState().reset();
+  useConnectionStateStore.getState().setState('online');
+  vi.unstubAllGlobals();
 });
+
+/** Every media query false: a viewport under the 1024px floor. */
+function stubTooSmallViewport(): void {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
+}
 
 function signIn(role: Role): void {
   useOperatorSessionStore.getState().hydrateSignedIn({
@@ -332,5 +352,45 @@ describe('v5 foundation CSS stays scoped to the v5 frame', () => {
   it('keeps every frame control at the 44px target floor', () => {
     expect(css.join('\n')).toMatch(/--v5-target:\s*44px/);
     expect(css[1]).toMatch(/\.v5-frame__link\s*\{[^}]*min-block-size:\s*var\(--v5-target\)/);
+  });
+});
+
+describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
+  it('below 1024px shows only the too-small notice: no nav, and the screen never mounts', () => {
+    signIn('cashier');
+    stubTooSmallViewport();
+    renderFrame();
+
+    expect(screen.getByRole('heading', { name: 'Screen too small' })).toBeInTheDocument();
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'مساحة البيع' })).not.toBeInTheDocument();
+  });
+
+  it('at a supported width renders the screen, not the too-small notice', () => {
+    signIn('cashier');
+    renderFrame();
+    expect(screen.queryByRole('heading', { name: 'Screen too small' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['offline', 'غير متصل — البيع من قائمة الانتظار المحلية'],
+    ['degraded', 'الاتصال بطيء — Connection slow'],
+    ['syncing', 'جارٍ المزامنة…'],
+  ] as const)('shows a persistent %s connection banner (never a toast)', (state, message) => {
+    signIn('cashier');
+    useConnectionStateStore.getState().setState(state);
+    renderFrame();
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent(message);
+    expect(banner).toHaveAttribute('data-state', state);
+    expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
+  });
+
+  it('shows no connection banner while online', () => {
+    signIn('cashier');
+    renderFrame();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

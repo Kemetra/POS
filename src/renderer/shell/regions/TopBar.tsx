@@ -5,6 +5,7 @@ import { ConnectionIndicator } from './ConnectionIndicator';
 import { OperatorSlot } from './OperatorSlot';
 import { ThemeToggle } from './ThemeToggle';
 import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
+import { CONNECTION_BANNER_MESSAGES } from '../../connection/connection-state';
 
 interface TopBarProps {
   tenantId: string;
@@ -26,11 +27,7 @@ interface TopBarProps {
  * via the `connectionState !== 'online'` guard, so it never reaches StatusBanner.
  * (The ConnectionIndicator pill keeps its own short English labels.)
  */
-const BANNER_MESSAGES: Record<Exclude<ConnectionState, 'online'>, string> = {
-  degraded: 'الاتصال بطيء — Connection slow',
-  offline: 'غير متصل — البيع من قائمة الانتظار المحلية',
-  syncing: 'جارٍ المزامنة…',
-};
+const BANNER_MESSAGES = CONNECTION_BANNER_MESSAGES;
 
 /**
  * T049 [S3] / POS v3.5 — TopBar restyle.
