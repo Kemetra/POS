@@ -12,6 +12,12 @@
   overflow: hidden;
 }
 
+/* Below the 1024px floor the frame holds only the too-small notice. */
+.v5-frame--too-small {
+  display: block;
+  overflow: auto;
+}
+
 .v5-frame__body {
   display: flex;
   flex-direction: column;
