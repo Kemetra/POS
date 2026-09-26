@@ -19,8 +19,8 @@ import { LiveSaleWorkspace } from '../sale/LiveSaleWorkspace';
 /**
  * V5 sale lifecycle: a paid sale reopened on V5 is recognised as completed
  * (never offered to payment again), and a successful void returns V5 to a
- * fresh sale. Both end states hand the next cart to the unchanged catalogue
- * create path; neither handler ever calls `cart.create` itself.
+ * fresh sale. Both end states leave no active cart; the next confirmed add
+ * creates one (#466), and neither handler ever calls `cart.create` itself.
  */
 
 afterEach(() => {
@@ -274,8 +274,9 @@ describe('V5 reopens a sale whose payment already settled', () => {
 
     await user.click(await screen.findByRole('button', { name: 'بيع جديد' }));
     await waitFor(() => {
-      expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-fresh');
+      expect(useCartStore.getState().activeCart).toBeNull();
     });
+    expect(b.fns.create).not.toHaveBeenCalled();
     await scanAndAdd(user);
 
     await waitFor(() => {
@@ -341,12 +342,10 @@ describe('V5 void returns to a fresh sale', () => {
     b: ReturnType<typeof bridges>,
     user: ReturnType<typeof userEvent.setup>,
   ): Promise<void> {
-    await waitFor(() => {
-      expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-first');
-    });
     await scanAndAdd(user);
     await screen.findByRole('list', { name: 'أصناف السلة' });
     expect(b.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-first' }));
+    expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-first');
   }
 
   async function confirmVoid(user: ReturnType<typeof userEvent.setup>): Promise<void> {
@@ -371,9 +370,9 @@ describe('V5 void returns to a fresh sale', () => {
     expect(b.fns.voidCart).toHaveBeenCalledOnce();
     expect(b.fns.voidCart).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-first' }));
     await waitFor(() => {
-      expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-second');
+      expect(useCartStore.getState().activeCart).toBeNull();
     });
-    expect(useCartStore.getState().activeCart?.state).toBe(CartState.empty);
+    expect(b.fns.create).toHaveBeenCalledOnce();
     expect(screen.getByText('لا توجد أصناف في السلة بعد.')).toBeInTheDocument();
 
     await scanAndAdd(user);
@@ -389,7 +388,7 @@ describe('V5 void returns to a fresh sale', () => {
     });
   });
 
-  it('creates no replacement cart before the void succeeds', async () => {
+  it('creates no replacement cart on void, before or after it succeeds (#466)', async () => {
     signIn();
     const b = bridges(() => Promise.reject(new Error('no snapshot expected')));
     b.fns.create.mockResolvedValue({ kind: 'ok', cart_id: 'cart-first' });
@@ -410,8 +409,9 @@ describe('V5 void returns to a fresh sale', () => {
 
     resolveVoid({ kind: 'ok' });
     await waitFor(() => {
-      expect(b.fns.create).toHaveBeenCalledTimes(2);
+      expect(useCartStore.getState().activeCart).toBeNull();
     });
+    expect(b.fns.create).toHaveBeenCalledOnce();
   });
 
   it('keeps the existing cart intact when the void is refused', async () => {

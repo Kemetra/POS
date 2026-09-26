@@ -375,4 +375,43 @@ describe('registerPaymentsHandlers — valid payloads forward to the handler', (
     await handler(fakeEvent(), { tender_line_id: 'tl-1' });
     expect(deps.tenderRead).toHaveBeenCalledWith({ tender_line_id: 'tl-1' });
   });
+
+  describe('payments.start bounds every id at the IPC boundary (§A4 LOW-1)', () => {
+    const valid = {
+      envelope_handoff_action_id: 'handoff-1',
+      envelope_cart_id: 'cart-1',
+      envelope_subtotal_minor: 1250,
+      envelope_version: 'v1',
+      idempotency_key: 'idem-1',
+    };
+    it.each([
+      ['envelope_handoff_action_id', 'x'.repeat(129)],
+      ['envelope_cart_id', ''],
+      ['envelope_cart_id', 'cart 1; DROP'],
+      ['idempotency_key', 'k'.repeat(129)],
+      ['idempotency_key', 'idem/../1'],
+    ])('refuses invalid_input for %s = %j without calling the handler', async (field, bad) => {
+      const { ipcMain, handlers } = mkIpc();
+      const deps = mkDeps();
+      registerPaymentsHandlers(ipcMain, deps);
+      const res = await handlers.get(PAYMENTS_IPC_CHANNELS.START)?.(fakeEvent(), {
+        ...valid,
+        [field]: bad,
+      });
+      expect(res).toEqual({ kind: 'refused', reason: 'invalid_input' });
+      expect(deps.paymentsStart).not.toHaveBeenCalled();
+    });
+
+    it('admits UUID-shaped ids at the 128-char bound', async () => {
+      const { ipcMain, handlers } = mkIpc();
+      const deps = mkDeps();
+      registerPaymentsHandlers(ipcMain, deps);
+      await handlers.get(PAYMENTS_IPC_CHANNELS.START)?.(fakeEvent(), {
+        ...valid,
+        envelope_cart_id: '0f8fad5b-d9cb-469f-a165-70867728950e',
+        idempotency_key: 'k'.repeat(128),
+      });
+      expect(deps.paymentsStart).toHaveBeenCalledOnce();
+    });
+  });
 });

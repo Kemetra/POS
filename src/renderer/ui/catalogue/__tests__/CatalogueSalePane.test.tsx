@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import { CatalogueSalePane } from '../CatalogueSalePane.js';
@@ -182,36 +182,53 @@ describe('CatalogueSalePane — scan → exact lookup → FSM (T049a wiring a)',
   });
 });
 
-describe('CatalogueSalePane — eager cart lifecycle (T049a wiring b)', () => {
+describe('CatalogueSalePane — lazy cart lifecycle (T049a wiring b, #466)', () => {
   beforeEach(() => {
     useCartStore.getState().reset();
   });
 
-  it('creates a cart on mount when none exists, then records it in the store', async () => {
+  it('creates no cart on mount; the first confirmed add creates one and records it (#466)', async () => {
     const create = vi.fn().mockResolvedValue({ kind: 'ok', cart_id: 'cart-new' });
+    const add = vi.fn().mockResolvedValue({
+      kind: 'ok',
+      line_id: 'line-1',
+      display_name: 'Panadol',
+      unit_price_minor: 1250,
+      line_subtotal_minor: 1250,
+      quantity: 1,
+      version: 1,
+      merged: false,
+    });
     const cb = {
       create,
-      lines: { add: vi.fn(), update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
+      lines: { add, update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
       discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
       void: vi.fn(),
       handoff: vi.fn(),
       subscribe: vi.fn(),
     } as unknown as CartBridgeAPI;
 
+    const lookupBarcode = vi.fn().mockResolvedValue({ kind: 'one', product: PRODUCT });
     render(
       <CatalogueSalePane
         onLineAdded={vi.fn()}
-        catalogueBridge={catalogueBridge()}
+        catalogueBridge={catalogueBridge({ lookupBarcode })}
         cartBridge={cb}
       />,
     );
+    await act(async () => Promise.resolve());
+    expect(create).not.toHaveBeenCalled();
+
+    const scan = screen.getByTestId('scan-capture-field');
+    fireEvent.change(scan, { target: { value: '6221000000001' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /Add/ }));
 
     await waitFor(() => {
-      expect(create).toHaveBeenCalledTimes(1);
+      expect(add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-new' }));
     });
-    await waitFor(() => {
-      expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-new');
-    });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-new');
   });
 
   it('does NOT create a cart when one already exists', async () => {
@@ -545,28 +562,51 @@ describe('CatalogueSalePane — bridge rejection degrades to idle (T049a resilie
     });
   });
 
-  it('a rejected cart.create leaves activeCart null (retried on a later mount)', async () => {
+  it('a rejected cart.create on Add leaves activeCart null, adds nothing, and the next Add retries (#466)', async () => {
     useCartStore.getState().reset();
-    const create = vi.fn().mockRejectedValue(new Error('ipc transport error'));
+    const create = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ipc transport error'))
+      .mockResolvedValueOnce({ kind: 'ok', cart_id: 'cart-retry' });
+    const add = vi.fn().mockResolvedValue({
+      kind: 'ok',
+      line_id: 'line-1',
+      display_name: 'Panadol',
+      unit_price_minor: 1250,
+      line_subtotal_minor: 1250,
+      quantity: 1,
+      version: 1,
+      merged: false,
+    });
     const cb = {
       create,
-      lines: { add: vi.fn(), update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
+      lines: { add, update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
       discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
       void: vi.fn(),
       handoff: vi.fn(),
       subscribe: vi.fn(),
     } as unknown as CartBridgeAPI;
+    const lookupBarcode = vi.fn().mockResolvedValue({ kind: 'one', product: PRODUCT });
     render(
       <CatalogueSalePane
         onLineAdded={vi.fn()}
-        catalogueBridge={catalogueBridge()}
+        catalogueBridge={catalogueBridge({ lookupBarcode })}
         cartBridge={cb}
       />,
     );
-    await waitFor(() => {
-      expect(create).toHaveBeenCalled();
-    });
-    // The rejection is swallowed; no cart recorded, no throw.
+    const scan = screen.getByTestId('scan-capture-field');
+    fireEvent.change(scan, { target: { value: '6221000000001' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /Add/ }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    // The rejection is swallowed; no cart recorded, no line added, no throw.
     expect(useCartStore.getState().activeCart).toBeNull();
+    expect(add).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    await waitFor(() => {
+      expect(add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-retry' }));
+    });
+    expect(create).toHaveBeenCalledTimes(2);
   });
 });

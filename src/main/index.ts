@@ -25,6 +25,7 @@ import { createReadDownDriver } from './catalogue/read-down/read-down-driver.js'
 import { registerCatalogueHandlers } from './ipc/catalogue.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
 import {
+  bindAttemptHasLiveTender,
   bindCartPaymentStatus,
   bindPaymentAttemptsRepository,
 } from './payments/repositories/payment-attempts.repository.js';
@@ -843,6 +844,8 @@ app
       // §A4: main decides whether the named cart may be paid (handed off, in
       // scope, envelope matches, not already paid).
       checkCartForPayment: bindCartPaymentEligibility(db),
+      // §A4: never discard another cart's attempt while it holds tender.
+      attemptHasLiveTender: bindAttemptHasLiveTender(db),
     });
     const paymentsConfirm = createPaymentsConfirmHandler({
       ...paymentsWriteDeps,

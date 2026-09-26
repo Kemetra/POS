@@ -131,9 +131,7 @@ function renderSale(bridges: ReturnType<typeof makeBridges>, onPaymentContinue =
 }
 
 async function scanAndOpenConfirm(user: ReturnType<typeof userEvent.setup>): Promise<void> {
-  await waitFor(() => {
-    expect(useCartStore.getState().activeCart).not.toBeNull();
-  });
+  // No cart precondition: the first confirmed add creates it (#466).
   const scan = screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' });
   await user.type(scan, '6223004355218{Enter}');
   await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
@@ -209,41 +207,52 @@ describe('live v5 Sale adapter', () => {
     expect(bridges.fns.create).not.toHaveBeenCalled();
   });
 
-  it('withholds add confirmation until the cart exists, then offers it', async () => {
+  it('offers add confirmation with no cart yet; Add creates the cart, then adds (#466)', async () => {
     signIn();
     const bridges = makeBridges();
-    let resolveCreate: (value: { kind: 'ok'; cart_id: string }) => void = () => undefined;
-    bridges.fns.create.mockReturnValue(
-      new Promise((resolve) => {
-        resolveCreate = resolve;
-      }),
-    );
     renderSale(bridges);
     const user = userEvent.setup();
     await user.type(
       screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
       '6223004355218{Enter}',
     );
-    await waitFor(() => {
-      expect(useCatalogueSearchStore.getState().state.kind).toBe('confirm_pending');
-    });
-    expect(screen.queryByRole('dialog', { name: 'تأكيد إضافة الصنف' })).not.toBeInTheDocument();
-    expect(bridges.fns.add).not.toHaveBeenCalled();
-    await act(async () => {
-      resolveCreate({ kind: 'ok', cart_id: 'cart-1' });
-      await Promise.resolve();
-    });
+    expect(bridges.fns.create).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
-    expect(bridges.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-1' }));
+    await waitFor(() => {
+      expect(bridges.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-1' }));
+    });
+    expect(bridges.fns.create).toHaveBeenCalledOnce();
+  });
+
+  it('a refused cart create leaves the cashier a working retry, not a dead workspace (#466)', async () => {
+    signIn();
+    const bridges = makeBridges();
+    bridges.fns.create
+      .mockResolvedValueOnce({ kind: 'refused', reason: 'no_session' })
+      .mockResolvedValueOnce({ kind: 'ok', cart_id: 'cart-1' });
+    renderSale(bridges);
+    const user = userEvent.setup();
+    await user.type(
+      screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
+      '6223004355218{Enter}',
+    );
+    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/تعذّرت الإضافة/);
+    expect(bridges.fns.add).not.toHaveBeenCalled();
+    expect(screen.queryByText(/no_session/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
+    await waitFor(() => {
+      expect(bridges.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-1' }));
+    });
+    expect(bridges.fns.create).toHaveBeenCalledTimes(2);
   });
 
   it('starts with an honest empty search and no static demo products or totals', async () => {
     signIn();
     const bridges = makeBridges();
     renderSale(bridges);
-    await waitFor(() => {
-      expect(bridges.fns.create).toHaveBeenCalledOnce();
-    });
+    await screen.findByText(/لم يُنزّل الكتالوج بعد/);
+    expect(bridges.fns.create).not.toHaveBeenCalled();
     expect(screen.queryByText('بنادول أدفانس 500 مجم أقراص')).not.toBeInTheDocument();
     expect(screen.getByText(/لم يُنزّل الكتالوج بعد/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /تسليم السلة/ })).toBeDisabled();

@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
 import { useCartStore } from '../../stores/cart-store';
@@ -44,17 +44,78 @@ afterEach(() => {
 });
 
 describe('useSaleCatalogueController', () => {
-  it('creates one active cart before the first confirmed add can run', async () => {
+  it('does not create a cart on mount — the first confirmed add creates it (#466)', async () => {
     const { cart, catalogue, create } = bridges();
     create.mockResolvedValue({ kind: 'ok', cart_id: 'cart-1' });
-    const { result, rerender } = renderHook(() => {
-      return useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue });
-    });
-    await waitFor(() => {
-      expect(result.current.effectiveCartId).toBe('cart-1');
-    });
+    const { result, rerender } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
     rerender();
+    await act(async () => Promise.resolve());
+    expect(create).not.toHaveBeenCalled();
+    expect(result.current.effectiveCartId).toBe('');
+  });
+
+  it('ensureCart creates one cart, publishes it, and shares one in-flight create', async () => {
+    const { cart, catalogue, create } = bridges();
+    let answer: (value: unknown) => void = () => undefined;
+    create.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    let first: Promise<string | null> = Promise.resolve(null);
+    let second: Promise<string | null> = Promise.resolve(null);
+    act(() => {
+      first = result.current.ensureCart();
+      second = result.current.ensureCart();
+    });
+    await act(async () => {
+      answer({ kind: 'ok', cart_id: 'cart-1' });
+      await first;
+    });
+    await expect(first).resolves.toBe('cart-1');
+    await expect(second).resolves.toBe('cart-1');
     expect(create).toHaveBeenCalledOnce();
+    expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-1');
+    expect(result.current.effectiveCartId).toBe('cart-1');
+    await expect(result.current.ensureCart()).resolves.toBe('cart-1');
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it('a refused or failed create returns null and the next ensureCart retries (#466)', async () => {
+    const { cart, catalogue, create } = bridges();
+    create
+      .mockResolvedValueOnce({ kind: 'refused', reason: 'no_session' })
+      .mockRejectedValueOnce(new Error('transport'))
+      .mockResolvedValueOnce({ kind: 'ok', cart_id: 'cart-2' });
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    await act(async () => {
+      await expect(result.current.ensureCart()).resolves.toBeNull();
+    });
+    expect(useCartStore.getState().activeCart).toBeNull();
+    await act(async () => {
+      await expect(result.current.ensureCart()).resolves.toBeNull();
+    });
+    await act(async () => {
+      await expect(result.current.ensureCart()).resolves.toBe('cart-2');
+    });
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it('ensureCart reuses an explicit or already-active cart without creating', async () => {
+    const { cart, catalogue, create } = bridges();
+    const explicit = renderHook(() =>
+      useSaleCatalogueController({ cartId: 'given', cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    await expect(explicit.result.current.ensureCart()).resolves.toBe('given');
+    useCartStore.getState().applyCartCreated('cart-9');
+    const active = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    await expect(active.result.current.ensureCart()).resolves.toBe('cart-9');
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('maps search and exact scan responses through the existing FSM', async () => {

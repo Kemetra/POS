@@ -137,7 +137,7 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
   const getBridge = useCallback(() => options.bridge ?? readCartBridge(), [options.bridge]);
 
   // Captured once: only a cart that already existed when this controller
-  // mounted is read back; the catalogue's eager create is left alone.
+  // mounted is read back; a cart created by the first add is not.
   const [hydrateCartId, setHydrateCartId] = useState<string | null>(() =>
     options.hydrateActiveCart === true
       ? (useCartStore.getState().activeCart?.cart_id ?? null)

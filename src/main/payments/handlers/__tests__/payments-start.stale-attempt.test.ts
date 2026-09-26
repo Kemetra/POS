@@ -82,6 +82,7 @@ function makeDeps(overrides: Partial<PaymentsStartHandlerDeps>): PaymentsStartHa
     clock: () => new Date('2026-06-19T09:00:00.000Z'),
     // Required since the §A4 cart-eligibility check; these cases are not about it.
     checkCartForPayment: () => ({ kind: 'ok' }),
+    attemptHasLiveTender: () => false,
     ...overrides,
   };
 }
@@ -235,5 +236,88 @@ describe('payments.start — stale started-attempt for a different cart must not
 
     expect(res.kind).toBe('ok');
     expect(cancelCalls).toEqual([]); // nothing to discard
+  });
+
+  describe('an orphan that already holds tender is never silently discarded (§A4 MEDIUM-2)', () => {
+    it('refuses attempt_already_started_on_terminal and neither cancels nor starts', async () => {
+      const stale = staleAttemptForCartA();
+      const cancelCalls: string[] = [];
+      const startCalls: string[] = [];
+      const liveTenderAsked: string[] = [];
+      const handler = createPaymentsStartHandler(
+        makeDeps({
+          attemptsRepo: { findStartedByTerminal: () => stale },
+          attemptHasLiveTender: (id) => {
+            liveTenderAsked.push(id);
+            return true;
+          },
+          paymentAttemptFsm: {
+            start: (input) => {
+              startCalls.push(input.payment_attempt_id);
+              return { kind: 'ok', payment_attempt_id: input.payment_attempt_id };
+            },
+            cancel: (input) => {
+              cancelCalls.push(input.payment_attempt_id);
+              return {
+                kind: 'ok',
+                cancelled_at: '2026-06-19T09:00:00.000Z',
+                reversed_tender_line_ids: [],
+                reversal_pending_tender_line_ids: [],
+              };
+            },
+          },
+        }),
+      );
+
+      const res = await handler({
+        envelope_handoff_action_id: 'handoff-B',
+        envelope_cart_id: CART_B,
+        envelope_subtotal_minor: 1250,
+        envelope_version: 'v1',
+        idempotency_key: 'idem-B',
+      });
+
+      expect(res).toEqual({ kind: 'refused', reason: 'attempt_already_started_on_terminal' });
+      expect(liveTenderAsked).toEqual([stale.payment_attempt_id]);
+      expect(cancelCalls).toEqual([]);
+      expect(startCalls).toEqual([]);
+    });
+
+    it('still discards an orphan with no live tender (the original recovery)', async () => {
+      const stale = staleAttemptForCartA();
+      const cancelCalls: string[] = [];
+      let cancelled = false;
+      const handler = createPaymentsStartHandler(
+        makeDeps({
+          attemptsRepo: { findStartedByTerminal: () => stale },
+          attemptHasLiveTender: () => false,
+          paymentAttemptFsm: {
+            start: (input) =>
+              !cancelled
+                ? { kind: 'refused', reason: 'attempt_already_started_on_terminal' }
+                : { kind: 'ok', payment_attempt_id: input.payment_attempt_id },
+            cancel: (input) => {
+              cancelCalls.push(input.payment_attempt_id);
+              cancelled = true;
+              return {
+                kind: 'ok',
+                cancelled_at: '2026-06-19T09:00:00.000Z',
+                reversed_tender_line_ids: [],
+                reversal_pending_tender_line_ids: [],
+              };
+            },
+          },
+        }),
+      );
+      const res = await handler({
+        envelope_handoff_action_id: 'handoff-B',
+        envelope_cart_id: CART_B,
+        envelope_subtotal_minor: 1250,
+        envelope_version: 'v1',
+        idempotency_key: 'idem-B',
+      });
+      expect(res.kind).toBe('ok');
+      expect(cancelCalls).toEqual([stale.payment_attempt_id]);
+    });
   });
 });
