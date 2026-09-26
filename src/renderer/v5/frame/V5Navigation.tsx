@@ -10,11 +10,11 @@ import { V5SignOut } from './V5SignOut';
  * so no screen repeats either. Labels stay visible at every supported width:
  * operators are workflow experts, not icon readers.
  */
-export function V5Navigation(): JSX.Element {
+export function V5Navigation({ salePath }: { salePath?: string | undefined }): JSX.Element {
   const session = useOperatorSessionStore((s) =>
     s.state.kind === 'signedIn' ? s.state.session : undefined,
   );
-  const entries = visibleNavEntries(session?.role);
+  const entries = visibleNavEntries(session?.role, salePath);
 
   return (
     <nav className="v5-frame__nav" aria-label="التنقل الرئيسي">

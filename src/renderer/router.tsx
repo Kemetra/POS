@@ -5,6 +5,7 @@ import {
   Navigate,
   RouterProvider,
   useNavigate,
+  Outlet,
   type RouteObject,
 } from 'react-router-dom';
 
@@ -14,7 +15,6 @@ import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
 import { AppIndexRedirect } from './routes/app/AppIndexRedirect';
 import { SalesWorkspace } from './routes/app/SalesWorkspace';
-import { CartWorkspace } from './routes/app/CartWorkspace';
 import { ReturnsPlaceholder } from './routes/app/ReturnsPlaceholder';
 import { AuditPlaceholder } from './routes/app/AuditPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
@@ -25,6 +25,9 @@ import { CashierManagement } from './routes/app/manager/CashierManagement';
 import { StuckShiftSurface } from './ui/operator/ForcedCloseSurface';
 import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
+import { V5Frame } from './v5/frame/V5Frame';
+import { V5OperationalNotices } from './v5/frame/V5OperationalNotices';
+import { LiveSaleWorkspace } from './v5/sale/LiveSaleWorkspace';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -125,6 +128,25 @@ function DevV5SaleRoute(): JSX.Element | null {
   );
 }
 
+function V5AppLayout(): JSX.Element {
+  return (
+    <V5Frame notices={<V5OperationalNotices />} salePath="/app/cart">
+      <Outlet />
+    </V5Frame>
+  );
+}
+
+function V5CartRoute(): JSX.Element {
+  const navigate = useNavigate();
+  return (
+    <LiveSaleWorkspace
+      onPaymentContinue={() => {
+        void navigate('/app/checkout');
+      }}
+    />
+  );
+}
+
 type BootStatus =
   | { phase: 'loading' }
   | {
@@ -187,7 +209,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // Pairing-bypass guard (T007) stays green: unpaired/invalid terminals
   // still route to /pairing and cannot reach /app/* directly.
   // 004-operator-session T032: `/sign-in` mounts above `/app/*`. The
-  // shell is wrapped in `<OperatorRouteGuard>` (no `allow` filter at
+  // route outlet is wrapped in `<OperatorRouteGuard>` (no `allow` filter at
   // S1 — any signed-in role passes; per-route role gating lands with
   // the manager-only surfaces in S4 / S5). Any deep-link to `/app/*`
   // without an operator session redirects to `/sign-in` (FR-005).
@@ -204,13 +226,13 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       <Navigate to={boot.startPath} replace />
     );
 
-  const guardedShell =
+  const guardedApp =
     props.operator !== undefined ? (
       <OperatorRouteGuard>
-        <AppShell />
+        <Outlet />
       </OperatorRouteGuard>
     ) : (
-      <AppShell />
+      <Outlet />
     );
 
   const routes: RouteObject[] = [
@@ -235,87 +257,97 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       : []),
     {
       path: '/app',
-      element: guardedShell,
+      element: guardedApp,
       children: [
-        // 022 US1 / FR-44 — role-aware landing. A cashier lands on the till
-        // (/app/cart) instead of /app/dashboard, which rejects the cashier
-        // role and made an ERROR STATE the first screen of a shift.
-        // Navigation only: DashboardRoute's role check, OperatorRouteGuard,
-        // every allow list and every flag are untouched (FR-45/FR-47).
-        { index: true, element: <AppIndexRedirect /> },
-        { path: 'dashboard', element: <DashboardRoute /> },
-        { path: 'sales', element: <SalesWorkspace /> },
-        { path: 'cart', element: <CartWorkspace /> },
-        ...((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
-          ? [{ path: 'sale-v5', element: <DevSaleRoute /> }]
-          : []),
-        { path: 'checkout', element: <CheckoutRoute /> },
-        // POS v3.5 Slice 1 — new nav entries route to thin "coming soon"
-        // placeholders. Returns is Phase-7 blocked; Audit is a later display
-        // slice. Both are navigation-only (no data, no IPC).
-        //
-        // PR #434 FIX 1 — gate BOTH to manager/admin (owner decision). The
-        // role-visibility-matrix marks the Audit surface ⛔ cashier, and
-        // Returns is Phase-7 blocked; a signed-in cashier must NOT reach
-        // either. Same nested guard pattern as the `/app/manager/*` routes.
         {
-          path: 'returns',
-          element: (
-            <OperatorRouteGuard allow={['manager', 'admin']}>
-              <ReturnsPlaceholder />
-            </OperatorRouteGuard>
-          ),
+          element: <AppShell />,
+          children: [
+            // 022 US1 / FR-44 — role-aware landing. A cashier lands on the till
+            // (/app/cart) instead of /app/dashboard, which rejects the cashier
+            // role and made an ERROR STATE the first screen of a shift.
+            // Navigation only: DashboardRoute's role check, OperatorRouteGuard,
+            // every allow list and every flag are untouched (FR-45/FR-47).
+            { index: true, element: <AppIndexRedirect /> },
+            { path: 'dashboard', element: <DashboardRoute /> },
+            { path: 'sales', element: <SalesWorkspace /> },
+            ...((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true
+              ? [{ path: 'sale-v5', element: <DevSaleRoute /> }]
+              : []),
+            // POS v3.5 Slice 1 — new nav entries route to thin "coming soon"
+            // placeholders. Returns is Phase-7 blocked; Audit is a later display
+            // slice. Both are navigation-only (no data, no IPC).
+            //
+            // PR #434 FIX 1 — gate BOTH to manager/admin (owner decision). The
+            // role-visibility-matrix marks the Audit surface ⛔ cashier, and
+            // Returns is Phase-7 blocked; a signed-in cashier must NOT reach
+            // either. Same nested guard pattern as the `/app/manager/*` routes.
+            {
+              path: 'returns',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  <ReturnsPlaceholder />
+                </OperatorRouteGuard>
+              ),
+            },
+            {
+              path: 'audit',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  <AuditPlaceholder />
+                </OperatorRouteGuard>
+              ),
+            },
+            { path: 'inventory', element: <InventoryPlaceholder /> },
+            { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
+            { path: 'settings', element: <SettingsHelpPlaceholder /> },
+            {
+              path: 'manager/cashiers',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  {props.operator !== undefined ? (
+                    <CashierManagement operator={props.operator} />
+                  ) : (
+                    <Navigate to="dashboard" replace />
+                  )}
+                </OperatorRouteGuard>
+              ),
+            },
+            {
+              path: 'manager/stuck-shifts',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  {props.operator !== undefined ? (
+                    <StuckShiftSurface operator={props.operator} />
+                  ) : (
+                    <Navigate to="dashboard" replace />
+                  )}
+                </OperatorRouteGuard>
+              ),
+            },
+            {
+              // T282 — Wave 5b-renderer manager-only force-fail surface
+              // (FR-021 / plan AD-5). Secondary UX defence; the load-
+              // bearing role check lives in the main-process bridge
+              // handler. The placeholder is rendered without props when
+              // `props.payments` isn't injected — production wires
+              // `window.api.payments` upstream; future "list of stuck
+              // attempts" feature will navigate users here with the
+              // payment_attempt_id in route state.
+              path: 'manager/force-fail',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  <ManagerForceFailRoutePlaceholder />
+                </OperatorRouteGuard>
+              ),
+            },
+          ],
         },
         {
-          path: 'audit',
-          element: (
-            <OperatorRouteGuard allow={['manager', 'admin']}>
-              <AuditPlaceholder />
-            </OperatorRouteGuard>
-          ),
-        },
-        { path: 'inventory', element: <InventoryPlaceholder /> },
-        { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
-        { path: 'settings', element: <SettingsHelpPlaceholder /> },
-        {
-          path: 'manager/cashiers',
-          element: (
-            <OperatorRouteGuard allow={['manager', 'admin']}>
-              {props.operator !== undefined ? (
-                <CashierManagement operator={props.operator} />
-              ) : (
-                <Navigate to="dashboard" replace />
-              )}
-            </OperatorRouteGuard>
-          ),
-        },
-        {
-          path: 'manager/stuck-shifts',
-          element: (
-            <OperatorRouteGuard allow={['manager', 'admin']}>
-              {props.operator !== undefined ? (
-                <StuckShiftSurface operator={props.operator} />
-              ) : (
-                <Navigate to="dashboard" replace />
-              )}
-            </OperatorRouteGuard>
-          ),
-        },
-        {
-          // T282 — Wave 5b-renderer manager-only force-fail surface
-          // (FR-021 / plan AD-5). Secondary UX defence; the load-
-          // bearing role check lives in the main-process bridge
-          // handler. The placeholder is rendered without props when
-          // `props.payments` isn't injected — production wires
-          // `window.api.payments` upstream; future "list of stuck
-          // attempts" feature will navigate users here with the
-          // payment_attempt_id in route state.
-          path: 'manager/force-fail',
-          element: (
-            <OperatorRouteGuard allow={['manager', 'admin']}>
-              <ManagerForceFailRoutePlaceholder />
-            </OperatorRouteGuard>
-          ),
+          element: <V5AppLayout />,
+          children: [
+            { path: 'cart', element: <V5CartRoute /> },
+            { path: 'checkout', element: <CheckoutRoute /> },
+          ],
         },
       ],
     },

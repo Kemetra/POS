@@ -47,7 +47,7 @@ export function CheckoutRoute(): JSX.Element {
 
   return (
     <Workspace title="Checkout">
-      <PaymentSurface onNewSale={handleNewSale} />
+      <PaymentSurface embedded onNewSale={handleNewSale} />
     </Workspace>
   );
 }

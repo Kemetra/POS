@@ -44,6 +44,8 @@ import type {
  */
 
 export interface PaymentSurfaceProps {
+  /** Render a labelled region when the route frame already owns the main landmark. */
+  embedded?: boolean;
   /**
    * Test seam: injects payments + tender (+ optional sales) bridge in place of
    * `window.api`. Mirrors the `_testBridge` pattern from CartPane
@@ -125,7 +127,9 @@ function resolveBridge(testBridge: ResolvedBridge | undefined): ResolvedBridge |
 export function PaymentSurface({
   _testBridge,
   onNewSale,
+  embedded = false,
 }: PaymentSurfaceProps = {}): JSX.Element | null {
+  const Root = embedded ? 'section' : 'main';
   const sessionState = useOperatorSessionStore((s) => s.state);
   const envelope = usePaymentStore((s) => s.envelope);
   const paymentSlice = usePaymentStore((s) => s.paymentSlice);
@@ -428,7 +432,7 @@ export function PaymentSurface({
     // payment. 011 already derives one from `envelope_handoff_action_id`.
 
     return (
-      <main
+      <Root
         className="v4-screen payment-surface--settled"
         data-testid="payment-surface"
         aria-label="الدفع"
@@ -511,12 +515,12 @@ export function PaymentSurface({
         >
           بيع جديد
         </button>
-      </main>
+      </Root>
     );
   }
 
   return (
-    <main className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
+    <Root className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
       <header className="payment-surface__header">
         <h2 className="payment-surface__title">الدفع</h2>
         <OperatorBadge display_name={display_name} role={role} />
@@ -699,6 +703,6 @@ export function PaymentSurface({
           {bridgeRefusalCopy}
         </div>
       )}
-    </main>
+    </Root>
   );
 }

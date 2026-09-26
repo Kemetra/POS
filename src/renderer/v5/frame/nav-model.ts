@@ -18,8 +18,8 @@ export interface V5NavEntry {
 /**
  * The v5 navigation is derived from the one existing seven-entry contract, so
  * labels, order and role gates cannot drift from the legacy rail. Only the
- * Sale entry points at the v5 preview; every other entry keeps its existing
- * route (those screens are not migrated in this slice).
+ * Sale defaults to the v5 preview for isolated renders; the production frame
+ * supplies `/app/cart`. Every other entry keeps its existing route.
  */
 export const v5NavEntries: ReadonlyArray<V5NavEntry> = shellNavEntries.map((entry) => ({
   id: entry.id,
@@ -28,11 +28,16 @@ export const v5NavEntries: ReadonlyArray<V5NavEntry> = shellNavEntries.map((entr
   ...(entry.allow !== undefined ? { allow: entry.allow } : {}),
 }));
 
-/** Same rule as the legacy rail: unrestricted entries, or the role is allowed. */
-export function visibleNavEntries(role: Role | undefined): ReadonlyArray<V5NavEntry> {
-  return v5NavEntries.filter(
-    (entry) => entry.allow === undefined || (role !== undefined && entry.allow.includes(role)),
-  );
+/** Same role rule as the legacy rail; production Sale links to the cutover route. */
+export function visibleNavEntries(
+  role: Role | undefined,
+  salePath = V5_SALE_PATH,
+): ReadonlyArray<V5NavEntry> {
+  return v5NavEntries
+    .filter(
+      (entry) => entry.allow === undefined || (role !== undefined && entry.allow.includes(role)),
+    )
+    .map((entry) => (entry.id === 'cart' ? { ...entry, path: salePath } : entry));
 }
 
 const ROLE_LABEL_AR: Readonly<Record<Role, string>> = {

@@ -183,15 +183,18 @@ afterEach(() => {
 });
 
 describe('/v5/sale — v5 frame + live Sale (DEV-only preview)', () => {
-  it('redirects a signed-out operator to sign-in without touching the cart bridge', async () => {
-    useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
-    renderAt(V5_SALE);
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/sign-in');
-    });
-    expect(api().cart.create).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
-  });
+  it.each([V5_SALE, '/app/cart', '/app/checkout'])(
+    'redirects signed-out access to %s before mounting the frame or touching the cart bridge',
+    async (path) => {
+      useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+      renderAt(path);
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/sign-in');
+      });
+      expect(api().cart.create).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
+    },
+  );
 
   it('renders the Sale inside one v5 frame: one main, one nav, one brand, no legacy chrome', async () => {
     signInCashier();
@@ -265,10 +268,16 @@ describe('/v5/sale — v5 frame + live Sale (DEV-only preview)', () => {
     expect(screen.getByRole('heading', { name: 'سلة المشتريات' })).toBeInTheDocument();
   });
 
-  it('leaves production /app/cart on the legacy shell and legacy Sale screen', async () => {
+  it('mounts production /app/cart in the v5 frame', async () => {
     signInCashier();
     renderAt('/app/cart');
-    expect(await screen.findByTestId('app-shell')).toBeInTheDocument();
-    expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'مساحة البيع' })).toBeInTheDocument();
+    expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('navigation', { name: 'التنقل الرئيسي' })).getByRole('link', {
+        name: 'نقطة البيع',
+      }),
+    ).toHaveAttribute('href', '/app/cart');
   });
 });
