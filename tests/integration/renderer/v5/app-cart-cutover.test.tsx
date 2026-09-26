@@ -254,6 +254,10 @@ describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
     renderAt(V5_SALE);
     expect(await screen.findByText('سلة البيع غير مفعّلة على هذا الجهاز بعد.')).toBeInTheDocument();
     expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+    // The fail-closed default still carries the screen title (Codex, PR #476).
+    expect(screen.getByRole('region', { name: 'مساحة البيع' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('مساحة البيع');
     expect(api().cart.create).not.toHaveBeenCalled();
   });
 
