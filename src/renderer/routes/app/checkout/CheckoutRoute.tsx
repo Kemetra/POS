@@ -14,7 +14,7 @@ import { CheckoutPlaceholder } from './CheckoutPlaceholder';
  * When the `payments` feature flag is on, the checkout route renders the live
  * `PaymentSurface` (the tender screen). PaymentSurface self-gates: it returns
  * null unless a signed-in operator session AND a non-null payment envelope
- * exist in the payment store. The envelope is mounted by CartPane's
+ * exist in the payment store. The envelope is mounted by the V5 Sale's
  * "Continue to payment" handler immediately before navigation here, so by the
  * time this route renders the envelope is present.
  *

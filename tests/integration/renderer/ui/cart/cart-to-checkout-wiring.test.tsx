@@ -174,10 +174,11 @@ async function scanAddHandoffContinue(user: ReturnType<typeof userEvent.setup>):
 describe('cart → checkout wiring (006 mount)', () => {
   it('Continue to payment navigates to /app/checkout and mounts PaymentSurface', async () => {
     // Drive the REAL flow end-to-end through AppRouter so the load-bearing seam
-    // — CartWorkspace actually wiring onPaymentContinue → navigate — is exercised,
-    // not stubbed. Use the SCAN path (lookupBarcode) to skip the typed-search
-    // debounce. The handoff is what hydrates CartPane's LOCAL envelope, which is
-    // why the frozen state can't simply be seeded into the store.
+    // — the V5 Sale route actually wiring onPaymentContinue → navigate — is
+    // exercised, not stubbed. Use the SCAN path (lookupBarcode) to skip the
+    // typed-search debounce. The handoff is what mounts the Sale controller's
+    // frozen envelope, which is why the frozen state can't simply be seeded
+    // into the store.
     const user = userEvent.setup();
     useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
     useOperatorSessionStore.getState().hydrateSignedIn(MANAGER_SESSION);

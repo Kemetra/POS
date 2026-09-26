@@ -36,20 +36,17 @@ async function importPanes() {
   const [
     { DashboardPlaceholder },
     { SalesWorkspace },
-    { CartWorkspace },
     { InventoryPlaceholder },
     { SettingsHelpPlaceholder },
   ] = await Promise.all([
     import('../DashboardPlaceholder'),
     import('../SalesWorkspace'),
-    import('../CartWorkspace'),
     import('../InventoryPlaceholder'),
     import('../SettingsHelpPlaceholder'),
   ]);
   return {
     DashboardPlaceholder,
     SalesWorkspace,
-    CartWorkspace,
     InventoryPlaceholder,
     SettingsHelpPlaceholder,
   };
@@ -61,7 +58,6 @@ type PaneName = keyof Pane;
 const PANE_NAMES: PaneName[] = [
   'DashboardPlaceholder',
   'SalesWorkspace',
-  'CartWorkspace',
   'InventoryPlaceholder',
   'SettingsHelpPlaceholder',
 ];

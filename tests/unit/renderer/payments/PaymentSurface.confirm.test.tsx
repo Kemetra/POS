@@ -44,7 +44,7 @@ import type { PaymentAttemptRendererView } from '../../../../src/shared/payments
  *      refusal, renders generic copy.
  *
  * The bridge is injected via the `_testBridge` prop (same pattern as
- * CartPane / cart-pane-live-lines.test.tsx).
+ * the Sale controllers in src/renderer/sale).
  */
 
 const ENVELOPE: PaymentIntentEnvelope = {

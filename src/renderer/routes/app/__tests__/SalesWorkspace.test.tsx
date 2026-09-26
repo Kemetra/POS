@@ -4,7 +4,6 @@ import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import { SalesWorkspace } from '../SalesWorkspace';
-import { CartWorkspace } from '../CartWorkspace';
 import { InventoryPlaceholder } from '../InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 
@@ -30,28 +29,6 @@ describe('SalesWorkspace (T037)', () => {
     render(
       <MemoryRouter>
         <SalesWorkspace />
-      </MemoryRouter>,
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
-
-describe('CartWorkspace (T037)', () => {
-  it('renders default state', () => {
-    render(
-      <MemoryRouter>
-        <CartWorkspace />
-      </MemoryRouter>,
-    );
-    expect(screen.getByRole('heading', { name: /cart/i })).toBeInTheDocument();
-  });
-
-  it('zero fetch calls on mount', () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    render(
-      <MemoryRouter>
-        <CartWorkspace />
       </MemoryRouter>,
     );
     expect(fetchMock).not.toHaveBeenCalled();

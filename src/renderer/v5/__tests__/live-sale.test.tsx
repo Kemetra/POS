@@ -14,6 +14,7 @@ import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { usePaymentStore } from '../../stores/payment-store';
 import { LiveSaleWorkspace } from '../sale/LiveSaleWorkspace';
+import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
 
 afterEach(() => {
   cleanup();
@@ -633,5 +634,81 @@ describe('live v5 Sale touch targets', () => {
         expect(Number(match[1]), selector?.trim()).toBeGreaterThanOrEqual(44);
       }
     }
+  });
+
+  // Ported from the retired legacy duplicate-scan / keyboard-walkthrough story 3
+  // (023 Slice H): the production wedge-scanner path, keyboard only.
+  it('a duplicate scan confirms by keyboard and merges into the same line', async () => {
+    signIn();
+    const bridges = makeBridges();
+    bridges.fns.add
+      .mockResolvedValueOnce({
+        kind: 'ok',
+        line_id: 'line-1',
+        merged: false,
+        version: 1,
+        display_name: 'بنادول',
+        unit_price_minor: 1500,
+        line_subtotal_minor: 1500,
+        quantity: 1,
+      })
+      .mockResolvedValueOnce({
+        kind: 'ok',
+        line_id: 'line-1',
+        merged: true,
+        version: 2,
+        display_name: 'بنادول',
+        unit_price_minor: 1500,
+        line_subtotal_minor: 3000,
+        quantity: 2,
+      });
+    renderSale(bridges);
+    const user = userEvent.setup();
+    const scan = screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' });
+
+    for (const expectedCalls of [1, 2]) {
+      act(() => {
+        scan.focus();
+      });
+      await user.keyboard('6223004355218{Enter}');
+      expect(scan).toHaveValue('');
+      await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
+      expect(bridges.fns.lookupBarcode).toHaveBeenCalledTimes(expectedCalls);
+      // Focus sits on Add when the dialog opens, so Enter confirms.
+      await user.keyboard('{Enter}');
+      await waitFor(() => {
+        expect(bridges.fns.add).toHaveBeenCalledTimes(expectedCalls);
+      });
+    }
+
+    expect(bridges.fns.add.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ item_ref: PANADOL.product_id, quantity: 1 }),
+    );
+    const lines = await screen.findByRole('list', { name: 'أصناف السلة' });
+    await waitFor(() => {
+      expect(within(lines).getAllByRole('listitem')).toHaveLength(1);
+      expect(within(lines).getByText('30.00 EGP')).toBeInTheDocument();
+    });
+  });
+
+  // Ported from the retired legacy Sale a11y suites (023 Slice H): the jsdom axe
+  // pass now runs on the V5 Sale's empty, confirm and one-line states.
+  it('is axe-clean empty, with the confirm dialog open, and with one line', async () => {
+    signIn();
+    const bridges = makeBridges();
+    const { container } = render(
+      <LiveSaleWorkspace
+        cartBridge={bridges.cart}
+        catalogueBridge={bridges.catalogue}
+        onPaymentContinue={vi.fn()}
+      />,
+    );
+    await expectNoAxeViolations(container);
+    const user = userEvent.setup();
+    await scanAndOpenConfirm(user);
+    await expectNoAxeViolations(container);
+    await user.click(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
+    await screen.findByRole('list', { name: 'أصناف السلة' });
+    await expectNoAxeViolations(container);
   });
 });

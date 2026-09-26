@@ -452,7 +452,7 @@ app
         ['1', 'true', 'yes', 'on'].includes(saleFinalizationRaw.trim().toLowerCase());
       // 009-product-search-and-barcode-lookup T049a — productSearch flag (default false).
       // Same truthy-value contract as cart. Mounts the catalogue surface only when
-      // BOTH this and `cart` are on (the surface needs CartPane to receive lines).
+      // BOTH this and `cart` are on (the surface needs the Sale cart to receive lines).
       const productSearchRaw = process.env['POS_PULSE_FEATURE_PRODUCT_SEARCH'];
       const productSearchEnabled =
         typeof productSearchRaw === 'string' &&

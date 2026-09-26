@@ -24,8 +24,10 @@
  * The window is ~100 ms per crossing, not indefinite. That is still a real
  * window (and repeated crossings re-open it), which is why the rules stay.
  *
- * This is the only BEHAVIOURAL guard on that window; `u2-sale-layout-rules`
- * asserts source text and cannot see a time-varying transition. Nothing else in
+ * This is the only BEHAVIOURAL guard on that window (`.sale-layout` and its
+ * `u2-sale-layout-rules` source tripwire were retired with the legacy Sale in
+ * 023 H; `.tender-method-grid` remains). A source-text check
+ * cannot see a time-varying transition. Nothing else in
  * the suite exercises a resize, which is why the deletion passed 5617 tests.
  *
  * If this fails because the shell now switches synchronously, the rules become

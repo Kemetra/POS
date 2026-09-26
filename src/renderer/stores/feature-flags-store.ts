@@ -9,7 +9,7 @@ import { create } from 'zustand';
  * tests via `useFeatureFlagsStore.setState({ ... })`.
  *
  * Defaults are fail-closed — every flag starts as `false`. The cart flag
- * enables CartPane in 003's reserved cart slot. Flipping it in production
+ * enables the Sale cart at /app/cart. Flipping it in production
  * is a §A5 sign-off.
  */
 export interface FeatureFlagsState {
