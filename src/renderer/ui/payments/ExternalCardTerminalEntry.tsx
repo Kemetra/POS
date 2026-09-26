@@ -4,6 +4,7 @@ import { validateExternalReference } from '../../../shared/payments/external-ref
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
+import { formatCheckoutMoney } from './format-checkout-money.js';
 
 /**
  * 006-payments-tender Slice 2 + S3d T151 — <ExternalCardTerminalEntry>.
@@ -39,17 +40,6 @@ export interface ExternalCardTerminalEntryProps {
   tenderApply?: (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
   /** Fires with the `{ kind: 'ok', ... }` response on successful apply. */
   onApplied?: (response: Extract<TenderApplyResponse, { kind: 'ok' }>) => void;
-}
-
-function formatMinorUnits(minor: number): string {
-  if (!Number.isSafeInteger(minor)) {
-    return '—';
-  }
-  const whole = Math.floor(minor / 100);
-  const frac = Math.abs(minor % 100)
-    .toString()
-    .padStart(2, '0');
-  return `¤${whole.toString()}.${frac}`;
 }
 
 export function ExternalCardTerminalEntry({
@@ -152,7 +142,7 @@ export function ExternalCardTerminalEntry({
             className="tender-row__label external-card-terminal-entry__amount-label"
             htmlFor="external-card-amount-input"
           >
-            المبلغ المخصوم (Amount applied ¤)
+            المبلغ المخصوم (Amount applied, EGP)
           </label>
           <span className="tender-row__value">
             <input
@@ -179,7 +169,7 @@ export function ExternalCardTerminalEntry({
           <span className="tender-row__label">المبلغ المُقتطع</span>
           <span className="tender-row__value">
             <span dir="ltr" className="mono">
-              {formatMinorUnits(remainingBalanceMinor)}
+              {formatCheckoutMoney(remainingBalanceMinor)}
             </span>
           </span>
         </div>

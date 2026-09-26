@@ -7,6 +7,7 @@ import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-mi
 import { quickAmounts } from '../../../shared/payments/quick-amounts.js';
 import { AmountPad } from './AmountPad.js';
 import { MoneyRoll } from './MoneyRoll.js';
+import { formatCheckoutMoney } from './format-checkout-money.js';
 
 /**
  * 006-payments-tender Slice 2 + S3d T151 — <CashEntry>.
@@ -44,17 +45,6 @@ export interface CashEntryProps {
   tenderApply?: (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
   /** Fires with the `{ kind: 'ok', ... }` response on successful apply. */
   onApplied?: (response: Extract<TenderApplyResponse, { kind: 'ok' }>) => void;
-}
-
-function formatMinorUnits(minor: number): string {
-  if (!Number.isSafeInteger(minor)) {
-    return '—';
-  }
-  const whole = Math.floor(minor / 100);
-  const frac = Math.abs(minor % 100)
-    .toString()
-    .padStart(2, '0');
-  return `¤${whole.toString()}.${frac}`;
 }
 
 export function CashEntry({
@@ -170,7 +160,7 @@ export function CashEntry({
             className="tender-row__label cash-entry__amount-label"
             htmlFor="cash-entry-amount-input"
           >
-            المبلغ المستلم (Amount received ¤)
+            المبلغ المستلم (Amount received, EGP)
           </label>
           <span className="tender-row__value" style={{ minWidth: 240, flex: 1 }}>
             <input
@@ -246,7 +236,7 @@ export function CashEntry({
                         setBridgeRefusal(false);
                       }}
                     >
-                      <span dir="ltr">{formatMinorUnits(v)}</span>
+                      <span dir="ltr">{formatCheckoutMoney(v)}</span>
                     </button>
                   ))}
             </span>
@@ -262,8 +252,11 @@ export function CashEntry({
             data-testid="cash-entry-change-due"
           >
             <span className="tender-row__label">الباقي للعميل (Change due)</span>
-            <span className="tender-row__value cash-entry__change-due-value change-row__value--positive">
-              ¤<MoneyRoll valueMinor={changeDueMinor} className="cash-entry__change-roll" />
+            <span
+              dir="ltr"
+              className="tender-row__value cash-entry__change-due-value change-row__value--positive"
+            >
+              <MoneyRoll valueMinor={changeDueMinor} className="cash-entry__change-roll" /> EGP
             </span>
           </div>
         )}

@@ -1,6 +1,6 @@
 /**
  * Parse a cashier-entered currency string (e.g. "12.50") into integer minor
- * units (1250). The inverse of `formatMinorUnits` — a display-layer boundary
+ * units (1250). The inverse of `formatMinorToInput` — a display-layer boundary
  * conversion so cashiers enter the natural amount the customer pays, while
  * storage + math stay in integer minor units (Constitution §II).
  *
@@ -32,10 +32,10 @@ export function parseCurrencyToMinor(input: string): number | null {
 
 /**
  * Format integer minor units into a PLAIN, editable currency string ("125.50")
- * — no ¤ symbol — suitable as an `<input>` value and round-trippable through
- * `parseCurrencyToMinor`. Used to pre-fill the amount field (e.g. the card
- * terminal seeds the exact remaining balance). Distinct from the display-only
- * `formatMinorUnits` which prepends the ¤ symbol.
+ * — no currency code — suitable as an `<input>` value and round-trippable
+ * through `parseCurrencyToMinor`. Used to pre-fill the amount field (e.g. the
+ * card terminal seeds the exact remaining balance). Distinct from the
+ * display-only `formatCheckoutMoney`, which appends `EGP` (RT-23).
  *
  * Returns '' for an unsafe or negative value — the caller cannot pre-fill an
  * un-representable amount, and an empty field is the safe fallback.

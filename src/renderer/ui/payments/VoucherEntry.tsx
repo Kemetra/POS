@@ -209,7 +209,7 @@ export function VoucherEntry({
         {/* Amount-to-apply row */}
         <div className="tender-row">
           <label className="tender-row__label voucher-entry__label" htmlFor="voucher-amount-input">
-            المبلغ المطبّق (Amount to apply ¤)
+            المبلغ المطبّق (Amount to apply, EGP)
           </label>
           <span className="tender-row__value">
             <input

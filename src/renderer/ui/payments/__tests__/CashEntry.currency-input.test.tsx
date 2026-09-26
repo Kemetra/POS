@@ -13,13 +13,13 @@ import { CashEntry } from '../CashEntry.js';
 afterEach(cleanup);
 
 // Slice-2 (display-only) mode: pass onConfirm; confirm fires with the parsed
-// minor-unit amounts. remainingBalanceMinor = 1250 (a ¤12.50 sale).
+// minor-unit amounts. remainingBalanceMinor = 1250 (a 12.50 EGP sale).
 function renderCash(onConfirm = vi.fn()) {
   render(<CashEntry remainingBalanceMinor={1250} onConfirm={onConfirm} />);
   return { onConfirm };
 }
 
-describe('CashEntry — currency-amount input (¤), not minor units', () => {
+describe('CashEntry — currency-amount input (EGP), not minor units', () => {
   it('accepts the typed currency amount "12.50" and enables confirm for an exact-cash sale', () => {
     renderCash();
     const input = screen.getByTestId('cash-entry-amount-input');
@@ -37,12 +37,12 @@ describe('CashEntry — currency-amount input (¤), not minor units', () => {
     expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
   });
 
-  it('shows change due ("money back to client") when the customer overpays: pays 15.00 for a 12.50 sale → ¤2.50', () => {
+  it('shows change due ("money back to client") when the customer overpays: pays 15.00 for a 12.50 sale → 2.50 EGP', () => {
     const { onConfirm } = renderCash();
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), { target: { value: '15.00' } });
     // Change-due row appears and shows the formatted overage.
     const change = screen.getByTestId('cash-entry-change-due');
-    expect(change).toHaveTextContent('¤2.50');
+    expect(change).toHaveTextContent('2.50 EGP');
     fireEvent.click(screen.getByTestId('cash-entry-confirm'));
     expect(onConfirm).toHaveBeenCalledWith({ amountAppliedMinor: 1500, changeDueMinor: 250 });
   });
@@ -62,9 +62,9 @@ describe('CashEntry — currency-amount input (¤), not minor units', () => {
     expect(screen.getByTestId('cash-entry-confirm')).toBeDisabled();
   });
 
-  it('the amount label reads "Amount received ¤" (Arabic-first v3.5 copy), not minor units', () => {
+  it('the amount label reads "Amount received, EGP" (Arabic-first v3.5 copy), not minor units', () => {
     renderCash();
-    // v3.5 recompose: Arabic-first label — "المبلغ المستلم (Amount received ¤)"
-    expect(screen.getByText('المبلغ المستلم (Amount received ¤)')).toBeInTheDocument();
+    // v3.5 recompose: Arabic-first label — "المبلغ المستلم (Amount received, EGP)"
+    expect(screen.getByText('المبلغ المستلم (Amount received, EGP)')).toBeInTheDocument();
   });
 });

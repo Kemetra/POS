@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope.js';
+import { formatCheckoutMoney } from './format-checkout-money.js';
 
 /**
  * 006-payments-tender S1 — PaymentCartSummary.
@@ -16,17 +17,6 @@ import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelop
  * branch_id, terminal_id, handoff_action_id, item_ref, last_action_id)
  * are rendered in the DOM (FR-035). No edit affordances.
  */
-
-function formatMinorUnits(minor: number): string {
-  if (!Number.isSafeInteger(minor)) {
-    return '—';
-  }
-  const whole = Math.floor(minor / 100);
-  const frac = Math.abs(minor % 100)
-    .toString()
-    .padStart(2, '0');
-  return `¤${whole.toString()}.${frac}`;
-}
 
 export interface PaymentCartSummaryProps {
   envelope: Readonly<PaymentIntentEnvelope>;
@@ -49,10 +39,11 @@ export function PaymentCartSummary({ envelope }: PaymentCartSummaryProps): JSX.E
               ×{line.quantity}
             </span>
             <span
+              dir="ltr"
               className="payment-cart-summary__line-subtotal"
               data-testid={`payment-summary-line-subtotal-${idx.toString()}`}
             >
-              {formatMinorUnits(line.line_subtotal_minor)}
+              {formatCheckoutMoney(line.line_subtotal_minor)}
             </span>
           </li>
         ))}
@@ -61,10 +52,11 @@ export function PaymentCartSummary({ envelope }: PaymentCartSummaryProps): JSX.E
       <div className="payment-cart-summary__footer">
         <span className="payment-cart-summary__subtotal-label">الإجمالي الفرعي</span>
         <span
+          dir="ltr"
           className="payment-cart-summary__subtotal-value"
           data-testid="payment-summary-subtotal"
         >
-          {formatMinorUnits(envelope.subtotal_minor)}
+          {formatCheckoutMoney(envelope.subtotal_minor)}
         </span>
       </div>
     </section>

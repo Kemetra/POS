@@ -48,11 +48,11 @@ describe('<CashEntry> — AmountPad shared-state integration', () => {
     expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
   });
 
-  it('an overpay quick amount drives the animated change-due (¤ preserved)', () => {
+  it('an overpay quick amount drives the animated change-due (EGP shown)', () => {
     render(<CashEntry remainingBalanceMinor={19925} onConfirm={vi.fn()} />);
-    // 20000 is a quick-amount roll-up; change due = 20000 − 19925 = 75 → ¤0.75.
+    // 20000 is a quick-amount roll-up; change due = 20000 − 19925 = 75 → 0.75 EGP.
     fireEvent.click(screen.getByTestId('amount-pad-quick-20000'));
     const changeDue = screen.getByTestId('cash-entry-change-due');
-    expect(changeDue).toHaveTextContent('¤0.75');
+    expect(changeDue).toHaveTextContent('0.75 EGP');
   });
 });

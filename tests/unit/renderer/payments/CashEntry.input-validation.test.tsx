@@ -114,18 +114,18 @@ describe('<CashEntry> — change-due display (display only, major units)', () =>
     expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
   });
 
-  it('renders change-due in major units when overpay (150.00 − 125.50 = ¤24.50)', () => {
+  it('renders change-due in major units when overpay (150.00 − 125.50 = 24.50 EGP)', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
     fireEvent.change(input, { target: { value: '150.00' } });
     const changeDue = screen.getByTestId('cash-entry-change-due');
-    expect(changeDue).toHaveTextContent('¤24.50');
+    expect(changeDue).toHaveTextContent('24.50 EGP');
   });
 
-  it('renders change-due as ¤1.00 for amount=126.50 remaining=125.50', () => {
+  it('renders change-due as 1.00 EGP for amount=126.50 remaining=125.50', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
     fireEvent.change(input, { target: { value: '126.50' } });
     const changeDue = screen.getByTestId('cash-entry-change-due');
-    expect(changeDue).toHaveTextContent('¤1.00');
+    expect(changeDue).toHaveTextContent('1.00 EGP');
   });
 });
 

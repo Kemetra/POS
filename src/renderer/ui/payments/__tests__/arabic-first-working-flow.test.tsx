@@ -140,8 +140,13 @@ function resetPaymentSession(): void {
  *
  * This list is CLOSED. Adding to it is a copy decision that needs its own
  * justification — it is not a place to park an untranslated string.
+ *
+ * `EGP` (RT-23, owner decision 2026-09-26): the ISO 4217 code that the shared
+ * `money.format` renders on every amount (`15.00 EGP`), matching the approved
+ * V5 Sale and the amount due. It is a currency code, not prose. Stripping only
+ * the code still flags any English around it (`Amount EGP` → `Amount`).
  */
-const ALLOWED_FORMAT_TOKENS: readonly string[] = ['VCH-000', 'T1A2B3'];
+const ALLOWED_FORMAT_TOKENS: readonly string[] = ['VCH-000', 'T1A2B3', 'EGP'];
 
 /** Operator-facing attributes that carry text but are not text nodes. */
 const OPERATOR_FACING_ATTRIBUTES: readonly string[] = ['aria-label', 'title', 'placeholder'];
@@ -493,5 +498,21 @@ describe('T076 assertion self-check — detects each class of English gap', () =
     expect(() => {
       expectNoEnglishOnlyStrings(el, 'fixture');
     }).not.toThrow();
+  });
+
+  it('accepts a formatted amount carrying the EGP code (RT-23)', () => {
+    const el = document.createElement('div');
+    el.innerHTML = '<span dir="ltr">15.00 EGP</span>';
+    expect(() => {
+      expectNoEnglishOnlyStrings(el, 'fixture');
+    }).not.toThrow();
+  });
+
+  it('still flags English prose next to the EGP code', () => {
+    const el = document.createElement('div');
+    el.innerHTML = '<span>Total 15.00 EGP</span>';
+    expect(() => {
+      expectNoEnglishOnlyStrings(el, 'fixture');
+    }).toThrow(/Total/);
   });
 });
