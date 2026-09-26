@@ -9,7 +9,7 @@ import type { PaymentAttemptRendererView } from '../../shared/payments/types.js'
  *
  * Two independent slices:
  *   - **envelope** (Slice 1): the frozen `PaymentIntentEnvelope` received
- *     from CartPane after a successful handoff.
+ *     from the Sale cart controller after a successful handoff.
  *   - **paymentSlice** (S3d / T150): a read-only mirror of the
  *     main-process `PaymentAttemptRendererView` projection returned by
  *     `payments.read` / `payments.subscribe`. Components own the bridge

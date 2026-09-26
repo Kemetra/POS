@@ -5,7 +5,6 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { DashboardPlaceholder } from '../DashboardPlaceholder';
 import { SalesWorkspace } from '../SalesWorkspace';
-import { CartWorkspace } from '../CartWorkspace';
 import { InventoryPlaceholder } from '../InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 import { CheckoutPlaceholder } from '../checkout/CheckoutPlaceholder';
@@ -39,11 +38,6 @@ describe('Workspace smoke tests (T070a)', () => {
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
   });
 
-  it('CartWorkspace renders inside a Workspace', () => {
-    renderInRouter(CartWorkspace);
-    expect(screen.getByTestId('workspace')).toBeInTheDocument();
-  });
-
   it('InventoryPlaceholder renders inside a Workspace', () => {
     renderInRouter(InventoryPlaceholder);
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
@@ -63,7 +57,6 @@ describe('Workspace smoke tests (T070a)', () => {
     const components = [
       DashboardPlaceholder,
       SalesWorkspace,
-      CartWorkspace,
       InventoryPlaceholder,
       SettingsHelpPlaceholder,
       CheckoutPlaceholder,

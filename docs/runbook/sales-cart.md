@@ -14,7 +14,7 @@
 **Normal flow:**
 1. VoidConfirmation dialog opens with generic copy.
 2. Operator confirms → `cart.void` IPC call → bridge transitions cart to `cancelled`.
-3. CartPane updates local state; active cart is cleared.
+3. The Sale screen updates local state; active cart is cleared.
 
 **Refused — `frozen` reason:**
 - Cart is in `frozen_handed_off` state and the calling session is a cashier.
@@ -76,7 +76,7 @@ the IPC boundary, so a cashier session cannot borrow manager authority from the 
 
 ### Removing a discount placeholder
 
-**Normal flow:** `discountPlaceholders.remove` succeeds, row is removed from CartPane.
+**Normal flow:** `discountPlaceholders.remove` succeeds, row is removed from the Sale cart.
 
 **Refused — `manager_attribution_required`:**
 - The placeholder was originally added with manager attribution; removal also requires it.

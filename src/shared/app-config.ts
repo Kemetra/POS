@@ -23,7 +23,7 @@ export interface AppConfig {
    * 005-sales-cart T001 — per-feature flag map.
    *
    * `cart` defaults to `false`. The renderer reads it once at boot and
-   * conditionally mounts the CartPane in 003's reserved cart slot
+   * conditionally mounts the Sale cart at /app/cart
    * (FR-033 / §A5). Enabling the flag is a per-tenant, per-branch
    * production decision — flipping it in dev is the only path to
    * exercise the cart UI surfaces until §A5 sign-off.
@@ -60,7 +60,7 @@ export interface AppConfig {
      * Defaults to `false`. Flip via `POS_PULSE_FEATURE_PRODUCT_SEARCH` in main.
      * Fail-closed: disabled keeps the cart surface search-free. Independent of
      * the `cart` flag, but the surface mounts only when BOTH are on (it needs
-     * CartPane present to receive added lines).
+     * the Sale cart present to receive added lines).
      */
     productSearch?: boolean;
   };

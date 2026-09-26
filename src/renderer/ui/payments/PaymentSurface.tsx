@@ -46,8 +46,8 @@ import type {
 export interface PaymentSurfaceProps {
   /**
    * Test seam: injects payments + tender (+ optional sales) bridge in place of
-   * `window.api`. Mirrors the `_testBridge` pattern from CartPane
-   * (cart-pane-live-lines). When omitted in production, the surface reads from
+   * `window.api`. The same injected-bridge pattern the Sale controllers use
+   * (renderer/sale). When omitted in production, the surface reads from
    * `window.api.payments` + `window.api.tender` (+ `window.api.sales`) — the
    * typed preload bridge.
    */
@@ -60,7 +60,7 @@ export interface PaymentSurfaceProps {
    * Invoked when the cashier clicks "New sale" on the settled/completed
    * surface. The route owner (CheckoutRoute) wires this to reset the payment +
    * cart stores and navigate back to /app/cart — keeping PaymentSurface
-   * Router-agnostic (mirrors CartPane's onPaymentContinue seam, so the
+   * Router-agnostic (mirrors the Sale screen's onContinue seam, so the
    * bare-render unit tests need no Router ancestor). Optional + guarded: when
    * omitted (tests / Slice-1), the button still renders and is a safe no-op.
    */

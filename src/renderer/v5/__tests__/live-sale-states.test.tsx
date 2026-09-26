@@ -212,3 +212,25 @@ describe('LiveSaleCart controls', () => {
     expect(screen.getByRole('dialog', { name: 'تأكيد إلغاء البيع' })).toBeInTheDocument();
   });
 });
+
+// Ported from the retired legacy U2 workspace suite (023 Slice H): the V5
+// totals must keep the D-007 tax honesty rule — VAT is not computed yet.
+describe('LiveSaleCart totals honesty (D-007)', () => {
+  function totals(): HTMLElement {
+    return screen.getByLabelText('ملخص المبالغ');
+  }
+
+  it('shows tax as pending with no figure and no 15% line', () => {
+    render(<LiveSaleCart {...cart()} />);
+    const taxRow = screen.getByText('الضريبة').parentElement;
+    expect(taxRow?.textContent).toContain('قيد الإضافة');
+    expect(taxRow?.textContent).not.toMatch(/\d/);
+    expect(totals().textContent).not.toMatch(/15\s*%/);
+  });
+
+  it('shows empty-cart totals as placeholders, not zeroes', () => {
+    render(<LiveSaleCart {...cart({ lines: [], subtotalMinor: 0, itemCount: 0 })} />);
+    expect(totals().textContent).toContain('—');
+    expect(totals().textContent).not.toMatch(/0[.,]00/);
+  });
+});

@@ -200,4 +200,57 @@ describe('useSaleCatalogueController', () => {
     });
     expect(result.current.state).toEqual({ kind: 'searching', query: 'بنادول' });
   });
+
+  // Ported from the retired legacy CatalogueSalePane suite (023 Slice H):
+  // the response → FSM mapping now lives only in this hook.
+  it.each([
+    [{ kind: 'not_found' }, 'not_found'],
+    [{ kind: 'catalogue_unavailable' }, 'catalogue_unavailable'],
+    [{ kind: 'too_short' }, 'idle'],
+    [{ kind: 'refused', reason: 'no_session' }, 'idle'],
+  ])('maps typed search %o to %s', async (response, expected) => {
+    const { cart, catalogue, search } = bridges();
+    search.mockResolvedValue(response);
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    await act(async () => {
+      await result.current.runTypedSearch('بنادول');
+    });
+    expect(result.current.state.kind).toBe(expected);
+  });
+
+  it.each([
+    [{ kind: 'not_found' }, 'not_found'],
+    [{ kind: 'ambiguous' }, 'ambiguous'],
+    [{ kind: 'catalogue_unavailable' }, 'catalogue_unavailable'],
+    [{ kind: 'refused', reason: 'no_session' }, 'idle'],
+  ])('maps scan %o to %s', async (response, expected) => {
+    const { cart, catalogue, lookupBarcode } = bridges();
+    lookupBarcode.mockResolvedValue(response);
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    await act(async () => {
+      await result.current.runScan('6223004355218');
+    });
+    expect(result.current.state.kind).toBe(expected);
+  });
+
+  it('a rejected search or scan returns the FSM to idle, never stuck searching', async () => {
+    const { cart, catalogue, search, lookupBarcode } = bridges();
+    search.mockRejectedValue(new Error('ipc'));
+    lookupBarcode.mockRejectedValue(new Error('ipc'));
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    await act(async () => {
+      await result.current.runTypedSearch('بنادول');
+    });
+    expect(result.current.state.kind).toBe('idle');
+    await act(async () => {
+      await result.current.runScan('6223004355218');
+    });
+    expect(result.current.state.kind).toBe('idle');
+  });
 });

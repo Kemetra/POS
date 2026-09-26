@@ -7,7 +7,6 @@ import { MemoryRouter, Route, Routes, Navigate } from 'react-router-dom';
 import { AppShell } from '../../../shell/AppShell';
 import { DashboardPlaceholder } from '../DashboardPlaceholder';
 import { SalesWorkspace } from '../SalesWorkspace';
-import { CartWorkspace } from '../CartWorkspace';
 import { InventoryPlaceholder } from '../InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 
@@ -45,7 +44,6 @@ function renderApp(initialPath = '/app/dashboard') {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPlaceholder />} />
           <Route path="sales" element={<SalesWorkspace />} />
-          <Route path="cart" element={<CartWorkspace />} />
           <Route path="inventory" element={<InventoryPlaceholder />} />
           <Route path="settings" element={<SettingsHelpPlaceholder />} />
         </Route>
@@ -67,14 +65,13 @@ describe('navigation test (T038)', () => {
     );
   });
 
-  it('clicking the Sale (cart) nav entry shows CartWorkspace', async () => {
+  it('the Sale (cart) nav entry points at /app/cart', () => {
     // POS v3.5: the cart entry's English accessible name is "Sale" (Arabic
-    // visible label "نقطة البيع"); it still routes to /app/cart → CartWorkspace
-    // whose Workspace heading remains "Cart".
-    const user = userEvent.setup();
+    // visible label "نقطة البيع"). Since the 023 cutover /app/cart is served by
+    // the V5 Sale under its own layout (app-cart-cutover.test.tsx), so this
+    // AppShell-only harness checks the link target, not the screen.
     renderApp();
-    await user.click(screen.getByRole('link', { name: 'Sale' }));
-    await waitFor(() => expect(screen.getByRole('heading', { name: /cart/i })).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'Sale' })).toHaveAttribute('href', '/app/cart');
   });
 
   it('clicking Inventory nav entry shows InventoryPlaceholder', async () => {

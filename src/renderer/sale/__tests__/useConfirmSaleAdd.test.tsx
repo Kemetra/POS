@@ -129,4 +129,64 @@ describe('useConfirmSaleAdd', () => {
     expect(add).not.toHaveBeenCalled();
     expect(result.current.error).not.toBeNull();
   });
+
+  // Ported from the retired legacy CatalogueAddController suite (023 Slice H).
+  it('calls the bridge once for a double-tap before the first add resolves', async () => {
+    pending();
+    let answer: (value: unknown) => void = () => undefined;
+    const add = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const bridge = { lines: { add } } as unknown as CartBridgeAPI;
+    const { result } = renderHook(() =>
+      useConfirmSaleAdd({ cartId: 'cart-1', bridge, onLineAdded: vi.fn() }),
+    );
+    let first: Promise<void> = Promise.resolve();
+    await act(async () => {
+      first = result.current.confirm();
+      await result.current.confirm();
+    });
+    expect(add).toHaveBeenCalledOnce();
+    await act(async () => {
+      answer({ kind: 'refused', reason: 'wrong_owner' });
+      await first;
+    });
+  });
+
+  it('a rejected transport shows the generic error, adds nothing, and releases the guard', async () => {
+    pending();
+    const add = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ipc'))
+      .mockResolvedValueOnce({ kind: 'refused', reason: 'wrong_owner' });
+    const onLineAdded = vi.fn();
+    const bridge = { lines: { add } } as unknown as CartBridgeAPI;
+    const { result } = renderHook(() =>
+      useConfirmSaleAdd({ cartId: 'cart-1', bridge, onLineAdded }),
+    );
+    await act(async () => result.current.confirm());
+    expect(result.current.error).not.toBeNull();
+    expect(onLineAdded).not.toHaveBeenCalled();
+    expect(useCatalogueSearchStore.getState().state.kind).toBe('confirm_pending');
+    await act(async () => result.current.confirm());
+    expect(add).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancel clears the confirmation without calling the bridge', () => {
+    pending();
+    const add = vi.fn();
+    const onResolved = vi.fn();
+    const bridge = { lines: { add } } as unknown as CartBridgeAPI;
+    const { result } = renderHook(() =>
+      useConfirmSaleAdd({ cartId: 'cart-1', bridge, onLineAdded: vi.fn(), onResolved }),
+    );
+    act(() => {
+      result.current.cancel();
+    });
+    expect(add).not.toHaveBeenCalled();
+    expect(onResolved).toHaveBeenCalledOnce();
+    expect(useCatalogueSearchStore.getState().state.kind).toBe('idle');
+  });
 });
