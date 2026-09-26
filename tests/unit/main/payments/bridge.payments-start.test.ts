@@ -78,6 +78,7 @@ function setup() {
     clock,
     // Required since the §A4 cart-eligibility check; these cases are not about it.
     checkCartForPayment: () => ({ kind: 'ok' }),
+    attemptHasLiveTender: () => false,
   });
   return { sessionSource, attemptsRepo, fsm, idempotency, auditEmitter, uuid, clock, handler };
 }
@@ -98,6 +99,7 @@ describe('T100 — payments.start bridge handler', () => {
       clock: () => new Date('2026-05-23T11:00:00.000Z'),
       // Required since the §A4 cart-eligibility check; these cases are not about it.
       checkCartForPayment: () => ({ kind: 'ok' }),
+      attemptHasLiveTender: () => false,
     });
     const result = await nullHandler(validRequest());
     expect(result).toEqual({ kind: 'refused', reason: 'no_session' });
@@ -123,6 +125,7 @@ describe('T100 — payments.start bridge handler', () => {
       clock: () => new Date('2026-05-23T11:00:00.000Z'),
       // Required since the §A4 cart-eligibility check; these cases are not about it.
       checkCartForPayment: () => ({ kind: 'ok' }),
+      attemptHasLiveTender: () => false,
     });
     const result = await handler(validRequest());
     expect(result).toEqual({ kind: 'refused', reason: 'role_denied' });
@@ -141,6 +144,7 @@ describe('T100 — payments.start bridge handler', () => {
         clock: () => new Date('2026-05-23T11:00:00.000Z'),
         // Required since the §A4 cart-eligibility check; these cases are not about it.
         checkCartForPayment: () => ({ kind: 'ok' }),
+        attemptHasLiveTender: () => false,
       });
       const result = await handler(validRequest({ idempotency_key: `idem-${role}` }));
       expect(result).toEqual({ kind: 'ok', payment_attempt_id: `pa-${role}` });
@@ -210,6 +214,7 @@ describe('T100 — payments.start bridge handler', () => {
       clock: () => new Date('2026-05-23T11:00:00.000Z'),
       // Required since the §A4 cart-eligibility check; these cases are not about it.
       checkCartForPayment: () => ({ kind: 'ok' }),
+      attemptHasLiveTender: () => false,
     });
     const result = await handler(validRequest());
     expect(result).toEqual({ kind: 'ok', payment_attempt_id: 'pa-existing' });
@@ -231,6 +236,7 @@ describe('T100 — payments.start bridge handler', () => {
       clock: () => new Date('2026-05-23T11:00:00.000Z'),
       // Required since the §A4 cart-eligibility check; these cases are not about it.
       checkCartForPayment: () => ({ kind: 'ok' }),
+      attemptHasLiveTender: () => false,
     });
     const result = await handler(validRequest());
     expect(result).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });

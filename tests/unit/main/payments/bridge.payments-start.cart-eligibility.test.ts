@@ -39,6 +39,7 @@ function build(checkCartForPayment: ReturnType<typeof vi.fn>) {
     uuid: () => 'pa-1',
     clock: () => new Date('2026-09-25T11:00:00.000Z'),
     checkCartForPayment,
+    attemptHasLiveTender: () => false,
   });
   return { handler, fsm };
 }

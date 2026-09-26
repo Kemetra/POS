@@ -94,15 +94,25 @@ function isValidMinorUnit(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+/**
+ * Ids that `payments.start` persists (attempt, outbox) are bounded at the IPC
+ * boundary, matching `ipc/cart.ts` (§A4 review, 2026-09-26).
+ */
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
+function isBoundedId(value: unknown): value is string {
+  return typeof value === 'string' && ID_PATTERN.test(value);
+}
+
 function asPaymentsStartReq(value: unknown): PaymentsStartRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (
-    typeof v['envelope_handoff_action_id'] !== 'string' ||
-    typeof v['envelope_cart_id'] !== 'string' ||
+    !isBoundedId(v['envelope_handoff_action_id']) ||
+    !isBoundedId(v['envelope_cart_id']) ||
     !isValidMinorUnit(v['envelope_subtotal_minor']) ||
     v['envelope_version'] !== 'v1' ||
-    typeof v['idempotency_key'] !== 'string'
+    !isBoundedId(v['idempotency_key'])
   ) {
     return null;
   }

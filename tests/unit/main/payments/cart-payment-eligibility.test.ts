@@ -24,6 +24,8 @@ const MIGRATIONS = [
   '0008_carts.sql',
   '0012_create_payment_attempts.sql',
   '0013_payment_attempts_partial_unique_started.sql',
+  '0014_create_payment_tender_lines.sql',
+  '0019_extend_payment_failure_reason_enum.sql',
 ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;
@@ -134,5 +136,59 @@ describe('bindCartPaymentEligibility', () => {
       last_action_id: 'pa-action-2',
     });
     expect(check()).toEqual({ kind: 'refused', reason: 'attempt_terminal' });
+  });
+
+  describe('a force-failed attempt (tender is NOT reversed by force-fail)', () => {
+    function forceFailedAttemptWithTender(tenderState: string | null): void {
+      seedCart('frozen_handed_off');
+      const repo = bindPaymentAttemptsRepository(makeSqlJsHandle(db));
+      repo.insert({
+        payment_attempt_id: 'ff1',
+        tenant_id: 'tenant-1',
+        branch_id: 'branch-1',
+        terminal_id: 'terminal-1',
+        acting_operator_id: 'op-1',
+        operator_session_id: 'sess-1',
+        envelope_handoff_action_id: 'handoff-1',
+        envelope_cart_id: 'cart-1',
+        envelope_subtotal_minor: 5500,
+        started_at: '2026-09-26T09:01:00.000Z',
+        last_action_id: 'ff-action-1',
+      });
+      if (tenderState !== null) {
+        db.run(
+          `INSERT INTO payment_tender_lines (
+             tender_line_id, payment_attempt_id, tender_type, amount_applied_minor, state,
+             attribution_operator_id, apply_order, last_action_id
+           ) VALUES ('t1', 'ff1', 'cash', 5500, ?, 'op-1', 1, 't-action-1')`,
+          [tenderState],
+        );
+      }
+      repo.updateState({
+        payment_attempt_id: 'ff1',
+        state: 'force_failed',
+        timestamp: '2026-09-26T09:05:00.000Z',
+        last_action_id: 'ff-action-2',
+        failure_reason: 'manager_force_failed',
+        force_fail_attribution_operator_id: 'mgr-1',
+      });
+    }
+
+    it.each(['applied', 'applying', 'reversal_pending'])(
+      'refuses attempt_terminal when its tender is still %s (money may be taken)',
+      (tenderState) => {
+        forceFailedAttemptWithTender(tenderState);
+        expect(check()).toEqual({ kind: 'refused', reason: 'attempt_terminal' });
+      },
+    );
+
+    it.each([
+      ['no tender', null],
+      ['only reversed tender', 'reversed'],
+      ['only refused tender', 'refused'],
+    ])('admits a new payment when it holds %s (no money was taken)', (_label, tenderState) => {
+      forceFailedAttemptWithTender(tenderState);
+      expect(check()).toEqual({ kind: 'ok' });
+    });
   });
 });

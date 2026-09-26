@@ -62,6 +62,12 @@ export interface PaymentsStartHandlerDeps {
    * already paid. Required, so a dropped wiring cannot reopen the path.
    */
   checkCartForPayment: CheckCartForPayment;
+  /**
+   * Does an attempt still hold live tender? A stale attempt that does is never
+   * discarded: cancelling it would record its tender as reversed while the
+   * money may still be in the drawer (§A4 review, 2026-09-26).
+   */
+  attemptHasLiveTender: (payment_attempt_id: string) => boolean;
 }
 
 export type PaymentsStartHandler = (req: PaymentsStartRequest) => Promise<PaymentsStartResponse>;
@@ -75,21 +81,31 @@ export type PaymentsStartHandler = (req: PaymentsStartRequest) => Promise<Paymen
  * never settle cart B. Discard the orphan (LIFO-reverse + cancel) so a clean
  * attempt can start. A started attempt for the SAME cart is the legitimate
  * split-tender / duplicate-start case and is left to the FSM.
+ *
+ * Only an orphan with no live tender is discarded. One that holds tender is
+ * refused `attempt_already_started_on_terminal`, writing nothing: the cashier
+ * finishes or cancels that sale explicitly, so its money is accounted for.
+ * Returns `false` when the start must be refused.
  */
 function discardStaleAttemptForOtherCart(
-  deps: Pick<PaymentsStartHandlerDeps, 'attemptsRepo' | 'paymentAttemptFsm'>,
+  deps: Pick<
+    PaymentsStartHandlerDeps,
+    'attemptsRepo' | 'paymentAttemptFsm' | 'attemptHasLiveTender'
+  >,
   terminalId: string,
   req: PaymentsStartRequest,
   now: string,
-): void {
+): boolean {
   const existingStarted = deps.attemptsRepo.findStartedByTerminal(terminalId);
-  if (existingStarted?.envelope_cart_id === undefined) return;
-  if (existingStarted.envelope_cart_id === req.envelope_cart_id) return;
+  if (existingStarted?.envelope_cart_id === undefined) return true;
+  if (existingStarted.envelope_cart_id === req.envelope_cart_id) return true;
+  if (deps.attemptHasLiveTender(existingStarted.payment_attempt_id)) return false;
   deps.paymentAttemptFsm.cancel({
     payment_attempt_id: existingStarted.payment_attempt_id,
     cancelled_at: now,
     action_id: `${req.idempotency_key}:stale-cancel`,
   });
+  return true;
 }
 
 /**
@@ -197,7 +213,12 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
     }
 
     // 3b. Stale-attempt recovery (see discardStaleAttemptForOtherCart).
-    discardStaleAttemptForOtherCart(deps, session.terminal_id, req, now);
+    if (!discardStaleAttemptForOtherCart(deps, session.terminal_id, req, now)) {
+      return await Promise.resolve({
+        kind: 'refused',
+        reason: 'attempt_already_started_on_terminal',
+      });
+    }
 
     // 4. Fresh path — invoke the FSM. The FSM itself opens a SQLite
     // transaction, inserts the attempt row, and writes the outbox row.
