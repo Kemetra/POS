@@ -269,11 +269,28 @@ no cashier-only path.
   Any credential input is verified and discarded in main: it is never
   persisted, logged, echoed or placed in the outbox or audit payload.
   **Credential (RT-28 D1a, option a):** the manager re-enters their
-  identifier + password, verified through the existing manager sign-in path
-  (Clerk + Backend-Core). No manager PIN is introduced; PINs stay cashier-only.
-  The step-up authorises only this one discount. It MUST NOT replace or
-  extend the cashier's operator session. When the terminal is offline the
-  step-up cannot complete and the add is refused generically (fail closed).
+  identifier + password. No manager PIN is introduced; PINs stay cashier-only.
+  The step-up authorises only this one discount.
+  **Authentication-only verification (required):** the existing manager
+  sign-in flow MUST NOT be reused as-is. `SignInHandler.signIn` creates a
+  backend operator session (or returns `takeover_required`) and
+  `SessionManager.create` replaces the local cashier session. The step-up
+  MUST use a verification seam that:
+  1. confirms the credential and that the identity holds the `manager` or
+     `admin` role *as resolved by the backend* (Clerk metadata is not
+     authoritative for role);
+  2. creates **no** backend operator session, no takeover and no local
+     session, and leaves the cashier's operator session unchanged;
+  3. returns only the approving manager's identity for the audit record.
+
+  **Cross-repo dependency:** role resolution lives in Backend-Core, so this
+  seam needs a Backend-Core authentication-only verification contract
+  (endpoint semantics, no session side effects, rate limiting and lockout).
+  That contract is **not defined here** and MUST be approved before the
+  RT-28 Implementation issue can build the cashier step-up path. Until it
+  exists, only manager or admin sessions can apply discounts (D2).
+  When the terminal is offline the step-up cannot complete and the add is
+  refused generically (fail closed).
 - **Manager or admin session:** applies directly. The acting operator is
   recorded as the approver (D2).
 

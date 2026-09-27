@@ -110,6 +110,13 @@ The `cart.handoff` bridge handler, given a non-empty cart in state
 2. Verifies the cart is non-empty (FR-037).
 3. Verifies every line's `version` matches the client's last-known
    `version` for that line (US3-AS5).
+3a. **RT-28:** verifies every discount placeholder on the cart has a
+    non-null `attribution_operator_id`. If any does not (only pre-RT-28
+    legacy rows can), refuses with `unauthorized_discount`. No outbox row,
+    no envelope, no state change and no audit row are written. Required
+    tests: a legacy null-approver placeholder refuses handoff; the same cart
+    hands off after the placeholder is removed; an approved placeholder
+    hands off.
 4. In a single transaction:
    a. Writes a `cart_action_outbox` row with `action_kind =
       cart.handoff_to_payment` and a fresh `action_id` (UUID v4).

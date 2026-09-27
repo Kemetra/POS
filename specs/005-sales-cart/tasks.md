@@ -4,6 +4,9 @@ description: "Task list for 005-sales-cart — APPROVED, slice-organised, §A0 C
 
 # Tasks: 005-sales-cart
 
+> 🔁 **RT-28 amendment (2026-09-27): discount tasks are HISTORICAL.** T059–T062, T065, T068, T069, T072–T074 and every "below/above threshold" discount step in this file implement the superseded Q2 threshold rule: cashier below-threshold adds, a renderer-supplied approver id, manager-gated removal, and `cart.discount.above_threshold` emission. Do **not** derive implementation or regression tests from them. The replacement rule is [`spec.md`](spec.md) Amendment + FR-023 (revised), [`contracts/bridge-api.md`](contracts/bridge-api.md) and [`contracts/handoff-envelope.md`](contracts/handoff-envelope.md) step 3a. Replacement work is the RT-28 Implementation Jira item.
+
+
 **Feature:** 005-sales-cart — Sales Cart
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Plan:** [./plan.md](./plan.md) (v1.0 APPROVED 2026-05-14)
