@@ -1,5 +1,8 @@
 # Coordination — 005-sales-cart
 
+> 🔁 **RT-28 amendment (2026-09-27):** manual discounts are **manager-only** — the Q2 threshold and every "below/above threshold" rule in this file are SUPERSEDED. Canonical text: [`spec.md`](spec.md) Amendment + FR-023 (revised). New audit category `cart.discount.manager_authorized`; `cart.discount.above_threshold` is historical only. Threshold references below are kept for audit trail.
+
+
 **Feature:** 005-sales-cart
 **Plan:** [./plan.md](./plan.md) (v1.0 APPROVED 2026-05-14)
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
