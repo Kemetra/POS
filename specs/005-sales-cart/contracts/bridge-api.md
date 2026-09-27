@@ -421,8 +421,14 @@ for the envelope shape and the construction algorithm.
 
 ```text
 | { kind: 'ok', envelope: PaymentIntentEnvelope }
-| { kind: 'refused', reason: 'empty_cart' | 'stale_version' | '...' }
+| { kind: 'refused', reason: 'empty_cart' | 'stale_version' | 'unauthorized_discount' | '...' }
 ```
+
+**RT-28:** handoff MUST refuse with `unauthorized_discount` while any discount
+placeholder on the cart has `attribution_operator_id IS NULL`. Only pre-RT-28
+legacy rows can be in that state (for example, below the old 10% threshold). The
+cashier removes the placeholder (no manager needed, D4) or re-adds it with
+manager authority. Nothing is grandfathered and no data migration runs (D5).
 
 **Effects:** see handoff-envelope.md. Audit emission: `action_category =
 cart.handoff_to_payment` (sensitive per FR-026; SC-005).

@@ -80,8 +80,7 @@ one `OperatorSession`.
    mutation (FR-006).
 3. The legal state transitions (FR-005) are:
    - `empty → editing` (first line add)
-   - `editing → discount_pending_attribution` (positive manual discount requested; manager authority not yet recorded — RT-28, formerly above-threshold only)
-   - `discount_pending_attribution → editing` (manager attribution recorded)
+   - ~~`editing → discount_pending_attribution` / `discount_pending_attribution → editing`~~ *(SUPERSEDED by RT-28: unreachable. An add without verified manager authority is refused before anything is written, and a successful add is written with its approver, so the cart stays `editing`. The manager step-up prompt is pre-call renderer UI state, not a persisted cart state. The `discount_pending_attribution` value stays in the `migrations/0008` CHECK for compatibility (D5) and MUST NOT be entered.)*
    - `editing → handing_off` (handoff invocation)
    - `handing_off → frozen_handed_off` (envelope construction succeeds)
    - `handing_off → editing` (handoff refused on stale version)
@@ -184,10 +183,14 @@ Append-only history of every cart-mutating action. One row per action.
    bridge call with the same `action_id` and the same payload MUST be a
    no-op returning the original outcome; replay with a *different*
    payload MUST be refused (FR-018).
-3. **Audit emission.** The four `action_kind` values marked *sensitive*
+3. **Audit emission.** The `action_kind` values marked *sensitive*
    above MUST also emit a row into 004's `audit_events` table with the
-   five mandatory attribution attributes (FR-026; SC-005). Non-sensitive
-   actions MUST NOT emit `audit_events` rows (FR-027).
+   five mandatory attribution attributes (FR-026; SC-005). **RT-28
+   exception:** a successful `cart.discount_placeholder.add` (the outbox
+   operation) MUST also emit an `audit_events` row whose `action_category`
+   is `cart.discount.manager_authorized` (the audit category, distinct from
+   the outbox `action_kind`), carrying requester and approving manager.
+   Every other non-sensitive action MUST NOT emit `audit_events` rows (FR-027).
 4. **No PII in `payload_json`.** The cart-payload allowlist (NFR-006)
    redacts `note` content, forbidden patterns, and any credential
    fragment before serialisation.
@@ -215,9 +218,13 @@ Per-line discount placeholders (R6). Zero-or-more per line.
 1. The cart layer does NOT compute the discounted amount. The placeholder
    is *informational* until the future payment / checkout feature applies
    discount math (FR-022, FR-024).
-2. `requires_manager_attribution = true` AND `attribution_operator_id IS NULL`
+2. **[SUPERSEDED by RT-28]** ~~`requires_manager_attribution = true` AND `attribution_operator_id IS NULL`
    places the *cart* in state `discount_pending_attribution`; the cart
-   transitions back to `editing` only when the attribution is recorded.
+   transitions back to `editing` only when the attribution is recorded.~~
+   **RT-28:** every placeholder written after RT-28 carries a non-null verified
+   `attribution_operator_id`. A placeholder with `attribution_operator_id IS NULL` can only
+   be a pre-RT-28 legacy row; `cart.handoff` refuses (`unauthorized_discount`) until it is
+   removed or re-added with manager authority. No data migration (D5).
 3. **[SUPERSEDED by RT-28 — there is no threshold; every positive manual
    discount requires manager authority.]** ~~The Q2-locked threshold is **a percentage of `line_subtotal_minor`,
    applied per-line.** The specific numeric value is a tenant-configurable
