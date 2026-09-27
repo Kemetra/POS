@@ -263,11 +263,12 @@ Adds a discount placeholder to a line.
 for every placeholder with a positive magnitude.** There is no threshold and
 no cashier-only path.
 
-- **Cashier session:** the call MUST carry a manager step-up that the main
-  process verifies against a manager credential before anything is written
-  (D1). A renderer-supplied approver identifier on its own MUST be refused.
-  Any credential input is verified and discarded in main: it is never
-  persisted, logged, echoed or placed in the outbox or audit payload.
+- **Cashier session:** the call MUST carry a `manager_approval_ref` that main
+  issued after verifying the manager credential on the operator bridge (see
+  the note below). It is checked before anything is written (D1). A
+  renderer-supplied approver identifier MUST be refused. The credential is
+  verified and discarded in main, never crosses the `cart.*` bridge, and is
+  never persisted, logged, echoed or placed in the outbox or audit payload.
   **Credential (RT-28 D1a, option a):** the manager re-enters their
   identifier + password. No manager PIN is introduced; PINs stay cashier-only.
   The step-up authorises only this one discount.
@@ -308,15 +309,25 @@ no cashier-only path.
   cart_id: UUID v4,
   line_id: UUID v4,
   placeholder_kind: string,                 // opaque token (FR-024)
-  manager_step_up?: <see note>,             // required on a cashier session
+  manager_approval_ref?: opaque string,     // required on a cashier session
   idempotency_key: UUID v4,
 }
 ```
 
-*Note:* `manager_step_up` carries the manager identifier and password
-once, on input, like `bridge.operator.signIn` (004 PR-1 redaction applies).
-Its exact field shape and the verification seam are fixed by the RT-28
-Implementation issue under a §A4 bridge-security review. This contract fixes
+*Note:* **no credential ever crosses the `cart.*` bridge** (NFR-006 and the
+`src/preload/cart.ts` no-secrets contract stay unchanged). The manager
+identifier + password go only through a dedicated **operator-bridge** step-up
+call, under the same one-time credential exception and 004 PR-1 redaction
+as `bridge.operator.signIn`. Main verifies them through the
+authentication-only seam and issues `manager_approval_ref`, an opaque,
+main-held, **single-use**, short-lived handle. It is bound to the `cart_id`,
+`line_id` and the cart's tenant/branch scope, and records the approving
+manager main-side. `cart.discountPlaceholders.add` consumes it. A missing,
+expired, reused or mismatched reference is refused generically
+(`manager_attribution_required`). The renderer never learns the approver
+identity. The operator-bridge call's name and shape, and the reference
+lifetime, are fixed by the RT-28 Implementation issue under a §A4
+bridge-security review. This contract fixes
 the rule: authority is established in main, never asserted by the renderer.
 
 **Response:**
