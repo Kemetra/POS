@@ -8,6 +8,8 @@
 **Contact sheet:** `specs/005-sales-cart/visual-direction/contact-sheet.md`
 **Constitution version pinned:** v1.5.1
 
+> 🔁 **RT-28 amendment (2026-09-27):** the sign-off below predates the manager-only discount rule. Surface 6 now triggers for every positive manual discount and uses the manager's identifier + password (D1a); see `contact-sheet.md` Surface 6 and `../spec.md` FR-023 (revised). The generic-copy policy recorded here still stands.
+
 ---
 
 ## Review scope
