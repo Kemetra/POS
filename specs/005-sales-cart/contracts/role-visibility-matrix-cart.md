@@ -1,6 +1,6 @@
 # Contract: Role-Visibility Matrix — Cart (PROPOSALS)
 
-> 🔁 **RT-28 amendment (2026-09-27):** manual discounts are **manager-only** — the Q2 threshold and every "below/above threshold" rule in this file are SUPERSEDED. Canonical text: [`spec.md`](../spec.md) Amendment + FR-023 (revised). New audit category `cart.discount.manager_authorized`; `cart.discount.above_threshold` is historical only. Threshold references below are kept for audit trail.
+> 🔁 **RT-28 amendment (2026-09-27):** manual discounts are **manager-only** — the Q2 threshold and every "below/above threshold" rule in this file are SUPERSEDED. Canonical text: [`spec.md`](../spec.md) Amendment + FR-023 (revised). New audit category `cart.discount.manager_authorized`; `cart.discount.above_threshold` is historical only. Threshold references below are kept for audit trail. **The two discount rows are canonical in `specs/004-operator-session/contracts/role-visibility-matrix.md` Section 3b.**
 
 
 **Feature ID:** 005-sales-cart
@@ -100,7 +100,7 @@ with cart surfaces:
    placeholder is shown as an opaque "discount applied" pill. The future
    payments feature decides how / whether to display the magnitude.
 2. **Manager identity on the attribution prompt** — when a cashier
-   initiates an above-threshold discount or a post-handoff void, the
+   initiates a manual discount (any positive discount, RT-28) or a post-handoff void, the
    manager-attribution prompt asks for the manager's identity. **Whether
    the prompt can name the manager's display name on the cashier's
    screen is a Cashier-Forbidden Information catalogue question**, not a

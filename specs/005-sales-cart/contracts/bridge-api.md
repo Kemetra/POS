@@ -1,5 +1,8 @@
 # Contract: `cart.*` Bridge API
 
+> 🔁 **RT-28 amendment (2026-09-27):** `cart.discountPlaceholders.add` / `.remove` below are revised to the manager-only rule (spec.md Amendment + FR-023 revised). There is no threshold. `cart.discount.above_threshold` is historical only.
+
+
 **Feature ID:** 005-sales-cart
 **Plan:** [../plan.md](../plan.md)
 **Spec:** [../spec.md](../spec.md)
@@ -251,9 +254,22 @@ No audit emission (non-sensitive per FR-027).
 
 Adds a discount placeholder to a line.
 
-**Roles:** `cashier`, `manager`, `admin`. **Manager attribution required**
-when the placeholder's magnitude exceeds the Q2 tenant-configured
-threshold (percentage of `line_subtotal_minor`, per-line).
+> *Revised by RT-28 (2026-09-27, owner decisions D1–D3, D5). The former
+> threshold rule, where manager attribution was required only above the Q2
+> threshold and a renderer-supplied `attribution_operator_id` sufficed, is
+> superseded.*
+
+**Roles:** `cashier`, `manager`, `admin`. **Manager authority is required
+for every placeholder with a positive magnitude.** There is no threshold and
+no cashier-only path.
+
+- **Cashier session:** the call MUST carry a manager PIN step-up that the
+  main process verifies against a manager credential before anything is
+  written (D1). A renderer-supplied approver identifier on its own MUST be
+  refused. The PIN is verified and discarded in main: it is never persisted,
+  logged, echoed or placed in the outbox or audit payload.
+- **Manager or admin session:** applies directly. The acting operator is
+  recorded as the approver (D2).
 
 **Request:**
 
@@ -262,42 +278,50 @@ threshold (percentage of `line_subtotal_minor`, per-line).
   cart_id: UUID v4,
   line_id: UUID v4,
   placeholder_kind: string,                 // opaque token (FR-024)
-  attribution_operator_id?:                 // required if magnitude > threshold
-    Clerk-backed identity,
+  manager_step_up?: <see note>,             // required on a cashier session
   idempotency_key: UUID v4,
 }
 ```
 
+*Note:* the exact `manager_step_up` wire shape (for example, manager
+identity plus PIN input verified main-side) is defined by the RT-28
+Implementation issue under a §A4 bridge-security review. This contract fixes
+the rule: authority is established in main, never asserted by the renderer.
+
 **Response:**
 
 ```text
-| { kind: 'ok', placeholder_id: UUID v4, requires_manager_attribution: boolean }
+| { kind: 'ok', placeholder_id: UUID v4, requires_manager_attribution: true }
 | { kind: 'refused', reason: 'manager_attribution_required' | '...' }
 ```
 
-**Effects:** writes a row to `cart_line_discount_placeholders` (the
-fourth cart-introduced table per data-model.md); writes
-`cart_action_outbox` row with `action_kind =
-cart.discount_placeholder.add`. If `requires_manager_attribution` is
-true and a manager attribution is recorded, ALSO emits an `audit_events`
-row with `action_category = cart.discount.above_threshold` (sensitive
-per FR-023, FR-026).
+Refusals stay generic. They MUST NOT reveal whether a manager identity
+exists or which part of the step-up failed.
 
-The cart layer **does NOT compute the discounted amount.** Magnitude is
-classified "above threshold yes/no" by reading the tenant configuration
-at apply-time; the *value* of the discount is the future payment /
-checkout feature's responsibility.
+**Effects:** writes a row to `cart_line_discount_placeholders` with
+`requires_manager_attribution = true` and `attribution_operator_id` = the
+verified approving manager (D5: no schema change). Writes a
+`cart_action_outbox` row with `action_kind = cart.discount_placeholder.add`.
+ALSO emits an `audit_events` row with `action_category =
+cart.discount.manager_authorized` (sensitive per FR-023 revised, FR-026). The
+row carries the acting operator (requester) and the approving supervisor as
+separate attributes (004 FR-025(f)), with no credential material. The
+historical `cart.discount.above_threshold` category is never emitted.
+
+The cart layer **does NOT compute the discounted amount.** The *value* of
+the discount is the future payment / checkout feature's responsibility.
 
 ---
 
 ### `cart.discountPlaceholders.remove`
 
-Removes a discount placeholder from a line. If the placeholder originally
-required manager attribution, the remove also requires manager
-attribution (mirrors the add rule).
+Removes a discount placeholder from a line.
 
-**Roles:** `cashier`, `manager`, `admin` (manager attribution required
-for above-threshold placeholders).
+> *Revised by RT-28 (D4). The former rule "remove requires manager
+> attribution if the add did" is superseded.*
+
+**Roles:** `cashier`, `manager`, `admin`. No manager authority is needed,
+because removing a discount can only raise the total.
 
 **Request:**
 
@@ -305,8 +329,6 @@ for above-threshold placeholders).
 {
   cart_id: UUID v4,
   placeholder_id: UUID v4,
-  attribution_operator_id?:
-    Clerk-backed identity,
   idempotency_key: UUID v4,
 }
 ```
@@ -318,9 +340,10 @@ for above-threshold placeholders).
 | { kind: 'refused', reason: '...' }
 ```
 
-**Effects:** deletes the placeholder row; writes `cart_action_outbox`
-row with `action_kind = cart.discount_placeholder.remove`. Audit
-emission only if the original add required attribution.
+**Effects:** deletes the placeholder row. Writes a `cart_action_outbox` row
+with `action_kind = cart.discount_placeholder.remove` and the acting
+operator: the audited non-sensitive lifecycle record (like `cart.void`, FR-031).
+No `audit_events` row.
 
 ---
 
@@ -468,7 +491,7 @@ cover, for every handler in this contract:
 - **Frozen-cart refusal** for every mutating handler when state is `frozen_handed_off` (FR-035).
 - **Q4 merge path** for `cart.lines.add` (existing line for the same `item_ref` → merge).
 - **Note length cap** (Q1, 200 chars) and **forbidden-pattern refusal** for `cart.lines.setNote`.
-- **Manager-attribution required** for above-threshold discount placeholder add / remove and post-handoff void.
+- **Manager authority required** for every positive discount placeholder add (RT-28: manager PIN step-up verified main-side on a cashier session; a renderer-supplied approver id alone is refused) and for post-handoff void. Discount placeholder remove needs no manager (RT-28 D4).
 - **Cross-process redaction smoke** (NFR-006): `note` content, forbidden patterns, and credential fragments must NOT appear in logs / Sentry / support bundles.
 
 Coverage gate: ≥ 95 % on the bridge-side gate (NFR-004 + plan Test
