@@ -130,6 +130,20 @@ describe('capture-sale-request contract conformance (H-1, AD-SALE-CAPTURE-1)', (
     }
   });
 
+  it('RT-35: a catalogue (UUID) line carries tenantProductRef and still no internal keys', () => {
+    const tenantProductId = '0192f3a4-5b6c-7d8e-9f01-23456789abcd';
+    const first = nn(PAYLOAD.lines[0]);
+    const wire: ContractCaptureSaleRequest = toWireBody(
+      { ...PAYLOAD, lines: [{ ...first, productRef: tenantProductId }] },
+      'EGP',
+    );
+    const line = nn(wire.lines[0]) as unknown as Record<string, unknown>;
+    expect(line['tenantProductRef']).toBe(tenantProductId);
+    for (const forbidden of ['lineRef', 'productRef', 'unitPriceMinor', 'lineAmountMinor']) {
+      expect(line[forbidden]).toBeUndefined();
+    }
+  });
+
   it('value-grammar: occurredAt is RFC3339 (passes DP-2 z.string().datetime())', () => {
     const wire = toWireBody(PAYLOAD, 'EGP');
     // The exact grammar DP-2 enforces: ISO-8601 with `T` and a `Z`/offset zone.
