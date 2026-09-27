@@ -77,7 +77,7 @@ no authority to decide them.
 | `cart.lines.update` (own cart) | allowed | allowed | allowed |
 | `cart.lines.remove` (own cart) | allowed | allowed | allowed |
 | `cart.lines.setNote` (own cart) | allowed | allowed | allowed |
-| `cart.discountPlaceholders.add` any positive manual discount (own cart) — *RT-28* | prompt_required (manager step-up verified main-side; credential source pending RT-28 D1a) | allowed (recorded as approver) | allowed (recorded as approver) |
+| `cart.discountPlaceholders.add` any positive manual discount (own cart) — *RT-28* | prompt_required (manager re-enters identifier + password, verified main-side; refused offline — RT-28 D1a) | allowed (recorded as approver) | allowed (recorded as approver) |
 | `cart.discountPlaceholders.remove` (own cart) — *RT-28 D4* | allowed (audited) | allowed (audited) | allowed (audited) |
 | ~~`cart.discountPlaceholders.add` below / above threshold~~ | *superseded by RT-28 — no threshold* | | |
 | `cart.void` (own cart, pre-handoff) | allowed | allowed | allowed |
