@@ -1,5 +1,8 @@
 # Contract: Role-Visibility Matrix — Cart (PROPOSALS)
 
+> 🔁 **RT-28 amendment (2026-09-27):** manual discounts are **manager-only** — the Q2 threshold and every "below/above threshold" rule in this file are SUPERSEDED. Canonical text: [`spec.md`](../spec.md) Amendment + FR-023 (revised). New audit category `cart.discount.manager_authorized`; `cart.discount.above_threshold` is historical only. Threshold references below are kept for audit trail. **Per 004 role-visibility-matrix Section 8, the canonical rows for the two discount bridge calls land in `specs/004-operator-session/contracts/role-visibility-matrix.md` together with their bridge enforcement and tests, in the RT-28 Implementation PR — not in this docs-only reconciliation.**
+
+
 **Feature ID:** 005-sales-cart
 **Plan:** [../plan.md](../plan.md)
 **Spec:** [../spec.md](../spec.md)
@@ -74,9 +77,9 @@ no authority to decide them.
 | `cart.lines.update` (own cart) | allowed | allowed | allowed |
 | `cart.lines.remove` (own cart) | allowed | allowed | allowed |
 | `cart.lines.setNote` (own cart) | allowed | allowed | allowed |
-| `cart.discountPlaceholders.add` below threshold (own cart) | allowed | allowed | allowed |
-| `cart.discountPlaceholders.add` above threshold (own cart) | prompt_required (manager attribution) | allowed | allowed |
-| `cart.discountPlaceholders.remove` above threshold (own cart) | prompt_required (manager attribution) | allowed | allowed |
+| `cart.discountPlaceholders.add` any positive manual discount (own cart) — *RT-28* | prompt_required (manager re-enters identifier + password, verified main-side; refused offline — RT-28 D1a) | allowed (recorded as approver) | allowed (recorded as approver) |
+| `cart.discountPlaceholders.remove` (own cart) — *RT-28 D4* | allowed (audited) | allowed (audited) | allowed (audited) |
+| ~~`cart.discountPlaceholders.add` below / above threshold~~ | *superseded by RT-28 — no threshold* | | |
 | `cart.void` (own cart, pre-handoff) | allowed | allowed | allowed |
 | `cart.void` (own cart, post-handoff) | hidden + audit event on attempt | allowed | allowed |
 | `cart.void` (another cashier's cart) | hidden + audit event on attempt | allowed *(?)* | allowed *(?)* |
@@ -97,7 +100,7 @@ with cart surfaces:
    placeholder is shown as an opaque "discount applied" pill. The future
    payments feature decides how / whether to display the magnitude.
 2. **Manager identity on the attribution prompt** — when a cashier
-   initiates an above-threshold discount or a post-handoff void, the
+   initiates a manual discount (any positive discount, RT-28) or a post-handoff void, the
    manager-attribution prompt asks for the manager's identity. **Whether
    the prompt can name the manager's display name on the cashier's
    screen is a Cashier-Forbidden Information catalogue question**, not a

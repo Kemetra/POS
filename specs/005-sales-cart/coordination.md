@@ -1,5 +1,8 @@
 # Coordination — 005-sales-cart
 
+> 🔁 **RT-28 amendment (2026-09-27):** manual discounts are **manager-only** — the Q2 threshold and every "below/above threshold" rule in this file are SUPERSEDED. Canonical text: [`spec.md`](spec.md) Amendment + FR-023 (revised). New audit category `cart.discount.manager_authorized`; `cart.discount.above_threshold` is historical only. Threshold references below are kept for audit trail.
+
+
 **Feature:** 005-sales-cart
 **Plan:** [./plan.md](./plan.md) (v1.0 APPROVED 2026-05-14)
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
@@ -519,6 +522,11 @@ the corresponding gate clearing:
   gate; reviewer assigned at production-rollout PR open time).
 - ❌ No backend / Data-Pulse-2 changes for 005 (cart drafts are
   local-only; no new backend endpoints in 005's scope).
+  **RT-28 exception (2026-09-27):** manager-only discounts add two
+  Backend-Core dependencies that gate the RT-28 Implementation issue:
+  (1) an authentication-only manager verification contract that creates
+  no session, and (2) audit-catalogue and OpenAPI acceptance of
+  `cart.discount.manager_authorized`. Neither is defined in this repo.
 - ❌ No payments / receipts / inventory / reports / analytics work begun.
 - ✅ S0–S4 complete and merged to main (T001–T091 done).
 - ✅ S5-a complete and merged to main (T092–T095 done via PR #166).

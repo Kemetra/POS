@@ -5,6 +5,9 @@
 **Reviewer:** Ahmed Shaaban
 **Review date:** 2026-05-14
 **Status:** Signed off — see `review-record.md`
+
+> 🔁 **RT-28 amendment (2026-09-27):** Surface 6 now triggers for **every positive manual discount** (no threshold), and its credential is the manager's **identifier + password** (D1a), verified main-side by an authentication-only seam that creates no session. Offline the approval cannot complete, so the discount is refused. See `../spec.md` Amendment + FR-023 (revised). The generic-copy / no-manager-identity policy is unchanged.
+
 **Constitution version pinned:** v1.5.1
 **Impeccable brief confirmed:** 2026-05-14 (shape brief approved; corrections OQ-1/OQ-4 locked)
 
@@ -257,8 +260,9 @@ button (uses `--color-danger` fill per DESIGN.md button-destructive).
 
 ## Surface 6 — Manager-attribution prompt
 
-**Trigger:** cashier initiates an above-threshold discount or a
-post-handoff void. A manager must credential in to approve.
+**Trigger:** cashier initiates **any positive manual discount** (RT-28 —
+formerly above-threshold only) or a post-handoff void. A manager must
+credential in to approve.
 
 > **Policy (locked in S0):** The manager-attribution prompt shows
 > **generic copy only**. The manager's display name, identity, role
@@ -278,8 +282,8 @@ post-handoff void. A manager must credential in to approve.
 │  This action needs a manager.           │  ← generic copy; no factor detail
 │                                         │
 │  Manager ID:  [___________________]     │  ← opaque identifier input
-│  Credential:  [___________________]     │  ← Clerk-backed credential (exact
-│                                         │    input type: TBD by S3 wiring)
+│  Credential:  [___________________]     │  ← manager password (RT-28 D1a;
+│                                         │    masked, never echoed or logged)
 │  [Cancel]          [Approve]            │
 │           ← both buttons ≥44×44 px      │
 └─────────────────────────────────────────┘
@@ -290,8 +294,11 @@ post-handoff void. A manager must credential in to approve.
 - Manager identity is **never displayed on the cashier screen** —
   not the display name, not the role, not any identifying label.
   The prompt is generically worded regardless of which manager signs in.
-- The credential input type (password / PIN / other Clerk factor) is
-  wired in S3; the layout is factor-agnostic.
+- The credential is the manager's **identifier + password** (RT-28 D1a).
+  It is verified main-side by an authentication-only seam that creates no
+  backend or local session and leaves the cashier session unchanged.
+  Offline the approval cannot complete; the prompt shows a generic
+  "approval unavailable" outcome and the discount is not applied.
 - On cancel: action is abandoned; no placeholder applied, no audit event.
 - On approve: manager attribution is recorded by the bridge; the audit
   record carries both the cashier (requester) and the manager (approver)

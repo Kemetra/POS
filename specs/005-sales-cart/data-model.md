@@ -1,5 +1,8 @@
 # Data Model: Sales Cart (Phase 1)
 
+> 🔁 **RT-28 amendment (2026-09-27):** manual discounts are **manager-only** — the Q2 threshold and every "below/above threshold" rule in this file are SUPERSEDED. Canonical text: [`spec.md`](spec.md) Amendment + FR-023 (revised). New audit category `cart.discount.manager_authorized`; `cart.discount.above_threshold` is historical only. Threshold references below are kept for audit trail.
+
+
 **Feature ID:** 005-sales-cart
 **Plan:** [./plan.md](./plan.md)
 **Spec:** [./spec.md](./spec.md)
@@ -37,7 +40,8 @@ catalogue (FR-026 + Q5) are:
 
 - `cart.handoff_to_payment`
 - `cart.cancel.post_handoff`
-- `cart.discount.above_threshold`
+- `cart.discount.manager_authorized` *(RT-28 — every positive manual discount)*
+- `cart.discount.above_threshold` *(historical only — superseded by RT-28; not emitted for new discounts)*
 - `cart.discarded_on_session_end` *(Q5 LOCKED 2026-05-14)*
 
 ---
@@ -76,8 +80,7 @@ one `OperatorSession`.
    mutation (FR-006).
 3. The legal state transitions (FR-005) are:
    - `empty → editing` (first line add)
-   - `editing → discount_pending_attribution` (above-threshold discount applied; manager not yet attributed)
-   - `discount_pending_attribution → editing` (manager attribution recorded)
+   - ~~`editing → discount_pending_attribution` / `discount_pending_attribution → editing`~~ *(SUPERSEDED by RT-28: unreachable. An add without verified manager authority is refused before anything is written, and a successful add is written with its approver, so the cart stays `editing`. The manager step-up prompt is pre-call renderer UI state, not a persisted cart state. The `discount_pending_attribution` value stays in the `migrations/0008` CHECK for compatibility (D5) and MUST NOT be entered.)*
    - `editing → handing_off` (handoff invocation)
    - `handing_off → frozen_handed_off` (envelope construction succeeds)
    - `handing_off → editing` (handoff refused on stale version)
@@ -168,7 +171,7 @@ Append-only history of every cart-mutating action. One row per action.
 - `cart.void` *(cashier pre-handoff void; non-sensitive lifecycle event per FR-031)*
 - `cart.handoff_to_payment` *(sensitive; emits audit per FR-026)*
 - `cart.cancel.post_handoff` *(sensitive; emits audit; manager-attributed per FR-033)*
-- `cart.discount.above_threshold` *(sensitive; emits audit; manager-attributed per FR-023)*
+- `cart.discount.above_threshold` *(sensitive; emits audit; manager-attributed per FR-023)* *(value retained to match the `migrations/0009` CHECK; RT-28's new `cart.discount.manager_authorized` is an `audit_events.action_category` only, NOT an outbox `action_kind` — the outbox row for a discount stays `cart.discount_placeholder.add`)*
 - `cart.discarded_on_session_end` *(sensitive; emits audit; Q5 LOCKED 2026-05-14)*
 
 **Invariants:**
@@ -180,10 +183,14 @@ Append-only history of every cart-mutating action. One row per action.
    bridge call with the same `action_id` and the same payload MUST be a
    no-op returning the original outcome; replay with a *different*
    payload MUST be refused (FR-018).
-3. **Audit emission.** The four `action_kind` values marked *sensitive*
+3. **Audit emission.** The `action_kind` values marked *sensitive*
    above MUST also emit a row into 004's `audit_events` table with the
-   five mandatory attribution attributes (FR-026; SC-005). Non-sensitive
-   actions MUST NOT emit `audit_events` rows (FR-027).
+   five mandatory attribution attributes (FR-026; SC-005). **RT-28
+   exception:** a successful `cart.discount_placeholder.add` (the outbox
+   operation) MUST also emit an `audit_events` row whose `action_category`
+   is `cart.discount.manager_authorized` (the audit category, distinct from
+   the outbox `action_kind`), carrying requester and approving manager.
+   Every other non-sensitive action MUST NOT emit `audit_events` rows (FR-027).
 4. **No PII in `payload_json`.** The cart-payload allowlist (NFR-006)
    redacts `note` content, forbidden patterns, and any credential
    fragment before serialisation.
@@ -202,8 +209,8 @@ Per-line discount placeholders (R6). Zero-or-more per line.
 | `cart_id` | UUID v4 (FK → `carts.cart_id`) | |
 | `line_id` | UUID v4 (FK → `cart_lines.line_id`) | |
 | `placeholder_kind` | string | Opaque token whose catalogue is owned by the future payment / checkout feature (FR-024). 005 does NOT interpret the token's magnitude. |
-| `requires_manager_attribution` | boolean | True when the placeholder's magnitude exceeds the Q2 percentage threshold. Set by the bridge handler at apply-time. |
-| `attribution_operator_id` | Clerk-backed identity (string), nullable | Set when `requires_manager_attribution = true` AND a manager has approved. |
+| `requires_manager_attribution` | boolean | **RT-28:** always true for a positive manual discount (no threshold). Column kept unchanged (D5 — no schema change). Formerly: true when the magnitude exceeded the Q2 threshold. |
+| `attribution_operator_id` | Clerk-backed identity (string), nullable | The approving manager, set only after manager authority is established main-side (RT-28 D1/D1a: manager identifier + password step-up through an authentication-only, non-session-creating verification seam) — or the acting manager/admin themselves (D2). Never accepted from the renderer as proof of authority. |
 | `created_at` | UTC timestamp | |
 
 **Invariants:**
@@ -211,14 +218,22 @@ Per-line discount placeholders (R6). Zero-or-more per line.
 1. The cart layer does NOT compute the discounted amount. The placeholder
    is *informational* until the future payment / checkout feature applies
    discount math (FR-022, FR-024).
-2. `requires_manager_attribution = true` AND `attribution_operator_id IS NULL`
+2. **[SUPERSEDED by RT-28]** ~~`requires_manager_attribution = true` AND `attribution_operator_id IS NULL`
    places the *cart* in state `discount_pending_attribution`; the cart
-   transitions back to `editing` only when the attribution is recorded.
-3. The Q2-locked threshold is **a percentage of `line_subtotal_minor`,
+   transitions back to `editing` only when the attribution is recorded.~~
+   **RT-28:** every placeholder written by RT-28 enforcement carries a verified
+   `attribution_operator_id`. Every placeholder written before it is untrusted,
+   *whatever* its `attribution_operator_id` (the old handler accepted renderer-supplied
+   ids). `cart.handoff` refuses (`unauthorized_discount`) while any untrusted row remains.
+   The mechanism for telling trusted rows apart is decided, with authorization, in the
+   RT-28 Implementation issue (recommended: audited upgrade-time removal of placeholders
+   from non-frozen carts; alternative: a provenance marker, which is a schema change).
+3. **[SUPERSEDED by RT-28 — there is no threshold; every positive manual
+   discount requires manager authority.]** ~~The Q2-locked threshold is **a percentage of `line_subtotal_minor`,
    applied per-line.** The specific numeric value is a tenant-configurable
    parameter owned by the future payment / checkout feature's discount-
    catalogue; this spec does not set that value. The bridge handler reads
-   the tenant configuration at apply-time.
+   the tenant configuration at apply-time.~~
 
 ---
 
