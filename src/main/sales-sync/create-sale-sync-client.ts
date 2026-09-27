@@ -133,9 +133,17 @@ export interface CreateSaleSyncClientDeps {
 /**
  * The binding DP2 `CaptureSaleLine` wire shape (deployed ref 6975f67). Required:
  * lineName, unitPrice, currencyCode, quantity, lineAmount, unit. Optional
- * taxAmount / tenantProductRef are OMITTED — the internal model carries no
- * per-line tax (tax is header-level) and no uuid product ref, and the strict
- * `additionalProperties: false` boundary rejects unknown keys.
+ * `taxAmount` is OMITTED — the internal model carries no per-line tax (tax is
+ * header-level) — and the strict `additionalProperties: false` boundary rejects
+ * unknown keys.
+ *
+ * Optional `tenantProductRef` (RT-30 / RT-35) is the line's Backend-Core Tenant
+ * Catalog lineage. For a catalogue line the frozen `item_ref` (internal
+ * `productRef`) IS `tenant_products.id` — read-down `product_id` → local
+ * `products.product_id` → cart `item_ref` → `lines_json`. It is emitted only when
+ * `productRef` has the UUID shape DP-2 accepts; otherwise the key is omitted
+ * (ad-hoc lineage) so the sale is still captured and ERP posting reports an
+ * explicit `unmapped_item`, rather than a 400 dead-lettering the sale.
  */
 interface CaptureSaleLineWire {
   lineName: string;
@@ -144,6 +152,18 @@ interface CaptureSaleLineWire {
   quantity: string;
   lineAmount: string;
   unit: string;
+  tenantProductRef?: string;
+}
+
+/**
+ * Mirrors DP-2's `z.string().uuid()` (zod 3.23.8) EXACTLY — 8-4-4-4-12 hex,
+ * case-insensitive, no version/variant check. Stricter would silently drop
+ * lineage DP-2 accepts; looser would 400 → dead-letter the sale.
+ */
+const DP2_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function tenantProductRefFor(productRef: string): { tenantProductRef?: string } {
+  return DP2_UUID_PATTERN.test(productRef) ? { tenantProductRef: productRef } : {};
 }
 
 /**
@@ -194,6 +214,7 @@ export function toWireBody(payload: CaptureSalePayload, currencyCode: string): C
       quantity: String(line.quantity),
       lineAmount: minorUnitsToDecimalString(line.lineAmountMinor, exponent),
       unit: DEFAULT_LINE_UNIT,
+      ...tenantProductRefFor(line.productRef),
     })),
   };
 }

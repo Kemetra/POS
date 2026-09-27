@@ -153,6 +153,55 @@ describe('toWireBody — internal → DP2 CaptureSaleRequest wire shape', () => 
     }
   });
 
+  // RT-35 (RT-30 lineage contract): the frozen `item_ref` IS the Backend-Core
+  // `tenant_products.id` for catalogue lines. It rides the wire as the optional
+  // `tenantProductRef` ONLY when it has the UUID shape DP-2 accepts
+  // (`z.string().uuid()`); anything else is omitted (ad-hoc lineage) so the sale
+  // is still captured instead of 400 → dead-lettered.
+  const TENANT_PRODUCT_ID = '0192f3a4-5b6c-7d8e-9f01-23456789abcd';
+  const withProductRefs = (...refs: string[]): CaptureSalePayload => {
+    const base = PAYLOAD.lines[0];
+    if (base === undefined) throw new Error('test: fixture has no lines');
+    return {
+      ...PAYLOAD,
+      lines: refs.map((productRef, i) => ({ ...base, lineRef: `l${String(i)}`, productRef })),
+    };
+  };
+
+  it('emits tenantProductRef from a UUID productRef (catalogue lineage)', () => {
+    const wire = toWireBody(withProductRefs(TENANT_PRODUCT_ID), 'EGP');
+    expect(wire.lines[0]?.tenantProductRef).toBe(TENANT_PRODUCT_ID);
+  });
+
+  it('accepts an upper-case UUID exactly as DP-2 zod does (case-insensitive)', () => {
+    const upper = TENANT_PRODUCT_ID.toUpperCase();
+    const wire = toWireBody(withProductRefs(upper), 'EGP');
+    expect(wire.lines[0]?.tenantProductRef).toBe(upper);
+  });
+
+  it('omits the tenantProductRef KEY for a non-UUID or empty productRef (never null / "")', () => {
+    const wire = toWireBody(
+      withProductRefs('dev-p-001', 'SKU-PARA-500', '', `${TENANT_PRODUCT_ID}x`),
+      'EGP',
+    );
+    for (const line of wire.lines) {
+      expect('tenantProductRef' in line).toBe(false);
+    }
+  });
+
+  it('decides tenantProductRef per line on a mixed sale', () => {
+    const wire = toWireBody(withProductRefs(TENANT_PRODUCT_ID, 'dev-p-002'), 'EGP');
+    expect(wire.lines[0]?.tenantProductRef).toBe(TENANT_PRODUCT_ID);
+    expect('tenantProductRef' in (wire.lines[1] ?? {})).toBe(false);
+  });
+
+  it('is byte-stable across retries of the same sale', () => {
+    const payload = withProductRefs(TENANT_PRODUCT_ID, 'dev-p-002');
+    expect(JSON.stringify(toWireBody(payload, 'EGP'))).toBe(
+      JSON.stringify(toWireBody(payload, 'EGP')),
+    );
+  });
+
   it('throws when a money field is not a safe integer (corrupted upstream value)', () => {
     const bad: CaptureSalePayload = { ...PAYLOAD, totalMinor: Number.MAX_SAFE_INTEGER + 1 };
     expect(() => toWireBody(bad, 'EGP')).toThrow();
