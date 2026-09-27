@@ -263,11 +263,15 @@ Adds a discount placeholder to a line.
 for every placeholder with a positive magnitude.** There is no threshold and
 no cashier-only path.
 
-- **Cashier session:** the call MUST carry a manager PIN step-up that the
-  main process verifies against a manager credential before anything is
-  written (D1). A renderer-supplied approver identifier on its own MUST be
-  refused. The PIN is verified and discarded in main: it is never persisted,
-  logged, echoed or placed in the outbox or audit payload.
+- **Cashier session:** the call MUST carry a manager step-up that the main
+  process verifies against a manager credential before anything is written
+  (D1). A renderer-supplied approver identifier on its own MUST be refused.
+  Any credential input is verified and discarded in main: it is never
+  persisted, logged, echoed or placed in the outbox or audit payload.
+  **Open (RT-28 D1a):** POS has no manager PIN today. Managers
+  authenticate with identifier + password via Clerk (online only), and PINs
+  are cashier-only (`cashier_pin_records`). The credential source MUST be
+  decided before this call is implemented.
 - **Manager or admin session:** applies directly. The acting operator is
   recorded as the approver (D2).
 
@@ -283,9 +287,9 @@ no cashier-only path.
 }
 ```
 
-*Note:* the exact `manager_step_up` wire shape (for example, manager
-identity plus PIN input verified main-side) is defined by the RT-28
-Implementation issue under a §A4 bridge-security review. This contract fixes
+*Note:* the `manager_step_up` wire shape follows the D1a credential
+decision and is fixed by the RT-28 Implementation issue under a §A4
+bridge-security review. This contract fixes
 the rule: authority is established in main, never asserted by the renderer.
 
 **Response:**
@@ -491,7 +495,7 @@ cover, for every handler in this contract:
 - **Frozen-cart refusal** for every mutating handler when state is `frozen_handed_off` (FR-035).
 - **Q4 merge path** for `cart.lines.add` (existing line for the same `item_ref` → merge).
 - **Note length cap** (Q1, 200 chars) and **forbidden-pattern refusal** for `cart.lines.setNote`.
-- **Manager authority required** for every positive discount placeholder add (RT-28: manager PIN step-up verified main-side on a cashier session; a renderer-supplied approver id alone is refused) and for post-handoff void. Discount placeholder remove needs no manager (RT-28 D4).
+- **Manager authority required** for every positive discount placeholder add (RT-28: manager step-up verified main-side on a cashier session, credential per D1a; a renderer-supplied approver id alone is refused) and for post-handoff void. Discount placeholder remove needs no manager (RT-28 D4).
 - **Cross-process redaction smoke** (NFR-006): `note` content, forbidden patterns, and credential fragments must NOT appear in logs / Sentry / support bundles.
 
 Coverage gate: ≥ 95 % on the bridge-side gate (NFR-004 + plan Test

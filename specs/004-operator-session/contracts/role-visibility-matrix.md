@@ -92,24 +92,6 @@ deep-link, route-restoration, refresh, search, quick-actions, tab restore.
 
 ---
 
-## Section 3b — 005 cart discount authority (RT-28)
-
-Added by RT-28 (2026-09-27, owner decision: manager-only manual discount;
-spec 005 FR-023 revised). These are the canonical rows for the two discount
-bridge calls. Other 005 cart calls are not yet canonicalised here; they stay
-proposals in `specs/005-sales-cart/contracts/role-visibility-matrix-cart.md`.
-
-| Surface | Route / call | `cashier` | `manager` | `admin` | Notes |
-|:--|:--|:--:|:--:|:--:|:--|
-| **Add manual discount placeholder** | `bridge.cart.discountPlaceholders.add` | ✅ *(manager PIN step-up required)* | ✅ | ✅ | Every positive discount needs manager authority. There is no threshold. A cashier call without a main-side-verified manager PIN step-up is refused generically (`manager_attribution_required`), and a renderer-supplied approver id alone is refused. A manager or admin session applies directly and is recorded as approver. Emits `cart.discount.manager_authorized`. |
-| **Remove discount placeholder** | `bridge.cart.discountPlaceholders.remove` | ✅ | ✅ | ✅ | No manager authority needed (RT-28 D4). Recorded as a non-sensitive lifecycle action in the cart outbox. |
-
-Per Section 8, the matching bridge enforcement and tests land with the
-RT-28 Implementation issue. Until then, `main` still enforces the
-superseded 10% threshold in `cart-bridge.ts`.
-
----
-
 ## Section 4 — Cashier-Forbidden Information catalogue (FR-015 — normative restatement)
 
 These are the *information items* (not routes) that MUST NOT be visible on

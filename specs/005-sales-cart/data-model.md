@@ -172,8 +172,7 @@ Append-only history of every cart-mutating action. One row per action.
 - `cart.void` *(cashier pre-handoff void; non-sensitive lifecycle event per FR-031)*
 - `cart.handoff_to_payment` *(sensitive; emits audit per FR-026)*
 - `cart.cancel.post_handoff` *(sensitive; emits audit; manager-attributed per FR-033)*
-- `cart.discount.manager_authorized` *(sensitive; emits audit; manager-authorized per FR-023 as revised by RT-28)*
-- `cart.discount.above_threshold` *(historical only — superseded by RT-28)*
+- `cart.discount.above_threshold` *(sensitive; emits audit; manager-attributed per FR-023)* *(value retained to match the `migrations/0009` CHECK; RT-28's new `cart.discount.manager_authorized` is an `audit_events.action_category` only, NOT an outbox `action_kind` — the outbox row for a discount stays `cart.discount_placeholder.add`)*
 - `cart.discarded_on_session_end` *(sensitive; emits audit; Q5 LOCKED 2026-05-14)*
 
 **Invariants:**
@@ -208,7 +207,7 @@ Per-line discount placeholders (R6). Zero-or-more per line.
 | `line_id` | UUID v4 (FK → `cart_lines.line_id`) | |
 | `placeholder_kind` | string | Opaque token whose catalogue is owned by the future payment / checkout feature (FR-024). 005 does NOT interpret the token's magnitude. |
 | `requires_manager_attribution` | boolean | **RT-28:** always true for a positive manual discount (no threshold). Column kept unchanged (D5 — no schema change). Formerly: true when the magnitude exceeded the Q2 threshold. |
-| `attribution_operator_id` | Clerk-backed identity (string), nullable | The approving manager, set only after manager authority is established main-side (RT-28 D1) — or the acting manager/admin themselves (D2). Never accepted from the renderer as proof of authority. |
+| `attribution_operator_id` | Clerk-backed identity (string), nullable | The approving manager, set only after manager authority is established main-side (RT-28 D1; credential source pending D1a) — or the acting manager/admin themselves (D2). Never accepted from the renderer as proof of authority. |
 | `created_at` | UTC timestamp | |
 
 **Invariants:**

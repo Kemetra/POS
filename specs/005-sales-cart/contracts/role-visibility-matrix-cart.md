@@ -1,6 +1,6 @@
 # Contract: Role-Visibility Matrix — Cart (PROPOSALS)
 
-> 🔁 **RT-28 amendment (2026-09-27):** manual discounts are **manager-only** — the Q2 threshold and every "below/above threshold" rule in this file are SUPERSEDED. Canonical text: [`spec.md`](../spec.md) Amendment + FR-023 (revised). New audit category `cart.discount.manager_authorized`; `cart.discount.above_threshold` is historical only. Threshold references below are kept for audit trail. **The two discount rows are canonical in `specs/004-operator-session/contracts/role-visibility-matrix.md` Section 3b.**
+> 🔁 **RT-28 amendment (2026-09-27):** manual discounts are **manager-only** — the Q2 threshold and every "below/above threshold" rule in this file are SUPERSEDED. Canonical text: [`spec.md`](../spec.md) Amendment + FR-023 (revised). New audit category `cart.discount.manager_authorized`; `cart.discount.above_threshold` is historical only. Threshold references below are kept for audit trail. **Per 004 role-visibility-matrix Section 8, the canonical rows for the two discount bridge calls land in `specs/004-operator-session/contracts/role-visibility-matrix.md` together with their bridge enforcement and tests, in the RT-28 Implementation PR — not in this docs-only reconciliation.**
 
 
 **Feature ID:** 005-sales-cart
@@ -77,7 +77,7 @@ no authority to decide them.
 | `cart.lines.update` (own cart) | allowed | allowed | allowed |
 | `cart.lines.remove` (own cart) | allowed | allowed | allowed |
 | `cart.lines.setNote` (own cart) | allowed | allowed | allowed |
-| `cart.discountPlaceholders.add` any positive manual discount (own cart) — *RT-28* | prompt_required (manager PIN step-up, verified main-side) | allowed (recorded as approver) | allowed (recorded as approver) |
+| `cart.discountPlaceholders.add` any positive manual discount (own cart) — *RT-28* | prompt_required (manager step-up verified main-side; credential source pending RT-28 D1a) | allowed (recorded as approver) | allowed (recorded as approver) |
 | `cart.discountPlaceholders.remove` (own cart) — *RT-28 D4* | allowed (audited) | allowed (audited) | allowed (audited) |
 | ~~`cart.discountPlaceholders.add` below / above threshold~~ | *superseded by RT-28 — no threshold* | | |
 | `cart.void` (own cart, pre-handoff) | allowed | allowed | allowed |
