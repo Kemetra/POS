@@ -119,6 +119,15 @@ The `cart.handoff` bridge handler, given a non-empty cart in state
     null approver refuses; a legacy placeholder with a non-null
     (renderer-asserted) approver refuses; the same cart hands off after
     removal; an RT-28-authorised placeholder hands off.
+3b. **RT-28, carts already frozen before the upgrade:** step 3a only runs on a
+    new handoff. An unpaid cart already in `frozen_handed_off` whose persisted
+    envelope contains any untrusted (pre-RT-28) placeholder MUST NOT be
+    payable. Payment eligibility (006, `cart-payment-eligibility.ts`) MUST
+    refuse it. Because envelopes are immutable, the recovery is the existing
+    manager-attributed post-handoff cancel (FR-033), then a new cart. Required
+    test: a pre-upgrade frozen envelope with a legacy placeholder is refused
+    by payment eligibility. This is a 005→006 consumer rule for the RT-28
+    Implementation issue.
 4. In a single transaction:
    a. Writes a `cart_action_outbox` row with `action_kind =
       cart.handoff_to_payment` and a fresh `action_id` (UUID v4).

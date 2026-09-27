@@ -320,10 +320,15 @@ identifier + password go only through a dedicated **operator-bridge** step-up
 call, under the same one-time credential exception and 004 PR-1 redaction
 as `bridge.operator.signIn`. Main verifies them through the
 authentication-only seam and issues `manager_approval_ref`, an opaque,
-main-held, **single-use**, short-lived handle. It is bound to the `cart_id`,
-`line_id` and the cart's tenant/branch scope, and records the approving
-manager main-side. `cart.discountPlaceholders.add` consumes it. A missing,
-expired, reused or mismatched reference is refused generically
+main-held, **single-use**, short-lived handle. It is bound to the **complete
+approved intent**: `cart_id`, `line_id`, `placeholder_kind`, the add's
+`idempotency_key` and the line's current `version`, plus the cart's
+tenant/branch scope. It records the approving manager main-side. The step-up
+call states that intent before approval, so the manager approves one specific
+discount. `cart.discountPlaceholders.add` consumes it. A missing,
+expired or reused reference, or one whose bound intent does not match the add
+request field-for-field (for example a different `placeholder_kind`), is
+refused generically
 (`manager_attribution_required`). The renderer never learns the approver
 identity. The operator-bridge call's name and shape, and the reference
 lifetime, are fixed by the RT-28 Implementation issue under a §A4
