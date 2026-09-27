@@ -281,7 +281,14 @@ no cashier-only path.
      authoritative for role);
   2. creates **no** backend operator session, no takeover and no local
      session, and leaves the cashier's operator session unchanged;
-  3. returns only the approving manager's identity for the audit record.
+  3. **binds the approver to the cart's scope:** the approving operator
+     MUST be authorised for the cart's `tenant_id` and `branch_id` (004's
+     branch-scoped supervisor authority). Either the backend seam enforces
+     this against the scope it is given, or it returns authoritative scope
+     data that main compares before applying the discount. A valid manager
+     from another tenant or branch MUST be refused generically;
+  4. returns only the approving manager's identity (and, if used, the scope
+     data for that comparison) for the audit record.
 
   **Cross-repo dependency:** role resolution lives in Backend-Core, so this
   seam needs a Backend-Core authentication-only verification contract
