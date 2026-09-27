@@ -325,8 +325,11 @@ the primary confirm button (uses `--color-primary` fill).
   payments feature's responsibility (FR-024). 005 shows only
   presence/absence of the placeholder.
 - Remove (×) button: visible pre-handoff; ≥ 44 × 44 px.
-- If the placeholder required manager attribution to apply: removing it
-  also requires manager attribution. The remove tap triggers Surface 6.
+- **RT-28 (D4):** removing a discount needs **no** manager approval for any
+  role; the remove tap removes the placeholder directly and never triggers
+  Surface 6. ~~If the placeholder required manager attribution to apply:
+  removing it also requires manager attribution. The remove tap triggers
+  Surface 6.~~
   Post-handoff: row is read-only; remove button absent.
 
 ---

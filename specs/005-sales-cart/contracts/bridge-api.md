@@ -325,7 +325,11 @@ approved intent**: `cart_id`, `line_id`, `placeholder_kind`, the add's
 `idempotency_key` and the line's current `version`, plus the cart's
 tenant/branch scope. It records the approving manager main-side. The step-up
 call states that intent before approval, so the manager approves one specific
-discount. `cart.discountPlaceholders.add` consumes it. A missing,
+discount. `cart.discountPlaceholders.add` consumes it. **Order of checks:** the outbox idempotency replay check runs **first**. An
+exact replay (same `idempotency_key` and payload) of an add that already
+committed returns the original outcome and does not re-validate, re-consume or
+reject its already-consumed reference, so a lost response never triggers a
+second approval. Only for a new add is the reference then validated: a missing,
 expired or reused reference, or one whose bound intent does not match the add
 request field-for-field (for example a different `placeholder_kind`), is
 refused generically
