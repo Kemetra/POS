@@ -221,10 +221,13 @@ Per-line discount placeholders (R6). Zero-or-more per line.
 2. **[SUPERSEDED by RT-28]** ~~`requires_manager_attribution = true` AND `attribution_operator_id IS NULL`
    places the *cart* in state `discount_pending_attribution`; the cart
    transitions back to `editing` only when the attribution is recorded.~~
-   **RT-28:** every placeholder written after RT-28 carries a non-null verified
-   `attribution_operator_id`. A placeholder with `attribution_operator_id IS NULL` can only
-   be a pre-RT-28 legacy row; `cart.handoff` refuses (`unauthorized_discount`) until it is
-   removed or re-added with manager authority. No data migration (D5).
+   **RT-28:** every placeholder written by RT-28 enforcement carries a verified
+   `attribution_operator_id`. Every placeholder written before it is untrusted,
+   *whatever* its `attribution_operator_id` (the old handler accepted renderer-supplied
+   ids). `cart.handoff` refuses (`unauthorized_discount`) while any untrusted row remains.
+   The mechanism for telling trusted rows apart is decided, with authorization, in the
+   RT-28 Implementation issue (recommended: audited upgrade-time removal of placeholders
+   from non-frozen carts; alternative: a provenance marker, which is a schema change).
 3. **[SUPERSEDED by RT-28 — there is no threshold; every positive manual
    discount requires manager authority.]** ~~The Q2-locked threshold is **a percentage of `line_subtotal_minor`,
    applied per-line.** The specific numeric value is a tenant-configurable

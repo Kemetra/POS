@@ -441,11 +441,12 @@ for the envelope shape and the construction algorithm.
 | { kind: 'refused', reason: 'empty_cart' | 'stale_version' | 'unauthorized_discount' | '...' }
 ```
 
-**RT-28:** handoff MUST refuse with `unauthorized_discount` while any discount
-placeholder on the cart has `attribution_operator_id IS NULL`. Only pre-RT-28
-legacy rows can be in that state (for example, below the old 10% threshold). The
-cashier removes the placeholder (no manager needed, D4) or re-adds it with
-manager authority. Nothing is grandfathered and no data migration runs (D5).
+**RT-28:** handoff MUST refuse with `unauthorized_discount` while the cart holds any
+untrusted discount placeholder: every placeholder written before RT-28 enforcement,
+whatever its `attribution_operator_id` (the old handler accepted renderer-supplied
+ids). The cashier removes it (no manager needed, D4) or re-adds it with manager
+authority. How trusted rows are told apart is decided, with authorization, in the
+RT-28 Implementation issue (see spec.md FR-023).
 
 **Effects:** see handoff-envelope.md. Audit emission: `action_category =
 cart.handoff_to_payment` (sensitive per FR-026; SC-005).
