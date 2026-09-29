@@ -21,7 +21,7 @@
   <a href="src/renderer"><img alt="React 19" src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=111827"></a>
   <a href="vite.config.ts"><img alt="Vite 8" src="https://img.shields.io/badge/Vite-8-646cff?style=flat-square&logo=vite&logoColor=white"></a>
   <a href="tailwind.config.ts"><img alt="Tailwind 4" src="https://img.shields.io/badge/Tailwind-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white"></a>
-  <a href="docs/assets/badges/loc.svg"><img alt="LOC" src="docs/assets/badges/loc.svg"></a>
+  <a href="https://github.com/Kemetra/POS/blob/badges/loc.svg"><img alt="LOC" src="https://raw.githubusercontent.com/Kemetra/POS/badges/loc.svg"></a>
 </p>
 
 <p align="center">
