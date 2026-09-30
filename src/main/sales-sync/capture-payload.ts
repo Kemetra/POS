@@ -100,7 +100,35 @@ const TENDER_METHOD: Readonly<Record<string, CaptureSaleTender['method']>> = {
  * accept date-only, zone-less (terminal-local) and locale formats, turning the gate on
  * for an unintended cutoff.
  */
-const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
+const ISO_INSTANT =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-](\d{2}):(\d{2}))$/;
+
+/**
+ * `Date.parse` silently rolls calendar-invalid fields over (Feb 30 -> Mar 2), so check
+ * each field is in range before trusting it.
+ */
+function isCalendarValid(m: RegExpExecArray): boolean {
+  const [year, month, day, hour, minute, second] = m.slice(1, 7).map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const offsetOk = m[7] === undefined || (Number(m[7]) <= 23 && Number(m[8]) <= 59);
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    offsetOk
+  );
+}
 
 /**
  * Parse `POS_PULSE_FEATURE_SALE_TENDERS_SINCE`. Unset, blank, not an explicit-zone ISO
@@ -109,7 +137,8 @@ const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2
  */
 export function parseTendersSince(raw: string | undefined): string | null {
   const value = raw?.trim() ?? '';
-  if (!ISO_INSTANT.test(value)) return null;
+  const match = ISO_INSTANT.exec(value);
+  if (match === null || !isCalendarValid(match)) return null;
   const ms = Date.parse(value);
   return Number.isNaN(ms) ? null : new Date(ms).toISOString();
 }

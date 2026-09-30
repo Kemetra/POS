@@ -252,6 +252,21 @@ describe('RT-79 — parseTendersSince (POS_PULSE_FEATURE_SALE_TENDERS_SINCE)', (
     }
   });
 
+  it('calendar-invalid instants stay OFF instead of rolling over (Feb 30, 24:00, :60)', () => {
+    for (const bad of [
+      '2026-02-30T00:00:00Z',
+      '2026-02-29T00:00:00Z',
+      '2026-04-31T00:00:00Z',
+      '2026-06-01T24:00:00Z',
+      '2026-06-01T00:60:00Z',
+      '2026-06-01T00:00:60Z',
+      '2026-06-01T00:00:00+24:00',
+    ]) {
+      expect(parseTendersSince(bad)).toBeNull();
+    }
+    expect(parseTendersSince('2028-02-29T00:00:00Z')).toBe('2028-02-29T00:00:00.000Z');
+  });
+
   it('accepts Z and +hh:mm instants, with or without fractional seconds', () => {
     expect(parseTendersSince('2026-06-01T00:00:00Z')).toBe('2026-06-01T00:00:00.000Z');
     expect(parseTendersSince('2026-06-01T00:00:00.5Z')).toBe('2026-06-01T00:00:00.500Z');
