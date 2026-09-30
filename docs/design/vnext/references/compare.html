@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layout Direction Compare</title>
+<style>
+  :root { --bg:#f7f9fa; --surface:#fff; --ink:#0f1d2e; --muted:#53647a; --line:#d8dfe7; --teal:#0f766e; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.6 'Segoe UI', Tahoma, sans-serif; }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); background:var(--surface); }
+  h1 { margin:0 0 4px; font-size:20px; }
+  h2 { margin:28px 24px 10px; font-size:16px; }
+  p { margin:0; color:var(--muted); }
+  .row { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(520px, 100%), 1fr)); gap:16px; padding:0 24px; }
+  figure { margin:0; background:var(--surface); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  img { display:block; width:100%; height:auto; border-bottom:1px solid var(--line); }
+  figcaption { padding:10px 14px; }
+  figcaption b { color:var(--teal); }
+</style>
+</head>
+<body>
+<header>
+  <h1>مقارنة اتجاه التخطيط: A (مبني على V5) مقابل B (السلة أولًا + شريط أوامر)</h1>
+  <p>نفس الألوان والمكوّنات والسلوك — يختلف التخطيط فقط. التفاصيل والقياسات في 10-direction-comparison.md.</p>
+</header>
+<h2>البيع · 1280</h2>
+<div class="row">
+  <figure><img src="VN-R1-sale-1280.png" alt="A البيع 1280"><figcaption><b>A</b> لوحة منتجات دائمة · الإجمالي أسفل السلة</figcaption></figure>
+  <figure><img src="VN-B1-sale-1280.png" alt="B البيع 1280"><figcaption><b>B</b> شريط أوامر · عمود المال ثابت</figcaption></figure>
+</div>
+<h2>سلة طويلة (10 أصناف) · 1024</h2>
+<div class="row">
+  <figure><img src="CMP-A-long-cart-1024.png" alt="A سلة طويلة 1024"><figcaption><b>A</b> 5 من 10 أسطر ظاهرة · عمود الاسم 164px</figcaption></figure>
+  <figure><img src="CMP-B-long-cart-1024.png" alt="B سلة طويلة 1024"><figcaption><b>B</b> 9 من 10 أسطر ظاهرة · عمود الاسم 248px</figcaption></figure>
+</div>
+<h2>سلة طويلة (10 أصناف) · 1280</h2>
+<div class="row">
+  <figure><img src="CMP-A-long-cart-1280.png" alt="A سلة طويلة 1280"><figcaption><b>A</b> 6 من 10 أسطر ظاهرة · عمود الاسم 214px</figcaption></figure>
+  <figure><img src="CMP-B-long-cart-1280.png" alt="B سلة طويلة 1280"><figcaption><b>B</b> 9 من 10 أسطر ظاهرة · عمود الاسم 386px</figcaption></figure>
+</div>
+<h2>البحث بالكتابة · 1024</h2>
+<div class="row">
+  <figure><img src="VN-R1-sale-1024.png" alt="A البحث 1024"><figcaption><b>A</b> النتائج في اللوحة — لا تغطي السلة</figcaption></figure>
+  <figure><img src="VN-B1-sale-search-1024.png" alt="B البحث 1024"><figcaption><b>B</b> النتائج قائمة منسدلة — تغطي أعلى السلة أثناء البحث</figcaption></figure>
+</div>
+<h2>الدفع النقدي · 1280 و 1024</h2>
+<div class="row">
+  <figure><img src="VN-R2-checkout-cash-1280.png" alt="A الدفع 1280"><figcaption><b>A</b> الدفع · 1280</figcaption></figure>
+  <figure><img src="VN-B2-checkout-cash-1280.png" alt="B الدفع 1280"><figcaption><b>B</b> الدفع · 1280 · نفس عمود المال في شاشة البيع</figcaption></figure>
+  <figure><img src="VN-R2-checkout-cash-shortfall-1024.png" alt="A الدفع 1024"><figcaption><b>A</b> الدفع · 1024 · مبلغ ناقص</figcaption></figure>
+  <figure><img src="VN-B2-checkout-cash-shortfall-1024.png" alt="B الدفع 1024"><figcaption><b>B</b> الدفع · 1024 · مبلغ ناقص</figcaption></figure>
+</div>
+</body>
+</html>

@@ -29,4 +29,14 @@ from `src/renderer/styles/tailwind.css`.
 | VN-R12 | `VN-R12-returns-entry-gated-1280.png` | 1280 | Returns entry, gated for pilot | RT-25 §22 | Placeholder only; `POS_RETURNS_ENABLED` off |
 | — | `VN-R1-sale-1280-forced-colors.png`, `VN-R2-checkout-cash-1280-forced-colors.png` | 1280 | Windows contrast theme emulation (`forced-colors: active`) | 04 §15 | No forced-colors support in `src/renderer` today |
 
-Open [`index.html`](index.html) for a side-by-side gallery.
+### Layout direction comparison (OD-7, [../10-direction-comparison.md](../10-direction-comparison.md))
+
+| ID | File | Width | State |
+|---|---|---|---|
+| VN-B1 | `VN-B1-sale-1280.png` | 1280 | Direction B Sale: command bar, cart-first, money column |
+| VN-B1 | `VN-B1-sale-search-1024.png` | 1024 | Direction B Sale: search dropdown over the cart, scan paused |
+| VN-B2 | `VN-B2-checkout-cash-1280.png` | 1280 | Direction B Checkout, slim nav |
+| VN-B2 | `VN-B2-checkout-cash-shortfall-1024.png` | 1024 | Direction B Checkout shortfall |
+| CMP | `CMP-A-long-cart-{1024,1280}.png`, `CMP-B-long-cart-{1024,1280}.png` | both | 10-line cart capacity test (A vs B) |
+
+Open [`index.html`](index.html) for the gallery and [`compare.html`](compare.html) for A vs B side by side.

@@ -408,6 +408,10 @@ Theme and density changes only between transactions (RT-24).
 
 ## 16. 1024 and 1280 production behaviour
 
+> The Sale layout below is **Direction A** (V5-based). Direction B (cart-first command bar + money
+> column) is compared in [10-direction-comparison.md](10-direction-comparison.md) and decided by
+> **OD-7**. Every other section of this document applies to both directions unchanged.
+
 | Aspect | 1280×800 (comfortable) | 1024×768 (compact) |
 |---|---|---|
 | Nav panel | 208px, labels | 140px, labels |

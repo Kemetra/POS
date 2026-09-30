@@ -31,6 +31,8 @@
 | **VN-S10** | Manager/admin surfaces + legacy shell retirement | Implementation | VN-S2, VN-S7; OD-6 | Restyle/recompose dashboard, stuck-shift, cashier management, diagnostics, settings into V5 frame; retire legacy `AppShell`, `NavRail`, `TopBar`, 007 primitives, `--color-accent`; remove theme toggle from cashier chrome (OD-4) | Admin-Console; new admin features | Captures; legacy class wall test extended |
 | **VN-S11** | Suspend / Resume UI | Implementation | A park/resume contract (RT-24 I-13; same-terminal durable store) — own Planning/contract issue first | `SuspendedSaleList`, suspend button, `ResumeConflictPanel` | Cross-terminal resume, stock reservation | Captures VN-R10 states; restart-with-suspended test |
 
+| **VN-S12** *(only if OD-7 = B)* | Sale layout B | Implementation | VN-S2; OD-7 | Re-compose the V5 Sale into command bar + cart + money column; slim nav while a sale is active; hooks/behaviour/tests unchanged; absorbs VN-S3 | Behaviour changes; checkout (VN-S4) | Real-app 10-line cart capture shows more visible rows than today at 1024; owner re-approval |
+
 Dependencies outside this plan (owned elsewhere, not to be pulled in): RT-26 (Back/Esc), RT-28
 (discount authority), RT-17 (shift/cash-up), RT-15 (returns flow), RT-50 (batch/expiry), RT-65
 (Electron upgrade — may affect capture tooling), 008-v2 (VAT/fiscal receipt).

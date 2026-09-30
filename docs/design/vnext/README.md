@@ -30,6 +30,7 @@
 | Current → VNext migration map | [07-migration-map.md](07-migration-map.md) |
 | What remains governed by RT-24 and must not change | [08-rt24-invariants.md](08-rt24-invariants.md) |
 | Proposed bounded Jira implementation slices | [09-implementation-slices.md](09-implementation-slices.md) |
+| Layout direction comparison (A V5-based vs B cart-first) — added on owner request | [10-direction-comparison.md](10-direction-comparison.md), [references/compare.html](references/compare.html) |
 
 ## Headline findings
 
@@ -58,6 +59,7 @@
 | **OD-4** | Themes: light-only for pilot, dark maintained but not offered; Windows contrast themes required | **Approve.** | A dark QA slice capturing every V5 screen in dark before re-offering it. |
 | **OD-5** | Wordmark in product: «POS Pulse» (shipped) vs «Retail Tower POS» | **Keep «POS Pulse»** until a branding decision exists (022 RECONCILIATION marks "Retail Tower POS" as not authorised in product). | Token/asset-only change. |
 | **OD-6** | Cashier nav: keep placeholder entries (dashboard, inventory, audit) visible to cashiers, or hide until they are real | **Hide placeholders from cashier role**; keep for manager/admin. | Restyle placeholders to Arabic V5 empty states. |
+| **OD-7** | Sale layout: A (V5-based product rail, as in 04 §16) or B (cart-first command bar + money column + slim nav during a sale) | **B's money column + command bar**, slim nav only during a sale — after one real-app capture confirms the capacity gap (10). Same visual language and behaviour either way. | Keep A; optionally take only the money column. |
 | — | Confirm RT-24 §C items 1 (direct add vs confirm-first), 2 (lazy cart), 4 (same-device suspend/resume), 5 (key map) | Confirm per slice (VN-S0) | Slices keep today's behaviour |
 
 ## Acceptance-criteria trace (RT-104)

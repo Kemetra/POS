@@ -67,10 +67,10 @@ function nav(active, status) {
     <div class="operator"><b>منى عادل</b><span class="meta">كاشير · وردية ${n('07:58')}</span></div>
   </nav>`;
 }
-function page({ id, title, compact, body, navActive = 'نقطة البيع', status, overlay = '', titleExtra = '' }) {
+function page({ id, title, compact, body, navActive = 'نقطة البيع', status, overlay = '', titleExtra = '', slim = false }) {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <title>${id} — ${title}</title><link rel="stylesheet" href="../vnext-kit.css"></head>
-<body class="${compact ? 'compact' : ''}"><div class="frame">${nav(navActive, status)}
+<body class="${compact ? 'compact' : ''}"><div class="frame ${slim ? 'slim' : ''}">${slim ? navSlim(navActive, status) : nav(navActive, status)}
 <div class="main"><header class="titlebar"><h1>${title}</h1>${titleExtra}<span class="grow"></span>
 <span class="ref-tag">${id} · مرجع تصميم VNext — ليس لقطة من التطبيق</span></header>
 <div class="workspace">${body}</div></div></div>${overlay}</body></html>`;
@@ -101,7 +101,7 @@ function cartPanel({ lines = LINES, flash = true, frozen = false } = {}) {
   const items = lines.length;
   const units = lines.reduce((a, l) => a + l[3], 0);
   const sub = lines.reduce((a, l) => a + Math.round(Number(l[4]) * 100), 0);
-  const subStr = (sub / 100).toFixed(2);
+  const subStr = group((sub / 100).toFixed(2));
   return `<section class="panel" style="flex:1">
     <div class="panel-head"><h2>سلة المشتريات</h2><span class="meta">${n(items)} أصناف · ${n(units)} وحدات</span>
       <span style="flex:1"></span>
@@ -157,6 +157,15 @@ const R1 = (compact) =>
     compact,
     titleExtra: saleTitleExtra,
     body: `<div style="display:flex;gap:var(--gap);flex:1;min-height:0">${saleRail(compact ? 'search' : 'ready')}${cartPanel()}</div>`,
+  });
+
+const R1long = (compact) =>
+  page({
+    id: 'VN-R1',
+    title: 'البيع',
+    compact,
+    titleExtra: saleTitleExtra,
+    body: `<div style="display:flex;gap:var(--gap);flex:1;min-height:0">${saleRail('ready')}${cartPanel({ lines: LONG })}</div>`,
   });
 
 // ── R2 Checkout cash ───────────────────────────────────────────────────────
@@ -390,6 +399,98 @@ const R12 = () =>
     </div></div>`,
   });
 
+// ── Direction B: cart-first command bar (comparison candidate) ─────────────
+const NI = {
+  'لوحة': svg('<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>'),
+  'البيع': svg('<path d="M4 5h2l2 10h10l2-7H7"/><circle cx="10" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>'),
+  'المبيعات': svg('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/>'),
+  'المرتجعات': svg('<path d="M9 7 5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-2"/>'),
+  'المراجعة': svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5"/>'),
+  'المخزون': svg('<path d="M4 8 12 4l8 4v8l-8 4-8-4Z"/><path d="M4 8l8 4 8-4M12 12v8"/>'),
+  'الإعدادات': svg('<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>'),
+};
+const NAV_SHORT = { 'لوحة المتابعة': 'لوحة', 'نقطة البيع': 'البيع', 'المبيعات': 'المبيعات', 'المرتجعات': 'المرتجعات', 'سجل المراجعة': 'المراجعة', 'المخزون': 'المخزون', 'الإعدادات': 'الإعدادات' };
+function navSlim(active, status) {
+  const s = { conn: ['متصل', ''], sync: ['مزامنة', ''], printer: ['طابعة', ''], ...status };
+  const row = ([label, tone]) => `<div class="si ${tone}"><span class="dot ${tone}"></span>${label}</div>`;
+  return `<nav class="nav" aria-label="التنقل">
+    <div class="brand"><span class="brand-mark">+</span></div>
+    ${NAV.map(([l]) => { const k = NAV_SHORT[l]; return `<div class="navlink" ${l === active ? 'aria-current="page"' : ''} title="${l}">${NI[k]}<span>${k}</span></div>`; }).join('')}
+    <div class="nav-spacer"></div>
+    <div class="status-cluster" aria-label="حالة الجهاز">${row(s.conn)}${row(s.sync)}${row(s.printer)}</div>
+    <div class="operator" title="منى عادل · كاشير"><span class="avatar">م.ع</span></div>
+  </nav>`;
+}
+const LONG = [
+  ...LINES,
+  ['أوجمنتين 1 جم — 14 قرص', 'Augmentin 1g', '156.00', 1, '156.00', 'rx'],
+  ['سنتروم فيتامينات متعددة — 30 قرص', 'Centrum Multivitamin', '310.00', 1, '310.00', ''],
+  ['بيبانثين كريم 30 جم', 'Bepanthen Cream 30g', '92.00', 2, '184.00', ''],
+  ['ديتول مطهر 250 مل', 'Dettol Antiseptic 250ml', '71.00', 1, '71.00', ''],
+  ['شاش طبي معقم 10×10 سم', 'Sterile Gauze 10x10', '12.00', 5, '60.00', ''],
+  ['أومبريزول 20 مجم — 14 كبسولة', 'Omeprazole 20mg', '38.50', 1, '38.50', 'rx'],
+];
+const sumOf = (lines) => (lines.reduce((a, l) => a + Math.round(Number(l[4]) * 100), 0) / 100).toFixed(2);
+const group = (v) => { const [i, d] = v.split('.'); return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${d}`; };
+
+function commandBar({ search = false } = {}) {
+  return `<div class="cmdbar">
+    <div class="scan ${search ? '' : 'ready'}" style="flex:1">${I.scan}<div style="flex:1"><div class="scan-state">${
+      search ? '<span class="dot" style="background:var(--color-border-strong)"></span>المسح متوقف أثناء البحث' : '<span class="dot"></span>جاهز للمسح'
+    }</div><div class="meta">${search ? `اضغط ${kbd('F2')} للعودة إلى المسح` : 'امسح الباركود في أي وقت'}</div></div></div>
+    <div style="flex:1.3;position:relative"><div class="field ${search ? 'focus' : ''}" style="min-height:52px">${I.search}${
+      search ? '<span>بنا</span>' : '<span class="ph">ابحث بالاسم أو الكود…</span>'
+    }<span style="flex:1"></span>${kbd('F2')}</div>${
+      search
+        ? `<div class="dropdown" role="listbox"><div class="cart-head" style="grid-template-columns:1fr auto"><span>نتائج البحث (${n(3)})</span><span>السعر</span></div>
+      <div class="result active"><div><b>بنادول إكسترا 500 مجم — 24 قرص</b><div class="meta ltr">Panadol Extra · 6221155012345</div></div>${money('45.00')}</div>
+      <div class="result"><div><b>بنادول أدفانس 500 مجم</b><div class="meta ltr">Panadol Advance · 6221155012352</div></div>${money('38.00')}</div>
+      <div class="result"><div><b>بنادول نايت</b><div class="meta ltr">Panadol Night · 6221155012369</div></div>${money('52.00')}</div>
+      <div class="meta" style="padding:8px var(--pad)">↑ ↓ للتنقل · ${kbd('Enter')} لعرض الصنف قبل الإضافة · ${kbd('Esc')} للإغلاق</div></div>`
+        : ''
+    }</div>
+    <button class="btn" style="min-height:52px">المعلّقة <span class="badge neutral">${n(2)}</span> ${kbd('F3')}</button>
+  </div>`;
+}
+function cartPanelB(lines, flash = true) {
+  const units = lines.reduce((a, l) => a + l[3], 0);
+  return `<section class="panel" style="flex:1;min-width:0">
+    <div class="panel-head"><h2>سلة المشتريات</h2><span class="meta">${n(lines.length)} أصناف · ${n(units)} وحدات</span></div>
+    <div class="cart-table"><div class="cart-head"><span>#</span><span>الصنف</span><span class="end">سعر الوحدة</span><span>الكمية</span><span class="end">الإجمالي</span></div>
+    ${cartRows(lines, flash)}</div></section>`;
+}
+function moneyColumn(lines, { lastScan = true } = {}) {
+  const t = group(sumOf(lines));
+  return `<section class="panel ledger" aria-label="الإجمالي">
+    <div class="due"><div class="label">الإجمالي الحالي</div><div class="amount ltr num" style="color:var(--color-primary-emphasis)">${t} EGP</div></div>
+    <div class="lrow"><span>المجموع الفرعي</span><span class="ltr num">${t} <small class="meta">EGP</small></span></div>
+    <div class="lrow"><span>الضريبة</span><span class="meta">قيد الإضافة · لا تُحسب هنا</span></div>
+    ${lastScan ? `<div style="padding:var(--pad)"><div class="notice success" role="status">${I.check}<div>أُضيف بالمسح: <b>${lines[lines.length - 1][0]}</b></div></div></div>` : ''}
+    <div class="commit">
+      <button class="btn primary lg block">الدفع ${kbd('F8')}</button>
+      <button class="btn block">${I.pause}تعليق البيع ${kbd('F4')}</button>
+      <button class="btn danger-quiet block">إلغاء البيع</button>
+      <div class="meta">آخر كتالوج: اليوم ${n('13:02')} · ${n('4,812')} صنفًا</div>
+    </div></section>`;
+}
+const B1 = (compact, { lines = LINES, search = false } = {}) =>
+  page({
+    id: 'VN-B1', title: 'البيع', compact, slim: true,
+    body: `${commandBar({ search })}<div class="sale-b">${cartPanelB(lines, !search)}${moneyColumn(lines, { lastScan: !search })}</div>`,
+  });
+const B2 = (compact) => {
+  const received = compact ? '300.00' : '400.00';
+  const center = `<section class="panel"><div class="panel-head"><h2>طريقة الدفع</h2></div><div class="panel-body">${tenderTiles('cash')}${cashEntry(received)}</div></section>`;
+  const led = compact
+    ? ledger({ received: '300.00', short: '75.00', commitLabel: 'تأكيد الدفع النقدي', commitDisabled: true, reason: 'المبلغ المستلم أقل من المستحق بـ <b class="ltr num">75.00 EGP</b>.' })
+    : ledger({ received: '400.00', change: '25.00', commitLabel: 'تأكيد الدفع النقدي' });
+  const strip = `<div class="strip"><span class="lock-pill">${I.lock}مجمّدة</span><b>${n(4)} أصناف · ${n(5)} وحدات</b><span class="meta">المجموع الفرعي ${money('375.00')}</span><span style="flex:1"></span><span class="link">عرض الأصناف</span></div>`;
+  return page({
+    id: 'VN-B2', title: 'الدفع', compact, slim: true, titleExtra: coSteps,
+    body: compact ? `${strip}<div class="co-grid">${center}${led}</div>` : `<div class="co-grid">${orderSummary()}${center}${led}</div>`,
+  });
+};
+
 const SCREENS = [
   ['VN-R1-sale-1280', R1(false), 1280, 800],
   ['VN-R1-sale-1024', R1(true), 1024, 768],
@@ -405,6 +506,15 @@ const SCREENS = [
   ['VN-R10-suspended-resume-conflict-1280', R10(), 1280, 800],
   ['VN-R11-shift-required-1280', R11(), 1280, 800],
   ['VN-R12-returns-entry-gated-1280', R12(), 1280, 800],
+  // Direction comparison (10-direction-comparison.md): A = V5-based, B = cart-first command bar
+  ['VN-B1-sale-1280', B1(false), 1280, 800],
+  ['VN-B1-sale-search-1024', B1(true, { search: true }), 1024, 768],
+  ['VN-B2-checkout-cash-1280', B2(false), 1280, 800],
+  ['VN-B2-checkout-cash-shortfall-1024', B2(true), 1024, 768],
+  ['CMP-A-long-cart-1024', R1long(true), 1024, 768],
+  ['CMP-A-long-cart-1280', R1long(false), 1280, 800],
+  ['CMP-B-long-cart-1024', B1(true, { lines: LONG }), 1024, 768],
+  ['CMP-B-long-cart-1280', B1(false, { lines: LONG }), 1280, 800],
 ];
 for (const [name, html] of SCREENS) writeFileSync(join(outHtml, `${name}.html`), html);
 
@@ -422,8 +532,19 @@ async function render() {
       x: document.documentElement.scrollWidth > innerWidth,
       clipped: [...document.querySelectorAll('.panel, .workspace')].some((e) => e.scrollHeight > e.clientHeight + 1),
     }));
+    const metrics = await p.evaluate(() => {
+      const t = document.querySelector('.cart-table');
+      if (!t) return {};
+      const tb = t.getBoundingClientRect();
+      const rows = [...t.querySelectorAll('.cart-row')];
+      const visible = rows.filter((r) => { const b = r.getBoundingClientRect(); return b.top >= tb.top - 1 && b.bottom <= tb.bottom + 1; }).length;
+      const nm = t.querySelector('.cart-row .name');
+      const cta = [...document.querySelectorAll('.btn.primary')].find((b) => b.textContent.includes('الدفع'));
+      const cb = cta && cta.getBoundingClientRect();
+      return { rows: `${visible}/${rows.length}`, nameColPx: nm ? Math.round(nm.getBoundingClientRect().width) : null, ctaXY: cb ? `${Math.round(cb.left)},${Math.round(cb.top)}` : null };
+    });
     await p.screenshot({ path: join(outPng, `${name}.png`) });
-    report.push({ name, w, h, ...overflow });
+    report.push({ name, w, h, ...overflow, ...metrics });
     await p.close();
   }
   // Windows contrast-theme emulation (04 §15) for the two core surfaces.
