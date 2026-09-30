@@ -42,16 +42,23 @@ const kbd = (k) => `<span class="kbd">${k}</span>`;
 
 // ── frame ──────────────────────────────────────────────────────────────────
 // DOM order matches V5Frame.tsx: working screen first (right in RTL), nav second (left).
+// Mirrors specs/003-pos-ui-shell/contracts/shell-routes.ts, including role allow-lists.
 const NAV = [
   ['لوحة المتابعة'],
-  ['نقطة البيع', true],
+  ['نقطة البيع'],
   ['المبيعات'],
-  ['المرتجعات'],
-  ['سجل المراجعة'],
+  ['المرتجعات', ['manager', 'admin']],
+  ['سجل المراجعة', ['manager', 'admin']],
   ['المخزون'],
   ['الإعدادات'],
 ];
-function nav(active, status) {
+const OPERATORS = {
+  cashier: { name: 'منى عادل', role: 'كاشير', initials: 'م.ع' },
+  manager: { name: 'أحمد نبيل', role: 'مدير', initials: 'أ.ن' },
+};
+const navFor = (role) => NAV.filter(([, allow]) => !allow || allow.includes(role));
+function nav(active, status, role = 'cashier') {
+  const op = OPERATORS[role];
   const s = {
     conn: ['متصل', ''],
     sync: ['المزامنة: لا شيء معلّق', ''],
@@ -62,19 +69,19 @@ function nav(active, status) {
     `<div class="si ${tone}"><span class="dot ${tone}"></span>${label}</div>`;
   return `<nav class="nav" aria-label="التنقل">
     <div class="brand"><span class="brand-mark">+</span><span class="ltr">POS Pulse</span></div>
-    ${NAV.map(([l], i) => `<div class="navlink" ${l === active ? 'aria-current="page"' : ''}>${l}</div>`).join('')}
+    ${navFor(role).map(([l]) => `<div class="navlink" ${l === active ? 'aria-current="page"' : ''}>${l}</div>`).join('')}
     <div class="nav-spacer"></div>
     <div class="status-cluster" aria-label="حالة الجهاز">${row(s.conn)}${row(s.sync)}${row(s.printer)}</div>
-    <div class="operator"><b>منى عادل</b><span class="meta">كاشير · وردية ${n('07:58')}</span></div>
+    <div class="operator"><b>${op.name}</b><span class="meta">${op.role} · وردية ${n('07:58')}</span></div>
   </nav>`;
 }
-function page({ id, title, compact, body, navActive = 'نقطة البيع', status, overlay = '', titleExtra = '', slim = false }) {
+function page({ id, title, compact, body, navActive = 'نقطة البيع', status, overlay = '', titleExtra = '', slim = false, role = 'cashier' }) {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <title>${id} — ${title}</title><link rel="stylesheet" href="../vnext-kit.css"></head>
 <body class="${compact ? 'compact' : ''}"><div class="frame ${slim ? 'slim' : ''}">
 <div class="main"><header class="titlebar"><h1>${title}</h1>${titleExtra}<span class="grow"></span>
 <span class="ref-tag">${id} · مرجع تصميم VNext — ليس لقطة من التطبيق</span></header>
-<div class="workspace">${body}</div></div>${slim ? navSlim(navActive, status) : nav(navActive, status)}</div>${overlay}</body></html>`;
+<div class="workspace">${body}</div></div>${slim ? navSlim(navActive, status, role) : nav(navActive, status, role)}</div>${overlay}</body></html>`;
 }
 
 // ── shared sale fragments ──────────────────────────────────────────────────
@@ -391,9 +398,10 @@ const R12 = () =>
     id: 'VN-R12',
     title: 'المرتجعات',
     navActive: 'المرتجعات',
+    role: 'manager', // /app/returns is manager/admin-only on main (shell-routes.ts)
     body: `<div class="blank"><div class="center-card">
       <h2 style="margin:0;font:700 20px/1.3 var(--font-sans)">مرتجع من بيع سابق</h2>
-      <div class="notice warn">${I.lock}<div><b>المرتجعات غير مفعّلة على هذا الجهاز في مرحلة التجربة.</b> وجّه العميل إلى المسؤول.</div></div>
+      <div class="notice warn">${I.lock}<div><b>المرتجعات غير متاحة بعد في مرحلة التجربة.</b> سيتوفر هذا المسار عند اكتمال مسار الاسترداد.</div></div>
       <div><div class="label">رقم البيع أو امسح باركود الإيصال</div><div class="field" style="margin-top:6px;background:var(--color-surface-sunken)">${I.scan}<span class="ph ltr">S-0412-000187</span></div></div>
       <div class="meta">عند التفعيل: يُختار البيع الأصلي، ثم الأصناف والكميات القابلة للإرجاع، ويُحسب المبلغ وطريقة الاسترداد من العقد — لا يُعدَّل البيع الأصلي أبدًا.</div>
       <button class="btn primary lg" disabled>بحث عن البيع</button>
@@ -411,15 +419,16 @@ const NI = {
   'الإعدادات': svg('<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>'),
 };
 const NAV_SHORT = { 'لوحة المتابعة': 'لوحة', 'نقطة البيع': 'البيع', 'المبيعات': 'المبيعات', 'المرتجعات': 'المرتجعات', 'سجل المراجعة': 'المراجعة', 'المخزون': 'المخزون', 'الإعدادات': 'الإعدادات' };
-function navSlim(active, status) {
+function navSlim(active, status, role = 'cashier') {
+  const op = OPERATORS[role];
   const s = { conn: ['متصل', ''], sync: ['مزامنة', ''], printer: ['طابعة', ''], ...status };
   const row = ([label, tone]) => `<div class="si ${tone}"><span class="dot ${tone}"></span>${label}</div>`;
   return `<nav class="nav" aria-label="التنقل">
     <div class="brand"><span class="brand-mark">+</span></div>
-    ${NAV.map(([l]) => { const k = NAV_SHORT[l]; return `<div class="navlink" ${l === active ? 'aria-current="page"' : ''} title="${l}">${NI[k]}<span>${k}</span></div>`; }).join('')}
+    ${navFor(role).map(([l]) => { const k = NAV_SHORT[l]; return `<div class="navlink" ${l === active ? 'aria-current="page"' : ''} title="${l}">${NI[k]}<span>${k}</span></div>`; }).join('')}
     <div class="nav-spacer"></div>
     <div class="status-cluster" aria-label="حالة الجهاز">${row(s.conn)}${row(s.sync)}${row(s.printer)}</div>
-    <div class="operator" title="منى عادل · كاشير"><span class="avatar">م.ع</span></div>
+    <div class="operator" title="${op.name} · ${op.role}"><span class="avatar">${op.initials}</span></div>
   </nav>`;
 }
 const LONG = [

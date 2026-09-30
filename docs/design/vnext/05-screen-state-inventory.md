@@ -43,7 +43,7 @@
 | VN-30 | Sale complete (+ receipt ready / printing / printed) | `FINALIZED`, `READY`/`PRINTING`/`PRINTED` | §19–§20 | v4 (no sale no., no receipt) | `CompletionPanel` with proof list; New sale `Ctrl+N` | VN-R5 | Pilot (X-4 dependency) |
 | VN-31 | Print failed after sale | `PRINT_FAILED` | §20 | Legacy 008 banner (V5 wired) | Warning banner + inline retry + manual-receipt ack | VN-R5 | Pilot |
 | VN-32 | Recent sales / receipt lookup / reprint | — | §21 | Legacy 003/008 (`/app/sales`) | Recompose on V5 (`ProductResultList`-style list, `ReceiptPreview`) | — | Pilot (restyle) |
-| VN-33 | Return/refund entry (gated) | — | §22 | Legacy placeholder | Entry + gate notice | VN-R12 | Pilot entry only |
+| VN-33 | Return/refund entry (gated) | — | §22 | Legacy placeholder, manager/admin-only route | Entry + gate notice | VN-R12 | Pilot entry only |
 | VN-34 | Offline selling | Sync `QUEUED` | §23 | Hard-coded online (X-2) | Banner + StatusIndicator | VN-R7 | Pilot (signal dependency) |
 | VN-35 | Sync backlog needs attention | Sync `ATTENTION`/`RETRYING` | §23 | `SaleSyncStatus` unmounted | Danger banner → diagnostics (manager) | — | Pilot |
 | VN-36 | Restart recovery (active / suspended cart restored) | Device `ACTIVE` | §24 | `cart.snapshot` hydration (023) | Inline notice «استُعيدت السلة بعد إعادة التشغيل» | — | Pilot |

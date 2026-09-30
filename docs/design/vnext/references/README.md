@@ -26,7 +26,7 @@ from `src/renderer/styles/tailwind.css`.
 | VN-R9 | `VN-R9-storage-blocked-1280.png` | 1280 | `STORAGE_BLOCKED` — stop collecting money | RT-25 §24; S39–S40 | No error boundary / blocking screen today |
 | VN-R10 | `VN-R10-suspended-resume-conflict-1280.png` | 1280 | Suspended sales list + resume conflict + price-change notice | RT-25 §10–§11; S18–S21; RT-27 correction 3 | **Not implemented** (no park bridge) |
 | VN-R11 | `VN-R11-shift-required-1280.png` | 1280 | Shift required / opening float (boundary) | RT-25 §2; S07 | No shift UI (D-003, RT-17) |
-| VN-R12 | `VN-R12-returns-entry-gated-1280.png` | 1280 | Returns entry, gated for pilot | RT-25 §22 | Placeholder only; `POS_RETURNS_ENABLED` off |
+| VN-R12 | `VN-R12-returns-entry-gated-1280.png` | 1280 | Returns entry, not yet available for pilot (manager view) | RT-25 §22 | Manager/admin-only placeholder route (`shell-routes.ts`); cashier return flow RT-15 not built |
 | — | `VN-R1-sale-1280-forced-colors.png`, `VN-R2-checkout-cash-1280-forced-colors.png` | 1280 | Windows contrast theme emulation (`forced-colors: active`) | 04 §15 | No forced-colors support in `src/renderer` today |
 
 ### Layout direction comparison (OD-7, [../10-direction-comparison.md](../10-direction-comparison.md))
