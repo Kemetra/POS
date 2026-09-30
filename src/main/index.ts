@@ -65,6 +65,7 @@ import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.rep
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
 import { createSaleSyncEngine } from './sales-sync/sale-sync-engine.js';
+import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
@@ -1263,8 +1264,24 @@ app
             return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
           },
         });
+        // RT-79 rollout gate: unset = never send tenders (default). Only sales finalized
+        // at/after this explicit-zone ISO instant carry `tenders`. Ops MUST choose a
+        // FUTURE instant, later than BOTH the Backend-Core tender switch going ON and
+        // the restart that loads it here: then no sale at/after the cutoff can have
+        // been sent without tenders by an earlier process (its retry body stays
+        // identical). A past cutoff re-opens that window. Unparseable = off + warning.
+        const tendersSinceRaw = process.env['POS_PULSE_FEATURE_SALE_TENDERS_SINCE'];
+        const tendersSince = parseTendersSince(tendersSinceRaw);
+        if (
+          tendersSinceRaw !== undefined &&
+          tendersSinceRaw.trim() !== '' &&
+          tendersSince === null
+        ) {
+          mainLogger.warn('sale_sync:tenders_since_unparseable_tenders_off');
+        }
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
+          tendersSince,
           stateRepo: saleSyncStateRepo,
           salesRepo,
           tenantId: pairingStatus.tenant_id,
@@ -1276,8 +1293,8 @@ app
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.
           backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },
-          onDeadLetter: (saleId: string) => {
-            mainLogger.warn({ sale_id: saleId }, 'sale_sync:dead_letter');
+          onDeadLetter: (saleId: string, reason?: string) => {
+            mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:dead_letter');
           },
         });
 

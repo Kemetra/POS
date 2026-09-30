@@ -393,3 +393,77 @@ describe('createSaleSyncClient — operator-token gating', () => {
     expect(body.lines[0]?.currencyCode).toBe('USD');
   });
 });
+
+describe('RT-79 — tenders on the wire (RT-10 D1; SaleTender contract)', () => {
+  const TENDERED: CaptureSalePayload = {
+    ...PAYLOAD,
+    tenders: [
+      { method: 'cash', amountMinor: PAYLOAD.totalMinor - 500 },
+      { method: 'card_external', amountMinor: 500 },
+    ],
+  };
+
+  it('converts tender amounts to exact-decimal strings (same exponent as posTotal)', () => {
+    const wire = toWireBody(TENDERED, 'EGP');
+    expect(wire.posTotal).toBe(minorUnitsToDecimalString(PAYLOAD.totalMinor, 2));
+    expect(wire.tenders).toEqual([
+      { method: 'cash', amount: minorUnitsToDecimalString(PAYLOAD.totalMinor - 500, 2) },
+      { method: 'card_external', amount: '5.00' },
+    ]);
+  });
+
+  it('emits NO reference key and only {method, amount} per tender', () => {
+    const wire = toWireBody(TENDERED, 'EGP');
+    for (const t of wire.tenders ?? []) {
+      expect(Object.keys(t).sort()).toEqual(['amount', 'method']);
+    }
+  });
+
+  it('a payload without tenders has no tenders key (byte-identical to pre-RT-79)', () => {
+    expect('tenders' in toWireBody(PAYLOAD, 'EGP')).toBe(false);
+  });
+
+  it('honours the currency exponent for tenders (JPY exponent 0)', () => {
+    const jpy: CaptureSalePayload = {
+      ...PAYLOAD,
+      totalMinor: 1000,
+      tenders: [{ method: 'cash', amountMinor: 1000 }],
+    };
+    expect(toWireBody(jpy, 'JPY').tenders).toEqual([{ method: 'cash', amount: '1000' }]);
+  });
+
+  it('sum(tenders) != total -> the transform throws (local defect)', () => {
+    const off: CaptureSalePayload = {
+      ...PAYLOAD,
+      tenders: [{ method: 'cash', amountMinor: PAYLOAD.totalMinor - 1 }],
+    };
+    expect(() => toWireBody(off, 'EGP')).toThrow(/tender/i);
+  });
+
+  it('postSale with a tender mismatch is permanent (dead-letter) and never reaches the network', async () => {
+    const { fetchImpl, captured } = captureFetch(200);
+    const client = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => TOKEN,
+    });
+    const off: CaptureSalePayload = {
+      ...PAYLOAD,
+      tenders: [{ method: 'cash', amountMinor: PAYLOAD.totalMinor + 1 }],
+    };
+    expect((await client.postSale(off)).kind).toBe('permanent');
+    expect(captured).toHaveLength(0);
+  });
+
+  it('postSale sends tenders in the JSON body', async () => {
+    const { fetchImpl, captured } = captureFetch(201);
+    const client = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => TOKEN,
+    });
+    expect((await client.postSale(TENDERED)).kind).toBe('ok');
+    const sent = JSON.parse(captured[0]?.init.body as string) as { tenders?: unknown[] };
+    expect(sent.tenders).toHaveLength(2);
+  });
+});

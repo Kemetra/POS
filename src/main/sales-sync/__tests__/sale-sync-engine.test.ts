@@ -239,3 +239,54 @@ describe('sale-sync-engine', () => {
     h.db.close();
   });
 });
+
+describe('RT-79 — tenders through the engine', () => {
+  const CASH = JSON.stringify([{ tender_type: 'cash', amount_applied_minor: 1500 }]);
+  const VOUCHER = JSON.stringify([{ tender_type: 'internal_voucher', amount_applied_minor: 1500 }]);
+  const SINCE = '2026-06-01T00:00:00.000Z';
+
+  async function tendered(tenderJson: string, tendersSince: string | null | undefined) {
+    const h = harness({ script: [{ kind: 'ok' }] });
+    seedSale(h.db, { sale_id: 'sale-1', tender_lines_summary_json: tenderJson });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    await runOnce({ ...h.deps, tendersSince });
+    const client = h.deps.client as ReturnType<typeof createFakeSaleSyncClient>;
+    return { h, client };
+  }
+
+  it('cutoff configured + post-cutoff cash sale -> the client receives net tenders', async () => {
+    const { h, client } = await tendered(CASH, SINCE);
+    expect(client.calls[0]?.tenders).toEqual([{ method: 'cash', amountMinor: 1500 }]);
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('synced');
+    h.db.close();
+  });
+
+  it('no cutoff configured (default) -> the client receives NO tenders', async () => {
+    const { h, client } = await tendered(CASH, undefined);
+    expect(client.calls).toHaveLength(1);
+    expect('tenders' in (client.calls[0] ?? {})).toBe(false);
+    h.db.close();
+  });
+
+  it('a not-sendable tender sale reports a tender reason to onDeadLetter (no PII)', async () => {
+    const h = harness({ script: [{ kind: 'ok' }] });
+    seedSale(h.db, { sale_id: 'sale-1', tender_lines_summary_json: VOUCHER });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    const reasons: (string | undefined)[] = [];
+    await runOnce({
+      ...h.deps,
+      tendersSince: SINCE,
+      onDeadLetter: (_saleId, reason) => reasons.push(reason),
+    });
+    expect(reasons).toEqual(['tender not sendable: unsupported tender type internal_voucher']);
+    h.db.close();
+  });
+
+  it('a voucher-tendered sale is dead-lettered with NO POST', async () => {
+    const { h, client } = await tendered(VOUCHER, SINCE);
+    expect(client.calls).toHaveLength(0);
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('dead_letter');
+    expect(h.deadLetters).toEqual(['sale-1']);
+    h.db.close();
+  });
+});

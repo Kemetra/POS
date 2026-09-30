@@ -64,6 +64,7 @@ export interface SeedSaleInput {
   total_tax_minor?: number;
   finalized_at?: string;
   lines_json?: string;
+  tender_lines_summary_json?: string;
 }
 
 /** Insert a durable `sales` row (the payload source). Unique sale_number per id. */
@@ -119,7 +120,7 @@ export function seedSale(db: SqlJsDatabase, o: SeedSaleInput = {}): string {
       row.subtotal_minor,
       row.total_tax_minor,
       0,
-      '[]',
+      o.tender_lines_summary_json ?? '[]',
       '2026-06-07T10:00:00.000Z',
       row.finalized_at,
       'TRN-123',
