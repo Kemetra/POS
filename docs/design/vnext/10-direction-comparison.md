@@ -64,7 +64,8 @@ Electron capture of real V5 with this 10-line cart must confirm the gap (part of
 2. **Command bar instead of the product rail (from B): recommended for pilot.** Most pharmacy sales
    are scanned. It trades a permanent, mostly-empty rail for cart capacity (9 vs 5–6 rows in the
    kit). Mitigate the dropdown trade-off by capping it at 3–5 results and closing on Esc/selection.
-3. **Slim nav (from B): recommended only while a sale is active.** Keep the labelled panel on
+3. **Slim nav (from B): recommended only while a sale is active** — i.e. on Sale, Checkout and
+   completion, from the first item until «بيع جديد». Keep the labelled panel on
    non-sale screens (manager/admin), or allow expanding on demand.
 4. **Keep A's visual language and every component unchanged.** B changes where components sit, not
    what they are or how they behave.
@@ -76,7 +77,8 @@ column) and revisit B after the pilot.
 
 - 04 §16 (1024/1280 behaviour) and 05 VN-07…VN-11 are amended to the B layout. No other document changes.
 - New slice **VN-S12 "Sale layout B"** (Implementation, depends on VN-S2): re-compose the V5 Sale
-  into command bar + cart + money column, and the V5 frame into a slim nav during a sale. Behaviour,
+  into command bar + cart + money column, and the V5 frame into a slim nav on every active-sale
+  route (Sale, Checkout, completion) — which is what VN-B2 depicts; VN-S4 still owns Checkout content. Behaviour,
   hooks and tests stay the same. Acceptance: real-app capture shows more visible rows than today at
   1024 with the 10-line cart; owner re-approval of the new Sale captures.
 - VN-S3 (Sale refinements) merges into VN-S12.
