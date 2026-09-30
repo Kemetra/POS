@@ -1291,8 +1291,8 @@ app
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.
           backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },
-          onDeadLetter: (saleId: string) => {
-            mainLogger.warn({ sale_id: saleId }, 'sale_sync:dead_letter');
+          onDeadLetter: (saleId: string, reason?: string) => {
+            mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:dead_letter');
           },
         });
 

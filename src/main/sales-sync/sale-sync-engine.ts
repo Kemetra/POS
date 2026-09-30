@@ -59,8 +59,12 @@ export interface SaleSyncEngineDeps {
    * `tenders`. Ops set it to the moment Backend-Core tender acceptance is ON.
    */
   tendersSince?: string | null | undefined;
-  /** Called once when a sale is dead-lettered (non-blocking operator notification). */
-  onDeadLetter?: (saleId: string) => void;
+  /**
+   * Called once when a sale is dead-lettered (non-blocking operator notification).
+   * `reason` is set when the POS itself refused to send the sale (RT-79: a tender it
+   * cannot send faithfully); it carries no PII, card data or token.
+   */
+  onDeadLetter?: (saleId: string, reason?: string) => void;
 }
 
 export type TickAdmission =
@@ -98,9 +102,9 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       if (!(err instanceof TenderNotSendableError)) throw err;
       // RT-10 D2: a sale whose tenders cannot be sent faithfully (voucher, unknown
       // method, corrupt amounts) is dead-lettered observably — never POSTed, never
-      // given a fabricated method. The reason is logged by the caller only as a sale_id.
+      // given a fabricated method. The typed reason goes to `onDeadLetter`.
       stateRepo.markDeadLetter({ saleId, tenantId, branchId, now: now() });
-      deps.onDeadLetter?.(saleId);
+      deps.onDeadLetter?.(saleId, err.message);
       return;
     }
     const result = await client.postSale(payload);

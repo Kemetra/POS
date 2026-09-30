@@ -268,6 +268,20 @@ describe('RT-79 — tenders through the engine', () => {
     h.db.close();
   });
 
+  it('a not-sendable tender sale reports a tender reason to onDeadLetter (no PII)', async () => {
+    const h = harness({ script: [{ kind: 'ok' }] });
+    seedSale(h.db, { sale_id: 'sale-1', tender_lines_summary_json: VOUCHER });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    const reasons: (string | undefined)[] = [];
+    await runOnce({
+      ...h.deps,
+      tendersSince: SINCE,
+      onDeadLetter: (_saleId, reason) => reasons.push(reason),
+    });
+    expect(reasons).toEqual(['tender not sendable: unsupported tender type internal_voucher']);
+    h.db.close();
+  });
+
   it('a voucher-tendered sale is dead-lettered with NO POST', async () => {
     const { h, client } = await tendered(VOUCHER, SINCE);
     expect(client.calls).toHaveLength(0);
