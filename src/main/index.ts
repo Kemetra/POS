@@ -1264,10 +1264,12 @@ app
             return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
           },
         });
-        // RT-79 rollout gate: unset = never send tenders (default). Ops set this ISO
-        // instant to the moment Backend-Core tender acceptance is ON; only sales
-        // finalized at/after it carry `tenders` (a 400 from a server with the switch
-        // off would otherwise dead-letter every sale). Unparseable = off, with a warning.
+        // RT-79 rollout gate: unset = never send tenders (default). Only sales finalized
+        // at/after this explicit-zone ISO instant carry `tenders`. Ops MUST choose a
+        // FUTURE instant, later than BOTH the Backend-Core tender switch going ON and
+        // the restart that loads it here: then no sale at/after the cutoff can have
+        // been sent without tenders by an earlier process (its retry body stays
+        // identical). A past cutoff re-opens that window. Unparseable = off + warning.
         const tendersSinceRaw = process.env['POS_PULSE_FEATURE_SALE_TENDERS_SINCE'];
         const tendersSince = parseTendersSince(tendersSinceRaw);
         if (

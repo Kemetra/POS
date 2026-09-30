@@ -56,7 +56,8 @@ export interface SaleSyncEngineDeps {
   /**
    * RT-79 rollout gate (`POS_PULSE_FEATURE_SALE_TENDERS_SINCE`, an ISO instant).
    * Unset/null = never send tenders. Set = only sales finalized at/after it carry
-   * `tenders`. Ops set it to the moment Backend-Core tender acceptance is ON.
+   * `tenders`. It must be a FUTURE instant, later than both the Backend-Core tender
+   * switch and the POS restart that loads it (see index.ts).
    */
   tendersSince?: string | null | undefined;
   /**

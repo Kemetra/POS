@@ -14,9 +14,9 @@
  *   • Tenders (RT-79, RT-10 D1/D2) are emitted ONLY when a rollout cutoff is
  *     configured AND the sale was finalized at/after it. Default (no cutoff) is
  *     byte-identical to the pre-RT-79 payload and never reads
- *     `tender_lines_summary_json`. The cutoff makes every retry of a given sale
- *     send an identical body (a changed body under the same Idempotency-Key is a 409
- *     payload-hash mismatch on the server).
+ *     `tender_lines_summary_json`. With a FUTURE cutoff (later than the restart that
+ *     loads it) every retry of a given sale sends an identical body; a changed body
+ *     under the same Idempotency-Key is a 409 payload-hash mismatch on the server.
  *   • Lines come from the frozen `lines_json` snapshot (LineSnapshot[]).
  */
 
@@ -96,12 +96,21 @@ const TENDER_METHOD: Readonly<Record<string, CaptureSaleTender['method']>> = {
 };
 
 /**
- * Parse `POS_PULSE_FEATURE_SALE_TENDERS_SINCE`. Unset, blank or unparseable -> null
- * (tenders OFF — fail-safe). A valid instant -> its canonical UTC ISO string.
+ * RFC 3339 instant with an EXPLICIT zone (`Z` or `+hh:mm`). `Date.parse` alone would also
+ * accept date-only, zone-less (terminal-local) and locale formats, turning the gate on
+ * for an unintended cutoff.
+ */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Parse `POS_PULSE_FEATURE_SALE_TENDERS_SINCE`. Unset, blank, not an explicit-zone ISO
+ * instant, or unparseable -> null (tenders OFF — fail-safe). A valid instant -> its
+ * canonical UTC ISO string.
  */
 export function parseTendersSince(raw: string | undefined): string | null {
-  if (raw === undefined || raw.trim().length === 0) return null;
-  const ms = Date.parse(raw.trim());
+  const value = raw?.trim() ?? '';
+  if (!ISO_INSTANT.test(value)) return null;
+  const ms = Date.parse(value);
   return Number.isNaN(ms) ? null : new Date(ms).toISOString();
 }
 
@@ -123,6 +132,7 @@ function buildTenders(sale: SaleRow): CaptureSaleTender[] {
     throw new TenderNotSendableError('unreadable tender summary');
   }
   if (!Array.isArray(lines)) throw new TenderNotSendableError('tender summary is not a list');
+  if (lines.length === 0) return []; // tender-unknown (RT-10 D8): nothing to reconcile
 
   const net = new Map<CaptureSaleTender['method'], number>();
   for (const raw of lines as unknown[]) {
@@ -141,6 +151,12 @@ function buildTenders(sale: SaleRow): CaptureSaleTender[] {
       throw new TenderNotSendableError(`invalid ${method} amount`);
     }
     net.set(method, (net.get(method) ?? 0) + (applied - change));
+  }
+  const sum = [...net.values()].reduce((a, b) => a + b, 0);
+  if (sum !== sale.subtotal_minor) {
+    throw new TenderNotSendableError(
+      `tenders sum ${String(sum)} != sale total ${String(sale.subtotal_minor)}`,
+    );
   }
   return [...net]
     .filter(([, amountMinor]) => amountMinor > 0)

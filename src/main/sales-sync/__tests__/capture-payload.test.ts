@@ -199,6 +199,13 @@ describe('RT-79 — tenders (frozen tender_lines_summary_json → payload.tender
     expect(() => buildCapturePayload(sale, ON)).toThrow(TenderNotSendableError);
   });
 
+  it('net tenders that do not sum to the sale total are NOT sendable, with the amounts in the reason', () => {
+    const sale = withTenders([{ tender_type: 'cash', amount_applied_minor: 1400 }]); // total 1500
+    expect(() => buildCapturePayload(sale, ON)).toThrow(
+      new TenderNotSendableError('tenders sum 1400 != sale total 1500'),
+    );
+  });
+
   it('an empty summary -> tender-unknown: no tenders key', () => {
     expect('tenders' in buildCapturePayload(withTenders([]), ON)).toBe(false);
   });
@@ -230,6 +237,24 @@ describe('RT-79 — parseTendersSince (POS_PULSE_FEATURE_SALE_TENDERS_SINCE)', (
     expect(parseTendersSince('')).toBeNull();
     expect(parseTendersSince('   ')).toBeNull();
     expect(parseTendersSince('next tuesday')).toBeNull();
+  });
+
+  it('non-instant values stay OFF (no explicit Z / offset, date-only, locale formats)', () => {
+    for (const bad of [
+      '2026-06-01',
+      '2026-06-01T00:00:00',
+      '06/01/2026',
+      'June 1, 2026 00:00 UTC',
+      '2026-06-01T00:00:00+0200',
+      '2026-13-01T00:00:00Z',
+    ]) {
+      expect(parseTendersSince(bad)).toBeNull();
+    }
+  });
+
+  it('accepts Z and +hh:mm instants, with or without fractional seconds', () => {
+    expect(parseTendersSince('2026-06-01T00:00:00Z')).toBe('2026-06-01T00:00:00.000Z');
+    expect(parseTendersSince('2026-06-01T00:00:00.5Z')).toBe('2026-06-01T00:00:00.500Z');
   });
 
   it('a valid ISO instant -> its canonical UTC ISO string', () => {
