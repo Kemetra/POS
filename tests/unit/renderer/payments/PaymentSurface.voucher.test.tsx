@@ -6,6 +6,7 @@ import '@testing-library/jest-dom/vitest';
 import { PaymentSurface } from '../../../../src/renderer/ui/payments/PaymentSurface.js';
 import { useOperatorSessionStore } from '../../../../src/renderer/stores/operator-session-store.js';
 import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.js';
+import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 import type {
   PaymentsBridgeAPI,
@@ -150,12 +151,16 @@ beforeEach(() => {
   setSignedIn();
   usePaymentStore.getState().reset();
   usePaymentStore.getState().mount(ENVELOPE);
+  // RT-103: this file covers the voucher-ENABLED configuration (Wave 5c). The
+  // pilot default (voucher unavailable) is covered in voucher-pilot-restriction.
+  useFeatureFlagsStore.getState().hydrate({ voucherTender: true });
 });
 
 afterEach(() => {
   cleanup();
   useOperatorSessionStore.getState().reset();
   usePaymentStore.getState().reset();
+  useFeatureFlagsStore.getState().reset();
 });
 
 describe('PaymentSurface — internal_voucher (Wave 5c coverage)', () => {

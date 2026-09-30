@@ -458,11 +458,19 @@ app
       const productSearchEnabled =
         typeof productSearchRaw === 'string' &&
         ['1', 'true', 'yes', 'on'].includes(productSearchRaw.trim().toLowerCase());
+      // RT-103 — voucherTender flag (default false). Vouchers are excluded from the
+      // pilot (RT-10 D2): off keeps the voucher tile disabled at checkout. Same
+      // truthy-value contract as cart.
+      const voucherTenderRaw = process.env['POS_PULSE_FEATURE_VOUCHER_TENDER'];
+      const voucherTenderEnabled =
+        typeof voucherTenderRaw === 'string' &&
+        ['1', 'true', 'yes', 'on'].includes(voucherTenderRaw.trim().toLowerCase());
       cfg.features = {
         cart: cartEnabled,
         payments: paymentsEnabled,
         saleFinalization: saleFinalizationEnabled,
         productSearch: productSearchEnabled,
+        voucherTender: voucherTenderEnabled,
       };
       return cfg;
     };

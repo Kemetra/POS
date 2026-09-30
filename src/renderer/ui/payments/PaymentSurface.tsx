@@ -140,6 +140,9 @@ export function PaymentSurface({
   // ever written, so the completion surface must say so rather than imply a
   // document is on its way.
   const saleFinalizationFlag = useFeatureFlagsStore((s) => s.saleFinalization);
+  // RT-103: vouchers are excluded from the pilot (RT-10 D2). Off (the default)
+  // disables the voucher tile and refuses a voucher selection here as well.
+  const voucherTenderFlag = useFeatureFlagsStore((s) => s.voucherTender);
 
   const bridge = resolveBridge(_testBridge);
 
@@ -202,6 +205,9 @@ export function PaymentSurface({
   const { display_name, role } = sessionState.session;
 
   async function handleTenderSelect(tender: TenderKind): Promise<void> {
+    // Defence in depth behind the disabled tile: never start or select a
+    // voucher payment while the pilot restriction is active.
+    if (tender === 'internal_voucher' && !voucherTenderFlag) return;
     setSelectedTender(tender);
     setBridgeRefusalCopy(null);
 
@@ -572,6 +578,7 @@ export function PaymentSurface({
           <TenderSelection
             envelope={envelope}
             selectedTender={selectedTender}
+            voucherEnabled={voucherTenderFlag}
             onTenderSelect={(tender) => {
               void handleTenderSelect(tender);
             }}
@@ -600,7 +607,7 @@ export function PaymentSurface({
                   }}
                 />
               )}
-              {selectedTender === 'internal_voucher' && (
+              {selectedTender === 'internal_voucher' && voucherTenderFlag && (
                 <VoucherEntry
                   remainingBalanceMinor={remainingBalanceMinor}
                   paymentAttemptId={paymentAttemptId}
