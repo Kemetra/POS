@@ -28,13 +28,14 @@ build's DOM measurement (`build.cjs`, `console.table`).
 |---|---|---|---|---|
 | Cart rows fully visible (of 10) | 5 | **9** | 6 | **9** |
 | Product-name column width | 164px | **248px (+51%)** | 214px | **386px (+80%)** |
-| Pay button position (x, y) | (10, 683) | (21, 561) | (29, 707) | (29, 585) |
-| Checkout confirm position (x, y) | (21, 587) | (21, 587) | (29, 611) | (29, 611) |
+| Pay button position (x, y) | (150, 683) | (97, 561) | (237, 707) | (105, 585) |
+| Checkout confirm position (x, y) | (161, 587) | (97, 587) | (237, 611) | (105, 611) |
 | Pay → confirm vertical move | 96px | **26px** | 96px | **26px** |
-| Sale total position → Checkout amount-due position | (264, 702) → (21, 151): moves across and up | **(21, 175) → (21, 151)** | (287, 723) → (29, 105) | **(29, 191) → (29, 105)** |
+| Sale total position → Checkout amount-due position | (404, 702) → (161, 151): moves across and up | **(97, 175) → (97, 151)** | (495, 723) → (237, 105) | **(105, 191) → (105, 105)** |
 
 All positions were measured from the rendered DOM (top-left of the element). At 1024, A's pay button
-also drifts inline-end by ~11px when a four-digit total widens the totals box.
+also drifts inline-end by ~11px when a four-digit total widens the totals box. The nav is on the
+inline-end (left) side in both directions, matching `V5Frame.tsx` (screen first, nav second).
 
 **Caveat:** A is the reference kit's reconstruction of the V5 grid, not the live app. The 023
 polish review recorded **6–7 rows at 1024** on the real V5 Sale with its data. Before adopting B, one

@@ -92,12 +92,12 @@ button { font: inherit; color: inherit; }
 /* ── Frame ─────────────────────────────────────────── */
 .frame {
   display: grid;
-  grid-template-columns: var(--nav) 1fr;
+  grid-template-columns: minmax(0, 1fr) var(--nav); /* V5: screen first (right), nav second (left) */
   height: 100vh;
 }
 .nav {
   background: var(--color-surface);
-  border-inline-end: 1px solid var(--color-border);
+  border-inline-start: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   padding: var(--gutter);

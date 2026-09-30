@@ -41,6 +41,7 @@ const n = (v) => `<span class="ltr num">${v}</span>`;
 const kbd = (k) => `<span class="kbd">${k}</span>`;
 
 // ── frame ──────────────────────────────────────────────────────────────────
+// DOM order matches V5Frame.tsx: working screen first (right in RTL), nav second (left).
 const NAV = [
   ['لوحة المتابعة'],
   ['نقطة البيع', true],
@@ -70,10 +71,10 @@ function nav(active, status) {
 function page({ id, title, compact, body, navActive = 'نقطة البيع', status, overlay = '', titleExtra = '', slim = false }) {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <title>${id} — ${title}</title><link rel="stylesheet" href="../vnext-kit.css"></head>
-<body class="${compact ? 'compact' : ''}"><div class="frame ${slim ? 'slim' : ''}">${slim ? navSlim(navActive, status) : nav(navActive, status)}
+<body class="${compact ? 'compact' : ''}"><div class="frame ${slim ? 'slim' : ''}">
 <div class="main"><header class="titlebar"><h1>${title}</h1>${titleExtra}<span class="grow"></span>
 <span class="ref-tag">${id} · مرجع تصميم VNext — ليس لقطة من التطبيق</span></header>
-<div class="workspace">${body}</div></div></div>${overlay}</body></html>`;
+<div class="workspace">${body}</div></div>${slim ? navSlim(navActive, status) : nav(navActive, status)}</div>${overlay}</body></html>`;
 }
 
 // ── shared sale fragments ──────────────────────────────────────────────────
