@@ -13,7 +13,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { buildCapturePayload } from '../capture-payload.js';
+import {
+  buildCapturePayload,
+  parseTendersSince,
+  TenderNotSendableError,
+} from '../capture-payload.js';
 import type { SaleRow } from '../../sales/repositories/sales.repository.js';
 
 function saleRow(over: Partial<SaleRow> = {}): SaleRow {
@@ -110,5 +114,125 @@ describe('T022 — buildCapturePayload', () => {
   it('handles an empty lines_json snapshot as zero lines', () => {
     const p = buildCapturePayload(saleRow({ lines_json: '[]' }));
     expect(p.lines).toEqual([]);
+  });
+});
+
+// ── RT-79 — tenders on capture (RT-10 D1/D2; owner decisions D-A / D-B) ─────────
+
+const CUTOFF = '2026-06-01T00:00:00.000Z';
+const ON = { tendersSince: CUTOFF };
+
+function withTenders(lines: unknown[], over: Partial<SaleRow> = {}): SaleRow {
+  return saleRow({ tender_lines_summary_json: JSON.stringify(lines), ...over });
+}
+
+describe('RT-79 — tenders (frozen tender_lines_summary_json → payload.tenders)', () => {
+  it('default off: no cutoff configured -> no tenders key, even with a tendered sale', () => {
+    const sale = withTenders([{ tender_type: 'cash', amount_applied_minor: 1500 }]);
+    expect('tenders' in buildCapturePayload(sale)).toBe(false);
+    expect('tenders' in buildCapturePayload(sale, { tendersSince: null })).toBe(false);
+  });
+
+  it('cash with change -> NET amount (applied - change_due)', () => {
+    const sale = withTenders([
+      { tender_type: 'cash', amount_applied_minor: 2000, change_due_minor: 500 },
+    ]);
+    expect(buildCapturePayload(sale, ON).tenders).toEqual([{ method: 'cash', amountMinor: 1500 }]);
+  });
+
+  it('split cash + card -> cash and card_external; card carries NO reference (D-A)', () => {
+    const sale = withTenders([
+      { tender_type: 'cash', amount_applied_minor: 1000 },
+      {
+        tender_type: 'external_card_terminal',
+        amount_applied_minor: 500,
+        external_reference: '*****',
+      },
+    ]);
+    const tenders = buildCapturePayload(sale, ON).tenders;
+    expect(tenders).toEqual([
+      { method: 'cash', amountMinor: 1000 },
+      { method: 'card_external', amountMinor: 500 },
+    ]);
+    expect(JSON.stringify(tenders)).not.toContain('reference');
+    expect(JSON.stringify(tenders)).not.toContain('*');
+  });
+
+  it('aggregates same-method lines into one entry', () => {
+    const sale = withTenders([
+      { tender_type: 'cash', amount_applied_minor: 700 },
+      { tender_type: 'external_card_terminal', amount_applied_minor: 300 },
+      { tender_type: 'cash', amount_applied_minor: 500, change_due_minor: 0 },
+    ]);
+    expect(buildCapturePayload(sale, ON).tenders).toEqual([
+      { method: 'cash', amountMinor: 1200 },
+      { method: 'card_external', amountMinor: 300 },
+    ]);
+  });
+
+  it('a voucher tender is NOT sendable (typed error, never a fabricated method)', () => {
+    const sale = withTenders([{ tender_type: 'internal_voucher', amount_applied_minor: 1500 }]);
+    expect(() => buildCapturePayload(sale, ON)).toThrow(TenderNotSendableError);
+  });
+
+  it('a voucher mixed with cash is NOT sendable either', () => {
+    const sale = withTenders([
+      { tender_type: 'cash', amount_applied_minor: 1000 },
+      { tender_type: 'internal_voucher', amount_applied_minor: 500 },
+    ]);
+    expect(() => buildCapturePayload(sale, ON)).toThrow(TenderNotSendableError);
+  });
+
+  it('an unknown tender type, a negative net, or a non-integer amount is NOT sendable', () => {
+    for (const bad of [
+      [{ tender_type: 'crypto', amount_applied_minor: 1500 }],
+      [{ tender_type: 'cash', amount_applied_minor: 100, change_due_minor: 500 }],
+      [{ tender_type: 'cash', amount_applied_minor: 15.5 }],
+      [null],
+    ]) {
+      expect(() => buildCapturePayload(withTenders(bad), ON)).toThrow(TenderNotSendableError);
+    }
+  });
+
+  it('malformed summary JSON is NOT sendable (dead-letter, not a crash)', () => {
+    const sale = saleRow({ tender_lines_summary_json: '{not json' });
+    expect(() => buildCapturePayload(sale, ON)).toThrow(TenderNotSendableError);
+  });
+
+  it('an empty summary -> tender-unknown: no tenders key', () => {
+    expect('tenders' in buildCapturePayload(withTenders([]), ON)).toBe(false);
+  });
+
+  it('cutoff rule: before the cutoff -> no tenders; at/after -> tenders; retries identical', () => {
+    const lines = [{ tender_type: 'cash', amount_applied_minor: 1500 }];
+    const before = withTenders(lines, { finalized_at: '2026-05-31T23:59:59.999Z' });
+    const at = withTenders(lines, { finalized_at: CUTOFF });
+    const after = withTenders(lines, { finalized_at: '2026-06-02T08:00:00.000Z' });
+    expect('tenders' in buildCapturePayload(before, ON)).toBe(false);
+    expect(buildCapturePayload(at, ON).tenders).toEqual([{ method: 'cash', amountMinor: 1500 }]);
+    expect(buildCapturePayload(after, ON).tenders).toEqual([{ method: 'cash', amountMinor: 1500 }]);
+    expect(JSON.stringify(buildCapturePayload(after, ON))).toBe(
+      JSON.stringify(buildCapturePayload(after, ON)),
+    );
+  });
+
+  it('a pre-cutoff voucher sale is left alone (byte-identical to today, not dead-lettered)', () => {
+    const sale = withTenders([{ tender_type: 'internal_voucher', amount_applied_minor: 1500 }], {
+      finalized_at: '2026-05-01T00:00:00.000Z',
+    });
+    expect('tenders' in buildCapturePayload(sale, ON)).toBe(false);
+  });
+});
+
+describe('RT-79 — parseTendersSince (POS_PULSE_FEATURE_SALE_TENDERS_SINCE)', () => {
+  it('unset / blank / unparseable -> null (off, fail-safe)', () => {
+    expect(parseTendersSince(undefined)).toBeNull();
+    expect(parseTendersSince('')).toBeNull();
+    expect(parseTendersSince('   ')).toBeNull();
+    expect(parseTendersSince('next tuesday')).toBeNull();
+  });
+
+  it('a valid ISO instant -> its canonical UTC ISO string', () => {
+    expect(parseTendersSince(' 2026-06-01T02:00:00+02:00 ')).toBe('2026-06-01T00:00:00.000Z');
   });
 });

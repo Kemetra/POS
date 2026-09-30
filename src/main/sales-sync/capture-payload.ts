@@ -11,8 +11,12 @@
  *     externalId)` collapses retries to one record.
  *   • Money is the Sale's integer minor units VERBATIM. The `sales` columns are
  *     already `INTEGER` at rest (migrations 0020/0028); there is no float anywhere.
- *   • NO tender / payment fields (gate A.5). `tender_lines_summary_json` from the
- *     Sale is deliberately NOT read.
+ *   • Tenders (RT-79, RT-10 D1/D2) are emitted ONLY when a rollout cutoff is
+ *     configured AND the sale was finalized at/after it. Default (no cutoff) is
+ *     byte-identical to the pre-RT-79 payload and never reads
+ *     `tender_lines_summary_json`. The cutoff makes every retry of a given sale
+ *     send an identical body (a changed body under the same Idempotency-Key is a 409
+ *     payload-hash mismatch on the server).
  *   • Lines come from the frozen `lines_json` snapshot (LineSnapshot[]).
  */
 
@@ -29,7 +33,13 @@ export interface CaptureSaleLine {
   lineAmountMinor: number;
 }
 
-/** The `captureSale` request body (v1 — no tender). Money is integer minor units. */
+/** One way the sale was paid. `amountMinor` is NET of change. No card data/reference (D-A). */
+export interface CaptureSaleTender {
+  method: 'cash' | 'card_external';
+  amountMinor: number;
+}
+
+/** The `captureSale` request body. Money is integer minor units. */
 export interface CaptureSalePayload {
   externalId: string;
   sourceSystem: 'pos-pulse';
@@ -40,6 +50,25 @@ export interface CaptureSalePayload {
   occurredAt: string;
   totalMinor: number;
   lines: CaptureSaleLine[];
+  /** RT-79: present only for a post-cutoff sale with sendable tender lines. */
+  tenders?: CaptureSaleTender[];
+}
+
+export interface BuildCapturePayloadOptions {
+  /** ISO instant; sales finalized at/after it carry `tenders`. null/undefined = off. */
+  tendersSince?: string | null | undefined;
+}
+
+/**
+ * A tendered sale that must never be sent (voucher, unknown method, corrupt amounts,
+ * unreadable summary). The engine dead-letters it with this reason rather than
+ * sending a fabricated method (RT-10 D2).
+ */
+export class TenderNotSendableError extends Error {
+  constructor(reason: string) {
+    super(`tender not sendable: ${reason}`);
+    this.name = 'TenderNotSendableError';
+  }
 }
 
 const SOURCE_SYSTEM = 'pos-pulse' as const;
@@ -54,6 +83,79 @@ interface PersistedLineSnapshot {
   line_subtotal_minor: number;
 }
 
+/** The frozen summary line shape (`buildRedactedTenderLinesSummary`). */
+interface PersistedTenderLine {
+  tender_type?: unknown;
+  amount_applied_minor?: unknown;
+  change_due_minor?: unknown;
+}
+
+const TENDER_METHOD: Readonly<Record<string, CaptureSaleTender['method']>> = {
+  cash: 'cash',
+  external_card_terminal: 'card_external',
+};
+
+/**
+ * Parse `POS_PULSE_FEATURE_SALE_TENDERS_SINCE`. Unset, blank or unparseable -> null
+ * (tenders OFF — fail-safe). A valid instant -> its canonical UTC ISO string.
+ */
+export function parseTendersSince(raw: string | undefined): string | null {
+  if (raw === undefined || raw.trim().length === 0) return null;
+  const ms = Date.parse(raw.trim());
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+}
+
+function isSafeNonNegativeInt(n: unknown): n is number {
+  return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
+}
+
+/**
+ * Frozen `tender_lines_summary_json` -> contract tenders: cash NET of change,
+ * `external_card_terminal` -> `card_external` (reference deliberately omitted), one
+ * entry per method in first-seen order, zero-net entries dropped. Throws
+ * `TenderNotSendableError` for anything that cannot be sent faithfully.
+ */
+function buildTenders(sale: SaleRow): CaptureSaleTender[] {
+  let lines: unknown;
+  try {
+    lines = JSON.parse(sale.tender_lines_summary_json);
+  } catch {
+    throw new TenderNotSendableError('unreadable tender summary');
+  }
+  if (!Array.isArray(lines)) throw new TenderNotSendableError('tender summary is not a list');
+
+  const net = new Map<CaptureSaleTender['method'], number>();
+  for (const raw of lines as unknown[]) {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new TenderNotSendableError('malformed tender line');
+    }
+    const line = raw as PersistedTenderLine;
+    const method =
+      typeof line.tender_type === 'string' ? TENDER_METHOD[line.tender_type] : undefined;
+    if (method === undefined) {
+      throw new TenderNotSendableError(`unsupported tender type ${String(line.tender_type)}`);
+    }
+    const applied = line.amount_applied_minor;
+    const change = line.change_due_minor ?? 0;
+    if (!isSafeNonNegativeInt(applied) || !isSafeNonNegativeInt(change) || change > applied) {
+      throw new TenderNotSendableError(`invalid ${method} amount`);
+    }
+    net.set(method, (net.get(method) ?? 0) + (applied - change));
+  }
+  return [...net]
+    .filter(([, amountMinor]) => amountMinor > 0)
+    .map(([method, amountMinor]) => ({
+      method,
+      amountMinor,
+    }));
+}
+
+function tendersApply(sale: SaleRow, tendersSince: string | null | undefined): boolean {
+  if (tendersSince === null || tendersSince === undefined) return false;
+  const finalized = Date.parse(sale.finalized_at);
+  return !Number.isNaN(finalized) && finalized >= Date.parse(tendersSince);
+}
+
 /**
  * Deterministic external id from the sale. The handoff action id is 008's
  * one-Sale-per-handoff idempotency anchor (unique index), so it is a stable,
@@ -63,7 +165,10 @@ export function deriveExternalId(sale: SaleRow): string {
   return `pos-pulse:${sale.envelope_handoff_action_id}`;
 }
 
-export function buildCapturePayload(sale: SaleRow): CaptureSalePayload {
+export function buildCapturePayload(
+  sale: SaleRow,
+  options: BuildCapturePayloadOptions = {},
+): CaptureSalePayload {
   const snapshots = JSON.parse(sale.lines_json) as PersistedLineSnapshot[];
   const lines: CaptureSaleLine[] = snapshots.map((s) => ({
     lineRef: s.line_id,
@@ -73,6 +178,8 @@ export function buildCapturePayload(sale: SaleRow): CaptureSalePayload {
     unitPriceMinor: s.unit_price_minor,
     lineAmountMinor: s.line_subtotal_minor,
   }));
+
+  const tenders = tendersApply(sale, options.tendersSince) ? buildTenders(sale) : [];
 
   return {
     externalId: deriveExternalId(sale),
@@ -84,5 +191,6 @@ export function buildCapturePayload(sale: SaleRow): CaptureSalePayload {
     occurredAt: sale.finalized_at,
     totalMinor: sale.subtotal_minor,
     lines,
+    ...(tenders.length > 0 ? { tenders } : {}),
   };
 }

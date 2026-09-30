@@ -65,6 +65,7 @@ import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.rep
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
 import { createSaleSyncEngine } from './sales-sync/sale-sync-engine.js';
+import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
@@ -1263,8 +1264,22 @@ app
             return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
           },
         });
+        // RT-79 rollout gate: unset = never send tenders (default). Ops set this ISO
+        // instant to the moment Backend-Core tender acceptance is ON; only sales
+        // finalized at/after it carry `tenders` (a 400 from a server with the switch
+        // off would otherwise dead-letter every sale). Unparseable = off, with a warning.
+        const tendersSinceRaw = process.env['POS_PULSE_FEATURE_SALE_TENDERS_SINCE'];
+        const tendersSince = parseTendersSince(tendersSinceRaw);
+        if (
+          tendersSinceRaw !== undefined &&
+          tendersSinceRaw.trim() !== '' &&
+          tendersSince === null
+        ) {
+          mainLogger.warn('sale_sync:tenders_since_unparseable_tenders_off');
+        }
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
+          tendersSince,
           stateRepo: saleSyncStateRepo,
           salesRepo,
           tenantId: pairingStatus.tenant_id,

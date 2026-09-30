@@ -12,8 +12,8 @@
  *      once a token returns (FR-3 / clarify Q1). The token is read in-process and
  *      never crosses the bridge.
  *   2. `stateRepo.eligible(scope, now)` → FIFO list (outbox LEFT JOIN state).
- *   3. For each: read the durable Sale, build the payload (no tender, integer
- *      minor units), POST, and record the outcome:
+ *   3. For each: read the durable Sale, build the payload (tenders only past the
+ *      RT-79 cutoff; integer minor units), POST, and record the outcome:
  *        ok / duplicate(409) → markSynced  (idempotent success, P5)
  *        transient(5xx/timeout) / no_connection → recordTransient (stay pending,
  *          attempt++, exponential backoff next_retry_at)  (P3 no silent loss)
@@ -25,7 +25,11 @@
 
 import type { SaleSyncClient } from './sale-sync-client-types.js';
 import type { SaleSyncStateRepo } from './sale-sync-state-repo.js';
-import { buildCapturePayload } from './capture-payload.js';
+import {
+  buildCapturePayload,
+  TenderNotSendableError,
+  type CaptureSalePayload,
+} from './capture-payload.js';
 
 /** Minimal read surface the engine needs from 008's sales repository. */
 export interface SaleReadPort {
@@ -49,6 +53,12 @@ export interface SaleSyncEngineDeps {
   /** One ISO-8601 UTC stamp source (determinism in tests). */
   now: () => string;
   backoff: BackoffPolicy;
+  /**
+   * RT-79 rollout gate (`POS_PULSE_FEATURE_SALE_TENDERS_SINCE`, an ISO instant).
+   * Unset/null = never send tenders. Set = only sales finalized at/after it carry
+   * `tenders`. Ops set it to the moment Backend-Core tender acceptance is ON.
+   */
+  tendersSince?: string | null | undefined;
   /** Called once when a sale is dead-lettered (non-blocking operator notification). */
   onDeadLetter?: (saleId: string) => void;
 }
@@ -81,7 +91,18 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     const sale = salesRepo.readById(saleId);
     if (sale === null) return; // outbox row without a durable Sale — skip (defensive)
 
-    const payload = buildCapturePayload(sale);
+    let payload: CaptureSalePayload;
+    try {
+      payload = buildCapturePayload(sale, { tendersSince: deps.tendersSince });
+    } catch (err) {
+      if (!(err instanceof TenderNotSendableError)) throw err;
+      // RT-10 D2: a sale whose tenders cannot be sent faithfully (voucher, unknown
+      // method, corrupt amounts) is dead-lettered observably — never POSTed, never
+      // given a fabricated method. The reason is logged by the caller only as a sale_id.
+      stateRepo.markDeadLetter({ saleId, tenantId, branchId, now: now() });
+      deps.onDeadLetter?.(saleId);
+      return;
+    }
     const result = await client.postSale(payload);
     const stamp = now();
 

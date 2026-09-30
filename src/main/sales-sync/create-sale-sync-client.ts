@@ -178,6 +178,14 @@ interface CaptureSaleWireBody {
   posTotal: string;
   occurredAt: string;
   lines: CaptureSaleLineWire[];
+  /** RT-79: only when the payload carries tenders. No `reference` (D-A). */
+  tenders?: CaptureSaleTenderWire[];
+}
+
+/** The DP-2 `SaleTender` wire shape (RT-10 D1) — `reference` is deliberately never sent. */
+interface CaptureSaleTenderWire {
+  method: 'cash' | 'card_external';
+  amount: string;
 }
 
 /**
@@ -201,6 +209,7 @@ export function toWireBody(payload: CaptureSalePayload, currencyCode: string): C
       );
     }
   }
+  const tenders = tendersWire(payload, exponent);
   return {
     sourceSystem: payload.sourceSystem,
     externalId: payload.externalId,
@@ -216,7 +225,36 @@ export function toWireBody(payload: CaptureSalePayload, currencyCode: string): C
       unit: DEFAULT_LINE_UNIT,
       ...tenantProductRefFor(line.productRef),
     })),
+    ...(tenders === undefined ? {} : { tenders }),
   };
+}
+
+/**
+ * RT-79: tender amounts minor -> exact decimal with the SAME exponent as `posTotal`.
+ * Asserts sum(tenders) == totalMinor before anything is sent — a mismatch is a local
+ * defect (it would only come back as 422 `sale_tender_mismatch`), so it throws and
+ * `postSale` maps it to `permanent` (dead-letter, never POSTed).
+ */
+function tendersWire(
+  payload: CaptureSalePayload,
+  exponent: number,
+): CaptureSaleTenderWire[] | undefined {
+  const tenders = payload.tenders;
+  if (tenders === undefined || tenders.length === 0) return undefined;
+  let sum = 0;
+  for (const t of tenders) {
+    if (!Number.isSafeInteger(t.amountMinor)) {
+      throw new Error(`tender ${t.method} amount must be a safe integer`);
+    }
+    sum += t.amountMinor;
+  }
+  if (sum !== payload.totalMinor) {
+    throw new Error(`tenders sum ${String(sum)} != sale total ${String(payload.totalMinor)}`);
+  }
+  return tenders.map((t) => ({
+    method: t.method,
+    amount: minorUnitsToDecimalString(t.amountMinor, exponent),
+  }));
 }
 
 /** Map an HTTP status onto the engine's outcome union (contracts/README.md). */
