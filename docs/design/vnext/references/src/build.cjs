@@ -569,6 +569,10 @@ async function render() {
   }
   await browser.close();
   console.table(report);
+  const failed = report.filter((r) => r.x || r.clipped);
+  if (failed.length > 0) {
+    throw new Error(`Layout check failed (horizontal overflow or clipped panel): ${failed.map((r) => r.name).join(', ')}`);
+  }
 }
 if (pw) {
   render().catch((err) => {
