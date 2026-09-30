@@ -157,42 +157,35 @@ describe('RT-103 TenderSelection — voucher explicitly enabled', () => {
   });
 });
 
+/** Mount PaymentSurface with the given flag, click one tender tile, return the start spy. */
+async function pickTender(
+  voucherTender: boolean,
+  tileTestId: string,
+): Promise<ReturnType<typeof vi.fn>> {
+  seedSurface(voucherTender);
+  const { bridge, start } = makeBridge();
+  render(<PaymentSurface _testBridge={bridge} />);
+  await act(async () => {
+    screen.getByTestId(tileTestId).click();
+    await Promise.resolve();
+  });
+  return start;
+}
+
 describe('RT-103 PaymentSurface — pilot restriction from the voucherTender flag', () => {
   it('flag off: selecting the voucher starts no payment and mounts no VoucherEntry', async () => {
-    seedSurface(false);
-    const { bridge, start } = makeBridge();
-    render(<PaymentSurface _testBridge={bridge} />);
-    await act(async () => {
-      screen.getByTestId('tender-voucher').click();
-      await Promise.resolve();
-    });
+    const start = await pickTender(false, 'tender-voucher');
     expect(start).not.toHaveBeenCalled();
     expect(screen.queryByTestId('voucher-entry-confirm')).not.toBeInTheDocument();
     expect(screen.getByTestId('tender-voucher')).toBeDisabled();
   });
 
-  it('flag off: cash still starts the payment and mounts the cash entry', async () => {
-    seedSurface(false);
-    const { bridge, start } = makeBridge();
-    render(<PaymentSurface _testBridge={bridge} />);
-    await act(async () => {
-      screen.getByTestId('tender-cash').click();
-      await Promise.resolve();
-    });
+  it.each([
+    ['flag off: cash still starts the payment', false, 'tender-cash', 'cash-entry'],
+    ['flag on: the voucher starts the payment', true, 'tender-voucher', 'voucher-entry-confirm'],
+  ])('%s and mounts its entry', async (_name, voucherTender, tile, entryTestId) => {
+    const start = await pickTender(voucherTender, tile);
     expect(start).toHaveBeenCalledTimes(1);
-    expect(await screen.findByTestId('cash-entry')).toBeInTheDocument();
-  });
-
-  it('flag on: the voucher tile is enabled and mounts VoucherEntry', async () => {
-    seedSurface(true);
-    const { bridge, start } = makeBridge();
-    render(<PaymentSurface _testBridge={bridge} />);
-    expect(screen.getByTestId('tender-voucher')).toBeEnabled();
-    await act(async () => {
-      screen.getByTestId('tender-voucher').click();
-      await Promise.resolve();
-    });
-    expect(start).toHaveBeenCalledTimes(1);
-    expect(await screen.findByTestId('voucher-entry-confirm')).toBeInTheDocument();
+    expect(await screen.findByTestId(entryTestId)).toBeInTheDocument();
   });
 });
