@@ -20,6 +20,11 @@ export interface FeatureFlagsState {
   saleFinalization: boolean;
   /** 009-product-search-and-barcode-lookup T049a: enables the catalogue search/scan/add surface. Fail-closed default: false. */
   productSearch: boolean;
+  /**
+   * RT-103: enables the internal voucher tender at checkout. Fail-closed default:
+   * false — vouchers are excluded from the pilot (RT-10 D2).
+   */
+  voucherTender: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
@@ -30,6 +35,7 @@ export interface FeatureFlagsStore extends FeatureFlagsState {
     payments?: boolean;
     saleFinalization?: boolean;
     productSearch?: boolean;
+    voucherTender?: boolean;
   }): void;
   reset(): void;
 }
@@ -39,6 +45,7 @@ const INITIAL: FeatureFlagsState = {
   payments: false,
   saleFinalization: false,
   productSearch: false,
+  voucherTender: false,
   hydrated: false,
 };
 
@@ -50,6 +57,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
       payments: flags.payments === true,
       saleFinalization: flags.saleFinalization === true,
       productSearch: flags.productSearch === true,
+      voucherTender: flags.voucherTender === true,
       hydrated: true,
     });
   },

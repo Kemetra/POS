@@ -131,6 +131,9 @@ afterEach(() => {
 
 /** Mount the surface and drive it into the entry phase for `testId`. */
 async function mountEntryPhase(testId: string): Promise<void> {
+  // RT-103: the voucher entry phase exists only when the voucher tender is enabled
+  // (it is off in the pilot by default); opt in so its amount-due check still runs.
+  if (testId === 'tender-voucher') useFeatureFlagsStore.setState({ voucherTender: true });
   const bridge = makeBridge();
   render(<PaymentSurface _testBridge={bridge} />);
   await act(async () => {

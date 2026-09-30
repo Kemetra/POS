@@ -63,5 +63,14 @@ export interface AppConfig {
      * the Sale cart present to receive added lines).
      */
     productSearch?: boolean;
+    /**
+     * RT-103 — enables the internal voucher tender tile at checkout.
+     *
+     * Defaults to `false`. Flip via `POS_PULSE_FEATURE_VOUCHER_TENDER` in main.
+     * Fail-closed: vouchers are excluded from the pilot (RT-10 D2), so the tile
+     * renders disabled and a voucher sale cannot be started. The sync side
+     * (RT-79) still dead-letters any voucher-tendered sale regardless.
+     */
+    voucherTender?: boolean;
   };
 }

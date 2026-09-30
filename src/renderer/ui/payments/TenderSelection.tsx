@@ -9,10 +9,11 @@ import { touchTarget } from '../tokens/touch.js';
  * Renders the three tender options:
  *   - cash: enabled and selectable.
  *   - external_card_terminal: enabled and selectable.
- *   - internal_voucher: ENABLED as of Wave 5c (§A4-B cleared 2026-05-25).
- *     The voucher entry surface (`<VoucherEntry>`) calls
- *     `tender.apply` with `tender_type: 'internal_voucher'`; the Slice 4
- *     bridge handler routes to the V-A client (Contract V-A).
+ *   - internal_voucher: selectable only when `voucherEnabled` (RT-103). The
+ *     pilot excludes vouchers (RT-10 D2), so by default the tile renders
+ *     DISABLED with an "unavailable" sub-label: not clickable, not in the tab
+ *     order. When enabled, `<VoucherEntry>` calls `tender.apply` with
+ *     `tender_type: 'internal_voucher'` (Wave 5c, Contract V-A).
  *
  * Returns null when no envelope is provided (route guard — caller must
  * not mount this component without a valid handoff envelope).
@@ -38,12 +39,19 @@ export interface TenderSelectionProps {
    * Presentation only; the parent still owns selection state.
    */
   selectedTender?: TenderKind | null;
+  /**
+   * RT-103: whether the internal voucher tender may be chosen. Fail-closed
+   * default `false` (pilot rule, RT-10 D2); PaymentSurface passes the
+   * `voucherTender` feature flag.
+   */
+  voucherEnabled?: boolean;
 }
 
 export function TenderSelection({
   envelope,
   onTenderSelect,
   selectedTender = null,
+  voucherEnabled = false,
 }: TenderSelectionProps): JSX.Element | null {
   if (envelope === null) {
     return null;
@@ -114,7 +122,11 @@ export function TenderSelection({
           <small>جهاز الشبكة الخارجي</small>
         </button>
 
-        {/* Wave 5c T291 — voucher slot ENABLED (§A4-B cleared 2026-05-25). */}
+        {/*
+          RT-103 — the voucher slot is available only when `voucherEnabled`. In the
+          pilot it stays visible (the grid keeps its three slots) but disabled, and
+          its sub-label says why, so the state is never carried by colour alone.
+        */}
         <button
           type="button"
           role="radio"
@@ -123,10 +135,12 @@ export function TenderSelection({
             selectedTender === 'internal_voucher' ? ' method-card--selected' : ''
           }`}
           data-testid="tender-voucher"
-          aria-label="قسيمة — Voucher"
+          aria-label={voucherEnabled ? 'قسيمة — Voucher' : 'قسيمة — غير متاحة حاليًا'}
+          disabled={!voucherEnabled}
+          aria-disabled={voucherEnabled ? undefined : 'true'}
           style={{ minHeight: touchTarget.min }}
           onClick={() => {
-            onTenderSelect('internal_voucher');
+            if (voucherEnabled) onTenderSelect('internal_voucher');
           }}
         >
           {selectedTender === 'internal_voucher' && (
@@ -135,7 +149,7 @@ export function TenderSelection({
             </span>
           )}
           <span className="tender-selection__option-label">قسيمة</span>
-          <small>قسيمة داخلية</small>
+          <small>{voucherEnabled ? 'قسيمة داخلية' : 'غير متاحة حاليًا'}</small>
         </button>
       </div>
     </section>

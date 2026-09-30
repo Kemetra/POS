@@ -2462,6 +2462,19 @@ body {
     color: var(--color-primary-emphasis);
   }
 
+  /*
+   * RT-103 — an unavailable tender (the pilot voucher slot). It keeps its place in
+   * the grid so the layout never shifts, but reads as inert: sunken fill, soft
+   * border, muted label, no hover response. No opacity fade — the sub-label
+   * ("غير متاحة حاليًا") carries the state in words and must keep AA contrast.
+   */
+  .tender-method-grid .method-card:disabled {
+    cursor: not-allowed;
+    background-color: var(--color-surface-sunken);
+    border-color: var(--color-border-soft);
+    color: var(--color-text-muted);
+  }
+
   /* ── Entry surfaces ───────────────────────────────────────────────────
    * The entry component mounts beneath the tender grid. It is a peer card
    * (rule above); its internal rows get the reference's row rhythm.

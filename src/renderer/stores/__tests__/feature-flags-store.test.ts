@@ -26,3 +26,22 @@ describe('feature-flags-store — productSearch (009 T049a)', () => {
     expect(useFeatureFlagsStore.getState().productSearch).toBe(false);
   });
 });
+
+describe('feature-flags-store — voucherTender (RT-103, RT-10 D2 pilot rule)', () => {
+  it('defaults voucherTender to false (pilot: voucher tender unavailable)', () => {
+    expect(useFeatureFlagsStore.getState().voucherTender).toBe(false);
+  });
+
+  it('hydrates voucherTender only from an explicit true', () => {
+    useFeatureFlagsStore.getState().hydrate({ payments: true });
+    expect(useFeatureFlagsStore.getState().voucherTender).toBe(false);
+    useFeatureFlagsStore.getState().hydrate({ voucherTender: true });
+    expect(useFeatureFlagsStore.getState().voucherTender).toBe(true);
+  });
+
+  it('reset restores voucherTender to false', () => {
+    useFeatureFlagsStore.getState().hydrate({ voucherTender: true });
+    useFeatureFlagsStore.getState().reset();
+    expect(useFeatureFlagsStore.getState().voucherTender).toBe(false);
+  });
+});

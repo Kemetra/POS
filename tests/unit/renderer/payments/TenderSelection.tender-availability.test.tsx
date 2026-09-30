@@ -83,13 +83,14 @@ describe('TenderSelection — external_card_terminal', () => {
   });
 });
 
-describe('TenderSelection — internal_voucher (Wave 5c T291 — now enabled)', () => {
-  // Wave 5c T291 — voucher slot is no longer reserved-disabled. §A4-B
-  // cleared 2026-05-25; the slot now routes to <VoucherEntry> via
-  // onTenderSelect('internal_voucher').
+describe('TenderSelection — internal_voucher (Wave 5c T291 — enabled configuration)', () => {
+  // Wave 5c T291 — when the voucher tender is enabled, the slot routes to
+  // <VoucherEntry> via onTenderSelect('internal_voucher'). RT-103: it is enabled
+  // only by opt-in (`voucherEnabled`); the pilot default (disabled) is covered in
+  // src/renderer/ui/payments/__tests__/voucher-pilot-restriction.test.tsx.
 
   it('renders the voucher slot as visible and enabled', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} voucherEnabled />);
     const btn = screen.getByTestId('tender-voucher');
     expect(btn).toBeInTheDocument();
     expect(btn).not.toBeDisabled();
@@ -105,7 +106,7 @@ describe('TenderSelection — internal_voucher (Wave 5c T291 — now enabled)', 
   it('calls onTenderSelect with "internal_voucher" when clicked', async () => {
     const user = userEvent.setup();
     const handler = vi.fn();
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={handler} />);
+    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={handler} voucherEnabled />);
     await user.click(screen.getByTestId('tender-voucher'));
     expect(handler).toHaveBeenCalledWith('internal_voucher');
     expect(handler).toHaveBeenCalledTimes(1);
