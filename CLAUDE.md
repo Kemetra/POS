@@ -501,6 +501,9 @@ the POS surface of the platform, packaged as an Electron application targeting W
 | [`docs/architecture/current.md`](docs/architecture/current.md) | **Canonical current internal architecture.** How POS-Pulse works today. Read before changing main-process wiring. |
 | [`docs/architecture/synchronization.md`](docs/architecture/synchronization.md) | The cross-repo boundary: POS ↔ Data-Pulse-2 ↔ Connector ↔ ERPNext. |
 | [`specs/README.md`](specs/README.md) | Spec status index — which specs are Active / Implemented / Deferred / Superseded. `specs/**` are historical design records, **not** the authority for current behaviour. |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | **Canonical visual design system** (with its sidecar `.impeccable/design.json`): the owner-approved RT-104 VNext language — light-first pharmacy teal, Dubai, Western tabular digits, Direction B for the active sale. Read before any UI work. Cashier behaviour stays governed by Jira **RT-24**; where they disagree, RT-24 wins and the conflict is raised. |
+| [`docs/design/vnext/`](docs/design/vnext/README.md) | The approved RT-104 VNext planning package (rationale, RT-25 delta, RT-24 invariants, migration map, bounded slices VN-S0…S12). Implementation only through its bounded Jira slices. |
+| `docs/design/pos-v3.5/` | **Historical, reference only, not authoritative** (the v3.5 navy / Inter / dark-default handoff). Never implement from it. |
 | `_reference/Data-Pulse/` | Read-only legacy reference. Gitignored. **Never copy-paste from here** (Constitution Principle IX). |
 
 ## Active feature
@@ -516,11 +519,12 @@ the POS surface of the platform, packaged as an Electron application targeting W
 > [#448](https://github.com/Kemetra/POS/issues/448). Snapshot-time next slice was US3 — Checkout /
 > tender (`tasks.md` Phase 7); **current priority and next work item come from Jira RT, not this file.**
 >
-> **Supplementary visual authority:** the approved Claude Design handoff is vendored at
-> [`specs/022-pos-ui-v4-rescue/design-handoff/`](specs/022-pos-ui-v4-rescue/design-handoff/).
-> Read its [`RECONCILIATION.md`](specs/022-pos-ui-v4-rescue/design-handoff/RECONCILIATION.md)
-> before using it — it is visual authority only and carries Saudi/ZATCA/15%-VAT/mada content that
-> is **not** authorised for this Egyptian product.
+> **Visual authority now:** [`docs/DESIGN.md`](docs/DESIGN.md) (RT-104 VNext, approved
+> 2026-10-01), which codifies and supersedes 022's visual direction. The 022 Claude Design handoff
+> vendored at [`specs/022-pos-ui-v4-rescue/design-handoff/`](specs/022-pos-ui-v4-rescue/design-handoff/)
+> is a historical visual reference only. Read its
+> [`RECONCILIATION.md`](specs/022-pos-ui-v4-rescue/design-handoff/RECONCILIATION.md) before using it;
+> it carries Saudi/ZATCA/15%-VAT/mada content that is **not** authorised for this Egyptian product.
 >
 > **The 010 / 011 blocks below are historical record**, retained for their implementation detail.
 > They are no longer the active feature.

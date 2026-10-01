@@ -6,6 +6,13 @@
 >
 > Generation key: **V5** clean-room (023) · **V5-frame/legacy** (V5 chrome around 006/022/v3.5
 > content) · **v4** (022) · **Legacy** (002/003/004/006/007/008) · **None** (no UI).
+>
+> **Direction B amendment (OD-7, approved 2026-10-01).** For VN-07…VN-11, the composition is
+> now the approved Direction B layout ([04 §16](04-design-language.md),
+> [10](10-direction-comparison.md); references `VN-B1-*`): a command bar holding the scan target
+> and search instead of the product rail, a full-width cart, the money column, and slim
+> navigation. The rows' states, RT-24 mappings and treatments are unchanged, but wherever a row
+> says "rail", read "command bar". The direct-add treatment in VN-09 still waits on RT-24 §C.1.
 
 ## A. Cashier journey
 

@@ -1,3 +1,23 @@
+> ## ⚠️ HISTORICAL — REFERENCE ONLY, NOT AUTHORITATIVE
+>
+> This folder is the **historical POS v3.0/v3.5 design handoff**. Nothing in it governs current
+> POS-Pulse work: not the visuals, not the behaviour, not the copy. Do not implement from it.
+>
+> | For | Current authority |
+> |:--|:--|
+> | Visual design system | [`docs/DESIGN.md`](../../DESIGN.md), the approved RT-104 VNext language ([`docs/design/vnext/`](../vnext/README.md)) |
+> | Cashier behaviour and transaction semantics | Jira **RT-24** (Cashier UX & Transaction Behavior Map) |
+> | Current code behaviour | GitHub `main` |
+>
+> What v3.5 shows that is superseded: dark default (now light-first), navy `#1f4e7a` (now
+> pharmacy teal `#0f766e`), the One-Accent Rule (teal may fill the primary commit), Inter (now
+> Dubai), and the v3.5 layouts (the active sale now uses VNext Direction B). Its feature and
+> tender scope is not product scope; current scope comes from Jira RT. The references
+> below to `docs/DESIGN.md` describe the v3.5 version of that file, since replaced.
+>
+> Use it only as a reference for intent, and re-derive anything you take from it against the
+> authorities above. Banner only — nothing below was rewritten or deleted.
+
 # Handoff: POS v3.0 — Rahma Qanater retail terminal (POS Pulse)
 
 Full implementation handoff for the **POS v3.0** point-of-sale terminal: an Arabic-first (RTL),

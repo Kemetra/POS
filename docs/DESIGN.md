@@ -1,81 +1,93 @@
 ---
 name: POS-Pulse
-description: Professional pharmacy POS terminal — precise, accountable, unhurried.
+description: Arabic-first pharmacy POS terminal — a calm clinical instrument, light and exact.
 colors:
-  primary: "#1f4e7a"
-  primary-emphasis: "#163d61"
-  primary-soft: "#e6eef6"
+  primary: "#0f766e"
+  primary-emphasis: "#0b5b55"
+  primary-soft: "#e6f4f1"
   primary-on: "#ffffff"
-  accent: "#2e7da3"
-  rail: "#0e1b2a"
-  rail-hover: "#162a40"
-  rail-text: "#cdd6e0"
-  rail-text-dim: "#7a8a9c"
-  background: "#fbfcfd"
+  background: "#f7f9fa"
   surface: "#ffffff"
   surface-elevated: "#f3f6fa"
   surface-sunken: "#eef2f6"
   text: "#0f1d2e"
-  text-muted: "#5b6b7c"
+  text-muted: "#53647a"
   text-inverse: "#ffffff"
   border: "#d8dfe7"
   border-soft: "#e7ecf2"
-  border-strong: "#9ca3af"
-  success: "#1f8a5b"
-  success-emphasis: "#176944"
+  border-strong: "#6f7b89"
+  overlay-scrim: "rgba(8, 14, 24, 0.55)"
+  success: "#15774d"
+  success-emphasis: "#10603d"
   success-soft: "#e7f5ee"
-  warning: "#b87600"
-  warning-emphasis: "#8f5b00"
-  warning-soft: "#fbf0db"
-  danger: "#b32e36"
-  danger-emphasis: "#8e2329"
-  danger-soft: "#f7e2e3"
-  info: "#1e6f8c"
-  info-emphasis: "#175670"
-  info-soft: "#e1f0f5"
-  neutral: "#5b6b7c"
-  neutral-emphasis: "#3d4c5a"
+  success-on: "#ffffff"
+  warning: "#a35a00"
+  warning-emphasis: "#7d4500"
+  warning-soft: "#fdf1e0"
+  warning-on: "#ffffff"
+  danger: "#b3261e"
+  danger-emphasis: "#8c1d18"
+  danger-soft: "#fbe9e7"
+  danger-on: "#ffffff"
+  info: "#1b6ca8"
+  info-emphasis: "#145184"
+  info-soft: "#e4f0f9"
+  info-on: "#ffffff"
 typography:
-  display:
-    fontFamily: "'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif"
+  amount-hero:
+    fontFamily: "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace"
+    fontSize: "2.75rem"
+    fontWeight: 700
+    lineHeight: 1.1
+    fontFeature: "'tnum'"
+  amount-total:
+    fontFamily: "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace"
     fontSize: "1.875rem"
     fontWeight: 700
     lineHeight: 1.1
-    letterSpacing: "-0.01em"
-  headline:
-    fontFamily: "'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif"
-    fontSize: "1.5rem"
+    fontFeature: "'tnum'"
+  screen-title:
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
+    fontSize: "1.25rem"
     fontWeight: 700
-    lineHeight: 1.2
-    letterSpacing: "-0.008em"
-  title:
-    fontFamily: "'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif"
-    fontSize: "1.125rem"
-    fontWeight: 600
     lineHeight: 1.3
-    letterSpacing: "-0.005em"
-  body:
-    fontFamily: "'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif"
+  section:
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
     fontSize: "1rem"
-    fontWeight: 400
-    lineHeight: 1.5
-    letterSpacing: "0"
-  label:
-    fontFamily: "'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif"
-    fontSize: "0.75rem"
-    fontWeight: 600
-    lineHeight: 1
-    letterSpacing: "0.01em"
-  mono:
-    fontFamily: "ui-monospace, 'Cascadia Code', 'JetBrains Mono', monospace"
+    fontWeight: 700
+    lineHeight: 1.4
+  control-lg:
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 700
+    lineHeight: 1.3
+  body:
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 400
+    lineHeight: 1.6
+  body-strong:
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 600
+    lineHeight: 1.6
+  money-row:
+    fontFamily: "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace"
+    fontSize: "0.875rem"
+    fontWeight: 600
+    lineHeight: 1.4
+    fontFeature: "'tnum'"
+  meta:
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 400
     lineHeight: 1.5
+  kbd:
+    fontFamily: "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace"
+    fontSize: "0.6875rem"
+    fontWeight: 600
+    lineHeight: 1
 rounded:
-  none: "0"
-  sm: "2px"
-  md: "4px"
-  lg: "8px"
   control: "10px"
   card: "14px"
   pane: "16px"
@@ -94,219 +106,332 @@ components:
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.primary-on}"
+    typography: "{typography.body-strong}"
     rounded: "{rounded.control}"
-    padding: "0 14px"
     height: "44px"
   button-primary-hover:
     backgroundColor: "{colors.primary-emphasis}"
+  button-commit:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.primary-on}"
+    typography: "{typography.control-lg}"
+    rounded: "{rounded.control}"
+    height: "56px"
+    width: "100%"
   button-secondary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
+    typography: "{typography.body-strong}"
     rounded: "{rounded.control}"
-    padding: "0 14px"
     height: "44px"
-  button-secondary-hover:
-    textColor: "{colors.primary}"
   button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.text}"
+    typography: "{typography.body-strong}"
     rounded: "{rounded.control}"
-    padding: "0 14px"
     height: "44px"
-  button-ghost-hover:
-    backgroundColor: "{colors.surface-elevated}"
-  button-destructive:
+  button-danger:
     backgroundColor: "{colors.danger}"
-    textColor: "{colors.primary-on}"
+    textColor: "{colors.danger-on}"
+    typography: "{typography.body-strong}"
     rounded: "{rounded.control}"
-    padding: "0 14px"
     height: "44px"
-  button-destructive-hover:
+  button-danger-hover:
     backgroundColor: "{colors.danger-emphasis}"
-  nav-entry:
-    backgroundColor: "transparent"
-    textColor: "{colors.rail-text}"
-    rounded: "12px"
-    height: "48px"
-  nav-entry-active:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.primary-on}"
-  card:
+  input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    height: "44px"
+  scan-target:
+    backgroundColor: "{colors.surface-sunken}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-strong}"
+    rounded: "{rounded.control}"
+    height: "44px"
+  tender-tile:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.control-lg}"
+    rounded: "{rounded.control}"
+    height: "72px"
+  tender-tile-selected:
+    backgroundColor: "{colors.primary-soft}"
+    textColor: "{colors.primary-emphasis}"
+  panel:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.card}"
-    padding: "{spacing.6}"
+    padding: "12px"
+  dialog:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.pane}"
+    width: "560px"
+  nav-link:
+    backgroundColor: "transparent"
+    textColor: "{colors.text-muted}"
+    typography: "{typography.body-strong}"
+    rounded: "{rounded.control}"
+    height: "44px"
+  nav-link-active:
+    backgroundColor: "{colors.primary-soft}"
+    textColor: "{colors.primary-emphasis}"
+  badge:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.text}"
+    typography: "{typography.meta}"
+    rounded: "{rounded.pill}"
+    height: "24px"
+  kbd-hint:
+    backgroundColor: "{colors.surface-sunken}"
+    textColor: "{colors.text-muted}"
+    typography: "{typography.kbd}"
+    rounded: "{rounded.pill}"
 ---
 
 # Design System: POS-Pulse
 
-## 1. Overview
+> **Authority.** This file is the operative design system for POS-Pulse agents and humans. It
+> carries the owner-approved **RT-104 VNext** design language (approved 2026-10-01, Jira RT-104
+> Done, package merged on `main` as `d04a385`). The long-form rationale lives in
+> [`design/vnext/`](design/vnext/README.md); start with
+> [`04-design-language.md`](design/vnext/04-design-language.md) and
+> [`10-direction-comparison.md`](design/vnext/10-direction-comparison.md).
+>
+> - **RT-24 is the behaviour authority.** Nothing here changes transaction, payment, cart,
+>   recovery, scanner, offline or manager semantics. If this file and RT-24 (or a merged
+>   GitHub contract) disagree, the functional contract wins; raise the conflict
+>   ([`08-rt24-invariants.md`](design/vnext/08-rt24-invariants.md)).
+> - **Token values** in the frontmatter are the shipped light `:root` values in
+>   `src/renderer/styles/tailwind.css` (the code is the source of values; if they ever differ,
+>   the CSS wins and this file is stale).
+> - **Approved, not yet shipped** items are tagged with the bounded slice that lands them, e.g.
+>   *(VN-S2)*. Do not describe them as shipped and do not implement them outside that slice's
+>   Jira issue ([`09-implementation-slices.md`](design/vnext/09-implementation-slices.md)).
+> - **Still open** (do not resolve them by design): the RT-24 §C confirmations — direct add vs
+>   confirm-first, lazy cart, same-device suspend/resume, key map; OD-3's validation against real
+>   Egyptian pharmacy receipts; and the real-app capacity capture that must confirm Direction B
+>   before VN-S12 ships.
+> - Superseded: the v3.5 navy / Inter / dark-default system and `docs/design/pos-v3.5/`
+>   (historical reference only).
 
-**Creative North Star: "The Accountable Instrument"**
+## Overview
 
-POS-Pulse is a precision instrument, not a consumer product. Its visual language is calibrated around one question: does the operator know the true state of every operation? The interface is built from opaque, well-lit surfaces, a commanding navy command rail, and a restrained accent vocabulary that preserves the visual weight of information. Every interaction is keyboard-first; every state change is legible without mouse proximity.
+**Creative North Star: "The Accountable Instrument, in daylight"**
 
-**Two themes — dark is the default (ADR-0004).** The terminal ships with the **Vault Dark** register as its default theme; a **light** toggle (the design-system base register) is always reachable from the TopBar, and the operator's choice persists across launches in `localStorage`. Switching themes flips token *values* only — no component is forked and no new component family is added. Both registers keep surfaces opaque and legible under pharmacy overhead lighting; neither relies on atmospheric depth. Light remains the design-system base from which the dark register is derived as a token override.
+The terminal is a calm clinical instrument on a pharmacy counter. It is read at arm's length, under
+overhead light, by a cashier whose hands are on a scanner and a keyboard while a customer waits.
+Every screen answers three questions in this order: *what is in the sale and what does it cost*,
+*what is the one next thing to do*, and *is anything not proven yet*. Anything not yet proven —
+payment UNKNOWN, sale not finalized, receipt not printed, sale not synced, terminal offline — is
+visible and named, never implied away.
 
-The system is **Arabic-first**: RTL is systemic — set once at the document root (`<html dir="rtl" lang="ar">`) — so component layout flips through CSS logical properties without per-leaf direction spot-fixes. The font stack gracefully degrades from Inter Variable to Segoe UI to system-UI without introducing a proprietary dependency that could cause a visual regression on a paired Windows 10 terminal. Motion is state-change-only: transitions confirm actions, they do not entertain.
+The language is light, quiet, dense, exact and Arabic-first. It is not a new look: it codifies the
+shipped 022 light pharmacy-teal system and the 023/V5 Sale screen, then completes them with the
+rules they lacked (numerals, focus, scanner ownership, density, states, themes, 1024/1280). The
+active-sale journey uses **Direction B** (OD-7): a cart-first workspace with a command bar, a
+persistent money column, and a slim navigation rail from Sale through Checkout to completion.
 
-The design explicitly rejects consumer SaaS aesthetics, glassmorphism, SaaS metric-hero templates, and generic AI tool aesthetics. If a screen could be mistaken for a Notion dashboard or a startup landing page, something has gone wrong.
+The visual weight of anything tracks its consequence — neutral < primary < warning < destructive —
+never brand flourish. It rejects dashboards, marketing gloss, playfulness, decoration and "AI app"
+aesthetics.
 
 **Key Characteristics:**
-- Restrained color strategy: navy primary + teal accent occupy less than 15% of any screen; the rest is neutral surface
-- Flat-by-default with structural shadow for elevation hierarchy (cards lift gently; overlays are unmistakably above)
-- Inter Variable as the single sans typeface; no secondary display font; weight contrast carries hierarchy
-- All interactive elements meet the 44 × 44 CSS px touch-target floor
-- State banners (status, warnings, errors) are persistent, not toast-based
-- Two themes (dark default, light toggle) via token-value overrides only — never forked components
-- In the **light** register, the dark navigation rail is the one intentionally drenched surface; it anchors the layout without darkening the workspace. In the **dark** register the rail deepens further so it still reads as the anchored command surface against the dark workspace
+- Money is the loudest thing on screen, and the total / amount due is never scrolled out of view at 1024 or 1280.
+- One filled-teal primary per region; teal is the commit colour, not decoration.
+- Proven or labelled: success styling only for persisted facts (SETTLED, FINALIZED, PRINTED, POSTED).
+- Quiet when healthy, loud when actionable: a small persistent status indicator, banners only when the cashier must act or must know.
+- Keyboard and scanner first, touch-capable (44px floor); scanner input has one visible owner.
+- Arabic-first RTL; money, codes and quantities are LTR-isolated Western digits with tabular figures.
+- Light is the pilot register; Windows contrast themes (forced colours) must work; colour is never the only signal.
 
-## 2. Colors: The Command Palette
+## Colors
 
-A restrained palette built around a single navy primary with a teal accent marker. Neutrals are tinted toward the primary hue at chroma 0.005–0.01 so they never read as cold gray.
-
-**The One-Accent Rule.** The teal accent (`#2e7da3`) appears only as a navigational marker (the active-state tab on the rail entry) and a focus-ring fallback. It is not used as a button color, badge color, or decorative fill. Its rarity is the point.
+One calm teal carries every commitment; everything else is cool, near-white clinical neutral, with
+four status roles held strictly to status surfaces.
 
 ### Primary
-- **Command Navy** (`#1f4e7a`): Primary action buttons, active navigation entries, key interactive affordances. The authority color — use where commitment is being requested.
-- **Deep Command** (`#163d61`): Hover and emphasis state for primary elements. 3–5% darker than Command Navy.
-- **Horizon Wash** (`#e6eef6`): Soft background tint for selected states, info surfaces, and tag fills. Never used for full-panel backgrounds.
-
-### Secondary
-- **Teal Marker** (`#2e7da3`): Navigation active-state accent tab (4 × 24 px rule only), focus rings as the Clerk accent color. Never a fill.
+- **Pharmacy Teal** (primary): the one next action — the commit button, the selected nav entry, the selected tender, the focus ring. White on it is 5.47:1.
+- **Deep Teal** (primary-emphasis): hover and pressed state of the commit, and teal ink on teal-wash selections (7.95:1 on white).
+- **Teal Wash** (primary-soft): selected-state fill — active nav entry, selected tender tile, listbox active option, scan-acknowledge row flash.
 
 ### Neutral
-- **Midnight Ink** (`#0f1d2e`): Primary text. The darkest color in the system; never pure black.
-- **Muted Slate** (`#5b6b7c`): Secondary text, descriptions, placeholder copy. Readable at 14px minimum.
-- **Near-White** (`#fbfcfd`): Workspace background. Slightly warm; never pure white.
-- **Clean White** (`#ffffff`): Card and panel surfaces that lift off the workspace.
-- **Lifted Canvas** (`#f3f6fa`): Inert tiles, slot-ID chips, banner band backgrounds.
-- **Recessed** (`#eef2f6`): Sunken well — PIN keypad recess, inset panels. Reads as below surface.
-- **Quiet Edge** (`#d8dfe7`): Default border. Separates without competing.
-- **Whisper Edge** (`#e7ecf2`): Soft divider, subtler than Quiet Edge.
-- **Vault Dark** (`#0e1b2a`): Navigation rail background, and the name of the default **dark register** (ADR-0004). In the light register it is the one intentionally dark surface; in the dark register it is the deepest member of a fully dark palette (see the dark token table in `src/renderer/styles/tailwind.css`, `:root[data-theme="dark"]`).
-- **Muted Silver** (`#cdd6e0`): Rail text at rest. Readable on Vault Dark; visually recessive when not hovered.
+- **Clinical Canvas** (background): the page behind panels.
+- **Clean White** (surface): panels, the cart, dialogs.
+- **Raised Band** (surface-elevated): titlebars, table headers, the sticky totals band.
+- **Recessed Well** (surface-sunken): the scan target, keypad well, disabled tiles, keyboard-hint chips.
+- **Clinical Ink** (text): all primary text and every numeral (17:1).
+- **Muted Ink** (text-muted): secondary text, meta, hints — 12px and up only; never money or errors.
+- **Hairline** (border, border-soft): decorative dividers only.
+- **Control Edge** (border-strong): the boundary of every input, button and tile (≥3:1, WCAG 1.4.11).
+- **Scrim** (overlay-scrim): behind modal dialogs and the lock screen.
 
-### Status Colors
-- **Confirmation Green** (`#1f8a5b` / soft `#e7f5ee`): Success states — sale confirmed, shift opened.
-- **Caution Amber** (`#b87600` / soft `#fbf0db`): Warnings — degraded connection, low stock, near-expiry.
-- **Alert Red** (`#b32e36` / soft `#f7e2e3`): Destructive states, errors, offline banners. Used for danger buttons.
-- **Info Teal** (`#1e6f8c` / soft `#e1f0f5`): Syncing state, informational banners.
+### Status
+- **Proven Green** (success family): proven outcomes only, and the healthy indicator dot.
+- **Degraded Amber** (warning family): degraded but operable — offline selling, stale catalogue, printer failed after a completed sale.
+- **Consequence Red** (danger family): destructive actions (void, cancel sale), blocking errors, and UNKNOWN payment results.
+- **Pending Blue** (info family): syncing, informational notices, and "recorded but not yet proven downstream".
 
-**The Status-Color Containment Rule.** Status colors (success, warning, danger, info) appear only on their designated surfaces (badges, status banners, alert callouts). They are never used as decorative fills, hover accents, or brand colors on primary actions.
+### Named Rules
+**The Commit-Teal Rule.** Filled teal appears on at most one control per region, plus selected-state washes. Large teal fills are allowed for the primary commit — the v3.5 One-Accent Rule is superseded.
 
-## 3. Typography
+**The No-Accent Rule.** There is no separate accent role. Selection is `primary-soft` fill + `primary` ink + a 2px inline-start bar + `aria-current`. The legacy `--color-accent` (equal to primary today) and the dark `--color-rail*` tokens exist only for legacy surfaces until VN-S10 retires them; new work never uses them.
 
-**Primary Font:** Inter Variable → Inter → Segoe UI → system-UI → sans-serif
-**Mono Font:** ui-monospace → Cascadia Code → JetBrains Mono → monospace
+**The Status-Containment Rule.** Status colours appear only on status surfaces: banner, indicator, badge, outcome panel, destructive button. Never as decoration, hover accent or brand fill.
 
-**Character:** A single humanist sans that scales from receipt-line labels at 11px to display headings at 30px without needing a companion face. Weight is the hierarchy lever: bold (700) for display and headline, semibold (600) for titles and labels, regular (400) for body. No italic emphasis in the core UI — bold is preferred for in-line emphasis in operational text.
+**The Pending-Is-Not-Success Rule.** "Recorded but not yet proven downstream" (payment SETTLED while the sale is still FINALIZING; sale FINALIZED but not POSTED) uses info, not success. Success green is reserved for the proven fact the cashier is being told about.
 
-**The No-Second-Font Rule.** Inter Tight and any secondary display typeface are rejected by spec (FR-052). Weight contrast alone carries the display hierarchy. A secondary proprietary font would introduce a Windows font dependency that causes fallback regressions on paired terminals.
+**The UNKNOWN-Is-Not-A-Decline Rule.** An UNKNOWN card result uses the danger role with «النتيجة غير مؤكدة», never the word «مرفوض».
+
+The dark register (`:root[data-theme='dark']`) is maintained but **not offered** in the pilot (OD-4); it returns only after a dedicated dark QA slice captures every V5 screen.
+
+## Typography
+
+**Body Font:** Dubai (Windows 10/11 system font; Segoe UI, Tahoma, Arial, system-ui fallbacks)
+**Numerals and Codes Font:** ui-monospace (Cascadia Code, JetBrains Mono, Consolas fallbacks), always with tabular figures
+
+**Character:** one quiet Arabic-first system face for every word, and a tabular monospace for every amount, quantity and code, so digits align in dense cart rows and totals never jitter. No font is bundled (OD-2: Dubai is kept for the pilot; the bundled-font option is declined), so the `no-brand-font` guard stays green.
 
 ### Hierarchy
-- **Display** (700, 30px / 1.875rem, line-height 1.1, letter-spacing −0.01em): Screen titles, modal headings. Used sparingly — at most one per screen.
-- **Headline** (700, 24px / 1.5rem, line-height 1.2, letter-spacing −0.008em): Section headers, panel titles within a screen.
-- **Title** (600, 18px / 1.125rem, line-height 1.3, letter-spacing −0.005em): Card headers, form section labels, named regions.
-- **Body** (400, 16px / 1rem, line-height 1.5): Primary paragraph text. Cap line length at 65–75ch on reading surfaces.
-- **Label** (600, 12px / 0.75rem, line-height 1, letter-spacing +0.01em): Badges, chip labels, table column headers, status indicators.
-- **Mono** (400, 14px / 0.875rem, line-height 1.5): Terminal IDs, receipt line amounts, barcode values, audit reference strings.
+The frontmatter roles map onto the shipped size scale; the `--type-*` role tokens themselves land in *(VN-S2)* — until then, pick the scale size the role names, not a raw literal.
 
-**The Tight-Display Rule.** Display and Headline headings use letter-spacing −0.01em and −0.008em respectively — not Inter Tight as a separate face. The visual effect is equivalent; the font stack remains a single family.
+- **Amount hero** (700, 44px, 1.1, mono tabular): the Checkout amount due and the completion amount. 36px at 1024.
+- **Amount total** (700, 30px, 1.1, mono tabular): the Sale grand total and ledger totals. 24px at 1024 compact.
+- **Screen title** (700, 20px, 1.3): one per screen, in the titlebar.
+- **Section** (700, 16px, 1.4): panel headings.
+- **Control large** (700, 16px, 1.3): the primary commit button and tender tile labels.
+- **Body / body strong** (400 / 600, 14px, 1.6): default cashier text; product names and button text are strong.
+- **Money row** (600, 14px, 1.4, mono tabular): line prices and ledger rows.
+- **Meta** (400–600, 12px, 1.5): hints, secondary names, timestamps.
+- **Kbd** (600, 11px, mono): keyboard-hint chips only — the one place below 12px is allowed.
 
-## 4. Elevation
+### Numerals
+Approved policy (OD-3): **Western digits everywhere** — money, quantities, counts, times, dates, barcodes, SKUs, sale and receipt numbers, terminal ids. Money reads `1,250.00 EGP`: thousands grouping, two decimals, the `EGP` label, minus as U+2212 at the inline start of the isolated run. Times use the pinned `ar-EG-u-nu-latn` locale. Inputs accept Arabic-Indic and Persian digits and normalise them to ASCII before validation.
 
-The system uses structural shadows — subtle, ambient, tinted toward the primary navy hue rather than flat black. The layering model has four distinct levels: workspace, surface, elevated, and overlay. Elevation is never decorative; it maps directly to z-index and interaction scope.
+Today's code still prints `123.45 EGP` with no grouping, and renders some times and counts in Arabic-Indic digits; the change is *(VN-S3, absorbed into VN-S12)*, must not alter integer minor-unit semantics, and stays subject to the still-open check against real Egyptian pharmacy receipts.
 
-**The Flat-By-Default Rule.** Every surface starts flat. Shadows appear only as a structural response to layering (card above workspace, dialog above everything) or to state (hover on a card signals lift). Purely decorative shadows are prohibited.
+### Named Rules
+**The Twelve-Pixel Rule.** Nothing a cashier must read is below 12px; 11px exists only for keyboard-hint chips.
+
+**The Arabic Leading Rule.** Arabic body text keeps line-height ≥ 1.5 — ascenders, descenders and dots clip at 1.25. Long product names wrap to two lines in the cart, then ellipsis, with the full name in the row's accessible name.
+
+**The Plain Emphasis Rule.** No italics and no all-caps; weight carries emphasis. All-caps Latin codes hurt scanning of `O/0` and `I/1`.
+
+## Layout
+
+**RTL composition.** `<html lang="ar" dir="rtl">` is set once at the root; components never re-declare RTL and only declare `dir="ltr"` on isolated Latin runs. Reading order is importance order: the inline start (right) holds *where you are and what you are adding*; the inline end (left) holds *money and the commit action*. Only CSS logical properties are used; a physical `left/right` needs a code comment explaining why. Money, quantities, barcodes, SKUs, sale and receipt numbers, terminal ids, times, card references and Latin product names are LTR-isolated (`unicode-bidi: isolate` or `<bdi>`) — isolate the number, never the whole Arabic sentence. Keypads stay LTR (1-2-3 on the top row). Direction-implying icons mirror; search, scan, print, lock, clock and check never do.
+
+**Spacing.** A 4px base scale (4 to 96). Two density profiles, switchable only between transactions, never mid-sale: **compact** (default up to 1279px: 8px gutter and gap, 52px cart rows, 12px panel padding, 44px titlebar) and **comfortable** (default from 1280px: 12px gutter and gap, 60px rows, 16px padding, 48px titlebar). The density tokens land in *(VN-S2)*. Density never changes target sizes, money type, the visibility of the total and next action, or shortcut meanings.
+
+**Frame — Direction B (OD-7).** The workspace is a size container and screens adapt with container queries, not viewport media queries. Navigation sits on the inline end (left), after the screen.
+
+| Aspect | 1280×800 (comfortable) | 1024×768 (compact) |
+|---|---|---|
+| Nav on an active sale (Sale, Checkout, completion — first item until «بيع جديد») | slim rail, icon + short label, ≈76px | slim rail, ≈76px |
+| Nav elsewhere (sign-in boundary, manager/admin screens) | labelled panel, 208px | labelled panel, 140px |
+| Sale | command bar (scan target, search, suspended-sales entry) above a full-width cart; money column ≈320px on the inline end: total at the top, «الدفع», suspend and cancel at the bottom | same, money column ≈280px; at least 6 cart rows visible |
+| Search results | drop down over the cart, 3–5 results, close on Esc or selection | same |
+| Checkout | order summary ≈280px · tender panel fluid · payment ledger ≈320px (amount due and commit pinned) | tender panel fluid · payment ledger ≈296px; summary collapses to a one-line strip with «عرض الأصناف» |
+| Below 1024 | `ScreenTooSmall`, Arabic copy *(VN-S2; today English)* | — |
+
+The money column keeps the same place through the whole journey: the Sale total becomes the Checkout amount due and «الدفع» becomes «تأكيد الدفع». Column widths are reference-kit values (`design/vnext/references/`), confirmed in the real app by *(VN-S12)* (Sale layout and slim nav) and *(VN-S4)* (Checkout content); today's shipped Sale is still the Direction A V5 layout.
+
+**The Never-Scrolled-Away Rule.** At neither width may the total, the amount due, the safe back/cancel, suspend (when applicable) or the primary action be scrolled out of view.
+
+**Touch targets.** Every interactive control is at least 44×44px. The primary commit is 56px tall and full panel width (60px at comfortable). Tender tiles are 72px (compact) / 84px (comfortable); numpad keys 56×56 / 60×64 with ≥ 8px spacing; quick-amount chips 48px (they *set* the amount, never add). Cart row actions are 44×44 and ≥ 8px apart, and remove is never adjacent to plus. Destructive and commit actions are separated from frequent actions by ≥ 16px or a separate region.
+
+## Elevation & Depth
+
+Flat by default, borders before shadows. Four levels: **canvas** (background, no treatment), **panel** (surface, 1px hairline, card radius, no shadow — product search, cart, tender panel, money column), **raised band** (surface-elevated inside a panel, no shadow — titlebars, table headers, the sticky totals band) and **overlay** (surface on the scrim, with the overlay shadow and pane radius — dialogs, manager approval, lock). Sticky regions use a raised band plus a top hairline instead of a shadow, so they survive forced-colours mode.
 
 ### Shadow Vocabulary
-- **None** (`box-shadow: none`): Default state for all surfaces; no resting shadow on interactive elements.
-- **sm** (`0 1px 2px rgba(0,0,0,0.05)`): Hairline depth for inline chips, tight status indicators.
-- **card** (`0 1px 2px rgba(15,29,46,0.04), 0 8px 24px rgba(15,29,46,0.06)`): Standard card elevation. The tint toward `#0f1d2e` (Midnight Ink) keeps it cool rather than generic gray.
-- **pane** (`0 18px 60px rgba(15,29,46,0.10)`): Modal-adjacent panels, the pairing screen pane.
-- **overlay** (`0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.25)`): Dialogs and drawers. Unmistakably above the page.
-- **inset** (`inset 0 1px 0 rgba(15,29,46,0.04), inset 0 0 0 1px rgba(15,29,46,0.04)`): Sunken wells — the PIN keypad recess, numeric input backgrounds where depth is needed.
+- **Overlay** (`box-shadow: 0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.25)`): dialogs, manager approval sheet, lock screen. The only shadow new work uses.
+- **Pane** (`box-shadow: 0 18px 60px rgba(15,29,46,0.10)`): the legacy pairing pane only.
+- `--shadow-card` and `--shadow-inset` remain for legacy surfaces until they migrate; they are not used on V5/VNext panels.
 
-## 5. Components
+### Named Rules
+**The Borders-Before-Shadows Rule.** Depth below the overlay level is expressed with hairlines and tint, never shadow.
+
+**The Forced-Colours Rule.** Every state stays distinguishable in Windows contrast themes: outlines rather than shadows, text, icon or border on every state, `Highlight`/`HighlightText` on selected tiles, and `forced-color-adjust: none` only for product images. A forced-colours capture of every touched surface is part of each slice's evidence.
+
+## Shapes
+
+Gently rounded, consistent by role: controls (buttons, fields, tiles, nav entries) 10px; panels 14px; overlays 16px; chips, badges and keyboard hints a full pill. The 2px, 4px and 8px radii exist in the token scale but are not used for controls (the V5 sign-out button at 4px is the known outlier). Panels never contain panels.
+
+## Components
+
+One vocabulary, one implementation each, under `src/renderer/v5/**` (the clean-room wall stays). The full state matrix is [`06-component-state-inventory.md`](design/vnext/06-component-state-inventory.md). The legacy 007 `ui/primitives/*`, `.btn`, `.v4-*`, the v3.5 tender classes and the four hand-rolled dialog mechanisms are retired vocabularies, kept alive only until their screens migrate.
 
 ### Buttons
-Buttons are the primary commitment affordances. Their shape is gently rounded (10px radius, `--radius-control`) — more deliberate than pill, less austere than square. All buttons are 44px minimum height to meet the touch-target floor.
+- **Shape:** control radius (10px); sizes medium 44px and large 56px.
+- **Primary / commit:** Pharmacy Teal fill, white text. The commit (Checkout CTA, confirm payment, new sale) is large and full panel width. Hover deepens to Deep Teal.
+- **Secondary:** white surface with a Control Edge boundary and ink text — supporting actions next to a primary.
+- **Ghost:** transparent, ink text — cancel, back, low-commitment navigation.
+- **Danger / danger-quiet:** Consequence Red fill (or red ink on white for the quiet form) — void, cancel sale, cancel after handoff. Hover deepens to the danger emphasis.
+- **Focus:** `outline: 2px solid` the focus ring (primary) with a 2px offset on every focusable element — never only a box-shadow, which disappears in contrast themes.
+- **Disabled-by-policy:** visibly present, sunken, with a reason line (the RT-103 internal-voucher tender tile is the reference case).
 
-- **Primary** (Command Navy fill, white text, 10px radius, 14px inline padding): For the single most important action on a surface — confirm sale, sign in, apply. One primary button per context.
-- **Primary hover/focus**: Darkens to Deep Command (`#163d61`). Focus ring: 4px, 18%-opacity Command Navy halo.
-- **Secondary** (white surface, Quiet Edge border, Midnight Ink text): Supporting actions alongside a primary. On hover, border shifts to 50%-opacity primary; text shifts to Command Navy. Signals readiness without competing.
-- **Ghost** (transparent fill, Midnight Ink text): Low-commitment actions, navigation triggers, cancel. On hover, fills with Lifted Canvas.
-- **Destructive** (Alert Red fill, white text): Permanent or financial-consequence actions — void, delete, force-close. Hover darkens to Deep Red (`#8e2329`). Focus ring: 4px, 18%-opacity Alert Red halo.
-- **Disabled/Loading**: 50% opacity, `cursor: not-allowed`. Loading shows a CSS spinner at the button's leading edge; label remains visible.
+### Keyboard hints
+A Recessed Well pill with an 11–12px mono key, on the control it accelerates («الدفع ‹F8›»). Always shown at comfortable density and on focus/hover at compact density. A hint appears **only if the binding exists in code** — no key is bound today; the key map awaits RT-24 confirmation and conflict testing *(VN-S5)*.
 
-**The Single Primary Rule.** No screen or modal shall have more than one primary-intent button visible at once. When two confirmations are needed, sequence them.
+### Inputs / Fields
+- **Style:** white surface, Control Edge boundary, control radius, 44px minimum.
+- **Focus:** the 2px teal outline with 2px offset.
+- **Error / disabled:** danger boundary plus a message in the same region; disabled dims label and value together.
+- **Scan target:** a Recessed Well field in the command bar with a visible scan-owner state — «جاهز للمسح» (teal dot) when it has focus, «المسح متوقف — …» (muted) when focus is elsewhere, «المسح معلّق أثناء النافذة» while a dialog is open *(VN-S3/VN-S12)*. The scanner never reaches PIN, money or card-reference fields or a focused financial button; financial confirmation is never bound to bare Enter.
 
-### Navigation Rail
-The navigation rail is the visual anchor of the application shell — the one intentionally dark surface (Vault Dark, `#0e1b2a`). It collapses to 84px icon-only below 1280px; expands to 248px with labels at 1280px+; hidden below 1024px.
+### Cart and money column
+Cart rows show name (wrapping to two lines), quantity stepper, unit price and line total as LTR-isolated tabular figures. A resolved scan flashes the affected row with Teal Wash for 150ms (none under reduced motion); an unknown barcode shows an inline notice with the scanned code — never a modal. The money column holds the total at the top and the commit, suspend and cancel at the bottom, all pinned.
 
-- **Entry** (48px height, 44px min-height, 12px radius, Muted Silver text at rest): Keyboard and pointer navigable. Focus ring is Teal Marker, 2px outline offset 2px.
-- **Entry hover** (Vault Dark hover `#162a40` fill, white text): Subtle lift within the dark rail.
-- **Active entry** (Command Navy fill, white text, 4×24px Teal Marker accent tab on inset-start edge): The accent tab is the only use of teal as a fill; it marks current location unambiguously without color alone.
+### Checkout
+`OrderSummary` (frozen), `TenderPicker` (tiles, including disabled-by-policy), `CashEntry` with `QuickAmounts`, `CardTerminalEntry`, `PaymentLedger` (amount due pinned at hero size), `PaymentOutcome` and `RecoveryPanel` for UNKNOWN, cancelling and reversal states. Selected tender tile: Teal Wash fill, Deep Teal ink, Control Edge boundary. Money values are never animated during entry (the current `MoneyRoll` is removed in *(VN-S4)*).
 
-### Cards
-Cards are used for bounded content regions — pairing flows, operator panels, form sections. Not for data lists.
+### Navigation
+- **Labelled panel** (208 / 140px) off-sale, **slim rail** (≈76px, icon + short 12px label) during an active sale.
+- **Default:** muted ink on canvas, control radius, 44px entries.
+- **Active:** Teal Wash fill, Deep Teal ink, a 2px inline-start bar and `aria-current="page"`.
+- Cashiers do not see unavailable or unauthorised placeholder routes (OD-6); manager and admin roles keep them *(VN-S10)*.
+- The nav footer hosts the **status indicator**: connection, sale sync and printer, each a dot plus text *(VN-S6)*.
 
-- **Default card** (white surface, 1px Quiet Edge border, 14px radius, card shadow, 32px padding): Standard contained region.
-- **Muted card** (Lifted Canvas background, no shadow): Inert or secondary content regions, e.g. metadata tiles.
-- **Elevated card** (pane shadow): Prominent single-action panels, e.g. the pairing screen pane.
+### Status and feedback
+| Form | Where | Anatomy | Dismissal |
+|---|---|---|---|
+| Inline notice (info/warning/danger) | inside the region that caused it | icon + one Arabic sentence + optional action | clears with the condition or the next action |
+| Banner (warning/danger/info) | frame, under the titlebar, full workspace width | icon + title + detail + ≤ 2 actions | persistent until the condition resolves |
+| Outcome panel (success/info/danger) | Checkout / completion main region | large icon + state sentence + reference + next action | replaced by the next state |
+| Acknowledgement toast (neutral) | inline-end bottom of the workspace | text only, ≤ 4s | only for user-initiated, non-financial acknowledgements |
+| Blocking error screen (danger) | replaces the workspace | what happened + what is safe + what to do + support reference | only by resolving |
 
-**The No-Nested-Cards Rule.** Cards do not contain cards. If content inside a card needs grouping, use spacing, borders, or background color shifts — never a child card component.
+Copy states what is true, what is safe, and what to do — in that order, in Arabic, never blaming the cashier and never "Error 500". Offline selling is a warning banner while the sale continues; a sync backlog needing attention is a danger banner that tells the cashier the sale is safe locally. The completion panel never says «تم الترحيل» — posting status lives only in the sync indicator. Today the connection state is hard-coded online and the sync status is unmounted; the treatment above must be driven by a real signal *(VN-S6)*, never faked.
 
-### Inputs
-Inputs use the same radius as buttons (10px, `--radius-control`) for visual family membership. The 44px minimum height is enforced globally via the base element rule.
+### Dialogs and manager approval
+One `Dialog` mechanism: `role="dialog"`, `aria-modal`, focus on the first *safe* control (never the destructive or commit button), Esc cancels, focus returns to the invoker, scanner suspended while open. Dialogs are a last resort — confirm-add, note, destructive confirmation, manager approval, resume conflict, lock. The **manager approval sheet** states exactly what is approved (action, amount, sale reference, cart version), requires a reason, authenticates the manager inside the sheet without replacing the cashier's session, and returns to the exact prior state on approved, denied or cancelled. Approval is bound to the cart version.
 
-- **Default** (white background, 1px Quiet Edge border, 14px font-size, 8px vertical padding): Clean and unadorned; the border is the only structure.
-- **Focus** (Command Navy border, 3px primary halo at 20% opacity, outline suppressed): Focus is unmistakable; the halo avoids the common 1px-only underline that fails under glare.
-- **Error** (Alert Red border; on focus, Alert Red halo at 20%): Error state preserves focus behavior; the border color change is reinforced by the halo and the error message below.
-- **Disabled** (inherits opacity from button disabled rule): Input text and label dim together.
+### Motion
+State-change only, from the shipped motion tokens: 80ms press, 150ms row flash and notice in, 220ms dialog in, `ease-out` `cubic-bezier(0.2, 0.7, 0.25, 1)`. No springs, overshoot, bounce or parallax. Under `prefers-reduced-motion: reduce` every duration is zero except the focus ring, and the state change stays visible by colour and text.
 
-### Status Banners
-Status banners are the system's primary ambient-state affordance. They run full-width under the top bar and remain persistent until the underlying condition resolves. They are never auto-dismissing.
-
-- **Degraded** (Caution Amber soft background `#fbf0db`, amber border, amber text): Network degradation, hardware fault.
-- **Offline** (Alert Red soft background `#f7e2e3`, red border, red text): Terminal is offline; selling from local queue.
-- **Syncing** (Info Teal soft background `#e1f0f5`, teal border, teal text, animated pulse dot): Background sync in progress.
-- **None** (hidden): No state banner is shown when the terminal is fully online.
-
-**The Persistent Banner Rule.** Status banners are never toasts. If a hardware or connectivity condition requires the operator's attention, the banner stays until the condition resolves. Ephemeral toasts are reserved for transient acknowledgement of user-initiated actions (sale saved, receipt printed).
-
-### Badges
-Badges are pill-shaped inline labels (26px height, 8px inline padding, pill radius, 12px semibold text) used for status attribution — shift state, connection state, operator role. They include an 8px color dot as a secondary signal alongside the text label.
-
-- Intent variants: info (teal soft), success (green soft), warning (amber soft), danger (red soft), neutral (neutral soft).
-
-## 6. Do's and Don'ts
+## Do's and Don'ts
 
 ### Do:
-- **Do** use Command Navy (`#1f4e7a`) as the single primary action color. One primary per context.
-- **Do** keep the workspace background Near-White (`#fbfcfd`), never pure white. Tinted neutrals prevent the terminal from reading as a blank canvas.
-- **Do** use status banners (full-width, persistent) for ambient operational state. Reserve toasts for ephemeral confirmations of user-initiated actions.
-- **Do** surface the true state of every operation — failed receipt, degraded connection, offline queue — with a visible, non-dismissable indicator.
-- **Do** meet the 44 × 44 CSS px touch-target floor on every interactive element. The cashier uses a touchscreen; tiny buttons cost seconds per transaction.
-- **Do** accompany every color-coded state (badge, status banner) with an icon or text label. Color alone is not a state signal.
-- **Do** use negative letter-spacing on headings (−0.01em for display, −0.008em for headline) to achieve display density — not Inter Tight or a secondary font.
-- **Do** apply `--shadow-card` to standard cards and `--shadow-overlay` to dialogs. The shadow vocabulary has specific roles; do not mix levels.
-- **Do** use the inset shadow (`--shadow-inset`) for sunken well surfaces — PIN keypad recesses, numeric input backgrounds where tactile depth is needed.
-- **Do** keep the navigation rail as the anchored command surface. In the light register it is the only intentionally dark surface; in the dark register it deepens further so it still reads as the anchor against the dark workspace.
-- **Do** add a theme by overriding token *values* on `:root[data-theme="dark"]` only. Dark is the default; light is the toggle target; the choice persists in `localStorage` and is applied to `<html data-theme>` at boot.
+- **Do** keep the total (Sale) and amount due (Checkout) as the largest numerals, in tabular mono, visible without scrolling at 1024×768 and 1280×800.
+- **Do** use exactly one filled-teal primary per region and reserve the large commit (56px, full width) for the one next action.
+- **Do** isolate every money value, quantity and code as an LTR run with Western digits and tabular figures.
+- **Do** keep the money column in the same place from Sale through Checkout to completion (Direction B).
+- **Do** give every state text and/or an icon in addition to colour, and verify it under forced colours.
+- **Do** draw control boundaries with Control Edge (`border-strong`) and keep the hairline (`border`) for decorative dividers.
+- **Do** show the scan owner, and suspend scanning visibly while a dialog is open.
+- **Do** use info (Pending Blue) for recorded-but-unproven states and success only for proven facts.
+- **Do** tag anything not yet shipped with its VN slice, and stop and raise it if a visual choice would change RT-24 behaviour.
 
 ### Don't:
-- **Don't** use consumer SaaS aesthetics (Notion, Intercom, Loom gradient heroes). The interface is a terminal, not a product landing page.
-- **Don't** use glassmorphism or backdrop-blur decoratively. Surfaces must be opaque and legible under pharmacy overhead lighting — in *both* registers.
-- **Don't** fork components per theme. Dark is the default and light is a toggle (ADR-0004), but a theme is reached by overriding token *values* on `:root[data-theme="dark"]` only — never by shipping a second, dark-specific copy of a component or a `.dark .component` selector. If a surface looks wrong in dark, fix the token, not the component.
-- **Don't** assume a light-only world. Both registers are first-class; new surfaces must read correctly under dark (the default) and light. The persisted choice (`localStorage`) is honored at boot.
-- **Don't** build SaaS metric-hero templates (big number, gradient accent, shadow flourish). Every number on screen carries financial weight; no cosmetic framing.
-- **Don't** use identical icon-heading-text card grids. Prefer functional lists, tabular data, and purpose-built surfaces.
-- **Don't** use gradient text (`background-clip: text`). It is decorative, never meaningful in a financial terminal.
-- **Don't** use `border-left` or `border-right` greater than 1px as a colored accent stripe on cards, list items, or callouts. Rewrite with full borders, background tints, or leading icons.
-- **Don't** use the Teal Marker accent (`#2e7da3`) as a button fill, badge color, or decorative accent. It is reserved for the nav active-state tab and focus rings only.
-- **Don't** use status colors (success green, caution amber, alert red, info teal) as brand or decorative fills. They carry operational meaning; misuse degrades the operator's ability to read state at a glance.
-- **Don't** use auto-dismissing toasts for operational state (offline, degraded, hardware fault). Those require persistent banners.
-- **Don't** apply modal dialogs as a first-resort pattern. Exhaust inline and progressive disclosure alternatives. Modals are for high-stakes confirmations (void, forced close, destructive actions) only.
-- **Don't** nest cards. If content inside a card needs grouping, use spacing, borders, or background tints.
-- **Don't** use generic AI-tool aesthetics (purple gradients, neon-on-dark, glassmorphism-as-brand). This is a regulated commercial terminal.
+- **Don't** use the superseded v3.5 system — navy `#1f4e7a`, Inter, dark default, the One-Accent Rule, the dark command rail — for new work.
+- **Don't** use `--color-accent` or `--color-rail*` on new surfaces; they exist only until the legacy shell is retired (VN-S10).
+- **Don't** offer the dark theme or a theme toggle on cashier surfaces in the pilot.
+- **Don't** show success colour, a check icon or a success word before the underlying fact is persisted.
+- **Don't** call an UNKNOWN payment a decline, or a local sale "posted".
+- **Don't** auto-dismiss operational state (offline, sync attention, printer, drawer, shift closed) — those are persistent banners.
+- **Don't** animate money values during entry, or use bounce, elastic or decorative motion.
+- **Don't** bind financial confirmation to bare Enter, or show a keyboard hint for a key that is not bound.
+- **Don't** use shadows below the overlay level, nest panels, or put status colours on decoration.
+- **Don't** mix numeral systems on one screen, or write bilingual headings such as «طريقة الدفع (Payment method)».
+- **Don't** use the RT-27 Tower Blue palette or the 022 handoff's Saudi/ZATCA/15% VAT/mada content; they are references, not authority, for this Egyptian product.
