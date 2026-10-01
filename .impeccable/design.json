@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T07:26:55.552Z",
+  "generatedAt": "2026-10-01T07:32:19.162Z",
   "title": "Design System: POS-Pulse",
   "extensions": {
     "colorMeta": {
@@ -328,9 +328,9 @@
         "purpose": "Below this width the terminal shows ScreenTooSmall (Arabic copy)."
       },
       {
-        "name": "comfortable",
-        "value": "1280px",
-        "purpose": "From this width the comfortable density profile and wider columns apply; compact below."
+        "name": "compact-workspace",
+        "value": "@container v5-screen (max-width: 1120px)",
+        "purpose": "Container query, not a viewport breakpoint: the compact density profile applies when the v5-screen workspace is 1120px wide or less (shipped in live-sale.css). Under Direction B that is a 1024 window; a 1280 window stays comfortable."
       }
     ]
   },
@@ -403,17 +403,17 @@
       "name": "Sale Total",
       "kind": "custom",
       "refersTo": null,
-      "description": "Sale grand total at the top of the money column (amount-total): 30px, 24px at 1024 compact. LTR-isolated Western digits, tabular mono.",
+      "description": "Sale grand total at the top of the money column (amount-total): 30px, 24px when the v5-screen workspace is compact (≤ 1120px). LTR-isolated Western digits, tabular mono.",
       "html": "<div class=\"ds-total\" dir=\"rtl\"><span class=\"ds-total-label\">الإجمالي</span><bdi class=\"ds-total-amount\" dir=\"ltr\">1,250.00 EGP</bdi></div>",
-      "css": ".ds-total { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-total-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-total-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 1.875rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @media (max-width: 1279px) { .ds-total-amount { font-size: 1.5rem; } }"
+      "css": ".ds-total { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-total-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-total-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 1.875rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @container v5-screen (max-width: 1120px) { .ds-total-amount { font-size: 1.5rem; } }"
     },
     {
       "name": "Checkout Amount Due",
       "kind": "custom",
       "refersTo": null,
-      "description": "Checkout amount due in the same place as the Sale total (amount-hero): 44px, 36px at 1024. The largest numeral on screen; never scrolled out of view.",
+      "description": "Checkout amount due in the same place as the Sale total (amount-hero): 44px, 36px when the v5-screen workspace is compact (≤ 1120px). The largest numeral on screen; never scrolled out of view.",
       "html": "<div class=\"ds-due\" dir=\"rtl\"><span class=\"ds-due-label\">المبلغ المستحق</span><bdi class=\"ds-due-amount\" dir=\"ltr\">1,250.00 EGP</bdi></div>",
-      "css": ".ds-due { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-due-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-due-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 2.75rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @media (max-width: 1279px) { .ds-due-amount { font-size: 2.25rem; } }"
+      "css": ".ds-due { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-due-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-due-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 2.75rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @container v5-screen (max-width: 1120px) { .ds-due-amount { font-size: 2.25rem; } }"
     }
   ],
   "narrative": {

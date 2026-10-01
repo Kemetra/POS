@@ -111,6 +111,8 @@ slices that depend on them must not assume an answer:
 - **RT-24 §C confirmations:** item 1 (direct add vs confirm-first), item 2 (lazy cart), item 4
   (same-device suspend/resume) and item 5 (key map). These gate VN-S3/VN-S12 (scan
   acknowledgement), VN-S5 (keys) and VN-S11 (suspend/resume). See [08](08-rt24-invariants.md).
+  The keycaps drawn in the approved references are part of this open key map, not bound
+  shortcuts ([references](references/README.md)).
 - **OD-3 receipt validation:** the numeral and grouping policy must be checked against real
   Egyptian pharmacy receipts before VN-S3/VN-S12 changes `shared/money` output.
 - **VN-S12 capacity capture:** one real-app Electron capture with the 10-line cart must confirm
