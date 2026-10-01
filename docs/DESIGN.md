@@ -370,6 +370,8 @@ One vocabulary, one implementation each, under `src/renderer/v5/**` (the clean-r
 - **Danger / danger-quiet:** Consequence Red fill (or red ink on white for the quiet form) — void, cancel sale, cancel after handoff. Hover deepens to the danger emphasis.
 - **Focus:** `outline: 2px solid` the focus ring (primary) with a 2px offset on every focusable element — never only a box-shadow, which disappears in contrast themes.
 - **Disabled-by-policy:** visibly present, sunken, with a reason line (the RT-103 internal-voucher tender tile is the reference case).
+- **Unavailable commit:** a commit that cannot proceed (for example a cash shortfall) is sunken with muted ink, never full teal, and the reason sits in the same region. It must not look payable.
+- **Density:** the commit is 56px compact and 60px comfortable; tender tiles are 72px and 84px, following the `v5-screen` container (see Layout).
 
 ### Keyboard hints
 A Recessed Well pill with an 11–12px mono key, on the control it accelerates (for example «الدفع ‹F8›», once that key is bound). Always shown at comfortable density and on focus/hover at compact density. A hint appears **only if the binding exists in code** — no key is bound today; the key map awaits RT-24 confirmation and conflict testing *(VN-S5)*.
