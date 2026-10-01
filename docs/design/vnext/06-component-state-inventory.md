@@ -4,6 +4,13 @@
 > import/class wall retained). "Replaces" lists today's divergent implementations on
 > `main@28890fa` (see [01 §5](01-current-state-audit.md)). Every component must render every listed
 > state in light and in `forced-colors: active`.
+>
+> **Shortcuts are conditional.** Every key named below (`F8` on `CheckoutCTA`, `F9` exact cash,
+> `Ctrl+Enter` commit and others) is RT-24's proposed, unconfirmed key map (§C.5). A component
+> renders the hint and binds the key only once VN-S5 confirms it; until then the control works
+> by click or tap and shows no hint ([`docs/DESIGN.md`](../../DESIGN.md), Keyboard hints).
+> Suspend-related components (`SuspendedSaleList`, `ResumeConflictPanel`, the suspend button)
+> belong to VN-S11.
 
 Common states abbreviated: **R** rest · **H** hover · **F** focus-visible · **P** pressed · **D**
 disabled (with reason) · **L** loading/in-progress · **E** error.
