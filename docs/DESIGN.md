@@ -329,7 +329,7 @@ Today's code still prints `123.45 EGP` with no grouping, and renders some times 
 |---|---|---|
 | Nav on an active sale (Sale, Checkout, completion — first item until «بيع جديد») | slim rail, icon + short label, ≈76px | slim rail, ≈76px |
 | Nav elsewhere (sign-in boundary, manager/admin screens) | labelled panel, 208px | labelled panel, 140px |
-| Sale | command bar (scan target, search, suspended-sales entry) above a full-width cart; money column ≈320px on the inline end: total at the top, «الدفع», suspend and cancel at the bottom | same, money column ≈280px; at least 6 cart rows visible |
+| Sale | command bar (scan target, search, suspended-sales entry *(VN-S11)*) above a full-width cart; money column ≈320px on the inline end: total at the top, «الدفع», suspend *(VN-S11)* and cancel at the bottom | same, money column ≈280px; at least 6 cart rows visible |
 | Search results | drop down over the cart, 3–5 results, close on Esc or selection | same |
 | Checkout | order summary ≈280px · tender panel fluid · payment ledger ≈320px (amount due and commit pinned) | tender panel fluid · payment ledger ≈296px; summary collapses to a one-line strip with «عرض الأصناف» |
 | Below 1024 | `ScreenTooSmall`, Arabic copy *(VN-S2; today English)* | — |
@@ -381,7 +381,7 @@ A Recessed Well pill with an 11–12px mono key, on the control it accelerates (
 - **Scan target:** a Recessed Well field in the command bar with a visible scan-owner state — «جاهز للمسح» (teal dot) when it has focus, «المسح متوقف — …» (muted) when focus is elsewhere, «المسح معلّق أثناء النافذة» while a dialog is open *(VN-S3/VN-S12)*. The scanner never reaches PIN, money or card-reference fields or a focused financial button; financial confirmation is never bound to bare Enter.
 
 ### Cart and money column
-Cart rows show name (wrapping to two lines), quantity stepper, unit price and line total as LTR-isolated tabular figures. A resolved scan flashes the affected row with Teal Wash for 150ms (none under reduced motion); an unknown barcode shows an inline notice with the scanned code — never a modal. The money column holds the total at the top and the commit, suspend and cancel at the bottom, all pinned.
+Cart rows show name (wrapping to two lines), quantity stepper, unit price and line total as LTR-isolated tabular figures. A resolved scan flashes the affected row with Teal Wash for 150ms (none under reduced motion); an unknown barcode shows an inline notice with the scanned code — never a modal. The money column holds the total at the top and the commit and cancel at the bottom, all pinned. The suspend control and the suspended-sales entry are added only by *(VN-S11)*, after the park/resume contract and the RT-24 §C.4 confirmation. VN-S12 lays out their place but must not ship them without that contract.
 
 ### Checkout
 `OrderSummary` (frozen), `TenderPicker` (tiles, including disabled-by-policy), `CashEntry` with `QuickAmounts`, `CardTerminalEntry`, `PaymentLedger` (amount due pinned at hero size), `PaymentOutcome` and `RecoveryPanel` for UNKNOWN, cancelling and reversal states. Selected tender tile: Teal Wash fill, Pharmacy Teal ink and boundary. Money values are never animated during entry (the current `MoneyRoll` is removed in *(VN-S4)*).
