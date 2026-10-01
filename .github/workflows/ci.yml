@@ -6,7 +6,7 @@
 #     per-file (80% global, 95% Money) — failure blocks merge.
 #   - VII Observability: package:dir uploads the unsigned --dir build
 #     for manual smoke. Sentry stays inert (no SENTRY_DSN secret wired).
-#   - Tech Stack (research.md §7): windows-latest runner, Node 24 (matches Electron 44's bundled Node; RT-109), npm
+#   - Tech Stack (research.md §7): windows-latest runner, Node 20, npm
 #     cache, electron-rebuild via package.json postinstall.
 #
 # Pre-flight decisions for this workflow are documented in the Phase 10
@@ -65,10 +65,10 @@ jobs:
           Write-Host "docs_only=$docsOnly"
           "docs_only=$docsOnly" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      - name: Setup Node 24
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: npm
 
       # Docs-only path: install packages without lifecycle scripts to get
@@ -111,9 +111,9 @@ jobs:
 
       # postinstall (electron-rebuild -f -w better-sqlite3) rebuilds argon2
       # for Electron's ABI as a side-effect, making it incompatible with the
-      # plain Node 24 process that Vitest forks use. Rebuild argon2 here for
-      # Node 24 so the test suite can load it without a segfault.
-      - name: Rebuild argon2 for Node 24 ABI (test suite)
+      # plain Node 20 process that Vitest forks use. Rebuild argon2 here for
+      # Node 20 so the test suite can load it without a segfault.
+      - name: Rebuild argon2 for Node 20 ABI (test suite)
         if: steps.docs-check.outputs.docs_only != 'true'
         run: npm rebuild argon2
 
