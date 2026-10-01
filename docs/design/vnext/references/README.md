@@ -1,9 +1,21 @@
-# VNext visual references (RT-104) — PROPOSED
+# VNext visual references (RT-104) — APPROVED (Direction B)
 
 These are **design references**, not screenshots of the app and not implementation proof. Every
-image carries a «مرجع تصميم VNext — ليس لقطة من التطبيق» tag. They render the proposed design
-language ([../04-design-language.md](../04-design-language.md)) with the **shipped token values**
-from `src/renderer/styles/tailwind.css`.
+image carries a «مرجع تصميم VNext — ليس لقطة من التطبيق» tag. They render the design language
+([../04-design-language.md](../04-design-language.md)) with the **shipped token values** from
+`src/renderer/styles/tailwind.css`.
+
+The owner approved the package on 2026-10-01 with **Direction B** (OD-7). The Sale and Checkout
+references are therefore `VN-B1-*` and `VN-B2-*`. `VN-R1`/`VN-R2` remain as the Direction A
+comparison, and the other `VN-R*` captures remain the state references.
+
+> **Keyboard hints in every capture are conditional.** No reference keycap (F2, F3, F4, F8, F9,
+> Enter) is a bound shortcut today. They illustrate RT-24's *proposed* key map, which is still
+> unconfirmed (RT-24 §C.5, carried forward in [../README.md](../README.md#carried-forward--still-open)).
+> Approval of these captures covers layout, hierarchy and states, not the key assignments.
+> Implementations show a hint only for a key that is actually bound, after VN-S5 confirms the map
+> ([`docs/DESIGN.md`](../../../DESIGN.md), Keyboard hints). The captures are kept as approved
+> rather than re-rendered without hints.
 
 - Source: [`src/build.cjs`](src/build.cjs) (generator), [`src/vnext-kit.css`](src/vnext-kit.css) (reference kit — **not** production CSS), generated HTML in `src/html/`.
 - Regenerate: `node docs/design/vnext/references/src/build.cjs <path-to>/playwright/index.mjs` (uses the pre-installed Chromium; no repo dependency added).

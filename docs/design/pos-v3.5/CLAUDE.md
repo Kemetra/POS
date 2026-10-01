@@ -1,21 +1,21 @@
-> ## ⚠️ SUPERSEDED FOR v4.0 — READ BEFORE FOLLOWING ANYTHING BELOW
+> ## ⚠️ HISTORICAL — REFERENCE ONLY, NOT AUTHORITATIVE
 >
-> This document remains the **historical v3.5 design record** and is still valid for
-> *structure, component inventory, copy, flows and implementation guidance*.
+> This folder is the **historical POS v3.0/v3.5 design handoff**. Nothing in it governs current
+> POS-Pulse work: not the visuals, not the behaviour, not the copy. Do not implement from it.
 >
-> **Three VISUAL axes are superseded** by [`specs/022-pos-ui-v4-rescue/`](../../../specs/022-pos-ui-v4-rescue/):
+> | For | Current authority |
+> |:--|:--|
+> | Visual design system | [`docs/DESIGN.md`](../../DESIGN.md), the approved RT-104 VNext language ([`docs/design/vnext/`](../vnext/README.md)) |
+> | Cashier behaviour and transaction semantics | Jira **RT-24** (Cashier UX & Transaction Behavior Map) |
+> | Current code behaviour | GitHub `main` |
 >
-> | Axis | v3.5 (below) | v4.0 (governing) |
-> |:--|:--|:--|
-> | Theme default | dark default | **light default** |
-> | Primary colour | navy `#1f4e7a` | **pharmacy green-teal `#0f766e`** |
-> | Accent rule | One-Accent Rule — "teal … never a fill" | **teal MAY fill large primary actions** |
+> What v3.5 shows that is superseded: dark default (now light-first), navy `#1f4e7a` (now
+> pharmacy teal `#0f766e`), the One-Accent Rule (teal may fill the primary commit), Inter (now
+> Dubai), and the v3.5 layouts (the active sale now uses VNext Direction B). Its feature and
+> tender scope is not product scope; current scope comes from Jira RT.
 >
-> Current visual authority is spec 022 plus its
-> [`visual-references/`](../../../specs/022-pos-ui-v4-rescue/visual-references/).
-> The dark register still exists, retuned to the v4.0 teal identity.
->
-> Everything else in this file stands. Banner only — nothing below was rewritten or deleted.
+> Use it only as a reference for intent, and re-derive anything you take from it against the
+> authorities above. Banner only — nothing below was rewritten or deleted.
 
 # CLAUDE.md — POS v3.0 terminal implementation
 

@@ -1,379 +1,336 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-05-13T00:00:00.000Z",
+  "generatedAt": "2026-10-01T07:39:27.891Z",
   "title": "Design System: POS-Pulse",
   "extensions": {
     "colorMeta": {
       "primary": {
         "role": "primary",
-        "displayName": "Command Navy",
-        "canonical": "oklch(36% 0.085 236)",
+        "displayName": "Pharmacy Teal",
+        "canonical": "oklch(51.1% 0.086 186.4)",
         "tonalRamp": [
-          "#0a1a2d",
-          "#102440",
-          "#163054",
-          "#1f4e7a",
-          "#2e6a9f",
-          "#4d86ba",
-          "#7aadd0",
-          "#b0cfe5",
-          "#ddeaf4",
-          "#f0f6fb"
+          "#001614",
+          "#013632",
+          "#055a53",
+          "#1f7f76",
+          "#4ba39a",
+          "#72cac0",
+          "#96eee4",
+          "#c8fff8"
         ]
       },
       "primary-emphasis": {
         "role": "primary",
-        "displayName": "Deep Command",
-        "canonical": "oklch(29% 0.075 236)",
+        "displayName": "Deep Teal",
+        "canonical": "oklch(42.6% 0.071 186.8)",
         "tonalRamp": [
-          "#060f1b",
-          "#0c1f33",
-          "#122b47",
-          "#163d61",
-          "#1f5584",
-          "#306ea3",
-          "#558dbf",
-          "#8cb5d8",
-          "#c4d9ec",
-          "#e5eff8"
+          "#001614",
+          "#023632",
+          "#075953",
+          "#367c75",
+          "#5ca199",
+          "#81c7bf",
+          "#a4ebe2",
+          "#c7fff8"
         ]
       },
       "primary-soft": {
         "role": "primary",
-        "displayName": "Horizon Wash",
-        "canonical": "oklch(93% 0.018 236)",
+        "displayName": "Teal Wash",
+        "canonical": "oklch(95.6% 0.015 181.8)",
         "tonalRamp": [
-          "#c5d8ec",
-          "#cde0f0",
-          "#d6e7f4",
-          "#deeef7",
-          "#e6eef6",
-          "#edf4fa",
-          "#f2f7fb",
-          "#f6fafd",
-          "#fafcfe",
-          "#ffffff"
-        ]
-      },
-      "accent": {
-        "role": "secondary",
-        "displayName": "Teal Marker",
-        "canonical": "oklch(52% 0.085 218)",
-        "tonalRamp": [
-          "#0d2a36",
-          "#123a4d",
-          "#174d66",
-          "#1e6f8c",
-          "#2e7da3",
-          "#4093bb",
-          "#68aed0",
-          "#9ccae2",
-          "#cde5f1",
-          "#e7f2f9"
-        ]
-      },
-      "rail": {
-        "role": "neutral",
-        "displayName": "Vault Dark",
-        "canonical": "oklch(16% 0.030 236)",
-        "tonalRamp": [
-          "#040a11",
-          "#070f18",
-          "#0a151f",
-          "#0e1b2a",
-          "#14253b",
-          "#1d344f",
-          "#2c4a6a",
-          "#4a6a8c",
-          "#7c9ab8",
-          "#b8cde0"
+          "#0a1412",
+          "#26302e",
+          "#44504e",
+          "#65726f",
+          "#899593",
+          "#adbbb8",
+          "#d0dedb",
+          "#e7f5f2"
         ]
       },
       "background": {
         "role": "neutral",
-        "displayName": "Near-White",
-        "canonical": "oklch(99% 0.005 236)",
+        "displayName": "Clinical Canvas",
+        "canonical": "oklch(98.1% 0.003 228.8)",
         "tonalRamp": [
-          "#d0d8e0",
-          "#dae0e8",
-          "#e4eaef",
-          "#edf1f6",
-          "#f3f6fa",
-          "#f7f9fb",
-          "#f9fbfc",
-          "#fbfcfd",
-          "#fdfefe",
-          "#ffffff"
+          "#101212",
+          "#2d2e2f",
+          "#4c4d4e",
+          "#6d6f70",
+          "#919293",
+          "#b6b8b9",
+          "#d9dbdc",
+          "#f0f2f3"
         ]
       },
       "surface": {
         "role": "neutral",
         "displayName": "Clean White",
-        "canonical": "oklch(100% 0 0)",
+        "canonical": "oklch(100.0% 0.000 89.9)",
         "tonalRamp": [
-          "#d6dde5",
-          "#dfe5ec",
-          "#e7ecf2",
-          "#eff3f7",
-          "#f4f7fa",
-          "#f8fafb",
-          "#fafbfc",
-          "#fcfcfd",
-          "#fdfefe",
-          "#ffffff"
+          "#121212",
+          "#2e2e2e",
+          "#4d4d4d",
+          "#6f6f6f",
+          "#929292",
+          "#b7b7b7",
+          "#dbdbdb",
+          "#f2f2f2"
         ]
       },
       "surface-elevated": {
         "role": "neutral",
-        "displayName": "Lifted Canvas",
-        "canonical": "oklch(96% 0.010 236)",
+        "displayName": "Raised Band",
+        "canonical": "oklch(97.2% 0.006 255.5)",
         "tonalRamp": [
-          "#c8d2dc",
-          "#d3dce4",
-          "#dce5ed",
-          "#e5edf3",
-          "#edf2f8",
-          "#f1f5fa",
-          "#f5f8fb",
-          "#f8fafc",
-          "#fbfcfd",
-          "#ffffff"
+          "#101214",
+          "#2c2e31",
+          "#4b4d50",
+          "#6c6f72",
+          "#909296",
+          "#b5b8bb",
+          "#d8dbdf",
+          "#eff2f6"
         ]
       },
       "surface-sunken": {
         "role": "neutral",
-        "displayName": "Recessed",
-        "canonical": "oklch(94% 0.012 236)",
+        "displayName": "Recessed Well",
+        "canonical": "oklch(95.9% 0.007 247.9)",
         "tonalRamp": [
-          "#c2ccd6",
-          "#cdd7e0",
-          "#d8e1ea",
-          "#e2eaf2",
-          "#eef2f6",
-          "#f2f5f9",
-          "#f5f8fb",
-          "#f8fafc",
-          "#fbfcfd",
-          "#ffffff"
+          "#0f1215",
+          "#2b2e31",
+          "#4a4d51",
+          "#6c6f73",
+          "#8f9396",
+          "#b4b8bc",
+          "#d7dbdf",
+          "#eef2f6"
         ]
       },
       "text": {
         "role": "neutral",
-        "displayName": "Midnight Ink",
-        "canonical": "oklch(18% 0.040 236)",
+        "displayName": "Clinical Ink",
+        "canonical": "oklch(22.7% 0.039 254.0)",
         "tonalRamp": [
-          "#040b14",
-          "#080f1a",
-          "#0c1521",
-          "#0f1d2e",
-          "#1a2d42",
-          "#2d4560",
-          "#4a6685",
-          "#738fad",
-          "#a8bfcf",
-          "#d0dce8"
+          "#051222",
+          "#202f41",
+          "#3f4e62",
+          "#5f7085",
+          "#8294aa",
+          "#a7b9d0",
+          "#caddf4",
+          "#e9f3ff"
         ]
       },
       "text-muted": {
         "role": "neutral",
-        "displayName": "Muted Slate",
-        "canonical": "oklch(50% 0.040 236)",
+        "displayName": "Muted Ink",
+        "canonical": "oklch(49.8% 0.041 255.0)",
         "tonalRamp": [
-          "#1c2a36",
-          "#2a3a4a",
-          "#3a4f62",
-          "#4d6072",
-          "#5b6b7c",
-          "#758a9c",
-          "#95a8b8",
-          "#b5c5d2",
-          "#d5e0e8",
-          "#edf2f6"
+          "#051223",
+          "#202f42",
+          "#3e4e63",
+          "#5f7087",
+          "#8294ab",
+          "#a6b9d2",
+          "#c9ddf6",
+          "#eaf3ff"
         ]
       },
       "border": {
         "role": "neutral",
-        "displayName": "Quiet Edge",
-        "canonical": "oklch(88% 0.015 236)",
+        "displayName": "Hairline",
+        "canonical": "oklch(90.1% 0.013 251.6)",
         "tonalRamp": [
-          "#9aabb9",
-          "#a8b8c6",
-          "#b8c6d2",
-          "#c8d5df",
-          "#d8dfe7",
-          "#e4e9ef",
-          "#edf1f5",
-          "#f3f5f8",
-          "#f8fafb",
-          "#ffffff"
+          "#0d1217",
+          "#292e34",
+          "#484e54",
+          "#696f76",
+          "#8c939a",
+          "#b1b8c0",
+          "#d5dce3",
+          "#ecf3fb"
         ]
       },
-      "danger": {
-        "role": "danger",
-        "displayName": "Alert Red",
-        "canonical": "oklch(44% 0.140 22)",
+      "border-soft": {
+        "role": "neutral",
+        "displayName": "Soft Hairline",
+        "canonical": "oklch(94.1% 0.010 252.8)",
         "tonalRamp": [
-          "#3d080d",
-          "#591015",
-          "#78181f",
-          "#96222a",
-          "#b32e36",
-          "#c84d55",
-          "#d8767d",
-          "#e8a4a8",
-          "#f4d0d2",
-          "#faeaea"
+          "#0f1216",
+          "#2a2e33",
+          "#494d52",
+          "#6b6f74",
+          "#8e9398",
+          "#b3b8be",
+          "#d6dbe1",
+          "#edf2f8"
         ]
       },
-      "warning": {
-        "role": "warning",
-        "displayName": "Caution Amber",
-        "canonical": "oklch(55% 0.140 65)",
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Control Edge",
+        "canonical": "oklch(57.8% 0.026 252.3)",
         "tonalRamp": [
-          "#3a2200",
-          "#562f00",
-          "#724000",
-          "#925500",
-          "#b87600",
-          "#d49030",
-          "#e5ae5e",
-          "#f0ca90",
-          "#f9e4c0",
-          "#fdf3e3"
+          "#09121d",
+          "#242f3b",
+          "#434e5b",
+          "#64707e",
+          "#8794a2",
+          "#acb9c8",
+          "#cfdcec",
+          "#eaf3fe"
         ]
       },
       "success": {
         "role": "success",
-        "displayName": "Confirmation Green",
-        "canonical": "oklch(50% 0.120 155)",
+        "displayName": "Proven Green",
+        "canonical": "oklch(50.5% 0.109 158.9)",
         "tonalRamp": [
-          "#05260f",
-          "#0a3817",
-          "#0f4d21",
-          "#14632c",
-          "#1f8a5b",
-          "#2ea069",
-          "#52b986",
-          "#84d0ab",
-          "#b8e6cc",
-          "#def5e7"
+          "#00170b",
+          "#003821",
+          "#045c39",
+          "#258257",
+          "#4fa679",
+          "#76cd9e",
+          "#99f1c0",
+          "#d1ffe3"
+        ]
+      },
+      "warning": {
+        "role": "warning",
+        "displayName": "Degraded Amber",
+        "canonical": "oklch(54.2% 0.127 60.2)",
+        "tonalRamp": [
+          "#1f0c00",
+          "#462401",
+          "#723e03",
+          "#a25a05",
+          "#ca7e37",
+          "#f2a35e",
+          "#fed1ac",
+          "#ffeee2"
+        ]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "Consequence Red",
+        "canonical": "oklch(50.1% 0.178 28.7)",
+        "tonalRamp": [
+          "#2b0000",
+          "#5d0001",
+          "#940304",
+          "#c1352a",
+          "#eb5d4f",
+          "#ff9688",
+          "#fecec6",
+          "#feeeeb"
         ]
       },
       "info": {
         "role": "info",
-        "displayName": "Info Teal",
-        "canonical": "oklch(48% 0.090 218)",
+        "displayName": "Pending Blue",
+        "canonical": "oklch(51.5% 0.121 246.3)",
         "tonalRamp": [
-          "#071e29",
-          "#0c2e40",
-          "#124059",
-          "#175670",
-          "#1e6f8c",
-          "#2e87a8",
-          "#50a2c0",
-          "#80c0d8",
-          "#b0daec",
-          "#d8eef6"
+          "#001325",
+          "#013051",
+          "#005084",
+          "#2574b0",
+          "#4d98d7",
+          "#74beff",
+          "#bddfff",
+          "#e8f3fe"
         ]
       }
     },
     "typographyMeta": {
-      "display": {
-        "displayName": "Display",
-        "purpose": "Screen titles and primary pane headings. At most one per screen."
+      "amount-hero": {
+        "displayName": "Amount hero",
+        "purpose": "Checkout amount due and completion amount. 36px at 1024."
       },
-      "headline": {
-        "displayName": "Headline",
-        "purpose": "Section headers, panel titles within a screen."
+      "amount-total": {
+        "displayName": "Amount total",
+        "purpose": "Sale grand total and ledger totals. 24px at 1024 compact."
       },
-      "title": {
-        "displayName": "Title",
-        "purpose": "Card headers, form section labels, named workspace regions."
+      "screen-title": {
+        "displayName": "Screen title",
+        "purpose": "One per screen, in the titlebar."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Panel headings."
+      },
+      "control-lg": {
+        "displayName": "Control large",
+        "purpose": "Primary commit button and tender tile labels."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Primary paragraph text, descriptions, help copy. Cap at 65–75ch on reading surfaces."
+        "purpose": "Default cashier text."
       },
-      "label": {
-        "displayName": "Label",
-        "purpose": "Badges, chip labels, table column headers, status indicators. All-caps forbidden; semibold carries the weight."
+      "body-strong": {
+        "displayName": "Body strong",
+        "purpose": "Product names, labels and button text."
       },
-      "mono": {
-        "displayName": "Mono",
-        "purpose": "Terminal IDs, receipt amounts, barcode values, audit reference strings, transaction UUIDs."
+      "money-row": {
+        "displayName": "Money row",
+        "purpose": "Line prices and ledger rows, mono tabular."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Hints, secondary names, timestamps. Never below 12px."
+      },
+      "kbd": {
+        "displayName": "Kbd",
+        "purpose": "Keyboard-hint chips only; the one place 11px is allowed."
       }
     },
     "shadows": [
       {
-        "name": "none",
-        "value": "none",
-        "purpose": "Default state for all surfaces. No resting shadow on interactive elements."
-      },
-      {
-        "name": "sm",
-        "value": "0 1px 2px rgba(0,0,0,0.05)",
-        "purpose": "Hairline depth for inline chips and tight status indicators."
-      },
-      {
-        "name": "md",
-        "value": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)",
-        "purpose": "Mid-level utility shadow; rarely used directly."
-      },
-      {
-        "name": "card",
-        "value": "0 1px 2px rgba(15,29,46,0.04), 0 8px 24px rgba(15,29,46,0.06)",
-        "purpose": "Standard card elevation. Tinted toward Midnight Ink to stay cool rather than generic gray."
+        "name": "overlay",
+        "value": "0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.25)",
+        "purpose": "Dialogs, manager approval sheet, lock screen. The only shadow new work uses."
       },
       {
         "name": "pane",
         "value": "0 18px 60px rgba(15,29,46,0.10)",
-        "purpose": "Modal-adjacent panels, the pairing screen pane."
-      },
-      {
-        "name": "overlay",
-        "value": "0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.25)",
-        "purpose": "Dialogs and drawers. Unmistakably above the page."
-      },
-      {
-        "name": "inset",
-        "value": "inset 0 1px 0 rgba(15,29,46,0.04), inset 0 0 0 1px rgba(15,29,46,0.04)",
-        "purpose": "Sunken wells — PIN keypad recess, numeric input backgrounds where tactile depth is needed."
+        "purpose": "Legacy pairing pane only."
       }
     ],
     "motion": [
       {
         "name": "duration-1",
         "value": "80ms",
-        "purpose": "Micro-interactions: hover bg fills, badge dot pulse onset."
+        "purpose": "Press feedback."
       },
       {
         "name": "duration-2",
         "value": "150ms",
-        "purpose": "Standard state transitions: button hover, border-color shifts, input focus."
+        "purpose": "Scan-acknowledge row flash, notice in."
       },
-      { "name": "duration-3", "value": "220ms", "purpose": "Panel slides, nav rail label fade." },
-      { "name": "duration-4", "value": "320ms", "purpose": "Dialog entrance, route change fade." },
+      {
+        "name": "duration-3",
+        "value": "220ms",
+        "purpose": "Dialog in."
+      },
       {
         "name": "ease-out",
         "value": "cubic-bezier(0.2, 0.7, 0.25, 1)",
-        "purpose": "Standard exit easing for state transitions. Expo-style; never bounce or elastic."
-      },
-      {
-        "name": "ease-in-out",
-        "value": "cubic-bezier(0.45, 0.05, 0.25, 1)",
-        "purpose": "Bidirectional transitions — panel toggle, rail expand/collapse."
+        "purpose": "Standard state-change easing. No springs, overshoot or bounce; zero duration under prefers-reduced-motion."
       }
     ],
     "breakpoints": [
       {
-        "name": "rail-collapse",
+        "name": "screen-too-small",
         "value": "1024px",
-        "purpose": "Below this breakpoint the nav rail is hidden."
+        "purpose": "Below this width the terminal shows ScreenTooSmall (Arabic copy)."
       },
       {
-        "name": "rail-expand",
-        "value": "1280px",
-        "purpose": "At this breakpoint the rail expands from 84px icon-only to 248px with labels."
+        "name": "compact-workspace",
+        "value": "@container v5-screen (max-width: 1120px)",
+        "purpose": "Container query, not a viewport breakpoint: the compact density profile applies when the v5-screen workspace is 1120px wide or less (shipped in live-sale.css). Under Direction B that is a 1024 window; a 1280 window stays comfortable."
       }
     ]
   },
@@ -382,146 +339,175 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The single commitment button per context — confirm sale, sign in, apply.",
-      "html": "<button class=\"ds-btn-primary\">Confirm Sale</button>",
-      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 14px; background-color: #1f4e7a; border: 1px solid #1f4e7a; border-radius: 10px; color: #ffffff; font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; letter-spacing: -0.005em; line-height: 1; white-space: nowrap; cursor: pointer; text-decoration: none; transition: background-color 120ms cubic-bezier(0.2,0.7,0.25,1), border-color 120ms cubic-bezier(0.2,0.7,0.25,1), box-shadow 120ms cubic-bezier(0.2,0.7,0.25,1); } .ds-btn-primary:hover { background-color: #163d61; border-color: #163d61; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(31,78,122,0.18); } .ds-btn-primary:disabled, .ds-btn-primary[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }"
+      "description": "The one next action in a region. At most one filled-teal control per region.",
+      "html": "<button class=\"ds-btn-primary\" dir=\"rtl\">تطبيق</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding-inline: 16px; border-radius: 10px; font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; line-height: 1; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.25, 1), border-color 150ms cubic-bezier(0.2, 0.7, 0.25, 1); background-color: var(--color-primary, #0f766e); border: 1px solid var(--color-primary, #0f766e); color: #ffffff; } .ds-btn-primary:hover { background-color: var(--color-primary-emphasis, #0b5b55); border-color: var(--color-primary-emphasis, #0b5b55); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Commit Button",
+      "kind": "button",
+      "refersTo": "button-commit",
+      "description": "Large full-width commit at the bottom of the money column: «الدفع» on Sale, «تأكيد الدفع» on Checkout. No key hint is shown: no shortcut is bound yet (VN-S5).",
+      "html": "<button class=\"ds-btn-commit\" dir=\"rtl\">الدفع</button>",
+      "css": ".ds-btn-commit { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding-inline: 16px; border-radius: 10px; font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; line-height: 1; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.25, 1), border-color 150ms cubic-bezier(0.2, 0.7, 0.25, 1); inline-size: 100%; min-block-size: 56px; font-size: 1rem; font-weight: 700; background-color: var(--color-primary, #0f766e); border: 1px solid var(--color-primary, #0f766e); color: #ffffff; } .ds-btn-commit:hover { background-color: var(--color-primary-emphasis, #0b5b55); } .ds-btn-commit:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; }"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Supporting action alongside a primary — cancel, back, secondary confirm.",
-      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
-      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 14px; background-color: #ffffff; border: 1px solid #d8dfe7; border-radius: 10px; color: #0f1d2e; font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; letter-spacing: -0.005em; line-height: 1; white-space: nowrap; cursor: pointer; transition: border-color 120ms cubic-bezier(0.2,0.7,0.25,1), color 120ms cubic-bezier(0.2,0.7,0.25,1); } .ds-btn-secondary:hover { border-color: rgba(31,78,122,0.5); color: #1f4e7a; } .ds-btn-secondary:focus-visible { outline: 2px solid #2e7da3; outline-offset: 2px; } .ds-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }"
+      "description": "Supporting action beside a primary; white surface with the Control Edge boundary.",
+      "html": "<button class=\"ds-btn-secondary\" dir=\"rtl\">تعليق البيع</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding-inline: 16px; border-radius: 10px; font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; line-height: 1; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.25, 1), border-color 150ms cubic-bezier(0.2, 0.7, 0.25, 1); background-color: var(--color-surface, #ffffff); border: 1px solid var(--color-border-strong, #6f7b89); color: var(--color-text, #0f1d2e); } .ds-btn-secondary:hover { background-color: var(--color-surface-elevated, #f3f6fa); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; }"
     },
     {
-      "name": "Destructive Button",
+      "name": "Danger Button",
       "kind": "button",
-      "refersTo": "button-destructive",
-      "description": "Permanent or financial-consequence actions — void, force-close, delete. Use sparingly.",
-      "html": "<button class=\"ds-btn-destructive\">Void Transaction</button>",
-      "css": ".ds-btn-destructive { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 14px; background-color: #b32e36; border: 1px solid #b32e36; border-radius: 10px; color: #ffffff; font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; letter-spacing: -0.005em; line-height: 1; white-space: nowrap; cursor: pointer; transition: background-color 120ms cubic-bezier(0.2,0.7,0.25,1), border-color 120ms cubic-bezier(0.2,0.7,0.25,1), box-shadow 120ms cubic-bezier(0.2,0.7,0.25,1); } .ds-btn-destructive:hover { background-color: #8e2329; border-color: #8e2329; } .ds-btn-destructive:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(179,46,54,0.18); } .ds-btn-destructive:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }"
+      "refersTo": "button-danger",
+      "description": "Destructive consequence — void, cancel sale. Spatially separated from frequent actions; never the default focus.",
+      "html": "<button class=\"ds-btn-danger\" dir=\"rtl\">إلغاء البيع</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding-inline: 16px; border-radius: 10px; font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; line-height: 1; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.25, 1), border-color 150ms cubic-bezier(0.2, 0.7, 0.25, 1); background-color: var(--color-danger, #b3261e); border: 1px solid var(--color-danger, #b3261e); color: #ffffff; } .ds-btn-danger:hover { background-color: var(--color-danger-emphasis, #8c1d18); border-color: var(--color-danger-emphasis, #8c1d18); } .ds-btn-danger:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; }"
     },
     {
-      "name": "Text Input",
+      "name": "Scan Target",
       "kind": "input",
-      "refersTo": null,
-      "description": "Base text field — barcode entry, name search, numeric amounts.",
-      "html": "<div class=\"ds-input-field\"><label class=\"ds-input-label\" for=\"ds-input-1\">Barcode</label><input class=\"ds-input\" id=\"ds-input-1\" type=\"text\" placeholder=\"Scan or type barcode\" /></div>",
-      "css": ".ds-input-field { display: flex; flex-direction: column; gap: 4px; } .ds-input-label { display: block; font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; color: #0f1d2e; } .ds-input { display: block; width: 100%; min-height: 44px; padding: 8px 12px; font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 0.875rem; color: #0f1d2e; background-color: #ffffff; border: 1px solid #d8dfe7; border-radius: 10px; transition: border-color 150ms cubic-bezier(0.2,0.7,0.25,1), box-shadow 150ms cubic-bezier(0.2,0.7,0.25,1); outline: none; } .ds-input:focus-visible { border-color: #1f4e7a; box-shadow: 0 0 0 3px rgba(31,78,122,0.20); } .ds-input[aria-invalid='true'] { border-color: #b32e36; } .ds-input[aria-invalid='true']:focus-visible { border-color: #b32e36; box-shadow: 0 0 0 3px rgba(179,46,54,0.20); } .ds-input:disabled { opacity: 0.5; cursor: not-allowed; }"
+      "refersTo": "scan-target",
+      "description": "The single scanner owner in the command bar, with a visible scan-owner state.",
+      "html": "<div class=\"ds-scan\" dir=\"rtl\"><label class=\"ds-scan-label\" for=\"ds-scan-1\">امسح الباركود أو ابحث</label><input class=\"ds-scan-input\" id=\"ds-scan-1\" type=\"text\" /><span class=\"ds-scan-owner\"><span class=\"ds-dot\" aria-hidden=\"true\"></span>جاهز للمسح</span></div>",
+      "css": ".ds-scan { display: grid; gap: 4px; font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-scan-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-scan-input { min-block-size: 44px; padding-inline: 12px; border-radius: 10px; border: 1px solid var(--color-border-strong, #6f7b89); background-color: var(--color-surface-sunken, #eef2f6); color: var(--color-text, #0f1d2e); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; } .ds-scan-input:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; } .ds-scan-owner { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--color-text, #0f1d2e); } .ds-dot { inline-size: 8px; block-size: 8px; border-radius: 9999px; background-color: var(--color-primary, #0f766e); }"
     },
     {
-      "name": "Navigation Rail Entry",
+      "name": "Tender Tile",
+      "kind": "custom",
+      "refersTo": "tender-tile",
+      "description": "Tender method tile: selected uses Teal Wash; disabled-by-policy stays visible with a reason (RT-103 voucher).",
+      "html": "<div class=\"ds-tiles\" dir=\"rtl\"><button class=\"ds-tile\" aria-pressed=\"true\">نقدي</button><button class=\"ds-tile\" aria-pressed=\"false\">بطاقة</button><button class=\"ds-tile\" disabled>قسيمة<small>غير متاحة في هذه المرحلة</small></button></div>",
+      "css": ".ds-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .ds-tile { display: grid; place-content: center; gap: 4px; min-block-size: 72px; border-radius: 10px; border: 1px solid var(--color-border-strong, #6f7b89); background-color: var(--color-surface, #ffffff); color: var(--color-text, #0f1d2e); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; } .ds-tile:hover { background-color: var(--color-surface-elevated, #f3f6fa); } .ds-tile:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; } .ds-tile[aria-pressed='true'] { background-color: var(--color-primary-soft, #e6f4f1); color: var(--color-primary, #0f766e); border-color: var(--color-primary, #0f766e); } .ds-tile:disabled { background-color: var(--color-surface-sunken, #eef2f6); color: var(--color-text-muted, #53647a); cursor: not-allowed; } .ds-tile small { font-size: 0.75rem; font-weight: 400; } @media (forced-colors: active) { .ds-tile { border-color: ButtonText; } .ds-tile[aria-pressed='true'] { background-color: Highlight; color: HighlightText; border-color: Highlight; } .ds-tile:disabled { color: GrayText; border-color: GrayText; } }"
+    },
+    {
+      "name": "Navigation Link",
       "kind": "nav",
-      "refersTo": "nav-entry",
-      "description": "Primary navigation item inside the dark rail sidebar.",
-      "html": "<a class=\"ds-nav-entry ds-nav-entry--active\" href=\"#\"><span class=\"ds-nav-icon\" aria-hidden=\"true\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" fill=\"none\"><rect x=\"3\" y=\"3\" width=\"6\" height=\"6\" rx=\"1\" fill=\"currentColor\"/><rect x=\"11\" y=\"3\" width=\"6\" height=\"6\" rx=\"1\" fill=\"currentColor\"/><rect x=\"3\" y=\"11\" width=\"6\" height=\"6\" rx=\"1\" fill=\"currentColor\"/><rect x=\"11\" y=\"11\" width=\"6\" height=\"6\" rx=\"1\" fill=\"currentColor\"/></svg></span><span class=\"ds-nav-label\">Dashboard</span></a>",
-      "css": ".ds-nav-entry { position: relative; display: flex; align-items: center; gap: 12px; padding: 0 12px; height: 48px; min-height: 44px; border-radius: 12px; color: #cdd6e0; text-decoration: none; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2,0.7,0.25,1), color 150ms cubic-bezier(0.2,0.7,0.25,1); overflow: hidden; white-space: nowrap; } .ds-nav-entry:hover { background-color: #162a40; color: #ffffff; } .ds-nav-entry:focus-visible { outline: 2px solid #2e7da3; outline-offset: 2px; } .ds-nav-entry--active { background-color: #1f4e7a; color: #ffffff; } .ds-nav-entry--active::before { content: ''; position: absolute; top: 50%; left: 0; transform: translateY(-50%); width: 4px; height: 24px; border-radius: 0 2px 2px 0; background-color: #2e7da3; } .ds-nav-entry--active:hover { background-color: #163d61; } .ds-nav-icon { flex-shrink: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; } .ds-nav-label { font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; }"
+      "refersTo": "nav-link",
+      "description": "Nav entry; active uses Teal Wash, Pharmacy Teal ink, a 2px inline-start bar and aria-current.",
+      "html": "<nav class=\"ds-nav\" dir=\"rtl\"><a class=\"ds-nav-link\" href=\"#\" aria-current=\"page\">البيع</a><a class=\"ds-nav-link\" href=\"#\">المبيعات</a></nav>",
+      "css": ".ds-nav { display: grid; gap: 4px; inline-size: 140px; font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-nav-link { position: relative; display: flex; align-items: center; min-block-size: 44px; padding-inline: 12px; border-radius: 10px; color: var(--color-text-muted, #53647a); font-size: 0.875rem; font-weight: 600; text-decoration: none; } .ds-nav-link:hover { background-color: var(--color-surface-elevated, #f3f6fa); color: var(--color-text, #0f1d2e); } .ds-nav-link:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; } .ds-nav-link[aria-current] { background-color: var(--color-primary-soft, #e6f4f1); color: var(--color-primary, #0f766e); } .ds-nav-link[aria-current]::before { content: ''; position: absolute; inset-inline-start: 0; inset-block: 10px; inline-size: 2px; background-color: var(--color-primary, #0f766e); } @media (forced-colors: active) { .ds-nav-link[aria-current] { background-color: Highlight; color: HighlightText; } .ds-nav-link[aria-current]::before { background-color: HighlightText; } }"
     },
     {
-      "name": "Card",
-      "kind": "card",
-      "refersTo": "card",
-      "description": "Bounded content region for operator panels, pairing flows, form sections.",
-      "html": "<div class=\"ds-card\"><p class=\"ds-card-title\">Terminal Pairing</p><p class=\"ds-card-body\">Status: Ready for cashier sign-in</p></div>",
-      "css": ".ds-card { background-color: #ffffff; border: 1px solid #d8dfe7; border-radius: 14px; box-shadow: 0 1px 2px rgba(15,29,46,0.04), 0 8px 24px rgba(15,29,46,0.06); padding: 32px; } .ds-card-title { font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 1.125rem; font-weight: 600; color: #0f1d2e; letter-spacing: -0.005em; margin: 0 0 8px; } .ds-card-body { font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 1rem; color: #5b6b7c; line-height: 1.5; margin: 0; }"
-    },
-    {
-      "name": "Status Banner — Offline",
+      "name": "Offline Banner",
       "kind": "custom",
       "refersTo": null,
-      "description": "Full-width persistent banner shown when the terminal is offline. Never auto-dismisses.",
-      "html": "<div class=\"ds-status-banner ds-status-banner--offline\" role=\"status\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 1a7 7 0 100 14A7 7 0 008 1zm0 1.5a5.5 5.5 0 110 11 5.5 5.5 0 010-11zM7.25 5v4.5h1.5V5h-1.5zm0 5.5V12h1.5v-1.5h-1.5z\"/></svg>Offline &mdash; selling from local queue</div>",
-      "css": ".ds-status-banner { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 24px; font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 0.8125rem; font-weight: 600; border-bottom: 1px solid transparent; flex-shrink: 0; } .ds-status-banner--offline { background-color: #f7e2e3; border-bottom-color: rgba(179,46,54,0.25); color: #b32e36; } .ds-status-banner--degraded { background-color: #fbf0db; border-bottom-color: rgba(184,118,0,0.25); color: #b87600; } .ds-status-banner--syncing { background-color: #e1f0f5; border-bottom-color: rgba(30,111,140,0.25); color: #1e6f8c; }"
+      "description": "Persistent warning banner for offline selling; the sale continues. Never auto-dismisses.",
+      "html": "<div class=\"ds-banner\" role=\"status\" dir=\"rtl\"><strong>أنت تعمل دون اتصال.</strong> المبيعات تُحفظ على هذا الجهاز وتُرسل تلقائيًا عند عودة الاتصال.</div>",
+      "css": ".ds-banner { display: block; padding: 10px 16px; border: 1px solid var(--color-warning, #a35a00); border-radius: 10px; background-color: var(--color-warning-soft, #fdf1e0); color: var(--color-text, #0f1d2e); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 0.875rem; line-height: 1.6; } .ds-banner strong { color: var(--color-warning, #a35a00); }"
     },
     {
-      "name": "Badge",
-      "kind": "chip",
+      "name": "Sale Total",
+      "kind": "custom",
       "refersTo": null,
-      "description": "Pill-shaped inline status label with a color-dot secondary signal for shift state, connection state, operator role.",
-      "html": "<span class=\"ds-badge ds-badge--success\">Shift Open</span>",
-      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 9999px; font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-size: 0.75rem; font-weight: 600; line-height: 1; white-space: nowrap; } .ds-badge::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 9999px; flex-shrink: 0; background-color: currentColor; } .ds-badge--info    { background-color: #e1f0f5; color: #1e6f8c; } .ds-badge--success { background-color: #e7f5ee; color: #1f8a5b; } .ds-badge--warning { background-color: #fbf0db; color: #b87600; } .ds-badge--danger  { background-color: #f7e2e3; color: #b32e36; } .ds-badge--neutral { background-color: #f3f6fa; color: #5b6b7c; }"
+      "description": "Sale grand total at the top of the money column (amount-total): 30px, 24px when the v5-screen workspace is compact (≤ 1120px). LTR-isolated Western digits, tabular mono.",
+      "html": "<div class=\"ds-total\" dir=\"rtl\"><span class=\"ds-total-label\">الإجمالي</span><bdi class=\"ds-total-amount\" dir=\"ltr\">1,250.00 EGP</bdi></div>",
+      "css": ".ds-total { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-total-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-total-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 1.875rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @container v5-screen (max-width: 1120px) { .ds-total-amount { font-size: 1.5rem; } }"
+    },
+    {
+      "name": "Checkout Amount Due",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Checkout amount due in the same place as the Sale total (amount-hero): 44px, 36px when the v5-screen workspace is compact (≤ 1120px). The largest numeral on screen; never scrolled out of view.",
+      "html": "<div class=\"ds-due\" dir=\"rtl\"><span class=\"ds-due-label\">المبلغ المستحق</span><bdi class=\"ds-due-amount\" dir=\"ltr\">1,250.00 EGP</bdi></div>",
+      "css": ".ds-due { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-due-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-due-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 2.75rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @container v5-screen (max-width: 1120px) { .ds-due-amount { font-size: 2.25rem; } }"
     }
   ],
   "narrative": {
-    "northStar": "The Accountable Instrument",
-    "overview": "POS-Pulse is a precision instrument, not a consumer product. Its visual language is calibrated around one question: does the operator know the true state of every operation? The interface is built from clean white surfaces, a commanding navy command rail, and a restrained accent vocabulary that preserves the visual weight of information. Every interaction is keyboard-first; every state change is legible without mouse proximity. The palette is determinedly light — pharmacy floor environments require opaque, well-lit surfaces that read under overhead fluorescent lighting, not atmospheric depth.\n\nThe system is Arabic-first: RTL layout is the default, and the font stack gracefully degrades from Inter Variable to Segoe UI to system-UI without introducing a proprietary dependency that could cause a visual regression on a paired Windows 10 terminal. Motion is state-change-only: transitions confirm actions, they do not entertain.\n\nThe design explicitly rejects consumer SaaS aesthetics, glassmorphism, dark-mode defaults, SaaS metric-hero templates, and generic AI tool aesthetics. If a screen could be mistaken for a Notion dashboard or a startup landing page, something has gone wrong.",
+    "northStar": "The Accountable Instrument, in daylight",
+    "overview": "The terminal is a calm clinical instrument on a pharmacy counter. It is read at arm's length, under overhead light, by a cashier whose hands are on a scanner and a keyboard while a customer waits. Every screen answers three questions in this order: what is in the sale and what does it cost, what is the one next thing to do, and is anything not proven yet. Anything not yet proven — payment UNKNOWN, sale not finalized, receipt not printed, sale not synced, terminal offline — is visible and named, never implied away.\n\nThe language is light, quiet, dense, exact and Arabic-first. It is not a new look: it codifies the shipped 022 light pharmacy-teal system and the 023/V5 Sale screen, then completes them with the rules they lacked (numerals, focus, scanner ownership, density, states, themes, 1024/1280). The active-sale journey uses Direction B (OD-7): a cart-first workspace with a command bar, a persistent money column, and a slim navigation rail from Sale through Checkout to completion.\n\nThe visual weight of anything tracks its consequence — neutral < primary < warning < destructive — never brand flourish. It rejects dashboards, marketing gloss, playfulness, decoration and \"AI app\" aesthetics.",
     "keyCharacteristics": [
-      "Restrained color strategy: navy primary + teal accent occupy less than 15% of any screen; the rest is neutral surface",
-      "Flat-by-default with structural shadow for elevation hierarchy",
-      "Inter Variable as the single sans typeface; weight contrast carries hierarchy",
-      "All interactive elements meet the 44 × 44 CSS px touch-target floor",
-      "State banners are persistent, not toast-based",
-      "The dark navigation rail is the one intentionally drenched surface"
+      "Money is the loudest thing on screen, and the total / amount due is never scrolled out of view at 1024 or 1280.",
+      "One filled-teal primary per region; teal is the commit colour, not decoration.",
+      "Proven or labelled: success styling only for persisted facts (SETTLED, FINALIZED, PRINTED, POSTED).",
+      "Quiet when healthy, loud when actionable: a small persistent status indicator, banners only when the cashier must act or must know.",
+      "Keyboard and scanner first, touch-capable (44px floor); scanner input has one visible owner.",
+      "Arabic-first RTL; money, codes and quantities are LTR-isolated Western digits with tabular figures.",
+      "Light is the pilot register; Windows contrast themes (forced colours) must work; colour is never the only signal."
     ],
     "rules": [
       {
-        "name": "The One-Accent Rule",
-        "body": "The teal accent (#2e7da3) appears only as a navigational marker (the active-state tab) and a focus-ring fallback. It is not used as a button color, badge color, or decorative fill. Its rarity is the point.",
+        "name": "The Commit-Teal Rule",
+        "body": "Filled teal appears on at most one control per region, plus selected-state washes. Large teal fills are allowed for the primary commit — the v3.5 One-Accent Rule is superseded.",
         "section": "colors"
       },
       {
-        "name": "The Status-Color Containment Rule",
-        "body": "Status colors (success, warning, danger, info) appear only on their designated surfaces (badges, status banners, alert callouts). They are never used as decorative fills, hover accents, or brand colors on primary actions.",
+        "name": "The No-Accent Rule",
+        "body": "There is no separate accent role. Selection is `primary-soft` fill + `primary` ink + a 2px inline-start bar + `aria-current`. The legacy `--color-accent` (equal to primary today) and the dark `--color-rail*` tokens exist only for legacy surfaces until VN-S10 retires them; new work never uses them.",
         "section": "colors"
       },
       {
-        "name": "The No-Second-Font Rule",
-        "body": "Inter Tight and any secondary display typeface are rejected by spec (FR-052). Weight contrast alone carries the display hierarchy. A secondary proprietary font introduces a Windows font dependency that causes fallback regressions on paired terminals.",
+        "name": "The Status-Containment Rule",
+        "body": "Status colours appear only on status surfaces: banner, indicator, badge, outcome panel, destructive button. Never as decoration, hover accent or brand fill.",
+        "section": "colors"
+      },
+      {
+        "name": "The Pending-Is-Not-Success Rule",
+        "body": "\"Recorded but not yet proven downstream\" (payment SETTLED while the sale is still FINALIZING; sale FINALIZED but not POSTED) uses info, not success. Success green is reserved for the proven fact the cashier is being told about.",
+        "section": "colors"
+      },
+      {
+        "name": "The UNKNOWN-Is-Not-A-Decline Rule",
+        "body": "An UNKNOWN card result uses the danger role with «النتيجة غير مؤكدة», never the word «مرفوض».",
+        "section": "colors"
+      },
+      {
+        "name": "The Twelve-Pixel Rule",
+        "body": "Nothing a cashier must read is below 12px; 11px exists only for keyboard-hint chips.",
         "section": "typography"
       },
       {
-        "name": "The Tight-Display Rule",
-        "body": "Display and Headline headings use letter-spacing −0.01em and −0.008em respectively — not Inter Tight as a separate face.",
+        "name": "The Arabic Leading Rule",
+        "body": "Arabic body text keeps line-height ≥ 1.5 — ascenders, descenders and dots clip at 1.25. Long product names wrap to two lines in the cart, then ellipsis, with the full name in the row's accessible name.",
         "section": "typography"
       },
       {
-        "name": "The Flat-By-Default Rule",
-        "body": "Every surface starts flat. Shadows appear only as a structural response to layering (card above workspace, dialog above everything) or to state (hover on a card signals lift). Purely decorative shadows are prohibited.",
+        "name": "The Plain Emphasis Rule",
+        "body": "No italics and no all-caps; weight carries emphasis. All-caps Latin codes hurt scanning of `O/0` and `I/1`.",
+        "section": "typography"
+      },
+      {
+        "name": "The Never-Scrolled-Away Rule",
+        "body": "At neither width may the total, the amount due, the safe back/cancel, suspend (when applicable) or the primary action be scrolled out of view.",
+        "section": "layout"
+      },
+      {
+        "name": "The Borders-Before-Shadows Rule",
+        "body": "Depth below the overlay level is expressed with hairlines and tint, never shadow.",
         "section": "elevation"
       },
       {
-        "name": "The Single Primary Rule",
-        "body": "No screen or modal shall have more than one primary-intent button visible at once. When two confirmations are needed, sequence them.",
-        "section": "components"
-      },
-      {
-        "name": "The No-Nested-Cards Rule",
-        "body": "Cards do not contain cards. If content inside a card needs grouping, use spacing, borders, or background color shifts — never a child card component.",
-        "section": "components"
-      },
-      {
-        "name": "The Persistent Banner Rule",
-        "body": "Status banners are never toasts. If a hardware or connectivity condition requires the operator's attention, the banner stays until the condition resolves. Ephemeral toasts are reserved for transient acknowledgement of user-initiated actions.",
-        "section": "components"
+        "name": "The Forced-Colours Rule",
+        "body": "Every state stays distinguishable in Windows contrast themes: outlines rather than shadows, text, icon or border on every state, `Highlight`/`HighlightText` on selected tiles, and `forced-color-adjust: none` only for product images. A forced-colours capture of every touched surface is part of each slice's evidence.",
+        "section": "elevation"
       }
     ],
     "dos": [
-      "Do use Command Navy (#1f4e7a) as the single primary action color. One primary per context.",
-      "Do keep the workspace background Near-White (#fbfcfd), never pure white.",
-      "Do use status banners (full-width, persistent) for ambient operational state.",
-      "Do surface the true state of every operation with a visible, non-dismissable indicator.",
-      "Do meet the 44 × 44 CSS px touch-target floor on every interactive element.",
-      "Do accompany every color-coded state with an icon or text label — color alone is not a state signal.",
-      "Do use negative letter-spacing on headings (−0.01em for display) — not a secondary font.",
-      "Do apply --shadow-card to standard cards and --shadow-overlay to dialogs.",
-      "Do use the inset shadow for sunken well surfaces — PIN keypad recesses, numeric input backgrounds.",
-      "Do keep the navigation rail as the only intentionally dark surface."
+      "Do keep the total (Sale) and amount due (Checkout) as the largest numerals, in tabular mono, visible without scrolling at 1024×768 and 1280×800.",
+      "Do use exactly one filled-teal primary per region and reserve the large commit (56px, full width) for the one next action.",
+      "Do isolate every money value, quantity and code as an LTR run with Western digits and tabular figures.",
+      "Do keep the money column in the same place from Sale through Checkout to completion (Direction B).",
+      "Do give every state text and/or an icon in addition to colour, and verify it under forced colours.",
+      "Do draw control boundaries with Control Edge (`border-strong`) and keep the hairline (`border`) for decorative dividers.",
+      "Do show the scan owner, and suspend scanning visibly while a dialog is open.",
+      "Do use info (Pending Blue) for recorded-but-unproven states and success only for proven facts.",
+      "Do tag anything not yet shipped with its VN slice, and stop and raise it if a visual choice would change RT-24 behaviour."
     ],
     "donts": [
-      "Don't use consumer SaaS aesthetics (Notion, Intercom, Loom gradient heroes).",
-      "Don't use glassmorphism or backdrop-blur decoratively.",
-      "Don't apply dark mode by default — the one light theme is deliberate.",
-      "Don't build SaaS metric-hero templates (big number, gradient accent, shadow flourish).",
-      "Don't use identical icon-heading-text card grids.",
-      "Don't use gradient text (background-clip: text).",
-      "Don't use border-left or border-right greater than 1px as a colored accent stripe.",
-      "Don't use the Teal Marker accent (#2e7da3) as a button fill, badge color, or decorative accent.",
-      "Don't use status colors as brand or decorative fills.",
-      "Don't use auto-dismissing toasts for operational state (offline, degraded, hardware fault).",
-      "Don't apply modal dialogs as a first-resort pattern.",
-      "Don't nest cards.",
-      "Don't use generic AI-tool aesthetics (purple gradients, neon-on-dark, glassmorphism-as-brand)."
+      "Don't use the superseded v3.5 system — navy `#1f4e7a`, Inter, dark default, the One-Accent Rule, the dark command rail — for new work.",
+      "Don't use `--color-accent` or `--color-rail*` on new surfaces; they exist only until the legacy shell is retired (VN-S10).",
+      "Don't offer the dark theme or a theme toggle on cashier surfaces in the pilot.",
+      "Don't show success colour, a check icon or a success word before the underlying fact is persisted.",
+      "Don't call an UNKNOWN payment a decline, or a local sale \"posted\".",
+      "Don't auto-dismiss operational state (offline, sync attention, printer, drawer, shift closed) — those are persistent banners.",
+      "Don't animate money values during entry, or use bounce, elastic or decorative motion.",
+      "Don't bind financial confirmation to bare Enter, or show a keyboard hint for a key that is not bound.",
+      "Don't use shadows below the overlay level, nest panels, or put status colours on decoration.",
+      "Don't mix numeral systems on one screen, or write bilingual headings such as «طريقة الدفع (Payment method)».",
+      "Don't use the RT-27 Tower Blue palette or the 022 handoff's Saudi/ZATCA/15% VAT/mada content; they are references, not authority, for this Egyptian product."
     ]
   }
 }

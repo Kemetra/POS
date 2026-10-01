@@ -1,7 +1,23 @@
-# 04 — Retail Tower POS Design Language (VNext) — PROPOSED
+# 04 — Retail Tower POS Design Language (VNext) — APPROVED
 
-> **Status: PROPOSED for owner review (RT-104, Planning).** Not implementation authority until the
-> owner approves it and a bounded Jira slice adopts it. **RT-24 remains the behaviour authority.**
+> **Status: APPROVED by the owner on 2026-10-01 (RT-104 Done).** This is the design-language
+> authority behind [`docs/DESIGN.md`](../../DESIGN.md), the operative summary agents read first.
+> Implementation still happens only through bounded Jira slices ([09](09-implementation-slices.md)).
+> The text below was written as the proposal. Where it says "Δ proposal" or names an owner
+> decision, the outcome is:
+>
+> - **OD-1:** keep teal. R-C6 stands, so Tower Blue is not adopted.
+> - **OD-2:** keep Dubai. The Noto Sans Arabic option in §4.1 is declined.
+> - **OD-3:** the §4.3 numeral policy is approved. It is not yet implemented and is still to be
+>   checked against real receipts.
+> - **OD-4:** §15 light-first is approved, and forced-colors support is required.
+> - **OD-5:** keep «POS Pulse».
+> - **OD-6:** hide placeholder navigation from cashiers.
+> - **OD-7:** **Direction B**. §16 below now describes B.
+>
+> The RT-24 §C confirmations remain open ([README](README.md#carried-forward--still-open)).
+>
+> **RT-24 remains the behaviour authority.**
 > Where this document and RT-24 (or a merged GitHub contract) disagree, the functional contract
 > wins and the conflict is listed in [08-rt24-invariants.md](08-rt24-invariants.md).
 >
@@ -58,7 +74,10 @@ principle survived; the navy/Inter/dark palette that expressed it did not.
 - **Reading order = importance order.** Inline-start (right) holds *where you are / what you are
   adding*; inline-end (left) holds *money and the commit action*. This is how the approved V5
   Sale already reads (product rail right, cart centre, total + CTA bottom-left) and Checkout
-  VNext follows the same muscle memory (§10).
+  VNext follows the same muscle memory (§10). **Amended for Direction B (OD-7):** the
+  reading-order rule stands, but during an active sale the inline start is the command bar
+  above a full-width cart, not a product rail, and money plus the commit sit in the money column
+  at the inline end (§16).
 - **CSS logical properties only** (`margin-inline-start`, `inset-inline-end`, `border-inline`…).
   Physical `left/right` allowed only with a code comment explaining why (existing: dialog
   centring, amount alignment).
@@ -209,7 +228,9 @@ RT-23); «ج.م» is an owner option, not a VNext default.
   shortcut semantics.
 - **Frame grid** (retained from V5): `[screen][nav]` in RTL order; nav 208px ≥1280 / 140px
   1024–1279, labels always visible. The workspace is a size container (`v5-screen`) and screens
-  adapt with **container queries**, not viewport media queries.
+  adapt with **container queries**, not viewport media queries. **Amended for Direction B
+  (OD-7):** the labelled 208/140px nav applies off-sale only. On an active sale (Sale, Checkout
+  and completion) the nav is the ≈76px slim rail (§16).
 - **No nested cards.** Regions are separated by panel boundaries, hairlines or tint — never card in
   card (retained rule).
 
@@ -408,15 +429,35 @@ Theme and density changes only between transactions (RT-24).
 
 ## 16. 1024 and 1280 production behaviour
 
-> The Sale layout below is **Direction A** (V5-based). Direction B (cart-first command bar + money
-> column) is compared in [10-direction-comparison.md](10-direction-comparison.md) and decided by
-> **OD-7**. Every other section of this document applies to both directions unchanged.
+> **Amended for OD-7 = Direction B (approved 2026-10-01).** The table below is the approved B
+> layout ([10-direction-comparison.md](10-direction-comparison.md); references `VN-B1-*`,
+> `VN-B2-*`). Column widths are reference-kit values, to be confirmed in the real app by VN-S12
+> (Sale and slim nav) and VN-S4 (Checkout content). The superseded Direction A table is kept
+> after it for the record. The two places where earlier sections described the A composition,
+> §2 (reading order) and §5 (frame grid), carry matching Direction B amendments. Every other
+> section applies unchanged. The suspend controls in the B Sale row are conditional on VN-S11
+> and the RT-24 §C.4 confirmation; VN-S12 must not ship them without that contract.
+
+| Aspect | 1280×800 (comfortable) | 1024×768 (compact) |
+|---|---|---|
+| Nav, active sale (Sale, Checkout, completion — from the first item until «بيع جديد») | slim rail, icon + short label, ≈76px | slim rail, ≈76px |
+| Nav, elsewhere | labelled panel, 208px | labelled panel, 140px |
+| Sale | command bar (scan target · search · suspended-sales entry *(VN-S11)*) above a full-width cart; **money column** ≈320px on the inline end: total at the top, «الدفع», suspend *(VN-S11)* and cancel pinned at the bottom | same; money column ≈280px; cart ≥ 6 rows visible |
+| Search results | dropdown over the cart, capped at 3–5 results, closes on Esc or selection | same |
+| Checkout | 3 regions: order summary ≈280px · tender panel fluid · payment ledger ≈320px (amount due + commit pinned, in the money column's place) | 2 regions: tender panel fluid · payment ledger ≈296px; order summary collapses to a one-line strip with «عرض الأصناف» disclosure |
+
+<details><summary>Superseded: the Direction A table (V5-based, not chosen)</summary>
 
 | Aspect | 1280×800 (comfortable) | 1024×768 (compact) |
 |---|---|---|
 | Nav panel | 208px, labels | 140px, labels |
 | Sale | product rail 360px · cart fluid · totals band + CTA pinned bottom | product rail 320px · cart fluid (≥ 6 rows visible) · total 24px |
 | Checkout | 3 regions: order summary 280px · tender panel fluid · payment ledger 320px (amount due + commit pinned) | 2 regions: tender panel fluid · payment ledger 300px; order summary collapses to a one-line strip with «عرض الأصناف» disclosure |
+
+</details>
+
+| Aspect (both directions) | 1280×800 (comfortable) | 1024×768 (compact) |
+|---|---|---|
 | Amount due | always visible, `--type-amount-hero` | always visible, 36px |
 | Dialogs | max 560px | max 520px |
 | Below 1024 | `ScreenTooSmall` (Arabic copy — today English) | — |

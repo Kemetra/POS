@@ -1,10 +1,21 @@
 # RT-104 — Retail Tower POS UI VNext rebaseline (Planning package)
 
-> **Status: owner-reviewable PROPOSAL.** Jira **RT-104** (Work Mode: Planning), first gate of
-> Epic **RT-106**. Nothing here authorises implementation; every follow-up needs its own bounded
-> Jira item ([09](09-implementation-slices.md)). **RT-24 remains the behaviour authority.** RT-25
-> remains the visual baseline except where [02](02-rt25-delta.md) marks a section amended or
-> superseded, which takes effect only once the owner approves this package.
+> **Status: APPROVED by the owner on 2026-10-01; RT-104 is Done.** Merged to `main` as
+> `d04a385` (PR #494). The owner approved OD-1…OD-7 with **Direction B** for the active-sale
+> journey (RT-104 comment 10540). The durable decisions are recorded on the Confluence RETAIL
+> **Decisions** and **Current State** pages.
+>
+> This package is the visual and design planning authority for Epic **RT-106**. The operative,
+> agent-facing summary is [`docs/DESIGN.md`](../../DESIGN.md). Approval does **not** authorise
+> implementation: every follow-up needs its own bounded Jira item
+> ([09](09-implementation-slices.md)), the first being VN-S1, Jira RT-107. **RT-24 remains the
+> behaviour authority.** The RT-25 amendments and supersessions marked in
+> [02](02-rt25-delta.md) are now in effect; RT-25 stays the baseline everywhere else.
+>
+> The documents below were written as the proposal and are kept as written. Where one still says
+> "proposed", "Δ proposal" or "pending owner decision", the decisions table below gives the
+> approved outcome. Items the approval did **not** close are listed under
+> [Carried forward](#carried-forward--still-open).
 
 ## Baseline
 
@@ -24,7 +35,7 @@
 | External-reference audit and applicability notes | [03-external-reference-audit.md](03-external-reference-audit.md) |
 | Retail Tower POS VNext design principles + design language | [04-design-language.md](04-design-language.md) |
 | Updated screen/state inventory | [05-screen-state-inventory.md](05-screen-state-inventory.md) |
-| Core Sale + Checkout visual references at 1024 and 1280 | [references/](references/README.md) — VN-R1, VN-R2 (+ VN-R4 at 1024) |
+| Core Sale + Checkout visual references at 1024 and 1280 | [references/](references/README.md) — approved Direction B: VN-B1 (Sale), VN-B2 (Checkout); Direction A comparison: VN-R1, VN-R2 (+ VN-R4 at 1024) |
 | Representative critical failure/recovery references | [references/](references/README.md) — VN-R3, R5–R12, forced-colors captures |
 | Component/state inventory | [06-component-state-inventory.md](06-component-state-inventory.md) |
 | Current → VNext migration map | [07-migration-map.md](07-migration-map.md) |
@@ -51,6 +62,21 @@
 
 ## Owner decisions
 
+**Approved outcomes (2026-10-01, RT-104 comment 10540):**
+
+| ID | Approved outcome |
+|---|---|
+| OD-1 | Keep the shipped teal direction. Tower Blue is not adopted as a palette. |
+| OD-2 | Keep Dubai for the pilot. No font is bundled. |
+| OD-3 | Western digits, grouped money formatting and the `EGP` label. Not yet implemented (VN-S3, absorbed into VN-S12); still to be checked against real Egyptian pharmacy receipts. |
+| OD-4 | Light-first for the pilot; high-contrast / forced-colors support is required. Dark is maintained but not offered. |
+| OD-5 | Keep the in-product name «POS Pulse» for now. |
+| OD-6 | Hide unavailable or unauthorised placeholder navigation from the cashier role. |
+| OD-7 | **Direction B** for the active-sale journey: cart-first layout, command bar, persistent money column, and slim navigation through Sale, Checkout and completion. |
+| RT-24 §C | **Not confirmed** by this approval; see [Carried forward](#carried-forward--still-open). |
+
+The table below is the decision request as originally proposed, kept for its rationale.
+
 | ID | Decision | Recommendation | If rejected |
 |---|---|---|---|
 | **OD-1** | Colour direction: keep shipped 022/023 pharmacy teal, or adopt RT-27 Tower Blue | **Keep teal.** It is shipped, contrast-measured and owner-approved on production (023, 2026-09-25); Tower Blue's tokens are not retrievable from Atlassian and it is a reference, not authority. | A token-value swap slice after the Tower Blue ZIP is vendored and contrast-validated; components unchanged (token-only theming). |
@@ -71,11 +97,27 @@
 | RT-25 classified retained/amended/superseded by section/state | 02: all 27 §-items, 11 visual-system requirements, 14 scenario families (S-level mapping inferred; atlas not downloadable). |
 | Every external reference has a reason and boundary | 03 (13 references + Tower Blue). |
 | One coherent Retail Tower POS visual language defined | 04. |
-| Sale and Checkout have **approved** 1024 and 1280 references | References **produced** (VN-R1, VN-R2). **Approval is the owner's** — pending. |
+| Sale and Checkout have **approved** 1024 and 1280 references | **Approved** 2026-10-01 with Direction B: `VN-B1-*` (Sale) and `VN-B2-*` (Checkout) at 1024 and 1280. VN-R1/VN-R2 remain as the Direction A comparison. |
 | Critical recovery/error/manager/offline states represented | VN-R3 (UNKNOWN), R5 (print failure), R6 (manager), R7 (offline), R8 (lock + live tender), R9 (storage blocked), R10 (resume conflict), R11 (shift), R12 (returns gated). |
 | Migration avoids a risky all-at-once rewrite | 07 (per-surface categories + order). |
 | Follow-up can proceed in bounded Jira slices | 09 (VN-S0…S11 with dependencies and Work Modes). |
-| Durable approved decisions reflected in Confluence after owner review | **Not done** — by design, only after owner review. |
+| Durable approved decisions reflected in Confluence after owner review | **Done**: RETAIL Decisions page ("POS UI VNext direction — approved 2026-10-01") and Current State page ("POS UI VNext planning state"). |
+
+## Carried forward — still open
+
+The approval did not close these. They stay open until separately evidenced or approved, and the
+slices that depend on them must not assume an answer:
+
+- **RT-24 §C confirmations:** item 1 (direct add vs confirm-first), item 2 (lazy cart), item 4
+  (same-device suspend/resume) and item 5 (key map). These gate VN-S3/VN-S12 (scan
+  acknowledgement), VN-S5 (keys) and VN-S11 (suspend/resume). See [08](08-rt24-invariants.md).
+  The keycaps drawn in the approved references are part of this open key map, not bound
+  shortcuts ([references](references/README.md)).
+- **OD-3 receipt validation:** the numeral and grouping policy must be checked against real
+  Egyptian pharmacy receipts before VN-S3/VN-S12 changes `shared/money` output.
+- **VN-S12 capacity capture:** one real-app Electron capture with the 10-line cart must confirm
+  the Direction B capacity gain ([10](10-direction-comparison.md)) before Sale layout B ships.
+- **Evidence limits** below are unchanged.
 
 ## Evidence limits (read before approving)
 

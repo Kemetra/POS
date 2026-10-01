@@ -20,7 +20,7 @@ Precise, accountable, unhurried. The interface is a precision instrument that ea
 
 - Consumer SaaS aesthetics (Notion, Intercom, Loom gradient heroes): the interface is a terminal, not a product landing page.
 - Glassmorphism or blur-heavy surfaces: panels must be opaque and legible under overhead pharmacy lighting.
-- "Dark because tools look dark" defaults: the single light theme is deliberate for the pharmacy floor environment.
+- "Dark because tools look dark" defaults: light-first is deliberate for the pharmacy floor environment (light is the pilot register; the dark register is maintained but not offered).
 - SaaS metric-hero cards (big number, gradient accent, decorative shadow flourish): every number on screen carries financial weight and demands unframed legibility.
 - Identical icon-heading-text card grids: the system uses functional lists, tabular data, and purpose-built surfaces.
 - Generic AI tool aesthetics (purple gradients, neon-on-dark, glassmorphism-as-default): this is a regulated commercial terminal, not a portfolio showcase.
@@ -31,7 +31,7 @@ Precise, accountable, unhurried. The interface is a precision instrument that ea
 2. **The shift is the context.** Every screen is used by someone on their feet, under time pressure, during a live transaction. Efficiency, keyboard operability, and unambiguous affordances take priority over novelty or visual interest.
 3. **Failure is loud, never silent.** Hardware faults, sync failures, and degraded states surface persistent banners and retry paths. Quiet degradation is a design defect. The cashier must always know the real state of the terminal.
 4. **Additive, not disruptive.** Visual improvements layer onto proven functional foundations. Tokens extend without renaming; components restyle without rewriting; no live surface regresses when the system gains polish.
-5. **Arabic-first, globally legible.** RTL layout is the default locale. Latin numerals appear on receipts for audit compatibility. A single font stack (Inter Variable → Segoe UI → system-UI) gracefully degrades on any paired Windows terminal without introducing a proprietary font dependency.
+5. **Arabic-first, globally legible.** RTL layout is the default locale. Money, codes and quantities are Western digits, isolated left-to-right inside Arabic text, for audit compatibility. A single system font stack (Dubai → Segoe UI → Tahoma, all shipped with Windows) renders Arabic properly on any paired Windows terminal without bundling a font. The visual system itself is [`DESIGN.md`](DESIGN.md).
 
 ## Accessibility & Inclusion
 
