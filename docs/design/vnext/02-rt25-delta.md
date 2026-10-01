@@ -1,5 +1,10 @@
 # 02 — RT-25 delta report
 
+> **In effect since the owner approved RT-104 on 2026-10-01, read with Direction B (OD-7).**
+> Wherever a row places something in the product "rail", read the command bar
+> ([04 §16](04-design-language.md)). Any shortcut a row names (for example the `F8` hint in §4)
+> is RT-24's proposed, unconfirmed key map (§C.5), shown only once VN-S5 binds it.
+>
 > RT-25 ("Screen Inventory & Visual UX Blueprint", Done, owner-approved 2026-09-27 as the visual
 > planning baseline subordinate to RT-24) is **not silently discarded**. Every numbered inventory
 > item (§1–§27), every visual-system requirement and every scenario family is classified below.
