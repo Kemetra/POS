@@ -158,7 +158,7 @@ components:
     height: "72px"
   tender-tile-selected:
     backgroundColor: "{colors.primary-soft}"
-    textColor: "{colors.primary-emphasis}"
+    textColor: "{colors.primary}"
   panel:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.card}"
@@ -175,7 +175,7 @@ components:
     height: "44px"
   nav-link-active:
     backgroundColor: "{colors.primary-soft}"
-    textColor: "{colors.primary-emphasis}"
+    textColor: "{colors.primary}"
   badge:
     backgroundColor: "{colors.surface-elevated}"
     textColor: "{colors.text}"
@@ -252,8 +252,8 @@ four status roles held strictly to status surfaces.
 
 ### Primary
 - **Pharmacy Teal** (primary): the one next action — the commit button, the selected nav entry, the selected tender, the focus ring. White on it is 5.47:1.
-- **Deep Teal** (primary-emphasis): hover and pressed state of the commit, and teal ink on teal-wash selections (7.95:1 on white).
-- **Teal Wash** (primary-soft): selected-state fill — active nav entry, selected tender tile, listbox active option, scan-acknowledge row flash.
+- **Deep Teal** (primary-emphasis): hover and pressed state of the commit (7.95:1 on white).
+- **Teal Wash** (primary-soft): selected-state fill — active nav entry, selected tender tile, listbox active option, scan-acknowledge row flash — always with Pharmacy Teal ink (4.84:1 on the wash).
 
 ### Neutral
 - **Clinical Canvas** (background): the page behind panels.
@@ -287,10 +287,10 @@ The dark register (`:root[data-theme='dark']`) is maintained but **not offered**
 
 ## Typography
 
-**Body Font:** Dubai (Windows 10/11 system font; Segoe UI, Tahoma, Arial, system-ui fallbacks)
-**Numerals and Codes Font:** ui-monospace (Cascadia Code, JetBrains Mono, Consolas fallbacks), always with tabular figures
+**Body Font:** Dubai (with Segoe UI, Tahoma, Arial, system-ui)
+**Mono Font:** ui-monospace (with Cascadia Code, JetBrains Mono, Consolas)
 
-**Character:** one quiet Arabic-first system face for every word, and a tabular monospace for every amount, quantity and code, so digits align in dense cart rows and totals never jitter. No font is bundled (OD-2: Dubai is kept for the pilot; the bundled-font option is declined), so the `no-brand-font` guard stays green.
+**Character:** one quiet Arabic-first system face for every word (Dubai ships with Windows 10/11), and a monospace with tabular figures for every amount, quantity and code, so digits align in dense cart rows and totals never jitter. No font is bundled (OD-2: Dubai is kept for the pilot; the bundled-font option is declined), so the `no-brand-font` guard stays green.
 
 ### Hierarchy
 The frontmatter roles map onto the shipped size scale; the `--type-*` role tokens themselves land in *(VN-S2)* — until then, pick the scale size the role names, not a raw literal.
@@ -372,7 +372,7 @@ One vocabulary, one implementation each, under `src/renderer/v5/**` (the clean-r
 - **Disabled-by-policy:** visibly present, sunken, with a reason line (the RT-103 internal-voucher tender tile is the reference case).
 
 ### Keyboard hints
-A Recessed Well pill with an 11–12px mono key, on the control it accelerates («الدفع ‹F8›»). Always shown at comfortable density and on focus/hover at compact density. A hint appears **only if the binding exists in code** — no key is bound today; the key map awaits RT-24 confirmation and conflict testing *(VN-S5)*.
+A Recessed Well pill with an 11–12px mono key, on the control it accelerates (for example «الدفع ‹F8›», once that key is bound). Always shown at comfortable density and on focus/hover at compact density. A hint appears **only if the binding exists in code** — no key is bound today; the key map awaits RT-24 confirmation and conflict testing *(VN-S5)*.
 
 ### Inputs / Fields
 - **Style:** white surface, Control Edge boundary, control radius, 44px minimum.
@@ -384,12 +384,12 @@ A Recessed Well pill with an 11–12px mono key, on the control it accelerates (
 Cart rows show name (wrapping to two lines), quantity stepper, unit price and line total as LTR-isolated tabular figures. A resolved scan flashes the affected row with Teal Wash for 150ms (none under reduced motion); an unknown barcode shows an inline notice with the scanned code — never a modal. The money column holds the total at the top and the commit, suspend and cancel at the bottom, all pinned.
 
 ### Checkout
-`OrderSummary` (frozen), `TenderPicker` (tiles, including disabled-by-policy), `CashEntry` with `QuickAmounts`, `CardTerminalEntry`, `PaymentLedger` (amount due pinned at hero size), `PaymentOutcome` and `RecoveryPanel` for UNKNOWN, cancelling and reversal states. Selected tender tile: Teal Wash fill, Deep Teal ink, Control Edge boundary. Money values are never animated during entry (the current `MoneyRoll` is removed in *(VN-S4)*).
+`OrderSummary` (frozen), `TenderPicker` (tiles, including disabled-by-policy), `CashEntry` with `QuickAmounts`, `CardTerminalEntry`, `PaymentLedger` (amount due pinned at hero size), `PaymentOutcome` and `RecoveryPanel` for UNKNOWN, cancelling and reversal states. Selected tender tile: Teal Wash fill, Pharmacy Teal ink and boundary. Money values are never animated during entry (the current `MoneyRoll` is removed in *(VN-S4)*).
 
 ### Navigation
 - **Labelled panel** (208 / 140px) off-sale, **slim rail** (≈76px, icon + short 12px label) during an active sale.
 - **Default:** muted ink on canvas, control radius, 44px entries.
-- **Active:** Teal Wash fill, Deep Teal ink, a 2px inline-start bar and `aria-current="page"`.
+- **Active:** Teal Wash fill, Pharmacy Teal ink, a 2px inline-start bar and `aria-current="page"`.
 - Cashiers do not see unavailable or unauthorised placeholder routes (OD-6); manager and admin roles keep them *(VN-S10)*.
 - The nav footer hosts the **status indicator**: connection, sale sync and printer, each a dot plus text *(VN-S6)*.
 
