@@ -345,8 +345,8 @@ The money column keeps the same place through the whole journey: the Sale total 
 Flat by default, borders before shadows. Four levels: **canvas** (background, no treatment), **panel** (surface, 1px hairline, card radius, no shadow — product search, cart, tender panel, money column), **raised band** (surface-elevated inside a panel, no shadow — titlebars, table headers, the sticky totals band) and **overlay** (surface on the scrim, with the overlay shadow and pane radius — dialogs, manager approval, lock). Sticky regions use a raised band plus a top hairline instead of a shadow, so they survive forced-colours mode.
 
 ### Shadow Vocabulary
-- **Overlay** (`box-shadow: 0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.25)`): dialogs, manager approval sheet, lock screen. The only shadow new work uses.
-- **Pane** (`box-shadow: 0 18px 60px rgba(15,29,46,0.10)`): the legacy pairing pane only.
+- **Overlay** (`0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.25)`): dialogs, manager approval sheet, lock screen. The only shadow new work uses.
+- **Pane** (`0 18px 60px rgba(15,29,46,0.10)`): the legacy pairing pane only.
 - `--shadow-card` and `--shadow-inset` remain for legacy surfaces until they migrate; they are not used on V5/VNext panels.
 
 ### Named Rules

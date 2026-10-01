@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T07:19:53.793Z",
+  "generatedAt": "2026-10-01T07:26:55.552Z",
   "title": "Design System: POS-Pulse",
   "extensions": {
     "colorMeta": {
@@ -381,7 +381,7 @@
       "refersTo": "tender-tile",
       "description": "Tender method tile: selected uses Teal Wash; disabled-by-policy stays visible with a reason (RT-103 voucher).",
       "html": "<div class=\"ds-tiles\" dir=\"rtl\"><button class=\"ds-tile\" aria-pressed=\"true\">نقدي</button><button class=\"ds-tile\" aria-pressed=\"false\">بطاقة</button><button class=\"ds-tile\" disabled>قسيمة<small>غير متاحة في هذه المرحلة</small></button></div>",
-      "css": ".ds-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .ds-tile { display: grid; place-content: center; gap: 4px; min-block-size: 72px; border-radius: 10px; border: 1px solid var(--color-border-strong, #6f7b89); background-color: var(--color-surface, #ffffff); color: var(--color-text, #0f1d2e); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; } .ds-tile:hover { background-color: var(--color-surface-elevated, #f3f6fa); } .ds-tile:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; } .ds-tile[aria-pressed='true'] { background-color: var(--color-primary-soft, #e6f4f1); color: var(--color-primary, #0f766e); border-color: var(--color-primary, #0f766e); } .ds-tile:disabled { background-color: var(--color-surface-sunken, #eef2f6); color: var(--color-text-muted, #53647a); cursor: not-allowed; } .ds-tile small { font-size: 0.75rem; font-weight: 400; }"
+      "css": ".ds-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .ds-tile { display: grid; place-content: center; gap: 4px; min-block-size: 72px; border-radius: 10px; border: 1px solid var(--color-border-strong, #6f7b89); background-color: var(--color-surface, #ffffff); color: var(--color-text, #0f1d2e); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; } .ds-tile:hover { background-color: var(--color-surface-elevated, #f3f6fa); } .ds-tile:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; } .ds-tile[aria-pressed='true'] { background-color: var(--color-primary-soft, #e6f4f1); color: var(--color-primary, #0f766e); border-color: var(--color-primary, #0f766e); } .ds-tile:disabled { background-color: var(--color-surface-sunken, #eef2f6); color: var(--color-text-muted, #53647a); cursor: not-allowed; } .ds-tile small { font-size: 0.75rem; font-weight: 400; } @media (forced-colors: active) { .ds-tile { border-color: ButtonText; } .ds-tile[aria-pressed='true'] { background-color: Highlight; color: HighlightText; border-color: Highlight; } .ds-tile:disabled { color: GrayText; border-color: GrayText; } }"
     },
     {
       "name": "Navigation Link",
@@ -389,7 +389,7 @@
       "refersTo": "nav-link",
       "description": "Nav entry; active uses Teal Wash, Pharmacy Teal ink, a 2px inline-start bar and aria-current.",
       "html": "<nav class=\"ds-nav\" dir=\"rtl\"><a class=\"ds-nav-link\" href=\"#\" aria-current=\"page\">البيع</a><a class=\"ds-nav-link\" href=\"#\">المبيعات</a></nav>",
-      "css": ".ds-nav { display: grid; gap: 4px; inline-size: 140px; font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-nav-link { position: relative; display: flex; align-items: center; min-block-size: 44px; padding-inline: 12px; border-radius: 10px; color: var(--color-text-muted, #53647a); font-size: 0.875rem; font-weight: 600; text-decoration: none; } .ds-nav-link:hover { background-color: var(--color-surface-elevated, #f3f6fa); color: var(--color-text, #0f1d2e); } .ds-nav-link:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; } .ds-nav-link[aria-current] { background-color: var(--color-primary-soft, #e6f4f1); color: var(--color-primary, #0f766e); } .ds-nav-link[aria-current]::before { content: ''; position: absolute; inset-inline-start: 0; inset-block: 10px; inline-size: 2px; background-color: var(--color-primary, #0f766e); }"
+      "css": ".ds-nav { display: grid; gap: 4px; inline-size: 140px; font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-nav-link { position: relative; display: flex; align-items: center; min-block-size: 44px; padding-inline: 12px; border-radius: 10px; color: var(--color-text-muted, #53647a); font-size: 0.875rem; font-weight: 600; text-decoration: none; } .ds-nav-link:hover { background-color: var(--color-surface-elevated, #f3f6fa); color: var(--color-text, #0f1d2e); } .ds-nav-link:focus-visible { outline: 2px solid var(--color-primary, #0f766e); outline-offset: 2px; } .ds-nav-link[aria-current] { background-color: var(--color-primary-soft, #e6f4f1); color: var(--color-primary, #0f766e); } .ds-nav-link[aria-current]::before { content: ''; position: absolute; inset-inline-start: 0; inset-block: 10px; inline-size: 2px; background-color: var(--color-primary, #0f766e); } @media (forced-colors: active) { .ds-nav-link[aria-current] { background-color: Highlight; color: HighlightText; } .ds-nav-link[aria-current]::before { background-color: HighlightText; } }"
     },
     {
       "name": "Offline Banner",
@@ -400,12 +400,20 @@
       "css": ".ds-banner { display: block; padding: 10px 16px; border: 1px solid var(--color-warning, #a35a00); border-radius: 10px; background-color: var(--color-warning-soft, #fdf1e0); color: var(--color-text, #0f1d2e); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 0.875rem; line-height: 1.6; } .ds-banner strong { color: var(--color-warning, #a35a00); }"
     },
     {
-      "name": "Money Total",
+      "name": "Sale Total",
       "kind": "custom",
       "refersTo": null,
-      "description": "Total / amount due at the top of the money column: LTR-isolated, Western digits, tabular mono, the loudest numeral on screen.",
+      "description": "Sale grand total at the top of the money column (amount-total): 30px, 24px at 1024 compact. LTR-isolated Western digits, tabular mono.",
       "html": "<div class=\"ds-total\" dir=\"rtl\"><span class=\"ds-total-label\">الإجمالي</span><bdi class=\"ds-total-amount\" dir=\"ltr\">1,250.00 EGP</bdi></div>",
-      "css": ".ds-total { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-total-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-total-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 1.875rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; }"
+      "css": ".ds-total { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-total-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-total-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 1.875rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @media (max-width: 1279px) { .ds-total-amount { font-size: 1.5rem; } }"
+    },
+    {
+      "name": "Checkout Amount Due",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Checkout amount due in the same place as the Sale total (amount-hero): 44px, 36px at 1024. The largest numeral on screen; never scrolled out of view.",
+      "html": "<div class=\"ds-due\" dir=\"rtl\"><span class=\"ds-due-label\">المبلغ المستحق</span><bdi class=\"ds-due-amount\" dir=\"ltr\">1,250.00 EGP</bdi></div>",
+      "css": ".ds-due { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-due-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-due-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 2.75rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @media (max-width: 1279px) { .ds-due-amount { font-size: 2.25rem; } }"
     }
   ],
   "narrative": {
