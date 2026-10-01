@@ -243,7 +243,7 @@ Four levels, **flat by default**, borders before shadows:
 | Level | Surface | Treatment | Examples |
 |---|---|---|---|
 | L0 Canvas | `--color-background` | none | page |
-| L1 Panel | `--color-surface` | 1px hairline border, `--radius-card` 14px, no shadow | product rail, cart, tender panel |
+| L1 Panel | `--color-surface` | 1px hairline border, `--radius-card` 14px, no shadow | command bar, cart, money column, tender panel (Direction B) |
 | L2 Raised band | `--color-surface-elevated` | inside a panel; no shadow | titlebars, table header, sticky totals band |
 | L3 Overlay | `--color-surface` on scrim | `--shadow-overlay`, `--radius-pane` 16px | dialogs, manager approval, lock |
 
@@ -300,20 +300,23 @@ frequent actions so a mis-tap never voids or pays.
 Behaviour belongs to RT-24; this section defines how it is **made visible**.
 
 - **One scan owner.** Exactly one element owns scanner input at a time (today: the dedicated scan
-  field `#v5-live-scan`). VNext adds a **Scan-owner indicator** in the product rail:
+  field `#v5-live-scan`). VNext adds a **Scan-owner indicator** in the command bar (Direction B; the product rail it
+  was first drawn in is superseded):
   - `جاهز للمسح` (teal dot) when the scan field has focus;
-  - `المسح متوقف — اضغط F2 أو انقر هنا` (muted, sunken) when focus is elsewhere;
+  - `المسح متوقف — انقر هنا` (muted, sunken) when focus is elsewhere. The «اضغط F2» variant
+    appears only once VN-S5 binds F2 under a confirmed RT-24 key map (§C.5);
   - `المسح معلّق أثناء النافذة` when a dialog is open.
   This exposes the existing focus-dependent behaviour honestly instead of silently dropping scans.
 - **Scanner never reaches** PIN fields, money fields, card reference, or a focused financial
   button. Financial confirmation is **never bound to bare Enter** (RT-24: no tendering via scanner
-  Enter); financial confirm uses click/tap or `Ctrl+Enter`, shown on the button.
+  Enter); financial confirm uses click/tap. A keyboard confirm (proposed `Ctrl+Enter`, shown on
+  the button) is added only once VN-S5 binds it under a confirmed RT-24 key map (§C.5).
 - **Dialogs over Sale** (confirm-add, note, void) show the scan-suspended state; a scan while a
   dialog is open must not activate the dialog's default button (known hazard,
   `slice-f-visual-review.md:151` — a behaviour fix in VN-S5, flagged in 08).
 - **Immediate acknowledgement.** A resolved scan flashes the affected cart row (`primary-soft`
   150ms, none under reduced motion) and updates the count; unknown barcode shows an inline notice
-  in the rail («لم يُعثر على الباركود 6221234567890») — never a modal.
+  in the command bar («لم يُعثر على الباركود 6221234567890») — never a modal.
 
 ---
 
@@ -348,7 +351,7 @@ Retired as vocabularies (kept alive only until their screens migrate): 007 `ui/p
 
 | Tone | Where | Anatomy | Dismissal |
 |---|---|---|---|
-| **Inline notice** (info/warning/danger) | inside the region that caused it (rail, cart, tender panel) | icon + one-line Arabic sentence + optional action | clears when condition clears or on next action |
+| **Inline notice** (info/warning/danger) | inside the region that caused it (command bar, cart, tender panel) | icon + one-line Arabic sentence + optional action | clears when condition clears or on next action |
 | **Banner** (warning/danger/info) | frame, under titlebar, full workspace width | icon + title + detail + ≤2 actions | **persistent** until condition resolves — never auto-dismiss |
 | **Outcome panel** (success/info/danger) | Checkout/Completion main region | large icon + state sentence + reference + next action | replaced by next state |
 | **Acknowledgement toast** (neutral) | bottom inline-end of workspace | text only, ≤ 4s | auto — **only** for user-initiated, non-financial acks ("تم حفظ الملاحظة") |
@@ -434,8 +437,10 @@ Theme and density changes only between transactions (RT-24).
 > `VN-B2-*`). Column widths are reference-kit values, to be confirmed in the real app by VN-S12
 > (Sale and slim nav) and VN-S4 (Checkout content). The superseded Direction A table is kept
 > after it for the record. The two places where earlier sections described the A composition,
-> §2 (reading order) and §5 (frame grid), carry matching Direction B amendments. Every other
-> section applies unchanged. The suspend controls in the B Sale row are conditional on VN-S11
+> §2 (reading order) and §5 (frame grid), carry matching Direction B amendments, and the
+> product-rail placements in §6, §9 and §11 now read "command bar". Every other section applies
+> unchanged. Every shortcut this document names (F2, F4, F8, `Ctrl+Enter` and others) is the
+> unconfirmed RT-24 key map (§C.5) and ships only once VN-S5 binds it. The suspend controls in the B Sale row are conditional on VN-S11
 > and the RT-24 §C.4 confirmation; VN-S12 must not ship them without that contract.
 
 | Aspect | 1280×800 (comfortable) | 1024×768 (compact) |
