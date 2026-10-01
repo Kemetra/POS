@@ -70,6 +70,8 @@ function makeSession(): OperatorSessionRecord {
     started_at: '2026-05-31T08:00:00.000Z',
     backend_session_id: 'bsess-009',
     last_activity_at: '2026-05-31T08:00:00.000Z',
+    lock_state: 'active',
+    locked_at: null,
   };
 }
 

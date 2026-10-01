@@ -23,6 +23,10 @@ export const AUDIT_ACTION_CATEGORIES = [
   'shift.close',
   'shift.forced_close',
   'operator.session.takeover',
+  // RT-117 (RT-116 §7.3) — inactivity lock of the EXISTING session and its
+  // same-operator unlock. Neither ends the session.
+  'operator.session.locked',
+  'operator.session.unlocked',
   'cashier.pin.reset',
   'cashier.pin.unlock',
   // 019-cashier-pin-provisioning (R-2) — first-PIN create path; sibling to

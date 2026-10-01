@@ -77,6 +77,26 @@ export interface ShiftForcedClosePayload {
   annotation?: string;
 }
 
+// ─── operator.session.locked / unlocked (RT-117) ───────────────────────────
+
+/**
+ * `operator.session.locked` — the EXISTING session locked in place
+ * (RT-115 D1). The session is not ended; no money or cart is touched.
+ */
+export interface OperatorSessionLockedPayload {
+  /** Why it locked. `manual` is reserved (RT-115 left the shortcut undecided). */
+  lock_cause: 'inactivity';
+}
+
+/**
+ * `operator.session.unlocked` — same-operator unlock of the same session.
+ * No credential, PIN or identifier is recorded (P11).
+ */
+export interface OperatorSessionUnlockedPayload {
+  /** Milliseconds the session spent locked. */
+  locked_duration_ms: number;
+}
+
 // ─── operator.session.takeover ─────────────────────────────────────────────
 
 export interface OperatorSessionTakeoverPayload {
@@ -275,6 +295,9 @@ export type AuditPayloadMap = {
   'shift.close': ShiftClosePayload;
   'shift.forced_close': ShiftForcedClosePayload;
   'operator.session.takeover': OperatorSessionTakeoverPayload;
+  // RT-117 (RT-116 §7.3)
+  'operator.session.locked': OperatorSessionLockedPayload;
+  'operator.session.unlocked': OperatorSessionUnlockedPayload;
   'cashier.pin.reset': CashierPinResetPayload;
   'cashier.pin.unlock': CashierPinUnlockPayload;
   'cashier.pin.provisioned': CashierPinProvisionedPayload;

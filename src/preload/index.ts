@@ -29,7 +29,11 @@ import type {
   SignOutResponse,
   UnlockCashierRequest,
   UnlockCashierResponse,
+  UnlockSessionRequest,
+  UnlockSessionResponse,
+  LockStateView,
 } from '../shared/bridge-api';
+import { subscribeSessionState } from './session-state.js';
 import type { OperatorRefusal } from '../shared/audit/event-shape';
 import type { LogRecord } from '../shared/log-record';
 import type { AppConfig } from '../shared/app-config';
@@ -38,7 +42,7 @@ import {
   type PairingStatus,
   type PairingSubmitResult,
 } from '../shared/pairing-types';
-import { OPERATOR_IPC_CHANNELS } from '../shared/operator/channels';
+import { OPERATOR_IPC_CHANNELS, SESSION_LOCK_IPC_CHANNELS } from '../shared/operator/channels';
 
 /**
  * T033 + T061 + T067 — preload bridge wired to ipcRenderer.invoke.
@@ -84,6 +88,15 @@ const operator: OperatorBridgeAPI = {
       OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION,
     ) as Promise<OperatorSessionBridgeView | null>,
   _reportActivity: () => void ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY),
+  // RT-117 — inactivity lock: unlock, lock-screen read, and the state push.
+  unlockSession: (req: UnlockSessionRequest) =>
+    ipcRenderer.invoke(
+      SESSION_LOCK_IPC_CHANNELS.UNLOCK_SESSION,
+      req,
+    ) as Promise<UnlockSessionResponse>,
+  getLockState: () =>
+    ipcRenderer.invoke(SESSION_LOCK_IPC_CHANNELS.GET_LOCK_STATE) as Promise<LockStateView>,
+  onSessionStateChanged: (cb) => subscribeSessionState(ipcRenderer, cb),
   emitAuditEvent: (req: EmitAuditEventRequest) =>
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT, req) as Promise<
       EmitAuditEventResponse | OperatorRefusal

@@ -396,3 +396,53 @@ describe('CashierSignInHandler — tampered/corrupt sealed material', () => {
     expect(serialised).not.toContain('decryptString');
   });
 });
+
+// RT-117 (RT-116 §2.4) — the same 004 PIN check, reused for same-operator
+// unlock of a LOCKED session. It verifies and applies the lockout rules but
+// never creates (or replaces) a session.
+describe('CashierSignInHandler.verifyPin — RT-117 unlock verifier', () => {
+  it('returns null on a correct PIN and creates no session', async () => {
+    const sm = new SessionManager();
+    let started = 0;
+    sm.onStarted(() => {
+      started += 1;
+    });
+    const handler = makeHandler({ sessionManager: sm });
+
+    const result = await handler.verifyPin(CASHIER_ID, PIN);
+
+    expect(result).toBeNull();
+    expect(sm.getCurrent()).toBeNull();
+    expect(started).toBe(0);
+  });
+
+  it('refuses invalid_input on a wrong PIN and counts the failure', async () => {
+    let capturedFailed = -1;
+    const handler = makeHandler({
+      db: makeDb(baseRow, (f) => {
+        capturedFailed = f;
+      }),
+    });
+
+    const result = await handler.verifyPin(CASHIER_ID, WRONG_PIN);
+
+    expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(capturedFailed).toBe(1);
+  });
+
+  it('refuses rate_limited during an active lockout', async () => {
+    const future = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const row: TestDbRow = { ...baseRow, failed_attempt_count: 5, lockout_until: future };
+    const handler = makeHandler({ db: makeDb(row) });
+
+    const result = await handler.verifyPin(CASHIER_ID, PIN);
+
+    expect(result).toEqual({ kind: 'refused', category: 'rate_limited' });
+  });
+
+  it('refuses invalid_input when the terminal is unpaired', async () => {
+    const handler = makeHandler({ pairingStore: makeUnpairedStore() });
+    const result = await handler.verifyPin(CASHIER_ID, PIN);
+    expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+});

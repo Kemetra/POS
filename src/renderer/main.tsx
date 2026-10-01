@@ -9,6 +9,7 @@ import type { PreloadBridgeAPI } from '../shared/bridge-api';
 import { useFeatureFlagsStore } from './stores/feature-flags-store';
 import { installCartStoreSignOutHook } from './stores/cart-signout-hook';
 import { initTheme } from './stores/theme-store';
+import { installActivityReporter } from './session/activity-reporter';
 
 /**
  * T068 — initialise renderer-side Sentry BEFORE React mounts.
@@ -63,6 +64,11 @@ if (
     })
     .catch(() => undefined);
   installCartStoreSignOutHook();
+  // RT-117 — report genuine operator input so main measures INACTIVITY, not
+  // session age (RT-112 RC-1). Notify-only; main ignores it while locked.
+  installActivityReporter(window, () => {
+    bridge.operator._reportActivity();
+  });
 
   root.render(
     <React.StrictMode>

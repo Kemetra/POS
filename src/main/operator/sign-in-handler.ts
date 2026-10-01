@@ -309,6 +309,29 @@ export function makeShiftDismissKey(
 export class CashierSignInHandler {
   constructor(private readonly deps: CashierSignInHandlerDeps) {}
 
+  /**
+   * RT-117 (RT-116 §2.4) — verify a cashier's PIN on this terminal WITHOUT
+   * creating a session. Used for same-operator unlock of a locked session.
+   * Same row lookup, scope guard, unseal and 004 lockout rules as sign-in.
+   * Returns null on a match, otherwise the generic refusal.
+   */
+  async verifyPin(cashier_clerk_user_id: string, pin: string): Promise<OperatorRefusal | null> {
+    const pairingStatus = await this.deps.pairingStore.getStatus();
+    if (pairingStatus.kind !== 'paired') {
+      this.logRefusal('invalid_input', 'not_paired');
+      return REFUSE_INVALID;
+    }
+    const scope: PinScope = {
+      tenant_id: pairingStatus.tenant_id,
+      branch_id: pairingStatus.branch_id,
+      terminal_id: pairingStatus.terminal_id,
+      cashier_clerk_user_id,
+    };
+    const loaded = this.loadPinRow(scope);
+    if ('kind' in loaded) return loaded;
+    return await this.verifyPinAndUpdateLockout(pin, loaded, scope);
+  }
+
   async signIn(req: CashierSignInRequest): Promise<SignInResponse> {
     // 1. Terminal scope — must be paired to know tenant/branch/terminal
     const pairingStatus = await this.deps.pairingStore.getStatus();

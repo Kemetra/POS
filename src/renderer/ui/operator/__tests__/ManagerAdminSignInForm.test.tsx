@@ -72,6 +72,17 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
     ),
     listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
     dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
+    unlockSession: vi.fn(() => Promise.resolve({ kind: 'unlocked' as const })),
+    getLockState: vi.fn(() =>
+      Promise.resolve({
+        state: 'active' as const,
+        locked_at: null,
+        role: null,
+        display_name: null,
+        summary: null,
+      }),
+    ),
+    onSessionStateChanged: vi.fn(() => () => undefined),
   };
   return { bridge, signInMock };
 }
@@ -263,6 +274,17 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
       ),
       listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
       dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
+      unlockSession: vi.fn(() => Promise.resolve({ kind: 'unlocked' as const })),
+      getLockState: vi.fn(() =>
+        Promise.resolve({
+          state: 'active' as const,
+          locked_at: null,
+          role: null,
+          display_name: null,
+          summary: null,
+        }),
+      ),
+      onSessionStateChanged: vi.fn(() => () => undefined),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByTestId('sign-in-identifier'), 'i');
@@ -323,6 +345,17 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
       ),
       listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
       dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
+      unlockSession: vi.fn(() => Promise.resolve({ kind: 'unlocked' as const })),
+      getLockState: vi.fn(() =>
+        Promise.resolve({
+          state: 'active' as const,
+          locked_at: null,
+          role: null,
+          display_name: null,
+          summary: null,
+        }),
+      ),
+      onSessionStateChanged: vi.fn(() => () => undefined),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByTestId('sign-in-identifier'), 'i');
@@ -376,6 +409,17 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
       ),
       listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
       dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
+      unlockSession: vi.fn(() => Promise.resolve({ kind: 'unlocked' as const })),
+      getLockState: vi.fn(() =>
+        Promise.resolve({
+          state: 'active' as const,
+          locked_at: null,
+          role: null,
+          display_name: null,
+          summary: null,
+        }),
+      ),
+      onSessionStateChanged: vi.fn(() => () => undefined),
     };
     render(<ManagerAdminSignInForm operator={bridge} />);
     await user.type(screen.getByTestId('sign-in-identifier'), 'i');
