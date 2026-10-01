@@ -27,6 +27,7 @@ Documentation index for POS Pulse, the Windows desktop point-of-sale terminal fo
 | [POS UI shell plan](../specs/003-pos-ui-shell/plan.md) | Renderer shell, navigation, routes, and UI region strategy. |
 | [Operator session spec](../specs/004-operator-session/spec.md) | Operator identity, role visibility, and session lifecycle. |
 | [Sales cart workflow](onboarding/cart-workflow.md) · [Sales cart runbook](runbook/sales-cart.md) | Operational guidance for the sales-cart slice. |
+| [Electron 44 upgrade plan](runtime/electron-44-upgrade-plan.md) | RT-65: Electron 41 → 44 path, breaking-change audit, native-module evidence, regression matrix and rollback. |
 | [Maestro workflow](maestro/README.md) | Multi-agent orchestration playbook for active features. |
 
 ## Visual system
