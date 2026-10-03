@@ -141,8 +141,11 @@ reboot, then the readiness check (§6).**
 ## 5. Provisioning procedure (per terminal)
 
 Prerequisites: packaged build installed in its final folder, terminal not yet
-paired or already paired to the correct store, a local admin account, and the
-pilot values from the deployment owner's secure channel (never from this repo).
+paired or already paired to the correct store, a separate local admin account,
+**every cashier Windows account a standard user (not a local administrator)**,
+and the pilot values from the deployment owner's secure channel (never from this
+repo). A cashier account with admin rights can change Machine scope itself, which
+removes the reason for choosing it. The §6.1 check fails on such an account.
 
 1. Quit the POS and confirm no `POS Pulse` process is left running (Task
    Manager → Details).
@@ -205,8 +208,11 @@ $expected = [ordered]@{
 function On([string]$v) { $null -ne $v -and @('1','true','yes','on') -contains $v.Trim().ToLower() }
 $fail = 0
 function Check([bool]$ok, [string]$msg) { if ($ok) { "[PASS] $msg" } else { "[FAIL] $msg"; $script:fail++ } }
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-Check (-not $isAdmin) 'running as the cashier (not elevated)'
+# S-1-5-32-544 = local Administrators. whoami lists it even for a non-elevated (UAC-filtered) admin.
+# Full path so no other 'whoami' on PATH can answer; no output at all fails closed.
+$groups = @(& "$env:SystemRoot\System32\whoami.exe" /groups 2>$null)
+$isLocalAdmin = ($groups.Count -eq 0) -or [bool]($groups | Select-String 'S-1-5-32-544')
+Check (-not $isLocalAdmin) 'this Windows account is a standard user (not a local administrator)'
 foreach ($n in $expected.Keys) {
   $p = [Environment]::GetEnvironmentVariable($n, 'Process')
   $m = [Environment]::GetEnvironmentVariable($n, 'Machine')
@@ -243,16 +249,25 @@ Start the POS **from the cashier shortcut** and confirm:
 2. The terminal is paired to the intended store, and an operator can sign in.
 3. The Sale screen shows the catalogue search/scan field, and a scanned or
    searched product can be added to the cart (CART + PRODUCT_SEARCH).
-4. At checkout the payment surface is shown, not the "payments unavailable"
-   placeholder (PAYMENTS).
-5. The voucher tender tile is visible but **disabled** (VOUCHER_TENDER off).
-6. **Abandon the test cart without tendering.** Do **not** complete a settled test
-   sale: it would create a durable Sale, a receipt, a sync outbox entry and a
-   Backend-Core capture with ERP posting.
+4. **Void the test cart while it is still being edited**, before handing it to
+   payment. A cashier may do this. The cart never reaches payment and no money
+   moves.
 
-SALE_FINALIZATION is proven by Part A together with D-1. If PAYMENTS were on with
-finalization off, step 1 would already have failed, because the POS refuses to
-open.
+Never complete a settled test sale: it would create a durable Sale, a receipt, a
+sync outbox entry and a Backend-Core capture with ERP posting.
+
+PAYMENTS, SALE_FINALIZATION and VOUCHER_TENDER are proven by Part A, which reads
+the same environment the POS receives. D-1 adds a second guard: if PAYMENTS were
+on with finalization off, step 1 would already have failed, because the POS
+refuses to open.
+
+**Optional B2 — PAYMENTS observed in the app (manager present).** Add a line and
+hand the cart to payment. Check that «المتابعة إلى الدفع» ("Continue to payment")
+is **enabled**; it shows disabled when PAYMENTS is off. **Do not press it.** A
+**manager** then voids the handed-off cart. That void is a recorded, manager-only
+action: it leaves one `cart.cancel.post_handoff` audit event
+(`manager_voided_post_handoff`). Note it in §6.4 so later review does not treat it
+as a real cancellation.
 
 ### 6.3 Part C — D-1 guard self-test (optional, once per new build)
 
@@ -269,14 +284,18 @@ Expect the «إعداد نقطة البيع غير صالح» dialog. Close it; 
 **close that PowerShell window** so the override is gone. The next normal launch
 from the shortcut must open as usual.
 
+The self-test leaves one real `app:cashier_profile_refused` line in that
+account's POS log. Note its time in §6.4 so incident triage can tell it apart
+from a genuine refusal.
+
 ### 6.4 Record
 
 Record one line per terminal in the pilot go/no-go record (Jira comment or the
 store's pilot log). Include no values, only results:
 
-| Terminal | Date/time | Build (exe SHA-256) | Part A | Part B | Part C | Checked by |
-| :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| `<terminal name>` | `<ISO time>` | `<hash>` | READY / NOT READY | pass / fail | pass / skipped | `<admin>` |
+| Terminal | Date/time | Build (exe SHA-256) | Cashier account standard user? | Part A | Part B (B2?) | Part C (time) | Checked by |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `<terminal name>` | `<ISO time>` | `<hash>` | yes / **no = not ready** | READY / NOT READY | pass / fail (B2 void time or skipped) | pass at `<time>` / skipped | `<admin>` |
 
 `Get-FileHash '<full path to>\POS Pulse.exe'` gives the build hash.
 
@@ -295,16 +314,16 @@ into terminal steps; T525 remains the authority on *what* rollback means.
    two steps, it would open with payments off.
 
    ```powershell
+   # Order matters: PAYMENTS first.
    [Environment]::SetEnvironmentVariable('POS_PULSE_FEATURE_PAYMENTS', '0', 'Machine')
    [Environment]::SetEnvironmentVariable('POS_PULSE_FEATURE_SALE_FINALIZATION', '0', 'Machine')
+   [Environment]::SetEnvironmentVariable('POS_PULSE_FEATURE_CART', '0', 'Machine')
+   [Environment]::SetEnvironmentVariable('POS_PULSE_FEATURE_PRODUCT_SEARCH', '0', 'Machine')
    ```
 
-   Leaving CART and PRODUCT_SEARCH on is valid. To match the
-   `$expectRollback = $true` check exactly, set them to `0` too.
-
 3. **Reboot.**
-4. Run §6.1 with `$expectRollback = $true`. It must print `[READY]`. In the app,
-   checkout must show the placeholder; no tender can be started.
+4. Run §6.1 with `$expectRollback = $true`. It must print `[READY]`, which here
+   means "ready in the rolled-back state": all four flags off, voucher off.
 5. Any trading continues **only** through the store's separate manual procedure,
    outside the POS financial flow (T525). It is never done by re-enabling payments
    on a terminal whose finalization is off.
@@ -374,6 +393,7 @@ registry writes were involved.
 | Nothing provisioned | `[NOT READY]`: four flags off, URL/key missing |
 | D-1 invalid (`PAYMENTS=1`, finalization off) | `[NOT READY]` with an explicit `[FAIL] D-1: PAYMENTS is not on while SALE_FINALIZATION is off` |
 | Pilot profile set **only** in process scope (a wrapper-style override) | Flags evaluate as expected, but each `effective value comes from Machine scope` line fails, giving `[NOT READY]` |
+| Every case, run from a non-elevated local-admin account | `[FAIL] this Windows account is a standard user`. A UAC-filtered admin is still detected. The check calls `System32\whoami.exe` by full path: an earlier draft ran plain `whoami`, which Git Bash's `whoami` answered, so it passed wrongly. |
 
 Limits, stated plainly:
 
@@ -387,5 +407,11 @@ Limits, stated plainly:
 - **Reboot survival was not exercised in this session.** Machine variables are
   persistent registry state by design. Each terminal proves it through the
   mandatory "reboot → §6" step.
+- **Residual risk, not fixed here (owner decision).** The packaged build sets
+  no Electron fuses. It accepted `--remote-debugging-port` (this evidence
+  relied on it), and `ELECTRON_RUN_AS_NODE` / `--inspect` are not disabled
+  either. A cashier who builds their own shortcut with such a switch gets around
+  the profile, and §6 cannot detect it. Closing this is a separate
+  Implementation item (fuses in the packaging config); it is outside RT-163.
 - The owner's real POS profile (`%APPDATA%\pos-pulse`) was not touched. The test
   variables were removed afterwards, and a `reg query` confirmed none were left.
