@@ -64,7 +64,7 @@ places:
 
 | # | Finding | Evidence | Class |
 |---|---|---|---|
-| **P-1** | **Cashier feature-flag coherence.** Five fail-closed env flags (`CART`, `PAYMENTS`, `SALE_FINALIZATION`, `PRODUCT_SEARCH`, `VOUCHER_TENDER`) are read per terminal from the OS environment (no dotenv loader in main). With **payments on and sale finalization off**, payments still settle, but no Sale row, receipt, outbox entry or backend capture is written (`index.ts:1054-1065`). This is the **documented rollback** (`docs/runbook/008-…md:250`), not a bug. But nothing at startup validates the combination, and the renderer has no state that tells the cashier they are in manual-receipt mode. The tender facts stay only in local `payment_attempts` and tender tables. | C, D | **Pilot-critical** (ops check now; slice S-A) |
+| **P-1** | **Cashier feature-flag coherence.** Five fail-closed env flags (`CART`, `PAYMENTS`, `SALE_FINALIZATION`, `PRODUCT_SEARCH`, `VOUCHER_TENDER`) are read from `process.env` in main (no dotenv loader in `src/main`). Whether a packaged build gets them from the terminal's OS environment or has them fixed at build time is **not verified (N)**; that decides whether the check below is per terminal or per build. With **payments on and sale finalization off**, payments still settle, but no Sale row, receipt, outbox entry or backend capture is written (`index.ts:1054-1065`). This is the **documented rollback** (`docs/runbook/008-…md:250`), not a bug. But nothing at startup validates the combination, and the renderer has no state that tells the cashier they are in manual-receipt mode. The tender facts stay only in local `payment_attempts` and tender tables. | C, D | **Pilot-critical** (ops check now; slice S-A) |
 | **P-2** | **Audit events never leave the terminal.** `AuditSync` (`src/main/audit/audit-sync.ts`) is implemented and tested but has **no production caller**. Lock/unlock, payment and sale audit rows accumulate in local `audit_events` only. | C | **Pilot decision** (slice S-B) |
 | **P-3** | **RT-117's inactivity timer escapes the documented shutdown order.** `InactivityMonitor.start()` (`index.ts:582`) is never stopped and is not in `workerRegistry`. A lock tick writes `audit_events` (`wireSessionLockAudit`). `current.md` §3 says every background worker must stop before the DB closes. Probability is very low (needs a 10-minute idle lock in the quit window). | C | Fold into the next RT-116 slice — no new issue |
 | **P-4** | **Built-but-unwired code suggests behaviour that does not run.** `AuditSync` (P-2); `LifecycleCascade` constructed then `void`ed (`index.ts:591-596`); `registerSessionEndCartDiscardSubscriber` with no caller (also RT-111 OB-06); ~24k-line `api-types.ts` with 281 paths and 4 importers, carrying legacy Data-Pulse return/shift schemas (`ReturnRequest`, `ActiveShiftResponse` with float `_egp` amounts) that are **not** Backend-Core POS contracts. | C | Post-pilot cleanup, except where P-2 decides otherwise |
@@ -176,8 +176,10 @@ stores/ (zustand projections)  ─invoke──▶   'api' object   ──▶    
 ### 5.2 What each case shows
 
 **CS-1 — RT-117 inactivity lock.** This is the largest recent change, and most of it is correct
-essential complexity. Lock semantics, unlock rate-limiting, the "never auto-reverse live tender"
-sweep rule and the audit categories make up about 72 % of production lines. The Electron share is the
+essential complexity. About 72 % of production lines sit outside the boundary files. Roughly 420 of
+those are the lock UI (LockScreen 243, SessionLockGate 71, activity-reporter 57, CSS 51). The rest
+(about 550) are main-side lock semantics: unlock handler and rate limit, session-manager lock state,
+lock-state reader, the "never auto-reverse live tender" sweep rule and the audit categories. The Electron share is the
 push channel, preload and bridge types, and the allowlist wrapper. The allowlist wrapper is really
 security semantics placed at the right choke point: it refuses future channels by default. The
 incidental cost is concentrated: `index.ts` +70 lines; 7 unrelated renderer tests edited only to add
@@ -293,9 +295,10 @@ not choose.
 
 **Immediate operational action (no code, pilot readiness):** every pilot terminal is checked for
 `POS_PULSE_FEATURE_CART`, `…_PAYMENTS`, `…_SALE_FINALIZATION` and `…_PRODUCT_SEARCH` **on**, and
-`…_VOUCHER_TENDER` **off** (RT-10 D2, RT-103). These are OS environment variables of the POS process.
-Main loads no `.env` file (C: no dotenv loader in `src/main`). How they are provisioned on a packaged
-terminal (installer, shortcut, system env) is **not verified** here (**N**) and belongs in the pilot
+`…_VOUCHER_TENDER` **off** (RT-10 D2, RT-103). Main reads them from `process.env` and loads no `.env`
+file (C: no dotenv loader in `src/main`). This audit did **not** verify whether a packaged build takes
+them from the terminal's OS environment at runtime or has them fixed at build time (**N**). The
+answer decides whether the check is per terminal or per build artifact, and it belongs in the pilot
 runbook.
 
 ---
