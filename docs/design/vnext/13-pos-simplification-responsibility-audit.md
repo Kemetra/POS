@@ -13,7 +13,8 @@
 > (§3.2, §7.2 R-7, §11), the P-1 renderer wording (§1, §4), and the fake-bridge evidence (§4, §9.1).
 > It also corrects the audit category count from a PR #511 review comment: POS defines **8** payment
 > categories, including the manager `payment.force_failed`, which belongs in the central set (§1 P-2,
-> §9.4).
+> §9.4). A further review comment moved routine `shift.open` / `shift.close` to local-only, because the
+> synced shift record is the fact (§9.4).
 >
 > **Read these limits first**
 >
@@ -353,7 +354,7 @@ only need **cleanup or hardening**. The test used: *does it reduce the cost of f
 | **H-3** | **Inactivity timer into the worker registry** | P-3: violates the documented shutdown invariant | Next RT-116 slice touching `InactivityMonitor`; no new issue | Pilot-optional |
 | **H-4** | **Privileged audit path (D-2).** Central audit covers only privileged, security and exception actions not already represented by an authoritative sale or payment record (§9.4). **Order:** align the Backend-Core category catalogue first (contract revision); then add a POS HTTP client and a sender that sends **only** supported central categories; a `schema_violation` rejection is terminal (dead-lettered and logged), never retried forever. Routine lock/unlock and sale/payment facts stay local | P-2: receiver exists; POS client and contract alignment do not | FU-3 (not created), contract-first, Backend-Core first | **Pilot-critical** |
 | **C-1** | **Runbook truth.** Correct `docs/runbook/sales-cart.md` session-end discard section, or wire the subscriber, after RT-116 S4 decides held-cart behaviour | P-4: the runbook describes behaviour that never runs | RT-116 S4 outcome; docs-only fix | Pilot-relevant (operators read runbooks) |
-| **C-2** | **Retire or record unwired code** (`LifecycleCascade`; `session-end-handler.ts` depending on C-1) | P-4: code implies behaviour that does not run | Post-pilot cleanup | Post-pilot |
+| **C-2** | **Retire or record unwired code** (`LifecycleCascade`; `session-end-handler.ts` depending on C-1); retire or properly gate the `shift.open` smoke handler, whose `NODE_ENV === 'production'` guard a packaged build probably never triggers (§9.4) | P-4: code implies behaviour that does not run | Post-pilot cleanup | Post-pilot |
 | **C-3** | **Trim `api-types.ts`** to consumed POS paths; bring the hand-vendored `CaptureSaleRequest` under codegen | P-4: ~24k lines of misleading types | Generated-code + codegen change needs explicit authorisation (CLAUDE.md §10) | Post-pilot |
 | **C-4** | **`current.md` drift** (§14) | Canonical doc out of date | Docs-only, after FU-1 / FU-3 change behaviour | Any time |
 
@@ -376,16 +377,27 @@ Backend-Core. "Accepted today" = in Backend-Core's 6-category set (`dto.ts:17-24
 
 | Group | Categories | Accepted today | Proposed treatment |
 |---|---|---|---|
-| **Central — already accepted** | `operator.session.takeover`, `cashier.pin.reset`, `cashier.pin.unlock`, `shift.forced_close`, `shift.open`, `shift.close` | Yes (all 6) | Send. `shift.open/close` are already in the catalogue; keep them as they are |
+| **Central — already accepted** | `operator.session.takeover`, `cashier.pin.reset`, `cashier.pin.unlock`, `shift.forced_close` | Yes (4 of the 6) | Send |
 | **Central — catalogue must add** | `cashier.pin.provisioned` (credential event), `cart.cancel.post_handoff` (manager authority), `cart.discount.above_threshold` (override), `sale.receipt.manual_override` (override), `payment.force_failed` (manager recovery; emitted with manager/cashier attribution by `payments-force-fail.ts:139-164`) | No | Send after the catalogue revision |
 | **Owner to confirm in FU-3** | `sale.receipt.reprinted` (reprint as a privileged action); `tender.reversed`, `tender.reversal_pending` (a reversed tender on an attempt that never finalizes leaves no central record) | No | Decide per D-2's "not already represented by an authoritative record" test |
 | **Local only — routine (D-2)** | `operator.session.locked`, `operator.session.unlocked` | No | Never sent |
+| **Local only — the shift record is the fact** | `shift.open`, `shift.close` (routine cashier open/close) | Yes (the other 2 of the 6) | Never sent, even though Backend-Core accepts them. Under spec 015 the closed shift record itself syncs to Backend-Core (§7.2 R-7), so these would duplicate it. D-2 names only *forced* shift actions; the forced variant is `shift.forced_close` above |
 | **Local only — represented by authoritative records** | `cart.handoff_to_payment`, `sale.finalized`, `payment.settled`, `tender.applied`, `sale.receipt.printed`, `sale.receipt.print_retried_success`, `sale.drawer.opened` (a drawer opening tied to a sale) | No | Never sent; the sale/tender/print records are the facts |
 | **Local only — operational diagnostics** | `sale.finalization_refused`, `sale.receipt.print_failed`, `sale.drawer.suppressed`, `sale.drawer.failed`, `tender.refused`, `payment.cancelled`, `payment.failed` (ordinary failure, not the manager force-fail) | No | Never sent |
 | **Not emitted** | `cart.discarded_on_session_end` (P-4: the subscriber is never wired) | No | Decide with C-1 / RT-116 S4 |
 
 A **no-sale drawer** action (named in D-2) has no POS category today because the action does not
 exist yet. It belongs in the central set when it is built.
+
+**Shift emitters today (C):** nothing in production code emits `shift.close`. The only `shift.open`
+emitter is a quickstart smoke handler (`src/main/ipc/operator.ts:338`, channel
+`EMIT_AUDIT_EVENT_SMOKE`, payload `{ smoke: true }` at `:371`).
+Its guard refuses only when `NODE_ENV === 'production'` (`:342`), and nothing in the packaged build
+sets `NODE_ENV` (main is `tsc`-built and reads the environment at runtime; `electron-builder.yml` sets
+none). So the guard probably does **not** fire in a packaged build; this is a code reading, not
+verified at runtime. A manager or admin session could then write a smoke `shift.open` row locally.
+Classifying `shift.open` as local-only keeps such rows off Backend-Core; retiring or properly gating
+the smoke handler is cleanup (C-2).
 
 ---
 
