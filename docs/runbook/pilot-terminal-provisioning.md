@@ -121,7 +121,8 @@ Pilot rules that follow:
 2. **User scope holds no `POS_PULSE_*` variable** for any account that runs the
    POS. The readiness check fails if it finds one.
 3. The POS is launched only from the plain shortcut. A wrapper, `--` switches
-   (especially `--remote-debugging-port` or `--user-data-dir`) and launching from
+   (especially `--remote-debugging-port` or `--user-data-dir`; the packaged build
+   refuses the debugging ones at startup since RT-164, §11) and launching from
    an admin's console are not allowed.
 
 **Ownership.**
@@ -245,7 +246,10 @@ means a User-scope override, or a change made without a reboot.
 
 Start the POS **from the cashier shortcut** and confirm:
 
-1. The POS opens. **No** «إعداد نقطة البيع غير صالح» dialog appears.
+1. The POS opens. **No** «إعداد نقطة البيع غير صالح» dialog appears. If the POS
+   closes at once with **no** dialog, look in the main log for
+   `app:debug_switch_refused`: the shortcut carries a debugging switch (§11).
+   Fix the shortcut (Target = the exe path, nothing after it).
 2. The terminal is paired to the intended store, and an operator can sign in.
 3. The Sale screen shows the catalogue search/scan field, and a scanned or
    searched product can be added to the cart (CART + PRODUCT_SEARCH).
@@ -355,8 +359,8 @@ configure a pilot terminal**, and a pilot terminal must not depend on any of the
 | Shell-exported vars + `npm run dev` | Developer machines | Unpackaged build; `NODE_ENV=development`; Vite renderer on `localhost:5173` |
 | `.env` / `.env.example` | Developer reference only | Main reads no `.env` in **any** build (`.env.example`'s "read in main" means the variable names, not the file) |
 | `POS_PULSE_DEV_*` bypasses and seeds | Developer machines | Ignored by packaged builds |
-| Lab launchers (rt9 `start-pos.ps1`, Orchestrator smoke runbook) | Isolated labs | Process-scope env, a scratch `--user-data-dir`, a CDP port. All three are forbidden on a pilot shortcut (§4) |
-| `--remote-debugging-port=<n>` | Lab automation and evidence | Gives full control of the running POS to anything on the machine. **Never** on a pilot terminal |
+| Lab launchers (rt9 `start-pos.ps1`, Orchestrator smoke runbook, RT-110 bench) | Isolated labs | Process-scope env, a scratch `--user-data-dir`, a CDP port. All three are forbidden on a pilot shortcut (§4). Since RT-164 they must drive the **unpackaged** build (`electron .`): a packaged exe refuses CDP (§11) |
+| `--remote-debugging-port` / `-pipe`, `--inspect*`, `ELECTRON_RUN_AS_NODE` | Lab automation and evidence, **unpackaged builds only** | Hand control of the running POS to anything on the machine. Since RT-164 the packaged exe refuses or ignores all of them (§11); **never** put one on a pilot terminal |
 
 ## 9. Secrets handling
 
@@ -407,11 +411,65 @@ Limits, stated plainly:
 - **Reboot survival was not exercised in this session.** Machine variables are
   persistent registry state by design. Each terminal proves it through the
   mandatory "reboot → §6" step.
-- **Residual risk, not fixed here (owner decision).** The packaged build sets
-  no Electron fuses. It accepted `--remote-debugging-port` (this evidence
-  relied on it), and `ELECTRON_RUN_AS_NODE` / `--inspect` are not disabled
-  either. A cashier who builds their own shortcut with such a switch gets around
-  the profile, and §6 cannot detect it. Closing this is a separate
-  Implementation item (fuses in the packaging config); it is outside RT-163.
+- **Residual risk recorded here — closed by RT-164 (§11).** At `main@4881eb6`
+  the packaged build set no Electron fuses: it accepted
+  `--remote-debugging-port` (this evidence relied on it), `ELECTRON_RUN_AS_NODE`
+  and `--inspect`. RT-164 hardened the packaged build, so this section's CDP
+  method can no longer be repeated on a packaged exe.
 - The owner's real POS profile (`%APPDATA%\pos-pulse`) was not touched. The test
   variables were removed afterwards, and a `reg query` confirmed none were left.
+
+## 11. Packaged-build hardening (RT-164, 2026-10-03)
+
+Owner decisions (RT-164): **D-1** the hardening is pilot-blocking; **D-2** there
+is one packaged build and it is always hardened. Lab and automation that need
+Node, an inspector or CDP use the unpackaged build (`electron .`).
+
+**What the packaged build does now**
+
+| Vector | Control | Behaviour |
+| :-- | :-- | :-- |
+| `ELECTRON_RUN_AS_NODE=1` | Fuse `RunAsNode` off | Ignored; the exe starts as the POS, not as Node |
+| `NODE_OPTIONS=--require …` | Fuse `EnableNodeOptionsEnvironmentVariable` off (Electron already restricted most options in packaged apps) | Ignored |
+| `--inspect`, `--inspect-brk`, `--inspect-port` | Fuse `EnableNodeCliInspectArguments` off, plus the startup guard | No inspector; the POS exits, logging `app:debug_switch_refused` |
+| `--remote-debugging-port`, `--remote-debugging-pipe` (any of `--` `-` `/` prefixes, any case) | Startup guard in main (`src/main/app/launch-switch-guard.ts`); no fuse exists for these | The POS exits before the DB, IPC or a window exists, logging `app:debug_switch_refused` with the switch **name** only |
+| App code replaced outside `app.asar`, or `app.asar` tampered | Fuses `OnlyLoadAppFromAsar` and `EnableEmbeddedAsarIntegrityValidation` on | Only the integrity-checked archive loads |
+
+Kept at Electron's default, with reasons:
+
+- `GrantFileProtocolExtraPrivileges` stays **on**. Turned off, the packaged
+  renderer (Vite ES-module scripts from `file://`) failed to load: the window
+  landed on `chrome-error://`. Turning it off needs the renderer served from a
+  custom protocol first, which is a separate change.
+- `EnableCookieEncryption` stays **off**. The POS keeps no secret in Chromium
+  cookies, and turning it on is a one-way cookie-store migration.
+
+**Evidence.** The same harness ran against the packaged build before
+(`main@4881eb6` code, which `cd9dfa2` leaves unchanged; no fuses) and after (RT-164 branch, SHA-256
+`0ab859c0…031b88`). Each launch used a scratch `--user-data-dir`.
+
+| Vector | Before | After |
+| :-- | :-- | :-- |
+| `ELECTRON_RUN_AS_NODE=1` + script | Script ran (`ran:40.9.3`) | Did not run |
+| `NODE_OPTIONS=--require` | Did not run (Electron's packaged-app restriction) | Did not run |
+| `--inspect=9339` | Inspector reachable | Not reachable; process exited; refusal logged (`switches: ["inspect"]`) |
+| `--remote-debugging-port=9334` | CDP reachable | Not reachable; exited; refusal logged |
+| `/remote-debugging-port=9335` | CDP reachable | Not reachable; exited; refusal logged |
+| `--REMOTE-DEBUGGING-PORT=9336` | CDP reachable | Not reachable; exited; refusal logged |
+| `--remote-debugging-pipe` | Process kept running | Exited; refusal logged |
+| Normal launch | Started; DB migrated; `app:ready` | Same. The window's accessibility tree shows the pairing screen ("Enter the pairing code…", "Pair terminal"), so the renderer, preload bridge and IPC all work |
+
+Fuse read-back after (`npx electron-fuses read --app "POS Pulse.exe"`):
+`RunAsNode` Disabled · `EnableNodeOptionsEnvironmentVariable` Disabled ·
+`EnableNodeCliInspectArguments` Disabled · `OnlyLoadAppFromAsar` Enabled ·
+`EnableEmbeddedAsarIntegrityValidation` Enabled ·
+`GrantFileProtocolExtraPrivileges` Enabled · `EnableCookieEncryption` Disabled.
+
+Limits:
+
+- Chromium opens a `--remote-debugging-port` listener at process start, before
+  main runs. The guard closes it within the first moments of startup, before
+  any page, preload or POS state exists, but the port is briefly open.
+- Fuses protect the binary as built. Someone who can replace
+  `POS Pulse.exe` itself is outside this control. That is code signing and
+  file-system permissions, not RT-164.

@@ -105,10 +105,11 @@ import {
   describeCashierProfileRefusal,
   parseFeatureFlags,
 } from './app/feature-flags.js';
+import { assessLaunchSwitches } from './app/launch-switch-guard.js';
 import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
-import { createLogger } from './logging/logger.js';
+import { createLogger, waitForLogDrain } from './logging/logger.js';
 import { initSentryMain } from './observability/sentry-main.js';
 import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
 import { applyDevSkipPairingIfRequested } from './pairing/dev-skip-pairing.js';
@@ -206,6 +207,9 @@ function resolveClerkExchanger(logger: {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const isDev = process.env['NODE_ENV'] === 'development';
+
+/** RT-164 — longest a refused launch waits for its log line to reach disk. */
+const LAUNCH_REFUSAL_LOG_DRAIN_MS = 2000;
 
 /**
  * The trusted renderer origin allow-list. Dev = the Vite server; prod = the
@@ -329,6 +333,27 @@ app
       logsDir,
     });
     mainLogger.info({ logsDir, appVersion }, 'app:logger-ready');
+
+    // RT-164 — a PACKAGED build refuses debugging switches (`--remote-debugging-*`
+    // has no Electron fuse; `--inspect*` is refused here as well as by the fuse).
+    // Checked as early as logging allows: before Sentry, the DB, any IPC
+    // handler or any window. Only switch NAMES are logged, never their values.
+    // pino-roll writes asynchronously and `flush()` does not wait for it, so the
+    // exit waits for the stream to drain (bounded) or the line is lost.
+    const launchSwitches = assessLaunchSwitches({
+      isPackaged: app.isPackaged,
+      argv: process.argv,
+      hasSwitch: (name) => app.commandLine.hasSwitch(name),
+    });
+    if (!launchSwitches.ok) {
+      mainLogger.error(
+        { reason: launchSwitches.reason, switches: launchSwitches.switches },
+        'app:debug_switch_refused',
+      );
+      await waitForLogDrain(mainLogger, LAUNCH_REFUSAL_LOG_DRAIN_MS);
+      app.exit(1);
+      return;
+    }
 
     // T068 — initialise Sentry AFTER the main logger is up but BEFORE
     // migrations / window creation. Sentry's `init` is wrapped in
