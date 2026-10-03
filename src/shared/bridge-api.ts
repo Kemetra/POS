@@ -130,6 +130,44 @@ export interface OperatorSessionBridgeView {
   started_at: string;
 }
 
+/**
+ * RT-117 (RT-116 §2.4) — same-operator unlock of the CURRENT locked session.
+ * Cashier sessions use `pin`; manager/admin sessions use the interim online
+ * credential re-auth (owner decision Z3; replaced by the RT-114 credential).
+ * Secrets in these requests are consumed by main and never logged (P11).
+ */
+export type UnlockSessionRequest =
+  | { method: 'pin'; pin: string }
+  | { method: 'online_credential'; identifier: string; password: string };
+
+export type UnlockSessionResponse = { kind: 'unlocked' } | OperatorRefusal;
+
+/**
+ * RT-117 (RT-116 §7.2) — the only read served while locked. Totals only:
+ * no line items, no names, no credentials. `summary` is null when the
+ * session has no open cart.
+ */
+export interface LockStateSummary {
+  line_count: number;
+  total_minor: number;
+  tender_applied_minor: number;
+  has_live_tender: boolean;
+}
+
+export interface LockStateView {
+  state: 'active' | 'locked' | 'signed_out';
+  locked_at: string | null;
+  /** Role of the locked session, so the lock screen offers the right unlock form. */
+  role: Role | null;
+  display_name: string | null;
+  summary: LockStateSummary | null;
+}
+
+/** RT-117 — main → renderer push payload on `operator:session-state`. */
+export interface SessionStateEvent {
+  state: 'active' | 'locked' | 'ended';
+}
+
 export interface SignInSuccessResponse {
   kind: 'signed_in';
   session: OperatorSessionBridgeView;
@@ -385,6 +423,26 @@ export interface OperatorBridgeAPI {
    * missing from the bridge surface).
    */
   _reportActivity(): void;
+
+  /**
+   * RT-117 (RT-116 §2.4) — same-operator unlock of the CURRENT locked session.
+   * Resumes the SAME session id. Generic refusal on any mismatch; the lock is
+   * unchanged. Secrets in the request are never logged (P11).
+   */
+  unlockSession(req: UnlockSessionRequest): Promise<UnlockSessionResponse>;
+
+  /**
+   * RT-117 (RT-116 §7.2) — lock state + preserved-sale TOTALS for the lock
+   * screen. The only operator read served while locked.
+   */
+  getLockState(): Promise<LockStateView>;
+
+  /**
+   * RT-117 (RT-116 §7.2) — subscribe to main → renderer session-state pushes
+   * (`locked` / `active` / `ended`). The callback receives the payload only.
+   * Returns an unsubscribe function.
+   */
+  onSessionStateChanged(cb: (event: SessionStateEvent) => void): () => void;
 
   /**
    * T048 — Emit one audit event to the local outbox.

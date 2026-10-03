@@ -117,6 +117,15 @@ function asCashierRequest(value: unknown): CashierSignInRequest | null {
   };
 }
 
+/**
+ * RT-117 §A4 L1 — categories only main may emit. The lock audit records a
+ * main-side state change; a renderer must not be able to forge one.
+ */
+const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
+  'operator.session.locked',
+  'operator.session.unlocked',
+]);
+
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -294,7 +303,7 @@ function registerAuditHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): voi
       }
 
       const req = asEmitAuditEventRequest(request);
-      if (req === null) {
+      if (req === null || MAIN_ONLY_AUDIT_CATEGORIES.has(req.action_category)) {
         return refuseInvalid();
       }
 

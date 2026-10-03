@@ -28,6 +28,13 @@ export interface OperatorSessionRecord {
   backend_session_id: string;
   /** ISO timestamp of last genuine renderer-side activity (T028b). */
   last_activity_at: string;
+  /**
+   * RT-117 (RT-116 §2.1) — LOCKED is a state of THIS session, never an end.
+   * In memory only, like the session itself; a restart loses it.
+   */
+  lock_state: 'active' | 'locked';
+  /** ISO timestamp the session locked; null while active. */
+  locked_at: string | null;
 }
 
 export interface CreateSessionInput {
@@ -48,11 +55,15 @@ type SessionEndCallback = (
 /** #380 — fired after a new session is created (any sign-in role). */
 type SessionStartCallback = (record: OperatorSessionRecord) => void;
 
+/** RT-117 — fired after the current session locks or unlocks. */
+type LockStateCallback = (record: OperatorSessionRecord) => void;
+
 export class SessionManager {
   private current: OperatorSessionRecord | null = null;
   private lastEndCause: SessionEndCause | null = null;
   private readonly endCallbacks: SessionEndCallback[] = [];
   private readonly startCallbacks: SessionStartCallback[] = [];
+  private readonly lockCallbacks: LockStateCallback[] = [];
 
   getCurrent(): OperatorSessionRecord | null {
     return this.current;
@@ -87,6 +98,8 @@ export class SessionManager {
       backend_session_id: input.backend_session_id,
       started_at: now,
       last_activity_at: now,
+      lock_state: 'active',
+      locked_at: null,
     };
     this.current = record;
     // #380 — fire start subscribers (e.g. the orphan-attempt sweep). A
@@ -146,6 +159,51 @@ export class SessionManager {
 
   noteActivity(at: string): void {
     if (this.current === null) return;
+    // RT-117 — activity never unlocks and never extends a locked session.
+    if (this.current.lock_state === 'locked') return;
     this.current.last_activity_at = at;
+  }
+
+  isLocked(): boolean {
+    return this.current?.lock_state === 'locked';
+  }
+
+  /** Register a callback fired after the current session locks or unlocks. */
+  onLockStateChanged(cb: LockStateCallback): void {
+    this.lockCallbacks.push(cb);
+  }
+
+  /**
+   * RT-117 (RT-116 §2.2) — lock the CURRENT session in place. Same session id;
+   * onEnded is NOT fired, so the session-end sweep cannot run on a lock.
+   */
+  lock(at: string): void {
+    if (this.current === null || this.current.lock_state === 'locked') return;
+    this.current.lock_state = 'locked';
+    this.current.locked_at = at;
+    this.notifyLockState(this.current);
+  }
+
+  /**
+   * RT-117 — resume the SAME session after a verified same-operator unlock.
+   * onStarted is NOT fired (the session never ended). Callers verify the
+   * credential first; this method only flips the state.
+   */
+  unlock(at: string): void {
+    if (this.current === null || this.current.lock_state !== 'locked') return;
+    this.current.lock_state = 'active';
+    this.current.locked_at = null;
+    this.current.last_activity_at = at;
+    this.notifyLockState(this.current);
+  }
+
+  private notifyLockState(record: OperatorSessionRecord): void {
+    for (const cb of this.lockCallbacks) {
+      try {
+        cb(record);
+      } catch {
+        // subscribers must not break lock()/unlock()
+      }
+    }
   }
 }

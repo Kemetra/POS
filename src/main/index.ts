@@ -3,6 +3,14 @@ import * as Sentry from '@sentry/electron/main';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
+import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
+import { registerSessionLockHandlers } from './ipc/session-lock.js';
+import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
+import { createLockStateReader } from './operator/lock-state-reader.js';
+import { wireSessionStatePush } from './operator/session-state-push.js';
+import { wireSessionLockAudit } from './operator/session-lock-audit.js';
+import { createSaleSyncTokenReader } from './operator/sale-sync-token.js';
+import { SESSION_LOCK_IPC_CHANNELS } from '../shared/operator/channels.js';
 import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
 import { registerLogHandler } from './ipc/log.js';
@@ -408,7 +416,14 @@ app
     // SAME `resolveRendererOrigin()` the `will-navigate` allow-list uses, so the
     // navigation check and the IPC check cannot drift. Every `register…` below
     // receives the guarded instance — zero registrar edits (they take IpcMain).
-    const guardedIpcMain = createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin());
+    // RT-117 (RT-116 §2.5) — wrap ONCE more so every handler is refused while
+    // the operator session is LOCKED unless its channel is on the allowlist.
+    // The session manager is built below; bind the probe to it there.
+    const sessionLockProbe: { isLocked: () => boolean } = { isLocked: () => false };
+    const guardedIpcMain = createSessionLockGuardedIpcMain(
+      createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
+      () => sessionLockProbe.isLocked(),
+    );
 
     // Register IPC handlers BEFORE the first window loads so the renderer's
     // first call cannot race the registration.
@@ -500,6 +515,7 @@ app
     //     closures. Keyed on backend_session_id, in-process only, never bridged.
     const operatorEnvelopeHolder = createJwtHolder();
     const operatorSessionManager = new SessionManager();
+    sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
     const apiBaseUrl = resolveApiBaseUrl();
     const operatorBackend = createBackendClient({
       baseUrl: apiBaseUrl,
@@ -560,6 +576,8 @@ app
     });
     const operatorInactivityMonitor = new InactivityMonitor({
       sessionManager: operatorSessionManager,
+      // RT-117 — a lock leaves a log line (RT-112: a timeout left none).
+      logger: mainLogger,
     });
     operatorInactivityMonitor.start();
 
@@ -582,6 +600,47 @@ app
     // T045 has already run before the first emit call.
     const auditEventsStore = bindAuditEventsStoreDb(db);
     const auditEmitter = new AuditEmitter(auditEventsStore);
+
+    // RT-117 (RT-116 S1) — inactivity LOCK of the existing session.
+    //   • push: main tells the renderer the moment the session locks/unlocks/
+    //     ends (state only — no ids, names or credentials);
+    //   • audit: operator.session.locked / operator.session.unlocked;
+    //   • IPC: same-operator unlock + the lock-screen totals read (both on the
+    //     locked-session allowlist).
+    wireSessionStatePush({
+      sessionManager: operatorSessionManager,
+      send: (event) => {
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send(SESSION_LOCK_IPC_CHANNELS.SESSION_STATE, event);
+        }
+      },
+      logError: (err) => {
+        mainLogger.error({ err }, 'operator.session_state_push:failed');
+      },
+    });
+    wireSessionLockAudit({
+      sessionManager: operatorSessionManager,
+      auditEmitter,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      uuid: () => randomUUID(),
+      logError: (err) => {
+        mainLogger.error({ err }, 'operator.session_lock_audit:failed');
+      },
+    });
+    registerSessionLockHandlers(guardedIpcMain, {
+      unlockHandler: new SessionUnlockHandler({
+        sessionManager: operatorSessionManager,
+        verifyCashierPin: (operator_id, pin) =>
+          operatorCashierSignInHandler.verifyPin(operator_id, pin),
+        clerk: clerkExchanger,
+        logger: mainLogger,
+      }),
+      getLockState: createLockStateReader({
+        db,
+        sessionManager: operatorSessionManager,
+        resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      }),
+    });
 
     const operatorTakeoverHandler = new TakeoverHandler({
       protoStore: operatorProtoStore,
@@ -914,6 +973,8 @@ app
       attemptsRepo: paymentsAttemptsRepo,
       discard: paymentsDiscardOnSessionEnd,
       resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      // RT-117 — never auto-reverse an attempt that holds live tender.
+      attemptHasLiveTender: bindAttemptHasLiveTender(db),
       logError: (err, ctx) => {
         mainLogger.error({ err, ...ctx }, 'stuck_attempt_sweep:failed');
       },
@@ -1267,10 +1328,10 @@ app
         const saleSyncClient = createSaleSyncClient({
           baseUrl: resolveApiBaseUrl(),
           fetch: globalThis.fetch.bind(globalThis),
-          getOperatorToken: () => {
-            const sess = operatorSessionManager.getCurrent();
-            return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
-          },
+          getOperatorToken: createSaleSyncTokenReader(
+            operatorSessionManager,
+            operatorEnvelopeHolder,
+          ),
         });
         // RT-79 rollout gate: unset = never send tenders (default). Only sales finalized
         // at/after this explicit-zone ISO instant carry `tenders`. Ops MUST choose a
@@ -1294,10 +1355,10 @@ app
           salesRepo,
           tenantId: pairingStatus.tenant_id,
           branchId: pairingStatus.branch_id,
-          getOperatorToken: () => {
-            const sess = operatorSessionManager.getCurrent();
-            return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
-          },
+          getOperatorToken: createSaleSyncTokenReader(
+            operatorSessionManager,
+            operatorEnvelopeHolder,
+          ),
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.
           backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },

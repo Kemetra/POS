@@ -1553,6 +1553,57 @@ body {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 20%, transparent);
   }
 
+  /* ── Inactivity lock (RT-117, VN-R8) ─────────────────────────────────────
+     Overlay level on the scrim, above every workspace layer. The app under
+     it stays mounted and `inert`, so the sale is preserved. Totals render as
+     isolated LTR runs (DESIGN.md RTL composition). */
+  /* Layout-neutral wrapper: `inert` still applies to its whole subtree. */
+  .session-lock-app {
+    display: contents;
+  }
+
+  .session-lock {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+  }
+
+  .session-lock__summary {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-5);
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-elevated);
+  }
+
+  .session-lock__summary > div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .session-lock__summary dt {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .session-lock__summary dd {
+    margin: 0;
+    font-weight: var(--font-weight-bold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .session-lock__form {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .session-lock__form .session-lock__operator {
+    margin: 0;
+  }
+
   /* ── Dialog (T033) ───────────────────────────────────────────────────── */
 
   .dialog-overlay {

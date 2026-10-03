@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import { AppRouter } from './router';
+import { SessionLockGate } from './session/SessionLockGate';
 import type { PreloadBridgeAPI } from '../shared/bridge-api';
 
 /**
@@ -13,5 +14,11 @@ import type { PreloadBridgeAPI } from '../shared/bridge-api';
  */
 export default function App(): JSX.Element {
   const bridge = (window as unknown as { api: PreloadBridgeAPI }).api;
-  return <AppRouter pairing={bridge.pairing} operator={bridge.operator} />;
+  // RT-117 — the inactivity lock screen sits above every route and keeps the
+  // routed app mounted (inert) underneath, so a locked sale is preserved.
+  return (
+    <SessionLockGate operator={bridge.operator}>
+      <AppRouter pairing={bridge.pairing} operator={bridge.operator} />
+    </SessionLockGate>
+  );
 }
