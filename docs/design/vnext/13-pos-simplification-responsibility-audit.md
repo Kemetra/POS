@@ -1,40 +1,50 @@
 # 13 — POS simplification & responsibility audit (RT-160)
 
-> **Status: Planning deliverable for RT-160. Docs only.** No production code, refactor, dependency,
-> DB, API or IPC change is made or authorised by this document. Every simplification below is a
-> **proposal**; implementation needs its own bounded Jira issue and owner approval. **RT-24 remains
-> the behaviour authority**; nothing here changes financial or recovery semantics.
+> **Status: Planning deliverable for RT-160, revision 2. Docs only.** No production code, refactor,
+> dependency, DB, API or IPC change is made or authorised by this document. Every candidate below is a
+> **proposal for owner review**. No follow-up Jira issue has been created, and none is to be created
+> until the owner has reviewed this evidence (RT-160 checkpoint, 2026-10-03). **RT-24 remains the
+> behaviour authority**; nothing here changes financial or recovery semantics.
+>
+> **Revision 2** applies the RT-160 **reference-first design rule** (§7) and closes the eight evidence
+> gaps in the RT-160 execution checkpoint (§15).
 >
 > **Read these limits first**
 >
-> 1. **Static and historical evidence only.** This audit read code on `main@7384217` and measured
->    git history. It ran **no** app, lab or packaged build. All runtime/UX evidence is cited from
->    RT-159 ([12](12-cashier-ux-usability-audit.md)), which itself ran *before* RT-117.
-> 2. **RT-117 is merged but still open in Jira.** RT-160 is linked "is blocked by RT-117". The
->    sequencing rule ("execute from the post-RT-117 `main` baseline") is met: S1 merged as `7384217`
->    (#509). The Jira link itself is the owner's to reconcile.
+> 1. **Static, git-history and reference evidence only.** This audit read code on POS
+>    `main@7384217` and Backend-Core `main@7af7903`, measured git history, and read the reference
+>    sources in §7. It ran **no** app, lab or packaged build. All runtime/UX evidence is cited from
+>    RT-159 ([12](12-cashier-ux-usability-audit.md)), which ran *before* RT-117.
+> 2. **The RT-117 → RT-160 "blocks" link is administratively stale** (owner reconciliation on RT-160,
+>    2026-10-03). RT-117 S1 is merged as `7384217` (#509), and this audit uses that baseline.
 > 3. **No duplicate ownership.** RT-159 F-01…F-06 and the RT-116 slices (S3–S7) already have owners.
->    They are cited as evidence and generate no new slices here.
-> 4. **ERPNext semantics are cited from the bench-verified scout** (`specs/010-…/dev-report.md` §B5,
->    ERPNext 15.110.0 DocType JSON) — not reconstructed from memory, and not re-verified this session.
+>    RT-161 (lock-screen visual concealment) is separate and does not affect this audit. These are
+>    cited as evidence and produce no new candidates here.
+> 4. **Competitor references are not re-surveyed.** Shopify POS, Square, Toast and Daftra are cited
+>    from RT-111 ([11](11-operational-workflow-benchmark.md) §1), as RT-160's non-goals require.
+>    ERPNext/Frappe and Odoo were re-checked for this revision (§7).
 
 ## Baseline
 
 | | |
 |---|---|
-| Repository / branch | `Kemetra/POS`, worktree branch `worktree-rt-160-simplification-audit` |
-| Verified `origin/main` | `738421703ab92c34cc10693c82cccf47647ac3fd` — RT-117 S1 (#509), 2026-10-03. Fetched at start and again before writing; unchanged |
-| Jira | RT-160, Work Mode **Planning**, parent Epic RT-106; relates to RT-159; blocked-by link to RT-117 (merged, see limit 2) |
-| Inputs read | RT-160 text; `docs/architecture/current.md`, `synchronization.md`; `specs/021-pos-maintainability-rescue/*`; `specs/README.md`; VNext [11](11-operational-workflow-benchmark.md) (RT-111) and [12](12-cashier-ux-usability-audit.md) (RT-159); `specs/010-…/dev-report.md` §B5–B6; `docs/runbook/008-…md`; `src/**` |
+| Repository / branch | `Kemetra/POS`, branch `worktree-rt-160-simplification-audit` (PR #511) |
+| Verified POS `origin/main` | `738421703ab92c34cc10693c82cccf47647ac3fd` — RT-117 S1 (#509), 2026-10-03. Fetched at start, before revision 1 and before revision 2; unchanged |
+| Verified Backend-Core `origin/main` | `7af79036ea72f5b72da179b0e32e5c4edcf21df8` (`git ls-remote` = local HEAD; read with `git grep` at that SHA). Used only for the audit-ingest and shift-route checks |
+| Jira | RT-160, Work Mode **Planning**, parent Epic RT-106; relates to RT-159; RT-117 link stale (limit 2) |
+| Inputs read | RT-160 text and reconciliation comment; `docs/architecture/current.md`, `synchronization.md`; `specs/021-pos-maintainability-rescue/*`; `specs/README.md`; VNext [11](11-operational-workflow-benchmark.md) (RT-111) and [12](12-cashier-ux-usability-audit.md) (RT-159); `specs/010-…/dev-report.md` §B5–B6; `docs/runbook/008-…md`, `sales-cart.md`; `src/**`; reference sources in §7 |
+| Reference index | Confluence RETAIL → Technology & Reference Radar → **Retail / POS Reference Library** (page 18120705) |
 | Date | 2026-10-03 |
 
 ## Evidence labels
 
 | Label | Meaning |
 |---|---|
-| **C** | Read in source at `7384217`, with file:line where useful. Not run. |
-| **G** | Measured from git history (`git show --numstat`) on `main`. |
-| **D** | Taken from a cited document, not re-verified here. |
+| **C** | Read in source (POS `7384217` or Backend-Core `7af7903`), with file:line where useful. Not run. |
+| **G** | Measured from git history (`git show --numstat`) on POS `main`. |
+| **X** | Exhaustive reference search: a script read every `.ts/.tsx/.js/.mjs/.cjs` file under `src/`, `tests/` and `scripts/` and listed every static or dynamic import of a module and every mention of its exported names, split into production and test files. |
+| **R** | Reference source (§7.1), read this session. Pattern evidence, not code to copy. |
+| **D** | Taken from a cited Retail Tower document, not re-verified here. |
 | **N** | Not done or not available. Said explicitly. |
 
 Line and file counts are **supporting signals, not proof** (RT-160 §B). The conclusions rest on
@@ -44,13 +54,14 @@ Line and file counts are **supporting signals, not proof** (RT-160 §B). The con
 
 ## 1. Executive summary
 
-**Verdict: keep Electron and simplify internally. Do not open a platform evaluation now.** Electron's
+**Recommendation: keep Electron and simplify internally. Defer the platform discussion.** Electron's
 cost is real but bounded. Across six measured changes, Electron/composition boundary files carried
 **5–37 %** of the added production lines (§5). Most of the cost of a POS change comes from three other
 places:
 
 1. **Essential safety work.** Money, idempotency, lock and recovery rules, and the tests that prove
-   them. Test lines ran **1.3–5.3×** production lines. That is the price of RT-24 and should be kept.
+   them. Test lines ran **1.3–5.3×** production lines. That is the price of RT-24, and the mature
+   references (§7) carry the same rules.
 2. **A composition-root hotspot (incidental).** `src/main/index.ts` was touched by **6 of 10** recent
    changes, including changes with no Electron surface at all (RT-79, #472). The reasons are inline
    env/flag parsing (**5 copies** of the same truthy parse) and hand wiring of every repository
@@ -60,14 +71,21 @@ places:
    decisions from the renderer to main after review. RT-159 F-03 (renderer recomputes change) is the
    same pattern still open in the UI.
 
-**Four findings matter more than any refactor:**
+**The reference check (§7) confirms the core design.** The parts of the POS that look most complex
+are the parts the mature systems also have: idempotent client-to-server order sync, immutable
+finalized documents, and session/register lifecycles. **No major POS responsibility needs a new
+design from scratch.** Returns and shift/cash-up should adopt the ERPNext/Odoo semantics through
+Backend-Core rather than be invented.
 
-| # | Finding | Evidence | Class |
+**Four findings matter more than any refactor.** They are hardening and decision items, not
+simplification:
+
+| # | Finding | Evidence | Kind |
 |---|---|---|---|
-| **P-1** | **Cashier feature-flag coherence.** Five fail-closed env flags (`CART`, `PAYMENTS`, `SALE_FINALIZATION`, `PRODUCT_SEARCH`, `VOUCHER_TENDER`) are read from `process.env` in main (no dotenv loader in `src/main`). Whether a packaged build gets them from the terminal's OS environment or has them fixed at build time is **not verified (N)**; that decides whether the check below is per terminal or per build. With **payments on and sale finalization off**, payments still settle, but no Sale row, receipt, outbox entry or backend capture is written (`index.ts:1054-1065`). This is the **documented rollback** (`docs/runbook/008-…md:250`), not a bug. But nothing at startup validates the combination, and the renderer has no state that tells the cashier they are in manual-receipt mode. The tender facts stay only in local `payment_attempts` and tender tables. | C, D | **Pilot-critical** (ops check now; slice S-A) |
-| **P-2** | **Audit events never leave the terminal.** `AuditSync` (`src/main/audit/audit-sync.ts`) is implemented and tested but has **no production caller**. Lock/unlock, payment and sale audit rows accumulate in local `audit_events` only. | C | **Pilot decision** (slice S-B) |
-| **P-3** | **RT-117's inactivity timer escapes the documented shutdown order.** `InactivityMonitor.start()` (`index.ts:582`) is never stopped and is not in `workerRegistry`. A lock tick writes `audit_events` (`wireSessionLockAudit`). `current.md` §3 says every background worker must stop before the DB closes. Probability is very low (needs a 10-minute idle lock in the quit window). | C | Fold into the next RT-116 slice — no new issue |
-| **P-4** | **Built-but-unwired code suggests behaviour that does not run.** `AuditSync` (P-2); `LifecycleCascade` constructed then `void`ed (`index.ts:591-596`); `registerSessionEndCartDiscardSubscriber` with no caller (also RT-111 OB-06); ~24k-line `api-types.ts` with 281 paths and 4 importers, carrying legacy Data-Pulse return/shift schemas (`ReturnRequest`, `ActiveShiftResponse` with float `_egp` amounts) that are **not** Backend-Core POS contracts. | C | Post-pilot cleanup, except where P-2 decides otherwise |
+| **P-1** | **Cashier feature-flag coherence (decision candidate D-1).** Five fail-closed flags are read from the POS process environment at runtime. **Verified (§15 gap 3):** main is compiled by `tsc` (not Vite), so `process.env` is not replaced at build time. The packaged app (`electron-builder.yml`: `target: dir`, `files`: `dist/**`, `package.json`, `node_modules/**`, `migrations/**`) contains no `.env` and no installer. Main loads no dotenv. Dev passes the parent shell's env through (`scripts/dev-electron.cjs:94`). With **payments on and sale finalization off**, payments still settle, but no Sale row, receipt, outbox entry or backend capture is written (`index.ts:1054-1065`). The tender facts stay only in local `payment_attempts` and tender tables. This is the **documented rollback** (`docs/runbook/008-…md:250`), not a bug. Nothing validates the combination at startup, and the renderer has no state telling the cashier they are in manual-receipt mode. **No repo artefact defines how a packaged terminal gets these variables.** | C | Hardening + decision |
+| **P-2** | **Audit evidence does not leave the terminal, and wiring alone would not fix it.** **Verified (§15 gap 4):** Backend-Core `main@7af7903` *has* the receiver: contract `packages/contracts/openapi/pos-audit-events.openapi.yaml` and `PosAuditEventsController` at `api/pos/v1/audit-events` (`apps/api/src/pos-audit-events/pos-audit-events.controller.ts:50`), authenticated by a body `device_token_attestation`. POS has **no HTTP implementation** of `AuditSyncClient`, and `AuditSync` has **zero production referrers** (X). The contract's category catalogue is closed: Backend-Core accepts **6** categories (`dto.ts:17-24`: `shift.open/close/forced_close`, `operator.session.takeover`, `cashier.pin.reset/unlock`). POS emits **23** core categories (`src/shared/audit/event-shape.ts:21`) plus **7** payment categories (`payments/audit-emitter.ts`). The other **24** (lock/unlock, cart, sale, receipt, drawer, payment, tender) would be rejected as `schema_violation`. `AuditSync` leaves rejected events in the outbox, so they would be retried forever. | C (both repos), X | Cross-repo contract gap + decision |
+| **P-3** | **RT-117's inactivity timer escapes the documented shutdown order.** `InactivityMonitor.start()` (`index.ts:582`) is never stopped and is not in `workerRegistry`. A lock tick writes `audit_events` (`wireSessionLockAudit`). `current.md` §3 says every background worker must stop before the DB closes. Probability is very low (needs a 10-minute idle lock in the quit window). | C | Hardening (fold into the next RT-116 slice) |
+| **P-4** | **Code and a runbook describe behaviour that does not run.** **Verified (§15 gap 5, X):** `session-end-handler.ts` (`registerSessionEndCartDiscardSubscriber`, `discardDraftCartForSessionEnd`) has **0 production referrers**. `LifecycleCascade` is constructed at `index.ts:591` and `void`ed at `:596`; its `notifyTerminalRevoked` / `notifyAccountDisabled` are named only in comments, with no call site. **`docs/runbook/sales-cart.md:87-95, 207-211` states that draft carts are discarded and audited (`cart.discarded_on_session_end`) at session end; that never happens.** This is consistent with RT-159 F-06 (carts survive restart). Also: `api-types.ts` (~24k lines, 281 paths, 4 importers) carries legacy Data-Pulse return/shift schemas (`ReturnRequest`, `ActiveShiftResponse`, float `_egp` amounts) that are **not** Backend-Core POS contracts. | X, C | Cleanup (runbook drift is truthfulness) |
 
 **The cashier-facing complexity RT-159 found is mostly presentation and focus, not architecture.**
 Two items are architectural: renderer-side money recompute (F-03) and renderer-memory cart identity
@@ -116,10 +134,13 @@ stores/ (zustand projections)  ─invoke──▶   'api' object   ──▶    
   **polls** (`sales-bridge.ts:13`), not subscriptions. (C)
 - The renderer reaches main only through `window.api` (`preload/index.ts:171`). The renderer
   isolation flags are unchanged and guarded. (C)
+- Outbound legs that run today: catalogue read-down and sale capture-up. **Audit upload does not run**
+  (P-2). (C, X)
 
 ### 3.2 Responsibility map
 
-"State authority" is the place whose value wins when two disagree.
+"State authority" is the place whose value wins when two disagree. The owner class follows the
+reference review in §7.
 
 | Responsibility | Lives today | State authority | Owner class |
 |---|---|---|---|
@@ -131,12 +152,12 @@ stores/ (zustand projections)  ─invoke──▶   'api' object   ──▶    
 | Offline persistence | `better-sqlite3`, 36 migrations, append-only triggers | SQLite | **Keep local** |
 | Outbox / retry / exactly-once capture | `sync-outbox/` (enqueue inside finalize tx) + `sales-sync/` (drain, typed result union, dead-letter) | local outbox → **Backend-Core** idempotent `captureSale` (externalId) | **Keep local** (queue) + **Backend-Core** (dedupe/authority) → Connector → ERPNext |
 | Restart / recovery | stuck-attempt sweep (`sweep-stuck-attempt.ts`), deferred-reversal resolver, read-down resume; held-cart re-attach **missing** | SQLite | **Keep local**; contract in RT-116 S4–S6 |
-| Returns / refunds | `ReturnsPlaceholder.tsx` only; spec 014 **Deferred** | none | **Backend-Core authority** (return against original sale) + **ERPNext reference** (`is_return` / `return_against`) |
-| Shift / cash-up | `shifts` table (no drawer math), forced-close, stuck-shift discovery; spec 015 **Deferred**; no Backend-Core lifecycle contract (D: dev-report row 5, RT-111 §5) | partial local | **Backend-Core authority** + **ERPNext reference** (POS Opening/Closing Entry); local count capture stays POS |
+| Returns / refunds | `ReturnsPlaceholder.tsx` only; spec 014 **Deferred** | none | **Backend-Core authority** (refundable quantity per original line) + **ERPNext/Odoo semantic reference** (§7.2 R-6) |
+| Shift / cash-up | `shifts` table (no drawer math), forced-close, stuck-shift discovery; spec 015 **Deferred**. Backend-Core serves only `GET api/pos/v1/shifts/stuck` (`pos-shifts.controller.ts:18-22`, C) | partial local | **Backend-Core authority** + **ERPNext/Odoo semantic reference** (§7.2 R-7); local count capture stays POS |
 | Printer / cash drawer | `main/receipts/*`, `main/drawer/*` | local `print_events`, `drawer_events` | **Keep local** |
 | Catalogue | read-down stage-and-promote into SQLite; offline lookup | **Backend-Core** resolved store catalogue | **Backend-Core** authority, local read model |
-| Audit | 3 emitters (`audit/`, `payments/`, `sales/`) → `audit_events`; **upload unwired** (P-2) | local only | **Keep local** (capture) + **Backend-Core** (upload, if decided) |
-| Terminal config (flags) | per-terminal OS env vars read in `index.ts` | the terminal's environment | **Candidate incidental** (P-1); post-pilot analogue = Backend-Core terminal profile (§7) |
+| Audit | 3 emitters (`audit/`, `payments/`, `sales/`) → `audit_events`; upload **not wired** and **not contract-compatible** (P-2) | local only | **Keep local** (capture) + **Backend-Core** (receiver exists; catalogue must widen) |
+| Terminal config (flags) | per-terminal process environment read in `index.ts` | the launching environment | **Candidate incidental** (P-1); reference analogue is a server-side register profile (§7.2 R-9) |
 
 ---
 
@@ -146,13 +167,13 @@ stores/ (zustand projections)  ─invoke──▶   'api' object   ──▶    
 |---|---|---|---|
 | **Money / payments** | 2 FSMs, idempotency helper, action outbox, live-tender rules (#472), integer minor units | — | Renderer recomputes change after apply (F-03); renderer was de facto authority for handed-off-cart decisions until #470 |
 | **Sale durability / sync** | Single finalize tx with idempotency re-check; enqueue/drain split; typed transport unions; dead-letter | — | Flag combination can disable finalization while payments settle, with no startup check or cashier-visible state (P-1) |
-| **Session / lock** | Lock state, unlock rate-limit, locked allowlist, credential split (device token / envelope / JWT) | Push channel + preload wiring for lock state; allowlist must wrap `ipcMain` | Inactivity timer outside worker registry (P-3); `LifecycleCascade` constructed and `void`ed |
+| **Session / lock** | Lock state, unlock rate-limit, locked allowlist, credential split (device token / envelope / JWT) | Push channel + preload wiring for lock state; allowlist must wrap `ipcMain` | Inactivity timer outside worker registry (P-3); `LifecycleCascade` constructed and `void`ed (P-4) |
 | **IPC surface** | Sender-origin guard; explicit preload allowlist; boundary id bounds | One operation spans channel const → `bridge-api.ts` type → preload entry → `ipc/<d>.ts` → handler (≈5 files) | Types declared twice: `shared/<d>/bridge-types.ts` and namespace interface in `bridge-api.ts` (1386 lines); `ipc/` vs `<d>/*-bridge.ts` vs `wire-*-handlers.ts` naming is uneven across domains |
 | **Composition root** | Ordered start/stop, fail-closed `safeStorage`, migrations halt launch | `index.ts` runs `app.whenReady()` at import, so it cannot be unit-imported → a 25-assertion source-text guard | Env parsing ×5 copies; feature wiring inline (114 imports, 17 `bind*` calls); main-only changes still edit it (§5) |
 | **Testability** | Characterization and money tests | Import-time Electron side effects; renderer tests must fake `window.api` | **77** test files hand-build an operator bridge fake; no shared typed fake factory, so RT-117 edited 7 unrelated renderer tests (+11 lines each) just to add 3 methods |
-| **Contracts** | Pinned codegen (Constitution V) | — | 24k-line `api-types.ts` (281 paths, 4 importers) with legacy non-POS schemas; `CaptureSaleRequest` hand-vendored separately in `create-sale-sync-client.ts` |
+| **Contracts** | Pinned codegen (Constitution V) | — | 24k-line `api-types.ts` (281 paths, 4 importers) with legacy non-POS schemas; `CaptureSaleRequest` hand-vendored separately in `create-sale-sync-client.ts`; audit category catalogue diverged across repos (P-2) |
 | **Native / runtime** | `better-sqlite3` on the main thread; ~3.6 s atomic read-down promote accepted for v1 (D: CLAUDE.md 010 T054) | Native module rebuild per Electron major (RT-65/RT-108/RT-109 cost) | — |
-| **Config** | Fail-closed defaults | — | Five independent env flags → 32 combinations, with no validated "cashier profile" (P-1) |
+| **Config** | Fail-closed defaults | — | Five independent env flags → 32 combinations, with no validated "cashier profile" and no defined provisioning (P-1) |
 
 ---
 
@@ -179,13 +200,14 @@ stores/ (zustand projections)  ─invoke──▶   'api' object   ──▶    
 essential complexity. About 72 % of production lines sit outside the boundary files. Roughly 420 of
 those are the lock UI (LockScreen 243, SessionLockGate 71, activity-reporter 57, CSS 51). The rest
 (about 550) are main-side lock semantics: unlock handler and rate limit, session-manager lock state,
-lock-state reader, the "never auto-reverse live tender" sweep rule and the audit categories. The Electron share is the
-push channel, preload and bridge types, and the allowlist wrapper. The allowlist wrapper is really
-security semantics placed at the right choke point: it refuses future channels by default. The
-incidental cost is concentrated: `index.ts` +70 lines; 7 unrelated renderer tests edited only to add
-`unlockSession` / `getLockState` / `onSessionStateChanged` to hand-built fakes; and the timer left
-outside the registry (P-3). **State authorities involved: 4.** Main lock state is the authority; the
-renderer gate is a projection; the activity reporter is a signal; the payments sweep rule is
+lock-state reader, the "never auto-reverse live tender" sweep rule and the audit categories. The
+Electron share is the push channel, preload and bridge types, and the allowlist wrapper. The
+allowlist wrapper is really security semantics placed at the right choke point: it refuses future
+channels by default. The incidental cost is concentrated: `index.ts` +70 lines; 7 unrelated renderer
+tests edited only to add `unlockSession` / `getLockState` / `onSessionStateChanged` to hand-built
+fakes; and the timer left outside the registry (P-3). It also added two audit categories that
+Backend-Core would reject (P-2). **State authorities involved: 4.** Main lock state is the authority;
+the renderer gate is a projection; the activity reporter is a signal; the payments sweep rule is
 separate. The design is right: main decides and the renderer projects.
 
 **CS-2 — handed-off cart (#469 then #470).** Adding one manager operation cost a new channel across
@@ -197,7 +219,7 @@ authority before the UI flow exists.** `docs/architecture/current.md` should say
 
 **CS-3 — RT-103 voucher flag.** A UI-only rule needed a main edit, because flags are parsed inline in
 the root. That edit was the fifth copy-paste of the same truthy parse, even though an `isTruthy`
-helper already exists in `dev-seed-catalogue.ts`. It also added one more dimension to the flag
+helper already exists in `dev-seed-catalogue.ts:239`. It also added one more dimension to the flag
 matrix that P-1 describes.
 
 **CS-4 — RT-79 and #472.** Neither change touches the renderer, preload or IPC registration, yet both
@@ -217,13 +239,14 @@ concentrated in root wiring, flag plumbing, bridge-type duplication and test fak
 |---|---|---|---|
 | C-1 | `index.ts` composes ~10 domains inline (114 imports, 9 `register*Handlers`, 17 `bind*`), 1437 lines | C | Incidental. Needs per-domain `wire<Domain>(ctx)` modules that return their stoppers to the registry |
 | C-2 | `index.ts` cannot be imported in Vitest (`app.whenReady()` at module load), so wiring is tested by a 25-assertion source-text guard; 021 tripped a second, unplanned guard | C, D (021 T035) | Electron tax made worse by structure. Extracted wiring modules are importable, which lets most regex assertions become runtime tests |
-| C-3 | Preload is a mechanical pass-through: about 69 `ipcRenderer.invoke` lines across 7 files, each typed by a `bridge-api.ts` interface that re-imports `shared/<d>/bridge-types.ts` | C | Partly required: the preload **must** stay an explicit allowlist. The duplication is incidental (§9 S-E) |
+| C-3 | Preload is a mechanical pass-through: about 69 `ipcRenderer.invoke` lines across 7 files, each typed by a `bridge-api.ts` interface that re-imports `shared/<d>/bridge-types.ts` | C | Partly required: the preload **must** stay an explicit allowlist. The duplication is incidental (§9 S-3) |
 | C-4 | IPC guarding is done once at the root: sender origin, then the locked allowlist | C | **Good. Keep.** Do not move guards back into handlers |
 | C-5 | Session/role gate lives in each domain bridge (`cart/require-operator-session.ts` 68 lines, `payments/require-operator-session.ts` 115 lines) | C | **Not duplicates.** Payments adds attempt-ownership and terminal-state refusals. A shared *core* (no session / role / tenant isolation) is a candidate; the semantics differ and must stay |
 | C-6 | Cross-layer state is mostly pull/poll; one push channel (lock). `*.subscribe` names are polls | C | Fine for a single-window terminal. Naming is misleading; document it rather than rename IPC |
 | C-7 | One SQLite handle on the main thread; workers are timers on the same thread | C, D | Essential for durability. Read-down promote blocks ~3.6 s (accepted v1). Moving DB work to a utility process is **not** justified by this evidence |
-| C-8 | Inactivity interval outside the worker registry (P-3); `LifecycleCascade` dead wiring | C | Incidental. Small fixes |
+| C-8 | Inactivity interval outside the worker registry (P-3); `LifecycleCascade` dead wiring (P-4) | C, X | Hardening / cleanup. Small fixes |
 | C-9 | Native module coupling: Electron majors force `better-sqlite3` rebuilds (RT-65 / RT-108 / RT-109 chain) | G | Electron tax. Periodic, not per-feature |
+| C-10 | Runtime configuration is read from `process.env` at startup, with no config module and no provisioning artefact (P-1) | C | Incidental. One importable config module would make the cashier profile testable |
 
 **Security boundary preserved by every proposal here:** `contextIsolation: true`,
 `nodeIntegration: false`, `sandbox: true`; the renderer has no Node, DB, secrets or network; the
@@ -231,22 +254,44 @@ preload stays an explicit per-channel allowlist (never a generic `invoke(channel
 
 ---
 
-## 7. Derive instead of reinvent — ERPNext / Backend-Core semantics (RT-160 §D)
+## 7. Reference-first review (RT-160 §D and the reference-first design rule)
 
-Source: `specs/010-…/dev-report.md` §B5 (ERPNext 15.110.0 DocType JSON, bench-verified 2026-06-07)
-and §B6 (non-goals). **D** throughout. No ERPNext POS UI or core code is copied, and there is no
-POS → ERPNext call.
+### 7.1 Sources read
 
-| Topic | ERPNext reference | Retail Tower position | Class |
+| Ref | Source | Used for | Label |
 |---|---|---|---|
-| Sale lifecycle | POS Invoice Draft → Submitted → Consolidated; Merge Log consolidates into a Sales Invoice at shift close | POS emits an immutable, idempotent sale **fact**; consolidation is server-side (Backend-Core → Connector) | **Adapt through Backend-Core / Connector**. Never on the terminal (B6.3) |
-| Payment / tender meaning | `payments` rows per Mode of Payment (split tender = several rows); `paid_amount`, `change_amount`, `account_for_change_amount` | POS keeps tender FSMs local. RT-79 sends cash **net** (applied − change) | **Reuse semantics** for the contract: change is its own fact, not netted away. Check with Backend-Core / Connector whether net cash loses anything ERPNext `change_amount` needs (**open question, not decided here**) |
-| Inventory / accounting identity | Item master, stock ledger | ERPNext Item = accounting identity only (ADR-0001); Connector maps a pre-resolved `erpnextItemRef` | **Adapt through Connector**. POS never touches stock (B6.5, B6.8) |
-| Opening / closing / cash-up | POS Opening Entry (per user, per shift, float by mode); POS Closing Entry (per-mode opening / expected / closing / difference) | No Backend-Core shift lifecycle contract yet (RT-111 §5, RT-17) | **Reuse semantics** for the RT-17 / 015 contract (per-tender-mode expected vs counted). Local count capture is **POS-specific**; authority is **Backend-Core** |
-| Cancellation / reversal | Submitted docs are cancelled (docstatus 2) or returned (`is_return` + `return_against`, negative-qty credit note) | POS `sales` are append-only. Pre-handoff void and post-handoff cancel create no sale | **Reuse semantics**: a return references the original sale and never mutates it (014 contract via Backend-Core). Do **not** mirror "cancel" onto finalized POS sales |
-| Tax / fiscal | Taxes table + regional override hooks | VAT deferred (012); Connector drops `taxAmount` today | **Connector adapter / fiscal extension point**. Not on the terminal (B6.6) |
-| Terminal configuration | POS Profile (payments, warehouse, price list, users) | Binding comes from Backend-Core pairing; flags are local env (P-1) | **Not applicable as an authority** (B6.7). The *idea* of a server-issued terminal profile is a post-pilot **Backend-Core** candidate and needs a new contract |
-| Loyalty | Loyalty fields on POS Invoice | Out of pilot scope | **Not applicable** |
+| ERPNext / Frappe | Retail / POS Reference Library pack (Orchestrator `docs/reference/erpnext/24 Point of Sale System.md`, `16 Transaction Processing.md`, `22 Status Updates and Document Linking.md`; summary pack `04 Transaction Processing`, `11 Localization`, `12 Technical Architecture`), which cites `frappe/erpnext@a9029f83` source; plus the bench-verified DocType scout (`specs/010-…/dev-report.md` §B5, ERPNext 15.110.0) | Sale lifecycle, POS Invoice, opening/closing, consolidation, returns, extension hooks | R, D |
+| Odoo POS | Official docs (`odoo.com/documentation/18.0/applications/sales/point_of_sale.html`); open source `odoo/odoo@18.0` `addons/point_of_sale/models/pos_session.py` and `pos_order.py` | Session states and cash control, per-session posting, idempotent order sync, refunds, change lines | R |
+| Shopify POS, Square, Toast, Daftra (+ Odoo/ERPNext operational rows) | RT-111 ([11](11-operational-workflow-benchmark.md) §1.1–1.5), not re-surveyed | Offline states, approvals, register/cash, returns, devices, recovery | D |
+
+**N:** the Odoo refund documentation page returned 404, so refund semantics come from `pos_order.py`.
+Daftra and the proprietary systems are cited only from RT-111.
+
+### 7.2 Per-responsibility reference findings
+
+Decision vocabulary: **Reuse** semantics/contracts · **Adapt** through Backend-Core/Connector ·
+**Keep local** in POS · **Reject** as incompatible. Nothing here copies code or UI.
+
+| # | Responsibility | What the mature references do | Proven pattern / semantic | Retail Tower decision | Smallest justified implementation |
+|---|---|---|---|---|---|
+| **R-1** | Sign-in / lock / takeover | Per-staff PIN; approver enters a PIN on the same device; one session per device (SH, SQ, TO via RT-111 §1.3–1.4). Odoo: employee login by badge/PIN | Same-device PIN identity; lock keeps the session; approval is a recorded second identity | **Keep local** (already matches: RT-117 same-operator unlock). In-sale approval stays with VN-S7 / RT-28 / MD-2 | None new. RT-116 S3–S7 and MD-2 own the gaps |
+| **R-2** | Active sale / cart | ERPNext `ItemCart` + Controller own the draft `POS Invoice` (docstatus 0, editable). Odoo order `state = draft`. SQ "open tickets" / DF hold-resume park carts | A draft is editable, durable and resumable; it becomes immutable only at submission | **Keep local** (cart FSM `editing → frozen_handed_off`). Held-cart resume = RT-116 S4 | None new (RT-116 S4) |
+| **R-3** | Checkout and tenders | ERPNext: `payments` table of `Sales Invoice Payment` rows (split tender = several rows), `change_amount` calculated separately. Odoo: `pos.payment` lines with an `is_change` flag for change returned | **Change is its own fact**, not netted into the cash line | **Keep local** (FSMs) + **contract question (D-3)**: RT-79 sends cash **net** (applied − change). Both references keep change separate. Whether ERPNext reconciliation via the Connector needs the gross/change split is for Backend-Core/Connector to answer | Decision only. No POS change until D-3 is answered |
+| **R-4** | Finalization / receipt | ERPNext: submit (docstatus 1) makes the invoice immutable and posts ledgers; cancel (docstatus 2) creates reversing entries. Odoo: order `draft → paid → done (Posted)` | **Finalized = immutable**; corrections are new documents, never edits | **Keep local** (already matches: append-only `sales`, finalize in one tx). **Reject** an on-terminal "cancel a finalized sale" | None new |
+| **R-5** | Offline persistence, outbox, exactly-once sync | Odoo: client orders sync through `sync_from_ui` → `_process_order`, deduplicated by a client `uuid` with a `unique (uuid)` constraint. SH/SQ/TO: queued states, and "don't sign out/reset while pending" (RT-111 §1.2). ERPNext v15 core has no native offline | **Client-generated id + server unique constraint** = idempotent sync; a visible pending count | **Keep local** queue + **Backend-Core** dedupe (already matches: `externalId` + `duplicate` result). Gap: the pending count is invisible (RT-159 F-15) → VN-S6 | None new (VN-S6). POS durability (SQLite outbox) is *stronger* than browser-storage references |
+| **R-6** | Returns / refunds | ERPNext: return = new document with `is_return` + `return_against`, negative quantities; merged into Credit Notes at closing. Odoo: `_refund()` creates a **new negative order** linked by `refunded_order_id` / `refunded_orderline_id`, tracking `refunded_qty` per original line. SH: refund capped per original method; no-receipt returns under a separate permission | **A return is a new document referencing the original line, with refunded quantity tracked to prevent over-refund** | **Reuse** these semantics in the spec 014 contract; **Backend-Core authority** for refundable quantity (it needs every terminal's history). POS captures a return *fact* through the outbox. **Reject** mutating the original sale | Contract-first Planning item when 014 is scheduled. Not pilot scope (RT-10) |
+| **R-7** | Shift / cash-up | ERPNext: mandatory `POS Opening Entry` (opening balance per mode of payment) and `POS Closing Entry` (per-mode opening / expected / closing / difference). Odoo: session `opening_control → opened → closing_control → closed`, with `cash_register_balance_start`, `…_end_real` (counted), `…_end` (theoretical) and `cash_register_difference`. TO: blind count permission. DF: balance to employee custody or treasury | **Per-tender-mode expected vs counted, with a recorded difference**, on a session state machine | **Reuse** semantics for the RT-17 / spec 015 contract. **Backend-Core authority** (today only `GET shifts/stuck` exists). **Keep local** the count capture and its offline durability. Blind count = RT-17 decision | Contract-first Planning item (RT-17). No POS design until Backend-Core has the lifecycle contract |
+| **R-8** | Accounting posting / consolidation | ERPNext: `POS Invoice Merge Log` consolidates into Sales Invoices / Credit Notes at closing. Odoo: one `account.move` **per session** (`_create_account_move`) | Posting is batched server-side; the till only records facts | **Adapt** through Backend-Core → Connector (already the architecture). **Reject** on-terminal posting or consolidation (dev-report B6.3–B6.4) | None |
+| **R-9** | Terminal configuration | ERPNext `POS Profile` (payment methods, item groups, stock behaviour, allowed users). Odoo `pos.config` per register. Both are server-side records | **Register configuration lives on the server and is versioned** | Pilot: **keep local** but make it a validated profile (P-1). Post-pilot: **adapt** a Backend-Core terminal profile (new contract; dev-report B6.7 rejects ERPNext POS Profile as the authority) | Pilot: config module + coherence check (decision D-1). Post-pilot: Planning item |
+| **R-10** | Inventory / item identity | ERPNext POS checks stock against `Bin` and optionally hides unavailable items | Stock is a server concern | **Reject** on-terminal stock authority (ADR-0001, B6.5/B6.8). Read-only availability is spec 013, Deferred | None |
+| **R-11** | Tax / fiscal | ERPNext `regional_overrides` + `allow_regional` route country rules without forking core | Country rules are extension points, server-side | **Adapt** via the Connector's fiscal extension points (VAT deferred, 012). **Reject** a tax engine on the terminal | None (012) |
+| **R-12** | Audit of sensitive actions | SH activity log incl. the approving manager, kept 1 year; TO void/discount/No-Sale reports by approver (RT-111 §1.3) | **Audit is reviewable off the till** | **Keep local** capture + **Backend-Core** receiver. Receiver exists but its category catalogue covers 6 of ~30 POS categories (P-2) | Decision D-2, then a contract-first cross-repo item if pilot needs it |
+| **R-13** | Hardware / devices | SH/SQ "Test Cash Drawer / Test Printer"; SH connectivity icon distinguishes hardware-disconnected from offline (RT-111 §1.5) | A device-health surface separate from network health | **Keep local** (RT-111 §6 target surface) | None new (RT-111 §6) |
+
+**Result for the reference-first rule:** every major responsibility maps to a proven pattern. No new
+major POS design is proposed from scratch. The two responsibilities without a Retail Tower design yet
+(returns R-6, shift/cash-up R-7) should be contract-first Backend-Core items that **reuse** the
+ERPNext/Odoo semantics above.
 
 ---
 
@@ -260,9 +305,9 @@ RT-159 findings (R-dev, pre-RT-117) sorted by cause:
 | Scanner input lands in whatever control has focus; focus returns to search, not scan | F-01, F-02 (UI side), F-07, F-08 | Presentation / focus model | UI (RT-159 pilot slices) |
 | Payment commit has no affordance; amount due off-screen | F-09, F-10 | Presentation | VN-S4 |
 | Wrong change after apply | F-03 | **Architecture: renderer recomputes money** instead of displaying main's stored `change_due_minor` | UI fix already proposed by RT-159. Principle for all VNext slices: *the renderer displays main's money facts after an apply and never recomputes them* |
-| Restart shows an empty cart | F-06 | **Architecture: active cart id held in renderer memory** | RT-116 S4 (owned) |
+| Restart shows an empty cart | F-06 | **Architecture: active cart id held in renderer memory**; the documented session-end discard never runs (P-4) | RT-116 S4 (owned) |
 | Absurd tender accepted by main | F-02 (main side) | Contract: main checks only safe-integer and ≥ 0 (`tender-apply.ts:86`) | Decision already raised by RT-159; not duplicated |
-| No connection / queue signal | F-15 | Missing aggregate signal (sale-sync status exists as `sales:syncStatus` but is not mounted) | VN-S6; needs a real signal |
+| No connection / queue signal | F-15 | Missing aggregate signal (sale-sync status exists as `sales:syncStatus` but is not mounted). References show a pending count (R-5) | VN-S6; needs a real signal |
 | Placeholder / "Coming soon" surfaces | F-25 | **Flag matrix + legacy shell** | OD-6 / VN-S10; P-1 reduces the matrix |
 
 **Complexity that must stay hidden:** attempt and tender FSMs, idempotency keys, the outboxes,
@@ -275,40 +320,56 @@ not because the architecture leaks. Two leaks exist (F-03, F-06), and both have 
 
 ---
 
-## 9. Simplification candidates (deliverable 5)
+## 9. Candidates (deliverable 5), split by kind
+
+RT-160 checkpoint item 7 asks to separate findings that justify **simplification** from findings that
+only need **cleanup or hardening**. The test used: *does it reduce the cost of future changes
+(simplification), or does it make current behaviour safer or more truthful (hardening / cleanup)?*
+
+### 9.1 Simplification candidates (reduce change cost)
 
 | ID | Candidate | Benefit | Risk | Prerequisites | Affected contracts | Pilot |
 |---|---|---|---|---|---|---|
-| **S-A** | **Cashier profile coherence.** Move flag/env parsing out of `index.ts` into one importable config module (one truthy parser, reusing the existing semantics). Validate the combination at startup (e.g. `productSearch` needs `cart`; `payments` without `saleFinalization`). Make the rollback mode **explicit and visible** | Removes P-1; testable config; ends root edits for each new flag | Must not remove the documented rollback (runbook 008) without an owner decision | **Owner decision D-1** (below) | `AppConfig` / `app:config` only if a visible mode is added (IPC shape change, must be authorised) | **Pilot-critical** |
-| **S-B** | **Audit upload decision.** Decide whether pilot audit evidence must reach Backend-Core. If yes, wire `AuditSync` against a confirmed Backend-Core endpoint. If no, record that terminal-local audit is accepted and say how it is retrieved | Auditability for lock, payments and manager actions | Wiring without a live contract would invent one | Backend-Core endpoint status (**N**: not verified this session) | Backend-Core audit ingestion (cross-repo) | **Pilot decision** (Planning first) |
-| **S-C** | **Per-domain wiring modules.** Extract `wireOperator`, `wireCart`, `wirePayments`, `wireSales`, `wireCatalogue`, `wireSync` from `index.ts`. Each returns its stoppers to `workerRegistry` (absorbs P-3) | Main-only changes stop touching the root; wiring becomes runtime-testable; guards repointed, not deleted | Static guard churn (021 lesson); ordering bugs at startup | S-A first (config out of the root); characterization tests per module | None (internal) | Post-pilot |
-| **S-D** | **Shared typed fake-bridge factory (test-only).** One `createFakeApi(overrides)` built from `bridge-api.ts` types | A new bridge method edits one helper instead of 7 (RT-117) up to 77 tests | Over-permissive fakes can hide missing stubs | — | None | Pre-pilot enabler (optional, cheap) |
-| **S-E** | **Single declaration per IPC namespace.** Channel name, request type and response type declared once; preload and `bridge-api` derive from it, but stay an **explicit enumerated allowlist** | New operation goes from ~5 files to ~3 | Must not become a generic pass-through (security regression); channel names must stay byte-identical | S-D (tests survive the move); §A4-style review | All bridge types (shape-preserving) | Post-pilot |
-| **S-F** | **Retire unwired code or record its intent** (`LifecycleCascade`, `registerSessionEndCartDiscardSubscriber`, depending on RT-116 S4). Trim `api-types.ts` to consumed POS paths and bring the hand-vendored `CaptureSaleRequest` under codegen | Code stops implying behaviour that does not run; ~24k lines of misleading types removed | Generated-code and codegen change: needs explicit authorisation (CLAUDE.md §10); the cart-discard subscriber may be RT-116's to decide | RT-116 S4 outcome; owner OK for codegen change | Codegen pipeline | Post-pilot |
-| **S-G** | **Shared session-gate core** for cart and payments (no-session / role / tenant isolation). Domain extras stay | One place for the isolation order | Security semantics differ (C-5); refusal reasons are closed sets per domain | Equivalence tests first | Refusal reason sets (unchanged) | Post-pilot, low priority |
+| **S-1** | **Config module.** Move all env/flag parsing out of `index.ts` into one importable module with one truthy parser (the existing semantics) | Ends root edits per new flag (CS-3, CS-4a); makes config unit-testable; prerequisite for H-1 | Low; must keep fail-closed defaults byte-for-byte | Characterization tests of current parsing | None | Pilot-adjacent (needed by H-1) |
+| **S-2** | **Shared typed fake-bridge factory (test-only).** One `createFakeApi(overrides)` typed from `bridge-api.ts` | A new bridge method edits one helper instead of 7 (RT-117) up to 77 tests | Over-permissive fakes can hide missing stubs | — | None | Optional pre-pilot enabler |
+| **S-3** | **Single declaration per IPC namespace.** Channel name, request type and response type declared once; preload and `bridge-api` derive from it but stay an **explicit enumerated allowlist** | New operation goes from ~5 files to ~3 | Must not become a generic pass-through (security regression); channel names must stay byte-identical | S-2; §A4-style review | All bridge types (shape-preserving) | Post-pilot |
+| **S-4** | **Per-domain wiring modules.** `wireOperator`, `wireCart`, `wirePayments`, `wireSales`, `wireCatalogue`, `wireSync` extracted from `index.ts`, each returning its stoppers to `workerRegistry` | Main-only changes stop touching the root; wiring becomes runtime-testable; absorbs H-3 permanently | Static-guard churn (021 lesson); startup-order bugs | S-1; characterization tests per module; guards repointed, not deleted | None (internal) | Post-pilot |
+| **S-5** | **Shared session-gate core** for cart and payments (no-session / role / tenant isolation); domain extras stay | One place for the isolation order | Security semantics differ (C-5); refusal reasons are closed sets per domain | Equivalence tests first | Refusal reason sets (unchanged) | Post-pilot, low priority |
 
-**Owner decision D-1 (needed before S-A):** with payments on and sale finalization off, should the
-terminal **(a)** refuse to start the cashier surface, removing the documented rollback, or **(b)**
-keep the rollback but show a persistent cashier-visible "manual receipt mode" state and log it at
-startup? (b) preserves runbook 008; (a) is simpler but needs a replacement rollback. This audit does
-not choose.
+### 9.2 Hardening and cleanup items (safety and truthfulness, not simplification)
 
-**Immediate operational action (no code, pilot readiness):** every pilot terminal is checked for
-`POS_PULSE_FEATURE_CART`, `…_PAYMENTS`, `…_SALE_FINALIZATION` and `…_PRODUCT_SEARCH` **on**, and
-`…_VOUCHER_TENDER` **off** (RT-10 D2, RT-103). Main reads them from `process.env` and loads no `.env`
-file (C: no dotenv loader in `src/main`). This audit did **not** verify whether a packaged build takes
-them from the terminal's OS environment at runtime or has them fixed at build time (**N**). The
-answer decides whether the check is per terminal or per build artifact, and it belongs in the pilot
-runbook.
+| ID | Item | Why | Owner / route | Pilot |
+|---|---|---|---|---|
+| **H-1** | **Cashier profile coherence (decision candidate D-1).** Validate the flag combination at startup and make the rollback mode explicit | P-1: payments can settle with no Sale and no cashier-visible state | Owner decides **D-1** first. Not created as an issue (RT-160 checkpoint item 6) | **Pilot-critical** (decision) |
+| **H-2** | **Pilot terminal provisioning.** Define how a packaged terminal gets its environment (installer, shortcut, machine env) and add a per-terminal readiness check: CART, PAYMENTS, SALE_FINALIZATION, PRODUCT_SEARCH on; VOUCHER_TENDER off | P-1: no repo artefact defines it; the variables are runtime inputs | Pilot runbook (ops), no code | **Pilot-critical** (ops) |
+| **H-3** | **Inactivity timer into the worker registry** | P-3: violates the documented shutdown invariant | Next RT-116 slice touching `InactivityMonitor`; no new issue | Pilot-optional |
+| **H-4** | **Audit evidence path (decision candidate D-2).** Decide whether pilot audit evidence must reach Backend-Core. If yes: widen the Backend-Core category catalogue (contract revision) **before** adding a POS HTTP client and wiring `AuditSync`, and decide what happens to rejected events (today: retried forever) | P-2: receiver exists; POS client and contract alignment do not | Owner decides **D-2**; then a contract-first cross-repo Planning item | **Pilot decision** |
+| **C-1** | **Runbook truth.** Correct `docs/runbook/sales-cart.md` session-end discard section, or wire the subscriber, after RT-116 S4 decides held-cart behaviour | P-4: the runbook describes behaviour that never runs | RT-116 S4 outcome; docs-only fix | Pilot-relevant (operators read runbooks) |
+| **C-2** | **Retire or record unwired code** (`LifecycleCascade`; `session-end-handler.ts` depending on C-1) | P-4: code implies behaviour that does not run | Post-pilot cleanup | Post-pilot |
+| **C-3** | **Trim `api-types.ts`** to consumed POS paths; bring the hand-vendored `CaptureSaleRequest` under codegen | P-4: ~24k lines of misleading types | Generated-code + codegen change needs explicit authorisation (CLAUDE.md §10) | Post-pilot |
+| **C-4** | **`current.md` drift** (§14) | Canonical doc out of date | Docs-only, after D-1 / D-2 | Any time |
+
+**Owner decisions needed (decision candidates, not issues):**
+
+- **D-1** — with payments on and sale finalization off, should the terminal **(a)** refuse to start
+  the cashier surface, removing the documented rollback, or **(b)** keep the rollback but show a
+  persistent cashier-visible "manual receipt mode" and log it at startup? (b) preserves runbook 008;
+  (a) is simpler but needs a replacement rollback.
+- **D-2** — must pilot audit evidence (lock/unlock, payment, sale, manager actions) reach Backend-Core
+  during the pilot? References treat off-till audit as standard (R-12).
+- **D-3** — should the capture contract carry cash **gross + change** (as ERPNext `change_amount` and
+  Odoo `is_change` do) instead of net? For Backend-Core / Connector owners; no POS action until
+  answered.
 
 ---
 
 ## 10. Must NOT be simplified (deliverable 6)
 
 These protect money, offline durability or security. A "simplification" that removes them is a
-regression.
+regression. The reference check (§7) shows each has a counterpart in mature systems.
 
-1. Finalize as **one transaction** with the idempotency re-check **inside** it; printing outside it.
+1. Finalize as **one transaction** with the idempotency re-check **inside** it; printing outside it
+   (R-4: finalized = immutable).
 2. The **enqueue/drain split** (`sync-outbox/` inside the finalize tx; `sales-sync/` outside it). 021
    already rejected merging them (T060).
 3. **Typed transport result unions**: `no_connection` / `authority_unreachable` must never become a
@@ -323,37 +384,44 @@ regression.
    channels).
 9. The **renderer trust boundary** and the explicit preload allowlist.
 10. **Stage-and-promote** read-down and its single atomic promote.
-11. **Fail-closed** `safeStorage` and fail-closed flag defaults (S-A validates combinations; it does
+11. **Fail-closed** `safeStorage` and fail-closed flag defaults (H-1 validates combinations; it does
     not flip defaults).
 12. RT-117's rule: **the stuck-attempt sweep never auto-reverses live tender**.
+13. **Client-generated sale id + server dedupe** (R-5; the same pattern as Odoo `uuid` + unique
+    constraint).
 
 ---
 
 ## 11. Pilot-critical vs post-pilot (deliverable 7)
 
-| Pilot-critical (resolve or consciously accept before real cashiers) | Post-pilot |
+| Pilot-critical (decide, or consciously accept, before real cashiers) | Post-pilot |
 |---|---|
-| P-1 / S-A: flag coherence + **ops check now** (D-1 decision) | S-C per-domain wiring modules |
-| P-2 / S-B: audit upload decision | S-E single IPC declaration |
-| P-3: inactivity timer in the registry (fold into the next RT-116 slice touching inactivity) | S-F unwired-code and `api-types` cleanup |
-| (owned elsewhere, cited) RT-159 F-01…F-03, F-07…F-15; RT-116 S3–S7 | S-G shared session-gate core |
-| Optional enabler: S-D fake-bridge factory (lowers the cost of every pilot slice) | `current.md` drift fixes (§14) — docs, any time |
+| H-1 / D-1: flag coherence decision | S-3 single IPC declaration |
+| H-2: terminal provisioning + readiness check (ops) | S-4 per-domain wiring modules |
+| H-4 / D-2: audit evidence path decision | S-5 shared session-gate core |
+| C-1: runbook truth for session-end carts (after RT-116 S4) | C-2 unwired code, C-3 `api-types` trim |
+| (owned elsewhere, cited) RT-159 F-01…F-03, F-07…F-15; RT-116 S3–S7 | R-6 returns and R-7 shift contracts (contract-first, when 014/015/RT-17 are scheduled) |
+| Pilot-adjacent: S-1 config module (prerequisite for H-1); optional S-2 | D-3 tender gross/change contract question |
+| Pilot-optional: H-3 timer in registry (fold into RT-116) | C-4 `current.md` drift |
 
 ---
 
-## 12. Proposed bounded Jira slices (deliverable 8) — proposals only, none created
+## 12. Candidate follow-ups (deliverable 8) — for owner review, none created
 
-Created only where the evidence justifies it, and none duplicates RT-159 / RT-116 ownership.
+Per the RT-160 checkpoint, **no follow-up Jira issue is created** until this evidence is
+owner-reviewed. These are the candidates the evidence justifies. The labels are local to this
+document and are not Jira keys.
 
-| Proposal | Work Mode | Repo | Scope | Depends on |
+| Candidate | Work Mode | Repo | Scope | Depends on |
 |---|---|---|---|---|
-| **RT-160-A** Cashier profile coherence (S-A) | Implementation | POS | Extract config parsing to an importable module; startup combination validation; D-1 outcome (refuse or visible manual-receipt mode); runbook update | Owner **D-1**; if (b), authorise the `app:config` shape change |
-| **RT-160-B** Pilot audit evidence path (S-B) | Planning | POS + Backend-Core | Confirm whether a Backend-Core audit ingestion contract exists and whether pilot needs upload; output: decision + (if yes) contract-first implementation slice | Backend-Core owner |
-| **RT-160-C** Shared typed fake bridge (S-D) | Implementation (test-only) | POS | Test helper + migrate the operator fakes; no production code | — |
-| **RT-160-D** Composition-root wiring extraction (S-C) | Implementation | POS | Per-domain wiring modules, registry ownership of every timer, guard repointing; zero behaviour change | RT-160-A merged; post-pilot |
+| **FU-1** Cashier profile (S-1 + H-1) | Implementation | POS | Config module; startup combination validation; D-1 outcome; runbook update | **D-1**; if D-1 = (b), authorise the `app:config` shape change |
+| **FU-2** Pilot terminal provisioning (H-2) | Docs / ops | POS (runbook) | How the packaged terminal receives its environment; readiness checklist | Owner choice of provisioning mechanism |
+| **FU-3** Audit evidence path (H-4) | Planning (contract-first) | Backend-Core + POS | Category catalogue revision, rejected-event policy, then a POS HTTP client + wiring | **D-2** = yes |
+| **FU-4** Shared typed fake bridge (S-2) | Implementation (test-only) | POS | Test helper + migrate the operator fakes | — |
+| **FU-5** Composition-root wiring extraction (S-4) | Implementation | POS | Per-domain wiring modules; every timer in the registry; guard repointing; zero behaviour change | FU-1 merged; post-pilot |
 
-P-3 is **not** a new issue: it is noted for the next RT-116 slice that touches `InactivityMonitor`. S-E,
-S-F and S-G stay in this document until post-pilot planning picks them up.
+H-3 goes to the next RT-116 slice and C-1 follows RT-116 S4, so neither becomes a new issue. R-6, R-7
+and D-3 belong to the existing Deferred specs (014, 015) and RT-17 when they are scheduled.
 
 ---
 
@@ -368,14 +436,17 @@ made from preference.
 - The recurring costs (root wiring, flag plumbing, duplicated bridge types, hand-built fakes) are
   **self-created** and would be carried into any new platform unchanged.
 - The essential costs (money FSMs, idempotency, durability, lock safety and their tests) are
-  platform-independent.
+  platform-independent, and the mature references carry the same ones (§7).
+- The reference systems that run in a browser (Odoo POS, ERPNext POS) keep offline orders in browser
+  storage and warn that clearing it loses orders (RT-111 §1.2). POS's SQLite outbox under a trusted
+  main process is the stronger position, and it is a reason *for* a native shell, not against one.
 - The real platform-specific cost is **periodic**: native module rebuilds per Electron major
   (RT-65 / RT-108 / RT-109). That calls for a maintenance cadence, not a migration.
 
 **What would reopen the question (evidence triggers, not preferences):** a hardware integration
 Electron cannot reach reliably (e.g. the deferred ESC/POS / DK1 drawer path); measured main-thread
 contention that a utility process cannot solve; or packaged-build or installer constraints the pilot
-cannot meet. None is evidenced today.
+cannot meet (H-2 is the first place this would show). None is evidenced today.
 
 ---
 
@@ -383,15 +454,31 @@ cannot meet. None is evidenced today.
 
 | `docs/architecture/current.md` says | `main@7384217` |
 |---|---|
-| §7: four flags (`cart`, `payments`, `saleFinalization`, `productSearch`) | Five; `voucherTender` added by RT-103 |
+| §7: four flags (`cart`, `payments`, `saleFinalization`, `productSearch`) | Five; `voucherTender` added by RT-103. Flags are runtime process-environment inputs (P-1) |
 | §3: workers stop finalize → read-down → sale-sync | True, but the inactivity interval (RT-117) is outside the registry (P-3) |
 | §2: trust-boundary enforcement lists the sender guard | Also the locked-session allowlist wrapper (`session-lock-guard.ts`) |
 | No statement on main→renderer pushes | One push channel exists (`operator:session-state`) |
+| §5: two network legs | Correct for what runs; audit upload is built but not wired and not contract-compatible (P-2) |
 | (absent) | Principle from CS-2: main is the authority for any money or cart decision; the renderer only projects |
-| (absent) | Audit capture is local-only; `AuditSync` is unwired (P-2) |
 
-A docs-only follow-up can fix these once P-2 / P-3 are decided, so it does not record a state that is
-about to change.
+Also out of date: `docs/runbook/sales-cart.md` session-end discard (P-4, C-1). A docs-only follow-up
+can fix these once D-1 / D-2 and RT-116 S4 are decided, so it does not record a state that is about
+to change.
+
+---
+
+## 15. RT-160 checkpoint gap closure (revision 2)
+
+| # | Checkpoint item (RT-160, 2026-10-03) | Result | Where |
+|---|---|---|---|
+| 1 | Re-check ERPNext/Frappe and Odoo semantics with the Reference Library plus official/open-source sources | Done: ERPNext from the Reference Library pack (citing `frappe/erpnext@a9029f83`) and the 010 bench scout; Odoo from official docs and `odoo/odoo@18.0` source | §7.1 |
+| 2 | For each major responsibility, the proven pattern and reuse / adapt / keep local / reject | Done for 13 responsibilities | §7.2 |
+| 3 | Flags: runtime env or fixed at build time? | **Runtime.** `tsc`-compiled main reads `process.env`; no dotenv; packaged app has no `.env` and no installer; provisioning is undefined (H-2) | P-1 |
+| 4 | Does Backend-Core have an audit-event receiver? | **Yes**, on `main@7af7903` (contract + controller). But POS has no client, no caller, and only 6 of ~30 POS categories are accepted | P-2 |
+| 5 | Re-verify unwired paths with stronger evidence | **Confirmed** by exhaustive reference search (X): `AuditSync` 0 production referrers; `session-end-handler.ts` 0; `LifecycleCascade` methods never called. Runbook drift found | P-4 |
+| 6 | Keep the payments-on / finalization-off question as a decision candidate; do not create RT-160-A | Kept as **D-1**; no issue created; the earlier "RT-160-A…D" labels are withdrawn | §9.2, §12 |
+| 7 | Separate simplification from cleanup/hardening | Done | §9.1 vs §9.2 |
+| 8 | Exactly one next safe action | Below | — |
 
 ---
 
@@ -399,23 +486,20 @@ about to change.
 
 | RT-160 acceptance criterion | Where |
 |---|---|
-| Current `main` verified, baseline SHA recorded | Baseline (`7384217`, fetched twice) |
+| Current `main` verified, baseline SHA recorded | Baseline (`7384217`, fetched three times; Backend-Core `7af7903`) |
 | 021 checked against current code | §2 |
-| Responsibilities mapped to the correct owner | §3.2, §7 |
+| Responsibilities mapped to the correct owner | §3.2, §7.2 |
 | Essential / Electron / incidental separated with evidence | §4, §5 |
 | ≥ 3 real change paths analysed end-to-end | §5: CS-1…CS-4 + control (six commits) |
 | UI-perceived vs backend/runtime complexity separated | §8 |
-| ERPNext semantics only where compatible with boundaries | §7 (with B6 non-goals) |
+| ERPNext semantics only where compatible with boundaries | §7 (reuse / adapt / keep local / reject, with B6 non-goals) |
 | Candidates bounded; no money/offline/security weakening | §9, §10 |
 | Pilot-critical vs post-pilot separated | §11 |
-| Implementation decomposed into separate Jira work; none performed | §12 (proposals, none created) |
+| Implementation decomposed into separate Jira work; none performed | §12 (candidates only, none created, per checkpoint) |
+| Reference-first design rule applied | §7 |
 | Exactly one next safe action | below |
 
 ## Next safe action
 
-**The owner decides D-1** (§9), refuse vs visible manual-receipt mode for payments-on /
-finalization-off. That is the only decision that unblocks the one pilot-critical slice this audit
-proposes (RT-160-A).
-
-(The no-code terminal flag check in §9 is a pilot-readiness item for the pilot runbook. It is not a
-second next action of this audit.)
+**The owner reviews this revision on PR #511**, including decision candidates D-1, D-2 and D-3 (§9.2).
+Follow-up issues and RT-160's move to review both wait on that review.
