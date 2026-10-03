@@ -79,7 +79,7 @@ function makeSession(): OperatorSessionRecord {
  * Build handlers whose cart store AND catalogue resolver are backed by the same
  * full-migration sql.js db (the cart tables and the products table coexist).
  */
-function handlersFor(opts: { isShippedApp: boolean; withProductionResolver: boolean }) {
+function handlersFor(opts: { isPackaged: boolean; withProductionResolver: boolean }) {
   if (db === undefined) throw new Error('seed db (freshCatalogueDb) first');
   const dbHandle = handleFor(db);
   const session = makeSession();
@@ -97,7 +97,7 @@ function handlersFor(opts: { isShippedApp: boolean; withProductionResolver: bool
     getTerminalId: () => 'terminal-test',
     logger: makeTestLogger(),
     auditEmitter: new AuditEmitter({ insertIgnore: () => {} }),
-    isShippedApp: opts.isShippedApp,
+    isPackaged: opts.isPackaged,
     // Required by the factory since the post-handoff cancel payment guard; no payments here.
     cartPaymentStatus: () => 'none',
     ...(productionResolver !== undefined ? { productionResolver } : {}),
@@ -124,7 +124,7 @@ describe('009 production resolver wiring (T042)', () => {
       active: 1,
     });
 
-    const handlers = handlersFor({ isShippedApp: true, withProductionResolver: true });
+    const handlers = handlersFor({ isPackaged: true, withProductionResolver: true });
     const cartId = await createCart(handlers, 'ik-s4-create-1');
 
     const add = await handlers.linesAdd({
@@ -157,7 +157,7 @@ describe('009 production resolver wiring (T042)', () => {
     db = freshCatalogueDb();
     seedProduct(db, { product_id: 'p-1', tenant_id: TENANT, active: 1 });
 
-    const handlers = handlersFor({ isShippedApp: true, withProductionResolver: true });
+    const handlers = handlersFor({ isPackaged: true, withProductionResolver: true });
     const cartId = await createCart(handlers, 'ik-s4-create-2');
 
     const add = await handlers.linesAdd({
@@ -173,7 +173,7 @@ describe('009 production resolver wiring (T042)', () => {
     db = freshCatalogueDb();
     seedProduct(db, { product_id: 'p-off', tenant_id: TENANT, active: 0 });
 
-    const handlers = handlersFor({ isShippedApp: true, withProductionResolver: true });
+    const handlers = handlersFor({ isPackaged: true, withProductionResolver: true });
     const cartId = await createCart(handlers, 'ik-s4-create-3');
 
     const add = await handlers.linesAdd({
@@ -189,7 +189,7 @@ describe('009 production resolver wiring (T042)', () => {
     db = freshCatalogueDb();
     seedProduct(db, { product_id: 'p-1', tenant_id: TENANT, active: 1 });
 
-    const handlers = handlersFor({ isShippedApp: true, withProductionResolver: false });
+    const handlers = handlersFor({ isPackaged: true, withProductionResolver: false });
     const cartId = await createCart(handlers, 'ik-s4-create-4');
 
     const add = await handlers.linesAdd({
@@ -212,7 +212,7 @@ describe('009 production resolver wiring (T042)', () => {
       active: 1,
     });
 
-    const handlers = handlersFor({ isShippedApp: true, withProductionResolver: true });
+    const handlers = handlersFor({ isPackaged: true, withProductionResolver: true });
     const cartId = await createCart(handlers, 'ik-s4-create-5');
 
     const add1 = await handlers.linesAdd({

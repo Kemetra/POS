@@ -21,17 +21,18 @@ export interface CartHandlersDeps {
   logger: Logger;
   auditEmitter: AuditEmitter;
   /**
-   * `isShippedApp(...)` (RT-165): `app.isPackaged` OR running from the shipped
-   * `app.asar`, so a renamed copy of the shipped exe is still `true`. When
-   * `true`, the dev fixture resolver is unconditionally skipped even if
+   * The shipped-app identity, `isShippedApp(...)` from `app/shipped-app.ts`:
+   * NOT raw `app.isPackaged`, which a renamed copy of the shipped exe reports
+   * as false (RT-165).  Must be `true` in production builds.
+   * When `true`, the dev fixture resolver is unconditionally skipped even if
    * `POS_PULSE_DEV_ITEM_RESOLVER` is set in the environment.
    */
-  isShippedApp: boolean;
+  isPackaged: boolean;
   /**
    * 009 R7 — the REAL catalogue-backed resolver (`createCatalogueResolver`).
    * When supplied it is the production resolver: it wins in any packaged build
    * and in a dev build with the fixture flag absent. The dev fixture
-   * (`POS_PULSE_DEV_ITEM_RESOLVER` + not shipped) still takes precedence so 005's
+   * (`POS_PULSE_DEV_ITEM_RESOLVER` + unpackaged) still takes precedence so 005's
    * dev workflow is unchanged. When omitted (e.g. 005's own tests, or before
    * 009 ships), the handler falls back to `DEFAULT_ITEM_REF_RESOLVER` (refuses
    * generically) — the prior behaviour.
@@ -61,23 +62,23 @@ function isDevResolverEnvSet(): boolean {
  *
  * `resolveItemRef` is wired to the T053 fixture resolver ONLY when both
  * conditions hold:
- *   1. `deps.isShippedApp` is `false` (unpackaged dev / CI build), AND
+ *   1. `deps.isPackaged` is `false` (dev / CI build), AND
  *   2. `POS_PULSE_DEV_ITEM_RESOLVER` is truthy in the environment.
  *
- * In all other cases (the shipped app, or env flag absent/falsy) the dep
+ * In all other cases (any packaged build, or env flag absent/falsy) the dep
  * is omitted and `CartBridgeHandlers` falls back to `DEFAULT_ITEM_REF_RESOLVER`
  * which refuses generically — the correct production behaviour until the real
  * item-catalogue feature ships (R7 seam / future feature).
  *
- * SECURITY: `deps.isShippedApp === true` short-circuits unconditionally; ops
- * cannot enable fixture data in the shipped app by exporting the env var.
+ * SECURITY: `deps.isPackaged === true` short-circuits unconditionally; ops
+ * cannot enable fixture data in a packaged build by exporting the env var.
  */
 export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHandlers {
-  const useFixtureResolver = !deps.isShippedApp && isDevResolverEnvSet();
+  const useFixtureResolver = !deps.isPackaged && isDevResolverEnvSet();
 
   // Precedence (additive — preserves 005's dev behaviour exactly):
   //   dev + fixture flag  → fixture resolver (the dev escape hatch; never in a
-  //                         shipped app — `!isShippedApp` guards it)
+  //                         packaged build — `!isPackaged` guards it)
   //   otherwise           → 009's production resolver when supplied; else the
   //                         dep is omitted and CartBridgeHandlers falls back to
   //                         DEFAULT_ITEM_REF_RESOLVER (refuses generically).

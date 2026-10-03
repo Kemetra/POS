@@ -100,7 +100,7 @@ async function frozenCartUnderManager(
     getTerminalId: () => 'terminal-1',
     logger,
     auditEmitter: { emit } as unknown as AuditEmitter,
-    isShippedApp: true,
+    isPackaged: true,
     cartPaymentStatus: guard,
   });
   return { db, cartId: created.cart_id, handlers, emit, guard };

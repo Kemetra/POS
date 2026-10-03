@@ -427,7 +427,7 @@ app
     // S5 review tasks exercise real rows. Meant to run alongside the
     // POS_PULSE_DEV_SKIP_* flags (same dev-tenant).
     applyDevSeedCatalogueIfRequested({
-      isShippedApp: shippedApp,
+      isPackaged: shippedApp,
       env: process.env,
       db: db,
       logger: mainLogger,
@@ -440,7 +440,7 @@ app
     const secretStore = createSecretStore({
       handle: db,
       safeStorage,
-      isShippedApp: shippedApp,
+      isPackaged: shippedApp,
     });
     // Note (Phase 5 R8): SecretStore still uses console.warn/error
     // placeholders. Swap to mainLogger is a deferred follow-up — out
@@ -461,7 +461,7 @@ app
     // this call is a no-op in the shipped app (renamed exe included, RT-165)
     // regardless of env vars.
     await applyDevSkipPairingIfRequested({
-      isShippedApp: shippedApp,
+      isPackaged: shippedApp,
       env: process.env,
       pairingStore,
       logger: mainLogger,
@@ -707,7 +707,7 @@ app
     // regardless of env vars.
     // Independent from POS_PULSE_DEV_SKIP_PAIRING; both may be set together.
     applyDevSkipOperatorSignInIfRequested({
-      isShippedApp: shippedApp,
+      isPackaged: shippedApp,
       env: process.env,
       sessionManager: operatorSessionManager,
       logger: mainLogger,
@@ -760,7 +760,7 @@ app
       getTerminalId: () => pairingStore.getCurrentTerminalId(),
       logger: mainLogger,
       auditEmitter,
-      isShippedApp: shippedApp,
+      isPackaged: shippedApp,
       productionResolver: catalogueResolver,
       // Post-handoff cancel and the snapshot "paid" flag read the payments record.
       cartPaymentStatus: bindCartPaymentStatus(db),

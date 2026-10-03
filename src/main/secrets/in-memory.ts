@@ -4,7 +4,7 @@ import type { SecretKey, SecretStore } from '../../shared/secret-store.js';
  * T047 — in-memory SecretStore backend.
  *
  * Used in dev/test only when `safeStorage.isEncryptionAvailable()` is
- * false AND the app is not shipped (`isShippedApp`, RT-165). Production builds MUST refuse to
+ * false AND `app.isPackaged` is false. Production builds MUST refuse to
  * use this backend (enforced in `createSecretStore()`).
  *
  * No encryption: values are held in a Map<string, string> for the

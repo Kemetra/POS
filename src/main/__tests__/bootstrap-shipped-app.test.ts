@@ -38,7 +38,8 @@ describe('main/index.ts keys security decisions on the shipped app (RT-165)', ()
 
   it('uses app.isPackaged only as an input to the shipped predicate', () => {
     // Exactly two reads: the shippedApp computation and the RT-164
-    // launch-switch input (which runs the same predicate internally).
+    // launch-switch input (which runs the same predicate internally). Every
+    // gate below takes its `isPackaged` dep from `shippedApp`, never from here.
     const reads = code.match(/app\.isPackaged/g) ?? [];
     expect(reads).toHaveLength(2);
     expect(code).toMatch(/assessLaunchSwitches\(\{\s*isPackaged: app\.isPackaged,/);
@@ -50,11 +51,11 @@ describe('main/index.ts keys security decisions on the shipped app (RT-165)', ()
     'applyDevSkipPairingIfRequested',
     'applyDevSkipOperatorSignInIfRequested',
     'createCartBridgeHandlers',
-  ])('%s receives the shipped identity', (fn) => {
+  ])('%s receives the shipped identity as its isPackaged dep', (fn) => {
     const start = code.search(new RegExp(`\\b${fn}\\(\\{`));
     expect(start).toBeGreaterThan(-1);
     const call = code.slice(start, code.indexOf('});', start));
-    expect(call).toMatch(/\bisShippedApp: shippedApp\b/);
+    expect(call).toMatch(/\bisPackaged: shippedApp\b/);
   });
 
   it('resolves the migrations directory from the shipped identity', () => {

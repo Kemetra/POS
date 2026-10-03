@@ -13,7 +13,7 @@ function makeDeps(
 ): DevSkipOperatorSignInDeps {
   const { envFlag, ...rest } = overrides;
   return {
-    isShippedApp: false,
+    isPackaged: false,
     env: envFlag !== undefined ? { POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN: envFlag } : {},
     sessionManager: {
       create: vi
@@ -33,7 +33,7 @@ describe('applyDevSkipOperatorSignInIfRequested', () => {
   });
 
   // Test 1: unpackaged + flag truthy creates manager fixture session and returns true
-  it('creates fixture manager session when isShippedApp=false and flag is truthy', () => {
+  it('creates fixture manager session when isPackaged=false and flag is truthy', () => {
     const deps = makeDeps({ envFlag: '1' });
 
     const result = applyDevSkipOperatorSignInIfRequested(deps);
@@ -47,8 +47,8 @@ describe('applyDevSkipOperatorSignInIfRequested', () => {
   });
 
   // Test 2: packaged + flag truthy does not run
-  it('does NOT run when isShippedApp=true even if flag is truthy', () => {
-    const deps = makeDeps({ isShippedApp: true, envFlag: '1' });
+  it('does NOT run when isPackaged=true even if flag is truthy', () => {
+    const deps = makeDeps({ isPackaged: true, envFlag: '1' });
 
     const result = applyDevSkipOperatorSignInIfRequested(deps);
 
@@ -63,7 +63,7 @@ describe('applyDevSkipOperatorSignInIfRequested', () => {
       isPackaged: false,
       appPath: 'C:\\copy\\resources\\app.asar',
     });
-    const deps = makeDeps({ isShippedApp: shipped, envFlag: '1' });
+    const deps = makeDeps({ isPackaged: shipped, envFlag: '1' });
 
     const result = applyDevSkipOperatorSignInIfRequested(deps);
 
@@ -73,13 +73,13 @@ describe('applyDevSkipOperatorSignInIfRequested', () => {
 
   it('still runs for an unpackaged dev build (`electron .`) with the flag set', () => {
     const shipped = isShippedApp({ isPackaged: false, appPath: 'C:\\Users\\dev\\POS' });
-    const deps = makeDeps({ isShippedApp: shipped, envFlag: '1' });
+    const deps = makeDeps({ isPackaged: shipped, envFlag: '1' });
 
     expect(applyDevSkipOperatorSignInIfRequested(deps)).toBe(true);
   });
 
   // Test 3: unpackaged + flag absent does not run
-  it('does NOT run when isShippedApp=false and flag is absent', () => {
+  it('does NOT run when isPackaged=false and flag is absent', () => {
     const deps = makeDeps(); // no envFlag
 
     const result = applyDevSkipOperatorSignInIfRequested(deps);
@@ -187,7 +187,7 @@ describe('applyDevSkipOperatorSignInIfRequested', () => {
   it('getCurrentBridgeView does not expose backend_session_id or token fields', () => {
     const realManager = new SessionManager();
     const deps: DevSkipOperatorSignInDeps = {
-      isShippedApp: false,
+      isPackaged: false,
       env: { POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN: '1' },
       sessionManager: realManager,
       logger: { warn: vi.fn() },
