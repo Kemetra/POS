@@ -42,7 +42,8 @@
 | What remains governed by RT-24 and must not change | [08-rt24-invariants.md](08-rt24-invariants.md) |
 | Proposed bounded Jira implementation slices | [09-implementation-slices.md](09-implementation-slices.md) |
 | Layout direction comparison (A V5-based vs B cart-first) — added on owner request | [10-direction-comparison.md](10-direction-comparison.md), [references/compare.html](references/compare.html) |
-| Operational workflow benchmark (RT-111, Planning, **pending owner review**): offline / permission matrices, register-shift flow, device health, recovery center | [11-operational-workflow-benchmark.md](11-operational-workflow-benchmark.md) |
+| Operational workflow benchmark (RT-111, Planning, owner review complete, merged): offline / permission matrices, register-shift flow, device health, recovery center | [11-operational-workflow-benchmark.md](11-operational-workflow-benchmark.md) |
+| Cashier UX / usability audit (RT-159, Planning, **PRELIMINARY — RT-159 stays open pending the post-RT-117 packaged/lab audit**): first runtime audit of the built app — scanner ownership, inactivity, cash/card steps, 1024/1280 capacity, a11y, findings matrix, session script, bounded slices | [12-cashier-ux-usability-audit.md](12-cashier-ux-usability-audit.md); captures in [references/audit-rt159/](references/audit-rt159/) |
 
 ## Headline findings
 
