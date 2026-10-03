@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session } from 'electron';
 import * as Sentry from '@sentry/electron/main';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -100,6 +100,11 @@ import { randomUUID } from 'node:crypto';
 import { createWorkerRegistry } from './app/bootstrap-workers.js';
 import { createWindowFactory } from './app/bootstrap-window.js';
 import { createDatabaseHolder } from './app/bootstrap-db.js';
+import {
+  assessCashierProfile,
+  describeCashierProfileRefusal,
+  parseFeatureFlags,
+} from './app/feature-flags.js';
 import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -338,6 +343,32 @@ app
       appVersion,
     });
 
+    // RT-162 (RT-160 FU-1 / owner decision D-1) — fail-closed cashier profile.
+    // PAYMENTS on with SALE_FINALIZATION off would settle money with no Sale
+    // row, receipt, outbox entry or Backend-Core capture, so it is refused HERE,
+    // in trusted main, before the DB opens, before any payment IPC is
+    // registered and before the window exists. The dialog is the ASYNC
+    // showMessageBox, not showErrorBox: the synchronous one blocks the event
+    // loop, and the packaged build showed the async pino write of this log line
+    // stalling behind it. We exit explicitly once the dialog closes: without a
+    // window, `window-all-closed` never fires and the process would linger.
+    const startupFeatureFlags = parseFeatureFlags(process.env);
+    const cashierProfile = assessCashierProfile(startupFeatureFlags);
+    if (!cashierProfile.ok) {
+      mainLogger.error(
+        { reason: cashierProfile.reason, features: startupFeatureFlags },
+        'app:cashier_profile_refused',
+      );
+      const refusal = describeCashierProfileRefusal(cashierProfile.reason);
+      const exitRefused = (): void => {
+        app.exit(1);
+      };
+      void dialog
+        .showMessageBox({ type: 'error', title: refusal.title, message: refusal.body })
+        .then(exitRefused, exitRefused);
+      return;
+    }
+
     // T040 + R9 — open ONE shared DB handle, run migrations, then keep
     // the handle alive for the SecretStore. Failure during migrations
     // rethrows into the .catch below, which calls app.exit(1).
@@ -441,52 +472,12 @@ app
       if (typeof dsn === 'string' && dsn.trim().length > 0) {
         cfg.sentryDsn = dsn;
       }
-      // 005-sales-cart T001 — cart feature flag (default false).
-      // Truthy values: '1', 'true', 'yes', 'on' (case-insensitive).
-      // Anything else, or unset, leaves the flag disabled.
-      const cartRaw = process.env['POS_PULSE_FEATURE_CART'];
-      const cartEnabled =
-        typeof cartRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(cartRaw.trim().toLowerCase());
-      // 006-payments-tender S1 — payments feature flag (default false).
-      // The type + renderer-store binding shipped with 006; the env-var read was missed
-      // at the time. This backfill brings 006 in line with the cart pattern: same truthy-
-      // value contract; disabled-by-default is the fail-safe (PaymentSurface stays hidden
-      // and 005's cart-handoff slot falls back to its pre-006 behaviour).
-      const paymentsRaw = process.env['POS_PULSE_FEATURE_PAYMENTS'];
-      const paymentsEnabled =
-        typeof paymentsRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(paymentsRaw.trim().toLowerCase());
-      // 008-sale-finalization-and-receipts T002 — sale_finalization feature flag (default false).
-      // Same truthy-value contract as cart. Disabled-by-default is the fail-safe: 006 still
-      // settles payments but 008's finalize listener short-circuits — no receipt prints, no
-      // drawer kicks, no audit-event emits. See `docs/runbook/008-sale-finalization-and-receipts.md`
-      // (authored at Slice 6 T524 / T525) for the rollback path.
-      const saleFinalizationRaw = process.env['POS_PULSE_FEATURE_SALE_FINALIZATION'];
-      const saleFinalizationEnabled =
-        typeof saleFinalizationRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(saleFinalizationRaw.trim().toLowerCase());
-      // 009-product-search-and-barcode-lookup T049a — productSearch flag (default false).
-      // Same truthy-value contract as cart. Mounts the catalogue surface only when
-      // BOTH this and `cart` are on (the surface needs the Sale cart to receive lines).
-      const productSearchRaw = process.env['POS_PULSE_FEATURE_PRODUCT_SEARCH'];
-      const productSearchEnabled =
-        typeof productSearchRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(productSearchRaw.trim().toLowerCase());
-      // RT-103 — voucherTender flag (default false). Vouchers are excluded from the
-      // pilot (RT-10 D2): off keeps the voucher tile disabled at checkout. Same
-      // truthy-value contract as cart.
-      const voucherTenderRaw = process.env['POS_PULSE_FEATURE_VOUCHER_TENDER'];
-      const voucherTenderEnabled =
-        typeof voucherTenderRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(voucherTenderRaw.trim().toLowerCase());
-      cfg.features = {
-        cart: cartEnabled,
-        payments: paymentsEnabled,
-        saleFinalization: saleFinalizationEnabled,
-        productSearch: productSearchEnabled,
-        voucherTender: voucherTenderEnabled,
-      };
+      // 005 cart / 006 payments / 008 saleFinalization / 009 productSearch /
+      // RT-103 voucherTender — all five flags default false (fail-closed).
+      // RT-162: parsing lives in `app/feature-flags.ts` (one truthy parser,
+      // unchanged semantics). Re-parsed per call, as before; the PAYMENTS-
+      // without-SALE_FINALIZATION profile never reaches here (refused at startup).
+      cfg.features = parseFeatureFlags(process.env);
       return cfg;
     };
     registerAppConfigHandler(guardedIpcMain, getAppConfig);
@@ -1055,8 +1046,9 @@ app
     //
     // Wire the AD-2 finalize worker + read-only `sales.*` bridge behind the
     // `sale_finalization` feature flag (fail-closed default off). When the
-    // flag is off, 006 still settles payments but no Sale rows are written —
-    // the cashier falls back to manual receipts (see runbook T525).
+    // flag is off no Sale rows are written. RT-162 / D-1: that is only a valid
+    // profile with payments OFF too — PAYMENTS on + SALE_FINALIZATION off is
+    // refused at startup (see runbook 008 T525).
     //
     // The worker is terminal-scoped: it only fires for the paired terminal.
     // We read the scope from the pairing status; an unpaired terminal cannot

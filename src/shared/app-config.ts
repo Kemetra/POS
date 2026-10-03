@@ -46,11 +46,17 @@ export interface AppConfig {
      *
      * Defaults to `false`. Flip via `POS_PULSE_FEATURE_SALE_FINALIZATION`
      * in main. Disabled-by-default is the fail-safe per Constitution
-     * (Production Readiness Gates): in disabled state, 006 still settles
-     * payments but 008's finalize listener short-circuits — no receipt
-     * prints, no drawer kicks, no audit-event emits. The cashier falls
-     * back to manual receipts. See `docs/runbook/008-sale-finalization-and-receipts.md`
-     * (authored at Slice 6 T524 / T525) for the rollback path.
+     * (Production Readiness Gates): in disabled state 008's finalize
+     * listener short-circuits — no Sale row, receipt, drawer kick, outbox
+     * entry or audit-event emit.
+     *
+     * RT-162 / D-1: `payments` on with this flag off is an INVALID cashier
+     * profile — main refuses to start (`src/main/app/feature-flags.ts`)
+     * rather than settle money it cannot record. The renderer may still see
+     * `payments: true, saleFinalization: false` only in tests/historical
+     * paths; its post-settlement truthfulness copy is kept for that case.
+     * See `docs/runbook/008-sale-finalization-and-receipts.md` T525 for the
+     * rollback path (both flags off).
      */
     saleFinalization?: boolean;
     /**
