@@ -13,7 +13,8 @@ import { LockScreen } from './LockScreen';
  *
  * The app stays MOUNTED under the lock and is made `inert`, so the exact sale
  * on screen — cart, checkout, entered amounts — is preserved for the same
- * operator. The operator-session store is untouched (still signed in), so the
+ * operator. It is also concealed (RT-161): the lock shows totals only, so the
+ * sale behind it must not be readable on an unattended till. The operator-session store is untouched (still signed in), so the
  * cart/payment reset hook never fires on a lock.
  */
 
@@ -54,7 +55,11 @@ export function SessionLockGate({ operator, children }: SessionLockGateProps): J
   const locked = lockView !== null;
   return (
     <>
-      <div data-testid="session-lock-app" inert={locked} className="session-lock-app">
+      <div
+        data-testid="session-lock-app"
+        inert={locked}
+        className={locked ? 'session-lock-app session-lock-app--concealed' : 'session-lock-app'}
+      >
         {children}
       </div>
       {lockView !== null && (

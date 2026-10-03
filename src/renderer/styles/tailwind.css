@@ -1562,10 +1562,22 @@ body {
     display: contents;
   }
 
+  /* RT-161: preserved, not readable. `visibility` inherits through the
+     `display: contents` wrapper to the whole sale, which stays mounted. */
+  .session-lock-app--concealed {
+    visibility: hidden;
+  }
+
   .session-lock {
     position: fixed;
     inset: 0;
     z-index: 100;
+  }
+
+  /* RT-161: the lock's own backdrop is opaque — the shared dialog scrim is
+     translucent and would let the sale show through on an unattended till. */
+  .session-lock > .dialog-overlay {
+    background: var(--color-background);
   }
 
   .session-lock__summary {

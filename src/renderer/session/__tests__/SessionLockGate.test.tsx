@@ -113,6 +113,8 @@ describe('RT-117 SessionLockGate', () => {
     const app = screen.getByTestId('session-lock-app');
     expect(app).toHaveAttribute('inert');
     expect(app).toHaveTextContent('count 1');
+    // RT-161: preserved, but not readable behind the lock.
+    expect(app).toHaveClass('session-lock-app--concealed');
   });
 
   it('shows the lock screen on mount when main is already locked', async () => {
@@ -155,6 +157,7 @@ describe('RT-117 SessionLockGate', () => {
     expect(op.api.unlockSession).toHaveBeenCalledWith({ method: 'pin', pin: '1234' });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByTestId('session-lock-app')).not.toHaveAttribute('inert');
+    expect(screen.getByTestId('session-lock-app')).not.toHaveClass('session-lock-app--concealed');
   });
 
   it('a wrong PIN shows a generic error, clears the field and stays locked', async () => {
