@@ -150,6 +150,42 @@ describe('RT-117 createSessionLockGuardedIpcMain', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it('delivers a fire-and-forget (.on) event while not locked', () => {
+    const fake = fakeIpcMain();
+    const listener = vi.fn();
+    const guarded = createSessionLockGuardedIpcMain(fake.ipcMain, () => false);
+    const returned = guarded.on('cart:something', listener);
+
+    fake.emit('cart:something', 'arg');
+
+    expect(listener).toHaveBeenCalledWith(expect.anything(), 'arg');
+    expect(returned).toBe(fake.ipcMain);
+  });
+
+  it('delivers an allowlisted fire-and-forget (.on) event while locked', () => {
+    const fake = fakeIpcMain();
+    const listener = vi.fn();
+    const guarded = createSessionLockGuardedIpcMain(fake.ipcMain, () => true);
+    guarded.on(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY, listener);
+
+    fake.emit(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes every other IpcMain member through to the real ipcMain', () => {
+    const removeHandler = vi.fn();
+    const real = { handle: vi.fn(), on: vi.fn(), removeHandler, label: 'real' };
+    const guarded = createSessionLockGuardedIpcMain(real as unknown as IpcMain, () => true);
+
+    guarded.removeHandler('cart:lines-add');
+
+    // Methods are bound to the real ipcMain; plain values are returned as-is.
+    expect(removeHandler).toHaveBeenCalledWith('cart:lines-add');
+    expect(removeHandler.mock.contexts[0]).toBe(real);
+    expect((guarded as unknown as { label: string }).label).toBe('real');
+  });
+
   it('the refusal is generic (does not reflect the channel name)', async () => {
     const fake = fakeIpcMain();
     const guarded = createSessionLockGuardedIpcMain(fake.ipcMain, () => true);

@@ -80,6 +80,58 @@ describe('RT-117 wireSessionLockAudit', () => {
     });
   });
 
+  it('records an empty terminal id when the terminal is unpaired', () => {
+    const sm = signedIn();
+    const events: AuditEvent[] = [];
+    wireSessionLockAudit({
+      sessionManager: sm,
+      auditEmitter: { emit: (e) => events.push(e) },
+      resolveTerminalId: () => null,
+      uuid: () => 'evt-1',
+    });
+
+    sm.lock('2026-10-01T10:10:00.000Z');
+
+    expect(events[0]?.originating_terminal_id).toBe('');
+  });
+
+  it('reports a zero locked duration when the lock itself was not observed', () => {
+    const sm = signedIn();
+    sm.lock('2026-10-01T10:10:00.000Z'); // locked before the audit was wired
+    const events: AuditEvent[] = [];
+    wire(sm, (e) => events.push(e));
+
+    sm.unlock('2026-10-01T10:13:30.000Z');
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      action_category: 'operator.session.unlocked',
+      payload: { locked_duration_ms: 0 },
+    });
+  });
+
+  it('logs an audit failure through logError when one is provided', () => {
+    const sm = signedIn();
+    const failure = new Error('disk full');
+    const logError = vi.fn();
+    wireSessionLockAudit({
+      sessionManager: sm,
+      auditEmitter: {
+        emit: () => {
+          throw failure;
+        },
+      },
+      resolveTerminalId: () => 'term-1',
+      uuid: () => 'evt-1',
+      logError,
+    });
+
+    sm.lock('2026-10-01T10:10:00.000Z');
+
+    expect(logError).toHaveBeenCalledWith(failure);
+    expect(sm.isLocked()).toBe(true);
+  });
+
   it('an audit failure never breaks the lock', () => {
     const sm = signedIn();
     wire(

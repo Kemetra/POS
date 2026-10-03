@@ -215,3 +215,156 @@ describe('RT-117 SessionUnlockHandler — state guards', () => {
     expect(sm.isLocked()).toBe(true);
   });
 });
+
+describe('RT-117 SessionUnlockHandler — single-flight unlock (§A4 M1)', () => {
+  const MANAGER_REQ = { method: 'online_credential', identifier: 'm@x', password: 'pw' } as const;
+
+  function deferred<T>(value: T): { promise: Promise<T>; release: () => void } {
+    let release: () => void = () => undefined;
+    const promise = new Promise<T>((resolve) => {
+      release = () => {
+        resolve(value);
+      };
+    });
+    return { promise, release };
+  }
+
+  it('refuses a concurrent cashier unlock with rate_limited and verifies only once', async () => {
+    const sm = lockedSession('cashier');
+    const gate = deferred(null);
+    const verifyCashierPin = vi.fn(() => gate.promise);
+    const h = handler(sm, { verifyCashierPin });
+
+    const first = h.unlock({ method: 'pin', pin: '1234' });
+    const second = await h.unlock({ method: 'pin', pin: '9999' });
+    gate.release();
+
+    expect(second).toEqual({ kind: 'refused', category: 'rate_limited' });
+    await expect(first).resolves.toEqual({ kind: 'unlocked' });
+    expect(verifyCashierPin).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes manager online unlocks the same way', async () => {
+    const sm = lockedSession('manager', 'mgr-1');
+    const gate = deferred(OK_CLERK('mgr-1'));
+    const exchange = vi.fn(() => gate.promise);
+    const h = handler(sm, { clerk: { exchange } });
+
+    const first = h.unlock(MANAGER_REQ);
+    const second = await h.unlock(MANAGER_REQ);
+    gate.release();
+
+    expect(second).toEqual({ kind: 'refused', category: 'rate_limited' });
+    await expect(first).resolves.toEqual({ kind: 'unlocked' });
+    expect(exchange).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the in-flight guard after the verifier throws', async () => {
+    const sm = lockedSession('cashier');
+    const verifyCashierPin = vi
+      .fn<(operator_id: string, pin: string) => Promise<null>>()
+      .mockRejectedValueOnce(new Error('db gone'))
+      .mockResolvedValueOnce(null);
+    const h = handler(sm, { verifyCashierPin });
+
+    await expect(h.unlock({ method: 'pin', pin: '1234' })).rejects.toThrow('db gone');
+    await expect(h.unlock({ method: 'pin', pin: '1234' })).resolves.toEqual({ kind: 'unlocked' });
+  });
+});
+
+describe('RT-117 SessionUnlockHandler — online-credential attempt limiter (§A4 M2)', () => {
+  const REQ = { method: 'online_credential', identifier: 'm@x', password: 'pw' } as const;
+  const REFUSED: ClerkExchangeResult = { kind: 'refused' };
+
+  function managerHandler(
+    exchange: ClerkExchanger['exchange'],
+    clock: { now: Date },
+    sm: SessionManager = lockedSession('manager', 'mgr-1'),
+  ): SessionUnlockHandler {
+    return new SessionUnlockHandler({
+      sessionManager: sm,
+      verifyCashierPin: () => Promise.resolve(null),
+      clerk: { exchange },
+      now: () => clock.now,
+    });
+  }
+
+  function sequence(results: ClerkExchangeResult[]): ClerkExchanger['exchange'] {
+    return vi.fn(() => Promise.resolve(results.shift() ?? REFUSED));
+  }
+
+  const at = (iso: string): { now: Date } => ({ now: new Date(iso) });
+
+  it('after 5 failed attempts refuses rate_limited without calling Clerk', async () => {
+    const exchange = vi.fn(() => Promise.resolve(REFUSED));
+    const h = managerHandler(exchange, at('2026-10-01T10:12:00.000Z'));
+
+    for (let i = 0; i < 5; i += 1) {
+      await expect(h.unlock(REQ)).resolves.toEqual({ kind: 'refused', category: 'invalid_input' });
+    }
+    await expect(h.unlock(REQ)).resolves.toEqual({ kind: 'refused', category: 'rate_limited' });
+    expect(exchange).toHaveBeenCalledTimes(5);
+  });
+
+  it('counts a different person authenticating as a failure', async () => {
+    const exchange = vi.fn(() => Promise.resolve(OK_CLERK('mgr-OTHER')));
+    const h = managerHandler(exchange, at('2026-10-01T10:12:00.000Z'));
+
+    for (let i = 0; i < 5; i += 1) await h.unlock(REQ);
+
+    await expect(h.unlock(REQ)).resolves.toEqual({ kind: 'refused', category: 'rate_limited' });
+    expect(exchange).toHaveBeenCalledTimes(5);
+  });
+
+  it('does not count a network failure (an outage never locks the manager out)', async () => {
+    const offline: ClerkExchangeResult = { kind: 'no_connection' };
+    const exchange = vi.fn(() => Promise.resolve(offline));
+    const h = managerHandler(exchange, at('2026-10-01T10:12:00.000Z'));
+
+    for (let i = 0; i < 6; i += 1) {
+      await expect(h.unlock(REQ)).resolves.toEqual({ kind: 'refused', category: 'no_connection' });
+    }
+    expect(exchange).toHaveBeenCalledTimes(6);
+  });
+
+  it('lets attempts through again once the 5-minute backoff has elapsed', async () => {
+    const clock = at('2026-10-01T10:12:00.000Z');
+    const h = managerHandler(
+      sequence([REFUSED, REFUSED, REFUSED, REFUSED, REFUSED, OK_CLERK('mgr-1')]),
+      clock,
+    );
+
+    for (let i = 0; i < 5; i += 1) await h.unlock(REQ);
+    clock.now = new Date('2026-10-01T10:16:59.000Z');
+    await expect(h.unlock(REQ)).resolves.toEqual({ kind: 'refused', category: 'rate_limited' });
+    clock.now = new Date('2026-10-01T10:17:00.000Z');
+
+    await expect(h.unlock(REQ)).resolves.toEqual({ kind: 'unlocked' });
+  });
+
+  it('a successful unlock resets the failure count', async () => {
+    const sm = lockedSession('manager', 'mgr-1');
+    const exchange = sequence([REFUSED, REFUSED, REFUSED, REFUSED, OK_CLERK('mgr-1')]);
+    const h = managerHandler(exchange, at('2026-10-01T10:12:00.000Z'), sm);
+
+    for (let i = 0; i < 5; i += 1) await h.unlock(REQ); // 4 failures, then unlocked
+    sm.lock('2026-10-01T10:20:00.000Z');
+    for (let i = 0; i < 4; i += 1) await h.unlock(REQ);
+
+    // 4 fresh failures stay under the limit: the next attempt still reaches Clerk.
+    await expect(h.unlock(REQ)).resolves.toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(exchange).toHaveBeenCalledTimes(10);
+  });
+
+  it('never applies the limiter to the cashier PIN path (the 004 lockout owns it)', async () => {
+    const sm = lockedSession('cashier');
+    const verifyCashierPin = vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    );
+    const h = handler(sm, { verifyCashierPin });
+
+    for (let i = 0; i < 7; i += 1) await h.unlock({ method: 'pin', pin: '0000' });
+
+    expect(verifyCashierPin).toHaveBeenCalledTimes(7);
+  });
+});
