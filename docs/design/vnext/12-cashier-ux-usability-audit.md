@@ -445,7 +445,7 @@ implementation issues are created from it yet.
 | Keyboard/scanner behaviour assessed | yes (§4.2, §6) |
 | Arabic/RTL and accessibility with evidence | yes (§7, §8) |
 | Evidence vs opinion separated | labels R-dev/R-pkg/C/N; hypotheses marked |
-| Reproducible steps / screenshots | scripts reproducible from §4; 23 screenshots in `references/audit-rt159/` |
+| Reproducible steps / screenshots | scripts reproducible from §4; 24 screenshots in `references/audit-rt159/` |
 | Pilot-critical vs post-pilot | §9 column "Class" |
 | Bounded Jira slices | §13 |
 | No implementation | docs + screenshots only |
