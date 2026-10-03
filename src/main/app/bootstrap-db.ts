@@ -9,7 +9,7 @@ import type { DatabaseHandle } from '../db/client.js';
  *
  * **What this module does NOT own.** Opening and migrating stay at the
  * composition root, inside `app.whenReady()`: the path comes from
- * `app.getPath('userData')`, the migrations directory from `app.isPackaged`,
+ * `app.getPath('userData')`, the migrations directory from the shipped-app identity (RT-165),
  * and a migration failure must rethrow into the existing `.catch` that calls
  * `app.exit(1)`. Moving that would change startup semantics; this slice is
  * scoped to lifetime, not to the open sequence (plan AD-5).

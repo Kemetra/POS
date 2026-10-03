@@ -103,7 +103,7 @@ start the POS.
 | :-- | :-- |
 | `NODE_ENV` | `development` makes the packaged app load the renderer from `http://localhost:5173` and trust that origin for IPC. |
 | `ELECTRON_RUN_AS_NODE` | Turns `POS Pulse.exe` into a plain Node runtime. |
-| `POS_PULSE_DEV_*` | Ignored by packaged builds (`app.isPackaged` guard). Unset anyway, as hygiene. |
+| `POS_PULSE_DEV_*` | Ignored by the shipped app, including a renamed copy of the exe (RT-165 shipped-app guard, §11). Unset anyway, as hygiene. |
 
 ## 4. Source, precedence, ownership, persistence
 
@@ -483,7 +483,7 @@ Limits:
   profile, whose DPAPI protection is per-user. The defence there is the
   Windows account and application control on the terminal (a standard user
   with no way to run unapproved programs), not the POS binary.
-- **Finding, not fixed in RT-164 (owner decision):** in a renamed copy of the
+- **Finding, not fixed in RT-164 (owner decision); fixed in RT-165, see below:** in a renamed copy of the
   shipped exe, `app.isPackaged` is false. The `POS_PULSE_DEV_*` bypasses (and
   any other `isPackaged`-keyed check, such as the SecretStore's production
   refusal) then activate: the probe logged `pairing.dev_bypass.active` and
@@ -494,3 +494,30 @@ Limits:
   `%APPDATA%\pos-pulse` profile. That last point was not exercised, to keep
   the real profile untouched. Remedy candidate: key those checks on the same
   "shipped" signal as the launch guard.
+
+**RT-165: renamed exe keeps production behaviour.** `src/main/app/shipped-app.ts`
+holds the launch guard's "shipped" signal (`app.isPackaged`, or running from an
+`.asar`). Every check that used `app.isPackaged` alone now keys on it: the four
+`POS_PULSE_DEV_*` bypasses (pairing, operator sign-in, catalogue seed, cart item
+resolver), the SecretStore production refusal, and the migrations directory.
+That last one also mattered. A renamed exe used to read `migrations/*.sql` from
+whatever folder it was launched in, so it would run any SQL placed there.
+Unpackaged `electron .` keeps every dev bypass.
+
+Probe: all four `POS_PULSE_DEV_*` flags set. Each run had its own scratch
+`--user-data-dir` and `APPDATA`, and was launched from a folder holding the real
+migrations plus a decoy `9999_rt165_decoy.sql`.
+
+| Run | Bypass log lines | Fixture pairing row | Fixture products | Decoy SQL applied |
+| :-- | :-- | :-- | :-- | :-- |
+| `main@607bbfe`, exe renamed `electron.exe` (control) | seed, pairing, operator | yes | 12 | **yes** |
+| RT-165, exe renamed `electron.exe` | none | no | 0 | no |
+| RT-165, `POS Pulse.exe` | none | no | 0 | no |
+| RT-165, unpackaged `electron .` | seed, pairing, operator | yes | 12 | n/a |
+| RT-165, renamed + `--remote-debugging-port` | refused, exited before the DB opened | – | – | – |
+
+The cart item resolver and the SecretStore refusal leave no log line or DB
+trace in a launch, and the refusal needs DPAPI to be unavailable. Unit tests
+cover those two, not the probe. Residual: a stock `electron.exe` pointed at an
+**extracted** app folder is not detected. That is the code-running case under
+"Limits" above.

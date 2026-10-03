@@ -21,7 +21,9 @@ export interface CartHandlersDeps {
   logger: Logger;
   auditEmitter: AuditEmitter;
   /**
-   * `app.isPackaged` from Electron.  Must be `true` in production builds.
+   * The shipped-app identity, `isShippedApp(...)` from `app/shipped-app.ts`:
+   * NOT raw `app.isPackaged`, which a renamed copy of the shipped exe reports
+   * as false (RT-165).  Must be `true` in production builds.
    * When `true`, the dev fixture resolver is unconditionally skipped even if
    * `POS_PULSE_DEV_ITEM_RESOLVER` is set in the environment.
    */

@@ -229,7 +229,11 @@ export const DEV_CATALOGUE_FIXTURE: readonly FixtureProduct[] = [
 ];
 
 export interface DevSeedCatalogueDeps {
-  /** `app.isPackaged` from Electron. Seed runs ONLY when this is false. */
+  /**
+   * The shipped-app identity, `isShippedApp(...)` from `app/shipped-app.ts`:
+   * NOT raw `app.isPackaged`, which a renamed copy of the shipped exe reports
+   * as false (RT-165). Seed runs ONLY when this is false.
+   */
   isPackaged: boolean;
   env: NodeJS.ProcessEnv;
   db: DatabaseHandle;
