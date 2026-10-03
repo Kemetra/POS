@@ -106,6 +106,7 @@ import {
   parseFeatureFlags,
 } from './app/feature-flags.js';
 import { assessLaunchSwitches } from './app/launch-switch-guard.js';
+import { isShippedApp } from './app/shipped-app.js';
 import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -208,6 +209,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const isDev = process.env['NODE_ENV'] === 'development';
 
+/**
+ * RT-165 — the trusted shipped-app identity. Every dev/production security
+ * decision below (dev bypasses, SecretStore refusal, migrations source) keys
+ * on this, never on `app.isPackaged` alone: a renamed copy of the shipped exe
+ * reports `isPackaged === false` but still runs the shipped `app.asar`.
+ */
+const shippedApp = isShippedApp({
+  isPackaged: app.isPackaged,
+  appPath: app.getAppPath(),
+});
+
 /** RT-164 — longest a refused launch waits for its log line to reach disk. */
 const LAUNCH_REFUSAL_LOG_DRAIN_MS = 2000;
 
@@ -275,9 +287,11 @@ async function getCurrentPrinters(): Promise<PrinterInfoLike[]> {
  *     so they sit at `<app.getAppPath()>/migrations` (inside `app.asar`; the
  *     builder-patched `fs` reads them transparently). Using cwd here crashes the
  *     packaged exe (cwd is wherever the user launched it, not the repo).
+ *   - RT-165: keyed on `shippedApp`, so a renamed shipped exe also reads the
+ *     bundled migrations, never `*.sql` from whatever directory it ran in.
  */
 function resolveMigrationsDir(): string {
-  return app.isPackaged
+  return shippedApp
     ? path.join(app.getAppPath(), 'migrations')
     : path.join(process.cwd(), 'migrations');
 }
@@ -407,13 +421,13 @@ app
     runMigrations({ db: bindMigrationsDb(db), files });
     mainLogger.info({ count: files.length }, 'db:migrations-applied');
 
-    // 009 T049b — dev-only catalogue fixture seed. Fail-closed: no-op in any
-    // packaged build (the env var is never consulted there) and unless
+    // 009 T049b — dev-only catalogue fixture seed. Fail-closed: no-op in the
+    // shipped app (the env var is never consulted there; RT-165) and unless
     // POS_PULSE_DEV_SEED_CATALOGUE is truthy. Lets the live T049a surface +
     // S5 review tasks exercise real rows. Meant to run alongside the
     // POS_PULSE_DEV_SKIP_* flags (same dev-tenant).
     applyDevSeedCatalogueIfRequested({
-      isPackaged: app.isPackaged,
+      isShippedApp: shippedApp,
       env: process.env,
       db: db,
       logger: mainLogger,
@@ -426,7 +440,7 @@ app
     const secretStore = createSecretStore({
       handle: db,
       safeStorage,
-      isPackaged: app.isPackaged,
+      isShippedApp: shippedApp,
     });
     // Note (Phase 5 R8): SecretStore still uses console.warn/error
     // placeholders. Swap to mainLogger is a deferred follow-up — out
@@ -443,10 +457,11 @@ app
 
     // 002-terminal-pairing dev bypass — seeds fixture pairing state so the
     // renderer routes past /pairing in unpackaged dev builds.
-    // SECURITY: isPackaged guard is inside applyDevSkipPairingIfRequested;
-    // this call is a no-op in every packaged build regardless of env vars.
+    // SECURITY: the shipped-app guard is inside applyDevSkipPairingIfRequested;
+    // this call is a no-op in the shipped app (renamed exe included, RT-165)
+    // regardless of env vars.
     await applyDevSkipPairingIfRequested({
-      isPackaged: app.isPackaged,
+      isShippedApp: shippedApp,
       env: process.env,
       pairingStore,
       logger: mainLogger,
@@ -687,11 +702,12 @@ app
 
     // 004-operator-session dev bypass — seeds a fixture manager session so
     // the renderer routes past /sign-in in unpackaged dev builds.
-    // SECURITY: isPackaged guard is inside applyDevSkipOperatorSignInIfRequested;
-    // this call is a no-op in every packaged build regardless of env vars.
+    // SECURITY: the shipped-app guard is inside applyDevSkipOperatorSignInIfRequested;
+    // this call is a no-op in the shipped app (renamed exe included, RT-165)
+    // regardless of env vars.
     // Independent from POS_PULSE_DEV_SKIP_PAIRING; both may be set together.
     applyDevSkipOperatorSignInIfRequested({
-      isPackaged: app.isPackaged,
+      isShippedApp: shippedApp,
       env: process.env,
       sessionManager: operatorSessionManager,
       logger: mainLogger,
@@ -744,7 +760,7 @@ app
       getTerminalId: () => pairingStore.getCurrentTerminalId(),
       logger: mainLogger,
       auditEmitter,
-      isPackaged: app.isPackaged,
+      isShippedApp: shippedApp,
       productionResolver: catalogueResolver,
       // Post-handoff cancel and the snapshot "paid" flag read the payments record.
       cartPaymentStatus: bindCartPaymentStatus(db),

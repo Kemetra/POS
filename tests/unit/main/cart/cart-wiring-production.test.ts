@@ -7,6 +7,7 @@ import type { Logger } from 'pino';
 
 import { createCartBridgeHandlers } from '../../../../src/main/cart/wire-cart-handlers.js';
 import { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
+import { isShippedApp } from '../../../../src/main/app/shipped-app.js';
 import { makeSqlJsHandle } from './__helpers__/sql-js-handle.js';
 import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
 
@@ -22,7 +23,7 @@ import type { OperatorSessionRecord } from '../../../../src/main/operator/sessio
  * After the fix, `createCartBridgeHandlers` supplies `bindCartStore(dbHandle)`
  * and the INSERT lands in SQLite.
  *
- * Additional tests (Option B fixture resolver) verify the `isPackaged` +
+ * Additional tests (Option B fixture resolver) verify the `isShippedApp` +
  * `POS_PULSE_DEV_ITEM_RESOLVER` wiring matrix:
  *   - unpackaged + flag set   → fixture resolver wired; line persists
  *   - packaged   + flag set   → fixture resolver NOT wired; item ref refused
@@ -98,7 +99,7 @@ describe('production cart wiring (T100 regression)', () => {
       getTerminalId: () => 'terminal-test-380',
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
-      isPackaged: true,
+      isShippedApp: true,
     });
 
     const result = await handlers.create({ idempotency_key: 'ikey-t100-wiring' });
@@ -126,7 +127,7 @@ describe('production cart wiring (T100 regression)', () => {
 });
 
 describe('dev fixture resolver wiring matrix (Option B)', () => {
-  it('wires fixture resolver when isPackaged=false and POS_PULSE_DEV_ITEM_RESOLVER=1', async () => {
+  it('wires fixture resolver when isShippedApp=false and POS_PULSE_DEV_ITEM_RESOLVER=1', async () => {
     vi.stubEnv('POS_PULSE_DEV_ITEM_RESOLVER', '1');
 
     const sqlJsDb = freshDb();
@@ -139,7 +140,7 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
       getTerminalId: () => 'terminal-test-380',
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
-      isPackaged: false,
+      isShippedApp: false,
     });
 
     const createResult = await handlers.create({ idempotency_key: 'ikey-t100-fixture-dev' });
@@ -174,7 +175,7 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
     expect(rows[0].item_ref).toBe('SKU-PARA-500');
   });
 
-  it('does NOT wire fixture resolver when isPackaged=true, even with POS_PULSE_DEV_ITEM_RESOLVER=1', async () => {
+  it('does NOT wire fixture resolver when isShippedApp=true, even with POS_PULSE_DEV_ITEM_RESOLVER=1', async () => {
     vi.stubEnv('POS_PULSE_DEV_ITEM_RESOLVER', '1');
 
     const sqlJsDb = freshDb();
@@ -187,7 +188,7 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
       getTerminalId: () => 'terminal-test-380',
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
-      isPackaged: true,
+      isShippedApp: true,
     });
 
     const createResult = await handlers.create({ idempotency_key: 'ikey-t100-fixture-pkg' });
@@ -207,7 +208,36 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
     expect(addResult.kind).toBe('refused');
   });
 
-  it('does NOT wire fixture resolver when isPackaged=false and POS_PULSE_DEV_ITEM_RESOLVER is absent', async () => {
+  // RT-165 — a renamed copy of the shipped exe reports app.isPackaged=false
+  // but still runs resources/app.asar; it must not ring up fixture items.
+  it('does NOT wire fixture resolver for a renamed shipped exe (isPackaged=false, app.asar) with POS_PULSE_DEV_ITEM_RESOLVER=1', async () => {
+    vi.stubEnv('POS_PULSE_DEV_ITEM_RESOLVER', '1');
+
+    const sqlJsDb = freshDb();
+    const handlers = createCartBridgeHandlers({
+      dbHandle: makeSqlJsHandle(sqlJsDb),
+      getCurrentSession: () => makeSession(),
+      getTerminalId: () => 'terminal-test-380',
+      logger: makeTestLogger(),
+      auditEmitter: makeTestAuditEmitter(),
+      isShippedApp: isShippedApp({ isPackaged: false, appPath: 'C:\\copy\\resources\\app.asar' }),
+    });
+
+    const createResult = await handlers.create({ idempotency_key: 'ikey-rt165-renamed' });
+    expect(createResult.kind).toBe('ok');
+    if (createResult.kind !== 'ok') return;
+
+    const addResult = await handlers.linesAdd({
+      cart_id: createResult.cart_id,
+      item_ref: 'SKU-PARA-500',
+      quantity: 1,
+      idempotency_key: 'ikey-rt165-renamed-line',
+    });
+
+    expect(addResult.kind).toBe('refused');
+  });
+
+  it('does NOT wire fixture resolver when isShippedApp=false and POS_PULSE_DEV_ITEM_RESOLVER is absent', async () => {
     // Env flag is not set — fixture resolver must NOT be wired.
     const sqlJsDb = freshDb();
     const dbHandle = makeSqlJsHandle(sqlJsDb);
@@ -219,7 +249,7 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
       getTerminalId: () => 'terminal-test-380',
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
-      isPackaged: false,
+      isShippedApp: false,
     });
 
     const createResult = await handlers.create({ idempotency_key: 'ikey-t100-fixture-noflag' });

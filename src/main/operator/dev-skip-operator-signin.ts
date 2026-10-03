@@ -5,7 +5,7 @@ import type { SessionManager } from './session-manager.js';
  * for local development without a live Clerk/backend stack.
  *
  * Activated ONLY when ALL of the following hold:
- *   1. `isPackaged === false`  (Electron dev build / CI)
+ *   1. `isShippedApp === false`  (unpackaged `electron .` dev/lab build / CI)
  *   2. `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN` is truthy in the environment
  *
  * When active, a fixture manager session is created directly via
@@ -18,9 +18,10 @@ import type { SessionManager } from './session-manager.js';
  * work together as a combined dev launch shortcut.
  *
  * SECURITY:
- *   - `isPackaged === true` short-circuits unconditionally — the env var
- *     is never consulted in a packaged build; this cannot be activated
- *     in production by exporting the variable.
+ *   - `isShippedApp === true` short-circuits unconditionally — the env var
+ *     is never consulted in the shipped app; this cannot be activated
+ *     in production by exporting the variable. A renamed copy of the
+ *     shipped exe still counts as shipped (RT-165; see `app/shipped-app.ts`).
  *   - No Clerk JWT is created or held. jwtHolder is deliberately NOT
  *     wired here (sign-out's backend call will be a no-op for this
  *     fixture session, which is the correct dev behaviour).
@@ -47,8 +48,8 @@ export const DEV_OPERATOR_FIXTURE_SESSION_INPUT = {
 } as const;
 
 export interface DevSkipOperatorSignInDeps {
-  /** `app.isPackaged` from Electron. Bypass runs ONLY when this is false. */
-  isPackaged: boolean;
+  /** `isShippedApp(...)` (RT-165): `app.isPackaged` OR running from the shipped `app.asar`. Bypass runs ONLY when this is false. */
+  isShippedApp: boolean;
   env: NodeJS.ProcessEnv;
   sessionManager: Pick<SessionManager, 'create' | 'getCurrent'>;
   logger: { warn(payload: object, msg: string): void };
@@ -66,12 +67,12 @@ function isTruthy(value: string | undefined): boolean {
 }
 
 /**
- * If the bypass is enabled (unpackaged + env flag truthy) and no
+ * If the bypass is enabled (not shipped + env flag truthy) and no
  * operator session already exists, creates a fixture manager session
  * and returns `true`. Otherwise no-ops and returns `false`.
  */
 export function applyDevSkipOperatorSignInIfRequested(deps: DevSkipOperatorSignInDeps): boolean {
-  if (deps.isPackaged) return false;
+  if (deps.isShippedApp) return false;
   if (!isTruthy(deps.env['POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN'])) return false;
   if (deps.sessionManager.getCurrent() !== null) return false;
 

@@ -5,7 +5,7 @@ import type { PairingStore } from './store.js';
  * development without a live SmartDataPulse backend.
  *
  * Activated ONLY when ALL of the following hold:
- *   1. `isPackaged === false`  (Electron dev build / CI)
+ *   1. `isShippedApp === false`  (unpackaged `electron .` dev/lab build / CI)
  *   2. `POS_PULSE_DEV_SKIP_PAIRING` is truthy in the environment
  *
  * When active, the store is pre-seeded with fixture pairing state so the
@@ -13,9 +13,10 @@ import type { PairingStore } from './store.js';
  * network call is made and no real device token is used or logged.
  *
  * SECURITY:
- *   - `isPackaged === true` short-circuits unconditionally — the env var is
- *     never consulted in a packaged build, so this cannot be activated in
- *     production by exporting the variable.
+ *   - `isShippedApp === true` short-circuits unconditionally — the env var is
+ *     never consulted in the shipped app, so this cannot be activated in
+ *     production by exporting the variable. A renamed copy of the shipped
+ *     exe still counts as shipped (RT-165; see `app/shipped-app.ts`).
  *   - The device_token written here is an obviously fake placeholder string
  *     and is NEVER included in any log payload.
  *   - The renderer-visible `PairingStatus` shape carries no token field by
@@ -52,8 +53,8 @@ export const DEV_BYPASS_FIXTURE_ASSIGNMENT = {
 } as const;
 
 export interface DevSkipPairingDeps {
-  /** `app.isPackaged` from Electron. Bypass runs ONLY when this is false. */
-  isPackaged: boolean;
+  /** `isShippedApp(...)` (RT-165): `app.isPackaged` OR running from the shipped `app.asar`. Bypass runs ONLY when this is false. */
+  isShippedApp: boolean;
   env: NodeJS.ProcessEnv;
   pairingStore: Pick<PairingStore, 'persist'>;
   logger: { warn(payload: object, msg: string): void };
@@ -71,7 +72,7 @@ function isTruthy(value: string | undefined): boolean {
 }
 
 /**
- * If the bypass is enabled (unpackaged + env flag truthy), seeds the
+ * If the bypass is enabled (not shipped + env flag truthy), seeds the
  * pairing store with fixture data and returns `true`. Otherwise no-ops
  * and returns `false`.
  *
@@ -79,7 +80,7 @@ function isTruthy(value: string | undefined): boolean {
  * without coupling the helper to the top-level logger type.
  */
 export async function applyDevSkipPairingIfRequested(deps: DevSkipPairingDeps): Promise<boolean> {
-  if (deps.isPackaged) return false;
+  if (deps.isShippedApp) return false;
   if (!isTruthy(deps.env['POS_PULSE_DEV_SKIP_PAIRING'])) return false;
 
   const clock = deps.clock ?? (() => new Date());

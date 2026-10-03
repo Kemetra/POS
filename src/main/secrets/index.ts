@@ -7,10 +7,10 @@ import { createSafeStorageSecretStore, type SafeStorageLike } from './safe-stora
  * T048 — SecretStore factory.
  *
  * Picks a backend based on (`safeStorage.isEncryptionAvailable()`,
- * `app.isPackaged`) per data-model.md § SecretEntry → "Backend
+ * shipped app) per data-model.md § SecretEntry → "Backend
  * selection":
  *
- *   | available | packaged | result                                    |
+ *   | available | shipped  | result                                    |
  *   |:---------:|:--------:|:------------------------------------------|
  *   |   true    |   any    | safe-storage backend (production-grade)   |
  *   |   false   |   false  | in-memory backend + warning               |
@@ -20,6 +20,9 @@ import { createSafeStorageSecretStore, type SafeStorageLike } from './safe-stora
  * console.warn / console.error placeholders. The factory still throws on
  * production refusal — the deferral is the *log mechanism*, not the
  * refusal itself.
+ *
+ * RT-165: "shipped" is `isShippedApp(...)`, not `app.isPackaged` alone, so a
+ * renamed copy of the shipped exe cannot drop to the in-memory backend.
  */
 
 export interface CreateSecretStoreOptions {
@@ -27,8 +30,8 @@ export interface CreateSecretStoreOptions {
   handle: DatabaseHandle;
   /** Electron's `safeStorage` (production) or a fake (tests). */
   safeStorage: SafeStorageLike;
-  /** `app.isPackaged` from Electron. */
-  isPackaged: boolean;
+  /** `isShippedApp(...)` (RT-165): `app.isPackaged` OR running from the shipped `app.asar`. */
+  isShippedApp: boolean;
   /** Override for the warning sink. Defaults to console.warn. */
   warn?: (...args: unknown[]) => void;
   /** Override for the error sink. Defaults to console.error. */
@@ -36,13 +39,13 @@ export interface CreateSecretStoreOptions {
 }
 
 export function createSecretStore(options: CreateSecretStoreOptions): SecretStore {
-  const { handle, safeStorage, isPackaged } = options;
+  const { handle, safeStorage, isShippedApp } = options;
   const warn = options.warn ?? defaultWarn;
   const error = options.error ?? defaultError;
 
   const available = safeStorage.isEncryptionAvailable();
 
-  if (!available && isPackaged) {
+  if (!available && isShippedApp) {
     // R8: log via the placeholder sink BEFORE throwing so operators see
     // the cause even if the catch in src/main/index.ts only does
     // app.exit(1). Plaintext leakage rule: this message MUST NOT contain
@@ -57,7 +60,7 @@ export function createSecretStore(options: CreateSecretStoreOptions): SecretStor
   }
 
   if (!available) {
-    // !available && !packaged — dev/test fallback.
+    // !available && !shipped — dev/test fallback.
     warn(
       '[pos-pulse] SecretStore: safeStorage unavailable; using in-memory backend (dev/test only). Production builds will refuse to start in this state.',
     );

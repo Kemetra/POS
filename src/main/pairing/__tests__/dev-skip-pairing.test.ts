@@ -6,13 +6,14 @@ import {
   DEV_BYPASS_FIXTURE_ASSIGNMENT,
   type DevSkipPairingDeps,
 } from '../dev-skip-pairing.js';
+import { isShippedApp } from '../../app/shipped-app.js';
 
 function makeDeps(
   overrides: Partial<DevSkipPairingDeps> & { envFlag?: string } = {},
 ): DevSkipPairingDeps {
   const { envFlag, ...rest } = overrides;
   return {
-    isPackaged: false,
+    isShippedApp: false,
     env: envFlag !== undefined ? { POS_PULSE_DEV_SKIP_PAIRING: envFlag } : {},
     pairingStore: { persist: vi.fn().mockResolvedValue(undefined) },
     logger: { warn: vi.fn() },
@@ -26,7 +27,7 @@ describe('applyDevSkipPairingIfRequested', () => {
     vi.clearAllMocks();
   });
 
-  it('seeds fixture pairing state when isPackaged=false and flag is truthy', async () => {
+  it('seeds fixture pairing state when isShippedApp=false and flag is truthy', async () => {
     const deps = makeDeps({ envFlag: '1' });
 
     const result = await applyDevSkipPairingIfRequested(deps);
@@ -40,8 +41,8 @@ describe('applyDevSkipPairingIfRequested', () => {
     });
   });
 
-  it('does NOT run when isPackaged=true even if flag is truthy', async () => {
-    const deps = makeDeps({ isPackaged: true, envFlag: '1' });
+  it('does NOT run when isShippedApp=true even if flag is truthy', async () => {
+    const deps = makeDeps({ isShippedApp: true, envFlag: '1' });
 
     const result = await applyDevSkipPairingIfRequested(deps);
 
@@ -49,7 +50,29 @@ describe('applyDevSkipPairingIfRequested', () => {
     expect(deps.pairingStore.persist).not.toHaveBeenCalled();
   });
 
-  it('does NOT run when isPackaged=false and flag is absent', async () => {
+  // RT-165 — a renamed copy of the shipped exe reports app.isPackaged=false
+  // but still runs resources/app.asar; it must keep production behaviour.
+  it('does NOT run for a renamed shipped exe (isPackaged=false, app.asar) with the flag set', async () => {
+    const shipped = isShippedApp({
+      isPackaged: false,
+      appPath: 'C:\\copy\\resources\\app.asar',
+    });
+    const deps = makeDeps({ isShippedApp: shipped, envFlag: '1' });
+
+    const result = await applyDevSkipPairingIfRequested(deps);
+
+    expect(result).toBe(false);
+    expect(deps.pairingStore.persist).not.toHaveBeenCalled();
+  });
+
+  it('still runs for an unpackaged dev build (`electron .`) with the flag set', async () => {
+    const shipped = isShippedApp({ isPackaged: false, appPath: 'C:\\Users\\dev\\POS' });
+    const deps = makeDeps({ isShippedApp: shipped, envFlag: '1' });
+
+    expect(await applyDevSkipPairingIfRequested(deps)).toBe(true);
+  });
+
+  it('does NOT run when isShippedApp=false and flag is absent', async () => {
     const deps = makeDeps(); // no envFlag
 
     const result = await applyDevSkipPairingIfRequested(deps);
@@ -78,7 +101,7 @@ describe('applyDevSkipPairingIfRequested', () => {
   it('uses real clock when clock dep is omitted', async () => {
     const before = Math.floor(Date.now() / 1000);
     const deps: DevSkipPairingDeps = {
-      isPackaged: false,
+      isShippedApp: false,
       env: { POS_PULSE_DEV_SKIP_PAIRING: '1' },
       pairingStore: { persist: vi.fn().mockResolvedValue(undefined) },
       logger: { warn: vi.fn() },

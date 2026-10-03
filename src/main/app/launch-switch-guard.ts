@@ -16,10 +16,13 @@
  * file name, so a renamed copy of the shipped exe, or a stock electron.exe
  * pointed at the shipped app.asar, reports false (both opened CDP in the RT-164
  * probe). The shipped app always loads from an `.asar` archive and an
- * unpackaged `electron .` never does, so either signal counts as shipped.
+ * unpackaged `electron .` never does, so either signal counts as shipped
+ * (`isShippedApp`, shared with the other RT-165 gates).
  *
  * The decision is pure here; the composition root logs it and exits.
  */
+
+import { isShippedApp, type ShippedAppInput } from './shipped-app.js';
 
 export const REFUSED_LAUNCH_SWITCHES: readonly string[] = Object.freeze([
   'remote-debugging-port',
@@ -35,11 +38,7 @@ const SWITCH_PREFIXES = ['--', '-', '/'] as const;
 /** Chromium stops reading switches at a bare `--`. */
 const END_OF_SWITCHES = '--';
 
-export interface LaunchSwitchInput {
-  /** `app.isPackaged`. */
-  readonly isPackaged: boolean;
-  /** `app.getAppPath()`: ends in `.asar` whenever the shipped app is running. */
-  readonly appPath: string;
+export interface LaunchSwitchInput extends ShippedAppInput {
   /** Normally `process.argv`. */
   readonly argv: readonly string[];
   /** Normally `(name) => app.commandLine.hasSwitch(name)`: Chromium's own parse. */
@@ -74,12 +73,8 @@ function switchesInArgv(argv: readonly string[]): Set<string> {
   return names;
 }
 
-function runsShippedApp(input: LaunchSwitchInput): boolean {
-  return input.isPackaged || input.appPath.toLowerCase().endsWith('.asar');
-}
-
 export function assessLaunchSwitches(input: LaunchSwitchInput): LaunchSwitchAssessment {
-  if (!runsShippedApp(input)) return { ok: true };
+  if (!isShippedApp(input)) return { ok: true };
   const inArgv = switchesInArgv(input.argv);
   const found = REFUSED_LAUNCH_SWITCHES.filter((name) => inArgv.has(name) || input.hasSwitch(name));
   return found.length === 0

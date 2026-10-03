@@ -7,6 +7,7 @@ import {
   DEV_SEED_TENANT_ID,
 } from '../dev-seed-catalogue.js';
 import { createProductRepo } from '../product-repo.js';
+import { isShippedApp } from '../../app/shipped-app.js';
 import { freshCatalogueDb, handleFor, initCatalogueSql } from './__helpers__/catalogue-fixture.js';
 
 let db: SqlJsDatabase | undefined;
@@ -38,7 +39,21 @@ describe('applyDevSeedCatalogueIfRequested — gating (fail-closed)', () => {
   it('NO-OPs in a packaged build even when the env flag is set', () => {
     db = freshCatalogueDb();
     const seeded = applyDevSeedCatalogueIfRequested({
-      isPackaged: true,
+      isShippedApp: true,
+      env: { POS_PULSE_DEV_SEED_CATALOGUE: '1' },
+      db: handleFor(db),
+      logger: silentLogger(),
+    });
+    expect(seeded).toBe(false);
+    expect(countRows(db, 'products')).toBe(0);
+  });
+
+  // RT-165 — a renamed copy of the shipped exe reports app.isPackaged=false
+  // but still runs resources/app.asar; it must never seed fixture products.
+  it('NO-OPs for a renamed shipped exe (isPackaged=false, app.asar) with the flag set', () => {
+    db = freshCatalogueDb();
+    const seeded = applyDevSeedCatalogueIfRequested({
+      isShippedApp: isShippedApp({ isPackaged: false, appPath: 'C:\\copy\\resources\\app.asar' }),
       env: { POS_PULSE_DEV_SEED_CATALOGUE: '1' },
       db: handleFor(db),
       logger: silentLogger(),
@@ -50,7 +65,7 @@ describe('applyDevSeedCatalogueIfRequested — gating (fail-closed)', () => {
   it('NO-OPs when the env flag is absent (unpackaged)', () => {
     db = freshCatalogueDb();
     const seeded = applyDevSeedCatalogueIfRequested({
-      isPackaged: false,
+      isShippedApp: false,
       env: {},
       db: handleFor(db),
       logger: silentLogger(),
@@ -62,7 +77,7 @@ describe('applyDevSeedCatalogueIfRequested — gating (fail-closed)', () => {
   it('SEEDS when unpackaged and the env flag is truthy', () => {
     db = freshCatalogueDb();
     const seeded = applyDevSeedCatalogueIfRequested({
-      isPackaged: false,
+      isShippedApp: false,
       env: { POS_PULSE_DEV_SEED_CATALOGUE: '1' },
       db: handleFor(db),
       logger: silentLogger(),
@@ -77,7 +92,7 @@ describe('applyDevSeedCatalogueIfRequested — idempotency', () => {
   it('does not duplicate rows when run twice', () => {
     db = freshCatalogueDb();
     const args = {
-      isPackaged: false,
+      isShippedApp: false,
       env: { POS_PULSE_DEV_SEED_CATALOGUE: '1' },
       db: handleFor(db),
       logger: silentLogger(),
@@ -93,7 +108,7 @@ describe('applyDevSeedCatalogueIfRequested — feeds the production read path', 
   it('a seeded product is findable via ProductRepo.search (fold came from normalize())', () => {
     db = freshCatalogueDb();
     applyDevSeedCatalogueIfRequested({
-      isPackaged: false,
+      isShippedApp: false,
       env: { POS_PULSE_DEV_SEED_CATALOGUE: '1' },
       db: handleFor(db),
       logger: silentLogger(),
@@ -111,7 +126,7 @@ describe('applyDevSeedCatalogueIfRequested — feeds the production read path', 
   it('a seeded barcode resolves via ProductRepo.lookupByBarcode', () => {
     db = freshCatalogueDb();
     applyDevSeedCatalogueIfRequested({
-      isPackaged: false,
+      isShippedApp: false,
       env: { POS_PULSE_DEV_SEED_CATALOGUE: '1' },
       db: handleFor(db),
       logger: silentLogger(),

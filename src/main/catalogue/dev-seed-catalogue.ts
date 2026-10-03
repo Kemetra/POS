@@ -7,11 +7,12 @@
  * `applyDevSkip*IfRequested` bootstrap pattern.
  *
  * Activated ONLY when BOTH hold:
- *   1. `isPackaged === false`  (Electron dev build / CI)
+ *   1. `isShippedApp === false`  (unpackaged `electron .` dev/lab build / CI)
  *   2. `POS_PULSE_DEV_SEED_CATALOGUE` is truthy in the environment
  *
- * SECURITY: `isPackaged === true` short-circuits unconditionally — the env var is
- * never consulted in a packaged build; this cannot seed production. The loader is
+ * SECURITY: `isShippedApp === true` short-circuits unconditionally — the env var is
+ * never consulted in the shipped app (a renamed copy of the shipped exe included,
+ * RT-165); this cannot seed production. The loader is
  * called from a single site in `src/main/index.ts` and is never renderer-reachable.
  *
  * The `*_norm` / `*_fold` columns are derived by calling the production
@@ -229,8 +230,8 @@ export const DEV_CATALOGUE_FIXTURE: readonly FixtureProduct[] = [
 ];
 
 export interface DevSeedCatalogueDeps {
-  /** `app.isPackaged` from Electron. Seed runs ONLY when this is false. */
-  isPackaged: boolean;
+  /** `isShippedApp(...)` (RT-165): `app.isPackaged` OR running from the shipped `app.asar`. Seed runs ONLY when this is false. */
+  isShippedApp: boolean;
   env: NodeJS.ProcessEnv;
   db: DatabaseHandle;
   logger: { warn(payload: object, msg: string): void };
@@ -251,12 +252,12 @@ function alreadyPopulated(db: DatabaseHandle): boolean {
 }
 
 /**
- * If enabled (unpackaged + env flag truthy) and the catalogue is empty, inserts
+ * If enabled (not shipped + env flag truthy) and the catalogue is empty, inserts
  * the fixture rows in one transaction and returns `true`. Otherwise no-ops and
  * returns `false`.
  */
 export function applyDevSeedCatalogueIfRequested(deps: DevSeedCatalogueDeps): boolean {
-  if (deps.isPackaged) return false;
+  if (deps.isShippedApp) return false;
   if (!isTruthy(deps.env['POS_PULSE_DEV_SEED_CATALOGUE'])) return false;
   if (alreadyPopulated(deps.db)) return false;
 

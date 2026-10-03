@@ -3,11 +3,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { createSecretStore } from '../index.js';
 import type { SafeStorageLike } from '../safe-storage.js';
 import type { DatabaseHandle } from '../../db/client.js';
+import { isShippedApp } from '../../app/shipped-app.js';
 
 /**
  * T044 — backend-selection matrix tests.
  *
- * Four cells of (isEncryptionAvailable, isPackaged):
+ * Four cells of (isEncryptionAvailable, isShippedApp):
  *
  *   | available | packaged | expected                                |
  *   |:---------:|:--------:|:----------------------------------------|
@@ -44,7 +45,7 @@ describe('createSecretStore — backend selection', () => {
     const store = createSecretStore({
       handle: makeStubDb(),
       safeStorage: makeSafeStorage(true),
-      isPackaged: true,
+      isShippedApp: true,
     });
     expect(store.isProductionBacked()).toBe(true);
   });
@@ -53,7 +54,7 @@ describe('createSecretStore — backend selection', () => {
     const store = createSecretStore({
       handle: makeStubDb(),
       safeStorage: makeSafeStorage(true),
-      isPackaged: false,
+      isShippedApp: false,
     });
     expect(store.isProductionBacked()).toBe(true);
   });
@@ -63,7 +64,7 @@ describe('createSecretStore — backend selection', () => {
     const store = createSecretStore({
       handle: makeStubDb(),
       safeStorage: makeSafeStorage(false),
-      isPackaged: false,
+      isShippedApp: false,
       warn,
     });
     expect(store.isProductionBacked()).toBe(false);
@@ -77,12 +78,41 @@ describe('createSecretStore — backend selection', () => {
       createSecretStore({
         handle: makeStubDb(),
         safeStorage: makeSafeStorage(false),
-        isPackaged: true,
+        isShippedApp: true,
         error,
       }),
     ).toThrow(/safeStorage|encryption|production/i);
     // The fatal log MUST fire before the throw so operators see why.
     expect(error).toHaveBeenCalled();
+  });
+
+  // RT-165 — a renamed copy of the shipped exe reports app.isPackaged=false
+  // but still runs resources/app.asar; it must not fall back to in-memory.
+  it('available=false, renamed shipped exe (isPackaged=false, app.asar) → throws fatal', () => {
+    const shipped = isShippedApp({
+      isPackaged: false,
+      appPath: 'C:\\copy\\resources\\app.asar',
+    });
+    expect(() =>
+      createSecretStore({
+        handle: makeStubDb(),
+        safeStorage: makeSafeStorage(false),
+        isShippedApp: shipped,
+        error: vi.fn(),
+        warn: vi.fn(),
+      }),
+    ).toThrow(/production/i);
+  });
+
+  it('available=false, unpackaged dev build (`electron .`) → in-memory backend', () => {
+    const shipped = isShippedApp({ isPackaged: false, appPath: 'C:\\Users\\dev\\POS' });
+    const store = createSecretStore({
+      handle: makeStubDb(),
+      safeStorage: makeSafeStorage(false),
+      isShippedApp: shipped,
+      warn: vi.fn(),
+    });
+    expect(store.isProductionBacked()).toBe(false);
   });
 
   it('uses console.warn as the default sink when no `warn` override is supplied', () => {
@@ -91,7 +121,7 @@ describe('createSecretStore — backend selection', () => {
       createSecretStore({
         handle: makeStubDb(),
         safeStorage: makeSafeStorage(false),
-        isPackaged: false,
+        isShippedApp: false,
         // no `warn` override — defaultWarn must fire
       });
       expect(spy).toHaveBeenCalled();
@@ -107,7 +137,7 @@ describe('createSecretStore — backend selection', () => {
         createSecretStore({
           handle: makeStubDb(),
           safeStorage: makeSafeStorage(false),
-          isPackaged: true,
+          isShippedApp: true,
           // no `error` override — defaultError must fire before the throw
         }),
       ).toThrow();
@@ -126,7 +156,7 @@ describe('createSecretStore — backend selection', () => {
       createSecretStore({
         handle: makeStubDb(),
         safeStorage: makeSafeStorage(false),
-        isPackaged: true,
+        isShippedApp: true,
         error,
       });
     } catch {
