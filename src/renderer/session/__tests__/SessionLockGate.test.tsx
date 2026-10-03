@@ -246,7 +246,22 @@ describe('RT-117 SessionLockGate', () => {
   // `inert` does not silence document/window key listeners. Keys typed on the
   // lock (or anywhere while locked) must not reach the sale's listeners behind
   // it — e.g. an open confirm-add Dialog's Escape-to-close.
-  it('keys typed on the lock screen never reach document listeners behind it', async () => {
+  it.each([
+    [
+      'typed on the lock screen',
+      async (): Promise<void> => {
+        await userEvent.type(await screen.findByLabelText('رمز PIN'), '12');
+        await userEvent.keyboard('{Escape}');
+      },
+    ],
+    [
+      'aimed outside the lock',
+      async (): Promise<void> => {
+        await screen.findByRole('dialog');
+        document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      },
+    ],
+  ])('keys %s never reach document listeners behind it', async (_where, pressKeys) => {
     const behind = vi.fn();
     document.addEventListener('keydown', behind);
     try {
@@ -256,26 +271,7 @@ describe('RT-117 SessionLockGate', () => {
           <Counter />
         </SessionLockGate>,
       );
-      await userEvent.type(await screen.findByLabelText('رمز PIN'), '12');
-      await userEvent.keyboard('{Escape}');
-      expect(behind).not.toHaveBeenCalled();
-    } finally {
-      document.removeEventListener('keydown', behind);
-    }
-  });
-
-  it('keys aimed outside the lock never reach listeners while locked', async () => {
-    const behind = vi.fn();
-    document.addEventListener('keydown', behind);
-    try {
-      const op = fakeOperator(LOCKED_CASHIER);
-      render(
-        <SessionLockGate operator={op.api}>
-          <Counter />
-        </SessionLockGate>,
-      );
-      await screen.findByRole('dialog');
-      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await pressKeys();
       expect(behind).not.toHaveBeenCalled();
     } finally {
       document.removeEventListener('keydown', behind);

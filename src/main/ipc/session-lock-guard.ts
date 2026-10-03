@@ -43,6 +43,37 @@ export class SessionLockedError extends Error {
 
 type GuardableIpcMain = Pick<IpcMain, 'handle' | 'on'>;
 
+/** True when `channel` must be refused right now (locked and not allowlisted). */
+type ChannelRefusal = (channel: string) => boolean;
+
+function guardHandle(ipcMain: IpcMain, isRefused: ChannelRefusal): GuardableIpcMain['handle'] {
+  return (channel, listener) => {
+    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+      if (isRefused(channel)) throw new SessionLockedError();
+      const fn = listener as (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown;
+      return await fn(event, ...args);
+    });
+  };
+}
+
+function guardOn(ipcMain: IpcMain, isRefused: ChannelRefusal): GuardableIpcMain['on'] {
+  return (channel, listener) => {
+    ipcMain.on(channel, (event: IpcMainEvent, ...args: unknown[]) => {
+      // `.on` has no return channel — fail closed by dropping the event.
+      if (isRefused(channel)) return;
+      const fn = listener as (e: IpcMainEvent, ...a: unknown[]) => void;
+      fn(event, ...args);
+    });
+    return ipcMain;
+  };
+}
+
+/** Pass every other member through, bound to the real `ipcMain`. */
+function forward(target: IpcMain, prop: string | symbol, receiver: unknown): unknown {
+  const value: unknown = Reflect.get(target, prop, receiver);
+  return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+}
+
 /**
  * Wrap an `IpcMain` so every `handle`/`on` refuses non-allowlisted channels
  * while `isLocked()` is true. The lock is re-read on every call.
@@ -51,36 +82,16 @@ export function createSessionLockGuardedIpcMain(
   ipcMain: IpcMain,
   isLocked: () => boolean,
 ): IpcMain {
+  const isRefused: ChannelRefusal = (channel) =>
+    isLocked() && !LOCKED_ALLOWED_CHANNELS.has(channel);
   const overrides: GuardableIpcMain = {
-    handle(channel, listener) {
-      ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-        if (isLocked() && !LOCKED_ALLOWED_CHANNELS.has(channel)) {
-          throw new SessionLockedError();
-        }
-        const fn = listener as (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown;
-        return await fn(event, ...args);
-      });
-    },
-    on(channel, listener) {
-      ipcMain.on(channel, (event: IpcMainEvent, ...args: unknown[]) => {
-        // `.on` has no return channel — fail closed by dropping the event.
-        if (isLocked() && !LOCKED_ALLOWED_CHANNELS.has(channel)) return;
-        const fn = listener as (e: IpcMainEvent, ...a: unknown[]) => void;
-        fn(event, ...args);
-      });
-      return ipcMain;
-    },
+    handle: guardHandle(ipcMain, isRefused),
+    on: guardOn(ipcMain, isRefused),
   };
 
   return new Proxy(ipcMain, {
     get(target, prop, receiver): unknown {
-      if (prop === 'handle' || prop === 'on') {
-        return overrides[prop];
-      }
-      const value: unknown = Reflect.get(target, prop, receiver);
-      return typeof value === 'function'
-        ? (value as (...a: unknown[]) => unknown).bind(target)
-        : value;
+      return prop === 'handle' || prop === 'on' ? overrides[prop] : forward(target, prop, receiver);
     },
   });
 }

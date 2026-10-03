@@ -5,7 +5,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { makeSqlJsHandle } from '../../../unit/main/cart/__helpers__/sql-js-handle.js';
-import { SessionManager } from '../../../../src/main/operator/session-manager.js';
+import {
+  SessionManager,
+  type CreateSessionInput,
+} from '../../../../src/main/operator/session-manager.js';
 import { createLockStateReader } from '../../../../src/main/operator/lock-state-reader.js';
 
 /**
@@ -57,60 +60,84 @@ afterEach(() => {
   db.close();
 });
 
-function signedIn(role: 'cashier' | 'manager' = 'cashier'): SessionManager {
+const CASHIER_ONE: CreateSessionInput = {
+  operator_id: 'op-1',
+  display_name: 'Cashier One',
+  role: 'cashier',
+  tenant_id: 't1',
+  branch_id: 'b1',
+  backend_session_id: '',
+  started_at: NOW,
+};
+
+function signedIn(input: CreateSessionInput = CASHIER_ONE): SessionManager {
   const sm = new SessionManager();
-  sm.create({
-    operator_id: 'op-1',
-    display_name: 'Cashier One',
-    role,
-    tenant_id: 't1',
-    branch_id: 'b1',
-    backend_session_id: '',
-    started_at: NOW,
-  });
+  sm.create(input);
   return sm;
 }
 
-function insertCart(cart_id: string, session_id: string, state: string, subtotal: number): void {
+interface CartRow {
+  cart_id: string;
+  session_id: string;
+  state: string;
+  subtotal: number;
+}
+
+function insertCart(row: CartRow): void {
   db.run(
     `INSERT INTO carts (cart_id, tenant_id, branch_id, terminal_id, owning_operator_id,
        operator_session_id, state, cart_subtotal_minor, created_at, updated_at)
      VALUES (?, 't1', 'b1', ?, 'op-1', ?, ?, ?, ?, ?)`,
-    [cart_id, TERMINAL, session_id, state, subtotal, NOW, NOW],
+    [row.cart_id, TERMINAL, row.session_id, row.state, row.subtotal, NOW, NOW],
   );
 }
 
-function insertLine(line_id: string, cart_id: string, subtotal: number, removed = false): void {
+interface LineRow {
+  line_id: string;
+  cart_id: string;
+  subtotal: number;
+  removed?: boolean;
+}
+
+function insertLine(row: LineRow): void {
   db.run(
     `INSERT INTO cart_lines (line_id, cart_id, item_ref, display_name, quantity,
        unit_price_minor, line_subtotal_minor, last_action_id, created_at, updated_at, removed_at)
      VALUES (?, ?, 'SKU', 'Item', 1, ?, ?, 'a', ?, ?, ?)`,
-    [line_id, cart_id, subtotal, subtotal, NOW, NOW, removed ? NOW : null],
+    [row.line_id, row.cart_id, row.subtotal, row.subtotal, NOW, NOW, row.removed ? NOW : null],
   );
 }
 
-function insertStartedAttempt(id: string, session_id: string, cart_id: string): void {
+interface AttemptRow {
+  id: string;
+  session_id: string;
+  cart_id: string;
+}
+
+function insertStartedAttempt(row: AttemptRow): void {
   db.run(
     `INSERT INTO payment_attempts (payment_attempt_id, tenant_id, branch_id, terminal_id,
        acting_operator_id, operator_session_id, envelope_handoff_action_id, envelope_cart_id,
        envelope_subtotal_minor, state, started_at, last_action_id)
      VALUES (?, 't1', 'b1', ?, 'op-1', ?, 'h1', ?, 2550, 'started', ?, 'a')`,
-    [id, TERMINAL, session_id, cart_id, NOW],
+    [row.id, TERMINAL, row.session_id, row.cart_id, NOW],
   );
 }
 
-function insertTender(
-  id: string,
-  attempt: string,
-  type: string,
-  amount: number,
-  state: string,
-): void {
+interface TenderRow {
+  id: string;
+  attempt: string;
+  type: string;
+  amount: number;
+  state: string;
+}
+
+function insertTender(row: TenderRow): void {
   db.run(
     `INSERT INTO payment_tender_lines (tender_line_id, payment_attempt_id, tender_type,
        amount_applied_minor, state, attribution_operator_id, apply_order, last_action_id)
      VALUES (?, ?, ?, ?, ?, 'op-1', 1, 'a')`,
-    [id, attempt, type, amount, state],
+    [row.id, row.attempt, row.type, row.amount, row.state],
   );
 }
 
@@ -149,11 +176,11 @@ describe('RT-117 createLockStateReader', () => {
   it('summarizes a draft cart as totals only (removed lines excluded)', () => {
     const sm = signedIn();
     const sid = sm.getCurrent()?.id ?? '';
-    insertCart('cart-1', sid, 'editing', 5275);
-    insertLine('l1', 'cart-1', 2000);
-    insertLine('l2', 'cart-1', 725);
-    insertLine('l3', 'cart-1', 2550);
-    insertLine('l4', 'cart-1', 999, true);
+    insertCart({ cart_id: 'cart-1', session_id: sid, state: 'editing', subtotal: 5275 });
+    insertLine({ line_id: 'l1', cart_id: 'cart-1', subtotal: 2000 });
+    insertLine({ line_id: 'l2', cart_id: 'cart-1', subtotal: 725 });
+    insertLine({ line_id: 'l3', cart_id: 'cart-1', subtotal: 2550 });
+    insertLine({ line_id: 'l4', cart_id: 'cart-1', subtotal: 999, removed: true });
     sm.lock('2026-10-01T10:10:00.000Z');
 
     expect(reader(sm)().summary).toEqual({
@@ -167,11 +194,11 @@ describe('RT-117 createLockStateReader', () => {
   it('includes applied tender and the live-tender flag for a handed-off cart', () => {
     const sm = signedIn();
     const sid = sm.getCurrent()?.id ?? '';
-    insertCart('cart-1', sid, 'frozen_handed_off', 2550);
-    insertLine('l1', 'cart-1', 2550);
-    insertStartedAttempt('pa-1', sid, 'cart-1');
-    insertTender('tl-1', 'pa-1', 'cash', 1000, 'applied');
-    insertTender('tl-2', 'pa-1', 'cash', 500, 'refused');
+    insertCart({ cart_id: 'cart-1', session_id: sid, state: 'frozen_handed_off', subtotal: 2550 });
+    insertLine({ line_id: 'l1', cart_id: 'cart-1', subtotal: 2550 });
+    insertStartedAttempt({ id: 'pa-1', session_id: sid, cart_id: 'cart-1' });
+    insertTender({ id: 'tl-1', attempt: 'pa-1', type: 'cash', amount: 1000, state: 'applied' });
+    insertTender({ id: 'tl-2', attempt: 'pa-1', type: 'cash', amount: 500, state: 'refused' });
     sm.lock('2026-10-01T10:10:00.000Z');
 
     expect(reader(sm)().summary).toEqual({
@@ -184,8 +211,13 @@ describe('RT-117 createLockStateReader', () => {
 
   it("ignores another session's cart", () => {
     const sm = signedIn();
-    insertCart('cart-other', 'some-other-session', 'editing', 9999);
-    insertLine('l1', 'cart-other', 9999);
+    insertCart({
+      cart_id: 'cart-other',
+      session_id: 'some-other-session',
+      state: 'editing',
+      subtotal: 9999,
+    });
+    insertLine({ line_id: 'l1', cart_id: 'cart-other', subtotal: 9999 });
 
     expect(reader(sm)().summary).toBeNull();
   });
@@ -193,7 +225,7 @@ describe('RT-117 createLockStateReader', () => {
   it('ignores a cancelled cart', () => {
     const sm = signedIn();
     const sid = sm.getCurrent()?.id ?? '';
-    insertCart('cart-1', sid, 'cancelled', 500);
+    insertCart({ cart_id: 'cart-1', session_id: sid, state: 'cancelled', subtotal: 500 });
 
     expect(reader(sm)().summary).toBeNull();
   });
@@ -204,8 +236,13 @@ describe('RT-117 createLockStateReader', () => {
   it('does not summarize a cart whose sale already settled', () => {
     const sm = signedIn();
     const sid = sm.getCurrent()?.id ?? '';
-    insertCart('cart-done', sid, 'frozen_handed_off', 2550);
-    insertLine('l1', 'cart-done', 2550);
+    insertCart({
+      cart_id: 'cart-done',
+      session_id: sid,
+      state: 'frozen_handed_off',
+      subtotal: 2550,
+    });
+    insertLine({ line_id: 'l1', cart_id: 'cart-done', subtotal: 2550 });
     db.run(
       `INSERT INTO payment_attempts (payment_attempt_id, tenant_id, branch_id, terminal_id,
          acting_operator_id, operator_session_id, envelope_handoff_action_id, envelope_cart_id,
@@ -220,13 +257,13 @@ describe('RT-117 createLockStateReader', () => {
   it('does not summarize an empty cart', () => {
     const sm = signedIn();
     const sid = sm.getCurrent()?.id ?? '';
-    insertCart('cart-empty', sid, 'empty', 0);
+    insertCart({ cart_id: 'cart-empty', session_id: sid, state: 'empty', subtotal: 0 });
 
     expect(reader(sm)().summary).toBeNull();
   });
 
   it('reports active for an unlocked session', () => {
-    const sm = signedIn('manager');
+    const sm = signedIn({ ...CASHIER_ONE, role: 'manager' });
     expect(reader(sm)()).toMatchObject({ state: 'active', locked_at: null, role: 'manager' });
   });
 });

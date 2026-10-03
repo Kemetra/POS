@@ -26,16 +26,35 @@ function nonEmpty(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0;
 }
 
+type RequestFields = Record<string, unknown>;
+
+function hasCredential(
+  v: RequestFields,
+): v is RequestFields & { identifier: string; password: string } {
+  return nonEmpty(v['identifier']) && nonEmpty(v['password']);
+}
+
+function asPinRequest(v: RequestFields): UnlockSessionRequest | null {
+  return nonEmpty(v['pin']) ? { method: 'pin', pin: v['pin'] } : null;
+}
+
+function asOnlineCredentialRequest(v: RequestFields): UnlockSessionRequest | null {
+  return hasCredential(v)
+    ? { method: 'online_credential', identifier: v['identifier'], password: v['password'] }
+    : null;
+}
+
+/** One boundary parser per unlock method; an unknown method has none. */
+const UNLOCK_REQUEST_PARSERS = new Map<unknown, (v: RequestFields) => UnlockSessionRequest | null>([
+  ['pin', asPinRequest],
+  ['online_credential', asOnlineCredentialRequest],
+]);
+
 function asUnlockRequest(value: unknown): UnlockSessionRequest | null {
   if (typeof value !== 'object' || value === null) return null;
-  const v = value as Record<string, unknown>;
-  if (v['method'] === 'pin' && nonEmpty(v['pin'])) {
-    return { method: 'pin', pin: v['pin'] };
-  }
-  if (v['method'] === 'online_credential' && nonEmpty(v['identifier']) && nonEmpty(v['password'])) {
-    return { method: 'online_credential', identifier: v['identifier'], password: v['password'] };
-  }
-  return null;
+  const v = value as RequestFields;
+  const parse = UNLOCK_REQUEST_PARSERS.get(v['method']);
+  return parse === undefined ? null : parse(v);
 }
 
 export function registerSessionLockHandlers(ipcMain: IpcMain, deps: SessionLockHandlerDeps): void {

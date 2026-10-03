@@ -4,7 +4,7 @@ import type { UnlockSessionRequest, UnlockSessionResponse } from '../../shared/b
 import type { OperatorRefusal, RefusalCategory } from '../../shared/audit/event-shape.js';
 
 import type { ClerkExchanger } from './clerk-client.js';
-import type { SessionManager } from './session-manager.js';
+import type { OperatorSessionRecord, SessionManager } from './session-manager.js';
 
 /**
  * RT-117 (RT-116 §2.4) — same-operator unlock of the CURRENT locked session.
@@ -49,6 +49,11 @@ interface OnlineFailures {
   locked_until_ms: number | null;
 }
 
+interface LockedSession {
+  kind: 'locked';
+  session: OperatorSessionRecord;
+}
+
 function refuse(category: RefusalCategory): OperatorRefusal {
   return { kind: 'refused', category };
 }
@@ -74,25 +79,39 @@ export class SessionUnlockHandler {
   }
 
   private async unlockOnce(req: UnlockSessionRequest): Promise<UnlockSessionResponse> {
-    const { sessionManager } = this.deps;
-    const session = sessionManager.getCurrent();
-    if (session === null) return this.refused('not_signed_in', 'no_session');
-    if (session.lock_state !== 'locked') return this.refused('state_invalid', 'not_locked');
+    const precheck = this.currentLockedSession();
+    if (precheck.kind === 'refused') return precheck;
+    const { session } = precheck;
 
-    const verdict =
-      session.role === 'cashier'
-        ? await this.verifyCashier(session.operator_id, req)
-        : await this.verifyOnline(session.operator_id, req);
+    const verdict = await this.verify(session, req);
     if (verdict !== null) return verdict;
 
     // The session must still be the same locked session after the await.
-    const after = sessionManager.getCurrent();
-    if (after?.id !== session.id || after.lock_state !== 'locked') {
-      return this.refused('state_invalid', 'session_changed');
-    }
-    sessionManager.unlock(this.now().toISOString());
+    if (!this.isStillLocked(session.id)) return this.refused('state_invalid', 'session_changed');
+    this.deps.sessionManager.unlock(this.now().toISOString());
     this.deps.logger?.info({ event: 'operator.session.unlocked' }, 'session unlocked');
     return { kind: 'unlocked' };
+  }
+
+  private currentLockedSession(): OperatorRefusal | LockedSession {
+    const session = this.deps.sessionManager.getCurrent();
+    if (session === null) return this.refused('not_signed_in', 'no_session');
+    if (session.lock_state !== 'locked') return this.refused('state_invalid', 'not_locked');
+    return { kind: 'locked', session };
+  }
+
+  private verify(
+    session: OperatorSessionRecord,
+    req: UnlockSessionRequest,
+  ): Promise<OperatorRefusal | null> {
+    return session.role === 'cashier'
+      ? this.verifyCashier(session.operator_id, req)
+      : this.verifyOnline(session.operator_id, req);
+  }
+
+  private isStillLocked(session_id: string): boolean {
+    const after = this.deps.sessionManager.getCurrent();
+    return after?.id === session_id && after.lock_state === 'locked';
   }
 
   private async verifyCashier(
