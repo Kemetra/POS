@@ -342,6 +342,7 @@ app
     // exit waits for the stream to drain (bounded) or the line is lost.
     const launchSwitches = assessLaunchSwitches({
       isPackaged: app.isPackaged,
+      appPath: app.getAppPath(),
       argv: process.argv,
       hasSwitch: (name) => app.commandLine.hasSwitch(name),
     });

@@ -15,10 +15,12 @@ import { REFUSED_LAUNCH_SWITCHES, assessLaunchSwitches } from '../launch-switch-
  */
 
 const EXE = 'C:\\Program Files\\POS Pulse\\POS Pulse.exe';
+const ASAR = 'C:\\Program Files\\POS Pulse\\resources\\app.asar';
+const REPO = 'C:\\Users\\dev\\POS';
 const noSwitch = (): boolean => false;
 
 function assessPackaged(argv: readonly string[], hasSwitch: (name: string) => boolean = noSwitch) {
-  return assessLaunchSwitches({ isPackaged: true, argv: [EXE, ...argv], hasSwitch });
+  return assessLaunchSwitches({ isPackaged: true, appPath: ASAR, argv: [EXE, ...argv], hasSwitch });
 }
 
 describe('assessLaunchSwitches — allowed launches', () => {
@@ -36,7 +38,11 @@ describe('assessLaunchSwitches — allowed launches', () => {
     expect(
       assessLaunchSwitches({
         isPackaged: false,
-        argv: [EXE, '--remote-debugging-port=9333', '--inspect'],
+        appPath: REPO,
+        argv: [
+          'C:\\repo\\node_modules\\electron\\dist\\electron.exe',
+          '--remote-debugging-port=9333',
+        ],
         hasSwitch: () => true,
       }),
     ).toEqual({ ok: true });
@@ -90,6 +96,28 @@ describe('assessLaunchSwitches — refused launches', () => {
       switches: ['remote-debugging-port'],
     });
   });
+
+  // Electron derives `app.isPackaged` from the exe FILE NAME: a copy of the
+  // shipped exe renamed to electron.exe, or a stock electron.exe pointed at the
+  // shipped app.asar, both report false (RT-164 probe: CDP opened on both).
+  // Loading the app from an .asar archive is the signal a rename cannot change.
+  it.each([ASAR, 'C:\\copy\\resources\\APP.ASAR'])(
+    'refuses when the app runs from an asar (%j) even though isPackaged is false',
+    (appPath) => {
+      expect(
+        assessLaunchSwitches({
+          isPackaged: false,
+          appPath,
+          argv: ['C:\\copy\\electron.exe', '--remote-debugging-port=9350'],
+          hasSwitch: noSwitch,
+        }),
+      ).toEqual({
+        ok: false,
+        reason: 'debug_switch_present',
+        switches: ['remote-debugging-port'],
+      });
+    },
+  );
 
   it('refuses a switch reported by the Chromium command line even if argv lacks it', () => {
     expect(assessPackaged([], (name) => name === 'remote-debugging-pipe')).toEqual({

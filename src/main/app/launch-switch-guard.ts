@@ -12,6 +12,12 @@
  * Unpackaged (`electron .`) builds are never refused: dev and lab tooling use
  * them for CDP and inspection (owner decision D-2, RT-164).
  *
+ * "Packaged" is NOT `app.isPackaged` alone: Electron derives that from the exe
+ * file name, so a renamed copy of the shipped exe, or a stock electron.exe
+ * pointed at the shipped app.asar, reports false (both opened CDP in the RT-164
+ * probe). The shipped app always loads from an `.asar` archive and an
+ * unpackaged `electron .` never does, so either signal counts as shipped.
+ *
  * The decision is pure here; the composition root logs it and exits.
  */
 
@@ -30,7 +36,10 @@ const SWITCH_PREFIXES = ['--', '-', '/'] as const;
 const END_OF_SWITCHES = '--';
 
 export interface LaunchSwitchInput {
+  /** `app.isPackaged`. */
   readonly isPackaged: boolean;
+  /** `app.getAppPath()`: ends in `.asar` whenever the shipped app is running. */
+  readonly appPath: string;
   /** Normally `process.argv`. */
   readonly argv: readonly string[];
   /** Normally `(name) => app.commandLine.hasSwitch(name)`: Chromium's own parse. */
@@ -65,8 +74,12 @@ function switchesInArgv(argv: readonly string[]): Set<string> {
   return names;
 }
 
+function runsShippedApp(input: LaunchSwitchInput): boolean {
+  return input.isPackaged || input.appPath.toLowerCase().endsWith('.asar');
+}
+
 export function assessLaunchSwitches(input: LaunchSwitchInput): LaunchSwitchAssessment {
-  if (!input.isPackaged) return { ok: true };
+  if (!runsShippedApp(input)) return { ok: true };
   const inArgv = switchesInArgv(input.argv);
   const found = REFUSED_LAUNCH_SWITCHES.filter((name) => inArgv.has(name) || input.hasSwitch(name));
   return found.length === 0

@@ -446,7 +446,7 @@ Kept at Electron's default, with reasons:
 
 **Evidence.** The same harness ran against the packaged build before
 (`main@4881eb6` code, which `cd9dfa2` leaves unchanged; no fuses) and after (RT-164 branch, SHA-256
-`0ab859c0…031b88`). Each launch used a scratch `--user-data-dir`.
+`94dc43a5…29ec51b`). Each launch used a scratch `--user-data-dir`.
 
 | Vector | Before | After |
 | :-- | :-- | :-- |
@@ -457,7 +457,14 @@ Kept at Electron's default, with reasons:
 | `/remote-debugging-port=9335` | CDP reachable | Not reachable; exited; refusal logged |
 | `--REMOTE-DEBUGGING-PORT=9336` | CDP reachable | Not reachable; exited; refusal logged |
 | `--remote-debugging-pipe` | Process kept running | Exited; refusal logged |
+| Copy of the shipped folder, exe **renamed** `electron.exe`, `--remote-debugging-port` | (probed during RT-164) CDP reachable, pairing page open | Not reachable; exited; refusal logged |
+| **Stock** `electron.exe` + the shipped `app.asar`, `--remote-debugging-port` | (probed during RT-164) CDP reachable, pairing page open | Not reachable; exited; refusal logged |
 | Normal launch | Started; DB migrated; `app:ready` | Same. The window's accessibility tree shows the pairing screen ("Enter the pairing code…", "Pair terminal"), so the renderer, preload bridge and IPC all work |
+
+The two rename rows exist because Electron's `app.isPackaged` comes from the
+exe **file name**. The first guard used it alone, and both probes got past it.
+The guard now also treats "the app is running from an `.asar`" as shipped,
+which a rename cannot change.
 
 Fuse read-back after (`npx electron-fuses read --app "POS Pulse.exe"`):
 `RunAsNode` Disabled · `EnableNodeOptionsEnvironmentVariable` Disabled ·
@@ -470,6 +477,20 @@ Limits:
 - Chromium opens a `--remote-debugging-port` listener at process start, before
   main runs. The guard closes it within the first moments of startup, before
   any page, preload or POS state exists, but the port is briefly open.
-- Fuses protect the binary as built. Someone who can replace
-  `POS Pulse.exe` itself is outside this control. That is code signing and
-  file-system permissions, not RT-164.
+- **This stops switches and shortcuts, not someone already running code as the
+  cashier.** Anyone who can run their own programs as the cashier can extract
+  `app.asar` and run it with a stock Electron, and can read that account's POS
+  profile, whose DPAPI protection is per-user. The defence there is the
+  Windows account and application control on the terminal (a standard user
+  with no way to run unapproved programs), not the POS binary.
+- **Finding, not fixed in RT-164 (owner decision):** in a renamed copy of the
+  shipped exe, `app.isPackaged` is false. The `POS_PULSE_DEV_*` bypasses (and
+  any other `isPackaged`-keyed check, such as the SecretStore's production
+  refusal) then activate: the probe logged `pairing.dev_bypass.active` and
+  `operator.dev_bypass.active`, a fixture pairing plus an auto-signed-in
+  fixture **manager** session. The shipped exe, as a control, ignored them.
+  Electron takes the default profile folder from the app's `package.json` name,
+  not the exe name, so a renamed copy is expected to open the real
+  `%APPDATA%\pos-pulse` profile. That last point was not exercised, to keep
+  the real profile untouched. Remedy candidate: key those checks on the same
+  "shipped" signal as the launch guard.
