@@ -126,45 +126,35 @@ function allFlagCombinations(): FeatureFlags[] {
   return out;
 }
 
+/** The H-2 pilot cashier profile: CART, PAYMENTS, SALE_FINALIZATION, PRODUCT_SEARCH on; VOUCHER off. */
+const PILOT_PROFILE: FeatureFlags = {
+  cart: true,
+  payments: true,
+  saleFinalization: true,
+  productSearch: true,
+  voucherTender: false,
+};
+
 describe('assessCashierProfile (D-1: fail closed on the money combination)', () => {
-  it('rejects PAYMENTS on with SALE_FINALIZATION off', () => {
-    expect(
-      assessCashierProfile({
-        cart: true,
-        payments: true,
-        saleFinalization: false,
-        productSearch: true,
-        voucherTender: false,
-      }),
-    ).toEqual({ ok: false, reason: 'payments_without_sale_finalization' });
-  });
-
-  it('accepts the normal pilot profile (both flags on)', () => {
-    expect(
-      assessCashierProfile({
-        cart: true,
-        payments: true,
-        saleFinalization: true,
-        productSearch: true,
-        voucherTender: false,
-      }),
-    ).toEqual({ ok: true });
-  });
-
-  it('accepts the all-off default (fail-closed defaults stay launchable)', () => {
-    expect(assessCashierProfile(parseFeatureFlags({}))).toEqual({ ok: true });
-  });
-
-  it('accepts the D-1 contingency rollback (PAYMENTS and SALE_FINALIZATION both off)', () => {
-    expect(
-      assessCashierProfile({
-        cart: true,
-        payments: false,
-        saleFinalization: false,
-        productSearch: true,
-        voucherTender: false,
-      }),
-    ).toEqual({ ok: true });
+  it.each<[string, FeatureFlags, ReturnType<typeof assessCashierProfile>]>([
+    [
+      'rejects PAYMENTS on with SALE_FINALIZATION off',
+      { ...PILOT_PROFILE, saleFinalization: false },
+      { ok: false, reason: 'payments_without_sale_finalization' },
+    ],
+    ['accepts the normal pilot profile (both flags on)', PILOT_PROFILE, { ok: true }],
+    [
+      'accepts the all-off default (fail-closed defaults stay launchable)',
+      parseFeatureFlags({}),
+      { ok: true },
+    ],
+    [
+      'accepts the D-1 contingency rollback (PAYMENTS and SALE_FINALIZATION both off)',
+      { ...PILOT_PROFILE, payments: false, saleFinalization: false },
+      { ok: true },
+    ],
+  ])('%s', (_label, flags, expected) => {
+    expect(assessCashierProfile(flags)).toEqual(expected);
   });
 
   it('rejects exactly the 8 of 32 combinations with payments on and finalization off', () => {
