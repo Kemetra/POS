@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { hashPin } from '../../../../src/main/operator/pin-credential.js';
 import { sealPinMaterial } from '../../../../src/main/operator/pin-seal.js';
@@ -8,7 +8,12 @@ import {
 } from '../../../../src/main/operator/sign-in-handler.js';
 import type { SafeStorageLike } from '../../../../src/main/secrets/safe-storage.js';
 import type { PairingStore } from '../../../../src/main/pairing/store.js';
-import { SessionManager } from '../../../../src/main/operator/session-manager.js';
+import {
+  SessionManager,
+  type AuthorityLatchCause,
+} from '../../../../src/main/operator/session-manager.js';
+import { CashierAdmissionKeeper } from '../../../../src/main/operator/cashier-admission-keeper.js';
+import type { SecretStore } from '../../../../src/shared/secret-store.js';
 import type { DatabaseHandle } from '../../../../src/main/db/client.js';
 import { ProtoSessionStore } from '../../../../src/main/operator/takeover-handler.js';
 import type { CashierAdmissionResult } from '../../../../src/main/operator/cashier-admission-client.js';
@@ -282,5 +287,119 @@ describe('cashier sign-in — refusal outcome table', () => {
     expect(res).toEqual({ kind: 'refused', category: 'no_connection' });
     expect(fake.invalidated).toEqual([]);
     expect(fake.deviceRevoked).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Codex P2 4179701431 (main side) — the keeper arms when the session is
+ * created, and the handler then still awaits the forced-close dismiss read. A
+ * short-TTL heartbeat can latch or end the new session during that await. The
+ * handler must then answer a refusal, never a stale `signed_in` for a session
+ * main no longer holds.
+ */
+describe('cashier sign-in — a session lost during the post-create await', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A forced-close shift exists, so the handler awaits the dismiss read; `during` runs inside it. */
+  function buildWithDismissRead(during: (sessions: SessionManager) => Promise<void> | void): {
+    handler: CashierSignInHandler;
+    sessions: SessionManager;
+    fake: ReturnType<typeof fakeCashierAdmission>;
+  } {
+    const sessions = new SessionManager();
+    const fake = fakeCashierAdmission({ ...ADMITTED, admission_ttl_seconds: 1 });
+    const secretStore = {
+      get: async () => {
+        await during(sessions);
+        return null;
+      },
+      set: () => Promise.resolve(),
+      delete: () => Promise.resolve(),
+    } as unknown as SecretStore;
+    const handler = new CashierSignInHandler({
+      db: makeDb({ ...row, closed_at: '2026-10-01T00:00:00.000Z' } as Row),
+      safeStorage: ss,
+      sessionManager: sessions,
+      admission: fake.deps,
+      pairingStore: paired,
+      protoStore: new ProtoSessionStore(),
+      secretStore,
+    });
+    return { handler, sessions, fake };
+  }
+
+  it('control: nothing happens during the read, so the cashier is signed in with the notice', async () => {
+    const { handler, sessions } = buildWithDismissRead(() => undefined);
+    const res = await handler.signIn(request());
+    expect(res).toMatchObject({
+      kind: 'signed_in',
+      forced_close_notice: { closed_at: '2026-10-01T00:00:00.000Z' },
+    });
+    expect(sessions.getCurrent()).not.toBeNull();
+  });
+
+  it.each([
+    ['superseded_by_takeover', 'state_invalid'],
+    ['account_disabled_mid_session', 'invalid_input'],
+    ['terminal_session_terminated', 'invalid_input'],
+  ] as const)('ended (%s) during the read: refused %s, not signed_in', async (cause, category) => {
+    const { handler, sessions } = buildWithDismissRead((sm) => {
+      sm.end(cause);
+    });
+    const res = await handler.signIn(request());
+    expect(res).toEqual({ kind: 'refused', category });
+    expect(sessions.getCurrent()).toBeNull();
+  });
+
+  it.each([
+    ['superseded_by_takeover', 'state_invalid'],
+    ['account_disabled_mid_session', 'invalid_input'],
+  ] as const)(
+    'latched (%s) but not yet ended during the read: refused %s, not signed_in',
+    async (cause: AuthorityLatchCause, category) => {
+      const { handler } = buildWithDismissRead((sm) => {
+        const current = sm.getCurrent();
+        if (current !== null) sm.latchAuthority(current.id, cause);
+      });
+      await expect(handler.signIn(request())).resolves.toEqual({ kind: 'refused', category });
+    },
+  );
+
+  it('replaced by another session during the read: refused state_invalid', async () => {
+    const { handler } = buildWithDismissRead((sm) => {
+      sm.end();
+      sm.create({
+        operator_id: 'someone-else',
+        display_name: 'Other',
+        role: 'manager',
+        tenant_id: TENANT,
+        branch_id: BRANCH,
+        backend_session_id: 'bs-2',
+      });
+    });
+    await expect(handler.signIn(request())).resolves.toEqual({
+      kind: 'refused',
+      category: 'state_invalid',
+    });
+  });
+
+  it('end to end with the real keeper: a 1 s TTL heartbeat answered active_elsewhere during a slow read', async () => {
+    vi.useFakeTimers();
+    const { handler, sessions, fake } = buildWithDismissRead(async () => {
+      // The read is slow: the first heartbeat (TTL/2 = 500 ms) runs meanwhile.
+      fake.setAdmit({ kind: 'active_elsewhere' });
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    const keeper = new CashierAdmissionKeeper({
+      sessionManager: sessions,
+      admission: fake.deps,
+      isAtSafePoint: () => true,
+    });
+    const res = await handler.signIn(request());
+    expect(res).toEqual({ kind: 'refused', category: 'state_invalid' });
+    expect(sessions.getCurrent()).toBeNull();
+    keeper.stop();
   });
 });

@@ -209,3 +209,43 @@ describe('cashier takeover via takeover:true', () => {
     expect(sessions.getCurrent()).toBeNull();
   });
 });
+
+/**
+ * Codex P2 4179701431 (main side) — the takeover creates the session (arming
+ * the keeper) and then awaits the audit setup. A session ended or latched
+ * meanwhile must not be answered `signed_in`.
+ */
+describe('cashier takeover — a session lost during the post-create await', () => {
+  it.each([
+    ['superseded_by_takeover', 'state_invalid'],
+    ['account_disabled_mid_session', 'invalid_input'],
+    ['terminal_session_terminated', 'invalid_input'],
+  ] as const)(
+    'ended (%s) during the audit: refused %s, proto consumed',
+    async (cause, category) => {
+      const { handler, store, sessions, emit } = build();
+      emit.mockImplementation(() => {
+        sessions.end(cause);
+      });
+      const proto = cashierProto();
+      store.set(proto);
+      const res = await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
+      expect(res).toEqual({ kind: 'refused', category });
+      expect(sessions.getCurrent()).toBeNull();
+      expect(store.get(proto.pending_takeover_id)).toBeUndefined();
+    },
+  );
+
+  it('latched during the audit: refused, not signed_in', async () => {
+    const { handler, store, sessions, emit } = build();
+    emit.mockImplementation(() => {
+      const current = sessions.getCurrent();
+      if (current !== null) sessions.latchAuthority(current.id, 'superseded_by_takeover');
+    });
+    const proto = cashierProto();
+    store.set(proto);
+    await expect(
+      handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id }),
+    ).resolves.toEqual({ kind: 'refused', category: 'state_invalid' });
+  });
+});

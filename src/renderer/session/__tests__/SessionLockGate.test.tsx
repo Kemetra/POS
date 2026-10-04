@@ -329,6 +329,32 @@ describe('RT-117 SessionLockGate', () => {
     useOperatorSessionStore.getState().reset();
   });
 
+  it('Codex P2 4179701431 — an ended push during signingIn discards that attempt’s late signed_in', async () => {
+    useOperatorSessionStore.getState().reset();
+    const op = fakeOperator(ACTIVE);
+    render(
+      <SessionLockGate operator={op.api}>
+        <Counter />
+      </SessionLockGate>,
+    );
+    await waitFor(() => {
+      expect(op.api.onSessionStateChanged).toHaveBeenCalled();
+    });
+    useOperatorSessionStore.getState().beginSignIn();
+    op.push({ state: 'ended' });
+    useOperatorSessionStore.getState().resolveSignedIn({
+      id: 's-1',
+      operator_id: 'user_clerk_1',
+      display_name: 'Cashier One',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      started_at: '2026-10-04T10:00:00.000Z',
+    });
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    useOperatorSessionStore.getState().reset();
+  });
+
   it('unsubscribes from the push on unmount', async () => {
     const op = fakeOperator(ACTIVE);
     const { unmount } = render(

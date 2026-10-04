@@ -411,6 +411,44 @@ describe('heartbeat outcomes', () => {
     expect(h.fake.admitCalls).toHaveLength(2);
   });
 
+  it('Codex P2 4179701427: with a 1 s TTL a first device 401 is confirmed after 500 ms, not 30 s', async () => {
+    const h = harness();
+    const record = signInCashier(h.sessions, 1);
+    h.fake.setAdmit({ kind: 'device_unauthorized' });
+    await advance(500);
+    expect(h.fake.admitCalls).toHaveLength(1);
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+    await advance(499);
+    expect(h.fake.admitCalls).toHaveLength(1);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(2);
+    // Two consecutive 401s, 500 ms apart: latched and ended (no sale open).
+    expect(h.ends).toEqual(['terminal_session_terminated']);
+    expect(h.sessions.getCurrent()?.id).not.toBe(record.id);
+  });
+
+  it.each([
+    { ...ADMITTED, admission_ttl_seconds: 1 },
+    { kind: 'device_unauthorized' },
+    { kind: 'no_connection' },
+    { kind: 'unavailable' },
+    { kind: 'rate_limited' },
+    { kind: 'rejected' },
+    { kind: 'idempotency_conflict' },
+    { kind: 'no_token' },
+  ] as const)(
+    'Codex P2 4179701427: with a 1 s TTL, after %o the next heartbeat comes within TTL/2 (500 ms)',
+    async (result) => {
+      const h = harness();
+      signInCashier(h.sessions, 1);
+      h.fake.setAdmit(result);
+      await advance(500);
+      expect(h.fake.admitCalls).toHaveLength(1);
+      await advance(500);
+      expect(h.fake.admitCalls).toHaveLength(2);
+    },
+  );
+
   it('review F9: a slow heartbeat never overlaps the next one (in-flight stays at 1)', async () => {
     const h = harness();
     signInCashier(h.sessions, 2); // interval 1 s
