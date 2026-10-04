@@ -36,7 +36,10 @@
  * same admitted actor's repeat for the same return (double click, second
  * window) shares the running operation; any other payout request meanwhile
  * (another return, another actor) is refused `another_payout_in_progress`,
- * never queued. Other app instances are held off by the durable kick lease.
+ * never queued. The slot is process-local: one payout per terminal holds
+ * given RT-203's Electron single-instance lock (one app process per
+ * terminal). The durable kick lease stays as defence in depth for a single
+ * payout's completion.
  * The amount is the journal's server-confirmed total; the request has none.
  *
  * ## Shutdown
@@ -256,7 +259,12 @@ interface ActivePayout extends InFlight<ReturnsPayoutResponse> {
 }
 
 class ReturnsPayoutService implements ReturnsPayoutAPI {
-  /** One drawer per terminal: one payout at a time (start, retry, commit). */
+  /**
+   * One drawer per terminal: one payout at a time (start, retry, commit).
+   * Process-local by design: cross-process exclusion relies on RT-203's
+   * Electron single-instance lock (one app process per terminal); it is not
+   * enforced in the database (owner decision on Codex P1, 60eb2c9).
+   */
   private active: ActivePayout | null = null;
   private readonly reprints = new Map<string, InFlight<ReturnsReprintResponse>>();
 
