@@ -12,6 +12,7 @@ import {
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import { CartBridgeHandlers } from '../../../../src/main/cart/cart-bridge.js';
+import { admitCashierOnline } from '../../../../src/main/operator/cashier-admission.js';
 import { registerCartHandlers } from '../../../../src/main/ipc/cart.js';
 import { createSaleBoundaryIpcMain } from '../../../../src/main/ipc/sale-boundary-guard.js';
 import { CART_IPC_CHANNELS } from '../../../../src/shared/cart/channels.js';
@@ -750,6 +751,60 @@ describe('end and timer lifecycle', () => {
     expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
     expect(h.fake.invalidated).toEqual([]);
     expect(h.fake.endCalls).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('review (024f07c) item 3 — sign-out then the SAME user signs in again: the new admit waits for the late end', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    let land: () => void = () => undefined;
+    const order: string[] = [];
+    h.fake.setEnd(
+      () =>
+        new Promise((resolve) => {
+          land = () => {
+            order.push('end landed');
+            resolve({ kind: 'ended' });
+          };
+        }),
+    );
+    h.sessions.end(); // sign-out: the keeper fires end(X) without awaiting it
+    expect(h.fake.endCalls).toEqual([FAKE_ADMISSION_ID]);
+    h.fake.setAdmit(() => {
+      order.push('admit sent');
+      return { ...ADMITTED, admission_id: FAKE_ADMISSION_ID };
+    });
+    const res = admitCashierOnline(h.fake.deps, {
+      user_id: FAKE_USER_ID,
+      operator_id: 'user_clerk_1',
+      takeover: false,
+      idempotency_key: 'test-idempotency-key-9999',
+    });
+    await advance(100);
+    expect(order).toEqual([]);
+    land();
+    await res;
+    expect(order).toEqual(['end landed', 'admit sent']);
+  });
+
+  it('review (024f07c) — an `admitted` in flight at shutdown has no effect: no renewal, no `end` POST after stop (RT-198)', async () => {
+    const h = harness();
+    const record = signInCashier(h.sessions);
+    let settle: (r: CashierAdmissionResult) => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    await advance(HALF_TTL_MS);
+    expect(h.fake.admitCalls).toHaveLength(1);
+    h.keeper.stop();
+    settle({ ...ADMITTED, admission_ttl_seconds: TTL_S });
+    await advance(0);
+    expect(h.fake.endCalls).toEqual([]);
+    expect(h.fake.admitted).toEqual([]);
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
     expect(vi.getTimerCount()).toBe(0);
   });
 

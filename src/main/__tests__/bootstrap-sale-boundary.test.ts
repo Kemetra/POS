@@ -34,6 +34,14 @@ describe('main/index.ts wires the sale-boundary choke point (RT-113 P2)', () => 
     );
   });
 
+  it('review (024f07c) item 2 — the keeper ends a latched session on the REAL safe-point probe', () => {
+    expect(source).toMatch(
+      /import\s+\{[^}]*\bcreateSafePointProbe\b[^}]*\}\s+from\s+'\.\/operator\/lock-state-reader\.js'/,
+    );
+    expect(source).toMatch(/isAtSafePoint: isCashierAtSafePoint,/);
+    expect(source).toMatch(/const isCashierAtSafePoint = createSafePointProbe\(\{/);
+  });
+
   it('the cart and payments/tender handlers register on the guarded surface', () => {
     expect(source).toMatch(/registerCartHandlers\(guardedIpcMain,/);
     expect(source).toMatch(/registerPaymentsHandlers\(guardedIpcMain,/);

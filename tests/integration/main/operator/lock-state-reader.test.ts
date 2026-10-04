@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
 import { readFileSync } from 'fs';
 import path from 'path';
@@ -9,7 +9,17 @@ import {
   SessionManager,
   type CreateSessionInput,
 } from '../../../../src/main/operator/session-manager.js';
-import { createLockStateReader } from '../../../../src/main/operator/lock-state-reader.js';
+import {
+  createLockStateReader,
+  createSafePointProbe,
+} from '../../../../src/main/operator/lock-state-reader.js';
+import { CashierAdmissionKeeper } from '../../../../src/main/operator/cashier-admission-keeper.js';
+import {
+  ADMITTED,
+  FAKE_ADMISSION_ID,
+  FAKE_USER_ID,
+  fakeCashierAdmission,
+} from '../../../../src/main/operator/__tests__/__helpers__/fake-cashier-admission.js';
 
 /**
  * RT-117 (RT-116 §7.2) — `operator.getLockState()`: the only read served while
@@ -81,14 +91,16 @@ interface CartRow {
   session_id: string;
   state: string;
   subtotal: number;
+  created_at?: string;
 }
 
 function insertCart(row: CartRow): void {
+  const at = row.created_at ?? NOW;
   db.run(
     `INSERT INTO carts (cart_id, tenant_id, branch_id, terminal_id, owning_operator_id,
        operator_session_id, state, cart_subtotal_minor, created_at, updated_at)
      VALUES (?, 't1', 'b1', ?, 'op-1', ?, ?, ?, ?, ?)`,
-    [row.cart_id, TERMINAL, row.session_id, row.state, row.subtotal, NOW, NOW],
+    [row.cart_id, TERMINAL, row.session_id, row.state, row.subtotal, at, at],
   );
 }
 
@@ -265,5 +277,133 @@ describe('RT-117 createLockStateReader', () => {
   it('reports active for an unlocked session', () => {
     const sm = signedIn({ ...CASHIER_ONE, role: 'manager' });
     expect(reader(sm)()).toMatchObject({ state: 'active', locked_at: null, role: 'manager' });
+  });
+});
+
+function probe(sm: SessionManager) {
+  return createSafePointProbe({
+    db: makeSqlJsHandle(db),
+    sessionManager: sm,
+    resolveTerminalId: () => TERMINAL,
+  });
+}
+
+/** A handed-off cart of the session with a started payment attempt holding live tender. */
+function handedOffWithLiveTender(sid: string, cart_id = 'cart-1', created_at = NOW): void {
+  insertCart({ cart_id, session_id: sid, state: 'frozen_handed_off', subtotal: 2550, created_at });
+  insertLine({ line_id: `${cart_id}-l1`, cart_id, subtotal: 2550 });
+  insertStartedAttempt({ id: `${cart_id}-pa`, session_id: sid, cart_id });
+  insertTender({
+    id: `${cart_id}-tl`,
+    attempt: `${cart_id}-pa`,
+    type: 'cash',
+    amount: 1000,
+    state: 'applied',
+  });
+}
+
+/**
+ * RT-113 P2 (adversarial review of 024f07c, items 2 and 5) — the PRODUCTION
+ * safe-point predicate that the cashier admission keeper ends a latched
+ * session on. Ending is safe only when no open sale has lines AND no started
+ * payment attempt of the session, on ANY cart, holds live tender.
+ */
+describe('RT-113 P2 createSafePointProbe', () => {
+  it('no session, no cart, or only an empty cart: safe', () => {
+    expect(probe(new SessionManager())()).toBe(true);
+    const sm = signedIn();
+    expect(probe(sm)()).toBe(true);
+    insertCart({
+      cart_id: 'cart-empty',
+      session_id: sm.getCurrent()?.id ?? '',
+      state: 'empty',
+      subtotal: 0,
+    });
+    expect(probe(sm)()).toBe(true);
+  });
+
+  it('an open sale with lines: not safe', () => {
+    const sm = signedIn();
+    const sid = sm.getCurrent()?.id ?? '';
+    insertCart({ cart_id: 'cart-1', session_id: sid, state: 'editing', subtotal: 500 });
+    insertLine({ line_id: 'l1', cart_id: 'cart-1', subtotal: 500 });
+    expect(probe(sm)()).toBe(false);
+  });
+
+  it('a handed-off cart with live tender: not safe; once the attempt settles: safe', () => {
+    const sm = signedIn();
+    const sid = sm.getCurrent()?.id ?? '';
+    handedOffWithLiveTender(sid);
+    expect(probe(sm)()).toBe(false);
+    db.run(
+      `UPDATE payment_attempts SET state = 'settled', settled_at = ? WHERE payment_attempt_id = 'cart-1-pa'`,
+      [NOW],
+    );
+    expect(probe(sm)()).toBe(true);
+  });
+
+  it('item 5: a NEWER empty cart does not hide an older handed-off cart with live tender', () => {
+    const sm = signedIn();
+    const sid = sm.getCurrent()?.id ?? '';
+    handedOffWithLiveTender(sid, 'cart-old', '2026-10-01T10:00:00.000Z');
+    insertCart({
+      cart_id: 'cart-new',
+      session_id: sid,
+      state: 'empty',
+      subtotal: 0,
+      created_at: '2026-10-01T10:05:00.000Z',
+    });
+    // The lock summary only looks at the newest cart, which is empty …
+    expect(reader(sm)().summary).toBeNull();
+    // … but the live tender on the older cart must keep the session alive.
+    expect(probe(sm)()).toBe(false);
+  });
+
+  it("another session's live tender does not count", () => {
+    const sm = signedIn();
+    handedOffWithLiveTender('some-other-session');
+    expect(probe(sm)()).toBe(true);
+  });
+
+  it('end to end with the real keeper: a latched session holding live tender does NOT end; it ends once the tender settles', async () => {
+    vi.useFakeTimers();
+    try {
+      const sm = new SessionManager();
+      const fake = fakeCashierAdmission({ ...ADMITTED, admission_ttl_seconds: 600 });
+      const ends: (string | undefined)[] = [];
+      sm.onEnded((_r, cause) => ends.push(cause));
+      const keeper = new CashierAdmissionKeeper({
+        sessionManager: sm,
+        admission: fake.deps,
+        isAtSafePoint: probe(sm),
+      });
+      const record = sm.create({
+        ...CASHIER_ONE,
+        cashier_admission: {
+          user_id: FAKE_USER_ID,
+          admission_id: FAKE_ADMISSION_ID,
+          admission_ttl_seconds: 600,
+          offline_grace_seconds: 86_400,
+        },
+      });
+      handedOffWithLiveTender(record.id);
+
+      fake.setAdmit({ kind: 'active_elsewhere' });
+      await vi.advanceTimersByTimeAsync(300_000);
+      expect(sm.getCurrent()?.authority_latch).toBe('superseded_by_takeover');
+      await vi.advanceTimersByTimeAsync(60_000); // many backstop re-checks
+      expect(ends).toEqual([]);
+      expect(sm.getCurrent()?.id).toBe(record.id);
+
+      db.run(
+        `UPDATE payment_attempts SET state = 'settled', settled_at = ? WHERE payment_attempt_id = 'cart-1-pa'`,
+        [NOW],
+      );
+      keeper.recheckSafePoint();
+      expect(ends).toEqual(['superseded_by_takeover']);
+      keeper.stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
