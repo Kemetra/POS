@@ -13,7 +13,9 @@
  *   • P1: every kick belongs to one return, claimed before it, and a return is
  *     kicked again only right after its own `failed_before_send`;
  *   • a double click by one actor gets the same answer twice (single-flight);
- *   • a payout is committed only under the live, unlocked, admitted operator;
+ *   • a payout is committed, and the drawer and printer are called, only under
+ *     the live, unlocked, admitted operator, including work that waited in the
+ *     per-return queue while its operator locked, signed out or was replaced;
  *   • a crashed process writes nothing after the crash.
  *
  * A failing seed replays exactly (`runPayoutInterleaving(seed, STEPS)`).
@@ -101,6 +103,15 @@ function expectDrawerPayoutAfterOpened(r: PayoutRun, audits: readonly AuditEvent
   }
 }
 
+/** Codex P1: every kick and every print happens under a live, eligible, unlocked operator. */
+function expectEffectsUnderLiveActor(r: PayoutRun): void {
+  for (const live of r.liveAtEffect) {
+    const at = `seed ${String(r.seed)} ${live.effect}`;
+    expect(live.locked, at).toBe(false);
+    expect(['manager', 'admin'], at).toContain(live.liveRole);
+  }
+}
+
 function expectNeverPaidUnconfirmed(r: PayoutRun): void {
   const at = `seed ${String(r.seed)}`;
   expect(scalar(r, 'SELECT state FROM return_journal WHERE return_id = ?', r.unconfirmed), at).toBe(
@@ -166,6 +177,7 @@ describe('X7: payout exactly-once under seeded random interleavings', () => {
     expectOneKickUnlessNeverSent(r);
     expectDoubleClicksShareOneAnswer(r);
     expectPaidOutUnderLiveActor(r);
+    expectEffectsUnderLiveActor(r);
     expectQuietAfterCrash(r);
   });
 

@@ -41,6 +41,7 @@
  * in flight at stop writes nothing when it settles.
  */
 import type {
+  LocalReturnRefusal,
   ReturnPayoutAction,
   ReturnPayoutMethod,
   ReturnsPayoutRequest,
@@ -108,7 +109,19 @@ type PayoutOperation = 'payout' | 'reprint';
 type Refused = { readonly kind: 'refused'; readonly reason: ReturnsRefusalReason };
 type Target = { readonly kind: 'ok'; readonly entry: JournalEntry } | PayoutRefused;
 type PayoutRefused = Extract<ReturnsPayoutResponse, { kind: 'refused' }>;
-type PrintResult = { readonly ok: true } | { readonly ok: false; readonly failureReason: string };
+/** A side effect that did not run: the admitted snapshot no longer holds. */
+interface Lost {
+  readonly lost: LocalReturnRefusal;
+}
+
+function isLost(value: unknown): value is Lost {
+  return typeof value === 'object' && value !== null && 'lost' in value;
+}
+
+type PrintResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly failureReason: string }
+  | ({ readonly ok: false } & Lost);
 interface PaidOut {
   readonly entry: JournalEntry;
   readonly payout: PayoutRow;
@@ -289,16 +302,48 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     return reason === null ? { kind: 'ok', entry } : this.refusePayout(actor, reason, entry);
   }
 
+  /**
+   * THE gate of every side effect (the RT-197 class rule, applied here to the
+   * claim, each drawer kick, the paid commit and each slip print): `run` runs
+   * only while the admitted snapshot is still the live, authorized actor,
+   * checked immediately before it, synchronously. Facts that already
+   * happened (a kick's outcome, a slip's result, a refusal) are recorded
+   * without it.
+   */
+  private effect<T>(actor: AuthSnapshot, run: () => T): T | Lost {
+    const lost = this.deps.authorizer.recheck(actor);
+    return lost === null ? run() : { lost };
+  }
+
   private async runPayout(actor: AuthSnapshot, req: ReturnsPayoutRequest) {
     // A queued operation may start after stop: touch nothing then.
     if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
+    // Queued work may run long after admission: the actor must still hold
+    // before anything is even read.
+    const lost = this.deps.authorizer.recheck(actor);
+    if (lost !== null) return this.refusePayout(actor, lost, null);
     const target = this.target(actor, req);
     if (target.kind !== 'ok') return target;
-    if (req.action === 'manual') return this.commit(actor, target.entry, 'manual');
-    const marked =
-      req.action === 'start' ? this.claim(actor, target.entry) : this.markRetry(target.entry);
-    if (marked !== null) return this.refusePayout(actor, marked, target.entry);
-    return this.kickThenCommit(actor, target.entry);
+    const { action } = req;
+    if (action === 'manual') return this.commit(actor, target.entry, 'manual');
+    const kick = this.effect(actor, () => this.markAndKick(actor, target.entry, action));
+    if (isLost(kick)) return this.refusePayout(actor, kick.lost, target.entry);
+    if (typeof kick === 'string') return this.refusePayout(actor, kick, target.entry);
+    return this.afterKick(actor, target.entry, await kick);
+  }
+
+  /**
+   * One synchronous step behind the gate: mark the kick about to be sent
+   * (with the claim for `start`, or a retry after a kick that never left),
+   * then call the drawer. Why not, instead of a kick in flight.
+   */
+  private markAndKick(
+    actor: AuthSnapshot,
+    entry: JournalEntry,
+    action: Exclude<ReturnPayoutAction, 'manual'>,
+  ): ReturnsRefusalReason | Promise<ReturnDrawerOutcome> {
+    const refused = action === 'start' ? this.claim(actor, entry) : this.markRetry(entry);
+    return refused ?? kickReturnDrawer(this.deps.drawer);
   }
 
   /**
@@ -334,19 +379,16 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   }
 
   /**
-   * Steps 2–3: the kick; its outcome persisted and audited FIRST (before any
-   * stop or recheck can return: the till must remember a drawer that opened);
-   * then, only if it opened and the actor still holds, the commit.
+   * Steps 2–3 after the kick: its outcome persisted and audited FIRST (before
+   * any stop or recheck can return: the till must remember a drawer that
+   * opened); then, only if it opened, the commit (itself behind the gate).
    */
-  private async kickThenCommit(actor: AuthSnapshot, entry: JournalEntry) {
-    const kick = await kickReturnDrawer(this.deps.drawer);
+  private async afterKick(actor: AuthSnapshot, entry: JournalEntry, kick: ReturnDrawerOutcome) {
     this.persistKick(actor, entry, kick);
     if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
     if (!kick.ok) {
       return { kind: 'drawer_failed', ret: this.viewOf(entry), reason: kick.reason } as const;
     }
-    const lost = this.deps.authorizer.recheck(actor);
-    if (lost !== null) return this.refusePayout(actor, lost, entry);
     return this.commit(actor, entry, 'drawer');
   }
 
@@ -371,7 +413,18 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
 
   /** Step 3: payout row paid + header paid_out + audit, atomically; then the slip. */
   private async commit(actor: AuthSnapshot, entry: JournalEntry, method: ReturnPayoutMethod) {
-    const paid = this.deps.transaction(() => {
+    const paid = this.effect(actor, () => this.completePayout(actor, entry, method));
+    if (isLost(paid)) return this.refusePayout(actor, paid.lost, entry);
+    if (!paid) return this.refusePayout(actor, 'already_paid_out', entry);
+    const ret = this.viewOf(entry);
+    const printed = await this.printSlip(actor, this.paidOut(entry.returnId), { kind: 'original' });
+    const slip = printed.ok ? 'printed' : 'failed';
+    return { kind: 'paid_out', ret, method, slip } as const;
+  }
+
+  /** The payout row paid + header paid_out + the `paid_out` audit, in one transaction. */
+  private completePayout(actor: AuthSnapshot, entry: JournalEntry, method: ReturnPayoutMethod) {
+    return this.deps.transaction(() => {
       const done = this.deps.payouts.complete({
         returnId: entry.returnId,
         operatorId: actor.operatorId,
@@ -383,11 +436,6 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
       if (done) this.deps.audit.paidOut(actor, entry, method);
       return done;
     });
-    if (!paid) return this.refusePayout(actor, 'already_paid_out', entry);
-    const ret = this.viewOf(entry);
-    const printed = await this.printSlip(actor, this.paidOut(entry.returnId), { kind: 'original' });
-    const slip = printed.ok ? 'printed' : 'failed';
-    return { kind: 'paid_out', ret, method, slip } as const;
   }
 
   /** A paid-out return with its completed payout, or null. */
@@ -400,6 +448,9 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
 
   private async runReprint(actor: AuthSnapshot, returnId: string): Promise<ReturnsReprintResponse> {
     if (this.deps.isStopped()) return SHUTTING_DOWN;
+    // Queued work: the actor must still hold before anything is read.
+    const lost = this.deps.authorizer.recheck(actor);
+    if (lost !== null) return this.refuseReprint(actor, lost, null);
     const entry = this.ownReturn(actor, returnId);
     if (entry === null) return this.refuseReprint(actor, 'return_not_found', null);
     const paid = this.paidOut(returnId);
@@ -409,6 +460,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
       reprintedAt: this.deps.now(),
     });
     if (printed.ok) return { kind: 'printed' };
+    if (isLost(printed)) return this.refuseReprint(actor, printed.lost, entry);
     // Not a printer failure: the slip is refused (and audited as not printed).
     if (printed.failureReason === SLIP_TOTAL_MISMATCH)
       return { kind: 'refused', reason: SLIP_TOTAL_MISMATCH };
@@ -431,7 +483,9 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
    */
   private async printSlip(actor: AuthSnapshot, paid: PaidOut | null, variant: ReturnSlipVariant) {
     if (paid === null) return { ok: false, failureReason: 'os_print_error' } as const;
-    const printed = await this.print(() => this.renderSlip(paid, variant));
+    const printed = await this.print(actor, () => this.renderSlip(paid, variant));
+    // Nothing was printed for a lost actor: not a print failure, no audit.
+    if (isLost(printed)) return printed;
     if (!this.deps.isStopped()) {
       const copy = variant.kind === 'copy';
       const outcome: SlipAuditOutcome = printed.ok
@@ -454,12 +508,15 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
 
   /**
    * Render (synchronously, before any await: the DB reads happen now) and
-   * print; the pipeline's answer as a closed result. A throw from either is
+   * print, behind the gate; the pipeline's answer as a closed result. A throw from either is
    * an OS print error: the payout is already committed and must not be lost.
    */
-  private async print(render: () => RenderedReceipt): Promise<PrintResult> {
+  private async print(actor: AuthSnapshot, render: () => RenderedReceipt): Promise<PrintResult> {
     try {
-      const result = await this.deps.printer.printRendered(render());
+      // Behind the gate: render and hand to the printer only for a live actor.
+      const sent = this.effect(actor, () => this.deps.printer.printRendered(render()));
+      if (isLost(sent)) return { ok: false, lost: sent.lost };
+      const result = await sent;
       return result.ok ? { ok: true } : { ok: false, failureReason: result.failure_reason };
     } catch (err) {
       const reason = err instanceof SlipTotalMismatch ? SLIP_TOTAL_MISMATCH : 'os_print_error';

@@ -14,13 +14,7 @@
  * operator envelope, operator or session ids, tenant/branch ids, customer data.
  * Pure: no clock, no I/O.
  */
-import {
-  renderBands,
-  utcStamp,
-  wrap,
-  type Band,
-  type BandAlign,
-} from '../receipts/template-engine.js';
+import { renderBands, utcStamp, type Band, type BandAlign } from '../receipts/template-engine.js';
 import type { RenderedReceipt } from '../receipts/print-pipeline.js';
 import { exponentFor, minorUnitsToDecimalString } from '../sales-sync/create-sale-sync-client.js';
 import type { PayoutRow, SlipLine } from './returns-payout-repository.js';
@@ -78,31 +72,56 @@ const UNNAMED_LINE = 'صنف مرتجع';
 
 /** The receipt's column width, and what a wrapped continuation line can hold. */
 const COLS = 42;
-const CONTINUATION = COLS - 4;
+const INDENT = '    ';
+const CONTINUATION = COLS - INDENT.length;
 
-/**
- * Split any token longer than a continuation line into pieces that fit, so
- * the shared word-wrap (which only breaks at spaces) never emits a line
- * wider than the roll. Code points, never UTF-16 halves.
- */
-function breakLongTokens(text: string): string {
-  return text
-    .split(' ')
-    .map((word) => {
-      const chars = Array.from(word);
-      if (chars.length <= CONTINUATION) return word;
-      const pieces: string[] = [];
-      for (let i = 0; i < chars.length; i += CONTINUATION) {
-        pieces.push(chars.slice(i, i + CONTINUATION).join(''));
-      }
-      return pieces.join(' ');
-    })
-    .join(' ');
+/** Width in printed columns: code points, never UTF-16 units (astral = 1). */
+function width(text: string): number {
+  return Array.from(text).length;
 }
 
-/** A fact, or a dash when it is not known. */
-function orDash(value: string | null | undefined): string {
-  return value ?? DASH;
+/** A token longer than a continuation line, cut into pieces that fit. */
+function splitToken(word: string): string[] {
+  const chars = Array.from(word);
+  if (chars.length <= CONTINUATION) return [word];
+  const pieces: string[] = [];
+  for (let i = 0; i < chars.length; i += CONTINUATION) {
+    pieces.push(chars.slice(i, i + CONTINUATION).join(''));
+  }
+  return pieces;
+}
+
+/** Word-wrap to the roll by code points, with a hanging indent on continuations. */
+function wrapColumns(text: string): string[] {
+  const words = text
+    .split(' ')
+    .filter((w) => w !== '')
+    .flatMap(splitToken);
+  const out: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current === '' ? word : `${current} ${word}`;
+    const indent = out.length === 0 ? 0 : INDENT.length;
+    if (current !== '' && width(candidate) + indent > COLS) {
+      out.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current !== '') out.push(current);
+  return out.map((line, i) => (i === 0 ? line : `${INDENT}${line}`));
+}
+
+/**
+ * THE way any dynamic value reaches the slip (Codex P2, a1703dc): made
+ * printable (control and bidi characters stripped), capped, a dash when
+ * empty, then — after its static `label` — hard-wrapped to the 42-column
+ * roll by code points. Every printed line fits; nothing is clipped.
+ */
+export function slipText(value: string | null | undefined, label = ''): string[] {
+  const clean = value === null || value === undefined ? null : slipLineName(value);
+  return wrapColumns(`${label}${clean ?? DASH}`);
 }
 
 /** A stored ISO time as the receipt prints it (UTC), or a dash. */
@@ -116,6 +135,11 @@ function money(minor: number, currencyCode: string): string {
 
 class SlipBands {
   readonly bands: Band[] = [];
+
+  /** A dynamic value (after its static label), one band per wrapped line. */
+  value(value: string | null | undefined, align: BandAlign, label = ''): void {
+    for (const line of slipText(value, label)) this.text(line, align);
+  }
 
   rule(char: '=' | '-' | '#'): void {
     this.bands.push({ kind: 'rule', char });
@@ -137,18 +161,18 @@ function copyMarker(out: SlipBands, variant: ReturnSlipVariant): void {
 function header(out: SlipBands, source: ReturnSlipSource): void {
   const { entry, payout, sale } = source;
   out.rule('=');
-  out.text(orDash(sale?.branchName), 'rtl');
-  out.text(`Terminal: ${orDash(sale?.terminalLabel)}`, 'ltr');
+  out.value(sale?.branchName, 'rtl');
+  out.value(sale?.terminalLabel, 'ltr', 'Terminal: ');
   out.rule('-');
   out.text('إيصال مرتجع نقدي', 'rtl', true);
   out.text('CASH RETURN SLIP (non-fiscal)', 'center', true);
   out.rule('-');
   out.text('Return ref:', 'ltr');
-  out.text(orDash(entry.returnRef), 'ltr');
-  out.text(`Sale # ${entry.saleNumber}`, 'ltr', true);
+  out.value(entry.returnRef, 'ltr');
+  out.value(entry.saleNumber, 'ltr', 'Sale # ');
   out.text('Sale ref:', 'ltr');
-  out.text(entry.serverSaleRef, 'ltr');
-  out.text(`Paid by: ${orDash(payout.paidOperatorName)}`, 'rtl');
+  out.value(entry.serverSaleRef, 'ltr');
+  out.value(payout.paidOperatorName, 'rtl', 'Paid by: ');
   out.text(stamp(payout.paidAt), 'ltr');
 }
 
@@ -157,10 +181,7 @@ function lines(out: SlipBands, source: ReturnSlipSource): void {
   out.text('الأصناف المرتجعة', 'rtl');
   out.rule('-');
   for (const line of source.lines) {
-    const label = `${String(line.quantity)}× ${breakLongTokens(line.lineName ?? UNNAMED_LINE)}`;
-    for (const part of wrap(label)) {
-      out.text(part, 'rtl');
-    }
+    out.value(line.lineName ?? UNNAMED_LINE, 'rtl', `${String(line.quantity)}× `);
     const amount =
       line.amountMinor === null ? DASH : money(line.amountMinor, source.entry.currencyCode);
     out.text(amount, 'ltr');

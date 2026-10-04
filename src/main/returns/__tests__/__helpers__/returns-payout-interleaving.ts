@@ -39,6 +39,7 @@ const SALES = [
 
 type Action =
   | ReturnPayoutAction
+  | 'queued_change'
   | 'double'
   | 'reprint'
   | 'crash'
@@ -52,6 +53,7 @@ const ACTIONS: readonly (readonly [Action, number])[] = [
   ['retry_drawer', 12],
   ['manual', 10],
   ['double', 8],
+  ['queued_change', 6],
   ['reprint', 6],
   ['crash', 5],
   ['lock', 4],
@@ -79,6 +81,13 @@ export interface KickEvent {
   readonly earlierOutcomes: readonly unknown[];
 }
 
+/** Who was live when the drawer or the printer was called. */
+export interface LiveAtEffect {
+  readonly effect: 'kick' | 'print';
+  readonly liveRole: Role | null;
+  readonly locked: boolean;
+}
+
 /** Who was live (and unlocked) when a `paid_out` audit was written. */
 export interface PaidOutAtCommit {
   readonly acting: string;
@@ -97,6 +106,7 @@ export interface PayoutRun {
   /** Both answers of every double click (the same admitted actor). */
   readonly doubles: readonly (readonly [unknown, unknown])[];
   readonly paidOutAtCommit: readonly PaidOutAtCommit[];
+  readonly liveAtEffect: readonly LiveAtEffect[];
   /** Per crash: the state at the crash and after the crashed domain settled. */
   readonly crashes: readonly { readonly at: PayoutSnapshot; readonly settled: PayoutSnapshot }[];
 }
@@ -117,6 +127,7 @@ class PayoutWorld {
   private readonly kicks: KickEvent[] = [];
   private readonly doubles: [unknown, unknown][] = [];
   private readonly paidOutAtCommit: PaidOutAtCommit[] = [];
+  private readonly liveAtEffect: LiveAtEffect[] = [];
   private kickCounts = new Map<string, number>();
   /** The live process; answers issued to an older one never arrive. */
   private generation = 0;
@@ -146,6 +157,7 @@ class PayoutWorld {
     });
     this.unconfirmed = lost.ret?.returnId ?? '';
     this.h.drawer.onKick = () => {
+      this.recordLive('kick');
       this.kicks.push(this.attributeKick());
     };
     this.h.state.onAudit = (event) => {
@@ -154,7 +166,10 @@ class PayoutWorld {
       this.paidOutAtCommit.push({ acting: event.acting_operator_id, liveRole: role, locked });
     };
     this.h.drawer.answer = () => this.drawerAnswer();
-    this.h.printer.answer = () => this.printerAnswer();
+    this.h.printer.answer = () => {
+      this.recordLive('print');
+      return this.printerAnswer();
+    };
   }
 
   async run(steps: number): Promise<PayoutRun> {
@@ -168,6 +183,7 @@ class PayoutWorld {
       kicks: this.kicks,
       doubles: this.doubles,
       paidOutAtCommit: this.paidOutAtCommit,
+      liveAtEffect: this.liveAtEffect,
       crashes: this.crashes,
     };
   }
@@ -194,6 +210,7 @@ class PayoutWorld {
           }),
         );
       },
+      queued_change: () => this.queuedChange(),
       reprint: () => {
         this.track(this.domain.service.reprintSlip({ returnId: this.pickReturn() }));
       },
@@ -209,6 +226,30 @@ class PayoutWorld {
       turn: () => this.turns(),
     };
     await handlers[action]();
+  }
+
+  /**
+   * Codex P1 (a1703dc): another operator queues behind a running payout of
+   * the same return, then that operator locks, signs out or is replaced
+   * before the queue releases. The queued work must do nothing.
+   */
+  private async queuedChange(): Promise<void> {
+    const returnId = this.pickReturn();
+    this.track(this.domain.service.payout({ returnId, action: 'start' }));
+    this.h.state.role = this.h.state.role === 'admin' ? 'manager' : 'admin';
+    this.h.state.locked = false;
+    const action = this.rng.pick<ReturnPayoutAction>(['manual', 'retry_drawer']);
+    this.track(this.domain.service.payout({ returnId, action }));
+    this.track(this.domain.service.reprintSlip({ returnId }));
+    const change = this.rng.pick(['lock', 'sign_out', 'cashier'] as const);
+    if (change === 'lock') await this.lockForAWhile();
+    else if (change === 'sign_out') this.h.state.role = null;
+    else this.h.state.role = 'cashier';
+  }
+
+  private recordLive(effect: LiveAtEffect['effect']): void {
+    const { role, locked } = this.h.state;
+    this.liveAtEffect.push({ effect, liveRole: role, locked });
   }
 
   private payout(action: ReturnPayoutAction): void {

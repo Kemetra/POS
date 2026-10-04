@@ -15,7 +15,7 @@ import {
   slipTotalsAgree,
   type ReturnSlipSource,
 } from '../returns-slip.js';
-import { LINE_A, LINE_B, RETURN_REF, SALE_REF, SCOPE } from './__helpers__/returns-fixture.js';
+import { LINE_A, LINE_B, NOW, RETURN_REF, SALE_REF, SCOPE } from './__helpers__/returns-fixture.js';
 
 const EXTERNAL_ID = 'pos-pulse-return:0190f5a2-7b3c-7d4e-8f90-0000000000e1';
 
@@ -170,6 +170,29 @@ describe('42-column slip lines (Codex P2)', () => {
       expect(lines.filter((l) => Array.from(l).length > 42)).toEqual([]);
     }
   }
+
+  it.each([
+    ['ASCII', 'Z'.repeat(120)],
+    ['astral (emoji, two UTF-16 units each)', '😀'.repeat(120)],
+    ['Arabic', 'ص'.repeat(120)],
+  ])(
+    'Codex P2: every dynamic field set to an unbroken 120-character %s string fits 42 columns',
+    (_l, long) => {
+      const source: ReturnSlipSource = {
+        entry: { ...ENTRY, saleNumber: long, returnRef: long, serverSaleRef: long },
+        payout: { ...PAYOUT, paidOperatorName: long },
+        lines: [{ lineRef: LINE_A, quantity: 3500, lineName: long, amountMinor: 3500 }],
+        sale: { branchName: long, terminalLabel: long },
+      };
+      for (const variant of [{ kind: 'original' }, { kind: 'copy', reprintedAt: NOW }] as const) {
+        const rendered = renderReturnSlip(source, variant);
+        expectFits(rendered);
+        // Nothing is dropped: each value prints in full (wrapped, never clipped).
+        const flat = textOf(rendered.html).replace(/\s/g, '');
+        expect(flat.split(long).length - 1).toBe(7);
+      }
+    },
+  );
 
   it.each([
     ['an unbroken 120-character Latin name', 'A'.repeat(120)],

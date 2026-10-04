@@ -278,3 +278,71 @@ describe('in-flight sharing is per admitted actor (Codex P2, #530)', () => {
     expect(h.repo.read(returnId)?.state).toBe('confirmed');
   });
 });
+
+describe('Codex P1 (a1703dc): queued work is reauthorized before any side effect', () => {
+  /** A's payout waits on the drawer; B (another operator) queues `request` behind it. */
+  async function queuedBehindA(request: (returnId: string) => Promise<unknown>) {
+    const returnId = await confirmedReturn(h.service);
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(1);
+    });
+    h.state.role = 'admin';
+    const second = request(returnId);
+    return {
+      returnId,
+      first,
+      second,
+      release: () => {
+        kick.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+      },
+    };
+  }
+
+  it.each<[string, (x: ReturnsHarness) => void]>([
+    ['locks', (x) => (x.state.locked = true)],
+    ['signs out', (x) => (x.state.role = null)],
+    ['changes terminal scope', (x) => (x.state.terminalId = 'term-2')],
+  ])('B queued for a manual payout then %s: nothing is recorded or printed', async (_l, change) => {
+    const q = await queuedBehindA((returnId) => h.service.payout({ returnId, action: 'manual' }));
+    change(h);
+    q.release();
+    await q.first;
+    expect(await q.second).toMatchObject({ kind: 'refused', ret: null });
+    expect(h.repo.read(q.returnId)?.state).toBe('confirmed');
+    expect(paidOutCount()).toBe(0);
+    expect(h.printer.printed).toHaveLength(0);
+    expect(h.drawer.kicks).toBe(1);
+  });
+
+  it('B queued for a retry then locks: no second kick', async () => {
+    const q = await queuedBehindA((returnId) =>
+      h.service.payout({ returnId, action: 'retry_drawer' }),
+    );
+    h.state.locked = true;
+    q.release();
+    await q.first;
+    expect(await q.second).toMatchObject({ kind: 'refused', ret: null });
+    expect(h.drawer.kicks).toBe(1);
+  });
+
+  it('B queued for a reprint then signs out: no copy is printed', async () => {
+    const returnId = await confirmedReturn(h.service);
+    await h.service.payout({ returnId, action: 'start' });
+    const print = deferredFake<{ ok: true; render_path: 'os_print' }>();
+    h.printer.answer = () => print.promise;
+    const first = h.service.reprintSlip({ returnId });
+    await vi.waitFor(() => {
+      expect(h.printer.printed).toHaveLength(2);
+    });
+    h.state.role = 'admin';
+    const second = h.service.reprintSlip({ returnId });
+    h.state.role = null;
+    print.resolve({ ok: true, render_path: 'os_print' });
+    await first;
+    expect(await second).toMatchObject({ kind: 'refused' });
+    expect(h.printer.printed).toHaveLength(2);
+  });
+});

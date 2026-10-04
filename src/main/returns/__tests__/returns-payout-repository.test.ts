@@ -174,6 +174,19 @@ describe('return payouts repository', () => {
     expect(journal.read('r1')?.state).toBe('paid_out');
   });
 
+  it('fails closed (throws) if the header did not move with the payout', () => {
+    confirm();
+    payouts.start(START);
+    // Unreachable through the schema today (0040 trigger); simulate the drift.
+    db.run('DROP TRIGGER trg_return_journal_paid_out_needs_payout');
+    db.run(
+      `UPDATE return_journal SET state = 'paid_out', paid_out_at = 't9' WHERE return_id = 'r1'`,
+    );
+    expect(() => payouts.complete({ ...COMPLETE, method: 'manual' })).toThrow(
+      /header is not confirmed/,
+    );
+  });
+
   it('stores a null operator name as null', () => {
     confirm();
     payouts.start(START);

@@ -197,11 +197,14 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
     );
     if (paid.changes === 0) return false;
     // A started payout always has a confirmed header (0040), and the header
-    // reaches paid_out only with this completed row (0040 trigger).
-    this.prepare(
+    // reaches paid_out only with this completed row (0040 trigger). Fail
+    // closed anyway: throwing rolls the caller's transaction back rather than
+    // leave a paid payout beside a header that did not move.
+    const header = this.prepare(
       `UPDATE return_journal SET state = 'paid_out', paid_out_at = ?, updated_at = ?
        WHERE return_id = ? AND state = 'confirmed'`,
     ).run(input.now, input.now, input.returnId);
+    if (header.changes === 0) throw new Error('returns-payout: header is not confirmed');
     return true;
   }
 
