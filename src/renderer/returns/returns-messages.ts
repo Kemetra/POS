@@ -51,6 +51,8 @@ const REFUSAL_COPY: Readonly<Record<ReturnsRefusalReason, string>> = Object.free
   shutting_down: 'التطبيق يُغلق الآن، فلم يُنفَّذ شيء.',
   drawer_retry_unsafe:
     'ربما فُتح الدرج من قبل، فلن يُفتح مرة ثانية. عُدّ النقد، وإن سلّمت العميل المبلغ فسجّل الصرف يدويًا.',
+  drawer_kick_in_progress:
+    'يُفتح الدرج لهذا المرتجع الآن، ربما من نافذة أو جهاز آخر. انتظر بضع ثوانٍ ثم حدّث الحالة.',
   slip_total_mismatch:
     'لا تطابق مبالغ الأصناف إجمالي الاسترداد، فلم يُطبع الإيصال. الصرف نفسه سليم.',
 });

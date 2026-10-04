@@ -13,8 +13,10 @@ import type { ReturnPayoutAction, ReturnState } from '../../../shared/returns/ty
 import { bindSalesRepository } from '../../sales/repositories/sales.repository.js';
 import { createReturnsAudit } from '../returns-audit.js';
 import { createReturnsAuthorizer } from '../returns-auth.js';
+import { RETURN_KICK_LEASE_MS } from '../returns-drawer.js';
 import {
   createReturnsPayoutService,
+  kickInFlight,
   kickResultOf,
   payoutRefusal,
   type ReturnsPayoutDeps,
@@ -40,10 +42,14 @@ beforeAll(async () => {
 
 type Kick = 'none' | 'sending' | 'opened' | 'failed_before_send' | 'unknown' | null;
 
+const KICKED_AT = '2026-10-04T10:00:00.000Z';
+const WITHIN_LEASE = '2026-10-04T10:00:03.000Z';
+
 /** null: no payout started; else the started payout's kick record. */
 function started(kick: Kick) {
   if (kick === null) return null;
-  return { kickOutcome: kick === 'none' ? null : kick };
+  const none = kick === 'none';
+  return { kickOutcome: none ? null : kick, kickedAt: none ? null : KICKED_AT };
 }
 
 describe('payoutRefusal', () => {
@@ -66,9 +72,34 @@ describe('payoutRefusal', () => {
     // Manual completes whatever the drawer did.
     ['confirmed', 'opened', 'manual', null],
     ['confirmed', 'unknown', 'manual', null],
-    ['confirmed', 'sending', 'manual', null],
+    // Codex P1: a kick in flight (here, 3 s ago) holds the payout.
+    ['confirmed', 'sending', 'manual', 'drawer_kick_in_progress'],
   ])('%s, kick %s, %s → %s', (state, kick, action, expected) => {
-    expect(payoutRefusal(state, started(kick), action)).toBe(expected);
+    expect(payoutRefusal(state, started(kick), action, WITHIN_LEASE)).toBe(expected);
+  });
+
+  it('a kick still sending after the lease (its process died) is completed manually only', () => {
+    const after = new Date(Date.parse(KICKED_AT) + RETURN_KICK_LEASE_MS).toISOString();
+    expect(payoutRefusal('confirmed', started('sending'), 'manual', after)).toBeNull();
+    expect(payoutRefusal('confirmed', started('sending'), 'retry_drawer', after)).toBe(
+      'drawer_retry_unsafe',
+    );
+  });
+});
+
+describe('kickInFlight (Codex P1 lease)', () => {
+  it.each<[Kick, number, boolean]>([
+    ['sending', 0, true],
+    ['sending', RETURN_KICK_LEASE_MS - 1, true],
+    ['sending', RETURN_KICK_LEASE_MS, false],
+    ['opened', 0, false],
+    ['unknown', 0, false],
+    ['none', 0, false],
+  ])('kick %s, %i ms later → in flight %s', (kick, ms, expected) => {
+    const now = new Date(Date.parse(KICKED_AT) + ms).toISOString();
+    expect(kickInFlight(started(kick) ?? { kickOutcome: null, kickedAt: null }, now)).toBe(
+      expected,
+    );
   });
 });
 

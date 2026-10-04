@@ -92,6 +92,10 @@ export const LOCAL_RETURN_REFUSALS = [
   // timeout, a fault, a crash mid-kick): it is never kicked again; only a
   // manual, attested payout completes it (P1).
   'drawer_retry_unsafe',
+  // A drawer kick for this payout is in flight (possibly in another instance
+  // of the app): it cannot be completed until that kick is recorded or its
+  // lease runs out (Codex P1).
+  'drawer_kick_in_progress',
   // The slip's line amounts do not add up to the confirmed refund: no slip is
   // printed (fail closed); the payout itself is unaffected.
   'slip_total_mismatch',

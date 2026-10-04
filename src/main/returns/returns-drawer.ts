@@ -14,6 +14,14 @@ import { RETURN_DRAWER_FAILURES, type ReturnDrawerFailure } from '../../shared/r
 /** How long the payout waits for the drawer to answer. */
 export const RETURN_DRAWER_TIMEOUT_MS = 5_000;
 
+/**
+ * Codex P1 (35e0d03): how long a kick still `sending` holds its payout, across
+ * app instances sharing the database (2 x the drawer timeout: an instance
+ * that is alive records its kick's outcome well within it). Must match the
+ * 10 s of 0040's `trg_return_payouts_kick_lease`.
+ */
+export const RETURN_KICK_LEASE_MS = 2 * RETURN_DRAWER_TIMEOUT_MS;
+
 export type ReturnDrawerOutcome =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: ReturnDrawerFailure };

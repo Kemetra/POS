@@ -62,7 +62,11 @@ import type {
   SlipAuditOutcome,
 } from './returns-audit.js';
 import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
-import { kickReturnDrawer, type ReturnDrawerOutcome } from './returns-drawer.js';
+import {
+  kickReturnDrawer,
+  RETURN_KICK_LEASE_MS,
+  type ReturnDrawerOutcome,
+} from './returns-drawer.js';
 import type {
   KickResult,
   PayoutRow,
@@ -130,7 +134,16 @@ interface PaidOut {
 const SHUTTING_DOWN = { kind: 'refused', reason: 'shutting_down' } as const;
 
 /** The started payout's kick record, as `payoutRefusal` needs it (null: none started). */
-export type StartedPayout = Pick<PayoutRow, 'kickOutcome'> | null;
+export type StartedPayout = Pick<PayoutRow, 'kickOutcome' | 'kickedAt'> | null;
+
+/**
+ * Codex P1: a kick still `sending` within the lease is in flight (possibly in
+ * another app instance): nothing may complete the payout meanwhile.
+ */
+export function kickInFlight(payout: NonNullable<StartedPayout>, now: string): boolean {
+  if (payout.kickOutcome !== 'sending' || payout.kickedAt === null) return false;
+  return Date.parse(now) - Date.parse(payout.kickedAt) < RETURN_KICK_LEASE_MS;
+}
 
 /**
  * Why a payout `action` is refused for a return in `state`, or null.
@@ -142,12 +155,14 @@ export function payoutRefusal(
   state: ReturnState,
   payout: StartedPayout,
   action: ReturnPayoutAction,
+  now: string,
 ): ReturnsRefusalReason | null {
   if (state === 'paid_out') return 'already_paid_out';
   if (state !== 'confirmed') return 'not_payable';
   if (action === 'start') return payout === null ? null : 'payout_started';
   if (payout === null) return 'payout_not_started';
-  return action === 'retry_drawer' && !mayKickAgain(payout) ? 'drawer_retry_unsafe' : null;
+  if (action === 'retry_drawer') return mayKickAgain(payout) ? null : 'drawer_retry_unsafe';
+  return kickInFlight(payout, now) ? 'drawer_kick_in_progress' : null;
 }
 
 function mayKickAgain(payout: NonNullable<StartedPayout>): boolean {
@@ -298,7 +313,8 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   private target(actor: AuthSnapshot, req: ReturnsPayoutRequest): Target {
     const entry = this.ownReturn(actor, req.returnId);
     if (entry === null) return this.refusePayout(actor, 'return_not_found', null);
-    const reason = payoutRefusal(entry.state, this.deps.payouts.read(entry.returnId), req.action);
+    const payout = this.deps.payouts.read(entry.returnId);
+    const reason = payoutRefusal(entry.state, payout, req.action, this.deps.now());
     return reason === null ? { kind: 'ok', entry } : this.refusePayout(actor, reason, entry);
   }
 

@@ -148,6 +148,25 @@ BEGIN
   SELECT RAISE(ABORT, 'return_payouts: illegal drawer kick transition (RT-15)');
 END;
 
+-- A kick lease (Codex P1): two app instances may share this database, so the
+-- process-local queue cannot stop one instance from completing a payout while
+-- another instance's kick is still in flight (a double dispense). While a kick
+-- is `sending` and less than the lease (10 s = 2 x the 5 s drawer timeout,
+-- RETURN_KICK_LEASE_MS) has passed since `kicked_at`, the payout cannot be
+-- completed. Measured against the completion's own `paid_at` (the app clock),
+-- never SQLite's clock. After the lease a still-`sending` kick means its process
+-- died mid-kick: unknown, so only the manual, attested payout completes it.
+-- The guarded UPDATE in the app enforces the same rule; this is the backstop.
+CREATE TRIGGER IF NOT EXISTS trg_return_payouts_kick_lease
+BEFORE UPDATE OF paid_at ON return_payouts
+WHEN OLD.paid_at IS NULL AND NEW.paid_at IS NOT NULL AND OLD.kick_outcome = 'sending'
+  -- whole milliseconds (julianday is a float): a deterministic boundary
+  AND CAST(ROUND((julianday(NEW.paid_at) - julianday(OLD.kicked_at)) * 86400000.0) AS INTEGER)
+    < 10000
+BEGIN
+  SELECT RAISE(ABORT, 'return_payouts: a drawer kick in progress holds the payout (RT-15)');
+END;
+
 -- The journal header reaches paid_out only with a completed payout row, so the
 -- two can never disagree (no paid_out without who, when and how).
 CREATE TRIGGER IF NOT EXISTS trg_return_journal_paid_out_needs_payout

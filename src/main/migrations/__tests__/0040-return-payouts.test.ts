@@ -213,6 +213,22 @@ describe('0040 — return payouts (RT-15 S4)', () => {
     else expect(run).toThrow(/kick|constraint failed/);
   });
 
+  it.each<[string, string, boolean]>([
+    ['at the kick: refused', '2026-10-04T10:00:00.000Z', false],
+    ['9.999 s after the kick: refused', '2026-10-04T10:00:09.999Z', false],
+    ['10 s after the kick (lease expired): allowed', '2026-10-04T10:00:10.000Z', true],
+    ['an hour after the kick: allowed', '2026-10-04T11:00:00.000Z', true],
+  ])('Codex P1 lease: completing a payout whose kick is sending, %s', (_l, at, ok) => {
+    journal('confirmed');
+    startPayout();
+    kick(`kick_outcome = 'sending', kick_count = 1, kicked_at = '2026-10-04T10:00:00.000Z'`);
+    const run = (): void => {
+      db.run(`UPDATE return_payouts SET ${PAID.replace("paid_at = 't4'", `paid_at = '${at}'`)}`);
+    };
+    if (ok) expect(run).not.toThrow();
+    else expect(run).toThrow(/drawer kick in progress/);
+  });
+
   it('P1: a drawer payout needs a drawer that opened', () => {
     journal('confirmed');
     startPayout();

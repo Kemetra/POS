@@ -10,7 +10,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import type { DrawerKickResult } from '../../drawer/drawer-kick-transport.js';
 import type { ReturnState } from '../../../shared/returns/types.js';
-import { RETURN_DRAWER_TIMEOUT_MS } from '../returns-drawer.js';
+import { RETURN_DRAWER_TIMEOUT_MS, RETURN_KICK_LEASE_MS } from '../returns-drawer.js';
 import {
   LINE_A,
   NOW,
@@ -21,6 +21,7 @@ import {
   deferredFake,
   initReturnsSql,
   returnsHarness,
+  secondsAfterNow,
   seedSyncedSale,
   type ReturnsHarness,
 } from './__helpers__/returns-fixture.js';
@@ -190,6 +191,11 @@ describe('X: exactly once', () => {
     expect(await after.service.payout({ returnId, action: 'retry_drawer' })).toMatchObject({
       reason: 'drawer_retry_unsafe',
     });
+    // Codex P1: within the kick lease the kick may still be in flight.
+    expect(await after.service.payout({ returnId, action: 'manual' })).toMatchObject({
+      reason: 'drawer_kick_in_progress',
+    });
+    h.state.now = secondsAfterNow(RETURN_KICK_LEASE_MS / 1000);
     expect(await after.service.payout({ returnId, action: 'manual' })).toMatchObject({
       kind: 'paid_out',
       method: 'manual',

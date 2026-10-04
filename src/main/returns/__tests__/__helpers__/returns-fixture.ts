@@ -408,6 +408,11 @@ export interface ReturnsHarness extends ComposedReturns {
    * domain over the SAME database, drawer and printer.
    */
   restart(): ComposedReturns;
+  /**
+   * RT-15 S4 (Codex P1 lease): a second app instance on the SAME database,
+   * alive at the same time (no single-instance lock); same drawer and printer.
+   */
+  anotherInstance(): ComposedReturns;
   readonly db: SqlJsDatabase;
   readonly handle: DatabaseHandle;
   readonly repo: ReturnsRepository;
@@ -491,6 +496,13 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     ...composed,
     drawer,
     printer,
+    anotherInstance: () => {
+      // A second app process on the same database, running at the same time.
+      const keep = killLatest;
+      const other = compose();
+      killLatest = keep;
+      return other;
+    },
     restart: () => {
       latest.stop();
       // A dead process cannot write: everything the old domain still holds

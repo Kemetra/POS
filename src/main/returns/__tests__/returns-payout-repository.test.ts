@@ -18,6 +18,7 @@ import {
   type CompletePayoutInput,
   type ReturnPayoutsRepository,
 } from '../returns-payout-repository.js';
+import { RETURN_KICK_LEASE_MS } from '../returns-drawer.js';
 import { LINE_A, LINE_B, RETURN_REF, SALE_REF, SCOPE } from './__helpers__/returns-fixture.js';
 
 let db: SqlJsDatabase;
@@ -185,6 +186,21 @@ describe('return payouts repository', () => {
     expect(() => payouts.complete({ ...COMPLETE, method: 'manual' })).toThrow(
       /header is not confirmed/,
     );
+  });
+
+  it.each<[number, boolean]>([
+    [0, false],
+    [RETURN_KICK_LEASE_MS - 1, false],
+    [RETURN_KICK_LEASE_MS, true],
+  ])('Codex P1 lease: a manual completion %i ms after a kick still sending: %s', (ms, ok) => {
+    confirm();
+    payouts.start(START);
+    const kickedAt = '2026-10-04T10:00:00.000Z';
+    payouts.markSending({ returnId: 'r1', now: kickedAt });
+    const now = new Date(Date.parse(kickedAt) + ms).toISOString();
+    // The guarded UPDATE answers false (never relies on the trigger throwing).
+    expect(payouts.complete({ ...COMPLETE, method: 'manual', now })).toBe(ok);
+    expect(journal.read('r1')?.state).toBe(ok ? 'paid_out' : 'confirmed');
   });
 
   it('stores a null operator name as null', () => {

@@ -11,6 +11,7 @@
  */
 import type { DatabaseHandle } from '../db/client.js';
 import type { ReturnPayoutMethod } from '../../shared/returns/types.js';
+import { RETURN_KICK_LEASE_MS } from './returns-drawer.js';
 
 /**
  * The drawer kick record of a payout (0040). `sending` is written before the
@@ -92,6 +93,13 @@ export interface ReturnPayoutsRepository {
   recordLineDetails(returnId: string, details: readonly LineDetail[]): void;
   slipLines(returnId: string): SlipLine[];
 }
+
+/**
+ * Codex P1 lease, in SQL: the kick was sent less than the lease ago (whole
+ * milliseconds against the completion's own time; never SQLite's clock).
+ * Binds: now, lease ms.
+ */
+const KICK_HELD = `CAST(ROUND((julianday(?) - julianday(kicked_at)) * 86400000.0) AS INTEGER) < ?`;
 
 interface Stmt {
   run(...params: unknown[]): { changes: number };
@@ -185,7 +193,8 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
       `UPDATE return_payouts SET paid_operator_id = ?, paid_operator_name = ?,
          paid_session_id = ?, paid_at = ?, method = ?
        WHERE return_id = ? AND paid_at IS NULL
-         AND (? = 'manual' OR kick_outcome = 'opened')`,
+         AND (? = 'manual' OR kick_outcome = 'opened')
+         AND NOT (kick_outcome IS 'sending' AND ${KICK_HELD})`,
     ).run(
       input.operatorId,
       input.operatorName,
@@ -194,6 +203,8 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
       input.method,
       input.returnId,
       input.method,
+      input.now,
+      RETURN_KICK_LEASE_MS,
     );
     if (paid.changes === 0) return false;
     // A started payout always has a confirmed header (0040), and the header
