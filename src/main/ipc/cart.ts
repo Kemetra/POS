@@ -152,6 +152,12 @@ function asLinesSetNoteReq(value: unknown): CartLinesSetNoteRequest | null {
   };
 }
 
+/**
+ * Discount placeholder add. Builds a FRESH object with only the contract
+ * fields: a renderer-supplied `attribution_operator_id` is deliberately
+ * dropped (RT-183), so the renderer can never choose the recorded approving
+ * supervisor. Main derives the approver from the authenticated session.
+ */
 function asDiscountAddReq(value: unknown): CartDiscountPlaceholdersAddRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -163,17 +169,12 @@ function asDiscountAddReq(value: unknown): CartDiscountPlaceholdersAddRequest | 
   ) {
     return null;
   }
-  const req: CartDiscountPlaceholdersAddRequest = {
+  return {
     cart_id: v['cart_id'],
     line_id: v['line_id'],
     placeholder_kind: v['placeholder_kind'],
     idempotency_key: v['idempotency_key'],
   };
-  if (typeof v['attribution_operator_id'] === 'string') {
-    (req as { attribution_operator_id?: string }).attribution_operator_id =
-      v['attribution_operator_id'];
-  }
-  return req;
 }
 
 function asDiscountRemoveReq(value: unknown): CartDiscountPlaceholdersRemoveRequest | null {
