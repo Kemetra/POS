@@ -13,9 +13,10 @@
  * signed-in, unlocked manager/admin on the paired terminal, with the envelope
  * it was admitted with — RT-197 A5); every send carries that snapshot's
  * envelope, and the dispatcher re-checks the snapshot against the live state
- * immediately before every send (the `returns-auth` choke point). The first send it refuses stops the pass; the
- * rows wait, unchanged, for a later eligible operator. Passes are single-flight
- * per process (one terminal per process).
+ * immediately before every send (the `returns-auth` choke point). The first
+ * send it refuses stops the pass; the rows wait, unchanged, for a later
+ * eligible operator. Passes are single-flight per process (one terminal per
+ * process).
  *
  * Liveness without hammering (RT-197 I2): a background tick re-sends an
  * `unknown` row only once its own backoff has elapsed since its last attempt —
