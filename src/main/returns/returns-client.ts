@@ -8,8 +8,10 @@
  *   recordReturn POST /api/pos/v1/sales/{saleRef}/returns
  *
  * Auth is the `operatorAuthorization` scheme: `Authorization: Bearer
- * <pos_operator envelope>`, read in-process per request and never logged,
- * stored or bridged (same seam as the sale-sync client). `recordReturn` sends
+ * <pos_operator envelope>`. The envelope is an explicit argument of every call
+ * — the admitted authorization snapshot's own (RT-197 A5) — so the client never
+ * reads the live session or token itself; it is never logged, stored or
+ * bridged. No envelope → no request. `recordReturn` sends
  * the journaled body bytes verbatim with `Idempotency-Key` = the return's
  * `externalId`, so every retry is the identical request.
  *
@@ -71,17 +73,24 @@ export interface RecordReturnRequest {
   readonly resend: boolean;
 }
 
+/**
+ * The opaque operator envelope a call authenticates with: the admitted
+ * authorization snapshot's own (`AuthSnapshot.envelope`), or null (→ no request).
+ */
+export type OperatorEnvelope = string | null;
+
 export interface ReturnsClient {
-  readSale(saleRef: string): Promise<ReadSaleOutcome>;
-  recordReturn(request: RecordReturnRequest): Promise<RecordReturnOutcome>;
+  readSale(saleRef: string, envelope: OperatorEnvelope): Promise<ReadSaleOutcome>;
+  recordReturn(
+    request: RecordReturnRequest,
+    envelope: OperatorEnvelope,
+  ): Promise<RecordReturnOutcome>;
 }
 
 export interface CreateReturnsClientDeps {
   /** Backend-Core base URL. */
   readonly baseUrl: string;
   readonly fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-  /** The opaque operator envelope for the current session, or null. */
-  readonly getOperatorToken: () => string | null;
   readonly timeoutMs?: number;
 }
 
@@ -144,8 +153,9 @@ export function createReturnsClient(deps: CreateReturnsClientDeps): ReturnsClien
   async function exchange(request: {
     path: string;
     init: RequestInit;
+    envelope: OperatorEnvelope;
   }): Promise<HttpAnswer | null> {
-    const token = deps.getOperatorToken();
+    const token = request.envelope;
     if (token === null || token.length === 0) return null;
     try {
       const response = await deps.fetch(`${root}${SALES_PATH}${request.path}`, {
@@ -164,15 +174,20 @@ export function createReturnsClient(deps: CreateReturnsClientDeps): ReturnsClien
   }
 
   return {
-    async readSale(saleRef: string): Promise<ReadSaleOutcome> {
+    async readSale(saleRef: string, envelope: OperatorEnvelope): Promise<ReadSaleOutcome> {
       if (!isUuid(saleRef)) return { kind: 'refused', reason: 'returns_unavailable' };
-      const answer = await exchange({ path: `/${saleRef}`, init: { method: 'GET', headers: {} } });
+      const init: RequestInit = { method: 'GET', headers: {} };
+      const answer = await exchange({ path: `/${saleRef}`, init, envelope });
       return answer === null ? { kind: 'unavailable' } : toReadOutcome(answer);
     },
 
-    async recordReturn(request: RecordReturnRequest): Promise<RecordReturnOutcome> {
+    async recordReturn(
+      request: RecordReturnRequest,
+      envelope: OperatorEnvelope,
+    ): Promise<RecordReturnOutcome> {
       if (!isUuid(request.saleRef)) return { kind: 'refused', reason: 'returns_unavailable' };
       const answer = await exchange({
+        envelope,
         path: `/${request.saleRef}/returns`,
         init: {
           method: 'POST',

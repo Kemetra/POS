@@ -35,7 +35,7 @@ import type {
 import type { SaleRow, SalesRepository } from '../sales/repositories/sales.repository.js';
 import type { SaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import type { ReturnActor, ReturnsAudit } from './returns-audit.js';
-import type { AuthorizedActor, ReturnsAuthorizer } from './returns-auth.js';
+import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
 import type { ReadSaleOutcome, ReturnsClient } from './returns-client.js';
 import type { DispatchOutcome, ReturnsDispatcher } from './returns-dispatch.js';
 import { assessSale, buildRecordReturnBody, quoteReturn, viewLines } from './returns-quote.js';
@@ -58,7 +58,7 @@ export interface ReturnsServiceDeps {
   readonly client: Pick<ReturnsClient, 'readSale'>;
   readonly repo: ReturnsRepository;
   readonly dispatcher: ReturnsDispatcher;
-  readonly resolver: { resolveOnce(actor: AuthorizedActor): Promise<ResolveSummary> };
+  readonly resolver: { resolveOnce(actor: AuthSnapshot): Promise<ResolveSummary> };
   readonly audit: ReturnsAudit;
   readonly now: () => string;
   readonly newReturnId: () => string;
@@ -82,7 +82,7 @@ interface Ids {
   readonly saleRef?: string;
 }
 
-type Admitted = { readonly kind: 'ok'; readonly actor: AuthorizedActor } | ReturnsRefused;
+type Admitted = { readonly kind: 'ok'; readonly actor: AuthSnapshot } | ReturnsRefused;
 type Loaded = { readonly kind: 'ok'; readonly sale: LiveSale } | ReturnsRefused;
 type Checked = { readonly kind: 'ok'; readonly sale: WireSale } | ReturnsRefused;
 
@@ -125,7 +125,7 @@ class ReturnsService implements ReturnsBridgeAPI {
    * The choke point after an await: null while the admitted actor is still
    * authorized; else the audited refusal to return instead (no data).
    */
-  private recheckAfterAwait(actor: AuthorizedActor, op: Operation, awaited: Loaded | null = null) {
+  private recheckAfterAwait(actor: AuthSnapshot, op: Operation, awaited: Loaded | null = null) {
     const lost = this.deps.authorizer.recheck(actor);
     if (lost === null) return null;
     // Already refused for this very reason by an inner re-check (and audited).
@@ -157,7 +157,7 @@ class ReturnsService implements ReturnsBridgeAPI {
 
   /** Local lookup, then the live server view (D-a) and its returnability (AC4). */
   private async loadSale(
-    actor: AuthorizedActor,
+    actor: AuthSnapshot,
     op: Operation,
     req: ReturnsLookupRequest,
   ): Promise<Loaded> {
@@ -170,7 +170,8 @@ class ReturnsService implements ReturnsBridgeAPI {
       row.sale_id,
     );
     if (saleRef === null) return this.refuse(actor, op, 'sale_not_synced', ids);
-    const read = await this.deps.client.readSale(saleRef);
+    // A5: the GET carries the admitted snapshot's own envelope.
+    const read = await this.deps.client.readSale(saleRef, actor.envelope);
     // The re-check is the first thing run after the await (inside postRead).
     const checked = this.postRead(actor, { row, saleRef }, read);
     if (checked.kind === 'refused') {
@@ -183,7 +184,7 @@ class ReturnsService implements ReturnsBridgeAPI {
    * The post-read guard pipeline, in order: re-authorize the actor (before
    * any branch), map the readSale outcome, then the live-sale checks.
    */
-  private postRead(actor: AuthorizedActor, local: LocalSale, read: ReadSaleOutcome): Checked {
+  private postRead(actor: AuthSnapshot, local: LocalSale, read: ReadSaleOutcome): Checked {
     const lost = this.deps.authorizer.recheck(actor);
     if (lost !== null) return { kind: 'refused', reason: lost };
     if (read.kind === 'unavailable') return { kind: 'refused', reason: 'offline' };
@@ -226,7 +227,7 @@ class ReturnsService implements ReturnsBridgeAPI {
   }
 
   /** Load and price; shared by quote and submit. */
-  private async priced(actor: AuthorizedActor, op: Operation, req: ReturnsQuoteRequest) {
+  private async priced(actor: AuthSnapshot, op: Operation, req: ReturnsQuoteRequest) {
     const loaded = await this.loadSale(actor, op, req);
     if (loaded.kind !== 'ok') return loaded;
     const ids: Ids = { saleId: loaded.sale.row.sale_id, saleRef: loaded.sale.saleRef };
@@ -272,7 +273,7 @@ class ReturnsService implements ReturnsBridgeAPI {
    * journaled and audited with its true state; an eligible operator sees it via
    * `returns.list` / `returns.resolve`. Not audited as a refusal: nothing was.
    */
-  private submitResponseFor(actor: AuthorizedActor, outcome: DispatchOutcome) {
+  private submitResponseFor(actor: AuthSnapshot, outcome: DispatchOutcome) {
     const lost = this.deps.authorizer.recheck(actor);
     if (lost === null) return toSubmitResponse(outcome);
     return { kind: 'refused', reason: lost, ret: null } as const;

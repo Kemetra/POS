@@ -18,7 +18,7 @@ import { bindAuditEventsStoreDb } from '../../../audit/audit-events-store.js';
 import type { DatabaseHandle } from '../../../db/client.js';
 import type { ReturnsAuditSink } from '../../returns-audit.js';
 import { amount4ToMinor, parseAmount4, parseWholeQuantity } from '../../returns-money.js';
-import type { AuthorizedActor } from '../../returns-auth.js';
+import type { AuthSnapshot } from '../../returns-auth.js';
 import { composeReturns, type ComposedReturns } from '../../compose-returns.js';
 import type { ReturnsSession } from '../../returns-service.js';
 import { createReturnsRepository, type ReturnsRepository } from '../../returns-repository.js';
@@ -55,12 +55,13 @@ export const CARD_SUMMARY = JSON.stringify([
 
 export const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
 
-/** The authorized actor a signed-in manager on this till is admitted as. */
-export const MANAGER_ACTOR: AuthorizedActor = {
+/** The authorization snapshot a signed-in manager on this till is admitted as. */
+export const MANAGER_ACTOR: AuthSnapshot = {
   scope: SCOPE,
   operatorId: 'op-manager',
   operatorSessionId: 'sess-manager',
   role: 'manager',
+  envelope: ENVELOPE,
 };
 
 export function sessionFor(role: Role): ReturnsSession {
@@ -390,7 +391,8 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
   };
   const composed = composeReturns({
     db: handle,
-    http: { baseUrl: BASE_URL, fetch: backend.fetch, getOperatorToken: () => state.token },
+    http: { baseUrl: BASE_URL, fetch: backend.fetch },
+    getOperatorEnvelope: () => state.token,
     isEnabled: () => state.enabled,
     getSession: () =>
       state.role === null || !state.paired

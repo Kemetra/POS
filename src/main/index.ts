@@ -1477,17 +1477,23 @@ app
     // renderer gets a typed `feature_disabled` refusal, never "no handler"). The
     // service re-reads `POS_PULSE_FEATURE_RETURNS` per call (default off, AC1),
     // requires a manager/admin operator session (D-b), and talks only to
-    // Backend-Core `/api/pos/v1/sales/...` (AC7) with the operator envelope read
-    // in-process. The background resolver (startup + interval) re-sends
-    // `pending` / `unknown` returns with the identical request; it is scheduled
-    // with the flag on and resolves pairing + operator live on every tick.
+    // Backend-Core `/api/pos/v1/sales/...` (AC7) with the operator envelope of
+    // the admitted authorization snapshot (RT-197 A5). The background resolver
+    // (startup + interval) re-sends `pending` / `unknown` returns with the
+    // identical request; it is scheduled with the flag on and resolves pairing +
+    // operator live on every tick.
     const returnsDomain = composeReturns({
       db,
       http: {
         baseUrl: resolveApiBaseUrl(),
         fetch: globalThis.fetch.bind(globalThis),
-        getOperatorToken: createSaleSyncTokenReader(operatorSessionManager, operatorEnvelopeHolder),
       },
+      // RT-197 A5: read only into the authorization snapshot (and at a
+      // recheck); every send carries the snapshot's envelope explicitly.
+      getOperatorEnvelope: createSaleSyncTokenReader(
+        operatorSessionManager,
+        operatorEnvelopeHolder,
+      ),
       isEnabled: () => parseFeatureFlags(process.env).returns,
       getSession: () =>
         resolveSessionScope(
