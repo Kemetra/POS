@@ -748,6 +748,39 @@ describe('RT-26 cart.returnToSale — Back vs Confirm race', () => {
   });
 });
 
+/** The cashier's cart handlers over the same DB, with an injected clock. */
+function withCashierClock(s: Stack, clock: () => Date): Stack {
+  const cart = new CartBridgeHandlers({
+    getCurrentSession: () => operator('sess-1'),
+    getTerminalId: () => TERMINAL,
+    cartStore: bindCartStore(s.handle),
+    clock,
+    cartPaymentStatus: bindCartPaymentStatus(s.handle),
+    checkoutReturnAllowed: bindCheckoutReturnAllowed(s.handle),
+    releaseCheckoutPayment: bindCheckoutReturnGuard({
+      db: s.handle,
+      paymentAttemptFsm: s.paymentAttemptFsm,
+      auditEmitter: createPaymentAuditEmitter({ sink: { write: () => undefined } }),
+    }),
+  });
+  return { ...s, cart };
+}
+
+/** A manager's post-handoff cancel of `cartId`, naming `handoffActionId`. */
+function managerCancel(s: Stack, cartId: string, handoffActionId: string) {
+  const manager = new CartBridgeHandlers({
+    getCurrentSession: () => operator('sess-mgr', 'manager'),
+    getTerminalId: () => TERMINAL,
+    cartStore: bindCartStore(s.handle),
+    cartPaymentStatus: bindCartPaymentStatus(s.handle),
+  });
+  return manager.cancelPostHandoff({
+    cart_id: cartId,
+    handoff_action_id: handoffActionId,
+    idempotency_key: key('cph'),
+  });
+}
+
 describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
   it('replays the same Back idempotently (lost response retried with the same key)', async () => {
     const s = buildStack();
@@ -805,43 +838,45 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     const s = buildStack();
     const cartId = await ringSale(s);
     // Same clock for every write: both handoffs get an identical applied_at.
-    const frozenClock = (): Date => new Date('2026-10-04T10:00:00.000Z');
-    const paymentAttemptFsm = s.paymentAttemptFsm;
-    const handlers = new CartBridgeHandlers({
-      getCurrentSession: () => operator('sess-1'),
-      getTerminalId: () => TERMINAL,
-      cartStore: bindCartStore(s.handle),
-      clock: frozenClock,
-      cartPaymentStatus: bindCartPaymentStatus(s.handle),
-      checkoutReturnAllowed: bindCheckoutReturnAllowed(s.handle),
-      releaseCheckoutPayment: bindCheckoutReturnGuard({
-        db: s.handle,
-        paymentAttemptFsm,
-        auditEmitter: createPaymentAuditEmitter({ sink: { write: () => undefined } }),
-      }),
-    });
-    const t = { ...s, cart: handlers };
+    const t = withCashierClock(s, () => new Date('2026-10-04T10:00:00.000Z'));
     const first = await handoff(t, cartId);
     expect(await back(t, first)).toEqual({ kind: 'ok' });
     const second = await handoff(t, cartId);
 
     expect(await back(t, first)).toEqual({ kind: 'refused', reason: 'stale_version' });
-    // The post-handoff cancel's latest-handoff lookup breaks the tie by insertion order.
-    const manager = new CartBridgeHandlers({
-      getCurrentSession: () => ({ ...operator('sess-mgr', 'manager') }),
-      getTerminalId: () => TERMINAL,
-      cartStore: bindCartStore(s.handle),
-      clock: frozenClock,
-      cartPaymentStatus: bindCartPaymentStatus(s.handle),
+    expect(await managerCancel(s, cartId, first.handoff_action_id)).toEqual({
+      kind: 'refused',
+      reason: 'stale_version',
     });
-    expect(
-      await manager.cancelPostHandoff({
-        cart_id: cartId,
-        handoff_action_id: first.handoff_action_id,
-        idempotency_key: key('cph-old'),
-      }),
-    ).toEqual({ kind: 'refused', reason: 'stale_version' });
     expect(await back(t, second)).toEqual({ kind: 'ok' });
+  });
+
+  it('post-handoff cancel follows the persisted envelope even when the clock stepped back', async () => {
+    const s = buildStack();
+    const cartId = await ringSale(s);
+    // handoff-1 at 10:00, Back, then NTP steps the clock back: handoff-2 lands at 09:00.
+    const times = [
+      '2026-10-04T10:00:00.000Z',
+      '2026-10-04T10:00:01.000Z',
+      '2026-10-04T09:00:00.000Z',
+    ];
+    const t = withCashierClock(s, () => new Date(times.shift() ?? '2026-10-04T09:00:01.000Z'));
+    const first = await handoff(t, cartId);
+    expect(await back(t, first)).toEqual({ kind: 'ok' });
+    const second = await handoff(t, cartId);
+    expect(
+      one(`SELECT applied_at FROM cart_action_outbox WHERE action_id = ?`, [
+        second.handoff_action_id,
+      ])?.['applied_at'],
+    ).toBe('2026-10-04T09:00:00.000Z');
+
+    // The superseded handoff is stale; the current one (earlier wall clock) cancels.
+    expect(await managerCancel(s, cartId, first.handoff_action_id)).toEqual({
+      kind: 'refused',
+      reason: 'stale_version',
+    });
+    expect(await managerCancel(s, cartId, second.handoff_action_id)).toEqual({ kind: 'ok' });
+    expect(cartRow(cartId)?.['state']).toBe('cancelled');
   });
 
   it('refuses a cart that was never handed off, and a cancelled cart', async () => {

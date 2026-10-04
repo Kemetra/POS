@@ -262,6 +262,9 @@ export interface CartStore {
    * Returns the action_id of the most recent `cart.handoff_to_payment` outbox
    * row. Since RT-26 a cart can be handed off more than once (Back, edit,
    * Checkout again), so insertion order (rowid) breaks an `applied_at` tie.
+   * Ordering is by wall clock, so it is NOT used to validate a handoff:
+   * `cart.returnToSale` and `cart.cancelPostHandoff` compare against the
+   * cart's persisted envelope instead (immune to a clock step).
    */
   findLatestHandoffActionId(cart_id: string): string | undefined;
   /** Returns the active (non-terminal) draft cart owned by the given session, if any. */

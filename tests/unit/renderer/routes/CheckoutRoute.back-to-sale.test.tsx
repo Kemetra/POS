@@ -201,14 +201,19 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
     expect(returnToSale).toHaveBeenCalledOnce();
   });
 
-  it('Back with a zero-funds started attempt is offered (main cancels the attempt)', async () => {
+  it('Back with a zero-funds started attempt is offered once the entry panel is closed (main cancels the attempt)', async () => {
     const user = userEvent.setup();
     renderCheckout();
     await user.click(await screen.findByTestId('tender-cash'));
     await waitFor(() => {
       expect(usePaymentStore.getState().paymentSlice?.state).toBe('started');
     });
+    expect(await screen.findByTestId('payment-surface-entry')).toBeInTheDocument();
 
+    // First Esc closes only the entry panel; the second is Back.
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+    expect(returnToSale).not.toHaveBeenCalled();
     expect(screen.getByTestId('payment-surface-back')).toBeEnabled();
     await user.keyboard('{Escape}');
     await waitFor(() => {
@@ -286,10 +291,37 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
       resolveStart({ kind: 'ok', payment_attempt_id: 'pa-1' });
       await Promise.resolve();
     });
-    await waitFor(() => {
-      expect(screen.getByTestId('payment-surface-back')).toBeEnabled();
-    });
+    // The cash entry panel is now open: Back stays disabled until it closes.
+    expect(await screen.findByTestId('payment-surface-entry')).toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface-back')).toBeDisabled();
   });
+
+  it.each([
+    ['cash', 'tender-cash'],
+    ['card', 'tender-external-card'],
+  ])(
+    'Esc in the open %s entry panel closes only that panel, consuming the key',
+    async (_label, tenderTestId) => {
+      const user = userEvent.setup();
+      renderCheckout();
+      await enabledBack();
+      await user.click(screen.getByTestId(tenderTestId));
+      expect(await screen.findByTestId('payment-surface-entry')).toBeInTheDocument();
+      expect(screen.getByTestId('payment-surface-back')).toBeDisabled();
+
+      const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      act(() => {
+        window.dispatchEvent(esc);
+      });
+
+      expect(esc.defaultPrevented).toBe(true);
+      expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+      expect(returnToSale).not.toHaveBeenCalled();
+      expect(screen.getByTestId('location-probe')).toHaveTextContent('/app/checkout');
+      // The attempt itself is untouched (closing the panel cancels nothing).
+      expect(usePaymentStore.getState().paymentSlice?.state).toBe('started');
+    },
+  );
 
   it('fails closed without calling main when the renderer cart is not the frozen envelope cart', async () => {
     useCartStore.setState({

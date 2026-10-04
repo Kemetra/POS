@@ -87,6 +87,127 @@ export interface PaymentSurfaceProps {
 /** Shown when main refuses (or cannot be reached for) a Back. Generic, no reason. */
 const BACK_REFUSED_COPY = 'تعذّر الرجوع إلى البيع. أكمل الدفع أو ألغِه.';
 
+/** What the Back control may do right now (RT-26). Pure; main still decides. */
+interface BackControl {
+  /** The control is shown: wired, signed in, an envelope, not settled. */
+  readonly offered: boolean;
+  /** Tender was seen (projection, a reversing cancel, or main says blocked). */
+  readonly tenderBlocked: boolean;
+  /** Back / Esc may ask main now. */
+  readonly enabled: boolean;
+  /** Show the "money recorded" reason line under the header. */
+  readonly showReason: boolean;
+  /** `aria-disabled` for the control (mirrors `disabled`). */
+  readonly ariaDisabled: 'true' | undefined;
+}
+
+interface BackControlInput {
+  readonly wired: boolean;
+  /** Signed in, an envelope mounted, and the surface is not settled. */
+  readonly onOpenCheckout: boolean;
+  readonly eligibility: BackToSaleEligibility;
+  /** Tender lines in the current projection (any state); undefined = no attempt. */
+  readonly projectedTenderLines: number | undefined;
+  /** A payments.cancel in this mount reversed tender. */
+  readonly tenderTouched: boolean;
+  /** start / confirm / cancel / back in flight. */
+  readonly busy: boolean;
+  /**
+   * A tender entry panel (cash / card / voucher) is open. Back is never offered
+   * from inside it: Esc there closes only the panel, so a card already charged
+   * on the standalone terminal cannot be walked away from in one keystroke.
+   */
+  readonly entryOpen: boolean;
+}
+
+/** Any sign of tender for this handoff: projected lines, a reversing cancel, or main. */
+function isTenderBlocked(input: BackControlInput): boolean {
+  if ((input.projectedTenderLines ?? 0) > 0 || input.tenderTouched) return true;
+  return input.eligibility === 'blocked';
+}
+
+function deriveBackControl(input: BackControlInput): BackControl {
+  const offered = input.wired && input.onOpenCheckout;
+  const tenderBlocked = isTenderBlocked(input);
+  const ready = input.eligibility === 'returnable' && !tenderBlocked;
+  const enabled = offered && ready && !(input.busy || input.entryOpen);
+  return {
+    offered,
+    tenderBlocked,
+    enabled,
+    showReason: offered && tenderBlocked,
+    ariaDisabled: enabled ? undefined : 'true',
+  };
+}
+
+/** Checkout is open on a live envelope (signed in, envelope mounted, not settled). */
+function isOpenCheckout(sessionKind: string, hasEnvelope: boolean, phase: Phase): boolean {
+  if (sessionKind !== 'signedIn') return false;
+  return hasEnvelope && phase !== 'settled';
+}
+
+/** A fresh Esc press no inner layer has already handled. */
+function isEscapePress(event: KeyboardEvent): boolean {
+  if (event.key !== 'Escape') return false;
+  return !event.defaultPrevented && !event.repeat;
+}
+
+/**
+ * Runs `onEscape` for an Esc press while `enabled`, consuming the event
+ * (preventDefault) so no other Esc handler acts on it. Re-subscribed every
+ * render so the handler always sees current state. Used for the RT-24 layer
+ * order: an open entry panel closes first; only then is Esc = Back.
+ */
+function useEscapeKey(enabled: boolean, onEscape: () => void): void {
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!isEscapePress(event)) return;
+      event.preventDefault();
+      onEscape();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  });
+}
+
+/** RT-26 — Back to the same sale (Esc). Rendered only while offered. */
+function BackToSaleButton(props: { back: BackControl; onBack: () => void }): JSX.Element | null {
+  if (!props.back.offered) return null;
+  return (
+    <button
+      type="button"
+      className="btn btn--md btn--secondary payment-surface__back"
+      data-testid="payment-surface-back"
+      disabled={!props.back.enabled}
+      aria-disabled={props.back.ariaDisabled}
+      aria-keyshortcuts="Escape"
+      onClick={props.onBack}
+    >
+      رجوع إلى البيع
+      <kbd className="payment-surface__back-key" dir="ltr">
+        Esc
+      </kbd>
+    </button>
+  );
+}
+
+/** Why Back is disabled once tender exists (main refuses it in that case too). */
+function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
+  if (!props.back.showReason) return null;
+  return (
+    <p
+      className="payment-surface__back-blocked"
+      data-testid="payment-surface-back-blocked"
+      role="status"
+    >
+      لا يمكن الرجوع إلى البيع بعد تسجيل أي مبلغ. أكمل الدفع أو ألغِه.
+    </p>
+  );
+}
+
 type Phase = 'tender_selection' | 'entry' | 'settled';
 
 interface ResolvedBridge {
@@ -227,30 +348,19 @@ export function PaymentSurface({
   // cashier-quotable reference is worse than none. It returns with the
   // correlating identifier, alongside T013a and T017.
 
-  // RT-26 — Back is offered before any tender: any tender line in the
-  // projection (applied, applying, refused, reversed, …), a settled surface or
-  // an operation in flight disables it. Mirrors main's rule; main decides.
-  const tenderActivity =
-    (paymentSlice?.tender_lines.length ?? 0) > 0 ||
-    tenderTouched ||
-    backToSaleEligibility === 'blocked';
-  const backOffered =
-    onBackToSale !== undefined &&
-    sessionState.kind === 'signedIn' &&
-    envelope !== null &&
-    phase !== 'settled';
-  const backEnabled =
-    backOffered &&
-    backToSaleEligibility === 'returnable' &&
-    !tenderActivity &&
-    !isStarting &&
-    !isConfirming &&
-    !isCancelling &&
-    !isReturning;
+  // RT-26 — Back is offered before any tender (see deriveBackControl).
+  const back = deriveBackControl({
+    wired: onBackToSale !== undefined,
+    onOpenCheckout: isOpenCheckout(sessionState.kind, envelope !== null, phase),
+    eligibility: backToSaleEligibility,
+    projectedTenderLines: paymentSlice?.tender_lines.length,
+    tenderTouched,
+    busy: [isStarting, isConfirming, isCancelling, isReturning].some(Boolean),
+    entryOpen: phase === 'entry',
+  });
 
   async function handleBackToSale(): Promise<void> {
-    // `backEnabled` implies `onBackToSale` is defined (TS narrows the alias).
-    if (!backEnabled) return;
+    if (!back.enabled || onBackToSale === undefined) return;
     setBridgeRefusalCopy(null);
     setIsReturning(true);
     const returned = await onBackToSale().catch(() => false);
@@ -261,19 +371,14 @@ export function PaymentSurface({
     }
   }
 
-  // Esc = Back (RT-24). Re-subscribed every render so it always sees the
-  // current state; inner layers that own Esc call preventDefault first.
-  useEffect(() => {
-    if (!backEnabled) return undefined;
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented || event.repeat) return;
-      event.preventDefault();
-      void handleBackToSale();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-    };
+  // Esc closes an open entry panel (only the panel: the attempt and any
+  // recorded tender are untouched, and Back stays a separate, second action).
+  useEscapeKey(phase === 'entry', () => {
+    setSelectedTender(null);
+    setPhase('tender_selection');
+  });
+  useEscapeKey(back.enabled, () => {
+    void handleBackToSale();
   });
 
   if (sessionState.kind !== 'signedIn' || envelope === null) {
@@ -620,36 +725,16 @@ export function PaymentSurface({
         <h1 className="payment-surface__title">الدفع</h1>
         {/* RT-26 — Back to the same sale (Esc). Disabled, with the reason
             below, once tender exists; main refuses it in that case too. */}
-        {backOffered && (
-          <button
-            type="button"
-            className="btn btn--md btn--secondary payment-surface__back"
-            data-testid="payment-surface-back"
-            disabled={!backEnabled}
-            aria-disabled={!backEnabled ? 'true' : undefined}
-            aria-keyshortcuts="Escape"
-            onClick={() => {
-              void handleBackToSale();
-            }}
-          >
-            رجوع إلى البيع
-            <kbd className="payment-surface__back-key" dir="ltr">
-              Esc
-            </kbd>
-          </button>
-        )}
+        <BackToSaleButton
+          back={back}
+          onBack={() => {
+            void handleBackToSale();
+          }}
+        />
         <OperatorBadge display_name={display_name} role={role} />
       </header>
 
-      {backOffered && tenderActivity && (
-        <p
-          className="payment-surface__back-blocked"
-          data-testid="payment-surface-back-blocked"
-          role="status"
-        >
-          لا يمكن الرجوع إلى البيع بعد تسجيل أي مبلغ. أكمل الدفع أو ألغِه.
-        </p>
-      )}
+      <BackBlockedReason back={back} />
 
       {/*
         022 US3 T070 — three-column composition.

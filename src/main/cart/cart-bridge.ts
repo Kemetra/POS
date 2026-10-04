@@ -260,14 +260,28 @@ function postHandoffApprover(
  * mislabelled.
  */
 function postHandoffCancelRefusal(
-  store: Pick<CartStore, 'findLatestHandoffActionId'>,
-  cartState: CartState,
-  req: { cart_id: string; handoff_action_id: string },
+  cart: PersistedHandoffCart,
+  req: { handoff_action_id: string },
 ): CartRefusalReason | null {
-  if (cartState !== CartState.frozen_handed_off) return 'closed';
-  return store.findLatestHandoffActionId(req.cart_id) === req.handoff_action_id
-    ? null
-    : 'stale_version';
+  if ((cart.state as CartState) !== CartState.frozen_handed_off) return 'closed';
+  return isPersistedHandoff(cart, req.handoff_action_id) ? null : 'stale_version';
+}
+
+/** The cart fields that identify its current handoff. */
+interface PersistedHandoffCart {
+  state: string;
+  handoff_envelope_json: string | null;
+}
+
+/**
+ * Does `handoffActionId` name the handoff of the cart's PERSISTED envelope —
+ * the one payment would use? Written in the same transaction as the cart
+ * freeze, so unlike the outbox's wall-clock `applied_at` it cannot be fooled
+ * by a clock step between two handoffs of the same cart (RT-26 makes repeat
+ * handoffs possible).
+ */
+function isPersistedHandoff(cart: PersistedHandoffCart, handoffActionId: string): boolean {
+  return parseEnvelope(cart.handoff_envelope_json)?.handoff_action_id === handoffActionId;
 }
 
 type RecordedAction = { action_kind: string; cart_id: string; payload_json: string };
@@ -316,15 +330,13 @@ function isSameReturnReplay(replay: RecordedAction, req: HandoffBoundRequest): b
  * would use — so an old envelope can never drive it.
  */
 function returnToSaleRefusal(
-  cart: { state: string; handoff_envelope_json: string | null },
+  cart: PersistedHandoffCart,
   req: { handoff_action_id: string },
 ): CartRefusalReason | null {
   const state = cart.state as CartState;
   if (state === CartState.cancelled) return 'closed';
   if (state !== CartState.frozen_handed_off) return 'stale_version';
-  return parseEnvelope(cart.handoff_envelope_json)?.handoff_action_id === req.handoff_action_id
-    ? null
-    : 'stale_version';
+  return isPersistedHandoff(cart, req.handoff_action_id) ? null : 'stale_version';
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
@@ -1080,7 +1092,7 @@ export class CartBridgeHandlers {
         : refuse('idempotency_payload_mismatch');
     }
 
-    const precondition = postHandoffCancelRefusal(store, cart.state as CartState, req);
+    const precondition = postHandoffCancelRefusal(cart, req);
     if (precondition !== null) return refuse(precondition);
 
     const now = this.clock().toISOString();
