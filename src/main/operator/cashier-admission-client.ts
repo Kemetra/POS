@@ -58,7 +58,9 @@ export interface CashierAdmissionAdmitted {
  * Outcome of `posCreateCashierAdmission`, in the contract's terms:
  *  - `admitted` / `active_elsewhere`: the two 200 variants;
  *  - `refused`: the generic 403 (cause never returned);
- *  - `device_unauthorized`: 401, or no device token held locally;
+ *  - `device_unauthorized`: 401 (the device credential was refused);
+ *  - `no_token`: no device token could be read locally, so nothing was sent
+ *    (review F8: never treated as a device revocation);
  *  - `idempotency_conflict`: 409; `rate_limited`: 429 (takeover limit);
  *  - `rejected`: 400, any other 4xx, or a 200 body outside the contract;
  *  - `unavailable`: 5xx; `no_connection`: transport failure or timeout.
@@ -68,6 +70,7 @@ export type CashierAdmissionResult =
   | { kind: 'active_elsewhere' }
   | { kind: 'refused' }
   | { kind: 'device_unauthorized' }
+  | { kind: 'no_token' }
   | { kind: 'idempotency_conflict' }
   | { kind: 'rate_limited' }
   | { kind: 'rejected' }
@@ -77,6 +80,7 @@ export type CashierAdmissionResult =
 export type CashierAdmissionEndResult =
   | { kind: 'ended' }
   | { kind: 'device_unauthorized' }
+  | { kind: 'no_token' }
   | { kind: 'failed' }
   | { kind: 'no_connection' };
 
@@ -91,6 +95,7 @@ export interface CashierRosterEntry {
 export type CashierRosterResult =
   | { kind: 'roster'; cashiers: CashierRosterEntry[] }
   | { kind: 'device_unauthorized' }
+  | { kind: 'no_token' }
   | { kind: 'rejected' }
   | { kind: 'unavailable' }
   | { kind: 'no_connection' };
@@ -122,9 +127,19 @@ export function createCashierAdmissionClient(
   const root = deps.baseUrl.replace(/\/$/, '');
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
+  /** The device token, or null when none can be read (a throwing read included). */
+  async function readToken(): Promise<string | null> {
+    try {
+      const token = await deps.getDeviceToken();
+      return token !== null && token.length > 0 ? token : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function send(path: string, method: 'GET' | 'POST', body?: unknown): Promise<Sent> {
-    const token = await deps.getDeviceToken();
-    if (token === null || token.length === 0) return { kind: 'no_token' };
+    const token = await readToken();
+    if (token === null) return { kind: 'no_token' };
     const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
     const init: RequestInit = { method, headers, signal: AbortSignal.timeout(timeoutMs) };
     if (body !== undefined) {
@@ -178,9 +193,9 @@ export function createCashierAdmissionClient(
 
 /** Outcome when no response arrived: no device token, or a transport failure. */
 function notSent(sent: Exclude<Sent, { kind: 'response' }>): {
-  kind: 'device_unauthorized' | 'no_connection';
+  kind: 'no_token' | 'no_connection';
 } {
-  return { kind: sent.kind === 'no_token' ? 'device_unauthorized' : 'no_connection' };
+  return { kind: sent.kind };
 }
 
 type NonOkKind = 'device_unauthorized' | 'refused' | 'idempotency_conflict' | 'rate_limited';
@@ -219,6 +234,13 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** `format: uuid` (review F9): the id is passed back in the `end` path. */
+function isUuid(value: unknown): value is string {
+  return isString(value) && UUID.test(value);
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return isString(value) && value.length > 0;
 }
@@ -231,7 +253,7 @@ function isIntegerAtLeast(min: number): (value: unknown) => boolean {
 const ADMITTED_FIELDS: Readonly<
   Record<keyof Omit<CashierAdmissionAdmitted, 'kind'>, (v: unknown) => boolean>
 > = {
-  admission_id: isNonEmptyString,
+  admission_id: isUuid,
   offline_grace_seconds: isIntegerAtLeast(0),
   admission_ttl_seconds: isIntegerAtLeast(1),
   server_time: isString,

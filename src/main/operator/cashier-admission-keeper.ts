@@ -6,10 +6,14 @@ import type {
 } from './cashier-admission-client.js';
 import {
   nextIdempotencyKey,
-  reportAdmissionOutcome,
+  notifyGrantSeam,
   type CashierAdmissionDeps,
 } from './cashier-admission.js';
-import type { OperatorSessionRecord, SessionManager } from './session-manager.js';
+import type {
+  AuthorityLatchCause,
+  OperatorSessionRecord,
+  SessionManager,
+} from './session-manager.js';
 
 /**
  * RT-113 P2 — keeps an online cashier admission live, and ends it.
@@ -20,51 +24,66 @@ import type { OperatorSessionRecord, SessionManager } from './session-manager.js
  * `admission_ttl_seconds` from the latest `admitted` response.
  *
  * The keeper observes the SessionManager:
- *  - a session that starts with an online admission is armed: its first
+ *  - a session that starts with an online admission is armed: the first
  *    heartbeat fires TTL/2 after sign-in, each next one TTL/2 after the latest
- *    answer (a `setTimeout` chain, so a request never overlaps the next);
- *  - any session end (sign-out, cascade, superseded) disarms it and fires a
- *    best-effort, fire-and-forget `end` for its admission. `end` is idempotent
- *    server-side and its failure never blocks sign-out;
+ *    answer. It is a `setTimeout` chain scheduled only AFTER the answer, so
+ *    requests never overlap. The interval is clamped to [1 s, 2^31-1 ms]
+ *    (review F5);
+ *  - any session end disarms it and fires a best-effort, fire-and-forget
+ *    `end` for its admission, never blocking sign-out. A replacing session
+ *    that holds the SAME admission_id does not end it (review F4);
  *  - `stop()` is the shutdown latch (RT-198 pattern): it clears every timer,
- *    and nothing — no heartbeat, no `end`, no session change, no seam call —
- *    happens afterwards, even when an in-flight request settles later.
+ *    and nothing runs afterwards, even when an in-flight request settles.
  *
- * Heartbeat outcomes (10763 D8 / contract):
- *  - `admitted` → renew (record the latest TTL and grace; refresh the P1
- *    grant seam). A different `admission_id` means the old one expired and the
- *    server admitted this device afresh: the new id is adopted and logged.
- *  - `active_elsewhere` → stop heartbeating; end the session
- *    `superseded_by_takeover` at its next safe point (no open sale with lines
- *    and no live tender), re-checked every {@link SAFE_POINT_RECHECK_MS}.
- *    Nothing is reversed or discarded.
- *  - `refused` (403) → invalidate the grant (P1 seam) and end the session
- *    `account_disabled_mid_session` (LifecycleCascade).
- *  - `device_unauthorized` (401) → the device-revoked handling
- *    (`terminal_session_terminated`).
- *  - anything else (unreachable, 5xx, 400/409/429) → keep the session and try
- *    again on the next tick.
+ * Losing authority (Codex P1 #1, review F1/F2/F3): `active_elsewhere`, a 403
+ * and two CONSECUTIVE device 401s (the second a confirmation call 30 s after
+ * the first) LATCH the session (`SessionManager.latchAuthority`). While
+ * latched no new sale may start (`cart.create` refuses `authority_conflict`)
+ * and the heartbeat stops. The session ends with its own cause
+ * (`superseded_by_takeover` / `account_disabled_mid_session` /
+ * `terminal_session_terminated`) at its FIRST safe point (no open sale with
+ * lines and no live tender). The safe point is checked at once, at every sale
+ * boundary (`recheckSafePoint`, wired to the cart bridge), on every lock-state
+ * change, and every {@link SAFE_POINT_RECHECK_MS} as a backstop. Nothing is
+ * reversed or discarded. A 403 or confirmed 401 invalidates the P1 grant at
+ * once (D4).
  *
- * Every outcome is checked against the stop latch and against the session the
- * request was made for, AFTER the await: a response for an ended session never
- * touches the next one.
+ * Other outcomes: `admitted` renews (a re-issued id is adopted and logged);
+ * network, 5xx and 429 retry after min(TTL/2, 60 s), backing off
+ * exponentially up to TTL/2 (review F6); 400, 409 and `no_token` keep the
+ * normal cadence. A late `admitted` for a session that is gone ends that
+ * admission unless the live session holds it (review F7).
  *
- * Logs carry the outcome kind only — no admission id, user id, key or name.
+ * Logs carry the outcome kind only: no admission id, user id, key or name.
  */
 
-/** How often a superseded session re-checks for its next safe point. */
+/** How often a latched session re-checks for its next safe point (backstop). */
 export const SAFE_POINT_RECHECK_MS = 5_000;
+/** Review F3: the confirmation call after a first device 401. */
+export const DEVICE_401_CONFIRM_MS = 30_000;
+/** Review F6: the first retry after a failed tick (network, 5xx, 429). */
+export const FAILED_TICK_RETRY_MS = 60_000;
 
-/** The heartbeat interval: half the TTL, in ms (never below 1 ms). */
+const MIN_INTERVAL_MS = 1_000;
+/** The largest delay `setTimeout` honours (a larger one fires at once). */
+const MAX_INTERVAL_MS = 2_147_483_647;
+
+/** The heartbeat interval: half the TTL in ms, clamped to [1 s, 2^31-1 ms] (F5). */
 export function heartbeatIntervalMs(ttlSeconds: number): number {
-  return Math.max(1, Math.floor((ttlSeconds * 1000) / 2));
+  const half = Math.floor((ttlSeconds * 1000) / 2);
+  return Math.min(MAX_INTERVAL_MS, Math.max(MIN_INTERVAL_MS, half));
 }
+
+/** Failed ticks that retry sooner (review F6). */
+const BACKOFF_KINDS: ReadonlySet<CashierAdmissionResult['kind']> = new Set([
+  'no_connection',
+  'unavailable',
+  'rate_limited',
+]);
 
 export interface CashierAdmissionKeeperDeps {
   sessionManager: SessionManager;
   admission: CashierAdmissionDeps;
-  /** 403 on a heartbeat: production wires `LifecycleCascade.notifyAccountDisabled()`. */
-  onAccountDisabled: () => void;
   /**
    * True when ending the session now preserves everything: no open sale with
    * lines and no live tender. Production wires the RT-117 lock-state summary.
@@ -81,7 +100,11 @@ interface Armed {
   admission_id: string;
   ttl_seconds: number;
   timer: ReturnType<typeof setTimeout> | null;
-  superseded: boolean;
+  latched: boolean;
+  /** Consecutive failed ticks (backoff). */
+  failures: number;
+  /** Consecutive device 401s (debounce). */
+  device401s: number;
 }
 
 /** True when the record holds a live online cashier admission to keep alive. */
@@ -105,8 +128,17 @@ function armedFor(record: OperatorSessionRecord): Armed | null {
     admission_id: record.admission_id,
     ttl_seconds: record.admission_ttl_seconds,
     timer: null,
-    superseded: false,
+    latched: false,
+    failures: 0,
+    device401s: 0,
   };
+}
+
+/** Review F6: min(TTL/2, 60 s), doubling per consecutive failure, capped at TTL/2. */
+function retryDelayMs(armed: Armed): number {
+  const interval = heartbeatIntervalMs(armed.ttl_seconds);
+  const backoff = FAILED_TICK_RETRY_MS * 2 ** Math.min(armed.failures - 1, 20);
+  return Math.min(interval, backoff);
 }
 
 export class CashierAdmissionKeeper {
@@ -120,6 +152,9 @@ export class CashierAdmissionKeeper {
     deps.sessionManager.onEnded((record) => {
       this.onSessionEnded(record);
     });
+    deps.sessionManager.onLockStateChanged(() => {
+      this.recheckSafePoint();
+    });
   }
 
   /** Shutdown latch: idempotent; clears every timer; nothing runs afterwards. */
@@ -128,18 +163,29 @@ export class CashierAdmissionKeeper {
     this.disarm();
   }
 
+  /**
+   * A sale boundary happened (sale settled, voided or cancelled, or a new sale
+   * was refused): end a latched session now if it is at its safe point.
+   */
+  recheckSafePoint(): void {
+    const armed = this.armed;
+    if (armed === null || !armed.latched) return;
+    this.endAtSafePoint(armed);
+  }
+
   private onSessionStarted(record: OperatorSessionRecord): void {
     if (this.stopped) return;
     const previous = this.armed;
     if (previous !== null && previous.session_id !== record.id) {
-      // A new session replaced the old one without an end: release the old admission.
+      // A new session replaced the old one without an end: release the old
+      // admission unless the new session holds the same one (F4).
       this.disarm();
-      this.endAdmission(previous.admission_id);
+      if (previous.admission_id !== record.admission_id) this.endAdmission(previous.admission_id);
     }
     const armed = armedFor(record);
     if (armed === null) return;
     this.armed = armed;
-    this.scheduleHeartbeat(armed);
+    this.scheduleHeartbeat(armed, heartbeatIntervalMs(armed.ttl_seconds));
   }
 
   private onSessionEnded(record: OperatorSessionRecord): void {
@@ -153,14 +199,18 @@ export class CashierAdmissionKeeper {
     if (record.admission_id !== undefined) this.endAdmission(record.admission_id);
   }
 
-  private schedule(ms: number, run: () => void): void {
-    const armed = this.armed;
-    if (armed === null) return;
+  private schedule(armed: Armed, ms: number, run: () => void): void {
     if (armed.timer !== null) clearTimeout(armed.timer);
     armed.timer = setTimeout(() => {
       armed.timer = null;
       run();
     }, ms);
+  }
+
+  private scheduleHeartbeat(armed: Armed, ms: number): void {
+    this.schedule(armed, ms, () => {
+      void this.heartbeat(armed);
+    });
   }
 
   private disarm(): void {
@@ -177,25 +227,15 @@ export class CashierAdmissionKeeper {
     );
   }
 
-  private scheduleHeartbeat(armed: Armed): void {
-    this.schedule(heartbeatIntervalMs(armed.ttl_seconds), () => {
-      void this.heartbeat();
-    });
-  }
-
-  /** The armed session may heartbeat now: running, armed, not superseded. */
-  private beatable(): Armed | null {
-    const armed = this.armed;
-    if (this.stopped || armed === null) return null;
-    return armed.superseded ? null : armed;
-  }
-
-  private async heartbeat(): Promise<void> {
-    const armed = this.beatable();
-    if (armed === null) return;
+  private async heartbeat(armed: Armed): Promise<void> {
+    if (!this.stillCurrent(armed) || armed.latched) return;
     const result = await this.requestHeartbeat(armed);
     // RT-198 latch + session identity: re-checked after the await.
-    if (!this.stillCurrent(armed)) return;
+    if (this.stopped) return;
+    if (!this.stillCurrent(armed)) {
+      this.releaseOrphan(result);
+      return;
+    }
     this.log(result.kind);
     this.handleOutcome(armed, result);
   }
@@ -213,28 +253,41 @@ export class CashierAdmissionKeeper {
     }
   }
 
+  /**
+   * Review F7: an `admitted` for a session that is gone leaves a live server
+   * admission behind. End it, unless the live session holds that same id
+   * (same-device re-admission returns the same `admission_id`).
+   */
+  private releaseOrphan(result: CashierAdmissionResult): void {
+    if (result.kind !== 'admitted') return;
+    if (this.armed?.admission_id === result.admission_id) return;
+    this.endAdmission(result.admission_id);
+  }
+
   private handleOutcome(armed: Armed, result: CashierAdmissionResult): void {
+    if (result.kind !== 'device_unauthorized') armed.device401s = 0;
     switch (result.kind) {
       case 'admitted':
         this.onAdmitted(armed, result);
         return;
       case 'active_elsewhere':
-        this.onActiveElsewhere(armed);
+        this.latch(armed, 'superseded_by_takeover');
         return;
       case 'refused':
-        this.onRefused(armed, result);
+        notifyGrantSeam(this.deps.admission, result, armed);
+        this.latch(armed, 'account_disabled_mid_session');
         return;
       case 'device_unauthorized':
-        this.onDeviceRevoked(armed, result);
+        this.onDeviceUnauthorized(armed, result);
         return;
       default:
-        // Unreachable / 5xx / 400 / 409 / 429: keep the session, retry next tick.
-        this.scheduleHeartbeat(armed);
+        this.onNotAnswered(armed, result);
     }
   }
 
   private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted): void {
-    reportAdmissionOutcome(this.deps.admission, result, armed);
+    armed.failures = 0;
+    notifyGrantSeam(this.deps.admission, result, armed);
     if (result.admission_id !== armed.admission_id) {
       this.deps.logger?.warn(
         { event: 'operator.cashier_admission.heartbeat.rotated' },
@@ -248,65 +301,74 @@ export class CashierAdmissionKeeper {
       admission_ttl_seconds: result.admission_ttl_seconds,
       offline_grace_seconds: result.offline_grace_seconds,
     });
-    this.scheduleHeartbeat(armed);
+    this.scheduleHeartbeat(armed, heartbeatIntervalMs(armed.ttl_seconds));
   }
 
-  private onActiveElsewhere(armed: Armed): void {
-    armed.superseded = true;
+  /** Review F3: act only on the second consecutive 401, confirmed 30 s later. */
+  private onDeviceUnauthorized(armed: Armed, result: CashierAdmissionResult): void {
+    armed.device401s += 1;
+    if (armed.device401s < 2) {
+      this.scheduleHeartbeat(armed, DEVICE_401_CONFIRM_MS);
+      return;
+    }
+    notifyGrantSeam(this.deps.admission, result, armed);
+    this.latch(armed, 'terminal_session_terminated');
+  }
+
+  /** Unanswered or not applied: keep the session; failed ticks retry sooner (F6). */
+  private onNotAnswered(armed: Armed, result: CashierAdmissionResult): void {
+    if (!BACKOFF_KINDS.has(result.kind)) {
+      armed.failures = 0;
+      this.scheduleHeartbeat(armed, heartbeatIntervalMs(armed.ttl_seconds));
+      return;
+    }
+    armed.failures += 1;
+    this.scheduleHeartbeat(armed, retryDelayMs(armed));
+  }
+
+  /** Lose authority: no new sale, no more heartbeats; end at the first safe point. */
+  private latch(armed: Armed, cause: AuthorityLatchCause): void {
+    armed.latched = true;
+    this.deps.sessionManager.latchAuthority(armed.session_id, cause);
     this.endAtSafePoint(armed);
-  }
-
-  private onRefused(armed: Armed, result: CashierAdmissionResult): void {
-    reportAdmissionOutcome(this.deps.admission, result, armed);
-    this.disarm();
-    this.safely(this.deps.onAccountDisabled);
-  }
-
-  private onDeviceRevoked(armed: Armed, result: CashierAdmissionResult): void {
-    this.disarm();
-    reportAdmissionOutcome(this.deps.admission, result, armed);
   }
 
   private endAtSafePoint(armed: Armed): void {
     if (!this.stillCurrent(armed)) return;
-    let safe = false;
-    try {
-      safe = this.deps.isAtSafePoint();
-    } catch {
-      safe = false; // never end over a sale we could not inspect
-    }
-    if (safe) {
-      this.deps.sessionManager.end('superseded_by_takeover');
+    if (this.atSafePoint()) {
+      const cause = this.deps.sessionManager.getCurrent()?.authority_latch;
+      this.deps.sessionManager.end(cause ?? 'superseded_by_takeover');
       return;
     }
-    this.schedule(this.deps.safePointRecheckMs ?? SAFE_POINT_RECHECK_MS, () => {
+    this.schedule(armed, this.deps.safePointRecheckMs ?? SAFE_POINT_RECHECK_MS, () => {
       this.endAtSafePoint(armed);
     });
+  }
+
+  private atSafePoint(): boolean {
+    try {
+      return this.deps.isAtSafePoint();
+    } catch {
+      return false; // never end over a sale we could not inspect
+    }
   }
 
   private endAdmission(admissionId: string): void {
     void this.deps.admission.client
       .end(admissionId)
       .then((res) => {
-        this.deps.logger?.info(
-          { event: 'operator.cashier_admission.end', outcome: res.kind },
-          'cashier admission end',
-        );
+        this.logEnd(res.kind);
       })
       .catch(() => {
-        this.deps.logger?.info(
-          { event: 'operator.cashier_admission.end', outcome: 'threw' },
-          'cashier admission end',
-        );
+        this.logEnd('threw');
       });
   }
 
-  private safely(fn: () => void): void {
-    try {
-      fn();
-    } catch {
-      // A failing cascade must not break the keeper.
-    }
+  private logEnd(outcome: string): void {
+    this.deps.logger?.info(
+      { event: 'operator.cashier_admission.end', outcome },
+      'cashier admission end',
+    );
   }
 
   private log(outcome: string): void {

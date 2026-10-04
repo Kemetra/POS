@@ -23,6 +23,15 @@ import type { SessionEndCause } from '../../shared/operator/session-end-cause.js
  */
 export type SessionAuthority = 'online_confirmed' | 'offline_grant';
 
+/**
+ * RT-113 P2 — why a session lost its authority and must end at its next safe
+ * point (Codex P1 #1 / review F1). While set, no new sale may start.
+ */
+export type AuthorityLatchCause = Extract<
+  SessionEndCause,
+  'superseded_by_takeover' | 'account_disabled_mid_session' | 'terminal_session_terminated'
+>;
+
 /** RT-113 P2 — the live cashier admission a session holds (main-only). */
 export interface CashierAdmissionFields {
   admission_id: string;
@@ -59,6 +68,11 @@ export interface OperatorSessionRecord {
   admission_id?: string;
   admission_ttl_seconds?: number;
   offline_grace_seconds?: number;
+  /**
+   * RT-113 P2 — set when the session lost its authority; it ends at its next
+   * safe point. Main-only. The first cause wins.
+   */
+  authority_latch?: AuthorityLatchCause;
 }
 
 export interface CreateSessionInput {
@@ -158,6 +172,16 @@ export class SessionManager {
     this.current.admission_id = admission.admission_id;
     this.current.admission_ttl_seconds = admission.admission_ttl_seconds;
     this.current.offline_grace_seconds = admission.offline_grace_seconds;
+    return true;
+  }
+
+  /**
+   * RT-113 P2 — latch the CURRENT session (only when `session_id` still names
+   * it): no new sale may start until it ends. Idempotent; the first cause wins.
+   */
+  latchAuthority(session_id: string, cause: AuthorityLatchCause): boolean {
+    if (this.current?.id !== session_id) return false;
+    this.current.authority_latch ??= cause;
     return true;
   }
 

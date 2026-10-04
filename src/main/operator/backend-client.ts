@@ -171,7 +171,12 @@ export type BackendStuckShiftsResponse =
 export interface BackendClient {
   signIn(req: BackendSignInRequest, jwt: string): Promise<BackendSignInResponse>;
   signOut(req: BackendSignOutRequest, jwt: string): Promise<BackendSignOutResponse>;
-  /** GET /api/pos/v1/operators/roster — no JWT; device token authenticates. */
+  /**
+   * GET /api/pos/v1/operators/roster — sent with no credential. Backend-Core
+   * requires a Clerk JWT plus a manager-eligible role (RT-150), so this route
+   * 401s as called (RT-182). The cashier picker no longer uses it (RT-113 P2:
+   * `cashier-admission-client.ts`); only manager PIN provisioning still does.
+   */
   listRoster(branchId: string): Promise<BackendRosterResponse>;
   /** POST /api/pos/v1/operators/takeover/confirm */
   confirmTakeover(

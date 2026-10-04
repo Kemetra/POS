@@ -71,10 +71,11 @@ export function nextIdempotencyKey(deps: CashierAdmissionDeps): string {
 }
 
 /**
- * Apply the side effects of one admission outcome: the P1 grant seam and the
- * device-revoked handling. A throwing seam or handler never breaks the caller.
+ * The P1 grant seam for one outcome: `admitted` writes or refreshes the grant;
+ * a 403 invalidates that user's grant; a device 401 invalidates every grant.
+ * Nothing else (including `no_token`) touches the seam. Never throws.
  */
-export function reportAdmissionOutcome(
+export function notifyGrantSeam(
   deps: CashierAdmissionDeps,
   result: CashierAdmissionResult,
   who: { user_id: string; operator_id: string },
@@ -99,12 +100,25 @@ export function reportAdmissionOutcome(
   } catch {
     // The grant seam must never break sign-in or the heartbeat.
   }
-  if (result.kind === 'device_unauthorized') {
-    try {
-      deps.onDeviceRevoked?.();
-    } catch {
-      // Same: best-effort.
-    }
+}
+
+/**
+ * Side effects of one sign-in or takeover admission outcome: the P1 grant
+ * seam, and on a device 401 the immediate device-revoked handling. (The
+ * heartbeat does NOT use this: it debounces a 401 and defers the end to the
+ * safe point, review F1/F3.) Never throws.
+ */
+export function reportAdmissionOutcome(
+  deps: CashierAdmissionDeps,
+  result: CashierAdmissionResult,
+  who: { user_id: string; operator_id: string },
+): void {
+  notifyGrantSeam(deps, result, who);
+  if (result.kind !== 'device_unauthorized') return;
+  try {
+    deps.onDeviceRevoked?.();
+  } catch {
+    // Best-effort.
   }
 }
 
@@ -129,7 +143,9 @@ const REFUSE_RATE_LIMITED: OperatorRefusal = { kind: 'refused', category: 'rate_
 
 /**
  * Sign-in / takeover refusal for a non-`admitted` outcome. Generic by design
- * (NFR-003 / PR-2): the operator never learns the cause of a 403 or 401.
+ * (NFR-003 / PR-2): the operator never learns the cause of a 403 or 401. A
+ * missing local device token (`no_token`) is `invalid_input`, as an unpaired
+ * terminal is.
  * An unreachable or failing Backend-Core (transport, 5xx) is `no_connection`,
  * never a credential refusal.
  */

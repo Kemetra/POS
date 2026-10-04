@@ -661,9 +661,10 @@ singleInstanceReady
       logger: mainLogger,
     });
     // T051b + T051d — lifecycle cascade for terminal-revocation (FR-014) and
-    // account-disabled-mid-session. RT-113 P2 wires its first callers: the
-    // cashier admission's device-401 handling (RT-138 L6 / 10763 D8) and the
-    // heartbeat's 403. It is NOT exposed to the renderer bridge.
+    // account-disabled-mid-session. RT-113 P2 wires one caller: a device 401 on
+    // a cashier sign-in or takeover (RT-138 L6 / 10763 D8; a no-op without a
+    // session). The heartbeat ends at the safe point instead (review F1). It is
+    // NOT exposed to the renderer bridge.
     const operatorLifecycleCascade = new LifecycleCascade({
       sessionManager: operatorSessionManager,
       logger: mainLogger,
@@ -776,16 +777,16 @@ singleInstanceReady
 
     // RT-113 P2 — keep the online cashier admission live (heartbeat at ≤ TTL/2
     // with a fresh key) and end it on sign-out / session end (best-effort).
-    // A takeover elsewhere ends this session at its next safe point: the
-    // RT-117 lock-state summary is null when no open sale with lines (and so
-    // no live tender) would be affected. Stopped on quit with the other
-    // workers (RT-198 latch: nothing runs after stop).
+    // Lost authority (taken over elsewhere, 403, two consecutive device 401s)
+    // latches the session (cart.create refuses `authority_conflict`) and ends
+    // it at its first safe point: the RT-117 lock-state summary is null when
+    // no open sale with lines (and so no live tender) would be affected.
+    // Re-checked at every sale boundary (cart hook below), on lock changes
+    // and by a backstop poll. Stopped on quit with the other workers (RT-198
+    // latch: nothing runs after stop).
     const cashierAdmissionKeeper = new CashierAdmissionKeeper({
       sessionManager: operatorSessionManager,
       admission: cashierAdmission,
-      onAccountDisabled: () => {
-        operatorLifecycleCascade.notifyAccountDisabled();
-      },
       isAtSafePoint: () => getOperatorLockState().summary === null,
       logger: mainLogger,
     });
@@ -949,6 +950,10 @@ singleInstanceReady
       releaseCheckoutPayment,
       // RT-26 — read-only twin for Checkout's Back eligibility (no writes).
       checkoutReturnAllowed: bindCheckoutReturnAllowed(db),
+      // RT-113 P2 — a sale boundary re-checks a latched session's safe point.
+      onSaleBoundary: () => {
+        cashierAdmissionKeeper.recheckSafePoint();
+      },
     });
     registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
 

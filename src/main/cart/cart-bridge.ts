@@ -174,6 +174,14 @@ export interface CartBridgeHandlersDeps {
   /** Optional clock for testability. Defaults to `() => new Date()`. */
   clock?: () => Date;
   /**
+   * RT-113 P2 (Codex P1 #1 / review F2) — called at each sale boundary: a
+   * `cart.create` refused by the authority latch, a successful void, a
+   * successful post-handoff cancel. Production re-checks the latched
+   * session's safe point (`CashierAdmissionKeeper.recheckSafePoint`). A
+   * throwing hook never breaks the cart call.
+   */
+  onSaleBoundary?: () => void;
+  /**
    * Optional audit emitter. Required for post-handoff cancel audit emission.
    * When omitted, pre-handoff void still works (no audit for cashier_voided).
    */
@@ -431,6 +439,14 @@ export class CartBridgeHandlers {
     if (gate.kind !== 'ok') return refuse(gate.reason);
 
     const session = gate.session;
+
+    // RT-113 P2 — a session that lost its authority may finish or void the
+    // current sale but must not start a new one. The refusal is a sale
+    // boundary: the session may now be at its safe point.
+    if (session.authority_latch !== undefined) {
+      this.signalSaleBoundary();
+      return refuse('authority_conflict');
+    }
 
     // #380 (F-007) — resolve the REAL terminal_id before doing any work. An
     // unpaired terminal cannot stamp a cart row (carts.terminal_id is NOT
@@ -1037,6 +1053,7 @@ export class CartBridgeHandlers {
         applied_at: now,
       },
     );
+    this.signalSaleBoundary();
     return { kind: 'ok' };
   }
 
@@ -1146,7 +1163,18 @@ export class CartBridgeHandlers {
         });
       },
     );
-    return cancelled ? { kind: 'ok' } : refuse('closed');
+    if (!cancelled) return refuse('closed');
+    this.signalSaleBoundary();
+    return { kind: 'ok' };
+  }
+
+  /** RT-113 P2 — notify the sale-boundary hook; never throws. */
+  private signalSaleBoundary(): void {
+    try {
+      this.deps.onSaleBoundary?.();
+    } catch {
+      // A failing re-check must never break the cart call.
+    }
   }
 
   // ── cart.returnToSale (RT-26) ───────────────────────────────────────
