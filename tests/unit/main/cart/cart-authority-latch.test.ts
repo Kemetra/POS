@@ -181,6 +181,33 @@ describe('cart under the authority latch (handler level)', () => {
     ).resolves.toEqual({ kind: 'refused', reason: 'authority_conflict' });
   });
 
+  it('latched WHILE the item lookup is awaited: the add to an empty cart is still refused', async () => {
+    const session = cashierSession();
+    const { store } = freshStore();
+    const handlers = new CartBridgeHandlers({
+      getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-1',
+      cartStore: store,
+      // The heartbeat latches the session between the gate and the insert.
+      resolveItemRef: async () => {
+        session.authority_latch = 'superseded_by_takeover';
+        return resolveItemRef();
+      },
+      clock: () => new Date('2026-10-04T10:00:00.000Z'),
+    });
+    const created = await handlers.create({ idempotency_key: 'create-latch-0007' });
+    if (created.kind !== 'ok') throw new Error('create failed');
+    await expect(
+      handlers.linesAdd({
+        cart_id: created.cart_id,
+        item_ref: 'sku-1',
+        quantity: 1,
+        idempotency_key: 'add-latch-0006',
+      }),
+    ).resolves.toEqual({ kind: 'refused', reason: 'authority_conflict' });
+    expect(store.getActiveLines(created.cart_id)).toHaveLength(0);
+  });
+
   it('latched: the current sale may still be voided', async () => {
     const session = cashierSession();
     const { db, store } = freshStore();
