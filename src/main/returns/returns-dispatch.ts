@@ -66,6 +66,12 @@ export interface ReturnsDispatchDeps {
   readonly audit: ReturnsAudit;
   /** The choke point: re-authorizes the actor immediately before every send. */
   readonly authorizer: Pick<ReturnsAuthorizer, 'recheck'>;
+  /**
+   * True once the return domain is stopping (app shutdown). No send starts
+   * after it, and a send in flight when it flips does no local reads/writes
+   * when it settles (the DB may already be closed).
+   */
+  readonly isStopped: () => boolean;
   /** Run `fn` in one local DB transaction (journal + audit_events). */
   readonly transaction: <T>(fn: () => T) => T;
   readonly now: () => string;
@@ -120,6 +126,7 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
 
   private async sendOnce(send: SendRequest): Promise<DispatchOutcome> {
     const { entry, op } = send;
+    if (this.deps.isStopped()) return { kind: 'deferred', entry };
     const current = this.current(entry);
     // The choke point: never send for an actor who is no longer authorized.
     if (this.deps.authorizer.recheck(send.actor) !== null) {
@@ -138,6 +145,9 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
       // count of 0 proves no earlier send reached the server: a first send.
       resend: attempted,
     });
+    // Stopped while the POST was in flight: touch nothing local (the DB may be
+    // closed). The row stays pending/unknown; the next start re-sends it.
+    if (this.deps.isStopped()) return { kind: 'deferred', entry };
     try {
       return this.apply(entry, outcome, op);
     } catch {

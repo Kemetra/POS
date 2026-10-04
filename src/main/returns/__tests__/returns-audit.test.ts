@@ -140,16 +140,22 @@ describe('scheduleReturnsResolver', () => {
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValue(null);
     const error = vi.fn();
+    const drain = vi.fn<(timeoutMs: number) => Promise<void>>().mockResolvedValue(undefined);
+    const stopDomain = vi.fn();
     const stop = scheduleReturnsResolver({
-      resolver: { tick },
+      resolver: { tick, drain },
+      stopDomain,
       intervalMs: 1000,
+      drainTimeoutMs: 15_000,
       logger: { error },
     });
     expect(tick).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1000);
     expect(tick).toHaveBeenCalledTimes(2);
     expect(error).toHaveBeenCalledWith(expect.anything(), 'returns_resolver:tick_unexpected');
-    stop();
+    await stop();
+    expect(stopDomain).toHaveBeenCalledTimes(1);
+    expect(drain).toHaveBeenCalledWith(15_000);
     await vi.advanceTimersByTimeAsync(5000);
     expect(tick).toHaveBeenCalledTimes(2);
   });

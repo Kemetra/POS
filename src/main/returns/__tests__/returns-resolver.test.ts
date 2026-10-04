@@ -10,7 +10,7 @@
  *   • a refusal on resend is final; an answer still lost stays `unknown`.
  *   • no credential → the background tick does nothing; passes are single-flight.
  */
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { scheduleReturnsResolver } from '../compose-returns.js';
 import {
@@ -245,7 +245,9 @@ describe('returns resolver', () => {
     h.state.paired = false;
     const stop = scheduleReturnsResolver({
       resolver: h.resolver,
+      stopDomain: h.stop,
       intervalMs: 5,
+      drainTimeoutMs: 1_000,
       logger: { error: () => undefined },
     });
     try {
@@ -256,7 +258,7 @@ describe('returns resolver', () => {
         await new Promise((resolve) => setTimeout(resolve, 5));
       }
     } finally {
-      stop();
+      await stop();
     }
     expect(h.backend.returnCalls()).toHaveLength(2);
   });
@@ -317,5 +319,71 @@ describe('returns resolver', () => {
       refused: 0,
       unresolved: 0,
     });
+  });
+});
+
+describe('returns resolver — shutdown (Codex P2 on 4efae9b)', () => {
+  /** A POST that stays in flight until `release()`. */
+  function holdNextPost(): { release: () => void } {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    h.backend.onReturn = async (call, backend) => {
+      await gate;
+      return backend.recordIdempotently(call);
+    };
+    return { release };
+  }
+
+  it('stop during an in-flight POST: the pass ends without touching the closed DB', async () => {
+    await submitWithLostAnswer();
+    const post = holdNextPost();
+    const passing = h.resolver.resolveOnce(ACTOR);
+    while (h.backend.returnCalls().length < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const order: string[] = [];
+    void passing.then(() => order.push('pass'));
+
+    h.stop(); // the worker stopper (synchronous), then the DB closes at once
+    const drained = h.resolver.drain(1_000).then(() => order.push('drain'));
+    h.db.close();
+    const dbAfterClose = vi.spyOn(h.handle, 'prepare');
+    const txAfterClose = vi.spyOn(h.handle, 'transaction');
+    post.release();
+
+    await expect(passing).resolves.toEqual({ confirmed: 0, refused: 0, unresolved: 1 });
+    await drained;
+    expect(order).toEqual(['pass', 'drain']);
+    expect(dbAfterClose).not.toHaveBeenCalled();
+    expect(txAfterClose).not.toHaveBeenCalled();
+    expect(h.warnings).not.toContain('returns:local_commit_failed');
+  });
+
+  it('stop between rows: the remaining rows are not sent', async () => {
+    await submitWithLostAnswer();
+    await secondUnknownReturn();
+    let sends = 0;
+    h.backend.onReturn = (call, backend) => {
+      sends += 1;
+      h.stop();
+      return backend.recordIdempotently(call);
+    };
+    await expect(h.resolver.resolveOnce(ACTOR)).resolves.toEqual({
+      confirmed: 0,
+      refused: 0,
+      unresolved: 2,
+    });
+    expect(sends).toBe(1);
+    expect(h.repo.listUnresolved(SCOPE)).toHaveLength(2);
+  });
+
+  it('drain settles at once with no pass, and is bounded by its timeout', async () => {
+    await submitWithLostAnswer();
+    await expect(h.resolver.drain(1_000)).resolves.toBeUndefined();
+    h.backend.onReturn = () => new Promise<Response>(() => undefined); // never settles
+    void h.resolver.resolveOnce(ACTOR);
+    await expect(h.resolver.drain(10)).resolves.toBeUndefined();
   });
 });

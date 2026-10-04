@@ -37,6 +37,8 @@ export interface ReturnsResolver {
    * while another pass runs or nobody eligible (with an envelope) is signed in.
    */
   tick(): Promise<ResolveSummary | null>;
+  /** Settles when the active pass (if any) has finished, or after `timeoutMs`. */
+  drain(timeoutMs: number): Promise<void>;
 }
 
 export interface ReturnsResolverDeps {
@@ -77,7 +79,23 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
     return current;
   }
 
+  function drain(timeoutMs: number): Promise<void> {
+    if (running === null) return Promise.resolve();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    const settled = running.then(
+      () => undefined,
+      () => undefined,
+    );
+    return Promise.race([settled, bound]).finally(() => {
+      clearTimeout(timer);
+    });
+  }
+
   return {
+    drain,
     resolveOnce: singleFlight,
     tick: () => {
       const live = deps.authorizer.current();

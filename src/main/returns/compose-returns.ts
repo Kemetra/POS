@@ -42,10 +42,17 @@ export interface ComposeReturnsDeps {
 export interface ComposedReturns {
   readonly service: ReturnsBridgeAPI;
   readonly resolver: ReturnsResolver;
+  /**
+   * Latch the domain stopped (no send starts; an in-flight send touches
+   * nothing local when it settles). Idempotent; synchronous, like every
+   * worker stop in `bootstrap-workers.ts`.
+   */
+  readonly stop: () => void;
 }
 
 export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const { now } = deps;
+  let stopped = false;
   const client = createReturnsClient(deps.http);
   const repo = createReturnsRepository(deps.db);
   const audit = createReturnsAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
@@ -62,6 +69,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     audit,
     now,
     logger: deps.logger,
+    isStopped: () => stopped,
     transaction: <T>(fn: () => T): T => deps.db.transaction(fn)(),
   });
   const resolver = createReturnsResolver({ repo, dispatcher, authorizer });
@@ -78,21 +86,35 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     newReturnId: randomUUID,
     newExternalId: () => newReturnExternalId(),
   });
-  return { service, resolver };
+  const stop = (): void => {
+    stopped = true;
+  };
+  return { service, resolver, stop };
 }
 
 export interface ScheduleResolverInput {
-  readonly resolver: Pick<ReturnsResolver, 'tick'>;
+  readonly resolver: Pick<ReturnsResolver, 'tick' | 'drain'>;
+  /** Latches the domain stopped (`ComposedReturns.stop`). */
+  readonly stopDomain: () => void;
   readonly intervalMs: number;
+  /** Upper bound on waiting for an in-flight pass (the client timeout). */
+  readonly drainTimeoutMs: number;
   readonly logger: Pick<ReturnsLogger, 'error'>;
 }
 
 /**
- * Run one resolver tick now (startup) and then every `intervalMs`; returns
- * stop(). Each tick resolves its scope live, so a terminal paired in-process
- * is picked up without a restart.
+ * Run one resolver tick now (startup) and then every `intervalMs`. Each tick
+ * resolves its scope live, so a terminal paired in-process is picked up
+ * without a restart.
+ *
+ * Returns the worker stopper (registered in `bootstrap-workers.ts`, called
+ * synchronously right before the DB closes). It clears the interval and
+ * latches the domain stopped, so no send starts and an in-flight send skips
+ * all local writes when it settles — closing the DB right after is safe. It
+ * also returns a promise that settles when the active pass is done (bounded
+ * by `drainTimeoutMs`).
  */
-export function scheduleReturnsResolver(input: ScheduleResolverInput): () => void {
+export function scheduleReturnsResolver(input: ScheduleResolverInput): () => Promise<void> {
   const run = (): void => {
     input.resolver.tick().catch((err: unknown) => {
       input.logger.error({ err }, 'returns_resolver:tick_unexpected');
@@ -102,5 +124,7 @@ export function scheduleReturnsResolver(input: ScheduleResolverInput): () => voi
   const timer = setInterval(run, input.intervalMs);
   return () => {
     clearInterval(timer);
+    input.stopDomain();
+    return input.resolver.drain(input.drainTimeoutMs);
   };
 }

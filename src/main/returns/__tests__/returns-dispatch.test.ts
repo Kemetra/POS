@@ -57,6 +57,7 @@ let eventSeq = 0;
 function standaloneDispatcher(repo: ReturnsRepository = h.repo) {
   return createReturnsDispatcher({
     authorizer: { recheck: () => null },
+    isStopped: () => false,
     client: createReturnsClient({
       baseUrl: BASE_URL,
       fetch: h.backend.fetch,

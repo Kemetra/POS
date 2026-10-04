@@ -1505,12 +1505,21 @@ app
       // and an eligible (unlocked manager/admin) operator live, so in-process
       // pairing needs no restart; until then every tick is a no-op.
       const RETURNS_RESOLVER_INTERVAL_MS = 30_000;
+      // = the returns client's request timeout.
+      const RETURNS_DRAIN_TIMEOUT_MS = 15_000;
       const stopReturnsResolver = scheduleReturnsResolver({
         resolver: returnsDomain.resolver,
+        stopDomain: returnsDomain.stop,
         intervalMs: RETURNS_RESOLVER_INTERVAL_MS,
+        drainTimeoutMs: RETURNS_DRAIN_TIMEOUT_MS,
         logger: mainLogger,
       });
-      workerRegistry.register('returns resolver', stopReturnsResolver);
+      // Synchronous like every worker stop: latches the domain stopped (no
+      // send starts; an in-flight send writes nothing when it settles), so the
+      // DB may close right after. The drain promise is not awaited here.
+      workerRegistry.register('returns resolver', () => {
+        void stopReturnsResolver();
+      });
     }
 
     createWindow();
