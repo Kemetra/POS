@@ -45,6 +45,65 @@
 | Operational workflow benchmark (RT-111, Planning, owner review complete, merged): offline / permission matrices, register-shift flow, device health, recovery center | [11-operational-workflow-benchmark.md](11-operational-workflow-benchmark.md) |
 | Cashier UX / usability audit (RT-159, Planning, **PRELIMINARY — RT-159 stays open pending the post-RT-117 packaged/lab audit**): first runtime audit of the built app — scanner ownership, inactivity, cash/card steps, 1024/1280 capacity, a11y, findings matrix, session script, bounded slices | [12-cashier-ux-usability-audit.md](12-cashier-ux-usability-audit.md); captures in [references/audit-rt159/](references/audit-rt159/) |
 | POS simplification & responsibility audit (RT-160, Planning, revision 3 on `main@7384217`, incl. the comment-10724 review corrections, **awaiting final owner review**): essential vs Electron-tax vs incidental complexity, responsibility/owner map (shift/cash-up: POS owns the offline lifecycle, Backend-Core the synced record; pilot-critical via RT-17), change-amplification case studies, reference-first review (ERPNext/Frappe, Odoo, RT-111 references), simplification vs hardening candidates, owner decisions D-1…D-3 recorded (fail-closed cashier profile; privileged-only central audit; keep net tender capture), platform recommendation (keep Electron) | [13-pos-simplification-responsibility-audit.md](13-pos-simplification-responsibility-audit.md) |
+| vNext **Visual Acceptance Pack** (owner-approved; Direction B frozen; imported verbatim, docs only): Iterations 1–3 of the cart-first cashier workspace at 1280×800 and 1024×768, with a two-axis classification (Visual status × Behavior status) and journey map | [visual-acceptance/index.html](visual-acceptance/index.html) — see [Visual Acceptance Pack](#visual-acceptance-pack-owner-approved) |
+
+## Visual Acceptance Pack (owner-approved)
+
+The final owner-approved **Retail Tower POS vNext Visual Acceptance Pack** is vendored, unmodified,
+under [`visual-acceptance/`](visual-acceptance/index.html) (entry point:
+[`index.html`](visual-acceptance/index.html); classification table:
+[`E-Journey-map-and-classification/I3-Classification.html`](visual-acceptance/E-Journey-map-and-classification/I3-Classification.html)).
+It was imported byte-for-byte from the owner-supplied archive — nothing in it was redesigned,
+regenerated, re-worded or re-classified by the import.
+
+- **Direction B is the frozen visual direction** (cart-first cashier workspace).
+- **The pack is a visual / reference authority only.** It carries no behaviour. **RT-24 and later
+  approved behaviour contracts remain the behaviour authority.** Anything the pack draws that
+  its own classification table does not mark as approved (key caps, hold buttons, focus labels)
+  is not a decision.
+- **Two independent axes.** *Visual status* (FROZEN / EXPLORATION / CONDITIONAL CONCEPT) says
+  whether the drawing is fixed; *Behavior status* (APPROVED / PENDING — RT-xxx) says whether what
+  it depicts is approved. **Implementation-safe = Visual FROZEN **and** Behavior APPROVED.** A
+  frozen screen with pending behaviour may be built visually but **must not ship its behaviour**.
+- **Screens marked Behavior Pending are not implementation-safe until their referenced Jira item
+  is resolved.** This import resolves none of them:
+
+  | Behavior pending | Screens affected (per the pack's classification) |
+  |---|---|
+  | **RT-113** — offline / reconnect / syncing | Offline while selling; Reconnected / syncing (enabled Checkout and «البيع مستمر» included) |
+  | **RT-114** — manager approval | Manager approval required (credential type, auth mechanics, retry/lockout, offline auth) |
+  | **RT-116** — lock / recovery | Terminal locked, transaction preserved; Post-unlock restored transaction |
+  | **RT-158** — held / suspended sale | Held-sale restore concept (Visual = CONDITIONAL CONCEPT) and the hold / held-sales controls drawn on the Sale pane |
+
+- **Implementation-safe today (per the pack):** Sale and Long cart (except the RT-158 hold
+  controls), Cash underpaid, Cash change due, Payment UNKNOWN / recovery, Definitive card failure,
+  Completed + receipt failure — at 1280 and 1024.
+- **Open assumptions carried over unchanged from the pack** — they stay open regardless of either
+  axis, and *Behavior APPROVED* never extends to them: digit system (Western vs Arabic-Indic);
+  final currency label and placement; keyboard shortcuts (none shown); focus ownership and
+  scanner routing (no focus state shown).
+- **Reconciliation with OD-3 (digits / currency label).** The pack is preserved verbatim, and its
+  "open assumption" wording about the digit system and the currency label and placement does
+  **not** supersede the owner decision **OD-3** above. OD-3 remains the current planning authority
+  for **Western digits, grouped money formatting and the `EGP` label**. Validation against real
+  Egyptian pharmacy receipts remains outstanding, exactly as OD-3 already states
+  ([Carried forward](#carried-forward--still-open)). The pack was deliberately not edited to
+  resolve this discrepancy; where its drawn numerals or currency text differ from OD-3, OD-3
+  governs. The pack's other open assumptions (keyboard shortcuts, focus ownership and scanner
+  routing) are unaffected by this note and stay open.
+- **Reference precedence.** For the first-wave vNext states the pack covers (Sale, Long cart,
+  Checkout, Payment unknown / failed, Offline, Syncing, Manager approval, Locked / restored,
+  Receipt failure, Held concept), the Visual Acceptance Pack is the **current visual acceptance
+  reference** wherever it overlaps the older [`references/`](references/README.md) material
+  (VN-B1, VN-B2, VN-R*). That older material is **retained, not deleted or rewritten**, as prior
+  planning / reference / history. This precedence is visual only; behaviour authority is
+  unchanged (RT-24 and later approved contracts).
+- **Superseded / exploration material is kept, not promoted.** The `Iteration-1-EXPLORATION/`,
+  `Exploration-iteration-1/`, `C-Components*/` and `D-State-consistency*/` folders are classified
+  EXPLORATION (superseded) and must not be implemented from.
+- **Import notes.** The `source/*.dc.html` files are the pack's editable design-canvas sources and
+  load a `./support.js` that was not in the archive; they do not render standalone. Every published
+  page (everything outside `source/`) is self-contained apart from one Google Fonts stylesheet.
 
 ## Headline findings
 

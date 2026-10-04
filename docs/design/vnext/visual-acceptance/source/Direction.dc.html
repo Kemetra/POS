@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Direction board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Noto+Sans+Arabic:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+
+body{margin:0}
+.rt{font-family:"Dubai","Segoe UI",Tahoma,"Noto Sans Arabic",system-ui,sans-serif;color:#0f1d2e;background:#f7f9fa;box-sizing:border-box;overflow:hidden;position:relative;font-size:14px;line-height:1.45}
+.rt *,.rt *::before,.rt *::after{box-sizing:border-box}
+.rt h1,.rt h2,.rt h3,.rt p{margin:0}
+.num{font-family:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;letter-spacing:-.01em}
+.mut{color:#53647a}
+.row{display:flex;align-items:center}
+.grow{flex:1;min-width:0}
+.shell{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px;background:#fff;border-bottom:1px solid #d8dfe7;flex:none}
+.shell.s1024{height:44px;gap:10px;padding:0 10px}
+.mark{display:flex;align-items:center;gap:8px;font-weight:700;color:#0b5b55;font-size:14px;white-space:nowrap;direction:ltr}
+.mark i{display:block;width:22px;height:22px;border-radius:6px;background:#0f766e;position:relative}
+.mark i::after{content:"";position:absolute;top:5px;bottom:5px;left:9px;right:9px;background:#fff;border-radius:1px}
+.sep{width:1px;height:20px;background:#d8dfe7;flex:none}
+.ctx{display:flex;align-items:center;gap:6px;font-size:13px;color:#53647a;white-space:nowrap}
+.ctx b{color:#0f1d2e;font-weight:600}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;border:1px solid transparent;background:transparent;color:#53647a;cursor:pointer;padding:0;flex:none}
+.iconbtn:hover{background:#eef2f6;color:#0f1d2e}
+.iconbtn.rm{color:#7a889a}
+.iconbtn.rm:hover{background:#fbeceb;color:#b3261e}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:14px;font-size:12.5px;font-weight:600;border:1px solid;white-space:nowrap;flex:none}
+.c-ok{background:#e8f4ee;color:#15774d;border-color:#b9dcc9}
+.c-warn{background:#fdf3e4;color:#8a4b00;border-color:#e6c38f}
+.c-err{background:#fbeceb;color:#b3261e;border-color:#efc3bf}
+.c-info{background:#e8f1f9;color:#1b6ca8;border-color:#bcd5ea}
+.c-off{background:#0f1d2e;color:#fff;border-color:#0f1d2e}
+.c-neutral{background:#eef2f6;color:#3e4d60;border-color:#d8dfe7}
+.c-mgr{background:#0b5b55;color:#fff;border-color:#0b5b55}
+.c-lock{background:#fff;color:#0f1d2e;border-color:#0f1d2e}
+.hatch{background-image:repeating-linear-gradient(-45deg,rgba(163,90,0,.13) 0 6px,rgba(163,90,0,0) 6px 12px)}
+.main{display:flex;flex:1;min-height:0;position:relative}
+.work{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;padding:12px 16px}
+.s1024w .work{padding:10px 12px;gap:8px}
+.pane{width:360px;flex:none;background:#fff;border-inline-start:1px solid #d8dfe7;display:flex;flex-direction:column;padding:16px;gap:10px}
+.s1024w .pane{width:300px;padding:12px;gap:8px}
+.scan{display:flex;gap:8px;align-items:center;flex:none}
+.scanbox{flex:1;min-width:0;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px;background:#fff;border:2px solid #0f766e;border-radius:10px;box-shadow:0 0 0 3px rgba(15,118,110,.16)}
+.scanbox svg{color:#0f766e;flex:none}
+.scanbox input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:inherit;font-size:15px;color:#0f1d2e;height:40px;padding:0}
+.scanbox input::placeholder{color:#53647a}
+.scanbox.idle{border:1px solid #c9d2dc;box-shadow:none}
+.scanbox.idle svg{color:#53647a}
+.scanbox.err{border-color:#b3261e;box-shadow:0 0 0 3px rgba(179,38,30,.14)}
+.scanbox.err svg{color:#b3261e}
+.caret{width:2px;height:24px;background:#0f1d2e;flex:none}
+.focus{font-size:11.5px;font-weight:600;color:#0b5b55;background:#e6f4f1;border-radius:6px;padding:3px 8px;white-space:nowrap;flex:none}
+.focus.away{color:#3e4d60;background:#eef2f6}
+.txh{display:flex;align-items:center;gap:10px;font-size:13px;color:#53647a;height:24px;flex:none;white-space:nowrap}
+.txh .id{font-weight:600;color:#0f1d2e;font-size:14px}
+.txh svg{color:#53647a}
+.cart{flex:1;min-height:0;background:#fff;border:1px solid #d8dfe7;border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+.cg{display:grid;grid-template-columns:36px minmax(0,1fr) 150px 104px 116px 48px;align-items:center;column-gap:8px;padding:0 12px}
+.c1024 .cg{grid-template-columns:minmax(0,1fr) 140px 84px 100px 44px;padding:0 10px;column-gap:6px}
+.ch{height:34px;background:#f3f6fa;border-bottom:1px solid #d8dfe7;font-size:12px;font-weight:600;color:#53647a;flex:none}
+.cb{flex:1;min-height:0;overflow:hidden;position:relative}
+.cr{height:56px;border-bottom:1px solid #eef2f6}
+.c1024 .cr{height:48px}
+.ix{font-size:12px;color:#53647a;text-align:center}
+.nmw{display:flex;flex-direction:column;min-width:0}
+.nml{display:flex;align-items:center;gap:8px;min-width:0}
+.nm{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bc{font-size:12px;color:#53647a;line-height:1.3}
+.qcell{display:flex;justify-content:center}
+.qv{font-size:15px;font-weight:600}
+.mh{text-align:right}
+.mu{text-align:right;font-size:14px;color:#3e4d60}
+.mt{text-align:right;font-size:15.5px;font-weight:600}
+.cr.act{background:#e6f4f1;box-shadow:inset -4px 0 0 #0f766e}
+.cr.sel{box-shadow:inset 0 0 0 2px #1b6ca8;background:#f5f9fd}
+.cr.act.sel{box-shadow:inset 0 0 0 2px #1b6ca8,inset -6px 0 0 #0f766e}
+.cr.pend{background:#fdf3e4;box-shadow:inset 0 0 0 2px #a35a00}
+.cr.dim .nm,.cr.dim .num{color:#7a889a}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;font-size:11px;font-weight:700;background:#0f766e;color:#fff;flex:none;white-space:nowrap}
+.tag.sel{background:#1b6ca8}
+.tag.pend{background:#8a4b00}
+.step{display:inline-flex;align-items:center;height:44px;border:1px solid #c9d2dc;border-radius:10px;background:#fff;overflow:hidden}
+.step button{width:42px;height:42px;border:0;background:transparent;color:#0f1d2e;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.step button:hover{background:#eef2f6}
+.step .q{min-width:46px;text-align:center;font-size:16px;font-weight:600;border-left:1px solid #d8dfe7;border-right:1px solid #d8dfe7;height:42px;line-height:42px}
+.cf{height:36px;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid #d8dfe7;background:#f3f6fa;font-size:12.5px;color:#53647a;flex:none;white-space:nowrap}
+.sbar{position:absolute;left:3px;width:6px;border-radius:3px;background:#b7c2cf}
+.ph2{font-size:12px;font-weight:700;color:#53647a}
+.kv{display:flex;justify-content:space-between;align-items:center;font-size:14px;height:30px}
+.s1024w .kv{height:26px;font-size:13px}
+.kv .num{font-size:15px}
+.cur{font-size:14px;font-weight:600;color:#53647a}
+.totb{border-top:1px solid #d8dfe7;padding-top:10px}
+.tot-l{font-size:14px;font-weight:700}
+.tot-v{font-size:44px;font-weight:600;line-height:1.1}
+.s1024w .tot-v{font-size:36px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 14px;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;border:1px solid #c9d2dc;background:#fff;color:#0f1d2e;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#f3f6fa}
+.btn-p{height:56px;background:#0f766e;border-color:#0f766e;color:#fff;font-size:18px;font-weight:700;padding:0 18px}
+.btn-p:hover{background:#0b5b55}
+.btn-p .kbd{border-color:rgba(255,255,255,.6);color:#fff}
+.btn-ink{background:#0f1d2e;border-color:#0f1d2e;color:#fff}
+.btn-ink:hover{background:#22334a}
+.btn-ink .kbd{border-color:rgba(255,255,255,.6);color:#fff}
+.btn-d{color:#b3261e;border-color:#e6b4af}
+.btn-d:hover{background:#fbeceb}
+.btn-q{background:transparent;border-color:transparent;color:#0b5b55}
+.btn-q:hover{background:#e6f4f1}
+.btn.off,.btn.off:hover{background:#eef2f6;border-color:#d8dfe7;color:#6b7a8d;cursor:not-allowed}
+.btn.off .kbd{border-color:#c9d2dc;color:#6b7a8d}
+.w100{width:100%}
+.kbd{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;border:1px solid #c9d2dc;font-family:"IBM Plex Mono",Consolas,monospace;font-size:11px;font-weight:500;color:#53647a;direction:ltr;unicode-bidi:isolate}
+.gate{font-size:12px;color:#53647a;display:flex;align-items:center;gap:6px;justify-content:center}
+.hr{height:1px;background:#d8dfe7;flex:none}
+.ban{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 14px;border-radius:10px;border:1px solid;font-size:13.5px;flex:none}
+.ban b{font-weight:700}
+.ban.warn{background:#fdf3e4;border-color:#e6c38f;color:#5c3400}
+.ban.warn>svg{color:#a35a00}
+.ban.err{background:#fbeceb;border-color:#efc3bf;color:#6e1712}
+.ban.err>svg{color:#b3261e}
+.ban.info{background:#e8f1f9;border-color:#bcd5ea;color:#123f63}
+.ban.info>svg{color:#1b6ca8}
+.ban.ok{background:#e8f4ee;border-color:#b9dcc9;color:#0d4a30}
+.ban.ok>svg{color:#15774d}
+.ban.tl{background:#e6f4f1;border-color:#a9d5cc;color:#083f3b}
+.ban.tl>svg{color:#0f766e}
+.ban.off{background:#fff;border-color:#0f1d2e;color:#0f1d2e}
+.strip{display:flex;align-items:center;gap:12px;height:38px;padding:0 16px;font-size:13px;border-bottom:1px solid;flex:none;white-space:nowrap}
+.strip.off{background:#eef2f6;border-color:#c9d2dc;color:#0f1d2e}
+.strip.info{background:#e8f1f9;border-color:#bcd5ea;color:#123f63}
+.strip .btn{height:30px;font-size:12.5px;padding:0 10px}
+.prog{width:120px;height:6px;border-radius:3px;background:#bcd5ea;overflow:hidden;flex:none}
+.prog i{display:block;height:6px;background:#1b6ca8;border-radius:3px}
+.scrim{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(15,29,46,.34)}
+.dock{position:absolute;top:0;bottom:0;left:0;background:#fff;border-right:1px solid #c9d2dc;box-shadow:12px 0 32px rgba(15,29,46,.16);display:flex;flex-direction:column}
+.toast{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 16px;border-radius:10px;background:#0f1d2e;color:#fff;font-size:13.5px;box-shadow:0 8px 24px rgba(15,29,46,.22)}
+.toast svg{flex:none}
+.inval{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#8f1f18}
+.inval svg{color:#b3261e;flex:none}
+.inval.w{color:#6b3a00}
+.inval.w svg{color:#a35a00}
+.h1{font-size:22px;font-weight:700}
+.ledger{background:#fff;border:1px solid #d8dfe7;border-radius:14px;overflow:hidden;flex:none}
+.lrow{display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #eef2f6;min-height:80px}
+.lrow:last-child{border-bottom:0}
+.llab{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.llab .t{font-size:18px;font-weight:700}
+.llab .s{font-size:12.5px;color:#53647a}
+.vbox{width:360px;text-align:right;flex:none}
+.s1024w .vbox{width:290px}
+.lv{font-size:36px;font-weight:600;line-height:1.1}
+.s1024w .lv{font-size:30px}
+.lcur{width:36px;flex:none;font-size:14px;font-weight:600;color:#53647a}
+.recv{height:68px;border:2px solid #0f766e;border-radius:10px;box-shadow:0 0 0 3px rgba(15,118,110,.16);background:#fff;display:flex;align-items:center;justify-content:flex-end;padding:0 14px;gap:8px;direction:ltr}
+.s1024w .recv{height:60px}
+.recv .caret{height:34px}
+.lrow.eq{border-top:2px solid #0f1d2e}
+.lrow.big{min-height:104px}
+.lrow.big .lv{font-size:52px}
+.s1024w .lrow.big .lv{font-size:44px}
+.lrow.chg{background:#0f1d2e;color:#fff}
+.lrow.chg .s,.lrow.chg .lcur{color:#c5d0dc}
+.lrow.short{background:#fdf3e4;box-shadow:inset 0 0 0 2px #a35a00;color:#5c3400}
+.lrow.short .s,.lrow.short .lcur{color:#6b3a00}
+.lrow.nil{background:#f3f6fa;color:#6b7a8d}
+.lrow.nil .lv{font-size:28px;font-weight:500}
+.lrow.due{background:#fbeceb;color:#6e1712}
+.seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:none}
+.segb{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;border-radius:10px;border:1px solid #c9d2dc;background:#fff;font-family:inherit;font-size:16px;font-weight:600;color:#0f1d2e;cursor:pointer}
+.segb.on{border:2px solid #0f766e;background:#e6f4f1;color:#083f3b}
+.segb .ck{margin-inline-start:auto;display:inline-flex;width:22px;height:22px;border-radius:11px;background:#0f766e;color:#fff;align-items:center;justify-content:center}
+.segb .kbd{margin-inline-start:auto}
+.segb.on .kbd{margin-inline-start:0}
+.sum{width:380px;flex:none;background:#fff;border-inline-end:1px solid #d8dfe7;display:flex;flex-direction:column}
+.s1024w .sum{width:300px}
+.sumh{padding:14px 16px;border-bottom:1px solid #d8dfe7;display:flex;flex-direction:column;gap:4px}
+.sl{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-bottom:1px solid #eef2f6;font-size:13.5px}
+.sl .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl .q{color:#53647a;font-size:13px;width:36px;text-align:center}
+.sl .t{width:80px;text-align:right;font-weight:600}
+.area{flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:14px}
+.s1024w .area{padding:14px 16px;gap:10px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.flab{font-size:12.5px;font-weight:700;color:#3e4d60}
+.sel{display:flex;align-items:center;height:44px;padding:0 12px;border:1px solid #c9d2dc;border-radius:10px;background:#fff;font-size:14px;gap:8px}
+.pin{display:flex;align-items:center;gap:10px;height:52px;padding:0 14px;border:2px solid #0f766e;border-radius:10px;box-shadow:0 0 0 3px rgba(15,118,110,.16);background:#fff}
+.pin input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:inherit;font-size:15px;height:40px;padding:0}
+.dots{display:flex;gap:8px;direction:ltr}
+.dots i{width:10px;height:10px;border-radius:5px;background:#0f1d2e;display:block}
+.card14{background:#fff;border:1px solid #d8dfe7;border-radius:14px}
+
+
+.bd{direction:ltr;padding:56px 64px;display:flex;flex-direction:column;gap:24px;font-family:"Segoe UI","Dubai",Tahoma,"Noto Sans Arabic",system-ui,sans-serif}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0b5b55}
+.btitle{font-size:40px;font-weight:700;line-height:1.15}
+.lead{font-size:18px;color:#53647a;max-width:1000px}
+.sec{background:#fff;border:1px solid #d8dfe7;border-radius:16px;padding:24px 28px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.sec h2{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0b5b55;margin:0}
+.sec h3{font-size:19px;font-weight:700;margin:0}
+.spec{font-size:13.5px;line-height:1.6;color:#0f1d2e;margin:0;padding-left:18px}
+.spec li{margin-bottom:3px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.g6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:24px}
+.ar{direction:rtl;text-align:right}
+.cap{font-size:12px;color:#53647a}
+.trow{display:grid;grid-template-columns:150px minmax(0,1fr) 210px;gap:16px;align-items:center;padding:10px 0;border-bottom:1px solid #eef2f6}
+.sw{display:flex;flex-direction:column;gap:6px}
+.sw i{display:block;height:56px;border-radius:10px;border:1px solid rgba(15,29,46,.12)}
+.sw b{font-size:13px}
+.lab{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#53647a}
+.stage{direction:rtl;background:#f7f9fa;border:1px dashed #c9d2dc;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;align-items:stretch}
+.sk{position:absolute;font-size:10px;color:#3e4d60;font-weight:600;direction:ltr}
+.mx{display:grid;grid-template-columns:190px 230px minmax(0,1fr) 250px;gap:0}
+.mx>div{padding:14px 16px;border-bottom:1px solid #d8dfe7;display:flex;flex-direction:column;justify-content:center;gap:6px;min-width:0}
+.mxh{background:#f3f6fa;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#53647a}
+
+</style>
+</helmet>
+<div class="rt" dir="ltr" style="width: 1440px; height: 3560px; ">
+<div class="bd">
+<div><div class="eyebrow">Retail Tower POS vNext · Visual acceptance · Wave 1</div>
+<div class="btitle">Direction B — cart-first cashier workspace</div>
+<div class="lead">A calm, precise clinical retail instrument. The cart is the work; money is the loudest thing on screen; state is always named in words, never only in colour. Everything else stays quiet.</div></div>
+
+<div class="g2">
+<section class="sec"><h2>Layout philosophy</h2>
+<div style="display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap"><div><div class="lab" style="margin-bottom:6px">1280 × 800</div><div style="position:relative;width:461px;height:288px;border:1px solid #9fb0c2;border-radius:6px;background:#f7f9fa;overflow:hidden"><div style="position:absolute;left:0px;top:0px;width:460.79999999999995px;height:17.28px;background:#fff;border-bottom:1px solid #c9d2dc"><span class="sk" style="left:4px;top:2px">Shell 48</span></div><div style="position:absolute;left:0px;top:17.28px;width:129.6px;height:270.72px;background:#fff;border-right:1px solid #c9d2dc"><span class="sk" style="left:4px;top:2px">Summary + actions 360</span></div><div style="position:absolute;left:3.5999999999999996px;top:241.2px;width:122.39999999999999px;height:20.16px;background:#0f766e;border-radius:4px"></div><div style="position:absolute;left:3.5999999999999996px;top:266.4px;width:122.39999999999999px;height:15.84px;background:#fff;border:1px solid #b3261e;border-radius:4px"></div><div style="position:absolute;left:134.64px;top:21.599999999999998px;width:321.11999999999995px;height:18.72px;background:#fff;border:2px solid #0f766e;border-radius:4px"><span class="sk" style="left:4px;top:2px">Product entry · focus per input contract</span></div><div style="position:absolute;left:134.64px;top:56.16px;width:321.11999999999995px;bottom:4.32px;background:#fff;border:1px solid #c9d2dc;border-radius:5px;overflow:hidden"><div style="height:12.24px;background:#eef2f6"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;background:#e6f4f1"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><div style="height:20.2px;border-bottom:1px solid #e3e8ee;"></div><span class="sk" style="right:6px;top:21.599999999999998px">Cart · rows 56px</span></div></div></div><div><div class="lab" style="margin-bottom:6px">1024 × 768</div><div style="position:relative;width:369px;height:276px;border:1px solid #9fb0c2;border-radius:6px;background:#f7f9fa;overflow:hidden"><div style="position:absolute;left:0px;top:0px;width:368.64px;height:15.84px;background:#fff;border-bottom:1px solid #c9d2dc"><span class="sk" style="left:4px;top:2px">Shell 44</span></div><div style="position:absolute;left:0px;top:15.84px;width:108.0px;height:260.64000000000004px;background:#fff;border-right:1px solid #c9d2dc"><span class="sk" style="left:4px;top:2px">Summary + actions 300</span></div><div style="position:absolute;left:3.5999999999999996px;top:229.68px;width:100.8px;height:20.16px;background:#0f766e;border-radius:4px"></div><div style="position:absolute;left:3.5999999999999996px;top:254.88000000000002px;width:100.8px;height:15.84px;background:#fff;border:1px solid #b3261e;border-radius:4px"></div><div style="position:absolute;left:113.04px;top:20.16px;width:250.55999999999997px;height:18.72px;background:#fff;border:2px solid #0f766e;border-radius:4px"><span class="sk" style="left:4px;top:2px">Product entry · focus per input contract</span></div><div style="position:absolute;left:113.04px;top:54.72px;width:250.55999999999997px;bottom:4.32px;background:#fff;border:1px solid #c9d2dc;border-radius:5px;overflow:hidden"><div style="height:12.24px;background:#eef2f6"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;background:#e6f4f1"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><div style="height:17.3px;border-bottom:1px solid #e3e8ee;"></div><span class="sk" style="right:6px;top:21.599999999999998px">Cart · rows 48px</span></div></div></div></div>
+<ul class="spec">
+<li>Two zones only. Start side (right, RTL): scan bar + cart. End side (left): totals and the action ladder. No nav rail, no dashboard tiles.</li>
+<li>Fixed chrome is capped at 48 px shell (44 at 1024). One optional status strip (38 px) only when the system is not normal.</li>
+<li>Totals and the primary action never scroll. Only the cart body scrolls; header and footer of the cart stay pinned.</li>
+<li>1024 is re-laid, not scaled: pane 300, no index column, rows 48 with barcode shown only on the active or selected line, shorter labels.</li>
+<li>Recovery and approval surfaces are docked or replace the work area; the transaction stays on screen and identifiable.</li>
+</ul></section>
+
+<section class="sec"><h2>Visual hierarchy — what the eye finds, in order</h2>
+<ol class="spec" style="font-size:14.5px">
+<li><b>Money due</b> — 44 px mono total beside the 56 px Pay action.</li>
+<li><b>The cart</b> — largest surface; the last-scanned line is tinted and tagged.</li>
+<li><b>Attention</b> — a status strip or banner in words + icon, only when something is not normal.</li>
+<li><b>Transaction identity</b> — sale number, start time, line and piece counts in one quiet line above the cart.</li>
+<li><b>Next safe action</b> — exactly one teal filled button per screen. Recovery screens may switch it to the safe step.</li>
+<li><b>System state</b> — chip in the shell: online, offline, syncing, locked, uncertain.</li>
+</ol>
+<div class="cap">Rule: one filled teal button per screen. If two things look primary, one of them is wrong.</div>
+</section>
+</div>
+
+<section class="sec"><h2>Typography</h2>
+<div class="cap">Arabic UI: Dubai → Segoe UI → Tahoma → system sans (preview falls back to Noto Sans Arabic). Money, quantities, IDs, barcodes: tabular monospace (IBM Plex Mono / Cascadia Mono / Consolas), always LTR-isolated. Digit system (Western vs Arabic-Indic) is an open assumption.</div>
+<div class="trow"><span class="lab">Change due</span><div class="ar"><span class="num" style="font-size:52px;font-weight:600">437.25</span></div><span class="cap">Mono 52 / 600 · checkout result only (44 at 1024)</span></div>
+<div class="trow"><span class="lab">Grand total</span><div class="ar"><span class="num" style="font-size:44px;font-weight:600">562.75</span> <span class="cur">ج.م</span></div><span class="cap">Mono 44 / 600 · pane total (36 at 1024)</span></div>
+<div class="trow"><span class="lab">Ledger money</span><div class="ar"><span class="num" style="font-size:36px;font-weight:600">1,000.00</span></div><span class="cap">Mono 36 / 600 · checkout rows (30 at 1024)</span></div>
+<div class="trow"><span class="lab">Screen title</span><div class="ar"><span style="font-size:22px;font-weight:700">الدفع</span></div><span class="cap">Sans 22 / 700 · only on checkout and recovery</span></div>
+<div class="trow"><span class="lab">Product name</span><div class="ar"><span style="font-size:14.5px;font-weight:600">باراسيتامول 500 مجم · 24 قرص</span></div><span class="cap">Sans 14.5 / 600 · single line, ellipsis</span></div>
+<div class="trow"><span class="lab">Line total</span><div class="ar"><span class="num" style="font-size:15.5px;font-weight:600">65.00</span> &nbsp; <span class="num" style="font-size:14px;color:#3e4d60">32.50</span></div><span class="cap">Mono 15.5 / 600 · unit price 14 / 400 grey-ink</span></div>
+<div class="trow"><span class="lab">Body</span><div class="ar"><span>البيع مستمر على هذه الطرفية</span></div><span class="cap">Sans 14 / 400 · banners 13.5</span></div>
+<div class="trow"><span class="lab">Field label</span><div class="ar"><span class="flab">طريقة الدفع</span></div><span class="cap">Sans 12.5 / 700 · #3e4d60</span></div>
+<div class="trow"><span class="lab">Meta / barcode</span><div class="ar"><span class="num bc">6223001234567</span></div><span class="cap">Mono 12 · muted #53647a</span></div>
+<div class="trow"><span class="lab">Key cap (open)</span><div class="ar"><span class="kbd">F12</span> <span class="kbd">Esc</span></div><span class="cap">Mono 11 · placeholders; bind to existing keymap</span></div>
+</section>
+
+<section class="sec"><h2>Colour tokens</h2>
+<div style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:16px">
+<div class="sw"><i style="background:#0f766e"></i><b>Primary</b><span class="num cap" style="direction:ltr">#0f766e</span><span class="cap">Pay, focus ring, last-scanned</span></div><div class="sw"><i style="background:#0b5b55"></i><b>Primary emphasis</b><span class="num cap" style="direction:ltr">#0b5b55</span><span class="cap">Hover, manager surface header</span></div><div class="sw"><i style="background:#e6f4f1"></i><b>Primary soft</b><span class="num cap" style="direction:ltr">#e6f4f1</span><span class="cap">Active row, restored banner</span></div><div class="sw"><i style="background:#f7f9fa"></i><b>Background</b><span class="num cap" style="direction:ltr">#f7f9fa</span><span class="cap">App ground</span></div>
+<div class="sw"><i style="background:#ffffff"></i><b>Surface</b><span class="num cap" style="direction:ltr">#ffffff</span><span class="cap">Cart, pane, dialogs</span></div><div class="sw"><i style="background:#f3f6fa"></i><b>Elevated</b><span class="num cap" style="direction:ltr">#f3f6fa</span><span class="cap">Table header/footer bands</span></div><div class="sw"><i style="background:#eef2f6"></i><b>Sunken</b><span class="num cap" style="direction:ltr">#eef2f6</span><span class="cap">Disabled, neutral chips, lock ground</span></div><div class="sw"><i style="background:#d8dfe7"></i><b>Border</b><span class="num cap" style="direction:ltr">#d8dfe7</span><span class="cap">Hairlines; controls #c9d2dc</span></div>
+<div class="sw"><i style="background:#0f1d2e"></i><b>Text</b><span class="num cap" style="direction:ltr">#0f1d2e</span><span class="cap">Primary text, change-due block, offline chip</span></div><div class="sw"><i style="background:#53647a"></i><b>Muted</b><span class="num cap" style="direction:ltr">#53647a</span><span class="cap">Meta, labels</span></div><div class="sw"><i style="background:#15774d"></i><b>Success</b><span class="num cap" style="direction:ltr">#15774d</span><span class="cap">Online, sale completed</span></div><div class="sw"><i style="background:#a35a00"></i><b>Warning</b><span class="num cap" style="direction:ltr">#a35a00</span><span class="cap">Short amount, unknown result, receipt</span></div>
+<div class="sw"><i style="background:#b3261e"></i><b>Danger</b><span class="num cap" style="direction:ltr">#b3261e</span><span class="cap">Definitive failure, destructive</span></div><div class="sw"><i style="background:#1b6ca8"></i><b>Info</b><span class="num cap" style="direction:ltr">#1b6ca8</span><span class="cap">Syncing, keyboard selection</span></div>
+</div>
+<div class="cap">Semantic tints: warning text on tint uses #5c3400–#8a4b00, danger #6e1712, info #123f63, success #0d4a30 to keep ≥ 4.5:1. Every semantic colour ships with an icon and a word.</div>
+</section>
+
+<div class="g3">
+<section class="sec"><h2>Spacing & density</h2>
+<div class="row" style="gap:10px;align-items:flex-end"><div style="display:flex;flex-direction:column;align-items:center;gap:4px"><i style="display:block;width:4px;height:4px;background:#0f766e;border-radius:2px"></i><span class="num cap">4</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px"><i style="display:block;width:8px;height:8px;background:#0f766e;border-radius:2px"></i><span class="num cap">8</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px"><i style="display:block;width:12px;height:12px;background:#0f766e;border-radius:2px"></i><span class="num cap">12</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px"><i style="display:block;width:16px;height:16px;background:#0f766e;border-radius:2px"></i><span class="num cap">16</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px"><i style="display:block;width:24px;height:24px;background:#0f766e;border-radius:2px"></i><span class="num cap">24</span></div></div>
+<ul class="spec">
+<li>4 px base; 8 between controls, 12–16 inside panes, 24 page gutter in checkout.</li>
+<li>Cart row 56 (1280, two-line) · 48 (1024, one-line).</li>
+<li>Controls ≥ 44 · scan bar 52 · commit 56.</li>
+<li>Rows are divided by 1 px hairlines — never a card per row.</li>
+<li>Visible capacity: 10 rows @1280, 11 rows @1024.</li>
+</ul></section>
+<section class="sec"><h2>Surfaces</h2>
+<div style="background:#f7f9fa;border:1px solid #d8dfe7;border-radius:12px;padding:12px">
+<span class="cap">Background #f7f9fa</span>
+<div style="background:#fff;border:1px solid #d8dfe7;border-radius:14px;margin-top:8px;overflow:hidden">
+<div style="background:#f3f6fa;padding:6px 10px;border-bottom:1px solid #d8dfe7" class="cap">Elevated band — table header</div>
+<div style="padding:10px" class="cap">Surface #fff — cart, pane</div>
+<div style="background:#eef2f6;padding:6px 10px" class="cap">Sunken — disabled / neutral</div></div></div>
+<ul class="spec"><li>Max two levels of nesting. No glass, no gradients, no floating cards.</li><li>Shadow only on docked panels and toasts (one level).</li></ul>
+</section>
+<section class="sec"><h2>Geometry</h2>
+<div class="row" style="gap:14px;align-items:flex-end">
+<div style="width:72px;height:44px;border:2px solid #0f766e;border-radius:10px"></div>
+<div style="width:96px;height:64px;border:2px solid #0f766e;border-radius:14px"></div>
+<div style="width:120px;height:80px;border:2px solid #0f766e;border-radius:16px"></div></div>
+<div class="cap">10 controls · 14 cards &amp; cart · 16 panes / dialogs · chips are pills (14).</div>
+<ul class="spec"><li>Commit actions are 56 px, full width of their column.</li><li>Icon buttons are 44 × 44, with aria-label.</li></ul>
+</section>
+</div>
+
+<div class="g2">
+<section class="sec"><h2>Buttons & action ladder</h2>
+<div class="stage" style="flex-direction:column">
+<button class="btn btn-p w100" style="justify-content:space-between"><span class="row" style="gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>الدفع</span><span class="kbd">F12</span></button>
+<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>تعليق البيع<span class="kbd">F8</span></button><button class="btn btn-q">حسناً</button><button class="btn btn-ink"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V4h10v5"></path><rect x="4" y="9" width="16" height="7" rx="2"></rect><path d="M7 14h10v6H7z"></path></svg>إعادة طباعة</button><button class="btn off" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>إعادة الدفع</button></div>
+<div class="hr"></div>
+<button class="btn btn-d w100"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>إلغاء البيع</button><div class="gate"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg>يتطلب موافقة المدير</div>
+</div>
+<ul class="spec"><li><b>Primary</b> teal 56, one per screen, at the bottom of the end column, with its key cap.</li><li><b>Secondary</b> white 44 with border, reversible actions, grouped above the total.</li><li><b>Quiet</b> text-only teal for dismiss / low-risk.</li><li><b>Ink</b> dark 52 — the main action inside a recovery panel that is not the screen's main path (reprint).</li><li><b>Destructive</b> outlined red, separated by a rule, labelled with its gate. Never adjacent to Pay.</li><li><b>Disabled</b> keeps its label and says why, next to it.</li></ul>
+</section>
+<section class="sec"><h2>Money presentation</h2>
+<div class="stage" style="direction:rtl">
+<div class="ledger" style="width:100%"><div class="lrow "><div class="llab"><span class="t">الإجمالي المستحق</span><span class="s"></span></div><div class="vbox"><span class="num lv">562.75</span></div><span class="lcur">ج.م</span></div><div class="lrow "><div class="llab"><span class="t">المبلغ المستلم</span><span class="s"></span></div><div class="vbox"><span class="num lv">1,000.00</span></div><span class="lcur">ج.م</span></div><div class="lrow eq big chg"><div class="llab"><span class="t">الباقي للعميل</span><span class="s"></span></div><div class="vbox"><span class="num lv">437.25</span></div><span class="lcur">ج.م</span></div></div></div>
+<ul class="spec"><li>Always two decimals, thousands separator, tabular mono, LTR-isolated inside RTL.</li><li>Decimal-aligned: values sit in a fixed-width box, right-aligned, so units and cents stack.</li><li>Currency label follows the number in its own column, never inside it (ج.م is a placeholder).</li><li>TOTAL plain · RECEIVED is an input box · REMAINING follows a 2 px "equals" rule · CHANGE is the only inverted (ink) block.</li><li>Remaining &gt; 0 turns the row amber-outlined with a word; colour never stands alone.</li></ul>
+</section>
+</div>
+
+<section class="sec"><h2>Cart row treatment</h2>
+<div class="stage" style="max-width:920px">
+<div class="cart" style="flex:none"><div class="cr cg"><div class="ix"><span class="num">3</span></div><div class="nmw"><div class="nml"><span class="nm">شراب للكحة للأطفال · 100 مل</span></div><div class="bc"><span class="num">6224000321456</span></div></div><div class="qcell"><span class="qv num">1</span></div><div class="mu"><span class="num">54.75</span></div><div class="mt"><span class="num">54.75</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg pend"><div class="ix"><span class="num">4</span></div><div class="nmw"><div class="nml"><span class="nm">كمامات طبية · 50 قطعة</span><span class="tag pend">بانتظار موافقة الحذف</span></div><div class="bc"><span class="num">6229876543210</span></div></div><div class="qcell"><span class="qv num">1</span></div><div class="mu"><span class="num">75.00</span></div><div class="mt"><span class="num">75.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg sel"><div class="ix"><span class="num">5</span></div><div class="nmw"><div class="nml"><span class="nm">مناديل مبللة · 80 منديل</span><span class="tag sel">محدد</span></div><div class="bc"><span class="num">6223456789012</span></div></div><div class="qcell"><div class="step"><button aria-label="زيادة الكمية"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button><span class="q num">3</span><button aria-label="إنقاص الكمية"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button></div></div><div class="mu"><span class="num">24.00</span></div><div class="mt"><span class="num">72.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg act"><div class="ix"><span class="num">7</span></div><div class="nmw"><div class="nml"><span class="nm">معجون أسنان للحساسية · 75 مل</span><span class="tag">آخر مسح</span></div><div class="bc"><span class="num">6225550001234</span></div></div><div class="qcell"><div class="step"><button aria-label="زيادة الكمية"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button><span class="q num">1</span><button aria-label="إنقاص الكمية"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button></div></div><div class="mu"><span class="num">62.00</span></div><div class="mt"><span class="num">62.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div></div></div>
+<div class="g3" style="gap:16px"><div class="cap"><b>Resting</b> — quantity as a number; stepper appears only on the active or selected line to keep columns calm and scannable.</div>
+<div class="cap"><b>Last scanned</b> — primary-soft tint + 4 px start-edge bar + "آخر مسح" tag. New lines append at the bottom; the cart keeps the newest in view.</div>
+<div class="cap"><b>Keyboard selected</b> — 2 px info outline + "محدد" tag; shows where arrows, +/− and Delete act. <b>Pending approval</b> — amber outline + tag in words.</div></div>
+</section>
+
+<div class="g2">
+<section class="sec"><h2>Status treatment</h2>
+<div class="stage" style="flex-direction:row;flex-wrap:wrap;gap:8px"><span class="chip c-ok "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17.5h10a3.5 3.5 0 0 0 .5-6.97A5.5 5.5 0 0 0 7 11a3.25 3.25 0 0 0 0 6.5z"></path></svg>متصل</span><span class="chip c-off "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"></path><path d="M7.5 7.6A5 5 0 0 0 6.5 17H17m3.2-1.6A3.5 3.5 0 0 0 17.5 10h-.3A6 6 0 0 0 10.6 5.2"></path></svg>غير متصل</span><span class="chip c-info "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"></path></svg>مزامنة</span><span class="chip c-neutral "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>3 بانتظار المزامنة</span><span class="chip c-lock "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>مقفلة</span><span class="chip c-mgr "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg>بانتظار موافقة المدير</span><span class="chip c-warn hatch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6v.4M12 17v.3"></path></svg>دفع غير مؤكد</span><span class="chip c-err "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9 9l6 6M15 9l-6 6"></path></svg>فشل الدفع</span><span class="chip c-ok "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>البيع مكتمل</span><span class="chip c-warn "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V4h10v5"></path><rect x="4" y="9" width="16" height="7" rx="2"></rect><path d="M7 14h10v6H7z"></path></svg>الإيصال لم يُطبع</span></div>
+<ul class="spec"><li>Three tiers: <b>chip</b> in the shell (always), <b>strip</b> under the shell (system-wide, non-blocking), <b>banner / surface</b> in the work area (this transaction).</li><li>Offline is ink, not red: it is a mode, not an error. Red is reserved for definitive failure.</li><li>Uncertain = amber + diagonal hatch + "?" icon. Failed = red + "×". They never share a look.</li><li>Silence means normal: no green banners for routine success; a toast at most.</li></ul>
+</section>
+<section class="sec"><h2>Dialogs & recovery surfaces</h2>
+<div class="row" style="gap:16px;align-items:flex-start">
+<div style="flex:1"><div style="position:relative;height:120px;border:1px solid #9fb0c2;border-radius:6px;background:#fff;overflow:hidden"><div style="position:absolute;inset:0;background:rgba(15,29,46,.22)"></div><div style="position:absolute;left:0;top:0;bottom:0;width:44%;background:#fff;border-right:1px solid #9fb0c2"><div style="height:16px;background:#0b5b55"></div></div></div><div class="cap" style="margin-top:6px"><b>Docked panel</b> — approval, held sales. Slides over the end side; cart stays readable under a light scrim.</div></div>
+<div style="flex:1"><div style="position:relative;height:120px;border:1px solid #9fb0c2;border-radius:6px;background:#fff;overflow:hidden"><div style="position:absolute;right:0;top:0;bottom:0;width:32%;background:#f3f6fa;border-left:1px solid #c9d2dc"></div><div class="hatch" style="position:absolute;left:8px;top:8px;right:36%;height:34px;background-color:#fdf3e4;border:2px solid #a35a00;border-radius:4px"></div></div><div class="cap" style="margin-top:6px"><b>Work-area replacement</b> — payment recovery. Transaction summary stays; the ledger is replaced by the recovery surface.</div></div>
+<div style="flex:1"><div style="position:relative;height:120px;border:1px solid #9fb0c2;border-radius:6px;background:#e9eef3;overflow:hidden"><div style="position:absolute;left:32%;right:32%;top:28px;bottom:28px;background:#fff;border-radius:6px"></div></div><div class="cap" style="margin-top:6px"><b>Full lock</b> — only terminal identity and "a sale is preserved". No amounts or lines.</div></div>
+</div>
+<ul class="spec"><li>No centred password-style modals. Every surface names the action, the affected object and the safe exit (Esc).</li><li>Focus ownership, scanner routing and shortcuts follow the existing Retail Tower input contract — not defined here.</li></ul>
+</section>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":3560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

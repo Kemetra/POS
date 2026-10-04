@@ -16,3 +16,10 @@ src/shared/api-types.ts text eol=lf
 specs/022-pos-ui-v4-rescue/design-handoff/**/*.html text eol=lf
 specs/022-pos-ui-v4-rescue/design-handoff/*.css text eol=lf
 specs/022-pos-ui-v4-rescue/design-handoff/*.md text eol=lf
+
+# Same rationale for the vNext Visual Acceptance Pack: it is committed VERBATIM
+# from the owner-approved archive, and its README entry asserts it is
+# byte-identical to that archive. Without a pin, autocrlf=true would materialise
+# CRLF on a Windows checkout. Scope stays narrow - this directory only.
+docs/design/vnext/visual-acceptance/**/*.html text eol=lf
+docs/design/vnext/visual-acceptance/**/*.json text eol=lf
