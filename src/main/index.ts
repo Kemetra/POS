@@ -1479,8 +1479,8 @@ app
     // requires a manager/admin operator session (D-b), and talks only to
     // Backend-Core `/api/pos/v1/sales/...` (AC7) with the operator envelope read
     // in-process. The background resolver (startup + interval) re-sends
-    // `pending` / `unknown` returns with the identical request; it starts only
-    // with the flag on and for an already-paired terminal.
+    // `pending` / `unknown` returns with the identical request; it is scheduled
+    // with the flag on and resolves pairing + operator live on every tick.
     const returnsDomain = composeReturns({
       db,
       http: {
@@ -1494,27 +1494,23 @@ app
           operatorSessionManager.getCurrent(),
           pairingStore.getCurrentTerminalId(),
         ),
+      isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
       auditSink: auditEmitter,
       logger: mainLogger,
       now: () => new Date().toISOString(),
     });
     registerReturnsHandlers(guardedIpcMain, { service: returnsDomain.service });
     if (parseFeatureFlags(process.env).returns) {
-      const returnsPairing = await pairingStore.getStatus();
-      if (returnsPairing.kind === 'paired') {
-        const RETURNS_RESOLVER_INTERVAL_MS = 30_000;
-        const stopReturnsResolver = scheduleReturnsResolver({
-          resolver: returnsDomain.resolver,
-          scope: {
-            tenantId: returnsPairing.tenant_id,
-            branchId: returnsPairing.branch_id,
-            terminalId: returnsPairing.terminal_id,
-          },
-          intervalMs: RETURNS_RESOLVER_INTERVAL_MS,
-          logger: mainLogger,
-        });
-        workerRegistry.register('returns resolver', stopReturnsResolver);
-      }
+      // Scheduled regardless of pairing: each tick resolves the paired terminal
+      // and an eligible (unlocked manager/admin) operator live, so in-process
+      // pairing needs no restart; until then every tick is a no-op.
+      const RETURNS_RESOLVER_INTERVAL_MS = 30_000;
+      const stopReturnsResolver = scheduleReturnsResolver({
+        resolver: returnsDomain.resolver,
+        intervalMs: RETURNS_RESOLVER_INTERVAL_MS,
+        logger: mainLogger,
+      });
+      workerRegistry.register('returns resolver', stopReturnsResolver);
     }
 
     createWindow();

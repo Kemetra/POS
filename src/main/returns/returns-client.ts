@@ -19,8 +19,9 @@
  *                        fields, else `unknown` (the answer was not readable —
  *                        a resend replays it)
  *   400                → validation_error
- *   401 / 403          → unauthorized
- *   404                → returns_unavailable (gate off, or unknown sale)
+ *   401 / 403          → unauthorized      (first send only; a resend → unknown)
+ *   404                → returns_unavailable (gate off, or unknown sale;
+ *                        first send only; a resend → unknown)
  *   409 over_return / already_reversed → that code; any other 409
  *                        (`conflict`, `idempotency_key_conflict`) → conflict
  *   422                → return_tender_mismatch
@@ -59,6 +60,14 @@ export interface RecordReturnRequest {
   readonly bodyJson: string;
   /** The return `externalId` (`pos-pulse-return:<uuidv7>`). */
   readonly idempotencyKey: string;
+  /**
+   * True when this send may follow an earlier one that reached the server (a
+   * resolver resend, or a row already attempted). Backend-Core answers 401
+   * (envelope refused) and 404 (`POS_RETURNS_ENABLED` off) BEFORE its
+   * provenance replay, so on a resend those say nothing about whether the
+   * return was recorded: they map to `unknown`, never a terminal refusal.
+   */
+  readonly resend: boolean;
 }
 
 export interface ReturnsClient {
@@ -99,12 +108,20 @@ function isReplay(answer: HttpAnswer): boolean {
   return answer.status === 200 || answer.headers.get('Idempotent-Replayed') === 'true';
 }
 
-function toRecordOutcome(answer: HttpAnswer): RecordReturnOutcome {
+/**
+ * Statuses Backend-Core decides before the provenance replay (the operator
+ * guard's 401/403, the deployment gate's 404). Deterministic on a first send;
+ * inconclusive on a resend, where the return may already be recorded.
+ */
+const PRE_REPLAY_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
+
+function toRecordOutcome(answer: HttpAnswer, resend: boolean): RecordReturnOutcome {
   if (answer.status === 200 || answer.status === 201) {
     const saleReturn = readSaleReturnBody(answer.json);
     if (saleReturn === null) return { kind: 'unknown' };
     return { kind: 'recorded', replayed: isReplay(answer), saleReturn };
   }
+  if (resend && PRE_REPLAY_STATUSES.has(answer.status)) return { kind: 'unknown' };
   const reason = classifyRefusal(answer.status, readErrorCode(answer.json));
   return reason === null ? { kind: 'unknown' } : { kind: 'refused', reason };
 }
@@ -165,7 +182,7 @@ export function createReturnsClient(deps: CreateReturnsClientDeps): ReturnsClien
           body: request.bodyJson,
         },
       });
-      return answer === null ? { kind: 'unknown' } : toRecordOutcome(answer);
+      return answer === null ? { kind: 'unknown' } : toRecordOutcome(answer, request.resend);
     },
   };
 }

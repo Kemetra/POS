@@ -225,7 +225,21 @@ describe('0039 — return journal (RT-15 S2)', () => {
       db.run(`INSERT INTO return_journal_lines VALUES ('r1', ?, 0)`, [REF.replace('f6', 'f0')]),
     ).toThrow(/constraint failed/);
     expect(() => db.run(`INSERT INTO return_journal_lines VALUES ('r404', ?, 1)`, [REF])).toThrow(
-      /FOREIGN KEY/,
+      /header must be pending and unsent/,
+    );
+  });
+
+  it.each<[string, JournalState, Change | null]>([
+    ['an attempted pending header', 'pending', { set: 'attempt_count = 1' }],
+    ['an unknown header', 'unknown', null],
+    ['a confirmed header', 'confirmed', null],
+    ['a refused header', 'refused', null],
+    ['a paid-out header', 'paid_out', null],
+  ])('refuses a line added to %s (P2-2)', (_label, state, extra) => {
+    reach(state);
+    if (extra !== null) update(extra);
+    expect(() => db.run(`INSERT INTO return_journal_lines VALUES ('r1', ?, 1)`, [REF])).toThrow(
+      /header must be pending and unsent/,
     );
   });
 

@@ -119,6 +119,16 @@ describe('returnability and quoting', () => {
     );
   });
 
+  it('refuses locally when returned + q would exceed the sold quantity (P2-3)', () => {
+    // An inconsistent server view: 2 of 3 already returned, yet 3 "returnable".
+    const sale = wire({ lines: [saleLine({ returnedQuantity: '2', returnableQuantity: '3' })] });
+    expect(quoteReturn(sale, [{ lineRef: LINE_A, quantity: 2 }])).toEqual({
+      kind: 'refused',
+      reason: 'quantity_out_of_range',
+    });
+    expect(quoteReturn(sale, [{ lineRef: LINE_A, quantity: 1 }])).toMatchObject({ kind: 'ok' });
+  });
+
   it('matches line refs case-insensitively', () => {
     const quoted = quoteReturn(wire(), [{ lineRef: LINE_A.toUpperCase(), quantity: 1 }]);
     expect(quoted).toMatchObject({ kind: 'ok', quote: { totalMinor: 1500 } });

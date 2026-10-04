@@ -272,6 +272,10 @@ export interface HarnessState {
   enabled: boolean;
   role: Role | null;
   token: string | null;
+  /** The terminal is paired (the live pairing read; unpaired → no session scope). */
+  paired: boolean;
+  /** The operator session is inactivity-locked. */
+  locked: boolean;
   /** When it returns true for an event, that audit insert throws (fault injection). */
   failAudit: ((event: AuditEvent) => boolean) | null;
 }
@@ -314,6 +318,8 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     enabled: options.enabled ?? true,
     role: options.role === undefined ? 'manager' : options.role,
     token: options.token === undefined ? ENVELOPE : options.token,
+    paired: true,
+    locked: false,
     failAudit: null,
   };
   const emitter = new AuditEmitter(bindAuditEventsStoreDb(handle));
@@ -327,7 +333,8 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     db: handle,
     http: { baseUrl: BASE_URL, fetch: backend.fetch, getOperatorToken: () => state.token },
     isEnabled: () => state.enabled,
-    getSession: () => (state.role === null ? null : sessionFor(state.role)),
+    getSession: () => (state.role === null || !state.paired ? null : sessionFor(state.role)),
+    isSessionLocked: () => state.locked,
     auditSink,
     logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
     now: () => NOW,

@@ -9,8 +9,10 @@
  * confirms it, or records it now, or refuses it. Never a second return.
  *
  * Runs on startup, on a slow interval, and on demand (`returns.resolve`). A
- * background pass needs an operator envelope; with none it does nothing (no
- * attempt is counted and nothing changes state). Passes are single-flight.
+ * pass needs a ready resolving operator — paired terminal, a signed-in,
+ * unlocked manager/admin with an operator envelope, resolved live per pass;
+ * without one it sends nothing (no attempt counted, nothing changes state).
+ * Passes are single-flight per process (one terminal per process).
  */
 import type { ReturnActor } from './returns-audit.js';
 import type { ReturnsDispatcher } from './returns-dispatch.js';
@@ -23,17 +25,28 @@ export interface ResolveSummary {
 }
 
 export interface ReturnsResolver {
-  /** Re-send every unresolved return in the actor's scope, oldest first. */
+  /**
+   * On demand: re-send every unresolved return in the actor's scope, oldest
+   * first — only while a resolving operator is ready (else nothing is sent and
+   * the rows are reported unresolved).
+   */
   resolveOnce(actor: Pick<ReturnActor, 'scope'>): Promise<ResolveSummary>;
-  /** One background pass for `scope`; skipped while another pass runs or no credential. */
-  tick(scope: ReturnScope): Promise<ResolveSummary | null>;
+  /**
+   * One background pass over the scope resolved LIVE now; a no-op (null) while
+   * another pass runs or no resolving operator is ready.
+   */
+  tick(): Promise<ResolveSummary | null>;
 }
 
 export interface ReturnsResolverDeps {
   readonly repo: Pick<ReturnsRepository, 'listUnresolved'>;
   readonly dispatcher: ReturnsDispatcher;
-  /** True when an operator envelope is present (a send can authenticate). */
-  readonly hasCredential: () => boolean;
+  /**
+   * The terminal scope to resolve right now, or null when no send should
+   * happen: flag off, unpaired, no manager/admin session, session locked, or
+   * no operator envelope. Read at every tick (pairing can happen in-process).
+   */
+  readonly readyScope: () => ReturnScope | null;
 }
 
 const EMPTY: ResolveSummary = { confirmed: 0, refused: 0, unresolved: 0 };
@@ -62,9 +75,14 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
   }
 
   return {
-    resolveOnce: (actor) => singleFlight(actor.scope),
-    tick: async (scope) => {
-      if (running !== null || !deps.hasCredential()) return null;
+    resolveOnce: (actor) => {
+      if (deps.readyScope() !== null) return singleFlight(actor.scope);
+      const unresolved = deps.repo.listUnresolved(actor.scope).length;
+      return Promise.resolve({ ...EMPTY, unresolved });
+    },
+    tick: () => {
+      const scope = deps.readyScope();
+      if (running !== null || scope === null) return Promise.resolve(null);
       return singleFlight(scope);
     },
   };

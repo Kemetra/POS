@@ -30,7 +30,8 @@
 --   unknown  -> unknown | confirmed | refused
 --   confirmed -> paid_out
 -- `refused` and `paid_out` are terminal: no further UPDATE. No row is ever
--- deleted. A confirmed row's server facts (`return_ref`, `return_total_minor`,
+-- deleted. Lines may be inserted only while their header is `pending` and
+-- unsent. A confirmed row's server facts (`return_ref`, `return_total_minor`,
 -- `confirmed_at`) never change once set, so a second confirmation cannot
 -- rewrite the first (no double confirmation). The identity columns and the
 -- stored request are immutable from INSERT.
@@ -162,6 +163,19 @@ WHEN OLD.confirmed_at IS NOT NULL AND (
 )
 BEGIN
   SELECT RAISE(ABORT, 'return_journal: a confirmation is immutable (RT-15)');
+END;
+
+-- Lines are written only with their header, before any send: the header must
+-- exist, still be `pending` and never attempted (`attempt_count = 0`). A line
+-- can never be added to a return that was sent, confirmed or refused.
+CREATE TRIGGER IF NOT EXISTS trg_return_journal_lines_header_pending
+BEFORE INSERT ON return_journal_lines
+WHEN NOT EXISTS (
+  SELECT 1 FROM return_journal
+  WHERE return_id = NEW.return_id AND state = 'pending' AND attempt_count = 0
+)
+BEGIN
+  SELECT RAISE(ABORT, 'return_journal_lines: header must be pending and unsent (RT-15)');
 END;
 
 -- Lines are append-only.

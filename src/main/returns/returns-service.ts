@@ -74,6 +74,11 @@ export const RETURNS_LIST_LIMIT = 50;
 
 const RETURN_ROLES: ReadonlySet<Role> = new Set<Role>(['manager', 'admin']);
 
+/** D-b: only a manager or admin may start (or resolve) a return. */
+export function isReturnsRole(role: Role): boolean {
+  return RETURN_ROLES.has(role);
+}
+
 type Operation = 'lookup' | 'quote' | 'submit' | 'resolve' | 'list';
 
 /** A live, returnable sale: the local row, its server ref and the server view. */
@@ -129,7 +134,7 @@ class ReturnsService implements ReturnsBridgeAPI {
     const session = this.deps.getSession();
     if (session === null) return { kind: 'refused', reason: 'no_session' };
     const actor = actorOf(session);
-    if (!RETURN_ROLES.has(session.role)) return this.refuse(actor, op, 'role_denied');
+    if (!isReturnsRole(session.role)) return this.refuse(actor, op, 'role_denied');
     return { kind: 'ok', actor };
   }
 

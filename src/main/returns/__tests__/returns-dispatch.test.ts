@@ -245,4 +245,17 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
     expect(h.backend.returnCalls()).toHaveLength(0);
     expect(h.audits).toHaveLength(0);
   });
+
+  it('P1: any send of an already-attempted row treats a 404 as unknown, not refused', async () => {
+    harness();
+    h.backend.onReturn = () => Promise.reject(new TypeError('fetch failed'));
+    const res = await h.service.submit(ONE_A);
+    const entry = nn(h.repo.read(res.ret?.returnId ?? ''));
+    expect(entry.attemptCount).toBe(1);
+    h.backend.onReturn = () => jsonResponse(404, errorBody('not_found'));
+
+    const outcome = await standaloneDispatcher().send(entry, 'submit');
+
+    expect(outcome).toMatchObject({ kind: 'unconfirmed', entry: { state: 'unknown' } });
+  });
 });

@@ -135,14 +135,13 @@ describe('scheduleReturnsResolver', () => {
   it('ticks on startup and every interval until stopped; a failing tick is logged', async () => {
     vi.useFakeTimers();
     const tick = vi
-      .fn<(scope: typeof SCOPE) => Promise<null>>()
+      .fn<() => Promise<null>>()
       .mockResolvedValueOnce(null)
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValue(null);
     const error = vi.fn();
     const stop = scheduleReturnsResolver({
       resolver: { tick },
-      scope: SCOPE,
       intervalMs: 1000,
       logger: { error },
     });
@@ -153,6 +152,5 @@ describe('scheduleReturnsResolver', () => {
     stop();
     await vi.advanceTimersByTimeAsync(5000);
     expect(tick).toHaveBeenCalledTimes(2);
-    expect(tick).toHaveBeenCalledWith(SCOPE);
   });
 });

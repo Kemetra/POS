@@ -12,6 +12,7 @@
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { scheduleReturnsResolver } from '../compose-returns.js';
 import {
   LINE_A,
   SALE_NUMBER,
@@ -146,18 +147,84 @@ describe('returns resolver', () => {
     });
   });
 
-  it('tick does nothing without an operator envelope, then resolves once one is present', async () => {
+  it.each<{ label: string; block: (state: ReturnsHarness['state']) => void }>([
+    { label: 'no operator envelope', block: (st) => (st.token = null) },
+    { label: 'a cashier signed in (P2-1)', block: (st) => (st.role = 'cashier') },
+    { label: 'no operator signed in', block: (st) => (st.role = null) },
+    { label: 'a locked session (P2-1)', block: (st) => (st.locked = true) },
+    { label: 'an unpaired terminal', block: (st) => (st.paired = false) },
+    { label: 'the flag off', block: (st) => (st.enabled = false) },
+  ])('tick and on-demand resolution send nothing with $label; rows wait', async ({ block }) => {
     await submitWithLostAnswer();
-    h.state.token = null;
-    await expect(h.resolver.tick(SCOPE)).resolves.toBeNull();
+    const ready = { ...h.state };
+    block(h.state);
+    await expect(h.resolver.tick()).resolves.toBeNull();
+    await expect(h.resolver.resolveOnce(ACTOR)).resolves.toEqual({
+      confirmed: 0,
+      refused: 0,
+      unresolved: 1,
+    });
     expect(h.backend.returnCalls()).toHaveLength(1);
-    h.state.token = 'envelope-2';
-    await expect(h.resolver.tick(SCOPE)).resolves.toMatchObject({ confirmed: 1 });
+    Object.assign(h.state, ready);
+    await expect(h.resolver.tick()).resolves.toMatchObject({ confirmed: 1 });
+  });
+
+  it('Codex P2: started unpaired, paired in-process, the next tick resolves the unknown row', async () => {
+    const returnId = await submitWithLostAnswer();
+    h.state.paired = false;
+    const stop = scheduleReturnsResolver({
+      resolver: h.resolver,
+      intervalMs: 5,
+      logger: { error: () => undefined },
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(h.repo.read(returnId)?.state).toBe('unknown');
+      h.state.paired = true;
+      while (h.repo.read(returnId)?.state !== 'confirmed') {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    } finally {
+      stop();
+    }
+    expect(h.backend.returnCalls()).toHaveLength(2);
+  });
+
+  it.each<[number, string]>([
+    [401, 'unauthorized'],
+    [403, 'forbidden'],
+    [404, 'not_found'],
+  ])(
+    'P1: a resend that gets %s (%s) keeps the return unknown and retries later',
+    async (status, code) => {
+      const returnId = await submitWithLostAnswer();
+      h.backend.onReturn = () => jsonResponse(status, errorBody(code));
+      await expect(h.resolver.resolveOnce(ACTOR)).resolves.toEqual({
+        confirmed: 0,
+        refused: 0,
+        unresolved: 1,
+      });
+      expect(h.repo.read(returnId)?.state).toBe('unknown');
+      h.backend.onReturn = (call, backend) => backend.recordIdempotently(call);
+      await h.resolver.resolveOnce(ACTOR);
+      expect(h.repo.read(returnId)?.state).toBe('confirmed');
+      expect(h.backend.recorded.size).toBe(1);
+    },
+  );
+
+  it('P1: a first send that gets 401 is refused (unchanged)', async () => {
+    h = returnsHarness();
+    seedSyncedSale(h.db);
+    h.backend.onReturn = () => jsonResponse(401, errorBody('unauthorized'));
+    await expect(h.service.submit(ONE_A)).resolves.toMatchObject({
+      kind: 'refused',
+      reason: 'unauthorized',
+    });
   });
 
   it('passes are single-flight: a concurrent pass shares the running one', async () => {
     await submitWithLostAnswer();
-    const [a, b] = await Promise.all([h.resolver.resolveOnce(ACTOR), h.resolver.tick(SCOPE)]);
+    const [a, b] = await Promise.all([h.resolver.resolveOnce(ACTOR), h.resolver.tick()]);
     expect(a).toEqual({ confirmed: 1, refused: 0, unresolved: 0 });
     expect(b).toBeNull();
     const [c, d] = await Promise.all([

@@ -16,7 +16,7 @@ import { createReturnsClient, type CreateReturnsClientDeps } from './returns-cli
 import { createReturnsDispatcher } from './returns-dispatch.js';
 import { createReturnsRepository, type ReturnScope } from './returns-repository.js';
 import { createReturnsResolver, type ReturnsResolver } from './returns-resolver.js';
-import { createReturnsService, type ReturnsSession } from './returns-service.js';
+import { createReturnsService, isReturnsRole, type ReturnsSession } from './returns-service.js';
 import { newReturnExternalId } from './uuidv7.js';
 
 export interface ReturnsLogger {
@@ -29,7 +29,10 @@ export interface ComposeReturnsDeps {
   /** Backend-Core base URL, fetch and the in-process envelope reader. */
   readonly http: Omit<CreateReturnsClientDeps, 'timeoutMs'>;
   readonly isEnabled: () => boolean;
+  /** The live operator session on the live paired terminal (null if either is absent). */
   readonly getSession: () => ReturnsSession | null;
+  /** True while the operator session is inactivity-locked (RT-117). */
+  readonly isSessionLocked: () => boolean;
   readonly auditSink: ReturnsAuditSink;
   readonly logger: ReturnsLogger;
   readonly now: () => string;
@@ -38,6 +41,23 @@ export interface ComposeReturnsDeps {
 export interface ComposedReturns {
   readonly service: ReturnsBridgeAPI;
   readonly resolver: ReturnsResolver;
+}
+
+/**
+ * The scope a resolver pass may send for right now, read live: flag on, a
+ * paired terminal with an unlocked manager/admin session (review P2-1), and an
+ * operator envelope present. Otherwise null — the rows wait for a later pass.
+ */
+export function readyScope(deps: ComposeReturnsDeps): ReturnScope | null {
+  const session = deps.isEnabled() ? deps.getSession() : null;
+  if (session === null || !isReturnsRole(session.role)) return null;
+  if (deps.isSessionLocked()) return null;
+  if ((deps.http.getOperatorToken() ?? '').length === 0) return null;
+  return {
+    tenantId: session.tenant_id,
+    branchId: session.branch_id,
+    terminalId: session.terminal_id,
+  };
 }
 
 export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
@@ -53,11 +73,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     logger: deps.logger,
     transaction: <T>(fn: () => T): T => deps.db.transaction(fn)(),
   });
-  const resolver = createReturnsResolver({
-    repo,
-    dispatcher,
-    hasCredential: () => (deps.http.getOperatorToken() ?? '').length > 0,
-  });
+  const resolver = createReturnsResolver({ repo, dispatcher, readyScope: () => readyScope(deps) });
   const service = createReturnsService({
     isEnabled: deps.isEnabled,
     getSession: deps.getSession,
@@ -77,15 +93,18 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
 
 export interface ScheduleResolverInput {
   readonly resolver: Pick<ReturnsResolver, 'tick'>;
-  readonly scope: ReturnScope;
   readonly intervalMs: number;
   readonly logger: Pick<ReturnsLogger, 'error'>;
 }
 
-/** Run one resolver pass now (startup) and then every `intervalMs`; returns stop(). */
+/**
+ * Run one resolver tick now (startup) and then every `intervalMs`; returns
+ * stop(). Each tick resolves its scope live, so a terminal paired in-process
+ * is picked up without a restart.
+ */
 export function scheduleReturnsResolver(input: ScheduleResolverInput): () => void {
   const run = (): void => {
-    input.resolver.tick(input.scope).catch((err: unknown) => {
+    input.resolver.tick().catch((err: unknown) => {
       input.logger.error({ err }, 'returns_resolver:tick_unexpected');
     });
   };

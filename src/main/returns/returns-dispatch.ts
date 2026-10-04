@@ -98,11 +98,15 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
   }
 
   private async sendOnce(entry: JournalEntry, op: DispatchOperation): Promise<DispatchOutcome> {
+    const attempted = this.current(entry).attemptCount > 0;
     this.deps.repo.recordAttempt({ returnId: entry.returnId, now: this.deps.now() });
     const outcome = await this.deps.client.recordReturn({
       saleRef: entry.serverSaleRef,
       bodyJson: entry.requestBodyJson,
       idempotencyKey: entry.externalId,
+      // P1: a send that may follow an earlier one never turns a pre-replay
+      // 401/403/404 into a terminal refusal (the return may be recorded).
+      resend: op === 'resolve' || attempted,
     });
     try {
       return this.apply(entry, outcome, op);

@@ -42,11 +42,12 @@ function clientFor(backend: FakeBackend, token: string | null = ENVELOPE) {
   });
 }
 
-function record(backend: FakeBackend) {
+function record(backend: FakeBackend, resend = false) {
   return clientFor(backend).recordReturn({
     saleRef: SALE_REF,
     bodyJson: BODY,
     idempotencyKey: KEY,
+    resend,
   });
 }
 
@@ -128,6 +129,10 @@ describe('recordReturn', () => {
           { status: 201 },
         ),
     ],
+    [
+      'a 425 idempotency_in_progress (RT-194)',
+      () => jsonResponse(425, errorBody('idempotency_in_progress')),
+    ],
   ])('%s is unknown, never success', async (_label, respond) => {
     const backend = new FakeBackend();
     backend.onReturn = respond;
@@ -147,7 +152,12 @@ describe('recordReturn', () => {
       timeoutMs: 10,
     });
     await expect(
-      client.recordReturn({ saleRef: SALE_REF, bodyJson: BODY, idempotencyKey: KEY }),
+      client.recordReturn({
+        saleRef: SALE_REF,
+        bodyJson: BODY,
+        idempotencyKey: KEY,
+        resend: false,
+      }),
     ).resolves.toEqual({ kind: 'unknown' });
   });
 
@@ -158,7 +168,12 @@ describe('recordReturn', () => {
     const backend = new FakeBackend();
     const client = clientFor(backend, token);
     await expect(
-      client.recordReturn({ saleRef: SALE_REF, bodyJson: BODY, idempotencyKey: KEY }),
+      client.recordReturn({
+        saleRef: SALE_REF,
+        bodyJson: BODY,
+        idempotencyKey: KEY,
+        resend: false,
+      }),
     ).resolves.toEqual({ kind: 'unknown' });
     await expect(client.readSale(SALE_REF)).resolves.toEqual({ kind: 'unavailable' });
     expect(backend.calls).toHaveLength(0);
@@ -169,13 +184,44 @@ describe('recordReturn', () => {
     const client = clientFor(backend);
     const evil = '../../../api/method/frappe.client.get';
     await expect(
-      client.recordReturn({ saleRef: evil, bodyJson: BODY, idempotencyKey: KEY }),
+      client.recordReturn({ saleRef: evil, bodyJson: BODY, idempotencyKey: KEY, resend: false }),
     ).resolves.toEqual({ kind: 'refused', reason: 'returns_unavailable' });
     await expect(client.readSale(evil)).resolves.toEqual({
       kind: 'refused',
       reason: 'returns_unavailable',
     });
     expect(backend.calls).toHaveLength(0);
+  });
+});
+
+describe('recordReturn — a resend never turns a pre-replay answer into a refusal (P1)', () => {
+  it.each<[number, string]>([
+    [401, 'unauthorized'],
+    [403, 'forbidden'],
+    [404, 'not_found'],
+  ])('a resend that gets %s (%s) is unknown, not refused', async (status, code) => {
+    const backend = new FakeBackend();
+    backend.onReturn = () => jsonResponse(status, errorBody(code));
+    await expect(record(backend, true)).resolves.toEqual({ kind: 'unknown' });
+  });
+
+  it.each<[number, string, ServerReturnRefusal]>([
+    [400, 'validation_error', 'validation_error'],
+    [409, 'over_return', 'over_return'],
+    [422, 'return_tender_mismatch', 'return_tender_mismatch'],
+  ])(
+    'a resend that gets %s %s is still refused (decided after the replay)',
+    async (status, code, reason) => {
+      const backend = new FakeBackend();
+      backend.onReturn = () => jsonResponse(status, errorBody(code));
+      await expect(record(backend, true)).resolves.toEqual({ kind: 'refused', reason });
+    },
+  );
+
+  it('a first send that gets 401 is refused (unchanged)', async () => {
+    const backend = new FakeBackend();
+    backend.onReturn = () => jsonResponse(401, errorBody('unauthorized'));
+    await expect(record(backend)).resolves.toEqual({ kind: 'refused', reason: 'unauthorized' });
   });
 });
 
@@ -231,7 +277,12 @@ describe('AC7 — Backend-Core only, never ERPNext / Frappe', () => {
     const backend = new FakeBackend();
     const client = clientFor(backend);
     await client.readSale(SALE_REF);
-    await client.recordReturn({ saleRef: SALE_REF, bodyJson: BODY, idempotencyKey: KEY });
+    await client.recordReturn({
+      saleRef: SALE_REF,
+      bodyJson: BODY,
+      idempotencyKey: KEY,
+      resend: false,
+    });
     expect(backend.calls).toHaveLength(2);
     for (const call of backend.calls) {
       expect(call.url.startsWith(`${BASE_URL}/api/pos/v1/sales/${SALE_REF}`)).toBe(true);

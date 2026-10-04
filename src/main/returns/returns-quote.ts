@@ -90,6 +90,8 @@ function quoteLine(sale: WireSale, input: ReturnLineInput): bigint | LocalReturn
   const q = input.quantity;
   if (!Number.isSafeInteger(q)) return 'quantity_out_of_range';
   if (q < 1 || q > whole.returnable) return 'quantity_out_of_range';
+  // Defensive local bound on top of the server's returnableQuantity.
+  if (whole.returned + q > whole.sold) return 'quantity_out_of_range';
   return priceReturnLine({ ...whole, quantity: q });
 }
 
