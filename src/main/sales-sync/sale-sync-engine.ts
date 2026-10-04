@@ -67,6 +67,12 @@ export interface SaleSyncEngineDeps {
    * cannot send faithfully); it carries no PII, card data or token.
    */
   onDeadLetter?: (saleId: string, reason?: string) => void;
+  /**
+   * RT-15 S1: called when a capture answer's `saleRef` differs from the one
+   * already stored for the sale. The stored value is kept (first write wins).
+   * Receives only the sale's opaque `externalId` — no PII, no reference values.
+   */
+  onSaleRefMismatch?: (info: { externalId: string }) => void;
 }
 
 export type TickAdmission =
@@ -113,17 +119,22 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     const stamp = now();
 
     switch (result.kind) {
-      case 'ok':
-        // RT-15 S1: persist the server reference with the synced transition (one
-        // statement). A null saleRef keeps any reference already stored.
-        stateRepo.markSynced({
+      case 'ok': {
+        // RT-15 S1: persist the server reference with the synced transition. The
+        // first stored reference wins; a null never clears it, and a different one
+        // is kept out and reported.
+        const synced = stateRepo.markSynced({
           saleId,
           tenantId,
           branchId,
           now: stamp,
           serverSaleRef: result.saleRef,
         });
+        if (synced.saleRefMismatch) {
+          deps.onSaleRefMismatch?.({ externalId: payload.externalId });
+        }
         return;
+      }
       case 'duplicate':
         // 409 carries no Sale projection, so no saleRef (any stored one is kept).
         stateRepo.markSynced({ saleId, tenantId, branchId, now: stamp });

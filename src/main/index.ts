@@ -1423,6 +1423,11 @@ app
           onDeadLetter: (saleId: string, reason?: string) => {
             mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:dead_letter');
           },
+          // RT-15 S1: a capture answer's saleRef differed from the stored one; the
+          // stored one is kept. Only the opaque externalId is logged (P7).
+          onSaleRefMismatch: ({ externalId }) => {
+            mainLogger.warn({ external_id: externalId }, 'sale_sync:sale_ref_mismatch');
+          },
         });
 
         // Read-only status surface for the renderer (counts + last-success only;

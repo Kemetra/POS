@@ -22,10 +22,13 @@
  *
  * RT-15 S1 (migration 0038): `server_sale_ref` holds the Backend-Core `saleRef`
  * (UUID) from a 200/201 capture answer. It is written only by `markSynced` and
- * is never cleared: a later write that has no reference (a 409 `duplicate`, a
- * malformed body, a transient/dead-letter transition) keeps the stored value
- * (`COALESCE`). NULL means "not known" — every pre-S1 row, and any sale whose
- * capture answer carried no usable reference.
+ * FIRST WRITE WINS: once stored it is never cleared and never replaced. A later
+ * write with no reference (a 409 `duplicate`, a malformed body, a transient/
+ * dead-letter transition) keeps it, and so does a later DIFFERENT reference —
+ * Backend-Core's saleRef is stable per sale, so a different value is an anomaly;
+ * `markSynced` reports it (`saleRefMismatch`) for the caller to log. NULL means
+ * "not known" — every pre-S1 row, and any sale whose capture answer carried no
+ * usable reference.
  */
 
 import type { DatabaseHandle } from '../db/client.js';
@@ -68,10 +71,19 @@ export interface MarkSyncedInput extends TenantScope {
   /** ISO-8601 UTC. */
   now: string;
   /**
-   * RT-15 S1: the Backend-Core `saleRef` from the capture answer. Null/omitted
-   * keeps whatever is already stored (never clears a known reference).
+   * RT-15 S1: the Backend-Core `saleRef` from the capture answer. Stored only if
+   * none is stored yet (first write wins); null/omitted never clears one.
    */
   serverSaleRef?: string | null;
+}
+
+/** RT-15 S1: what `markSynced` did with the incoming `serverSaleRef`. */
+export interface MarkSyncedResult {
+  /**
+   * True when a non-null incoming reference differs from the one already stored.
+   * The stored value is kept; the caller logs the anomaly (no PII).
+   */
+  saleRefMismatch: boolean;
 }
 
 export interface MarkDeadLetterInput extends TenantScope {
@@ -100,7 +112,7 @@ export interface SaleSyncStateRepo {
   eligible(scope: TenantScope, now: string): EligibleSale[];
   /** Tenant-scoped counts for the read-only status surface. */
   readSyncStatus(scope: TenantScope): SaleSyncStatusCounts;
-  markSynced(input: MarkSyncedInput): void;
+  markSynced(input: MarkSyncedInput): MarkSyncedResult;
   markDeadLetter(input: MarkDeadLetterInput): void;
   recordTransient(input: RecordTransientInput): void;
   /**
@@ -180,7 +192,7 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
          last_error_category = excluded.last_error_category,
          last_attempt_at     = excluded.last_attempt_at,
          synced_at           = COALESCE(excluded.synced_at, sale_sync_state.synced_at),
-         server_sale_ref     = COALESCE(excluded.server_sale_ref, sale_sync_state.server_sale_ref),
+         server_sale_ref     = COALESCE(sale_sync_state.server_sale_ref, excluded.server_sale_ref),
          updated_at          = excluded.updated_at`,
     ) as PrepareRun;
     const initialAttempt = input.bumpAttempt ? 1 : 0;
@@ -202,7 +214,11 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     );
   }
 
-  function markSynced(input: MarkSyncedInput): void {
+  function markSynced(input: MarkSyncedInput): MarkSyncedResult {
+    // Read-then-upsert is safe: the DB handle is synchronous and the engine is
+    // single-flight, so nothing interleaves between the two statements.
+    const incoming = input.serverSaleRef ?? null;
+    const stored = incoming === null ? null : (read(input.saleId)?.server_sale_ref ?? null);
     upsert({
       ...input,
       status: 'synced',
@@ -210,8 +226,9 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       nextRetryAt: null,
       errorCategory: null,
       syncedAt: input.now,
-      serverSaleRef: input.serverSaleRef ?? null,
+      serverSaleRef: incoming,
     });
+    return { saleRefMismatch: stored !== null && stored !== incoming };
   }
 
   function markDeadLetter(input: MarkDeadLetterInput): void {

@@ -191,7 +191,7 @@ describe('createSaleSyncClient.postSale — carries saleRef on ok (RT-15 S1)', (
     expect(JSON.stringify(warnings)).not.toContain('not-a-uuid-PII-ish');
   });
 
-  it('a body stream that fails after the status: ok with null + unparseable_body', async () => {
+  it('a body read that fails after the status is transient (retry), with no warning', async () => {
     const warnings: SaleRefUnavailableInfo[] = [];
     const broken = new Response(
       new ReadableStream({
@@ -202,8 +202,33 @@ describe('createSaleSyncClient.postSale — carries saleRef on ok (RT-15 S1)', (
       { status: 201 },
     );
     const result = await client(() => broken, warnings).postSale(PAYLOAD);
-    expect(result).toEqual({ kind: 'ok', saleRef: null });
-    expect(warnings).toEqual([{ externalId: 'pos-pulse:handoff-1', reason: 'unparseable_body' }]);
+    // The answer was lost in transit, not malformed: retry with the same key so
+    // the server replays it (same saleRef) — never mark it synced without one.
+    expect(result).toEqual({ kind: 'transient' });
+    expect(warnings).toEqual([]);
+  });
+
+  it('a timeout that fires mid-body is transient too', async () => {
+    const c = createSaleSyncClient({
+      baseUrl: BASE,
+      // Like a real fetch: the headers arrive, then the body stream errors when the
+      // request signal (the client's AbortSignal.timeout) aborts mid-body.
+      fetch: (_input, init) => {
+        const signal = init?.signal;
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{"saleRef":"'));
+            signal?.addEventListener('abort', () => {
+              controller.error(signal.reason);
+            });
+          },
+        });
+        return Promise.resolve(new Response(body, { status: 201 }));
+      },
+      getOperatorToken: () => 'opaque-envelope',
+      timeoutMs: 20,
+    });
+    expect(await c.postSale(PAYLOAD)).toEqual({ kind: 'transient' });
   });
 
   it('no warning hook configured: a null saleRef is still a quiet ok', async () => {

@@ -54,7 +54,7 @@ function makeStateRepo(eligible: EligibleSale[]): {
   recordTransient: ReturnType<typeof vi.fn>;
   markDeadLetter: ReturnType<typeof vi.fn>;
 } {
-  const markSynced = vi.fn();
+  const markSynced = vi.fn(() => ({ saleRefMismatch: false }));
   const recordTransient = vi.fn();
   const markDeadLetter = vi.fn();
   const repo: SaleSyncStateRepo = {

@@ -24,7 +24,13 @@
  * ignored, so a later additive `Sale` field never breaks capture. A missing /
  * unparseable body or a non-UUID `saleRef` still yields `ok` (the sale IS
  * captured server-side) with `saleRef: null`, and `onSaleRefUnavailable` is told
- * the reason — never the body or the rejected value (P7). Only 200/201 bodies
+ * the reason — never the body or the rejected value (P7). A body that cannot be
+ * READ (the stream fails or the timeout fires mid-body) is different: the answer
+ * was lost in transit, so it maps to `transient` and the engine retries with the
+ * SAME `Idempotency-Key` / `externalId`. That cannot double-capture — Backend-Core
+ * dedups on the key (a same-key retry replays the stored 201) and on provenance
+ * `(tenant, sourceSystem, externalId)` (a 200 replay) — and the replay carries
+ * the same `saleRef`, which is then stored. Only 200/201 bodies
  * are read: a capture 409 (`duplicate`) is an `Error` envelope
  * (`idempotency_key_conflict`) with no `saleRef`, so its body is not read.
  *
@@ -397,9 +403,12 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
       try {
         bodyText = await response.text();
       } catch {
-        // The body stream failed after the status arrived (e.g. the timeout hit
-        // mid-body). The sale is captured; only the reference is unknown.
-        bodyText = '';
+        // The body stream failed after the status arrived (the timeout hit
+        // mid-body, or the connection reset). The answer was lost in transit, not
+        // malformed: retry. The retry reuses the same Idempotency-Key/externalId,
+        // so Backend-Core replays the capture (201/200, same saleRef) instead of
+        // recording a second sale; marking it synced now would lose the saleRef.
+        return { kind: 'transient' };
       }
       const parsed = parseSaleRef(bodyText);
       if (parsed.saleRef === null) {

@@ -1,12 +1,16 @@
 /**
  * RT-15 S1 — the server `saleRef` is persisted on `sale_sync_state` (0038).
  *
- *   • repo: `markSynced` stores `serverSaleRef`; a later write without one
- *     (409 duplicate, malformed body, transient, dead-letter) never clears it;
- *     a new non-null value replaces it; `findServerSaleRefBySaleId` is
- *     tenant/branch-scoped and only answers for a synced sale.
+ *   • repo: `markSynced` stores `serverSaleRef`; FIRST WRITE WINS — a later write
+ *     without one (409 duplicate, malformed body, transient, dead-letter) never
+ *     clears it, and a different non-null value never replaces it (reported as
+ *     `saleRefMismatch`); `findServerSaleRefBySaleId` is tenant/branch-scoped and
+ *     only answers for a synced sale.
  *   • engine: `ok` persists the saleRef with the synced transition; `duplicate`
- *     stores none; a retry that ends in a replayed 200 stores it.
+ *     stores none; a retry that ends in a replayed 200 stores it; a mismatch
+ *     keeps the stored value and fires `onSaleRefMismatch` with the externalId.
+ *   • live client: a 201 whose body read fails is retried with the same
+ *     Idempotency-Key and the 200 replay's saleRef is stored.
  *   • a pre-S1 row (written without the column) reads NULL.
  *   • end-to-end through the live client: a 201 `Sale` body lands in the row.
  */
@@ -20,7 +24,11 @@ import {
   seedOutbox,
   seedSale,
 } from './__helpers__/sales-sync-fixture.js';
-import { createSaleSyncStateRepo, type SaleSyncStateRepo } from '../sale-sync-state-repo.js';
+import {
+  createSaleSyncStateRepo,
+  type MarkSyncedResult,
+  type SaleSyncStateRepo,
+} from '../sale-sync-state-repo.js';
 import {
   createFakeSaleSyncClient,
   type SaleSyncClient,
@@ -62,8 +70,8 @@ function withRepo(options: { saleIds?: readonly string[] }, body: (h: RepoHarnes
 function syncSale(
   repo: SaleSyncStateRepo,
   options: { now?: string; serverSaleRef?: string | null } = {},
-): void {
-  repo.markSynced({ saleId: SALE_ID, ...SCOPE, now: options.now ?? T0, ...options });
+): MarkSyncedResult {
+  return repo.markSynced({ saleId: SALE_ID, ...SCOPE, now: options.now ?? T0, ...options });
 }
 
 describe('sale-sync-state-repo — server_sale_ref (RT-15 S1)', () => {
@@ -83,16 +91,33 @@ describe('sale-sync-state-repo — server_sale_ref (RT-15 S1)', () => {
     });
   });
 
-  it('a re-sync is idempotent: same value kept; null never clears; a new value replaces', () => {
+  it('a re-sync is idempotent and first write wins: same value kept; null never clears; a different value is refused and reported', () => {
     withRepo({}, ({ repo }) => {
-      syncSale(repo, { now: '2026-10-04T10:00:00.000Z', serverSaleRef: REF_A });
-      syncSale(repo, { now: '2026-10-04T10:01:00.000Z', serverSaleRef: REF_A });
+      const noMismatch: MarkSyncedResult = { saleRefMismatch: false };
+      expect(syncSale(repo, { now: '2026-10-04T10:00:00.000Z', serverSaleRef: REF_A })).toEqual(
+        noMismatch,
+      );
+      expect(syncSale(repo, { now: '2026-10-04T10:01:00.000Z', serverSaleRef: REF_A })).toEqual(
+        noMismatch,
+      );
       expect(repo.findServerSaleRefBySaleId(SCOPE, SALE_ID)).toBe(REF_A);
-      syncSale(repo, { now: '2026-10-04T10:02:00.000Z', serverSaleRef: null });
-      syncSale(repo, { now: '2026-10-04T10:03:00.000Z' });
+      expect(syncSale(repo, { now: '2026-10-04T10:02:00.000Z', serverSaleRef: null })).toEqual(
+        noMismatch,
+      );
+      expect(syncSale(repo, { now: '2026-10-04T10:03:00.000Z' })).toEqual(noMismatch);
       expect(repo.findServerSaleRefBySaleId(SCOPE, SALE_ID)).toBe(REF_A);
-      syncSale(repo, { now: '2026-10-04T10:04:00.000Z', serverSaleRef: REF_B });
-      expect(repo.findServerSaleRefBySaleId(SCOPE, SALE_ID)).toBe(REF_B);
+      expect(syncSale(repo, { now: '2026-10-04T10:04:00.000Z', serverSaleRef: REF_B })).toEqual({
+        saleRefMismatch: true,
+      });
+      expect(repo.findServerSaleRefBySaleId(SCOPE, SALE_ID)).toBe(REF_A);
+    });
+  });
+
+  it('a first reference after an earlier NULL sync is stored, not a mismatch', () => {
+    withRepo({}, ({ repo }) => {
+      expect(syncSale(repo, { serverSaleRef: null })).toEqual({ saleRefMismatch: false });
+      expect(syncSale(repo, { serverSaleRef: REF_A })).toEqual({ saleRefMismatch: false });
+      expect(repo.findServerSaleRefBySaleId(SCOPE, SALE_ID)).toBe(REF_A);
     });
   });
 
@@ -165,7 +190,13 @@ interface EngineHarness {
 }
 
 /** Fresh DB with SALE_ID finalized + enqueued, and an engine over `client`. */
-function engineHarness(options: { client: SaleSyncClient; now?: () => string }): EngineHarness {
+interface EngineHarnessOptions {
+  client: SaleSyncClient;
+  now?: () => string;
+  onSaleRefMismatch?: SaleSyncEngineDeps['onSaleRefMismatch'];
+}
+
+function engineHarness(options: EngineHarnessOptions): EngineHarness {
   const db = freshSalesSyncDb();
   seedSale(db, { sale_id: SALE_ID });
   seedOutbox(db, { sale_id: SALE_ID });
@@ -179,6 +210,9 @@ function engineHarness(options: { client: SaleSyncClient; now?: () => string }):
     getOperatorToken: () => 'tok-1',
     now: options.now ?? (() => '2026-10-04T10:05:00.000Z'),
     backoff: { baseMs: 1000, maxMs: 300_000 },
+    ...(options.onSaleRefMismatch === undefined
+      ? {}
+      : { onSaleRefMismatch: options.onSaleRefMismatch }),
   };
   return { db, deps };
 }
@@ -250,6 +284,93 @@ describe('sale-sync-engine — persists saleRef (RT-15 S1)', () => {
     try {
       await runOnce(deps);
       expect(deps.stateRepo.findServerSaleRefBySaleId(SCOPE, SALE_ID)).toBe(REF_A);
+    } finally {
+      db.close();
+    }
+  });
+
+  it.each<{ label: string; incoming: string; expectedMismatches: number }>([
+    { label: 'the same saleRef → no warning', incoming: REF_A, expectedMismatches: 0 },
+    { label: 'a different saleRef → kept out + warning', incoming: REF_B, expectedMismatches: 1 },
+  ])(
+    'a stored reference wins over the capture answer: $label',
+    async ({ incoming, expectedMismatches }) => {
+      const mismatches: { externalId: string }[] = [];
+      const { db, deps } = engineHarness({
+        client: createFakeSaleSyncClient([{ kind: 'ok', saleRef: incoming }]),
+        onSaleRefMismatch: (info) => mismatches.push(info),
+      });
+      try {
+        // An anomalous pending row that already holds a reference (still drainable).
+        db.run(
+          `INSERT INTO sale_sync_state
+             (sale_id, tenant_id, branch_id, sync_status, attempt_count, created_at, updated_at,
+              server_sale_ref)
+           VALUES (?, 'tenant-1', 'branch-1', 'pending', 1, ?, ?, ?)`,
+          [SALE_ID, T0, T0, REF_A],
+        );
+        await runOnce(deps);
+        const row = nn(deps.stateRepo.read(SALE_ID));
+        expect(row.sync_status).toBe('synced');
+        expect(row.server_sale_ref).toBe(REF_A);
+        expect(mismatches).toHaveLength(expectedMismatches);
+        for (const m of mismatches) {
+          // Only the opaque externalId — never either reference value.
+          expect(Object.keys(m)).toEqual(['externalId']);
+          expect(m.externalId).toContain(SALE_ID);
+          expect(JSON.stringify(m)).not.toContain(REF_A);
+          expect(JSON.stringify(m)).not.toContain(REF_B);
+        }
+      } finally {
+        db.close();
+      }
+    },
+  );
+
+  it('live client: a 201 whose body read fails is retried with the same key and the 200 replay saleRef is stored', async () => {
+    const keys: (string | null)[] = [];
+    const answers = [
+      () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new Error('connection reset mid-body'));
+            },
+          }),
+          { status: 201 },
+        ),
+      () =>
+        new Response(JSON.stringify({ saleRef: REF_A, voided: false, lines: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Idempotent-Replayed': 'true' },
+        }),
+    ];
+    const live = createSaleSyncClient({
+      baseUrl: 'https://example.invalid',
+      fetch: (_input, init) => {
+        const headers = init?.headers as Record<string, string> | undefined;
+        keys.push(headers?.['Idempotency-Key'] ?? null);
+        const answer = nn(answers.shift());
+        return Promise.resolve(answer());
+      },
+      getOperatorToken: () => 'tok-1',
+    });
+    let clock = '2026-10-04T10:05:00.000Z';
+    const { db, deps } = engineHarness({ client: live, now: () => clock });
+    try {
+      await runOnce(deps);
+      const afterLostAnswer = nn(deps.stateRepo.read(SALE_ID));
+      expect(afterLostAnswer.sync_status).toBe('pending');
+      expect(afterLostAnswer.last_error_category).toBe('transient');
+      expect(afterLostAnswer.server_sale_ref).toBeNull();
+
+      clock = '2026-10-04T11:00:00.000Z'; // past the backoff
+      await runOnce(deps);
+      expect(deps.stateRepo.findServerSaleRefBySaleId(SCOPE, SALE_ID)).toBe(REF_A);
+      // Same Idempotency-Key on both sends: the server replays, never re-captures.
+      expect(keys).toHaveLength(2);
+      expect(keys[0]).not.toBeNull();
+      expect(keys[1]).toBe(keys[0]);
     } finally {
       db.close();
     }
