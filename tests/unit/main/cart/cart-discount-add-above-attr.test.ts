@@ -2,17 +2,19 @@
  * T061 — cart.discountPlaceholders.add above threshold WITH manager
  *        attribution + audit emission (S3 contract).
  *
- * When `placeholder_kind` signals above-threshold and `attribution_operator_id`
- * is a valid manager, the handler MUST:
- *   1. Insert a `cart_line_discount_placeholders` row.
+ * RT-183: the approver is never renderer-supplied. Manager attribution comes
+ * from the authenticated session: a manager (or admin) session approves its
+ * own above-threshold discount (RT-28 D2). The handler MUST:
+ *   1. Insert a `cart_line_discount_placeholders` row naming the session
+ *      manager as `attribution_operator_id`.
  *   2. Write an outbox row.
  *   3. Return `{ kind: 'ok', placeholder_id, requires_manager_attribution: true }`.
  *   4. Emit audit event with category `cart.discount.above_threshold`.
  *
- * The cashier is `acting_operator_id`; the manager is `approving_supervisor_id`
- * on the audit event envelope.
- *
- * Tests are RED until T069 + T070 (discount handler + audit wiring).
+ * The session manager is both `acting_operator_id` and
+ * `approving_supervisor_id` on the audit event envelope. The cashier-session
+ * refusal (including a renderer-supplied supervisor id) is covered by T060
+ * and `cart-discount-add-no-renderer-supervisor.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
@@ -44,22 +46,22 @@ beforeAll(async () => {
   SQL = await initSqlJs();
 });
 
-function makeCashierSession(overrides?: Partial<OperatorSessionRecord>): OperatorSessionRecord {
+const MANAGER_ID = 'mgr-1';
+
+function makeManagerSession(overrides?: Partial<OperatorSessionRecord>): OperatorSessionRecord {
   return {
-    id: 'sess-cashier-t061',
-    operator_id: 'cashier-1',
-    display_name: 'Cashier One',
-    role: 'cashier',
+    id: 'sess-manager-t061',
+    operator_id: MANAGER_ID,
+    display_name: 'Manager One',
+    role: 'manager',
     tenant_id: 'tenant-1',
     branch_id: 'branch-1',
     started_at: '2026-05-16T08:00:00.000Z',
-    backend_session_id: 'b-cash-1',
+    backend_session_id: 'b-mgr-1',
     last_activity_at: '2026-05-16T08:00:00.000Z',
     ...overrides,
   };
 }
-
-const MANAGER_ID = 'mgr-1';
 
 const fixtureResolver: ItemRefResolver = () =>
   Promise.resolve({ kind: 'ok', display_name: 'Aspirin', unit_price_minor: 150 });
@@ -70,11 +72,11 @@ interface Fixture {
   emitFn: ReturnType<typeof vi.fn>;
   cart_id: string;
   line_id: string;
-  cashierSession: OperatorSessionRecord;
+  managerSession: OperatorSessionRecord;
 }
 
 async function newCartWithLine(): Promise<Fixture> {
-  const cashierSession = makeCashierSession();
+  const managerSession = makeManagerSession();
   const db = new SQL.Database();
   for (const sql of MIGRATIONS) db.run(sql);
   const handle = makeSqlJsHandle(db);
@@ -82,7 +84,7 @@ async function newCartWithLine(): Promise<Fixture> {
   const emitFn = vi.fn();
   const auditEmitter = { emit: emitFn } as unknown as AuditEmitter;
   const handlers = new CartBridgeHandlers({
-    getCurrentSession: () => cashierSession,
+    getCurrentSession: () => managerSession,
     getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     resolveItemRef: fixtureResolver,
@@ -107,7 +109,7 @@ async function newCartWithLine(): Promise<Fixture> {
     emitFn,
     cart_id: createRes.cart_id,
     line_id: addRes.line_id,
-    cashierSession,
+    managerSession,
   };
 }
 
@@ -135,7 +137,6 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-a',
     });
     // RED until T069.
@@ -151,7 +152,6 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-b',
     });
     // RED until T069.
@@ -167,7 +167,6 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-c',
     });
     // RED until T070.
@@ -176,17 +175,16 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     expect(emittedEvent.action_category).toBe('cart.discount.above_threshold');
   });
 
-  it('audit event has cashier as acting_operator and manager as approving_supervisor', async () => {
+  it('audit event names the session manager as acting_operator and approving_supervisor', async () => {
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-d',
     });
     // RED until T070.
     const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
-    expect(emittedEvent.acting_operator_id).toBe(f.cashierSession.operator_id);
+    expect(emittedEvent.acting_operator_id).toBe(f.managerSession.operator_id);
     expect(emittedEvent.approving_supervisor_id).toBe(MANAGER_ID);
   });
 
@@ -195,7 +193,6 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-e',
     });
     // RED until T070.
@@ -209,7 +206,6 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-f',
     });
     // RED until T070.
@@ -226,7 +222,6 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-g',
     });
     // RED until T070.
@@ -242,14 +237,12 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-h',
     });
     const res2 = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: 'dp-t061-h', // same key
     });
     // RED until T069 — idempotent replay should succeed and not emit twice.
@@ -269,13 +262,12 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
          (action_id, cart_id, line_id, action_kind, acting_operator_id,
           attribution_operator_id, operator_session_id, payload_json, applied_at)
        VALUES (?, ?, NULL, 'cart.discount_placeholder.remove', ?, NULL, ?, '{}', ?)`,
-      [SHARED_KEY, f.cart_id, 'cashier-1', 'sess-cashier-t061', '2026-05-16T10:01:00.000Z'],
+      [SHARED_KEY, f.cart_id, MANAGER_ID, 'sess-manager-t061', '2026-05-16T10:01:00.000Z'],
     );
     const res = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
-      attribution_operator_id: MANAGER_ID,
       idempotency_key: SHARED_KEY,
     });
     expect(res.kind).toBe('refused');

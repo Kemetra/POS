@@ -78,12 +78,15 @@ export type CartLinesSetNoteResponse =
   | CartRefusal;
 
 // ── cart.discountPlaceholders.add ─────────────────────────────────────────────
+//
+// No approver crosses this bridge (RT-183; spec 005 contracts/bridge-api.md):
+// main records the authenticated session operator as the approving
+// supervisor and drops any renderer-supplied `attribution_operator_id`.
 
 export interface CartDiscountPlaceholdersAddRequest {
   readonly cart_id: string;
   readonly line_id: string;
   readonly placeholder_kind: string;
-  readonly attribution_operator_id?: string;
   readonly idempotency_key: string;
 }
 
