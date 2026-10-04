@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { SignInHandler } from '../sign-in-handler.js';
 import { SessionManager } from '../session-manager.js';
 import { createJwtHolder } from '../jwt-holder.js';
-import type { ClerkExchanger, ClerkExchangeResult } from '../clerk-client.js';
+import {
+  createClerkExchanger,
+  type ClerkExchanger,
+  type ClerkExchangeRequest,
+  type ClerkExchangeResult,
+} from '../clerk-client.js';
 import type { BackendClient, BackendSignInResponse } from '../backend-client.js';
 import { ProtoSessionStore } from '../takeover-handler.js';
 
@@ -403,5 +408,107 @@ describe('SignInHandler — manager/admin path', () => {
     expect(serialized).not.toContain('this-must-not-appear');
     expect(serialized).not.toContain('leaky@example.com');
     expect(serialized).not.toContain('eyJhbGciOiJSUzI1NiJ9.fake.jwt');
+  });
+});
+
+/**
+ * RT-42 — the manager/admin identifier is trimmed in the main-process sign-in
+ * path before the Clerk exchange; the password is passed through byte-for-byte.
+ */
+describe('SignInHandler — RT-42 identifier trimming', () => {
+  function handlerWith(clerk: ClerkExchanger): SignInHandler {
+    return new SignInHandler({
+      clerk,
+      backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
+      sessionManager: new SessionManager(),
+      protoStore: new ProtoSessionStore(),
+      deviceTokenAttestation: () => 'attest',
+    });
+  }
+
+  it.each([
+    ['trailing space', 'manager@pharmacy.test '],
+    ['leading space', ' manager@pharmacy.test'],
+    ['both sides, mixed whitespace', ' \t manager@pharmacy.test \n '],
+  ])('sends the trimmed identifier to Clerk (%s) and signs in', async (_label, raw) => {
+    const calls: ClerkExchangeRequest[] = [];
+    const handler = handlerWith(fakeClerk(HAPPY_CLERK_RESULT, calls));
+
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: raw,
+      password: 'correct-horse-battery-staple',
+    });
+
+    expect(res.kind).toBe('signed_in');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.identifier).toBe('manager@pharmacy.test');
+  });
+
+  it('never trims or transforms the password (surrounding spaces preserved)', async () => {
+    const calls: ClerkExchangeRequest[] = [];
+    const handler = handlerWith(fakeClerk(HAPPY_CLERK_RESULT, calls));
+    const password = '  p@ss word\t ';
+
+    await handler.signIn({
+      kind: 'manager_admin',
+      identifier: ' manager@pharmacy.test ',
+      password,
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.password).toBe(password);
+    expect(calls[0]?.password).toHaveLength(password.length);
+  });
+
+  it('a whitespace-only password is passed through unchanged (not treated as empty)', async () => {
+    const calls: ClerkExchangeRequest[] = [];
+    const handler = handlerWith(fakeClerk(HAPPY_CLERK_RESULT, calls));
+
+    await handler.signIn({ kind: 'manager_admin', identifier: 'm@x.test', password: '   ' });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.password).toBe('   ');
+  });
+
+  it('a whitespace-only identifier is refused generically without calling Clerk', async () => {
+    const calls: ClerkExchangeRequest[] = [];
+    const handler = handlerWith(fakeClerk(HAPPY_CLERK_RESULT, calls));
+
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: ' \t ',
+      password: 'p',
+    });
+
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('wire level: the real Clerk exchanger posts the trimmed identifier and the exact password', async () => {
+    const bodies: string[] = [];
+    const fetchImpl = (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      bodies.push(typeof init?.body === 'string' ? init.body : '');
+      // Refuse the attempt — only the outbound sign_ins body matters here.
+      return Promise.resolve(new Response('{}', { status: 422 }));
+    };
+    const clerk = createClerkExchanger({
+      fetch: fetchImpl,
+      frontendApiBaseUrl: 'https://clerk.example.com',
+    });
+    const password = ' secret with spaces ';
+
+    const res = await handlerWith(clerk).signIn({
+      kind: 'manager_admin',
+      identifier: '  manager@pharmacy.test ',
+      password,
+    });
+
+    // Clerk refusal disclosure is unchanged: still the single generic category.
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(bodies).toHaveLength(1);
+    const form = new URLSearchParams(bodies[0]);
+    expect(form.get('identifier')).toBe('manager@pharmacy.test');
+    expect(form.get('password')).toBe(password);
   });
 });
