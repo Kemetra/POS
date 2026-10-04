@@ -150,6 +150,7 @@ describe('returns dispatcher', () => {
       tamper: (r) => ({ ...r, saleRef: '0190f5a2-7b3c-7d4e-8f90-0000000000aa' }),
     },
     { label: 'another total', tamper: (r) => ({ ...r, returnTotal: '14.0000' }) },
+    { label: 'another currency (Codex P2)', tamper: (r) => ({ ...r, currencyCode: 'USD' }) },
     { label: 'an unpayable total', tamper: (r) => ({ ...r, returnTotal: '15.0050' }) },
   ])('does not trust a confirmation naming $label', async ({ tamper }) => {
     harness();

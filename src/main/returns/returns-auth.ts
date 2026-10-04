@@ -44,7 +44,10 @@ export type CurrentActor =
 export interface ReturnsAuthorizer {
   /** The live actor: flag on, a session on a paired terminal, manager/admin, unlocked. */
   current(): CurrentActor;
-  /** Null while `actor` is still authorized right now (and an envelope is present); else why not. */
+  /**
+   * Null while `actor` is still authorized right now and an envelope is
+   * present; else why not (`offline` when only the envelope is missing).
+   */
   recheck(actor: AuthorizedActor): LocalReturnRefusal | null;
 }
 
@@ -111,7 +114,8 @@ export function createReturnsAuthorizer(deps: ReturnsAuthorizerDeps): ReturnsAut
       const live = current();
       if (live.kind === 'refused') return lostReason(live);
       if (!isSameActor(live.actor, actor)) return 'session_changed';
-      return deps.hasEnvelope() ? null : 'session_changed';
+      // No envelope: the till cannot authenticate to Backend-Core at all.
+      return deps.hasEnvelope() ? null : 'offline';
     },
   };
 }

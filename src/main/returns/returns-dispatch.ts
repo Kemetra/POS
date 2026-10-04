@@ -9,9 +9,9 @@
  *   refused                        → refused;   audit refused
  *   unknown (timeout / network…)   → unknown;   never success (AC9/AC10)
  *
- * A confirmation must name this return (`externalId`) and carry exactly the
- * quoted refund (the cash tender the server checked against its own total);
- * otherwise the row stays `unknown` and the anomaly is logged — nothing is
+ * A confirmation must name this return (`externalId`, `saleRef`), be in its
+ * currency and carry exactly the quoted refund (the cash tender the server
+ * checked against its own total); otherwise the row stays `unknown` and the anomaly is logged — nothing is
  * paid out on an answer the till cannot match.
  *
  * Confirmation is written once and atomically: the guarded `markConfirmed`
@@ -86,6 +86,7 @@ function outcomeOfState(entry: JournalEntry): DispatchOutcome {
 /** The server's refund in minor units when it matches this return; else null. */
 function matchingTotalMinor(entry: JournalEntry, saleReturn: WireSaleReturn): number | null {
   if (saleReturn.externalId !== entry.externalId) return null;
+  if (saleReturn.currencyCode !== entry.currencyCode) return null;
   if (saleReturn.saleRef.toLowerCase() !== entry.serverSaleRef.toLowerCase()) return null;
   const total4 = parseAmount4(saleReturn.returnTotal);
   const minor = total4 === null ? null : amount4ToMinor(total4, exponentFor(entry.currencyCode));

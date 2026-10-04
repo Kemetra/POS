@@ -81,6 +81,12 @@ interface Ids {
 type Admitted = { readonly kind: 'ok'; readonly actor: AuthorizedActor } | ReturnsRefused;
 type Loaded = { readonly kind: 'ok'; readonly sale: LiveSale } | ReturnsRefused;
 
+/** The sale ids known from an awaited load, for refusal audits. */
+function idsOf(awaited: Loaded | null): Ids {
+  if (awaited?.kind !== 'ok') return {};
+  return { saleId: awaited.sale.row.sale_id, saleRef: awaited.sale.saleRef };
+}
+
 function toSubmitResponse(outcome: DispatchOutcome): ReturnsSubmitResponse {
   const ret = toJournalView(outcome.entry);
   if (outcome.kind === 'confirmed') return { kind: 'confirmed', ret, replayed: outcome.replayed };
@@ -108,9 +114,12 @@ class ReturnsService implements ReturnsBridgeAPI {
    * The choke point after an await: null while the admitted actor is still
    * authorized; else the audited refusal to return instead (no data).
    */
-  private recheckAfterAwait(actor: AuthorizedActor, op: Operation, ids: Ids = {}) {
+  private recheckAfterAwait(actor: AuthorizedActor, op: Operation, awaited: Loaded | null = null) {
     const lost = this.deps.authorizer.recheck(actor);
-    return lost === null ? null : this.refuse(actor, op, lost, ids);
+    if (lost === null) return null;
+    // Already refused for this very reason by an inner re-check (and audited).
+    if (awaited?.kind === 'refused' && awaited.reason === lost) return awaited;
+    return this.refuse(actor, op, lost, idsOf(awaited));
   }
 
   /** Gate + capture the authorized actor (flag, session, manager/admin, unlocked). */
@@ -136,7 +145,7 @@ class ReturnsService implements ReturnsBridgeAPI {
 
   /** Local lookup, then the live server view (D-a) and its returnability (AC4). */
   private async loadSale(
-    actor: ReturnActor,
+    actor: AuthorizedActor,
     op: Operation,
     req: ReturnsLookupRequest,
   ): Promise<Loaded> {
@@ -150,6 +159,9 @@ class ReturnsService implements ReturnsBridgeAPI {
     );
     if (saleRef === null) return this.refuse(actor, op, 'sale_not_synced', ids);
     const read = await this.deps.client.readSale(saleRef);
+    // First statement after the await: re-authorize before any branch.
+    const lost = this.deps.authorizer.recheck(actor);
+    if (lost !== null) return this.refuse(actor, op, lost, { ...ids, saleRef });
     if (read.kind === 'unavailable') return this.refuse(actor, op, 'offline', { ...ids, saleRef });
     if (read.kind === 'refused') return this.refuse(actor, op, read.reason, { ...ids, saleRef });
     const blocked = assessSale(read.sale);
@@ -161,10 +173,10 @@ class ReturnsService implements ReturnsBridgeAPI {
     const admitted = this.admit('lookup');
     if (admitted.kind !== 'ok') return admitted;
     const loaded = await this.loadSale(admitted.actor, 'lookup', req);
+    const lost = this.recheckAfterAwait(admitted.actor, 'lookup', loaded);
+    if (lost !== null) return lost;
     if (loaded.kind !== 'ok') return loaded;
     const { row, saleRef, wire } = loaded.sale;
-    const lost = this.recheckAfterAwait(admitted.actor, 'lookup', { saleId: row.sale_id, saleRef });
-    if (lost !== null) return lost;
     return {
       kind: 'ok',
       sale: {
@@ -178,7 +190,7 @@ class ReturnsService implements ReturnsBridgeAPI {
   }
 
   /** Load and price; shared by quote and submit. */
-  private async priced(actor: ReturnActor, op: Operation, req: ReturnsQuoteRequest) {
+  private async priced(actor: AuthorizedActor, op: Operation, req: ReturnsQuoteRequest) {
     const loaded = await this.loadSale(actor, op, req);
     if (loaded.kind !== 'ok') return loaded;
     const ids: Ids = { saleId: loaded.sale.row.sale_id, saleRef: loaded.sale.saleRef };
@@ -191,14 +203,9 @@ class ReturnsService implements ReturnsBridgeAPI {
     const admitted = this.admit('quote');
     if (admitted.kind !== 'ok') return admitted;
     const priced = await this.priced(admitted.actor, 'quote', req);
-    if (priced.kind !== 'ok') return priced;
-    const ids: Ids = { saleId: priced.sale.row.sale_id, saleRef: priced.sale.saleRef };
-    return (
-      this.recheckAfterAwait(admitted.actor, 'quote', ids) ?? {
-        kind: 'ok',
-        quote: priced.quote,
-      }
-    );
+    const lost = this.recheckAfterAwait(admitted.actor, 'quote', priced);
+    if (lost !== null) return lost;
+    return priced.kind === 'ok' ? { kind: 'ok', quote: priced.quote } : priced;
   }
 
   async submit(req: ReturnsSubmitRequest): Promise<ReturnsSubmitResponse> {
@@ -206,15 +213,16 @@ class ReturnsService implements ReturnsBridgeAPI {
     if (admitted.kind !== 'ok') return { ...admitted, ret: null };
     const { actor } = admitted;
     const priced = await this.priced(actor, 'submit', req);
+    // Choke point (a): the first statement after the await — before any
+    // branch, early exit or refusal, and so before the journal insert.
+    const lost = this.recheckAfterAwait(actor, 'submit', priced);
+    if (lost !== null) return { ...lost, ret: null };
     if (priced.kind !== 'ok') return { ...priced, ret: null };
     const saleId = priced.sale.row.sale_id;
     if (this.deps.repo.hasUnresolvedForSale(saleId)) {
       const ids: Ids = { saleId, saleRef: priced.sale.saleRef };
       return { ...this.refuse(actor, 'submit', 'unresolved_return_exists', ids), ret: null };
     }
-    // Choke point (a): after every await, immediately before the journal insert.
-    const lost = this.recheckAfterAwait(actor, 'submit', { saleId, saleRef: priced.sale.saleRef });
-    if (lost !== null) return { ...lost, ret: null };
     const entry = this.journal(actor, priced.sale, priced.quote, req.lines);
     // Choke point (b) runs inside the dispatcher, immediately before the POST.
     const outcome = await this.deps.dispatcher.send(entry, 'submit', actor);

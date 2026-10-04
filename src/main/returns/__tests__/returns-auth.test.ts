@@ -57,7 +57,7 @@ describe('(a) submit re-checks the admitted actor before journaling', () => {
     {
       label: 'the envelope is dropped',
       change: (st) => (st.token = null),
-      reason: 'session_changed',
+      reason: 'offline',
     },
     {
       label: 'the flag is turned off',
@@ -81,6 +81,24 @@ describe('(a) submit re-checks the admitted actor before journaling', () => {
       acting_operator_id: 'op-manager',
       payload: { operation: 'submit', reason: c.reason },
     });
+  });
+});
+
+describe('the recheck is the first statement after every await (Codex P2)', () => {
+  it('a lock during priced() on a sale with an unresolved return → session_changed', async () => {
+    h = returnsHarness();
+    seedSyncedSale(h.db);
+    h.backend.onReturn = () => Promise.reject(new TypeError('socket hang up'));
+    await h.service.submit(ONE_A); // leaves an unresolved (unknown) return on the sale
+    h.backend.onRead = () => {
+      h.state.locked = true;
+    };
+
+    const res = await h.service.submit(ONE_A);
+
+    expect(res).toEqual({ kind: 'refused', reason: 'session_changed', ret: null });
+    expect(categories(h.audits).filter((c) => c === 'sale.return.refused')).toHaveLength(1);
+    expect(h.audits.at(-1)?.payload).toMatchObject({ reason: 'session_changed' });
   });
 });
 
@@ -177,7 +195,7 @@ describe('createReturnsAuthorizer.recheck', () => {
     ['signed out', { session: null }, 'session_changed'],
     ['a cashier', { session: sessionFor('cashier') }, 'role_denied'],
     ['locked', { locked: true }, 'session_changed'],
-    ['no envelope', { envelope: false }, 'session_changed'],
+    ['no envelope', { envelope: false }, 'offline'],
     ['another terminal', { session: { ...manager, terminal_id: 'term-2' } }, 'session_changed'],
     ['another session', { session: { ...manager, operator_session_id: 's2' } }, 'session_changed'],
   ])('%s → %s', (_label, live, expected) => {
