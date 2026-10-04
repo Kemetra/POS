@@ -99,6 +99,9 @@ export const LOCAL_RETURN_REFUSALS = [
   // Another return's payout is running on this terminal (one cash drawer, one
   // payout at a time): nothing was done; try again once it has finished.
   'another_payout_in_progress',
+  // Another step of this payout (e.g. its drawer kick) is running for the same
+  // operator: this request was not joined to it; try again once it finished.
+  'payout_step_in_progress',
   // The slip's line amounts do not add up to the confirmed refund: no slip is
   // printed (fail closed); the payout itself is unaffected.
   'slip_total_mismatch',
@@ -166,8 +169,11 @@ export interface ReturnPayoutView {
   /** How many kicks were sent (each counted before it is sent). */
   readonly kickCount: number;
   /**
-   * The last kick's outcome is not recorded yet (`sending`: in flight, or its
-   * process died). Shown as `unknown`; its recorded outcome is a newer view.
+   * A kick is in flight: sent, its outcome not recorded, and within its lease
+   * as main judged it when the view was made (it may still open the drawer:
+   * nothing completes the payout meanwhile, not even a manual payout). Shown
+   * as `unknown`; its recorded outcome (or the lease running out) is a newer
+   * view.
    */
   readonly kickPending: boolean;
 }

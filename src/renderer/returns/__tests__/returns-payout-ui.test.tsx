@@ -360,12 +360,11 @@ describe('a kick in progress elsewhere can be refreshed', () => {
       ret: journal({ payout: STARTED }),
       replayed: false,
     });
-    bridge.payout.mockResolvedValueOnce({
-      kind: 'refused',
-      reason: 'drawer_kick_in_progress',
-      ret: SENDING,
+    // The other instance's kick starts while this panel asks for the manual payout.
+    bridge.payout.mockImplementationOnce(() => {
+      bridge.list.mockResolvedValue({ kind: 'ok', returns: [SENDING] });
+      return Promise.resolve({ kind: 'refused', reason: 'drawer_kick_in_progress', ret: SENDING });
     });
-    bridge.list.mockResolvedValue({ kind: 'ok', returns: [SENDING] });
     const user = await confirmedOutcome(bridge);
     await user.click(screen.getByRole('button', { name: PAYOUT_COPY.interruptedManual }));
     await user.click(screen.getByRole('button', { name: PAYOUT_COPY.confirmManualYes }));

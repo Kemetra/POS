@@ -69,7 +69,8 @@ import type {
   SlipAuditOutcome,
 } from './returns-audit.js';
 import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
-import { kickReturnDrawer, withinKickLease, type ReturnDrawerOutcome } from './returns-drawer.js';
+import { payoutActionRefusal } from '../../shared/returns/payout-rules.js';
+import { kickReturnDrawer, kickStateOf, type ReturnDrawerOutcome } from './returns-drawer.js';
 import type {
   CompleteResult,
   KickResult,
@@ -146,22 +147,8 @@ export type StartedPayout = Pick<PayoutRow, 'kickOutcome' | 'kickedAt'> | null;
  * is bounded on both sides (reviewer P2: a backward clock jump never extends it).
  */
 export function kickInFlight(payout: NonNullable<StartedPayout>, now: string): boolean {
-  if (payout.kickOutcome !== 'sending' || payout.kickedAt === null) return false;
-  return withinKickLease(payout.kickedAt, now);
+  return payout.kickedAt !== null && kickStateOf(payout, now) === 'in_flight';
 }
-
-function mayKickAgain(payout: NonNullable<StartedPayout>): boolean {
-  return payout.kickOutcome === null || payout.kickOutcome === 'failed_before_send';
-}
-
-type ActionRule = (payout: NonNullable<StartedPayout>, now: string) => ReturnsRefusalReason | null;
-
-/** Why each action is refused on a payout already started (or null). */
-const STARTED_RULES: Readonly<Record<ReturnPayoutAction, ActionRule>> = {
-  start: () => 'payout_started',
-  retry_drawer: (payout) => (mayKickAgain(payout) ? null : 'drawer_retry_unsafe'),
-  manual: (payout, now) => (kickInFlight(payout, now) ? 'drawer_kick_in_progress' : null),
-};
 
 /**
  * Why a payout `action` is refused for a return in `state`, or null.
@@ -175,10 +162,9 @@ export function payoutRefusal(
   action: ReturnPayoutAction,
   now: string,
 ): ReturnsRefusalReason | null {
-  if (state === 'paid_out') return 'already_paid_out';
-  if (state !== 'confirmed') return 'not_payable';
-  if (payout === null) return action === 'start' ? null : 'payout_not_started';
-  return STARTED_RULES[action](payout, now);
+  const kick = payout === null ? 'none' : kickStateOf(payout, now);
+  // The one rule the renderer applies too (src/shared/returns/payout-rules.ts).
+  return payoutActionRefusal({ state, started: payout !== null, kick }, action);
 }
 
 /**
@@ -253,9 +239,10 @@ function serialized<T>(
   return promise;
 }
 
-/** The one payout running on this terminal: its return and admitted actor. */
+/** The one payout running on this terminal: its request and admitted actor. */
 interface ActivePayout extends InFlight<ReturnsPayoutResponse> {
   readonly returnId: string;
+  readonly action: ReturnPayoutAction;
 }
 
 class ReturnsPayoutService implements ReturnsPayoutAPI {
@@ -298,17 +285,28 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   private exclusive(actor: AuthSnapshot, req: ReturnsPayoutRequest) {
     const key = actorKey(actor);
     const running = this.active;
-    if (running !== null) {
-      const joins = running.returnId === req.returnId && running.actor === key;
-      return joins ? running.promise : Promise.resolve(this.busy(actor, req.returnId));
-    }
+    if (running !== null) return this.whileRunning(running, actor, req);
     const promise = Promise.resolve()
       .then(() => this.runPayout(actor, req))
       .finally(() => {
         if (this.active?.promise === promise) this.active = null;
       });
-    this.active = { returnId: req.returnId, actor: key, promise };
+    this.active = { returnId: req.returnId, action: req.action, actor: key, promise };
     return promise;
+  }
+
+  /**
+   * Codex P1 (a55ae8e): only an IDENTICAL request (same actor, return and
+   * action: a double click, a second window) joins the running payout. The
+   * same actor asking another step of it (a manual attestation while its
+   * kick runs) is refused `payout_step_in_progress`, never silently joined;
+   * anything else is `another_payout_in_progress`.
+   */
+  private whileRunning(running: ActivePayout, actor: AuthSnapshot, req: ReturnsPayoutRequest) {
+    const sameReturn = running.returnId === req.returnId && running.actor === actorKey(actor);
+    if (sameReturn && running.action === req.action) return running.promise;
+    const reason = sameReturn ? 'payout_step_in_progress' : 'another_payout_in_progress';
+    return Promise.resolve(this.busy(actor, req.returnId, reason));
   }
 
   /**
@@ -321,9 +319,13 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     if (this.active?.returnId === returnId) this.active = null;
   }
 
-  /** Another payout runs on this terminal: refused, with this terminal's own row. */
-  private busy(actor: AuthSnapshot, returnId: string) {
-    return this.refusePayout(actor, 'another_payout_in_progress', this.ownReturn(actor, returnId));
+  /** Another payout (step) runs on this terminal: refused, with this terminal's own row. */
+  private busy(
+    actor: AuthSnapshot,
+    returnId: string,
+    reason: 'another_payout_in_progress' | 'payout_step_in_progress',
+  ) {
+    return this.refusePayout(actor, reason, this.ownReturn(actor, returnId));
   }
 
   /** Gate + snapshot (flag, session, manager/admin, unlocked); refusals audited. */

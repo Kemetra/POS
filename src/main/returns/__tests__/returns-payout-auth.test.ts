@@ -426,6 +426,30 @@ describe('one payout at a time per terminal', () => {
     expect(h.repo.read(b)?.state).toBe('confirmed');
   });
 
+  it('Codex P1 (a55ae8e): the same actor asking another step is refused, never joined', async () => {
+    const returnId = await confirmedReturn(h.service);
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(1);
+    });
+    // A second window attests a manual payout while the start awaits the drawer.
+    expect(await h.service.payout({ returnId, action: 'manual' })).toMatchObject({
+      kind: 'refused',
+      reason: 'payout_step_in_progress',
+      ret: { returnId },
+    });
+    kick.resolve({ ok: false, failure_reason: 'os_error' });
+    expect(await first).toMatchObject({ kind: 'drawer_failed', reason: 'os_error' });
+    // Settled: the manual payout is judged on its own (the kick is unknown).
+    expect(await h.service.payout({ returnId, action: 'manual' })).toMatchObject({
+      kind: 'paid_out',
+      method: 'manual',
+    });
+    expect(h.drawer.kicks).toBe(1);
+  });
+
   it('reviewer P2 (60eb2c9): a hanging slip print does not hold the drawer slot', async () => {
     const [a, b] = await twoReturns();
     const print = deferredFake<{ ok: true; render_path: 'os_print' }>();

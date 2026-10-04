@@ -9,6 +9,7 @@
  * already been told the drawer did not open, so nothing is recorded as paid.
  */
 import type { DrawerKickTransport } from '../drawer/drawer-kick-transport.js';
+import type { PayoutKickState } from '../../shared/returns/payout-rules.js';
 import { RETURN_DRAWER_FAILURES, type ReturnDrawerFailure } from '../../shared/returns/types.js';
 
 /** How long the payout waits for the drawer to answer. */
@@ -31,6 +32,25 @@ export const RETURN_KICK_LEASE_MS = 2 * RETURN_DRAWER_TIMEOUT_MS;
 export function withinKickLease(kickedAt: string, now: string): boolean {
   const elapsed = Date.parse(now) - Date.parse(kickedAt);
   return elapsed >= -RETURN_KICK_LEASE_MS && elapsed < RETURN_KICK_LEASE_MS;
+}
+
+/** A payout row's kick record, as the payout rule needs it. */
+export interface KickRecord {
+  readonly kickOutcome: 'sending' | 'opened' | 'failed_before_send' | 'unknown' | null;
+  readonly kickedAt: string | null;
+}
+
+/**
+ * The kick as the payout rule sees it at `now`: `in_flight` while still
+ * `sending` within the lease; `unknown` once its lease ran out (its process
+ * died). Without a clock (`now` null) a sending kick is in flight
+ * (conservative: nothing completes it).
+ */
+export function kickStateOf(record: KickRecord, now: string | null): PayoutKickState {
+  if (record.kickOutcome === null) return 'none';
+  if (record.kickOutcome !== 'sending') return record.kickOutcome;
+  const held = now === null || record.kickedAt === null || withinKickLease(record.kickedAt, now);
+  return held ? 'in_flight' : 'unknown';
 }
 
 export type ReturnDrawerOutcome =

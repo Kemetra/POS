@@ -254,3 +254,35 @@ describe('the open payout is fed the last good journal rows (reviewer P2 on 49e0
     expect(result.current.known).toEqual(ROWS);
   });
 });
+
+/**
+ * Codex P1 (a55ae8e): another window lists the row right after the kick was
+ * sent. The drawer may still open: no manual attestation until main says the
+ * kick is settled (or its lease ran out).
+ */
+describe('a payout whose kick is in flight', () => {
+  const IN_FLIGHT = journal({
+    returnId: 'r-ready',
+    saleNumber: 'T1-000001',
+    payout: { ...STARTED, kick: 'unknown', kickCount: 1, kickPending: true },
+  });
+  const SETTLED = journal({ ...IN_FLIGHT, payout: { ...STARTED, kick: 'unknown' } });
+
+  it('waits with a refresh and offers no manual payout; after it settles, manual only', async () => {
+    const bridge = fakeBridge();
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: [IN_FLIGHT, ...ROWS.slice(1)] });
+    const user = userEvent.setup();
+    renderReturns({ bridge });
+    await screen.findByText('T1-000001');
+    await user.click(within(rowOf('T1-000001')).getByRole('button'));
+    expect(await screen.findByText(refusalMessage('drawer_kick_in_progress'))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PAYOUT_COPY.interruptedManual })).toBeNull();
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: [SETTLED, ...ROWS.slice(1)] });
+    await user.click(screen.getByRole('button', { name: PAYOUT_COPY.refresh }));
+    expect(
+      await screen.findByRole('button', { name: PAYOUT_COPY.interruptedManual }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PAYOUT_COPY.interruptedRetry })).toBeNull();
+    expect(bridge.payout).not.toHaveBeenCalled();
+  });
+});

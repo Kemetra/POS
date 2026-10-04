@@ -282,3 +282,29 @@ describe('transient refusals wait for a refresh (Codex P2 on 49e0277)', () => {
     expect(refreshed(paid, READY).phase.kind).toBe('paid');
   });
 });
+
+describe('Codex P1 (a55ae8e): a kick in flight offers no manual attestation', () => {
+  it('a view whose kick is in flight is a wait with a refresh, not interrupted', () => {
+    expect(initialPayout(kicked(2, true)).phase).toEqual({
+      kind: 'wait',
+      reason: 'drawer_kick_in_progress',
+    });
+  });
+
+  it('a refusal that hands back an in-flight row waits too', () => {
+    const res: ReturnsPayoutResponse = {
+      kind: 'refused',
+      reason: 'payout_started',
+      ret: kicked(1, true),
+    };
+    expect(afterPayout(state(), res).phase.kind).toBe('wait');
+  });
+
+  it('once main no longer reports it in flight: unknown → manual only (no retry)', () => {
+    const waiting = initialPayout(kicked(2, true));
+    expect(refreshed(waiting, kicked(2, false)).phase).toEqual({
+      kind: 'interrupted',
+      retryable: false,
+    });
+  });
+});

@@ -316,6 +316,7 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
 
   it.each<[string | null, number, boolean]>([
     [null, 0, false],
+    // No clock given: a sending kick is conservatively in flight.
     ['sending', 1, true],
     ['unknown', 1, false],
     ['opened', 2, false],
@@ -329,6 +330,21 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
       });
     },
   );
+});
+
+describe('Codex P1 (a55ae8e): kickPending is a kick in flight within the lease', () => {
+  it.each<[string, number, boolean]>([
+    ['3 s after the kick', 3_000, true],
+    ['at the lease end (its process died)', 10_000, false],
+    ['the clock jumped back past the lease', -10_001, false],
+  ])('a kick still sending, %s: kickPending %s', (_l, ms, pending) => {
+    const now = new Date(Date.parse('2026-10-04T10:00:00.000Z') + ms).toISOString();
+    const payout = { ...unpaidWithKick('sending', 1), kickedAt: '2026-10-04T10:00:00.000Z' };
+    expect(toJournalView(viewEntry(), payout, now).payout).toMatchObject({
+      kick: 'unknown',
+      kickPending: pending,
+    });
+  });
 });
 
 describe('shared closed sets', () => {

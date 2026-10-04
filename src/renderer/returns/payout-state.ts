@@ -7,6 +7,11 @@ import type {
   ReturnsRefusalReason,
   ReturnsReprintResponse,
 } from '../../shared/returns/types.js';
+import {
+  payoutActionRefusal,
+  type PayoutFacts,
+  type PayoutKickState,
+} from '../../shared/returns/payout-rules.js';
 import { CALL_FAILED } from './returns-bridge.js';
 
 /**
@@ -54,6 +59,7 @@ export type PayoutPhase =
 const TRANSIENT_REFUSALS = [
   'drawer_kick_in_progress',
   'another_payout_in_progress',
+  'payout_step_in_progress',
   'session_changed',
   'no_session',
   'offline',
@@ -85,14 +91,35 @@ export interface PayoutState {
   readonly reprint: ReprintResult | null;
 }
 
+/** A journal row as the shared payout rule sees it. */
+function factsOf(ret: ReturnJournalView): PayoutFacts {
+  const p = ret.payout;
+  const kick: PayoutKickState = p === null ? 'none' : p.kickPending ? 'in_flight' : p.kick;
+  return { state: ret.state, started: p !== null, kick };
+}
+
+/**
+ * The phase a started, unpaid row implies, by the rule main enforces
+ * (Codex P1, a55ae8e): a manual payout only when main would accept one, so a
+ * kick in flight is a wait with a refresh, never a manual attestation.
+ */
+function startedPhase(ret: ReturnJournalView): PayoutPhase {
+  const facts = factsOf(ret);
+  const manual = payoutActionRefusal(facts, 'manual');
+  if (manual === null) {
+    return { kind: 'interrupted', retryable: payoutActionRefusal(facts, 'retry_drawer') === null };
+  }
+  return isTransient(manual)
+    ? { kind: 'wait', reason: manual }
+    : { kind: 'refused', reason: manual };
+}
+
 /** The phase a journal row implies on its own (no live call result). */
 function phaseOf(ret: ReturnJournalView): PayoutPhase {
   if (ret.state === 'paid_out') {
     return { kind: 'paid', slip: null, method: ret.payout?.method ?? null };
   }
-  if (ret.payout === null) return { kind: 'ready' };
-  const { kick } = ret.payout;
-  return { kind: 'interrupted', retryable: kick === 'none' || kick === 'failed_before_send' };
+  return ret.payout === null ? { kind: 'ready' } : startedPhase(ret);
 }
 
 export function initialPayout(ret: ReturnJournalView): PayoutState {

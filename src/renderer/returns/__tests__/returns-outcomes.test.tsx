@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -37,6 +37,13 @@ async function outcomeFor(submit: unknown): Promise<ReturnType<typeof fakeBridge
   renderReturns({ bridge });
   await submitReturn(user);
   await screen.findByRole('heading', { name: 'نتيجة المرتجع' });
+  // K2: the outcome's live region is filled by a passive effect after mount,
+  // which React may flush after the heading is found (seen under the full
+  // coverage run's load): wait for the headline before asserting on it.
+  const outcome = screen.getByRole('region', { name: 'نتيجة المرتجع' });
+  await waitFor(() => {
+    expect(outcome.querySelector('.rt-outcome__headline')).not.toBeNull();
+  });
   return bridge;
 }
 

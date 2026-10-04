@@ -75,10 +75,11 @@ export interface ComposedReturns {
 }
 
 /** Renderer views of journal rows, each with its payout (one query). */
-function viewsWithPayouts(payouts: ReturnPayoutsRepository) {
+function viewsWithPayouts(payouts: ReturnPayoutsRepository, now: () => string) {
   return (entries: readonly JournalEntry[]): ReturnJournalView[] => {
     const rows = payouts.readMany(entries.map((e) => e.returnId));
-    return entries.map((e) => toJournalView(e, rows.get(e.returnId) ?? null));
+    const at = now();
+    return entries.map((e) => toJournalView(e, rows.get(e.returnId) ?? null, at));
   };
 }
 
@@ -90,7 +91,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const client = createReturnsClient(deps.http);
   const repo = createReturnsRepository(deps.db);
   const payouts = createReturnPayoutsRepository(deps.db);
-  const views = viewsWithPayouts(payouts);
+  const views = viewsWithPayouts(payouts, now);
   const sales = bindSalesRepository(deps.db);
   const audit = createReturnsAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
   const authorizer = createReturnsAuthorizer({
@@ -139,7 +140,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     transaction,
     isStopped,
     now,
-    view: (entry) => toJournalView(entry, payouts.read(entry.returnId)),
+    view: (entry) => toJournalView(entry, payouts.read(entry.returnId), now()),
   });
   const service: ReturnsBridgeAPI = {
     lookup: (req) => core.lookup(req),

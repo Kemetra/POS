@@ -143,12 +143,14 @@ describe('X: exactly once', () => {
     h.drawer.answer = () => kick.promise;
     const first = h.service.payout({ returnId, action: 'start' });
     const second = h.service.payout({ returnId, action: 'start' });
+    // Codex P1 (a55ae8e): another step is refused, never joined (by design).
     const third = h.service.payout({ returnId, action: 'manual' });
     kick.resolve({ ok: true });
     const answers = await Promise.all([first, second, third]);
-    expect(answers.map((a) => a.kind)).toEqual(['paid_out', 'paid_out', 'paid_out']);
+    expect(answers.map((a) => a.kind)).toEqual(['paid_out', 'paid_out', 'refused']);
+    expect(answers[2]).toMatchObject({ reason: 'payout_step_in_progress' });
     expect(h.drawer.kicks).toBe(1);
-    expect(payoutCategories()).toEqual(PAYOUT_TRAIL);
+    expect(payoutCategories().filter((c) => c !== 'sale.return.refused')).toEqual(PAYOUT_TRAIL);
   });
 
   it('X4: start on a payout that was already started never kicks again', async () => {
