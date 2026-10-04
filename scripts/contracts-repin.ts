@@ -27,6 +27,7 @@ import {
   formatPin,
   gitBlobSha,
   parsePin,
+  parseRepinArgs,
   type PinnedFile,
 } from './contracts-pin.js';
 
@@ -34,29 +35,6 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const SNAPSHOT_DIR = path.join(REPO_ROOT, 'contracts', 'backend-core');
 const OPENAPI_DIR = path.join(SNAPSHOT_DIR, 'openapi');
 const PIN_PATH = path.join(SNAPSHOT_DIR, 'PIN');
-
-interface Args {
-  ref: string;
-  add: string[];
-  remove: string[];
-}
-
-function parseArgs(argv: readonly string[]): Args {
-  const args: Args = { ref: 'main', add: [], remove: [] };
-  for (let i = 0; i < argv.length; i += 1) {
-    const flag = argv[i];
-    const value = argv[i + 1];
-    if (flag !== '--ref' && flag !== '--add' && flag !== '--remove') {
-      throw new Error(`unknown argument "${String(flag)}"`);
-    }
-    if (value === undefined || value.startsWith('--')) throw new Error(`${flag} needs a value`);
-    if (flag === '--ref') args.ref = value;
-    else if (flag === '--add') args.add.push(value);
-    else args.remove.push(value);
-    i += 1;
-  }
-  return args;
-}
 
 function gh(args: readonly string[], raw = false): Buffer {
   return execFileSync(
@@ -98,7 +76,7 @@ function listVendored(dir: string, prefix = ''): string[] {
 }
 
 function main(): void {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseRepinArgs(process.argv.slice(2));
   const current = existsSync(PIN_PATH)
     ? parsePin(readFileSync(PIN_PATH, 'utf-8')).files.map((f) => f.path)
     : [];

@@ -14,6 +14,11 @@ export interface KnownViolation {
   readonly kind: 'credential-mismatch' | 'endpoint-missing';
   /** For `credential-mismatch`: what the client sends today. */
   readonly sent?: CredentialKind;
+  /**
+   * For `credential-mismatch`: the credentials the pinned contract accepts. Part of
+   * the identity, so a re-pin that changes the route's security fails the suite.
+   */
+  readonly requires?: readonly CredentialKind[];
   /** Jira key(s), or `TODO-ticket` when none is filed yet. */
   readonly tickets: readonly string[];
   readonly note: string;
@@ -24,6 +29,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     call: 'backendClient.listRoster',
     kind: 'credential-mismatch',
     sent: 'none',
+    requires: ['operator-jwt'],
     tickets: ['RT-214', 'RT-182'],
     note:
       'GET /operators/roster requires operator-identity (+ RT-150 manager role); the client sends ' +
@@ -34,6 +40,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     call: 'backendClient.getActiveSession',
     kind: 'credential-mismatch',
     sent: 'none',
+    requires: ['operator-jwt'],
     tickets: ['RT-182'],
     note:
       'GET /operators/active-session requires operator-identity; the cashier PIN path sends no ' +
@@ -43,6 +50,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     call: 'validateVoucher',
     kind: 'credential-mismatch',
     sent: 'none',
+    requires: ['operator-jwt'],
     tickets: ['TODO-ticket'],
     note:
       'POST /vouchers/validate declares operator-identity; the client sends no Authorization. ' +
@@ -53,6 +61,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     call: 'redeemVoucher',
     kind: 'credential-mismatch',
     sent: 'none',
+    requires: ['operator-jwt'],
     tickets: ['TODO-ticket'],
     note: 'Same as validateVoucher: POST /vouchers/redeem declares operator-identity.',
   },
@@ -60,6 +69,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     call: 'reverseVoucher',
     kind: 'credential-mismatch',
     sent: 'none',
+    requires: ['operator-jwt'],
     tickets: ['TODO-ticket'],
     note: 'Same as validateVoucher: POST /vouchers/reverse declares operator-identity.',
   },

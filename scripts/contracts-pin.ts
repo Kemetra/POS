@@ -1,7 +1,7 @@
 /**
- * RT-217 — the `contracts/backend-core/PIN` file format, shared by the re-pin
- * script (`scripts/contracts-repin.ts`) and the contract-conformance suite
- * (`tests/contract/backend-core/`). Pure: no I/O.
+ * RT-217 — the `contracts/backend-core/PIN` file format and the re-pin argument
+ * grammar, shared by `scripts/contracts-repin.ts` and the contract-conformance
+ * suite (`tests/contract/backend-core/`). Pure: no I/O.
  *
  * The PIN records which Backend-Core commit the vendored OpenAPI contracts came
  * from and the git blob SHA of every vendored file, so the suite can prove the
@@ -43,18 +43,34 @@ export function gitBlobSha(bytes: Uint8Array): string {
     .digest('hex');
 }
 
-/** Reject anything that could escape the vendored directory. */
-export function assertSafeRelativePath(p: string): void {
-  if (
-    p.length === 0 ||
-    p.startsWith('/') ||
-    p.includes('\\') ||
-    p.split('/').some((seg) => seg === '' || seg === '.' || seg === '..') ||
-    !/\.(ya?ml|json)$/.test(p)
-  ) {
-    throw new Error(`contracts PIN: unsafe or non-OpenAPI path "${p}"`);
-  }
+// ─── path safety ─────────────────────────────────────────────────────────────
+
+interface PathRule {
+  readonly reason: string;
+  readonly broken: (p: string) => boolean;
 }
+
+const DOT_SEGMENTS: ReadonlySet<string> = new Set(['', '.', '..']);
+const OPENAPI_FILE = /\.(ya?ml|json)$/;
+
+const PATH_RULES: readonly PathRule[] = [
+  { reason: 'absolute', broken: (p) => p.startsWith('/') },
+  { reason: 'backslash', broken: (p) => p.includes('\\') },
+  {
+    reason: 'empty, . or .. segment',
+    broken: (p) => p.split('/').some((s) => DOT_SEGMENTS.has(s)),
+  },
+  { reason: 'not .yaml/.yml/.json', broken: (p) => !OPENAPI_FILE.test(p) },
+];
+
+/** Reject anything that could escape the vendored directory or is not an OpenAPI file. */
+export function assertSafeRelativePath(p: string): void {
+  const rule = PATH_RULES.find((r) => r.broken(p));
+  if (rule === undefined) return;
+  throw new Error(`contracts PIN: unsafe or non-OpenAPI path "${p}" (${rule.reason})`);
+}
+
+// ─── PIN format ──────────────────────────────────────────────────────────────
 
 export function formatPin(pin: ContractsPin): string {
   const files = [...pin.files].sort((a, b) => a.path.localeCompare(b.path));
@@ -68,45 +84,128 @@ export function formatPin(pin: ContractsPin): string {
   ].join('\n');
 }
 
+interface PinDraft {
+  repo?: string;
+  commit?: string;
+  source?: string;
+  readonly files: PinnedFile[];
+}
+
+interface PinField {
+  readonly key: string;
+  readonly value: string;
+}
+
+function parseFileEntry(field: PinField): PinnedFile {
+  const parts = field.value.split(/\s+/);
+  const [path, blobSha] = parts as [string, string | undefined];
+  if (parts.length !== 2 || !SHA1.test(blobSha ?? '')) {
+    throw new Error(`contracts PIN: malformed file line "file: ${field.value}"`);
+  }
+  assertSafeRelativePath(path);
+  return { path, blobSha: blobSha as string };
+}
+
+const FIELD_READERS: Readonly<Record<string, (draft: PinDraft, field: PinField) => void>> = {
+  repo: (draft, field) => {
+    draft.repo = field.value;
+  },
+  commit: (draft, field) => {
+    draft.commit = field.value;
+  },
+  source: (draft, field) => {
+    draft.source = field.value;
+  },
+  file: (draft, field) => {
+    draft.files.push(parseFileEntry(field));
+  },
+};
+
+const PIN_LINE = /^([a-z]+):\s+(.+)$/;
+
+/** A `key: value` field, or null for a blank / comment line. */
+function parseField(raw: string): PinField | null {
+  const line = raw.trim();
+  if (line === '' || line.startsWith('#')) return null;
+  const match = PIN_LINE.exec(line);
+  if (match === null) throw new Error(`contracts PIN: unparseable line "${line}"`);
+  return { key: match[1] as string, value: (match[2] as string).trim() };
+}
+
+function readField(draft: PinDraft, field: PinField): void {
+  const reader = FIELD_READERS[field.key];
+  if (reader === undefined) throw new Error(`contracts PIN: unknown key "${field.key}"`);
+  reader(draft, field);
+}
+
+const PIN_CHECKS: ReadonlyArray<{
+  readonly message: string;
+  readonly ok: (d: PinDraft) => boolean;
+}> = [
+  { message: 'repo is required', ok: (d) => d.repo !== undefined },
+  { message: 'source is required', ok: (d) => d.source !== undefined },
+  { message: 'commit must be a full SHA', ok: (d) => SHA1.test(d.commit ?? '') },
+  { message: 'no files pinned', ok: (d) => d.files.length > 0 },
+  {
+    message: 'duplicate file entry',
+    ok: (d) => new Set(d.files.map((f) => f.path)).size === d.files.length,
+  },
+];
+
 export function parsePin(text: string): ContractsPin {
-  let repo: string | null = null;
-  let commit: string | null = null;
-  let source: string | null = null;
-  const files: PinnedFile[] = [];
+  const draft: PinDraft = { files: [] };
   for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (line === '' || line.startsWith('#')) continue;
-    const m = /^([a-z]+):\s+(.+)$/.exec(line);
-    if (m === null) throw new Error(`contracts PIN: unparseable line "${line}"`);
-    const key = m[1] as string;
-    const value = (m[2] as string).trim();
-    if (key === 'repo') repo = value;
-    else if (key === 'commit') commit = value;
-    else if (key === 'source') source = value;
-    else if (key === 'file') {
-      const parts = value.split(/\s+/);
-      const [path, blobSha] = parts;
-      if (
-        parts.length !== 2 ||
-        path === undefined ||
-        blobSha === undefined ||
-        !SHA1.test(blobSha)
-      ) {
-        throw new Error(`contracts PIN: malformed file line "${line}"`);
-      }
-      assertSafeRelativePath(path);
-      files.push({ path, blobSha });
-    } else {
-      throw new Error(`contracts PIN: unknown key "${key}"`);
-    }
+    const field = parseField(raw);
+    if (field !== null) readField(draft, field);
   }
-  if (repo === null || commit === null || source === null) {
-    throw new Error('contracts PIN: repo, commit and source are all required');
+  const failed = PIN_CHECKS.find((check) => !check.ok(draft));
+  if (failed !== undefined) throw new Error(`contracts PIN: ${failed.message}`);
+  return {
+    repo: draft.repo as string,
+    commit: draft.commit as string,
+    source: draft.source as string,
+    files: draft.files,
+  };
+}
+
+// ─── re-pin arguments ────────────────────────────────────────────────────────
+
+export interface RepinArgs {
+  ref: string;
+  readonly add: string[];
+  readonly remove: string[];
+}
+
+const REPIN_FLAGS: Readonly<Record<string, (args: RepinArgs, value: string) => void>> = {
+  '--ref': (args, value) => {
+    args.ref = value;
+  },
+  '--add': (args, value) => {
+    args.add.push(value);
+  },
+  '--remove': (args, value) => {
+    args.remove.push(value);
+  },
+};
+
+interface FlagPair {
+  readonly flag: string;
+  readonly value: string | undefined;
+}
+
+function applyFlag(args: RepinArgs, pair: FlagPair): void {
+  const apply = REPIN_FLAGS[pair.flag];
+  if (apply === undefined) throw new Error(`unknown argument "${pair.flag}"`);
+  const value = pair.value ?? '--';
+  if (value.startsWith('--')) throw new Error(`${pair.flag} needs a value`);
+  apply(args, value);
+}
+
+/** `--ref <ref>` (default `main`), repeatable `--add <path>` / `--remove <path>`. */
+export function parseRepinArgs(argv: readonly string[]): RepinArgs {
+  const args: RepinArgs = { ref: 'main', add: [], remove: [] };
+  for (let i = 0; i < argv.length; i += 2) {
+    applyFlag(args, { flag: argv[i] ?? '', value: argv[i + 1] });
   }
-  if (!SHA1.test(commit)) throw new Error(`contracts PIN: commit "${commit}" is not a full SHA`);
-  if (files.length === 0) throw new Error('contracts PIN: no files pinned');
-  if (new Set(files.map((f) => f.path)).size !== files.length) {
-    throw new Error('contracts PIN: duplicate file entry');
-  }
-  return { repo, commit, source, files };
+  return args;
 }
