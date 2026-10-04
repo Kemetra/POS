@@ -1,31 +1,52 @@
 # Phase 10 / US8 — CI pipeline + package dry-run artifact.
+# RT-217 PR A — split into parallel jobs for wall-clock speed.
 #
-# Single job on windows-latest exercising the full validation gate stack
-# on every PR plus pushes to main. Constitution v1.2.x principles upheld:
+# Job graph (every job below `changes` starts in parallel):
+#
+#   changes ──┬── static   (ubuntu)  contract conformance, codegen drift,
+#             │                      typecheck, lint
+#             ├── test     (ubuntu)  full vitest suite + coverage thresholds
+#             ├── package  (windows) build + package:dir (+ main-only upload)
+#             └── docs     (ubuntu)  docs-only PRs: Prettier on changed .md/.json
+#   ci  ← aggregate of all of the above. `ci` is the ONLY required status
+#         check on `main` (ruleset `protect-main`), so its name must not change.
+#
+# Constitution v1.2.x principles upheld:
 #   - VI Test-First: full vitest suite + coverage thresholds enforced
-#     per-file (80% global, 95% Money) — failure blocks merge.
+#     per-file (80% global, 95% Money) — failure blocks merge via `ci`.
 #   - VII Observability: package:dir uploads the unsigned --dir build
 #     for manual smoke. Sentry stays inert (no SENTRY_DSN secret wired).
-#   - Tech Stack (research.md §7): windows-latest runner, Node 24 (matches Electron 44's bundled Node; RT-109), npm
-#     cache, electron-rebuild via package.json postinstall.
+#   - Tech Stack (research.md §7): Node 24 (matches Electron 44's bundled
+#     Node; RT-109), npm cache, electron-rebuild via package.json postinstall.
 #
-# Pre-flight decisions for this workflow are documented in the Phase 10
-# PR body (D1–D7). Two are load-bearing inside this file:
+# Why the ubuntu jobs install with `--ignore-scripts` (RT-217):
+#   The only install scripts are electron's binary download and the
+#   `postinstall` electron-rebuild of better-sqlite3 — both exist for the
+#   packaged Electron app only. Nothing in static/test loads them: the test
+#   suite uses sql.js, and argon2 (N-API) loads its bundled linux-x64 prebuild
+#   via node-gyp-build. This is exactly the state the old single Windows job
+#   reached with its "Rebuild argon2 for Node 24 ABI" step. The full suite was
+#   verified on Linux before the move (577/577 files, same 3 skipped as on
+#   windows-latest).
+#
+# Windows stays ONLY for the native, platform-bound work: `npm ci` with the
+# electron-rebuild postinstall, the argon2 Electron-ABI rebuild, and
+# `package:dir` (electron-builder --win). It builds `dist/` itself: building
+# on ubuntu and handing `dist/` over as an artifact would serialise the two
+# jobs and lengthen the critical path.
+#
+# Load-bearing pre-flight decisions (Phase 10 PR body D1–D3):
 #   D1 — `npm run build` runs as its own step BEFORE `npm run package:dir`.
 #        electron-builder.yml's `files: [dist/**, ...]` requires `dist/`
-#        to be populated by `vite build` + `tsc -p tsconfig.{main,preload}`
-#        first, and the `package:dir` script does NOT chain `build`.
+#        to be populated first, and `package:dir` does NOT chain `build`.
 #   D2 — Native rebuild for `better-sqlite3` is handled implicitly by
-#        `package.json`'s `postinstall` hook (electron-rebuild). We do
-#        NOT add an explicit `npx @electron/rebuild` step.
-#
-# Docs-only fast path (D3):
-#   On pull_request events, if every changed file matches the docs/design
-#   pattern (*.md, docs/**, specs/**, .impeccable/**), the heavy
-#   codegen/typecheck/test/build/package gates are skipped. A lightweight
-#   Prettier check runs on changed .md/.json files instead. The required
-#   `ci` job still completes successfully. Pushes to main always run the
-#   full gate stack. Non-docs PRs keep the existing full CI behaviour.
+#        `package.json`'s `postinstall` hook (electron-rebuild) in the
+#        `package` job. We do NOT add an explicit `npx @electron/rebuild`.
+#   D3 — Docs-only fast path: on pull_request events, if every changed file
+#        matches *.md | docs/** | specs/** | .impeccable/**, the heavy jobs are
+#        skipped and the `docs` job Prettier-checks changed .md/.json files
+#        instead. The required `ci` job still completes successfully. Pushes
+#        to main always run the full stack.
 
 name: ci
 
@@ -37,33 +58,55 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR cancels that PR's in-flight run. Pushes to main get a
+# per-commit group, so every merged commit is still fully validated (and
+# its unpacked build uploaded) instead of being cancelled by the next merge.
+concurrency:
+  group: ci-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: true
+
 jobs:
-  ci:
-    runs-on: windows-latest
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.docs-check.outputs.docs_only }}
+    steps:
+      # pull_request checks out the synthetic merge commit; depth 2 makes its
+      # first parent (the base-branch tip) available, so HEAD^1..HEAD is
+      # exactly the PR's change set (same set as the old
+      # `git diff origin/<base> HEAD`) without fetching full history.
+      - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect docs-only PR
+        id: docs-check
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Not a pull_request event: full CI."
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only HEAD^1 HEAD)"
+          echo "Changed files:"
+          printf '  %s\n' $changed
+          non_docs="$(printf '%s\n' "$changed" | grep -Ev '\.md$|^(docs|specs|\.impeccable)/' | grep -v '^$' || true)"
+          if [ -z "$changed" ] || [ -n "$non_docs" ]; then docs_only=false; else docs_only=true; fi
+          echo "docs_only=$docs_only"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
+  static:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # Detect whether this PR touches only documentation/design files.
-      # Outputs docs_only=true when every changed file matches the pattern:
-      #   *.md | docs/** | specs/** | .impeccable/**
-      # Step is skipped on push-to-main; docs_only remains unset (falsy) so
-      # all downstream conditions fall through to the full-CI path.
-      - name: Detect docs-only PR
-        id: docs-check
-        if: github.event_name == 'pull_request'
-        shell: pwsh
-        run: |
-          $changedFiles = git diff --name-only "origin/${{ github.base_ref }}" HEAD
-          Write-Host "Changed files:"
-          $changedFiles | ForEach-Object { Write-Host "  $_" }
-          $docsPattern = '\.(md)$|^(docs|specs|\.impeccable)/'
-          $nonDocsFiles = @($changedFiles | Where-Object { $_ -notmatch $docsPattern })
-          $docsOnly = if ($nonDocsFiles.Count -eq 0) { "true" } else { "false" }
-          Write-Host "docs_only=$docsOnly"
-          "docs_only=$docsOnly" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Setup Node 24
         uses: actions/setup-node@v4
@@ -71,78 +114,80 @@ jobs:
           node-version: 24
           cache: npm
 
-      # Docs-only path: install packages without lifecycle scripts to get
-      # Prettier available without triggering the electron-rebuild postinstall.
-      - name: Install dependencies (docs-only, skip postinstall)
-        if: steps.docs-check.outputs.docs_only == 'true'
+      - name: Install dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts
 
-      # Full path: postinstall runs electron-rebuild -f -w better-sqlite3 (D2).
-      - name: Install dependencies
-        if: steps.docs-check.outputs.docs_only != 'true'
-        run: npm ci
+      # RT-217 PR B lands the Backend-Core contract-conformance suite under
+      # tests/contract/backend-core/. It runs first so a cross-repo contract
+      # break fails within the first minute. It also runs in the `test` job
+      # as part of the full suite, so this step can never be the only gate.
+      - name: Backend-Core contract conformance
+        run: npx vitest run tests/contract/backend-core --passWithNoTests
 
       - name: Verify OpenAPI codegen drift
-        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run codegen:verify
 
       - name: Typecheck
-        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run typecheck
 
-      # Docs-only: lightweight Prettier format-check on changed .md/.json files.
-      - name: Prettier check (docs-only)
-        if: steps.docs-check.outputs.docs_only == 'true'
-        shell: pwsh
-        run: |
-          $changedFiles = git diff --name-only "origin/${{ github.base_ref }}" HEAD
-          $filesToCheck = @($changedFiles | Where-Object { $_ -match '\.(md|json)$' })
-          if ($filesToCheck.Count -gt 0) {
-            Write-Host "Prettier-checking:"
-            $filesToCheck | ForEach-Object { Write-Host "  $_" }
-            npx prettier --check $filesToCheck
-          } else {
-            Write-Host "No .md/.json files to Prettier-check."
-          }
-
       - name: Lint
-        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run lint
 
-      # postinstall (electron-rebuild -f -w better-sqlite3) rebuilds argon2
-      # for Electron's ABI as a side-effect, making it incompatible with the
-      # plain Node 24 process that Vitest forks use. Rebuild argon2 here for
-      # Node 24 so the test suite can load it without a segfault.
-      - name: Rebuild argon2 for Node 24 ABI (test suite)
-        if: steps.docs-check.outputs.docs_only != 'true'
-        run: npm rebuild argon2
+  test:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts
 
       - name: Test with coverage
-        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm test -- --coverage
 
-      # Restore argon2 to Electron ABI before packaging so the installed app
-      # loads the correct native binary at runtime.
+  package:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Full install: postinstall runs electron-rebuild -f -w better-sqlite3 (D2).
+      - name: Install dependencies
+        run: npm ci
+
+      # Electron-ABI argon2 for the packaged app — the same final state the
+      # old single job reached before packaging.
       - name: Rebuild argon2 for Electron ABI (packaging)
-        if: steps.docs-check.outputs.docs_only != 'true'
         run: npx electron-rebuild -f -w argon2
 
-      # `npm run package:dir` packs whatever sits under `dist/` per
-      # electron-builder.yml's `files` glob; the `package:dir` script
-      # does NOT chain `build`. CI must populate `dist/` first (D1).
       - name: Build (renderer + main + preload)
-        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run build
 
       - name: Package (Windows --dir, unsigned)
-        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run package:dir
 
       # The unpacked build is a manual-smoke convenience artifact, not a gate.
       # A transient artifact-storage quota wall (recalculated every 6-12h) must
-      # NOT fail the required `ci` job — the code gates above already passed.
-      # continue-on-error keeps the upload best-effort: a quota/transient
-      # failure is surfaced on the step but does not block merge.
+      # NOT fail the required `ci` job — the code gates already passed.
+      # continue-on-error keeps the upload best-effort.
       - name: Upload unpacked Windows build
         if: github.event_name != 'pull_request'
         continue-on-error: true
@@ -151,3 +196,74 @@ jobs:
           name: pos-pulse-win-unpacked-${{ github.sha }}
           path: dist-electron/win-unpacked
           retention-days: 1
+
+  docs:
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies (docs-only, skip postinstall)
+        run: npm ci --ignore-scripts
+
+      - name: Prettier check (docs-only)
+        shell: bash
+        run: |
+          mapfile -t files < <(git diff --name-only HEAD^1 HEAD | grep -E '\.(md|json)$' || true)
+          if [ "${#files[@]}" -gt 0 ]; then
+            echo "Prettier-checking:"
+            printf '  %s\n' "${files[@]}"
+            npx prettier --check "${files[@]}"
+          else
+            echo "No .md/.json files to Prettier-check."
+          fi
+
+  # Aggregate gate. Keeps the required check name `ci`. `if: always()` makes
+  # it run (and FAIL) when a needed job failed or was cancelled — without it
+  # a failed dependency would leave `ci` "skipped", which GitHub counts as
+  # passing. Which jobs must succeed depends on the docs-only decision.
+  ci:
+    needs: [changes, static, test, package, docs]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check job results
+        shell: bash
+        env:
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          CHANGES: ${{ needs.changes.result }}
+          STATIC: ${{ needs.static.result }}
+          TEST: ${{ needs.test.result }}
+          PACKAGE: ${{ needs.package.result }}
+          DOCS: ${{ needs.docs.result }}
+        run: |
+          echo "changes=$CHANGES docs_only=$DOCS_ONLY static=$STATIC test=$TEST package=$PACKAGE docs=$DOCS"
+          if [ "$CHANGES" != "success" ]; then
+            echo "::error::changes job did not succeed ($CHANGES)"; exit 1
+          fi
+          if [ "$DOCS_ONLY" = "true" ]; then
+            required="DOCS"
+          else
+            required="STATIC TEST PACKAGE"
+          fi
+          failed=0
+          for job in $required; do
+            result="${!job}"
+            if [ "$result" != "success" ]; then
+              echo "::error::$job job result is '$result' (expected success)"
+              failed=1
+            fi
+          done
+          exit $failed
