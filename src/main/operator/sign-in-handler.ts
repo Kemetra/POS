@@ -22,6 +22,7 @@ import {
   admitCashierOnline,
   nextIdempotencyKey,
   refusalForAdmission,
+  refusalIfSessionLost,
   type CashierAdmissionDeps,
 } from './cashier-admission.js';
 import { unsealPinMaterial } from './pin-seal.js';
@@ -440,6 +441,14 @@ export class CashierSignInHandler {
 
     // T091 — check for an undismissed forced-close shift on this cashier.
     const forced_close_notice = await this.resolveForcedCloseNotice(scope);
+
+    // Codex P2 4179701431 — the keeper armed at create; the session may have
+    // been latched or ended during the await above. Never answer it signed_in.
+    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    if (lost !== null) {
+      this.logRefusal(lost.category, 'session_lost');
+      return lost;
+    }
 
     this.logSuccess('signed_in');
     if (forced_close_notice !== undefined) {

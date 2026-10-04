@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { OperatorRefusal } from '../../shared/audit/event-shape.js';
 
 import type { CashierAdmissionClient, CashierAdmissionResult } from './cashier-admission-client.js';
+import type { SessionManager } from './session-manager.js';
 
 /**
  * RT-113 P2 — shared pieces of the online cashier admission (10763 D2/D8;
@@ -161,4 +162,40 @@ export function refusalForAdmission(
     default:
       return REFUSE_INVALID;
   }
+}
+
+const REFUSE_STATE_INVALID: OperatorRefusal = { kind: 'refused', category: 'state_invalid' };
+
+/**
+ * Codex P2 4179701431 — the keeper arms when a cashier session is created, and
+ * the sign-in and takeover handlers still await after that (the forced-close
+ * dismiss read, the takeover audit). A short-TTL heartbeat can latch or end
+ * the new session meanwhile. Call this after EVERY such await: it returns null
+ * while `session_id` is still the current, unlatched session, else the refusal
+ * to answer instead of a stale `signed_in`.
+ *
+ * The category follows the sign-in mapping of the outcome that lost the
+ * authority: a 403 or device revocation is the generic `invalid_input` (no
+ * cause shown); a takeover elsewhere, or any other change of session, is
+ * `state_invalid`.
+ */
+export function refusalIfSessionLost(
+  sessionManager: Pick<SessionManager, 'getCurrent' | 'getLastEndCause'>,
+  session_id: string,
+): OperatorRefusal | null {
+  const current = sessionManager.getCurrent();
+  const stillCurrent = current !== null && current.id === session_id;
+  if (stillCurrent && current.authority_latch === undefined) return null;
+  const cause = stillCurrent ? current.authority_latch : endCauseIfEnded(sessionManager, current);
+  return cause === 'account_disabled_mid_session' || cause === 'terminal_session_terminated'
+    ? REFUSE_INVALID
+    : REFUSE_STATE_INVALID;
+}
+
+/** The last end cause, when the session ended (none current); a replaced session has none. */
+function endCauseIfEnded(
+  sessionManager: Pick<SessionManager, 'getLastEndCause'>,
+  current: ReturnType<SessionManager['getCurrent']>,
+): string | null {
+  return current === null ? sessionManager.getLastEndCause() : null;
 }

@@ -59,7 +59,7 @@ import type {
 
 /** How often a latched session re-checks for its next safe point (backstop). */
 export const SAFE_POINT_RECHECK_MS = 5_000;
-/** Review F3: the confirmation call after a first device 401. */
+/** Review F3: the confirmation call after a first device 401 (at most TTL/2, Codex P2 4179701427). */
 export const DEVICE_401_CONFIRM_MS = 30_000;
 /** Review F6: the first retry after a failed tick (network, 5xx, 429). */
 export const FAILED_TICK_RETRY_MS = 60_000;
@@ -134,6 +134,11 @@ function armedFor(record: OperatorSessionRecord): Armed | null {
     failures: 0,
     device401s: 0,
   };
+}
+
+/** Review F3 + Codex P2 4179701427: the 401 confirmation, min(30 s, TTL/2). */
+function deviceConfirmDelayMs(armed: Armed): number {
+  return Math.min(DEVICE_401_CONFIRM_MS, heartbeatIntervalMs(armed.ttl_seconds));
 }
 
 /** Review F6: min(TTL/2, 60 s), doubling per consecutive failure, capped at TTL/2. */
@@ -306,11 +311,16 @@ export class CashierAdmissionKeeper {
     this.scheduleHeartbeat(armed, heartbeatIntervalMs(armed.ttl_seconds));
   }
 
-  /** Review F3: act only on the second consecutive 401, confirmed 30 s later. */
+  /**
+   * Review F3: act only on the second consecutive 401, confirmed 30 s later,
+   * or sooner when TTL/2 is shorter (Codex P2 4179701427): no heartbeat path
+   * may wait longer than TTL/2, or the admission lapses while this till still
+   * treats the cashier as admitted.
+   */
   private onDeviceUnauthorized(armed: Armed, result: CashierAdmissionResult): void {
     armed.device401s += 1;
     if (armed.device401s < 2) {
-      this.scheduleHeartbeat(armed, DEVICE_401_CONFIRM_MS);
+      this.scheduleHeartbeat(armed, deviceConfirmDelayMs(armed));
       return;
     }
     notifyGrantSeam(this.deps.admission, result, armed);

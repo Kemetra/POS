@@ -21,6 +21,7 @@ import {
   admitCashierOnline,
   nextIdempotencyKey,
   refusalForAdmission,
+  refusalIfSessionLost,
   type CashierAdmissionDeps,
 } from './cashier-admission.js';
 
@@ -322,6 +323,13 @@ export class TakeoverHandler {
     await this.emitTakeoverAudit(event_id, record);
 
     this.deps.protoStore.delete(proto.pending_takeover_id);
+    // Codex P2 4179701431 — the keeper armed at create; the session may have
+    // been latched or ended during the await above. Never answer it signed_in.
+    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    if (lost !== null) {
+      this.log('refused', 'cashier_session_lost');
+      return lost;
+    }
     this.log('signed_in', 'cashier_confirm');
 
     return {

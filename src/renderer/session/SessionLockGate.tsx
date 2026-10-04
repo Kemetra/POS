@@ -23,7 +23,9 @@ import { LockScreen } from './LockScreen';
  * `ended` push therefore also moves a signed-in renderer to signed-out, so the
  * route guard returns it to /sign-in instead of leaving a dead screen. A
  * renderer-initiated sign-out reaches the same state; both paths are no-ops
- * once signed out.
+ * once signed out. An `ended` push during an in-flight sign-in or takeover
+ * confirm is recorded against that attempt, so its late `signed_in` is
+ * discarded (Codex P2 4179701431).
  */
 
 export type SessionLockOperator = Pick<
@@ -56,13 +58,7 @@ export function SessionLockGate({ operator, children }: SessionLockGateProps): J
         return;
       }
       setLockView(null);
-      if (event.state === 'ended') {
-        const store = useOperatorSessionStore.getState();
-        if (store.state.kind === 'signedIn') {
-          store.beginSignOut();
-          store.resolveSignedOut();
-        }
-      }
+      if (event.state === 'ended') useOperatorSessionStore.getState().sessionEndedByMain();
     });
     return unsubscribe;
   }, [operator, refresh]);
