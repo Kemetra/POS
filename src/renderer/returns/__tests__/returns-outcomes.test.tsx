@@ -80,6 +80,22 @@ describe('refusals before submit (O2)', () => {
   });
 });
 
+describe('outcome announcement (K2)', () => {
+  it('fills an already-present live region, so screen readers announce it', async () => {
+    const filledInPlace: Node[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const r of records) if (r.addedNodes.length > 0) filledInPlace.push(r.target);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    await outcomeFor({ kind: 'confirmed', ret: journal(), replayed: false });
+    observer.disconnect();
+    const region = screen.getByRole('status');
+    expect(region).toHaveTextContent(OUTCOME_COPY.confirmed);
+    expect(filledInPlace).toContain(region);
+    expect(screen.getByRole('heading', { name: 'نتيجة المرتجع' })).toHaveFocus();
+  });
+});
+
 describe('submit outcomes (O3, O4)', () => {
   it('confirmed shows the server reference and the server total as success', async () => {
     const ret = journal({ quotedTotalMinor: 2600, returnTotalMinor: 2499 });

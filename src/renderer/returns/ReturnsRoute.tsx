@@ -8,7 +8,7 @@ import {
   useOperatorSessionStore,
   type OperatorSessionView,
 } from '../stores/operator-session-store.js';
-import { windowReturnsBridge } from './returns-bridge.js';
+import { windowReturnsBridge, windowSessionEvents, type SessionEvents } from './returns-bridge.js';
 import { OUTCOME_COPY, refusalMessage } from './returns-messages.js';
 import { ReturnsScreen } from './ReturnsScreen';
 import './returns.css';
@@ -29,6 +29,8 @@ import './returns.css';
 export interface ReturnsRouteProps {
   /** Tests inject a bridge (null = no returns namespace); production reads window.api. */
   readonly bridge?: ReturnsBridgeAPI | null;
+  /** Tests inject main's session-state push; production reads window.api.operator. */
+  readonly sessionEvents?: SessionEvents | null;
 }
 
 const RETURNS_ROLES: ReadonlySet<Role> = new Set<Role>(['manager', 'admin']);
@@ -43,12 +45,13 @@ function gateMessage(
   return bridge === null ? OUTCOME_COPY.bridgeMissing : null;
 }
 
-export function ReturnsRoute({ bridge }: ReturnsRouteProps): JSX.Element | null {
+export function ReturnsRoute({ bridge, sessionEvents }: ReturnsRouteProps): JSX.Element | null {
   const session = useOperatorSessionStore((s) =>
     s.state.kind === 'signedIn' ? s.state.session : null,
   );
   const enabled = useFeatureFlagsStore((s) => s.returns);
   const api = bridge === undefined ? windowReturnsBridge() : bridge;
+  const events = sessionEvents === undefined ? windowSessionEvents() : sessionEvents;
   if (session === null) return null;
   const blocked = gateMessage(session, enabled, api);
 
@@ -60,7 +63,7 @@ export function ReturnsRoute({ bridge }: ReturnsRouteProps): JSX.Element | null 
             {blocked}
           </p>
         ) : (
-          <ReturnsScreen key={session.id} bridge={api} />
+          <ReturnsScreen key={session.id} bridge={api} sessionEvents={events} />
         )}
       </div>
     </Workspace>

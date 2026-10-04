@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -12,6 +12,7 @@ import {
   renderReturns,
   resetStores,
   RETURN_REF,
+  settle,
   submitReturn,
 } from './returns-test-kit.js';
 
@@ -78,7 +79,7 @@ describe('check again failures (U2)', () => {
 });
 
 describe('check again is single-flight (U3)', () => {
-  it('a double click resolves once; a new return started meanwhile is not undone', async () => {
+  it('a double click resolves once, and the flow cannot be left until main answers', async () => {
     const { bridge, user } = await unconfirmedThen([journal({ state: 'confirmed' })]);
     const pending = deferred<ReturnsResolveResponse>();
     bridge.resolve.mockImplementationOnce(() => pending.promise);
@@ -86,12 +87,9 @@ describe('check again is single-flight (U3)', () => {
     await user.dblClick(check);
     expect(check).toBeDisabled();
     expect(bridge.resolve).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole('button', { name: 'مرتجع جديد' }));
-    pending.resolve({ kind: 'ok', confirmed: 1, refused: 0, unresolved: 0 });
-    await waitFor(() => {
-      expect(bridge.list).toHaveBeenCalledTimes(3);
-    });
-    expect(screen.getByLabelText('رقم البيع')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'نتيجة المرتجع' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'مرتجع جديد' })).toBeDisabled();
+    await settle(pending, { kind: 'ok', confirmed: 1, refused: 0, unresolved: 0 });
+    expect(await screen.findByRole('status')).toHaveTextContent(OUTCOME_COPY.confirmed);
+    expect(screen.getByRole('button', { name: 'مرتجع جديد' })).toBeEnabled();
   });
 });

@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 
 import type { ReturnJournalView } from '../../shared/returns/types.js';
 import { ReturnNotice } from './ReturnNotice';
@@ -80,10 +80,29 @@ function CheckAgain({ flow, outcome }: { flow: ReturnFlow; outcome: Outcome }) {
   );
 }
 
+/**
+ * K2: the live region is rendered empty first and filled after mount, so
+ * assistive tech announces the outcome (a region inserted already filled is
+ * often not read). Focus still moves to the step heading.
+ */
+function Announcement({ outcome }: { outcome: Outcome }): JSX.Element {
+  const [shown, setShown] = useState<Outcome | null>(null);
+  useEffect(() => {
+    setShown(outcome);
+  }, [outcome]);
+  const confirmed = outcome.kind === 'confirmed';
+  const tone: Tone = confirmed ? 'success' : 'danger';
+  return (
+    <div className={`rt-outcome rt-outcome--${tone}`} role={confirmed ? 'status' : 'alert'}>
+      {shown !== null && <p className="rt-outcome__headline">{headline(shown)}</p>}
+      {shown !== null && mayBeRecorded(shown) && <p>{OUTCOME_COPY.mayBeRecorded}</p>}
+    </div>
+  );
+}
+
 export function ReturnOutcome({ flow, outcome }: { flow: ReturnFlow; outcome: Outcome }) {
   const heading = useFocusOnMount<HTMLHeadingElement>();
   const confirmed = outcome.kind === 'confirmed';
-  const tone: Tone = confirmed ? 'success' : 'danger';
   const ret = retOf(outcome);
 
   return (
@@ -91,16 +110,14 @@ export function ReturnOutcome({ flow, outcome }: { flow: ReturnFlow; outcome: Ou
       <h2 id="rt-returns-outcome" ref={heading} tabIndex={-1} className="rt-returns__heading">
         نتيجة المرتجع
       </h2>
-      <div className={`rt-outcome rt-outcome--${tone}`} role={confirmed ? 'status' : 'alert'}>
-        <p className="rt-outcome__headline">{headline(outcome)}</p>
-        {mayBeRecorded(outcome) && <p>{OUTCOME_COPY.mayBeRecorded}</p>}
-      </div>
+      <Announcement outcome={outcome} />
       {ret !== null && <Facts ret={ret} confirmed={confirmed} />}
       <div className="rt-returns__actions">
         <CheckAgain flow={flow} outcome={outcome} />
         <button
           type="button"
           className={`rt-btn ${outcome.kind === 'unconfirmed' ? 'rt-btn--secondary' : 'rt-btn--primary'}`}
+          disabled={flow.busy === 'check'}
           onClick={flow.startOver}
         >
           مرتجع جديد

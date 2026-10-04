@@ -63,6 +63,10 @@ describe('single-flight lookup and quote (D2)', () => {
     await user.click(screen.getByRole('button', { name: 'زيادة بانادول 500 مجم' }));
     await user.dblClick(screen.getByRole('button', { name: 'احسب مبلغ الاسترداد' }));
     expect(bridge.quote).toHaveBeenCalledTimes(1);
+    // Nothing can leave or change the picked lines while main prices them.
+    expect(screen.getByRole('button', { name: 'بحث عن بيع آخر' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'زيادة شاش طبي' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'إنقاص بانادول 500 مجم' })).toBeDisabled();
     await settle(priced, { kind: 'ok', quote: QUOTE });
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 
+import type { OperatorBridgeAPI } from '../../shared/bridge-api.js';
 import type { ReturnsBridgeAPI, ReturnsRefused } from '../../shared/returns/types.js';
 import type { FlowNotice } from './return-flow-state.js';
 
@@ -10,6 +11,14 @@ import type { FlowNotice } from './return-flow-state.js';
 export function windowReturnsBridge(): ReturnsBridgeAPI | null {
   const api = (window as unknown as { api?: { returns?: ReturnsBridgeAPI } }).api;
   return api?.returns ?? null;
+}
+
+/** Main's session-state push (lock, unlock, end), from the operator bridge. */
+export type SessionEvents = Pick<OperatorBridgeAPI, 'onSessionStateChanged'>;
+
+export function windowSessionEvents(): SessionEvents | null {
+  const api = (window as unknown as { api?: { operator?: SessionEvents } }).api;
+  return api?.operator ?? null;
 }
 
 /** A bridge call that rejected (e.g. refused by main while the session is locked). */

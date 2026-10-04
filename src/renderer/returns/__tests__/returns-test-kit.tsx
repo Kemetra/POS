@@ -14,6 +14,7 @@ import type {
   ReturnsSubmitResponse,
 } from '../../../shared/returns/types.js';
 import type { Role } from '../../../shared/operator/role.js';
+import type { SessionStateEvent } from '../../../shared/bridge-api.js';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store.js';
 import {
   useOperatorSessionStore,
@@ -111,17 +112,42 @@ export function signIn(view: OperatorSessionView): void {
   useOperatorSessionStore.setState({ state: { kind: 'signedIn', session: view } });
 }
 
+/** Main's session-state push, as the operator bridge exposes it. */
+export interface FakeSessionEvents {
+  readonly onSessionStateChanged: (cb: (e: SessionStateEvent) => void) => () => void;
+  /** Deliver one push inside act. */
+  readonly push: (e: SessionStateEvent) => void;
+}
+
+export function fakeSessionEvents(): FakeSessionEvents {
+  const listeners = new Set<(e: SessionStateEvent) => void>();
+  return {
+    onSessionStateChanged: (cb) => {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+    push: (e) => {
+      act(() => {
+        for (const cb of listeners) cb(e);
+      });
+    },
+  };
+}
+
 export interface RenderReturnsOptions {
   readonly bridge?: ReturnsBridgeAPI | null;
   readonly role?: Role;
   readonly flag?: boolean;
+  readonly sessionEvents?: FakeSessionEvents;
 }
 
 export function renderReturns(options: RenderReturnsOptions = {}): RenderResult {
   useFeatureFlagsStore.getState().hydrate({ returns: options.flag ?? true });
   signIn(session(options.role ?? 'manager'));
   const bridge = options.bridge === undefined ? fakeBridge() : options.bridge;
-  return render(<ReturnsRoute bridge={bridge} />);
+  return render(<ReturnsRoute bridge={bridge} sessionEvents={options.sessionEvents ?? null} />);
 }
 
 export function resetStores(): void {

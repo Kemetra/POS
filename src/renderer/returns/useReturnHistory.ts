@@ -5,12 +5,20 @@ import type {
   ReturnsBridgeAPI,
   ReturnsRefusalReason,
 } from '../../shared/returns/types.js';
-import { attempt, CALL_FAILED, failureNotice, useSingleFlight } from './returns-bridge.js';
+import {
+  attempt,
+  CALL_FAILED,
+  failureNotice,
+  useSingleFlight,
+  type SessionEvents,
+} from './returns-bridge.js';
 import type { FlowNotice } from './return-flow-state.js';
 
 /**
- * RT-15 S3 — this terminal's return journal, as main lists it (H1..H3).
- * The journal is the truth after an unconfirmed or session-changed submit.
+ * RT-15 S3 — this terminal's return journal, as main lists it (H1..H4).
+ * The journal is the truth after an unconfirmed or session-changed submit,
+ * so a failed read is never final: it can be reloaded by hand and is re-read
+ * automatically when the session becomes active again (unlock).
  */
 export type HistoryState =
   | { readonly status: 'loading' }
@@ -35,7 +43,10 @@ export function resolveNotice(
   return res === CALL_FAILED || res.kind === 'refused' ? failureNotice(res) : null;
 }
 
-export function useReturnHistory(bridge: ReturnsBridgeAPI): ReturnHistory {
+export function useReturnHistory(
+  bridge: ReturnsBridgeAPI,
+  sessionEvents: SessionEvents | null,
+): ReturnHistory {
   const [state, setState] = useState<HistoryState>({ status: 'loading' });
   const [checkNotice, setCheckNotice] = useState<FlowNotice | null>(null);
   const { busy, run } = useSingleFlight<'check'>();
@@ -57,6 +68,15 @@ export function useReturnHistory(bridge: ReturnsBridgeAPI): ReturnHistory {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // H4: every `returns.*` call is refused while the session is locked, so a
+  // read that failed under the lock is repeated the moment it lifts.
+  useEffect(() => {
+    if (sessionEvents === null) return undefined;
+    return sessionEvents.onSessionStateChanged((event) => {
+      if (event.state === 'active') void reload();
+    });
+  }, [sessionEvents, reload]);
 
   const checkUnresolved = useCallback(
     () =>

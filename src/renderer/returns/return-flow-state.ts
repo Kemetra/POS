@@ -131,10 +131,12 @@ export function reconcile(ret: ReturnJournalView, row: ReturnJournalView | undef
 }
 
 /**
- * Apply a "check again" result only while that same unconfirmed return is
- * still on screen: a new return started meanwhile is never undone.
+ * Apply a "check again" result only while the flow still shows an
+ * unconfirmed outcome. The UI cannot leave that outcome while the check is in
+ * flight (its controls are disabled) and a session switch remounts the flow,
+ * so this is a defensive guard against a late answer, not a reachable path.
  */
-export function afterCheck(state: FlowState, returnId: string, next: Outcome): FlowState {
+export function afterCheck(state: FlowState, next: Outcome): FlowState {
   if (state.step !== 'outcome' || state.outcome.kind !== 'unconfirmed') return state;
-  return state.outcome.ret.returnId === returnId ? settled(next) : state;
+  return settled(next);
 }

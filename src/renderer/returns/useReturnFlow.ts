@@ -105,7 +105,7 @@ export function useReturnFlow(bridge: ReturnsBridgeAPI, reload: Reload): ReturnF
         const { ret } = s.outcome;
         const notice = resolveNotice(await attempt(() => bridge.resolve()));
         const apply = (next: Outcome): void => {
-          setState((x) => afterCheck(x, ret.returnId, next));
+          setState((x) => afterCheck(x, next));
         };
         if (notice !== null) {
           apply({ kind: 'unconfirmed', ret, still: false, notice });

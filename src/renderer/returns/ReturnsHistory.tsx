@@ -66,6 +66,21 @@ function Rows({ rows }: { rows: readonly ReturnJournalView[] }): JSX.Element {
   );
 }
 
+/** H4: a list main did not give is never a dead end. */
+function Reload({ history }: { history: ReturnHistory }): JSX.Element | null {
+  const { status } = history.state;
+  if (status !== 'failed' && status !== 'refused') return null;
+  return (
+    <button
+      type="button"
+      className="rt-btn rt-btn--secondary"
+      onClick={() => void history.reload()}
+    >
+      إعادة تحميل السجل
+    </button>
+  );
+}
+
 function Body({ state }: { state: HistoryState }): JSX.Element {
   switch (state.status) {
     case 'loading':
@@ -104,6 +119,7 @@ export function ReturnsHistory({ history }: { history: ReturnHistory }): JSX.Ele
       </div>
       <ReturnNotice notice={history.checkNotice} />
       <Body state={history.state} />
+      <Reload history={history} />
     </section>
   );
 }

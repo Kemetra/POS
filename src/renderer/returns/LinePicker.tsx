@@ -16,17 +16,19 @@ type SelectState = Extract<FlowState, { step: 'select' }>;
 interface StepperProps {
   readonly line: ReturnableLineView;
   readonly quantity: number;
+  /** True while main prices the picked lines: they must not change under it. */
+  readonly locked: boolean;
   readonly onPick: (quantity: number) => void;
 }
 
-function Stepper({ line, quantity, onPick }: StepperProps): JSX.Element {
+function Stepper({ line, quantity, locked, onPick }: StepperProps): JSX.Element {
   return (
     <div className="rt-stepper">
       <button
         type="button"
         className="rt-btn rt-btn--secondary rt-stepper__btn"
         aria-label={`إنقاص ${line.lineName}`}
-        disabled={quantity <= 0}
+        disabled={locked || quantity <= 0}
         onClick={() => {
           onPick(quantity - 1);
         }}
@@ -44,7 +46,7 @@ function Stepper({ line, quantity, onPick }: StepperProps): JSX.Element {
         type="button"
         className="rt-btn rt-btn--secondary rt-stepper__btn"
         aria-label={`زيادة ${line.lineName}`}
-        disabled={quantity >= line.returnableQuantity}
+        disabled={locked || quantity >= line.returnableQuantity}
         onClick={() => {
           onPick(quantity + 1);
         }}
@@ -59,10 +61,11 @@ interface LineRowProps {
   readonly line: ReturnableLineView;
   readonly currencyCode: string;
   readonly quantity: number;
+  readonly locked: boolean;
   readonly onPick: (lineRef: string, quantity: number) => void;
 }
 
-function LineRow({ line, currencyCode, quantity, onPick }: LineRowProps): JSX.Element {
+function LineRow({ line, currencyCode, quantity, locked, onPick }: LineRowProps): JSX.Element {
   const unit =
     line.unitPriceMinor === null ? '—' : formatReturnMoney(line.unitPriceMinor, currencyCode);
   return (
@@ -79,6 +82,7 @@ function LineRow({ line, currencyCode, quantity, onPick }: LineRowProps): JSX.El
         <Stepper
           line={line}
           quantity={quantity}
+          locked={locked}
           onPick={(q) => {
             onPick(line.lineRef, q);
           }}
@@ -110,13 +114,19 @@ export function LinePicker({ flow, state }: { flow: ReturnFlow; state: SelectSta
             line={line}
             currencyCode={state.sale.currencyCode}
             quantity={state.picked[line.lineRef] ?? 0}
+            locked={busy}
             onPick={flow.pick}
           />
         ))}
       </ul>
       <ReturnNotice notice={state.notice} />
       <div className="rt-returns__actions">
-        <button type="button" className="rt-btn rt-btn--ghost" onClick={flow.startOver}>
+        <button
+          type="button"
+          className="rt-btn rt-btn--ghost"
+          disabled={busy}
+          onClick={flow.startOver}
+        >
           بحث عن بيع آخر
         </button>
         <button

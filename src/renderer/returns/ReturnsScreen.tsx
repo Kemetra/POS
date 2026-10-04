@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import type { ReturnsBridgeAPI } from '../../shared/returns/types.js';
+import type { SessionEvents } from './returns-bridge.js';
 import { LinePicker } from './LinePicker';
 import { RefundSummary } from './RefundSummary';
 import { ReturnOutcome } from './ReturnOutcome';
@@ -15,6 +16,8 @@ import { useReturnHistory } from './useReturnHistory.js';
  */
 export interface ReturnsScreenProps {
   readonly bridge: ReturnsBridgeAPI;
+  /** Unlock re-reads the journal (H4); null when no push is available. */
+  readonly sessionEvents: SessionEvents | null;
 }
 
 function FlowStep({ flow }: { readonly flow: ReturnFlow }): JSX.Element {
@@ -31,8 +34,8 @@ function FlowStep({ flow }: { readonly flow: ReturnFlow }): JSX.Element {
   }
 }
 
-export function ReturnsScreen({ bridge }: ReturnsScreenProps): JSX.Element {
-  const history = useReturnHistory(bridge);
+export function ReturnsScreen({ bridge, sessionEvents }: ReturnsScreenProps): JSX.Element {
+  const history = useReturnHistory(bridge, sessionEvents);
   const flow = useReturnFlow(bridge, history.reload);
   return (
     <>
