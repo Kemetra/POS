@@ -11,6 +11,7 @@ import {
   SESSION_LOCK_IPC_CHANNELS,
 } from '../../../shared/operator/channels.js';
 import { PAIRING_IPC_CHANNELS } from '../../../shared/pairing-types.js';
+import { RETURNS_IPC_CHANNELS } from '../../../shared/returns/channels.js';
 
 /**
  * RT-117 (RT-116 §2.5) — while the operator session is LOCKED, main serves an
@@ -84,6 +85,8 @@ describe('RT-117 createSessionLockGuardedIpcMain', () => {
     OPERATOR_IPC_CHANNELS.UNLOCK_CASHIER,
     OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT,
     OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT,
+    // RT-15 S2 — returns are default-denied while locked.
+    ...Object.values(RETURNS_IPC_CHANNELS),
   ])('refuses %s while locked', async (channel) => {
     const fake = fakeIpcMain();
     const guarded = createSessionLockGuardedIpcMain(fake.ipcMain, () => true);

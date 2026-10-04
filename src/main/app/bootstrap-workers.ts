@@ -40,7 +40,14 @@
  * the sale-durability path, then the read-down driver, then the sale-sync
  * interval — after which the DB handle is safe to close.
  */
-const STOP_ORDER = ['finalize listener', 'read-down driver', 'sale-sync interval'] as const;
+const STOP_ORDER = [
+  'finalize listener',
+  'read-down driver',
+  'sale-sync interval',
+  // RT-15 S2 — the return resolver (startup + interval re-send of unresolved
+  // returns). Stopped last, still before the DB handle closes.
+  'returns resolver',
+] as const;
 
 export type WorkerName = (typeof STOP_ORDER)[number];
 

@@ -293,6 +293,56 @@ export type SaleDrawerOpenedPayload = Readonly<Record<string, unknown>>;
 export type SaleDrawerSuppressedPayload = Readonly<Record<string, unknown>>;
 export type SaleDrawerFailedPayload = Readonly<Record<string, unknown>>;
 
+// ─── RT-15 S2 — cashier returns (AC11) ────────────────────────────────────
+//
+// Operator and terminal ride the envelope (`acting_operator_id`,
+// `originating_terminal_id`); the payloads carry the sale / return references
+// and minor-unit amounts only. No line names, no free text, no credential.
+
+/** `sale.return.attempted` — the return was journaled and is about to be sent. */
+export interface SaleReturnAttemptedPayload {
+  return_id: string;
+  sale_id: string;
+  sale_ref: string;
+  quoted_total_minor: number;
+  currency_code: string;
+  line_count: number;
+}
+
+/**
+ * `sale.return.refused` — a return was refused, before or after journaling.
+ * `return_id` / `sale_id` / `sale_ref` are null when the refusal came before
+ * the till knew them (e.g. a cashier refused at lookup).
+ */
+export interface SaleReturnRefusedPayload {
+  return_id: string | null;
+  sale_id: string | null;
+  sale_ref: string | null;
+  operation: 'lookup' | 'quote' | 'submit' | 'resolve' | 'list';
+  reason: string;
+}
+
+/** `sale.return.confirmed` — Backend-Core answered 201/200 (a replay counts). */
+export interface SaleReturnConfirmedPayload {
+  return_id: string;
+  sale_id: string;
+  sale_ref: string;
+  return_ref: string;
+  return_total_minor: number;
+  currency_code: string;
+  replayed: boolean;
+}
+
+/** `sale.return.payout_ready` — the confirmed cash refund may be paid out (S4 kicks). */
+export interface SaleReturnPayoutReadyPayload {
+  return_id: string;
+  sale_ref: string;
+  return_ref: string;
+  payout_minor: number;
+  currency_code: string;
+  method: 'cash';
+}
+
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────
 
 /**
@@ -334,6 +384,11 @@ export type AuditPayloadMap = {
   'sale.drawer.opened': SaleDrawerOpenedPayload;
   'sale.drawer.suppressed': SaleDrawerSuppressedPayload;
   'sale.drawer.failed': SaleDrawerFailedPayload;
+  // RT-15 S2
+  'sale.return.attempted': SaleReturnAttemptedPayload;
+  'sale.return.refused': SaleReturnRefusedPayload;
+  'sale.return.confirmed': SaleReturnConfirmedPayload;
+  'sale.return.payout_ready': SaleReturnPayoutReadyPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

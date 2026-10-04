@@ -6,6 +6,24 @@ import type { PairingStatus, PairingSubmitResult } from './pairing-types.js';
 import type { Role } from './operator/role.js';
 import type { OperatorRefusal } from './audit/event-shape.js';
 import type { ForcedCloseReason } from './audit/payload-schemas.js';
+import type { ReturnsBridgeAPI } from './returns/types.js';
+
+export type {
+  ReturnJournalView,
+  ReturnLineInput,
+  ReturnQuoteView,
+  ReturnableSaleView,
+  ReturnsBridgeAPI,
+  ReturnsListResponse,
+  ReturnsLookupRequest,
+  ReturnsLookupResponse,
+  ReturnsQuoteRequest,
+  ReturnsQuoteResponse,
+  ReturnsRefusalReason,
+  ReturnsResolveResponse,
+  ReturnsSubmitRequest,
+  ReturnsSubmitResponse,
+} from './returns/types.js';
 import type {
   SaleId,
   SaleNumber,
@@ -666,6 +684,14 @@ export interface PreloadBridgeAPI {
    * WR-1). Optional for the same staged-wiring reason as the namespaces above.
    */
   salesSync?: SalesSyncBridgeAPI;
+
+  /**
+   * RT-15 S2: the cashier return flow (`returns.*`). Main-process gated on
+   * `POS_PULSE_FEATURE_RETURNS` (default off), an operator session and the
+   * manager/admin role; refused while the session is locked. Optional for the
+   * same staged-wiring reason as the namespaces above (the renderer flow is S3).
+   */
+  returns?: ReturnsBridgeAPI;
 }
 
 /**

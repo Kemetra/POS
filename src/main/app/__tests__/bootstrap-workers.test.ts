@@ -186,3 +186,17 @@ describe('021 S1 — worker registry: registration semantics', () => {
     expect(registry.hasRegistered()).toBe(false);
   });
 });
+
+describe('RT-15 S2 — worker registry: the returns resolver', () => {
+  it('stops the returns resolver after the sale-sync interval', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('returns resolver', () => order.push('returns resolver'));
+    registry.register('sale-sync interval', () => order.push('sale-sync interval'));
+
+    registry.stopAll();
+
+    expect(order).toEqual(['sale-sync interval', 'returns resolver']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});
