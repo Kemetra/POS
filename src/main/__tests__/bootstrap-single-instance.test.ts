@@ -28,6 +28,17 @@ function indexOfOrFail(needle: RegExp): number {
   return idx;
 }
 
+/** Offset of EVERY match, so a second (e.g. module-level) call cannot hide behind the first. */
+function allIndexesOf(needle: RegExp): number[] {
+  const global = new RegExp(
+    needle.source,
+    needle.flags.includes('g') ? needle.flags : `${needle.flags}g`,
+  );
+  const found = [...code.matchAll(global)].map((m) => m.index);
+  if (found.length === 0) throw new Error(`index.ts: ${String(needle)} not found`);
+  return found;
+}
+
 const LOCK_REQUEST = /acquireSingleInstance\(app,/;
 const BOOT_GATE = /^singleInstanceReady\s*\?\.then\(async \(\) => \{/m;
 
@@ -38,34 +49,44 @@ describe('main/index.ts takes the single-instance lock first (RT-203)', () => {
     );
   });
 
-  it('requests the lock before the module builds anything else', () => {
-    const lock = indexOfOrFail(LOCK_REQUEST);
-    for (const later of [
-      /createWindowFactory\(/,
-      /createDatabaseHolder\(/,
-      /createWorkerRegistry\(/,
-    ]) {
-      expect(lock, String(later)).toBeLessThan(indexOfOrFail(later));
-    }
+  it('runs nothing at module scope before the lock but the focus-target slot', () => {
+    const prelude = code
+      .slice(0, indexOfOrFail(LOCK_REQUEST))
+      .replace(/^import\b[\s\S]*?from\s+'[^']+';$/gm, '')
+      .trim();
+    expect(prelude).toBe('let mainWindow: BrowserWindow | undefined;\nconst singleInstanceReady =');
   });
+
+  it.each([/createWindowFactory\(/, /createDatabaseHolder\(/, /createWorkerRegistry\(/])(
+    'builds %s only after the lock',
+    (needle) => {
+      const lock = indexOfOrFail(LOCK_REQUEST);
+      for (const at of allIndexesOf(needle)) expect(at).toBeGreaterThan(lock);
+    },
+  );
 
   it('hangs the whole boot off the lock gate, with no other ready entry point', () => {
     expect(indexOfOrFail(BOOT_GATE)).toBeGreaterThan(indexOfOrFail(LOCK_REQUEST));
     expect(code).toMatch(/const singleInstanceReady = acquireSingleInstance\(app,/);
     expect(code).not.toMatch(/\.whenReady\(/);
+    // A `ready` listener would boot a second launch too, bypassing the gate.
+    expect(code).not.toMatch(/\.(on|once|prependListener|prependOnceListener)\(\s*['"`]ready['"`]/);
   });
 
   it.each([
     ['the logger', /createLogger\(/],
-    ['the DB open', /openDatabase\(dbPath\)/],
-    ['migrations', /runMigrations\(/],
+    ['the DB open', /\bopenDatabase\(/],
+    ['the migrations read', /\breadMigrationsFromDisk\(/],
+    ['migrations', /\brunMigrations\(/],
+    ['the SecretStore', /\bcreateSecretStore\(/],
     ['IPC registration', /register\w+Handlers?\(/],
     ['the paired workers', /createPairedWorkers\(/],
     ['the printer pipeline', /createPrintPipeline\(/],
     ['the drawer dispatcher', /createDrawerKickDispatcher\(/],
-    ['the window', /^\s*createWindow\(\);/m],
-  ])('runs %s only inside the lock-gated boot', (_what, needle) => {
-    expect(indexOfOrFail(needle)).toBeGreaterThan(indexOfOrFail(BOOT_GATE));
+    ['the window', /\bcreateWindow\(\)/],
+  ])('runs %s only inside the lock-gated boot (every call)', (_what, needle) => {
+    const gate = indexOfOrFail(BOOT_GATE);
+    for (const at of allIndexesOf(needle)) expect(at).toBeGreaterThan(gate);
   });
 
   it('a second launch focuses the tracked cashier window, never "any window"', () => {
