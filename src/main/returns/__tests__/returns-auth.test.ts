@@ -14,6 +14,7 @@ import {
   LINE_A,
   MANAGER_ACTOR,
   SALE_NUMBER,
+  SCOPE,
   categories,
   initReturnsSql,
   returnsHarness,
@@ -83,6 +84,52 @@ describe('(a) submit re-checks the admitted actor before journaling', () => {
   });
 });
 
+describe('lookup / quote / resolve re-check the actor after their await (Codex P2)', () => {
+  const CHANGES: {
+    label: string;
+    change: (st: HarnessState) => void;
+    reason: LocalReturnRefusal;
+  }[] = [
+    { label: 'a lock', change: (st) => (st.locked = true), reason: 'session_changed' },
+    { label: 'a cashier switch', change: (st) => (st.role = 'cashier'), reason: 'role_denied' },
+  ];
+  const OPS = {
+    lookup: () => h.service.lookup({ saleNumber: SALE_NUMBER }),
+    quote: () => h.service.quote(ONE_A),
+  };
+
+  it.each(CHANGES.flatMap((c) => (['lookup', 'quote'] as const).map((op) => ({ ...c, op }))))(
+    '$op: $label during the live readSale → $reason, no sale data',
+    async (c) => {
+      h = returnsHarness();
+      seedSyncedSale(h.db);
+      h.backend.onRead = () => {
+        c.change(h.state);
+      };
+      await expect(OPS[c.op]()).resolves.toEqual({ kind: 'refused', reason: c.reason });
+      expect(h.audits.at(-1)).toMatchObject({
+        action_category: 'sale.return.refused',
+        payload: { operation: c.op, reason: c.reason },
+      });
+    },
+  );
+
+  it('resolve: a lock during the pass withholds the tally', async () => {
+    h = returnsHarness();
+    seedSyncedSale(h.db);
+    h.backend.onReturn = () => Promise.reject(new TypeError('socket hang up'));
+    await h.service.submit(ONE_A);
+    h.backend.onReturn = (call, backend) => {
+      h.state.locked = true;
+      return backend.recordIdempotently(call);
+    };
+    await expect(h.service.resolve()).resolves.toEqual({
+      kind: 'refused',
+      reason: 'session_changed',
+    });
+  });
+});
+
 describe('(b) the dispatcher re-checks the actor immediately before the POST', () => {
   it('a switch between the journal write and the send: not sent, the row stays pending', async () => {
     h = returnsHarness();
@@ -93,9 +140,10 @@ describe('(b) the dispatcher re-checks the actor immediately before the POST', (
 
     const res = await h.service.submit(ONE_A);
 
-    expect(res).toMatchObject({ kind: 'unconfirmed', ret: { state: 'pending' } });
+    // The outcome is withheld from the cashier session (no return data).
+    expect(res).toEqual({ kind: 'refused', reason: 'role_denied', ret: null });
     expect(h.backend.returnCalls()).toHaveLength(0);
-    expect(h.repo.read(res.ret?.returnId ?? '')).toMatchObject({ attemptCount: 0 });
+    expect(h.repo.listUnresolved(SCOPE)).toMatchObject([{ state: 'pending', attemptCount: 0 }]);
     expect(h.warnings).toContain('returns:send_deferred_unauthorized');
 
     // The manager signs back in: the resolver sends it once, under their authority.

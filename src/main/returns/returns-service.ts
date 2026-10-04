@@ -104,6 +104,15 @@ class ReturnsService implements ReturnsBridgeAPI {
     return { kind: 'refused', reason } as const;
   }
 
+  /**
+   * The choke point after an await: null while the admitted actor is still
+   * authorized; else the audited refusal to return instead (no data).
+   */
+  private recheckAfterAwait(actor: AuthorizedActor, op: Operation, ids: Ids = {}) {
+    const lost = this.deps.authorizer.recheck(actor);
+    return lost === null ? null : this.refuse(actor, op, lost, ids);
+  }
+
   /** Gate + capture the authorized actor (flag, session, manager/admin, unlocked). */
   private admit(op: Operation): Admitted {
     const live = this.deps.authorizer.current();
@@ -154,6 +163,8 @@ class ReturnsService implements ReturnsBridgeAPI {
     const loaded = await this.loadSale(admitted.actor, 'lookup', req);
     if (loaded.kind !== 'ok') return loaded;
     const { row, saleRef, wire } = loaded.sale;
+    const lost = this.recheckAfterAwait(admitted.actor, 'lookup', { saleId: row.sale_id, saleRef });
+    if (lost !== null) return lost;
     return {
       kind: 'ok',
       sale: {
@@ -180,7 +191,14 @@ class ReturnsService implements ReturnsBridgeAPI {
     const admitted = this.admit('quote');
     if (admitted.kind !== 'ok') return admitted;
     const priced = await this.priced(admitted.actor, 'quote', req);
-    return priced.kind === 'ok' ? { kind: 'ok', quote: priced.quote } : priced;
+    if (priced.kind !== 'ok') return priced;
+    const ids: Ids = { saleId: priced.sale.row.sale_id, saleRef: priced.sale.saleRef };
+    return (
+      this.recheckAfterAwait(admitted.actor, 'quote', ids) ?? {
+        kind: 'ok',
+        quote: priced.quote,
+      }
+    );
   }
 
   async submit(req: ReturnsSubmitRequest): Promise<ReturnsSubmitResponse> {
@@ -195,16 +213,25 @@ class ReturnsService implements ReturnsBridgeAPI {
       return { ...this.refuse(actor, 'submit', 'unresolved_return_exists', ids), ret: null };
     }
     // Choke point (a): after every await, immediately before the journal insert.
-    const lost = this.deps.authorizer.recheck(actor);
-    if (lost !== null) {
-      return {
-        ...this.refuse(actor, 'submit', lost, { saleId, saleRef: priced.sale.saleRef }),
-        ret: null,
-      };
-    }
+    const lost = this.recheckAfterAwait(actor, 'submit', { saleId, saleRef: priced.sale.saleRef });
+    if (lost !== null) return { ...lost, ret: null };
     const entry = this.journal(actor, priced.sale, priced.quote, req.lines);
     // Choke point (b) runs inside the dispatcher, immediately before the POST.
-    return toSubmitResponse(await this.deps.dispatcher.send(entry, 'submit', actor));
+    const outcome = await this.deps.dispatcher.send(entry, 'submit', actor);
+    return this.submitResponseFor(actor, outcome);
+  }
+
+  /**
+   * After the send: answer the admitted actor only if still authorized. If the
+   * session changed while the POST was awaited, the outcome is withheld from
+   * the new session (`session_changed`, no data). The return itself is already
+   * journaled and audited with its true state; an eligible operator sees it via
+   * `returns.list` / `returns.resolve`. Not audited as a refusal: nothing was.
+   */
+  private submitResponseFor(actor: AuthorizedActor, outcome: DispatchOutcome) {
+    const lost = this.deps.authorizer.recheck(actor);
+    if (lost === null) return toSubmitResponse(outcome);
+    return { kind: 'refused', reason: lost, ret: null } as const;
   }
 
   /**
@@ -247,7 +274,8 @@ class ReturnsService implements ReturnsBridgeAPI {
   async resolve(): Promise<ReturnsResolveResponse> {
     const admitted = this.admit('resolve');
     if (admitted.kind !== 'ok') return admitted;
-    return { kind: 'ok', ...(await this.deps.resolver.resolveOnce(admitted.actor)) };
+    const tally = await this.deps.resolver.resolveOnce(admitted.actor);
+    return this.recheckAfterAwait(admitted.actor, 'resolve') ?? { kind: 'ok', ...tally };
   }
 
   list(): Promise<ReturnsListResponse> {
