@@ -10,6 +10,7 @@ import { PaymentCartSummary } from './PaymentCartSummary.js';
 import { CashEntry } from './CashEntry.js';
 import { ExternalCardTerminalEntry } from './ExternalCardTerminalEntry.js';
 import { VoucherEntry } from './VoucherEntry.js';
+import type { BackToSaleEligibility } from '../../sale/useCheckoutBackToSale.js';
 import type {
   PaymentsBridgeAPI,
   PreloadBridgeAPI,
@@ -74,6 +75,13 @@ export interface PaymentSurfaceProps {
    * or an operation in flight — main is the authority either way.
    */
   onBackToSale?: () => Promise<boolean>;
+  /**
+   * RT-26 — main's durable eligibility for this handoff
+   * (`cart.returnToSaleEligibility`). Back is enabled only on `returnable`;
+   * `unknown` (the default: not asked yet, or no answer) keeps it disabled, and
+   * `blocked` shows the reason. Survives remounts, unlike component state.
+   */
+  backToSaleEligibility?: BackToSaleEligibility;
 }
 
 /** Shown when main refuses (or cannot be reached for) a Back. Generic, no reason. */
@@ -124,6 +132,7 @@ export function PaymentSurface({
   _testBridge,
   onNewSale,
   onBackToSale,
+  backToSaleEligibility = 'unknown',
 }: PaymentSurfaceProps = {}): JSX.Element | null {
   const sessionState = useOperatorSessionStore((s) => s.state);
   const envelope = usePaymentStore((s) => s.envelope);
@@ -221,14 +230,23 @@ export function PaymentSurface({
   // RT-26 — Back is offered before any tender: any tender line in the
   // projection (applied, applying, refused, reversed, …), a settled surface or
   // an operation in flight disables it. Mirrors main's rule; main decides.
-  const tenderActivity = (paymentSlice?.tender_lines.length ?? 0) > 0 || tenderTouched;
+  const tenderActivity =
+    (paymentSlice?.tender_lines.length ?? 0) > 0 ||
+    tenderTouched ||
+    backToSaleEligibility === 'blocked';
   const backOffered =
     onBackToSale !== undefined &&
     sessionState.kind === 'signedIn' &&
     envelope !== null &&
     phase !== 'settled';
   const backEnabled =
-    backOffered && !tenderActivity && !isStarting && !isConfirming && !isCancelling && !isReturning;
+    backOffered &&
+    backToSaleEligibility === 'returnable' &&
+    !tenderActivity &&
+    !isStarting &&
+    !isConfirming &&
+    !isCancelling &&
+    !isReturning;
 
   async function handleBackToSale(): Promise<void> {
     // `backEnabled` implies `onBackToSale` is defined (TS narrows the alias).

@@ -36,6 +36,7 @@ describe('preload cart — snapshot (V5 active cart read)', () => {
         'handoff',
         'lines',
         'returnToSale',
+        'returnToSaleEligibility',
         'snapshot',
         'subscribe',
         'void',

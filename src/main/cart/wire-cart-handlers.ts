@@ -51,6 +51,8 @@ export interface CartHandlersDeps {
    * closed without it).
    */
   releaseCheckoutPayment: ReleaseCheckoutPayment;
+  /** RT-26 — read-only twin of the guard (`bindCheckoutReturnAllowed`); required. */
+  checkoutReturnAllowed: (req: { cart_id: string; handoff_action_id: string }) => boolean;
 }
 
 /**
@@ -100,6 +102,7 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
     auditEmitter: deps.auditEmitter,
     cartPaymentStatus: deps.cartPaymentStatus,
     releaseCheckoutPayment: deps.releaseCheckoutPayment,
+    checkoutReturnAllowed: deps.checkoutReturnAllowed,
   };
 
   // Only attach `resolveItemRef` when one was resolved — omitting it lets

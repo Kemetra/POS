@@ -37,6 +37,8 @@ import type {
   CartCancelPostHandoffResponse,
   CartReturnToSaleRequest,
   CartReturnToSaleResponse,
+  CartReturnToSaleEligibilityRequest,
+  CartReturnToSaleEligibilityResponse,
   CartHandoffRequest,
   CartHandoffResponse,
   CartSubscribeRequest,
@@ -727,6 +729,14 @@ export interface CartBridgeAPI {
    * always wires it, and the sole caller fails closed when it is absent.
    */
   returnToSale?(req: CartReturnToSaleRequest): Promise<CartReturnToSaleResponse>;
+  /**
+   * RT-26 — read-only: would main allow `returnToSale` for this cart and
+   * handoff now (no writes)? Checkout fails closed until it answers `true`.
+   * Optional on the TYPE only, like `returnToSale?`.
+   */
+  returnToSaleEligibility?(
+    req: CartReturnToSaleEligibilityRequest,
+  ): Promise<CartReturnToSaleEligibilityResponse>;
   /** Freezes the cart and constructs the PaymentIntentEnvelope. */
   handoff(req: CartHandoffRequest): Promise<CartHandoffResponse>;
   /** Push-style cart state updates (type-only in Phase 2; S1+ runtime). */

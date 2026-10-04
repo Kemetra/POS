@@ -54,7 +54,9 @@ function LocationProbe(): JSX.Element {
 }
 
 let returnToSale: ReturnType<typeof vi.fn>;
+let returnToSaleEligibility: ReturnType<typeof vi.fn>;
 let paymentsStart: ReturnType<typeof vi.fn>;
+let paymentsCancel: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true });
@@ -77,13 +79,22 @@ beforeEach(() => {
   });
   usePaymentStore.getState().mount(ENVELOPE);
   returnToSale = vi.fn(() => Promise.resolve({ kind: 'ok' }));
+  returnToSaleEligibility = vi.fn(() => Promise.resolve({ kind: 'ok', returnable: true }));
+  paymentsCancel = vi.fn(() =>
+    Promise.resolve({
+      kind: 'ok',
+      cancelled_at: '2026-06-11T12:00:05.000Z',
+      reversed_tender_line_ids: ['tl-1'],
+      reversal_pending_tender_line_ids: [],
+    }),
+  );
   paymentsStart = vi.fn(() => Promise.resolve({ kind: 'ok', payment_attempt_id: 'pa-1' }));
   (window as unknown as { api?: unknown }).api = {
-    cart: { returnToSale },
+    cart: { returnToSale, returnToSaleEligibility },
     payments: {
       start: paymentsStart,
       confirm: vi.fn(),
-      cancel: vi.fn(),
+      cancel: paymentsCancel,
       subscribe: vi.fn(),
       read: vi.fn(() =>
         Promise.resolve({
@@ -123,6 +134,15 @@ function renderCheckout(): void {
   );
 }
 
+/** Back is offered once main's eligibility answer has arrived. */
+async function enabledBack(): Promise<HTMLElement> {
+  const back = await screen.findByTestId('payment-surface-back');
+  await waitFor(() => {
+    expect(back).toBeEnabled();
+  });
+  return back;
+}
+
 function withAppliedCash(): PaymentAttemptRendererView {
   return {
     payment_attempt_id: 'pa-1',
@@ -147,7 +167,7 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
     const user = userEvent.setup();
     renderCheckout();
 
-    await user.click(await screen.findByTestId('payment-surface-back'));
+    await user.click(await enabledBack());
 
     await waitFor(() => {
       expect(screen.getByTestId('location-probe')).toHaveTextContent('/app/cart');
@@ -171,7 +191,7 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
   it('Esc does the same as Back', async () => {
     const user = userEvent.setup();
     renderCheckout();
-    await screen.findByTestId('payment-surface-back');
+    await enabledBack();
 
     await user.keyboard('{Escape}');
 
@@ -202,7 +222,7 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
     const user = userEvent.setup();
     renderCheckout();
 
-    await user.click(await screen.findByTestId('payment-surface-back'));
+    await user.click(await enabledBack());
 
     expect(await screen.findByTestId('payment-surface-bridge-refusal')).toHaveTextContent(
       'تعذّر الرجوع إلى البيع',
@@ -217,7 +237,7 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
     const user = userEvent.setup();
     renderCheckout();
 
-    await user.click(await screen.findByTestId('payment-surface-back'));
+    await user.click(await enabledBack());
     expect(await screen.findByTestId('payment-surface-bridge-refusal')).toBeInTheDocument();
     await user.click(screen.getByTestId('payment-surface-back'));
 
@@ -278,7 +298,7 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
     const user = userEvent.setup();
     renderCheckout();
 
-    await user.click(await screen.findByTestId('payment-surface-back'));
+    await user.click(await enabledBack());
 
     expect(await screen.findByTestId('payment-surface-bridge-refusal')).toBeInTheDocument();
     expect(returnToSale).not.toHaveBeenCalled();
@@ -293,5 +313,63 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
     });
     expect(returnToSale).not.toHaveBeenCalled();
     expect(useCartStore.getState().activeCart?.state).toBe(CartState.frozen_handed_off);
+  });
+
+  it('stays disabled until main answers, and when main cannot answer', async () => {
+    let answer: (v: unknown) => void = () => undefined;
+    returnToSaleEligibility.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderCheckout();
+    const back = await screen.findByTestId('payment-surface-back');
+    expect(back).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(returnToSale).not.toHaveBeenCalled();
+    expect(returnToSaleEligibility).toHaveBeenCalledWith({
+      cart_id: 'cart-001',
+      handoff_action_id: 'handoff-001',
+    });
+
+    await act(async () => {
+      answer({ kind: 'refused', reason: 'no_session' });
+      await Promise.resolve();
+    });
+    expect(back).toBeDisabled();
+    // No answer is not a tender: no "money recorded" reason is claimed.
+    expect(screen.queryByTestId('payment-surface-back-blocked')).not.toBeInTheDocument();
+  });
+
+  it('after tender + cancel, a remounted Checkout keeps Back disabled (main is durable)', async () => {
+    const user = userEvent.setup();
+    renderCheckout();
+    await enabledBack();
+    // Tender in this mount, then the payment flow cancels it (lines reversed).
+    await user.click(screen.getByTestId('tender-cash'));
+    await screen.findByTestId('payment-surface-cancel');
+    act(() => {
+      usePaymentStore.getState().applyAttemptSnapshot(withAppliedCash());
+    });
+    // From here main's durable record says no (tender history on this cart).
+    returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
+    await user.click(screen.getByTestId('payment-surface-cancel'));
+    await waitFor(() => {
+      expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    });
+    expect(screen.getByTestId('payment-surface-back')).toBeDisabled();
+
+    // Navigate away and back: component state is gone, the projection is empty.
+    cleanup();
+    renderCheckout();
+    const back = await screen.findByTestId('payment-surface-back');
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface-back-blocked')).toBeInTheDocument();
+    });
+    expect(back).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(returnToSale).not.toHaveBeenCalled();
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/app/checkout');
   });
 });

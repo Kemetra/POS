@@ -24,3 +24,19 @@ describe('preload cart — returnToSale (RT-26)', () => {
     expect(ipcRendererInvoke).toHaveBeenCalledWith(CART_IPC_CHANNELS.RETURN_TO_SALE, req);
   });
 });
+
+describe('preload cart — returnToSaleEligibility (RT-26)', () => {
+  it('invokes only CART_IPC_CHANNELS.RETURN_TO_SALE_ELIGIBILITY with the request unchanged', async () => {
+    ipcRendererInvoke.mockResolvedValueOnce({ kind: 'ok', returnable: false });
+    const { cart } = await import('../../../src/preload/cart.js');
+    const req = { cart_id: 'cart-1', handoff_action_id: 'handoff-1' };
+    await expect(cart.returnToSaleEligibility?.(req)).resolves.toEqual({
+      kind: 'ok',
+      returnable: false,
+    });
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(
+      CART_IPC_CHANNELS.RETURN_TO_SALE_ELIGIBILITY,
+      req,
+    );
+  });
+});

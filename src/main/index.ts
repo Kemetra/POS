@@ -44,7 +44,10 @@ import { createPaymentAttemptFsm } from './payments/fsm/payment-attempt-fsm.js';
 import { createTenderLineFsm } from './payments/fsm/tender-line-fsm.js';
 import { createIdempotencyHelper } from './payments/idempotency.js';
 import { createPaymentAuditEmitter, type PaymentAuditEvent } from './payments/audit-emitter.js';
-import { bindCheckoutReturnGuard } from './payments/checkout-return-guard.js';
+import {
+  bindCheckoutReturnAllowed,
+  bindCheckoutReturnGuard,
+} from './payments/checkout-return-guard.js';
 import { createPaymentsStartHandler } from './payments/handlers/payments-start.js';
 import { createPaymentsConfirmHandler } from './payments/handlers/payments-confirm.js';
 import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel.js';
@@ -827,6 +830,8 @@ app
       // Post-handoff cancel and the snapshot "paid" flag read the payments record.
       cartPaymentStatus: bindCartPaymentStatus(db),
       releaseCheckoutPayment,
+      // RT-26 — read-only twin for Checkout's Back eligibility (no writes).
+      checkoutReturnAllowed: bindCheckoutReturnAllowed(db),
     });
     registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
 

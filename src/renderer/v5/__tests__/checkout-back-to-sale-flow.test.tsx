@@ -43,11 +43,8 @@ interface FakeLine {
   version: number;
 }
 
-function fakeMain() {
-  let state: CartState = CartState.editing;
-  let handoffSeq = 0;
-  let envelope: PaymentIntentEnvelope | null = null;
-  const lines: FakeLine[] = [
+function initialLines(): FakeLine[] {
+  return [
     {
       line_id: 'line-a',
       display_name: 'باراسيتامول',
@@ -65,69 +62,94 @@ function fakeMain() {
       version: 1,
     },
   ];
-  const subtotal = (): number => lines.reduce((s, l) => s + l.quantity * l.unit_price_minor, 0);
+}
+
+const lineTotal = (l: FakeLine): number => l.quantity * l.unit_price_minor;
+
+function buildEnvelope(lines: readonly FakeLine[], seq: number): PaymentIntentEnvelope {
+  return {
+    envelope_version: 'v1',
+    cart_id: CART,
+    operator_session_id: 'session-1',
+    owning_operator_id: 'op-1',
+    tenant_id: 'tenant-1',
+    branch_id: 'branch-1',
+    terminal_id: 'terminal-1',
+    handoff_action_id: `handoff-${String(seq)}`,
+    created_at: '2026-10-04T09:05:00.000Z',
+    subtotal_minor: lines.reduce((sum, l) => sum + lineTotal(l), 0),
+    lines: lines.map((l) => ({
+      ...l,
+      item_ref: l.line_id,
+      line_subtotal_minor: lineTotal(l),
+      last_action_id: `a-${l.line_id}`,
+    })),
+    discount_placeholders: [],
+  };
+}
+
+/** Main's rule: Back only from the frozen cart, on its current envelope. */
+function isCurrentHandoff(
+  state: CartState,
+  envelope: PaymentIntentEnvelope | null,
+  handoffActionId: string,
+): boolean {
+  return state === CartState.frozen_handed_off && envelope?.handoff_action_id === handoffActionId;
+}
+
+/** Main's rule: a line edit needs an editing cart and the line's current version. */
+function isEditableLine(state: CartState, line: FakeLine | undefined, version: number): boolean {
+  return state === CartState.editing && line?.version === version;
+}
+
+/** Every per-line version the handoff names matches the cart. */
+function versionsMatch(lines: readonly FakeLine[], req: CartHandoffRequest): boolean {
+  return req.per_line_versions.every(
+    (v) => lines.find((l) => l.line_id === v.line_id)?.version === v.version,
+  );
+}
+
+function refusal(reason: 'frozen' | 'stale_version') {
+  return Promise.resolve({ kind: 'refused' as const, reason });
+}
+
+function fakeMain() {
+  let state: CartState = CartState.editing;
+  let handoffSeq = 0;
+  let envelope: PaymentIntentEnvelope | null = null;
+  const lines = initialLines();
   const snapshot = (): CartSnapshot => ({
     cart_id: CART,
     state,
     paid: false,
-    lines: lines.map((l) => ({ ...l, line_subtotal_minor: l.quantity * l.unit_price_minor })),
+    lines: lines.map((l) => ({ ...l, line_subtotal_minor: lineTotal(l) })),
     discount_placeholders: [],
     envelope,
   });
 
   const returnToSale = vi.fn((req: CartReturnToSaleRequest) => {
-    if (
-      state !== CartState.frozen_handed_off ||
-      req.handoff_action_id !== envelope?.handoff_action_id
-    ) {
-      return Promise.resolve({ kind: 'refused' as const, reason: 'stale_version' as const });
-    }
+    if (!isCurrentHandoff(state, envelope, req.handoff_action_id)) return refusal('stale_version');
     state = CartState.editing;
     envelope = null;
     return Promise.resolve({ kind: 'ok' as const });
   });
+  const returnToSaleEligibility = vi.fn((req: { handoff_action_id: string }) =>
+    Promise.resolve({
+      kind: 'ok' as const,
+      returnable: isCurrentHandoff(state, envelope, req.handoff_action_id),
+    }),
+  );
   const handoff = vi.fn((req: CartHandoffRequest) => {
-    if (state !== CartState.editing) {
-      return Promise.resolve({ kind: 'refused' as const, reason: 'frozen' as const });
-    }
-    for (const v of req.per_line_versions) {
-      if (lines.find((l) => l.line_id === v.line_id)?.version !== v.version) {
-        return Promise.resolve({ kind: 'refused' as const, reason: 'stale_version' as const });
-      }
-    }
+    if (state !== CartState.editing) return refusal('frozen');
+    if (!versionsMatch(lines, req)) return refusal('stale_version');
     handoffSeq += 1;
     state = CartState.frozen_handed_off;
-    envelope = {
-      envelope_version: 'v1',
-      cart_id: CART,
-      operator_session_id: 'session-1',
-      owning_operator_id: 'op-1',
-      tenant_id: 'tenant-1',
-      branch_id: 'branch-1',
-      terminal_id: 'terminal-1',
-      handoff_action_id: `handoff-${String(handoffSeq)}`,
-      created_at: '2026-10-04T09:05:00.000Z',
-      subtotal_minor: subtotal(),
-      lines: lines.map((l) => ({
-        line_id: l.line_id,
-        item_ref: l.line_id,
-        display_name: l.display_name,
-        quantity: l.quantity,
-        unit_price_minor: l.unit_price_minor,
-        line_subtotal_minor: l.quantity * l.unit_price_minor,
-        note: l.note,
-        version: l.version,
-        last_action_id: `a-${l.line_id}`,
-      })),
-      discount_placeholders: [],
-    };
+    envelope = buildEnvelope(lines, handoffSeq);
     return Promise.resolve({ kind: 'ok' as const, envelope });
   });
   const update = vi.fn((req: CartLinesUpdateRequest) => {
     const line = lines.find((l) => l.line_id === req.line_id);
-    if (state !== CartState.editing || line === undefined || line.version !== req.version) {
-      return Promise.resolve({ kind: 'refused' as const, reason: 'frozen' as const });
-    }
+    if (line === undefined || !isEditableLine(state, line, req.version)) return refusal('frozen');
     line.quantity += 1;
     line.version += 1;
     return Promise.resolve({ kind: 'ok' as const, version: line.version });
@@ -143,6 +165,7 @@ function fakeMain() {
     handoff,
     subscribe: vi.fn(),
     returnToSale,
+    returnToSaleEligibility,
   } as unknown as CartBridgeAPI;
   return { cart, returnToSale, handoff, update, cartCreate, getState: () => state };
 }
@@ -205,78 +228,99 @@ function cartLines(): HTMLElement {
   return screen.getByRole('list', { name: 'أصناف السلة' });
 }
 
+type Main = ReturnType<typeof fakeMain>;
+type User = ReturnType<typeof userEvent.setup>;
+
+function renderLoop(main: Main): void {
+  (window as unknown as { api?: unknown }).api = {
+    cart: main.cart,
+    payments: {
+      start: vi.fn(),
+      confirm: vi.fn(),
+      cancel: vi.fn(),
+      subscribe: vi.fn(),
+      read: vi.fn(),
+    },
+    tender: { apply: vi.fn(), reverse: vi.fn(), read: vi.fn() },
+  };
+  render(
+    <MemoryRouter initialEntries={['/app/cart']}>
+      <Routes>
+        <Route path="/app/cart" element={<SaleRoute cart={main.cart} />} />
+        <Route path="/app/checkout" element={<CheckoutRoute />} />
+      </Routes>
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+}
+
+/** Sale: hand off, continue, and land on the payment surface. */
+async function handOffToCheckout(user: User): Promise<void> {
+  await user.click(screen.getByRole('button', { name: /تسليم السلة للدفع/ }));
+  await user.click(await screen.findByRole('button', { name: /المتابعة إلى الدفع/ }));
+  expect(await screen.findByTestId('payment-surface')).toBeInTheDocument();
+}
+
+/** The Sale shows the SAME lines, quantities and note, with no envelope left. */
+async function expectSameSaleEditable(main: Main): Promise<void> {
+  await waitFor(() => {
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/app/cart');
+  });
+  expect(main.getState()).toBe(CartState.editing);
+  const list = await screen.findByRole('list', { name: 'أصناف السلة' });
+  for (const text of ['باراسيتامول', 'فيتامين سي', 'ملاحظة: بعد الأكل']) {
+    expect(within(list).getByText(text)).toBeInTheDocument();
+  }
+  expect(within(list).getByLabelText('الكمية 2')).toBeInTheDocument();
+  expect(usePaymentStore.getState().envelope).toBeNull();
+  expect(main.cartCreate).not.toHaveBeenCalled();
+}
+
+/** Checkout was re-entered on a NEW envelope for the edited cart version. */
+function expectFreshEnvelope(main: Main): void {
+  const fresh = usePaymentStore.getState().envelope;
+  expect(fresh?.cart_id).toBe(CART);
+  expect(fresh?.handoff_action_id).toBe('handoff-2');
+  expect(fresh?.subtotal_minor).toBe(3 * 1250 + 2500);
+  expect(main.handoff).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      cart_id: CART,
+      per_line_versions: [
+        { line_id: 'line-a', version: 4 },
+        { line_id: 'line-b', version: 1 },
+      ],
+    }),
+  );
+}
+
 describe('RT-26 — Sale → Checkout → Esc → edit → Checkout', () => {
   it('returns to the same editable sale and re-enters Checkout on a fresh envelope', async () => {
     const main = fakeMain();
-    (window as unknown as { api?: unknown }).api = {
-      cart: main.cart,
-      payments: {
-        start: vi.fn(),
-        confirm: vi.fn(),
-        cancel: vi.fn(),
-        subscribe: vi.fn(),
-        read: vi.fn(),
-      },
-      tender: { apply: vi.fn(), reverse: vi.fn(), read: vi.fn() },
-    };
     const user = userEvent.setup();
-    render(
-      <MemoryRouter initialEntries={['/app/cart']}>
-        <Routes>
-          <Route path="/app/cart" element={<SaleRoute cart={main.cart} />} />
-          <Route path="/app/checkout" element={<CheckoutRoute />} />
-        </Routes>
-        <LocationProbe />
-      </MemoryRouter>,
-    );
-
-    // Sale: hand off and continue to Checkout.
+    renderLoop(main);
     expect(
       await within(await screen.findByRole('list', { name: 'أصناف السلة' })).findByText(
         'باراسيتامول',
       ),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /تسليم السلة للدفع/ }));
-    await user.click(await screen.findByRole('button', { name: /المتابعة إلى الدفع/ }));
-    expect(await screen.findByTestId('payment-surface')).toBeInTheDocument();
+
+    await handOffToCheckout(user);
     expect(usePaymentStore.getState().envelope?.handoff_action_id).toBe('handoff-1');
 
-    // Esc: main returns the cart; the Sale shows the SAME lines, editable.
-    await user.keyboard('{Escape}');
+    // Esc (once main confirmed eligibility): main returns the cart.
     await waitFor(() => {
-      expect(screen.getByTestId('location-probe')).toHaveTextContent('/app/cart');
+      expect(screen.getByTestId('payment-surface-back')).toBeEnabled();
     });
+    await user.keyboard('{Escape}');
+    await expectSameSaleEditable(main);
     expect(main.returnToSale).toHaveBeenCalledWith(
       expect.objectContaining({ cart_id: CART, handoff_action_id: 'handoff-1' }),
     );
-    expect(main.getState()).toBe(CartState.editing);
-    const list = await screen.findByRole('list', { name: 'أصناف السلة' });
-    expect(within(list).getByText('باراسيتامول')).toBeInTheDocument();
-    expect(within(list).getByText('فيتامين سي')).toBeInTheDocument();
-    expect(within(list).getByText('ملاحظة: بعد الأكل')).toBeInTheDocument();
-    expect(within(list).getByLabelText('الكمية 2')).toBeInTheDocument();
-    expect(usePaymentStore.getState().envelope).toBeNull();
-    expect(main.cartCreate).not.toHaveBeenCalled();
 
     // Edit the same draft, then go to Checkout again.
     await user.click(within(cartLines()).getByRole('button', { name: 'زيادة كمية باراسيتامول' }));
     expect(await within(cartLines()).findByLabelText('الكمية 3')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /تسليم السلة للدفع/ }));
-    await user.click(await screen.findByRole('button', { name: /المتابعة إلى الدفع/ }));
-    expect(await screen.findByTestId('payment-surface')).toBeInTheDocument();
-
-    const fresh = usePaymentStore.getState().envelope;
-    expect(fresh?.cart_id).toBe(CART);
-    expect(fresh?.handoff_action_id).toBe('handoff-2');
-    expect(fresh?.subtotal_minor).toBe(3 * 1250 + 2500);
-    expect(main.handoff).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        cart_id: CART,
-        per_line_versions: [
-          { line_id: 'line-a', version: 4 },
-          { line_id: 'line-b', version: 1 },
-        ],
-      }),
-    );
+    await handOffToCheckout(user);
+    expectFreshEnvelope(main);
   });
 });

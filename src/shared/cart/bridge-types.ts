@@ -152,6 +152,21 @@ export interface CartReturnToSaleRequest {
 
 export type CartReturnToSaleResponse = { readonly kind: 'ok' } | CartRefusal;
 
+// ── cart.returnToSaleEligibility (RT-26) ──────────────────────────────────────
+// Read-only twin of `cart.returnToSale`: the same gates and the same payments
+// proof, no writes. `returnable: false` covers a cart that is not frozen on this
+// handoff as well as one with tender history / a settled or force-failed
+// payment. Checkout keeps Back disabled until this says `true`.
+
+export interface CartReturnToSaleEligibilityRequest {
+  readonly cart_id: string;
+  readonly handoff_action_id: string;
+}
+
+export type CartReturnToSaleEligibilityResponse =
+  | { readonly kind: 'ok'; readonly returnable: boolean }
+  | CartRefusal;
+
 // ── cart.handoff ──────────────────────────────────────────────────────────────
 
 export interface CartHandoffRequest {

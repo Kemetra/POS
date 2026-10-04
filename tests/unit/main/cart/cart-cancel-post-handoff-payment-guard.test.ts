@@ -103,6 +103,7 @@ async function frozenCartUnderManager(
     isPackaged: true,
     cartPaymentStatus: guard,
     releaseCheckoutPayment: () => ({ kind: 'blocked' }),
+    checkoutReturnAllowed: () => false,
   });
   return { db, cartId: created.cart_id, handlers, emit, guard };
 }

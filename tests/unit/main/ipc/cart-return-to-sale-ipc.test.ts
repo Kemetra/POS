@@ -77,3 +77,60 @@ describe('cart:returnToSale IPC', () => {
     expect(w.returnToSale).toHaveBeenCalledWith(VALID);
   });
 });
+
+describe('cart:returnToSaleEligibility IPC (read-only)', () => {
+  function wireEligibility(): {
+    invoke: (payload: unknown) => Promise<unknown>;
+    eligibility: ReturnType<typeof vi.fn>;
+  } {
+    const channels = new Map<string, Handler>();
+    const ipcMain = {
+      handle: (channel: string, fn: Handler) => {
+        channels.set(channel, fn);
+      },
+    } as unknown as IpcMain;
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
+    const eligibility = vi
+      .spyOn(bridge, 'returnToSaleEligibility')
+      .mockResolvedValue({ kind: 'ok', returnable: true });
+    registerCartHandlers(ipcMain, { handlers: bridge });
+    const handler = channels.get(CART_IPC_CHANNELS.RETURN_TO_SALE_ELIGIBILITY);
+    if (handler === undefined) throw new Error('cart:returnToSaleEligibility not registered');
+    return {
+      invoke: (payload) => Promise.resolve(handler({} as IpcMainInvokeEvent, payload)),
+      eligibility,
+    };
+  }
+
+  const REF = { cart_id: 'cart-1', handoff_action_id: 'handoff-1' };
+
+  it('uses its own channel name', () => {
+    expect(CART_IPC_CHANNELS.RETURN_TO_SALE_ELIGIBILITY).toBe('cart:returnToSaleEligibility');
+  });
+
+  it.each([
+    [null],
+    ['cart-1'],
+    [{}],
+    [{ ...REF, cart_id: 42 }],
+    [{ ...REF, cart_id: '../etc' }],
+    [{ ...REF, handoff_action_id: '' }],
+    [{ cart_id: 'cart-1' }],
+  ])('refuses malformed payload %j generically without calling the handler', async (payload) => {
+    const w = wireEligibility();
+    expect(await w.invoke(payload)).toEqual({ kind: 'refused', reason: 'no_session' });
+    expect(w.eligibility).not.toHaveBeenCalled();
+  });
+
+  it('forwards only cart_id + handoff_action_id', async () => {
+    const w = wireEligibility();
+    expect(await w.invoke({ ...REF, idempotency_key: 'k', tenant_id: 'evil' })).toEqual({
+      kind: 'ok',
+      returnable: true,
+    });
+    expect(w.eligibility).toHaveBeenCalledWith(REF);
+  });
+});

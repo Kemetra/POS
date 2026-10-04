@@ -22,6 +22,8 @@ import type {
   CartLinesUpdateResponse,
   CartReturnToSaleRequest,
   CartReturnToSaleResponse,
+  CartReturnToSaleEligibilityRequest,
+  CartReturnToSaleEligibilityResponse,
   CartSnapshotRequest,
   CartSnapshotResponse,
   CartSubscribeRequest,
@@ -234,17 +236,20 @@ function asCancelPostHandoffReq(value: unknown): CartCancelPostHandoffRequest | 
   return { cart_id: cartId, handoff_action_id: handoffActionId, idempotency_key: idempotencyKey };
 }
 
-/** RT-26 — same bounded-identifier shape as `cart:cancelPostHandoff`. */
-function asReturnToSaleReq(value: unknown): CartReturnToSaleRequest | null {
+/** RT-26 — the same bounded-identifier request shape as `cart:cancelPostHandoff`. */
+const asReturnToSaleReq: (value: unknown) => CartReturnToSaleRequest | null =
+  asCancelPostHandoffReq;
+
+/** RT-26 — the read-only eligibility query: bounded cart + handoff ids only. */
+function asReturnToSaleEligibilityReq(value: unknown): CartReturnToSaleEligibilityRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   const cartId = v['cart_id'];
   const handoffActionId = v['handoff_action_id'];
-  const idempotencyKey = v['idempotency_key'];
-  if (!isBoundedId(cartId) || !isBoundedId(handoffActionId) || !isBoundedId(idempotencyKey)) {
-    return null;
-  }
-  return { cart_id: cartId, handoff_action_id: handoffActionId, idempotency_key: idempotencyKey };
+  if (!isBoundedId(cartId)) return null;
+  return isBoundedId(handoffActionId)
+    ? { cart_id: cartId, handoff_action_id: handoffActionId }
+    : null;
 }
 
 function asHandoffReq(value: unknown): CartHandoffRequest | null {
@@ -389,6 +394,18 @@ export function registerCartHandlers(ipcMain: IpcMain, deps: CartHandlerDeps): v
       const req = asReturnToSaleReq(request);
       if (req === null) return refuseInvalid();
       return handlers.returnToSale(req);
+    },
+  );
+
+  ipcMain.handle(
+    CART_IPC_CHANNELS.RETURN_TO_SALE_ELIGIBILITY,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<CartReturnToSaleEligibilityResponse> => {
+      const req = asReturnToSaleEligibilityReq(request);
+      if (req === null) return refuseInvalid();
+      return handlers.returnToSaleEligibility(req);
     },
   );
 

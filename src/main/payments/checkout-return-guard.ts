@@ -42,7 +42,7 @@ interface PrepareGet<Row> {
   get(...params: unknown[]): Row | undefined;
 }
 
-interface CartAttemptRow {
+export interface CartAttemptRow {
   payment_attempt_id: string;
   tenant_id: string;
   branch_id: string;
@@ -86,14 +86,44 @@ export interface CheckoutReturnGuardDeps {
 /** Attempt states that close a cart to Back regardless of tender lines. */
 const BLOCKING_ATTEMPT_STATES: ReadonlySet<string> = new Set(['settled', 'force_failed']);
 
-export function bindCheckoutReturnGuard(deps: CheckoutReturnGuardDeps): ReleaseCheckoutPayment {
-  const attemptsStmt = deps.db.prepare(
+/**
+ * The one started attempt bound to this handoff, or null. At most one started
+ * attempt exists per terminal (0013) and a cart lives on one terminal; more
+ * than one, or one bound to another handoff, is not a state this proof covers
+ * — refuse rather than guess.
+ */
+function soleAttemptForHandoff(
+  started: readonly CartAttemptRow[],
+  handoffActionId: string,
+): CartAttemptRow | null {
+  const [open] = started;
+  if (started.length !== 1 || open === undefined) return null;
+  return open.envelope_handoff_action_id === handoffActionId ? open : null;
+}
+
+/**
+ * The read half of the proof, shared by the guard (which then writes) and the
+ * read-only eligibility query (which never writes). `clear` names the
+ * zero-funds started attempt Back would cancel, or null when there is none.
+ */
+export type CheckoutReturnAssessment =
+  | { readonly kind: 'blocked' }
+  | { readonly kind: 'clear'; readonly open: CartAttemptRow | null };
+
+export type AssessCheckoutReturn = (req: {
+  readonly cart_id: string;
+  readonly handoff_action_id: string;
+}) => CheckoutReturnAssessment;
+
+/** Read-only: what the payments record says about a Back for this cart and handoff. */
+export function bindCheckoutReturnAssessment(db: DatabaseHandle): AssessCheckoutReturn {
+  const attemptsStmt = db.prepare(
     `SELECT payment_attempt_id, tenant_id, branch_id, terminal_id, acting_operator_id,
             envelope_handoff_action_id, envelope_cart_id, state
        FROM payment_attempts
       WHERE envelope_cart_id = ?`,
   ) as PrepareAll<CartAttemptRow>;
-  const anyTenderStmt = deps.db.prepare(
+  const anyTenderStmt = db.prepare(
     `SELECT 1 AS any_line FROM payment_tender_lines t
        JOIN payment_attempts a ON a.payment_attempt_id = t.payment_attempt_id
       WHERE a.envelope_cart_id = ?
@@ -106,14 +136,28 @@ export function bindCheckoutReturnGuard(deps: CheckoutReturnGuardDeps): ReleaseC
     if (anyTenderStmt.get(req.cart_id) !== undefined) return { kind: 'blocked' };
 
     const started = attempts.filter((a) => a.state === 'started');
-    if (started.length === 0) return { kind: 'released', cancelled_attempt_id: null };
-    // At most one started attempt per terminal (0013), and a cart lives on one
-    // terminal; more than one, or one bound to another handoff, is not a state
-    // this proof covers — refuse rather than guess.
-    const [open] = started;
-    if (started.length > 1 || open?.envelope_handoff_action_id !== req.handoff_action_id) {
-      return { kind: 'blocked' };
-    }
+    if (started.length === 0) return { kind: 'clear', open: null };
+    const open = soleAttemptForHandoff(started, req.handoff_action_id);
+    return open === null ? { kind: 'blocked' } : { kind: 'clear', open };
+  };
+}
+
+/** Read-only boolean form for `cart.returnToSaleEligibility`: never writes. */
+export function bindCheckoutReturnAllowed(
+  db: DatabaseHandle,
+): (req: { readonly cart_id: string; readonly handoff_action_id: string }) => boolean {
+  const assess = bindCheckoutReturnAssessment(db);
+  return (req) => assess(req).kind === 'clear';
+}
+
+export function bindCheckoutReturnGuard(deps: CheckoutReturnGuardDeps): ReleaseCheckoutPayment {
+  const assess = bindCheckoutReturnAssessment(deps.db);
+
+  return (req) => {
+    const assessment = assess(req);
+    if (assessment.kind === 'blocked') return { kind: 'blocked' };
+    const { open } = assessment;
+    if (open === null) return { kind: 'released', cancelled_attempt_id: null };
 
     const cancelled = deps.paymentAttemptFsm.cancel({
       payment_attempt_id: open.payment_attempt_id,
