@@ -197,6 +197,16 @@ export function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]
   >;
 }
 
+/** The request as the fake backend records it. */
+function recordCall(input: RequestInfo | URL, init: RequestInit = {}): RecordedCall {
+  return {
+    url: urlOf(input),
+    method: init.method ?? 'GET',
+    headers: { ...(init.headers as Record<string, string> | undefined) },
+    body: typeof init.body === 'string' ? init.body : undefined,
+  };
+}
+
 /** In-memory Backend-Core POS sales surface. */
 export class FakeBackend {
   readonly calls: RecordedCall[] = [];
@@ -209,19 +219,25 @@ export class FakeBackend {
   /** Returns recorded so far, by Idempotency-Key. */
   readonly recorded = new Map<string, ContractSaleReturn>();
 
-  readonly fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const call: RecordedCall = {
-      url: urlOf(input),
-      method: init?.method ?? 'GET',
-      headers: { ...(init?.headers as Record<string, string> | undefined) },
-      body: typeof init?.body === 'string' ? init.body : undefined,
-    };
-    this.calls.push(call);
-    if (call.method === 'GET') this.onRead?.();
-    if (call.method === 'GET')
-      return this.sale instanceof Response ? this.sale : jsonResponse(200, this.sale);
-    return await this.onReturn(call, this);
+  /** Method-keyed routes of the fake POS sales surface. */
+  private readonly routes: Readonly<Record<string, (call: RecordedCall) => Promise<Response>>> = {
+    GET: () => Promise.resolve(this.answerRead()),
+    POST: async (call) => await this.onReturn(call, this),
   };
+
+  readonly fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const call = recordCall(input, init);
+    this.calls.push(call);
+    const route = this.routes[call.method];
+    if (route === undefined) throw new Error(`FakeBackend: unexpected ${call.method}`);
+    return await route(call);
+  };
+
+  /** The `readSale` answer; `onRead` runs while it is "in flight". */
+  private answerRead(): Response {
+    this.onRead?.();
+    return this.sale instanceof Response ? this.sale : jsonResponse(200, this.sale);
+  }
 
   /** 201 the first time a key is seen; a same-key retry replays it (RT-82 K4). */
   recordIdempotently(call: RecordedCall): Response {
