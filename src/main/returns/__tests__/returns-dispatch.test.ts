@@ -17,11 +17,11 @@ import { createReturnsClient } from '../returns-client.js';
 import { createReturnsDispatcher } from '../returns-dispatch.js';
 import type { ReturnsRepository } from '../returns-repository.js';
 import {
+  MANAGER_ACTOR,
   BASE_URL,
   ENVELOPE,
   LINE_A,
   NOW,
-  SCOPE,
   SALE_NUMBER,
   categories,
   errorBody,
@@ -56,6 +56,7 @@ let eventSeq = 0;
 /** A second dispatcher over the same journal (as a stale resolver would hold). */
 function standaloneDispatcher(repo: ReturnsRepository = h.repo) {
   return createReturnsDispatcher({
+    authorizer: { recheck: () => null },
     client: createReturnsClient({
       baseUrl: BASE_URL,
       fetch: h.backend.fetch,
@@ -81,7 +82,7 @@ describe('returns dispatcher', () => {
     expect(entry?.state).toBe('confirmed');
     const dispatcher = standaloneDispatcher();
 
-    const again = await dispatcher.send(nn(entry), 'resolve');
+    const again = await dispatcher.send(nn(entry), 'resolve', MANAGER_ACTOR);
 
     expect(again).toMatchObject({
       kind: 'confirmed',
@@ -105,6 +106,7 @@ describe('returns dispatcher', () => {
     const again = await standaloneDispatcher().send(
       nn(h.repo.read(res.ret?.returnId ?? '')),
       'resolve',
+      MANAGER_ACTOR,
     );
 
     expect(again).toMatchObject({ kind: 'refused', reason: 'over_return' });
@@ -125,7 +127,7 @@ describe('returns dispatcher', () => {
     while (h.backend.returnCalls().length === 0) {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    const resolving = h.resolver.resolveOnce({ scope: SCOPE });
+    const resolving = h.resolver.resolveOnce(MANAGER_ACTOR);
     release();
     const [submitted, resolved] = await Promise.all([submitting, resolving]);
     expect(submitted.kind).toBe('confirmed');
@@ -182,10 +184,10 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
       expect(h.warnings).toContain('returns:local_commit_failed');
 
       h.state.failAudit = null;
-      await expect(h.resolver.resolveOnce({ scope: SCOPE })).resolves.toMatchObject({
+      await expect(h.resolver.resolveOnce(MANAGER_ACTOR)).resolves.toMatchObject({
         confirmed: 1,
       });
-      await h.resolver.resolveOnce({ scope: SCOPE });
+      await h.resolver.resolveOnce(MANAGER_ACTOR);
 
       expect(h.repo.read(res.ret?.returnId ?? '')?.state).toBe('confirmed');
       expect(h.backend.recorded.size).toBe(1);
@@ -206,7 +208,7 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
 
     expect(res).toMatchObject({ kind: 'unconfirmed', ret: { state: 'unknown' } });
     h.state.failAudit = null;
-    await expect(h.resolver.resolveOnce({ scope: SCOPE })).resolves.toMatchObject({ refused: 1 });
+    await expect(h.resolver.resolveOnce(MANAGER_ACTOR)).resolves.toMatchObject({ refused: 1 });
     expect(categories(h.audits)).toEqual(['sale.return.attempted', 'sale.return.refused']);
   });
 
@@ -214,8 +216,8 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
     harness();
     const res = await h.service.submit(ONE_A);
     const entry = nn(h.repo.read(res.ret?.returnId ?? ''));
-    await standaloneDispatcher().send(entry, 'resolve');
-    await standaloneDispatcher().send(entry, 'resolve');
+    await standaloneDispatcher().send(entry, 'resolve', MANAGER_ACTOR);
+    await standaloneDispatcher().send(entry, 'resolve', MANAGER_ACTOR);
     expect(categories(h.audits).filter((c) => c === PAYOUT)).toHaveLength(1);
     expect(h.audits).toHaveLength(3);
   });
@@ -231,7 +233,7 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
       },
     });
 
-    const outcome = await standaloneDispatcher(broken).send(entry, 'resolve');
+    const outcome = await standaloneDispatcher(broken).send(entry, 'resolve', MANAGER_ACTOR);
 
     expect(outcome).toMatchObject({ kind: 'unconfirmed', entry: { state: 'unknown' } });
     expect(h.repo.read(entry.returnId)?.state).toBe('unknown');
@@ -254,7 +256,7 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
     expect(entry.attemptCount).toBe(1);
     h.backend.onReturn = () => jsonResponse(404, errorBody('not_found'));
 
-    const outcome = await standaloneDispatcher().send(entry, 'submit');
+    const outcome = await standaloneDispatcher().send(entry, 'submit', MANAGER_ACTOR);
 
     expect(outcome).toMatchObject({ kind: 'unconfirmed', entry: { state: 'unknown' } });
   });

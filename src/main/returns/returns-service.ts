@@ -32,10 +32,10 @@ import type {
   ReturnsSubmitRequest,
   ReturnsSubmitResponse,
 } from '../../shared/returns/types.js';
-import type { Role } from '../../shared/operator/role.js';
 import type { SaleRow, SalesRepository } from '../sales/repositories/sales.repository.js';
 import type { SaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import type { ReturnActor, ReturnsAudit } from './returns-audit.js';
+import type { AuthorizedActor, ReturnsAuthorizer } from './returns-auth.js';
 import type { ReturnsClient } from './returns-client.js';
 import type { DispatchOutcome, ReturnsDispatcher } from './returns-dispatch.js';
 import { assessSale, buildRecordReturnBody, quoteReturn, viewLines } from './returns-quote.js';
@@ -44,25 +44,17 @@ import type { ResolveSummary } from './returns-resolver.js';
 import { hasNonCashLocalTender, toJournalView } from './returns-views.js';
 import type { WireSale } from './returns-wire.js';
 
-/** The operator session as the return flow needs it (main-only). */
-export interface ReturnsSession {
-  readonly role: Role;
-  readonly operator_id: string;
-  readonly operator_session_id: string;
-  readonly tenant_id: string;
-  readonly branch_id: string;
-  readonly terminal_id: string;
-}
+export type { ReturnsSession } from './returns-auth.js';
 
 export interface ReturnsServiceDeps {
-  readonly isEnabled: () => boolean;
-  readonly getSession: () => ReturnsSession | null;
+  /** The single authorization choke point (admission + every re-check). */
+  readonly authorizer: ReturnsAuthorizer;
   readonly sales: Pick<SalesRepository, 'findByNumber'>;
   readonly saleRefs: Pick<SaleSyncStateRepo, 'findServerSaleRefBySaleId'>;
   readonly client: Pick<ReturnsClient, 'readSale'>;
   readonly repo: ReturnsRepository;
   readonly dispatcher: ReturnsDispatcher;
-  readonly resolver: { resolveOnce(actor: ReturnActor): Promise<ResolveSummary> };
+  readonly resolver: { resolveOnce(actor: AuthorizedActor): Promise<ResolveSummary> };
   readonly audit: ReturnsAudit;
   readonly now: () => string;
   readonly newReturnId: () => string;
@@ -71,13 +63,6 @@ export interface ReturnsServiceDeps {
 
 /** How many journal rows `returns.list` shows. */
 export const RETURNS_LIST_LIMIT = 50;
-
-const RETURN_ROLES: ReadonlySet<Role> = new Set<Role>(['manager', 'admin']);
-
-/** D-b: only a manager or admin may start (or resolve) a return. */
-export function isReturnsRole(role: Role): boolean {
-  return RETURN_ROLES.has(role);
-}
 
 type Operation = 'lookup' | 'quote' | 'submit' | 'resolve' | 'list';
 
@@ -93,25 +78,15 @@ interface Ids {
   readonly saleRef?: string;
 }
 
-type Admitted = { readonly kind: 'ok'; readonly actor: ReturnActor } | ReturnsRefused;
+type Admitted = { readonly kind: 'ok'; readonly actor: AuthorizedActor } | ReturnsRefused;
 type Loaded = { readonly kind: 'ok'; readonly sale: LiveSale } | ReturnsRefused;
-
-function actorOf(session: ReturnsSession): ReturnActor {
-  return {
-    scope: {
-      tenantId: session.tenant_id,
-      branchId: session.branch_id,
-      terminalId: session.terminal_id,
-    },
-    operatorId: session.operator_id,
-    operatorSessionId: session.operator_session_id,
-  };
-}
 
 function toSubmitResponse(outcome: DispatchOutcome): ReturnsSubmitResponse {
   const ret = toJournalView(outcome.entry);
   if (outcome.kind === 'confirmed') return { kind: 'confirmed', ret, replayed: outcome.replayed };
   if (outcome.kind === 'refused') return { kind: 'refused', reason: outcome.reason, ret };
+  // `unconfirmed` (answer lost) and `deferred` (not sent: authorization lost
+  // right before the send) both leave the journaled return unresolved.
   return { kind: 'unconfirmed', ret };
 }
 
@@ -129,13 +104,12 @@ class ReturnsService implements ReturnsBridgeAPI {
     return { kind: 'refused', reason } as const;
   }
 
+  /** Gate + capture the authorized actor (flag, session, manager/admin, unlocked). */
   private admit(op: Operation): Admitted {
-    if (!this.deps.isEnabled()) return { kind: 'refused', reason: 'feature_disabled' };
-    const session = this.deps.getSession();
-    if (session === null) return { kind: 'refused', reason: 'no_session' };
-    const actor = actorOf(session);
-    if (!isReturnsRole(session.role)) return this.refuse(actor, op, 'role_denied');
-    return { kind: 'ok', actor };
+    const live = this.deps.authorizer.current();
+    if (live.kind === 'ok') return { kind: 'ok', actor: live.actor };
+    if (live.actor === null) return { kind: 'refused', reason: live.reason };
+    return this.refuse(live.actor, op, live.reason);
   }
 
   /** The local sale, synced, cash-only on the till's own record (D-c, D-d, AC3). */
@@ -220,8 +194,17 @@ class ReturnsService implements ReturnsBridgeAPI {
       const ids: Ids = { saleId, saleRef: priced.sale.saleRef };
       return { ...this.refuse(actor, 'submit', 'unresolved_return_exists', ids), ret: null };
     }
+    // Choke point (a): after every await, immediately before the journal insert.
+    const lost = this.deps.authorizer.recheck(actor);
+    if (lost !== null) {
+      return {
+        ...this.refuse(actor, 'submit', lost, { saleId, saleRef: priced.sale.saleRef }),
+        ret: null,
+      };
+    }
     const entry = this.journal(actor, priced.sale, priced.quote, req.lines);
-    return toSubmitResponse(await this.deps.dispatcher.send(entry, 'submit'));
+    // Choke point (b) runs inside the dispatcher, immediately before the POST.
+    return toSubmitResponse(await this.deps.dispatcher.send(entry, 'submit', actor));
   }
 
   /**

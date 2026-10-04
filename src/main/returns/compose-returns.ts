@@ -14,9 +14,10 @@ import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import { createReturnsAudit, type ReturnsAuditSink } from './returns-audit.js';
 import { createReturnsClient, type CreateReturnsClientDeps } from './returns-client.js';
 import { createReturnsDispatcher } from './returns-dispatch.js';
-import { createReturnsRepository, type ReturnScope } from './returns-repository.js';
+import { createReturnsRepository } from './returns-repository.js';
 import { createReturnsResolver, type ReturnsResolver } from './returns-resolver.js';
-import { createReturnsService, isReturnsRole, type ReturnsSession } from './returns-service.js';
+import { createReturnsAuthorizer, type ReturnsSession } from './returns-auth.js';
+import { createReturnsService } from './returns-service.js';
 import { newReturnExternalId } from './uuidv7.js';
 
 export interface ReturnsLogger {
@@ -43,29 +44,19 @@ export interface ComposedReturns {
   readonly resolver: ReturnsResolver;
 }
 
-/**
- * The scope a resolver pass may send for right now, read live: flag on, a
- * paired terminal with an unlocked manager/admin session (review P2-1), and an
- * operator envelope present. Otherwise null — the rows wait for a later pass.
- */
-export function readyScope(deps: ComposeReturnsDeps): ReturnScope | null {
-  const session = deps.isEnabled() ? deps.getSession() : null;
-  if (session === null || !isReturnsRole(session.role)) return null;
-  if (deps.isSessionLocked()) return null;
-  if ((deps.http.getOperatorToken() ?? '').length === 0) return null;
-  return {
-    tenantId: session.tenant_id,
-    branchId: session.branch_id,
-    terminalId: session.terminal_id,
-  };
-}
-
 export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const { now } = deps;
   const client = createReturnsClient(deps.http);
   const repo = createReturnsRepository(deps.db);
   const audit = createReturnsAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
+  const authorizer = createReturnsAuthorizer({
+    isEnabled: deps.isEnabled,
+    getSession: deps.getSession,
+    isSessionLocked: deps.isSessionLocked,
+    hasEnvelope: () => (deps.http.getOperatorToken() ?? '').length > 0,
+  });
   const dispatcher = createReturnsDispatcher({
+    authorizer,
     client,
     repo,
     audit,
@@ -73,10 +64,9 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     logger: deps.logger,
     transaction: <T>(fn: () => T): T => deps.db.transaction(fn)(),
   });
-  const resolver = createReturnsResolver({ repo, dispatcher, readyScope: () => readyScope(deps) });
+  const resolver = createReturnsResolver({ repo, dispatcher, authorizer });
   const service = createReturnsService({
-    isEnabled: deps.isEnabled,
-    getSession: deps.getSession,
+    authorizer,
     sales: bindSalesRepository(deps.db),
     saleRefs: createSaleSyncStateRepo(deps.db),
     client,

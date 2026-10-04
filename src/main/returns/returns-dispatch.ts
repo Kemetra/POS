@@ -28,6 +28,7 @@
 import type { ReturnsRefusalReason } from '../../shared/returns/types.js';
 import { exponentFor } from '../sales-sync/create-sale-sync-client.js';
 import type { ReturnsAudit } from './returns-audit.js';
+import type { AuthorizedActor, ReturnsAuthorizer } from './returns-auth.js';
 import type { RecordReturnOutcome, ReturnsClient } from './returns-client.js';
 import { amount4ToMinor, parseAmount4 } from './returns-money.js';
 import type { ConfirmInput, JournalEntry, ReturnsRepository } from './returns-repository.js';
@@ -36,6 +37,8 @@ import type { WireSaleReturn } from './returns-wire.js';
 export type DispatchOutcome =
   | { readonly kind: 'confirmed'; readonly entry: JournalEntry; readonly replayed: boolean }
   | { readonly kind: 'unconfirmed'; readonly entry: JournalEntry }
+  /** Not sent: the actor is no longer authorized; the row stays pending/unknown. */
+  | { readonly kind: 'deferred'; readonly entry: JournalEntry }
   | {
       readonly kind: 'refused';
       readonly reason: ReturnsRefusalReason;
@@ -45,7 +48,12 @@ export type DispatchOutcome =
 export type DispatchOperation = 'submit' | 'resolve';
 
 export interface ReturnsDispatcher {
-  send(entry: JournalEntry, operation: DispatchOperation): Promise<DispatchOutcome>;
+  /** Send `entry` on behalf of `actor`, who is re-authorized right before the POST. */
+  send(
+    entry: JournalEntry,
+    operation: DispatchOperation,
+    actor: AuthorizedActor,
+  ): Promise<DispatchOutcome>;
 }
 
 export interface ReturnsDispatchLogger {
@@ -56,6 +64,8 @@ export interface ReturnsDispatchDeps {
   readonly client: Pick<ReturnsClient, 'recordReturn'>;
   readonly repo: ReturnsRepository;
   readonly audit: ReturnsAudit;
+  /** The choke point: re-authorizes the actor immediately before every send. */
+  readonly authorizer: Pick<ReturnsAuthorizer, 'recheck'>;
   /** Run `fn` in one local DB transaction (journal + audit_events). */
   readonly transaction: <T>(fn: () => T) => T;
   readonly now: () => string;
@@ -82,23 +92,40 @@ function matchingTotalMinor(entry: JournalEntry, saleReturn: WireSaleReturn): nu
   return minor === entry.quotedTotalMinor ? minor : null;
 }
 
+interface SendRequest {
+  readonly entry: JournalEntry;
+  readonly op: DispatchOperation;
+  readonly actor: AuthorizedActor;
+}
+
 class JournaledReturnsDispatcher implements ReturnsDispatcher {
   private readonly inFlight = new Map<string, Promise<DispatchOutcome>>();
 
   constructor(private readonly deps: ReturnsDispatchDeps) {}
 
-  send(entry: JournalEntry, operation: DispatchOperation): Promise<DispatchOutcome> {
+  send(
+    entry: JournalEntry,
+    operation: DispatchOperation,
+    actor: AuthorizedActor,
+  ): Promise<DispatchOutcome> {
     const running = this.inFlight.get(entry.returnId);
     if (running !== undefined) return running;
-    const promise = this.sendOnce(entry, operation).finally(() => {
+    const promise = this.sendOnce({ entry, op: operation, actor }).finally(() => {
       this.inFlight.delete(entry.returnId);
     });
     this.inFlight.set(entry.returnId, promise);
     return promise;
   }
 
-  private async sendOnce(entry: JournalEntry, op: DispatchOperation): Promise<DispatchOutcome> {
-    const attempted = this.current(entry).attemptCount > 0;
+  private async sendOnce(send: SendRequest): Promise<DispatchOutcome> {
+    const { entry, op } = send;
+    const current = this.current(entry);
+    // The choke point: never send for an actor who is no longer authorized.
+    if (this.deps.authorizer.recheck(send.actor) !== null) {
+      this.deps.logger.warn({ return_id: entry.returnId }, 'returns:send_deferred_unauthorized');
+      return { kind: 'deferred', entry: current };
+    }
+    const attempted = current.attemptCount > 0;
     this.deps.repo.recordAttempt({ returnId: entry.returnId, now: this.deps.now() });
     const outcome = await this.deps.client.recordReturn({
       saleRef: entry.serverSaleRef,

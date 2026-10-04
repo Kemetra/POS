@@ -42,6 +42,9 @@ export const LOCAL_RETURN_REFUSALS = [
   'amount_not_payable',
   'unresolved_return_exists',
   'offline',
+  // The authorized manager/admin session ended, locked, switched or lost its
+  // envelope while a request was awaited; nothing was journaled or sent.
+  'session_changed',
 ] as const;
 export type LocalReturnRefusal = (typeof LOCAL_RETURN_REFUSALS)[number];
 

@@ -14,6 +14,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { scheduleReturnsResolver } from '../compose-returns.js';
 import {
+  MANAGER_ACTOR,
   LINE_A,
   SALE_NUMBER,
   SALE_REF,
@@ -40,7 +41,7 @@ afterEach(() => {
 });
 
 const ONE_A = { saleNumber: SALE_NUMBER, lines: [{ lineRef: LINE_A, quantity: 1 }] };
-const ACTOR = { scope: SCOPE };
+const ACTOR = MANAGER_ACTOR;
 
 /** Submit once while the server RECORDS the return but the answer is lost. */
 async function submitWithLostAnswer(): Promise<string> {

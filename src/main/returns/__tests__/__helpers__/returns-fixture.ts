@@ -17,6 +17,7 @@ import { AuditEmitter } from '../../../audit/audit-emitter.js';
 import { bindAuditEventsStoreDb } from '../../../audit/audit-events-store.js';
 import type { DatabaseHandle } from '../../../db/client.js';
 import type { ReturnsAuditSink } from '../../returns-audit.js';
+import type { AuthorizedActor } from '../../returns-auth.js';
 import { composeReturns, type ComposedReturns } from '../../compose-returns.js';
 import type { ReturnsSession } from '../../returns-service.js';
 import { createReturnsRepository, type ReturnsRepository } from '../../returns-repository.js';
@@ -52,6 +53,14 @@ export const CARD_SUMMARY = JSON.stringify([
 ]);
 
 export const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
+
+/** The authorized actor a signed-in manager on this till is admitted as. */
+export const MANAGER_ACTOR: AuthorizedActor = {
+  scope: SCOPE,
+  operatorId: 'op-manager',
+  operatorSessionId: 'sess-manager',
+  role: 'manager',
+};
 
 export function sessionFor(role: Role): ReturnsSession {
   return {
@@ -195,6 +204,8 @@ export class FakeBackend {
   sale: ContractSale | Response = saleBody();
   /** How `recordReturn` answers; defaults to the idempotent recorder below. */
   onReturn: ReturnResponder = (call, backend) => backend.recordIdempotently(call);
+  /** Runs while a readSale GET is in flight (to change the session mid-request). */
+  onRead: (() => void) | null = null;
   /** Returns recorded so far, by Idempotency-Key. */
   readonly recorded = new Map<string, ContractSaleReturn>();
 
@@ -206,6 +217,7 @@ export class FakeBackend {
       body: typeof init?.body === 'string' ? init.body : undefined,
     };
     this.calls.push(call);
+    if (call.method === 'GET') this.onRead?.();
     if (call.method === 'GET')
       return this.sale instanceof Response ? this.sale : jsonResponse(200, this.sale);
     return await this.onReturn(call, this);
@@ -280,6 +292,8 @@ export interface HarnessState {
   locked: boolean;
   /** The live paired terminal id. */
   terminalId: string;
+  /** Runs on every audit emit, before it is written (to change state mid-flow). */
+  onAudit: ((event: AuditEvent) => void) | null;
   /** When it returns true for an event, that audit insert throws (fault injection). */
   failAudit: ((event: AuditEvent) => boolean) | null;
 }
@@ -325,11 +339,13 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     paired: true,
     locked: false,
     terminalId: SCOPE.terminalId,
+    onAudit: null,
     failAudit: null,
   };
   const emitter = new AuditEmitter(bindAuditEventsStoreDb(handle));
   const auditSink: ReturnsAuditSink = {
     emit: (event) => {
+      state.onAudit?.(event);
       if (state.failAudit?.(event) === true) throw new Error('audit insert failed');
       emitter.emit(event);
     },
