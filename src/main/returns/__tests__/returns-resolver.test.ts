@@ -23,6 +23,7 @@ import {
   initReturnsSql,
   jsonResponse,
   returnsHarness,
+  saleBody,
   seedSyncedSale,
   type RecordedCall,
   type ReturnsHarness,
@@ -54,6 +55,17 @@ async function submitWithLostAnswer(): Promise<string> {
   h.backend.onReturn = (call, backend) => backend.recordIdempotently(call);
   return res.kind === 'unconfirmed' ? res.ret.returnId : '';
 }
+
+/** A second return on another synced sale, left `unknown` (its answer lost). */
+async function secondUnknownReturn(): Promise<string> {
+  seedSyncedSale(h.db, { saleId: 'sale-2', saleRef: SALE_REF_2 });
+  h.backend.sale = saleBody({ saleRef: SALE_REF_2 });
+  h.backend.onReturn = () => Promise.reject(new TypeError('socket hang up'));
+  const res = await h.service.submit({ ...ONE_A, saleNumber: 'SN-sale-2' });
+  return res.kind === 'unconfirmed' ? res.ret.returnId : '';
+}
+
+const SALE_REF_2 = '0190f5a2-7b3c-7d4e-8f90-0000000000b2';
 
 function sameRequest(a: RecordedCall | undefined, b: RecordedCall | undefined): void {
   expect(b?.url).toBe(a?.url);
@@ -167,6 +179,42 @@ describe('returns resolver', () => {
     expect(h.backend.returnCalls()).toHaveLength(1);
     Object.assign(h.state, ready);
     await expect(h.resolver.tick()).resolves.toMatchObject({ confirmed: 1 });
+  });
+
+  it.each<{ label: string; change: (state: ReturnsHarness['state']) => void }>([
+    { label: 'an operator switch (manager → cashier)', change: (st) => (st.role = 'cashier') },
+    { label: 'an inactivity lock', change: (st) => (st.locked = true) },
+    { label: 'a sign-out', change: (st) => (st.role = null) },
+  ])('stops the pass on $label mid-pass: the remaining rows are not sent', async ({ change }) => {
+    const first = await submitWithLostAnswer();
+    const second = await secondUnknownReturn();
+    let sends = 0;
+    h.backend.onReturn = (call, backend) => {
+      sends += 1;
+      change(h.state); // happens while the first resend is in flight
+      return backend.recordIdempotently(call);
+    };
+    await expect(h.resolver.resolveOnce(ACTOR)).resolves.toEqual({
+      confirmed: 1,
+      refused: 0,
+      unresolved: 1,
+    });
+    expect(sends).toBe(1);
+    const states = [first, second].map((id) => h.repo.read(id)?.state).sort();
+    expect(states).toEqual(['confirmed', 'unknown']);
+  });
+
+  it('stops the pass when the live scope changes to another terminal', async () => {
+    await submitWithLostAnswer();
+    await secondUnknownReturn();
+    let sends = 0;
+    h.backend.onReturn = (call, backend) => {
+      sends += 1;
+      h.state.terminalId = 'term-2';
+      return backend.recordIdempotently(call);
+    };
+    await expect(h.resolver.resolveOnce(ACTOR)).resolves.toMatchObject({ unresolved: 1 });
+    expect(sends).toBe(1);
   });
 
   it('Codex P2: started unpaired, paired in-process, the next tick resolves the unknown row', async () => {

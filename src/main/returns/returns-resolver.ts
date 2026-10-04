@@ -49,14 +49,34 @@ export interface ReturnsResolverDeps {
   readonly readyScope: () => ReturnScope | null;
 }
 
+function scopeKey(scope: ReturnScope): string {
+  return `${scope.tenantId}|${scope.branchId}|${scope.terminalId}`;
+}
+
+function sameScope(a: ReturnScope, b: ReturnScope): boolean {
+  return scopeKey(a) === scopeKey(b);
+}
+
 const EMPTY: ResolveSummary = { confirmed: 0, refused: 0, unresolved: 0 };
 
 export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolver {
   let running: Promise<ResolveSummary> | null = null;
 
+  /**
+   * Still ready for the SAME scope? Re-read before EVERY send: the operator can
+   * sign out / switch, or the session lock in, partway through a pass.
+   */
+  function stillReady(scope: ReturnScope): boolean {
+    const now = deps.readyScope();
+    return now !== null && sameScope(now, scope);
+  }
+
   async function pass(scope: ReturnScope): Promise<ResolveSummary> {
     const tally = { ...EMPTY };
-    for (const entry of deps.repo.listUnresolved(scope)) {
+    const rows = deps.repo.listUnresolved(scope);
+    for (const [index, entry] of rows.entries()) {
+      if (!stillReady(scope))
+        return { ...tally, unresolved: tally.unresolved + rows.length - index };
       const outcome = await deps.dispatcher.send(entry, 'resolve');
       if (outcome.kind === 'confirmed') tally.confirmed += 1;
       else if (outcome.kind === 'refused') tally.refused += 1;

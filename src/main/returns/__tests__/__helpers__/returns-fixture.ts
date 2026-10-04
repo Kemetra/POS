@@ -218,7 +218,9 @@ export class FakeBackend {
     if (existing !== undefined) {
       return jsonResponse(201, existing, { 'Idempotent-Replayed': 'true' });
     }
-    const created = saleReturnFor(JSON.parse(call.body ?? '{}') as SentReturnBody);
+    // The return is against the sale named in the path (…/sales/{saleRef}/returns).
+    const saleRef = /\/sales\/([^/]+)\/returns$/.exec(call.url)?.[1] ?? SALE_REF;
+    const created = { ...saleReturnFor(JSON.parse(call.body ?? '{}') as SentReturnBody), saleRef };
     this.recorded.set(key, created);
     return jsonResponse(201, created);
   }
@@ -276,6 +278,8 @@ export interface HarnessState {
   paired: boolean;
   /** The operator session is inactivity-locked. */
   locked: boolean;
+  /** The live paired terminal id. */
+  terminalId: string;
   /** When it returns true for an event, that audit insert throws (fault injection). */
   failAudit: ((event: AuditEvent) => boolean) | null;
 }
@@ -320,6 +324,7 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     token: options.token === undefined ? ENVELOPE : options.token,
     paired: true,
     locked: false,
+    terminalId: SCOPE.terminalId,
     failAudit: null,
   };
   const emitter = new AuditEmitter(bindAuditEventsStoreDb(handle));
@@ -333,7 +338,10 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     db: handle,
     http: { baseUrl: BASE_URL, fetch: backend.fetch, getOperatorToken: () => state.token },
     isEnabled: () => state.enabled,
-    getSession: () => (state.role === null || !state.paired ? null : sessionFor(state.role)),
+    getSession: () =>
+      state.role === null || !state.paired
+        ? null
+        : { ...sessionFor(state.role), terminal_id: state.terminalId },
     isSessionLocked: () => state.locked,
     auditSink,
     logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
