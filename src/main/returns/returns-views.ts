@@ -4,10 +4,20 @@
  * A `ReturnJournalView` carries no operator ids, no `externalId` (the
  * Idempotency-Key) and no request body: those stay in the main process.
  */
-import type { ReturnJournalView } from '../../shared/returns/types.js';
+import type { ReturnJournalView, ReturnPayoutView } from '../../shared/returns/types.js';
+import type { PayoutRow } from './returns-payout-repository.js';
 import type { JournalEntry } from './returns-repository.js';
 
-export function toJournalView(entry: JournalEntry): ReturnJournalView {
+/** The payout as the renderer sees it: when and how, never who (ids stay in main). */
+function toPayoutView(payout: PayoutRow | null): ReturnPayoutView | null {
+  if (payout === null) return null;
+  return { startedAt: payout.startedAt, paidAt: payout.paidAt, method: payout.method };
+}
+
+export function toJournalView(
+  entry: JournalEntry,
+  payout: PayoutRow | null = null,
+): ReturnJournalView {
   return {
     returnId: entry.returnId,
     saleId: entry.saleId,
@@ -21,5 +31,6 @@ export function toJournalView(entry: JournalEntry): ReturnJournalView {
     createdAt: entry.createdAt,
     confirmedAt: entry.confirmedAt,
     lines: entry.lines.map((l) => ({ lineRef: l.lineRef, quantity: l.quantity })),
+    payout: toPayoutView(payout),
   };
 }

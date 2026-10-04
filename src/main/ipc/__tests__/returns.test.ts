@@ -55,7 +55,7 @@ const manyLines = Array.from({ length: RETURNS_INPUT_BOUNDS.maxLines + 1 }, (_, 
 }));
 
 describe('returns IPC registration', () => {
-  it('registers exactly the five returns channels, none on the lock allowlist', () => {
+  it('registers exactly the seven returns channels, none on the lock allowlist', () => {
     const { handlers } = setup();
     expect([...handlers.keys()].sort()).toEqual(Object.values(RETURNS_IPC_CHANNELS).sort());
     for (const channel of Object.values(RETURNS_IPC_CHANNELS)) {

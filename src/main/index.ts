@@ -102,6 +102,7 @@ import {
 import { createPrintDispatcher } from './receipts/print-dispatcher.js';
 import { dispatchFirstPrintOnFinalize } from './receipts/dispatch-first-print-on-finalize.js';
 import { createDrawerKickDispatcher } from './drawer/drawer-kick.js';
+import type { DrawerKickTransport } from './drawer/drawer-kick-transport.js';
 import { randomUUID } from 'node:crypto';
 import { createWorkerRegistry } from './app/bootstrap-workers.js';
 import { createWindowFactory } from './app/bootstrap-window.js';
@@ -1104,6 +1105,57 @@ app
       );
     });
 
+    // ── Shared receipt printer + drawer ports (RT-15 S4: hoisted out of the
+    // 008 branch below so the return payout reuses the same instances) ──────
+    //
+    // 008 §A3 print transports.
+    //
+    // OS-print path (T200): the REAL `webContents.print` transport is wired —
+    // an actual 008 receipt prints through the Windows OS print path on a
+    // physically attached printer (e.g. the BIXOLON SRP-330 II from the §A5
+    // bench). The slip is rendered to 80 mm continuous-roll width to match the
+    // recorded browser/HTML render-quality smoke. `getPrintersAsync` enumerates
+    // the system printers; an unconfigured `deviceName` targets the system
+    // default. (Mapping a SPECIFIC queue to the paired terminal is a follow-up:
+    // pairing/T094a carries USB vendor/product/com-port ids, NOT the Windows
+    // print-queue name.) Verified on the bench by T301; the pure parts are
+    // unit-tested in os-print-transport.test.ts.
+    //
+    // ESC/POS-direct path: still an honest STUB reporting `offline` — that path
+    // (node-thermal-printer ↔ printer status byte) remains unverified (a5
+    // findings) and is NOT selected. We route to OS-print via
+    // `probeEscposSupport: false`, the proven path.
+    const printPipeline = createPrintPipeline({
+      escposAdapter: createEscposAdapter({
+        transport: {
+          write: () => Promise.resolve(),
+          pollStatus: () => Promise.resolve('offline' as const),
+        },
+        statusTimeoutMs: 3000,
+      }),
+      osPrintAdapter: createOsPrintAdapter({
+        print: createOsPrintTransport({
+          createPrintWindow: createDefaultPrintWindow,
+          listPrinters: () => getCurrentPrinters(),
+          logger: mainLogger,
+        }),
+      }),
+      // Route to the OS-print path: it is the proven transport (the ESC/POS
+      // direct path is unverified). The cashier never sees which path ran
+      // unless the print fails (path is for audit only — T212).
+      probeEscposSupport: () => Promise.resolve(false),
+    });
+    // 008 Slice 4 drawer port, hoisted (RT-15 S4) so the sale drawer-kick
+    // dispatcher and the return payout share ONE drawer transport. The real
+    // DK1/DK2 transport is the §A3 hardware bring-up (T200), deferred: until
+    // then this honest STUB reports `no_drawer_configured` — a cash sale
+    // records a `failed` drawer row, and a return payout answers
+    // `drawer_failed` (nothing paid is recorded; the manager may then attest a
+    // manual payout). Never a faked "opened" (PRODUCT.md Principle 3).
+    const drawerKickTransport: DrawerKickTransport = {
+      kick: () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' }),
+    };
+
     // ── 008-sale-finalization-and-receipts Slice 1c.3 (T094c) ──────────────
     //
     // Wire the AD-2 finalize worker + read-only `sales.*` bridge behind the
@@ -1161,43 +1213,6 @@ app
       const saleAuditEmitter = createSaleAuditEmitter({
         sink: { write: forwardAuditEvent },
       });
-      // 008 §A3 print transports.
-      //
-      // OS-print path (T200): the REAL `webContents.print` transport is wired —
-      // an actual 008 receipt prints through the Windows OS print path on a
-      // physically attached printer (e.g. the BIXOLON SRP-330 II from the §A5
-      // bench). The slip is rendered to 80 mm continuous-roll width to match the
-      // recorded browser/HTML render-quality smoke. `getPrintersAsync` enumerates
-      // the system printers; an unconfigured `deviceName` targets the system
-      // default. (Mapping a SPECIFIC queue to the paired terminal is a follow-up:
-      // pairing/T094a carries USB vendor/product/com-port ids, NOT the Windows
-      // print-queue name.) Verified on the bench by T301; the pure parts are
-      // unit-tested in os-print-transport.test.ts.
-      //
-      // ESC/POS-direct path: still an honest STUB reporting `offline` — that path
-      // (node-thermal-printer ↔ printer status byte) remains unverified (a5
-      // findings) and is NOT selected. We route to OS-print via
-      // `probeEscposSupport: false`, the proven path.
-      const printPipeline = createPrintPipeline({
-        escposAdapter: createEscposAdapter({
-          transport: {
-            write: () => Promise.resolve(),
-            pollStatus: () => Promise.resolve('offline' as const),
-          },
-          statusTimeoutMs: 3000,
-        }),
-        osPrintAdapter: createOsPrintAdapter({
-          print: createOsPrintTransport({
-            createPrintWindow: createDefaultPrintWindow,
-            listPrinters: () => getCurrentPrinters(),
-            logger: mainLogger,
-          }),
-        }),
-        // Route to the OS-print path: it is the proven transport (the ESC/POS
-        // direct path is unverified). The cashier never sees which path ran
-        // unless the print fails (path is for audit only — T212).
-        probeEscposSupport: () => Promise.resolve(false),
-      });
       // Shared clock for the print dispatcher + receipts bridge so a reprint's
       // rendered slip time (bridge) matches the print_events.printed_at the
       // dispatcher writes for the same logical event (one clock read per event).
@@ -1219,13 +1234,12 @@ app
       // honest STUB reports `no_drawer_configured`, so a cash sale records a
       // clean `failed` drawer row + raises the drawer-failure banner while the
       // Sale stays durable — no fake "opened" is recorded (PRODUCT.md
-      // Principle 3). T200 swaps this transport for the real one; nothing else
+      // Principle 3). T200 swaps the shared `drawerKickTransport` (hoisted above,
+      // also used by the RT-15 S4 return payout) for the real one; nothing else
       // changes.
       const drawerKickDispatcher = createDrawerKickDispatcher({
         drawerEventsRepo,
-        transport: {
-          kick: () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' }),
-        },
+        transport: drawerKickTransport,
         auditEmitter: saleAuditEmitter,
         now: () => new Date().toISOString(),
         newDrawerEventId: () => randomUUID(),
@@ -1504,6 +1518,11 @@ app
       auditSink: auditEmitter,
       logger: mainLogger,
       now: () => new Date().toISOString(),
+      // RT-15 S4: the SAME drawer port and print pipeline as sales (no new
+      // hardware path): the payout kicks the drawer, the slip prints through
+      // the receipt pipeline's path selection.
+      drawer: drawerKickTransport,
+      printer: printPipeline,
     });
     registerReturnsHandlers(guardedIpcMain, { service: returnsDomain.service });
     if (parseFeatureFlags(process.env).returns) {

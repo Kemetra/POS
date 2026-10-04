@@ -18,6 +18,7 @@
  */
 import type {
   LocalReturnRefusal,
+  ReturnJournalView,
   ReturnLineInput,
   ReturnQuoteView,
   ReturnsBridgeAPI,
@@ -39,14 +40,19 @@ import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
 import type { ReadSaleOutcome, ReturnsClient } from './returns-client.js';
 import type { DispatchOutcome, ReturnsDispatcher } from './returns-dispatch.js';
 import { assessSale, buildRecordReturnBody, quoteReturn, viewLines } from './returns-quote.js';
-import type { ReturnsRepository } from './returns-repository.js';
+import type { LineDetail } from './returns-payout-repository.js';
+import type { JournalEntry, ReturnsRepository } from './returns-repository.js';
 import type { ResolveSummary } from './returns-resolver.js';
 import { isExpectedSale } from './returns-verify.js';
+import { slipLineName } from './returns-slip.js';
 import { cashOnlyVerdict, localTenderEvidence, serverTenderEvidence } from './returns-tender.js';
 import { toJournalView } from './returns-views.js';
 import type { WireSale } from './returns-wire.js';
 
 export type { ReturnsSession } from './returns-auth.js';
+
+/** The journal-side bridge methods (S2); payout and slip live in `returns-payout` (S4). */
+export type ReturnsCoreAPI = Omit<ReturnsBridgeAPI, 'payout' | 'reprintSlip'>;
 
 export interface ReturnsServiceDeps {
   /** The terminal's capture currency (the sale-sync capture's own source). */
@@ -63,6 +69,13 @@ export interface ReturnsServiceDeps {
   readonly now: () => string;
   readonly newReturnId: () => string;
   readonly newExternalId: () => string;
+  /** RT-15 S4: renderer views of journal rows, with their payouts. */
+  readonly views: (entries: readonly JournalEntry[]) => ReturnJournalView[];
+  /**
+   * RT-15 S4: write the slip facts of the journaled lines (name, amount),
+   * inside the journal insert transaction.
+   */
+  readonly recordLineDetails: (returnId: string, details: readonly LineDetail[]) => void;
 }
 
 /** How many journal rows `returns.list` shows. */
@@ -98,6 +111,19 @@ function idsOf(awaited: Loaded | null): Ids {
   return { saleId: awaited.sale.row.sale_id, saleRef: awaited.sale.saleRef };
 }
 
+/**
+ * RT-15 S4: the slip facts of each quoted line — the live sale's line name
+ * (made printable) and the contract-priced amount — journaled with the line.
+ */
+function lineDetails(sale: WireSale, quote: ReturnQuoteView): LineDetail[] {
+  const names = new Map(sale.lines.map((l) => [l.lineRef.toLowerCase(), l.lineName]));
+  return quote.lines.map((l) => ({
+    lineRef: l.lineRef,
+    lineName: slipLineName(names.get(l.lineRef.toLowerCase()) ?? ''),
+    amountMinor: l.amountMinor,
+  }));
+}
+
 function toSubmitResponse(outcome: DispatchOutcome): ReturnsSubmitResponse {
   const ret = toJournalView(outcome.entry);
   if (outcome.kind === 'confirmed') return { kind: 'confirmed', ret, replayed: outcome.replayed };
@@ -107,7 +133,7 @@ function toSubmitResponse(outcome: DispatchOutcome): ReturnsSubmitResponse {
   return { kind: 'unconfirmed', ret };
 }
 
-class ReturnsService implements ReturnsBridgeAPI {
+class ReturnsService implements ReturnsCoreAPI {
   constructor(private readonly deps: ReturnsServiceDeps) {}
 
   private refuse(actor: ReturnActor, op: Operation, reason: ReturnsRefusalReason, ids: Ids = {}) {
@@ -309,6 +335,7 @@ class ReturnsService implements ReturnsBridgeAPI {
       },
       (inserted) => {
         this.deps.audit.attempted(inserted);
+        this.deps.recordLineDetails(returnId, lineDetails(sale.wire, quote));
       },
     );
     const entry = this.deps.repo.read(returnId);
@@ -327,10 +354,10 @@ class ReturnsService implements ReturnsBridgeAPI {
     const admitted = this.admit('list');
     if (admitted.kind !== 'ok') return Promise.resolve(admitted);
     const entries = this.deps.repo.listRecent(admitted.actor.scope, RETURNS_LIST_LIMIT);
-    return Promise.resolve({ kind: 'ok', returns: entries.map(toJournalView) });
+    return Promise.resolve({ kind: 'ok', returns: this.deps.views(entries) });
   }
 }
 
-export function createReturnsService(deps: ReturnsServiceDeps): ReturnsBridgeAPI {
+export function createReturnsService(deps: ReturnsServiceDeps): ReturnsCoreAPI {
   return new ReturnsService(deps);
 }

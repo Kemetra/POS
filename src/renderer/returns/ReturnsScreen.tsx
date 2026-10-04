@@ -4,15 +4,18 @@ import type { ReturnsBridgeAPI } from '../../shared/returns/types.js';
 import type { SessionEvents } from './returns-bridge.js';
 import { LinePicker } from './LinePicker';
 import { RefundSummary } from './RefundSummary';
-import { ReturnOutcome } from './ReturnOutcome';
+import { ReturnOutcome, type PayoutDeps } from './ReturnOutcome';
 import { ReturnsHistory } from './ReturnsHistory';
 import { SaleLookup } from './SaleLookup';
+import type { Outcome } from './return-flow-state.js';
 import { useReturnFlow, type ReturnFlow } from './useReturnFlow.js';
+import { useHistoryReprint } from './useHistoryReprint.js';
 import { useReturnHistory } from './useReturnHistory.js';
 
 /**
  * RT-15 S3 — the return flow (one step at a time) above this terminal's
- * return journal. No payout, drawer or slip control lives here (S4).
+ * return journal. RT-15 S4: a confirmed outcome carries its payout; the
+ * journal offers pay out / complete / reprint per row.
  */
 export interface ReturnsScreenProps {
   readonly bridge: ReturnsBridgeAPI;
@@ -20,7 +23,18 @@ export interface ReturnsScreenProps {
   readonly sessionEvents: SessionEvents | null;
 }
 
-function FlowStep({ flow }: { readonly flow: ReturnFlow }): JSX.Element {
+function outcomeKey(outcome: Outcome): string {
+  if (outcome.kind === 'failed') return 'failed';
+  return outcome.ret?.returnId ?? 'none';
+}
+
+function FlowStep({
+  flow,
+  payout,
+}: {
+  readonly flow: ReturnFlow;
+  readonly payout: PayoutDeps;
+}): JSX.Element {
   const { state } = flow;
   switch (state.step) {
     case 'lookup':
@@ -30,17 +44,26 @@ function FlowStep({ flow }: { readonly flow: ReturnFlow }): JSX.Element {
     case 'summary':
       return <RefundSummary flow={flow} state={state} />;
     case 'outcome':
-      return <ReturnOutcome flow={flow} outcome={state.outcome} />;
+      // Keyed by the return: opening another return's payout starts afresh.
+      return (
+        <ReturnOutcome
+          key={outcomeKey(state.outcome)}
+          flow={flow}
+          outcome={state.outcome}
+          payout={payout}
+        />
+      );
   }
 }
 
 export function ReturnsScreen({ bridge, sessionEvents }: ReturnsScreenProps): JSX.Element {
   const history = useReturnHistory(bridge, sessionEvents);
   const flow = useReturnFlow(bridge, history.reload);
+  const reprint = useHistoryReprint(bridge);
   return (
     <>
-      <FlowStep flow={flow} />
-      <ReturnsHistory history={history} />
+      <FlowStep flow={flow} payout={{ bridge, reload: history.reload }} />
+      <ReturnsHistory history={history} actions={{ pay: flow.openPayout, reprint }} />
     </>
   );
 }

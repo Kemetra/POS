@@ -7,18 +7,26 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import type { ReturnsBridgeAPI } from '../../shared/returns/types.js';
+import type { ReturnJournalView, ReturnsBridgeAPI } from '../../shared/returns/types.js';
 import type { DatabaseHandle } from '../db/client.js';
+import type { DrawerKickTransport } from '../drawer/drawer-kick-transport.js';
+import type { PrintPipeline } from '../receipts/print-pipeline.js';
 import { bindSalesRepository } from '../sales/repositories/sales.repository.js';
 import { DEFAULT_CURRENCY_CODE } from '../sales-sync/create-sale-sync-client.js';
 import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import { createReturnsAudit, type ReturnsAuditSink } from './returns-audit.js';
 import { createReturnsClient, type CreateReturnsClientDeps } from './returns-client.js';
 import { createReturnsDispatcher } from './returns-dispatch.js';
-import { createReturnsRepository } from './returns-repository.js';
+import { createReturnsPayoutService } from './returns-payout.js';
+import {
+  createReturnPayoutsRepository,
+  type ReturnPayoutsRepository,
+} from './returns-payout-repository.js';
+import { createReturnsRepository, type JournalEntry } from './returns-repository.js';
 import { createReturnsResolver, type ReturnsResolver } from './returns-resolver.js';
 import { createReturnsAuthorizer, type ReturnsSession } from './returns-auth.js';
 import { createReturnsService } from './returns-service.js';
+import { toJournalView } from './returns-views.js';
 import { newReturnExternalId } from './uuidv7.js';
 
 export interface ReturnsLogger {
@@ -49,6 +57,10 @@ export interface ComposeReturnsDeps {
    * capture (`createSaleSyncClient` `currencyCode ?? DEFAULT_CURRENCY_CODE`).
    */
   readonly captureCurrencyCode?: string;
+  /** RT-15 S4: the sale drawer's hardware port (the same instance sales use). */
+  readonly drawer: DrawerKickTransport;
+  /** RT-15 S4: the receipt print pipeline (the same instance sales use). */
+  readonly printer: Pick<PrintPipeline, 'printRendered'>;
 }
 
 export interface ComposedReturns {
@@ -62,11 +74,24 @@ export interface ComposedReturns {
   readonly stop: () => void;
 }
 
+/** Renderer views of journal rows, each with its payout (one query). */
+function viewsWithPayouts(payouts: ReturnPayoutsRepository) {
+  return (entries: readonly JournalEntry[]): ReturnJournalView[] => {
+    const rows = payouts.readMany(entries.map((e) => e.returnId));
+    return entries.map((e) => toJournalView(e, rows.get(e.returnId) ?? null));
+  };
+}
+
 export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const { now } = deps;
   let stopped = false;
+  const isStopped = (): boolean => stopped;
+  const transaction = <T>(fn: () => T): T => deps.db.transaction(fn)();
   const client = createReturnsClient(deps.http);
   const repo = createReturnsRepository(deps.db);
+  const payouts = createReturnPayoutsRepository(deps.db);
+  const views = viewsWithPayouts(payouts);
+  const sales = bindSalesRepository(deps.db);
   const audit = createReturnsAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
   const authorizer = createReturnsAuthorizer({
     isEnabled: deps.isEnabled,
@@ -81,14 +106,14 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     audit,
     now,
     logger: deps.logger,
-    isStopped: () => stopped,
-    transaction: <T>(fn: () => T): T => deps.db.transaction(fn)(),
+    isStopped,
+    transaction,
   });
   const resolver = createReturnsResolver({ repo, dispatcher, authorizer, now });
-  const service = createReturnsService({
+  const core = createReturnsService({
     authorizer,
     captureCurrencyCode: deps.captureCurrencyCode ?? DEFAULT_CURRENCY_CODE,
-    sales: bindSalesRepository(deps.db),
+    sales,
     saleRefs: createSaleSyncStateRepo(deps.db),
     client,
     repo,
@@ -98,7 +123,33 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     now,
     newReturnId: randomUUID,
     newExternalId: () => newReturnExternalId(),
+    views,
+    recordLineDetails: (returnId, details) => {
+      payouts.recordLineDetails(returnId, details);
+    },
   });
+  const payout = createReturnsPayoutService({
+    authorizer,
+    repo,
+    payouts,
+    sales,
+    audit,
+    drawer: deps.drawer,
+    printer: deps.printer,
+    transaction,
+    isStopped,
+    now,
+    view: (entry) => toJournalView(entry, payouts.read(entry.returnId)),
+  });
+  const service: ReturnsBridgeAPI = {
+    lookup: (req) => core.lookup(req),
+    quote: (req) => core.quote(req),
+    submit: (req) => core.submit(req),
+    resolve: () => core.resolve(),
+    list: () => core.list(),
+    payout: (req) => payout.payout(req),
+    reprintSlip: (req) => payout.reprintSlip(req),
+  };
   const stop = (): void => {
     stopped = true;
   };

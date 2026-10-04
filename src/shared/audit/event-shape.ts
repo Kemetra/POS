@@ -58,6 +58,15 @@ export const AUDIT_ACTION_CATEGORIES = [
   'sale.return.refused',
   'sale.return.confirmed',
   'sale.return.payout_ready',
+  // RT-15 S4 — the cash payout, its drawer kick and the return slip. Open-set
+  // at the SQL layer (0004); recorded in migration 0040's header.
+  'sale.return.payout_started',
+  'sale.return.drawer_opened',
+  'sale.return.drawer_failed',
+  'sale.return.paid_out',
+  'sale.return.slip_printed',
+  'sale.return.slip_print_failed',
+  'sale.return.slip_reprinted',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 

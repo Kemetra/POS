@@ -23,6 +23,15 @@ import { composeReturns, type ComposedReturns } from '../../compose-returns.js';
 import type { ReturnsSession } from '../../returns-service.js';
 import { createReturnsRepository, type ReturnsRepository } from '../../returns-repository.js';
 import type { Role } from '../../../../shared/operator/role.js';
+import type {
+  DrawerKickResult,
+  DrawerKickTransport,
+} from '../../../drawer/drawer-kick-transport.js';
+import type {
+  PrintAdapterResult,
+  PrintPipeline,
+  RenderedReceipt,
+} from '../../../receipts/print-pipeline.js';
 import {
   freshSalesSyncDb,
   handleFor,
@@ -66,6 +75,7 @@ export const MANAGER_ACTOR: AuthSnapshot = {
   operatorId: 'op-manager',
   operatorSessionId: 'sess-manager',
   role: 'manager',
+  displayName: 'Display manager',
   envelope: ENVELOPE,
 };
 
@@ -77,7 +87,42 @@ export function sessionFor(role: Role): ReturnsSession {
     tenant_id: SCOPE.tenantId,
     branch_id: SCOPE.branchId,
     terminal_id: SCOPE.terminalId,
+    display_name: `Display ${role}`,
   };
+}
+
+/**
+ * RT-15 S4 — the sale drawer's hardware port, faked: counts kicks, answers
+ * with `answer` (opened by default) and runs `onKick` as the kick lands.
+ */
+export class FakeDrawer implements DrawerKickTransport {
+  kicks = 0;
+  answer: () => Promise<DrawerKickResult> = () => Promise.resolve({ ok: true });
+  onKick: (() => void) | null = null;
+
+  kick(): Promise<DrawerKickResult> {
+    this.kicks += 1;
+    this.onKick?.();
+    return this.answer();
+  }
+}
+
+/** RT-15 S4 — the receipt print pipeline's `printRendered`, faked: records every slip. */
+export class FakePrinter implements Pick<PrintPipeline, 'printRendered'> {
+  readonly printed: RenderedReceipt[] = [];
+  answer: () => Promise<PrintAdapterResult> = () =>
+    Promise.resolve({ ok: true, render_path: 'os_print' });
+
+  printRendered(rendered: RenderedReceipt): Promise<PrintAdapterResult> {
+    this.printed.push(rendered);
+    return this.answer();
+  }
+
+  /** The text of the n-th printed slip (HTML with tags removed). */
+  textOf(n: number): string {
+    const html = this.printed[n]?.html ?? '';
+    return html.replace(/<[^>]+>/g, '\n');
+  }
 }
 
 /** A contract `SaleLine` as Backend-Core renders it (numeric(19,4) / (19,6) text). */
@@ -354,6 +399,15 @@ export interface HarnessState {
 }
 
 export interface ReturnsHarness extends ComposedReturns {
+  /** RT-15 S4: the drawer and printer the payout uses. */
+  readonly drawer: FakeDrawer;
+  readonly printer: FakePrinter;
+  /**
+   * RT-15 S4: the app crashed and started again. Latches the latest domain
+   * stopped (an in-flight await then writes nothing) and composes a fresh
+   * domain over the SAME database, drawer and printer.
+   */
+  restart(): ComposedReturns;
   readonly db: SqlJsDatabase;
   readonly handle: DatabaseHandle;
   readonly repo: ReturnsRepository;
@@ -406,22 +460,36 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
       emitter.emit(event);
     },
   };
-  const composed = composeReturns({
-    db: handle,
-    http: { baseUrl: BASE_URL, fetch: backend.fetch },
-    getOperatorEnvelope: () => state.token,
-    isEnabled: () => state.enabled,
-    getSession: () =>
-      state.role === null || !state.paired
-        ? null
-        : { ...sessionFor(state.role), terminal_id: state.terminalId },
-    isSessionLocked: () => state.locked,
-    auditSink,
-    logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
-    now: () => state.now,
-  });
+  const drawer = new FakeDrawer();
+  const printer = new FakePrinter();
+  const compose = (): ComposedReturns =>
+    composeReturns({
+      db: handle,
+      http: { baseUrl: BASE_URL, fetch: backend.fetch },
+      getOperatorEnvelope: () => state.token,
+      isEnabled: () => state.enabled,
+      getSession: () =>
+        state.role === null || !state.paired
+          ? null
+          : { ...sessionFor(state.role), terminal_id: state.terminalId },
+      isSessionLocked: () => state.locked,
+      auditSink,
+      logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
+      now: () => state.now,
+      drawer,
+      printer,
+    });
+  const composed = compose();
+  let latest = composed;
   return {
     ...composed,
+    drawer,
+    printer,
+    restart: () => {
+      latest.stop();
+      latest = compose();
+      return latest;
+    },
     db,
     handle,
     repo: createReturnsRepository(handle),
@@ -436,6 +504,28 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
       db.close();
     },
   };
+}
+
+/**
+ * RT-15 S4 — journal and confirm one return of one unit of LINE_A through the
+ * real submit path (FakeBackend records it); its return id.
+ */
+export async function confirmedReturn(
+  service: Pick<ComposedReturns['service'], 'submit'>,
+  saleNumber = SALE_NUMBER,
+): Promise<string> {
+  const res = await service.submit({ saleNumber, lines: [{ lineRef: LINE_A, quantity: 1 }] });
+  if (res.kind !== 'confirmed') throw new Error(`confirmedReturn: ${res.kind}`);
+  return res.ret.returnId;
+}
+
+/** A promise a test settles by hand (an in-flight drawer kick or print). */
+export function deferredFake<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
 }
 
 /** The audit categories written so far, in order. */

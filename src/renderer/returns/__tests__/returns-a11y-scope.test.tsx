@@ -18,7 +18,11 @@ import {
   submitReturn,
 } from './returns-test-kit.js';
 
-/** RT-15 S3 — K3 (axe) and X1 (no S4 surface, no other bridge). */
+/**
+ * RT-15 S3 — K3 (axe) and X1 (no other bridge). RT-15 S4 moved the X1
+ * boundary: no payout, drawer or print control before a confirmed outcome;
+ * the confirmed outcome offers exactly the payout.
+ */
 afterEach(() => {
   cleanup();
   resetStores();
@@ -65,7 +69,7 @@ describe('accessibility (K3)', () => {
 });
 
 describe('scope (X1, A1 through window.api)', () => {
-  it('uses only window.api.returns and offers no payout, drawer or print control', async () => {
+  it('uses only window.api.returns; no payout control until the return is confirmed', async () => {
     const returns = fakeBridge();
     const other = { payments: vi.fn(), receipts: vi.fn(), sales: vi.fn(), cart: vi.fn() };
     vi.stubGlobal('api', {
@@ -86,7 +90,9 @@ describe('scope (X1, A1 through window.api)', () => {
     expectNoS4Control();
     await user.click(screen.getByRole('button', { name: 'تأكيد الإرجاع' }));
     await screen.findByRole('heading', { name: 'نتيجة المرتجع' });
-    expectNoS4Control();
+    // S4: the confirmed outcome carries its payout, and nothing has been paid.
+    expect(screen.getByRole('button', { name: 'افتح الدرج واصرف النقد' })).toBeInTheDocument();
+    expect(returns.payout).not.toHaveBeenCalled();
     expect(returns.submit).toHaveBeenCalledTimes(1);
     for (const fn of Object.values(other)) expect(fn).not.toHaveBeenCalled();
   });

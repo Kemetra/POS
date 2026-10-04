@@ -13,6 +13,9 @@ export const RETURNS_IPC_CHANNELS = {
   SUBMIT: 'returns:submit',
   RESOLVE: 'returns:resolve',
   LIST: 'returns:list',
+  // RT-15 S4
+  PAYOUT: 'returns:payout',
+  REPRINT_SLIP: 'returns:reprintSlip',
 } as const;
 
 export type ReturnsIpcChannel = (typeof RETURNS_IPC_CHANNELS)[keyof typeof RETURNS_IPC_CHANNELS];

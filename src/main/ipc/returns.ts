@@ -11,7 +11,10 @@
  *   • no other key anywhere (no operator id, scope, amount, key or saleRef can
  *     be smuggled in — scope, saleRef, money and the Idempotency-Key are
  *     derived in main);
- *   • `resolve` / `list` take no payload.
+ *   • `resolve` / `list` take no payload;
+ *   • RT-15 S4 `payout`: exactly `{ returnId, action }` with a canonical UUID
+ *     and an action in the closed set; `reprintSlip`: exactly `{ returnId }`.
+ *     No amount can be sent: main pays the journal's server-confirmed total.
  *
  * Session, role, feature gate and every business rule live in the service.
  * The channels are not on the locked-session allowlist, so the guarded
@@ -20,10 +23,14 @@
 import type { IpcMain } from 'electron';
 
 import { RETURNS_IPC_CHANNELS } from '../../shared/returns/channels.js';
-import type {
-  ReturnLineInput,
-  ReturnsBridgeAPI,
-  ReturnsQuoteRequest,
+import {
+  RETURN_PAYOUT_ACTIONS,
+  type ReturnLineInput,
+  type ReturnPayoutAction,
+  type ReturnsBridgeAPI,
+  type ReturnsPayoutRequest,
+  type ReturnsQuoteRequest,
+  type ReturnsReprintRequest,
 } from '../../shared/returns/types.js';
 import { isUuid } from '../returns/returns-wire.js';
 
@@ -39,6 +46,8 @@ const INVALID = { kind: 'refused', reason: 'invalid_input' } as const;
 const LINE_KEYS = ['lineRef', 'quantity'] as const;
 const LOOKUP_KEYS = ['saleNumber'] as const;
 const QUOTE_KEYS = ['saleNumber', 'lines'] as const;
+const PAYOUT_KEYS = ['returnId', 'action'] as const;
+const REPRINT_KEYS = ['returnId'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return false;
@@ -110,6 +119,28 @@ export function readQuoteRequest(value: unknown): ReturnsQuoteRequest | null {
   return saleNumber === null || lines === null ? null : { saleNumber, lines };
 }
 
+function isReturnId(value: unknown): value is string {
+  return typeof value === 'string' && isUuid(value);
+}
+
+function isPayoutAction(value: unknown): value is ReturnPayoutAction {
+  return (RETURN_PAYOUT_ACTIONS as readonly unknown[]).includes(value);
+}
+
+/** `{ returnId, action }` exactly, or null. */
+export function readPayoutRequest(value: unknown): ReturnsPayoutRequest | null {
+  if (!isClosedShape(value, PAYOUT_KEYS)) return null;
+  const { returnId, action } = value;
+  return isReturnId(returnId) && isPayoutAction(action) ? { returnId, action } : null;
+}
+
+/** `{ returnId }` exactly, or null. */
+export function readReprintRequest(value: unknown): ReturnsReprintRequest | null {
+  if (!isClosedShape(value, REPRINT_KEYS)) return null;
+  const { returnId } = value;
+  return isReturnId(returnId) ? { returnId } : null;
+}
+
 /** `resolve` / `list` accept no payload (undefined or `{}`). */
 function isEmptyPayload(value: unknown): boolean {
   return value === undefined || isClosedShape(value, []);
@@ -144,4 +175,14 @@ export function registerReturnsHandlers(ipcMain: IpcMain, deps: ReturnsIpcDeps):
   ipcMain.handle(RETURNS_IPC_CHANNELS.LIST, (_event, request: unknown) =>
     isEmptyPayload(request) ? service.list() : INVALID,
   );
+
+  ipcMain.handle(RETURNS_IPC_CHANNELS.PAYOUT, (_event, request: unknown) => {
+    const req = readPayoutRequest(request);
+    return req === null ? { ...INVALID, ret: null } : service.payout(req);
+  });
+
+  ipcMain.handle(RETURNS_IPC_CHANNELS.REPRINT_SLIP, (_event, request: unknown) => {
+    const req = readReprintRequest(request);
+    return req === null ? INVALID : service.reprintSlip(req);
+  });
 }

@@ -12,6 +12,7 @@ import type {
   AuditPayloadMap,
   SaleReturnRefusedPayload,
 } from '../../shared/audit/payload-schemas.js';
+import type { ReturnDrawerFailure, ReturnPayoutMethod } from '../../shared/returns/types.js';
 import type { JournalEntry, ReturnScope } from './returns-repository.js';
 
 type ReturnAuditCategory = Extract<AuditEvent['action_category'], `sale.return.${string}`>;
@@ -27,11 +28,26 @@ export interface ReturnActor {
   readonly operatorSessionId: string;
 }
 
+/** What the drawer kick of a payout did. */
+export type DrawerAuditOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: ReturnDrawerFailure };
+
+/** What printing a return slip did; `copy` is a reprint. */
+export type SlipAuditOutcome =
+  | { readonly copy: boolean; readonly ok: true }
+  | { readonly copy: boolean; readonly ok: false; readonly failureReason: string };
+
 export interface ReturnsAudit {
   attempted(entry: JournalEntry): void;
   refused(actor: ReturnActor, payload: SaleReturnRefusedPayload): void;
   confirmed(entry: JournalEntry, replayed: boolean): void;
   payoutReady(entry: JournalEntry): void;
+  // RT-15 S4: attributed to the paying operator (`actor`), for a confirmed return.
+  payoutStarted(actor: ReturnActor, entry: JournalEntry): void;
+  drawer(actor: ReturnActor, entry: JournalEntry, outcome: DrawerAuditOutcome): void;
+  paidOut(actor: ReturnActor, entry: JournalEntry, method: ReturnPayoutMethod): void;
+  slip(actor: ReturnActor, entry: JournalEntry, outcome: SlipAuditOutcome): void;
 }
 
 export interface ReturnsAuditDeps {
@@ -104,6 +120,25 @@ export function createReturnsAudit(deps: ReturnsAuditDeps): ReturnsAudit {
     write(actorOf(entry), category, { ...shared, ...extra(facts) } as AuditPayloadMap[C]);
   }
 
+  /** The references every payout event carries. */
+  function refs(entry: JournalEntry) {
+    return { return_id: entry.returnId, return_ref: confirmedFacts(entry).returnRef };
+  }
+
+  function slipEvent(actor: ReturnActor, entry: JournalEntry, outcome: SlipAuditOutcome): void {
+    if (!outcome.ok) {
+      const failure_reason = outcome.failureReason;
+      write(actor, 'sale.return.slip_print_failed', {
+        ...refs(entry),
+        copy: outcome.copy,
+        failure_reason,
+      });
+      return;
+    }
+    const category = outcome.copy ? 'sale.return.slip_reprinted' : 'sale.return.slip_printed';
+    write(actor, category, refs(entry));
+  }
+
   return {
     attempted(entry) {
       write(actorOf(entry), 'sale.return.attempted', {
@@ -131,5 +166,33 @@ export function createReturnsAudit(deps: ReturnsAuditDeps): ReturnsAudit {
         method: 'cash' as const,
       }));
     },
+    payoutStarted(actor, entry) {
+      write(actor, 'sale.return.payout_started', {
+        ...refs(entry),
+        sale_ref: entry.serverSaleRef,
+        payout_minor: confirmedFacts(entry).totalMinor,
+        currency_code: entry.currencyCode,
+      });
+    },
+    drawer(actor, entry, outcome) {
+      if (outcome.ok) write(actor, 'sale.return.drawer_opened', refs(entry));
+      else
+        write(actor, 'sale.return.drawer_failed', {
+          ...refs(entry),
+          failure_reason: outcome.reason,
+        });
+    },
+    paidOut(actor, entry, method) {
+      write(actor, 'sale.return.paid_out', {
+        ...refs(entry),
+        sale_id: entry.saleId,
+        sale_ref: entry.serverSaleRef,
+        payout_minor: confirmedFacts(entry).totalMinor,
+        currency_code: entry.currencyCode,
+        method,
+        tender: 'cash',
+      });
+    },
+    slip: slipEvent,
   };
 }

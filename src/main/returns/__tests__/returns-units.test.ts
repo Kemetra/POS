@@ -177,6 +177,31 @@ describe('returnability and quoting', () => {
   });
 });
 
+function viewEntry(): JournalEntry {
+  return {
+    returnId: 'r1',
+    scope: SCOPE,
+    saleId: 's1',
+    saleNumber: 'SN-1',
+    serverSaleRef: SALE_REF,
+    externalId: 'pos-pulse-return:secret-ish',
+    operatorId: 'op',
+    operatorSessionId: 'sess',
+    currencyCode: 'EGP',
+    quotedTotalMinor: 100,
+    requestBodyJson: '{}',
+    lines: [{ lineRef: LINE_A, quantity: 1 }],
+    state: 'pending',
+    returnRef: null,
+    returnTotalMinor: null,
+    refusalReason: null,
+    attemptCount: 0,
+    lastAttemptAt: null,
+    createdAt: 't0',
+    confirmedAt: null,
+  };
+}
+
 describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => {
   it.each<[string, TenderEvidence]>([
     [JSON.stringify([{ tender_type: 'cash' }]), 'cash'],
@@ -216,28 +241,7 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
   });
 
   it('projects a journal entry without keys, operator ids or the request', () => {
-    const entry: JournalEntry = {
-      returnId: 'r1',
-      scope: SCOPE,
-      saleId: 's1',
-      saleNumber: 'SN-1',
-      serverSaleRef: SALE_REF,
-      externalId: 'pos-pulse-return:secret-ish',
-      operatorId: 'op',
-      operatorSessionId: 'sess',
-      currencyCode: 'EGP',
-      quotedTotalMinor: 100,
-      requestBodyJson: '{}',
-      lines: [{ lineRef: LINE_A, quantity: 1 }],
-      state: 'pending',
-      returnRef: null,
-      returnTotalMinor: null,
-      refusalReason: null,
-      attemptCount: 0,
-      lastAttemptAt: null,
-      createdAt: 't0',
-      confirmedAt: null,
-    };
+    const entry = viewEntry();
     expect(toJournalView(entry)).toEqual({
       returnId: 'r1',
       saleId: 's1',
@@ -251,7 +255,26 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
       createdAt: 't0',
       confirmedAt: null,
       lines: [{ lineRef: LINE_A, quantity: 1 }],
+      payout: null,
     });
+  });
+
+  it('projects a started or completed payout as when and how, never who (RT-15 S4)', () => {
+    const entry = { ...viewEntry(), state: 'paid_out' as const };
+    const payout = {
+      returnId: 'r1',
+      startedOperatorId: 'op-starter',
+      startedSessionId: 'sess-starter',
+      startedAt: 't2',
+      paidOperatorId: 'op-payer',
+      paidOperatorName: 'Mona',
+      paidSessionId: 'sess-payer',
+      paidAt: 't3',
+      method: 'manual' as const,
+    };
+    const view = toJournalView(entry, payout);
+    expect(view.payout).toEqual({ startedAt: 't2', paidAt: 't3', method: 'manual' });
+    expect(JSON.stringify(view)).not.toMatch(/op-starter|sess-starter|op-payer|sess-payer|Mona/);
   });
 });
 

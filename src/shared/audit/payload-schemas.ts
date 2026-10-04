@@ -318,7 +318,7 @@ export interface SaleReturnRefusedPayload {
   return_id: string | null;
   sale_id: string | null;
   sale_ref: string | null;
-  operation: 'lookup' | 'quote' | 'submit' | 'resolve' | 'list';
+  operation: 'lookup' | 'quote' | 'submit' | 'resolve' | 'list' | 'payout' | 'reprint';
   reason: string;
 }
 
@@ -341,6 +341,59 @@ export interface SaleReturnPayoutReadyPayload {
   payout_minor: number;
   currency_code: string;
   method: 'cash';
+}
+
+// ─── RT-15 S4 — the cash payout, drawer and return slip ────────────────────
+//
+// The acting operator (envelope) is the one who paid out. Amounts are the
+// server-confirmed refund in minor units. No slip text, no line names.
+
+/** `sale.return.payout_started` — the payout was claimed, before the drawer kick. */
+export interface SaleReturnPayoutStartedPayload {
+  return_id: string;
+  sale_ref: string;
+  return_ref: string;
+  payout_minor: number;
+  currency_code: string;
+}
+
+/** `sale.return.drawer_opened` — the drawer kick reported opened. */
+export interface SaleReturnDrawerOpenedPayload {
+  return_id: string;
+  return_ref: string;
+}
+
+/** `sale.return.drawer_failed` — the drawer did not open; nothing was paid out. */
+export interface SaleReturnDrawerFailedPayload {
+  return_id: string;
+  return_ref: string;
+  failure_reason: string;
+}
+
+/** `sale.return.paid_out` — the cash refund was paid out (once per return). */
+export interface SaleReturnPaidOutPayload {
+  return_id: string;
+  sale_id: string;
+  sale_ref: string;
+  return_ref: string;
+  payout_minor: number;
+  currency_code: string;
+  method: 'drawer' | 'manual';
+  tender: 'cash';
+}
+
+/** `sale.return.slip_printed` / `slip_reprinted` — a return slip printed (copy on reprint). */
+export interface SaleReturnSlipPrintedPayload {
+  return_id: string;
+  return_ref: string;
+}
+
+/** `sale.return.slip_print_failed` — the slip did not print; the payout stands. */
+export interface SaleReturnSlipPrintFailedPayload {
+  return_id: string;
+  return_ref: string;
+  copy: boolean;
+  failure_reason: string;
 }
 
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────
@@ -389,6 +442,14 @@ export type AuditPayloadMap = {
   'sale.return.refused': SaleReturnRefusedPayload;
   'sale.return.confirmed': SaleReturnConfirmedPayload;
   'sale.return.payout_ready': SaleReturnPayoutReadyPayload;
+  // RT-15 S4
+  'sale.return.payout_started': SaleReturnPayoutStartedPayload;
+  'sale.return.drawer_opened': SaleReturnDrawerOpenedPayload;
+  'sale.return.drawer_failed': SaleReturnDrawerFailedPayload;
+  'sale.return.paid_out': SaleReturnPaidOutPayload;
+  'sale.return.slip_printed': SaleReturnSlipPrintedPayload;
+  'sale.return.slip_print_failed': SaleReturnSlipPrintFailedPayload;
+  'sale.return.slip_reprinted': SaleReturnSlipPrintedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

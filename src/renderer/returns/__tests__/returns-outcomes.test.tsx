@@ -83,11 +83,15 @@ describe('refusals before submit (O2)', () => {
 describe('outcome announcement (K2)', () => {
   it('fills an already-present live region, so screen readers announce it', async () => {
     const filledInPlace: Node[] = [];
-    const observer = new MutationObserver((records) => {
+    const collect = (records: MutationRecord[]): void => {
       for (const r of records) if (r.addedNodes.length > 0) filledInPlace.push(r.target);
-    });
+    };
+    const observer = new MutationObserver(collect);
     observer.observe(document.body, { childList: true, subtree: true });
     await outcomeFor({ kind: 'confirmed', ret: journal(), replayed: false });
+    // Records still queued for delivery (a microtask) are dropped by
+    // disconnect(): take them first, or a late fill goes unseen (RT-15 S4).
+    collect(observer.takeRecords());
     observer.disconnect();
     const region = screen.getByRole('status');
     expect(region).toHaveTextContent(OUTCOME_COPY.confirmed);
@@ -102,7 +106,8 @@ describe('submit outcomes (O3, O4)', () => {
     await outcomeFor({ kind: 'confirmed', ret, replayed: false });
     expect(screen.getByRole('status')).toHaveTextContent(OUTCOME_COPY.confirmed);
     expect(screen.getByText(RETURN_REF)).toBeInTheDocument();
-    expect(screen.getByText('24.99 EGP')).toBeInTheDocument();
+    // The outcome facts and (RT-15 S4, R6) the payout amount: both the server total.
+    expect(screen.getAllByText('24.99 EGP')).toHaveLength(2);
     expect(screen.queryByText('26.00 EGP')).not.toBeInTheDocument();
   });
 
