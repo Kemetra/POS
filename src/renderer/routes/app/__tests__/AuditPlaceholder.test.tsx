@@ -3,41 +3,17 @@ import { render, screen, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
-import { ReturnsPlaceholder } from '../ReturnsPlaceholder';
 import { AuditPlaceholder } from '../AuditPlaceholder';
 
 /**
- * POS v3.5 Slice 1 — thin "coming soon" placeholders for the two new nav
- * entries (returns Phase-7 blocked; audit a later display slice). Same
- * contract as the other placeholders (T037): renders default state, no
- * fetch/IPC/persistence on mount.
+ * POS v3.5 Slice 1 — thin "coming soon" placeholder for the Audit nav entry
+ * (a later display slice). Same contract as the other placeholders (T037):
+ * renders default state, no fetch/IPC/persistence on mount. (The Returns
+ * placeholder was replaced by the RT-15 S3 return flow.)
  */
 
 afterEach(cleanup);
 afterEach(() => vi.unstubAllGlobals());
-
-describe('ReturnsPlaceholder', () => {
-  it('renders the Returns heading and coming-soon copy', () => {
-    render(
-      <MemoryRouter>
-        <ReturnsPlaceholder />
-      </MemoryRouter>,
-    );
-    expect(screen.getByRole('heading', { name: /returns/i })).toBeInTheDocument();
-    expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
-  });
-
-  it('makes zero fetch calls on mount', () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    render(
-      <MemoryRouter>
-        <ReturnsPlaceholder />
-      </MemoryRouter>,
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
 
 describe('AuditPlaceholder', () => {
   it('renders the Audit heading and coming-soon copy', () => {

@@ -25,6 +25,11 @@ export interface FeatureFlagsState {
    * false — vouchers are excluded from the pilot (RT-10 D2).
    */
   voucherTender: boolean;
+  /**
+   * RT-15 S3: enables the manager/admin return flow at /app/returns.
+   * Fail-closed default: false (AC1). Main gates every `returns.*` call too.
+   */
+  returns: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
@@ -36,6 +41,7 @@ export interface FeatureFlagsStore extends FeatureFlagsState {
     saleFinalization?: boolean;
     productSearch?: boolean;
     voucherTender?: boolean;
+    returns?: boolean;
   }): void;
   reset(): void;
 }
@@ -46,6 +52,7 @@ const INITIAL: FeatureFlagsState = {
   saleFinalization: false,
   productSearch: false,
   voucherTender: false,
+  returns: false,
   hydrated: false,
 };
 
@@ -58,6 +65,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
       saleFinalization: flags.saleFinalization === true,
       productSearch: flags.productSearch === true,
       voucherTender: flags.voucherTender === true,
+      returns: flags.returns === true,
       hydrated: true,
     });
   },

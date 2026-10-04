@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  LOCAL_RETURN_REFUSALS,
+  RETURN_STATES,
+  SERVER_RETURN_REFUSALS,
+} from '../../../shared/returns/types.js';
+import { OUTCOME_COPY, refusalMessage, stateLabel } from '../returns-messages.js';
+
+/**
+ * RT-15 S3 — O1 (AC10): every refusal the bridge can answer has its own
+ * message, and no two read alike. The reason lists come from the shared S2
+ * tuples, so a reason added in main without copy here fails this test.
+ */
+const ALL_REASONS = [...SERVER_RETURN_REFUSALS, ...LOCAL_RETURN_REFUSALS];
+
+describe('returns refusal copy (O1)', () => {
+  it('covers all 24 reasons with a non-empty Arabic message', () => {
+    expect(ALL_REASONS).toHaveLength(24);
+    for (const reason of ALL_REASONS) {
+      const message = refusalMessage(reason);
+      expect(message.trim().length, reason).toBeGreaterThan(0);
+      expect(message, reason).toMatch(/[؀-ۿ]/);
+    }
+  });
+
+  it('gives every reason a distinct message, distinct from every outcome message', () => {
+    const messages = [...ALL_REASONS.map(refusalMessage), ...Object.values(OUTCOME_COPY)];
+    expect(new Set(messages).size).toBe(messages.length);
+  });
+
+  it('falls back to a generic message for a reason main has not taught the renderer', () => {
+    const unknown = refusalMessage('brand_new_reason' as never);
+    expect(unknown.length).toBeGreaterThan(0);
+    expect(ALL_REASONS.map(refusalMessage)).not.toContain(unknown);
+  });
+});
+
+describe('journal state labels (H1)', () => {
+  it('labels each of the 5 journal states distinctly', () => {
+    const labels = RETURN_STATES.map(stateLabel);
+    expect(new Set(labels).size).toBe(5);
+    for (const label of labels) expect(label).toMatch(/[؀-ۿ]/);
+  });
+});

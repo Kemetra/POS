@@ -517,12 +517,14 @@ describe('SC-003 path 28 — /app/audit?from=nav query string (⛔ cashier)', ()
 // ── PR #434 FIX 1 (positive) — manager + admin CAN reach returns + audit ───
 
 describe('SC-003 path 29 — /app/returns (✅ manager)', () => {
-  it('manager reaches /app/returns without redirect; placeholder shown', async () => {
+  // RT-15 S3: the placeholder is replaced by the return flow; with the
+  // returns flag off by default (AC1) the manager sees the disabled notice.
+  it('manager reaches /app/returns without redirect; the flow is gated off by default', async () => {
     await renderAsSession(MANAGER_SESSION, '/app/returns');
     await waitFor(() => {
       expect(screen.getByTestId('app-shell')).toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
-      expect(screen.getByText(/Returns are not yet available/i)).toBeInTheDocument();
+      expect(screen.getByText('المرتجعات غير مفعّلة على هذا الجهاز.')).toBeInTheDocument();
     });
   });
 });
@@ -539,12 +541,12 @@ describe('SC-003 path 30 — /app/audit (✅ manager)', () => {
 });
 
 describe('SC-003 path 31 — /app/returns (✅ admin)', () => {
-  it('admin reaches /app/returns without redirect; placeholder shown', async () => {
+  it('admin reaches /app/returns without redirect; the flow is gated off by default', async () => {
     await renderAsSession({ ...MANAGER_SESSION, id: 'sess-admin', role: 'admin' }, '/app/returns');
     await waitFor(() => {
       expect(screen.getByTestId('app-shell')).toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
-      expect(screen.getByText(/Returns are not yet available/i)).toBeInTheDocument();
+      expect(screen.getByText('المرتجعات غير مفعّلة على هذا الجهاز.')).toBeInTheDocument();
     });
   });
 });
