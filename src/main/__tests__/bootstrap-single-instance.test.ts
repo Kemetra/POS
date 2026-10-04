@@ -5,44 +5,59 @@ import { describe, it, expect } from 'vitest';
 /**
  * RT-203 — composition-root guard for the single-instance lock.
  *
- * A static check, like `bootstrap-cashier-profile.test.ts`: `src/main/index.ts`
- * boots at module load, so it cannot be imported under vitest. The lock
- * decision itself is unit-tested in `app/__tests__/single-instance.test.ts`;
- * this guard pins WHERE it runs.
+ * A static check, like `bootstrap-cashier-profile.test.ts`, that pins WHERE the
+ * lock runs. The lock decision is unit-tested in
+ * `app/__tests__/single-instance.test.ts`; the effect on the real boot is
+ * covered by the behavioural `boot-single-instance.test.ts`.
  *
  * The load-bearing property is ORDER: a second launch must quit before it
  * opens the terminal database, runs migrations, starts a worker, registers IPC,
  * builds the printer/drawer ports or creates a window. So every one of those
  * must sit inside the boot chain that hangs off the lock gate.
+ *
+ * Line endings: Windows CI checks the source out with CRLF. Every check runs
+ * against the source as checked out AND against a forced-CRLF copy, the source
+ * is normalised to LF before analysis, and the checks are token/regex based so
+ * no whitespace layout is load-bearing.
  */
 
-const INDEX_PATH = resolve(__dirname, '../index.ts');
-const source = readFileSync(INDEX_PATH, 'utf-8');
+const raw = readFileSync(resolve(__dirname, '../index.ts'), 'utf-8');
 
-/** `source` without comments, so prose cannot satisfy or trip a check. */
-const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const SOURCES: [string, string][] = [
+  ['as checked out', raw],
+  ['with CRLF line endings', raw.replace(/\r?\n/g, '\r\n')],
+];
 
-function indexOfOrFail(needle: RegExp): number {
-  const idx = code.search(needle);
-  if (idx < 0) throw new Error(`index.ts: ${String(needle)} not found`);
-  return idx;
+/** Analyse `text` as LF, without comments (prose cannot satisfy or trip a check). */
+function analyse(text: string) {
+  const code = text
+    .replace(/\r\n?/g, '\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const indexOfOrFail = (needle: RegExp): number => {
+    const idx = code.search(needle);
+    if (idx < 0) throw new Error(`index.ts: ${String(needle)} not found`);
+    return idx;
+  };
+  /** Offset of EVERY match, so a second (e.g. module-level) call cannot hide behind the first. */
+  const allIndexesOf = (needle: RegExp): number[] => {
+    const flags = needle.flags.includes('g') ? needle.flags : `${needle.flags}g`;
+    const found = [...code.matchAll(new RegExp(needle.source, flags))].map((m) => m.index);
+    if (found.length === 0) throw new Error(`index.ts: ${String(needle)} not found`);
+    return found;
+  };
+  return { code, indexOfOrFail, allIndexesOf };
 }
 
-/** Offset of EVERY match, so a second (e.g. module-level) call cannot hide behind the first. */
-function allIndexesOf(needle: RegExp): number[] {
-  const global = new RegExp(
-    needle.source,
-    needle.flags.includes('g') ? needle.flags : `${needle.flags}g`,
-  );
-  const found = [...code.matchAll(global)].map((m) => m.index);
-  if (found.length === 0) throw new Error(`index.ts: ${String(needle)} not found`);
-  return found;
-}
+/** Collapse all whitespace, so a token comparison ignores layout and line endings. */
+const tokens = (text: string): string => text.trim().split(/\s+/).join(' ');
 
 const LOCK_REQUEST = /acquireSingleInstance\(app,/;
 const BOOT_GATE = /^singleInstanceReady\s*\?\.then\(async \(\) => \{/m;
 
-describe('main/index.ts takes the single-instance lock first (RT-203)', () => {
+describe.each(SOURCES)('RT-203 index.ts takes the lock first (%s)', (_eol, text) => {
+  const { code, indexOfOrFail, allIndexesOf } = analyse(text);
+
   it('imports the lock module', () => {
     expect(code).toMatch(
       /import\s+\{[^}]*\bacquireSingleInstance\b[^}]*\}\s+from\s+'\.\/app\/single-instance\.js'/,
@@ -52,9 +67,10 @@ describe('main/index.ts takes the single-instance lock first (RT-203)', () => {
   it('runs nothing at module scope before the lock but the focus-target slot', () => {
     const prelude = code
       .slice(0, indexOfOrFail(LOCK_REQUEST))
-      .replace(/^import\b[\s\S]*?from\s+'[^']+';$/gm, '')
-      .trim();
-    expect(prelude).toBe('let mainWindow: BrowserWindow | undefined;\nconst singleInstanceReady =');
+      .replace(/^import\b[\s\S]*?from\s+'[^']+';$/gm, '');
+    expect(tokens(prelude)).toBe(
+      'let mainWindow: BrowserWindow | undefined; const singleInstanceReady =',
+    );
   });
 
   it.each([/createWindowFactory\(/, /createDatabaseHolder\(/, /createWorkerRegistry\(/])(
@@ -72,6 +88,10 @@ describe('main/index.ts takes the single-instance lock first (RT-203)', () => {
     // A `ready` listener would boot a second launch too, bypassing the gate.
     expect(code).not.toMatch(/\.(on|once|prependListener|prependOnceListener)\(\s*['"`]ready['"`]/);
   });
+});
+
+describe.each(SOURCES)('RT-203 index.ts boots only behind the lock (%s)', (_eol, text) => {
+  const { indexOfOrFail, allIndexesOf } = analyse(text);
 
   it.each([
     ['the logger', /createLogger\(/],
@@ -88,6 +108,10 @@ describe('main/index.ts takes the single-instance lock first (RT-203)', () => {
     const gate = indexOfOrFail(BOOT_GATE);
     for (const at of allIndexesOf(needle)) expect(at).toBeGreaterThan(gate);
   });
+});
+
+describe.each(SOURCES)('RT-203 index.ts focuses the cashier window (%s)', (_eol, text) => {
+  const { code, indexOfOrFail } = analyse(text);
 
   it('a second launch focuses the tracked cashier window, never "any window"', () => {
     const start = indexOfOrFail(LOCK_REQUEST);
