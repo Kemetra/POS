@@ -223,12 +223,19 @@ export class FakeBackend {
   onReturn: ReturnResponder = (call, backend) => backend.recordIdempotently(call);
   /** Runs while a readSale GET is in flight (to change the session mid-request). */
   onRead: (() => void) | null = null;
+  /** When set, the `readSale` answer per requested saleRef (else `sale`). */
+  saleFor: ((saleRef: string) => ContractSale) | null = null;
+  /** When set, awaited before a readSale GET is answered (network latency). */
+  readLatency: (() => Promise<void>) | null = null;
   /** Returns recorded so far, by Idempotency-Key. */
   readonly recorded = new Map<string, ContractSaleReturn>();
 
   /** Method-keyed routes of the fake POS sales surface. */
   private readonly routes: Readonly<Record<string, (call: RecordedCall) => Promise<Response>>> = {
-    GET: () => Promise.resolve(this.answerRead()),
+    GET: async (call) => {
+      if (this.readLatency !== null) await this.readLatency();
+      return this.answerRead(call);
+    },
     POST: async (call) => await this.onReturn(call, this),
   };
 
@@ -241,9 +248,11 @@ export class FakeBackend {
   };
 
   /** The `readSale` answer; `onRead` runs while it is "in flight". */
-  private answerRead(): Response {
+  private answerRead(call: RecordedCall): Response {
     this.onRead?.();
-    return this.sale instanceof Response ? this.sale : jsonResponse(200, this.sale);
+    const saleRef = /\/sales\/([^/]+)$/.exec(call.url)?.[1] ?? '';
+    const sale = this.saleFor?.(saleRef) ?? this.sale;
+    return sale instanceof Response ? sale : jsonResponse(200, sale);
   }
 
   /** 201 the first time a key is seen; a same-key retry replays it (RT-82 K4). */
