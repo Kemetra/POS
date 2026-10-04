@@ -40,15 +40,23 @@ function lineKey(parts: readonly unknown[]): string {
   return parts.map((p) => String(p)).join('|');
 }
 
+/** A contract amount string → integer minor units, or null. */
+function toMinor(value: string, exponent: number): number | null {
+  const amount4 = parseAmount4(value);
+  return amount4 === null ? null : amount4ToMinor(amount4, exponent);
+}
+
+function isAllNumbers(values: readonly (number | null)[]): values is readonly number[] {
+  return values.every((v) => v !== null);
+}
+
 function serverLineKey(line: WireSaleLine, exponent: number): string | null {
-  const quantity = parseWholeQuantity(line.quantity);
-  const unit4 = parseAmount4(line.unitPrice);
-  const amount4 = parseAmount4(line.lineAmount);
-  if (quantity === null || unit4 === null || amount4 === null) return null;
-  const unit = amount4ToMinor(unit4, exponent);
-  const amount = amount4ToMinor(amount4, exponent);
-  if (unit === null || amount === null) return null;
-  return lineKey([quantity, unit, amount]);
+  const parts = [
+    parseWholeQuantity(line.quantity),
+    toMinor(line.unitPrice, exponent),
+    toMinor(line.lineAmount, exponent),
+  ];
+  return isAllNumbers(parts) ? lineKey(parts) : null;
 }
 
 function snapshotKeys(linesJson: string): string[] | null {
