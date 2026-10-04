@@ -703,7 +703,10 @@ export interface CartBridgeAPI {
     setNote(req: CartLinesSetNoteRequest): Promise<CartLinesSetNoteResponse>;
   };
   discountPlaceholders: {
-    /** Adds a discount placeholder; may require manager attribution. */
+    /**
+     * Adds a discount placeholder; may require manager attribution. The
+     * approver is the authenticated session operator, never renderer-supplied.
+     */
     add(req: CartDiscountPlaceholdersAddRequest): Promise<CartDiscountPlaceholdersAddResponse>;
     /** Removes a discount placeholder; mirrors attribution rule of add. */
     remove(

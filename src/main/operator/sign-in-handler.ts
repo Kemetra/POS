@@ -100,12 +100,19 @@ export class SignInHandler {
   async signIn(req: ManagerAdminSignInRequest): Promise<SignInResponse> {
     // Boundary input validation — generic refusal on shape miss; we
     // never echo the rejected payload (Constitution VII).
-    if (
-      typeof req.identifier !== 'string' ||
-      req.identifier.length === 0 ||
-      typeof req.password !== 'string' ||
-      req.password.length === 0
-    ) {
+    if (typeof req.identifier !== 'string' || typeof req.password !== 'string') {
+      this.logRefusal('invalid_input', 'shape');
+      return REFUSE_INVALID;
+    }
+    // RT-42 — normalise the identifier (email/username) by trimming
+    // surrounding whitespace before it reaches Clerk: a pasted trailing space
+    // otherwise fails Clerk's identifier format check (422) and surfaces as a
+    // generic credential refusal. Done here, in the authoritative main-process
+    // path, so it holds regardless of what the renderer sends. The PASSWORD is
+    // deliberately NOT trimmed or transformed — its bytes are passed through
+    // exactly as entered (leading/trailing spaces can be part of a password).
+    const identifier = req.identifier.trim();
+    if (identifier.length === 0 || req.password.length === 0) {
       this.logRefusal('invalid_input', 'shape');
       return REFUSE_INVALID;
     }
@@ -113,7 +120,7 @@ export class SignInHandler {
     // 1. Clerk credential exchange — happens in main process; password
     //    is consumed by the exchanger and discarded after this call.
     const exchange = await this.deps.clerk.exchange({
-      identifier: req.identifier,
+      identifier,
       password: req.password,
     });
     if (exchange.kind === 'no_connection') {

@@ -846,15 +846,16 @@ export class CartBridgeHandlers {
     const pctDigits = pctMatch?.[1] ?? null;
     const isAboveThreshold = pctDigits !== null && parseInt(pctDigits, 10) > 10;
 
-    if (isAboveThreshold) {
-      // Attribution must be present and must not be the acting cashier.
-      if (!req.attribution_operator_id || req.attribution_operator_id === session.operator_id) {
-        return refuse('manager_attribution_required');
-      }
+    // RT-183: the approving supervisor is derived from the authenticated
+    // session only — never from the renderer. A manager or admin session
+    // approves its own discount (RT-28 D2). A cashier session has no
+    // main-held approval to consume yet (the RT-28/RT-114 step-up does not
+    // exist), so an above-threshold add fails closed.
+    const sessionIsManager = session.role === 'manager' || session.role === 'admin';
+    if (isAboveThreshold && !sessionIsManager) {
+      return refuse('manager_attribution_required');
     }
-
-    // Narrowed after the guard above — safe to use without assertion in the isAboveThreshold branch.
-    const attributionOperatorId = req.attribution_operator_id ?? null;
+    const attributionOperatorId = isAboveThreshold ? session.operator_id : null;
 
     // Idempotency: the idempotency_key doubles as placeholder_id.
     const replay = store.getOutboxRow(req.idempotency_key);
