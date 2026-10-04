@@ -47,15 +47,9 @@ function wholeLine(line: WireSaleLine): WholeLine | null {
   return sold > 0 ? { sold, returned, returnable, lineAmount4 } : null;
 }
 
-/** D-c: refunds are cash only, so any non-cash tender blocks the return. */
-function hasNonCashTender(sale: WireSale): boolean {
-  return (sale.tenders ?? []).some((t) => t.method !== 'cash');
-}
-
-/** Sale-level refusal from the live server view (AC4, D-c), or null. */
+/** Sale-level refusal from the live server view (AC4), or null. D-c: `returns-tender`. */
 export function assessSale(sale: WireSale): LocalReturnRefusal | null {
   if (sale.voided) return 'sale_voided';
-  if (hasNonCashTender(sale)) return 'card_tender_blocked';
   const anyReturnable = sale.lines.some((l) => (wholeLine(l)?.returnable ?? 0) > 0);
   return anyReturnable ? null : 'nothing_returnable';
 }

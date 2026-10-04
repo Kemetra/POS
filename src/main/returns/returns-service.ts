@@ -42,12 +42,15 @@ import { assessSale, buildRecordReturnBody, quoteReturn, viewLines } from './ret
 import type { ReturnsRepository } from './returns-repository.js';
 import type { ResolveSummary } from './returns-resolver.js';
 import { isExpectedSale } from './returns-verify.js';
-import { hasNonCashLocalTender, toJournalView } from './returns-views.js';
+import { cashOnlyVerdict, localTenderEvidence, serverTenderEvidence } from './returns-tender.js';
+import { toJournalView } from './returns-views.js';
 import type { WireSale } from './returns-wire.js';
 
 export type { ReturnsSession } from './returns-auth.js';
 
 export interface ReturnsServiceDeps {
+  /** The terminal's capture currency (the sale-sync capture's own source). */
+  readonly captureCurrencyCode: string;
   /** The single authorization choke point (admission + every re-check). */
   readonly authorizer: ReturnsAuthorizer;
   readonly sales: Pick<SalesRepository, 'findByNumber'>;
@@ -140,7 +143,8 @@ class ReturnsService implements ReturnsBridgeAPI {
       terminal_id: terminalId,
     });
     if (row === null) return 'sale_not_found';
-    if (hasNonCashLocalTender(row)) return 'card_tender_blocked';
+    // D-c: a contradicting local tender refuses before any network call.
+    if (localTenderEvidence(row) === 'non_cash') return 'card_tender_blocked';
     return row;
   }
 
@@ -165,9 +169,17 @@ class ReturnsService implements ReturnsBridgeAPI {
     if (lost !== null) return this.refuse(actor, op, lost, { ...ids, saleRef });
     if (read.kind === 'unavailable') return this.refuse(actor, op, 'offline', { ...ids, saleRef });
     if (read.kind === 'refused') return this.refuse(actor, op, read.reason, { ...ids, saleRef });
-    if (!isExpectedSale(read.sale, { saleRef, linesJson: row.lines_json })) {
+    const expected = {
+      saleRef,
+      currencyCode: this.deps.captureCurrencyCode,
+      linesJson: row.lines_json,
+    };
+    if (!isExpectedSale(read.sale, expected)) {
       return this.refuse(actor, op, 'sale_mismatch', { ...ids, saleRef });
     }
+    // D-c fails closed: cash-refundable only when a source PROVES all-cash.
+    const tender = cashOnlyVerdict([localTenderEvidence(row), serverTenderEvidence(read.sale)]);
+    if (tender !== null) return this.refuse(actor, op, tender, { ...ids, saleRef });
     const blocked = assessSale(read.sale);
     if (blocked !== null) return this.refuse(actor, op, blocked, { ...ids, saleRef });
     return { kind: 'ok', sale: { row, saleRef, wire: read.sale } };

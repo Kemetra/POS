@@ -93,7 +93,8 @@ import type {
 
 const SALES_PATH = '/api/pos/v1/sales';
 const DEFAULT_TIMEOUT_MS = 15_000;
-const DEFAULT_CURRENCY_CODE = 'EGP';
+/** The capture currency when none is configured (v1 single-currency EGP); RT-15 returns reuse it. */
+export const DEFAULT_CURRENCY_CODE = 'EGP';
 
 /**
  * Unit-of-measure token sent on every `CaptureSaleLine.unit` (contract-required,

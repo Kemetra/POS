@@ -4,8 +4,7 @@
  *
  * readSale (before any line is exposed or priced):
  *   • `saleRef` is the one requested (case-insensitive);
- *   • every line is in the sale's currency (the POS keeps no per-sale
- *     currency, so the sale's own is the anchor the confirmation is pinned to);
+ *   • the sale is in the terminal's capture currency, and every line in it (the POS keeps no per-sale
  *   • `lineRef`s are unique;
  *   • the lines correspond one-to-one to the till's frozen snapshot
  *     (`sales.lines_json`) on whole quantity, unit price and line amount in
@@ -21,8 +20,8 @@
  * minor-unit, order-independent comparison absorbs. The POS sends exactly the
  * snapshot (`capture-payload.ts` `buildCapturePayload` → `toWireBody`).
  *
- * recordReturn confirmation: every returned line is one the journal asked to
- * return, with the same whole quantity, and none twice (in `returns-dispatch`).
+ * recordReturn confirmation: exactly the lines the journal asked to return,
+ * with the same whole quantities, none twice (in `returns-dispatch`).
  */
 import { exponentFor } from '../sales-sync/create-sale-sync-client.js';
 import { amount4ToMinor, parseAmount4, parseWholeQuantity } from './returns-money.js';
@@ -94,6 +93,8 @@ function matchesSnapshot(sale: WireSale, linesJson: string): boolean {
 export interface ExpectedSale {
   /** The saleRef that was requested. */
   readonly saleRef: string;
+  /** The terminal's capture currency (the sale-sync capture's own source). */
+  readonly currencyCode: string;
   /** The till's frozen `sales.lines_json`. */
   readonly linesJson: string;
 }
@@ -101,16 +102,24 @@ export interface ExpectedSale {
 /** True when the live `readSale` answer is the sale the till asked for. */
 export function isExpectedSale(sale: WireSale, expected: ExpectedSale): boolean {
   if (sale.saleRef.toLowerCase() !== expected.saleRef.toLowerCase()) return false;
+  if (sale.currencyCode !== expected.currencyCode) return false;
   if (sale.lines.some((l) => l.currencyCode !== sale.currencyCode)) return false;
   if (!hasUniqueRefs(sale.lines.map((l) => l.lineRef))) return false;
   return matchesSnapshot(sale, expected.linesJson);
 }
 
-/** Every returned line was requested, with the same whole quantity, none twice. */
+/**
+ * The confirmation covers EXACTLY the requested lines: same count, none twice,
+ * every requested lineRef with the same whole quantity. Backend-Core always
+ * returns them (SaleReturn.lines is required; both the fresh 201 and the
+ * provenance replay re-project the stored return_lines, and a same-key replay
+ * serves the stored 201 body).
+ */
 export function returnedLinesMatch(
   requested: readonly JournalLine[],
   returned: readonly WireReturnLine[],
 ): boolean {
+  if (returned.length !== requested.length) return false;
   if (!hasUniqueRefs(returned.map((l) => l.lineRef))) return false;
   const asked = new Map(requested.map((l) => [l.lineRef.toLowerCase(), l.quantity]));
   return returned.every(

@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { ReturnsBridgeAPI } from '../../shared/returns/types.js';
 import type { DatabaseHandle } from '../db/client.js';
 import { bindSalesRepository } from '../sales/repositories/sales.repository.js';
+import { DEFAULT_CURRENCY_CODE } from '../sales-sync/create-sale-sync-client.js';
 import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import { createReturnsAudit, type ReturnsAuditSink } from './returns-audit.js';
 import { createReturnsClient, type CreateReturnsClientDeps } from './returns-client.js';
@@ -37,6 +38,11 @@ export interface ComposeReturnsDeps {
   readonly auditSink: ReturnsAuditSink;
   readonly logger: ReturnsLogger;
   readonly now: () => string;
+  /**
+   * The terminal's capture currency — the same source as the sale-sync
+   * capture (`createSaleSyncClient` `currencyCode ?? DEFAULT_CURRENCY_CODE`).
+   */
+  readonly captureCurrencyCode?: string;
 }
 
 export interface ComposedReturns {
@@ -75,6 +81,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const resolver = createReturnsResolver({ repo, dispatcher, authorizer });
   const service = createReturnsService({
     authorizer,
+    captureCurrencyCode: deps.captureCurrencyCode ?? DEFAULT_CURRENCY_CODE,
     sales: bindSalesRepository(deps.db),
     saleRefs: createSaleSyncStateRepo(deps.db),
     client,

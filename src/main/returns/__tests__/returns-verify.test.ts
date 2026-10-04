@@ -44,7 +44,7 @@ function wire(sale: ContractSale): WireSale {
   return nn(readSaleBody(sale));
 }
 
-const EXPECTED = { saleRef: SALE_REF, linesJson: snapshotFor(saleBody()) };
+const EXPECTED = { saleRef: SALE_REF, currencyCode: 'EGP', linesJson: snapshotFor(saleBody()) };
 
 describe('isExpectedSale (readSale)', () => {
   it.each<[string, ContractSale, boolean]>([
@@ -52,6 +52,14 @@ describe('isExpectedSale (readSale)', () => {
     ['the saleRef in upper case', saleBody({ saleRef: SALE_REF.toUpperCase() }), true],
     ['lines in another order', saleBody({ lines: [...saleBody().lines].reverse() }), true],
     ['another saleRef', saleBody({ saleRef: RETURN_REF }), false],
+    [
+      'a uniformly-USD sale (Codex P2: not the terminal currency)',
+      saleBody({
+        currencyCode: 'USD',
+        lines: saleBody().lines.map((l) => ({ ...l, currencyCode: 'USD' })),
+      }),
+      false,
+    ],
     [
       'a line in another currency',
       saleBody({
@@ -105,7 +113,7 @@ describe('isExpectedSale (readSale)', () => {
   it.each(['not json', '{}', '[{"quantity":3}]'])(
     'fails closed on an unusable local snapshot (%s)',
     (linesJson) => {
-      expect(isExpectedSale(wire(saleBody()), { saleRef: SALE_REF, linesJson })).toBe(false);
+      expect(isExpectedSale(wire(saleBody()), { ...EXPECTED, linesJson })).toBe(false);
     },
   );
 });
@@ -124,9 +132,32 @@ describe('returnedLinesMatch (recordReturn confirmation)', () => {
       ],
       true,
     ],
-    ['a subset', [{ lineRef: LINE_A.toUpperCase(), quantity: '2' }], true],
-    ['a foreign line', [{ lineRef: RETURN_REF, quantity: '1' }], false],
-    ['another quantity', [{ lineRef: LINE_A, quantity: '1' }], false],
+    [
+      'the requested lines, any case and order',
+      [
+        { lineRef: LINE_B.toUpperCase(), quantity: '1' },
+        { lineRef: LINE_A.toUpperCase(), quantity: '2' },
+      ],
+      true,
+    ],
+    ['a strict subset (Codex P2)', [{ lineRef: LINE_A, quantity: '2' }], false],
+    ['no lines (Codex P2)', [], false],
+    [
+      'a foreign line',
+      [
+        { lineRef: LINE_A, quantity: '2' },
+        { lineRef: RETURN_REF, quantity: '1' },
+      ],
+      false,
+    ],
+    [
+      'another quantity',
+      [
+        { lineRef: LINE_A, quantity: '1' },
+        { lineRef: LINE_B, quantity: '1' },
+      ],
+      false,
+    ],
     [
       'a duplicate line',
       [
@@ -243,9 +274,7 @@ describe('round trip: POS capture → Backend-Core sale_lines → readSale', () 
         .sort((a, b) => a.lineName.localeCompare(b.lineName));
       const sale = saleBody({ posTotal: pgNumericText(body.posTotal, 4), lines: served });
 
-      expect(isExpectedSale(wire(sale), { saleRef: SALE_REF, linesJson: row.lines_json })).toBe(
-        true,
-      );
+      expect(isExpectedSale(wire(sale), { ...EXPECTED, linesJson: row.lines_json })).toBe(true);
     } finally {
       db.close();
     }

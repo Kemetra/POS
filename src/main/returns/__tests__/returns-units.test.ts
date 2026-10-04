@@ -6,7 +6,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildRecordReturnBody, assessSale, quoteReturn, viewLines } from '../returns-quote.js';
-import { hasNonCashLocalTender, toJournalView } from '../returns-views.js';
+import {
+  cashOnlyVerdict,
+  localTenderEvidence,
+  serverTenderEvidence,
+  type TenderEvidence,
+} from '../returns-tender.js';
+import { toJournalView } from '../returns-views.js';
 import { parseJsonBody, readErrorCode, readSaleBody, readSaleReturnBody } from '../returns-wire.js';
 import { newReturnExternalId, uuidv7 } from '../uuidv7.js';
 import type { JournalEntry } from '../returns-repository.js';
@@ -171,17 +177,42 @@ describe('returnability and quoting', () => {
   });
 });
 
-describe('views and the local tender read', () => {
-  it.each<[string, boolean]>([
-    [JSON.stringify([{ tender_type: 'cash' }]), false],
-    ['[]', false],
-    [JSON.stringify([{ tender_type: 'cash' }, { tender_type: 'external_card_terminal' }]), true],
-    [JSON.stringify([{ tender_type: 'internal_voucher' }]), true],
-    [JSON.stringify([null]), true],
-    [JSON.stringify({ tender_type: 'cash' }), true],
-    ['not json', true],
-  ])('hasNonCashLocalTender(%s) → %s', (json, expected) => {
-    expect(hasNonCashLocalTender({ tender_lines_summary_json: json })).toBe(expected);
+describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => {
+  it.each<[string, TenderEvidence]>([
+    [JSON.stringify([{ tender_type: 'cash' }]), 'cash'],
+    [JSON.stringify([{ tender_type: 'cash' }, { tender_type: 'cash' }]), 'cash'],
+    ['[]', 'none'],
+    [
+      JSON.stringify([{ tender_type: 'cash' }, { tender_type: 'external_card_terminal' }]),
+      'non_cash',
+    ],
+    [JSON.stringify([{ tender_type: 'internal_voucher' }]), 'non_cash'],
+    [JSON.stringify([null]), 'non_cash'],
+    [JSON.stringify({ tender_type: 'cash' }), 'non_cash'],
+    ['not json', 'non_cash'],
+  ])('local summary %s → %s', (json, expected) => {
+    expect(localTenderEvidence({ tender_lines_summary_json: json })).toBe(expected);
+  });
+
+  it.each<[string, { method: string }[] | undefined, TenderEvidence]>([
+    ['absent (pre-RT-77)', undefined, 'none'],
+    ['empty (tender-unknown capture)', [], 'none'],
+    ['all cash', [{ method: 'cash' }], 'cash'],
+    ['a card', [{ method: 'cash' }, { method: 'card_external' }], 'non_cash'],
+  ])('server tenders %s → %s', (_label, tenders, expected) => {
+    expect(serverTenderEvidence(tenders === undefined ? {} : { tenders })).toBe(expected);
+  });
+
+  it.each<[TenderEvidence, TenderEvidence, string | null]>([
+    ['none', 'none', 'tender_unknown'],
+    ['none', 'cash', null],
+    ['cash', 'none', null],
+    ['cash', 'cash', null],
+    ['cash', 'non_cash', 'card_tender_blocked'],
+    ['non_cash', 'cash', 'card_tender_blocked'],
+    ['none', 'non_cash', 'card_tender_blocked'],
+  ])('verdict local %s + server %s → %s', (local, server, expected) => {
+    expect(cashOnlyVerdict([local, server])).toBe(expected);
   });
 
   it('projects a journal entry without keys, operator ids or the request', () => {

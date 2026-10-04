@@ -13,6 +13,7 @@ import type { ReturnsRefusalReason } from '../../../shared/returns/types.js';
 import type { Role } from '../../../shared/operator/role.js';
 import {
   CARD_SUMMARY,
+  CASH_SUMMARY,
   LINE_A,
   LINE_B,
   RETURN_REF,
@@ -244,6 +245,61 @@ describe('lookup', () => {
       reason: 'offline',
     });
     expect(h.backend.calls).toHaveLength(0);
+  });
+});
+
+describe('D-c: cash-refundable only when a source proves all-cash (Codex P1)', () => {
+  const CASH = [{ method: 'cash' as const, amount: '65.0000' }];
+  const MIXED = [
+    { method: 'cash' as const, amount: '40.0000' },
+    { method: 'card_external' as const, amount: '25.0000' },
+  ];
+  it.each<{
+    label: string;
+    local: string;
+    server: typeof CASH | typeof MIXED | [] | undefined;
+    reason: ReturnsRefusalReason | null;
+  }>([
+    {
+      label: 'local [] + server tenders absent',
+      local: '[]',
+      server: undefined,
+      reason: 'tender_unknown',
+    },
+    { label: 'local [] + server []', local: '[]', server: [], reason: 'tender_unknown' },
+    { label: 'local [] + server all-cash', local: '[]', server: CASH, reason: null },
+    {
+      label: 'local all-cash + server absent (pre-cutoff)',
+      local: CASH_SUMMARY,
+      server: undefined,
+      reason: null,
+    },
+    {
+      label: 'local all-cash + server [] (pre-cutoff capture)',
+      local: CASH_SUMMARY,
+      server: [],
+      reason: null,
+    },
+    {
+      label: 'local all-cash + server mixed',
+      local: CASH_SUMMARY,
+      server: MIXED,
+      reason: 'card_tender_blocked',
+    },
+    { label: 'local [] + server mixed', local: '[]', server: MIXED, reason: 'card_tender_blocked' },
+  ])('$label → $reason', async ({ local, server, reason }) => {
+    const sale = server === undefined ? omit(saleBody(), 'tenders') : saleBody({ tenders: server });
+    setup({}, { tenderSummary: local, sale });
+    const res = await h.service.lookup({ saleNumber: SALE_NUMBER });
+    if (reason === null) {
+      expect(res.kind).toBe('ok');
+      return;
+    }
+    expect(res).toEqual({ kind: 'refused', reason });
+    expect(h.audits.at(-1)).toMatchObject({
+      action_category: 'sale.return.refused',
+      payload: { reason, sale_ref: SALE_REF },
+    });
   });
 });
 

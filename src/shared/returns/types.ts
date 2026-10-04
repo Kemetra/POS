@@ -42,6 +42,9 @@ export const LOCAL_RETURN_REFUSALS = [
   'amount_not_payable',
   'unresolved_return_exists',
   'offline',
+  // Neither the till's tender summary nor the server proves the sale was paid
+  // all in cash (D-c fails closed: a tender-unknown sale is not cash-refunded).
+  'tender_unknown',
   // The live server sale is not the one asked for (another saleRef, mixed
   // currency, duplicate or foreign lines): fail closed, nothing exposed.
   'sale_mismatch',
