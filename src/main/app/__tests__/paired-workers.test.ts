@@ -1,6 +1,12 @@
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
-import { createPairedWorkers, type PairedWorkersLogger } from '../paired-workers.js';
+import type { PairingService } from '../../pairing/service.js';
+import type { PairingSubmitResult } from '../../../shared/pairing-types.js';
+import {
+  createPairedWorkers,
+  withPairedNotification,
+  type PairedWorkersLogger,
+} from '../paired-workers.js';
 
 /**
  * RT-202 — paired-only worker lifecycle.
@@ -160,5 +166,79 @@ describe('RT-202 paired workers — shutdown latch', () => {
       workers.close();
       workers.close();
     }).not.toThrow();
+  });
+});
+
+describe('RT-202 withPairedNotification — pairing-service wrapper', () => {
+  const SUCCESS: PairingSubmitResult = {
+    outcome: 'success',
+    tenant_id: 'tenant-A',
+    branch_id: 'branch-B',
+    terminal_id: 'terminal-C',
+    terminal_label: 'Counter 1',
+  };
+
+  function innerReturning(result: PairingSubmitResult): PairingService & {
+    submit: Mock<PairingService['submit']>;
+  } {
+    return { submit: vi.fn<PairingService['submit']>(() => Promise.resolve(result)) };
+  }
+
+  it('returns the inner result unchanged and notifies exactly once on success, after submit resolved', async () => {
+    const inner = innerReturning(SUCCESS);
+    const onPaired = vi.fn();
+    const wrapped = withPairedNotification(inner, onPaired);
+
+    const result = await wrapped.submit('CODE');
+
+    expect(result).toBe(SUCCESS);
+    expect(inner.submit).toHaveBeenCalledWith('CODE');
+    expect(onPaired).toHaveBeenCalledTimes(1);
+    const submittedAt = inner.submit.mock.invocationCallOrder[0] ?? Infinity;
+    const notifiedAt = onPaired.mock.invocationCallOrder[0] ?? -Infinity;
+    expect(submittedAt).toBeLessThan(notifiedAt);
+  });
+
+  it.each([
+    ['invalid_code', { outcome: 'invalid_code' }],
+    ['expired_code', { outcome: 'expired_code' }],
+    ['already_paired', { outcome: 'already_paired' }],
+    ['branch_mismatch', { outcome: 'branch_mismatch' }],
+    ['rate_limited', { outcome: 'rate_limited', retry_after_s: 30 }],
+    ['network_error', { outcome: 'network_error' }],
+    ['unknown_error', { outcome: 'unknown_error' }],
+  ] as const)('never notifies for a %s outcome', async (_name, result) => {
+    const inner = innerReturning(result);
+    const onPaired = vi.fn();
+
+    const returned = await withPairedNotification(inner, onPaired).submit('CODE');
+
+    expect(returned).toBe(result);
+    expect(onPaired).not.toHaveBeenCalled();
+  });
+
+  it('propagates an inner rejection unchanged and never notifies (programmer-error path)', async () => {
+    const failure = new TypeError('pairing_code must be a string');
+    const inner: PairingService = { submit: () => Promise.reject(failure) };
+    const onPaired = vi.fn();
+
+    await expect(withPairedNotification(inner, onPaired).submit('CODE')).rejects.toBe(failure);
+    expect(onPaired).not.toHaveBeenCalled();
+  });
+
+  it('still returns success when the hook throws synchronously', async () => {
+    const inner = innerReturning(SUCCESS);
+    const wrapped = withPairedNotification(inner, () => {
+      throw new Error('starter exploded');
+    });
+    await expect(wrapped.submit('CODE')).resolves.toBe(SUCCESS);
+  });
+
+  it('still returns success when the hook rejects (and leaves no unhandled rejection)', async () => {
+    const inner = innerReturning(SUCCESS);
+    const wrapped = withPairedNotification(inner, () => Promise.reject(new Error('rejected')));
+    await expect(wrapped.submit('CODE')).resolves.toBe(SUCCESS);
+    // Let the swallowed rejection settle; vitest fails the run on an unhandled one.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });

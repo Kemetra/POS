@@ -105,33 +105,10 @@ export interface CreatePairingServiceOptions {
   pairingLog: (record: PairingAttemptLogRecord) => void;
   /** Provides `new Date()` for testability of the `at` field. */
   clock: () => Date;
-  /**
-   * RT-202 — called once after a pairing has been PERSISTED (success path only;
-   * never on any failure outcome, never when `persist` throws). It lets the
-   * composition root start the paired-only workers in the running process
-   * instead of waiting for the next launch.
-   *
-   * Contract: it is a notification, not part of the pairing result. The service
-   * does not await it and ignores a throw or rejection from it, so the typed
-   * `success` outcome is never turned into a failure. The hook must report its
-   * own errors; it receives no argument and the token never reaches it.
-   */
-  onPaired?: () => void | Promise<void>;
-}
-
-function notifyPaired(onPaired: (() => void | Promise<void>) | undefined): void {
-  if (onPaired === undefined) return;
-  try {
-    // A rejecting hook is observed so it cannot become an unhandled rejection;
-    // the hook owns reporting its own failure (see CreatePairingServiceOptions).
-    void Promise.resolve(onPaired()).catch(() => undefined);
-  } catch {
-    // A synchronous throw is deliberately not allowed to alter the outcome.
-  }
 }
 
 export function createPairingService(deps: CreatePairingServiceOptions): PairingService {
-  const { store, network, pairingLog, clock, onPaired } = deps;
+  const { store, network, pairingLog, clock } = deps;
 
   function nowIso(): string {
     return clock().toISOString();
@@ -234,11 +211,6 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
           terminal_id: pairResult.body.terminal_id,
         });
         emitBreadcrumb('success', 200);
-
-        // RT-202 — pairing is durable: let the root start the paired-only
-        // workers now. Fire-and-forget, and isolated: whatever the hook does,
-        // the renderer still gets the typed success below.
-        notifyPaired(onPaired);
 
         // The success result type explicitly OMITS device_token — that
         // is the renderer-visible shape, and the only place the token

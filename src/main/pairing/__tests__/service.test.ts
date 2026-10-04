@@ -76,8 +76,6 @@ interface HarnessOpts {
   pairRejection?: Error;
   /** Make `pairingStore.persist()` reject with the given error. */
   persistRejection?: Error;
-  /** RT-202 — the post-pairing hook (omitted = service built without one). */
-  onPaired?: () => void | Promise<void>;
 }
 
 function makeHarness(opts: HarnessOpts = {}): Harness {
@@ -105,7 +103,6 @@ function makeHarness(opts: HarnessOpts = {}): Harness {
     network,
     pairingLog: (record) => logRecords.push(record),
     clock: () => new Date(PAIRED_AT * 1000),
-    ...(opts.onPaired !== undefined ? { onPaired: opts.onPaired } : {}),
   });
 
   return {
@@ -1133,87 +1130,5 @@ describe('PairingService.submit — T060 log-field schema (US6)', () => {
       await h.service.submit('CODE');
       expect(h.logRecords).toHaveLength(1);
     }
-  });
-});
-
-/* ------------------------- RT-202 ------------------------- */
-
-describe('PairingService.submit — onPaired hook (RT-202)', () => {
-  it('calls onPaired exactly once, after store.persist resolved, on success', async () => {
-    const onPaired = vi.fn();
-    const h = makeHarness({ onPaired });
-
-    const result = await h.service.submit('VALIDCODE');
-
-    expect(result.outcome).toBe('success');
-    expect(onPaired).toHaveBeenCalledTimes(1);
-    const persistedAt = h.store.persist.mock.invocationCallOrder[0] ?? Infinity;
-    const notifiedAt = onPaired.mock.invocationCallOrder[0] ?? -Infinity;
-    expect(persistedAt).toBeLessThan(notifiedAt);
-  });
-
-  it.each([
-    ['invalid_code', { ok: false, status: 400, body: { code: 'INVALID_CODE' } }],
-    ['expired_code', { ok: false, status: 400, body: { code: 'EXPIRED_CODE' } }],
-    ['already_paired', { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } }],
-    ['branch_mismatch', { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } }],
-    ['unknown', { ok: false, status: 500, body: {} }],
-  ] as const)('never calls onPaired for a %s failure', async (_name, pairResult) => {
-    const onPaired = vi.fn();
-    const h = makeHarness({ onPaired, pairResult: pairResult as unknown as PairResult });
-
-    await h.service.submit('CODE');
-
-    expect(onPaired).not.toHaveBeenCalled();
-  });
-
-  it('never calls onPaired on a transport failure', async () => {
-    const onPaired = vi.fn();
-    const h = makeHarness({
-      onPaired,
-      pairRejection: new TransportError({ timed_out: false, reason: 'fetch_failed' }),
-    });
-
-    await h.service.submit('CODE');
-
-    expect(onPaired).not.toHaveBeenCalled();
-  });
-
-  it('never calls onPaired when persist throws (incomplete pairing)', async () => {
-    const onPaired = vi.fn();
-    const h = makeHarness({ onPaired, persistRejection: new Error('disk full') });
-
-    const result = await h.service.submit('VALIDCODE');
-
-    expect(result).toEqual({ outcome: 'unknown_error' });
-    expect(onPaired).not.toHaveBeenCalled();
-  });
-
-  it('still resolves success when onPaired throws synchronously', async () => {
-    const h = makeHarness({
-      onPaired: () => {
-        throw new Error('starter exploded');
-      },
-    });
-
-    const result = await h.service.submit('VALIDCODE');
-
-    expect(result.outcome).toBe('success');
-    expect(h.logRecords).toHaveLength(1);
-    expect(h.logRecords[0]?.outcome).toBe('success');
-  });
-
-  it('still resolves success when onPaired rejects', async () => {
-    const h = makeHarness({ onPaired: () => Promise.reject(new Error('starter rejected')) });
-
-    const result = await h.service.submit('VALIDCODE');
-
-    expect(result.outcome).toBe('success');
-  });
-
-  it('works unchanged when no onPaired is supplied', async () => {
-    const h = makeHarness();
-    const result = await h.service.submit('VALIDCODE');
-    expect(result.outcome).toBe('success');
   });
 });

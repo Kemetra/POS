@@ -26,10 +26,16 @@
  * deferred path is logged and never retried: a retry could build a second copy of
  * a half-started worker (duplicate intervals / listeners).
  *
+ * The pairing service itself is not touched (`src/main/pairing/` belongs to 002):
+ * {@link withPairedNotification} wraps it at the composition root instead.
+ *
  * Out of scope: re-pairing an already-paired terminal. The latch is set by the
  * first pairing, so workers keep the scope they started with — as they did when
  * they were bound at boot.
  */
+
+import type { PairingSubmitResult } from '../../shared/pairing-types.js';
+import type { PairingService } from '../pairing/service.js';
 
 /** The scope a paired-only worker is built with (re-read from the pairing store). */
 export interface PairedTerminal {
@@ -108,6 +114,38 @@ export function createPairedWorkers(deps: PairedWorkersDeps): PairedWorkers {
     close(): void {
       closed = true;
       pending = [];
+    },
+  };
+}
+
+/**
+ * Wrap a pairing service so a SUCCESSFUL pairing notifies `onPaired`.
+ *
+ * `PairingService.submit` resolves `success` only after the pairing has been
+ * persisted, and resolves a typed non-success outcome for every failure (it
+ * rejects only on programmer error). So notifying on `success` is exactly "the
+ * pairing is durable" — never on a failure, never when `persist` threw.
+ *
+ * The notification is fire-and-forget and isolated: the caller always gets the
+ * inner result (or the inner rejection) unchanged, whatever the hook does. The
+ * hook owns reporting its own failure; a rejection is observed here only so it
+ * cannot surface as an unhandled rejection.
+ */
+export function withPairedNotification(
+  inner: PairingService,
+  onPaired: () => void | Promise<void>,
+): PairingService {
+  return {
+    async submit(pairing_code: string): Promise<PairingSubmitResult> {
+      const result = await inner.submit(pairing_code);
+      if (result.outcome === 'success') {
+        try {
+          void Promise.resolve(onPaired()).catch(() => undefined);
+        } catch {
+          // A synchronous throw from the hook must not alter the pairing result.
+        }
+      }
+      return result;
     },
   };
 }
