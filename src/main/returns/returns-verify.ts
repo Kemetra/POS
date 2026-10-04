@@ -4,7 +4,8 @@
  *
  * readSale (before any line is exposed or priced):
  *   • `saleRef` is the one requested (case-insensitive);
- *   • the sale is in the terminal's capture currency, and every line in it (the POS keeps no per-sale
+ *   • the sale is in the terminal's capture currency, and every line is in
+ *     the sale's currency;
  *   • `lineRef`s are unique;
  *   • the lines correspond one-to-one to the till's frozen snapshot
  *     (`sales.lines_json`) on whole quantity, unit price and line amount in

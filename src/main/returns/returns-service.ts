@@ -36,7 +36,7 @@ import type { SaleRow, SalesRepository } from '../sales/repositories/sales.repos
 import type { SaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import type { ReturnActor, ReturnsAudit } from './returns-audit.js';
 import type { AuthorizedActor, ReturnsAuthorizer } from './returns-auth.js';
-import type { ReturnsClient } from './returns-client.js';
+import type { ReadSaleOutcome, ReturnsClient } from './returns-client.js';
 import type { DispatchOutcome, ReturnsDispatcher } from './returns-dispatch.js';
 import { assessSale, buildRecordReturnBody, quoteReturn, viewLines } from './returns-quote.js';
 import type { ReturnsRepository } from './returns-repository.js';
@@ -84,6 +84,13 @@ interface Ids {
 
 type Admitted = { readonly kind: 'ok'; readonly actor: AuthorizedActor } | ReturnsRefused;
 type Loaded = { readonly kind: 'ok'; readonly sale: LiveSale } | ReturnsRefused;
+type Checked = { readonly kind: 'ok'; readonly sale: WireSale } | ReturnsRefused;
+
+/** The local sale row and its stored server reference. */
+interface LocalSale {
+  readonly row: SaleRow;
+  readonly saleRef: string;
+}
 
 /** The sale ids known from an awaited load, for refusal audits. */
 function idsOf(awaited: Loaded | null): Ids {
@@ -164,25 +171,38 @@ class ReturnsService implements ReturnsBridgeAPI {
     );
     if (saleRef === null) return this.refuse(actor, op, 'sale_not_synced', ids);
     const read = await this.deps.client.readSale(saleRef);
-    // First statement after the await: re-authorize before any branch.
-    const lost = this.deps.authorizer.recheck(actor);
-    if (lost !== null) return this.refuse(actor, op, lost, { ...ids, saleRef });
-    if (read.kind === 'unavailable') return this.refuse(actor, op, 'offline', { ...ids, saleRef });
-    if (read.kind === 'refused') return this.refuse(actor, op, read.reason, { ...ids, saleRef });
-    const expected = {
-      saleRef,
-      currencyCode: this.deps.captureCurrencyCode,
-      linesJson: row.lines_json,
-    };
-    if (!isExpectedSale(read.sale, expected)) {
-      return this.refuse(actor, op, 'sale_mismatch', { ...ids, saleRef });
+    // The re-check is the first thing run after the await (inside postRead).
+    const checked = this.postRead(actor, { row, saleRef }, read);
+    if (checked.kind === 'refused') {
+      return this.refuse(actor, op, checked.reason, { ...ids, saleRef });
     }
+    return { kind: 'ok', sale: { row, saleRef, wire: checked.sale } };
+  }
+
+  /**
+   * The post-read guard pipeline, in order: re-authorize the actor (before
+   * any branch), map the readSale outcome, then the live-sale checks.
+   */
+  private postRead(actor: AuthorizedActor, local: LocalSale, read: ReadSaleOutcome): Checked {
+    const lost = this.deps.authorizer.recheck(actor);
+    if (lost !== null) return { kind: 'refused', reason: lost };
+    if (read.kind === 'unavailable') return { kind: 'refused', reason: 'offline' };
+    if (read.kind === 'refused') return read;
+    const reason = this.liveSaleRefusal(local, read.sale);
+    return reason === null ? { kind: 'ok', sale: read.sale } : { kind: 'refused', reason };
+  }
+
+  /** The live sale is the one asked for (sweep), provably cash (D-c), returnable (AC4). */
+  private liveSaleRefusal(local: LocalSale, sale: WireSale): ReturnsRefusalReason | null {
+    const expected = {
+      saleRef: local.saleRef,
+      currencyCode: this.deps.captureCurrencyCode,
+      linesJson: local.row.lines_json,
+    };
+    if (!isExpectedSale(sale, expected)) return 'sale_mismatch';
     // D-c fails closed: cash-refundable only when a source PROVES all-cash.
-    const tender = cashOnlyVerdict([localTenderEvidence(row), serverTenderEvidence(read.sale)]);
-    if (tender !== null) return this.refuse(actor, op, tender, { ...ids, saleRef });
-    const blocked = assessSale(read.sale);
-    if (blocked !== null) return this.refuse(actor, op, blocked, { ...ids, saleRef });
-    return { kind: 'ok', sale: { row, saleRef, wire: read.sale } };
+    const tender = cashOnlyVerdict([localTenderEvidence(local.row), serverTenderEvidence(sale)]);
+    return tender ?? assessSale(sale);
   }
 
   async lookup(req: ReturnsLookupRequest): Promise<ReturnsLookupResponse> {

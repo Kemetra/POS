@@ -91,7 +91,6 @@ function outcomeOfState(entry: JournalEntry): DispatchOutcome {
   return { kind: 'unconfirmed', entry };
 }
 
-/** The server's refund in minor units when it matches this return; else null. */
 /** The answer names this return: its externalId, sale, currency and lines. */
 function isThisReturn(entry: JournalEntry, saleReturn: WireSaleReturn): boolean {
   if (saleReturn.externalId !== entry.externalId) return false;
@@ -100,6 +99,7 @@ function isThisReturn(entry: JournalEntry, saleReturn: WireSaleReturn): boolean 
   return returnedLinesMatch(entry.lines, saleReturn.lines);
 }
 
+/** The server's refund in minor units when it matches this return; else null. */
 function matchingTotalMinor(entry: JournalEntry, saleReturn: WireSaleReturn): number | null {
   if (!isThisReturn(entry, saleReturn)) return null;
   const total4 = parseAmount4(saleReturn.returnTotal);
