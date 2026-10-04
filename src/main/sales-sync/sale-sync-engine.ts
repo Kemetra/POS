@@ -22,6 +22,9 @@
  *          re-sent under a new key; an operator investigates.
  *        transient(5xx/timeout) / no_connection → recordTransient (stay pending,
  *          attempt++, exponential backoff next_retry_at)  (P3 no silent loss)
+ *        transient(425/429, RT-194) → the same, but next_retry_at is at least the
+ *          server's `Retry-After` (`retryAfterMs`). There is no max-attempts cap:
+ *          a transient sale is never dead-lettered, however many retries it takes.
  *        permanent(4xx) → markDeadLetter + onDeadLetter notification  (P3/FR-7)
  *
  * Logs (caller's concern) carry only sale_id / externalId / status / category /
@@ -105,6 +108,21 @@ export function backoffMs(policy: BackoffPolicy, attempt: number): number {
   return Math.min(raw, policy.maxMs);
 }
 
+/**
+ * RT-194: delay before the next attempt — the backoff, or the server's
+ * `Retry-After` when that is longer (the retry must never come before it).
+ */
+export function retryDelayMs(
+  policy: BackoffPolicy,
+  attempt: number,
+  result: Extract<SaleSyncResult, { kind: 'transient' | 'no_connection' }>,
+): number {
+  const backoffDelay = backoffMs(policy, attempt);
+  return result.kind === 'transient' && result.retryAfterMs !== undefined
+    ? Math.max(backoffDelay, result.retryAfterMs)
+    : backoffDelay;
+}
+
 function addMs(iso: string, ms: number): string {
   return new Date(Date.parse(iso) + ms).toISOString();
 }
@@ -183,7 +201,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
           tenantId,
           branchId,
           now: stamp,
-          nextRetryAt: addMs(stamp, backoffMs(backoff, attempt)),
+          nextRetryAt: addMs(stamp, retryDelayMs(backoff, attempt, result)),
           errorCategory: result.kind === 'no_connection' ? 'no_connection' : 'transient',
         });
         return;

@@ -163,6 +163,14 @@ it. The sale is counted in the sync-status `deadLetter` and `payloadDivergence` 
 as `sale_sync:payload_divergence` with only the `externalId` and a closed-set error code. A 409
 with a malformed body or another code is treated the same way (fail closed).
 
+A capture 425 `idempotency_in_progress` is never a rejection (RT-194). Backend-Core sends it,
+with `Retry-After`, while an earlier request with the same Idempotency-Key is still in flight —
+typically the till's own first attempt that hit the client timeout but is still committing. It is
+`transient`: the sale stays pending, the next attempt waits at least `Retry-After` (seconds or
+HTTP-date, clamped to 5 min; a missing or invalid header falls back to the backoff), and the retry
+with the same key gets the 201/200 replay and its `saleRef`. A 429 rate limit is handled the same
+way. There is no max-attempts cap, so a transient sale never dead-letters.
+
 **Pairing is outside this table and uses a different transport API.** `src/main/pairing/network.ts`
 throws a typed `TransportError` on a transport failure rather than returning a union member. It
 upholds the same invariant by a different route — a `TransportError` explicitly means *the request

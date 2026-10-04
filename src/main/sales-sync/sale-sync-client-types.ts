@@ -28,6 +28,13 @@
  * the contract's code, or `unrecognized` for a malformed body or any other code
  * (fail closed — the 409 status alone makes it divergent). No server text is
  * ever echoed (P7).
+ *
+ * RT-194: `transient` may carry `retryAfterMs` — the server's `Retry-After`
+ * (425 `idempotency_in_progress` or 429 rate limit), already parsed and clamped.
+ * The engine waits at least that long before the next attempt for the sale, and
+ * uses its normal backoff when the field is absent. A 425 is never `permanent`:
+ * the same Idempotency-Key is still being processed, so the retry replays the
+ * eventual 201/200 instead of losing the sale.
  */
 
 import type { CaptureSalePayload } from './capture-payload.js';
@@ -38,7 +45,7 @@ export type CaptureConflictCode = 'idempotency_key_conflict' | 'unrecognized';
 export type SaleSyncResult =
   | { kind: 'ok'; saleRef: string | null }
   | { kind: 'divergent'; errorCode: CaptureConflictCode }
-  | { kind: 'transient' }
+  | { kind: 'transient'; retryAfterMs?: number }
   | { kind: 'permanent' }
   | { kind: 'no_connection' };
 
