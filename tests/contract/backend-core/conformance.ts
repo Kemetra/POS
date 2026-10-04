@@ -34,25 +34,27 @@ export interface Violation extends ViolationIdentity {
 
 // ─── recording ───────────────────────────────────────────────────────────────
 
-function urlOf(input: RequestInfo | URL): URL {
-  if (input instanceof URL) return input;
-  return new URL(typeof input === 'string' ? input : input.url);
-}
-
-function methodOf(input: RequestInfo | URL, init: RequestInit | undefined): string {
-  const fromRequest = input instanceof Request ? input.method : 'GET';
-  return (init?.method ?? fromRequest).toLowerCase();
+/**
+ * What the server would receive: `fetch(input, init)` sends exactly
+ * `new Request(input, init)`, so recording that Request keeps a `Request`
+ * input's own method and headers, and lets `init` override them by the Fetch
+ * spec's rules (`init.headers` replaces the Request's headers). `Headers`
+ * normalises header-name case (Codex P2, PR #538).
+ */
+function toObserved(input: RequestInfo | URL, init: RequestInit | undefined): ObservedRequest {
+  const request = new Request(input, init);
+  return {
+    method: request.method.toLowerCase(),
+    url: new URL(request.url),
+    headers: new Headers(request.headers),
+  };
 }
 
 /** A `fetch` that records every request and answers `200 {}`. */
 export function recordingFetch(): { fetch: FetchLike; requests: ObservedRequest[] } {
   const requests: ObservedRequest[] = [];
   const fetch: FetchLike = (input, init) => {
-    requests.push({
-      method: methodOf(input, init),
-      url: urlOf(input),
-      headers: new Headers(init?.headers),
-    });
+    requests.push(toObserved(input, init));
     return Promise.resolve(
       new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
     );

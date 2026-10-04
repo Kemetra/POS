@@ -4,8 +4,14 @@
  * that changes a route's security can never hide behind an existing entry.
  */
 import { describe, expect, it } from 'vitest';
-import { CLIENT_CALLS, type ClientCall } from './client-registry.js';
-import { diffAgainstKnown, observe, violationsFor } from './conformance.js';
+import { BASE_URL, CLIENT_CALLS, SENTINEL, type ClientCall } from './client-registry.js';
+import {
+  diffAgainstKnown,
+  observe,
+  recordingFetch,
+  sentCredential,
+  violationsFor,
+} from './conformance.js';
 import { KNOWN_VIOLATIONS } from './known-violations.js';
 import { indexContract, type ContractOperation } from './openapi-index.js';
 
@@ -74,5 +80,43 @@ describe('known-violation identity', () => {
         KNOWN_VIOLATIONS.filter((k) => k.call === ROSTER),
       ).stale,
     ).toHaveLength(1);
+  });
+});
+
+describe('recordingFetch', () => {
+  const url = `${BASE_URL}/api/pos/v1/catalog/snapshot`;
+  const bearer = (token: string): HeadersInit => ({ Authorization: `Bearer ${token}` });
+
+  async function record(input: RequestInfo | URL, init?: RequestInit) {
+    const { fetch, requests } = recordingFetch();
+    await fetch(input, init);
+    expect(requests).toHaveLength(1);
+    return requests[0] as NonNullable<(typeof requests)[0]>;
+  }
+
+  it('records the headers and method of a Request passed without init (Codex P2, PR #538)', async () => {
+    const req = await record(
+      new Request(url, { method: 'POST', headers: bearer(SENTINEL.device) }),
+    );
+    expect([req.method, sentCredential(req), req.url.pathname]).toEqual([
+      'post',
+      'device',
+      '/api/pos/v1/catalog/snapshot',
+    ]);
+  });
+
+  it('lets init.headers replace the Request headers, as fetch does', async () => {
+    const req = await record(new Request(url, { headers: bearer(SENTINEL.device) }), {
+      headers: bearer(SENTINEL['operator-jwt']),
+    });
+    expect(sentCredential(req)).toBe('operator-jwt');
+  });
+
+  it('records a plain string URL with init, normalising header case', async () => {
+    const req = await record(url, {
+      method: 'GET',
+      headers: { authorization: `Bearer ${SENTINEL.device}` },
+    });
+    expect([req.method, sentCredential(req)]).toEqual(['get', 'device']);
   });
 });
