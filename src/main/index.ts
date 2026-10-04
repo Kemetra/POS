@@ -840,7 +840,9 @@ app
     });
     registerCatalogueHandlers(guardedIpcMain, { bridge: catalogueBridge });
 
-    // Start the background snapshot pull (paired terminals only). The driver's
+    // Start the background snapshot pull (paired terminals only). `start()` also
+    // admits one immediate initial tick (RT-41) so a freshly paired/restarted
+    // terminal does not wait a full interval for its catalogue. The driver's
     // setInterval is stopped on quit via `closeDbHandle()` so it never outlives
     // the process or runs against a closed DB handle.
     if (readDownDriver !== undefined) {
