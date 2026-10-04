@@ -233,4 +233,15 @@ describe('RT-202 — catalogue:refresh resolves the driver lazily', () => {
     await expect(bridge.refresh({})).resolves.toEqual({ kind: 'refused', reason: 'no_session' });
     expect(driver.calls()).toBe(0);
   });
+
+  it('when a getter is configured it is authoritative: undefined refuses, the static driver is never used', async () => {
+    const stale = fakeDriver(startedAdmission);
+    const bridge = createCatalogueBridge({
+      getCurrentSession: () => SESSION,
+      readDownDriver: stale,
+      getReadDownDriver: () => undefined,
+    });
+    await expect(bridge.refresh({})).resolves.toEqual({ kind: 'refused', reason: 'no_session' });
+    expect(stale.calls()).toBe(0);
+  });
 });

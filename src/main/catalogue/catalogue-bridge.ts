@@ -87,8 +87,9 @@ export interface CatalogueBridgeDependencies {
   /**
    * RT-202 — resolves the driver at call time, for a terminal that pairs
    * in-process: the driver does not exist when the bridge is built, and exists
-   * once the paired-only workers have started. Takes precedence over
-   * `readDownDriver` when it returns one; `undefined` still refuses.
+   * once the paired-only workers have started. When configured it is
+   * authoritative: `readDownDriver` is ignored, and `undefined` means "no driver
+   * right now" and refuses (never a fallback to a stale static driver).
    */
   getReadDownDriver?: () => Pick<ReadDownDriver, 'runTickOnce'> | undefined;
   /**
@@ -188,7 +189,8 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
       // unreachable once the driver is wired (T039), and the reason is never
       // surfaced to the cashier (the renderer maps any refusal to a generic
       // `unavailable`). Do not trust this reason code as a session signal.
-      const readDownDriver = deps.getReadDownDriver?.() ?? deps.readDownDriver;
+      const readDownDriver =
+        deps.getReadDownDriver !== undefined ? deps.getReadDownDriver() : deps.readDownDriver;
       if (readDownDriver === undefined)
         return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
       const admission = readDownDriver.runTickOnce();
