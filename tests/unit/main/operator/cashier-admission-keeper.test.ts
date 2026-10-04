@@ -7,7 +7,12 @@ import {
   SAFE_POINT_RECHECK_MS,
   heartbeatIntervalMs,
 } from '../../../../src/main/operator/cashier-admission-keeper.js';
+import type { IpcMain, IpcMainInvokeEvent } from 'electron';
+
 import { CartBridgeHandlers } from '../../../../src/main/cart/cart-bridge.js';
+import { registerCartHandlers } from '../../../../src/main/ipc/cart.js';
+import { createSaleBoundaryIpcMain } from '../../../../src/main/ipc/sale-boundary-guard.js';
+import { CART_IPC_CHANNELS } from '../../../../src/shared/cart/channels.js';
 import { SessionManager } from '../../../../src/main/operator/session-manager.js';
 import { LifecycleCascade } from '../../../../src/main/operator/lifecycle-cascade.js';
 import { SignOutHandler } from '../../../../src/main/operator/sign-out-handler.js';
@@ -109,10 +114,25 @@ describe('heartbeatIntervalMs', () => {
     expect(heartbeatIntervalMs(600)).toBe(300_000);
   });
 
-  it('review F5: clamped to [1000 ms, 2^31-1 ms] (a tiny TTL or a TTL past the setTimeout limit)', () => {
-    expect(heartbeatIntervalMs(1)).toBe(1_000);
-    expect(heartbeatIntervalMs(0.5)).toBe(1_000);
+  it('Codex P2 4179617259: sub-2 s TTLs keep TTL/2 (no 1 s floor): TTL 1 s → 500 ms, 3 s → 1500 ms', () => {
+    expect(heartbeatIntervalMs(1)).toBe(500);
+    expect(heartbeatIntervalMs(3)).toBe(1_500);
+  });
+
+  it('review F5: capped at the setTimeout maximum (2^31-1 ms)', () => {
     expect(heartbeatIntervalMs(10_000_000)).toBe(2_147_483_647);
+  });
+
+  it('a 1 s TTL heartbeats every 500 ms, before the admission expires', async () => {
+    const h = harness();
+    signInCashier(h.sessions, 1);
+    h.fake.setAdmit({ ...ADMITTED, admission_ttl_seconds: 1 });
+    await advance(499);
+    expect(h.fake.admitCalls).toHaveLength(0);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(1);
+    await advance(500);
+    expect(h.fake.admitCalls).toHaveLength(2);
   });
 });
 
@@ -393,7 +413,7 @@ describe('heartbeat outcomes', () => {
 
   it('review F9: a slow heartbeat never overlaps the next one (in-flight stays at 1)', async () => {
     const h = harness();
-    signInCashier(h.sessions, 2); // interval clamped to 1 s
+    signInCashier(h.sessions, 2); // interval 1 s
     let inFlight = 0;
     let maxInFlight = 0;
     h.fake.setAdmit(
@@ -417,20 +437,33 @@ describe('Codex P1 #1 / review F2 — the latch blocks a new sale; the first saf
   it('after active_elsewhere mid-sale: the sale completes, cart.create is refused and the session ends', async () => {
     const h = harness();
     const record = signInCashier(h.sessions);
-    const cart = new CartBridgeHandlers({
-      getCurrentSession: () => h.sessions.getCurrent(),
-      getTerminalId: () => 'term-1',
-      onSaleBoundary: () => {
-        h.keeper.recheckSafePoint();
+    // The production wiring: every sale call goes through the one choke point.
+    const channels = new Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>();
+    const ipcMain = {
+      handle: (c: string, f: (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown) => {
+        channels.set(c, f);
       },
-    });
+    } as unknown as IpcMain;
+    registerCartHandlers(
+      createSaleBoundaryIpcMain(ipcMain, () => {
+        h.keeper.recheckSafePoint();
+      }),
+      {
+        handlers: new CartBridgeHandlers({
+          getCurrentSession: () => h.sessions.getCurrent(),
+          getTerminalId: () => 'term-1',
+        }),
+      },
+    );
     h.safe.value = false; // sale open with lines
     h.fake.setAdmit({ kind: 'active_elsewhere' });
     await advance(HALF_TTL_MS);
     expect(h.sessions.getCurrent()?.id).toBe(record.id);
 
     h.safe.value = true; // the sale settled
-    const res = await cart.create({ idempotency_key: 'create-after-takeover-0001' });
+    const res = await channels.get(CART_IPC_CHANNELS.CREATE)?.({} as IpcMainInvokeEvent, {
+      idempotency_key: 'create-after-takeover-0001',
+    });
     expect(res).toEqual({ kind: 'refused', reason: 'authority_conflict' });
     // The boundary re-check ended it at once, without waiting for the poll.
     expect(h.ends).toEqual(['superseded_by_takeover']);
