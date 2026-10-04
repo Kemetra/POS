@@ -100,6 +100,9 @@ function handlersFor(opts: { isPackaged: boolean; withProductionResolver: boolea
     isPackaged: opts.isPackaged,
     // Required by the factory since the post-handoff cancel payment guard; no payments here.
     cartPaymentStatus: () => 'none',
+    // Required by the factory since RT-26 Checkout Back; never reached here.
+    releaseCheckoutPayment: () => ({ kind: 'blocked' }),
+    checkoutReturnAllowed: () => false,
     ...(productionResolver !== undefined ? { productionResolver } : {}),
   });
 }

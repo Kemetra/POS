@@ -44,6 +44,10 @@ import { createPaymentAttemptFsm } from './payments/fsm/payment-attempt-fsm.js';
 import { createTenderLineFsm } from './payments/fsm/tender-line-fsm.js';
 import { createIdempotencyHelper } from './payments/idempotency.js';
 import { createPaymentAuditEmitter, type PaymentAuditEvent } from './payments/audit-emitter.js';
+import {
+  bindCheckoutReturnAllowed,
+  bindCheckoutReturnGuard,
+} from './payments/checkout-return-guard.js';
 import { createPaymentsStartHandler } from './payments/handlers/payments-start.js';
 import { createPaymentsConfirmHandler } from './payments/handlers/payments-confirm.js';
 import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel.js';
@@ -752,6 +756,67 @@ app
       getTenantId: () => operatorSessionManager.getCurrent()?.tenant_id ?? '',
     });
 
+    // 006-payments-tender Slice 3 (T142 + F-002/F-003/F-004) — wire the
+    // payments.* + tender.* bridge surface. The 8 handler factories share
+    // the three S3a repositories, both FSMs, and a single idempotency
+    // helper + audit-emitter pair. payments.discardOnSessionEnd is
+    // instantiated but NOT registered on ipcMain — it's an internal
+    // handler called by the operator-session-end signal.
+    const paymentsAttemptsRepo = bindPaymentAttemptsRepository(db);
+    const paymentsLinesRepo = bindPaymentTenderLinesRepository(db);
+    const paymentsOutboxRepo = bindPaymentActionOutboxRepository(db);
+
+    const paymentAttemptFsm = createPaymentAttemptFsm({
+      db: db,
+      attempts: paymentsAttemptsRepo,
+      lines: paymentsLinesRepo,
+      outbox: paymentsOutboxRepo,
+    });
+    const tenderLineFsm = createTenderLineFsm({
+      db: db,
+      attempts: paymentsAttemptsRepo,
+      lines: paymentsLinesRepo,
+      outbox: paymentsOutboxRepo,
+    });
+
+    const paymentsIdempotency = createIdempotencyHelper({ outbox: paymentsOutboxRepo });
+
+    // Adapter — the payments and sales emitters write their own event shapes;
+    // both forward to 004's `audit_events` table via the shared
+    // `AuditEventsStore.insertIgnore` with the same field mapping. F-006:
+    // 004's `ActionCategory` union does not yet include the 7 payment
+    // categories at the TypeScript level (migration 0017 extends the SQL
+    // CHECK only). The cast lives at this single seam and is bounded by the
+    // migration's CHECK; a future PR by 004's owner should extend
+    // `AUDIT_ACTION_CATEGORIES`.
+    const forwardAuditEvent = (evt: PaymentAuditEvent | SaleAuditEvent): void => {
+      auditEventsStore.insertIgnore({
+        event_id: randomUUID(),
+        tenant_id: evt.tenant_id,
+        branch_id: evt.branch_id,
+        originating_terminal_id: evt.originating_terminal_id,
+        acting_operator_id: evt.attribution_operator_id,
+        session_id: evt.session_id,
+        shift_id: null,
+        action_category: evt.action_category as unknown as Audit004ActionCategory,
+        created_at: evt.created_at,
+        approving_supervisor_id: null,
+        payload: evt.payload,
+      });
+    };
+    const paymentAuditEmitter = createPaymentAuditEmitter({
+      sink: { write: forwardAuditEvent },
+    });
+
+    // RT-26 — Checkout Back: the payments record decides whether a handed-off
+    // cart may return to the Sale (no tender, no settled / force-failed payment)
+    // and cancels a zero-funds started attempt inside the cart transaction.
+    const releaseCheckoutPayment = bindCheckoutReturnGuard({
+      db,
+      paymentAttemptFsm,
+      auditEmitter: paymentAuditEmitter,
+    });
+
     // 005-sales-cart S2 — register `cart:*` IPC with DB-backed CartStore.
     const cartBridgeHandlers = createCartBridgeHandlers({
       dbHandle: db,
@@ -764,6 +829,9 @@ app
       productionResolver: catalogueResolver,
       // Post-handoff cancel and the snapshot "paid" flag read the payments record.
       cartPaymentStatus: bindCartPaymentStatus(db),
+      releaseCheckoutPayment,
+      // RT-26 — read-only twin for Checkout's Back eligibility (no writes).
+      checkoutReturnAllowed: bindCheckoutReturnAllowed(db),
     });
     registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
 
@@ -861,58 +929,6 @@ app
     } else {
       mainLogger.info('read_down_driver:skipped_unpaired');
     }
-
-    // 006-payments-tender Slice 3 (T142 + F-002/F-003/F-004) — wire the
-    // payments.* + tender.* bridge surface. The 8 handler factories share
-    // the three S3a repositories, both FSMs, and a single idempotency
-    // helper + audit-emitter pair. payments.discardOnSessionEnd is
-    // instantiated but NOT registered on ipcMain — it's an internal
-    // handler called by the operator-session-end signal.
-    const paymentsAttemptsRepo = bindPaymentAttemptsRepository(db);
-    const paymentsLinesRepo = bindPaymentTenderLinesRepository(db);
-    const paymentsOutboxRepo = bindPaymentActionOutboxRepository(db);
-
-    const paymentAttemptFsm = createPaymentAttemptFsm({
-      db: db,
-      attempts: paymentsAttemptsRepo,
-      lines: paymentsLinesRepo,
-      outbox: paymentsOutboxRepo,
-    });
-    const tenderLineFsm = createTenderLineFsm({
-      db: db,
-      attempts: paymentsAttemptsRepo,
-      lines: paymentsLinesRepo,
-      outbox: paymentsOutboxRepo,
-    });
-
-    const paymentsIdempotency = createIdempotencyHelper({ outbox: paymentsOutboxRepo });
-
-    // Adapter — the payments and sales emitters write their own event shapes;
-    // both forward to 004's `audit_events` table via the shared
-    // `AuditEventsStore.insertIgnore` with the same field mapping. F-006:
-    // 004's `ActionCategory` union does not yet include the 7 payment
-    // categories at the TypeScript level (migration 0017 extends the SQL
-    // CHECK only). The cast lives at this single seam and is bounded by the
-    // migration's CHECK; a future PR by 004's owner should extend
-    // `AUDIT_ACTION_CATEGORIES`.
-    const forwardAuditEvent = (evt: PaymentAuditEvent | SaleAuditEvent): void => {
-      auditEventsStore.insertIgnore({
-        event_id: randomUUID(),
-        tenant_id: evt.tenant_id,
-        branch_id: evt.branch_id,
-        originating_terminal_id: evt.originating_terminal_id,
-        acting_operator_id: evt.attribution_operator_id,
-        session_id: evt.session_id,
-        shift_id: null,
-        action_category: evt.action_category as unknown as Audit004ActionCategory,
-        created_at: evt.created_at,
-        approving_supervisor_id: null,
-        payload: evt.payload,
-      });
-    };
-    const paymentAuditEmitter = createPaymentAuditEmitter({
-      sink: { write: forwardAuditEvent },
-    });
 
     const paymentsSessionAdapter = (): OperatorSessionForPayments | null =>
       // #380 (F-007 FIXED) — stamp the REAL terminal_id from the pairing store,

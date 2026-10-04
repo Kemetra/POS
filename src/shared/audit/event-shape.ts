@@ -37,6 +37,9 @@ export const AUDIT_ACTION_CATEGORIES = [
   'cart.cancel.post_handoff',
   'cart.discount.above_threshold',
   'cart.discarded_on_session_end',
+  // RT-26 — Checkout Back: a handed-off cart with no tender activity returns
+  // to `editing` (envelope invalidated). Open-set at the SQL layer (0004).
+  'cart.return_to_sale',
   // 008-sale-finalization-and-receipts §AD-9 (S1c T093) — 10 new categories.
   // Migration 0026 is a no-op SELECT 1; the closed-set enforcement lives here.
   'sale.finalized',

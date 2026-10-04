@@ -2200,6 +2200,30 @@ body {
     color: var(--color-text);
   }
 
+  /*
+   * RT-26 — Back to the same sale. Sits beside the title (inline-start of the
+   * badge); the visible Esc hint is the keyboard affordance. No layout change
+   * to the body grid.
+   */
+  .payment-surface__back {
+    margin-inline-start: auto;
+    gap: var(--space-2);
+  }
+
+  .payment-surface__back-key {
+    font-family: inherit;
+    font-size: 0.75em;
+    padding: 0 var(--space-1);
+    border: 1px solid var(--color-border-soft);
+    border-radius: 4px;
+    color: var(--color-text-muted);
+  }
+
+  .payment-surface__back-blocked {
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+
   .payment-surface__body {
     display: grid;
     grid-template-columns: 400px minmax(0, 1fr) 392px;
