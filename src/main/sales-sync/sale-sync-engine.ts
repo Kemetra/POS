@@ -14,7 +14,8 @@
  *   2. `stateRepo.eligible(scope, now)` → FIFO list (outbox LEFT JOIN state).
  *   3. For each: read the durable Sale, build the payload (tenders only past the
  *      RT-79 cutoff; integer minor units), POST, and record the outcome:
- *        ok / duplicate(409) → markSynced  (idempotent success, P5)
+ *        ok / duplicate(409) → markSynced  (idempotent success, P5); `ok` also
+ *          stores the Backend-Core `saleRef` when the answer carried one (RT-15 S1)
  *        transient(5xx/timeout) / no_connection → recordTransient (stay pending,
  *          attempt++, exponential backoff next_retry_at)  (P3 no silent loss)
  *        permanent(4xx) → markDeadLetter + onDeadLetter notification  (P3/FR-7)
@@ -66,6 +67,12 @@ export interface SaleSyncEngineDeps {
    * cannot send faithfully); it carries no PII, card data or token.
    */
   onDeadLetter?: (saleId: string, reason?: string) => void;
+  /**
+   * RT-15 S1: called when a capture answer's `saleRef` differs from the one
+   * already stored for the sale. The stored value is kept (first write wins).
+   * Receives only the sale's opaque `externalId` — no PII, no reference values.
+   */
+  onSaleRefMismatch?: (info: { externalId: string }) => void;
 }
 
 export type TickAdmission =
@@ -112,8 +119,24 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     const stamp = now();
 
     switch (result.kind) {
-      case 'ok':
+      case 'ok': {
+        // RT-15 S1: persist the server reference with the synced transition. The
+        // first stored reference wins; a null never clears it, and a different one
+        // is kept out and reported.
+        const synced = stateRepo.markSynced({
+          saleId,
+          tenantId,
+          branchId,
+          now: stamp,
+          serverSaleRef: result.saleRef,
+        });
+        if (synced.saleRefMismatch) {
+          deps.onSaleRefMismatch?.({ externalId: payload.externalId });
+        }
+        return;
+      }
       case 'duplicate':
+        // 409 carries no Sale projection, so no saleRef (any stored one is kept).
         stateRepo.markSynced({ saleId, tenantId, branchId, now: stamp });
         return;
       case 'permanent':

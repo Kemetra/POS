@@ -12,12 +12,19 @@
  * `no_connection` (offline / DNS / refused). `postSale` NEVER rejects — transport
  * faults are mapped to the union. The raw response body is NEVER surfaced (P7);
  * the operator token is attached main-process-side and never passed through here.
+ *
+ * RT-15 S1: `ok` carries the Backend-Core `saleRef` (the stable server reference,
+ * a UUID) read from the 200/201 `Sale` body — the ONE field taken from the body.
+ * It is `null` when the body is missing, unparseable, or has no valid UUID
+ * `saleRef`; the sale is still captured server-side, so the outcome stays `ok`.
+ * `duplicate` (409) carries none: Backend-Core's capture 409 is an `Error`
+ * envelope (`idempotency_key_conflict`) with no `Sale` projection.
  */
 
 import type { CaptureSalePayload } from './capture-payload.js';
 
 export type SaleSyncResult =
-  | { kind: 'ok' }
+  | { kind: 'ok'; saleRef: string | null }
   | { kind: 'duplicate' }
   | { kind: 'transient' }
   | { kind: 'permanent' }
@@ -34,11 +41,11 @@ export interface FakeSaleSyncClient extends SaleSyncClient {
 }
 
 export function createFakeSaleSyncClient(
-  script: SaleSyncResult[] = [{ kind: 'ok' }],
+  script: SaleSyncResult[] = [{ kind: 'ok', saleRef: null }],
 ): FakeSaleSyncClient {
   const calls: CaptureSalePayload[] = [];
   const queue = [...script];
-  let last: SaleSyncResult = script[script.length - 1] ?? { kind: 'ok' };
+  let last: SaleSyncResult = script[script.length - 1] ?? { kind: 'ok', saleRef: null };
   return {
     calls,
     postSale(payload: CaptureSalePayload): Promise<SaleSyncResult> {

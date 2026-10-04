@@ -30,13 +30,13 @@ function payload(over: Partial<CaptureSalePayload> = {}): CaptureSalePayload {
 
 describe('T024 — SaleSyncClient fake', () => {
   it('yields scripted results in order', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'transient' }, { kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([{ kind: 'transient' }, { kind: 'ok', saleRef: null }]);
     expect((await client.postSale(payload())).kind).toBe('transient');
     expect((await client.postSale(payload())).kind).toBe('ok');
   });
 
   it('repeats the last scripted result once the script is exhausted', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     expect((await client.postSale(payload())).kind).toBe('ok');
     expect((await client.postSale(payload())).kind).toBe('ok');
   });
@@ -52,7 +52,10 @@ describe('T024 — SaleSyncClient fake', () => {
   });
 
   it('records the payloads it was called with', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }, { kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([
+      { kind: 'ok', saleRef: null },
+      { kind: 'ok', saleRef: null },
+    ]);
     await client.postSale(payload({ externalId: 'a' }));
     await client.postSale(payload({ externalId: 'b' }));
     expect(client.calls.map((c) => c.externalId)).toEqual(['a', 'b']);

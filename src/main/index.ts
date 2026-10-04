@@ -1384,6 +1384,12 @@ app
             operatorSessionManager,
             operatorEnvelopeHolder,
           ),
+          // RT-15 S1: a 200/201 without a usable saleRef — the sale is captured but
+          // the till cannot return it. Logs the opaque externalId + a closed-set
+          // reason only (never the body or the rejected value; P7).
+          onSaleRefUnavailable: ({ externalId, reason }) => {
+            mainLogger.warn({ external_id: externalId, reason }, 'sale_sync:sale_ref_unavailable');
+          },
         });
         // RT-79 rollout gate: unset = never send tenders (default). Only sales finalized
         // at/after this explicit-zone ISO instant carry `tenders`. Ops MUST choose a
@@ -1416,6 +1422,11 @@ app
           backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },
           onDeadLetter: (saleId: string, reason?: string) => {
             mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:dead_letter');
+          },
+          // RT-15 S1: a capture answer's saleRef differed from the stored one; the
+          // stored one is kept. Only the opaque externalId is logged (P7).
+          onSaleRefMismatch: ({ externalId }) => {
+            mainLogger.warn({ external_id: externalId }, 'sale_sync:sale_ref_mismatch');
           },
         });
 
