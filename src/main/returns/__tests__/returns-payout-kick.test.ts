@@ -4,7 +4,9 @@
  *
  * Every kick is marked `sending` durably BEFORE the transport is called, and
  * its outcome (opened / failed_before_send / unknown) is persisted with its
- * audit BEFORE any recheck or stop handling can return. `retry_drawer` is
+ * audit BEFORE any recheck can return. At shutdown (RT-198) nothing is
+ * written after stop — the DB closes at once — so the durable `sending`
+ * mark is what remembers a kick in flight at quit. `retry_drawer` is
  * allowed only after `failed_before_send`; after `opened` or `unknown` (a
  * timeout, a fault, a crash mid-kick) the only completion is the manual,
  * attested payout.
@@ -76,7 +78,7 @@ describe('P1: no second kick after the till knows the drawer opened', () => {
     },
   );
 
-  it('a stop during an opened kick still records and audits the opening; no retry after restart', async () => {
+  it('RT-198: a stop during an opened kick writes nothing; the kick stays sending: no retry after restart', async () => {
     const returnId = await confirmedReturn(h.service);
     const kick = deferredFake<DrawerKickResult>();
     h.drawer.answer = () => kick.promise;
@@ -85,10 +87,11 @@ describe('P1: no second kick after the till knows the drawer opened', () => {
       expect(h.drawer.kicks).toBe(1);
     });
     h.stop();
+    const audits = h.audits.length;
     kick.resolve({ ok: true });
     expect(await pending).toMatchObject({ kind: 'refused', reason: 'shutting_down' });
-    expect(kickRecord(returnId)).toEqual(['opened', 1]);
-    expect(h.audits.at(-1)).toMatchObject({ action_category: 'sale.return.drawer_opened' });
+    expect(kickRecord(returnId)).toEqual(['sending', 1]);
+    expect(h.audits).toHaveLength(audits);
     expect(h.repo.read(returnId)?.state).toBe('confirmed');
     const after = h.restart();
     expect(await after.service.payout({ returnId, action: 'retry_drawer' })).toMatchObject(

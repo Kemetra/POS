@@ -67,9 +67,10 @@ export interface ComposedReturns {
   readonly service: ReturnsBridgeAPI;
   readonly resolver: ReturnsResolver;
   /**
-   * Latch the domain stopped (no send starts; an in-flight send touches
-   * nothing local when it settles). Idempotent; synchronous, like every
-   * worker stop in `bootstrap-workers.ts`.
+   * Latch the domain stopped (RT-198): every `returns.*` call answers
+   * `shutting_down` before any DB access, no send starts, and work in flight
+   * writes nothing when it settles (the DB closes right after). Idempotent;
+   * synchronous, like every worker stop in `bootstrap-workers.ts`.
    */
   readonly stop: () => void;
 }
@@ -128,6 +129,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     recordLineDetails: (returnId, details) => {
       payouts.recordLineDetails(returnId, details);
     },
+    isStopped,
   });
   const payout = createReturnsPayoutService({
     authorizer,

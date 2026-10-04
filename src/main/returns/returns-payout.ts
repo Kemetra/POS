@@ -45,7 +45,10 @@
  * ## Shutdown
  *
  * After stop, nothing is read or written (`shutting_down`); a kick or print
- * in flight at stop writes nothing when it settles.
+ * in flight at stop writes nothing when it settles (RT-198: the stop latch is
+ * the first check after every await). A kick in flight at quit is remembered
+ * by its durable `sending` mark (P1): it reads as in flight, then unknown,
+ * never retryable; the DB closes right after stop in any case.
  */
 import type {
   LocalReturnRefusal,
@@ -68,7 +71,12 @@ import type {
   ReturnsAudit,
   SlipAuditOutcome,
 } from './returns-audit.js';
-import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
+import {
+  SHUTTING_DOWN,
+  latchedRecheck,
+  type AuthSnapshot,
+  type ReturnsAuthorizer,
+} from './returns-auth.js';
 import { payoutActionRefusal } from '../../shared/returns/payout-rules.js';
 import { kickReturnDrawer, kickStateOf, type ReturnDrawerOutcome } from './returns-drawer.js';
 import type {
@@ -135,8 +143,6 @@ interface PaidOut {
   readonly entry: JournalEntry;
   readonly payout: PayoutRow;
 }
-
-const SHUTTING_DOWN = { kind: 'refused', reason: 'shutting_down' } as const;
 
 /** The started payout's kick record, as `payoutRefusal` needs it (null: none started). */
 export type StartedPayout = Pick<PayoutRow, 'kickOutcome' | 'kickedAt'> | null;
@@ -263,7 +269,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     const admitted = this.admit('payout');
     if (admitted.kind !== 'ok') return { ...admitted, ret: null };
     const outcome = await this.exclusive(admitted.actor, req);
-    const lost = this.lostAfterAwait(admitted.actor, outcome);
+    const lost = this.lostAfterAwait(admitted.actor);
     return lost === null ? outcome : { ...lost, ret: null };
   }
 
@@ -274,7 +280,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     const outcome = await serialized(this.reprints, req.returnId, admitted.actor, () =>
       this.runReprint(admitted.actor, req.returnId),
     );
-    return this.lostAfterAwait(admitted.actor, outcome) ?? outcome;
+    return this.lostAfterAwait(admitted.actor) ?? outcome;
   }
 
   /**
@@ -339,12 +345,15 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   /**
    * After the awaited work: null while the admitted actor is still the live
    * one; else the refusal to answer with instead (no data; not audited — the
-   * work itself is recorded with its true state).
+   * work itself is recorded with its true state). RT-198: through the
+   * latched recheck, so once stopped no session is read (it goes through the
+   * DB, which closes at stop) and the true outcome is answered — a completed
+   * payout stays paid_out, it just is not rechecked.
    */
-  private lostAfterAwait(actor: AuthSnapshot, outcome: { kind: string; reason?: unknown }) {
-    if (outcome.kind === 'refused' && outcome.reason === 'shutting_down') return null;
-    const lost = this.deps.authorizer.recheck(actor);
-    return lost === null ? null : ({ kind: 'refused', reason: lost } as const);
+  private lostAfterAwait(actor: AuthSnapshot) {
+    const lost = latchedRecheck(this.deps, actor);
+    if (lost === null || lost === 'shutting_down') return null;
+    return { kind: 'refused', reason: lost } as const;
   }
 
   private auditRefusal(
@@ -397,7 +406,9 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
    * only while the admitted snapshot is still the live, authorized actor,
    * checked immediately before it, synchronously. Facts that already
    * happened (a kick's outcome, a slip's result, a refusal) are recorded
-   * without it.
+   * without it. RT-198: never the first thing after an await — every caller
+   * reaches it synchronously behind a stop-latch check (`latchedRecheck` in
+   * `runPayout` / `runReprint`, the latch in `afterKick`).
    */
   private effect<T>(actor: AuthSnapshot, run: () => T): T | Lost {
     const lost = this.deps.authorizer.recheck(actor);
@@ -405,11 +416,10 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   }
 
   private async runPayout(actor: AuthSnapshot, req: ReturnsPayoutRequest) {
-    // A queued operation may start after stop: touch nothing then.
-    if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
-    // Queued work may run long after admission: the actor must still hold
-    // before anything is even read.
-    const lost = this.deps.authorizer.recheck(actor);
+    // Queued work may start after stop (touch nothing then), or long after
+    // admission: the actor must still hold before anything is even read.
+    const lost = latchedRecheck(this.deps, actor);
+    if (lost === 'shutting_down') return { ...SHUTTING_DOWN, ret: null };
     if (lost !== null) return this.refusePayout(actor, lost, null);
     const target = this.target(actor, req);
     if (target.kind !== 'ok') return target;
@@ -468,36 +478,30 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   }
 
   /**
-   * Steps 2–3 after the kick: its outcome persisted and audited FIRST (before
-   * any stop or recheck can return: the till must remember a drawer that
-   * opened); then, only if it opened, the commit (itself behind the gate).
+   * Steps 2–3 after the kick. RT-198: the stop latch first — after stop the
+   * DB is closed, and the durable `sending` mark already remembers the kick
+   * (P1). Then its outcome persisted and audited (before any recheck can
+   * return: the till must remember a drawer that opened); then, only if it
+   * opened, the commit (itself behind the gate).
    */
   private async afterKick(actor: AuthSnapshot, entry: JournalEntry, kick: ReturnDrawerOutcome) {
-    this.persistKick(actor, entry, kick);
     if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
+    this.persistKick(actor, entry, kick);
     if (!kick.ok) {
       return { kind: 'drawer_failed', ret: this.viewOf(entry), reason: kick.reason } as const;
     }
     return this.commit(actor, entry, 'drawer');
   }
 
-  /**
-   * The kick's outcome and its audit, in one transaction. At quit the DB may
-   * already be closed: then the write fails and the durable `sending` mark
-   * stays, which reads as unknown (no retry) after the restart.
-   */
+  /** The kick's outcome and its audit, in one transaction. */
   private persistKick(actor: AuthSnapshot, entry: JournalEntry, kick: ReturnDrawerOutcome): void {
     const outcome = kickResultOf(kick);
     const audited = drawerAuditOf(kick);
-    try {
-      this.deps.transaction(() => {
-        if (this.deps.payouts.recordKick({ returnId: entry.returnId, outcome })) {
-          this.deps.audit.drawer(actor, entry, audited);
-        }
-      });
-    } catch (err) {
-      if (!this.deps.isStopped()) throw err;
-    }
+    this.deps.transaction(() => {
+      if (this.deps.payouts.recordKick({ returnId: entry.returnId, outcome })) {
+        this.deps.audit.drawer(actor, entry, audited);
+      }
+    });
   }
 
   /**
@@ -540,9 +544,10 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   }
 
   private async runReprint(actor: AuthSnapshot, returnId: string): Promise<ReturnsReprintResponse> {
-    if (this.deps.isStopped()) return SHUTTING_DOWN;
-    // Queued work: the actor must still hold before anything is read.
-    const lost = this.deps.authorizer.recheck(actor);
+    // Queued work: not after stop, and the actor must still hold before
+    // anything is read.
+    const lost = latchedRecheck(this.deps, actor);
+    if (lost === 'shutting_down') return SHUTTING_DOWN;
     if (lost !== null) return this.refuseReprint(actor, lost, null);
     const entry = this.ownReturn(actor, returnId);
     if (entry === null) return this.refuseReprint(actor, 'return_not_found', null);

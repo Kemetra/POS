@@ -413,6 +413,15 @@ export interface ReturnsHarness extends ComposedReturns {
    * alive at the same time (no single-instance lock); same drawer and printer.
    */
   anotherInstance(): ComposedReturns;
+  /**
+   * RT-198: every process composed so far; `deadTouches` counts each time a
+   * dead (crashed) one touched its database, audit sink or session read —
+   * each such touch is refused, as a closed DB would refuse it;
+   * `sessionReadsAfterStop` counts each session read by a stopped (live)
+   * domain — refused too: in the app the DB closes right after stop, and the
+   * session read goes through it (the pairing store).
+   */
+  readonly lives: Pick<Lives, 'deadTouches' | 'sessionReadsAfterStop'>;
   readonly db: SqlJsDatabase;
   readonly handle: DatabaseHandle;
   readonly repo: ReturnsRepository;
@@ -425,6 +434,11 @@ export interface ReturnsHarness extends ComposedReturns {
   /** Mutable session / flag / token / fault, read per call like production. */
   readonly state: HarnessState;
   close(): void;
+}
+
+/** Rows inserted, updated or deleted on the connection so far, in any table (SQLite). */
+export function totalChanges(db: SqlJsDatabase): number {
+  return Number(db.exec('SELECT total_changes()')[0]?.values[0]?.[0] ?? 0);
 }
 
 /** Every committed `audit_events` row, in insert order, payload parsed. */
@@ -468,20 +482,24 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
   const drawer = new FakeDrawer();
   const printer = new FakePrinter();
   let killLatest: () => void = () => undefined;
+  const lives = new Lives();
   const compose = (): ComposedReturns => {
-    const life = { alive: true };
+    const life = lives.next();
     killLatest = () => {
       life.alive = false;
     };
-    return composeReturns({
+    const domain = composeReturns({
       db: whileAlive(handle, life),
       http: { baseUrl: BASE_URL, fetch: backend.fetch },
       getOperatorEnvelope: () => state.token,
       isEnabled: () => state.enabled,
-      getSession: () =>
-        state.role === null || !state.paired
+      // In the app this reads the pairing store (the DB): never after stop.
+      getSession: () => {
+        assertSessionReadable(life);
+        return state.role === null || !state.paired
           ? null
-          : { ...sessionFor(state.role), terminal_id: state.terminalId },
+          : { ...sessionFor(state.role), terminal_id: state.terminalId };
+      },
       isSessionLocked: () => state.locked,
       auditSink: whileAlive(auditSink, life),
       logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
@@ -489,6 +507,13 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
       drawer,
       printer,
     });
+    return {
+      ...domain,
+      stop: () => {
+        life.stopped = true;
+        domain.stop();
+      },
+    };
   };
   const composed = compose();
   let latest = composed;
@@ -511,6 +536,7 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
       latest = compose();
       return latest;
     },
+    lives,
     db,
     handle,
     repo: createReturnsRepository(handle),
@@ -540,18 +566,64 @@ export async function confirmedReturn(
   return res.ret.returnId;
 }
 
+/** One composed process: alive until it crashes; what it touched after that. */
+interface Life {
+  alive: boolean;
+  /** Its domain was stopped (the app quits: the DB closes right after). */
+  stopped: boolean;
+  deadTouches: number;
+  sessionReadsAfterStop: number;
+}
+
+/** Every process composed over one database, and what the dead ones touched. */
+class Lives {
+  private readonly all: Life[] = [];
+
+  next(): Life {
+    const life = { alive: true, stopped: false, deadTouches: 0, sessionReadsAfterStop: 0 };
+    this.all.push(life);
+    return life;
+  }
+
+  get deadTouches(): number {
+    return this.all.reduce((n, life) => n + life.deadTouches, 0);
+  }
+
+  get sessionReadsAfterStop(): number {
+    return this.all.reduce((n, life) => n + life.sessionReadsAfterStop, 0);
+  }
+}
+
+/** A dead process cannot touch anything: count the attempt, then refuse it. */
+function assertAlive(life: Life): void {
+  if (life.alive) return;
+  life.deadTouches += 1;
+  throw new Error('the process is gone');
+}
+
+/**
+ * RT-198: the session read goes through the DB in the app, which closes right
+ * after stop: count it and refuse it once the domain is stopped (or dead).
+ */
+function assertSessionReadable(life: Life): void {
+  assertAlive(life);
+  if (!life.stopped) return;
+  life.sessionReadsAfterStop += 1;
+  throw new Error('database connection is not open');
+}
+
 /**
  * `target`, usable only while `life.alive`: every method call (and every
  * function or object such a call returns: a transaction, a statement) throws
- * once the process is dead.
+ * once the process is dead, and is counted (`deadTouches`).
  */
-function whileAlive<T extends object>(target: T, life: { alive: boolean }): T {
+function whileAlive<T extends object>(target: T, life: Life): T {
   return new Proxy(target, {
     get(obj, prop, receiver) {
       const value: unknown = Reflect.get(obj, prop, receiver);
       if (typeof value !== 'function') return value;
       return (...args: unknown[]): unknown => {
-        if (!life.alive) throw new Error('the process is gone');
+        assertAlive(life);
         const result: unknown = (value as (...a: unknown[]) => unknown).apply(obj, args);
         if (typeof result === 'function') {
           return whileAlive(result as (...a: unknown[]) => unknown, life);
@@ -560,7 +632,7 @@ function whileAlive<T extends object>(target: T, life: { alive: boolean }): T {
       };
     },
     apply(fn, thisArg, args) {
-      if (!life.alive) throw new Error('the process is gone');
+      assertAlive(life);
       return Reflect.apply(fn as (...a: unknown[]) => unknown, thisArg, args);
     },
   });

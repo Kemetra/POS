@@ -48,7 +48,9 @@ const REFUSAL_COPY: Readonly<Record<ReturnsRefusalReason, string>> = Object.free
   payout_started: 'بدأ صرف هذا المرتجع من قبل ولم يكتمل.',
   payout_not_started: 'لم يبدأ صرف هذا المرتجع بعد.',
   not_paid_out: 'لا يوجد إيصال لهذا المرتجع: لم يُصرف نقده بعد.',
-  shutting_down: 'التطبيق يُغلق الآن، فلم يُنفَّذ شيء.',
+  // RT-198: work in flight at stop may already have happened (a resolve
+  // pass, a drawer kick): never "nothing was done".
+  shutting_down: 'التطبيق يُغلق الآن. راجع سجل المرتجعات بعد إعادة تشغيله.',
   drawer_retry_unsafe:
     'ربما فُتح الدرج من قبل، فلن يُفتح مرة ثانية. عُدّ النقد، وإن سلّمت العميل المبلغ فسجّل الصرف يدويًا.',
   drawer_kick_in_progress:

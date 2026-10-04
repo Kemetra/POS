@@ -88,6 +88,34 @@ export interface ReturnsAuthorizerDeps {
   readonly getEnvelope: () => string | null;
 }
 
+/**
+ * RT-198: the app is quitting — the one answer of every `returns.*` call
+ * after stop (never audited: shutdown is not an operator refusal).
+ */
+export const SHUTTING_DOWN = { kind: 'refused', reason: 'shutting_down' } as const;
+
+/** What `latchedRecheck` needs: the authorizer and the domain's stop latch. */
+export interface LatchedRecheckDeps {
+  readonly authorizer: Pick<ReturnsAuthorizer, 'recheck'>;
+  /** RT-198: true once the return domain is stopping (app shutdown). */
+  readonly isStopped: () => boolean;
+}
+
+/**
+ * RT-198: THE recheck after any await in the return domain. Once stopped it
+ * answers `shutting_down` without rechecking: the recheck reads the operator
+ * session, which in the app goes through the DB (the pairing store), and the
+ * DB closes right after stop. Else why the snapshot's actor no longer holds,
+ * or null. `shutting_down` is never an operator refusal: callers never audit it.
+ */
+export function latchedRecheck(
+  deps: LatchedRecheckDeps,
+  snapshot: AuthSnapshot,
+): LocalReturnRefusal | null {
+  if (deps.isStopped()) return 'shutting_down';
+  return deps.authorizer.recheck(snapshot);
+}
+
 const RETURN_ROLES: ReadonlySet<Role> = new Set<Role>(['manager', 'admin']);
 
 /** D-b: only a manager or admin may start (or resolve) a return. */
