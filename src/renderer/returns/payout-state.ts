@@ -27,8 +27,14 @@ import { CALL_FAILED } from './returns-bridge.js';
  */
 export type PayoutPhase =
   | { readonly kind: 'ready' }
-  | { readonly kind: 'interrupted' }
-  | { readonly kind: 'drawer_failed'; readonly reason: ReturnDrawerFailure }
+  /** `retryable`: the last kick provably never reached the drawer (P1). */
+  | { readonly kind: 'interrupted'; readonly retryable: boolean }
+  | {
+      readonly kind: 'drawer_failed';
+      readonly reason: ReturnDrawerFailure;
+      /** Only "no drawer configured" proves the kick never left (P1). */
+      readonly retryable: boolean;
+    }
   | { readonly kind: 'confirm_manual'; readonly back: ManualOrigin }
   | {
       readonly kind: 'paid';
@@ -41,11 +47,22 @@ export type PayoutPhase =
 /** Where a manual payout can be asked from (and returned to on cancel). */
 export type ManualOrigin = Extract<PayoutPhase, { kind: 'drawer_failed' | 'interrupted' }>;
 
+/**
+ * What a reprint answered, each kept distinct: only `print_failed` is a
+ * printer failure. A refusal may come after a copy printed (the session
+ * changed during the print), and a rejected call has no known result.
+ */
+export type ReprintResult =
+  | { readonly kind: 'printed' }
+  | { readonly kind: 'print_failed' }
+  | { readonly kind: 'refused'; readonly reason: ReturnsRefusalReason }
+  | { readonly kind: 'unknown' };
+
 export interface PayoutState {
   readonly ret: ReturnJournalView;
   readonly phase: PayoutPhase;
   /** The last reprint's result on this panel, if any. */
-  readonly reprint: ReturnSlipStatus | null;
+  readonly reprint: ReprintResult | null;
 }
 
 /** The phase a journal row implies on its own (no live call result). */
@@ -53,7 +70,9 @@ function phaseOf(ret: ReturnJournalView): PayoutPhase {
   if (ret.state === 'paid_out') {
     return { kind: 'paid', slip: null, method: ret.payout?.method ?? null };
   }
-  return ret.payout === null ? { kind: 'ready' } : { kind: 'interrupted' };
+  if (ret.payout === null) return { kind: 'ready' };
+  const { kick } = ret.payout;
+  return { kind: 'interrupted', retryable: kick === 'none' || kick === 'failed_before_send' };
 }
 
 export function initialPayout(ret: ReturnJournalView): PayoutState {
@@ -66,8 +85,11 @@ function afterRefusal(
   ret: ReturnJournalView | null,
 ) {
   const row = ret ?? state.ret;
-  // R3: a payout started elsewhere is completed, never started afresh.
-  if (reason === 'payout_started') return { ret: row, phase: phaseOf(row), reprint: null };
+  // R3: a payout started elsewhere is completed, never started afresh; P1: a
+  // drawer that may have opened is never kicked again (manual only).
+  if (reason === 'payout_started' || reason === 'drawer_retry_unsafe') {
+    return { ret: row, phase: phaseOf(row), reprint: null };
+  }
   return { ret: row, phase: { kind: 'refused', reason } as const, reprint: null };
 }
 
@@ -83,8 +105,14 @@ export function afterPayout(
         phase: { kind: 'paid', slip: res.slip, method: res.method },
         reprint: null,
       };
-    case 'drawer_failed':
-      return { ret: res.ret, phase: { kind: 'drawer_failed', reason: res.reason }, reprint: null };
+    case 'drawer_failed': {
+      const retryable = res.reason === 'no_drawer_configured';
+      return {
+        ret: res.ret,
+        phase: { kind: 'drawer_failed', reason: res.reason, retryable },
+        reprint: null,
+      };
+    }
     case 'refused':
       return afterRefusal(state, res.reason, res.ret);
   }
@@ -107,10 +135,15 @@ export function refreshed(state: PayoutState, row: ReturnJournalView | undefined
   return row === undefined ? state : initialPayout(row);
 }
 
+/** A reprint answer (or a rejected call) as its own closed result. */
+export function reprintResult(res: ReturnsReprintResponse | typeof CALL_FAILED): ReprintResult {
+  if (res === CALL_FAILED) return { kind: 'unknown' };
+  return res.kind === 'refused' ? { kind: 'refused', reason: res.reason } : { kind: res.kind };
+}
+
 export function afterReprint(
   state: PayoutState,
   res: ReturnsReprintResponse | typeof CALL_FAILED,
 ): PayoutState {
-  const printed = res !== CALL_FAILED && res.kind === 'printed';
-  return { ...state, reprint: printed ? 'printed' : 'failed' };
+  return { ...state, reprint: reprintResult(res) };
 }

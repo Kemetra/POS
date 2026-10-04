@@ -361,13 +361,19 @@ export interface SaleReturnPayoutStartedPayload {
 export interface SaleReturnDrawerOpenedPayload {
   return_id: string;
   return_ref: string;
+  kick_outcome: 'opened';
 }
 
-/** `sale.return.drawer_failed` — the drawer did not open; nothing was paid out. */
+/**
+ * `sale.return.drawer_failed` — the drawer did not report opened; nothing was
+ * paid out. `kick_outcome` says what is known: `failed_before_send` (provably
+ * never reached the drawer) or `unknown` (timeout / fault: may have opened).
+ */
 export interface SaleReturnDrawerFailedPayload {
   return_id: string;
   return_ref: string;
   failure_reason: string;
+  kick_outcome: 'failed_before_send' | 'unknown';
 }
 
 /** `sale.return.paid_out` — the cash refund was paid out (once per return). */

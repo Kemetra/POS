@@ -74,7 +74,11 @@ describe('payout audit events (U1)', () => {
     const { audit, stored } = auditWithStore();
     audit.payoutStarted(PAYER, ENTRY);
     audit.drawer(PAYER, ENTRY, { ok: true });
-    audit.drawer(PAYER, ENTRY, { ok: false, reason: 'no_drawer_configured' });
+    audit.drawer(PAYER, ENTRY, {
+      ok: false,
+      reason: 'no_drawer_configured',
+      kickOutcome: 'failed_before_send',
+    });
     audit.paidOut(PAYER, ENTRY, 'manual');
     audit.slip(PAYER, ENTRY, { copy: false, ok: true });
     audit.slip(PAYER, ENTRY, { copy: true, ok: false, failureReason: 'printer_offline' });
@@ -123,12 +127,13 @@ describe('payout audit events (U1)', () => {
 
   it('records why the drawer or the slip failed', () => {
     const { audit, stored } = auditWithStore();
-    audit.drawer(PAYER, ENTRY, { ok: false, reason: 'timeout' });
+    audit.drawer(PAYER, ENTRY, { ok: false, reason: 'timeout', kickOutcome: 'unknown' });
     audit.slip(PAYER, ENTRY, { copy: false, ok: false, failureReason: 'os_print_error' });
     expect(stored[0]?.payload).toEqual({
       return_id: 'r1',
       return_ref: RETURN_REF,
       failure_reason: 'timeout',
+      kick_outcome: 'unknown',
     });
     expect(stored[1]?.payload).toEqual({
       return_id: 'r1',

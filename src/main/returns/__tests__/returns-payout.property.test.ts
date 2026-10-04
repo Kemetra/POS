@@ -10,9 +10,11 @@
  *     (claim before payout), and pays the journal's server-confirmed total;
  *   • a `drawer` payout follows a drawer that opened (never a failed kick);
  *   • a return that was never confirmed is never claimed or paid;
- *   • every drawer kick happened while some return was confirmed AND claimed;
- *   • a crashed domain writes nothing after the crash (its in-flight kicks and
- *     prints settle without a journal, payout or audit write).
+ *   • P1: every kick belongs to one return, claimed before it, and a return is
+ *     kicked again only right after its own `failed_before_send`;
+ *   • a double click by one actor gets the same answer twice (single-flight);
+ *   • a payout is committed only under the live, unlocked, admitted operator;
+ *   • a crashed process writes nothing after the crash.
  *
  * A failing seed replays exactly (`runPayoutInterleaving(seed, STEPS)`).
  */
@@ -110,9 +112,40 @@ function expectNeverPaidUnconfirmed(r: PayoutRun): void {
   ).toBe(0);
 }
 
-function expectKicksOnlyWhenClaimed(r: PayoutRun): void {
-  const unclaimed = r.claimedAtKick.filter((claimed) => claimed.length === 0);
-  expect(unclaimed, `seed ${String(r.seed)}`).toEqual([]);
+/**
+ * P1: every kick belongs to exactly one return, claimed before it; and a
+ * return is kicked again only right after its own `failed_before_send` (the
+ * previous kick provably never reached the drawer).
+ */
+function expectOneKickUnlessNeverSent(r: PayoutRun): void {
+  const kicksSoFar = new Map<string, number>();
+  for (const [i, kick] of r.kicks.entries()) {
+    const at = `seed ${String(r.seed)} kick ${String(i)}`;
+    expect(kick.returnIds, at).toHaveLength(1);
+    expect(kick.claimed, at).toBe(true);
+    const returnId = kick.returnIds[0] ?? '';
+    const earlier = kicksSoFar.get(returnId) ?? 0;
+    if (earlier > 0) {
+      expect(kick.earlierOutcomes, at).toHaveLength(earlier);
+      expect(kick.earlierOutcomes.at(-1), at).toBe('failed_before_send');
+    }
+    kicksSoFar.set(returnId, earlier + 1);
+  }
+}
+
+/** X3: the same admitted actor's double click gets one answer, twice. */
+function expectDoubleClicksShareOneAnswer(r: PayoutRun): void {
+  for (const [first, second] of r.doubles) expect(second, `seed ${String(r.seed)}`).toEqual(first);
+}
+
+/** A2: a payout is committed only under the live, unlocked, admitted operator. */
+function expectPaidOutUnderLiveActor(r: PayoutRun): void {
+  for (const commit of r.paidOutAtCommit) {
+    const at = `seed ${String(r.seed)}`;
+    expect(commit.locked, at).toBe(false);
+    expect(commit.acting, at).toBe(`op-${String(commit.liveRole)}`);
+    expect(['manager', 'admin'], at).toContain(commit.liveRole);
+  }
 }
 
 function expectQuietAfterCrash(r: PayoutRun): void {
@@ -130,7 +163,9 @@ describe('X7: payout exactly-once under seeded random interleavings', () => {
     expectClaimBeforePayoutAndConfirmedAmount(r, audits);
     expectDrawerPayoutAfterOpened(r, audits);
     expectNeverPaidUnconfirmed(r);
-    expectKicksOnlyWhenClaimed(r);
+    expectOneKickUnlessNeverSent(r);
+    expectDoubleClicksShareOneAnswer(r);
+    expectPaidOutUnderLiveActor(r);
     expectQuietAfterCrash(r);
   });
 
@@ -158,7 +193,7 @@ describe('X7: payout exactly-once under seeded random interleavings', () => {
       const r = await run(seed);
       for (const a of committedAudits(r.harness.db)) seen.add(a.action_category);
       crashes += r.crashes.length;
-      kicks += r.claimedAtKick.length;
+      kicks += r.kicks.length;
     }
     expect(crashes).toBeGreaterThan(0);
     expect(kicks).toBeGreaterThan(0);

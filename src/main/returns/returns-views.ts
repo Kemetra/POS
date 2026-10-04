@@ -4,14 +4,29 @@
  * A `ReturnJournalView` carries no operator ids, no `externalId` (the
  * Idempotency-Key) and no request body: those stay in the main process.
  */
-import type { ReturnJournalView, ReturnPayoutView } from '../../shared/returns/types.js';
+import type {
+  ReturnJournalView,
+  ReturnPayoutKick,
+  ReturnPayoutView,
+} from '../../shared/returns/types.js';
 import type { PayoutRow } from './returns-payout-repository.js';
 import type { JournalEntry } from './returns-repository.js';
+
+/** A kick still `sending` (a crash mid-kick) may have opened the drawer: unknown. */
+function kickOf(payout: PayoutRow): ReturnPayoutKick {
+  if (payout.kickOutcome === null) return 'none';
+  return payout.kickOutcome === 'sending' ? 'unknown' : payout.kickOutcome;
+}
 
 /** The payout as the renderer sees it: when and how, never who (ids stay in main). */
 function toPayoutView(payout: PayoutRow | null): ReturnPayoutView | null {
   if (payout === null) return null;
-  return { startedAt: payout.startedAt, paidAt: payout.paidAt, method: payout.method };
+  return {
+    startedAt: payout.startedAt,
+    paidAt: payout.paidAt,
+    method: payout.method,
+    kick: kickOf(payout),
+  };
 }
 
 export function toJournalView(

@@ -28,10 +28,14 @@ export interface ReturnActor {
   readonly operatorSessionId: string;
 }
 
-/** What the drawer kick of a payout did. */
+/** What the drawer kick of a payout did, and what that proves about the drawer. */
 export type DrawerAuditOutcome =
   | { readonly ok: true }
-  | { readonly ok: false; readonly reason: ReturnDrawerFailure };
+  | {
+      readonly ok: false;
+      readonly reason: ReturnDrawerFailure;
+      readonly kickOutcome: 'failed_before_send' | 'unknown';
+    };
 
 /** What printing a return slip did; `copy` is a reprint. */
 export type SlipAuditOutcome =
@@ -175,12 +179,15 @@ export function createReturnsAudit(deps: ReturnsAuditDeps): ReturnsAudit {
       });
     },
     drawer(actor, entry, outcome) {
-      if (outcome.ok) write(actor, 'sale.return.drawer_opened', refs(entry));
-      else
-        write(actor, 'sale.return.drawer_failed', {
-          ...refs(entry),
-          failure_reason: outcome.reason,
-        });
+      if (outcome.ok) {
+        write(actor, 'sale.return.drawer_opened', { ...refs(entry), kick_outcome: 'opened' });
+        return;
+      }
+      write(actor, 'sale.return.drawer_failed', {
+        ...refs(entry),
+        failure_reason: outcome.reason,
+        kick_outcome: outcome.kickOutcome,
+      });
     },
     paidOut(actor, entry, method) {
       write(actor, 'sale.return.paid_out', {

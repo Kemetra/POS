@@ -271,10 +271,41 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
       paidSessionId: 'sess-payer',
       paidAt: 't3',
       method: 'manual' as const,
+      kickOutcome: 'opened' as const,
+      kickCount: 1,
+      kickedAt: 't2',
     };
     const view = toJournalView(entry, payout);
-    expect(view.payout).toEqual({ startedAt: 't2', paidAt: 't3', method: 'manual' });
+    expect(view.payout).toEqual({
+      startedAt: 't2',
+      paidAt: 't3',
+      method: 'manual',
+      kick: 'opened',
+    });
     expect(JSON.stringify(view)).not.toMatch(/op-starter|sess-starter|op-payer|sess-payer|Mona/);
+  });
+
+  it.each<[string | null, string]>([
+    [null, 'none'],
+    ['sending', 'unknown'],
+    ['failed_before_send', 'failed_before_send'],
+    ['unknown', 'unknown'],
+  ])('P1: a kick record %s is shown as %s (a crash mid-kick may have opened it)', (kick, shown) => {
+    const payout = {
+      returnId: 'r1',
+      startedOperatorId: 'op',
+      startedSessionId: 'sess',
+      startedAt: 't2',
+      paidOperatorId: null,
+      paidOperatorName: null,
+      paidSessionId: null,
+      paidAt: null,
+      method: null,
+      kickOutcome: kick as 'sending' | null,
+      kickCount: kick === null ? 0 : 1,
+      kickedAt: kick === null ? null : 't2',
+    };
+    expect(toJournalView(viewEntry(), payout).payout?.kick).toBe(shown);
   });
 });
 

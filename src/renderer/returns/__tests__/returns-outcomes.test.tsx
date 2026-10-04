@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
@@ -80,22 +80,40 @@ describe('refusals before submit (O2)', () => {
   });
 });
 
+/** Every appendChild / insertBefore, with whether the parent was in the document. */
+function recordInsertions() {
+  const calls: { parent: Node; connected: boolean }[] = [];
+  const spies = (['appendChild', 'insertBefore'] as const).map((method) => {
+    const original = Node.prototype[method] as (this: Node, ...a: unknown[]) => Node;
+    return vi.spyOn(Node.prototype, method).mockImplementation(function (
+      this: Node,
+      ...args: unknown[]
+    ) {
+      calls.push({ parent: this, connected: this.isConnected });
+      return original.apply(this, args) as never;
+    });
+  });
+  return {
+    intoConnected: (): Node[] => calls.filter((c) => c.connected).map((c) => c.parent),
+    restore: (): void => {
+      for (const spy of spies) spy.mockRestore();
+    },
+  };
+}
+
 describe('outcome announcement (K2)', () => {
   it('fills an already-present live region, so screen readers announce it', async () => {
-    const filledInPlace: Node[] = [];
-    const collect = (records: MutationRecord[]): void => {
-      for (const r of records) if (r.addedNodes.length > 0) filledInPlace.push(r.target);
-    };
-    const observer = new MutationObserver(collect);
-    observer.observe(document.body, { childList: true, subtree: true });
+    // RT-15 S4: not a MutationObserver. happy-dom holds an observer's callback
+    // only through a WeakRef, so a GC under load silently stops delivery (the
+    // RT-199 root cause; reproduced here by a forced GC). Instead, record every
+    // child insertion strongly, with whether its parent was already in the
+    // document: a region filled in place gets a child while connected.
+    const inserted = recordInsertions();
     await outcomeFor({ kind: 'confirmed', ret: journal(), replayed: false });
-    // Records still queued for delivery (a microtask) are dropped by
-    // disconnect(): take them first, or a late fill goes unseen (RT-15 S4).
-    collect(observer.takeRecords());
-    observer.disconnect();
+    inserted.restore();
     const region = screen.getByRole('status');
     expect(region).toHaveTextContent(OUTCOME_COPY.confirmed);
-    expect(filledInPlace).toContain(region);
+    expect(inserted.intoConnected()).toContain(region);
     expect(screen.getByRole('heading', { name: 'نتيجة المرتجع' })).toHaveFocus();
   });
 });

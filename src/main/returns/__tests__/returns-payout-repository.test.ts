@@ -104,6 +104,9 @@ describe('return payouts repository', () => {
       paidSessionId: null,
       paidAt: null,
       method: null,
+      kickOutcome: null,
+      kickCount: 0,
+      kickedAt: null,
     });
   });
 
@@ -114,6 +117,8 @@ describe('return payouts repository', () => {
   it('completes once: the payout row and the header move together', () => {
     confirm();
     payouts.start(START);
+    payouts.markSending({ returnId: 'r1', now: 'k1' });
+    payouts.recordKick({ returnId: 'r1', outcome: 'opened' });
     expect(payouts.complete(COMPLETE)).toBe(true);
     expect(payouts.complete({ ...COMPLETE, method: 'manual', now: 't4' })).toBe(false);
     expect(payouts.read('r1')).toMatchObject({
@@ -133,17 +138,46 @@ describe('return payouts repository', () => {
     expect(journal.read('r1')?.state).toBe('confirmed');
   });
 
-  it('throws rather than complete a payout whose header already left confirmed', () => {
+  it('P1: records one kick, and a second only after a kick that provably never left', () => {
     confirm();
     payouts.start(START);
-    journal.markPaidOut({ returnId: 'r1', now: 't3' });
-    expect(() => payouts.complete(COMPLETE)).toThrow(/header is not confirmed/);
+    expect(payouts.markSending({ returnId: 'r1', now: 'k1' })).toBe(true);
+    expect(payouts.markSending({ returnId: 'r1', now: 'k1b' })).toBe(false);
+    expect(payouts.recordKick({ returnId: 'r1', outcome: 'failed_before_send' })).toBe(true);
+    expect(payouts.recordKick({ returnId: 'r1', outcome: 'opened' })).toBe(false);
+    expect(payouts.markSending({ returnId: 'r1', now: 'k2' })).toBe(true);
+    expect(payouts.recordKick({ returnId: 'r1', outcome: 'opened' })).toBe(true);
+    expect(payouts.markSending({ returnId: 'r1', now: 'k3' })).toBe(false);
+    expect(payouts.read('r1')).toMatchObject({
+      kickOutcome: 'opened',
+      kickCount: 2,
+      kickedAt: 'k2',
+    });
+  });
+
+  it('P1: an unknown kick is final for the drawer', () => {
+    confirm();
+    payouts.start(START);
+    payouts.markSending({ returnId: 'r1', now: 'k1' });
+    payouts.recordKick({ returnId: 'r1', outcome: 'unknown' });
+    expect(payouts.markSending({ returnId: 'r1', now: 'k2' })).toBe(false);
+  });
+
+  it('P1: completes by drawer only after the drawer opened; manually at any time', () => {
+    confirm();
+    payouts.start(START);
+    payouts.markSending({ returnId: 'r1', now: 'k1' });
+    payouts.recordKick({ returnId: 'r1', outcome: 'unknown' });
+    expect(payouts.complete(COMPLETE)).toBe(false);
+    expect(journal.read('r1')?.state).toBe('confirmed');
+    expect(payouts.complete({ ...COMPLETE, method: 'manual' })).toBe(true);
+    expect(journal.read('r1')?.state).toBe('paid_out');
   });
 
   it('stores a null operator name as null', () => {
     confirm();
     payouts.start(START);
-    payouts.complete({ ...COMPLETE, operatorName: null });
+    payouts.complete({ ...COMPLETE, operatorName: null, method: 'manual' });
     expect(payouts.read('r1')?.paidOperatorName).toBeNull();
   });
 

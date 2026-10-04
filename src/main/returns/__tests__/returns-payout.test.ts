@@ -186,14 +186,18 @@ describe('X: exactly once', () => {
     expect(await after.service.payout({ returnId, action: 'start' })).toMatchObject({
       reason: 'payout_started',
     });
+    // P1: the kick may have opened the drawer: never kicked again.
     expect(await after.service.payout({ returnId, action: 'retry_drawer' })).toMatchObject({
+      reason: 'drawer_retry_unsafe',
+    });
+    expect(await after.service.payout({ returnId, action: 'manual' })).toMatchObject({
       kind: 'paid_out',
-      method: 'drawer',
+      method: 'manual',
     });
     expect(await after.service.payout({ returnId, action: 'manual' })).toMatchObject({
       reason: 'already_paid_out',
     });
-    expect(h.drawer.kicks).toBe(2);
+    expect(h.drawer.kicks).toBe(1);
     expect(categories(h.audits).filter((c) => c === 'sale.return.paid_out')).toHaveLength(1);
   });
 });
@@ -321,9 +325,9 @@ describe('D: drawer', () => {
     expect(h.repo.read(returnId)?.state).toBe('confirmed');
   });
 
-  it('D2: retry_drawer after a failure opens the drawer and pays out', async () => {
+  it('D2: retry_drawer after a kick that never left opens the drawer and pays out', async () => {
     const returnId = await confirmedReturn(h.service);
-    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'os_error' });
+    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
     await h.service.payout({ returnId, action: 'start' });
     h.drawer.answer = () => Promise.resolve({ ok: true });
     expect(await h.service.payout({ returnId, action: 'retry_drawer' })).toMatchObject({
@@ -387,7 +391,7 @@ describe('Z: shutdown', () => {
     expect([h.audits.length, h.drawer.kicks, payoutRow(returnId)]).toEqual([before, 0, undefined]);
   });
 
-  it('Z2: stop during the kick writes nothing after it, and records no payout', async () => {
+  it('Z2: stop during the kick records only that kick (P1), and no payout', async () => {
     const returnId = await confirmedReturn(h.service);
     const kick = deferredFake<DrawerKickResult>();
     h.drawer.answer = () => kick.promise;
@@ -399,7 +403,9 @@ describe('Z: shutdown', () => {
     const before = h.audits.length;
     kick.resolve({ ok: true });
     expect(await pending).toMatchObject({ kind: 'refused', reason: 'shutting_down' });
-    expect([h.audits.length, h.repo.read(returnId)?.state]).toEqual([before, 'confirmed']);
+    // P1: the opening is remembered even at quit; nothing else is written.
+    expect(categories(h.audits.slice(before))).toEqual(['sale.return.drawer_opened']);
+    expect(h.repo.read(returnId)?.state).toBe('confirmed');
   });
 
   it('Z3: stop during the print writes no slip audit; the payout stays recorded', async () => {

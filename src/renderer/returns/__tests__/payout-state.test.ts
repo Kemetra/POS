@@ -7,7 +7,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import type { ReturnJournalView, ReturnsPayoutResponse } from '../../../shared/returns/types.js';
+import type {
+  ReturnDrawerFailure,
+  ReturnJournalView,
+  ReturnsPayoutResponse,
+} from '../../../shared/returns/types.js';
 import {
   afterPayout,
   afterReprint,
@@ -20,11 +24,18 @@ import {
 import { CALL_FAILED } from '../returns-bridge.js';
 import { journal } from './returns-test-kit.js';
 
-const STARTED = { startedAt: '2026-10-04T09:06:00.000Z', paidAt: null, method: null };
+/** A payout started whose kick provably never left (no drawer): may be retried. */
+const STARTED = {
+  startedAt: '2026-10-04T09:06:00.000Z',
+  paidAt: null,
+  method: null,
+  kick: 'failed_before_send' as const,
+};
 const PAID = {
   startedAt: '2026-10-04T09:06:00.000Z',
   paidAt: '2026-10-04T09:06:05.000Z',
   method: 'drawer' as const,
+  kick: 'opened' as const,
 };
 const READY = journal();
 const INTERRUPTED = journal({ payout: STARTED });
@@ -45,6 +56,36 @@ describe('initialPayout', () => {
 
   it('a paid-out return from the journal has no known slip result', () => {
     expect(initialPayout(PAID_OUT).phase).toEqual({ kind: 'paid', slip: null, method: 'drawer' });
+  });
+});
+
+describe('P1: the drawer may be retried only after a kick that provably never left', () => {
+  it.each<[string, 'none' | 'failed_before_send' | 'opened' | 'unknown', boolean]>([
+    ['never kicked', 'none', true],
+    ['no drawer configured', 'failed_before_send', true],
+    ['opened', 'opened', false],
+    ['unknown (timeout, fault, crash mid-kick)', 'unknown', false],
+  ])('an interrupted payout whose kick is %s (%s): retryable %s', (_l, kick, retryable) => {
+    expect(initialPayout(journal({ payout: { ...STARTED, kick } })).phase).toEqual({
+      kind: 'interrupted',
+      retryable,
+    });
+  });
+
+  it.each<[ReturnDrawerFailure, boolean]>([
+    ['no_drawer_configured', true],
+    ['printer_dk_failure', false],
+    ['os_error', false],
+    ['timeout', false],
+  ])('a live drawer failure %s: retryable %s', (reason, retryable) => {
+    const res: ReturnsPayoutResponse = { kind: 'drawer_failed', ret: INTERRUPTED, reason };
+    expect(afterPayout(state(), res).phase).toEqual({ kind: 'drawer_failed', reason, retryable });
+  });
+
+  it('drawer_retry_unsafe shows the payout as interrupted, manual only', () => {
+    const ret = journal({ payout: { ...STARTED, kick: 'opened' } });
+    const res: ReturnsPayoutResponse = { kind: 'refused', reason: 'drawer_retry_unsafe', ret };
+    expect(afterPayout(state(), res).phase).toEqual({ kind: 'interrupted', retryable: false });
   });
 });
 
@@ -69,7 +110,11 @@ describe('afterPayout', () => {
       ret: INTERRUPTED,
       reason: 'timeout',
     };
-    expect(afterPayout(state(), res).phase).toEqual({ kind: 'drawer_failed', reason: 'timeout' });
+    expect(afterPayout(state(), res).phase).toEqual({
+      kind: 'drawer_failed',
+      reason: 'timeout',
+      retryable: false,
+    });
   });
 
   it('R3: payout_started becomes the interrupted state, never a fresh start', () => {
@@ -120,7 +165,7 @@ describe('manual confirmation (R2)', () => {
           ? state(INTERRUPTED)
           : {
               ret: INTERRUPTED,
-              phase: { kind: 'drawer_failed', reason: 'os_error' },
+              phase: { kind: 'drawer_failed', reason: 'os_error', retryable: false },
               reprint: null,
             };
       const asked = askManual(from);
@@ -148,13 +193,21 @@ describe('refreshed (after an unknown result)', () => {
   });
 });
 
-describe('afterReprint', () => {
+describe('afterReprint (Codex P2: never call a refusal or an unknown a printer failure)', () => {
   it.each<[Parameters<typeof afterReprint>[1], PayoutState['reprint']]>([
-    [{ kind: 'printed' }, 'printed'],
-    [{ kind: 'print_failed' }, 'failed'],
-    [{ kind: 'refused', reason: 'not_paid_out' }, 'failed'],
-    [CALL_FAILED, 'failed'],
-  ])('%o → %s', (res, expected) => {
-    expect(afterReprint(state(PAID_OUT), res).reprint).toBe(expected);
+    [{ kind: 'printed' }, { kind: 'printed' }],
+    [{ kind: 'print_failed' }, { kind: 'print_failed' }],
+    [
+      { kind: 'refused', reason: 'not_paid_out' },
+      { kind: 'refused', reason: 'not_paid_out' },
+    ],
+    // A copy may have printed before the session changed: not a printer failure.
+    [
+      { kind: 'refused', reason: 'session_changed' },
+      { kind: 'refused', reason: 'session_changed' },
+    ],
+    [CALL_FAILED, { kind: 'unknown' }],
+  ])('%o → %o', (res, expected) => {
+    expect(afterReprint(state(PAID_OUT), res).reprint).toEqual(expected);
   });
 });

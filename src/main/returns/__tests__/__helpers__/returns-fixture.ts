@@ -462,9 +462,14 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
   };
   const drawer = new FakeDrawer();
   const printer = new FakePrinter();
-  const compose = (): ComposedReturns =>
-    composeReturns({
-      db: handle,
+  let killLatest: () => void = () => undefined;
+  const compose = (): ComposedReturns => {
+    const life = { alive: true };
+    killLatest = () => {
+      life.alive = false;
+    };
+    return composeReturns({
+      db: whileAlive(handle, life),
       http: { baseUrl: BASE_URL, fetch: backend.fetch },
       getOperatorEnvelope: () => state.token,
       isEnabled: () => state.enabled,
@@ -473,12 +478,13 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
           ? null
           : { ...sessionFor(state.role), terminal_id: state.terminalId },
       isSessionLocked: () => state.locked,
-      auditSink,
+      auditSink: whileAlive(auditSink, life),
       logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
       now: () => state.now,
       drawer,
       printer,
     });
+  };
   const composed = compose();
   let latest = composed;
   return {
@@ -487,6 +493,9 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     printer,
     restart: () => {
       latest.stop();
+      // A dead process cannot write: everything the old domain still holds
+      // (DB handle, statements, audit sink) now throws, as a closed DB does.
+      killLatest();
       latest = compose();
       return latest;
     },
@@ -517,6 +526,32 @@ export async function confirmedReturn(
   const res = await service.submit({ saleNumber, lines: [{ lineRef: LINE_A, quantity: 1 }] });
   if (res.kind !== 'confirmed') throw new Error(`confirmedReturn: ${res.kind}`);
   return res.ret.returnId;
+}
+
+/**
+ * `target`, usable only while `life.alive`: every method call (and every
+ * function or object such a call returns: a transaction, a statement) throws
+ * once the process is dead.
+ */
+function whileAlive<T extends object>(target: T, life: { alive: boolean }): T {
+  return new Proxy(target, {
+    get(obj, prop, receiver) {
+      const value: unknown = Reflect.get(obj, prop, receiver);
+      if (typeof value !== 'function') return value;
+      return (...args: unknown[]): unknown => {
+        if (!life.alive) throw new Error('the process is gone');
+        const result: unknown = (value as (...a: unknown[]) => unknown).apply(obj, args);
+        if (typeof result === 'function') {
+          return whileAlive(result as (...a: unknown[]) => unknown, life);
+        }
+        return typeof result === 'object' && result !== null ? whileAlive(result, life) : result;
+      };
+    },
+    apply(fn, thisArg, args) {
+      if (!life.alive) throw new Error('the process is gone');
+      return Reflect.apply(fn as (...a: unknown[]) => unknown, thisArg, args);
+    },
+  });
 }
 
 /** A promise a test settles by hand (an in-flight drawer kick or print). */

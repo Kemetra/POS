@@ -3,6 +3,7 @@ import type {
   ReturnState,
   ReturnsRefusalReason,
 } from '../../shared/returns/types.js';
+import type { ReprintResult } from './payout-state.js';
 
 /**
  * RT-15 S3 — the return flow's Arabic copy (AC10).
@@ -48,6 +49,10 @@ const REFUSAL_COPY: Readonly<Record<ReturnsRefusalReason, string>> = Object.free
   payout_not_started: 'لم يبدأ صرف هذا المرتجع بعد.',
   not_paid_out: 'لا يوجد إيصال لهذا المرتجع: لم يُصرف نقده بعد.',
   shutting_down: 'التطبيق يُغلق الآن، فلم يُنفَّذ شيء.',
+  drawer_retry_unsafe:
+    'ربما فُتح الدرج من قبل، فلن يُفتح مرة ثانية. عُدّ النقد، وإن سلّمت العميل المبلغ فسجّل الصرف يدويًا.',
+  slip_total_mismatch:
+    'لا تطابق مبالغ الأصناف إجمالي الاسترداد، فلم يُطبع الإيصال. الصرف نفسه سليم.',
 });
 
 /** Non-refusal outcomes and notices; each distinct from every refusal line. */
@@ -83,7 +88,10 @@ export const PAYOUT_COPY = Object.freeze({
   reprint: 'طباعة نسخة من الإيصال',
   reprinted: 'طُبعت نسخة من إيصال المرتجع.',
   reprintFailed: 'لم تُطبع النسخة. تحقّق من الطابعة ثم حاول مجددًا.',
+  reprintUnknown: 'لم تُعرف نتيجة طباعة النسخة. انظر هل خرجت من الطابعة قبل إعادة المحاولة.',
   drawerFailed: 'لم يُفتح الدرج، ولم يُسجَّل أي صرف.',
+  drawerUnknown:
+    'لا يُعرف هل فُتح الدرج، ولم يُسجَّل أي صرف. عُدّ النقد في الدرج، وإن سلّمت العميل المبلغ فسجّل الصرف يدويًا.',
   retryDrawer: 'حاول فتح الدرج مجددًا',
   manual: 'صرفتُ المبلغ يدويًا',
   confirmManual:
@@ -112,6 +120,20 @@ const DRAWER_FAILURE_COPY: Readonly<Record<ReturnDrawerFailure, string>> = Objec
 
 export function drawerFailureMessage(reason: ReturnDrawerFailure): string {
   return reason in DRAWER_FAILURE_COPY ? DRAWER_FAILURE_COPY[reason] : OUTCOME_COPY.unknownReason;
+}
+
+/** RT-15 S4 — a reprint's result, each in its own words (only print_failed blames the printer). */
+export function reprintMessage(result: ReprintResult): string {
+  switch (result.kind) {
+    case 'printed':
+      return PAYOUT_COPY.reprinted;
+    case 'print_failed':
+      return PAYOUT_COPY.reprintFailed;
+    case 'refused':
+      return refusalMessage(result.reason);
+    case 'unknown':
+      return PAYOUT_COPY.reprintUnknown;
+  }
 }
 
 export function refusalMessage(reason: ReturnsRefusalReason): string {

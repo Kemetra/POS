@@ -1,10 +1,13 @@
 -- RT-15 S4 — the cash payout of a confirmed return, and the slip facts of its lines.
 --
 -- Jira RT-15 decision D-f authorizes POS-local migrations for this story. Two
--- new tables; nothing existing is altered (0039's tables, columns and
--- triggers are unchanged).
+-- new tables and one new trigger on return_journal; no column, table or 0039
+-- trigger is altered.
 --
 -- ## Why a payout row (and why 0039 alone is not enough)
+--
+-- 0040 adds one rule to 0039's table: the header moves to paid_out only with a
+-- completed payout row (trigger below); otherwise 0039 is unchanged.
 --
 -- 0039 allows exactly one move after confirmation: `confirmed -> paid_out`,
 -- and `paid_out` is terminal. A payout has a physical step in the middle (the
@@ -68,6 +71,24 @@ CREATE TABLE IF NOT EXISTS return_payouts (
   paid_session_id      TEXT,
   paid_at              TEXT,
   method               TEXT  CHECK (method IS NULL OR method IN ('drawer', 'manual')),
+  -- The drawer kick record (one row per payout, so per return):
+  --   sending             a kick is about to be sent (written BEFORE the
+  --                       transport call; after a crash it reads as unknown);
+  --   opened              the drawer reported opened;
+  --   failed_before_send  provably never reached the hardware (no drawer
+  --                       configured): the only outcome that allows a retry;
+  --   unknown             anything else (timeout, transport or printer fault).
+  kick_outcome         TEXT  CHECK (
+    kick_outcome IS NULL
+    OR kick_outcome IN ('sending', 'opened', 'failed_before_send', 'unknown')
+  ),
+  kick_count           INTEGER NOT NULL DEFAULT 0 CHECK (kick_count >= 0),
+  kicked_at            TEXT,
+
+  CHECK ((kick_outcome IS NULL) = (kick_count = 0)),
+  CHECK ((kick_outcome IS NULL) = (kicked_at IS NULL)),
+  -- A drawer payout follows a drawer that opened.
+  CHECK (method IS NOT 'drawer' OR kick_outcome = 'opened'),
 
   -- The paid facts exist all together or not at all.
   CHECK (
@@ -104,6 +125,38 @@ BEFORE UPDATE ON return_payouts
 WHEN OLD.paid_at IS NOT NULL
 BEGIN
   SELECT RAISE(ABORT, 'return_payouts: a payout is completed once (RT-15)');
+END;
+
+-- At most one kick per payout unless the previous kick provably never reached
+-- the hardware: a new kick (-> sending, counted) only from no kick or from
+-- failed_before_send; a sent kick resolves once to opened / failed_before_send
+-- / unknown; opened and unknown are final for the drawer (only a manual,
+-- attested payout completes such a payout).
+CREATE TRIGGER IF NOT EXISTS trg_return_payouts_kick_guard
+BEFORE UPDATE OF kick_outcome, kick_count, kicked_at ON return_payouts
+WHEN NOT (
+  (NEW.kick_outcome IS OLD.kick_outcome AND NEW.kick_count = OLD.kick_count
+    AND NEW.kicked_at IS OLD.kicked_at)
+  OR ((OLD.kick_outcome IS NULL OR OLD.kick_outcome = 'failed_before_send')
+    AND NEW.kick_outcome = 'sending' AND NEW.kick_count = OLD.kick_count + 1
+    AND NEW.kicked_at IS NOT NULL)
+  OR (OLD.kick_outcome = 'sending'
+    AND NEW.kick_outcome IN ('opened', 'failed_before_send', 'unknown')
+    AND NEW.kick_count = OLD.kick_count AND NEW.kicked_at IS OLD.kicked_at)
+)
+BEGIN
+  SELECT RAISE(ABORT, 'return_payouts: illegal drawer kick transition (RT-15)');
+END;
+
+-- The journal header reaches paid_out only with a completed payout row, so the
+-- two can never disagree (no paid_out without who, when and how).
+CREATE TRIGGER IF NOT EXISTS trg_return_journal_paid_out_needs_payout
+BEFORE UPDATE OF state ON return_journal
+WHEN NEW.state = 'paid_out' AND OLD.state IS NOT 'paid_out' AND NOT EXISTS (
+  SELECT 1 FROM return_payouts WHERE return_id = NEW.return_id AND paid_at IS NOT NULL
+)
+BEGIN
+  SELECT RAISE(ABORT, 'return_journal: paid_out needs a completed payout (RT-15)');
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_return_payouts_no_delete

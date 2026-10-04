@@ -12,6 +12,14 @@
 import type { DatabaseHandle } from '../db/client.js';
 import type { ReturnPayoutMethod } from '../../shared/returns/types.js';
 
+/**
+ * The drawer kick record of a payout (0040). `sending` is written before the
+ * transport is called; `failed_before_send` (provably never reached the
+ * hardware) is the only outcome after which the drawer may be kicked again.
+ */
+export type KickOutcome = 'sending' | 'opened' | 'failed_before_send' | 'unknown';
+export type KickResult = Exclude<KickOutcome, 'sending'>;
+
 export interface PayoutRow {
   readonly returnId: string;
   readonly startedOperatorId: string;
@@ -22,6 +30,9 @@ export interface PayoutRow {
   readonly paidSessionId: string | null;
   readonly paidAt: string | null;
   readonly method: ReturnPayoutMethod | null;
+  readonly kickOutcome: KickOutcome | null;
+  readonly kickCount: number;
+  readonly kickedAt: string | null;
 }
 
 export interface StartPayoutInput {
@@ -64,8 +75,17 @@ export interface ReturnPayoutsRepository {
   /** Start (claim) the payout; false when one was already started. */
   start(input: StartPayoutInput): boolean;
   /**
-   * Complete a started, unpaid payout and move the header to `paid_out`.
-   * False when there is no started unpaid payout. Run inside a transaction.
+   * Record that a kick is about to be sent (counted), BEFORE the transport is
+   * called. False unless the payout is unpaid and was never kicked or its last
+   * kick provably never left (`failed_before_send`).
+   */
+  markSending(stamp: { readonly returnId: string; readonly now: string }): boolean;
+  /** Resolve the kick in flight (`sending`) to its outcome, once. */
+  recordKick(input: { readonly returnId: string; readonly outcome: KickResult }): boolean;
+  /**
+   * Complete a started, unpaid payout and move the header to `paid_out`. A
+   * `drawer` completion needs a drawer that opened. False otherwise. Run
+   * inside a transaction.
    */
   complete(input: CompletePayoutInput): boolean;
   /** Write the slip facts of a return's lines (inside the journal insert). */
@@ -89,6 +109,9 @@ interface PayoutDbRow {
   paid_session_id: string | null;
   paid_at: string | null;
   method: ReturnPayoutMethod | null;
+  kick_outcome: KickOutcome | null;
+  kick_count: number;
+  kicked_at: string | null;
 }
 
 interface SlipLineDbRow {
@@ -109,6 +132,9 @@ function toPayout(row: PayoutDbRow): PayoutRow {
     paidSessionId: row.paid_session_id,
     paidAt: row.paid_at,
     method: row.method,
+    kickOutcome: row.kick_outcome,
+    kickCount: row.kick_count,
+    kickedAt: row.kicked_at,
   };
 }
 
@@ -140,11 +166,26 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
     return this.prepare(sql).run(...params).changes > 0;
   }
 
+  markSending({ returnId, now }: { returnId: string; now: string }): boolean {
+    const sql = `UPDATE return_payouts SET kick_outcome = 'sending', kick_count = kick_count + 1,
+        kicked_at = ?
+      WHERE return_id = ? AND paid_at IS NULL
+        AND (kick_outcome IS NULL OR kick_outcome = 'failed_before_send')`;
+    return this.prepare(sql).run(now, returnId).changes > 0;
+  }
+
+  recordKick({ returnId, outcome }: { returnId: string; outcome: KickResult }): boolean {
+    const sql = `UPDATE return_payouts SET kick_outcome = ?
+      WHERE return_id = ? AND kick_outcome = 'sending'`;
+    return this.prepare(sql).run(outcome, returnId).changes > 0;
+  }
+
   complete(input: CompletePayoutInput): boolean {
     const paid = this.prepare(
       `UPDATE return_payouts SET paid_operator_id = ?, paid_operator_name = ?,
          paid_session_id = ?, paid_at = ?, method = ?
-       WHERE return_id = ? AND paid_at IS NULL`,
+       WHERE return_id = ? AND paid_at IS NULL
+         AND (? = 'manual' OR kick_outcome = 'opened')`,
     ).run(
       input.operatorId,
       input.operatorName,
@@ -152,15 +193,15 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
       input.now,
       input.method,
       input.returnId,
+      input.method,
     );
     if (paid.changes === 0) return false;
-    const header = this.prepare(
+    // A started payout always has a confirmed header (0040), and the header
+    // reaches paid_out only with this completed row (0040 trigger).
+    this.prepare(
       `UPDATE return_journal SET state = 'paid_out', paid_out_at = ?, updated_at = ?
        WHERE return_id = ? AND state = 'confirmed'`,
     ).run(input.now, input.now, input.returnId);
-    // A started payout always has a confirmed header (0040 trigger); throwing
-    // rolls the caller's transaction back rather than leave the two apart.
-    if (header.changes === 0) throw new Error('returns-payout: header is not confirmed');
     return true;
   }
 

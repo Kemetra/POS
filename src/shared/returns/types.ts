@@ -88,6 +88,13 @@ export const LOCAL_RETURN_REFUSALS = [
   'not_paid_out',
   // The app is quitting; nothing was done (not audited).
   'shutting_down',
+  // The last drawer kick of this payout opened the drawer or may have (a
+  // timeout, a fault, a crash mid-kick): it is never kicked again; only a
+  // manual, attested payout completes it (P1).
+  'drawer_retry_unsafe',
+  // The slip's line amounts do not add up to the confirmed refund: no slip is
+  // printed (fail closed); the payout itself is unaffected.
+  'slip_total_mismatch',
 ] as const;
 export type LocalReturnRefusal = (typeof LOCAL_RETURN_REFUSALS)[number];
 
@@ -143,7 +150,15 @@ export interface ReturnPayoutView {
   /** Null while the payout is started but not completed (e.g. the drawer failed). */
   readonly paidAt: string | null;
   readonly method: ReturnPayoutMethod | null;
+  /**
+   * What is known about this payout's drawer kick: `none` (never kicked),
+   * `failed_before_send` (provably never reached the drawer: may be retried),
+   * `opened`, or `unknown` (may have opened: complete it manually only).
+   */
+  readonly kick: ReturnPayoutKick;
 }
+
+export type ReturnPayoutKick = 'none' | 'failed_before_send' | 'opened' | 'unknown';
 
 export interface ReturnJournalView {
   readonly returnId: string;

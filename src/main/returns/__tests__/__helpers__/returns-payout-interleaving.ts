@@ -5,13 +5,18 @@
  * authorizer, audits) with a fake drawer and printer whose latency and
  * answers (opened / failed / throw; printed / failed / throw) come from a
  * seeded PRNG. Steps interleave start, retry_drawer, manual, double clicks,
- * reprints, crash-and-restart (the old domain is stopped and its in-flight
- * work drained BEFORE the new one starts, as a real restart is sequential),
- * locks, sign-out, operator switches and event-loop turns.
+ * reprints, crash-and-restart, locks, sign-out, operator switches and
+ * event-loop turns.
  *
- * The run records what the invariants need: every kick with the returns that
- * were claimed and confirmed at that instant, and, per crash, the payout
- * state at the crash and after the crashed domain's in-flight work settled.
+ * A crash is a dead process: the old domain is latched stopped and its
+ * in-flight drawer and printer answers never arrive (nothing it awaited ever
+ * resumes), then a fresh domain starts over the same database.
+ *
+ * The run records what the invariants need: every kick attributed to its own
+ * return (the return whose durable `kick_count` the kick just incremented),
+ * with that return's claim and drawer audits at that instant; both answers of
+ * every double click; the live session at every `paid_out` audit; and, per
+ * crash, the payout state at the crash and after the abandoned work.
  */
 import type { Role } from '../../../../shared/operator/role.js';
 import type { ReturnPayoutAction } from '../../../../shared/returns/types.js';
@@ -64,6 +69,23 @@ export interface PayoutSnapshot {
   readonly audits: number;
 }
 
+/** One drawer kick, attributed to its return, with what was known at that instant. */
+export interface KickEvent {
+  /** The returns whose kick_count this kick incremented (exactly one is right). */
+  readonly returnIds: readonly string[];
+  /** Whether each such return had its `payout_started` audit already. */
+  readonly claimed: boolean;
+  /** That return's drawer audits so far, as their `kick_outcome`s. */
+  readonly earlierOutcomes: readonly unknown[];
+}
+
+/** Who was live (and unlocked) when a `paid_out` audit was written. */
+export interface PaidOutAtCommit {
+  readonly acting: string;
+  readonly liveRole: Role | null;
+  readonly locked: boolean;
+}
+
 export interface PayoutRun {
   readonly seed: number;
   readonly harness: ReturnsHarness;
@@ -71,8 +93,10 @@ export interface PayoutRun {
   readonly confirmed: readonly string[];
   /** A journaled return that was never confirmed (never payable). */
   readonly unconfirmed: string;
-  /** Per kick: the returns that were confirmed AND claimed when it happened. */
-  readonly claimedAtKick: readonly (readonly string[])[];
+  readonly kicks: readonly KickEvent[];
+  /** Both answers of every double click (the same admitted actor). */
+  readonly doubles: readonly (readonly [unknown, unknown])[];
+  readonly paidOutAtCommit: readonly PaidOutAtCommit[];
   /** Per crash: the state at the crash and after the crashed domain settled. */
   readonly crashes: readonly { readonly at: PayoutSnapshot; readonly settled: PayoutSnapshot }[];
 }
@@ -90,7 +114,12 @@ class PayoutWorld {
   private inFlight: Promise<unknown>[] = [];
   private confirmed: string[] = [];
   private unconfirmed = '';
-  private readonly claimedAtKick: string[][] = [];
+  private readonly kicks: KickEvent[] = [];
+  private readonly doubles: [unknown, unknown][] = [];
+  private readonly paidOutAtCommit: PaidOutAtCommit[] = [];
+  private kickCounts = new Map<string, number>();
+  /** The live process; answers issued to an older one never arrive. */
+  private generation = 0;
   private readonly crashes: { at: PayoutSnapshot; settled: PayoutSnapshot }[] = [];
 
   constructor(private readonly seed: number) {
@@ -117,7 +146,12 @@ class PayoutWorld {
     });
     this.unconfirmed = lost.ret?.returnId ?? '';
     this.h.drawer.onKick = () => {
-      this.claimedAtKick.push(this.claimedAndConfirmed());
+      this.kicks.push(this.attributeKick());
+    };
+    this.h.state.onAudit = (event) => {
+      if (event.action_category !== 'sale.return.paid_out') return;
+      const { role, locked } = this.h.state;
+      this.paidOutAtCommit.push({ acting: event.acting_operator_id, liveRole: role, locked });
     };
     this.h.drawer.answer = () => this.drawerAnswer();
     this.h.printer.answer = () => this.printerAnswer();
@@ -131,7 +165,9 @@ class PayoutWorld {
       harness: this.h,
       confirmed: this.confirmed,
       unconfirmed: this.unconfirmed,
-      claimedAtKick: this.claimedAtKick,
+      kicks: this.kicks,
+      doubles: this.doubles,
+      paidOutAtCommit: this.paidOutAtCommit,
       crashes: this.crashes,
     };
   }
@@ -149,8 +185,14 @@ class PayoutWorld {
       },
       double: () => {
         const returnId = this.pickReturn();
-        this.track(this.domain.service.payout({ returnId, action: 'start' }));
-        this.track(this.domain.service.payout({ returnId, action: 'start' }));
+        const action = this.rng.pick<ReturnPayoutAction>(['start', 'retry_drawer', 'manual']);
+        const first = this.domain.service.payout({ returnId, action });
+        const second = this.domain.service.payout({ returnId, action });
+        this.track(
+          Promise.all([first, second]).then((pair) => {
+            this.doubles.push(pair);
+          }),
+        );
       },
       reprint: () => {
         this.track(this.domain.service.reprintSlip({ returnId: this.pickReturn() }));
@@ -182,12 +224,27 @@ class PayoutWorld {
     this.inFlight.push(work.catch(() => undefined));
   }
 
-  /** Crash: stop the domain, let its in-flight work settle, then start again. */
+  /**
+   * Crash: the process dies. Its in-flight answers never arrive (abandoned,
+   * not awaited); a fresh domain starts over the same database. A few turns
+   * later the database must still be exactly as the crash left it.
+   */
   private async crash(): Promise<void> {
     const at = this.snapshot();
+    this.generation += 1;
+    this.inFlight = [];
     this.domain = this.h.restart();
-    await this.settle();
+    await this.turns();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     this.crashes.push({ at, settled: this.snapshot() });
+  }
+
+  /** After the latency: the answer, unless its process has died meanwhile. */
+  private async afterLatency<T>(answer: () => T): Promise<T> {
+    const generation = this.generation;
+    await this.turns();
+    if (generation !== this.generation) return new Promise<T>(() => undefined);
+    return answer();
   }
 
   private async settle(): Promise<void> {
@@ -214,30 +271,45 @@ class PayoutWorld {
     }
   }
 
-  private async drawerAnswer() {
-    await this.turns();
-    const roll = this.rng.next();
-    if (roll < 0.6) return { ok: true } as const;
-    if (roll < 0.9) return { ok: false, failure_reason: 'no_drawer_configured' } as const;
-    throw new Error('drawer fault');
+  private drawerAnswer() {
+    return this.afterLatency(() => {
+      const roll = this.rng.next();
+      if (roll < 0.5) return { ok: true } as const;
+      if (roll < 0.8) return { ok: false, failure_reason: 'no_drawer_configured' } as const;
+      if (roll < 0.9) return { ok: false, failure_reason: 'os_error' } as const;
+      throw new Error('drawer fault');
+    });
   }
 
-  private async printerAnswer() {
-    await this.turns();
-    const roll = this.rng.next();
-    if (roll < 0.7) return { ok: true, render_path: 'os_print' } as const;
-    if (roll < 0.9) {
-      return { ok: false, render_path: 'os_print', failure_reason: 'printer_offline' } as const;
-    }
-    throw new Error('spooler fault');
+  private printerAnswer() {
+    return this.afterLatency(() => {
+      const roll = this.rng.next();
+      if (roll < 0.7) return { ok: true, render_path: 'os_print' } as const;
+      if (roll < 0.9) {
+        return { ok: false, render_path: 'os_print', failure_reason: 'printer_offline' } as const;
+      }
+      throw new Error('spooler fault');
+    });
   }
 
-  private claimedAndConfirmed(): string[] {
-    const res = this.h.db.exec(
-      `SELECT p.return_id FROM return_payouts p JOIN return_journal j USING (return_id)
-       WHERE j.state = 'confirmed' AND p.paid_at IS NULL ORDER BY p.return_id`,
-    )[0];
-    return (res?.values ?? []).map((r) => String(r[0]));
+  /** The kick just sent: the return whose durable kick_count it incremented. */
+  private attributeKick(): KickEvent {
+    const res = this.h.db.exec('SELECT return_id, kick_count FROM return_payouts')[0];
+    const counts = new Map((res?.values ?? []).map((r) => [String(r[0]), Number(r[1])]));
+    const returnIds = [...counts]
+      .filter(([id, n]) => n > (this.kickCounts.get(id) ?? 0))
+      .map(([id]) => id);
+    this.kickCounts = counts;
+    const audits = committedAudits(this.h.db).filter(
+      (a) => a.payload['return_id'] === returnIds[0],
+    );
+    return {
+      returnIds,
+      claimed: audits.some((a) => a.action_category === 'sale.return.payout_started'),
+      earlierOutcomes: audits
+        .filter((a) => /^sale\.return\.drawer_(opened|failed)$/.test(a.action_category))
+        .map((a) => a.payload['kick_outcome']),
+    };
   }
 
   private snapshot(): PayoutSnapshot {

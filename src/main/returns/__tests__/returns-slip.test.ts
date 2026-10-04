@@ -9,7 +9,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { JournalEntry } from '../returns-repository.js';
 import type { PayoutRow, SlipLine } from '../returns-payout-repository.js';
-import { renderReturnSlip, slipLineName, type ReturnSlipSource } from '../returns-slip.js';
+import {
+  renderReturnSlip,
+  slipLineName,
+  slipTotalsAgree,
+  type ReturnSlipSource,
+} from '../returns-slip.js';
 import { LINE_A, LINE_B, RETURN_REF, SALE_REF, SCOPE } from './__helpers__/returns-fixture.js';
 
 const EXTERNAL_ID = 'pos-pulse-return:0190f5a2-7b3c-7d4e-8f90-0000000000e1';
@@ -50,6 +55,9 @@ const PAYOUT: PayoutRow = {
   paidSessionId: 'sess-payer-secret-id',
   paidAt: '2026-10-04T10:01:05.000Z',
   method: 'drawer',
+  kickOutcome: 'opened' as const,
+  kickCount: 1,
+  kickedAt: 't2',
 };
 
 const LINES: SlipLine[] = [
@@ -149,6 +157,49 @@ describe('return slip content (S1)', () => {
     const text = slipText({ ...SOURCE, lines: [line] });
     expect(text).toContain('end');
     expect(text.split('\n').every((l) => Array.from(l).length <= 42)).toBe(true);
+  });
+});
+
+describe('42-column slip lines (Codex P2)', () => {
+  /** Every printed line of the slip fits the 42-column roll, in both outputs. */
+  function expectFits(rendered: { html: string; escpos: Uint8Array }): void {
+    for (const out of [textOf(rendered.html), new TextDecoder().decode(rendered.escpos)]) {
+      // ESC/POS commands are not printed text: ESC @, ESC a n, ESC E n, GS V n.
+      const text = out.replace(/\x1b@|\x1b[aE][\x00-\x02]|\x1dV[\x00-\x01]/g, '');
+      const lines = text.split('\n');
+      expect(lines.filter((l) => Array.from(l).length > 42)).toEqual([]);
+    }
+  }
+
+  it.each([
+    ['an unbroken 120-character Latin name', 'A'.repeat(120)],
+    ['an unbroken 120-character Arabic name', 'ب'.repeat(120)],
+    ['a long token after a short word', `Panadol ${'x'.repeat(100)}`],
+  ])('hard-wraps %s and keeps every character', (_label, name) => {
+    const line: SlipLine = { lineRef: LINE_A, quantity: 12, lineName: name, amountMinor: 1500 };
+    const rendered = renderReturnSlip({ ...SOURCE, lines: [line] }, { kind: 'original' });
+    expectFits(rendered);
+    const printed = textOf(rendered.html).replace(/\s/g, '');
+    expect(printed).toContain(`12×${name.replace(/\s/g, '')}`);
+  });
+});
+
+describe('slip lines add up to the confirmed total (reviewer P2-4)', () => {
+  const line = (amountMinor: number | null): SlipLine => ({
+    lineRef: LINE_A,
+    quantity: 1,
+    lineName: 'x',
+    amountMinor,
+  });
+  it.each<[string, (number | null)[], number, boolean]>([
+    ['lines that sum to the total', [1500, 2000], 3500, true],
+    ['lines one minor unit short', [1500, 1999], 3500, false],
+    ['lines one minor unit over', [1500, 2001], 3500, false],
+    ['no lines', [], 3500, false],
+    ['a return journaled before 0040 (no amounts)', [null, null], 3500, true],
+    ['a mix of known and unknown amounts', [1500, null], 3500, false],
+  ])('%s → %s', (_label, amounts, total, agree) => {
+    expect(slipTotalsAgree(amounts.map(line), total)).toBe(agree);
   });
 });
 

@@ -59,6 +59,8 @@ const TO_STATE: Readonly<Record<Header, readonly string[]>> = {
   ],
   paid_out: [
     `state = 'confirmed', return_ref = '${REF}', return_total_minor = 1500, confirmed_at = 't1'`,
+    // 0040: the header reaches paid_out only with a completed payout row.
+    'PAYOUT',
     `state = 'paid_out', paid_out_at = 't2'`,
   ],
 };
@@ -76,8 +78,14 @@ function journal(state: Header): void {
   db.run(`INSERT INTO return_journal_lines (return_id, line_ref, quantity) VALUES ('r1', ?, 1)`, [
     LINE,
   ]);
-  for (const set of TO_STATE[state])
-    db.run(`UPDATE return_journal SET ${set} WHERE return_id = 'r1'`);
+  for (const set of TO_STATE[state]) {
+    if (set === 'PAYOUT') {
+      startPayout();
+      db.run(`UPDATE return_payouts SET ${PAID} WHERE return_id = 'r1'`);
+    } else {
+      db.run(`UPDATE return_journal SET ${set} WHERE return_id = 'r1'`);
+    }
+  }
 }
 
 function startPayout(returnId = 'r1'): void {
@@ -89,7 +97,14 @@ function startPayout(returnId = 'r1'): void {
 }
 
 const PAID = `paid_operator_id = 'op-m', paid_operator_name = 'Manager', paid_session_id = 'sess-m',
-  paid_at = 't4', method = 'drawer'`;
+  paid_at = 't4', method = 'manual'`;
+
+/** Move r1's payout kick state (the drawer kick record) by one UPDATE. */
+function kick(set: string): void {
+  db.run(`UPDATE return_payouts SET ${set} WHERE return_id = 'r1'`);
+}
+
+const SENDING_1 = `kick_outcome = 'sending', kick_count = 1, kicked_at = 'k1'`;
 
 function columns(table: string): string[] {
   return (db.exec(`PRAGMA table_info(${table})`)[0]?.values ?? []).map((r) => String(r[1]));
@@ -107,6 +122,9 @@ describe('0040 — return payouts (RT-15 S4)', () => {
       'paid_session_id',
       'paid_at',
       'method',
+      'kick_outcome',
+      'kick_count',
+      'kicked_at',
     ]);
     expect(columns('return_journal_line_details')).toEqual([
       'return_id',
@@ -117,7 +135,7 @@ describe('0040 — return payouts (RT-15 S4)', () => {
     expect(columns('return_journal_lines')).toEqual(['return_id', 'line_ref', 'quantity']);
   });
 
-  it.each<Header>(['pending', 'unknown', 'refused', 'paid_out'])(
+  it.each<Header>(['pending', 'unknown', 'refused'])(
     'refuses to start a payout for a %s return',
     (state) => {
       journal(state);
@@ -126,6 +144,85 @@ describe('0040 — return payouts (RT-15 S4)', () => {
       }).toThrow(/only for a confirmed return/);
     },
   );
+
+  it('a paid-out return gets no second payout row', () => {
+    journal('paid_out');
+    expect(() => {
+      startPayout();
+    }).toThrow(/only for a confirmed return|UNIQUE|PRIMARY KEY/);
+  });
+
+  it('P1: the header reaches paid_out only with a completed payout row', () => {
+    journal('confirmed');
+    const toPaidOut = (): void => {
+      db.run(
+        `UPDATE return_journal SET state = 'paid_out', paid_out_at = 't9' WHERE return_id = 'r1'`,
+      );
+    };
+    expect(toPaidOut).toThrow(/needs a completed payout/);
+    startPayout();
+    expect(toPaidOut).toThrow(/needs a completed payout/);
+    db.run(`UPDATE return_payouts SET ${PAID}`);
+    expect(toPaidOut).not.toThrow();
+  });
+
+  it.each<[string, string[], string, boolean]>([
+    ['never kicked → sending (first kick)', [], SENDING_1, true],
+    ['sending → opened', [SENDING_1], `kick_outcome = 'opened'`, true],
+    ['sending → failed_before_send', [SENDING_1], `kick_outcome = 'failed_before_send'`, true],
+    ['sending → unknown', [SENDING_1], `kick_outcome = 'unknown'`, true],
+    [
+      'failed_before_send → sending (a retry)',
+      [SENDING_1, `kick_outcome = 'failed_before_send'`],
+      `kick_outcome = 'sending', kick_count = 2, kicked_at = 'k2'`,
+      true,
+    ],
+    [
+      'opened → sending (a second kick after an opening)',
+      [SENDING_1, `kick_outcome = 'opened'`],
+      `kick_outcome = 'sending', kick_count = 2, kicked_at = 'k2'`,
+      false,
+    ],
+    [
+      'unknown → sending (a second kick after an unknown)',
+      [SENDING_1, `kick_outcome = 'unknown'`],
+      `kick_outcome = 'sending', kick_count = 2, kicked_at = 'k2'`,
+      false,
+    ],
+    ['sending → sending without counting the kick', [SENDING_1], `kicked_at = 'k2'`, false],
+    [
+      'opened → failed_before_send',
+      [SENDING_1, `kick_outcome = 'opened'`],
+      `kick_outcome = 'failed_before_send'`,
+      false,
+    ],
+    [
+      'never kicked → opened',
+      [],
+      `kick_outcome = 'opened', kick_count = 1, kicked_at = 'k1'`,
+      false,
+    ],
+  ])('P1 kick record: %s', (_label, path, set, allowed) => {
+    journal('confirmed');
+    startPayout();
+    path.forEach(kick);
+    const run = (): void => {
+      kick(set);
+    };
+    if (allowed) expect(run).not.toThrow();
+    else expect(run).toThrow(/kick|constraint failed/);
+  });
+
+  it('P1: a drawer payout needs a drawer that opened', () => {
+    journal('confirmed');
+    startPayout();
+    kick(SENDING_1);
+    kick(`kick_outcome = 'unknown'`);
+    expect(() =>
+      db.run(`UPDATE return_payouts SET ${PAID.replace("'manual'", "'drawer'")}`),
+    ).toThrow(/constraint failed/);
+    db.run(`UPDATE return_payouts SET ${PAID}`);
+  });
 
   it('starts a payout for a confirmed return, once', () => {
     journal('confirmed');
@@ -150,7 +247,7 @@ describe('0040 — return payouts (RT-15 S4)', () => {
     journal('confirmed');
     startPayout();
     expect(() => db.run(`UPDATE return_payouts SET paid_at = 't4'`)).toThrow(/constraint failed/);
-    expect(() => db.run(`UPDATE return_payouts SET ${PAID.replace("'drawer'", "'card'")}`)).toThrow(
+    expect(() => db.run(`UPDATE return_payouts SET ${PAID.replace("'manual'", "'card'")}`)).toThrow(
       /constraint failed/,
     );
     db.run(`UPDATE return_payouts SET ${PAID}`);

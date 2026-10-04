@@ -86,7 +86,27 @@ interface Change {
 }
 
 function update(change: Change): void {
+  if (change.set.includes(`state = 'paid_out'`)) completePayoutIfConfirmed();
   db.run(`UPDATE return_journal SET ${change.set} WHERE return_id = 'r1'`);
+}
+
+/**
+ * RT-15 S4 (0040): the header reaches paid_out only with a completed
+ * `return_payouts` row, which can exist only for a confirmed header. A move
+ * to paid_out from any other state is still refused (by either trigger).
+ */
+function completePayoutIfConfirmed(): void {
+  const state = db.exec(`SELECT state FROM return_journal WHERE return_id = 'r1'`)[0]
+    ?.values[0]?.[0];
+  if (state !== 'confirmed') return;
+  db.run(
+    `INSERT OR IGNORE INTO return_payouts (return_id, started_operator_id, started_session_id,
+       started_at) VALUES ('r1', 'op', 'sess', 't2')`,
+  );
+  db.run(
+    `UPDATE return_payouts SET paid_operator_id = 'op', paid_session_id = 'sess', paid_at = 't2',
+       method = 'manual' WHERE return_id = 'r1' AND paid_at IS NULL`,
+  );
 }
 
 type JournalState = 'pending' | 'unknown' | 'confirmed' | 'refused' | 'paid_out';
@@ -182,7 +202,10 @@ describe('0039 — return journal (RT-15 S2)', () => {
       update(SETS[to]);
     };
     if (allowed) expect(run).not.toThrow();
-    else expect(run).toThrow(/illegal state transition|constraint failed|immutable/);
+    else
+      expect(run).toThrow(
+        /illegal state transition|constraint failed|immutable|paid_out needs a completed payout/,
+      );
   });
 
   it.each([

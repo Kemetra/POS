@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest';
 
 import type { ReturnJournalView } from '../../../shared/returns/types.js';
 import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config.js';
-import { PAYOUT_COPY } from '../returns-messages.js';
+import { PAYOUT_COPY, refusalMessage } from '../returns-messages.js';
 import {
   deferred,
   fakeBridge,
@@ -25,7 +25,13 @@ afterEach(() => {
   resetStores();
 });
 
-const STARTED = { startedAt: '2026-10-04T09:06:00.000Z', paidAt: null, method: null };
+/** A payout started whose kick provably never left (no drawer): may be retried. */
+const STARTED = {
+  startedAt: '2026-10-04T09:06:00.000Z',
+  paidAt: null,
+  method: null,
+  kick: 'failed_before_send' as const,
+};
 const ROWS: ReturnJournalView[] = [
   journal({ returnId: 'r-ready', saleNumber: 'T1-000001' }),
   journal({ returnId: 'r-started', saleNumber: 'T1-000002', payout: STARTED }),
@@ -115,11 +121,23 @@ describe('history payout actions (R5)', () => {
     expect(screen.getByText(PAYOUT_COPY.reprinted)).toBeInTheDocument();
   });
 
-  it('a failed or rejected reprint says so', async () => {
+  it.each<[string, () => Promise<unknown>, string]>([
+    [
+      'a printer failure',
+      () => Promise.resolve({ kind: 'print_failed' }),
+      PAYOUT_COPY.reprintFailed,
+    ],
+    [
+      'a refusal',
+      () => Promise.resolve({ kind: 'refused', reason: 'session_changed' }),
+      refusalMessage('session_changed'),
+    ],
+    ['a rejected call', () => Promise.reject(new Error('locked')), PAYOUT_COPY.reprintUnknown],
+  ])('%s is reported as itself (Codex P2)', async (_label, answer, expected) => {
     const { bridge, user } = await renderHistory();
-    bridge.reprintSlip.mockRejectedValueOnce(new Error('locked'));
+    bridge.reprintSlip.mockImplementationOnce(answer as never);
     await user.click(within(rowOf('T1-000003')).getByRole('button'));
-    expect(await screen.findByText(PAYOUT_COPY.reprintFailed)).toBeInTheDocument();
+    expect(await screen.findByText(expected)).toBeInTheDocument();
   });
 
   it('has no axe violations with the action column', async () => {

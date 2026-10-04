@@ -54,12 +54,31 @@ import type {
 import type { DrawerKickTransport } from '../drawer/drawer-kick-transport.js';
 import type { PrintPipeline, RenderedReceipt } from '../receipts/print-pipeline.js';
 import type { SalesRepository } from '../sales/repositories/sales.repository.js';
-import type { ReturnActor, ReturnsAudit, SlipAuditOutcome } from './returns-audit.js';
+import type {
+  DrawerAuditOutcome,
+  ReturnActor,
+  ReturnsAudit,
+  SlipAuditOutcome,
+} from './returns-audit.js';
 import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
-import { kickReturnDrawer } from './returns-drawer.js';
-import type { PayoutRow, ReturnPayoutsRepository } from './returns-payout-repository.js';
+import { kickReturnDrawer, type ReturnDrawerOutcome } from './returns-drawer.js';
+import type {
+  KickResult,
+  PayoutRow,
+  ReturnPayoutsRepository,
+} from './returns-payout-repository.js';
 import type { JournalEntry, ReturnScope, ReturnsRepository } from './returns-repository.js';
-import { renderReturnSlip, type ReturnSlipVariant } from './returns-slip.js';
+import { renderReturnSlip, slipTotalsAgree, type ReturnSlipVariant } from './returns-slip.js';
+
+/** The slip's lines do not add up to the confirmed refund: printed nowhere. */
+class SlipTotalMismatch extends Error {
+  constructor() {
+    super('returns-payout: slip lines do not add up to the refund');
+  }
+}
+
+/** The failure reason a slip that does not add up is recorded with. */
+const SLIP_TOTAL_MISMATCH = 'slip_total_mismatch';
 
 export interface ReturnsPayoutDeps {
   readonly authorizer: ReturnsAuthorizer;
@@ -97,36 +116,93 @@ interface PaidOut {
 
 const SHUTTING_DOWN = { kind: 'refused', reason: 'shutting_down' } as const;
 
-/** Why a payout `action` is refused for a return in `state`, or null. */
+/** The started payout's kick record, as `payoutRefusal` needs it (null: none started). */
+export type StartedPayout = Pick<PayoutRow, 'kickOutcome'> | null;
+
+/**
+ * Why a payout `action` is refused for a return in `state`, or null.
+ * P1: `retry_drawer` only while the last kick provably never reached the
+ * drawer (or there was none); after `opened`, `unknown` or a kick still
+ * `sending` (a crash mid-kick) only the manual, attested payout remains.
+ */
 export function payoutRefusal(
   state: ReturnState,
-  started: boolean,
+  payout: StartedPayout,
   action: ReturnPayoutAction,
 ): ReturnsRefusalReason | null {
   if (state === 'paid_out') return 'already_paid_out';
   if (state !== 'confirmed') return 'not_payable';
-  if (action === 'start') return started ? 'payout_started' : null;
-  return started ? null : 'payout_not_started';
+  if (action === 'start') return payout === null ? null : 'payout_started';
+  if (payout === null) return 'payout_not_started';
+  return action === 'retry_drawer' && !mayKickAgain(payout) ? 'drawer_retry_unsafe' : null;
+}
+
+function mayKickAgain(payout: NonNullable<StartedPayout>): boolean {
+  return payout.kickOutcome === null || payout.kickOutcome === 'failed_before_send';
+}
+
+/**
+ * What a kick's answer proves about the drawer. Only "no drawer configured"
+ * provably never reached the hardware; a timeout, a transport or printer
+ * fault, or an answer outside the contract may have opened it.
+ */
+export function kickResultOf(kick: ReturnDrawerOutcome): KickResult {
+  if (kick.ok) return 'opened';
+  return kick.reason === 'no_drawer_configured' ? 'failed_before_send' : 'unknown';
+}
+
+/** The drawer audit of a kick: opened, or why not and what that proves. */
+function drawerAuditOf(kick: ReturnDrawerOutcome): DrawerAuditOutcome {
+  if (kick.ok) return kick;
+  const kickOutcome = kick.reason === 'no_drawer_configured' ? 'failed_before_send' : 'unknown';
+  return { ok: false, reason: kick.reason, kickOutcome };
 }
 
 function sameScope(a: ReturnScope, b: ReturnScope): boolean {
   return a.tenantId === b.tenantId && a.branchId === b.branchId && a.terminalId === b.terminalId;
 }
 
-/** Run `work` once per key: a concurrent call for the same key shares it. */
-function shared<T>(inFlight: Map<string, Promise<T>>, key: string, work: () => Promise<T>) {
-  const running = inFlight.get(key);
-  if (running !== undefined) return running;
-  const promise = work().finally(() => {
-    inFlight.delete(key);
+/** An operation in flight for one return, and the admitted actor it runs for. */
+interface InFlight<T> {
+  readonly actor: string;
+  readonly promise: Promise<T>;
+}
+
+/** The admitted actor's identity: terminal scope + operator session. */
+function actorKey(actor: AuthSnapshot): string {
+  const { tenantId, branchId, terminalId } = actor.scope;
+  return [tenantId, branchId, terminalId, actor.operatorId, actor.operatorSessionId].join('|');
+}
+
+const settled = (): void => undefined;
+
+/**
+ * One operation per return at a time. The SAME admitted actor (a double
+ * click, a second window of the same session) shares the running operation
+ * and its answer. Any other actor (a new operator, a new terminal scope)
+ * never sees that answer: it waits for the running operation to settle, then
+ * runs its own, fully checked one — so no foreign result, no concurrent kick.
+ */
+function serialized<T>(
+  inFlight: Map<string, InFlight<T>>,
+  returnId: string,
+  actor: AuthSnapshot,
+  work: () => Promise<T>,
+): Promise<T> {
+  const key = actorKey(actor);
+  const running = inFlight.get(returnId);
+  if (running?.actor === key) return running.promise;
+  const before = running === undefined ? Promise.resolve() : running.promise.then(settled, settled);
+  const promise: Promise<T> = before.then(work).finally(() => {
+    if (inFlight.get(returnId)?.promise === promise) inFlight.delete(returnId);
   });
-  inFlight.set(key, promise);
+  inFlight.set(returnId, { actor: key, promise });
   return promise;
 }
 
 class ReturnsPayoutService implements ReturnsPayoutAPI {
-  private readonly payouts = new Map<string, Promise<ReturnsPayoutResponse>>();
-  private readonly reprints = new Map<string, Promise<ReturnsReprintResponse>>();
+  private readonly payouts = new Map<string, InFlight<ReturnsPayoutResponse>>();
+  private readonly reprints = new Map<string, InFlight<ReturnsReprintResponse>>();
 
   constructor(private readonly deps: ReturnsPayoutDeps) {}
 
@@ -134,7 +210,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
     const admitted = this.admit('payout');
     if (admitted.kind !== 'ok') return { ...admitted, ret: null };
-    const outcome = await shared(this.payouts, req.returnId, () =>
+    const outcome = await serialized(this.payouts, req.returnId, admitted.actor, () =>
       this.runPayout(admitted.actor, req),
     );
     const lost = this.lostAfterAwait(admitted.actor, outcome);
@@ -145,7 +221,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     if (this.deps.isStopped()) return SHUTTING_DOWN;
     const admitted = this.admit('reprint');
     if (admitted.kind !== 'ok') return admitted;
-    const outcome = await shared(this.reprints, req.returnId, () =>
+    const outcome = await serialized(this.reprints, req.returnId, admitted.actor, () =>
       this.runReprint(admitted.actor, req.returnId),
     );
     return this.lostAfterAwait(admitted.actor, outcome) ?? outcome;
@@ -209,46 +285,88 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   private target(actor: AuthSnapshot, req: ReturnsPayoutRequest): Target {
     const entry = this.ownReturn(actor, req.returnId);
     if (entry === null) return this.refusePayout(actor, 'return_not_found', null);
-    const started = this.deps.payouts.read(entry.returnId) !== null;
-    const reason = payoutRefusal(entry.state, started, req.action);
+    const reason = payoutRefusal(entry.state, this.deps.payouts.read(entry.returnId), req.action);
     return reason === null ? { kind: 'ok', entry } : this.refusePayout(actor, reason, entry);
   }
 
   private async runPayout(actor: AuthSnapshot, req: ReturnsPayoutRequest) {
+    // A queued operation may start after stop: touch nothing then.
+    if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
     const target = this.target(actor, req);
     if (target.kind !== 'ok') return target;
     if (req.action === 'manual') return this.commit(actor, target.entry, 'manual');
-    if (req.action === 'start' && !this.claim(actor, target.entry)) {
-      return this.refusePayout(actor, 'payout_started', target.entry);
-    }
+    const marked =
+      req.action === 'start' ? this.claim(actor, target.entry) : this.markRetry(target.entry);
+    if (marked !== null) return this.refusePayout(actor, marked, target.entry);
     return this.kickThenCommit(actor, target.entry);
   }
 
-  /** Step 1: the durable claim and its audit, before the drawer opens. */
-  private claim(actor: AuthSnapshot, entry: JournalEntry): boolean {
+  /**
+   * Step 1: the durable claim, the kick about to be sent (`sending`) and the
+   * `payout_started` audit, in one transaction, before the drawer is kicked.
+   * Null when claimed; else why not (another process claimed first).
+   */
+  private claim(actor: AuthSnapshot, entry: JournalEntry): ReturnsRefusalReason | null {
     return this.deps.transaction(() => {
-      const started = this.deps.payouts.start({
-        returnId: entry.returnId,
+      const now = this.deps.now();
+      const { returnId } = entry;
+      const input = {
+        returnId,
         operatorId: actor.operatorId,
         sessionId: actor.operatorSessionId,
-        now: this.deps.now(),
-      });
-      if (started) this.deps.audit.payoutStarted(actor, entry);
-      return started;
+        now,
+      };
+      if (!this.deps.payouts.start(input)) return 'payout_started';
+      if (!this.deps.payouts.markSending({ returnId, now }))
+        throw new Error('returns-payout: claim not kickable');
+      this.deps.audit.payoutStarted(actor, entry);
+      return null;
     });
   }
 
-  /** Steps 2–3: the kick, then (only if it opened and the actor still holds) the commit. */
+  /** A retry: the kick about to be sent, only after one that provably never left. */
+  private markRetry(entry: JournalEntry): ReturnsRefusalReason | null {
+    const marked = this.deps.payouts.markSending({
+      returnId: entry.returnId,
+      now: this.deps.now(),
+    });
+    return marked ? null : 'drawer_retry_unsafe';
+  }
+
+  /**
+   * Steps 2–3: the kick; its outcome persisted and audited FIRST (before any
+   * stop or recheck can return: the till must remember a drawer that opened);
+   * then, only if it opened and the actor still holds, the commit.
+   */
   private async kickThenCommit(actor: AuthSnapshot, entry: JournalEntry) {
     const kick = await kickReturnDrawer(this.deps.drawer);
+    this.persistKick(actor, entry, kick);
     if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
-    this.deps.audit.drawer(actor, entry, kick);
     if (!kick.ok) {
       return { kind: 'drawer_failed', ret: this.viewOf(entry), reason: kick.reason } as const;
     }
     const lost = this.deps.authorizer.recheck(actor);
     if (lost !== null) return this.refusePayout(actor, lost, entry);
     return this.commit(actor, entry, 'drawer');
+  }
+
+  /**
+   * The kick's outcome and its audit, in one transaction. At quit the DB may
+   * already be closed: then the write fails and the durable `sending` mark
+   * stays, which reads as unknown (no retry) after the restart.
+   */
+  private persistKick(actor: AuthSnapshot, entry: JournalEntry, kick: ReturnDrawerOutcome): void {
+    const outcome = kickResultOf(kick);
+    const audited = drawerAuditOf(kick);
+    try {
+      this.deps.transaction(() => {
+        if (this.deps.payouts.recordKick({ returnId: entry.returnId, outcome })) {
+          this.deps.audit.drawer(actor, entry, audited);
+        }
+      });
+    } catch (err) {
+      if (!this.deps.isStopped()) throw err;
+    }
   }
 
   /** Step 3: payout row paid + header paid_out + audit, atomically; then the slip. */
@@ -281,6 +399,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   }
 
   private async runReprint(actor: AuthSnapshot, returnId: string): Promise<ReturnsReprintResponse> {
+    if (this.deps.isStopped()) return SHUTTING_DOWN;
     const entry = this.ownReturn(actor, returnId);
     if (entry === null) return this.refuseReprint(actor, 'return_not_found', null);
     const paid = this.paidOut(returnId);
@@ -289,7 +408,11 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
       kind: 'copy',
       reprintedAt: this.deps.now(),
     });
-    return printed.ok ? { kind: 'printed' } : { kind: 'print_failed' };
+    if (printed.ok) return { kind: 'printed' };
+    // Not a printer failure: the slip is refused (and audited as not printed).
+    if (printed.failureReason === SLIP_TOTAL_MISMATCH)
+      return { kind: 'refused', reason: SLIP_TOTAL_MISMATCH };
+    return { kind: 'print_failed' };
   }
 
   private refuseReprint(
@@ -324,6 +447,8 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     const header =
       sale === null ? null : { branchName: sale.branch_name, terminalLabel: sale.terminal_label };
     const lines = this.deps.payouts.slipLines(entry.returnId);
+    const total = entry.returnTotalMinor ?? entry.quotedTotalMinor;
+    if (!slipTotalsAgree(lines, total)) throw new SlipTotalMismatch();
     return renderReturnSlip({ entry, payout, lines, sale: header }, variant);
   }
 
@@ -336,8 +461,9 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     try {
       const result = await this.deps.printer.printRendered(render());
       return result.ok ? { ok: true } : { ok: false, failureReason: result.failure_reason };
-    } catch {
-      return { ok: false, failureReason: 'os_print_error' };
+    } catch (err) {
+      const reason = err instanceof SlipTotalMismatch ? SLIP_TOTAL_MISMATCH : 'os_print_error';
+      return { ok: false, failureReason: reason };
     }
   }
 }

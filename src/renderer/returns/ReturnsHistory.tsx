@@ -3,7 +3,13 @@ import type { JSX } from 'react';
 import type { ReturnJournalView } from '../../shared/returns/types.js';
 import { ReturnNotice } from './ReturnNotice';
 import { formatReturnMoney, formatReturnTime } from './returns-format.js';
-import { OUTCOME_COPY, PAYOUT_COPY, refusalMessage, stateLabel } from './returns-messages.js';
+import {
+  OUTCOME_COPY,
+  PAYOUT_COPY,
+  refusalMessage,
+  reprintMessage,
+  stateLabel,
+} from './returns-messages.js';
 import type { HistoryReprint } from './useHistoryReprint.js';
 import type { HistoryState, ReturnHistory } from './useReturnHistory.js';
 
@@ -160,10 +166,10 @@ function hasUnresolved(state: HistoryState): boolean {
 /** The last journal reprint's result, announced politely. */
 function ReprintNotice({ reprint }: { reprint: HistoryReprint }): JSX.Element | null {
   if (reprint.result === null) return null;
-  const printed = reprint.result === 'printed';
+  const printed = reprint.result.kind === 'printed';
   return (
     <p className={printed ? 'rt-returns__meta' : 'rt-returns__notice'} role="status">
-      {printed ? PAYOUT_COPY.reprinted : PAYOUT_COPY.reprintFailed}
+      {reprintMessage(reprint.result)}
     </p>
   );
 }

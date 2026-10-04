@@ -3,7 +3,12 @@ import type { JSX, Ref } from 'react';
 import type { ReturnJournalView, ReturnsBridgeAPI } from '../../shared/returns/types.js';
 import type { PayoutPhase } from './payout-state.js';
 import { formatReturnMoney, formatReturnTime } from './returns-format.js';
-import { PAYOUT_COPY, drawerFailureMessage, refusalMessage } from './returns-messages.js';
+import {
+  PAYOUT_COPY,
+  drawerFailureMessage,
+  refusalMessage,
+  reprintMessage,
+} from './returns-messages.js';
 import { useFocusOnMount } from './useFocusOnMount.js';
 import { usePayout, type Payout, type Reload } from './usePayout.js';
 
@@ -33,7 +38,8 @@ const TONES: Readonly<Record<PayoutPhase['kind'], Tone>> = {
  */
 function toneOf(state: Payout['state']): Tone {
   const slipFailed = state.phase.kind === 'paid' && state.phase.slip === 'failed';
-  return slipFailed || state.reprint === 'failed' ? 'warning' : TONES[state.phase.kind];
+  const reprintNotPrinted = state.reprint !== null && state.reprint.kind !== 'printed';
+  return slipFailed || reprintNotPrinted ? 'warning' : TONES[state.phase.kind];
 }
 
 function paidLines(phase: Extract<PayoutPhase, { kind: 'paid' }>): string[] {
@@ -50,8 +56,12 @@ function statusLines(phase: PayoutPhase): string[] {
       return [PAYOUT_COPY.ready];
     case 'interrupted':
       return [PAYOUT_COPY.interrupted, PAYOUT_COPY.interruptedCheck];
-    case 'drawer_failed':
-      return [PAYOUT_COPY.drawerFailed, drawerFailureMessage(phase.reason)];
+    case 'drawer_failed': {
+      // P2-1: only a kick that provably never left "did not open"; anything
+      // else (timeout, fault) is unknown: count the drawer, attest manually.
+      const headline = phase.retryable ? PAYOUT_COPY.drawerFailed : PAYOUT_COPY.drawerUnknown;
+      return [headline, drawerFailureMessage(phase.reason)];
+    }
     case 'confirm_manual':
       return [PAYOUT_COPY.confirmManual];
     case 'paid':
@@ -111,22 +121,33 @@ function ConfirmManual({ payout }: ActionProps): JSX.Element {
   );
 }
 
-function CompleteActions({ payout, interrupted }: ActionProps & { interrupted: boolean }) {
+/**
+ * Complete a started payout: the attested manual payout always; the drawer
+ * again only when the last kick provably never reached it (P1).
+ */
+function CompleteActions({
+  payout,
+  phase,
+}: ActionProps & { phase: Extract<PayoutPhase, { kind: 'drawer_failed' | 'interrupted' }> }) {
   const disabled = payout.busy !== null;
+  const interrupted = phase.kind === 'interrupted';
   return (
     <>
       <Btn
         label={interrupted ? PAYOUT_COPY.interruptedManual : PAYOUT_COPY.manual}
+        primary={!phase.retryable}
         disabled={disabled}
         onClick={payout.askManual}
       />
-      <Btn
-        label={interrupted ? PAYOUT_COPY.interruptedRetry : PAYOUT_COPY.retryDrawer}
-        primary={!interrupted}
-        busy={payout.busy === 'payout'}
-        disabled={disabled}
-        onClick={() => void payout.pay('retry_drawer')}
-      />
+      {phase.retryable && (
+        <Btn
+          label={interrupted ? PAYOUT_COPY.interruptedRetry : PAYOUT_COPY.retryDrawer}
+          primary={!interrupted}
+          busy={payout.busy === 'payout'}
+          disabled={disabled}
+          onClick={() => void payout.pay('retry_drawer')}
+        />
+      )}
     </>
   );
 }
@@ -148,7 +169,7 @@ function Actions({ payout }: ActionProps): JSX.Element | null {
       );
     case 'drawer_failed':
     case 'interrupted':
-      return <CompleteActions payout={payout} interrupted={phase.kind === 'interrupted'} />;
+      return <CompleteActions payout={payout} phase={phase} />;
     case 'confirm_manual':
       return <ConfirmManual payout={payout} />;
     case 'paid':
@@ -177,7 +198,7 @@ function Actions({ payout }: ActionProps): JSX.Element | null {
 function ReprintResult({ payout }: ActionProps): JSX.Element | null {
   const { reprint } = payout.state;
   if (reprint === null) return null;
-  return <p>{reprint === 'printed' ? PAYOUT_COPY.reprinted : PAYOUT_COPY.reprintFailed}</p>;
+  return <p>{reprintMessage(reprint)}</p>;
 }
 
 function Amount({ ret }: { readonly ret: ReturnJournalView }): JSX.Element {

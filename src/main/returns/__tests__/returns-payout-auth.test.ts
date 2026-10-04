@@ -7,13 +7,16 @@
  * A lock, sign-out or operator switch while the drawer is answering leaves the
  * payout started but not recorded; the next eligible operator completes it.
  */
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { DrawerKickResult } from '../../drawer/drawer-kick-transport.js';
 
 import type { Role } from '../../../shared/operator/role.js';
 import {
   ENVELOPE,
   categories,
   confirmedReturn,
+  deferredFake,
   initReturnsSql,
   returnsHarness,
   seedSyncedSale,
@@ -199,5 +202,79 @@ describe('U2: atomic commits', () => {
     expect(await h.service.payout({ returnId, action: 'manual' })).toMatchObject({
       kind: 'paid_out',
     });
+  });
+});
+
+describe('in-flight sharing is per admitted actor (Codex P2, #530)', () => {
+  it('a caller in a new terminal scope never joins the old payout or sees its result', async () => {
+    const returnId = await confirmedReturn(h.service);
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(1);
+    });
+    h.state.terminalId = 'term-2';
+    const second = h.service.payout({ returnId, action: 'retry_drawer' });
+    kick.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+    expect(await second).toEqual({ kind: 'refused', reason: 'return_not_found', ret: null });
+    await first;
+    expect(h.drawer.kicks).toBe(1);
+  });
+
+  it('another operator waits for the running payout, then runs their own, with no concurrent kick', async () => {
+    const returnId = await confirmedReturn(h.service);
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(1);
+    });
+    h.state.role = 'admin';
+    const second = h.service.payout({ returnId, action: 'manual' });
+    kick.resolve({ ok: true });
+    // The manager's payout lost its session after the kick: nothing recorded.
+    expect(await first).toMatchObject({ kind: 'refused', reason: 'session_changed', ret: null });
+    // The admin's own manual payout then completes it, once.
+    expect(await second).toMatchObject({ kind: 'paid_out', method: 'manual' });
+    expect(h.drawer.kicks).toBe(1);
+    expect(paidOutCount()).toBe(1);
+  });
+
+  it('a reprint by another operator never shares the running one', async () => {
+    const returnId = await confirmedReturn(h.service);
+    await h.service.payout({ returnId, action: 'start' });
+    const print = deferredFake<{ ok: true; render_path: 'os_print' }>();
+    h.printer.answer = () => print.promise;
+    const first = h.service.reprintSlip({ returnId });
+    await vi.waitFor(() => {
+      expect(h.printer.printed).toHaveLength(2);
+    });
+    h.state.terminalId = 'term-2';
+    const second = h.service.reprintSlip({ returnId });
+    print.resolve({ ok: true, render_path: 'os_print' });
+    expect(await second).toEqual({ kind: 'refused', reason: 'return_not_found' });
+    await first;
+    expect(h.printer.printed).toHaveLength(2);
+  });
+
+  it('Z1: an operation queued behind another starts after stop and touches nothing', async () => {
+    const returnId = await confirmedReturn(h.service);
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(1);
+    });
+    h.state.role = 'admin';
+    const second = h.service.payout({ returnId, action: 'manual' });
+    h.stop();
+    const before = h.audits.length;
+    kick.resolve({ ok: true });
+    await first;
+    expect(await second).toEqual({ kind: 'refused', reason: 'shutting_down', ret: null });
+    // The running kick's opening is remembered (P1); the queued one wrote nothing.
+    expect(categories(h.audits.slice(before))).toEqual(['sale.return.drawer_opened']);
+    expect(h.repo.read(returnId)?.state).toBe('confirmed');
   });
 });

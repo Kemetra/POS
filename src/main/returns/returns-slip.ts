@@ -39,6 +39,21 @@ export function slipLineName(raw: string): string | null {
   return Array.from(clean).slice(0, SLIP_LINE_NAME_MAX).join('');
 }
 
+/**
+ * The slip's lines add up to the refund (reviewer P2-4). Confirmation already
+ * requires the server total to equal the quote exactly (S2), and the lines
+ * are the quote's own amounts, so this always holds unless something is
+ * wrong: then no slip is printed (fail closed). A return journaled before
+ * 0040 has no line amounts and prints quantities with the total.
+ */
+export function slipTotalsAgree(lines: readonly SlipLine[], totalMinor: number): boolean {
+  if (lines.length === 0) return false;
+  const amounts = lines.map((l) => l.amountMinor);
+  if (amounts.every((a) => a === null)) return true;
+  if (amounts.some((a) => a === null)) return false;
+  return (amounts as number[]).reduce((sum, a) => sum + a, 0) === totalMinor;
+}
+
 /** The sale header facts the slip reuses (same terminal as the sale, D-d). */
 export interface SlipSaleHeader {
   readonly branchName: string;
@@ -60,6 +75,30 @@ export type ReturnSlipVariant =
 
 const DASH = '—';
 const UNNAMED_LINE = 'صنف مرتجع';
+
+/** The receipt's column width, and what a wrapped continuation line can hold. */
+const COLS = 42;
+const CONTINUATION = COLS - 4;
+
+/**
+ * Split any token longer than a continuation line into pieces that fit, so
+ * the shared word-wrap (which only breaks at spaces) never emits a line
+ * wider than the roll. Code points, never UTF-16 halves.
+ */
+function breakLongTokens(text: string): string {
+  return text
+    .split(' ')
+    .map((word) => {
+      const chars = Array.from(word);
+      if (chars.length <= CONTINUATION) return word;
+      const pieces: string[] = [];
+      for (let i = 0; i < chars.length; i += CONTINUATION) {
+        pieces.push(chars.slice(i, i + CONTINUATION).join(''));
+      }
+      return pieces.join(' ');
+    })
+    .join(' ');
+}
 
 /** A fact, or a dash when it is not known. */
 function orDash(value: string | null | undefined): string {
@@ -118,7 +157,8 @@ function lines(out: SlipBands, source: ReturnSlipSource): void {
   out.text('الأصناف المرتجعة', 'rtl');
   out.rule('-');
   for (const line of source.lines) {
-    for (const part of wrap(`${String(line.quantity)}× ${line.lineName ?? UNNAMED_LINE}`)) {
+    const label = `${String(line.quantity)}× ${breakLongTokens(line.lineName ?? UNNAMED_LINE)}`;
+    for (const part of wrap(label)) {
       out.text(part, 'rtl');
     }
     const amount =

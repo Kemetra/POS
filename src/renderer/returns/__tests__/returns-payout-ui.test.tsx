@@ -27,7 +27,13 @@ afterEach(() => {
   resetStores();
 });
 
-const STARTED = { startedAt: '2026-10-04T09:06:00.000Z', paidAt: null, method: null };
+/** A payout started whose kick provably never left (no drawer): may be retried. */
+const STARTED = {
+  startedAt: '2026-10-04T09:06:00.000Z',
+  paidAt: null,
+  method: null,
+  kick: 'failed_before_send' as const,
+};
 const PAID_ROW = journal({
   state: 'paid_out',
   payout: { ...STARTED, paidAt: '2026-10-04T09:06:05.000Z', method: 'drawer' },
@@ -115,7 +121,7 @@ describe('pay out from the confirmed outcome', () => {
     expect(screen.getByRole('button', { name: PAYOUT_COPY.cancel })).toHaveFocus();
     expect(bridge.payout).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole('button', { name: PAYOUT_COPY.cancel }));
-    expect(screen.getByText(PAYOUT_COPY.drawerFailed)).toBeInTheDocument();
+    expect(screen.getByText(PAYOUT_COPY.drawerUnknown)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: PAYOUT_COPY.manual }));
     bridge.payout.mockResolvedValueOnce({
       kind: 'paid_out',
@@ -184,6 +190,38 @@ describe('pay out from the confirmed outcome', () => {
   });
 });
 
+describe('P1 + reviewer P2-1: no retry when the drawer may have opened', () => {
+  it('a timeout says the drawer state is unknown and offers only the attested manual payout', async () => {
+    const bridge = fakeBridge();
+    bridge.payout.mockResolvedValueOnce({
+      kind: 'drawer_failed',
+      ret: journal({ payout: { ...STARTED, kick: 'unknown' } }),
+      reason: 'timeout',
+    });
+    const user = await confirmedOutcome(bridge);
+    await user.click(screen.getByRole('button', { name: START_NAME }));
+    expect(await screen.findByText(PAYOUT_COPY.drawerUnknown)).toBeInTheDocument();
+    expect(screen.getByText(drawerFailureMessage('timeout'))).toBeInTheDocument();
+    expect(screen.queryByText(PAYOUT_COPY.drawerFailed)).toBeNull();
+    expect(screen.queryByRole('button', { name: PAYOUT_COPY.retryDrawer })).toBeNull();
+    expect(screen.getByRole('button', { name: PAYOUT_COPY.manual })).toBeInTheDocument();
+  });
+
+  it('an interrupted payout whose drawer may have opened offers no retry', async () => {
+    const bridge = fakeBridge();
+    bridge.payout.mockResolvedValueOnce({
+      kind: 'refused',
+      reason: 'drawer_retry_unsafe',
+      ret: journal({ payout: { ...STARTED, kick: 'opened' } }),
+    });
+    const user = await confirmedOutcome(bridge);
+    await user.click(screen.getByRole('button', { name: START_NAME }));
+    expect(await screen.findByText(PAYOUT_COPY.interrupted)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PAYOUT_COPY.interruptedRetry })).toBeNull();
+    expect(screen.getByRole('button', { name: PAYOUT_COPY.interruptedManual })).toBeInTheDocument();
+  });
+});
+
 describe('the slip after a payout', () => {
   it('S4: a failed slip keeps the payout and offers a reprint, single-flight', async () => {
     const bridge = fakeBridge();
@@ -219,6 +257,26 @@ describe('the slip after a payout', () => {
   });
 });
 
+describe('reprint results stay distinct (Codex P2)', () => {
+  it.each<[string, () => Promise<unknown>, string]>([
+    [
+      'a refusal after printing',
+      () => Promise.resolve({ kind: 'refused', reason: 'session_changed' }),
+      refusalMessage('session_changed'),
+    ],
+    ['a rejected call', () => Promise.reject(new Error('locked')), PAYOUT_COPY.reprintUnknown],
+  ])('%s is not reported as a printer failure', async (_label, answer, expected) => {
+    const bridge = fakeBridge();
+    bridge.payout.mockResolvedValueOnce(PAID_BY_DRAWER);
+    bridge.reprintSlip.mockImplementationOnce(answer as never);
+    const user = await confirmedOutcome(bridge);
+    await user.click(screen.getByRole('button', { name: START_NAME }));
+    await user.click(await screen.findByRole('button', { name: PAYOUT_COPY.reprint }));
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+    expect(screen.queryByText(PAYOUT_COPY.reprintFailed)).toBeNull();
+  });
+});
+
 describe('accessibility', () => {
   it('has no axe violations when ready, after a drawer failure, while confirming and when paid', async () => {
     const bridge = fakeBridge();
@@ -233,7 +291,7 @@ describe('accessibility', () => {
     await screen.findByRole('heading', { name: 'صرف النقد' });
     await expectNoAxeViolations(container);
     await user.click(screen.getByRole('button', { name: START_NAME }));
-    await screen.findByText(PAYOUT_COPY.drawerFailed);
+    await screen.findByText(PAYOUT_COPY.drawerUnknown);
     await expectNoAxeViolations(container);
     await user.click(screen.getByRole('button', { name: PAYOUT_COPY.manual }));
     await expectNoAxeViolations(container);
