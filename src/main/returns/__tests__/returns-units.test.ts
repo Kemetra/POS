@@ -84,6 +84,7 @@ describe('lenient wire readers (D-g)', () => {
         currencyCode: 'EGP',
         returnTotal: '1.0000',
         recordedAt: 't',
+        lines: [{ lineRef: LINE_A, quantity: '1.000000' }],
         extra: 1,
       }),
     ).toMatchObject({ returnTotal: '1.0000' });

@@ -41,6 +41,7 @@ import type { DispatchOutcome, ReturnsDispatcher } from './returns-dispatch.js';
 import { assessSale, buildRecordReturnBody, quoteReturn, viewLines } from './returns-quote.js';
 import type { ReturnsRepository } from './returns-repository.js';
 import type { ResolveSummary } from './returns-resolver.js';
+import { isExpectedSale } from './returns-verify.js';
 import { hasNonCashLocalTender, toJournalView } from './returns-views.js';
 import type { WireSale } from './returns-wire.js';
 
@@ -164,6 +165,9 @@ class ReturnsService implements ReturnsBridgeAPI {
     if (lost !== null) return this.refuse(actor, op, lost, { ...ids, saleRef });
     if (read.kind === 'unavailable') return this.refuse(actor, op, 'offline', { ...ids, saleRef });
     if (read.kind === 'refused') return this.refuse(actor, op, read.reason, { ...ids, saleRef });
+    if (!isExpectedSale(read.sale, { saleRef, linesJson: row.lines_json })) {
+      return this.refuse(actor, op, 'sale_mismatch', { ...ids, saleRef });
+    }
     const blocked = assessSale(read.sale);
     if (blocked !== null) return this.refuse(actor, op, blocked, { ...ids, saleRef });
     return { kind: 'ok', sale: { row, saleRef, wire: read.sale } };

@@ -42,6 +42,9 @@ export const LOCAL_RETURN_REFUSALS = [
   'amount_not_payable',
   'unresolved_return_exists',
   'offline',
+  // The live server sale is not the one asked for (another saleRef, mixed
+  // currency, duplicate or foreign lines): fail closed, nothing exposed.
+  'sale_mismatch',
   // The authorized manager/admin session ended, locked or switched while a
   // request was awaited; nothing was journaled or sent.
   'session_changed',

@@ -10,7 +10,8 @@
  *   unknown (timeout / network…)   → unknown;   never success (AC9/AC10)
  *
  * A confirmation must name this return (`externalId`, `saleRef`), be in its
- * currency and carry exactly the quoted refund (the cash tender the server
+ * currency, return only the requested lines and quantities, and carry exactly
+ * the quoted refund (the cash tender the server
  * checked against its own total); otherwise the row stays `unknown` and the anomaly is logged — nothing is
  * paid out on an answer the till cannot match.
  *
@@ -32,6 +33,7 @@ import type { AuthorizedActor, ReturnsAuthorizer } from './returns-auth.js';
 import type { RecordReturnOutcome, ReturnsClient } from './returns-client.js';
 import { amount4ToMinor, parseAmount4 } from './returns-money.js';
 import type { ConfirmInput, JournalEntry, ReturnsRepository } from './returns-repository.js';
+import { returnedLinesMatch } from './returns-verify.js';
 import type { WireSaleReturn } from './returns-wire.js';
 
 export type DispatchOutcome =
@@ -90,10 +92,16 @@ function outcomeOfState(entry: JournalEntry): DispatchOutcome {
 }
 
 /** The server's refund in minor units when it matches this return; else null. */
+/** The answer names this return: its externalId, sale, currency and lines. */
+function isThisReturn(entry: JournalEntry, saleReturn: WireSaleReturn): boolean {
+  if (saleReturn.externalId !== entry.externalId) return false;
+  if (saleReturn.saleRef.toLowerCase() !== entry.serverSaleRef.toLowerCase()) return false;
+  if (saleReturn.currencyCode !== entry.currencyCode) return false;
+  return returnedLinesMatch(entry.lines, saleReturn.lines);
+}
+
 function matchingTotalMinor(entry: JournalEntry, saleReturn: WireSaleReturn): number | null {
-  if (saleReturn.externalId !== entry.externalId) return null;
-  if (saleReturn.currencyCode !== entry.currencyCode) return null;
-  if (saleReturn.saleRef.toLowerCase() !== entry.serverSaleRef.toLowerCase()) return null;
+  if (!isThisReturn(entry, saleReturn)) return null;
   const total4 = parseAmount4(saleReturn.returnTotal);
   const minor = total4 === null ? null : amount4ToMinor(total4, exponentFor(entry.currencyCode));
   return minor === entry.quotedTotalMinor ? minor : null;

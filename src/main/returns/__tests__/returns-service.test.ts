@@ -41,7 +41,13 @@ let h: ReturnsHarness;
 function setup(options: HarnessOptions = {}, sale: SeedSyncedSaleInput = {}): ReturnsHarness {
   h = returnsHarness(options);
   seedSyncedSale(h.db, sale);
+  if (sale.sale !== undefined) h.backend.sale = sale.sale;
   return h;
+}
+
+/** Serve `sale` live AND seed the till's frozen lines to match it (a real capture). */
+function setupServing(sale: ReturnType<typeof saleBody>): ReturnsHarness {
+  return setup({}, { sale });
 }
 
 afterEach(() => {
@@ -211,8 +217,12 @@ describe('lookup', () => {
       reason: 'offline',
     },
   ])('AC4 / D-a: refuses a $label from the live readSale', async ({ sale, reason }) => {
-    setup();
-    h.backend.sale = sale;
+    if (sale instanceof Response) {
+      setup();
+      h.backend.sale = sale;
+    } else {
+      setupServing(sale);
+    }
     await expect(h.service.lookup({ saleNumber: SALE_NUMBER })).resolves.toEqual({
       kind: 'refused',
       reason,
@@ -284,10 +294,11 @@ describe('quote', () => {
   });
 
   it('honours the server returnableQuantity after an earlier partial return', async () => {
-    setup();
-    h.backend.sale = saleBody({
-      lines: [saleLine({ returnedQuantity: '2.000000', returnableQuantity: '1.000000' })],
-    });
+    setupServing(
+      saleBody({
+        lines: [saleLine({ returnedQuantity: '2.000000', returnableQuantity: '1.000000' })],
+      }),
+    );
     await expect(
       h.service.quote({ saleNumber: SALE_NUMBER, lines: [{ lineRef: LINE_A, quantity: 2 }] }),
     ).resolves.toMatchObject({ reason: 'quantity_out_of_range' });
@@ -295,10 +306,11 @@ describe('quote', () => {
   });
 
   it('refuses amount_not_payable when the contract price is not whole minor units', async () => {
-    setup();
-    h.backend.sale = saleBody({
-      lines: [saleLine({ unitPrice: '3.3300', lineAmount: '10.0000', returnableQuantity: '3' })],
-    });
+    setupServing(
+      saleBody({
+        lines: [saleLine({ unitPrice: '3.3300', lineAmount: '10.0000', returnableQuantity: '3' })],
+      }),
+    );
     await expect(h.service.quote(ONE_A)).resolves.toEqual({
       kind: 'refused',
       reason: 'amount_not_payable',

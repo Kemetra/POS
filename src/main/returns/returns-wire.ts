@@ -65,6 +65,7 @@ function optional<T>(read: Read<T>): Read<T | undefined> {
 export interface WireSaleLine {
   lineRef: string;
   lineName: string;
+  currencyCode: string;
   quantity: string;
   unitPrice: string;
   lineAmount: string;
@@ -85,6 +86,11 @@ export interface WireSale {
   tenders?: WireSaleTender[] | undefined;
 }
 
+export interface WireReturnLine {
+  lineRef: string;
+  quantity: string;
+}
+
 export interface WireSaleReturn {
   returnRef: string;
   saleRef: string;
@@ -92,11 +98,13 @@ export interface WireSaleReturn {
   currencyCode: string;
   returnTotal: string;
   recordedAt: string;
+  lines: WireReturnLine[];
 }
 
 const readSaleLine = readObject<WireSaleLine>({
   lineRef: uuid,
   lineName: str,
+  currencyCode: currency,
   quantity: str,
   unitPrice: str,
   lineAmount: str,
@@ -119,6 +127,7 @@ const readSaleReturn = readObject<WireSaleReturn>({
   currencyCode: currency,
   returnTotal: str,
   recordedAt: str,
+  lines: arrayOf(readObject<WireReturnLine>({ lineRef: uuid, quantity: str })),
 });
 
 const readErrorCodeShape = readObject<{ error: { code: string } }>({

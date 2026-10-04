@@ -17,6 +17,7 @@ import { AuditEmitter } from '../../../audit/audit-emitter.js';
 import { bindAuditEventsStoreDb } from '../../../audit/audit-events-store.js';
 import type { DatabaseHandle } from '../../../db/client.js';
 import type { ReturnsAuditSink } from '../../returns-audit.js';
+import { amount4ToMinor, parseAmount4, parseWholeQuantity } from '../../returns-money.js';
 import type { AuthorizedActor } from '../../returns-auth.js';
 import { composeReturns, type ComposedReturns } from '../../compose-returns.js';
 import type { ReturnsSession } from '../../returns-service.js';
@@ -264,6 +265,26 @@ export interface SeedSyncedSaleInput {
   readonly saleRef?: string | null;
   readonly syncStatus?: 'synced' | 'pending';
   readonly tenderSummary?: string;
+  /** The server sale whose lines the local frozen snapshot must match (default saleBody()). */
+  readonly sale?: ContractSale;
+}
+
+/**
+ * The till's frozen `lines_json` for a server sale — the inverse of what
+ * capture sent (whole quantity, unit price and line amount in minor units).
+ */
+export function snapshotFor(sale: ContractSale): string {
+  const minor = (v: string): number | null => amount4ToMinor(parseAmount4(v) ?? -1n, 2);
+  return JSON.stringify(
+    sale.lines.map((l) => ({
+      line_id: `local-${l.lineRef}`,
+      item_ref: 'p-1',
+      display_name: l.lineName,
+      quantity: parseWholeQuantity(l.quantity),
+      unit_price_minor: minor(l.unitPrice),
+      line_subtotal_minor: minor(l.lineAmount),
+    })),
+  );
 }
 
 /** A finalized local sale plus its sale_sync_state row. */
@@ -273,6 +294,7 @@ export function seedSyncedSale(db: SqlJsDatabase, input: SeedSyncedSaleInput = {
     sale_id: saleId,
     terminal_id: SCOPE.terminalId,
     tender_lines_summary_json: input.tenderSummary ?? CASH_SUMMARY,
+    lines_json: snapshotFor(input.sale ?? saleBody()),
   });
   db.run(
     `INSERT INTO sale_sync_state (sale_id, tenant_id, branch_id, sync_status, attempt_count,
