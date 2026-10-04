@@ -12,6 +12,8 @@
  * an `HTTP-date`. Both are accepted; the date must be the preferred IMF-fixdate
  * (`Sun, 06 Nov 1994 08:49:37 GMT`), matched strictly BEFORE `Date.parse`, which
  * on its own also accepts non-HTTP strings (`October 5, 2026`, ISO-8601). The
+ * date must also round-trip through `toUTCString()` unchanged, which rejects
+ * impossible or inconsistent dates (31 Feb, hour 24, a wrong weekday). The
  * obsolete rfc850 / asctime forms are treated as invalid (normal backoff — the
  * sale is still retried, only without the server's hint). The delay is clamped to
  * [0, `MAX_RETRY_AFTER_MS`] so a hostile or broken value can never park a sale for
@@ -47,6 +49,9 @@ export function parseRetryAfterMs(value: string | null, nowMs: number): number |
   if (DELAY_SECONDS.test(trimmed)) return clamp(Number(trimmed) * 1_000);
   if (!IMF_FIXDATE.test(trimmed)) return undefined;
   const at = Date.parse(trimmed);
-  if (Number.isNaN(at)) return undefined;
+  // Canonical round-trip: `Date.parse` silently normalizes impossible dates
+  // (31 Feb, hour 24, second 60) and ignores the weekday; `toUTCString()` emits
+  // exactly IMF-fixdate, so only a real, self-consistent date survives.
+  if (!Number.isFinite(at) || new Date(at).toUTCString() !== trimmed) return undefined;
   return clamp(at - nowMs);
 }

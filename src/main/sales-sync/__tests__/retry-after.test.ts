@@ -48,6 +48,7 @@ describe('parseRetryAfterMs (RT-194)', () => {
     ['zero seconds', '0', 0],
     ['surrounding whitespace', ' 7 ', 7_000],
     ['an IMF-fixdate 30s ahead', 'Sun, 04 Oct 2026 10:00:30 GMT', 30_000],
+    ['a valid IMF-fixdate on a leap day', 'Tue, 29 Feb 2028 10:00:00 GMT', MAX_RETRY_AFTER_MS],
     ['an IMF-fixdate in the past (→ 0)', 'Sun, 04 Oct 2026 09:59:00 GMT', 0],
     ['absurd seconds (clamped)', '86400', MAX_RETRY_AFTER_MS],
     ['an overflowing number (clamped)', '9'.repeat(400), MAX_RETRY_AFTER_MS],
@@ -69,6 +70,11 @@ describe('parseRetryAfterMs (RT-194)', () => {
     ['an obsolete asctime date', 'Sun Oct  4 10:00:30 2026'],
     ['an IMF-fixdate in a non-GMT zone', 'Sun, 04 Oct 2026 10:00:30 UTC'],
     ['a lower-case IMF-fixdate', 'sun, 04 oct 2026 10:00:30 gmt'],
+    ['an impossible date (31 Feb)', 'Wed, 31 Feb 2027 10:00:30 GMT'],
+    ['hour 24', 'Sun, 04 Oct 2026 24:00:30 GMT'],
+    ['minute 60', 'Sun, 04 Oct 2026 10:60:30 GMT'],
+    ['second 60', 'Sun, 04 Oct 2026 10:00:60 GMT'],
+    ['a weekday that does not match the date', 'Mon, 04 Oct 2026 10:00:30 GMT'],
   ])('%s → undefined (normal backoff applies)', (_label, header) => {
     expect(parseRetryAfterMs(header, NOW_MS)).toBeUndefined();
   });
