@@ -19,7 +19,6 @@ import type { ReturnsRepository } from '../returns-repository.js';
 import {
   MANAGER_ACTOR,
   BASE_URL,
-  ENVELOPE,
   LINE_A,
   NOW,
   SALE_NUMBER,
@@ -61,7 +60,6 @@ function standaloneDispatcher(repo: ReturnsRepository = h.repo) {
     client: createReturnsClient({
       baseUrl: BASE_URL,
       fetch: h.backend.fetch,
-      getOperatorToken: () => ENVELOPE,
     }),
     repo,
     audit: createReturnsAudit({

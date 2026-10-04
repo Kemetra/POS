@@ -76,7 +76,7 @@ import { bindDrawerEventsRepository } from './sales/repositories/drawer-events.r
 import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.repository.js';
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
-import { createSaleSyncEngine } from './sales-sync/sale-sync-engine.js';
+import { createSaleSyncEngine, SALE_SYNC_BACKOFF_POLICY } from './sales-sync/sale-sync-engine.js';
 import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
@@ -1421,7 +1421,7 @@ app
           ),
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.
-          backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },
+          backoff: { ...SALE_SYNC_BACKOFF_POLICY },
           onDeadLetter: (saleId: string, reason?: string) => {
             mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:dead_letter');
           },
@@ -1477,17 +1477,23 @@ app
     // renderer gets a typed `feature_disabled` refusal, never "no handler"). The
     // service re-reads `POS_PULSE_FEATURE_RETURNS` per call (default off, AC1),
     // requires a manager/admin operator session (D-b), and talks only to
-    // Backend-Core `/api/pos/v1/sales/...` (AC7) with the operator envelope read
-    // in-process. The background resolver (startup + interval) re-sends
-    // `pending` / `unknown` returns with the identical request; it is scheduled
-    // with the flag on and resolves pairing + operator live on every tick.
+    // Backend-Core `/api/pos/v1/sales/...` (AC7) with the operator envelope of
+    // the admitted authorization snapshot (RT-197 A5). The background resolver
+    // (startup + interval) re-sends `pending` / `unknown` returns with the
+    // identical request; it is scheduled with the flag on and resolves pairing +
+    // operator live on every tick.
     const returnsDomain = composeReturns({
       db,
       http: {
         baseUrl: resolveApiBaseUrl(),
         fetch: globalThis.fetch.bind(globalThis),
-        getOperatorToken: createSaleSyncTokenReader(operatorSessionManager, operatorEnvelopeHolder),
       },
+      // RT-197 A5: read only into the authorization snapshot (and at a
+      // recheck); every send carries the snapshot's envelope explicitly.
+      getOperatorEnvelope: createSaleSyncTokenReader(
+        operatorSessionManager,
+        operatorEnvelopeHolder,
+      ),
       isEnabled: () => parseFeatureFlags(process.env).returns,
       getSession: () =>
         resolveSessionScope(

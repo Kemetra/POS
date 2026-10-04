@@ -14,7 +14,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import type { ServerReturnRefusal } from '../../../shared/returns/types.js';
-import { classifyRefusal, createReturnsClient } from '../returns-client.js';
+import {
+  classifyRefusal,
+  createReturnsClient,
+  type RecordReturnRequest,
+} from '../returns-client.js';
 import {
   BASE_URL,
   ENVELOPE,
@@ -33,13 +37,17 @@ const BODY = JSON.stringify({
   refundTenders: [{ method: 'cash', amount: '15.00' }],
 });
 
+/** The client, with every call carrying `token` as its (snapshot) envelope. */
 function clientFor(backend: FakeBackend, token: string | null = ENVELOPE) {
-  return createReturnsClient({
+  const client = createReturnsClient({
     baseUrl: `${BASE_URL}/`,
     fetch: backend.fetch,
-    getOperatorToken: () => token,
     timeoutMs: 50,
   });
+  return {
+    readSale: (saleRef: string) => client.readSale(saleRef, token),
+    recordReturn: (request: RecordReturnRequest) => client.recordReturn(request, token),
+  };
 }
 
 function record(backend: FakeBackend, resend = false) {
@@ -148,16 +156,13 @@ describe('recordReturn', () => {
             reject(new DOMException('aborted', 'TimeoutError'));
           });
         }),
-      getOperatorToken: () => ENVELOPE,
       timeoutMs: 10,
     });
     await expect(
-      client.recordReturn({
-        saleRef: SALE_REF,
-        bodyJson: BODY,
-        idempotencyKey: KEY,
-        resend: false,
-      }),
+      client.recordReturn(
+        { saleRef: SALE_REF, bodyJson: BODY, idempotencyKey: KEY, resend: false },
+        ENVELOPE,
+      ),
     ).resolves.toEqual({ kind: 'unknown' });
   });
 

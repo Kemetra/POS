@@ -29,7 +29,7 @@
 import type { ReturnsRefusalReason } from '../../shared/returns/types.js';
 import { exponentFor } from '../sales-sync/create-sale-sync-client.js';
 import type { ReturnsAudit } from './returns-audit.js';
-import type { AuthorizedActor, ReturnsAuthorizer } from './returns-auth.js';
+import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
 import type { RecordReturnOutcome, ReturnsClient } from './returns-client.js';
 import { amount4ToMinor, parseAmount4 } from './returns-money.js';
 import type { ConfirmInput, JournalEntry, ReturnsRepository } from './returns-repository.js';
@@ -50,11 +50,14 @@ export type DispatchOutcome =
 export type DispatchOperation = 'submit' | 'resolve';
 
 export interface ReturnsDispatcher {
-  /** Send `entry` on behalf of `actor`, who is re-authorized right before the POST. */
+  /**
+   * Send `entry` on behalf of the authorization `snapshot`: re-checked against
+   * the live state right before the POST, which carries the snapshot's envelope.
+   */
   send(
     entry: JournalEntry,
     operation: DispatchOperation,
-    actor: AuthorizedActor,
+    snapshot: AuthSnapshot,
   ): Promise<DispatchOutcome>;
 }
 
@@ -110,7 +113,7 @@ function matchingTotalMinor(entry: JournalEntry, saleReturn: WireSaleReturn): nu
 interface SendRequest {
   readonly entry: JournalEntry;
   readonly op: DispatchOperation;
-  readonly actor: AuthorizedActor;
+  readonly snapshot: AuthSnapshot;
 }
 
 class JournaledReturnsDispatcher implements ReturnsDispatcher {
@@ -121,11 +124,11 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
   send(
     entry: JournalEntry,
     operation: DispatchOperation,
-    actor: AuthorizedActor,
+    snapshot: AuthSnapshot,
   ): Promise<DispatchOutcome> {
     const running = this.inFlight.get(entry.returnId);
     if (running !== undefined) return running;
-    const promise = this.sendOnce({ entry, op: operation, actor }).finally(() => {
+    const promise = this.sendOnce({ entry, op: operation, snapshot }).finally(() => {
       this.inFlight.delete(entry.returnId);
     });
     this.inFlight.set(entry.returnId, promise);
@@ -136,23 +139,29 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
     const { entry, op } = send;
     if (this.deps.isStopped()) return { kind: 'deferred', entry };
     const current = this.current(entry);
-    // The choke point: never send for an actor who is no longer authorized.
-    if (this.deps.authorizer.recheck(send.actor) !== null) {
+    // Commit point (b): never send for a snapshot whose actor is no longer
+    // authorized or whose envelope is no longer live.
+    if (this.deps.authorizer.recheck(send.snapshot) !== null) {
       this.deps.logger.warn({ return_id: entry.returnId }, 'returns:send_deferred_unauthorized');
       return { kind: 'deferred', entry: current };
     }
     const attempted = current.attemptCount > 0;
     this.deps.repo.recordAttempt({ returnId: entry.returnId, now: this.deps.now() });
-    const outcome = await this.deps.client.recordReturn({
-      saleRef: entry.serverSaleRef,
-      bodyJson: entry.requestBodyJson,
-      idempotencyKey: entry.externalId,
-      // P1: a send that may follow an earlier one never turns a pre-replay
-      // 401/403/404 into a terminal refusal (the return may be recorded).
-      // `recordAttempt` is committed before every POST, so a pre-increment
-      // count of 0 proves no earlier send reached the server: a first send.
-      resend: attempted,
-    });
+    // A5: the POST carries the rechecked snapshot's own envelope — no live
+    // session or token read happens between the recheck and the wire.
+    const outcome = await this.deps.client.recordReturn(
+      {
+        saleRef: entry.serverSaleRef,
+        bodyJson: entry.requestBodyJson,
+        idempotencyKey: entry.externalId,
+        // P1: a send that may follow an earlier one never turns a pre-replay
+        // 401/403/404 into a terminal refusal (the return may be recorded).
+        // `recordAttempt` is committed before every POST, so a pre-increment
+        // count of 0 proves no earlier send reached the server: a first send.
+        resend: attempted,
+      },
+      send.snapshot.envelope,
+    );
     // Stopped while the POST was in flight: touch nothing local (the DB may be
     // closed). The row stays pending/unknown; the next start re-sends it.
     if (this.deps.isStopped()) return { kind: 'deferred', entry };

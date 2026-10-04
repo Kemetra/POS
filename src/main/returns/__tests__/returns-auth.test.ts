@@ -11,6 +11,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { LocalReturnRefusal } from '../../../shared/returns/types.js';
 import { createReturnsAuthorizer, type ReturnsSession } from '../returns-auth.js';
 import {
+  ENVELOPE,
   LINE_A,
   MANAGER_ACTOR,
   SALE_NUMBER,
@@ -179,13 +180,13 @@ describe('createReturnsAuthorizer.recheck', () => {
     session?: ReturnsSession | null;
     enabled?: boolean;
     locked?: boolean;
-    envelope?: boolean;
+    envelope?: string | null;
   }) {
     return createReturnsAuthorizer({
       isEnabled: () => live.enabled ?? true,
       getSession: () => (live.session === undefined ? manager : live.session),
       isSessionLocked: () => live.locked ?? false,
-      hasEnvelope: () => live.envelope ?? true,
+      getEnvelope: () => (live.envelope === undefined ? ENVELOPE : live.envelope),
     });
   }
 
@@ -195,10 +196,50 @@ describe('createReturnsAuthorizer.recheck', () => {
     ['signed out', { session: null }, 'session_changed'],
     ['a cashier', { session: sessionFor('cashier') }, 'role_denied'],
     ['locked', { locked: true }, 'session_changed'],
-    ['no envelope', { envelope: false }, 'offline'],
+    ['no envelope', { envelope: null }, 'offline'],
+    ['an empty envelope', { envelope: '' }, 'offline'],
+    [
+      'RT-197: the envelope replaced in the same session',
+      { envelope: 'rotated' },
+      'session_changed',
+    ],
     ['another terminal', { session: { ...manager, terminal_id: 'term-2' } }, 'session_changed'],
     ['another session', { session: { ...manager, operator_session_id: 's2' } }, 'session_changed'],
   ])('%s → %s', (_label, live, expected) => {
     expect(authorizer(live).recheck(MANAGER_ACTOR)).toBe(expected);
+  });
+
+  it('RT-197: a snapshot admitted without an envelope never sends, even once one appears', () => {
+    const live: { envelope: string | null } = { envelope: null };
+    const auth = createReturnsAuthorizer({
+      isEnabled: () => true,
+      getSession: () => manager,
+      isSessionLocked: () => false,
+      getEnvelope: () => live.envelope,
+    });
+    const admitted = auth.current();
+    live.envelope = ENVELOPE;
+    expect(admitted).toMatchObject({ kind: 'ok', actor: { envelope: null } });
+    expect(admitted.kind === 'ok' && auth.recheck(admitted.actor)).toBe('offline');
+  });
+});
+
+describe('createReturnsAuthorizer.current — the immutable snapshot (RT-197 A5)', () => {
+  it('captures the envelope with the actor, frozen, and keeps it when the live token changes', () => {
+    const live = { envelope: ENVELOPE };
+    const auth = createReturnsAuthorizer({
+      isEnabled: () => true,
+      getSession: () => sessionFor('manager'),
+      isSessionLocked: () => false,
+      getEnvelope: () => live.envelope,
+    });
+    const admitted = auth.current();
+    if (admitted.kind !== 'ok') throw new Error('expected an admitted manager');
+    live.envelope = 'rotated';
+
+    expect(admitted.actor).toEqual({ ...MANAGER_ACTOR, envelope: ENVELOPE });
+    expect(Object.isFrozen(admitted.actor)).toBe(true);
+    expect(Object.isFrozen(admitted.actor.scope)).toBe(true);
+    expect(auth.recheck(admitted.actor)).toBe('session_changed');
   });
 });

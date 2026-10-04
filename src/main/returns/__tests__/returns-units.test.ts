@@ -234,6 +234,7 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
       returnTotalMinor: null,
       refusalReason: null,
       attemptCount: 0,
+      lastAttemptAt: null,
       createdAt: 't0',
       confirmedAt: null,
     };

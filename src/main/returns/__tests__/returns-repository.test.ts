@@ -132,3 +132,52 @@ describe('returns repository', () => {
     expect(repo.hasUnresolvedForSale('sale-2')).toBe(true);
   });
 });
+
+describe('D5: migration 0039 lets lines join a return only while it is pending and unsent', () => {
+  const LINE_C = '0190f5a2-7b3c-7d4e-8f90-00000000000c';
+  const HEADER_PENDING_UNSENT = /header must be pending and unsent/;
+
+  function addLine(): void {
+    db.run('INSERT INTO return_journal_lines (return_id, line_ref, quantity) VALUES (?, ?, 1)', [
+      'r1',
+      LINE_C,
+    ]);
+  }
+
+  it.each<{ label: string; advance: () => void }>([
+    {
+      label: 'once attempted (still pending, attempt_count 1)',
+      advance: () => {
+        repo.recordAttempt({ returnId: 'r1', now: 't1' });
+      },
+    },
+    { label: 'once unknown', advance: () => repo.markUnknown({ returnId: 'r1', now: 't1' }) },
+    { label: 'once confirmed', advance: () => repo.markConfirmed(CONFIRM) },
+    {
+      label: 'once refused',
+      advance: () => repo.markRefused({ returnId: 'r1', reason: 'conflict', now: 't1' }),
+    },
+    {
+      label: 'once paid out',
+      advance: () => {
+        repo.markConfirmed(CONFIRM);
+        repo.markPaidOut({ returnId: 'r1', now: 't2' });
+      },
+    },
+  ])('rejects a line INSERT $label', ({ advance }) => {
+    repo.insert(entry(1));
+    advance();
+    expect(addLine).toThrow(HEADER_PENDING_UNSENT);
+    expect(repo.read('r1')?.lines).toHaveLength(2);
+  });
+
+  it('accepts a line INSERT while the header is pending with attempt_count 0', () => {
+    repo.insert(entry(1));
+    addLine();
+    expect(repo.read('r1')?.lines).toHaveLength(3);
+  });
+
+  it('rejects a line for a header that does not exist', () => {
+    expect(addLine).toThrow(HEADER_PENDING_UNSENT);
+  });
+});

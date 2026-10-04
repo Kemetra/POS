@@ -18,7 +18,7 @@ import { bindAuditEventsStoreDb } from '../../../audit/audit-events-store.js';
 import type { DatabaseHandle } from '../../../db/client.js';
 import type { ReturnsAuditSink } from '../../returns-audit.js';
 import { amount4ToMinor, parseAmount4, parseWholeQuantity } from '../../returns-money.js';
-import type { AuthorizedActor } from '../../returns-auth.js';
+import type { AuthSnapshot } from '../../returns-auth.js';
 import { composeReturns, type ComposedReturns } from '../../compose-returns.js';
 import type { ReturnsSession } from '../../returns-service.js';
 import { createReturnsRepository, type ReturnsRepository } from '../../returns-repository.js';
@@ -48,6 +48,11 @@ export const LINE_B = '0190f5a2-7b3c-7d4e-8f90-00000000000b';
 export const RETURN_REF = '0190f5a2-7b3c-7d4e-8f90-0000000000ff';
 export const NOW = '2026-10-04T10:00:00.000Z';
 
+/** `NOW` plus `seconds`, as the ISO-8601 stamp the domain clock returns. */
+export function secondsAfterNow(seconds: number): string {
+  return new Date(Date.parse(NOW) + seconds * 1_000).toISOString();
+}
+
 export const CASH_SUMMARY = JSON.stringify([{ tender_type: 'cash', amount_applied_minor: 6500 }]);
 export const CARD_SUMMARY = JSON.stringify([
   { tender_type: 'external_card_terminal', amount_applied_minor: 6500 },
@@ -55,12 +60,13 @@ export const CARD_SUMMARY = JSON.stringify([
 
 export const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
 
-/** The authorized actor a signed-in manager on this till is admitted as. */
-export const MANAGER_ACTOR: AuthorizedActor = {
+/** The authorization snapshot a signed-in manager on this till is admitted as. */
+export const MANAGER_ACTOR: AuthSnapshot = {
   scope: SCOPE,
   operatorId: 'op-manager',
   operatorSessionId: 'sess-manager',
   role: 'manager',
+  envelope: ENVELOPE,
 };
 
 export function sessionFor(role: Role): ReturnsSession {
@@ -217,12 +223,19 @@ export class FakeBackend {
   onReturn: ReturnResponder = (call, backend) => backend.recordIdempotently(call);
   /** Runs while a readSale GET is in flight (to change the session mid-request). */
   onRead: (() => void) | null = null;
+  /** When set, the `readSale` answer per requested saleRef (else `sale`). */
+  saleFor: ((saleRef: string) => ContractSale) | null = null;
+  /** When set, awaited before a readSale GET is answered (network latency). */
+  readLatency: (() => Promise<void>) | null = null;
   /** Returns recorded so far, by Idempotency-Key. */
   readonly recorded = new Map<string, ContractSaleReturn>();
 
   /** Method-keyed routes of the fake POS sales surface. */
   private readonly routes: Readonly<Record<string, (call: RecordedCall) => Promise<Response>>> = {
-    GET: () => Promise.resolve(this.answerRead()),
+    GET: async (call) => {
+      if (this.readLatency !== null) await this.readLatency();
+      return this.answerRead(call);
+    },
     POST: async (call) => await this.onReturn(call, this),
   };
 
@@ -235,9 +248,11 @@ export class FakeBackend {
   };
 
   /** The `readSale` answer; `onRead` runs while it is "in flight". */
-  private answerRead(): Response {
+  private answerRead(call: RecordedCall): Response {
     this.onRead?.();
-    return this.sale instanceof Response ? this.sale : jsonResponse(200, this.sale);
+    const saleRef = /\/sales\/([^/]+)$/.exec(call.url)?.[1] ?? '';
+    const sale = this.saleFor?.(saleRef) ?? this.sale;
+    return sale instanceof Response ? sale : jsonResponse(200, sale);
   }
 
   /** 201 the first time a key is seen; a same-key retry replays it (RT-82 K4). */
@@ -330,6 +345,8 @@ export interface HarnessState {
   locked: boolean;
   /** The live paired terminal id. */
   terminalId: string;
+  /** The domain clock (ISO-8601), read per call; starts at `NOW`. */
+  now: string;
   /** Runs on every audit emit, before it is written (to change state mid-flow). */
   onAudit: ((event: AuditEvent) => void) | null;
   /** When it returns true for an event, that audit insert throws (fault injection). */
@@ -377,6 +394,7 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     paired: true,
     locked: false,
     terminalId: SCOPE.terminalId,
+    now: NOW,
     onAudit: null,
     failAudit: null,
   };
@@ -390,7 +408,8 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
   };
   const composed = composeReturns({
     db: handle,
-    http: { baseUrl: BASE_URL, fetch: backend.fetch, getOperatorToken: () => state.token },
+    http: { baseUrl: BASE_URL, fetch: backend.fetch },
+    getOperatorEnvelope: () => state.token,
     isEnabled: () => state.enabled,
     getSession: () =>
       state.role === null || !state.paired
@@ -399,7 +418,7 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     isSessionLocked: () => state.locked,
     auditSink,
     logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
-    now: () => NOW,
+    now: () => state.now,
   });
   return {
     ...composed,

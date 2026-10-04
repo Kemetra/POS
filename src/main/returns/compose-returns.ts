@@ -28,8 +28,14 @@ export interface ReturnsLogger {
 
 export interface ComposeReturnsDeps {
   readonly db: DatabaseHandle;
-  /** Backend-Core base URL, fetch and the in-process envelope reader. */
+  /** Backend-Core base URL and fetch. */
   readonly http: Omit<CreateReturnsClientDeps, 'timeoutMs'>;
+  /**
+   * The in-process operator-envelope reader. Given ONLY to the authorizer: it
+   * is read when an authorization snapshot is taken and at a recheck, never by
+   * the client or on a send path (RT-197 A5).
+   */
+  readonly getOperatorEnvelope: () => string | null;
   readonly isEnabled: () => boolean;
   /** The live operator session on the live paired terminal (null if either is absent). */
   readonly getSession: () => ReturnsSession | null;
@@ -66,7 +72,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     isEnabled: deps.isEnabled,
     getSession: deps.getSession,
     isSessionLocked: deps.isSessionLocked,
-    hasEnvelope: () => (deps.http.getOperatorToken() ?? '').length > 0,
+    getEnvelope: deps.getOperatorEnvelope,
   });
   const dispatcher = createReturnsDispatcher({
     authorizer,
@@ -78,7 +84,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     isStopped: () => stopped,
     transaction: <T>(fn: () => T): T => deps.db.transaction(fn)(),
   });
-  const resolver = createReturnsResolver({ repo, dispatcher, authorizer });
+  const resolver = createReturnsResolver({ repo, dispatcher, authorizer, now });
   const service = createReturnsService({
     authorizer,
     captureCurrencyCode: deps.captureCurrencyCode ?? DEFAULT_CURRENCY_CODE,

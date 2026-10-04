@@ -27,6 +27,7 @@ import {
 import type {
   ContractError,
   ContractRecordReturnRequest,
+  ContractReturnLine,
   ContractSale,
   ContractSaleLine,
   ContractSaleReturn,
@@ -56,6 +57,28 @@ void _saleFromContract;
 void _lineFromContract;
 void _returnFromContract;
 void _errorFromContract;
+
+// ── RT-197 I3: the stated contract assumptions the till relies on ─────────
+// The confirmation check matches the returned `lines` (so `SaleReturn.lines`
+// must be required), and pricing / verification read the `SaleLine` amounts
+// and the echoed `ReturnLine.lineAmount` / `returnTotal` (so they must be
+// required, non-null decimal strings). Pinned on the vendored contract: a
+// re-pin that relaxes any of them fails `tsc` here.
+type RequiredKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? never : K }[keyof T];
+type IsRequired<T, K extends keyof T> = K extends RequiredKeys<T> ? true : false;
+type IsExactlyString<V> = [V] extends [string] ? ([string] extends [V] ? true : false) : false;
+type RequiredAmount<T, K extends keyof T> =
+  IsRequired<T, K> extends true ? IsExactlyString<T[K]> : false;
+const _saleReturnLinesRequired: IsRequired<ContractSaleReturn, 'lines'> = true;
+const _returnTotalRequired: RequiredAmount<ContractSaleReturn, 'returnTotal'> = true;
+const _saleLineAmountRequired: RequiredAmount<ContractSaleLine, 'lineAmount'> = true;
+const _saleLineUnitPriceRequired: RequiredAmount<ContractSaleLine, 'unitPrice'> = true;
+const _returnLineAmountRequired: RequiredAmount<ContractReturnLine, 'lineAmount'> = true;
+void _saleReturnLinesRequired;
+void _returnTotalRequired;
+void _saleLineAmountRequired;
+void _saleLineUnitPriceRequired;
+void _returnLineAmountRequired;
 
 const CONTRACT_REQUEST_KEYS = ['sourceSystem', 'externalId', 'lines', 'refundTenders', 'reason'];
 const DECIMAL = /^[0-9]{1,15}(\.[0-9]{1,4})?$/;
@@ -104,4 +127,33 @@ describe('response readers accept full contract bodies', () => {
     expect(readSaleReturnBody(ret)).toMatchObject({ returnTotal: '15.0000' });
     expect(readErrorCode(errorBody('over_return'))).toBe('over_return');
   });
+});
+
+describe('RT-197 I3: the readers fail closed when a pinned assumption is broken', () => {
+  const ret = saleReturnFor({
+    externalId: 'pos-pulse-return:k',
+    lines: [{ lineRef: LINE_A, quantity: '1' }],
+    refundTenders: [{ method: 'cash', amount: '15.00' }],
+  });
+
+  it('a SaleReturn without its required lines is unreadable (never a confirmation)', () => {
+    expect(readSaleReturnBody(omit(ret, 'lines'))).toBeNull();
+    expect(readSaleReturnBody({ ...ret, lines: null })).toBeNull();
+  });
+
+  it('a SaleReturn without its returnTotal is unreadable', () => {
+    expect(readSaleReturnBody(omit(ret, 'returnTotal'))).toBeNull();
+  });
+
+  it.each(['lineAmount', 'unitPrice'] as const)(
+    'a Sale whose line lacks its %s is unreadable (nothing priced from it)',
+    (amount) => {
+      const [first, second] = saleBody().lines;
+      const lines = [omit(first as ContractSaleLine, amount), second];
+      expect(readSaleBody({ ...saleBody(), lines })).toBeNull();
+      expect(
+        readSaleBody({ ...saleBody(), lines: [{ ...first, [amount]: null }, second] }),
+      ).toBeNull();
+    },
+  );
 });
