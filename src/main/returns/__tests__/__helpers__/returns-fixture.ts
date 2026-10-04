@@ -413,6 +413,12 @@ export interface ReturnsHarness extends ComposedReturns {
    * alive at the same time (no single-instance lock); same drawer and printer.
    */
   anotherInstance(): ComposedReturns;
+  /**
+   * RT-198: every process composed so far; `deadTouches` counts each time a
+   * dead (crashed) one touched its database or audit sink — each such touch
+   * is refused, as a closed DB would refuse it.
+   */
+  readonly lives: Pick<Lives, 'deadTouches'>;
   readonly db: SqlJsDatabase;
   readonly handle: DatabaseHandle;
   readonly repo: ReturnsRepository;
@@ -468,8 +474,9 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
   const drawer = new FakeDrawer();
   const printer = new FakePrinter();
   let killLatest: () => void = () => undefined;
+  const lives = new Lives();
   const compose = (): ComposedReturns => {
-    const life = { alive: true };
+    const life = lives.next();
     killLatest = () => {
       life.alive = false;
     };
@@ -511,6 +518,7 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
       latest = compose();
       return latest;
     },
+    lives,
     db,
     handle,
     repo: createReturnsRepository(handle),
@@ -540,18 +548,46 @@ export async function confirmedReturn(
   return res.ret.returnId;
 }
 
+/** One composed process: alive until it crashes; what it touched after that. */
+interface Life {
+  alive: boolean;
+  deadTouches: number;
+}
+
+/** Every process composed over one database, and what the dead ones touched. */
+class Lives {
+  private readonly all: Life[] = [];
+
+  next(): Life {
+    const life = { alive: true, deadTouches: 0 };
+    this.all.push(life);
+    return life;
+  }
+
+  get deadTouches(): number {
+    return this.all.reduce((n, life) => n + life.deadTouches, 0);
+  }
+}
+
+/** A dead process cannot touch anything: count the attempt, then refuse it. */
+function assertAlive(life: Life): void {
+  if (life.alive) return;
+  life.deadTouches += 1;
+  throw new Error('the process is gone');
+}
+
 /**
  * `target`, usable only while `life.alive`: every method call (and every
  * function or object such a call returns: a transaction, a statement) throws
- * once the process is dead.
+ * once the process is dead, and is counted (`deadTouches`).
  */
-function whileAlive<T extends object>(target: T, life: { alive: boolean }): T {
+function whileAlive<T extends object>(target: T, life: Life): T {
   return new Proxy(target, {
     get(obj, prop, receiver) {
       const value: unknown = Reflect.get(obj, prop, receiver);
       if (typeof value !== 'function') return value;
       return (...args: unknown[]): unknown => {
-        if (!life.alive) throw new Error('the process is gone');
+        assertAlive(life);
         const result: unknown = (value as (...a: unknown[]) => unknown).apply(obj, args);
         if (typeof result === 'function') {
           return whileAlive(result as (...a: unknown[]) => unknown, life);
@@ -560,7 +596,7 @@ function whileAlive<T extends object>(target: T, life: { alive: boolean }): T {
       };
     },
     apply(fn, thisArg, args) {
-      if (!life.alive) throw new Error('the process is gone');
+      assertAlive(life);
       return Reflect.apply(fn as (...a: unknown[]) => unknown, thisArg, args);
     },
   });

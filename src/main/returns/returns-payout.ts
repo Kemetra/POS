@@ -45,7 +45,10 @@
  * ## Shutdown
  *
  * After stop, nothing is read or written (`shutting_down`); a kick or print
- * in flight at stop writes nothing when it settles.
+ * in flight at stop writes nothing when it settles (RT-198: the stop latch is
+ * the first check after every await). A kick in flight at quit is remembered
+ * by its durable `sending` mark (P1): it reads as in flight, then unknown,
+ * never retryable; the DB closes right after stop in any case.
  */
 import type {
   LocalReturnRefusal,
@@ -468,36 +471,30 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   }
 
   /**
-   * Steps 2–3 after the kick: its outcome persisted and audited FIRST (before
-   * any stop or recheck can return: the till must remember a drawer that
-   * opened); then, only if it opened, the commit (itself behind the gate).
+   * Steps 2–3 after the kick. RT-198: the stop latch first — after stop the
+   * DB is closed, and the durable `sending` mark already remembers the kick
+   * (P1). Then its outcome persisted and audited (before any recheck can
+   * return: the till must remember a drawer that opened); then, only if it
+   * opened, the commit (itself behind the gate).
    */
   private async afterKick(actor: AuthSnapshot, entry: JournalEntry, kick: ReturnDrawerOutcome) {
-    this.persistKick(actor, entry, kick);
     if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
+    this.persistKick(actor, entry, kick);
     if (!kick.ok) {
       return { kind: 'drawer_failed', ret: this.viewOf(entry), reason: kick.reason } as const;
     }
     return this.commit(actor, entry, 'drawer');
   }
 
-  /**
-   * The kick's outcome and its audit, in one transaction. At quit the DB may
-   * already be closed: then the write fails and the durable `sending` mark
-   * stays, which reads as unknown (no retry) after the restart.
-   */
+  /** The kick's outcome and its audit, in one transaction. */
   private persistKick(actor: AuthSnapshot, entry: JournalEntry, kick: ReturnDrawerOutcome): void {
     const outcome = kickResultOf(kick);
     const audited = drawerAuditOf(kick);
-    try {
-      this.deps.transaction(() => {
-        if (this.deps.payouts.recordKick({ returnId: entry.returnId, outcome })) {
-          this.deps.audit.drawer(actor, entry, audited);
-        }
-      });
-    } catch (err) {
-      if (!this.deps.isStopped()) throw err;
-    }
+    this.deps.transaction(() => {
+      if (this.deps.payouts.recordKick({ returnId: entry.returnId, outcome })) {
+        this.deps.audit.drawer(actor, entry, audited);
+      }
+    });
   }
 
   /**

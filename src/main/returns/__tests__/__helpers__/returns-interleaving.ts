@@ -13,8 +13,10 @@
  * The run records what the invariants need: every request with its envelope,
  * the envelopes issued to manager/admin sessions, the journal and audit rows
  * as they were at stop and at the end (so any write after stop shows as a
- * difference), any request made after stop, and any moment a sale had two
- * unresolved returns at once.
+ * difference), how many rows the database changed after stop (RT-198: any
+ * write at all, to any table, counts — even one later rolled back), any
+ * request made after stop, and any moment a sale had two unresolved returns
+ * at once.
  */
 import type { Role } from '../../../../shared/operator/role.js';
 import type { AuditEvent } from '../../../../shared/audit/event-shape.js';
@@ -110,6 +112,8 @@ export interface InterleavingRun {
   readonly auditsAfterStop: readonly AuditEvent[];
   /** Requests sent after stop. */
   readonly callsAfterStop: number;
+  /** Rows inserted, updated or deleted after stop, in any table (SQLite `total_changes()`). */
+  readonly writesAfterStop: number;
   /** Moments a sale had two unresolved returns at once. */
   readonly overlaps: readonly string[];
   /** Whether the run stopped the domain. */
@@ -141,6 +145,7 @@ class InterleavingWorld {
   private clockReads = 0;
   private stopped = false;
   private callsAtStop = 0;
+  private writesAtStop = 0;
 
   constructor(private readonly seed: number) {
     this.rng = new SeededRng(seed);
@@ -298,6 +303,12 @@ class InterleavingWorld {
     this.callsAtStop = this.h.backend.calls.length;
     this.journalAtStop = this.journalRows();
     this.auditCountAtStop = committedAudits(this.h.db).length;
+    this.writesAtStop = this.totalChanges();
+  }
+
+  /** Rows changed by every INSERT / UPDATE / DELETE on the connection so far. */
+  private totalChanges(): number {
+    return Number(this.h.db.exec('SELECT total_changes()')[0]?.values[0]?.[0] ?? 0);
   }
 
   private journalRows(): Map<string, JournalRowState> {
@@ -350,6 +361,7 @@ class InterleavingWorld {
       journalAtEnd,
       auditsAfterStop: this.stopped ? audits.slice(this.auditCountAtStop) : [],
       callsAfterStop: this.stopped ? this.h.backend.calls.length - this.callsAtStop : 0,
+      writesAfterStop: this.stopped ? this.totalChanges() - this.writesAtStop : 0,
       overlaps: this.overlaps,
       stopped: this.stopped,
     };

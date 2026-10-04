@@ -36,6 +36,15 @@ describe('returns refusal copy (O1)', () => {
     expect(new Set(messages).size).toBe(messages.length);
   });
 
+  it('RT-198: shutting_down says the app is closing and never that nothing was done', () => {
+    // Work in flight at stop (a resolve pass, a drawer kick) may already have
+    // happened: the copy sends the operator to the history, not to "nothing".
+    const message = refusalMessage('shutting_down');
+    expect(message).toContain('يُغلق');
+    expect(message).toContain('سجل المرتجعات');
+    expect(message).not.toContain('لم يُنفَّذ');
+  });
+
   it('falls back to a generic message for a reason main has not taught the renderer', () => {
     const unknown = refusalMessage('brand_new_reason' as never);
     expect(unknown.length).toBeGreaterThan(0);

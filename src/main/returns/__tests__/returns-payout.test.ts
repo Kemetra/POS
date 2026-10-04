@@ -399,7 +399,7 @@ describe('Z: shutdown', () => {
     expect([h.audits.length, h.drawer.kicks, payoutRow(returnId)]).toEqual([before, 0, undefined]);
   });
 
-  it('Z2: stop during the kick records only that kick (P1), and no payout', async () => {
+  it('Z2 (RT-198): stop during the kick writes nothing: no kick outcome, no audit, no payout', async () => {
     const returnId = await confirmedReturn(h.service);
     const kick = deferredFake<DrawerKickResult>();
     h.drawer.answer = () => kick.promise;
@@ -411,8 +411,9 @@ describe('Z: shutdown', () => {
     const before = h.audits.length;
     kick.resolve({ ok: true });
     expect(await pending).toMatchObject({ kind: 'refused', reason: 'shutting_down' });
-    // P1: the opening is remembered even at quit; nothing else is written.
-    expect(categories(h.audits.slice(before))).toEqual(['sale.return.drawer_opened']);
+    // The DB closes at stop: the durable `sending` mark (P1) remembers the kick.
+    expect(categories(h.audits.slice(before))).toEqual([]);
+    expect(h.db.exec('SELECT kick_outcome FROM return_payouts')[0]?.values).toEqual([['sending']]);
     expect(h.repo.read(returnId)?.state).toBe('confirmed');
   });
 

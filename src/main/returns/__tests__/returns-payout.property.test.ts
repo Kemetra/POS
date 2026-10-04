@@ -17,7 +17,9 @@
  *     the live, unlocked, admitted operator, including a reprint that waited
  *     in its per-return queue while its operator locked, signed out or was
  *     replaced (a payout is never queued: one at a time per terminal);
- *   • a crashed process writes nothing after the crash;
+ *   • RT-198: a crashed (stopped) process makes no database access at all
+ *     after the crash — not even one its closed database would refuse — so
+ *     the stop latch, not the closed handle, is what keeps it quiet;
  *   • Codex P2 (f1a8907): at most one drawer kick in flight per terminal at
  *     any time, including payouts of different returns requested together.
  *
@@ -171,6 +173,7 @@ function expectQuietAfterCrash(r: PayoutRun): void {
   for (const [i, crash] of r.crashes.entries()) {
     expect(crash.settled, `seed ${String(r.seed)} crash ${String(i)}`).toEqual(crash.at);
   }
+  expect(r.harness.lives.deadTouches, `seed ${String(r.seed)}: DB touched after a crash`).toBe(0);
 }
 
 describe('X7: payout exactly-once under seeded random interleavings', () => {

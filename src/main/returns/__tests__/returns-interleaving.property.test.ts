@@ -12,20 +12,12 @@
  *     synchronous step: no switch can land between them);
  *   • every POST is for a return already journaled (journal before send);
  *   • a sale never has two unresolved returns at once;
- *   • after stop: no request, no audit of a send's outcome, and no journaled
- *     return changes (no attempt, confirmation, refusal or `unknown`).
- *
- * RT-197 FINDING (reported, not fixed — a behaviour change outside the
- * ticket's listed scope): only the dispatcher and the resolver observe the
- * stop latch; the service does not. A lookup / quote / submit / resolve whose
- * await is in flight when the domain stops still writes when it resumes:
- * either its refusal audit (`sale.return.refused`, no return id), or — for a
- * submit — its journal row, lines and `attempted` audit; the dispatcher then
- * defers that return, so it is never sent and stays `pending` for the next
- * start. In the app the DB closes right after the stop latch, so those writes
- * fail instead. The property pins exactly that much and no more: a return
- * journaled after stop is pending and never attempted, and the only audits
- * after stop are those service-level ones.
+ *   • RT-198: after stop, no request and NO DATABASE WRITE AT ALL — no row
+ *     inserted, updated or deleted in any table (SQLite `total_changes()`), so
+ *     no journaled return, no line, no audit (not even a refusal) and no
+ *     journal change. Work in flight at stop settles as `shutting_down`
+ *     before it touches the database (the RT-197 I5 finding, now fixed: the
+ *     service observes the stop latch, not only the dispatcher and resolver).
  *
  * A failing seed replays exactly (`runInterleaving(seed, STEPS)`).
  */
@@ -86,13 +78,7 @@ function expectJournalBeforeSend(run: InterleavingRun): void {
   expect(unjournaled, `seed ${String(run.seed)}`).toEqual([]);
 }
 
-/** The FINDING's audits: an `attempted` for a return journaled after stop, or a service refusal. */
-function isServiceLevelAudit(audit: AuditEvent, addedIds: ReadonlySet<string>): boolean {
-  const returnId = audit.payload['return_id'];
-  if (audit.action_category === 'sale.return.attempted') return addedIds.has(String(returnId));
-  return audit.action_category === 'sale.return.refused' && returnId === null;
-}
-
+/** RT-198: after stop, nothing is sent and nothing at all is written. */
 function expectQuietAfterStop(run: InterleavingRun): void {
   const at = `seed ${String(run.seed)}`;
   expect(run.callsAfterStop, `${at}: requests after stop`).toBe(0);
@@ -100,12 +86,13 @@ function expectQuietAfterStop(run: InterleavingRun): void {
     ([id, row]) => !isDeepStrictEqual(run.journalAtEnd.get(id), row),
   );
   expect(changed, `${at}: journaled returns changed after stop`).toEqual([]);
-  // The FINDING above: a return journaled after stop is pending and never sent.
-  const added = [...run.journalAtEnd].filter(([id]) => !run.journalAtStop.has(id));
-  for (const [, row] of added) expect(row, at).toMatchObject({ state: 'pending', attemptCount: 0 });
-  const addedIds = new Set(added.map(([id]) => id));
-  const otherAudits = run.auditsAfterStop.filter((a) => !isServiceLevelAudit(a, addedIds));
-  expect(otherAudits, `${at}: audits after stop`).toEqual([]);
+  const added = [...run.journalAtEnd.keys()].filter((id) => !run.journalAtStop.has(id));
+  expect(added, `${at}: returns journaled after stop`).toEqual([]);
+  const audits = run.auditsAfterStop.map(
+    (a) => `${a.action_category}:${String(a.payload['reason'])}`,
+  );
+  expect(audits, `${at}: audits after stop`).toEqual([]);
+  expect(run.writesAfterStop, `${at}: database rows written after stop`).toBe(0);
 }
 
 describe('I5: the return state machine under seeded random interleavings', () => {
