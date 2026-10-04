@@ -110,10 +110,13 @@ export interface CartDiscountPlaceholdersRemoveRequest {
 export type CartDiscountPlaceholdersRemoveResponse = { readonly kind: 'ok' } | CartRefusal;
 
 // ── cart.void ─────────────────────────────────────────────────────────────────
+//
+// Pre-handoff void only (a frozen cart is refused; post-handoff is
+// `cancelPostHandoff`). No attribution crosses this bridge (RT-184): main
+// records the session operator as the acting operator and no approver.
 
 export interface CartVoidRequest {
   readonly cart_id: string;
-  readonly attribution_operator_id?: string;
   readonly idempotency_key: string;
 }
 
