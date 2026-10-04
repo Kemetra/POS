@@ -48,11 +48,12 @@ export type PayoutPhase =
 
 /**
  * Refusals that hold only for now: a drawer kick in flight (possibly in
- * another instance), or a session that locked, ended or changed. Waiting and
+ * another instance), another return's payout on this terminal, or a session that locked, ended or changed. Waiting and
  * refreshing re-derives the next step; every other refusal is final here.
  */
 const TRANSIENT_REFUSALS = [
   'drawer_kick_in_progress',
+  'another_payout_in_progress',
   'session_changed',
   'no_session',
   'offline',

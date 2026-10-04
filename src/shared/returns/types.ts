@@ -96,6 +96,9 @@ export const LOCAL_RETURN_REFUSALS = [
   // of the app): it cannot be completed until that kick is recorded or its
   // lease runs out (Codex P1).
   'drawer_kick_in_progress',
+  // Another return's payout is running on this terminal (one cash drawer, one
+  // payout at a time): nothing was done; try again once it has finished.
+  'another_payout_in_progress',
   // The slip's line amounts do not add up to the confirmed refund: no slip is
   // printed (fail closed); the payout itself is unaffected.
   'slip_total_mismatch',

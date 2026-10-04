@@ -138,3 +138,38 @@ describe('inactivity lock (S4)', () => {
     expect(screen.getByTestId(`qty-${L1}`)).toHaveTextContent('1');
   });
 });
+
+/**
+ * Reviewer nit (f1a8907): the last good journal rows that feed an open payout
+ * belong to the operator who listed them. Operator B's refused reload never
+ * falls back to operator A's rows.
+ */
+describe('the last good journal rows belong to one operator (S1)', () => {
+  it("operator A's listed rows are not shown to operator B after a refused reload", async () => {
+    const bridge = fakeBridge();
+    const paid = journal({
+      state: 'paid_out',
+      payout: {
+        startedAt: '2026-10-04T09:06:00.000Z',
+        paidAt: '2026-10-04T09:06:05.000Z',
+        method: 'drawer',
+        kick: 'opened',
+        kickCount: 1,
+        kickPending: false,
+      },
+    });
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: [paid] });
+    const user = userEvent.setup();
+    renderReturns({ bridge });
+    await screen.findByText(SALE_NUMBER);
+    bridge.list.mockResolvedValue({ kind: 'refused', reason: 'session_changed' });
+    switchOperator();
+    await waitFor(() => {
+      expect(bridge.list).toHaveBeenCalledTimes(2);
+    });
+    // B's own confirmed outcome of the same return: B's view, not A's listing.
+    await submitReturn(user);
+    await screen.findByRole('heading', { name: 'صرف النقد' });
+    expect(screen.getByRole('button', { name: 'افتح الدرج واصرف النقد' })).toBeInTheDocument();
+  });
+});

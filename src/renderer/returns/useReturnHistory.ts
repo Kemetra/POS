@@ -32,6 +32,8 @@ export interface ReturnHistory {
    * The rows of the last successful listing, kept across a failed or refused
    * reload, for the payout already open (it shows that return anyway): a
    * missing list never puts an older view of it back (reviewer P2, 49e0277).
+   * They belong to one operator: the screen is keyed by the operator session
+   * id, so another operator starts with none (S1).
    */
   readonly known: readonly ReturnJournalView[];
   /** Re-read the journal; the rows, or null when main did not list them. */

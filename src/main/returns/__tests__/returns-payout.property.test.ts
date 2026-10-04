@@ -14,9 +14,12 @@
  *     kicked again only right after its own `failed_before_send`;
  *   • a double click by one actor gets the same answer twice (single-flight);
  *   • a payout is committed, and the drawer and printer are called, only under
- *     the live, unlocked, admitted operator, including work that waited in the
- *     per-return queue while its operator locked, signed out or was replaced;
- *   • a crashed process writes nothing after the crash.
+ *     the live, unlocked, admitted operator, including a reprint that waited
+ *     in its per-return queue while its operator locked, signed out or was
+ *     replaced (a payout is never queued: one at a time per terminal);
+ *   • a crashed process writes nothing after the crash;
+ *   • Codex P2 (f1a8907): at most one drawer kick in flight per terminal at
+ *     any time, including payouts of different returns requested together.
  *
  * A failing seed replays exactly (`runPayoutInterleaving(seed, STEPS)`).
  */
@@ -159,6 +162,11 @@ function expectPaidOutUnderLiveActor(r: PayoutRun): void {
   }
 }
 
+/** One drawer per terminal: never two kicks in flight at once. */
+function expectOneKickInFlight(r: PayoutRun): void {
+  expect(r.maxKicksInFlight, `seed ${String(r.seed)}`).toBeLessThanOrEqual(1);
+}
+
 function expectQuietAfterCrash(r: PayoutRun): void {
   for (const [i, crash] of r.crashes.entries()) {
     expect(crash.settled, `seed ${String(r.seed)} crash ${String(i)}`).toEqual(crash.at);
@@ -179,6 +187,7 @@ describe('X7: payout exactly-once under seeded random interleavings', () => {
     expectPaidOutUnderLiveActor(r);
     expectEffectsUnderLiveActor(r);
     expectQuietAfterCrash(r);
+    expectOneKickInFlight(r);
   });
 
   it('a seed replays exactly: the same audits', async () => {

@@ -243,16 +243,19 @@ describe('synced: only a strictly newer view is adopted, never a downgrade', () 
 });
 
 describe('transient refusals wait for a refresh (Codex P2 on 49e0277)', () => {
-  it.each(['drawer_kick_in_progress', 'session_changed', 'no_session', 'offline'] as const)(
-    '%s is a wait with a refresh, keeping the row',
-    (reason) => {
-      expect(afterPayout(state(INTERRUPTED), { kind: 'refused', reason, ret: null })).toEqual({
-        ret: INTERRUPTED,
-        phase: { kind: 'wait', reason },
-        reprint: null,
-      });
-    },
-  );
+  it.each([
+    'drawer_kick_in_progress',
+    'another_payout_in_progress',
+    'session_changed',
+    'no_session',
+    'offline',
+  ] as const)('%s is a wait with a refresh, keeping the row', (reason) => {
+    expect(afterPayout(state(INTERRUPTED), { kind: 'refused', reason, ret: null })).toEqual({
+      ret: INTERRUPTED,
+      phase: { kind: 'wait', reason },
+      reprint: null,
+    });
+  });
 
   it.each(['not_payable', 'role_denied', 'feature_disabled', 'shutting_down'] as const)(
     '%s stays a final refusal',

@@ -50,29 +50,35 @@ function paidLines(phase: Extract<PayoutPhase, { kind: 'paid' }>): string[] {
   return [PAYOUT_COPY.paid, how, slip];
 }
 
-/** What is true now, one sentence per line. */
+/**
+ * P2-1: only a kick that provably never left "did not open"; anything else
+ * (timeout, fault) is unknown: count the drawer, attest manually.
+ */
+function drawerFailedLines(phase: Extract<PayoutPhase, { kind: 'drawer_failed' }>): string[] {
+  const headline = phase.retryable ? PAYOUT_COPY.drawerFailed : PAYOUT_COPY.drawerUnknown;
+  return [headline, drawerFailureMessage(phase.reason)];
+}
+
+type LinesOf = {
+  readonly [K in PayoutPhase['kind']]: (phase: Extract<PayoutPhase, { kind: K }>) => string[];
+};
+
+/** Per phase, what is true now, one sentence per line. */
+const STATUS_LINES: LinesOf = {
+  ready: () => [PAYOUT_COPY.ready],
+  interrupted: () => [PAYOUT_COPY.interrupted, PAYOUT_COPY.interruptedCheck],
+  drawer_failed: drawerFailedLines,
+  confirm_manual: () => [PAYOUT_COPY.confirmManual],
+  paid: paidLines,
+  refused: (phase) => [refusalMessage(phase.reason)],
+  wait: (phase) => [refusalMessage(phase.reason)],
+  unknown: () => [PAYOUT_COPY.unknown],
+};
+
 function statusLines(phase: PayoutPhase): string[] {
-  switch (phase.kind) {
-    case 'ready':
-      return [PAYOUT_COPY.ready];
-    case 'interrupted':
-      return [PAYOUT_COPY.interrupted, PAYOUT_COPY.interruptedCheck];
-    case 'drawer_failed': {
-      // P2-1: only a kick that provably never left "did not open"; anything
-      // else (timeout, fault) is unknown: count the drawer, attest manually.
-      const headline = phase.retryable ? PAYOUT_COPY.drawerFailed : PAYOUT_COPY.drawerUnknown;
-      return [headline, drawerFailureMessage(phase.reason)];
-    }
-    case 'confirm_manual':
-      return [PAYOUT_COPY.confirmManual];
-    case 'paid':
-      return paidLines(phase);
-    case 'refused':
-    case 'wait':
-      return [refusalMessage(phase.reason)];
-    case 'unknown':
-      return [PAYOUT_COPY.unknown];
-  }
+  // The map is keyed by kind, so each builder gets its own phase.
+  const build = STATUS_LINES[phase.kind] as (p: PayoutPhase) => string[];
+  return build(phase);
 }
 
 interface ActionProps {

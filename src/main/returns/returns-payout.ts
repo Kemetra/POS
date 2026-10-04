@@ -29,10 +29,14 @@
  * operator (the snapshot) is recorded and audited. After the slip prints, an
  * answer is given only to the still-admitted session.
  *
- * ## Exactly once
+ * ## Exactly once, one at a time
  *
- * The payout row's start and completion are guarded writes; concurrent calls
- * for one return (double click, two windows) share one in-flight operation.
+ * The payout row's start and completion are guarded writes. The terminal has
+ * ONE cash drawer, so it runs ONE payout at a time (Codex P2, f1a8907): the
+ * same admitted actor's repeat for the same return (double click, second
+ * window) shares the running operation; any other payout request meanwhile
+ * (another return, another actor) is refused `another_payout_in_progress`,
+ * never queued. Other app instances are held off by the durable kick lease.
  * The amount is the journal's server-confirmed total; the request has none.
  *
  * ## Shutdown
@@ -246,8 +250,14 @@ function serialized<T>(
   return promise;
 }
 
+/** The one payout running on this terminal: its return and admitted actor. */
+interface ActivePayout extends InFlight<ReturnsPayoutResponse> {
+  readonly returnId: string;
+}
+
 class ReturnsPayoutService implements ReturnsPayoutAPI {
-  private readonly payouts = new Map<string, InFlight<ReturnsPayoutResponse>>();
+  /** One drawer per terminal: one payout at a time (start, retry, commit). */
+  private active: ActivePayout | null = null;
   private readonly reprints = new Map<string, InFlight<ReturnsReprintResponse>>();
 
   constructor(private readonly deps: ReturnsPayoutDeps) {}
@@ -256,9 +266,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
     const admitted = this.admit('payout');
     if (admitted.kind !== 'ok') return { ...admitted, ret: null };
-    const outcome = await serialized(this.payouts, req.returnId, admitted.actor, () =>
-      this.runPayout(admitted.actor, req),
-    );
+    const outcome = await this.exclusive(admitted.actor, req);
     const lost = this.lostAfterAwait(admitted.actor, outcome);
     return lost === null ? outcome : { ...lost, ret: null };
   }
@@ -271,6 +279,32 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
       this.runReprint(admitted.actor, req.returnId),
     );
     return this.lostAfterAwait(admitted.actor, outcome) ?? outcome;
+  }
+
+  /**
+   * The terminal's one payout slot. The same actor repeating the running
+   * request's return joins it; anything else while it runs is refused (not
+   * queued: a hidden cash operation must never start later on its own).
+   */
+  private exclusive(actor: AuthSnapshot, req: ReturnsPayoutRequest) {
+    const key = actorKey(actor);
+    const running = this.active;
+    if (running !== null) {
+      const joins = running.returnId === req.returnId && running.actor === key;
+      return joins ? running.promise : Promise.resolve(this.busy(actor, req.returnId));
+    }
+    const promise = Promise.resolve()
+      .then(() => this.runPayout(actor, req))
+      .finally(() => {
+        if (this.active?.promise === promise) this.active = null;
+      });
+    this.active = { returnId: req.returnId, actor: key, promise };
+    return promise;
+  }
+
+  /** Another payout runs on this terminal: refused, with this terminal's own row. */
+  private busy(actor: AuthSnapshot, returnId: string) {
+    return this.refusePayout(actor, 'another_payout_in_progress', this.ownReturn(actor, returnId));
   }
 
   /** Gate + snapshot (flag, session, manager/admin, unlocked); refusals audited. */

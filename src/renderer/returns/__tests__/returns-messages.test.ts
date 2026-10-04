@@ -22,8 +22,8 @@ import {
 const ALL_REASONS = [...SERVER_RETURN_REFUSALS, ...LOCAL_RETURN_REFUSALS];
 
 describe('returns refusal copy (O1)', () => {
-  it('covers all 34 reasons (24 from S2/S3, 10 from S4 payout) with a non-empty Arabic message', () => {
-    expect(ALL_REASONS).toHaveLength(34);
+  it('covers all 35 reasons (24 from S2/S3, 11 from S4 payout) with a non-empty Arabic message', () => {
+    expect(ALL_REASONS).toHaveLength(35);
     for (const reason of ALL_REASONS) {
       const message = refusalMessage(reason);
       expect(message.trim().length, reason).toBeGreaterThan(0);

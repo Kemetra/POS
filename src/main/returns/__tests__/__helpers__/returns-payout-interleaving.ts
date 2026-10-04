@@ -5,8 +5,8 @@
  * authorizer, audits) with a fake drawer and printer whose latency and
  * answers (opened / failed / throw; printed / failed / throw) come from a
  * seeded PRNG. Steps interleave start, retry_drawer, manual, double clicks,
- * reprints, crash-and-restart, locks, sign-out, operator switches and
- * event-loop turns.
+ * reprints, crash-and-restart, locks, sign-out, operator switches,
+ * concurrent payouts of different returns and event-loop turns.
  *
  * A crash is a dead process: the old domain is latched stopped and its
  * in-flight drawer and printer answers never arrive (nothing it awaited ever
@@ -40,6 +40,7 @@ const SALES = [
 type Action =
   | ReturnPayoutAction
   | 'queued_change'
+  | 'concurrent'
   | 'double'
   | 'reprint'
   | 'crash'
@@ -54,6 +55,7 @@ const ACTIONS: readonly (readonly [Action, number])[] = [
   ['manual', 10],
   ['double', 8],
   ['queued_change', 6],
+  ['concurrent', 6],
   ['reprint', 6],
   ['crash', 5],
   ['lock', 4],
@@ -109,6 +111,8 @@ export interface PayoutRun {
   readonly liveAtEffect: readonly LiveAtEffect[];
   /** Per crash: the state at the crash and after the crashed domain settled. */
   readonly crashes: readonly { readonly at: PayoutSnapshot; readonly settled: PayoutSnapshot }[];
+  /** The most drawer kicks the live process ever had in flight at once. */
+  readonly maxKicksInFlight: number;
 }
 
 export async function runPayoutInterleaving(seed: number, steps: number): Promise<PayoutRun> {
@@ -132,6 +136,9 @@ class PayoutWorld {
   /** The live process; answers issued to an older one never arrive. */
   private generation = 0;
   private readonly crashes: { at: PayoutSnapshot; settled: PayoutSnapshot }[] = [];
+  /** Kicks of the live process sent and not yet answered (a dead process's never are). */
+  private kicksInFlight = 0;
+  private maxKicksInFlight = 0;
 
   constructor(private readonly seed: number) {
     this.rng = new SeededRng(seed);
@@ -159,6 +166,8 @@ class PayoutWorld {
     this.h.drawer.onKick = () => {
       this.recordLive('kick');
       this.kicks.push(this.attributeKick());
+      this.kicksInFlight += 1;
+      this.maxKicksInFlight = Math.max(this.maxKicksInFlight, this.kicksInFlight);
     };
     this.h.state.onAudit = (event) => {
       if (event.action_category !== 'sale.return.paid_out') return;
@@ -185,6 +194,7 @@ class PayoutWorld {
       paidOutAtCommit: this.paidOutAtCommit,
       liveAtEffect: this.liveAtEffect,
       crashes: this.crashes,
+      maxKicksInFlight: this.maxKicksInFlight,
     };
   }
 
@@ -211,6 +221,9 @@ class PayoutWorld {
         );
       },
       queued_change: () => this.queuedChange(),
+      concurrent: () => {
+        this.concurrentPayouts();
+      },
       reprint: () => {
         this.track(this.domain.service.reprintSlip({ returnId: this.pickReturn() }));
       },
@@ -247,6 +260,17 @@ class PayoutWorld {
     else this.h.state.role = 'cashier';
   }
 
+  /**
+   * Codex P2 (f1a8907): payouts of two DIFFERENT returns requested together
+   * (another history row, another window). The terminal has one drawer.
+   */
+  private concurrentPayouts(): void {
+    const [a, b] = this.rng.chance(0.5) ? this.confirmed : [...this.confirmed].reverse();
+    const actions: readonly ReturnPayoutAction[] = ['start', 'retry_drawer', 'manual'];
+    this.track(this.domain.service.payout({ returnId: a ?? '', action: this.rng.pick(actions) }));
+    this.track(this.domain.service.payout({ returnId: b ?? '', action: this.rng.pick(actions) }));
+  }
+
   private recordLive(effect: LiveAtEffect['effect']): void {
     const { role, locked } = this.h.state;
     this.liveAtEffect.push({ effect, liveRole: role, locked });
@@ -274,6 +298,7 @@ class PayoutWorld {
     const at = this.snapshot();
     this.generation += 1;
     this.inFlight = [];
+    this.kicksInFlight = 0;
     this.domain = this.h.restart();
     await this.turns();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -314,6 +339,7 @@ class PayoutWorld {
 
   private drawerAnswer() {
     return this.afterLatency(() => {
+      this.kicksInFlight -= 1;
       const roll = this.rng.next();
       if (roll < 0.5) return { ok: true } as const;
       if (roll < 0.8) return { ok: false, failure_reason: 'no_drawer_configured' } as const;

@@ -19,6 +19,7 @@ import {
   deferredFake,
   initReturnsSql,
   returnsHarness,
+  saleBody,
   seedSyncedSale,
   type ReturnsHarness,
 } from './__helpers__/returns-fixture.js';
@@ -217,12 +218,17 @@ describe('in-flight sharing is per admitted actor (Codex P2, #530)', () => {
     h.state.terminalId = 'term-2';
     const second = h.service.payout({ returnId, action: 'retry_drawer' });
     kick.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
-    expect(await second).toEqual({ kind: 'refused', reason: 'return_not_found', ret: null });
+    // One payout at a time (Codex P2, f1a8907); the return is not disclosed.
+    expect(await second).toEqual({
+      kind: 'refused',
+      reason: 'another_payout_in_progress',
+      ret: null,
+    });
     await first;
     expect(h.drawer.kicks).toBe(1);
   });
 
-  it('another operator waits for the running payout, then runs their own, with no concurrent kick', async () => {
+  it('another operator is refused while the payout runs, then completes it, with no concurrent kick', async () => {
     const returnId = await confirmedReturn(h.service);
     const kick = deferredFake<DrawerKickResult>();
     h.drawer.answer = () => kick.promise;
@@ -231,12 +237,19 @@ describe('in-flight sharing is per admitted actor (Codex P2, #530)', () => {
       expect(h.drawer.kicks).toBe(1);
     });
     h.state.role = 'admin';
-    const second = h.service.payout({ returnId, action: 'manual' });
+    // Codex P2 (f1a8907): refused, not queued (no hidden cash operation later).
+    expect(await h.service.payout({ returnId, action: 'manual' })).toMatchObject({
+      kind: 'refused',
+      reason: 'another_payout_in_progress',
+    });
     kick.resolve({ ok: true });
     // The manager's payout lost its session after the kick: nothing recorded.
     expect(await first).toMatchObject({ kind: 'refused', reason: 'session_changed', ret: null });
     // The admin's own manual payout then completes it, once.
-    expect(await second).toMatchObject({ kind: 'paid_out', method: 'manual' });
+    expect(await h.service.payout({ returnId, action: 'manual' })).toMatchObject({
+      kind: 'paid_out',
+      method: 'manual',
+    });
     expect(h.drawer.kicks).toBe(1);
     expect(paidOutCount()).toBe(1);
   });
@@ -258,29 +271,29 @@ describe('in-flight sharing is per admitted actor (Codex P2, #530)', () => {
     expect(h.printer.printed).toHaveLength(2);
   });
 
-  it('Z1: an operation queued behind another starts after stop and touches nothing', async () => {
+  it('Z1: a reprint queued behind another starts after stop and touches nothing', async () => {
     const returnId = await confirmedReturn(h.service);
-    const kick = deferredFake<DrawerKickResult>();
-    h.drawer.answer = () => kick.promise;
-    const first = h.service.payout({ returnId, action: 'start' });
+    await h.service.payout({ returnId, action: 'start' });
+    const print = deferredFake<{ ok: true; render_path: 'os_print' }>();
+    h.printer.answer = () => print.promise;
+    const first = h.service.reprintSlip({ returnId });
     await vi.waitFor(() => {
-      expect(h.drawer.kicks).toBe(1);
+      expect(h.printer.printed).toHaveLength(2);
     });
     h.state.role = 'admin';
-    const second = h.service.payout({ returnId, action: 'manual' });
+    const second = h.service.reprintSlip({ returnId });
     h.stop();
     const before = h.audits.length;
-    kick.resolve({ ok: true });
+    print.resolve({ ok: true, render_path: 'os_print' });
     await first;
-    expect(await second).toEqual({ kind: 'refused', reason: 'shutting_down', ret: null });
-    // The running kick's opening is remembered (P1); the queued one wrote nothing.
-    expect(categories(h.audits.slice(before))).toEqual(['sale.return.drawer_opened']);
-    expect(h.repo.read(returnId)?.state).toBe('confirmed');
+    expect(await second).toEqual({ kind: 'refused', reason: 'shutting_down' });
+    expect(h.audits.slice(before)).toEqual([]);
+    expect(h.printer.printed).toHaveLength(2);
   });
 });
 
 describe('Codex P1 (a1703dc): queued work is reauthorized before any side effect', () => {
-  /** A's payout waits on the drawer; B (another operator) queues `request` behind it. */
+  /** A's payout waits on the drawer; B (another operator) asks `request` meanwhile. */
   async function queuedBehindA(request: (returnId: string) => Promise<unknown>) {
     const returnId = await confirmedReturn(h.service);
     const kick = deferredFake<DrawerKickResult>();
@@ -301,32 +314,25 @@ describe('Codex P1 (a1703dc): queued work is reauthorized before any side effect
     };
   }
 
-  it.each<[string, (x: ReturnsHarness) => void]>([
-    ['locks', (x) => (x.state.locked = true)],
-    ['signs out', (x) => (x.state.role = null)],
-    ['changes terminal scope', (x) => (x.state.terminalId = 'term-2')],
-  ])('B queued for a manual payout then %s: nothing is recorded or printed', async (_l, change) => {
-    const q = await queuedBehindA((returnId) => h.service.payout({ returnId, action: 'manual' }));
-    change(h);
-    q.release();
-    await q.first;
-    expect(await q.second).toMatchObject({ kind: 'refused', ret: null });
-    expect(h.repo.read(q.returnId)?.state).toBe('confirmed');
-    expect(paidOutCount()).toBe(0);
-    expect(h.printer.printed).toHaveLength(0);
-    expect(h.drawer.kicks).toBe(1);
-  });
-
-  it('B queued for a retry then locks: no second kick', async () => {
-    const q = await queuedBehindA((returnId) =>
-      h.service.payout({ returnId, action: 'retry_drawer' }),
-    );
-    h.state.locked = true;
-    q.release();
-    await q.first;
-    expect(await q.second).toMatchObject({ kind: 'refused', ret: null });
-    expect(h.drawer.kicks).toBe(1);
-  });
+  // Codex P2 (f1a8907): a payout is never queued, so none can run later
+  // under a session that changed meanwhile.
+  it.each(['manual', 'retry_drawer'] as const)(
+    'B asking for %s while A runs is refused at once and never runs later',
+    async (action) => {
+      const q = await queuedBehindA((returnId) => h.service.payout({ returnId, action }));
+      expect(await q.second).toMatchObject({
+        kind: 'refused',
+        reason: 'another_payout_in_progress',
+      });
+      q.release();
+      await q.first;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(h.repo.read(q.returnId)?.state).toBe('confirmed');
+      expect(paidOutCount()).toBe(0);
+      expect(h.printer.printed).toHaveLength(0);
+      expect(h.drawer.kicks).toBe(1);
+    },
+  );
 
   it('B queued for a reprint then signs out: no copy is printed', async () => {
     const returnId = await confirmedReturn(h.service);
@@ -344,5 +350,93 @@ describe('Codex P1 (a1703dc): queued work is reauthorized before any side effect
     await first;
     expect(await second).toMatchObject({ kind: 'refused' });
     expect(h.printer.printed).toHaveLength(2);
+  });
+});
+
+/**
+ * Codex P2 (f1a8907): the drawer is one per terminal, so is the payout. A
+ * payout of ANOTHER return while one is running is refused (a wait with a
+ * refresh in the UI), never queued and never kicked concurrently.
+ */
+describe('one payout at a time per terminal', () => {
+  /** Two confirmed returns of two sales of this terminal. */
+  async function twoReturns(): Promise<[string, string]> {
+    const other = { saleId: 'sale-2', saleRef: '0190f5a2-7b3c-7d4e-8f90-0000000000b2' };
+    seedSyncedSale(h.db, { ...other, sale: saleBody({ saleRef: other.saleRef }) });
+    h.backend.saleFor = (saleRef) => saleBody({ saleRef });
+    const first = await confirmedReturn(h.service);
+    return [first, await confirmedReturn(h.service, 'SN-sale-2')];
+  }
+
+  it('a second return started while the first kicks is refused: one kick, one commit', async () => {
+    const [a, b] = await twoReturns();
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId: a, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(1);
+    });
+    expect(await h.service.payout({ returnId: b, action: 'start' })).toMatchObject({
+      kind: 'refused',
+      reason: 'another_payout_in_progress',
+      ret: { returnId: b, state: 'confirmed', payout: null },
+    });
+    kick.resolve({ ok: true });
+    expect(await first).toMatchObject({ kind: 'paid_out', ret: { returnId: a } });
+    expect(h.drawer.kicks).toBe(1);
+    expect(paidOutCount()).toBe(1);
+    expect(h.audits.at(-1)?.action_category).not.toBe('sale.return.payout_started');
+  });
+
+  it('after the first payout settles, the second proceeds', async () => {
+    const [a, b] = await twoReturns();
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId: a, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(1);
+    });
+    await h.service.payout({ returnId: b, action: 'start' });
+    kick.resolve({ ok: true });
+    await first;
+    h.drawer.answer = () => Promise.resolve({ ok: true });
+    expect(await h.service.payout({ returnId: b, action: 'start' })).toMatchObject({
+      kind: 'paid_out',
+    });
+    expect(h.drawer.kicks).toBe(2);
+    expect(paidOutCount()).toBe(2);
+  });
+
+  it('a manual completion of another return is refused too (the commit is drawer work)', async () => {
+    const [a, b] = await twoReturns();
+    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'os_error' });
+    await h.service.payout({ returnId: b, action: 'start' });
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId: a, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(2);
+    });
+    expect(await h.service.payout({ returnId: b, action: 'manual' })).toMatchObject({
+      kind: 'refused',
+      reason: 'another_payout_in_progress',
+    });
+    kick.resolve({ ok: true });
+    await first;
+    expect(h.repo.read(b)?.state).toBe('confirmed');
+  });
+
+  it('a reprint does not wait for the drawer', async () => {
+    const [a, b] = await twoReturns();
+    await h.service.payout({ returnId: b, action: 'start' });
+    const kick = deferredFake<DrawerKickResult>();
+    h.drawer.answer = () => kick.promise;
+    const first = h.service.payout({ returnId: a, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.drawer.kicks).toBe(2);
+    });
+    expect(await h.service.reprintSlip({ returnId: b })).toEqual({ kind: 'printed' });
+    kick.resolve({ ok: true });
+    await first;
   });
 });
