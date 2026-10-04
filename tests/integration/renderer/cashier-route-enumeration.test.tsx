@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
@@ -125,38 +125,40 @@ function signInAs(session: OperatorSessionView): void {
 }
 
 /**
- * Latches whether the `/sign-in` route was ever mounted since the last render.
+ * Records every location the router visits since the last render.
  *
  * A guard miss renders `<Navigate to="/sign-in">`, but these tests pre-sign a
  * session into the store, and `SignInRoute` forwards a signed-in operator on to
- * `/app` from an effect (→ the cashier landing, `/app/cart`). So
- * `route-sign-in` exists for one transient commit only. Polling the live DOM
- * for it races that effect: on a slow runner the poll lands after the forward
- * and times out (seen on Windows CI with coverage). A MutationObserver records
- * the insertion itself, deterministically, even if the node is gone by the
- * time the assertion runs.
+ * `/app` from an effect (→ the cashier landing, `/app/cart`). The router goes
+ * `/sign-in` → `/app` → `/app/cart` and settles there, so `route-sign-in`
+ * exists for one commit only. Polling the live DOM for it races that effect.
+ *
+ * RT-199: the previous fix latched the insertion with a MutationObserver, which
+ * is not reliable under happy-dom: `MutationObserverListener` holds its
+ * callback only through a `WeakRef`, so a full GC between `observe()` and the
+ * redirect silently stops record delivery and the latch never flips (Windows
+ * CI with coverage; reproduced locally by forcing GC during the run).
+ *
+ * Instead, read the router's own location history. `AppRouter`'s
+ * `PathMirrorBridge` mirrors every memory-router location into
+ * `window.history.replaceState`, and the spy keeps each call strongly
+ * referenced, so whether `/sign-in` was visited stays checkable after the
+ * forward has moved on.
  */
-const SIGN_IN_SELECTOR = '[data-testid="route-sign-in"]';
-let signInObserver: MutationObserver | null = null;
-let signInMounted = false;
-
-function containsSignIn(node: Node): boolean {
-  if (!(node instanceof Element)) return false;
-  return node.matches(SIGN_IN_SELECTOR) || node.querySelector(SIGN_IN_SELECTOR) !== null;
-}
+let replaceStateSpy: MockInstance<History['replaceState']> | null = null;
 
 function watchSignInRoute(): void {
-  signInObserver?.disconnect();
-  signInMounted = false;
-  signInObserver = new MutationObserver((records) => {
-    if (records.some((r) => Array.from(r.addedNodes).some(containsSignIn))) signInMounted = true;
-  });
-  signInObserver.observe(document.body, { childList: true, subtree: true });
+  replaceStateSpy?.mockRestore();
+  // The mirror skips a location equal to the current URL, so start each render
+  // from a neutral URL: a `/sign-in` left by an earlier test must not hide this
+  // render's visit.
+  window.history.replaceState(null, '', '/');
+  replaceStateSpy = vi.spyOn(window.history, 'replaceState');
 }
 
-/** The guard redirected to `/sign-in` (the route mounted, possibly transiently). */
+/** The guard redirected the router to `/sign-in` (possibly transiently). */
 function signInRouteReached(): boolean {
-  return signInMounted || document.querySelector(SIGN_IN_SELECTOR) !== null;
+  return (replaceStateSpy?.mock.calls ?? []).some(([, , url]) => url === '/sign-in');
 }
 
 /**
@@ -201,8 +203,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  signInObserver?.disconnect();
-  signInObserver = null;
+  replaceStateSpy?.mockRestore();
+  replaceStateSpy = null;
   useOperatorSessionStore.getState().reset();
   cleanup();
 });
