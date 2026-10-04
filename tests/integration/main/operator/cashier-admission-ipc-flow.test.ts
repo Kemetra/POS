@@ -93,6 +93,47 @@ interface Req {
 
 type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
+const ADMISSIONS = '/api/pos/v1/cashier-admissions';
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function errorJson(status: number, code: string): Response {
+  return json(status, { error: { code, message: 'x', request_id: 'r' } });
+}
+
+function urlOf(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  return input instanceof URL ? input.href : input.url;
+}
+
+/** Header names lower-cased by hand: happy-dom's `Headers` keeps the original case. */
+function lowerHeaders(headers: HeadersInit | undefined): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries((headers ?? {}) as Record<string, string>).map(([k, v]) => [k.toLowerCase(), v]),
+  );
+}
+
+function recordRequest(input: RequestInfo | URL, init: RequestInit | undefined): Req {
+  return {
+    method: init?.method ?? 'GET',
+    url: urlOf(input),
+    headers: lowerHeaders(init?.headers),
+    body: typeof init?.body === 'string' ? init.body : undefined,
+  };
+}
+
+/** Like Backend-Core main: anything but the device-bearer cashier-admissions routes is 401. */
+function deviceAuthorized(req: Req, path: string): boolean {
+  return req.headers['authorization'] === `Bearer ${DEVICE_TOKEN}` && path.startsWith(ADMISSIONS);
+}
+
+type Route = { method: string; matches: (path: string) => boolean; respond: () => Response };
+
 function stubBackendCore(): {
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   requests: Req[];
@@ -100,58 +141,41 @@ function stubBackendCore(): {
 } {
   const requests: Req[] = [];
   const admitQueue: unknown[] = [];
-  const json = (status: number, body: unknown): Response =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const req: Req = {
-      method: init?.method ?? 'GET',
-      url,
-      // Lower-cased by hand: happy-dom's `Headers` keeps the original case.
-      headers: Object.fromEntries(
-        Object.entries((init?.headers ?? {}) as Record<string, string>).map(([k, v]) => [
-          k.toLowerCase(),
-          v,
-        ]),
-      ),
-      body: typeof init?.body === 'string' ? init.body : undefined,
-    };
-    requests.push(req);
-    const authed = req.headers['authorization'] === `Bearer ${DEVICE_TOKEN}`;
-    const path = url.slice(BASE.length);
-    if (!authed || !path.startsWith('/api/pos/v1/cashier-admissions')) {
-      // Backend-Core main: Clerk-gated operator routes 401 without a Clerk JWT.
-      return Promise.resolve(
-        json(401, { error: { code: 'unauthorized', message: 'no', request_id: 'r' } }),
-      );
-    }
-    if (req.method === 'GET' && path === '/api/pos/v1/cashier-admissions/roster') {
-      return Promise.resolve(
+  const admitted = {
+    kind: 'admitted',
+    admission_id: ADMISSION_ID,
+    offline_grace_seconds: 86_400,
+    admission_ttl_seconds: TTL_S,
+    server_time: '2026-10-04T10:00:00.000Z',
+    display_name: 'Mona',
+  };
+  const routes: Route[] = [
+    {
+      method: 'GET',
+      matches: (p) => p === `${ADMISSIONS}/roster`,
+      respond: () =>
         json(200, {
           cashiers: [{ user_id: USER_ID, operator_id: CLERK_ID, display_name: 'Mona' }],
         }),
-      );
-    }
-    if (req.method === 'POST' && path.endsWith('/end')) {
-      return Promise.resolve(json(200, { kind: 'ended' }));
-    }
-    if (req.method === 'POST' && path === '/api/pos/v1/cashier-admissions') {
-      const next = admitQueue.shift() ?? {
-        kind: 'admitted',
-        admission_id: ADMISSION_ID,
-        offline_grace_seconds: 86_400,
-        admission_ttl_seconds: TTL_S,
-        server_time: '2026-10-04T10:00:00.000Z',
-        display_name: 'Mona',
-      };
-      return Promise.resolve(json(200, next));
-    }
-    return Promise.resolve(
-      json(400, { error: { code: 'validation_error', message: 'x', request_id: 'r' } }),
-    );
+    },
+    {
+      method: 'POST',
+      matches: (p) => p.endsWith('/end'),
+      respond: () => json(200, { kind: 'ended' }),
+    },
+    {
+      method: 'POST',
+      matches: (p) => p === ADMISSIONS,
+      respond: () => json(200, admitQueue.shift() ?? admitted),
+    },
+  ];
+  const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const req = recordRequest(input, init);
+    requests.push(req);
+    const path = req.url.slice(BASE.length);
+    if (!deviceAuthorized(req, path)) return Promise.resolve(errorJson(401, 'unauthorized'));
+    const route = routes.find((r) => r.method === req.method && r.matches(path));
+    return Promise.resolve(route?.respond() ?? errorJson(400, 'validation_error'));
   };
   return { fetch: fetchImpl, requests, admitQueue };
 }

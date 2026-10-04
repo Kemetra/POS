@@ -1,6 +1,9 @@
 import type { Logger } from 'pino';
 
-import type { CashierAdmissionResult } from './cashier-admission-client.js';
+import type {
+  CashierAdmissionAdmitted,
+  CashierAdmissionResult,
+} from './cashier-admission-client.js';
 import {
   nextIdempotencyKey,
   reportAdmissionOutcome,
@@ -81,6 +84,31 @@ interface Armed {
   superseded: boolean;
 }
 
+/** True when the record holds a live online cashier admission to keep alive. */
+function isOnlineAdmitted(
+  record: OperatorSessionRecord,
+): record is OperatorSessionRecord &
+  Required<Pick<OperatorSessionRecord, 'user_id' | 'admission_id' | 'admission_ttl_seconds'>> {
+  const fieldsPresent = [record.admission_id, record.user_id, record.admission_ttl_seconds].every(
+    (f) => f !== undefined,
+  );
+  return record.authority === 'online_confirmed' && fieldsPresent;
+}
+
+/** The heartbeat state for a session, or null when it holds no online admission. */
+function armedFor(record: OperatorSessionRecord): Armed | null {
+  if (!isOnlineAdmitted(record)) return null;
+  return {
+    session_id: record.id,
+    user_id: record.user_id,
+    operator_id: record.operator_id,
+    admission_id: record.admission_id,
+    ttl_seconds: record.admission_ttl_seconds,
+    timer: null,
+    superseded: false,
+  };
+}
+
 export class CashierAdmissionKeeper {
   private armed: Armed | null = null;
   private stopped = false;
@@ -108,26 +136,10 @@ export class CashierAdmissionKeeper {
       this.disarm();
       this.endAdmission(previous.admission_id);
     }
-    if (
-      record.authority !== 'online_confirmed' ||
-      record.admission_id === undefined ||
-      record.user_id === undefined ||
-      record.admission_ttl_seconds === undefined
-    ) {
-      return;
-    }
-    this.armed = {
-      session_id: record.id,
-      user_id: record.user_id,
-      operator_id: record.operator_id,
-      admission_id: record.admission_id,
-      ttl_seconds: record.admission_ttl_seconds,
-      timer: null,
-      superseded: false,
-    };
-    this.schedule(heartbeatIntervalMs(record.admission_ttl_seconds), () => {
-      void this.heartbeat();
-    });
+    const armed = armedFor(record);
+    if (armed === null) return;
+    this.armed = armed;
+    this.scheduleHeartbeat(armed);
   }
 
   private onSessionEnded(record: OperatorSessionRecord): void {
@@ -165,63 +177,94 @@ export class CashierAdmissionKeeper {
     );
   }
 
-  private async heartbeat(): Promise<void> {
+  private scheduleHeartbeat(armed: Armed): void {
+    this.schedule(heartbeatIntervalMs(armed.ttl_seconds), () => {
+      void this.heartbeat();
+    });
+  }
+
+  /** The armed session may heartbeat now: running, armed, not superseded. */
+  private beatable(): Armed | null {
     const armed = this.armed;
-    if (this.stopped || armed === null || armed.superseded) return;
-    let result: CashierAdmissionResult;
+    if (this.stopped || armed === null) return null;
+    return armed.superseded ? null : armed;
+  }
+
+  private async heartbeat(): Promise<void> {
+    const armed = this.beatable();
+    if (armed === null) return;
+    const result = await this.requestHeartbeat(armed);
+    // RT-198 latch + session identity: re-checked after the await.
+    if (!this.stillCurrent(armed)) return;
+    this.log(result.kind);
+    this.handleOutcome(armed, result);
+  }
+
+  private async requestHeartbeat(armed: Armed): Promise<CashierAdmissionResult> {
     try {
-      result = await this.deps.admission.client.admit({
+      return await this.deps.admission.client.admit({
         mode: 'online',
         user_id: armed.user_id,
         takeover: false,
         idempotency_key: nextIdempotencyKey(this.deps.admission),
       });
     } catch {
-      result = { kind: 'no_connection' };
+      return { kind: 'no_connection' };
     }
-    // RT-198 latch + session identity: re-checked after the await.
-    if (!this.stillCurrent(armed)) return;
-    this.log(result.kind);
+  }
 
+  private handleOutcome(armed: Armed, result: CashierAdmissionResult): void {
     switch (result.kind) {
       case 'admitted':
-        reportAdmissionOutcome(this.deps.admission, result, armed);
-        if (result.admission_id !== armed.admission_id) {
-          this.deps.logger?.warn(
-            { event: 'operator.cashier_admission.heartbeat.rotated' },
-            'cashier admission re-issued after expiry',
-          );
-          armed.admission_id = result.admission_id;
-        }
-        armed.ttl_seconds = result.admission_ttl_seconds;
-        this.deps.sessionManager.renewAdmission(armed.session_id, {
-          admission_id: result.admission_id,
-          admission_ttl_seconds: result.admission_ttl_seconds,
-          offline_grace_seconds: result.offline_grace_seconds,
-        });
-        this.schedule(heartbeatIntervalMs(armed.ttl_seconds), () => {
-          void this.heartbeat();
-        });
+        this.onAdmitted(armed, result);
         return;
       case 'active_elsewhere':
-        armed.superseded = true;
-        this.endAtSafePoint(armed);
+        this.onActiveElsewhere(armed);
         return;
       case 'refused':
-        reportAdmissionOutcome(this.deps.admission, result, armed);
-        this.disarm();
-        this.safely(this.deps.onAccountDisabled);
+        this.onRefused(armed, result);
         return;
       case 'device_unauthorized':
-        this.disarm();
-        reportAdmissionOutcome(this.deps.admission, result, armed);
+        this.onDeviceRevoked(armed, result);
         return;
       default:
         // Unreachable / 5xx / 400 / 409 / 429: keep the session, retry next tick.
-        this.schedule(heartbeatIntervalMs(armed.ttl_seconds), () => {
-          void this.heartbeat();
-        });
+        this.scheduleHeartbeat(armed);
     }
+  }
+
+  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted): void {
+    reportAdmissionOutcome(this.deps.admission, result, armed);
+    if (result.admission_id !== armed.admission_id) {
+      this.deps.logger?.warn(
+        { event: 'operator.cashier_admission.heartbeat.rotated' },
+        'cashier admission re-issued after expiry',
+      );
+      armed.admission_id = result.admission_id;
+    }
+    armed.ttl_seconds = result.admission_ttl_seconds;
+    this.deps.sessionManager.renewAdmission(armed.session_id, {
+      admission_id: result.admission_id,
+      admission_ttl_seconds: result.admission_ttl_seconds,
+      offline_grace_seconds: result.offline_grace_seconds,
+    });
+    this.scheduleHeartbeat(armed);
+  }
+
+  private onActiveElsewhere(armed: Armed): void {
+    armed.superseded = true;
+    this.endAtSafePoint(armed);
+  }
+
+  private onRefused(armed: Armed, result: CashierAdmissionResult): void {
+    reportAdmissionOutcome(this.deps.admission, result, armed);
+    this.disarm();
+    this.safely(this.deps.onAccountDisabled);
+  }
+
+  private onDeviceRevoked(armed: Armed, result: CashierAdmissionResult): void {
+    this.disarm();
+    reportAdmissionOutcome(this.deps.admission, result, armed);
   }
 
   private endAtSafePoint(armed: Armed): void {

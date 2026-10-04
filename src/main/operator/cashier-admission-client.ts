@@ -154,93 +154,124 @@ export function createCashierAdmissionClient(
         takeover: req.takeover,
         idempotency_key: req.idempotency_key,
       } satisfies CashierAdmissionOnlineRequest);
-      if (sent.kind === 'no_token') return { kind: 'device_unauthorized' };
-      if (sent.kind === 'no_connection') return sent;
-      const { status } = sent.response;
-      if (status === 200) return interpretAdmission(await readJson(sent.response));
-      return mapAdmissionStatus(status);
+      if (sent.kind !== 'response') return notSent(sent);
+      if (sent.response.status === 200) return interpretAdmission(await readJson(sent.response));
+      return { kind: statusOutcome(sent.response.status, ADMISSION_STATUS) };
     },
 
     async end(admissionId) {
       const sent = await send(`${ADMISSIONS_PATH}/${encodeURIComponent(admissionId)}/end`, 'POST');
-      if (sent.kind === 'no_token') return { kind: 'device_unauthorized' };
-      if (sent.kind === 'no_connection') return sent;
-      if (sent.response.status === 401) return { kind: 'device_unauthorized' };
+      if (sent.kind !== 'response') return notSent(sent);
       // Every non-401 answer is informational: `end` is idempotent and the
       // local tear-down is authoritative.
-      return sent.response.ok ? { kind: 'ended' } : { kind: 'failed' };
+      return { kind: endOutcome(sent.response) };
     },
 
     async listRoster() {
       const sent = await send(ROSTER_PATH, 'GET');
-      if (sent.kind === 'no_token') return { kind: 'device_unauthorized' };
-      if (sent.kind === 'no_connection') return sent;
-      const { status } = sent.response;
-      if (status === 401) return { kind: 'device_unauthorized' };
-      if (status >= 500) return { kind: 'unavailable' };
-      if (status !== 200) return { kind: 'rejected' };
-      return interpretRoster(await readJson(sent.response));
+      if (sent.kind !== 'response') return notSent(sent);
+      if (sent.response.status === 200) return interpretRoster(await readJson(sent.response));
+      return { kind: statusOutcome(sent.response.status, ROSTER_STATUS) };
     },
   };
 }
 
-function mapAdmissionStatus(status: number): CashierAdmissionResult {
-  if (status === 401) return { kind: 'device_unauthorized' };
-  if (status === 403) return { kind: 'refused' };
-  if (status === 409) return { kind: 'idempotency_conflict' };
-  if (status === 429) return { kind: 'rate_limited' };
-  if (status >= 500) return { kind: 'unavailable' };
-  return { kind: 'rejected' };
+/** Outcome when no response arrived: no device token, or a transport failure. */
+function notSent(sent: Exclude<Sent, { kind: 'response' }>): {
+  kind: 'device_unauthorized' | 'no_connection';
+} {
+  return { kind: sent.kind === 'no_token' ? 'device_unauthorized' : 'no_connection' };
+}
+
+type NonOkKind = 'device_unauthorized' | 'refused' | 'idempotency_conflict' | 'rate_limited';
+
+/** posCreateCashierAdmission non-200 statuses with a contract meaning. */
+const ADMISSION_STATUS: Readonly<Partial<Record<number, NonOkKind>>> = {
+  401: 'device_unauthorized',
+  403: 'refused',
+  409: 'idempotency_conflict',
+  429: 'rate_limited',
+};
+
+/** posListCashierAdmissionRoster: only 401 has a contract meaning. */
+const ROSTER_STATUS: Readonly<Partial<Record<number, 'device_unauthorized'>>> = {
+  401: 'device_unauthorized',
+};
+
+/** A mapped status, else 5xx → `unavailable`, anything else → `rejected`. */
+function statusOutcome<K extends string>(
+  status: number,
+  table: Readonly<Partial<Record<number, K>>>,
+): K | 'unavailable' | 'rejected' {
+  return table[status] ?? (status >= 500 ? 'unavailable' : 'rejected');
+}
+
+function endOutcome(response: Response): 'device_unauthorized' | 'ended' | 'failed' {
+  if (response.status === 401) return 'device_unauthorized';
+  return response.ok ? 'ended' : 'failed';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
 
-function isIntegerAtLeast(value: unknown, min: number): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= min;
+function isNonEmptyString(value: unknown): value is string {
+  return isString(value) && value.length > 0;
+}
+
+function isIntegerAtLeast(min: number): (value: unknown) => boolean {
+  return (value) => typeof value === 'number' && Number.isInteger(value) && value >= min;
+}
+
+/** Field → contract check for the `admitted` variant. */
+const ADMITTED_FIELDS: Readonly<
+  Record<keyof Omit<CashierAdmissionAdmitted, 'kind'>, (v: unknown) => boolean>
+> = {
+  admission_id: isNonEmptyString,
+  offline_grace_seconds: isIntegerAtLeast(0),
+  admission_ttl_seconds: isIntegerAtLeast(1),
+  server_time: isString,
+  display_name: isString,
+};
+
+function isAdmittedBody(body: Record<string, unknown>): boolean {
+  return (
+    body['kind'] === 'admitted' &&
+    Object.entries(ADMITTED_FIELDS).every(([field, valid]) => valid(body[field]))
+  );
 }
 
 /** Allowlist-parse a 200 body; anything outside the contract is `rejected`. */
 function interpretAdmission(parsed: unknown): CashierAdmissionResult {
   if (!isRecord(parsed)) return { kind: 'rejected' };
   if (parsed['kind'] === 'active_elsewhere') return { kind: 'active_elsewhere' };
-  if (parsed['kind'] !== 'admitted') return { kind: 'rejected' };
-  const { admission_id, offline_grace_seconds, admission_ttl_seconds, server_time, display_name } =
-    parsed;
-  if (
-    !isNonEmptyString(admission_id) ||
-    !isIntegerAtLeast(offline_grace_seconds, 0) ||
-    !isIntegerAtLeast(admission_ttl_seconds, 1) ||
-    typeof server_time !== 'string' ||
-    typeof display_name !== 'string'
-  ) {
-    return { kind: 'rejected' };
-  }
+  if (!isAdmittedBody(parsed)) return { kind: 'rejected' };
   return {
     kind: 'admitted',
-    admission_id,
-    offline_grace_seconds,
-    admission_ttl_seconds,
-    server_time,
-    display_name,
+    admission_id: parsed['admission_id'] as string,
+    offline_grace_seconds: parsed['offline_grace_seconds'] as number,
+    admission_ttl_seconds: parsed['admission_ttl_seconds'] as number,
+    server_time: parsed['server_time'] as string,
+    display_name: parsed['display_name'] as string,
   };
+}
+
+/** One roster entry, allowlisted to the three minimum-disclosure fields; null if malformed. */
+function parseRosterEntry(entry: unknown): CashierRosterEntry | null {
+  if (!isRecord(entry)) return null;
+  const { user_id, operator_id, display_name } = entry;
+  const valid =
+    isNonEmptyString(user_id) && isNonEmptyString(operator_id) && isString(display_name);
+  return valid ? { user_id, operator_id, display_name } : null;
 }
 
 function interpretRoster(parsed: unknown): CashierRosterResult {
   if (!isRecord(parsed) || !Array.isArray(parsed['cashiers'])) return { kind: 'rejected' };
-  const cashiers: CashierRosterEntry[] = [];
-  for (const entry of parsed['cashiers']) {
-    if (!isRecord(entry)) return { kind: 'rejected' };
-    const { user_id, operator_id, display_name } = entry;
-    if (!isNonEmptyString(user_id) || !isNonEmptyString(operator_id)) return { kind: 'rejected' };
-    if (typeof display_name !== 'string') return { kind: 'rejected' };
-    // Allowlist: only the three minimum-disclosure fields cross this layer.
-    cashiers.push({ user_id, operator_id, display_name });
-  }
-  return { kind: 'roster', cashiers };
+  const cashiers = parsed['cashiers'].map(parseRosterEntry);
+  if (cashiers.some((c) => c === null)) return { kind: 'rejected' };
+  return { kind: 'roster', cashiers: cashiers as CashierRosterEntry[] };
 }
