@@ -118,6 +118,7 @@ import {
 } from './app/feature-flags.js';
 import { assessLaunchSwitches } from './app/launch-switch-guard.js';
 import { isShippedApp } from './app/shipped-app.js';
+import { acquireSingleInstance, restoreAndFocus } from './app/single-instance.js';
 import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -151,6 +152,30 @@ import { ForcedCloseHandler } from './operator/forced-close-handler.js';
 import { StuckShiftsHandler } from './operator/stuck-shifts-handler.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
+
+/**
+ * RT-203 — ONE POS process per terminal. Taken FIRST, before anything else in
+ * main is built.
+ *
+ * A second launch does not get the lock: it quits right here and never opens
+ * the database, runs migrations, starts a worker, registers IPC, builds the
+ * printer/drawer ports or creates a window. The whole boot below is chained on
+ * `singleInstanceReady`, which is `null` for that process.
+ *
+ * The process-local single-flight structures depend on this lock: sale sync,
+ * the catalogue read-down, the finalize listener, the payments deferred-reversal
+ * resolver, the returns resolver/dispatcher (and the returns payout), the drawer
+ * double-kick guard and printer access. See `app/single-instance.ts` and
+ * `docs/architecture/current.md` §3.
+ *
+ * On a second launch the running instance restores and focuses its cashier
+ * window: the tracked `mainWindow`, never "any window" (the hidden offscreen
+ * print window is a BrowserWindow too).
+ */
+let mainWindow: BrowserWindow | undefined;
+const singleInstanceReady = acquireSingleInstance(app, () => {
+  restoreAndFocus(mainWindow);
+});
 
 /**
  * 002-terminal-pairing US2: API base URL for the pair endpoint. Reads
@@ -256,7 +281,7 @@ function resolveRendererOrigin(): string {
  * it stays the single source of truth (#370) shared with the IPC sender guard
  * wired in `whenReady`.
  */
-const createWindow = createWindowFactory({
+const buildMainWindow = createWindowFactory({
   isDev,
   BrowserWindow,
   session,
@@ -265,6 +290,11 @@ const createWindow = createWindowFactory({
   rendererFilePath: path.join(__dirname, '../renderer/index.html'),
   devServerUrl: 'http://localhost:5173',
 });
+
+/** Build the cashier window and track it as the RT-203 focus target. */
+const createWindow = (): void => {
+  mainWindow = buildMainWindow();
+};
 
 /**
  * Enumerate the system printers via a live window's webContents
@@ -345,9 +375,8 @@ const workerRegistry = createWorkerRegistry({ logger: console });
  */
 let pairedWorkers: PairedWorkers | undefined;
 
-app
-  .whenReady()
-  .then(async () => {
+singleInstanceReady
+  ?.then(async () => {
     // T062 — initialize loggers FIRST inside whenReady, before any
     // other subsystem. `app.getPath('logs')` is only available after
     // `whenReady` fires, so this is the earliest possible site.
