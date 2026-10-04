@@ -7,6 +7,7 @@ import {
   MIN_RETRY_MS,
   SAFE_POINT_RECHECK_MS,
   heartbeatIntervalMs,
+  nextCallDelayMs,
 } from '../../../../src/main/operator/cashier-admission-keeper.js';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
@@ -150,6 +151,25 @@ describe('heartbeatIntervalMs', () => {
     expect(h.fake.admitCalls).toHaveLength(1);
     await advance(500);
     expect(h.fake.admitCalls).toHaveLength(2);
+  });
+});
+
+describe('nextCallDelayMs (Codex P2 4179771036)', () => {
+  it('while time is left, every delay lands strictly before the deadline and never below MIN_RETRY_MS', () => {
+    for (const cap of [500, 30_000, 60_000, 300_000]) {
+      for (let left = MIN_RETRY_MS + 1; left <= 700_000; left += 997) {
+        const d = nextCallDelayMs(cap, 1_000_000 + left, 1_000_000);
+        expect(d).toBeLessThan(left);
+        expect(d).toBeGreaterThanOrEqual(MIN_RETRY_MS);
+        expect(d).toBeLessThanOrEqual(cap);
+      }
+    }
+  });
+
+  it('lapsed (MIN_RETRY_MS or less left, or past the deadline): the plain cadence', () => {
+    expect(nextCallDelayMs(300_000, 1_000, 1_000 - MIN_RETRY_MS)).toBe(300_000);
+    expect(nextCallDelayMs(300_000, 1_000, 1_000)).toBe(300_000);
+    expect(nextCallDelayMs(60_000, 1_000, 50_000)).toBe(60_000);
   });
 });
 

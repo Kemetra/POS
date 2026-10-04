@@ -38,6 +38,12 @@ export interface CashierAdmissionFields {
   /** TTL from the LATEST `admitted` response; the heartbeat runs at ≤ half of it. */
   admission_ttl_seconds: number;
   offline_grace_seconds: number;
+  /**
+   * Codex P2 4179771036 — when the request that got the latest `admitted` was
+   * SENT, on the monotonic clock (`performance.now()`). The admission lapses
+   * at this + TTL on the server at the latest; the keeper retries before it.
+   */
+  admission_requested_at_ms?: number;
 }
 
 export interface OperatorSessionRecord {
@@ -68,6 +74,8 @@ export interface OperatorSessionRecord {
   admission_id?: string;
   admission_ttl_seconds?: number;
   offline_grace_seconds?: number;
+  /** See {@link CashierAdmissionFields.admission_requested_at_ms}. Main-only. */
+  admission_requested_at_ms?: number;
   /**
    * RT-113 P2 — set when the session lost its authority; it ends at its next
    * safe point. Main-only. The first cause wins.
@@ -148,6 +156,9 @@ export class SessionManager {
       record.admission_id = a.admission_id;
       record.admission_ttl_seconds = a.admission_ttl_seconds;
       record.offline_grace_seconds = a.offline_grace_seconds;
+      if (a.admission_requested_at_ms !== undefined) {
+        record.admission_requested_at_ms = a.admission_requested_at_ms;
+      }
     }
     this.current = record;
     // #380 — fire start subscribers (e.g. the orphan-attempt sweep). A
@@ -172,6 +183,9 @@ export class SessionManager {
     this.current.admission_id = admission.admission_id;
     this.current.admission_ttl_seconds = admission.admission_ttl_seconds;
     this.current.offline_grace_seconds = admission.offline_grace_seconds;
+    if (admission.admission_requested_at_ms !== undefined) {
+      this.current.admission_requested_at_ms = admission.admission_requested_at_ms;
+    }
     return true;
   }
 

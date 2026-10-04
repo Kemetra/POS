@@ -5,6 +5,7 @@ import type {
   CashierAdmissionResult,
 } from './cashier-admission-client.js';
 import {
+  monotonicNowMs,
   nextIdempotencyKey,
   notifyGrantSeam,
   type CashierAdmissionDeps,
@@ -26,8 +27,10 @@ import type {
  * The keeper observes the SessionManager:
  *  - a session that starts with an online admission is armed: the first
  *    heartbeat fires TTL/2 after sign-in, each next one TTL/2 after the latest
- *    answer. It is a `setTimeout` chain scheduled only AFTER the answer, so
- *    requests never overlap. The interval is capped at 2^31-1 ms (review F5);
+ *    answer, and never later than half the time left before the admission's
+ *    DEADLINE (below). It is a `setTimeout` chain scheduled only AFTER the
+ *    answer, so requests never overlap. The interval is capped at 2^31-1 ms
+ *    (review F5);
  *  - any session end disarms it and fires a best-effort, fire-and-forget
  *    `end` for its admission, never blocking sign-out. A replacing session
  *    that holds the SAME admission_id does not end it (review F4);
@@ -48,11 +51,22 @@ import type {
  * reversed or discarded. A 403 or confirmed 401 invalidates the P1 grant at
  * once (D4).
  *
+ * The deadline (Codex P2 4179771036): the server admission lapses at most TTL
+ * after the request that got the latest `admitted` was SENT (monotonic clock;
+ * sign-in and takeover stamp it on the session, the keeper on each renewal).
+ * Every next call, renewal or retry, is scheduled by {@link nextCallDelayMs}:
+ * at most half the time left, never sooner than {@link MIN_RETRY_MS}, so
+ * several attempts land before the deadline and none after it. Once too little
+ * time is left (≤ MIN_RETRY_MS) the admission is treated as LAPSED: the
+ * session stays (P2 keeps today's behaviour; offline authority is P1/P3) and
+ * retries at the plain cadence below until a renewal sets a new deadline.
+ *
  * Other outcomes: `admitted` renews (a re-issued id is adopted and logged);
  * network, 5xx and 429 retry after min(TTL/2, 60 s), backing off
  * exponentially up to TTL/2 (review F6); 400, 409 and `no_token` keep the
- * normal cadence. A late `admitted` for a session that is gone ends that
- * admission unless the live session holds it (review F7).
+ * normal cadence; a first device 401 is confirmed after 30 s (F3). Each of
+ * these is ALSO capped by the deadline. A late `admitted` for a session that
+ * is gone ends that admission unless the live session holds it (review F7).
  *
  * Logs carry the outcome kind only: no admission id, user id, key or name.
  */
@@ -63,6 +77,15 @@ export const SAFE_POINT_RECHECK_MS = 5_000;
 export const DEVICE_401_CONFIRM_MS = 30_000;
 /** Review F6: the first retry after a failed tick (network, 5xx, 429). */
 export const FAILED_TICK_RETRY_MS = 60_000;
+
+/**
+ * Codex P2 4179771036 — the shortest wait before a retry. Half the smallest
+ * legal heartbeat interval (TTL 1 s → 500 ms), so even a 1 s admission gets a
+ * retry inside its window; it only applies in the last 500 ms before the
+ * deadline, so it adds at most one call there and can never form a tight loop
+ * (at or below it, the admission counts as lapsed).
+ */
+export const MIN_RETRY_MS = 250;
 
 /** The largest delay `setTimeout` honours (a larger one fires at once). */
 const MAX_INTERVAL_MS = 2_147_483_647;
@@ -101,6 +124,8 @@ interface Armed {
   operator_id: string;
   admission_id: string;
   ttl_seconds: number;
+  /** Monotonic ms at which the server admission lapses at the latest (P2 4179771036). */
+  deadline_ms: number;
   timer: ReturnType<typeof setTimeout> | null;
   latched: boolean;
   /** Consecutive failed ticks (backoff). */
@@ -120,15 +145,21 @@ function isOnlineAdmitted(
   return record.authority === 'online_confirmed' && fieldsPresent;
 }
 
-/** The heartbeat state for a session, or null when it holds no online admission. */
-function armedFor(record: OperatorSessionRecord): Armed | null {
+/**
+ * The heartbeat state for a session, or null when it holds no online admission.
+ * The first deadline runs from when the sign-in/takeover admission was SENT;
+ * without that stamp, from now (`nowMs`).
+ */
+function armedFor(record: OperatorSessionRecord, nowMs: number): Armed | null {
   if (!isOnlineAdmitted(record)) return null;
+  const sentAt = record.admission_requested_at_ms ?? nowMs;
   return {
     session_id: record.id,
     user_id: record.user_id,
     operator_id: record.operator_id,
     admission_id: record.admission_id,
     ttl_seconds: record.admission_ttl_seconds,
+    deadline_ms: sentAt + record.admission_ttl_seconds * 1000,
     timer: null,
     latched: false,
     failures: 0,
@@ -136,16 +167,33 @@ function armedFor(record: OperatorSessionRecord): Armed | null {
   };
 }
 
-/** Review F3 + Codex P2 4179701427: the 401 confirmation, min(30 s, TTL/2). */
-function deviceConfirmDelayMs(armed: Armed): number {
+/** Review F3 + Codex P2 4179701427: the 401 confirmation, min(30 s, TTL/2), before the deadline. */
+function deviceConfirmCapMs(armed: Armed): number {
   return Math.min(DEVICE_401_CONFIRM_MS, heartbeatIntervalMs(armed.ttl_seconds));
 }
 
 /** Review F6: min(TTL/2, 60 s), doubling per consecutive failure, capped at TTL/2. */
-function retryDelayMs(armed: Armed): number {
+function backoffCapMs(armed: Armed): number {
   const interval = heartbeatIntervalMs(armed.ttl_seconds);
   const backoff = FAILED_TICK_RETRY_MS * 2 ** Math.min(armed.failures - 1, 20);
   return Math.min(interval, backoff);
+}
+
+/**
+ * Codex P2 4179771036 — the delay before the next admission call. `capMs` is
+ * that outcome's own cadence (TTL/2, the F6 backoff, the F3 confirmation); the
+ * deadline caps it at half the time left, floored at {@link MIN_RETRY_MS}, so
+ * the call always lands strictly before the deadline.
+ *
+ * LAPSED (explicit): with MIN_RETRY_MS or less left, no call can land before
+ * the deadline. P2 keeps today's behaviour: the session stays and the plain
+ * `capMs` applies until a renewal sets a new deadline (offline authority is
+ * P1/P3).
+ */
+export function nextCallDelayMs(capMs: number, deadlineMs: number, nowMs: number): number {
+  const leftMs = deadlineMs - nowMs;
+  if (leftMs <= MIN_RETRY_MS) return capMs; // lapsed
+  return Math.min(capMs, Math.max(MIN_RETRY_MS, Math.floor(leftMs / 2)));
 }
 
 export class CashierAdmissionKeeper {
@@ -189,10 +237,10 @@ export class CashierAdmissionKeeper {
       this.disarm();
       if (previous.admission_id !== record.admission_id) this.endAdmission(previous.admission_id);
     }
-    const armed = armedFor(record);
+    const armed = armedFor(record, this.nowMs());
     if (armed === null) return;
     this.armed = armed;
-    this.scheduleHeartbeat(armed, heartbeatIntervalMs(armed.ttl_seconds));
+    this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
   }
 
   private onSessionEnded(record: OperatorSessionRecord): void {
@@ -220,6 +268,15 @@ export class CashierAdmissionKeeper {
     });
   }
 
+  /** The ONE way to schedule the next admission call: `capMs`, bounded by the deadline. */
+  private scheduleNext(armed: Armed, capMs: number): void {
+    this.scheduleHeartbeat(armed, nextCallDelayMs(capMs, armed.deadline_ms, this.nowMs()));
+  }
+
+  private nowMs(): number {
+    return monotonicNowMs(this.deps.admission);
+  }
+
   private disarm(): void {
     if (this.armed?.timer != null) clearTimeout(this.armed.timer);
     this.armed = null;
@@ -236,6 +293,8 @@ export class CashierAdmissionKeeper {
 
   private async heartbeat(armed: Armed): Promise<void> {
     if (!this.stillCurrent(armed) || armed.latched) return;
+    // Stamped before the request goes out: a renewal's deadline runs from here.
+    const sentAtMs = this.nowMs();
     const result = await this.requestHeartbeat(armed);
     // RT-198 latch + session identity: re-checked after the await.
     if (this.stopped) return;
@@ -244,7 +303,7 @@ export class CashierAdmissionKeeper {
       return;
     }
     this.log(result.kind);
-    this.handleOutcome(armed, result);
+    this.handleOutcome(armed, result, sentAtMs);
   }
 
   private async requestHeartbeat(armed: Armed): Promise<CashierAdmissionResult> {
@@ -271,11 +330,11 @@ export class CashierAdmissionKeeper {
     this.endAdmission(result.admission_id);
   }
 
-  private handleOutcome(armed: Armed, result: CashierAdmissionResult): void {
+  private handleOutcome(armed: Armed, result: CashierAdmissionResult, sentAtMs: number): void {
     if (result.kind !== 'device_unauthorized') armed.device401s = 0;
     switch (result.kind) {
       case 'admitted':
-        this.onAdmitted(armed, result);
+        this.onAdmitted(armed, result, sentAtMs);
         return;
       case 'active_elsewhere':
         this.latch(armed, 'superseded_by_takeover');
@@ -292,7 +351,7 @@ export class CashierAdmissionKeeper {
     }
   }
 
-  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted): void {
+  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted, sentAtMs: number): void {
     armed.failures = 0;
     notifyGrantSeam(this.deps.admission, result, armed);
     if (result.admission_id !== armed.admission_id) {
@@ -303,39 +362,44 @@ export class CashierAdmissionKeeper {
       armed.admission_id = result.admission_id;
     }
     armed.ttl_seconds = result.admission_ttl_seconds;
+    armed.deadline_ms = sentAtMs + result.admission_ttl_seconds * 1000;
     this.deps.sessionManager.renewAdmission(armed.session_id, {
       admission_id: result.admission_id,
       admission_ttl_seconds: result.admission_ttl_seconds,
       offline_grace_seconds: result.offline_grace_seconds,
+      admission_requested_at_ms: sentAtMs,
     });
-    this.scheduleHeartbeat(armed, heartbeatIntervalMs(armed.ttl_seconds));
+    this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
   }
 
   /**
    * Review F3: act only on the second consecutive 401, confirmed 30 s later,
-   * or sooner when TTL/2 is shorter (Codex P2 4179701427): no heartbeat path
-   * may wait longer than TTL/2, or the admission lapses while this till still
-   * treats the cashier as admitted.
+   * or sooner: never later than TTL/2 (Codex P2 4179701427) nor than half the
+   * time left before the deadline (4179771036), or the admission lapses while
+   * this till still treats the cashier as admitted.
    */
   private onDeviceUnauthorized(armed: Armed, result: CashierAdmissionResult): void {
     armed.device401s += 1;
     if (armed.device401s < 2) {
-      this.scheduleHeartbeat(armed, deviceConfirmDelayMs(armed));
+      this.scheduleNext(armed, deviceConfirmCapMs(armed));
       return;
     }
     notifyGrantSeam(this.deps.admission, result, armed);
     this.latch(armed, 'terminal_session_terminated');
   }
 
-  /** Unanswered or not applied: keep the session; failed ticks retry sooner (F6). */
+  /**
+   * Unanswered or not applied: keep the session; failed ticks back off (F6).
+   * Either way the retry lands before the deadline (Codex P2 4179771036).
+   */
   private onNotAnswered(armed: Armed, result: CashierAdmissionResult): void {
     if (!BACKOFF_KINDS.has(result.kind)) {
       armed.failures = 0;
-      this.scheduleHeartbeat(armed, heartbeatIntervalMs(armed.ttl_seconds));
+      this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
       return;
     }
     armed.failures += 1;
-    this.scheduleHeartbeat(armed, retryDelayMs(armed));
+    this.scheduleNext(armed, backoffCapMs(armed));
   }
 
   /** Lose authority: no new sale, no more heartbeats; end at the first safe point. */

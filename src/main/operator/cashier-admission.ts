@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import type { OperatorRefusal } from '../../shared/audit/event-shape.js';
 
-import type { CashierAdmissionClient, CashierAdmissionResult } from './cashier-admission-client.js';
+import type {
+  CashierAdmissionAdmitted,
+  CashierAdmissionClient,
+  CashierAdmissionResult,
+} from './cashier-admission-client.js';
 import type { SessionManager } from './session-manager.js';
 
 /**
@@ -60,7 +64,23 @@ export interface CashierAdmissionDeps {
   newIdempotencyKey?: () => string;
   /** Defaults to the wall clock. */
   now?: () => Date;
+  /**
+   * Codex P2 4179771036 — the monotonic clock (ms) that anchors the admission
+   * deadline. Defaults to `performance.now()`; never the wall clock, which can
+   * jump.
+   */
+  monotonicNow?: () => number;
 }
+
+/** The monotonic clock of {@link CashierAdmissionDeps.monotonicNow}. */
+export function monotonicNowMs(deps: CashierAdmissionDeps): number {
+  return (deps.monotonicNow ?? (() => performance.now()))();
+}
+
+/** An online admission outcome; `admitted` also says when its request was SENT. */
+export type OnlineAdmissionResult =
+  | Exclude<CashierAdmissionResult, { kind: 'admitted' }>
+  | (CashierAdmissionAdmitted & { requested_at_ms: number });
 
 /** A fresh contract-valid key (16–128 printable ASCII); carries no secret. */
 export function newAdmissionIdempotencyKey(): string {
@@ -127,7 +147,10 @@ export function reportAdmissionOutcome(
 export async function admitCashierOnline(
   deps: CashierAdmissionDeps,
   req: { user_id: string; operator_id: string; takeover: boolean; idempotency_key: string },
-): Promise<CashierAdmissionResult> {
+): Promise<OnlineAdmissionResult> {
+  // Stamped BEFORE the request goes out: the server's TTL runs from no
+  // earlier than this, so a deadline from it is conservative under latency.
+  const requested_at_ms = monotonicNowMs(deps);
   const result = await deps.client.admit({
     mode: 'online',
     user_id: req.user_id,
@@ -135,7 +158,7 @@ export async function admitCashierOnline(
     idempotency_key: req.idempotency_key,
   });
   reportAdmissionOutcome(deps, result, req);
-  return result;
+  return result.kind === 'admitted' ? { ...result, requested_at_ms } : result;
 }
 
 const REFUSE_INVALID: OperatorRefusal = { kind: 'refused', category: 'invalid_input' };
