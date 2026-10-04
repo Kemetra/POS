@@ -14,7 +14,7 @@ import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
 import { AppIndexRedirect } from './routes/app/AppIndexRedirect';
 import { SalesWorkspace } from './routes/app/SalesWorkspace';
-import { ReturnsPlaceholder } from './routes/app/ReturnsPlaceholder';
+import { ReturnsRoute } from './returns/ReturnsRoute';
 import { AuditPlaceholder } from './routes/app/AuditPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { CatalogueDiagnostics } from './routes/app/CatalogueDiagnostics';
@@ -197,19 +197,19 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             { index: true, element: <AppIndexRedirect /> },
             { path: 'dashboard', element: <DashboardRoute /> },
             { path: 'sales', element: <SalesWorkspace /> },
-            // POS v3.5 Slice 1 — new nav entries route to thin "coming soon"
-            // placeholders. Returns is Phase-7 blocked; Audit is a later display
-            // slice. Both are navigation-only (no data, no IPC).
-            //
             // PR #434 FIX 1 — gate BOTH to manager/admin (owner decision). The
-            // role-visibility-matrix marks the Audit surface ⛔ cashier, and
-            // Returns is Phase-7 blocked; a signed-in cashier must NOT reach
-            // either. Same nested guard pattern as the `/app/manager/*` routes.
+            // role-visibility-matrix marks the Audit surface ⛔ cashier, and a
+            // signed-in cashier must NOT reach either. Same nested guard
+            // pattern as the `/app/manager/*` routes.
+            //
+            // RT-15 S3 — Returns is the manager/admin return flow (D-b; main
+            // re-checks flag, session and role on every `returns.*` call).
+            // Audit is still a later display slice (navigation-only placeholder).
             {
               path: 'returns',
               element: (
                 <OperatorRouteGuard allow={['manager', 'admin']}>
-                  <ReturnsPlaceholder />
+                  <ReturnsRoute />
                 </OperatorRouteGuard>
               ),
             },
