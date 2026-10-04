@@ -120,8 +120,8 @@ describe('return payouts repository', () => {
     payouts.start(START);
     payouts.markSending({ returnId: 'r1', now: 'k1' });
     payouts.recordKick({ returnId: 'r1', outcome: 'opened' });
-    expect(payouts.complete(COMPLETE)).toBe(true);
-    expect(payouts.complete({ ...COMPLETE, method: 'manual', now: 't4' })).toBe(false);
+    expect(payouts.complete(COMPLETE)).toBe('completed');
+    expect(payouts.complete({ ...COMPLETE, method: 'manual', now: 't4' })).toBe('already_paid');
     expect(payouts.read('r1')).toMatchObject({
       startedOperatorId: 'op-m',
       paidOperatorId: 'op-a',
@@ -135,7 +135,7 @@ describe('return payouts repository', () => {
 
   it('never completes a payout that was not started', () => {
     confirm();
-    expect(payouts.complete(COMPLETE)).toBe(false);
+    expect(payouts.complete(COMPLETE)).toBe('not_started');
     expect(journal.read('r1')?.state).toBe('confirmed');
   });
 
@@ -169,9 +169,9 @@ describe('return payouts repository', () => {
     payouts.start(START);
     payouts.markSending({ returnId: 'r1', now: 'k1' });
     payouts.recordKick({ returnId: 'r1', outcome: 'unknown' });
-    expect(payouts.complete(COMPLETE)).toBe(false);
+    expect(payouts.complete(COMPLETE)).toBe('drawer_not_opened');
     expect(journal.read('r1')?.state).toBe('confirmed');
-    expect(payouts.complete({ ...COMPLETE, method: 'manual' })).toBe(true);
+    expect(payouts.complete({ ...COMPLETE, method: 'manual' })).toBe('completed');
     expect(journal.read('r1')?.state).toBe('paid_out');
   });
 
@@ -192,6 +192,9 @@ describe('return payouts repository', () => {
     [0, false],
     [RETURN_KICK_LEASE_MS - 1, false],
     [RETURN_KICK_LEASE_MS, true],
+    // Reviewer P2: a backward clock jump bounds the lease, never extends it.
+    [-RETURN_KICK_LEASE_MS, false],
+    [-RETURN_KICK_LEASE_MS - 1, true],
   ])('Codex P1 lease: a manual completion %i ms after a kick still sending: %s', (ms, ok) => {
     confirm();
     payouts.start(START);
@@ -199,7 +202,9 @@ describe('return payouts repository', () => {
     payouts.markSending({ returnId: 'r1', now: kickedAt });
     const now = new Date(Date.parse(kickedAt) + ms).toISOString();
     // The guarded UPDATE answers false (never relies on the trigger throwing).
-    expect(payouts.complete({ ...COMPLETE, method: 'manual', now })).toBe(ok);
+    expect(payouts.complete({ ...COMPLETE, method: 'manual', now })).toBe(
+      ok ? 'completed' : 'kick_in_progress',
+    );
     expect(journal.read('r1')?.state).toBe(ok ? 'paid_out' : 'confirmed');
   });
 

@@ -1,16 +1,18 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, renderHook, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import type { ReturnJournalView } from '../../../shared/returns/types.js';
 import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config.js';
 import { PAYOUT_COPY, refusalMessage } from '../returns-messages.js';
+import { usePayout } from '../usePayout.js';
 import {
   deferred,
   fakeBridge,
   journal,
   renderReturns,
+  fakeSessionEvents,
   resetStores,
   settle,
 } from './returns-test-kit.js';
@@ -59,8 +61,12 @@ const ROWS: ReturnJournalView[] = [
 ];
 
 function rowOf(saleNumber: string): HTMLElement {
-  const row = screen.getByText(saleNumber).closest('tr');
-  if (row === null) throw new Error(`no row for ${saleNumber}`);
+  // The open payout's facts show the sale number too: the row is the one in a table.
+  const row = screen
+    .getAllByText(saleNumber)
+    .map((cell) => cell.closest('tr'))
+    .find((tr) => tr !== null);
+  if (row == null) throw new Error(`no row for ${saleNumber}`);
   return row;
 }
 
@@ -143,5 +149,87 @@ describe('history payout actions (R5)', () => {
   it('has no axe violations with the action column', async () => {
     const { view } = await renderHistory();
     await expectNoAxeViolations(view.container);
+  });
+});
+
+/**
+ * Codex P2 (c21d7e2): the open payout follows a newer journal view of the
+ * same return (another window or instance started it), so it never offers a
+ * stale fresh start; the same view keeps what the panel just learned live.
+ */
+describe('the open payout follows a newer view of its return', () => {
+  const START_NAME = 'افتح الدرج واصرف النقد';
+  const STARTED_READY = journal({ returnId: 'r-ready', saleNumber: 'T1-000001', payout: STARTED });
+  const UNKNOWN_READY = journal({
+    returnId: 'r-ready',
+    saleNumber: 'T1-000001',
+    payout: { ...STARTED, kick: 'unknown' },
+  });
+
+  async function openReady() {
+    const events = fakeSessionEvents();
+    const bridge = fakeBridge();
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: ROWS });
+    const user = userEvent.setup();
+    renderReturns({ bridge, sessionEvents: events });
+    await screen.findByText('T1-000001');
+    await user.click(within(rowOf('T1-000001')).getByRole('button'));
+    await screen.findByRole('button', { name: START_NAME });
+    return { bridge, events, user };
+  }
+
+  it('a history reload with the payout started elsewhere drops the fresh start', async () => {
+    const { bridge, events } = await openReady();
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: [STARTED_READY, ...ROWS.slice(1)] });
+    events.push({ state: 'active' });
+    expect(await screen.findByText(PAYOUT_COPY.interrupted)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: START_NAME })).toBeNull();
+  });
+
+  it('the same view after its own payout call keeps the live answer', async () => {
+    const { bridge, user } = await openReady();
+    bridge.payout.mockResolvedValueOnce({
+      kind: 'drawer_failed',
+      reason: 'timeout',
+      ret: UNKNOWN_READY,
+    });
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: [UNKNOWN_READY, ...ROWS.slice(1)] });
+    await user.click(screen.getByRole('button', { name: START_NAME }));
+    expect(await screen.findByText(PAYOUT_COPY.drawerUnknown)).toBeInTheDocument();
+    expect(await within(rowOf('T1-000001')).findByRole('button')).toHaveTextContent(
+      PAYOUT_COPY.historyComplete,
+    );
+    expect(screen.getByText(PAYOUT_COPY.drawerUnknown)).toBeInTheDocument();
+    expect(screen.queryByText(PAYOUT_COPY.interrupted)).toBeNull();
+  });
+});
+
+describe('usePayout follows a newer prop of the same return (Codex P2)', () => {
+  const READY = journal({ returnId: 'r1' });
+  const STARTED_R1 = journal({ returnId: 'r1', payout: STARTED });
+
+  function hook(initial: ReturnJournalView) {
+    const bridge = fakeBridge();
+    const reload = () => Promise.resolve(null);
+    return renderHook(({ ret }: { ret: ReturnJournalView }) => usePayout(bridge, ret, reload), {
+      initialProps: { ret: initial },
+    });
+  }
+
+  it('a newer view replaces a stale ready panel: no fresh start', () => {
+    const { result, rerender } = hook(READY);
+    expect(result.current.state.phase).toEqual({ kind: 'ready' });
+    rerender({ ret: STARTED_R1 });
+    expect(result.current.state.phase).toEqual({ kind: 'interrupted', retryable: true });
+    expect(result.current.state.ret).toBe(STARTED_R1);
+  });
+
+  it('a new object with the same revision keeps the live phase', () => {
+    const { result, rerender } = hook(STARTED_R1);
+    act(() => {
+      result.current.askManual();
+    });
+    rerender({ ret: { ...STARTED_R1 } });
+    expect(result.current.state.phase.kind).toBe('confirm_manual');
   });
 });

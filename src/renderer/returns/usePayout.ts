@@ -11,7 +11,9 @@ import {
   askManual,
   cancelManual,
   initialPayout,
+  payoutRevision,
   refreshed,
+  synced,
   type PayoutState,
 } from './payout-state.js';
 import { attempt, useSingleFlight } from './returns-bridge.js';
@@ -42,6 +44,15 @@ export function usePayout(
   reload: Reload,
 ): Payout {
   const [state, setState] = useState<PayoutState>(() => initialPayout(ret));
+  // Codex P2: `ret` is not only the seed. A newer view of this return (by
+  // payout revision) is adopted while rendering (React's "adjust state when a
+  // prop changes"); the same view keeps what this panel learned live.
+  const revision = payoutRevision(ret);
+  const [seen, setSeen] = useState(revision);
+  if (seen !== revision) {
+    setSeen(revision);
+    setState((s) => synced(s, ret));
+  }
   const { busy, run } = useSingleFlight<PayoutOp>();
   const { returnId } = ret;
 

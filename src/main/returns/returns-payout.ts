@@ -62,12 +62,9 @@ import type {
   SlipAuditOutcome,
 } from './returns-audit.js';
 import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
-import {
-  kickReturnDrawer,
-  RETURN_KICK_LEASE_MS,
-  type ReturnDrawerOutcome,
-} from './returns-drawer.js';
+import { kickReturnDrawer, withinKickLease, type ReturnDrawerOutcome } from './returns-drawer.js';
 import type {
+  CompleteResult,
   KickResult,
   PayoutRow,
   ReturnPayoutsRepository,
@@ -138,12 +135,26 @@ export type StartedPayout = Pick<PayoutRow, 'kickOutcome' | 'kickedAt'> | null;
 
 /**
  * Codex P1: a kick still `sending` within the lease is in flight (possibly in
- * another app instance): nothing may complete the payout meanwhile.
+ * another app instance): nothing may complete the payout meanwhile. The lease
+ * is bounded on both sides (reviewer P2: a backward clock jump never extends it).
  */
 export function kickInFlight(payout: NonNullable<StartedPayout>, now: string): boolean {
   if (payout.kickOutcome !== 'sending' || payout.kickedAt === null) return false;
-  return Date.parse(now) - Date.parse(payout.kickedAt) < RETURN_KICK_LEASE_MS;
+  return withinKickLease(payout.kickedAt, now);
 }
+
+function mayKickAgain(payout: NonNullable<StartedPayout>): boolean {
+  return payout.kickOutcome === null || payout.kickOutcome === 'failed_before_send';
+}
+
+type ActionRule = (payout: NonNullable<StartedPayout>, now: string) => ReturnsRefusalReason | null;
+
+/** Why each action is refused on a payout already started (or null). */
+const STARTED_RULES: Readonly<Record<ReturnPayoutAction, ActionRule>> = {
+  start: () => 'payout_started',
+  retry_drawer: (payout) => (mayKickAgain(payout) ? null : 'drawer_retry_unsafe'),
+  manual: (payout, now) => (kickInFlight(payout, now) ? 'drawer_kick_in_progress' : null),
+};
 
 /**
  * Why a payout `action` is refused for a return in `state`, or null.
@@ -159,15 +170,22 @@ export function payoutRefusal(
 ): ReturnsRefusalReason | null {
   if (state === 'paid_out') return 'already_paid_out';
   if (state !== 'confirmed') return 'not_payable';
-  if (action === 'start') return payout === null ? null : 'payout_started';
-  if (payout === null) return 'payout_not_started';
-  if (action === 'retry_drawer') return mayKickAgain(payout) ? null : 'drawer_retry_unsafe';
-  return kickInFlight(payout, now) ? 'drawer_kick_in_progress' : null;
+  if (payout === null) return action === 'start' ? null : 'payout_not_started';
+  return STARTED_RULES[action](payout, now);
 }
 
-function mayKickAgain(payout: NonNullable<StartedPayout>): boolean {
-  return payout.kickOutcome === null || payout.kickOutcome === 'failed_before_send';
-}
+/**
+ * Codex P2: why a completion that changed nothing is refused. Another
+ * instance may have won the race between this one's checks and its commit:
+ * a kick it sent meanwhile is in progress, never "already paid out".
+ */
+const NOT_COMPLETED: Readonly<Record<Exclude<CompleteResult, 'completed'>, ReturnsRefusalReason>> =
+  {
+    already_paid: 'already_paid_out',
+    kick_in_progress: 'drawer_kick_in_progress',
+    not_started: 'payout_not_started',
+    drawer_not_opened: 'drawer_retry_unsafe',
+  };
 
 /**
  * What a kick's answer proves about the drawer. Only "no drawer configured"
@@ -431,7 +449,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   private async commit(actor: AuthSnapshot, entry: JournalEntry, method: ReturnPayoutMethod) {
     const paid = this.effect(actor, () => this.completePayout(actor, entry, method));
     if (isLost(paid)) return this.refusePayout(actor, paid.lost, entry);
-    if (!paid) return this.refusePayout(actor, 'already_paid_out', entry);
+    if (paid !== 'completed') return this.refusePayout(actor, NOT_COMPLETED[paid], entry);
     const ret = this.viewOf(entry);
     const printed = await this.printSlip(actor, this.paidOut(entry.returnId), { kind: 'original' });
     const slip = printed.ok ? 'printed' : 'failed';
@@ -449,7 +467,7 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
         method,
         now: this.deps.now(),
       });
-      if (done) this.deps.audit.paidOut(actor, entry, method);
+      if (done === 'completed') this.deps.audit.paidOut(actor, entry, method);
       return done;
     });
   }

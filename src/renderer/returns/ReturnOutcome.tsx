@@ -116,6 +116,8 @@ function Announcement({ outcome }: { outcome: Outcome }): JSX.Element {
 export interface PayoutDeps {
   readonly bridge: ReturnsBridgeAPI;
   readonly reload: Reload;
+  /** The journal's latest view of a return, or null (Codex P2: never a stale panel). */
+  readonly latest: (returnId: string) => ReturnJournalView | null;
 }
 
 export function ReturnOutcome({
@@ -139,7 +141,11 @@ export function ReturnOutcome({
       <Announcement outcome={outcome} />
       {ret !== null && <Facts ret={ret} confirmed={confirmed} />}
       {confirmed && ret !== null && (
-        <PayoutPanel bridge={payout.bridge} ret={ret} reload={payout.reload} />
+        <PayoutPanel
+          bridge={payout.bridge}
+          ret={payout.latest(ret.returnId) ?? ret}
+          reload={payout.reload}
+        />
       )}
       <div className="rt-returns__actions">
         <CheckAgain flow={flow} outcome={outcome} />

@@ -79,6 +79,21 @@ export function initialPayout(ret: ReturnJournalView): PayoutState {
   return { ret, phase: phaseOf(ret), reprint: null };
 }
 
+/** What a newer journal view of the same return can change about its payout. */
+export function payoutRevision(ret: ReturnJournalView): string {
+  const p = ret.payout;
+  return [ret.state, p?.startedAt, p?.paidAt, p?.method, p?.kick].join('|');
+}
+
+/**
+ * Codex P2 (c21d7e2): a newer view of the panel's return (another window or
+ * instance moved its payout) replaces the panel's state, so a stale action
+ * (a fresh `start`) is never offered; the same view keeps the live phase.
+ */
+export function synced(s: PayoutState, ret: ReturnJournalView): PayoutState {
+  return payoutRevision(ret) === payoutRevision(s.ret) ? s : initialPayout(ret);
+}
+
 function afterRefusal(
   state: PayoutState,
   reason: ReturnsRefusalReason,

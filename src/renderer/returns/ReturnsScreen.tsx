@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 
-import type { ReturnsBridgeAPI } from '../../shared/returns/types.js';
+import type { ReturnJournalView, ReturnsBridgeAPI } from '../../shared/returns/types.js';
 import type { SessionEvents } from './returns-bridge.js';
 import { LinePicker } from './LinePicker';
 import { RefundSummary } from './RefundSummary';
@@ -10,7 +10,7 @@ import { SaleLookup } from './SaleLookup';
 import type { Outcome } from './return-flow-state.js';
 import { useReturnFlow, type ReturnFlow } from './useReturnFlow.js';
 import { useHistoryReprint } from './useHistoryReprint.js';
-import { useReturnHistory } from './useReturnHistory.js';
+import { useReturnHistory, type HistoryState } from './useReturnHistory.js';
 
 /**
  * RT-15 S3 — the return flow (one step at a time) above this terminal's
@@ -26,6 +26,12 @@ export interface ReturnsScreenProps {
 function outcomeKey(outcome: Outcome): string {
   if (outcome.kind === 'failed') return 'failed';
   return outcome.ret?.returnId ?? 'none';
+}
+
+/** The journal's view of `returnId`, while the journal is listed. */
+function latestIn(state: HistoryState, returnId: string): ReturnJournalView | null {
+  if (state.status !== 'ok') return null;
+  return state.rows.find((row) => row.returnId === returnId) ?? null;
 }
 
 function FlowStep({
@@ -62,7 +68,14 @@ export function ReturnsScreen({ bridge, sessionEvents }: ReturnsScreenProps): JS
   const reprint = useHistoryReprint(bridge);
   return (
     <>
-      <FlowStep flow={flow} payout={{ bridge, reload: history.reload }} />
+      <FlowStep
+        flow={flow}
+        payout={{
+          bridge,
+          reload: history.reload,
+          latest: (returnId) => latestIn(history.state, returnId),
+        }}
+      />
       <ReturnsHistory history={history} actions={{ pay: flow.openPayout, reprint }} />
     </>
   );

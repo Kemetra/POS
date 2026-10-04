@@ -218,6 +218,13 @@ describe('0040 — return payouts (RT-15 S4)', () => {
     ['9.999 s after the kick: refused', '2026-10-04T10:00:09.999Z', false],
     ['10 s after the kick (lease expired): allowed', '2026-10-04T10:00:10.000Z', true],
     ['an hour after the kick: allowed', '2026-10-04T11:00:00.000Z', true],
+    // Reviewer P2: a backward clock jump bounds the lease, never extends it.
+    ['10 s before the kick (clock jumped back): refused', '2026-10-04T09:59:50.000Z', false],
+    [
+      '10.001 s before the kick (jumped back past the lease): allowed',
+      '2026-10-04T09:59:49.999Z',
+      true,
+    ],
   ])('Codex P1 lease: completing a payout whose kick is sending, %s', (_l, at, ok) => {
     journal('confirmed');
     startPayout();

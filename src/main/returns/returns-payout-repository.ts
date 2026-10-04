@@ -11,7 +11,7 @@
  */
 import type { DatabaseHandle } from '../db/client.js';
 import type { ReturnPayoutMethod } from '../../shared/returns/types.js';
-import { RETURN_KICK_LEASE_MS } from './returns-drawer.js';
+import { RETURN_KICK_LEASE_MS, withinKickLease } from './returns-drawer.js';
 
 /**
  * The drawer kick record of a payout (0040). `sending` is written before the
@@ -20,6 +20,17 @@ import { RETURN_KICK_LEASE_MS } from './returns-drawer.js';
  */
 export type KickOutcome = 'sending' | 'opened' | 'failed_before_send' | 'unknown';
 export type KickResult = Exclude<KickOutcome, 'sending'>;
+
+/**
+ * What `complete` did: completed, or why not (Codex P2: a lost race is told
+ * apart, so a kick in flight in another instance is never `already_paid`).
+ */
+export type CompleteResult =
+  | 'completed'
+  | 'already_paid'
+  | 'kick_in_progress'
+  | 'not_started'
+  | 'drawer_not_opened';
 
 export interface PayoutRow {
   readonly returnId: string;
@@ -85,21 +96,23 @@ export interface ReturnPayoutsRepository {
   recordKick(input: { readonly returnId: string; readonly outcome: KickResult }): boolean;
   /**
    * Complete a started, unpaid payout and move the header to `paid_out`. A
-   * `drawer` completion needs a drawer that opened. False otherwise. Run
-   * inside a transaction.
+   * `drawer` completion needs a drawer that opened; a kick still `sending`
+   * within the lease holds it. Else why not. Run inside a transaction.
    */
-  complete(input: CompletePayoutInput): boolean;
+  complete(input: CompletePayoutInput): CompleteResult;
   /** Write the slip facts of a return's lines (inside the journal insert). */
   recordLineDetails(returnId: string, details: readonly LineDetail[]): void;
   slipLines(returnId: string): SlipLine[];
 }
 
 /**
- * Codex P1 lease, in SQL: the kick was sent less than the lease ago (whole
- * milliseconds against the completion's own time; never SQLite's clock).
- * Binds: now, lease ms.
+ * Codex P1 lease, in SQL: the kick was sent within the lease of the
+ * completion's own time, on either side (reviewer P2: a backward clock jump
+ * never extends it). Whole milliseconds; never SQLite's clock. Binds: now,
+ * -lease ms, lease ms - 1.
  */
-const KICK_HELD = `CAST(ROUND((julianday(?) - julianday(kicked_at)) * 86400000.0) AS INTEGER) < ?`;
+const KICK_HELD = `CAST(ROUND((julianday(?) - julianday(kicked_at)) * 86400000.0) AS INTEGER)
+  BETWEEN ? AND ?`;
 
 interface Stmt {
   run(...params: unknown[]): { changes: number };
@@ -127,6 +140,14 @@ interface SlipLineDbRow {
   quantity: number;
   line_name: string | null;
   amount_minor: number | null;
+}
+
+/** Why a completion changed nothing, from the row as it stands now. */
+function notCompleted(row: PayoutRow | null, now: string): Exclude<CompleteResult, 'completed'> {
+  if (row === null) return 'not_started';
+  if (row.paidAt !== null) return 'already_paid';
+  const sending = row.kickOutcome === 'sending' && row.kickedAt !== null;
+  return sending && withinKickLease(row.kickedAt, now) ? 'kick_in_progress' : 'drawer_not_opened';
 }
 
 function toPayout(row: PayoutDbRow): PayoutRow {
@@ -188,7 +209,7 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
     return this.prepare(sql).run(outcome, returnId).changes > 0;
   }
 
-  complete(input: CompletePayoutInput): boolean {
+  complete(input: CompletePayoutInput): CompleteResult {
     const paid = this.prepare(
       `UPDATE return_payouts SET paid_operator_id = ?, paid_operator_name = ?,
          paid_session_id = ?, paid_at = ?, method = ?
@@ -204,9 +225,10 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
       input.returnId,
       input.method,
       input.now,
-      RETURN_KICK_LEASE_MS,
+      -RETURN_KICK_LEASE_MS,
+      RETURN_KICK_LEASE_MS - 1,
     );
-    if (paid.changes === 0) return false;
+    if (paid.changes === 0) return notCompleted(this.read(input.returnId), input.now);
     // A started payout always has a confirmed header (0040), and the header
     // reaches paid_out only with this completed row (0040 trigger). Fail
     // closed anyway: throwing rolls the caller's transaction back rather than
@@ -216,7 +238,7 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
        WHERE return_id = ? AND state = 'confirmed'`,
     ).run(input.now, input.now, input.returnId);
     if (header.changes === 0) throw new Error('returns-payout: header is not confirmed');
-    return true;
+    return 'completed';
   }
 
   recordLineDetails(returnId: string, details: readonly LineDetail[]): void {

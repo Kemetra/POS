@@ -28,6 +28,7 @@ import {
 import { toJournalView } from '../returns-views.js';
 import {
   ENVELOPE,
+  NOW,
   confirmedReturn,
   initReturnsSql,
   returnsHarness,
@@ -92,6 +93,9 @@ describe('kickInFlight (Codex P1 lease)', () => {
     ['sending', 0, true],
     ['sending', RETURN_KICK_LEASE_MS - 1, true],
     ['sending', RETURN_KICK_LEASE_MS, false],
+    // Reviewer P2: a backward clock jump bounds the lease, never extends it.
+    ['sending', -RETURN_KICK_LEASE_MS, true],
+    ['sending', -RETURN_KICK_LEASE_MS - 1, false],
     ['opened', 0, false],
     ['unknown', 0, false],
     ['none', 0, false],
@@ -232,5 +236,54 @@ describe('the claim is a guarded insert', () => {
       action_category: 'sale.return.slip_print_failed',
       payload: { copy: true, failure_reason: 'slip_total_mismatch' },
     });
+  });
+
+  /** A payouts repository on which `race` runs right after the pre-read (another instance). */
+  function racingAfterRead(race: (payouts: ReturnPayoutsRepository, id: string) => void) {
+    const payouts = createReturnPayoutsRepository(h.handle);
+    return Object.create(payouts, {
+      read: {
+        value: (id: string) => {
+          const row = payouts.read(id);
+          race(payouts, id);
+          return row;
+        },
+      },
+    }) as ReturnPayoutsRepository;
+  }
+
+  it("Codex P2 (c21d7e2): losing the race to another instance's kick is drawer_kick_in_progress", async () => {
+    const returnId = await confirmedReturn(h.service);
+    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+    await h.service.payout({ returnId, action: 'start' });
+    // The other instance starts a retry kick between this one's checks and its commit.
+    const payouts = racingAfterRead((p, id) => p.markSending({ returnId: id, now: NOW }));
+    const res = await serviceOver({ payouts, now: () => NOW }).payout({
+      returnId,
+      action: 'manual',
+    });
+    expect(res).toMatchObject({ kind: 'refused', reason: 'drawer_kick_in_progress' });
+    expect(h.repo.read(returnId)?.state).toBe('confirmed');
+  });
+
+  it("losing the race to another instance's completion is already_paid_out", async () => {
+    const returnId = await confirmedReturn(h.service);
+    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+    await h.service.payout({ returnId, action: 'start' });
+    const payouts = racingAfterRead((p, id) => {
+      p.complete({
+        returnId: id,
+        operatorId: 'op-other',
+        operatorName: null,
+        sessionId: 'sess-other',
+        method: 'manual',
+        now: NOW,
+      });
+    });
+    const res = await serviceOver({ payouts, now: () => NOW }).payout({
+      returnId,
+      action: 'manual',
+    });
+    expect(res).toMatchObject({ kind: 'refused', reason: 'already_paid_out' });
   });
 });

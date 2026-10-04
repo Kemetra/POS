@@ -22,6 +22,17 @@ export const RETURN_DRAWER_TIMEOUT_MS = 5_000;
  */
 export const RETURN_KICK_LEASE_MS = 2 * RETURN_DRAWER_TIMEOUT_MS;
 
+/**
+ * Whether a kick sent at `kickedAt` still holds its payout at `now`: within
+ * the lease on EITHER side (reviewer P2: a clock that jumped backwards bounds
+ * the lease, never extends it). Whole milliseconds, as 0040's trigger and the
+ * repository's guarded UPDATE measure it.
+ */
+export function withinKickLease(kickedAt: string, now: string): boolean {
+  const elapsed = Date.parse(now) - Date.parse(kickedAt);
+  return elapsed >= -RETURN_KICK_LEASE_MS && elapsed < RETURN_KICK_LEASE_MS;
+}
+
 export type ReturnDrawerOutcome =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: ReturnDrawerFailure };
