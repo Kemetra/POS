@@ -16,6 +16,7 @@ import {
   LINE_A,
   MANAGER_ACTOR,
   SALE_NUMBER,
+  SCOPE,
   initReturnsSql,
   returnsHarness,
   saleBody,
@@ -132,4 +133,63 @@ describe('I2: per-row backoff for unknown returns', () => {
     await expect(h.resolver.resolveOnce(MANAGER_ACTOR)).resolves.toMatchObject({ confirmed: 1 });
     expect(h.repo.read(returnId)?.state).toBe('confirmed');
   });
+
+  it('review P2-1: an attempt stamped in the future (clock moved back) is due, not starved', async () => {
+    h = returnsHarness();
+    seedSyncedSale(h.db);
+    h.state.now = secondsAfterNow(3_600); // an RTC running an hour fast
+    const returnId = await unknownReturn();
+    h.state.now = secondsAfterNow(30); // NTP corrects the clock backwards
+    h.backend.onReturn = (call, backend) => backend.recordIdempotently(call);
+
+    await expect(h.resolver.tick()).resolves.toMatchObject({ confirmed: 1 });
+    expect(h.repo.read(returnId)?.state).toBe('confirmed');
+  });
+
+  it('review P2-2: an on-demand resolve during a backoff-filtered tick still sends the waiting row', async () => {
+    h = returnsHarness();
+    seedSyncedSale(h.db);
+    seedSyncedSale(h.db, { saleId: 'sale-2', saleRef: SALE_REF_2 });
+    const waiting = await unknownReturn(); // X: attempted at t = 0, backing off 1 s
+    h.state.now = secondsAfterNow(0.5);
+    const stalled = await pendingReturn('SN-sale-2'); // Y: never sent, due
+    const post = holdPosts();
+
+    const ticking = h.resolver.tick(); // sends Y only (X is filtered), Y stalls
+    const resolving = h.resolver.resolveOnce(MANAGER_ACTOR);
+    post.release();
+    await ticking;
+
+    await expect(resolving).resolves.toMatchObject({ confirmed: 1 });
+    expect(h.repo.read(waiting)?.state).toBe('confirmed');
+    expect(h.repo.read(stalled)?.state).toBe('confirmed');
+    expect(h.backend.recorded.size).toBe(2);
+  });
 });
+
+/** A return journaled but never sent (the send was deferred): `pending`, attempt_count 0. */
+async function pendingReturn(saleNumber: string): Promise<string> {
+  h.backend.sale = saleBody({ saleRef: SALE_REF_2 });
+  h.state.onAudit = (event) => {
+    if (event.action_category === 'sale.return.attempted') h.state.role = 'cashier';
+  };
+  await h.service.submit({ ...ONE_A, saleNumber });
+  h.state.onAudit = null;
+  h.state.role = 'manager';
+  const row = h.repo.listUnresolved(SCOPE).find((e) => e.state === 'pending');
+  if (row === undefined) throw new Error('expected a pending return');
+  return row.returnId;
+}
+
+/** Hold every POST (recording it) until `release()`. */
+function holdPosts(): { release: () => void } {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  h.backend.onReturn = async (call, backend) => {
+    await gate;
+    return backend.recordIdempotently(call);
+  };
+  return { release };
+}

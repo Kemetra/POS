@@ -74,16 +74,25 @@ const EMPTY: ResolveSummary = { confirmed: 0, refused: 0, unresolved: 0 };
  * True when a background tick may re-send `entry` at `nowMs`: always for a row
  * that is not `unknown` or has no recorded attempt; else once
  * `backoffMs(policy, attemptCount)` has elapsed since its last attempt. An
- * unreadable stamp is due (fail towards liveness).
+ * unreadable stamp, or one in the future (the clock moved backwards, e.g. an
+ * NTP correction of a fast RTC), is due: fail towards liveness, never starve.
  */
 function isDue(entry: JournalEntry, nowMs: number, policy: BackoffPolicy): boolean {
   if (entry.state !== 'unknown' || entry.lastAttemptAt === null) return true;
   const waited = nowMs - Date.parse(entry.lastAttemptAt);
-  return !(waited < backoffMs(policy, entry.attemptCount));
+  return waited < 0 || !(waited < backoffMs(policy, entry.attemptCount));
 }
 
+/** The pass in flight, and whether it is a backoff-filtered background tick. */
+interface RunningPass {
+  readonly pass: Promise<ResolveSummary>;
+  readonly background: boolean;
+}
+
+const ignore = (): undefined => undefined;
+
 export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolver {
-  let running: Promise<ResolveSummary> | null = null;
+  let running: RunningPass | null = null;
 
   const policy = deps.backoff ?? SALE_SYNC_BACKOFF_POLICY;
 
@@ -114,13 +123,28 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
     return tally;
   }
 
-  function singleFlight(snapshot: AuthSnapshot, backgroundTick: boolean): Promise<ResolveSummary> {
-    if (running !== null) return running;
-    const current = pass(snapshot, backgroundTick).finally(() => {
-      running = null;
+  /** Track `work` as the one pass in flight until it settles. */
+  function track(work: Promise<ResolveSummary>, background: boolean): Promise<ResolveSummary> {
+    const current: Promise<ResolveSummary> = work.finally(() => {
+      if (running?.pass === current) running = null;
     });
-    running = current;
+    running = { pass: current, background };
     return current;
+  }
+
+  /**
+   * On demand: share a running on-demand pass; never join a background tick
+   * (it skipped rows still backing off) — wait for it, then run one unfiltered
+   * pass. Passes stay single-flight, and so does every send of one return.
+   */
+  function resolveOnce(snapshot: AuthSnapshot): Promise<ResolveSummary> {
+    if (running === null) return track(pass(snapshot, false), false);
+    if (!running.background) return running.pass;
+    const afterTick = running.pass.then(ignore, ignore);
+    return track(
+      afterTick.then(() => pass(snapshot, false)),
+      false,
+    );
   }
 
   function drain(timeoutMs: number): Promise<void> {
@@ -129,7 +153,7 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
     const bound = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, timeoutMs);
     });
-    const settled = running.then(
+    const settled = running.pass.then(
       () => undefined,
       () => undefined,
     );
@@ -140,13 +164,13 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
 
   return {
     drain,
-    resolveOnce: (snapshot) => singleFlight(snapshot, false),
+    resolveOnce,
     tick: () => {
       // The pass's authorization snapshot, taken once at its start.
       const live = deps.authorizer.current();
       if (running !== null || live.kind !== 'ok') return Promise.resolve(null);
       if (deps.authorizer.recheck(live.actor) !== null) return Promise.resolve(null);
-      return singleFlight(live.actor, true);
+      return track(pass(live.actor, true), true);
     },
   };
 }
