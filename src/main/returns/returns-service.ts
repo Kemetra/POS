@@ -18,9 +18,11 @@
  *
  * Shutdown (RT-198): once the domain is stopped every call answers
  * `shutting_down` before it touches the database, and a call whose await was
- * in flight at stop checks the latch first when it resumes, so it writes
- * nothing (no journal row, no audit). Shutdown is not an operator refusal:
- * it is never audited (AC11 does not apply), and the DB may already be closed.
+ * in flight at stop checks the latch first when it resumes: every post-await
+ * recheck goes through the shared `latchedRecheck`, so it reads and writes
+ * nothing (no session read, no journal row, no audit). Shutdown is not an
+ * operator refusal: `refuse` never audits it (AC11 does not apply), and the
+ * DB may already be closed.
  */
 import type {
   LocalReturnRefusal,
@@ -42,7 +44,12 @@ import type {
 import type { SaleRow, SalesRepository } from '../sales/repositories/sales.repository.js';
 import type { SaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import type { ReturnActor, ReturnsAudit } from './returns-audit.js';
-import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
+import {
+  SHUTTING_DOWN,
+  latchedRecheck,
+  type AuthSnapshot,
+  type ReturnsAuthorizer,
+} from './returns-auth.js';
 import type { ReadSaleOutcome, ReturnsClient } from './returns-client.js';
 import type { DispatchOutcome, ReturnsDispatcher } from './returns-dispatch.js';
 import { assessSale, buildRecordReturnBody, quoteReturn, viewLines } from './returns-quote.js';
@@ -90,9 +97,6 @@ export interface ReturnsServiceDeps {
 export const RETURNS_LIST_LIMIT = 50;
 
 type Operation = 'lookup' | 'quote' | 'submit' | 'resolve' | 'list';
-
-/** RT-198: the app is quitting; this call writes nothing (and is not audited). */
-const SHUTTING_DOWN = { kind: 'refused', reason: 'shutting_down' } as const;
 
 /** A live, returnable sale: the local row, its server ref and the server view. */
 interface LiveSale {
@@ -163,11 +167,11 @@ class ReturnsService implements ReturnsCoreAPI {
   /**
    * The choke point after an await: null while the domain runs and the
    * admitted actor is still authorized; else the refusal to return instead
-   * (no data) — `shutting_down` first and unaudited, any other audited.
+   * (no data) — `shutting_down` first, with no session read, and unaudited
+   * (`refuse` never audits it); any other audited.
    */
   private recheckAfterAwait(actor: AuthSnapshot, op: Operation, awaited: Loaded | null = null) {
-    if (this.deps.isStopped()) return SHUTTING_DOWN;
-    const lost = this.deps.authorizer.recheck(actor);
+    const lost = latchedRecheck(this.deps, actor);
     if (lost === null) return null;
     // Already refused for this very reason by an inner re-check (and audited).
     if (awaited?.kind === 'refused' && awaited.reason === lost) return awaited;
@@ -232,8 +236,7 @@ class ReturnsService implements ReturnsCoreAPI {
    * live-sale checks.
    */
   private postRead(actor: AuthSnapshot, local: LocalSale, read: ReadSaleOutcome): Checked {
-    if (this.deps.isStopped()) return SHUTTING_DOWN;
-    const lost = this.deps.authorizer.recheck(actor);
+    const lost = latchedRecheck(this.deps, actor);
     if (lost !== null) return { kind: 'refused', reason: lost };
     if (read.kind === 'unavailable') return { kind: 'refused', reason: 'offline' };
     if (read.kind === 'refused') return read;
@@ -320,9 +323,11 @@ class ReturnsService implements ReturnsCoreAPI {
    * the new session (`session_changed`, no data). The return itself is already
    * journaled and audited with its true state; an eligible operator sees it via
    * `returns.list` / `returns.resolve`. Not audited as a refusal: nothing was.
+   * Stopped while the POST was in flight: `shutting_down` (the return stays
+   * journaled; the next start resends it), with no session read.
    */
   private submitResponseFor(actor: AuthSnapshot, outcome: DispatchOutcome) {
-    const lost = this.deps.authorizer.recheck(actor);
+    const lost = latchedRecheck(this.deps, actor);
     if (lost === null) return toSubmitResponse(outcome);
     return { kind: 'refused', reason: lost, ret: null } as const;
   }

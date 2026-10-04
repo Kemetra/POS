@@ -431,5 +431,40 @@ describe('Z: shutdown', () => {
     expect(await pending).toMatchObject({ kind: 'paid_out', slip: 'printed' });
     expect(h.audits.length).toBe(before);
     expect(h.repo.read(returnId)?.state).toBe('paid_out');
+    // The DB closes at stop: the session (read through it) is not rechecked.
+    expect(h.lives.sessionReadsAfterStop).toBe(0);
+  });
+
+  it('Z3b: stop during the print after a session switch still answers the true paid_out, unrechecked', async () => {
+    const returnId = await confirmedReturn(h.service);
+    const print = deferredFake<{ ok: true; render_path: 'os_print' }>();
+    h.printer.answer = () => print.promise;
+    const pending = h.service.payout({ returnId, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.printer.printed).toHaveLength(1);
+    });
+    h.state.role = 'admin';
+    h.stop();
+    print.resolve({ ok: true, render_path: 'os_print' });
+    // Shutdown never misreports a completed payout: paid_out stays paid_out.
+    expect(await pending).toMatchObject({ kind: 'paid_out', method: 'drawer', slip: 'printed' });
+    expect(h.lives.sessionReadsAfterStop).toBe(0);
+  });
+
+  it('Z4: stop during a reprint answers its true outcome and reads no session', async () => {
+    const returnId = await confirmedReturn(h.service);
+    await h.service.payout({ returnId, action: 'start' });
+    const print = deferredFake<{ ok: true; render_path: 'os_print' }>();
+    h.printer.answer = () => print.promise;
+    const pending = h.service.reprintSlip({ returnId });
+    await vi.waitFor(() => {
+      expect(h.printer.printed).toHaveLength(2);
+    });
+    h.stop();
+    const before = h.audits.length;
+    print.resolve({ ok: true, render_path: 'os_print' });
+    expect(await pending).toEqual({ kind: 'printed' });
+    expect(h.audits.length).toBe(before);
+    expect(h.lives.sessionReadsAfterStop).toBe(0);
   });
 });

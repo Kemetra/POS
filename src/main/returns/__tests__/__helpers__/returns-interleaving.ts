@@ -14,7 +14,8 @@
  * the envelopes issued to manager/admin sessions, the journal and audit rows
  * as they were at stop and at the end (so any write after stop shows as a
  * difference), how many rows the database changed after stop (RT-198: any
- * write at all, to any table, counts — even one later rolled back), any
+ * write at all, to any table, counts — even one later rolled back), how many
+ * times the operator session was read after stop (it reads the DB), any
  * request made after stop, and any moment a sale had two unresolved returns
  * at once.
  */
@@ -31,6 +32,7 @@ import {
   saleBody,
   secondsAfterNow,
   seedSyncedSale,
+  totalChanges,
   type FakeBackend,
   type RecordedCall,
   type ReturnsHarness,
@@ -114,6 +116,8 @@ export interface InterleavingRun {
   readonly callsAfterStop: number;
   /** Rows inserted, updated or deleted after stop, in any table (SQLite `total_changes()`). */
   readonly writesAfterStop: number;
+  /** Operator-session reads after stop (in the app they read the closed DB). */
+  readonly sessionReadsAfterStop: number;
   /** Moments a sale had two unresolved returns at once. */
   readonly overlaps: readonly string[];
   /** Whether the run stopped the domain. */
@@ -308,7 +312,7 @@ class InterleavingWorld {
 
   /** Rows changed by every INSERT / UPDATE / DELETE on the connection so far. */
   private totalChanges(): number {
-    return Number(this.h.db.exec('SELECT total_changes()')[0]?.values[0]?.[0] ?? 0);
+    return totalChanges(this.h.db);
   }
 
   private journalRows(): Map<string, JournalRowState> {
@@ -362,6 +366,7 @@ class InterleavingWorld {
       auditsAfterStop: this.stopped ? audits.slice(this.auditCountAtStop) : [],
       callsAfterStop: this.stopped ? this.h.backend.calls.length - this.callsAtStop : 0,
       writesAfterStop: this.stopped ? this.totalChanges() - this.writesAtStop : 0,
+      sessionReadsAfterStop: this.h.lives.sessionReadsAfterStop,
       overlaps: this.overlaps,
       stopped: this.stopped,
     };

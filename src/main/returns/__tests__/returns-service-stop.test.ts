@@ -6,6 +6,8 @@
  * call whose await is in flight when the domain stops checks the latch first
  * when it resumes, so it writes nothing: no journal row, no line, no audit —
  * not even the refusal its session change would otherwise have earned.
+ * Nor does it read the operator session: in the app that read goes through
+ * the DB (the pairing store), which closes right after stop.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +18,7 @@ import {
   initReturnsSql,
   returnsHarness,
   seedSyncedSale,
+  totalChanges,
   type ReturnsHarness,
 } from './__helpers__/returns-fixture.js';
 
@@ -40,7 +43,7 @@ function setup(): ReturnsHarness {
 
 /** Rows inserted, updated or deleted on the connection so far, in any table. */
 function writes(): number {
-  return Number(h.db.exec('SELECT total_changes()')[0]?.values[0]?.[0] ?? 0);
+  return totalChanges(h.db);
 }
 
 describe('RT-198: after stop', () => {
@@ -97,6 +100,39 @@ describe('RT-198: a call in flight at stop writes nothing when it settles', () =
     read.resolve(undefined);
     expect(await pending).toMatchObject(SHUTTING_DOWN);
     expect([writes() - before, h.audits.length, h.backend.calls.length]).toEqual([0, 0, 1]);
+    expect(h.lives.sessionReadsAfterStop).toBe(0);
+  });
+
+  it.each([
+    { label: 'recorded (would confirm)', lost: false, change: null },
+    { label: 'answer lost (would be unconfirmed)', lost: true, change: null },
+    {
+      label: 'recorded after a switch to a cashier (would withhold the answer)',
+      lost: false,
+      change: (): void => {
+        h.state.role = 'cashier';
+      },
+    },
+  ])('submit: a stop during the POST, $label, reads no session', async ({ lost, change }) => {
+    setup();
+    const post = deferredFake<undefined>();
+    h.backend.onReturn = async (call, backend) => {
+      await post.promise;
+      if (lost) throw new TypeError('socket hang up');
+      return backend.recordIdempotently(call);
+    };
+    const pending = h.service.submit(ONE_A);
+    await vi.waitFor(() => {
+      expect(h.backend.returnCalls()).toHaveLength(1);
+    });
+    change?.();
+    h.stop();
+    const before = [writes(), h.audits.length];
+    post.resolve(undefined);
+    // The return is journaled (pending): the next start resends it.
+    expect(await pending).toEqual({ ...SHUTTING_DOWN, ret: null });
+    expect([writes(), h.audits.length]).toEqual(before);
+    expect(h.lives.sessionReadsAfterStop).toBe(0);
   });
 
   it('resolve: a pass in flight at stop answers shutting_down, with no refusal audit', async () => {
@@ -117,5 +153,6 @@ describe('RT-198: a call in flight at stop writes nothing when it settles', () =
     post.resolve(new Response(null, { status: 503 }));
     expect(await pending).toEqual(SHUTTING_DOWN);
     expect([writes(), h.audits.length]).toEqual(before);
+    expect(h.lives.sessionReadsAfterStop).toBe(0);
   });
 });

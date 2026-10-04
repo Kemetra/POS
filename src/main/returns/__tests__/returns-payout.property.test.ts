@@ -174,6 +174,8 @@ function expectQuietAfterCrash(r: PayoutRun): void {
     expect(crash.settled, `seed ${String(r.seed)} crash ${String(i)}`).toEqual(crash.at);
   }
   expect(r.harness.lives.deadTouches, `seed ${String(r.seed)}: DB touched after a crash`).toBe(0);
+  const reads = r.harness.lives.sessionReadsAfterStop;
+  expect(reads, `seed ${String(r.seed)}: session read after stop`).toBe(0);
 }
 
 describe('X7: payout exactly-once under seeded random interleavings', () => {

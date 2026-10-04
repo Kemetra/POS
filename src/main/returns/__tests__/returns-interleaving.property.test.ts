@@ -78,7 +78,7 @@ function expectJournalBeforeSend(run: InterleavingRun): void {
   expect(unjournaled, `seed ${String(run.seed)}`).toEqual([]);
 }
 
-/** RT-198: after stop, nothing is sent and nothing at all is written. */
+/** RT-198: after stop, nothing is sent, nothing at all is written, and no session is read. */
 function expectQuietAfterStop(run: InterleavingRun): void {
   const at = `seed ${String(run.seed)}`;
   expect(run.callsAfterStop, `${at}: requests after stop`).toBe(0);
@@ -93,6 +93,7 @@ function expectQuietAfterStop(run: InterleavingRun): void {
   );
   expect(audits, `${at}: audits after stop`).toEqual([]);
   expect(run.writesAfterStop, `${at}: database rows written after stop`).toBe(0);
+  expect(run.sessionReadsAfterStop, `${at}: session read after stop`).toBe(0);
 }
 
 describe('I5: the return state machine under seeded random interleavings', () => {
