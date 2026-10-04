@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
+import { createSaleBoundaryIpcMain } from './ipc/sale-boundary-guard.js';
 import { registerSessionLockHandlers } from './ipc/session-lock.js';
 import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
 import { createLockStateReader } from './operator/lock-state-reader.js';
@@ -577,9 +578,18 @@ singleInstanceReady
     // the operator session is LOCKED unless its channel is on the allowlist.
     // The session manager is built below; bind the probe to it there.
     const sessionLockProbe: { isLocked: () => boolean } = { isLocked: () => false };
-    const guardedIpcMain = createSessionLockGuardedIpcMain(
-      createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
-      () => sessionLockProbe.isLocked(),
+    // RT-113 P2 — after EVERY cart/payments/tender call, re-check whether a
+    // session that lost its authority has reached its safe point (one choke
+    // point; bound to the keeper once it is built below).
+    const saleBoundaryProbe: { recheck: () => void } = { recheck: () => undefined };
+    const guardedIpcMain = createSaleBoundaryIpcMain(
+      createSessionLockGuardedIpcMain(
+        createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
+        () => sessionLockProbe.isLocked(),
+      ),
+      () => {
+        saleBoundaryProbe.recheck();
+      },
     );
 
     // Register IPC handlers BEFORE the first window loads so the renderer's
@@ -778,11 +788,12 @@ singleInstanceReady
     // RT-113 P2 — keep the online cashier admission live (heartbeat at ≤ TTL/2
     // with a fresh key) and end it on sign-out / session end (best-effort).
     // Lost authority (taken over elsewhere, 403, two consecutive device 401s)
-    // latches the session (cart.create refuses `authority_conflict`) and ends
+    // latches the session (cart.create, and an add to an empty cart, refuse
+    // `authority_conflict`) and ends
     // it at its first safe point: the RT-117 lock-state summary is null when
     // no open sale with lines (and so no live tender) would be affected.
-    // Re-checked at every sale boundary (cart hook below), on lock changes
-    // and by a backstop poll. Stopped on quit with the other workers (RT-198
+    // Re-checked after every sale IPC call (sale-boundary-guard), on lock
+    // changes and by a backstop poll. Stopped on quit with the other workers (RT-198
     // latch: nothing runs after stop).
     const cashierAdmissionKeeper = new CashierAdmissionKeeper({
       sessionManager: operatorSessionManager,
@@ -790,6 +801,9 @@ singleInstanceReady
       isAtSafePoint: () => getOperatorLockState().summary === null,
       logger: mainLogger,
     });
+    saleBoundaryProbe.recheck = () => {
+      cashierAdmissionKeeper.recheckSafePoint();
+    };
     workerRegistry.register('cashier admission heartbeat', () => {
       cashierAdmissionKeeper.stop();
     });
@@ -950,10 +964,6 @@ singleInstanceReady
       releaseCheckoutPayment,
       // RT-26 — read-only twin for Checkout's Back eligibility (no writes).
       checkoutReturnAllowed: bindCheckoutReturnAllowed(db),
-      // RT-113 P2 — a sale boundary re-checks a latched session's safe point.
-      onSaleBoundary: () => {
-        cashierAdmissionKeeper.recheckSafePoint();
-      },
     });
     registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
 

@@ -53,8 +53,6 @@ export interface CartHandlersDeps {
   releaseCheckoutPayment: ReleaseCheckoutPayment;
   /** RT-26 — read-only twin of the guard (`bindCheckoutReturnAllowed`); required. */
   checkoutReturnAllowed: (req: { cart_id: string; handoff_action_id: string }) => boolean;
-  /** RT-113 P2 — sale-boundary hook (see `CartBridgeHandlersDeps.onSaleBoundary`). */
-  onSaleBoundary?: () => void;
 }
 
 /**
@@ -105,7 +103,6 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
     cartPaymentStatus: deps.cartPaymentStatus,
     releaseCheckoutPayment: deps.releaseCheckoutPayment,
     checkoutReturnAllowed: deps.checkoutReturnAllowed,
-    ...(deps.onSaleBoundary !== undefined ? { onSaleBoundary: deps.onSaleBoundary } : {}),
   };
 
   // Only attach `resolveItemRef` when one was resolved — omitting it lets

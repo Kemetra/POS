@@ -27,8 +27,7 @@ import type {
  *  - a session that starts with an online admission is armed: the first
  *    heartbeat fires TTL/2 after sign-in, each next one TTL/2 after the latest
  *    answer. It is a `setTimeout` chain scheduled only AFTER the answer, so
- *    requests never overlap. The interval is clamped to [1 s, 2^31-1 ms]
- *    (review F5);
+ *    requests never overlap. The interval is capped at 2^31-1 ms (review F5);
  *  - any session end disarms it and fires a best-effort, fire-and-forget
  *    `end` for its admission, never blocking sign-out. A replacing session
  *    that holds the SAME admission_id does not end it (review F4);
@@ -38,13 +37,14 @@ import type {
  * Losing authority (Codex P1 #1, review F1/F2/F3): `active_elsewhere`, a 403
  * and two CONSECUTIVE device 401s (the second a confirmation call 30 s after
  * the first) LATCH the session (`SessionManager.latchAuthority`). While
- * latched no new sale may start (`cart.create` refuses `authority_conflict`)
- * and the heartbeat stops. The session ends with its own cause
+ * latched no new sale may start (`cart.create`, and adding a line to an empty
+ * cart, refuse `authority_conflict`) and the heartbeat stops. The session ends with its own cause
  * (`superseded_by_takeover` / `account_disabled_mid_session` /
  * `terminal_session_terminated`) at its FIRST safe point (no open sale with
- * lines and no live tender). The safe point is checked at once, at every sale
- * boundary (`recheckSafePoint`, wired to the cart bridge), on every lock-state
- * change, and every {@link SAFE_POINT_RECHECK_MS} as a backstop. Nothing is
+ * lines and no live tender). The safe point is checked at once, after EVERY
+ * sale IPC call (`recheckSafePoint`, wired at the `sale-boundary-guard.ts`
+ * choke point), on every lock-state change, and every
+ * {@link SAFE_POINT_RECHECK_MS} as a backstop. Nothing is
  * reversed or discarded. A 403 or confirmed 401 invalidates the P1 grant at
  * once (D4).
  *
@@ -64,14 +64,16 @@ export const DEVICE_401_CONFIRM_MS = 30_000;
 /** Review F6: the first retry after a failed tick (network, 5xx, 429). */
 export const FAILED_TICK_RETRY_MS = 60_000;
 
-const MIN_INTERVAL_MS = 1_000;
 /** The largest delay `setTimeout` honours (a larger one fires at once). */
 const MAX_INTERVAL_MS = 2_147_483_647;
 
-/** The heartbeat interval: half the TTL in ms, clamped to [1 s, 2^31-1 ms] (F5). */
+/**
+ * The heartbeat interval: half the TTL in ms, capped at the setTimeout maximum
+ * (review F5). No floor beyond the contract's own (Codex P2 4179617259): the
+ * client rejects a TTL below 1 s or a non-integer, so this is at least 500 ms.
+ */
 export function heartbeatIntervalMs(ttlSeconds: number): number {
-  const half = Math.floor((ttlSeconds * 1000) / 2);
-  return Math.min(MAX_INTERVAL_MS, Math.max(MIN_INTERVAL_MS, half));
+  return Math.min(MAX_INTERVAL_MS, Math.floor((ttlSeconds * 1000) / 2));
 }
 
 /** Failed ticks that retry sooner (review F6). */
