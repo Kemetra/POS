@@ -4,6 +4,7 @@ import {
   CashierAdmissionKeeper,
   DEVICE_401_CONFIRM_MS,
   FAILED_TICK_RETRY_MS,
+  MIN_RETRY_MS,
   SAFE_POINT_RECHECK_MS,
   heartbeatIntervalMs,
 } from '../../../../src/main/operator/cashier-admission-keeper.js';
@@ -78,6 +79,7 @@ function harness(): Harness {
 function signInCashier(
   sessions: SessionManager,
   ttl = TTL_S,
+  admission_requested_at_ms?: number,
 ): ReturnType<SessionManager['create']> {
   return sessions.create({
     operator_id: 'user_clerk_1',
@@ -91,8 +93,23 @@ function signInCashier(
       admission_id: FAKE_ADMISSION_ID,
       admission_ttl_seconds: ttl,
       offline_grace_seconds: 86_400,
+      ...(admission_requested_at_ms !== undefined ? { admission_requested_at_ms } : {}),
     },
   });
+}
+
+/** Records when each admit call is made, in ms since the harness started. */
+function recordCallTimes(
+  h: Harness,
+  answer: (n: number) => CashierAdmissionResult | Promise<CashierAdmissionResult>,
+): number[] {
+  const start = Date.now();
+  const times: number[] = [];
+  h.fake.setAdmit(() => {
+    times.push(Date.now() - start);
+    return answer(times.length);
+  });
+  return times;
 }
 
 /** Advance fake time and let the awaited admit() settle. */
@@ -341,7 +358,7 @@ describe('heartbeat outcomes', () => {
   });
 
   it.each([{ kind: 'rejected' }, { kind: 'idempotency_conflict' }, { kind: 'no_token' }] as const)(
-    '%o keeps the session and retries on the next tick',
+    '%o keeps the session and retries after half the time left before the deadline (Codex P2 4179771036)',
     async (result) => {
       const h = harness();
       const record = signInCashier(h.sessions);
@@ -349,7 +366,8 @@ describe('heartbeat outcomes', () => {
       await advance(HALF_TTL_MS);
       expect(h.sessions.getCurrent()?.id).toBe(record.id);
       expect(h.fake.admitCalls).toHaveLength(1);
-      await advance(HALF_TTL_MS - 1);
+      // TTL/2 left before the admission lapses → retry after half of that.
+      await advance(HALF_TTL_MS / 2 - 1);
       expect(h.fake.admitCalls).toHaveLength(1);
       await advance(1);
       expect(h.fake.admitCalls).toHaveLength(2);
@@ -377,52 +395,131 @@ describe('heartbeat outcomes', () => {
     },
   );
 
-  it('review F6: failed ticks back off exponentially, capped at TTL/2; success restores the cadence', async () => {
+  it('review F6 + Codex P2 4179771036: the backoff is capped by half the time left; a renewal resets the deadline', async () => {
+    const h = harness();
+    signInCashier(h.sessions); // deadline: 600 s
+    const times = recordCallTimes(h, (n) =>
+      n === 6 ? { ...ADMITTED, admission_ttl_seconds: TTL_S } : { kind: 'no_connection' },
+    );
+    await advance(950_000);
+    expect(times.slice(0, 8)).toEqual([
+      300_000, // TTL/2: fails
+      360_000, // backoff 60 s < 150 s left/2
+      480_000, // backoff 120 s = 240 s left/2
+      540_000, // backoff 240 s, capped: 120 s left → 60 s
+      570_000, // 60 s left → 30 s
+      585_000, // 30 s left → 15 s: admitted; new deadline 585 + 600 = 1185 s
+      885_000, // the normal cadence again: TTL/2 after the renewal; fails
+      945_000, // the failure counter restarted: backoff 60 s < 300 s left/2
+    ]);
+    expect(times.every((t, i) => i === 0 || t > (times[i - 1] ?? 0))).toBe(true);
+  });
+
+  it('Codex P2 4179771036: TTL 60 s, a 503 at 30 s: the retry is strictly before 60 s, and several attempts fit before expiry', async () => {
+    const h = harness();
+    const record = signInCashier(h.sessions, 60);
+    const times = recordCallTimes(h, () => ({ kind: 'unavailable' }));
+    await advance(60_000);
+    expect(times[0]).toBe(30_000);
+    expect(times[1]).toBe(45_000); // half of the 30 s left, not 30 s after the 503
+    expect(times.length).toBeGreaterThanOrEqual(5);
+    expect(times.every((t) => t < 60_000)).toBe(true);
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
+  });
+
+  it('Codex P2 4179771036: TTL 1 s: the retry lands inside the window, then backs off; no tight loop', async () => {
+    const h = harness();
+    signInCashier(h.sessions, 1);
+    const times = recordCallTimes(h, () => ({ kind: 'no_connection' }));
+    await advance(3_000);
+    // 500 ms (TTL/2) fails; 250 ms (MIN_RETRY_MS) before the 1 s deadline;
+    // then the deadline has lapsed: the F6 backoff, capped at TTL/2.
+    expect(times).toEqual([500, 750, 1_250, 1_750, 2_250, 2_750]);
+    expect(MIN_RETRY_MS).toBe(250);
+  });
+
+  it('Codex P2 4179771036: a 429 backing off is still capped by the deadline', async () => {
     const h = harness();
     signInCashier(h.sessions);
-    h.fake.setAdmit({ kind: 'no_connection' });
-    const callTimes: number[] = [];
-    const start = Date.now();
-    h.fake.setAdmit(() => {
-      callTimes.push(Date.now() - start);
-      return callTimes.length < 6
-        ? { kind: 'no_connection' }
-        : { ...ADMITTED, admission_ttl_seconds: TTL_S };
-    });
-    await advance(HALF_TTL_MS + 60_000 + 120_000 + 240_000 + 300_000 + 300_000 + HALF_TTL_MS);
-    expect(callTimes).toEqual([
-      HALF_TTL_MS,
-      HALF_TTL_MS + 60_000,
-      HALF_TTL_MS + 180_000,
-      HALF_TTL_MS + 420_000,
-      HALF_TTL_MS + 720_000,
-      HALF_TTL_MS + 1_020_000,
-      HALF_TTL_MS + 1_020_000 + HALF_TTL_MS,
-    ]);
+    const times = recordCallTimes(h, () => ({ kind: 'rate_limited' }));
+    await advance(TTL_S * 1000);
+    expect(times.slice(0, 6)).toEqual([300_000, 360_000, 480_000, 540_000, 570_000, 585_000]);
+    expect(times.every((t) => t < TTL_S * 1000)).toBe(true);
   });
 
-  it('review F6: the failed-tick retry never exceeds TTL/2 when TTL/2 is under 60 s', async () => {
+  it('Codex P2 4179771036: after the deadline lapses unrenewed, the session stays and retries at the F6 backoff (P1/P3 own offline)', async () => {
     const h = harness();
-    signInCashier(h.sessions, 20); // TTL/2 = 10 s
-    h.fake.setAdmit({ kind: 'no_connection' });
-    await advance(10_000);
-    expect(h.fake.admitCalls).toHaveLength(1);
-    await advance(10_000);
-    expect(h.fake.admitCalls).toHaveLength(2);
+    const record = signInCashier(h.sessions);
+    const times = recordCallTimes(h, () => ({ kind: 'no_connection' }));
+    await advance(TTL_S * 1000 + 2 * HALF_TTL_MS);
+    const before = times.filter((t) => t < TTL_S * 1000);
+    const after = times.filter((t) => t >= TTL_S * 1000);
+    const last = before[before.length - 1] ?? 0;
+    expect(TTL_S * 1000 - last).toBeGreaterThan(0);
+    expect(TTL_S * 1000 - last).toBeLessThanOrEqual(MIN_RETRY_MS);
+    // The lapsed branch: no more halving, the capped backoff (TTL/2).
+    expect(after).toEqual([last + HALF_TTL_MS, last + 2 * HALF_TTL_MS]);
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+    expect(h.ends).toEqual([]);
   });
 
-  it('Codex P2 4179701427: with a 1 s TTL a first device 401 is confirmed after 500 ms, not 30 s', async () => {
+  it('Codex P2 4179771036: the deadline is anchored at the request SEND time, so a slow admitted shortens the next wait', async () => {
+    const h = harness();
+    signInCashier(h.sessions, 60);
+    const times = recordCallTimes(
+      h,
+      (n) =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          // The first renewal takes 10 s to answer.
+          setTimeout(
+            () => {
+              resolve({ ...ADMITTED, admission_ttl_seconds: 60 });
+            },
+            n === 1 ? 10_000 : 0,
+          );
+        }),
+    );
+    await advance(70_000);
+    // Sent at 30 s → deadline 90 s; answered at 40 s → next at 40 + 50/2 = 65 s
+    // (answer-anchored TTL/2 would give 70 s).
+    expect(times.slice(0, 2)).toEqual([30_000, 65_000]);
+  });
+
+  it('Codex P2 4179771036: a sign-in admission sent before the session was created anchors the first deadline', async () => {
+    const h = harness();
+    // The sign-in admit was SENT 10 s before the session was created.
+    signInCashier(h.sessions, 60, performance.now() - 10_000);
+    h.fake.setAdmit({ kind: 'unavailable' });
+    await advance(24_999);
+    expect(h.fake.admitCalls).toHaveLength(0);
+    await advance(1);
+    // Deadline 50 s from now → the first heartbeat after 25 s, not 30 s.
+    expect(h.fake.admitCalls).toHaveLength(1);
+  });
+
+  it('Codex P2 4179771036: TTL 60 s, a first device 401 at 30 s is confirmed before the deadline', async () => {
+    const h = harness();
+    signInCashier(h.sessions, 60);
+    const times = recordCallTimes(h, () => ({ kind: 'device_unauthorized' }));
+    await advance(60_000);
+    // min(30 s, half of the 30 s left) → 45 s, not 60 s.
+    expect(times).toEqual([30_000, 45_000]);
+    expect(h.ends).toEqual(['terminal_session_terminated']);
+  });
+
+  it('Codex P2 4179701427 / 4179771036: with a 1 s TTL a first device 401 is confirmed before the 1 s deadline, not 30 s later', async () => {
     const h = harness();
     const record = signInCashier(h.sessions, 1);
     h.fake.setAdmit({ kind: 'device_unauthorized' });
     await advance(500);
     expect(h.fake.admitCalls).toHaveLength(1);
     expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
-    await advance(499);
+    await advance(249);
     expect(h.fake.admitCalls).toHaveLength(1);
     await advance(1);
     expect(h.fake.admitCalls).toHaveLength(2);
-    // Two consecutive 401s, 500 ms apart: latched and ended (no sale open).
+    // Two consecutive 401s, 250 ms apart: latched and ended (no sale open).
     expect(h.ends).toEqual(['terminal_session_terminated']);
     expect(h.sessions.getCurrent()?.id).not.toBe(record.id);
   });

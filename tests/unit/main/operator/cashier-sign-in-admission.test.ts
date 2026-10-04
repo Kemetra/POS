@@ -403,3 +403,23 @@ describe('cashier sign-in — a session lost during the post-create await', () =
     keeper.stop();
   });
 });
+
+describe('Codex P2 4179771036 — the admission deadline is anchored at the request SEND time', () => {
+  it('the session records when the sign-in admission request was sent (monotonic), not when it was answered', async () => {
+    const { handler, sessions, fake } = build();
+    let sentAt = Number.NaN;
+    fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          sentAt = performance.now();
+          setTimeout(() => {
+            resolve(ADMITTED);
+          }, 30);
+        }),
+    );
+    await expect(handler.signIn(request())).resolves.toMatchObject({ kind: 'signed_in' });
+    const stamped = sessions.getCurrent()?.admission_requested_at_ms;
+    expect(typeof stamped).toBe('number');
+    expect(stamped).toBeLessThanOrEqual(sentAt);
+  });
+});

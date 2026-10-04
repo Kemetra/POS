@@ -249,3 +249,25 @@ describe('cashier takeover — a session lost during the post-create await', () 
     ).resolves.toEqual({ kind: 'refused', category: 'state_invalid' });
   });
 });
+
+describe('Codex P2 4179771036 — the takeover admission deadline is anchored at the request SEND time', () => {
+  it('the session records when the takeover admission request was sent, not when it was answered', async () => {
+    const { handler, store, sessions, fake } = build();
+    let sentAt = Number.NaN;
+    fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          sentAt = performance.now();
+          setTimeout(() => {
+            resolve(ADMITTED);
+          }, 30);
+        }),
+    );
+    const proto = cashierProto();
+    store.set(proto);
+    await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
+    const stamped = sessions.getCurrent()?.admission_requested_at_ms;
+    expect(typeof stamped).toBe('number');
+    expect(stamped).toBeLessThanOrEqual(sentAt);
+  });
+});
