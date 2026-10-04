@@ -51,7 +51,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     kind: 'credential-mismatch',
     sent: 'none',
     requires: ['operator-jwt'],
-    tickets: ['TODO-ticket'],
+    tickets: ['RT-218'],
     note:
       'POST /vouchers/validate declares operator-identity; the client sends no Authorization. ' +
       'Contract V-A is x-runtime-status: contract-only (no Backend-Core route yet) and the voucher ' +
@@ -62,7 +62,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     kind: 'credential-mismatch',
     sent: 'none',
     requires: ['operator-jwt'],
-    tickets: ['TODO-ticket'],
+    tickets: ['RT-218'],
     note: 'Same as validateVoucher: POST /vouchers/redeem declares operator-identity.',
   },
   {
@@ -70,7 +70,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     kind: 'credential-mismatch',
     sent: 'none',
     requires: ['operator-jwt'],
-    tickets: ['TODO-ticket'],
+    tickets: ['RT-218'],
     note: 'Same as validateVoucher: POST /vouchers/reverse declares operator-identity.',
   },
 ];
