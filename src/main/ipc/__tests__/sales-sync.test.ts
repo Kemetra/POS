@@ -4,7 +4,7 @@
  * The whole sale-sync bridge surface is a SINGLE read-only channel. This test
  * locks the §A4 contract:
  *   • exactly one channel is registered: `sales:syncStatus` — NO write/trigger channel;
- *   • it returns `{ pending, deadLetter, lastSuccessAt }` from the injected reader,
+ *   • it returns `{ pending, deadLetter, payloadDivergence, lastSuccessAt }` from the injected reader,
  *     scoped to the resolved device principal (request carries no scope — INP-1);
  *   • the response carries no token / PII / raw error (P7) — only counts + a timestamp.
  */
@@ -43,6 +43,7 @@ function fakeIpcMain(): {
 const STATUS: SaleSyncStatusCounts = {
   pending: 3,
   deadLetter: 1,
+  payloadDivergence: 1,
   lastSuccessAt: '2026-06-07T10:00:00.000Z',
 };
 
@@ -74,7 +75,12 @@ describe('T051 — sales:syncStatus IPC (read-only)', () => {
     expect(serialized).not.toContain('token');
     expect(serialized).not.toContain('bearer');
     expect(serialized).not.toContain('operator');
-    expect(Object.keys(res).sort()).toEqual(['deadLetter', 'lastSuccessAt', 'pending']);
+    expect(Object.keys(res).sort()).toEqual([
+      'deadLetter',
+      'lastSuccessAt',
+      'payloadDivergence',
+      'pending',
+    ]);
   });
 
   it('T050 (016): no credential — opaque envelope or otherwise — crosses the bridge', async () => {
