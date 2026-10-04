@@ -145,6 +145,59 @@ async function queryEligibility(
   return res.returnable ? 'returnable' : 'blocked';
 }
 
+interface EligibilityRequest {
+  readonly cart_id: string;
+  readonly handoff_action_id: string;
+}
+
+/** An eligibility answer, tagged with the handoff it was read for. */
+interface EligibilityResult {
+  readonly handoff: string;
+  readonly value: BackToSaleEligibility;
+}
+
+const selectCartId = (s: ReturnType<typeof usePaymentStore.getState>): string | null =>
+  s.envelope?.cart_id ?? null;
+const selectHandoffId = (s: ReturnType<typeof usePaymentStore.getState>): string | null =>
+  s.envelope?.handoff_action_id ?? null;
+
+/** The request for the mounted envelope, or null when none is mounted. */
+function eligibilityRequest(
+  cart_id: string | null,
+  handoff_action_id: string | null,
+): EligibilityRequest | null {
+  if (cart_id === null) return null;
+  return handoff_action_id === null ? null : { cart_id, handoff_action_id };
+}
+
+/** Only an answer for the CURRENT handoff counts; anything else is `unknown`. */
+function currentEligibility(
+  result: EligibilityResult | null,
+  handoffId: string | null,
+): BackToSaleEligibility {
+  return result?.handoff === handoffId ? result.value : 'unknown';
+}
+
+/**
+ * Ask main for one handoff and report the answer unless cancelled. Returns the
+ * effect cleanup (or undefined when there is nothing to ask).
+ */
+function startEligibilityRead(
+  bridge: CartBridgeAPI | undefined,
+  req: EligibilityRequest | null,
+  onResult: (result: EligibilityResult) => void,
+): (() => void) | undefined {
+  const query = resolveEligibilityQuery(bridge);
+  if (req === null || query === null) return undefined;
+  let cancelled = false;
+  void queryEligibility(query, req.cart_id, req.handoff_action_id).then((value) => {
+    if (!cancelled) onResult({ handoff: req.handoff_action_id, value });
+  });
+  return () => {
+    cancelled = true;
+  };
+}
+
 /**
  * RT-26 — main's durable answer to "may this handoff go Back?", read once per
  * mounted envelope. Tender history is monotonic (it never disappears for a
@@ -152,24 +205,14 @@ async function queryEligibility(
  * enough; a remount re-reads instead of trusting lost component state.
  */
 export function useBackToSaleEligibility(bridge?: CartBridgeAPI): BackToSaleEligibility {
-  const cartId = usePaymentStore((s) => s.envelope?.cart_id ?? null);
-  const handoffId = usePaymentStore((s) => s.envelope?.handoff_action_id ?? null);
-  const [result, setResult] = useState<{
-    handoff: string;
-    value: BackToSaleEligibility;
-  } | null>(null);
+  const cartId = usePaymentStore(selectCartId);
+  const handoffId = usePaymentStore(selectHandoffId);
+  const [result, setResult] = useState<EligibilityResult | null>(null);
 
-  useEffect(() => {
-    const query = resolveEligibilityQuery(bridge);
-    if (cartId === null || handoffId === null || query === null) return undefined;
-    let cancelled = false;
-    void queryEligibility(query, cartId, handoffId).then((value) => {
-      if (!cancelled) setResult({ handoff: handoffId, value });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [bridge, cartId, handoffId]);
+  useEffect(
+    () => startEligibilityRead(bridge, eligibilityRequest(cartId, handoffId), setResult),
+    [bridge, cartId, handoffId],
+  );
 
-  return result !== null && result.handoff === handoffId ? result.value : 'unknown';
+  return currentEligibility(result, handoffId);
 }
