@@ -226,6 +226,73 @@ describe('cart under the authority latch (handler level)', () => {
   });
 });
 
+/** Session manager, keeper and cart handlers wired through the choke point, as production does. */
+function chokePointHarness(ttlS: number): {
+  sessions: SessionManager;
+  keeper: CashierAdmissionKeeper;
+  fake: ReturnType<typeof fakeCashierAdmission>;
+  ends: (string | undefined)[];
+  invoke: (channel: string, req: unknown) => Promise<unknown>;
+} {
+  const sessions = new SessionManager();
+  const { store } = freshStore();
+  const fake = fakeCashierAdmission({ ...ADMITTED, admission_ttl_seconds: ttlS });
+  const ends: (string | undefined)[] = [];
+  sessions.onEnded((_r, cause) => ends.push(cause));
+
+  // Safe point = the session's open cart has no active line (no tender here).
+  const isAtSafePoint = (): boolean => {
+    const s = sessions.getCurrent();
+    const cart = s === null ? undefined : store.findDraftCartBySession(s.id);
+    return cart === undefined || store.getActiveLines(cart.cart_id).length === 0;
+  };
+  const keeper = new CashierAdmissionKeeper({
+    sessionManager: sessions,
+    admission: fake.deps,
+    isAtSafePoint,
+  });
+
+  const handlers = new Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>();
+  const ipcMain = {
+    handle: (c: string, f: (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown) => {
+      handlers.set(c, f);
+    },
+  } as unknown as IpcMain;
+  registerCartHandlers(
+    createSaleBoundaryIpcMain(ipcMain, () => {
+      keeper.recheckSafePoint();
+    }),
+    {
+      handlers: new CartBridgeHandlers({
+        getCurrentSession: () => sessions.getCurrent(),
+        getTerminalId: () => 'terminal-1',
+        cartStore: store,
+        resolveItemRef,
+      }),
+    },
+  );
+  const invoke = async (c: string, req: unknown): Promise<unknown> =>
+    await handlers.get(c)?.({} as IpcMainInvokeEvent, req);
+  return { sessions, keeper, fake, ends, invoke };
+}
+
+function signInOnlineCashier(sessions: SessionManager, ttlS: number): void {
+  sessions.create({
+    operator_id: 'user_clerk_1',
+    display_name: 'Cashier',
+    role: 'cashier',
+    tenant_id: 'tenant-1',
+    branch_id: 'branch-1',
+    backend_session_id: '',
+    cashier_admission: {
+      user_id: FAKE_USER_ID,
+      admission_id: FAKE_ADMISSION_ID,
+      admission_ttl_seconds: ttlS,
+      offline_grace_seconds: 86_400,
+    },
+  });
+}
+
 describe('Codex P1 4179617256 — removing the final line ends a latched session at once', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -236,60 +303,8 @@ describe('Codex P1 4179617256 — removing the final line ends a latched session
 
   it('latched cashier removes the final line, then adds an item: the add is refused and the session ended', async () => {
     const TTL_S = 600;
-    const sessions = new SessionManager();
-    const { store } = freshStore();
-    const fake = fakeCashierAdmission({ ...ADMITTED, admission_ttl_seconds: TTL_S });
-    const ends: (string | undefined)[] = [];
-    sessions.onEnded((_r, cause) => ends.push(cause));
-
-    // Safe point = the session's open cart has no active line (no tender here).
-    const isAtSafePoint = (): boolean => {
-      const s = sessions.getCurrent();
-      const cart = s === null ? undefined : store.findDraftCartBySession(s.id);
-      return cart === undefined || store.getActiveLines(cart.cart_id).length === 0;
-    };
-    const keeper = new CashierAdmissionKeeper({
-      sessionManager: sessions,
-      admission: fake.deps,
-      isAtSafePoint,
-    });
-
-    const handlers = new Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>();
-    const ipcMain = {
-      handle: (c: string, f: (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown) => {
-        handlers.set(c, f);
-      },
-    } as unknown as IpcMain;
-    registerCartHandlers(
-      createSaleBoundaryIpcMain(ipcMain, () => {
-        keeper.recheckSafePoint();
-      }),
-      {
-        handlers: new CartBridgeHandlers({
-          getCurrentSession: () => sessions.getCurrent(),
-          getTerminalId: () => 'terminal-1',
-          cartStore: store,
-          resolveItemRef,
-        }),
-      },
-    );
-    const invoke = async (c: string, req: unknown): Promise<unknown> =>
-      await handlers.get(c)?.({} as IpcMainInvokeEvent, req);
-
-    sessions.create({
-      operator_id: 'user_clerk_1',
-      display_name: 'Cashier',
-      role: 'cashier',
-      tenant_id: 'tenant-1',
-      branch_id: 'branch-1',
-      backend_session_id: '',
-      cashier_admission: {
-        user_id: FAKE_USER_ID,
-        admission_id: FAKE_ADMISSION_ID,
-        admission_ttl_seconds: TTL_S,
-        offline_grace_seconds: 86_400,
-      },
-    });
+    const { sessions, keeper, fake, ends, invoke } = chokePointHarness(TTL_S);
+    signInOnlineCashier(sessions, TTL_S);
     const created = (await invoke(CART_IPC_CHANNELS.CREATE, {
       idempotency_key: 'create-ipc-latch-0001',
     })) as { cart_id: string };
