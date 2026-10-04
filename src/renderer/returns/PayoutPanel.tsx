@@ -29,6 +29,7 @@ const TONES: Readonly<Record<PayoutPhase['kind'], Tone>> = {
   confirm_manual: 'warning',
   paid: 'success',
   refused: 'danger',
+  wait: 'warning',
   unknown: 'danger',
 };
 
@@ -67,6 +68,7 @@ function statusLines(phase: PayoutPhase): string[] {
     case 'paid':
       return paidLines(phase);
     case 'refused':
+    case 'wait':
       return [refusalMessage(phase.reason)];
     case 'unknown':
       return [PAYOUT_COPY.unknown];
@@ -182,6 +184,7 @@ function Actions({ payout }: ActionProps): JSX.Element | null {
         />
       );
     case 'unknown':
+    case 'wait':
       return (
         <Btn
           label={PAYOUT_COPY.refresh}

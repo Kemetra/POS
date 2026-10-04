@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { act, cleanup, renderHook, screen, within } from '@testing-library/react';
+import { act, cleanup, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -7,6 +7,7 @@ import type { ReturnJournalView } from '../../../shared/returns/types.js';
 import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config.js';
 import { PAYOUT_COPY, refusalMessage } from '../returns-messages.js';
 import { usePayout } from '../usePayout.js';
+import { useReturnHistory } from '../useReturnHistory.js';
 import {
   deferred,
   fakeBridge,
@@ -33,6 +34,8 @@ const STARTED = {
   paidAt: null,
   method: null,
   kick: 'failed_before_send' as const,
+  kickCount: 1,
+  kickPending: false,
 };
 const ROWS: ReturnJournalView[] = [
   journal({ returnId: 'r-ready', saleNumber: 'T1-000001' }),
@@ -231,5 +234,23 @@ describe('usePayout follows a newer prop of the same return (Codex P2)', () => {
     });
     rerender({ ret: { ...STARTED_R1 } });
     expect(result.current.state.phase.kind).toBe('confirm_manual');
+  });
+});
+
+describe('the open payout is fed the last good journal rows (reviewer P2 on 49e0277)', () => {
+  it.each<[string, () => Promise<unknown>]>([
+    ['refused', () => Promise.resolve({ kind: 'refused', reason: 'session_changed' })],
+    ['failed', () => Promise.reject(new Error('locked'))],
+  ])('a reload that is %s keeps the last listed rows', async (_l, answer) => {
+    const bridge = fakeBridge();
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: ROWS });
+    const { result } = renderHook(() => useReturnHistory(bridge, null));
+    await waitFor(() => {
+      expect(result.current.known).toEqual(ROWS);
+    });
+    bridge.list.mockImplementation(answer as never);
+    await act(() => result.current.reload());
+    expect(result.current.state.status).not.toBe('ok');
+    expect(result.current.known).toEqual(ROWS);
   });
 });

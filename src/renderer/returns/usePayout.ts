@@ -11,7 +11,6 @@ import {
   askManual,
   cancelManual,
   initialPayout,
-  payoutRevision,
   refreshed,
   synced,
   type PayoutState,
@@ -44,13 +43,12 @@ export function usePayout(
   reload: Reload,
 ): Payout {
   const [state, setState] = useState<PayoutState>(() => initialPayout(ret));
-  // Codex P2: `ret` is not only the seed. A newer view of this return (by
-  // payout revision) is adopted while rendering (React's "adjust state when a
-  // prop changes"); the same view keeps what this panel learned live.
-  const revision = payoutRevision(ret);
-  const [seen, setSeen] = useState(revision);
-  if (seen !== revision) {
-    setSeen(revision);
+  // Codex P2: `ret` is not only the seed. A strictly newer view of this
+  // return is adopted while rendering (React's "adjust state when a prop
+  // changes"); the same or an older view keeps what this panel holds.
+  const [seen, setSeen] = useState(ret);
+  if (seen !== ret) {
+    setSeen(ret);
     setState((s) => synced(s, ret));
   }
   const { busy, run } = useSingleFlight<PayoutOp>();

@@ -19,6 +19,7 @@ import {
   cancelManual,
   initialPayout,
   refreshed,
+  synced,
   type PayoutState,
 } from '../payout-state.js';
 import { CALL_FAILED } from '../returns-bridge.js';
@@ -30,12 +31,16 @@ const STARTED = {
   paidAt: null,
   method: null,
   kick: 'failed_before_send' as const,
+  kickCount: 1,
+  kickPending: false,
 };
 const PAID = {
   startedAt: '2026-10-04T09:06:00.000Z',
   paidAt: '2026-10-04T09:06:05.000Z',
   method: 'drawer' as const,
   kick: 'opened' as const,
+  kickCount: 1,
+  kickPending: false,
 };
 const READY = journal();
 const INTERRUPTED = journal({ payout: STARTED });
@@ -143,10 +148,10 @@ describe('afterPayout', () => {
   });
 
   it('a refusal without a row keeps the current row', () => {
-    const res: ReturnsPayoutResponse = { kind: 'refused', reason: 'session_changed', ret: null };
+    const res: ReturnsPayoutResponse = { kind: 'refused', reason: 'not_payable', ret: null };
     expect(afterPayout(state(), res)).toEqual({
       ret: READY,
-      phase: { kind: 'refused', reason: 'session_changed' },
+      phase: { kind: 'refused', reason: 'not_payable' },
       reprint: null,
     });
   });
@@ -209,5 +214,68 @@ describe('afterReprint (Codex P2: never call a refusal or an unknown a printer f
     [CALL_FAILED, { kind: 'unknown' }],
   ])('%o → %o', (res, expected) => {
     expect(afterReprint(state(PAID_OUT), res).reprint).toEqual(expected);
+  });
+});
+
+/** A kick (the n-th) whose outcome is not recorded yet (`sending`), or is. */
+function kicked(kickCount: number, kickPending: boolean): ReturnJournalView {
+  return journal({ payout: { ...STARTED, kick: 'unknown', kickCount, kickPending } });
+}
+
+describe('synced: only a strictly newer view is adopted, never a downgrade', () => {
+  it.each<[string, ReturnJournalView, ReturnJournalView, boolean]>([
+    ['ready → started (adopted)', READY, INTERRUPTED, true],
+    ['started → paid (adopted)', INTERRUPTED, PAID_OUT, true],
+    // Reviewer P2 (49e0277): a stale or original view never rolls a panel back.
+    ['started → ready (kept)', INTERRUPTED, READY, false],
+    ['paid → ready (kept)', PAID_OUT, READY, false],
+    ['paid → started (kept)', PAID_OUT, INTERRUPTED, false],
+    // Codex P2 (49e0277): a kick's outcome recorded after `sending` is newer.
+    ['a kick sending → its outcome recorded (adopted)', kicked(1, true), kicked(1, false), true],
+    ['a recorded outcome → sending (older) (kept)', kicked(1, false), kicked(1, true), false],
+    ['no drawer → a retry kick sending (adopted)', INTERRUPTED, kicked(2, true), true],
+    ['a retry kick sending → the first kick (older) (kept)', kicked(2, true), INTERRUPTED, false],
+    ['the same view (kept)', INTERRUPTED, journal({ payout: { ...STARTED } }), false],
+  ])('%s', (_l, from, to, adopted) => {
+    const live: PayoutState = { ...state(from), phase: { kind: 'unknown' } };
+    expect(synced(live, to)).toEqual(adopted ? initialPayout(to) : live);
+  });
+});
+
+describe('transient refusals wait for a refresh (Codex P2 on 49e0277)', () => {
+  it.each(['drawer_kick_in_progress', 'session_changed', 'no_session', 'offline'] as const)(
+    '%s is a wait with a refresh, keeping the row',
+    (reason) => {
+      expect(afterPayout(state(INTERRUPTED), { kind: 'refused', reason, ret: null })).toEqual({
+        ret: INTERRUPTED,
+        phase: { kind: 'wait', reason },
+        reprint: null,
+      });
+    },
+  );
+
+  it.each(['not_payable', 'role_denied', 'feature_disabled', 'shutting_down'] as const)(
+    '%s stays a final refusal',
+    (reason) => {
+      const res: ReturnsPayoutResponse = { kind: 'refused', reason, ret: null };
+      expect(afterPayout(state(INTERRUPTED), res).phase).toEqual({ kind: 'refused', reason });
+    },
+  );
+
+  it('a refresh after the lease re-derives the actions: unknown kick → manual only', () => {
+    const waiting: PayoutState = {
+      ret: kicked(2, true),
+      phase: { kind: 'wait', reason: 'drawer_kick_in_progress' },
+      reprint: null,
+    };
+    expect(refreshed(waiting, kicked(2, false)).phase).toEqual({
+      kind: 'interrupted',
+      retryable: false,
+    });
+  });
+
+  it('a refresh never rolls back to an older row', () => {
+    const paid: PayoutState = { ...state(PAID_OUT), phase: { kind: 'unknown' } };
+    expect(refreshed(paid, READY).phase.kind).toBe('paid');
   });
 });

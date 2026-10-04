@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -9,6 +9,7 @@ import { PAYOUT_COPY, drawerFailureMessage, refusalMessage } from '../returns-me
 import {
   deferred,
   fakeBridge,
+  fakeSessionEvents,
   journal,
   renderReturns,
   resetStores,
@@ -33,6 +34,8 @@ const STARTED = {
   paidAt: null,
   method: null,
   kick: 'failed_before_send' as const,
+  kickCount: 1,
+  kickPending: false,
 };
 const PAID_ROW = journal({
   state: 'paid_out',
@@ -304,5 +307,74 @@ describe('accessibility', () => {
     await user.click(screen.getByRole('button', { name: PAYOUT_COPY.confirmManualYes }));
     await screen.findByText(PAYOUT_COPY.slipFailed);
     await expectNoAxeViolations(container);
+  });
+});
+
+/**
+ * Reviewer P2 (49e0277): a panel never moves back to an older view. A
+ * journal reload that fails or is refused (e.g. under a lock) must not put
+ * the original confirmed view back and offer "pay out" on a paid return.
+ */
+describe('the confirmed outcome keeps its newest payout view', () => {
+  it.each<[string, () => Promise<unknown>]>([
+    ['refused', () => Promise.resolve({ kind: 'refused', reason: 'session_changed' })],
+    ['failed', () => Promise.reject(new Error('locked'))],
+  ])('a paid panel stays paid after a journal reload that is %s', async (_l, answer) => {
+    const events = fakeSessionEvents();
+    const bridge = fakeBridge();
+    // The journal lists the return as paid once it is paid out.
+    bridge.payout.mockImplementationOnce(() => {
+      bridge.list.mockResolvedValue({ kind: 'ok', returns: [PAID_ROW] });
+      return Promise.resolve(PAID_BY_DRAWER);
+    });
+    const user = userEvent.setup();
+    renderReturns({ bridge, sessionEvents: events });
+    await submitReturn(user);
+    await user.click(await screen.findByRole('button', { name: START_NAME }));
+    await screen.findByText(PAYOUT_COPY.paid);
+    bridge.list.mockImplementation(answer as never);
+    events.push({ state: 'active' });
+    await waitFor(() => {
+      expect(bridge.list).toHaveBeenCalledTimes(4);
+    });
+    expect(screen.getByText(PAYOUT_COPY.paid)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: START_NAME })).toBeNull();
+  });
+});
+
+/**
+ * Codex P2 (49e0277): a kick in progress (possibly another instance's) is a
+ * wait, not a dead end: the panel offers a refresh, and after the lease the
+ * refreshed journal offers the attested manual payout only.
+ */
+describe('a kick in progress elsewhere can be refreshed', () => {
+  /** Another instance's retry kick: in flight, then recorded as unknown (after the lease). */
+  const RETRY = { ...STARTED, kick: 'unknown' as const, kickCount: 2 };
+  const SENDING = journal({ payout: { ...RETRY, kickPending: true } });
+  const SETTLED = journal({ payout: { ...RETRY, kickPending: false } });
+
+  it('drawer_kick_in_progress offers a refresh; after the lease, manual only', async () => {
+    const bridge = fakeBridge();
+    bridge.submit.mockResolvedValue({
+      kind: 'confirmed',
+      ret: journal({ payout: STARTED }),
+      replayed: false,
+    });
+    bridge.payout.mockResolvedValueOnce({
+      kind: 'refused',
+      reason: 'drawer_kick_in_progress',
+      ret: SENDING,
+    });
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: [SENDING] });
+    const user = await confirmedOutcome(bridge);
+    await user.click(screen.getByRole('button', { name: PAYOUT_COPY.interruptedManual }));
+    await user.click(screen.getByRole('button', { name: PAYOUT_COPY.confirmManualYes }));
+    expect(await screen.findByText(refusalMessage('drawer_kick_in_progress'))).toBeInTheDocument();
+    bridge.list.mockResolvedValue({ kind: 'ok', returns: [SETTLED] });
+    await user.click(screen.getByRole('button', { name: PAYOUT_COPY.refresh }));
+    expect(
+      await screen.findByRole('button', { name: PAYOUT_COPY.interruptedManual }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PAYOUT_COPY.interruptedRetry })).toBeNull();
   });
 });

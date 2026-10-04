@@ -42,7 +42,26 @@ export type PayoutPhase =
       readonly method: ReturnPayoutMethod | null;
     }
   | { readonly kind: 'refused'; readonly reason: ReturnsRefusalReason }
+  /** Codex P2 (49e0277): refused for now (a kick in flight, a session change): refresh. */
+  | { readonly kind: 'wait'; readonly reason: TransientRefusal }
   | { readonly kind: 'unknown' };
+
+/**
+ * Refusals that hold only for now: a drawer kick in flight (possibly in
+ * another instance), or a session that locked, ended or changed. Waiting and
+ * refreshing re-derives the next step; every other refusal is final here.
+ */
+const TRANSIENT_REFUSALS = [
+  'drawer_kick_in_progress',
+  'session_changed',
+  'no_session',
+  'offline',
+] as const satisfies readonly ReturnsRefusalReason[];
+export type TransientRefusal = (typeof TRANSIENT_REFUSALS)[number];
+
+function isTransient(reason: ReturnsRefusalReason): reason is TransientRefusal {
+  return (TRANSIENT_REFUSALS as readonly ReturnsRefusalReason[]).includes(reason);
+}
 
 /** Where a manual payout can be asked from (and returned to on cancel). */
 export type ManualOrigin = Extract<PayoutPhase, { kind: 'drawer_failed' | 'interrupted' }>;
@@ -79,19 +98,34 @@ export function initialPayout(ret: ReturnJournalView): PayoutState {
   return { ret, phase: phaseOf(ret), reprint: null };
 }
 
-/** What a newer journal view of the same return can change about its payout. */
-export function payoutRevision(ret: ReturnJournalView): string {
+/**
+ * How far a return's payout has moved, as a rank that only grows: not
+ * started < started < paid out; within a started payout, each kick counts
+ * twice (sent, then its outcome recorded). The journal only moves forward.
+ */
+export function payoutRevision(ret: ReturnJournalView): readonly [number, number] {
   const p = ret.payout;
-  return [ret.state, p?.startedAt, p?.paidAt, p?.method, p?.kick].join('|');
+  if (ret.state === 'paid_out') return [2, 0];
+  if (p === null) return [0, 0];
+  if (p.kickCount === 0) return [1, 0];
+  return [1, p.kickCount * 2 - (p.kickPending ? 1 : 0)];
+}
+
+function isNewer(ret: ReturnJournalView, than: ReturnJournalView): boolean {
+  const [a, b] = payoutRevision(ret);
+  const [x, y] = payoutRevision(than);
+  return a > x || (a === x && b > y);
 }
 
 /**
- * Codex P2 (c21d7e2): a newer view of the panel's return (another window or
- * instance moved its payout) replaces the panel's state, so a stale action
- * (a fresh `start`) is never offered; the same view keeps the live phase.
+ * Codex P2 (c21d7e2) + reviewer P2 (49e0277): a strictly newer view of the
+ * panel's return (another window or instance moved its payout) replaces the
+ * panel's state, so a stale action (a fresh `start`) is never offered. The
+ * same or an older view (a stale list, the original outcome) is ignored: a
+ * panel never moves back.
  */
 export function synced(s: PayoutState, ret: ReturnJournalView): PayoutState {
-  return payoutRevision(ret) === payoutRevision(s.ret) ? s : initialPayout(ret);
+  return isNewer(ret, s.ret) ? initialPayout(ret) : s;
 }
 
 function afterRefusal(
@@ -105,7 +139,10 @@ function afterRefusal(
   if (reason === 'payout_started' || reason === 'drawer_retry_unsafe') {
     return { ret: row, phase: phaseOf(row), reprint: null };
   }
-  return { ret: row, phase: { kind: 'refused', reason } as const, reprint: null };
+  const phase: PayoutPhase = isTransient(reason)
+    ? { kind: 'wait', reason }
+    : { kind: 'refused', reason };
+  return { ret: row, phase, reprint: null };
 }
 
 export function afterPayout(
@@ -145,9 +182,13 @@ export function cancelManual(state: PayoutState): PayoutState {
   return { ...state, phase: state.phase.back };
 }
 
-/** After an unknown result: what the journal now says about this return. */
+/**
+ * After an unknown result or a wait: what the journal now says about this
+ * return (never an older view than the panel already holds).
+ */
 export function refreshed(state: PayoutState, row: ReturnJournalView | undefined): PayoutState {
-  return row === undefined ? state : initialPayout(row);
+  if (row === undefined) return state;
+  return initialPayout(isNewer(state.ret, row) ? state.ret : row);
 }
 
 /** A reprint answer (or a rejected call) as its own closed result. */

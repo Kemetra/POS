@@ -26,6 +26,8 @@ function toPayoutView(payout: PayoutRow | null): ReturnPayoutView | null {
     paidAt: payout.paidAt,
     method: payout.method,
     kick: kickOf(payout),
+    kickCount: payout.kickCount,
+    kickPending: payout.kickOutcome === 'sending',
   };
 }
 

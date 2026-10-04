@@ -160,6 +160,13 @@ export interface ReturnPayoutView {
    * `opened`, or `unknown` (may have opened: complete it manually only).
    */
   readonly kick: ReturnPayoutKick;
+  /** How many kicks were sent (each counted before it is sent). */
+  readonly kickCount: number;
+  /**
+   * The last kick's outcome is not recorded yet (`sending`: in flight, or its
+   * process died). Shown as `unknown`; its recorded outcome is a newer view.
+   */
+  readonly kickPending: boolean;
 }
 
 export type ReturnPayoutKick = 'none' | 'failed_before_send' | 'opened' | 'unknown';

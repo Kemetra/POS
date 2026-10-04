@@ -28,6 +28,12 @@ export type HistoryState =
 
 export interface ReturnHistory {
   readonly state: HistoryState;
+  /**
+   * The rows of the last successful listing, kept across a failed or refused
+   * reload, for the payout already open (it shows that return anyway): a
+   * missing list never puts an older view of it back (reviewer P2, 49e0277).
+   */
+  readonly known: readonly ReturnJournalView[];
   /** Re-read the journal; the rows, or null when main did not list them. */
   readonly reload: () => Promise<readonly ReturnJournalView[] | null>;
   /** Ask main to re-send unresolved returns, then re-read the journal. */
@@ -49,6 +55,7 @@ export function useReturnHistory(
 ): ReturnHistory {
   const [state, setState] = useState<HistoryState>({ status: 'loading' });
   const [checkNotice, setCheckNotice] = useState<FlowNotice | null>(null);
+  const [known, setKnown] = useState<readonly ReturnJournalView[]>([]);
   const { busy, run } = useSingleFlight<'check'>();
 
   const reload = useCallback(async () => {
@@ -62,6 +69,7 @@ export function useReturnHistory(
       return null;
     }
     setState({ status: 'ok', rows: res.returns });
+    setKnown(res.returns);
     return res.returns;
   }, [bridge]);
 
@@ -87,5 +95,5 @@ export function useReturnHistory(
     [bridge, reload, run],
   );
 
-  return { state, reload, checkUnresolved, checking: busy === 'check', checkNotice };
+  return { state, known, reload, checkUnresolved, checking: busy === 'check', checkNotice };
 }

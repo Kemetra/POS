@@ -202,6 +202,23 @@ function viewEntry(): JournalEntry {
   };
 }
 
+/** An unpaid payout row whose last kick is `kick` (null: never kicked). */
+function unpaidWithKick(kick: string | null, kickCount: number) {
+  return {
+    returnId: 'r1',
+    startedOperatorId: 'op',
+    startedSessionId: 'sess',
+    startedAt: 't2',
+    paidOperatorId: null,
+    paidOperatorName: null,
+    paidSessionId: null,
+    paidAt: null,
+    method: null,
+    kickOutcome: kick as 'sending' | null,
+    kickCount,
+    kickedAt: kick === null ? null : 't2',
+  };
+}
 describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => {
   it.each<[string, TenderEvidence]>([
     [JSON.stringify([{ tender_type: 'cash' }]), 'cash'],
@@ -281,6 +298,8 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
       paidAt: 't3',
       method: 'manual',
       kick: 'opened',
+      kickCount: 1,
+      kickPending: false,
     });
     expect(JSON.stringify(view)).not.toMatch(/op-starter|sess-starter|op-payer|sess-payer|Mona/);
   });
@@ -291,22 +310,25 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
     ['failed_before_send', 'failed_before_send'],
     ['unknown', 'unknown'],
   ])('P1: a kick record %s is shown as %s (a crash mid-kick may have opened it)', (kick, shown) => {
-    const payout = {
-      returnId: 'r1',
-      startedOperatorId: 'op',
-      startedSessionId: 'sess',
-      startedAt: 't2',
-      paidOperatorId: null,
-      paidOperatorName: null,
-      paidSessionId: null,
-      paidAt: null,
-      method: null,
-      kickOutcome: kick as 'sending' | null,
-      kickCount: kick === null ? 0 : 1,
-      kickedAt: kick === null ? null : 't2',
-    };
+    const payout = unpaidWithKick(kick, kick === null ? 0 : 1);
     expect(toJournalView(viewEntry(), payout).payout?.kick).toBe(shown);
   });
+
+  it.each<[string | null, number, boolean]>([
+    [null, 0, false],
+    ['sending', 1, true],
+    ['unknown', 1, false],
+    ['opened', 2, false],
+  ])(
+    'Codex P2 (49e0277): a kick record %s (count %i) carries kickPending %s, so its outcome is a newer view',
+    (kick, kickCount, pending) => {
+      const payout = unpaidWithKick(kick, kickCount);
+      expect(toJournalView(viewEntry(), payout).payout).toMatchObject({
+        kickCount,
+        kickPending: pending,
+      });
+    },
+  );
 });
 
 describe('shared closed sets', () => {

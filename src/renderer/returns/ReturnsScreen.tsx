@@ -10,7 +10,7 @@ import { SaleLookup } from './SaleLookup';
 import type { Outcome } from './return-flow-state.js';
 import { useReturnFlow, type ReturnFlow } from './useReturnFlow.js';
 import { useHistoryReprint } from './useHistoryReprint.js';
-import { useReturnHistory, type HistoryState } from './useReturnHistory.js';
+import { useReturnHistory } from './useReturnHistory.js';
 
 /**
  * RT-15 S3 — the return flow (one step at a time) above this terminal's
@@ -28,10 +28,9 @@ function outcomeKey(outcome: Outcome): string {
   return outcome.ret?.returnId ?? 'none';
 }
 
-/** The journal's view of `returnId`, while the journal is listed. */
-function latestIn(state: HistoryState, returnId: string): ReturnJournalView | null {
-  if (state.status !== 'ok') return null;
-  return state.rows.find((row) => row.returnId === returnId) ?? null;
+/** The last listed view of `returnId` (kept across a failed or refused reload). */
+function latestIn(rows: readonly ReturnJournalView[], returnId: string): ReturnJournalView | null {
+  return rows.find((row) => row.returnId === returnId) ?? null;
 }
 
 function FlowStep({
@@ -73,7 +72,7 @@ export function ReturnsScreen({ bridge, sessionEvents }: ReturnsScreenProps): JS
         payout={{
           bridge,
           reload: history.reload,
-          latest: (returnId) => latestIn(history.state, returnId),
+          latest: (returnId) => latestIn(history.known, returnId),
         }}
       />
       <ReturnsHistory history={history} actions={{ pay: flow.openPayout, reprint }} />
