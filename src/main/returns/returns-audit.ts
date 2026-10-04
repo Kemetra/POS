@@ -48,8 +48,16 @@ function actorOf(entry: JournalEntry): ReturnActor {
   };
 }
 
+type ConfirmedCategory = 'sale.return.confirmed' | 'sale.return.payout_ready';
+type SharedConfirmedKey = 'return_id' | 'sale_ref' | 'return_ref' | 'currency_code';
+
+interface ConfirmedFacts {
+  readonly returnRef: string;
+  readonly totalMinor: number;
+}
+
 /** The journaled return's confirmed facts; a programming error if absent. */
-function confirmedFacts(entry: JournalEntry): { returnRef: string; totalMinor: number } {
+function confirmedFacts(entry: JournalEntry): ConfirmedFacts {
   if (entry.returnRef === null || entry.returnTotalMinor === null) {
     throw new Error('returns-audit: entry is not confirmed');
   }
@@ -77,6 +85,25 @@ export function createReturnsAudit(deps: ReturnsAuditDeps): ReturnsAudit {
     });
   }
 
+  /**
+   * One builder for the two events that need a confirmed return: resolves the
+   * server facts once and stamps the shared fields; `extra` adds the rest.
+   */
+  function writeConfirmedEvent<C extends ConfirmedCategory>(
+    entry: JournalEntry,
+    category: C,
+    extra: (facts: ConfirmedFacts) => Omit<AuditPayloadMap[C], SharedConfirmedKey>,
+  ): void {
+    const facts = confirmedFacts(entry);
+    const shared = {
+      return_id: entry.returnId,
+      sale_ref: entry.serverSaleRef,
+      return_ref: facts.returnRef,
+      currency_code: entry.currencyCode,
+    };
+    write(actorOf(entry), category, { ...shared, ...extra(facts) } as AuditPayloadMap[C]);
+  }
+
   return {
     attempted(entry) {
       write(actorOf(entry), 'sale.return.attempted', {
@@ -92,27 +119,17 @@ export function createReturnsAudit(deps: ReturnsAuditDeps): ReturnsAudit {
       write(actor, 'sale.return.refused', payload);
     },
     confirmed(entry, replayed) {
-      const facts = confirmedFacts(entry);
-      write(actorOf(entry), 'sale.return.confirmed', {
-        return_id: entry.returnId,
+      writeConfirmedEvent(entry, 'sale.return.confirmed', (facts) => ({
         sale_id: entry.saleId,
-        sale_ref: entry.serverSaleRef,
-        return_ref: facts.returnRef,
         return_total_minor: facts.totalMinor,
-        currency_code: entry.currencyCode,
         replayed,
-      });
+      }));
     },
     payoutReady(entry) {
-      const facts = confirmedFacts(entry);
-      write(actorOf(entry), 'sale.return.payout_ready', {
-        return_id: entry.returnId,
-        sale_ref: entry.serverSaleRef,
-        return_ref: facts.returnRef,
+      writeConfirmedEvent(entry, 'sale.return.payout_ready', (facts) => ({
         payout_minor: facts.totalMinor,
-        currency_code: entry.currencyCode,
-        method: 'cash',
-      });
+        method: 'cash' as const,
+      }));
     },
   };
 }

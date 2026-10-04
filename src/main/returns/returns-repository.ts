@@ -69,7 +69,11 @@ export interface RefuseInput {
 }
 
 export interface ReturnsRepository {
-  insert(entry: NewJournalEntry): void;
+  /**
+   * Insert header + lines in one transaction; `within` (e.g. the attempt audit)
+   * runs inside it with the new row, so both commit or neither does.
+   */
+  insert(entry: NewJournalEntry, within?: (inserted: JournalEntry) => void): void;
   read(returnId: string): JournalEntry | null;
   /** This terminal's returns, newest first. */
   listRecent(scope: ReturnScope, limit: number): JournalEntry[];
@@ -174,16 +178,20 @@ function insertHeader(db: DatabaseHandle, e: NewJournalEntry): void {
   );
 }
 
+type InsertHook = (inserted: JournalEntry) => void;
+
 class SqlReturnsRepository implements ReturnsRepository {
-  private readonly insertTx: (entry: NewJournalEntry) => void;
+  private readonly insertTx: (entry: NewJournalEntry, within: InsertHook) => void;
 
   constructor(private readonly db: DatabaseHandle) {
-    this.insertTx = db.transaction((entry: NewJournalEntry): void => {
+    this.insertTx = db.transaction((entry: NewJournalEntry, within: InsertHook): void => {
       insertHeader(db, entry);
       const line = this.prepare(
         'INSERT INTO return_journal_lines (return_id, line_ref, quantity) VALUES (?, ?, ?)',
       );
       for (const l of entry.lines) line.run(entry.returnId, l.lineRef, l.quantity);
+      const inserted = this.read(entry.returnId);
+      if (inserted !== null) within(inserted);
     });
   }
 
@@ -207,8 +215,8 @@ class SqlReturnsRepository implements ReturnsRepository {
     return this.prepare(statement.sql).run(...statement.params).changes > 0;
   }
 
-  insert(entry: NewJournalEntry): void {
-    this.insertTx(entry);
+  insert(entry: NewJournalEntry, within: InsertHook = () => undefined): void {
+    this.insertTx(entry, within);
   }
 
   read(returnId: string): JournalEntry | null {

@@ -14,18 +14,23 @@
  * otherwise the row stays `unknown` and the anomaly is logged — nothing is
  * paid out on an answer the till cannot match.
  *
- * Confirmation is written once: `markConfirmed` only moves a row out of
- * `pending` / `unknown`, so a second confirmation of the same return (a
- * resolver racing a submit, a later replay) emits no second audit event and no
- * second payout-ready (AC8). Sends of the same return are also single-flight
- * within the process.
+ * Confirmation is written once and atomically: the guarded `markConfirmed`
+ * and both its audit rows (`confirmed`, `payout_ready`) commit in ONE local
+ * transaction (`audit_events` lives in the same SQLite DB), and the audits are
+ * written only when the transition changed the row. A second confirmation (a
+ * resolver racing a submit, a later replay) therefore writes nothing (AC8). The
+ * refusal transition and its audit are atomic the same way. If that local
+ * commit fails, it rolls back: the row stays `pending` / `unknown`, the result
+ * is `unconfirmed` (never a rejected call once the server has answered), and
+ * the resolver's same-key resend confirms it later. Sends of the same return
+ * are single-flight within the process.
  */
 import type { ReturnsRefusalReason } from '../../shared/returns/types.js';
 import { exponentFor } from '../sales-sync/create-sale-sync-client.js';
 import type { ReturnsAudit } from './returns-audit.js';
 import type { RecordReturnOutcome, ReturnsClient } from './returns-client.js';
 import { amount4ToMinor, parseAmount4 } from './returns-money.js';
-import type { JournalEntry, ReturnsRepository } from './returns-repository.js';
+import type { ConfirmInput, JournalEntry, ReturnsRepository } from './returns-repository.js';
 import type { WireSaleReturn } from './returns-wire.js';
 
 export type DispatchOutcome =
@@ -51,6 +56,8 @@ export interface ReturnsDispatchDeps {
   readonly client: Pick<ReturnsClient, 'recordReturn'>;
   readonly repo: ReturnsRepository;
   readonly audit: ReturnsAudit;
+  /** Run `fn` in one local DB transaction (journal + audit_events). */
+  readonly transaction: <T>(fn: () => T) => T;
   readonly now: () => string;
   readonly logger: ReturnsDispatchLogger;
 }
@@ -97,7 +104,21 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
       bodyJson: entry.requestBodyJson,
       idempotencyKey: entry.externalId,
     });
-    return this.apply(entry, outcome, op);
+    try {
+      return this.apply(entry, outcome, op);
+    } catch {
+      this.deps.logger.warn({ return_id: entry.returnId }, 'returns:local_commit_failed');
+      return this.pendingLocally(entry);
+    }
+  }
+
+  /** The server answered but the local commit failed: report unknown, never reject. */
+  private pendingLocally(entry: JournalEntry): DispatchOutcome {
+    try {
+      return this.unconfirmed(entry);
+    } catch {
+      return { kind: 'unconfirmed', entry: { ...entry, state: 'unknown' } };
+    }
   }
 
   private apply(entry: JournalEntry, outcome: RecordReturnOutcome, op: DispatchOperation) {
@@ -123,27 +144,39 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
       this.deps.logger.warn({ return_id: entry.returnId }, 'returns:confirmation_mismatch');
       return this.unconfirmed(entry);
     }
-    const changed = this.deps.repo.markConfirmed({
+    const input = {
       returnId: entry.returnId,
       returnRef: saleReturn.returnRef,
       returnTotalMinor: totalMinor,
       now: this.deps.now(),
-    });
+    };
+    const changed = this.deps.transaction(() => this.commitConfirmation(input, replayed));
     const fresh = this.current(entry);
-    if (!changed) return outcomeOfState(fresh);
-    this.deps.audit.confirmed(fresh, replayed);
-    this.deps.audit.payoutReady(fresh);
-    return { kind: 'confirmed', entry: fresh, replayed } as const;
+    return changed
+      ? ({ kind: 'confirmed', entry: fresh, replayed } as const)
+      : outcomeOfState(fresh);
+  }
+
+  /** Inside the transaction: the guarded transition, then its two audits. */
+  private commitConfirmation(input: ConfirmInput, replayed: boolean): boolean {
+    if (!this.deps.repo.markConfirmed(input)) return false;
+    const confirmed = this.deps.repo.read(input.returnId);
+    if (confirmed === null) throw new Error('returns-dispatch: confirmed row vanished');
+    this.deps.audit.confirmed(confirmed, replayed);
+    this.deps.audit.payoutReady(confirmed);
+    return true;
   }
 
   private refuse(entry: JournalEntry, reason: ReturnsRefusalReason, op: DispatchOperation) {
-    const changed = this.deps.repo.markRefused({
-      returnId: entry.returnId,
-      reason,
-      now: this.deps.now(),
-    });
+    const changed = this.deps.transaction(() => this.commitRefusal(entry, reason, op));
     const fresh = this.current(entry);
-    if (!changed) return outcomeOfState(fresh);
+    return changed ? ({ kind: 'refused', reason, entry: fresh } as const) : outcomeOfState(fresh);
+  }
+
+  /** Inside the transaction: the guarded refusal, then its audit. */
+  private commitRefusal(entry: JournalEntry, reason: ReturnsRefusalReason, op: DispatchOperation) {
+    const now = this.deps.now();
+    if (!this.deps.repo.markRefused({ returnId: entry.returnId, reason, now })) return false;
     const { scope, operatorId, operatorSessionId } = entry;
     this.deps.audit.refused(
       { scope, operatorId, operatorSessionId },
@@ -155,7 +188,7 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
         reason,
       },
     );
-    return { kind: 'refused', reason, entry: fresh } as const;
+    return true;
   }
 }
 

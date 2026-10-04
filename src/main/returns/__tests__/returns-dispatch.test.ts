@@ -15,6 +15,7 @@ import { nn } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js
 import { createReturnsAudit } from '../returns-audit.js';
 import { createReturnsClient } from '../returns-client.js';
 import { createReturnsDispatcher } from '../returns-dispatch.js';
+import type { ReturnsRepository } from '../returns-repository.js';
 import {
   BASE_URL,
   ENVELOPE,
@@ -50,22 +51,25 @@ function harness(): ReturnsHarness {
   return h;
 }
 
+let eventSeq = 0;
+
 /** A second dispatcher over the same journal (as a stale resolver would hold). */
-function standaloneDispatcher() {
+function standaloneDispatcher(repo: ReturnsRepository = h.repo) {
   return createReturnsDispatcher({
     client: createReturnsClient({
       baseUrl: BASE_URL,
       fetch: h.backend.fetch,
       getOperatorToken: () => ENVELOPE,
     }),
-    repo: h.repo,
+    repo,
     audit: createReturnsAudit({
-      sink: { emit: (e) => h.audits.push(e) },
+      sink: h.auditSink,
       now: () => NOW,
-      newEventId: () => 'evt',
+      newEventId: () => `evt-${String((eventSeq += 1))}`,
     }),
     now: () => NOW,
     logger: { warn: () => undefined },
+    transaction: <T>(fn: () => T): T => h.handle.transaction(fn)(),
   });
 }
 
@@ -153,5 +157,92 @@ describe('returns dispatcher', () => {
     expect(res).toMatchObject({ kind: 'unconfirmed', ret: { state: 'unknown' } });
     expect(categories(h.audits)).toEqual(['sale.return.attempted']);
     expect(h.warnings).toContain('returns:confirmation_mismatch');
+  });
+});
+
+describe('returns dispatcher — atomic confirmation with its audits (Codex P2)', () => {
+  const PAYOUT = 'sale.return.payout_ready';
+
+  it.each<{ label: string; failing: string }>([
+    { label: 'the confirmed audit', failing: 'sale.return.confirmed' },
+    { label: 'the payout_ready audit', failing: PAYOUT },
+  ])(
+    'when $label fails: no confirmation, no partial audit, then the resolver confirms once',
+    async ({ failing }) => {
+      harness();
+      h.state.failAudit = (e) => e.action_category === failing;
+
+      const res = await h.service.submit(ONE_A);
+
+      expect(res).toMatchObject({
+        kind: 'unconfirmed',
+        ret: { state: 'unknown', returnRef: null },
+      });
+      expect(categories(h.audits)).toEqual(['sale.return.attempted']);
+      expect(h.warnings).toContain('returns:local_commit_failed');
+
+      h.state.failAudit = null;
+      await expect(h.resolver.resolveOnce({ scope: SCOPE })).resolves.toMatchObject({
+        confirmed: 1,
+      });
+      await h.resolver.resolveOnce({ scope: SCOPE });
+
+      expect(h.repo.read(res.ret?.returnId ?? '')?.state).toBe('confirmed');
+      expect(h.backend.recorded.size).toBe(1);
+      expect(categories(h.audits)).toEqual([
+        'sale.return.attempted',
+        'sale.return.confirmed',
+        PAYOUT,
+      ]);
+    },
+  );
+
+  it('a failed refusal audit rolls back the refusal; the resend refuses once', async () => {
+    harness();
+    h.backend.onReturn = () => jsonResponse(409, errorBody('over_return'));
+    h.state.failAudit = (e) => e.action_category === 'sale.return.refused';
+
+    const res = await h.service.submit(ONE_A);
+
+    expect(res).toMatchObject({ kind: 'unconfirmed', ret: { state: 'unknown' } });
+    h.state.failAudit = null;
+    await expect(h.resolver.resolveOnce({ scope: SCOPE })).resolves.toMatchObject({ refused: 1 });
+    expect(categories(h.audits)).toEqual(['sale.return.attempted', 'sale.return.refused']);
+  });
+
+  it('a replay after confirmation writes no duplicate audits', async () => {
+    harness();
+    const res = await h.service.submit(ONE_A);
+    const entry = nn(h.repo.read(res.ret?.returnId ?? ''));
+    await standaloneDispatcher().send(entry, 'resolve');
+    await standaloneDispatcher().send(entry, 'resolve');
+    expect(categories(h.audits).filter((c) => c === PAYOUT)).toHaveLength(1);
+    expect(h.audits).toHaveLength(3);
+  });
+
+  it('never rejects once the server answered, even if the journal cannot be written', async () => {
+    harness();
+    h.state.failAudit = (e) => e.action_category !== 'sale.return.attempted';
+    const res = await h.service.submit(ONE_A);
+    const entry = nn(h.repo.read(res.ret?.returnId ?? ''));
+    const broken: ReturnsRepository = Object.assign(Object.create(h.repo) as ReturnsRepository, {
+      markUnknown: () => {
+        throw new Error('disk full');
+      },
+    });
+
+    const outcome = await standaloneDispatcher(broken).send(entry, 'resolve');
+
+    expect(outcome).toMatchObject({ kind: 'unconfirmed', entry: { state: 'unknown' } });
+    expect(h.repo.read(entry.returnId)?.state).toBe('unknown');
+  });
+
+  it('journals a return and its attempted audit atomically (a failed audit sends nothing)', async () => {
+    harness();
+    h.state.failAudit = (e) => e.action_category === 'sale.return.attempted';
+    await expect(h.service.submit(ONE_A)).rejects.toThrow(/audit insert failed/);
+    expect(h.db.exec('SELECT COUNT(*) FROM return_journal')[0]?.values[0]?.[0]).toBe(0);
+    expect(h.backend.returnCalls()).toHaveLength(0);
+    expect(h.audits).toHaveLength(0);
   });
 });

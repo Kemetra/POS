@@ -4,6 +4,7 @@ import {
   createSaleSyncClient,
   toWireBody,
   classifyStatus,
+  exponentFor,
   minorUnitsToDecimalString,
 } from '../create-sale-sync-client.js';
 import type { CaptureSalePayload } from '../capture-payload.js';
@@ -86,6 +87,19 @@ function headerValue(init: RequestInit, name: string): string | null {
   const headers = init.headers as Record<string, string> | undefined;
   return headers?.[name] ?? null;
 }
+
+describe('exponentFor — ISO-4217 minor-unit exponent (shared with RT-15 returns)', () => {
+  it.each<[string, number]>([
+    ['EGP', 2],
+    ['USD', 2],
+    ['JPY', 0],
+    ['KWD', 3],
+    ['BHD', 3],
+    ['XYZ', 2],
+  ])('%s → %s (unknown currencies default to 2)', (currency, exponent) => {
+    expect(exponentFor(currency)).toBe(exponent);
+  });
+});
 
 describe('minorUnitsToDecimalString — integer minor → exact-decimal string', () => {
   it('formats exponent-2 amounts with two fractional digits', () => {

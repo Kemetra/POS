@@ -13,6 +13,10 @@
 import type { Database as SqlJsDatabase } from 'sql.js';
 
 import type { AuditEvent } from '../../../../shared/audit/event-shape.js';
+import { AuditEmitter } from '../../../audit/audit-emitter.js';
+import { bindAuditEventsStoreDb } from '../../../audit/audit-events-store.js';
+import type { DatabaseHandle } from '../../../db/client.js';
+import type { ReturnsAuditSink } from '../../returns-audit.js';
 import { composeReturns, type ComposedReturns } from '../../compose-returns.js';
 import type { ReturnsSession } from '../../returns-service.js';
 import { createReturnsRepository, type ReturnsRepository } from '../../returns-repository.js';
@@ -264,15 +268,40 @@ export interface HarnessOptions {
   readonly timeoutMs?: number;
 }
 
+export interface HarnessState {
+  enabled: boolean;
+  role: Role | null;
+  token: string | null;
+  /** When it returns true for an event, that audit insert throws (fault injection). */
+  failAudit: ((event: AuditEvent) => boolean) | null;
+}
+
 export interface ReturnsHarness extends ComposedReturns {
   readonly db: SqlJsDatabase;
+  readonly handle: DatabaseHandle;
   readonly repo: ReturnsRepository;
   readonly backend: FakeBackend;
+  /** The production audit path: 004's validating emitter into `audit_events`. */
+  readonly auditSink: ReturnsAuditSink;
+  /** The audit rows actually committed to `audit_events`, in insert order. */
   readonly audits: AuditEvent[];
   readonly warnings: string[];
-  /** Mutable session / flag / token, read per call like production. */
-  readonly state: { enabled: boolean; role: Role | null; token: string | null };
+  /** Mutable session / flag / token / fault, read per call like production. */
+  readonly state: HarnessState;
   close(): void;
+}
+
+/** Every committed `audit_events` row, in insert order, payload parsed. */
+export function committedAudits(db: SqlJsDatabase): AuditEvent[] {
+  const res = db.exec('SELECT * FROM audit_events ORDER BY rowid')[0];
+  if (res === undefined) return [];
+  return res.values.map((row) => {
+    const rec = Object.fromEntries(res.columns.map((c, i) => [c, row[i]]));
+    return {
+      ...rec,
+      payload: JSON.parse(String(rec['payload'])) as Record<string, unknown>,
+    } as AuditEvent;
+  });
 }
 
 /** The composed return domain over a fresh DB and a FakeBackend. */
@@ -280,28 +309,39 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
   const db = freshSalesSyncDb();
   const handle = handleFor(db);
   const backend = new FakeBackend();
-  const audits: AuditEvent[] = [];
   const warnings: string[] = [];
-  const state = {
+  const state: HarnessState = {
     enabled: options.enabled ?? true,
     role: options.role === undefined ? 'manager' : options.role,
     token: options.token === undefined ? ENVELOPE : options.token,
+    failAudit: null,
+  };
+  const emitter = new AuditEmitter(bindAuditEventsStoreDb(handle));
+  const auditSink: ReturnsAuditSink = {
+    emit: (event) => {
+      if (state.failAudit?.(event) === true) throw new Error('audit insert failed');
+      emitter.emit(event);
+    },
   };
   const composed = composeReturns({
     db: handle,
     http: { baseUrl: BASE_URL, fetch: backend.fetch, getOperatorToken: () => state.token },
     isEnabled: () => state.enabled,
     getSession: () => (state.role === null ? null : sessionFor(state.role)),
-    auditSink: { emit: (event) => audits.push(event) },
+    auditSink,
     logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
     now: () => NOW,
   });
   return {
     ...composed,
     db,
+    handle,
     repo: createReturnsRepository(handle),
     backend,
-    audits,
+    auditSink,
+    get audits() {
+      return committedAudits(db);
+    },
     warnings,
     state,
     close: () => {

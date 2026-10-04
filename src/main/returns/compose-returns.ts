@@ -45,7 +45,14 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const client = createReturnsClient(deps.http);
   const repo = createReturnsRepository(deps.db);
   const audit = createReturnsAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
-  const dispatcher = createReturnsDispatcher({ client, repo, audit, now, logger: deps.logger });
+  const dispatcher = createReturnsDispatcher({
+    client,
+    repo,
+    audit,
+    now,
+    logger: deps.logger,
+    transaction: <T>(fn: () => T): T => deps.db.transaction(fn)(),
+  });
   const resolver = createReturnsResolver({
     repo,
     dispatcher,

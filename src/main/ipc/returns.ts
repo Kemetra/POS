@@ -36,62 +36,83 @@ export const RETURNS_INPUT_BOUNDS = {
 const PRINTABLE = /^[^\p{Cc}]+$/u;
 const INVALID = { kind: 'refused', reason: 'invalid_input' } as const;
 
+const LINE_KEYS = ['lineRef', 'quantity'] as const;
+const LOOKUP_KEYS = ['saleNumber'] as const;
+const QUOTE_KEYS = ['saleNumber', 'lines'] as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return false;
   return !Array.isArray(value);
 }
 
-function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  return Object.keys(value).every((k) => keys.includes(k));
+/** A plain object whose keys are all in `keys` (closed shape: nothing smuggled in). */
+function isClosedShape(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  return isRecord(value) && Object.keys(value).every((k) => keys.includes(k));
+}
+
+/** 1 ≤ n ≤ max — the one bound used for lengths, counts and quantities. */
+function isWithin(n: number, max: number): boolean {
+  return n >= 1 && n <= max;
+}
+
+function isSaleNumber(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  return isWithin(value.length, RETURNS_INPUT_BOUNDS.saleNumberMaxLength) && PRINTABLE.test(value);
+}
+
+function isLineRef(value: unknown): value is string {
+  return typeof value === 'string' && isUuid(value);
+}
+
+function isWholeQty(value: unknown): value is number {
+  return Number.isSafeInteger(value) && isWithin(value as number, RETURNS_INPUT_BOUNDS.maxQuantity);
+}
+
+function isLine(value: ReturnLineInput | null): value is ReturnLineInput {
+  return value !== null;
+}
+
+function hasUniqueLineRefs(lines: readonly ReturnLineInput[]): boolean {
+  return new Set(lines.map((l) => l.lineRef.toLowerCase())).size === lines.length;
 }
 
 /** A bounded sale number, or null. */
 export function readSaleNumber(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  if (value.length === 0 || value.length > RETURNS_INPUT_BOUNDS.saleNumberMaxLength) return null;
-  return PRINTABLE.test(value) ? value : null;
+  return isSaleNumber(value) ? value : null;
 }
 
 function readLine(value: unknown): ReturnLineInput | null {
-  if (!isRecord(value) || !hasOnlyKeys(value, ['lineRef', 'quantity'])) return null;
+  if (!isClosedShape(value, LINE_KEYS)) return null;
   const { lineRef, quantity } = value;
-  if (typeof lineRef !== 'string' || !isUuid(lineRef)) return null;
-  if (typeof quantity !== 'number' || !Number.isSafeInteger(quantity)) return null;
-  if (quantity < 1 || quantity > RETURNS_INPUT_BOUNDS.maxQuantity) return null;
-  return { lineRef, quantity };
+  return isLineRef(lineRef) && isWholeQty(quantity) ? { lineRef, quantity } : null;
 }
 
 /** Validated, unique-per-request lines, or null. */
 export function readLines(value: unknown): ReturnLineInput[] | null {
-  if (!Array.isArray(value)) return null;
-  if (value.length === 0 || value.length > RETURNS_INPUT_BOUNDS.maxLines) return null;
+  if (!Array.isArray(value) || !isWithin(value.length, RETURNS_INPUT_BOUNDS.maxLines)) return null;
   const lines = value.map(readLine);
-  if (lines.some((l) => l === null)) return null;
-  const valid = lines as ReturnLineInput[];
-  const refs = new Set(valid.map((l) => l.lineRef.toLowerCase()));
-  return refs.size === valid.length ? valid : null;
+  if (!lines.every(isLine)) return null;
+  return hasUniqueLineRefs(lines) ? lines : null;
 }
 
 /** `{ saleNumber }` exactly, or null. */
 export function readLookupRequest(value: unknown): { saleNumber: string } | null {
-  if (!isRecord(value) || !hasOnlyKeys(value, ['saleNumber'])) return null;
+  if (!isClosedShape(value, LOOKUP_KEYS)) return null;
   const saleNumber = readSaleNumber(value['saleNumber']);
   return saleNumber === null ? null : { saleNumber };
 }
 
 /** `{ saleNumber, lines }` exactly, or null. */
 export function readQuoteRequest(value: unknown): ReturnsQuoteRequest | null {
-  if (!isRecord(value) || !hasOnlyKeys(value, ['saleNumber', 'lines'])) return null;
+  if (!isClosedShape(value, QUOTE_KEYS)) return null;
   const saleNumber = readSaleNumber(value['saleNumber']);
   const lines = readLines(value['lines']);
-  if (saleNumber === null || lines === null) return null;
-  return { saleNumber, lines };
+  return saleNumber === null || lines === null ? null : { saleNumber, lines };
 }
 
 /** `resolve` / `list` accept no payload (undefined or `{}`). */
 function isEmptyPayload(value: unknown): boolean {
-  if (value === undefined) return true;
-  return isRecord(value) && Object.keys(value).length === 0;
+  return value === undefined || isClosedShape(value, []);
 }
 
 export interface ReturnsIpcDeps {

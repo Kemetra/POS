@@ -216,11 +216,13 @@ class ReturnsService implements ReturnsBridgeAPI {
       return { ...this.refuse(actor, 'submit', 'unresolved_return_exists', ids), ret: null };
     }
     const entry = this.journal(actor, priced.sale, priced.quote, req.lines);
-    this.deps.audit.attempted(entry);
     return toSubmitResponse(await this.deps.dispatcher.send(entry, 'submit'));
   }
 
-  /** Write the return to the journal before anything is sent (AC8). */
+  /**
+   * Write the return to the journal — with its `attempted` audit, atomically —
+   * before anything is sent (AC8).
+   */
   private journal(
     actor: ReturnActor,
     sale: LiveSale,
@@ -229,21 +231,26 @@ class ReturnsService implements ReturnsBridgeAPI {
   ) {
     const returnId = this.deps.newReturnId();
     const externalId = this.deps.newExternalId();
-    this.deps.repo.insert({
-      returnId,
-      scope: actor.scope,
-      saleId: sale.row.sale_id,
-      saleNumber: sale.row.sale_number,
-      serverSaleRef: sale.saleRef,
-      externalId,
-      operatorId: actor.operatorId,
-      operatorSessionId: actor.operatorSessionId,
-      currencyCode: quote.currencyCode,
-      quotedTotalMinor: quote.totalMinor,
-      requestBodyJson: JSON.stringify(buildRecordReturnBody(externalId, quote)),
-      lines: lines.map((l) => ({ lineRef: l.lineRef, quantity: l.quantity })),
-      now: this.deps.now(),
-    });
+    this.deps.repo.insert(
+      {
+        returnId,
+        scope: actor.scope,
+        saleId: sale.row.sale_id,
+        saleNumber: sale.row.sale_number,
+        serverSaleRef: sale.saleRef,
+        externalId,
+        operatorId: actor.operatorId,
+        operatorSessionId: actor.operatorSessionId,
+        currencyCode: quote.currencyCode,
+        quotedTotalMinor: quote.totalMinor,
+        requestBodyJson: JSON.stringify(buildRecordReturnBody(externalId, quote)),
+        lines: lines.map((l) => ({ lineRef: l.lineRef, quantity: l.quantity })),
+        now: this.deps.now(),
+      },
+      (inserted) => {
+        this.deps.audit.attempted(inserted);
+      },
+    );
     const entry = this.deps.repo.read(returnId);
     if (entry === null) throw new Error('returns-service: journaled return not found');
     return entry;
