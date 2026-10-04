@@ -99,7 +99,8 @@ function check(schema: Schema, value: unknown, at: string, errors: string[]): vo
       check(branch, value, at, branchErrors);
       return branchErrors.length === 0;
     });
-    if (matches.length !== 1) errors.push(`${at}: matches ${matches.length} oneOf branches`);
+    if (matches.length !== 1)
+      errors.push(`${at}: matches ${String(matches.length)} oneOf branches`);
     return;
   }
   if (typeof schema['type'] === 'string' && !typeOk(schema['type'], value)) {
@@ -129,7 +130,7 @@ function check(schema: Schema, value: unknown, at: string, errors: string[]): vo
   }
   if (Array.isArray(value) && schema['items'] !== undefined) {
     value.forEach((item, i) => {
-      check(schema['items'] as Schema, item, `${at}[${i}]`, errors);
+      check(schema['items'] as Schema, item, `${at}[${String(i)}]`, errors);
     });
   }
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {

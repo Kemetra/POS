@@ -201,7 +201,7 @@ describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', ()
   it('the renderer bridge view never carries the admission fields (main-only, Constitution VII)', () => {
     const m = makeManager();
     createCashier(m);
-    const view = m.getCurrentBridgeView() as Record<string, unknown>;
+    const view = m.getCurrentBridgeView() as unknown as Record<string, unknown>;
     for (const field of [
       'user_id',
       'admission_id',

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type JSX, type ReactNode } from 'react';
 
 import type { LockStateView, OperatorBridgeAPI } from '../../shared/bridge-api';
+import { useOperatorSessionStore } from '../stores/operator-session-store';
 import { LockScreen } from './LockScreen';
 
 /**
@@ -16,6 +17,13 @@ import { LockScreen } from './LockScreen';
  * operator. It is also concealed (RT-161): the lock shows totals only, so the
  * sale behind it must not be readable on an unattended till. The operator-session store is untouched (still signed in), so the
  * cart/payment reset hook never fires on a lock.
+ *
+ * RT-113 P2 — main can now END a session on its own (the cashier admission
+ * heartbeat: taken over on another till, account refused, device revoked). An
+ * `ended` push therefore also moves a signed-in renderer to signed-out, so the
+ * route guard returns it to /sign-in instead of leaving a dead screen. A
+ * renderer-initiated sign-out reaches the same state; both paths are no-ops
+ * once signed out.
  */
 
 export type SessionLockOperator = Pick<
@@ -45,8 +53,15 @@ export function SessionLockGate({ operator, children }: SessionLockGateProps): J
     const unsubscribe = operator.onSessionStateChanged((event) => {
       if (event.state === 'locked') {
         void refresh();
-      } else {
-        setLockView(null);
+        return;
+      }
+      setLockView(null);
+      if (event.state === 'ended') {
+        const store = useOperatorSessionStore.getState();
+        if (store.state.kind === 'signedIn') {
+          store.beginSignOut();
+          store.resolveSignedOut();
+        }
       }
     });
     return unsubscribe;

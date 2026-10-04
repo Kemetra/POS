@@ -52,7 +52,7 @@ function makeClient(
 ): { client: CashierAdmissionClient; calls: Recorded[] } {
   const calls: Recorded[] = [];
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString();
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     calls.push({ url, init: init ?? {} });
     return Promise.resolve(respond(url));
   });
@@ -64,8 +64,14 @@ function makeClient(
   return { client, calls };
 }
 
+/** Header names lower-cased (happy-dom's `Headers` keeps the original case). */
 function headersOf(rec: Recorded): Record<string, string> {
-  return Object.fromEntries(new Headers(rec.init.headers).entries());
+  return Object.fromEntries(
+    Object.entries((rec.init.headers ?? {}) as Record<string, string>).map(([k, v]) => [
+      k.toLowerCase(),
+      v,
+    ]),
+  );
 }
 
 const ONLINE_REQ = {
@@ -103,7 +109,7 @@ describe('admit — request', () => {
     const [call] = calls;
     expect(call?.url).toBe(`${BASE}/api/pos/v1/cashier-admissions`);
     expect(call?.init.method).toBe('POST');
-    const headers = headersOf(call!);
+    const headers = headersOf(call ?? { url: '', init: {} });
     expect(headers['authorization']).toBe(`Bearer ${DEVICE_TOKEN}`);
     expect(headers['content-type']).toBe('application/json');
     expect(Object.keys(headers).sort()).toEqual(['authorization', 'content-type']);
@@ -179,7 +185,9 @@ describe('end', () => {
     expect(calls[0]?.url).toBe(`${BASE}/api/pos/v1/cashier-admissions/${ADMISSION_ID}/end`);
     expect(calls[0]?.init.method).toBe('POST');
     expect(calls[0]?.init.body).toBeUndefined();
-    expect(headersOf(calls[0]!)).toEqual({ authorization: `Bearer ${DEVICE_TOKEN}` });
+    expect(headersOf(calls[0] ?? { url: '', init: {} })).toEqual({
+      authorization: `Bearer ${DEVICE_TOKEN}`,
+    });
   });
 
   it('encodes the admission id into the path', async () => {
@@ -229,7 +237,9 @@ describe('listRoster', () => {
     });
     expect(calls[0]?.url).toBe(`${BASE}/api/pos/v1/cashier-admissions/roster`);
     expect(calls[0]?.init.method).toBe('GET');
-    expect(headersOf(calls[0]!)).toEqual({ authorization: `Bearer ${DEVICE_TOKEN}` });
+    expect(headersOf(calls[0] ?? { url: '', init: {} })).toEqual({
+      authorization: `Bearer ${DEVICE_TOKEN}`,
+    });
   });
 
   it('strips fields outside the minimum-disclosure allowlist', async () => {

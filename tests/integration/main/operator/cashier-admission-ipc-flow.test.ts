@@ -106,11 +106,17 @@ function stubBackendCore(): {
       headers: { 'Content-Type': 'application/json' },
     });
   const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === 'string' ? input : input.toString();
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const req: Req = {
       method: init?.method ?? 'GET',
       url,
-      headers: Object.fromEntries(new Headers(init?.headers).entries()),
+      // Lower-cased by hand: happy-dom's `Headers` keeps the original case.
+      headers: Object.fromEntries(
+        Object.entries((init?.headers ?? {}) as Record<string, string>).map(([k, v]) => [
+          k.toLowerCase(),
+          v,
+        ]),
+      ),
       body: typeof init?.body === 'string' ? init.body : undefined,
     };
     requests.push(req);

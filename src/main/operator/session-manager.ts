@@ -16,6 +16,21 @@ import type { SessionEndCause } from '../../shared/operator/session-end-cause.js
  * tokens) comes from this manager.
  */
 
+/**
+ * RT-113 (10763 §3) — where a cashier session's authority comes from.
+ * P2 sets `online_confirmed` (a live Backend-Core cashier admission); P3 adds
+ * sessions admitted offline from the sealed grant (`offline_grant`).
+ */
+export type SessionAuthority = 'online_confirmed' | 'offline_grant';
+
+/** RT-113 P2 — the live cashier admission a session holds (main-only). */
+export interface CashierAdmissionFields {
+  admission_id: string;
+  /** TTL from the LATEST `admitted` response; the heartbeat runs at ≤ half of it. */
+  admission_ttl_seconds: number;
+  offline_grace_seconds: number;
+}
+
 export interface OperatorSessionRecord {
   id: string;
   operator_id: string;
@@ -35,6 +50,15 @@ export interface OperatorSessionRecord {
   lock_state: 'active' | 'locked';
   /** ISO timestamp the session locked; null while active. */
   locked_at: string | null;
+  /**
+   * RT-113 P2 (10763 §3) — set only on an admitted cashier session. Main-only:
+   * never in the bridge view (Constitution VII).
+   */
+  user_id?: string;
+  authority?: SessionAuthority;
+  admission_id?: string;
+  admission_ttl_seconds?: number;
+  offline_grace_seconds?: number;
 }
 
 export interface CreateSessionInput {
@@ -45,6 +69,8 @@ export interface CreateSessionInput {
   branch_id: string;
   backend_session_id: string;
   started_at?: string;
+  /** RT-113 P2 — the cashier's live online admission (sign-in or takeover). */
+  cashier_admission?: CashierAdmissionFields & { user_id: string };
 }
 
 type SessionEndCallback = (
@@ -101,6 +127,14 @@ export class SessionManager {
       lock_state: 'active',
       locked_at: null,
     };
+    if (input.cashier_admission !== undefined) {
+      const a = input.cashier_admission;
+      record.user_id = a.user_id;
+      record.authority = 'online_confirmed';
+      record.admission_id = a.admission_id;
+      record.admission_ttl_seconds = a.admission_ttl_seconds;
+      record.offline_grace_seconds = a.offline_grace_seconds;
+    }
     this.current = record;
     // #380 — fire start subscribers (e.g. the orphan-attempt sweep). A
     // throwing subscriber must not break sign-in (mirrors end()).
@@ -112,6 +146,19 @@ export class SessionManager {
       }
     }
     return record;
+  }
+
+  /**
+   * RT-113 P2 — record a heartbeat's `admitted` on the CURRENT session, only
+   * when `session_id` still names it. Returns whether it was applied.
+   */
+  renewAdmission(session_id: string, admission: CashierAdmissionFields): boolean {
+    if (this.current?.id !== session_id) return false;
+    this.current.authority = 'online_confirmed';
+    this.current.admission_id = admission.admission_id;
+    this.current.admission_ttl_seconds = admission.admission_ttl_seconds;
+    this.current.offline_grace_seconds = admission.offline_grace_seconds;
+    return true;
   }
 
   /** Register a callback fired after each session ends. */

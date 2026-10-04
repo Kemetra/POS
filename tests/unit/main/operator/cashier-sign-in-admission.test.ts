@@ -86,7 +86,7 @@ function makeDb(r: Row | undefined): DatabaseHandle {
     exec: () => undefined,
     transaction: <T>(fn: T) => fn,
     close: () => undefined,
-  } as unknown as DatabaseHandle;
+  };
 }
 
 const paired: PairingStore = {
@@ -246,7 +246,7 @@ describe('cashier sign-in — refusal outcome table', () => {
     [{ kind: 'unavailable' }, 'no_connection'],
     [{ kind: 'no_connection' }, 'no_connection'],
   ] as const)('%o → refused/%s, no session', async (result, category) => {
-    const { handler, sessions, fake } = build(result as CashierAdmissionResult);
+    const { handler, sessions, fake } = build(result);
     const res = await handler.signIn(request());
     expect(res).toEqual({ kind: 'refused', category });
     expect(sessions.getCurrent()).toBeNull();

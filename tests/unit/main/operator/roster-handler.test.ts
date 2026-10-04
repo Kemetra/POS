@@ -108,7 +108,7 @@ describe('RosterHandler (device roster)', () => {
     [{ kind: 'rejected' }, 'invalid_input'],
   ] as const)('%o → refused/%s', async (result, category) => {
     const handler = new RosterHandler({
-      cashierAdmissions: fakeClient(result as CashierRosterResult).client,
+      cashierAdmissions: fakeClient(result).client,
     });
     await expect(handler.listRoster()).resolves.toEqual({ kind: 'refused', category });
   });

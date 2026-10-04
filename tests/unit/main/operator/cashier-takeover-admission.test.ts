@@ -155,7 +155,7 @@ describe('cashier takeover via takeover:true', () => {
     [{ kind: 'rejected' }, 'invalid_input'],
     [{ kind: 'rate_limited' }, 'rate_limited'],
   ] as const)('%o → refused/%s, proto discarded, no session', async (result, category) => {
-    const { handler, store, sessions, emit } = build(result as CashierAdmissionResult);
+    const { handler, store, sessions, emit } = build(result);
     const proto = cashierProto();
     store.set(proto);
     const res = await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });

@@ -266,7 +266,7 @@ describe('heartbeat outcomes', () => {
   ] as const)('%o keeps the session and retries on the next tick', async (result) => {
     const h = harness();
     const record = signInCashier(h.sessions);
-    h.fake.setAdmit(result as CashierAdmissionResult);
+    h.fake.setAdmit(result);
     await advance(HALF_TTL_MS);
     expect(h.sessions.getCurrent()?.id).toBe(record.id);
     expect(h.fake.admitCalls).toHaveLength(1);
@@ -319,7 +319,7 @@ describe('end and timer lifecycle', () => {
     expect(h2.sessions.getCurrent()).toBeNull();
   });
 
-  it('any session end (e.g. account disabled) stops the timer and ends the admission', async () => {
+  it('any session end (e.g. account disabled) stops the timer and ends the admission', () => {
     const h = harness();
     signInCashier(h.sessions);
     h.sessions.end('account_disabled_mid_session');
@@ -327,7 +327,7 @@ describe('end and timer lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('a new session replacing the old one disarms the old heartbeat and ends its admission', async () => {
+  it('a new session replacing the old one disarms the old heartbeat and ends its admission', () => {
     const h = harness();
     signInCashier(h.sessions);
     h.sessions.create({

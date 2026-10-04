@@ -142,7 +142,12 @@ import { createBackendClient } from './operator/backend-client.js';
 import { SessionManager } from './operator/session-manager.js';
 import { CashierSignInHandler, SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
-import { CheckActiveSessionHandler } from './operator/check-active-session.js';
+import { createCashierAdmissionClient } from './operator/cashier-admission-client.js';
+import {
+  NOOP_OFFLINE_GRANT_SEAM,
+  type CashierAdmissionDeps,
+} from './operator/cashier-admission.js';
+import { CashierAdmissionKeeper } from './operator/cashier-admission-keeper.js';
 import { RosterHandler } from './operator/roster-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
 import { LifecycleCascade } from './operator/lifecycle-cascade.js';
@@ -655,14 +660,42 @@ singleInstanceReady
       deviceTokenAttestation,
       logger: mainLogger,
     });
-    const checkActiveSessionHandler = new CheckActiveSessionHandler({
-      backend: operatorBackend,
+    // T051b + T051d — lifecycle cascade for terminal-revocation (FR-014) and
+    // account-disabled-mid-session. RT-113 P2 wires its first callers: the
+    // cashier admission's device-401 handling (RT-138 L6 / 10763 D8) and the
+    // heartbeat's 403. It is NOT exposed to the renderer bridge.
+    const operatorLifecycleCascade = new LifecycleCascade({
+      sessionManager: operatorSessionManager,
+      logger: mainLogger,
     });
+
+    // RT-113 P2 (10763 D2/D11, owner decision 10844; fixes RT-182) — the
+    // cashier path's server authority: the device-authenticated Backend-Core
+    // cashier-admissions resource. Device token as the bearer, read in-process
+    // per call; never logged, never bridged. No Clerk-gated call remains on
+    // the cashier path.
+    const cashierAdmissionClient = createCashierAdmissionClient({
+      baseUrl: apiBaseUrl,
+      fetch: globalThis.fetch.bind(globalThis),
+      getDeviceToken: async () => {
+        const status = await pairingStore.getStatus();
+        if (status.kind !== 'paired') return null;
+        return (await secretStore.get(DEVICE_TOKEN_KEY)) ?? null;
+      },
+    });
+    const cashierAdmission: CashierAdmissionDeps = {
+      client: cashierAdmissionClient,
+      // P1 SEAM — RT113-P1 replaces this with the sealed offline grant store.
+      grantSeam: NOOP_OFFLINE_GRANT_SEAM,
+      onDeviceRevoked: () => {
+        operatorLifecycleCascade.notifyTerminalRevoked();
+      },
+    };
     const operatorCashierSignInHandler = new CashierSignInHandler({
       db: db,
       safeStorage,
       sessionManager: operatorSessionManager,
-      checkActiveSession: checkActiveSessionHandler,
+      admission: cashierAdmission,
       pairingStore,
       protoStore: operatorProtoStore,
       secretStore,
@@ -683,7 +716,7 @@ singleInstanceReady
       logger: mainLogger,
     });
     const operatorRosterHandler = new RosterHandler({
-      backend: operatorBackend,
+      cashierAdmissions: cashierAdmissionClient,
       logger: mainLogger,
     });
     const operatorInactivityMonitor = new InactivityMonitor({
@@ -692,20 +725,6 @@ singleInstanceReady
       logger: mainLogger,
     });
     operatorInactivityMonitor.start();
-
-    // T051b + T051d — lifecycle cascade for terminal-revocation (FR-014) and
-    // account-disabled-mid-session edge cases. The cascade holds the session-
-    // manager reference so the future US7 401-interceptor can call
-    // operatorLifecycleCascade.notifyTerminalRevoked() /
-    // operatorLifecycleCascade.notifyAccountDisabled() without importing any
-    // singleton. Exported as a module-level let so future interceptors can
-    // reach it; it is NOT exposed to the renderer bridge.
-    const operatorLifecycleCascade = new LifecycleCascade({
-      sessionManager: operatorSessionManager,
-      logger: mainLogger,
-    });
-    // Suppress "declared but never read" until the US7 interceptor wires it.
-    void operatorLifecycleCascade;
 
     // T048 — construct the audit-events outbox chain on the shared DB handle.
     // Lazy statement preparation in bindAuditEventsStoreDb ensures migration
@@ -739,6 +758,11 @@ singleInstanceReady
         mainLogger.error({ err }, 'operator.session_lock_audit:failed');
       },
     });
+    const getOperatorLockState = createLockStateReader({
+      db,
+      sessionManager: operatorSessionManager,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+    });
     registerSessionLockHandlers(guardedIpcMain, {
       unlockHandler: new SessionUnlockHandler({
         sessionManager: operatorSessionManager,
@@ -747,11 +771,26 @@ singleInstanceReady
         clerk: clerkExchanger,
         logger: mainLogger,
       }),
-      getLockState: createLockStateReader({
-        db,
-        sessionManager: operatorSessionManager,
-        resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
-      }),
+      getLockState: getOperatorLockState,
+    });
+
+    // RT-113 P2 — keep the online cashier admission live (heartbeat at ≤ TTL/2
+    // with a fresh key) and end it on sign-out / session end (best-effort).
+    // A takeover elsewhere ends this session at its next safe point: the
+    // RT-117 lock-state summary is null when no open sale with lines (and so
+    // no live tender) would be affected. Stopped on quit with the other
+    // workers (RT-198 latch: nothing runs after stop).
+    const cashierAdmissionKeeper = new CashierAdmissionKeeper({
+      sessionManager: operatorSessionManager,
+      admission: cashierAdmission,
+      onAccountDisabled: () => {
+        operatorLifecycleCascade.notifyAccountDisabled();
+      },
+      isAtSafePoint: () => getOperatorLockState().summary === null,
+      logger: mainLogger,
+    });
+    workerRegistry.register('cashier admission heartbeat', () => {
+      cashierAdmissionKeeper.stop();
     });
 
     const operatorTakeoverHandler = new TakeoverHandler({
@@ -765,6 +804,8 @@ singleInstanceReady
       auditEmitter,
       pairingStore,
       deviceTokenAttestation,
+      // RT-113 P2 — the cashier takeover is an admission with takeover:true.
+      cashierAdmission,
       logger: mainLogger,
     });
 
