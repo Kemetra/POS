@@ -76,6 +76,37 @@ Three lifecycle concerns are factored out into `src/main/app/`:
 | `bootstrap-window.ts` | BrowserWindow construction + the renderer trust boundary |
 | `bootstrap-db.ts` | DB handle ownership and close mechanics (open/migrate stay at the root) |
 | `bootstrap-workers.ts` | Background-worker teardown: stop order, failure isolation, idempotency |
+| `single-instance.ts` | The one-process-per-terminal lock and the second-launch focus (RT-203) |
+
+### Single instance per terminal — load-bearing
+
+`index.ts` calls `app.requestSingleInstanceLock()` (through `acquireSingleInstance`) **before it
+builds anything else**, and the whole `whenReady` boot chain hangs off that call's result. A second
+launch does not get the lock: it calls `app.quit()` and never opens the database, runs migrations,
+starts a worker, registers IPC, builds the printer or drawer ports, or creates a window. The running
+instance gets a `second-instance` event and restores (if minimized) and focuses its tracked cashier
+window. It does not pick from `BrowserWindow.getAllWindows()`, because the hidden offscreen
+receipt-print window is a `BrowserWindow` too.
+
+The lock is per user-data directory, which is where `pos-pulse.db` lives. So "one process per
+terminal database" is what it guarantees. These main-process structures are process-local and are
+correct **only because of this lock**:
+
+| Structure | Process-local coordination |
+|:--|:--|
+| Sale sync (`sales-sync/sale-sync-engine.ts`) | in-memory single-flight drain |
+| Catalogue read-down (`catalogue/read-down/read-down-driver.ts`) | in-memory single-flight tick |
+| Finalize listener (`sales/finalize-listener.ts`) | in-memory single-flight tick |
+| Payments deferred-reversal resolver | in-memory `running` flag |
+| Returns resolver + dispatcher (`returns/`) | one pass per process; per-return in-flight map (and the returns payout serialization) |
+| Drawer kick (`drawer/drawer-kick.ts`) | read-then-write double-kick guard (`UNIQUE(sale_id)` is only the backstop) |
+| Receipt printing / drawer hardware | one owner of the device |
+
+Do not remove or bypass the lock without replacing each of these with cross-process (database-level)
+coordination. There is no dev or test override: nothing in the repo launches two instances on
+purpose (`scripts/dev-electron.cjs` spawns one Electron), so dev runs take the lock too. The wiring is
+pinned by the static guard `src/main/__tests__/bootstrap-single-instance.test.ts`; the packaged
+Windows behaviour is a lab check.
 
 ### Shutdown ordering — load-bearing
 
