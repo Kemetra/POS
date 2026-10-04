@@ -249,3 +249,35 @@ describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', ()
     ).toBe(false);
   });
 });
+
+describe('SessionManager — RT-113 P2 authority latch (Codex P1 #1 / review F1-F2)', () => {
+  function cashier(m: SessionManager): ReturnType<SessionManager['create']> {
+    return m.create({
+      operator_id: 'user_clerk_1',
+      display_name: 'Cashier',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: '',
+    });
+  }
+
+  it('latches the current session only, keeps the first cause, and is main-only', () => {
+    const m = makeManager();
+    const record = cashier(m);
+    expect(m.latchAuthority('other', 'superseded_by_takeover')).toBe(false);
+    expect(record.authority_latch).toBeUndefined();
+    expect(m.latchAuthority(record.id, 'account_disabled_mid_session')).toBe(true);
+    expect(m.latchAuthority(record.id, 'superseded_by_takeover')).toBe(true);
+    expect(m.getCurrent()?.authority_latch).toBe('account_disabled_mid_session');
+    expect(m.getCurrentBridgeView()).not.toHaveProperty('authority_latch');
+  });
+
+  it('a new session starts unlatched', () => {
+    const m = makeManager();
+    const first = cashier(m);
+    m.latchAuthority(first.id, 'superseded_by_takeover');
+    m.end('superseded_by_takeover');
+    expect(cashier(m).authority_latch).toBeUndefined();
+  });
+});

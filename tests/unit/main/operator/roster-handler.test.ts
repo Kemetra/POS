@@ -105,6 +105,7 @@ describe('RosterHandler (device roster)', () => {
     [{ kind: 'no_connection' }, 'no_connection'],
     [{ kind: 'unavailable' }, 'no_connection'],
     [{ kind: 'device_unauthorized' }, 'invalid_input'],
+    [{ kind: 'no_token' }, 'invalid_input'],
     [{ kind: 'rejected' }, 'invalid_input'],
   ] as const)('%o → refused/%s', async (result, category) => {
     const handler = new RosterHandler({

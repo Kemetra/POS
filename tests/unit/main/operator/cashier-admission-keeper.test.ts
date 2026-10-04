@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CashierAdmissionKeeper,
+  DEVICE_401_CONFIRM_MS,
+  FAILED_TICK_RETRY_MS,
   SAFE_POINT_RECHECK_MS,
   heartbeatIntervalMs,
 } from '../../../../src/main/operator/cashier-admission-keeper.js';
+import { CartBridgeHandlers } from '../../../../src/main/cart/cart-bridge.js';
 import { SessionManager } from '../../../../src/main/operator/session-manager.js';
 import { LifecycleCascade } from '../../../../src/main/operator/lifecycle-cascade.js';
 import { SignOutHandler } from '../../../../src/main/operator/sign-out-handler.js';
@@ -33,23 +36,24 @@ interface Harness {
   sessions: SessionManager;
   keeper: CashierAdmissionKeeper;
   fake: ReturnType<typeof fakeCashierAdmission>;
-  accountDisabled: ReturnType<typeof vi.fn>;
   safe: { value: boolean };
   logs: unknown[];
+  /** Every session end (cause), as the renderer push and the cart/payment resets see it. */
+  ends: (string | undefined)[];
 }
 
 function harness(): Harness {
   const sessions = new SessionManager();
   const fake = fakeCashierAdmission({ ...ADMITTED, admission_ttl_seconds: TTL_S });
   const cascade = new LifecycleCascade({ sessionManager: sessions });
-  // The RT-138 device-revoked handling ends the session terminal_session_terminated.
+  // The immediate RT-138 cascade (sign-in path). Review F1: the heartbeat must
+  // NOT use it; it ends at the safe point instead.
   fake.deps.onDeviceRevoked = vi.fn(() => {
     cascade.notifyTerminalRevoked();
   });
   fake.deviceRevoked = fake.deps.onDeviceRevoked as ReturnType<typeof vi.fn>;
-  const accountDisabled = vi.fn(() => {
-    cascade.notifyAccountDisabled();
-  });
+  const ends: (string | undefined)[] = [];
+  sessions.onEnded((_record, cause) => ends.push(cause));
   const safe = { value: true };
   const logs: unknown[] = [];
   const logger = {
@@ -60,11 +64,10 @@ function harness(): Harness {
   const keeper = new CashierAdmissionKeeper({
     sessionManager: sessions,
     admission: fake.deps,
-    onAccountDisabled: accountDisabled,
     isAtSafePoint: () => safe.value,
     logger,
   });
-  return { sessions, keeper, fake, accountDisabled, safe, logs };
+  return { sessions, keeper, fake, safe, logs, ends };
 }
 
 function signInCashier(
@@ -104,7 +107,12 @@ describe('heartbeatIntervalMs', () => {
   it('is half the TTL, in ms', () => {
     expect(heartbeatIntervalMs(43_200)).toBe(21_600_000);
     expect(heartbeatIntervalMs(600)).toBe(300_000);
-    expect(heartbeatIntervalMs(1)).toBe(500);
+  });
+
+  it('review F5: clamped to [1000 ms, 2^31-1 ms] (a tiny TTL or a TTL past the setTimeout limit)', () => {
+    expect(heartbeatIntervalMs(1)).toBe(1_000);
+    expect(heartbeatIntervalMs(0.5)).toBe(1_000);
+    expect(heartbeatIntervalMs(10_000_000)).toBe(2_147_483_647);
   });
 });
 
@@ -219,7 +227,6 @@ describe('heartbeat outcomes', () => {
     const keeper = new CashierAdmissionKeeper({
       sessionManager: sessions,
       admission: fake.deps,
-      onAccountDisabled: vi.fn(),
       isAtSafePoint: () => {
         probes += 1;
         throw new Error('db busy');
@@ -233,48 +240,219 @@ describe('heartbeat outcomes', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('403 refused ends the session account_disabled_mid_session and invalidates the grant', async () => {
+  it('active_elsewhere latches the session (no new sale) until it ends', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    h.safe.value = false;
+    h.fake.setAdmit({ kind: 'active_elsewhere' });
+    await advance(HALF_TTL_MS);
+    expect(h.sessions.getCurrent()?.authority_latch).toBe('superseded_by_takeover');
+    expect(h.ends).toEqual([]);
+  });
+
+  it('403 at a safe point ends account_disabled_mid_session and invalidates the grant', async () => {
     const h = harness();
     signInCashier(h.sessions);
     h.fake.setAdmit({ kind: 'refused' });
     await advance(HALF_TTL_MS);
-    expect(h.accountDisabled).toHaveBeenCalledOnce();
     expect(h.sessions.getCurrent()).toBeNull();
-    expect(h.sessions.getLastEndCause()).toBe('account_disabled_mid_session');
+    expect(h.ends).toEqual(['account_disabled_mid_session']);
     expect(h.fake.invalidated).toEqual([{ reason: 'refused', user_id: FAKE_USER_ID }]);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('device 401 runs the device-revoked handling (terminal_session_terminated)', async () => {
+  it('review F1: a 403 mid-tender latches and defers the end to the safe point', async () => {
     const h = harness();
-    signInCashier(h.sessions);
-    h.fake.setAdmit({ kind: 'device_unauthorized' });
+    const record = signInCashier(h.sessions);
+    h.safe.value = false; // live tender on the open sale
+    h.fake.setAdmit({ kind: 'refused' });
     await advance(HALF_TTL_MS);
-    expect(h.fake.deviceRevoked).toHaveBeenCalledOnce();
-    expect(h.sessions.getCurrent()).toBeNull();
-    expect(h.sessions.getLastEndCause()).toBe('terminal_session_terminated');
-    expect(h.fake.invalidated).toEqual([{ reason: 'device_unauthorized' }]);
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
+    expect(h.sessions.getCurrent()?.authority_latch).toBe('account_disabled_mid_session');
+    // The grant is invalidated at once (D4); the session is not ended yet, so
+    // the renderer gets no `ended` push and resets no cart or payment store.
+    expect(h.fake.invalidated).toEqual([{ reason: 'refused', user_id: FAKE_USER_ID }]);
+    await advance(SAFE_POINT_RECHECK_MS * 3);
+    expect(h.ends).toEqual([]);
+    expect(h.fake.admitCalls).toHaveLength(1); // latched: no more heartbeats
+    h.safe.value = true;
+    await advance(SAFE_POINT_RECHECK_MS);
+    expect(h.ends).toEqual(['account_disabled_mid_session']);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it.each([
-    { kind: 'no_connection' },
-    { kind: 'unavailable' },
-    { kind: 'rejected' },
-    { kind: 'idempotency_conflict' },
-    { kind: 'rate_limited' },
-  ] as const)('%o keeps the session and retries on the next tick', async (result) => {
+  it('review F3: a single device 401 does not latch; a confirmation call follows in 30 s', async () => {
     const h = harness();
     const record = signInCashier(h.sessions);
-    h.fake.setAdmit(result);
+    h.fake.setAdmit({ kind: 'device_unauthorized' });
+    await advance(HALF_TTL_MS);
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+    expect(h.fake.invalidated).toEqual([]);
+    h.fake.setAdmit({ ...ADMITTED, admission_ttl_seconds: TTL_S });
+    await advance(DEVICE_401_CONFIRM_MS - 1);
+    expect(h.fake.admitCalls).toHaveLength(1);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(2);
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+    expect(h.ends).toEqual([]);
+    // The 401 count reset: a later single 401 again needs confirmation.
+    h.fake.setAdmit({ kind: 'device_unauthorized' });
+    await advance(HALF_TTL_MS);
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+  });
+
+  it('review F3 + F1: two consecutive device 401s latch and end terminal_session_terminated at the safe point', async () => {
+    const h = harness();
+    const record = signInCashier(h.sessions);
+    h.safe.value = false; // mid-tender
+    h.fake.setAdmit({ kind: 'device_unauthorized' });
+    await advance(HALF_TTL_MS + DEVICE_401_CONFIRM_MS);
+    expect(h.fake.admitCalls).toHaveLength(2);
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
+    expect(h.sessions.getCurrent()?.authority_latch).toBe('terminal_session_terminated');
+    expect(h.fake.invalidated).toEqual([{ reason: 'device_unauthorized' }]);
+    expect(h.fake.deviceRevoked).not.toHaveBeenCalled(); // no immediate cascade
+    expect(h.ends).toEqual([]);
+    h.safe.value = true;
+    await advance(SAFE_POINT_RECHECK_MS);
+    expect(h.ends).toEqual(['terminal_session_terminated']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([{ kind: 'rejected' }, { kind: 'idempotency_conflict' }, { kind: 'no_token' }] as const)(
+    '%o keeps the session and retries on the next tick',
+    async (result) => {
+      const h = harness();
+      const record = signInCashier(h.sessions);
+      h.fake.setAdmit(result);
+      await advance(HALF_TTL_MS);
+      expect(h.sessions.getCurrent()?.id).toBe(record.id);
+      expect(h.fake.admitCalls).toHaveLength(1);
+      await advance(HALF_TTL_MS - 1);
+      expect(h.fake.admitCalls).toHaveLength(1);
+      await advance(1);
+      expect(h.fake.admitCalls).toHaveLength(2);
+      expect(h.fake.admitCalls[0]?.idempotency_key).not.toBe(h.fake.admitCalls[1]?.idempotency_key);
+      expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+      expect(h.fake.deviceRevoked).not.toHaveBeenCalled();
+      expect(h.fake.invalidated).toEqual([]);
+    },
+  );
+
+  it.each([{ kind: 'no_connection' }, { kind: 'unavailable' }, { kind: 'rate_limited' }] as const)(
+    'review F6: %o keeps the session and retries sooner, after min(TTL/2, 60 s)',
+    async (result) => {
+      const h = harness();
+      const record = signInCashier(h.sessions);
+      h.fake.setAdmit(result);
+      await advance(HALF_TTL_MS);
+      expect(h.fake.admitCalls).toHaveLength(1);
+      await advance(FAILED_TICK_RETRY_MS - 1);
+      expect(h.fake.admitCalls).toHaveLength(1);
+      await advance(1);
+      expect(h.fake.admitCalls).toHaveLength(2);
+      expect(h.sessions.getCurrent()?.id).toBe(record.id);
+      expect(h.fake.deviceRevoked).not.toHaveBeenCalled();
+    },
+  );
+
+  it('review F6: failed ticks back off exponentially, capped at TTL/2; success restores the cadence', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    h.fake.setAdmit({ kind: 'no_connection' });
+    const callTimes: number[] = [];
+    const start = Date.now();
+    h.fake.setAdmit(() => {
+      callTimes.push(Date.now() - start);
+      return callTimes.length < 6
+        ? { kind: 'no_connection' }
+        : { ...ADMITTED, admission_ttl_seconds: TTL_S };
+    });
+    await advance(HALF_TTL_MS + 60_000 + 120_000 + 240_000 + 300_000 + 300_000 + HALF_TTL_MS);
+    expect(callTimes).toEqual([
+      HALF_TTL_MS,
+      HALF_TTL_MS + 60_000,
+      HALF_TTL_MS + 180_000,
+      HALF_TTL_MS + 420_000,
+      HALF_TTL_MS + 720_000,
+      HALF_TTL_MS + 1_020_000,
+      HALF_TTL_MS + 1_020_000 + HALF_TTL_MS,
+    ]);
+  });
+
+  it('review F6: the failed-tick retry never exceeds TTL/2 when TTL/2 is under 60 s', async () => {
+    const h = harness();
+    signInCashier(h.sessions, 20); // TTL/2 = 10 s
+    h.fake.setAdmit({ kind: 'no_connection' });
+    await advance(10_000);
+    expect(h.fake.admitCalls).toHaveLength(1);
+    await advance(10_000);
+    expect(h.fake.admitCalls).toHaveLength(2);
+  });
+
+  it('review F9: a slow heartbeat never overlaps the next one (in-flight stays at 1)', async () => {
+    const h = harness();
+    signInCashier(h.sessions, 2); // interval clamped to 1 s
+    let inFlight = 0;
+    let maxInFlight = 0;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          inFlight += 1;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          setTimeout(() => {
+            inFlight -= 1;
+            resolve({ ...ADMITTED, admission_ttl_seconds: 2 });
+          }, 5_000);
+        }),
+    );
+    await advance(30_000);
+    expect(h.fake.admitCalls.length).toBeGreaterThan(2);
+    expect(maxInFlight).toBe(1);
+  });
+});
+
+describe('Codex P1 #1 / review F2 — the latch blocks a new sale; the first safe point ends the session', () => {
+  it('after active_elsewhere mid-sale: the sale completes, cart.create is refused and the session ends', async () => {
+    const h = harness();
+    const record = signInCashier(h.sessions);
+    const cart = new CartBridgeHandlers({
+      getCurrentSession: () => h.sessions.getCurrent(),
+      getTerminalId: () => 'term-1',
+      onSaleBoundary: () => {
+        h.keeper.recheckSafePoint();
+      },
+    });
+    h.safe.value = false; // sale open with lines
+    h.fake.setAdmit({ kind: 'active_elsewhere' });
     await advance(HALF_TTL_MS);
     expect(h.sessions.getCurrent()?.id).toBe(record.id);
-    expect(h.fake.admitCalls).toHaveLength(1);
+
+    h.safe.value = true; // the sale settled
+    const res = await cart.create({ idempotency_key: 'create-after-takeover-0001' });
+    expect(res).toEqual({ kind: 'refused', reason: 'authority_conflict' });
+    // The boundary re-check ended it at once, without waiting for the poll.
+    expect(h.ends).toEqual(['superseded_by_takeover']);
+  });
+
+  it('recheckSafePoint is a no-op on an unlatched session', () => {
+    const h = harness();
+    const record = signInCashier(h.sessions);
+    h.keeper.recheckSafePoint();
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
+    expect(h.ends).toEqual([]);
+  });
+
+  it('a lock-state change re-checks the safe point', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    h.safe.value = false;
+    h.fake.setAdmit({ kind: 'active_elsewhere' });
     await advance(HALF_TTL_MS);
-    expect(h.fake.admitCalls).toHaveLength(2);
-    expect(h.fake.admitCalls[0]?.idempotency_key).not.toBe(h.fake.admitCalls[1]?.idempotency_key);
-    expect(h.accountDisabled).not.toHaveBeenCalled();
-    expect(h.fake.deviceRevoked).not.toHaveBeenCalled();
+    h.safe.value = true;
+    h.sessions.lock(new Date().toISOString());
+    expect(h.ends).toEqual(['superseded_by_takeover']);
   });
 });
 
@@ -342,6 +520,14 @@ describe('end and timer lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('review F4: replacing a session that holds the SAME admission_id does not end it', () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    signInCashier(h.sessions); // same device re-admission: the same admission_id
+    expect(h.fake.endCalls).toEqual([]);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
   it('shutdown (stop latch) clears the timer; no heartbeat or end afterwards', async () => {
     const h = harness();
     signInCashier(h.sessions);
@@ -373,8 +559,9 @@ describe('end and timer lifecycle', () => {
     settle({ kind: 'refused' });
     await advance(0);
     expect(h.sessions.getCurrent()?.id).toBe(record.id);
-    expect(h.accountDisabled).not.toHaveBeenCalled();
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
     expect(h.fake.invalidated).toEqual([]);
+    expect(h.fake.endCalls).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -395,8 +582,65 @@ describe('end and timer lifecycle', () => {
     settle({ kind: 'refused' });
     await advance(0);
     expect(h.sessions.getCurrent()?.id).toBe(next.id);
-    expect(h.accountDisabled).not.toHaveBeenCalled();
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
     expect(vi.getTimerCount()).toBe(1); // only the new session's heartbeat
+  });
+
+  it('review F7: a late admitted after sign-out ends that admission (no orphan)', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    let settle: (r: CashierAdmissionResult) => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    await advance(HALF_TTL_MS);
+    h.sessions.end('signed_out'); // ends FAKE_ADMISSION_ID
+    const LATE_ID = '0192f6a0-aaaa-7bbb-8ccc-0000000000aa';
+    settle({ ...ADMITTED, admission_id: LATE_ID });
+    await advance(0);
+    expect(h.fake.endCalls).toEqual([FAKE_ADMISSION_ID, LATE_ID]);
+    expect(h.fake.admitted).toEqual([]); // no grant refresh for a dead session
+  });
+
+  it('review F7: a late admitted after sign-out + immediate sign-in never ends the new live admission', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    let settle: (r: CashierAdmissionResult) => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    await advance(HALF_TTL_MS);
+    h.sessions.end('signed_out');
+    h.fake.setAdmit({ ...ADMITTED, admission_ttl_seconds: TTL_S });
+    const next = signInCashier(h.sessions); // re-admitted: same device, same admission_id
+    settle({ ...ADMITTED }); // the late heartbeat answer carries that same id
+    await advance(0);
+    expect(h.fake.endCalls).toEqual([FAKE_ADMISSION_ID]); // only the sign-out end
+    expect(h.sessions.getCurrent()?.id).toBe(next.id);
+
+    // A DIFFERENT late id while a new session is live is still released.
+    const h2 = harness();
+    signInCashier(h2.sessions);
+    let settle2: (r: CashierAdmissionResult) => void = () => undefined;
+    h2.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          settle2 = resolve;
+        }),
+    );
+    await advance(HALF_TTL_MS);
+    h2.sessions.end('signed_out');
+    signInCashier(h2.sessions);
+    const ORPHAN = '0192f6a0-aaaa-7bbb-8ccc-0000000000bb';
+    settle2({ ...ADMITTED, admission_id: ORPHAN });
+    await advance(0);
+    expect(h2.fake.endCalls).toEqual([FAKE_ADMISSION_ID, ORPHAN]);
   });
 });
 

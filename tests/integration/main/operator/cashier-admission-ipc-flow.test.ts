@@ -217,9 +217,6 @@ function wire(opts: { deviceToken?: string } = {}): {
   const keeper = new CashierAdmissionKeeper({
     sessionManager: sessions,
     admission,
-    onAccountDisabled: () => {
-      cascade.notifyAccountDisabled();
-    },
     isAtSafePoint: () => true,
     logger,
   });

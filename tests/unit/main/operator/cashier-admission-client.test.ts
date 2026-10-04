@@ -48,7 +48,7 @@ function errorBody(code: string): unknown {
 
 function makeClient(
   respond: (url: string) => Response | Promise<Response>,
-  opts: { token?: string | null } = {},
+  opts: { token?: string | null; tokenThrows?: boolean } = {},
 ): { client: CashierAdmissionClient; calls: Recorded[] } {
   const calls: Recorded[] = [];
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -59,7 +59,10 @@ function makeClient(
   const client = createCashierAdmissionClient({
     baseUrl: `${BASE}/`,
     fetch: fetchImpl,
-    getDeviceToken: () => Promise.resolve(opts.token === undefined ? DEVICE_TOKEN : opts.token),
+    getDeviceToken: () => {
+      if (opts.tokenThrows === true) throw new Error('secret store unavailable');
+      return Promise.resolve(opts.token === undefined ? DEVICE_TOKEN : opts.token);
+    },
   });
   return { client, calls };
 }
@@ -120,9 +123,9 @@ describe('admit — request', () => {
     expect(call?.init.body as string).not.toContain(DEVICE_TOKEN);
   });
 
-  it('sends nothing and answers device_unauthorized when no device token is held', async () => {
+  it('review F8: sends nothing and answers no_token (not device_unauthorized) when no device token is held', async () => {
     const { client, calls } = makeClient(() => jsonResponse(200, ADMITTED), { token: null });
-    await expect(client.admit(ONLINE_REQ)).resolves.toEqual({ kind: 'device_unauthorized' });
+    await expect(client.admit(ONLINE_REQ)).resolves.toEqual({ kind: 'no_token' });
     expect(calls).toHaveLength(0);
   });
 });
@@ -164,6 +167,7 @@ describe('admit — outcome mapping', () => {
     ['fractional ttl', { ...ADMITTED, admission_ttl_seconds: 1.5 }],
     ['negative grace', { ...ADMITTED, offline_grace_seconds: -1 }],
     ['empty admission id', { ...ADMITTED, admission_id: '' }],
+    ['non-uuid admission id (review F9)', { ...ADMITTED, admission_id: 'not-a-uuid' }],
     ['non-string display name', { ...ADMITTED, display_name: 7 }],
     ['non-string server time', { ...ADMITTED, server_time: null }],
     ['array body', [ADMITTED]],
@@ -205,14 +209,30 @@ describe('end', () => {
     await expect(client.end(ADMISSION_ID)).resolves.toEqual({ kind });
   });
 
-  it('a transport failure → no_connection; no token → device_unauthorized', async () => {
+  it('a transport failure → no_connection; no token → no_token', async () => {
     const down = makeClient(() => Promise.reject(new Error('ECONNREFUSED')));
     await expect(down.client.end(ADMISSION_ID)).resolves.toEqual({ kind: 'no_connection' });
     const noToken = makeClient(() => jsonResponse(200, { kind: 'ended' }), { token: '' });
-    await expect(noToken.client.end(ADMISSION_ID)).resolves.toEqual({
-      kind: 'device_unauthorized',
-    });
+    await expect(noToken.client.end(ADMISSION_ID)).resolves.toEqual({ kind: 'no_token' });
     expect(noToken.calls).toHaveLength(0);
+  });
+});
+
+describe('review F8: a missing or unreadable device token', () => {
+  it('a token read that throws resolves no_token on every call and never throws', async () => {
+    const { client, calls } = makeClient(() => jsonResponse(200, ADMITTED), { tokenThrows: true });
+    await expect(client.admit(ONLINE_REQ)).resolves.toEqual({ kind: 'no_token' });
+    await expect(client.end(ADMISSION_ID)).resolves.toEqual({ kind: 'no_token' });
+    await expect(client.listRoster()).resolves.toEqual({ kind: 'no_token' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('no token held: the roster resolves no_token without a request', async () => {
+    const { client, calls } = makeClient(() => jsonResponse(200, { cashiers: [] }), {
+      token: null,
+    });
+    await expect(client.listRoster()).resolves.toEqual({ kind: 'no_token' });
+    expect(calls).toHaveLength(0);
   });
 });
 

@@ -150,6 +150,7 @@ describe('cashier takeover via takeover:true', () => {
   it.each([
     [{ kind: 'refused' }, 'invalid_input'],
     [{ kind: 'device_unauthorized' }, 'invalid_input'],
+    [{ kind: 'no_token' }, 'invalid_input'],
     [{ kind: 'active_elsewhere' }, 'invalid_input'],
     [{ kind: 'idempotency_conflict' }, 'invalid_input'],
     [{ kind: 'rejected' }, 'invalid_input'],

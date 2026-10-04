@@ -240,6 +240,7 @@ describe('cashier sign-in — refusal outcome table', () => {
   it.each([
     [{ kind: 'refused' }, 'invalid_input'],
     [{ kind: 'device_unauthorized' }, 'invalid_input'],
+    [{ kind: 'no_token' }, 'invalid_input'],
     [{ kind: 'idempotency_conflict' }, 'invalid_input'],
     [{ kind: 'rejected' }, 'invalid_input'],
     [{ kind: 'rate_limited' }, 'rate_limited'],
@@ -265,6 +266,14 @@ describe('cashier sign-in — refusal outcome table', () => {
     await handler.signIn(request());
     expect(fake.deviceRevoked).toHaveBeenCalledOnce();
     expect(fake.invalidated).toEqual([{ reason: 'device_unauthorized' }]);
+  });
+
+  it('review F8: no local device token is a generic refusal with NO device-revoked cascade or grant invalidation', async () => {
+    const { handler, fake } = build({ kind: 'no_token' });
+    const res = await handler.signIn(request());
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(fake.deviceRevoked).not.toHaveBeenCalled();
+    expect(fake.invalidated).toEqual([]);
   });
 
   it('a network failure keeps today’s behaviour: offline sign-in is refused no_connection', async () => {
