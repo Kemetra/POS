@@ -2,147 +2,129 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { RosterHandler } from '../../../../src/main/operator/roster-handler.js';
 import type {
-  BackendClient,
-  BackendRosterResponse,
-} from '../../../../src/main/operator/backend-client.js';
+  CashierAdmissionClient,
+  CashierRosterResult,
+} from '../../../../src/main/operator/cashier-admission-client.js';
 
 /**
- * 004-operator-session T070a — operator.listBranchRoster main-side handler.
+ * 004-operator-session T070a / RT-113 P2 — operator.listBranchRoster main-side handler.
+ *
+ * RT-113 P2 (10763 D11, 10844): the cashier picker reads the
+ * device-authenticated `GET /api/pos/v1/cashier-admissions/roster` instead of
+ * the Clerk-gated `/operators/roster` (RT-182: 401 without a manager JWT).
  *
  * Verifies:
- *  - Allowlist redaction: only {id, display_name, role} cross the bridge
- *    per FR-006 / FR-031 (no email, phone, PIN material, audit history).
- *  - Branch scoping: the correct branchId is forwarded to the backend.
- *  - Failure-mode collapse: no_connection → refused/no_connection;
- *    refused → refused/invalid_input (PR-2 / NFR-003).
- *  - Empty roster is valid.
- *  - FR-032 redaction: cashier display names NEVER appear in any pino
- *    log call.
+ *  - Mapping: `{user_id, operator_id, display_name}` → bridge
+ *    `{id: operator_id, display_name, role: 'cashier'}` (the session
+ *    `operator_id` stays the provider subject, RT-116 seam 1); `user_id` stays
+ *    main-side (Constitution VII).
+ *  - `source: 'online'` on a live roster (10763 §3).
+ *  - Allowlist redaction (FR-006 / FR-031).
+ *  - Failure-mode collapse: no_connection / 5xx → no_connection; anything
+ *    else → invalid_input.
+ *  - FR-032: display names never reach the logger.
  */
 
-function fakeBackend(
-  result: BackendRosterResponse,
-  calls: { branchId?: string }[] = [],
-): BackendClient {
-  return {
-    signIn: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
-    signOut: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
-    listRoster: vi.fn((branchId: string) => {
-      calls.push({ branchId });
-      return Promise.resolve(result);
-    }),
-    confirmTakeover: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
-    getActiveSession: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
-    getStuckShifts: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
-  };
+function fakeClient(result: CashierRosterResult): {
+  client: Pick<CashierAdmissionClient, 'listRoster'>;
+  listRoster: ReturnType<typeof vi.fn>;
+} {
+  const listRoster = vi.fn(() => Promise.resolve(result));
+  return { client: { listRoster }, listRoster };
 }
 
-const HAPPY_BACKEND_ROSTER: BackendRosterResponse = {
+const ROSTER: CashierRosterResult = {
   kind: 'roster',
   cashiers: [
-    { id: 'c-1', display_name: 'Ali Hassan', role: 'cashier' },
-    { id: 'c-2', display_name: 'Sara Nabil', role: 'cashier' },
+    {
+      user_id: '0192f6a0-1b2c-7d3e-8f40-123456789abc',
+      operator_id: 'user_clerk_1',
+      display_name: 'Ali Hassan',
+    },
+    {
+      user_id: '0192f6a0-1b2c-7d3e-8f40-123456789abd',
+      operator_id: 'user_clerk_2',
+      display_name: 'Sara Nabil',
+    },
   ],
 };
 
-describe('RosterHandler', () => {
-  it('happy path: returns roster cashiers with only {id, display_name, role}', async () => {
-    const handler = new RosterHandler({ backend: fakeBackend(HAPPY_BACKEND_ROSTER) });
-    const res = await handler.listRoster('branch-42');
+describe('RosterHandler (device roster)', () => {
+  it('maps the device roster to bridge entries keyed on operator_id, with source online', async () => {
+    const { client, listRoster } = fakeClient(ROSTER);
+    const handler = new RosterHandler({ cashierAdmissions: client });
+    const res = await handler.listRoster();
+    expect(listRoster).toHaveBeenCalledOnce();
     expect(res).toEqual({
       kind: 'roster',
+      source: 'online',
       cashiers: [
-        { id: 'c-1', display_name: 'Ali Hassan', role: 'cashier' },
-        { id: 'c-2', display_name: 'Sara Nabil', role: 'cashier' },
+        { id: 'user_clerk_1', display_name: 'Ali Hassan', role: 'cashier' },
+        { id: 'user_clerk_2', display_name: 'Sara Nabil', role: 'cashier' },
       ],
     });
   });
 
-  it('forwards the branchId to the backend (branch scoping)', async () => {
-    const calls: { branchId?: string }[] = [];
-    const handler = new RosterHandler({ backend: fakeBackend(HAPPY_BACKEND_ROSTER, calls) });
-    await handler.listRoster('branch-99');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.branchId).toBe('branch-99');
-  });
-
-  it('strips extra backend fields — allowlist defence in depth (FR-006, FR-031)', async () => {
-    // Simulate a backend that leaks extra fields beyond the contract.
-    // Cast via unknown to bypass the type-level restriction and test the
-    // runtime allowlist filter.
-    const leakyRoster = {
-      kind: 'roster' as const,
+  it('never lets user_id or any extra field cross the bridge', async () => {
+    const leaky = {
+      kind: 'roster',
       cashiers: [
         {
-          id: 'c-1',
+          user_id: 'u-1',
+          operator_id: 'user_clerk_1',
           display_name: 'Test Cashier',
-          role: 'cashier' as const,
           email: 'test@pharmacy.test',
-          phone: '+966-555-0001',
           pin_hash: 'hash123',
         },
       ],
-    } as unknown as BackendRosterResponse;
-    const handler = new RosterHandler({ backend: fakeBackend(leakyRoster) });
-    const res = await handler.listRoster('b1');
+    } as unknown as CashierRosterResult;
+    const handler = new RosterHandler({ cashierAdmissions: fakeClient(leaky).client });
+    const res = await handler.listRoster();
     expect(res.kind).toBe('roster');
     if (res.kind === 'roster') {
-      const cashier = res.cashiers[0];
-      expect(cashier).toEqual({ id: 'c-1', display_name: 'Test Cashier', role: 'cashier' });
-      expect(cashier).not.toHaveProperty('email');
-      expect(cashier).not.toHaveProperty('phone');
-      expect(cashier).not.toHaveProperty('pin_hash');
+      expect(res.cashiers[0]).toEqual({
+        id: 'user_clerk_1',
+        display_name: 'Test Cashier',
+        role: 'cashier',
+      });
     }
   });
 
-  it('accepts an empty cashiers array', async () => {
+  it('accepts an empty roster', async () => {
     const handler = new RosterHandler({
-      backend: fakeBackend({ kind: 'roster', cashiers: [] }),
+      cashierAdmissions: fakeClient({ kind: 'roster', cashiers: [] }).client,
     });
-    const res = await handler.listRoster('b1');
-    expect(res).toEqual({ kind: 'roster', cashiers: [] });
+    await expect(handler.listRoster()).resolves.toEqual({
+      kind: 'roster',
+      source: 'online',
+      cashiers: [],
+    });
   });
 
-  it('maps no_connection to refused/no_connection', async () => {
+  it.each([
+    [{ kind: 'no_connection' }, 'no_connection'],
+    [{ kind: 'unavailable' }, 'no_connection'],
+    [{ kind: 'device_unauthorized' }, 'invalid_input'],
+    [{ kind: 'rejected' }, 'invalid_input'],
+  ] as const)('%o → refused/%s', async (result, category) => {
     const handler = new RosterHandler({
-      backend: fakeBackend({ kind: 'no_connection' }),
+      cashierAdmissions: fakeClient(result as CashierRosterResult).client,
     });
-    const res = await handler.listRoster('b1');
-    expect(res).toEqual({ kind: 'refused', category: 'no_connection' });
+    await expect(handler.listRoster()).resolves.toEqual({ kind: 'refused', category });
   });
 
-  it('maps refused to refused/invalid_input', async () => {
-    const handler = new RosterHandler({
-      backend: fakeBackend({ kind: 'refused' }),
-    });
-    const res = await handler.listRoster('b1');
-    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
-  });
-
-  it('FR-032 redaction: logger never receives cashier display names', async () => {
+  it('FR-032 redaction: logger never receives cashier display names or ids', async () => {
     const logCalls: unknown[] = [];
     const logger = {
       info: (...args: unknown[]) => logCalls.push(...args),
       warn: (...args: unknown[]) => logCalls.push(...args),
-      error: (...args: unknown[]) => logCalls.push(...args),
-      debug: (...args: unknown[]) => logCalls.push(...args),
-      trace: (...args: unknown[]) => logCalls.push(...args),
-      fatal: (...args: unknown[]) => logCalls.push(...args),
-      child: () => ({ info: () => undefined, warn: () => undefined }) as unknown,
     } as unknown as NonNullable<ConstructorParameters<typeof RosterHandler>[0]['logger']>;
-
-    const rosterWithNames: BackendRosterResponse = {
-      kind: 'roster',
-      cashiers: [
-        { id: 'c-1', display_name: 'Sensitive Name One', role: 'cashier' },
-        { id: 'c-2', display_name: 'Sensitive Name Two', role: 'cashier' },
-      ],
-    };
-    const handler = new RosterHandler({ backend: fakeBackend(rosterWithNames), logger });
-    await handler.listRoster('b1');
-
+    const handler = new RosterHandler({ cashierAdmissions: fakeClient(ROSTER).client, logger });
+    await handler.listRoster();
     const serialized = JSON.stringify(logCalls);
-    expect(serialized).not.toContain('Sensitive Name One');
-    expect(serialized).not.toContain('Sensitive Name Two');
+    expect(serialized).toContain('operator.roster.fetched');
+    expect(serialized).not.toContain('Ali Hassan');
+    expect(serialized).not.toContain('user_clerk_1');
+    expect(serialized).not.toContain('0192f6a0');
   });
 });

@@ -4,7 +4,7 @@ import type { Logger } from 'pino';
 import { CashierSignInHandler } from '../sign-in-handler.js';
 import { SessionManager } from '../session-manager.js';
 import { ProtoSessionStore } from '../takeover-handler.js';
-import { CheckActiveSessionHandler } from '../check-active-session.js';
+import { FAKE_USER_ID, fakeCashierAdmission } from './__helpers__/fake-cashier-admission.js';
 import { hashPin } from '../pin-credential.js';
 import { sealPinMaterial } from '../pin-seal.js';
 import type { SafeStorageLike } from '../../secrets/safe-storage.js';
@@ -70,6 +70,7 @@ function makeDb(opts: {
     branch_id: BRANCH,
     terminal_id: TERMINAL,
     cashier_clerk_user_id: CASHIER_ID,
+    user_id: FAKE_USER_ID,
     pin_hash: opts.pinHash,
     pin_salt: opts.pinSalt,
     failed_attempt_count: opts.failed_attempt_count,
@@ -85,12 +86,6 @@ function makeDb(opts: {
   });
 
   return { prepare } as unknown as DatabaseHandle;
-}
-
-function makeCheckActiveSession(): CheckActiveSessionHandler {
-  return {
-    checkActiveSession: vi.fn(() => Promise.resolve({ kind: 'none' as const })),
-  } as unknown as CheckActiveSessionHandler;
 }
 
 function captureLogger(): { logger: Logger; logCalls: Array<[string, ...unknown[]]> } {
@@ -125,7 +120,7 @@ async function buildHandlerWithPin(
     db,
     safeStorage,
     sessionManager: new SessionManager(),
-    checkActiveSession: makeCheckActiveSession(),
+    admission: fakeCashierAdmission().deps,
     pairingStore: makePairingStore(),
     protoStore: new ProtoSessionStore(),
     logger,
