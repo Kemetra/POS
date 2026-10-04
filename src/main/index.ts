@@ -7,7 +7,7 @@ import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
 import { createSaleBoundaryIpcMain } from './ipc/sale-boundary-guard.js';
 import { registerSessionLockHandlers } from './ipc/session-lock.js';
 import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
-import { createLockStateReader } from './operator/lock-state-reader.js';
+import { createLockStateReader, createSafePointProbe } from './operator/lock-state-reader.js';
 import { wireSessionStatePush } from './operator/session-state-push.js';
 import { wireSessionLockAudit } from './operator/session-lock-audit.js';
 import { createSaleSyncTokenReader } from './operator/sale-sync-token.js';
@@ -790,15 +790,21 @@ singleInstanceReady
     // Lost authority (taken over elsewhere, 403, two consecutive device 401s)
     // latches the session (cart.create, and an add to an empty cart, refuse
     // `authority_conflict`) and ends
-    // it at its first safe point: the RT-117 lock-state summary is null when
-    // no open sale with lines (and so no live tender) would be affected.
+    // it at its first safe point: no open sale with lines (the RT-117 lock
+    // summary is null) and no live tender on ANY cart of the session
+    // (`createSafePointProbe`, review of 024f07c items 2 and 5).
     // Re-checked after every sale IPC call (sale-boundary-guard), on lock
     // changes and by a backstop poll. Stopped on quit with the other workers (RT-198
     // latch: nothing runs after stop).
+    const isCashierAtSafePoint = createSafePointProbe({
+      db,
+      sessionManager: operatorSessionManager,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+    });
     const cashierAdmissionKeeper = new CashierAdmissionKeeper({
       sessionManager: operatorSessionManager,
       admission: cashierAdmission,
-      isAtSafePoint: () => getOperatorLockState().summary === null,
+      isAtSafePoint: isCashierAtSafePoint,
       logger: mainLogger,
     });
     saleBoundaryProbe.recheck = () => {

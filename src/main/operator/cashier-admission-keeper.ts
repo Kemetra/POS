@@ -5,6 +5,7 @@ import type {
   CashierAdmissionResult,
 } from './cashier-admission-client.js';
 import {
+  endAdmissionTracked,
   monotonicNowMs,
   nextIdempotencyKey,
   notifyGrantSeam,
@@ -235,7 +236,9 @@ export class CashierAdmissionKeeper {
       // A new session replaced the old one without an end: release the old
       // admission unless the new session holds the same one (F4).
       this.disarm();
-      if (previous.admission_id !== record.admission_id) this.endAdmission(previous.admission_id);
+      if (previous.admission_id !== record.admission_id) {
+        this.endAdmission(previous.admission_id, previous.user_id);
+      }
     }
     const armed = armedFor(record, this.nowMs());
     if (armed === null) return;
@@ -248,10 +251,10 @@ export class CashierAdmissionKeeper {
     const armed = this.armed;
     if (armed !== null && armed.session_id === record.id) {
       this.disarm();
-      this.endAdmission(armed.admission_id);
+      this.endAdmission(armed.admission_id, armed.user_id);
       return;
     }
-    if (record.admission_id !== undefined) this.endAdmission(record.admission_id);
+    if (record.admission_id !== undefined) this.endAdmission(record.admission_id, record.user_id);
   }
 
   private schedule(armed: Armed, ms: number, run: () => void): void {
@@ -299,7 +302,7 @@ export class CashierAdmissionKeeper {
     // RT-198 latch + session identity: re-checked after the await.
     if (this.stopped) return;
     if (!this.stillCurrent(armed)) {
-      this.releaseOrphan(result);
+      this.releaseOrphan(result, armed.user_id);
       return;
     }
     this.log(result.kind);
@@ -324,10 +327,10 @@ export class CashierAdmissionKeeper {
    * admission behind. End it, unless the live session holds that same id
    * (same-device re-admission returns the same `admission_id`).
    */
-  private releaseOrphan(result: CashierAdmissionResult): void {
+  private releaseOrphan(result: CashierAdmissionResult, user_id: string): void {
     if (result.kind !== 'admitted') return;
     if (this.armed?.admission_id === result.admission_id) return;
-    this.endAdmission(result.admission_id);
+    this.endAdmission(result.admission_id, user_id);
   }
 
   private handleOutcome(armed: Armed, result: CashierAdmissionResult, sentAtMs: number): void {
@@ -429,15 +432,14 @@ export class CashierAdmissionKeeper {
     }
   }
 
-  private endAdmission(admissionId: string): void {
-    void this.deps.admission.client
-      .end(admissionId)
-      .then((res) => {
-        this.logEnd(res.kind);
-      })
-      .catch(() => {
-        this.logEnd('threw');
-      });
+  /**
+   * Best-effort, fire-and-forget; never blocks sign-out. Tracked per user so a
+   * re-admission of the same user waits for it (review of 024f07c, item 3).
+   */
+  private endAdmission(admissionId: string, user_id: string | undefined): void {
+    void endAdmissionTracked(this.deps.admission, admissionId, user_id).then((res) => {
+      this.logEnd(res.kind);
+    });
   }
 
   private logEnd(outcome: string): void {

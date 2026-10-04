@@ -90,3 +90,37 @@ export function createLockStateReader(deps: LockStateReaderDeps): () => LockStat
     };
   };
 }
+
+/**
+ * RT-113 P2 (adversarial review of 024f07c, items 2 and 5) — the predicate the
+ * cashier admission keeper ends a LATCHED session on: true only when ending
+ * the session now preserves everything.
+ *
+ *  - no open sale with lines (the RT-117 lock summary is null); and
+ *  - no started payment attempt of the session holds live tender, on ANY of
+ *    its carts. The lock summary looks only at the session's NEWEST cart, so a
+ *    newer empty cart would otherwise hide an older handed-off cart that is
+ *    mid-tender (cart.create does not refuse while one exists, and a cart
+ *    created before the latch survives it).
+ *
+ * Live tender: `applying | applied | reversal_pending` (RT-116 M7). Never
+ * throws for a missing session (no session: nothing to preserve).
+ */
+export function createSafePointProbe(deps: LockStateReaderDeps): () => boolean {
+  const readLockState = createLockStateReader(deps);
+  const liveTenderStmt = (): Get<{ live: 1 }> =>
+    deps.db.prepare(
+      `SELECT 1 AS live FROM payment_attempts a
+         JOIN payment_tender_lines l ON l.payment_attempt_id = a.payment_attempt_id
+        WHERE a.operator_session_id = ? AND a.state = 'started'
+          AND l.state IN ('applying', 'applied', 'reversal_pending')
+        LIMIT 1`,
+    ) as Get<{ live: 1 }>;
+
+  return function isAtSafePoint(): boolean {
+    const session = deps.sessionManager.getCurrent();
+    if (session === null) return true;
+    if (readLockState().summary !== null) return false;
+    return liveTenderStmt().get(session.id) === undefined;
+  };
+}

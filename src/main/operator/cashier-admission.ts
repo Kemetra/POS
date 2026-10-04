@@ -5,6 +5,7 @@ import type { OperatorRefusal } from '../../shared/audit/event-shape.js';
 import type {
   CashierAdmissionAdmitted,
   CashierAdmissionClient,
+  CashierAdmissionEndResult,
   CashierAdmissionResult,
 } from './cashier-admission-client.js';
 import type { SessionManager } from './session-manager.js';
@@ -143,11 +144,74 @@ export function reportAdmissionOutcome(
   }
 }
 
+/**
+ * Review of 024f07c, item 3 — the longest an admission waits for the same
+ * user's pending `end`. Long enough for a normal round trip on the shop LAN or
+ * uplink; short enough that a hung `end` only delays sign-in briefly. Past it
+ * the sign-in goes ahead (best-effort): a late `end` can then still land, and
+ * the next heartbeat re-admits (a re-issued id is adopted).
+ */
+export const PENDING_END_WAIT_MS = 3_000;
+
+/** The `end` calls still in flight, per shared admission deps and per user. */
+const pendingEnds = new WeakMap<CashierAdmissionDeps, Map<string, Set<Promise<unknown>>>>();
+
+export type TrackedEndResult = CashierAdmissionEndResult | { kind: 'threw' };
+
+/**
+ * End an admission best-effort: never throws, never blocks the caller. While
+ * it is in flight it is remembered for `user_id`, so a re-admission of that
+ * user on this device waits for it ({@link awaitPendingEnd}) instead of being
+ * renewed by the server and then killed by this late `end`.
+ */
+export function endAdmissionTracked(
+  deps: CashierAdmissionDeps,
+  admission_id: string,
+  user_id: string | undefined,
+): Promise<TrackedEndResult> {
+  const ending: Promise<TrackedEndResult> = deps.client
+    .end(admission_id)
+    .catch((): TrackedEndResult => ({ kind: 'threw' }));
+  if (user_id === undefined) return ending;
+  let byUser = pendingEnds.get(deps);
+  if (byUser === undefined) {
+    byUser = new Map();
+    pendingEnds.set(deps, byUser);
+  }
+  const forUser = byUser.get(user_id) ?? new Set<Promise<unknown>>();
+  byUser.set(user_id, forUser);
+  forUser.add(ending);
+  void ending.then(() => {
+    forUser.delete(ending);
+    if (forUser.size === 0 && byUser.get(user_id) === forUser) byUser.delete(user_id);
+  });
+  return ending;
+}
+
+/** Wait for every pending `end` of `user_id`, at most `timeoutMs`. Never throws. */
+export async function awaitPendingEnd(
+  deps: CashierAdmissionDeps,
+  user_id: string,
+  timeoutMs = PENDING_END_WAIT_MS,
+): Promise<void> {
+  const forUser = pendingEnds.get(deps)?.get(user_id);
+  if (forUser === undefined || forUser.size === 0) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  await Promise.race([Promise.all([...forUser]), timeout]);
+  clearTimeout(timer);
+}
+
 /** Call the admission resource for an online sign-in or takeover and report the outcome. */
 export async function admitCashierOnline(
   deps: CashierAdmissionDeps,
   req: { user_id: string; operator_id: string; takeover: boolean; idempotency_key: string },
 ): Promise<OnlineAdmissionResult> {
+  // Review of 024f07c, item 3: a late `end` of this user's previous admission
+  // would kill the one the server renews now; let it land first (bounded).
+  await awaitPendingEnd(deps, req.user_id);
   // Stamped BEFORE the request goes out: the server's TTL runs from no
   // earlier than this, so a deadline from it is conservative under latency.
   const requested_at_ms = monotonicNowMs(deps);
