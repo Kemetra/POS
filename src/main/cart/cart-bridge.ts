@@ -934,7 +934,9 @@ export class CartBridgeHandlers {
         line_id: null,
         action_kind: 'cart.void',
         acting_operator_id: session.operator_id,
-        attribution_operator_id: req.attribution_operator_id ?? null,
+        // RT-184: a pre-handoff void needs no approver, and the renderer
+        // never chooses one.
+        attribution_operator_id: null,
         operator_session_id: session.id,
         payload_json: JSON.stringify(scrubPayloadForOutbox({ cart_id: req.cart_id })),
         applied_at: now,
