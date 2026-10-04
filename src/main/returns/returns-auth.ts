@@ -31,11 +31,15 @@ export interface ReturnsSession {
   readonly tenant_id: string;
   readonly branch_id: string;
   readonly terminal_id: string;
+  /** RT-15 S4: printed on the return slip as "Paid by" (as on a sale receipt). */
+  readonly display_name?: string;
 }
 
 /** An actor that passed the gate: who, in which session, with which role, where. */
 export interface AuthorizedActor extends ReturnActor {
   readonly role: Role;
+  /** RT-15 S4: the operator's display name, for the slip; absent when unknown. */
+  readonly displayName?: string;
 }
 
 /**
@@ -101,6 +105,7 @@ function actorOf(session: ReturnsSession): AuthorizedActor {
     operatorId: session.operator_id,
     operatorSessionId: session.operator_session_id,
     role: session.role,
+    ...(session.display_name === undefined ? {} : { displayName: session.display_name }),
   };
 }
 

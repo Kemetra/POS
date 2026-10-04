@@ -17,6 +17,7 @@ import {
   type NewJournalEntry,
   type ReturnsRepository,
 } from '../returns-repository.js';
+import { createReturnPayoutsRepository } from '../returns-payout-repository.js';
 import { LINE_A, LINE_B, RETURN_REF, SALE_REF, SCOPE } from './__helpers__/returns-fixture.js';
 
 let db: SqlJsDatabase;
@@ -97,13 +98,8 @@ describe('returns repository', () => {
     });
   });
 
-  it('pays out only a confirmed return, once', () => {
-    repo.insert(entry(1));
-    expect(repo.markPaidOut({ returnId: 'r1', now: 't1' })).toBe(false);
-    repo.markConfirmed(CONFIRM);
-    expect(repo.markPaidOut({ returnId: 'r1', now: 't2' })).toBe(true);
-    expect(repo.markPaidOut({ returnId: 'r1', now: 't3' })).toBe(false);
-    expect(repo.read('r1')?.state).toBe('paid_out');
+  it('has no direct paid_out write: only the S4 payout path moves a header there', () => {
+    expect('markPaidOut' in repo).toBe(false);
   });
 
   it('counts attempts only while unresolved', () => {
@@ -161,7 +157,16 @@ describe('D5: migration 0039 lets lines join a return only while it is pending a
       label: 'once paid out',
       advance: () => {
         repo.markConfirmed(CONFIRM);
-        repo.markPaidOut({ returnId: 'r1', now: 't2' });
+        const payouts = createReturnPayoutsRepository(handleFor(db));
+        payouts.start({ returnId: 'r1', operatorId: 'op', sessionId: 'sess', now: 't2' });
+        payouts.complete({
+          returnId: 'r1',
+          operatorId: 'op',
+          operatorName: null,
+          sessionId: 'sess',
+          method: 'manual',
+          now: 't2',
+        });
       },
     },
   ])('rejects a line INSERT $label', ({ advance }) => {

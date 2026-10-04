@@ -44,6 +44,11 @@ beforeAll(async () => {
 beforeEach(() => {
   db = freshSalesSyncDb();
   seedSale(db, { sale_id: 'sale-1' });
+  // 0039's own guards, in isolation: 0040 adds a separate rule (paid_out needs
+  // a completed return_payouts row), tested in 0040-return-payouts.test.ts.
+  // Without this, a move into paid_out could be refused by 0040's trigger and
+  // mask a broken 0039 state guard.
+  db.run('DROP TRIGGER trg_return_journal_paid_out_needs_payout');
 });
 
 afterEach(() => {

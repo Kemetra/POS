@@ -4,6 +4,10 @@ import { RETURNS_IPC_CHANNELS } from '../shared/returns/channels.js';
 import type {
   ReturnsBridgeAPI,
   ReturnsListResponse,
+  ReturnsPayoutRequest,
+  ReturnsPayoutResponse,
+  ReturnsReprintRequest,
+  ReturnsReprintResponse,
   ReturnsLookupRequest,
   ReturnsLookupResponse,
   ReturnsQuoteRequest,
@@ -31,4 +35,8 @@ export const returns: ReturnsBridgeAPI = {
   resolve: () =>
     ipcRenderer.invoke(RETURNS_IPC_CHANNELS.RESOLVE) as Promise<ReturnsResolveResponse>,
   list: () => ipcRenderer.invoke(RETURNS_IPC_CHANNELS.LIST) as Promise<ReturnsListResponse>,
+  payout: (req: ReturnsPayoutRequest) =>
+    ipcRenderer.invoke(RETURNS_IPC_CHANNELS.PAYOUT, req) as Promise<ReturnsPayoutResponse>,
+  reprintSlip: (req: ReturnsReprintRequest) =>
+    ipcRenderer.invoke(RETURNS_IPC_CHANNELS.REPRINT_SLIP, req) as Promise<ReturnsReprintResponse>,
 };

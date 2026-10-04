@@ -27,6 +27,8 @@ describe('preload returns bridge', () => {
     ['lookup', RETURNS_IPC_CHANNELS.LOOKUP, { saleNumber: 'SN-1' }],
     ['quote', RETURNS_IPC_CHANNELS.QUOTE, req],
     ['submit', RETURNS_IPC_CHANNELS.SUBMIT, req],
+    ['payout', RETURNS_IPC_CHANNELS.PAYOUT, { returnId: 'r', action: 'start' }],
+    ['reprintSlip', RETURNS_IPC_CHANNELS.REPRINT_SLIP, { returnId: 'r' }],
   ] as const)('%s invokes its channel with the request', async (member, channel, arg) => {
     const { returns } = await import('../returns');
     const call = returns[member] as (a: unknown) => Promise<unknown>;
@@ -50,7 +52,9 @@ describe('preload returns bridge', () => {
     expect(Object.keys(api.returns ?? {}).sort()).toEqual([
       'list',
       'lookup',
+      'payout',
       'quote',
+      'reprintSlip',
       'resolve',
       'submit',
     ]);

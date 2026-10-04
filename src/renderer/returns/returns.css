@@ -338,3 +338,37 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
+
+/*
+ * RT-15 S4 — the cash payout under a confirmed outcome. Amber (warning) for
+ * degraded-but-operable states: the drawer did not open, a payout was
+ * interrupted, a manual payout awaits its explicit confirmation. Success green
+ * only once main recorded the payout; danger for a refusal or an unknown result.
+ */
+.rt-payout {
+  display: grid;
+  gap: var(--space-3);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.rt-outcome--warning {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-emphasis);
+}
+
+.rt-outcome--neutral {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.rt-outcome p + p {
+  margin-block-start: var(--space-1);
+}
+
+/* A row action keeps its label on one line. */
+.rt-table .rt-btn {
+  white-space: nowrap;
+}

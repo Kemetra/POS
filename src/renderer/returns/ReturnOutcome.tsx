@@ -1,11 +1,13 @@
 import { useEffect, useState, type JSX } from 'react';
 
-import type { ReturnJournalView } from '../../shared/returns/types.js';
+import type { ReturnJournalView, ReturnsBridgeAPI } from '../../shared/returns/types.js';
+import { PayoutPanel } from './PayoutPanel';
 import { ReturnNotice } from './ReturnNotice';
 import { formatReturnMoney } from './returns-format.js';
 import { OUTCOME_COPY, refusalMessage } from './returns-messages.js';
 import { mayBeRecorded, type Outcome } from './return-flow-state.js';
 import { useFocusOnMount } from './useFocusOnMount.js';
+import type { Reload } from './usePayout.js';
 import type { ReturnFlow } from './useReturnFlow.js';
 
 /**
@@ -13,8 +15,10 @@ import type { ReturnFlow } from './useReturnFlow.js';
  *
  * Only `confirmed` is success. An unconfirmed answer is never presented as
  * done and offers "check again". No outcome re-arms the submitted selection:
- * the only way on is a new return (fresh lookup, live quantities). There is
- * no payout, drawer or slip control here (S4).
+ * the only way on is a new return (fresh lookup, live quantities).
+ *
+ * RT-15 S4: a confirmed return carries its payout (drawer, then slip) below
+ * the outcome; nothing else offers one.
  */
 type Tone = 'success' | 'danger';
 
@@ -29,6 +33,14 @@ function headline(outcome: Outcome): string {
     case 'failed':
       return OUTCOME_COPY.submitFailed;
   }
+}
+
+/**
+ * One filled commit per region: "check again" (unconfirmed) or the payout
+ * (confirmed, RT-15 S4) owns it; otherwise starting a new return does.
+ */
+function newReturnIsSecondary(outcome: Outcome): boolean {
+  return outcome.kind === 'unconfirmed' || outcome.kind === 'confirmed';
 }
 
 function retOf(outcome: Outcome): ReturnJournalView | null {
@@ -100,7 +112,23 @@ function Announcement({ outcome }: { outcome: Outcome }): JSX.Element {
   );
 }
 
-export function ReturnOutcome({ flow, outcome }: { flow: ReturnFlow; outcome: Outcome }) {
+/** What the payout below a confirmed outcome talks to. */
+export interface PayoutDeps {
+  readonly bridge: ReturnsBridgeAPI;
+  readonly reload: Reload;
+  /** The journal's latest view of a return, or null (Codex P2: never a stale panel). */
+  readonly latest: (returnId: string) => ReturnJournalView | null;
+}
+
+export function ReturnOutcome({
+  flow,
+  outcome,
+  payout,
+}: {
+  flow: ReturnFlow;
+  outcome: Outcome;
+  payout: PayoutDeps;
+}) {
   const heading = useFocusOnMount<HTMLHeadingElement>();
   const confirmed = outcome.kind === 'confirmed';
   const ret = retOf(outcome);
@@ -112,11 +140,18 @@ export function ReturnOutcome({ flow, outcome }: { flow: ReturnFlow; outcome: Ou
       </h2>
       <Announcement outcome={outcome} />
       {ret !== null && <Facts ret={ret} confirmed={confirmed} />}
+      {confirmed && ret !== null && (
+        <PayoutPanel
+          bridge={payout.bridge}
+          ret={payout.latest(ret.returnId) ?? ret}
+          reload={payout.reload}
+        />
+      )}
       <div className="rt-returns__actions">
         <CheckAgain flow={flow} outcome={outcome} />
         <button
           type="button"
-          className={`rt-btn ${outcome.kind === 'unconfirmed' ? 'rt-btn--secondary' : 'rt-btn--primary'}`}
+          className={`rt-btn ${newReturnIsSecondary(outcome) ? 'rt-btn--secondary' : 'rt-btn--primary'}`}
           disabled={flow.busy === 'check'}
           onClick={flow.startOver}
         >

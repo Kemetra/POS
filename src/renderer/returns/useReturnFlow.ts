@@ -39,6 +39,8 @@ export interface ReturnFlow {
   readonly submit: () => Promise<void>;
   readonly checkAgain: () => Promise<void>;
   readonly startOver: () => void;
+  /** RT-15 S4: show a confirmed return from the journal with its payout. */
+  readonly openPayout: (row: ReturnJournalView) => void;
 }
 
 type Reload = () => Promise<readonly ReturnJournalView[] | null>;
@@ -131,6 +133,9 @@ export function useReturnFlow(bridge: ReturnsBridgeAPI, reload: Reload): ReturnF
   const startOver = useCallback(() => {
     setState(INITIAL_FLOW);
   }, []);
+  const openPayout = useCallback((row: ReturnJournalView) => {
+    setState(settled({ kind: 'confirmed', ret: row, replayed: false }));
+  }, []);
 
-  return { state, busy, lookup, pick, getQuote, edit, submit, checkAgain, startOver };
+  return { state, busy, lookup, pick, getQuote, edit, submit, checkAgain, startOver, openPayout };
 }

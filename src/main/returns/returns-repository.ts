@@ -90,8 +90,6 @@ export interface ReturnsRepository {
   markConfirmed(input: ConfirmInput): boolean;
   /** pending/unknown → refused. False when already final. */
   markRefused(input: RefuseInput): boolean;
-  /** confirmed → paid_out (S4 drawer). False otherwise. */
-  markPaidOut(stamp: ReturnStamp): boolean;
 }
 
 interface Stmt {
@@ -274,14 +272,6 @@ class SqlReturnsRepository implements ReturnsRepository {
       sql: `UPDATE return_journal SET state = 'refused', refusal_reason = ?, updated_at = ?
        WHERE return_id = ? AND ${UNRESOLVED}`,
       params: [input.reason, input.now, input.returnId],
-    });
-  }
-
-  markPaidOut({ returnId, now }: ReturnStamp): boolean {
-    return this.update({
-      sql: `UPDATE return_journal SET state = 'paid_out', paid_out_at = ?, updated_at = ?
-       WHERE return_id = ? AND state = 'confirmed'`,
-      params: [now, now, returnId],
     });
   }
 }

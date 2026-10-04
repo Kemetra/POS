@@ -9,7 +9,9 @@ import type {
   ReturnsBridgeAPI,
   ReturnsListResponse,
   ReturnsLookupResponse,
+  ReturnsPayoutResponse,
   ReturnsQuoteResponse,
+  ReturnsReprintResponse,
   ReturnsResolveResponse,
   ReturnsSubmitResponse,
 } from '../../../shared/returns/types.js';
@@ -70,6 +72,7 @@ export function journal(overrides: Partial<ReturnJournalView> = {}): ReturnJourn
     createdAt: '2026-10-04T09:05:00.000Z',
     confirmedAt: '2026-10-04T09:05:02.000Z',
     lines: [{ lineRef: L1, quantity: 1 }],
+    payout: null,
     ...overrides,
   };
 }
@@ -80,6 +83,8 @@ export interface FakeReturnsBridge extends ReturnsBridgeAPI {
   submit: Mock<(req: unknown) => Promise<ReturnsSubmitResponse>>;
   resolve: Mock<() => Promise<ReturnsResolveResponse>>;
   list: Mock<() => Promise<ReturnsListResponse>>;
+  payout: Mock<(req: unknown) => Promise<ReturnsPayoutResponse>>;
+  reprintSlip: Mock<(req: unknown) => Promise<ReturnsReprintResponse>>;
 }
 
 export function fakeBridge(): FakeReturnsBridge {
@@ -93,6 +98,14 @@ export function fakeBridge(): FakeReturnsBridge {
       Promise.resolve({ kind: 'ok' as const, confirmed: 0, refused: 0, unresolved: 0 }),
     ),
     list: vi.fn(() => Promise.resolve({ kind: 'ok' as const, returns: [] })),
+    payout: vi.fn(() =>
+      Promise.resolve({
+        kind: 'refused' as const,
+        reason: 'feature_disabled' as const,
+        ret: null,
+      }),
+    ),
+    reprintSlip: vi.fn(() => Promise.resolve({ kind: 'printed' as const })),
   };
 }
 

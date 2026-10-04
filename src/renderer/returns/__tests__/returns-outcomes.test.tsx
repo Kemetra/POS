@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -37,6 +37,13 @@ async function outcomeFor(submit: unknown): Promise<ReturnType<typeof fakeBridge
   renderReturns({ bridge });
   await submitReturn(user);
   await screen.findByRole('heading', { name: 'نتيجة المرتجع' });
+  // K2: the outcome's live region is filled by a passive effect after mount,
+  // which React may flush after the heading is found (seen under the full
+  // coverage run's load): wait for the headline before asserting on it.
+  const outcome = screen.getByRole('region', { name: 'نتيجة المرتجع' });
+  await waitFor(() => {
+    expect(outcome.querySelector('.rt-outcome__headline')).not.toBeNull();
+  });
   return bridge;
 }
 
@@ -80,18 +87,40 @@ describe('refusals before submit (O2)', () => {
   });
 });
 
+/** Every appendChild / insertBefore, with whether the parent was in the document. */
+function recordInsertions() {
+  const calls: { parent: Node; connected: boolean }[] = [];
+  const spies = (['appendChild', 'insertBefore'] as const).map((method) => {
+    const original = Node.prototype[method] as (this: Node, ...a: unknown[]) => Node;
+    return vi.spyOn(Node.prototype, method).mockImplementation(function (
+      this: Node,
+      ...args: unknown[]
+    ) {
+      calls.push({ parent: this, connected: this.isConnected });
+      return original.apply(this, args) as never;
+    });
+  });
+  return {
+    intoConnected: (): Node[] => calls.filter((c) => c.connected).map((c) => c.parent),
+    restore: (): void => {
+      for (const spy of spies) spy.mockRestore();
+    },
+  };
+}
+
 describe('outcome announcement (K2)', () => {
   it('fills an already-present live region, so screen readers announce it', async () => {
-    const filledInPlace: Node[] = [];
-    const observer = new MutationObserver((records) => {
-      for (const r of records) if (r.addedNodes.length > 0) filledInPlace.push(r.target);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+    // RT-15 S4: not a MutationObserver. happy-dom holds an observer's callback
+    // only through a WeakRef, so a GC under load silently stops delivery (the
+    // RT-199 root cause; reproduced here by a forced GC). Instead, record every
+    // child insertion strongly, with whether its parent was already in the
+    // document: a region filled in place gets a child while connected.
+    const inserted = recordInsertions();
     await outcomeFor({ kind: 'confirmed', ret: journal(), replayed: false });
-    observer.disconnect();
+    inserted.restore();
     const region = screen.getByRole('status');
     expect(region).toHaveTextContent(OUTCOME_COPY.confirmed);
-    expect(filledInPlace).toContain(region);
+    expect(inserted.intoConnected()).toContain(region);
     expect(screen.getByRole('heading', { name: 'نتيجة المرتجع' })).toHaveFocus();
   });
 });
@@ -102,7 +131,8 @@ describe('submit outcomes (O3, O4)', () => {
     await outcomeFor({ kind: 'confirmed', ret, replayed: false });
     expect(screen.getByRole('status')).toHaveTextContent(OUTCOME_COPY.confirmed);
     expect(screen.getByText(RETURN_REF)).toBeInTheDocument();
-    expect(screen.getByText('24.99 EGP')).toBeInTheDocument();
+    // The outcome facts and (RT-15 S4, R6) the payout amount: both the server total.
+    expect(screen.getAllByText('24.99 EGP')).toHaveLength(2);
     expect(screen.queryByText('26.00 EGP')).not.toBeInTheDocument();
   });
 

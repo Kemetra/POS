@@ -2,10 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LOCAL_RETURN_REFUSALS,
+  RETURN_DRAWER_FAILURES,
   RETURN_STATES,
   SERVER_RETURN_REFUSALS,
 } from '../../../shared/returns/types.js';
-import { OUTCOME_COPY, refusalMessage, stateLabel } from '../returns-messages.js';
+import {
+  OUTCOME_COPY,
+  PAYOUT_COPY,
+  drawerFailureMessage,
+  refusalMessage,
+  stateLabel,
+} from '../returns-messages.js';
 
 /**
  * RT-15 S3 — O1 (AC10): every refusal the bridge can answer has its own
@@ -15,8 +22,8 @@ import { OUTCOME_COPY, refusalMessage, stateLabel } from '../returns-messages.js
 const ALL_REASONS = [...SERVER_RETURN_REFUSALS, ...LOCAL_RETURN_REFUSALS];
 
 describe('returns refusal copy (O1)', () => {
-  it('covers all 24 reasons with a non-empty Arabic message', () => {
-    expect(ALL_REASONS).toHaveLength(24);
+  it('covers all 36 reasons (24 from S2/S3, 12 from S4 payout) with a non-empty Arabic message', () => {
+    expect(ALL_REASONS).toHaveLength(36);
     for (const reason of ALL_REASONS) {
       const message = refusalMessage(reason);
       expect(message.trim().length, reason).toBeGreaterThan(0);
@@ -41,5 +48,24 @@ describe('journal state labels (H1)', () => {
     const labels = RETURN_STATES.map(stateLabel);
     expect(new Set(labels).size).toBe(5);
     for (const label of labels) expect(label).toMatch(/[؀-ۿ]/);
+  });
+});
+
+describe('drawer failure and payout copy (RT-15 S4)', () => {
+  it('says why the drawer did not open, one distinct Arabic line per reason', () => {
+    const lines = RETURN_DRAWER_FAILURES.map(drawerFailureMessage);
+    expect(new Set(lines).size).toBe(RETURN_DRAWER_FAILURES.length);
+    for (const line of lines) expect(line).toMatch(/[؀-ۿ]/);
+  });
+
+  it('falls back to a generic line for a drawer reason the renderer does not know', () => {
+    expect(drawerFailureMessage('melted' as never)).toBe(OUTCOME_COPY.unknownReason);
+  });
+
+  it('never reuses a refusal line as payout copy, and uses no em dash', () => {
+    const payout = Object.values(PAYOUT_COPY);
+    const refusals = new Set(ALL_REASONS.map(refusalMessage));
+    expect(payout.filter((line) => refusals.has(line))).toEqual([]);
+    expect(payout.filter((line) => line.includes('—'))).toEqual([]);
   });
 });
