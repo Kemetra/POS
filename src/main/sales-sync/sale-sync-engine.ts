@@ -14,7 +14,8 @@
  *   2. `stateRepo.eligible(scope, now)` → FIFO list (outbox LEFT JOIN state).
  *   3. For each: read the durable Sale, build the payload (tenders only past the
  *      RT-79 cutoff; integer minor units), POST, and record the outcome:
- *        ok / duplicate(409) → markSynced  (idempotent success, P5)
+ *        ok / duplicate(409) → markSynced  (idempotent success, P5); `ok` also
+ *          stores the Backend-Core `saleRef` when the answer carried one (RT-15 S1)
  *        transient(5xx/timeout) / no_connection → recordTransient (stay pending,
  *          attempt++, exponential backoff next_retry_at)  (P3 no silent loss)
  *        permanent(4xx) → markDeadLetter + onDeadLetter notification  (P3/FR-7)
@@ -113,7 +114,18 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
 
     switch (result.kind) {
       case 'ok':
+        // RT-15 S1: persist the server reference with the synced transition (one
+        // statement). A null saleRef keeps any reference already stored.
+        stateRepo.markSynced({
+          saleId,
+          tenantId,
+          branchId,
+          now: stamp,
+          serverSaleRef: result.saleRef,
+        });
+        return;
       case 'duplicate':
+        // 409 carries no Sale projection, so no saleRef (any stored one is kept).
         stateRepo.markSynced({ saleId, tenantId, branchId, now: stamp });
         return;
       case 'permanent':

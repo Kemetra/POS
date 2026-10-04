@@ -70,7 +70,7 @@ function makeStateRepo(eligible: EligibleSale[]): {
 function makeEngine(over: Partial<SaleSyncEngineDeps>): SaleSyncEngineDeps {
   const salesRepo: SaleReadPort = { readById: () => fakeSaleRow() };
   return {
-    client: createFakeSaleSyncClient([{ kind: 'ok' }]),
+    client: createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]),
     stateRepo: makeStateRepo([{ sale_id: SALE_ID } as EligibleSale]).repo,
     salesRepo,
     tenantId: TENANT,
@@ -84,7 +84,7 @@ function makeEngine(over: Partial<SaleSyncEngineDeps>): SaleSyncEngineDeps {
 
 describe('sale-sync drain — fires the POST when a token is present', () => {
   it('POSTs an eligible pending sale and marks it synced when an operator token is present', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     const { repo, markSynced } = makeStateRepo([{ sale_id: SALE_ID } as EligibleSale]);
     const engine = createSaleSyncEngine(
       makeEngine({ client, stateRepo: repo, getOperatorToken: () => 'envelope-present' }),
@@ -106,7 +106,7 @@ describe('sale-sync drain — fires the POST when a token is present', () => {
   });
 
   it('PAUSES the drain (no POST) when no operator token is present — the FR-3 gate', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     const { repo, markSynced } = makeStateRepo([{ sale_id: SALE_ID } as EligibleSale]);
     const engine = createSaleSyncEngine(
       makeEngine({ client, stateRepo: repo, getOperatorToken: () => null }),
@@ -121,7 +121,7 @@ describe('sale-sync drain — fires the POST when a token is present', () => {
   });
 
   it('treats an empty-string token as ABSENT (envelope "" → paused, not a no_connection POST)', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     const { repo, markSynced } = makeStateRepo([{ sale_id: SALE_ID } as EligibleSale]);
     const engine = createSaleSyncEngine(
       makeEngine({ client, stateRepo: repo, getOperatorToken: () => '' }),

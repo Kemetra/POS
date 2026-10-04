@@ -75,7 +75,7 @@ async function runOnce(deps: SaleSyncEngineDeps): Promise<void> {
 
 describe('sale-sync-engine', () => {
   it('T026 happy path: a freshly-enqueued sale (no state row) syncs to synced', async () => {
-    const h = harness({ script: [{ kind: 'ok' }] });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' }); // outbox row, NO state row — first drain
     await runOnce(h.deps);
@@ -157,12 +157,20 @@ describe('sale-sync-engine', () => {
   });
 
   it('T034 drains in FIFO order by enqueued_at', async () => {
-    const h = harness({ script: [{ kind: 'ok' }, { kind: 'ok' }] });
+    const h = harness({
+      script: [
+        { kind: 'ok', saleRef: null },
+        { kind: 'ok', saleRef: null },
+      ],
+    });
     seedSale(h.db, { sale_id: 'sale-A' });
     seedSale(h.db, { sale_id: 'sale-B' });
     seedOutbox(h.db, { sale_id: 'sale-B', enqueued_at: '2026-06-07T10:00:02.000Z' });
     seedOutbox(h.db, { sale_id: 'sale-A', enqueued_at: '2026-06-07T10:00:01.000Z' });
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }, { kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([
+      { kind: 'ok', saleRef: null },
+      { kind: 'ok', saleRef: null },
+    ]);
     const deps = { ...h.deps, client };
     await runOnce(deps);
     expect(client.calls.map((c) => c.externalId)).toEqual([
@@ -173,7 +181,7 @@ describe('sale-sync-engine', () => {
   });
 
   it('T040 operator-session gate: no token → no POST, sale stays unsynced', async () => {
-    const h = harness({ script: [{ kind: 'ok' }], token: null });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }], token: null });
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     await runOnce(h.deps);
@@ -190,8 +198,8 @@ describe('sale-sync-engine', () => {
     // takeover). The engine's envelope-present gate MUST treat '' as ABSENT — a
     // `=== null` check would let '' through, and the client would then reject it
     // as no_connection, a silent no-op drain. With token '' the drain must pause.
-    const h = harness({ script: [{ kind: 'ok' }], token: '' });
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }], token: '' });
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     const deps = { ...h.deps, client };
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' });
@@ -213,8 +221,8 @@ describe('sale-sync-engine', () => {
     // by the device token alone is structurally impossible. (The device token is read
     // by the client's Bearer/read-down paths, never by this engine gate.)
     for (const absentEnvelope of [null, ''] as Array<string | null>) {
-      const h = harness({ script: [{ kind: 'ok' }], token: absentEnvelope });
-      const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+      const h = harness({ script: [{ kind: 'ok', saleRef: null }], token: absentEnvelope });
+      const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
       const deps = { ...h.deps, client };
       seedSale(h.db, { sale_id: 'sale-1' });
       seedOutbox(h.db, { sale_id: 'sale-1' });
@@ -226,7 +234,7 @@ describe('sale-sync-engine', () => {
   });
 
   it('single-flight: a second runTickOnce while one is in flight returns already_running', async () => {
-    const h = harness({ script: [{ kind: 'ok' }] });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     const engine = createSaleSyncEngine(h.deps);
@@ -246,7 +254,7 @@ describe('RT-79 — tenders through the engine', () => {
   const SINCE = '2026-06-01T00:00:00.000Z';
 
   async function tendered(tenderJson: string, tendersSince: string | null | undefined) {
-    const h = harness({ script: [{ kind: 'ok' }] });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
     seedSale(h.db, { sale_id: 'sale-1', tender_lines_summary_json: tenderJson });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     await runOnce({ ...h.deps, tendersSince });
@@ -269,7 +277,7 @@ describe('RT-79 — tenders through the engine', () => {
   });
 
   it('a not-sendable tender sale reports a tender reason to onDeadLetter (no PII)', async () => {
-    const h = harness({ script: [{ kind: 'ok' }] });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
     seedSale(h.db, { sale_id: 'sale-1', tender_lines_summary_json: VOUCHER });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     const reasons: (string | undefined)[] = [];

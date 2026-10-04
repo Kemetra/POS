@@ -19,6 +19,13 @@
  * injected so tests run on sql.js without the native better-sqlite3 binding.
  *
  * No secrets: timestamps + an opaque error category only (P7).
+ *
+ * RT-15 S1 (migration 0038): `server_sale_ref` holds the Backend-Core `saleRef`
+ * (UUID) from a 200/201 capture answer. It is written only by `markSynced` and
+ * is never cleared: a later write that has no reference (a 409 `duplicate`, a
+ * malformed body, a transient/dead-letter transition) keeps the stored value
+ * (`COALESCE`). NULL means "not known" — every pre-S1 row, and any sale whose
+ * capture answer carried no usable reference.
  */
 
 import type { DatabaseHandle } from '../db/client.js';
@@ -39,6 +46,8 @@ export interface SaleSyncStateRow {
   synced_at: string | null;
   created_at: string;
   updated_at: string;
+  /** RT-15 S1: Backend-Core `saleRef` (UUID); null when not known. */
+  server_sale_ref: string | null;
 }
 
 /** A sale that is due for a (re)send: an outbox row, FIFO-ordered by enqueue time. */
@@ -58,6 +67,11 @@ export interface MarkSyncedInput extends TenantScope {
   saleId: string;
   /** ISO-8601 UTC. */
   now: string;
+  /**
+   * RT-15 S1: the Backend-Core `saleRef` from the capture answer. Null/omitted
+   * keeps whatever is already stored (never clears a known reference).
+   */
+  serverSaleRef?: string | null;
 }
 
 export interface MarkDeadLetterInput extends TenantScope {
@@ -89,6 +103,12 @@ export interface SaleSyncStateRepo {
   markSynced(input: MarkSyncedInput): void;
   markDeadLetter(input: MarkDeadLetterInput): void;
   recordTransient(input: RecordTransientInput): void;
+  /**
+   * RT-15 S1: the stored Backend-Core `saleRef` of a SYNCED sale in this scope,
+   * else null (unknown sale, other tenant/branch, not synced, or pre-S1 row).
+   * Read helper for the return flow (S2); no IPC exposes it in S1.
+   */
+  findServerSaleRefBySaleId(scope: TenantScope, saleId: string): string | null;
 }
 
 interface PrepareGet<Row> {
@@ -105,7 +125,8 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
   function read(saleId: string): SaleSyncStateRow | null {
     const stmt = db.prepare(
       `SELECT sale_id, tenant_id, branch_id, sync_status, attempt_count, next_retry_at,
-              last_error_category, last_attempt_at, synced_at, created_at, updated_at
+              last_error_category, last_attempt_at, synced_at, created_at, updated_at,
+              server_sale_ref
        FROM sale_sync_state WHERE sale_id = ?`,
     ) as PrepareGet<SaleSyncStateRow>;
     return stmt.get(saleId) ?? null;
@@ -140,6 +161,7 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       nextRetryAt: string | null;
       errorCategory: string | null;
       syncedAt: string | null;
+      serverSaleRef: string | null;
     },
   ): void {
     // PK is sale_id (globally unique per sale); tenant_id is fixed for a given
@@ -148,8 +170,9 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     const stmt = db.prepare(
       `INSERT INTO sale_sync_state
          (sale_id, tenant_id, branch_id, sync_status, attempt_count, next_retry_at,
-          last_error_category, last_attempt_at, synced_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          last_error_category, last_attempt_at, synced_at, created_at, updated_at,
+          server_sale_ref)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(sale_id) DO UPDATE SET
          sync_status         = excluded.sync_status,
          attempt_count       = sale_sync_state.attempt_count + ?,
@@ -157,6 +180,7 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
          last_error_category = excluded.last_error_category,
          last_attempt_at     = excluded.last_attempt_at,
          synced_at           = COALESCE(excluded.synced_at, sale_sync_state.synced_at),
+         server_sale_ref     = COALESCE(excluded.server_sale_ref, sale_sync_state.server_sale_ref),
          updated_at          = excluded.updated_at`,
     ) as PrepareRun;
     const initialAttempt = input.bumpAttempt ? 1 : 0;
@@ -173,6 +197,7 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       input.syncedAt,
       input.now,
       input.now,
+      input.serverSaleRef,
       conflictBump,
     );
   }
@@ -185,6 +210,7 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       nextRetryAt: null,
       errorCategory: null,
       syncedAt: input.now,
+      serverSaleRef: input.serverSaleRef ?? null,
     });
   }
 
@@ -196,6 +222,7 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       nextRetryAt: null,
       errorCategory: 'permanent',
       syncedAt: null,
+      serverSaleRef: null,
     });
   }
 
@@ -233,8 +260,25 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       errorCategory: input.errorCategory,
       now: input.now,
       syncedAt: null,
+      serverSaleRef: null,
     });
   }
 
-  return { read, eligible, readSyncStatus, markSynced, markDeadLetter, recordTransient };
+  function findServerSaleRefBySaleId(scope: TenantScope, saleId: string): string | null {
+    const stmt = db.prepare(
+      `SELECT server_sale_ref FROM sale_sync_state
+       WHERE sale_id = ? AND tenant_id = ? AND branch_id = ? AND sync_status = 'synced'`,
+    ) as PrepareGet<{ server_sale_ref: string | null }>;
+    return stmt.get(saleId, scope.tenantId, scope.branchId)?.server_sale_ref ?? null;
+  }
+
+  return {
+    read,
+    eligible,
+    readSyncStatus,
+    markSynced,
+    markDeadLetter,
+    recordTransient,
+    findServerSaleRefBySaleId,
+  };
 }

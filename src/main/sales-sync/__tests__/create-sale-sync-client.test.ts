@@ -220,8 +220,8 @@ describe('toWireBody — internal → DP2 CaptureSaleRequest wire shape', () => 
 
 describe('classifyStatus — HTTP → outcome union', () => {
   it('maps 200/201 → ok', () => {
-    expect(classifyStatus(200)).toEqual({ kind: 'ok' });
-    expect(classifyStatus(201)).toEqual({ kind: 'ok' });
+    expect(classifyStatus(200)).toEqual({ kind: 'ok', saleRef: null });
+    expect(classifyStatus(201)).toEqual({ kind: 'ok', saleRef: null });
   });
   it('maps 409 → duplicate (idempotent success)', () => {
     expect(classifyStatus(409)).toEqual({ kind: 'duplicate' });

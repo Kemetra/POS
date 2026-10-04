@@ -17,6 +17,17 @@
  *   transient (retry) ·  400/422 (and other 4xx) → permanent (dead-letter) ·
  *   network/DNS/refused/timeout-before-response → no_connection.
  *
+ * RT-15 S1 — `saleRef`: on 200/201 the body is the Backend-Core `Sale`
+ * projection, whose required `saleRef` (UUID, = `sales.id`) is what the return
+ * flow later addresses (`/api/pos/v1/sales/{saleRef}/returns`). The body is
+ * parsed LENIENTLY (RT-15 D-g): only `saleRef` is read and every other key is
+ * ignored, so a later additive `Sale` field never breaks capture. A missing /
+ * unparseable body or a non-UUID `saleRef` still yields `ok` (the sale IS
+ * captured server-side) with `saleRef: null`, and `onSaleRefUnavailable` is told
+ * the reason — never the body or the rejected value (P7). Only 200/201 bodies
+ * are read: a capture 409 (`duplicate`) is an `Error` envelope
+ * (`idempotency_key_conflict`) with no `saleRef`, so its body is not read.
+ *
  * Auth (016 D5/D7, DP-2 #559): the `operatorAuthorization` scheme =
  * `Authorization: Bearer <pos_operator_envelope>` — the OPAQUE operator envelope
  * (NOT the Clerk JWT, NOT the device token). The envelope is read fresh per POST via
@@ -126,6 +137,12 @@ export interface CreateSaleSyncClientDeps {
   getOperatorToken: () => string | null;
   /** ISO-4217 currency for the store (v1 single-currency). Defaults to EGP. */
   currencyCode?: string;
+  /**
+   * RT-15 S1: called when a 200/201 capture answer carried no usable `saleRef`.
+   * Receives the sale's deterministic `externalId` (an opaque local id, no PII)
+   * and a closed-set reason — never the body, never the rejected value.
+   */
+  onSaleRefUnavailable?: (info: SaleRefUnavailableInfo) => void;
   /** Override the request timeout in tests. */
   timeoutMs?: number;
 }
@@ -257,9 +274,49 @@ function tendersWire(
   }));
 }
 
+/** Why a 200/201 capture answer yielded `saleRef: null` (closed set; no body content). */
+export type SaleRefUnavailableReason = 'unparseable_body' | 'missing_sale_ref' | 'invalid_sale_ref';
+
+export interface SaleRefUnavailableInfo {
+  externalId: string;
+  reason: SaleRefUnavailableReason;
+}
+
+export type SaleRefParse =
+  | { saleRef: string }
+  | { saleRef: null; reason: SaleRefUnavailableReason };
+
+/**
+ * RT-15 S1 — lenient read of `saleRef` from a capture 200/201 body (D-g).
+ * Reads ONLY `saleRef`; unknown keys are allowed and ignored. The value must be
+ * a string in the canonical UUID shape Backend-Core issues and checks
+ * (`DP2_UUID_PATTERN`, case-insensitive); anything else is `null` + a reason.
+ * Pure; never throws.
+ */
+export function parseSaleRef(bodyText: string): SaleRefParse {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    return { saleRef: null, reason: 'unparseable_body' };
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { saleRef: null, reason: 'unparseable_body' };
+  }
+  const value = (parsed as Record<string, unknown>)['saleRef'];
+  if (value === undefined || value === null) {
+    return { saleRef: null, reason: 'missing_sale_ref' };
+  }
+  if (typeof value !== 'string' || !DP2_UUID_PATTERN.test(value)) {
+    return { saleRef: null, reason: 'invalid_sale_ref' };
+  }
+  return { saleRef: value };
+}
+
 /** Map an HTTP status onto the engine's outcome union (contracts/README.md). */
 export function classifyStatus(status: number): SaleSyncResult {
-  if (status === 200 || status === 201) return { kind: 'ok' };
+  // Status-only: `saleRef` comes from the body, which `postSale` reads for 200/201.
+  if (status === 200 || status === 201) return { kind: 'ok', saleRef: null };
   if (status === 409) return { kind: 'duplicate' };
   if (status >= 500) return { kind: 'transient' };
   // 401/403 — auth refusal. 016 (D5/R4): the credential is now the opaque
@@ -330,9 +387,30 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
         return { kind: 'no_connection' };
       }
 
-      // Body is intentionally not read: outcome is derived from status only, and
-      // the raw response body is never surfaced (P7).
-      return classifyStatus(response.status);
+      // The outcome is derived from the status only. RT-15 S1: for 200/201 the
+      // body is read for `saleRef` and nothing else; the raw body is never
+      // surfaced or logged (P7). Other statuses' bodies are not read.
+      const result = classifyStatus(response.status);
+      if (result.kind !== 'ok') return result;
+
+      let bodyText: string;
+      try {
+        bodyText = await response.text();
+      } catch {
+        // The body stream failed after the status arrived (e.g. the timeout hit
+        // mid-body). The sale is captured; only the reference is unknown.
+        bodyText = '';
+      }
+      const parsed = parseSaleRef(bodyText);
+      if (parsed.saleRef === null) {
+        try {
+          deps.onSaleRefUnavailable?.({ externalId: payload.externalId, reason: parsed.reason });
+        } catch {
+          // A failing warning hook must not turn a captured sale into a rejection
+          // (`postSale` never rejects); the outcome below is unaffected.
+        }
+      }
+      return { kind: 'ok', saleRef: parsed.saleRef };
     },
   };
 }
