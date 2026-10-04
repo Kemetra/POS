@@ -77,6 +77,11 @@ import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.rep
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
 import { createSaleSyncEngine, SALE_SYNC_BACKOFF_POLICY } from './sales-sync/sale-sync-engine.js';
+import {
+  createPairedWorkers,
+  withPairedNotification,
+  type PairedWorkers,
+} from './app/paired-workers.js';
 import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
@@ -114,6 +119,7 @@ import {
 } from './app/feature-flags.js';
 import { assessLaunchSwitches } from './app/launch-switch-guard.js';
 import { isShippedApp } from './app/shipped-app.js';
+import { acquireSingleInstance, restoreAndFocus } from './app/single-instance.js';
 import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -147,6 +153,30 @@ import { ForcedCloseHandler } from './operator/forced-close-handler.js';
 import { StuckShiftsHandler } from './operator/stuck-shifts-handler.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
+
+/**
+ * RT-203 — ONE POS process per terminal. Taken FIRST, before anything else in
+ * main is built.
+ *
+ * A second launch does not get the lock: it quits right here and never opens
+ * the database, runs migrations, starts a worker, registers IPC, builds the
+ * printer/drawer ports or creates a window. The whole boot below is chained on
+ * `singleInstanceReady`, which is `null` for that process.
+ *
+ * The process-local single-flight structures depend on this lock: sale sync,
+ * the catalogue read-down, the finalize listener, the payments deferred-reversal
+ * resolver, the returns resolver/dispatcher (and the returns payout), the drawer
+ * double-kick guard and printer access. See `app/single-instance.ts` and
+ * `docs/architecture/current.md` §3.
+ *
+ * On a second launch the running instance restores and focuses its cashier
+ * window: the tracked `mainWindow`, never "any window" (the hidden offscreen
+ * print window is a BrowserWindow too).
+ */
+let mainWindow: BrowserWindow | undefined;
+const singleInstanceReady = acquireSingleInstance(app, () => {
+  restoreAndFocus(mainWindow);
+});
 
 /**
  * 002-terminal-pairing US2: API base URL for the pair endpoint. Reads
@@ -252,7 +282,7 @@ function resolveRendererOrigin(): string {
  * it stays the single source of truth (#370) shared with the IPC sender guard
  * wired in `whenReady`.
  */
-const createWindow = createWindowFactory({
+const buildMainWindow = createWindowFactory({
   isDev,
   BrowserWindow,
   session,
@@ -261,6 +291,11 @@ const createWindow = createWindowFactory({
   rendererFilePath: path.join(__dirname, '../renderer/index.html'),
   devServerUrl: 'http://localhost:5173',
 });
+
+/** Build the cashier window and track it as the RT-203 focus target. */
+const createWindow = (): void => {
+  mainWindow = buildMainWindow();
+};
 
 /**
  * Enumerate the system printers via a live window's webContents
@@ -332,9 +367,17 @@ const dbHolder = createDatabaseHolder({ logger: console });
  */
 const workerRegistry = createWorkerRegistry({ logger: console });
 
-app
-  .whenReady()
-  .then(async () => {
+/**
+ * RT-202 — once-latch for the paired-only workers (read-down driver, finalize
+ * listener, sale-sync engine). Built inside `whenReady` (it needs the main
+ * logger); held here so `closeDbHandle()` can refuse a late start — a pairing
+ * that completes while the app is quitting must not build a worker against a DB
+ * handle that is about to close.
+ */
+let pairedWorkers: PairedWorkers | undefined;
+
+singleInstanceReady
+  ?.then(async () => {
     // T062 — initialize loggers FIRST inside whenReady, before any
     // other subsystem. `app.getPath('logs')` is only available after
     // `whenReady` fires, so this is the earliest possible site.
@@ -483,12 +526,42 @@ app
       fetch: globalThis.fetch.bind(globalThis),
       baseUrl: resolveApiBaseUrl(),
     });
-    const pairingService = createPairingService({
-      store: pairingStore,
-      network: pairingNetwork,
-      pairingLog: createPairingLog(mainLogger),
-      clock: () => new Date(),
-    });
+    // RT-202 — pairing happens in the renderer WITHOUT a process relaunch, so the
+    // paired-only workers cannot be bound only at boot. They register a starter
+    // with this latch (at the sites below); it fires at boot when already paired
+    // and, for a first-run terminal, right after the pairing is persisted.
+    const pairedWorkersLatch = createPairedWorkers({ logger: mainLogger });
+    pairedWorkers = pairedWorkersLatch;
+    // Re-read the scope from the pairing store (not from the submit result) so the
+    // workers bind the SAME terminal_id payments writes (#380 / F-007 lockstep).
+    const notifyPairedFromStore = async (): Promise<void> => {
+      try {
+        const status = await pairingStore.getStatus();
+        if (status.kind !== 'paired') return;
+        pairedWorkersLatch.notifyPaired({
+          tenant_id: status.tenant_id,
+          branch_id: status.branch_id,
+          terminal_id: status.terminal_id,
+        });
+      } catch (err) {
+        mainLogger.error(
+          { error: err instanceof Error ? err.message : String(err) },
+          'paired_workers:notify_failed',
+        );
+      }
+    };
+    // The ONLY pairing service handed to the IPC handler is the wrapped one, so a
+    // successful in-process pairing always notifies the latch. `src/main/pairing/`
+    // itself is unchanged.
+    const pairingService = withPairedNotification(
+      createPairingService({
+        store: pairingStore,
+        network: pairingNetwork,
+        pairingLog: createPairingLog(mainLogger),
+        clock: () => new Date(),
+      }),
+      notifyPairedFromStore,
+    );
 
     // #370 (LOW hardening) — wrap ipcMain ONCE so every handler is sender-origin
     // guarded (defense-in-depth on the renderer→main trust boundary). Uses the
@@ -855,29 +928,22 @@ app
     const catalogueSyncStateRepo = createCatalogueSyncStateRepo(db);
 
     const catalogueApiBaseUrl = resolveApiBaseUrl();
-    const cataloguePairingStatus = await pairingStore.getStatus();
-    let readDownDriver: ReturnType<typeof createReadDownDriver> | undefined;
-    if (cataloguePairingStatus.kind === 'paired') {
-      const readDownClient = createReadDownClient({
-        baseUrl: catalogueApiBaseUrl,
-        fetch: globalThis.fetch.bind(globalThis),
-        // Device token (the paired-terminal credential) read in-process; never
-        // logged, never bridged. Sole credential for the non-session-gated driver.
-        getDeviceToken: async () => {
-          const token = await secretStore.get(DEVICE_TOKEN_KEY);
-          return token ?? null;
-        },
-      });
-      readDownDriver = createReadDownDriver({
-        client: readDownClient,
-        writer: createReadDownWriter({ db: db, syncStateRepo: catalogueSyncStateRepo }),
-        tenantId: cataloguePairingStatus.tenant_id,
-        branchId: cataloguePairingStatus.branch_id,
-        now: () => new Date().toISOString(),
-        // Background pull cadence: hourly. Bounded [1s, 24h] by the driver.
-        tickIntervalMs: 60 * 60 * 1_000,
+    // Pairing state at boot. A terminal already paired notifies the latch NOW, so
+    // every paired-only starter registered below runs immediately in its original
+    // position (RT-202: unchanged paired-boot behaviour). An unpaired terminal
+    // leaves them held until the in-process pairing completes.
+    const bootPairing = await pairingStore.getStatus();
+    if (bootPairing.kind === 'paired') {
+      pairedWorkersLatch.notifyPaired({
+        tenant_id: bootPairing.tenant_id,
+        branch_id: bootPairing.branch_id,
+        terminal_id: bootPairing.terminal_id,
       });
     }
+    // Created by the paired-only starter below (boot or in-process pairing); the
+    // catalogue bridge resolves it lazily so `refresh` works after in-process
+    // pairing and still refuses while there is no driver.
+    let readDownDriver: ReturnType<typeof createReadDownDriver> | undefined;
 
     const catalogueBridge = createCatalogueBridge({
       // Adapt the operator session to the catalogue projection: the gate needs
@@ -903,11 +969,11 @@ app
         // 010 diagnostics — tenant-scoped barcode-alias count for catalogue:counts.
         countBarcodes: (tenantId) => catalogueRepo.countBarcodesByTenant(tenantId),
       },
-      // 010 T039 — the live read-down driver (paired terminals only). Omitted
-      // when unpaired (exactOptionalPropertyTypes — spread the key only when
-      // present), so `refresh` still refuses cleanly. The bridge only ever calls
-      // `runTickOnce` (admit); start/stop are owned here at the root.
-      ...(readDownDriver !== undefined ? { readDownDriver } : {}),
+      // 010 T039 — the live read-down driver (paired terminals only), resolved at
+      // call time (RT-202): `undefined` while unpaired, so `refresh` still refuses
+      // cleanly. The bridge only ever calls `runTickOnce` (admit); start/stop are
+      // owned here at the root.
+      getReadDownDriver: () => readDownDriver,
     });
     registerCatalogueHandlers(guardedIpcMain, { bridge: catalogueBridge });
 
@@ -916,20 +982,35 @@ app
     // terminal does not wait a full interval for its catalogue. The driver's
     // setInterval is stopped on quit via `closeDbHandle()` so it never outlives
     // the process or runs against a closed DB handle.
-    if (readDownDriver !== undefined) {
-      const driver = readDownDriver;
+    pairedWorkersLatch.register('read-down driver', (terminal) => {
+      const readDownClient = createReadDownClient({
+        baseUrl: catalogueApiBaseUrl,
+        fetch: globalThis.fetch.bind(globalThis),
+        // Device token (the paired-terminal credential) read in-process; never
+        // logged, never bridged. Sole credential for the non-session-gated driver.
+        getDeviceToken: async () => {
+          const token = await secretStore.get(DEVICE_TOKEN_KEY);
+          return token ?? null;
+        },
+      });
+      const driver = createReadDownDriver({
+        client: readDownClient,
+        writer: createReadDownWriter({ db: db, syncStateRepo: catalogueSyncStateRepo }),
+        tenantId: terminal.tenant_id,
+        branchId: terminal.branch_id,
+        now: () => new Date().toISOString(),
+        // Background pull cadence: hourly. Bounded [1s, 24h] by the driver.
+        tickIntervalMs: 60 * 60 * 1_000,
+      });
+      readDownDriver = driver;
       driver.start();
       workerRegistry.register('read-down driver', () => {
         driver.stop();
       });
-      mainLogger.info(
-        {
-          tenant_id:
-            cataloguePairingStatus.kind === 'paired' ? cataloguePairingStatus.tenant_id : null,
-        },
-        'read_down_driver:started',
-      );
-    } else {
+      mainLogger.info({ tenant_id: terminal.tenant_id }, 'read_down_driver:started');
+    });
+    if (bootPairing.kind !== 'paired') {
+      // Boot-time fact only: the starter above runs when the pairing completes.
       mainLogger.info('read_down_driver:skipped_unpaired');
     }
 
@@ -1268,12 +1349,12 @@ app
       registerReceiptsHandlers(guardedIpcMain, { receiptsBridge });
 
       // The AD-2 finalize WORKER, by contrast, IS terminal-scoped and only
-      // starts for an already-paired terminal — it needs the pairing row's
-      // scope to filter the scan. A terminal paired mid-process picks up the
-      // worker on the next launch; the startup recovery scan re-fires any
-      // settled-but-unfinalized rows then, so nothing is lost.
-      const pairingStatus = await pairingStore.getStatus();
-      if (pairingStatus.kind === 'paired') {
+      // starts for a paired terminal — it needs the pairing row's scope to
+      // filter the scan. RT-202: a terminal that pairs mid-process starts the
+      // worker (and the sale-sync engine) right after the pairing is persisted,
+      // through the same starter a paired boot runs immediately — never only on
+      // the next launch. The startup recovery scan below runs on either path.
+      pairedWorkersLatch.register('finalize listener + sale-sync engine', (pairingStatus) => {
         const outboxRepo = bindSaleSyncOutboxRepository(db);
         const allocator = bindSaleNumberAllocator(db);
         // saleAuditEmitter + printPipeline + printDispatcher are hoisted above
@@ -1480,7 +1561,9 @@ app
           clearInterval(saleSyncInterval);
         });
         mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'sale_sync_engine:started');
-      } else {
+      });
+      if (bootPairing.kind !== 'paired') {
+        // Boot-time fact only: the starter above runs when the pairing completes.
         mainLogger.info('finalize_listener:skipped_unpaired');
       }
     }
@@ -1569,6 +1652,7 @@ function closeDbHandle(): void {
   // tick cannot run against a closed handle. Stop ordering, failure isolation,
   // and idempotency are owned by the worker registry; this function preserves
   // the sequencing (drain, then close).
+  pairedWorkers?.close();
   workerRegistry.stopAll();
   dbHolder.close();
 }
