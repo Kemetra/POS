@@ -63,7 +63,7 @@ async function tickBetween(from: number, to: number): Promise<number[]> {
   return sentAt;
 }
 
-describe('I2: per-row backoff for unknown returns', () => {
+describe('I2: the per-row backoff schedule', () => {
   it('retries an unknown row on the sale-sync schedule (1 s doubling, 5 min cap)', async () => {
     h = returnsHarness();
     seedSyncedSale(h.db);
@@ -109,6 +109,20 @@ describe('I2: per-row backoff for unknown returns', () => {
     expect(h.repo.read(slow)?.attemptCount).toBe(7);
   });
 
+  it('review P2-1: an attempt stamped in the future (clock moved back) is due, not starved', async () => {
+    h = returnsHarness();
+    seedSyncedSale(h.db);
+    h.state.now = secondsAfterNow(3_600); // an RTC running an hour fast
+    const returnId = await unknownReturn();
+    h.state.now = secondsAfterNow(30); // NTP corrects the clock backwards
+    h.backend.onReturn = (call, backend) => backend.recordIdempotently(call);
+
+    await expect(h.resolver.tick()).resolves.toMatchObject({ confirmed: 1 });
+    expect(h.repo.read(returnId)?.state).toBe('confirmed');
+  });
+});
+
+describe('I2: what is never delayed', () => {
   it('a never-sent pending row is sent on the next tick', async () => {
     h = returnsHarness();
     seedSyncedSale(h.db);
@@ -133,19 +147,9 @@ describe('I2: per-row backoff for unknown returns', () => {
     await expect(h.resolver.resolveOnce(MANAGER_ACTOR)).resolves.toMatchObject({ confirmed: 1 });
     expect(h.repo.read(returnId)?.state).toBe('confirmed');
   });
+});
 
-  it('review P2-1: an attempt stamped in the future (clock moved back) is due, not starved', async () => {
-    h = returnsHarness();
-    seedSyncedSale(h.db);
-    h.state.now = secondsAfterNow(3_600); // an RTC running an hour fast
-    const returnId = await unknownReturn();
-    h.state.now = secondsAfterNow(30); // NTP corrects the clock backwards
-    h.backend.onReturn = (call, backend) => backend.recordIdempotently(call);
-
-    await expect(h.resolver.tick()).resolves.toMatchObject({ confirmed: 1 });
-    expect(h.repo.read(returnId)?.state).toBe('confirmed');
-  });
-
+describe('I2: an on-demand resolve during a background tick (review P2-2)', () => {
   it('review P2-2: an on-demand resolve during a backoff-filtered tick still sends the waiting row', async () => {
     h = returnsHarness();
     seedSyncedSale(h.db);
@@ -164,6 +168,41 @@ describe('I2: per-row backoff for unknown returns', () => {
     expect(h.repo.read(waiting)?.state).toBe('confirmed');
     expect(h.repo.read(stalled)?.state).toBe('confirmed');
     expect(h.backend.recorded.size).toBe(2);
+  });
+
+  it('two concurrent on-demand resolves share one chained pass; each return is sent once', async () => {
+    const { waiting, stalled, post } = await tickStalledWithOneRowBackingOff();
+
+    const ticking = h.resolver.tick();
+    const first = h.resolver.resolveOnce(MANAGER_ACTOR);
+    const second = h.resolver.resolveOnce(MANAGER_ACTOR);
+    post.release();
+    await ticking;
+
+    expect(second).toBe(first);
+    await expect(first).resolves.toMatchObject({ confirmed: 1, unresolved: 0 });
+    expect(postsPerKey()).toEqual(
+      new Map([
+        [h.repo.read(stalled)?.externalId, 1],
+        [h.repo.read(waiting)?.externalId, 1],
+      ]),
+    );
+  });
+
+  it('stop during a chained pass: no send after stop, and drain settles within its bound', async () => {
+    const { waiting, post } = await tickStalledWithOneRowBackingOff();
+    const ticking = h.resolver.tick();
+    const chained = h.resolver.resolveOnce(MANAGER_ACTOR);
+    await waitForPosts(1); // the tick's POST of Y, held
+
+    h.stop();
+    await expect(h.resolver.drain(20)).resolves.toBeUndefined(); // bounded: the POST is still held
+    post.release();
+    await Promise.all([ticking, chained]);
+
+    expect(h.backend.returnCalls()).toHaveLength(1);
+    expect(h.repo.read(waiting)?.state).toBe('unknown');
+    await expect(h.resolver.drain(1_000)).resolves.toBeUndefined();
   });
 });
 
@@ -192,4 +231,38 @@ function holdPosts(): { release: () => void } {
     return backend.recordIdempotently(call);
   };
   return { release };
+}
+
+/**
+ * Row X `unknown` and backing off (attempted at t = 0, clock t = 0.5 s), row Y
+ * `pending` and due, and every POST held: a background tick then sends Y only
+ * and stalls on it. The recorded requests are reset, so only POSTs made after
+ * this setup are observed.
+ */
+async function tickStalledWithOneRowBackingOff() {
+  h = returnsHarness();
+  seedSyncedSale(h.db);
+  seedSyncedSale(h.db, { saleId: 'sale-2', saleRef: SALE_REF_2 });
+  const waiting = await unknownReturn();
+  h.state.now = secondsAfterNow(0.5);
+  const stalled = await pendingReturn('SN-sale-2');
+  // Only POSTs from here on count (X's own first send, its answer lost, came before).
+  h.backend.calls.length = 0;
+  return { waiting, stalled, post: holdPosts() };
+}
+
+/** How many POSTs each Idempotency-Key received. */
+function postsPerKey(): Map<string | undefined, number> {
+  const counts = new Map<string | undefined, number>();
+  for (const call of h.backend.returnCalls()) {
+    const key = call.headers['Idempotency-Key'];
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+async function waitForPosts(n: number): Promise<void> {
+  while (h.backend.returnCalls().length < n) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
 }

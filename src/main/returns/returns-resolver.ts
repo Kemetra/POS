@@ -89,11 +89,59 @@ interface RunningPass {
   readonly background: boolean;
 }
 
+type StartPass = () => Promise<ResolveSummary>;
+
 const ignore = (): undefined => undefined;
 
-export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolver {
-  let running: RunningPass | null = null;
+/**
+ * Single-flight bookkeeping: at most one pass runs per process. An on-demand
+ * pass shares a running on-demand pass, but never joins a background tick (it
+ * skipped rows still backing off): it waits for the tick, then runs one
+ * unfiltered pass. Every send of one return stays single-flight (dispatcher).
+ */
+class PassTracker {
+  private running: RunningPass | null = null;
 
+  get busy(): boolean {
+    return this.running !== null;
+  }
+
+  background(start: StartPass): Promise<ResolveSummary> {
+    return this.track(start(), true);
+  }
+
+  onDemand(start: StartPass): Promise<ResolveSummary> {
+    if (this.running === null) return this.track(start(), false);
+    if (!this.running.background) return this.running.pass;
+    const afterTick = this.running.pass.then(ignore, ignore);
+    return this.track(afterTick.then(start), false);
+  }
+
+  /** Settles when the pass in flight (if any) has finished, or after `timeoutMs`. */
+  drain(timeoutMs: number): Promise<void> {
+    if (this.running === null) return Promise.resolve();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    const settled = this.running.pass.then(ignore, ignore);
+    return Promise.race([settled, bound]).finally(() => {
+      clearTimeout(timer);
+    });
+  }
+
+  /** Track `work` as the one pass in flight until it settles. */
+  private track(work: Promise<ResolveSummary>, background: boolean): Promise<ResolveSummary> {
+    const current: Promise<ResolveSummary> = work.finally(() => {
+      if (this.running?.pass === current) this.running = null;
+    });
+    this.running = { pass: current, background };
+    return current;
+  }
+}
+
+/** One pass over the snapshot's unresolved rows (background: only those due). */
+function createPass(deps: ReturnsResolverDeps) {
   const policy = deps.backoff ?? SALE_SYNC_BACKOFF_POLICY;
 
   /** This pass's rows: all unresolved, or (background) only those due. */
@@ -105,7 +153,10 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
     return { rows, waiting: all.length - rows.length };
   }
 
-  async function pass(snapshot: AuthSnapshot, backgroundTick: boolean): Promise<ResolveSummary> {
+  return async function pass(
+    snapshot: AuthSnapshot,
+    backgroundTick: boolean,
+  ): Promise<ResolveSummary> {
     const { rows, waiting } = rowsFor(snapshot, backgroundTick);
     // Rows still backing off stay unresolved.
     const tally = { ...EMPTY, unresolved: waiting };
@@ -121,56 +172,22 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
       else tally.unresolved += 1;
     }
     return tally;
-  }
+  };
+}
 
-  /** Track `work` as the one pass in flight until it settles. */
-  function track(work: Promise<ResolveSummary>, background: boolean): Promise<ResolveSummary> {
-    const current: Promise<ResolveSummary> = work.finally(() => {
-      if (running?.pass === current) running = null;
-    });
-    running = { pass: current, background };
-    return current;
-  }
-
-  /**
-   * On demand: share a running on-demand pass; never join a background tick
-   * (it skipped rows still backing off) — wait for it, then run one unfiltered
-   * pass. Passes stay single-flight, and so does every send of one return.
-   */
-  function resolveOnce(snapshot: AuthSnapshot): Promise<ResolveSummary> {
-    if (running === null) return track(pass(snapshot, false), false);
-    if (!running.background) return running.pass;
-    const afterTick = running.pass.then(ignore, ignore);
-    return track(
-      afterTick.then(() => pass(snapshot, false)),
-      false,
-    );
-  }
-
-  function drain(timeoutMs: number): Promise<void> {
-    if (running === null) return Promise.resolve();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const bound = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, timeoutMs);
-    });
-    const settled = running.pass.then(
-      () => undefined,
-      () => undefined,
-    );
-    return Promise.race([settled, bound]).finally(() => {
-      clearTimeout(timer);
-    });
-  }
+export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolver {
+  const passes = new PassTracker();
+  const pass = createPass(deps);
 
   return {
-    drain,
-    resolveOnce,
+    drain: (timeoutMs) => passes.drain(timeoutMs),
+    resolveOnce: (snapshot) => passes.onDemand(() => pass(snapshot, false)),
     tick: () => {
       // The pass's authorization snapshot, taken once at its start.
       const live = deps.authorizer.current();
-      if (running !== null || live.kind !== 'ok') return Promise.resolve(null);
+      if (passes.busy || live.kind !== 'ok') return Promise.resolve(null);
       if (deps.authorizer.recheck(live.actor) !== null) return Promise.resolve(null);
-      return track(pass(live.actor, true), true);
+      return passes.background(() => pass(live.actor, true));
     },
   };
 }
