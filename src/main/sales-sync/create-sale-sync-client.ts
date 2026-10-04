@@ -14,8 +14,9 @@
  *
  * Outcome mapping (contracts/README.md):
  *   200/201 → ok ·  409 → divergent (terminal payload divergence, RT-190) ·
- *   5xx / timeout → transient (retry) ·  400/422 (and other 4xx) → permanent
- *   (dead-letter) ·  network/DNS/refused/timeout-before-response → no_connection.
+ *   5xx / timeout → transient (retry) ·  425 / 429 → transient + `Retry-After`
+ *   (RT-194) ·  400/422 (and other 4xx) → permanent (dead-letter) ·
+ *   network/DNS/refused/timeout-before-response → no_connection.
  *
  * RT-15 S1 — `saleRef`: on 200/201 the body is the Backend-Core `Sale`
  * projection, whose required `saleRef` (UUID, = `sales.id`) is what the return
@@ -40,6 +41,17 @@
  * body, an unreadable body or any other code is `unrecognized` and is STILL
  * divergent (fail closed). The body text is never surfaced or logged (P7).
  * Bodies of every other non-2xx status are not read.
+ *
+ * RT-194 — 425: Backend-Core's `IdempotencyInterceptor` answers 425
+ * `{ error: 'idempotency_in_progress', retryAfterSec: 2 }` with `Retry-After: 2`
+ * while an earlier request with the SAME Idempotency-Key still holds the in-flight
+ * marker — typically our own first attempt that hit the client timeout but is
+ * still committing on the server. The sale is not rejected; it is being captured.
+ * So 425 is `transient` (status alone decides; the body is not read), the engine
+ * waits at least `Retry-After`, and the retry with the same key gets the 201/200
+ * replay and its saleRef. 429 (per-device write rate limit) is handled the same
+ * way. `Retry-After` is parsed by `parseRetryAfterMs` (seconds or HTTP-date,
+ * clamped); a missing or invalid header leaves the normal backoff in charge.
  *
  * Auth (016 D5/D7, DP-2 #559): the `operatorAuthorization` scheme =
  * `Authorization: Bearer <pos_operator_envelope>` — the OPAQUE operator envelope
@@ -72,6 +84,7 @@
  */
 
 import type { CaptureSalePayload } from './capture-payload.js';
+import { parseRetryAfterMs } from './retry-after.js';
 import type {
   CaptureConflictCode,
   SaleSyncClient,
@@ -162,6 +175,8 @@ export interface CreateSaleSyncClientDeps {
   onSaleRefUnavailable?: (info: SaleRefUnavailableInfo) => void;
   /** Override the request timeout in tests. */
   timeoutMs?: number;
+  /** RT-194: epoch-ms clock for an HTTP-date `Retry-After`. Defaults to `Date.now`. */
+  nowMs?: () => number;
 }
 
 /**
@@ -363,6 +378,15 @@ async function readConflictCode(response: Response): Promise<CaptureConflictCode
   }
 }
 
+/** RT-194: the transient statuses whose `Retry-After` the engine honours. */
+const RETRY_AFTER_STATUSES: ReadonlySet<number> = new Set([425, 429]);
+
+/** RT-194: a transient 425/429 carries the parsed `Retry-After`, when valid. */
+function withRetryAfter(response: Response, nowMs: number): SaleSyncResult {
+  const retryAfterMs = parseRetryAfterMs(response.headers.get('Retry-After'), nowMs);
+  return retryAfterMs === undefined ? { kind: 'transient' } : { kind: 'transient', retryAfterMs };
+}
+
 /** Map an HTTP status onto the engine's outcome union (contracts/README.md). */
 export function classifyStatus(status: number): SaleSyncResult {
   // Status-only: `saleRef` comes from the body, which `postSale` reads for 200/201.
@@ -383,7 +407,10 @@ export function classifyStatus(status: number): SaleSyncResult {
   // defect. The sale is valid and WILL succeed on retry once the window rolls
   // (Retry-After). Dead-lettering it would permanently lose a good sale — the
   // same failure mode the 401/403 case above guards against. Treat as transient.
-  if (status === 429) return { kind: 'transient' };
+  // RT-194: 425 `idempotency_in_progress` — the same Idempotency-Key is still in
+  // flight on the server. The sale is being captured, not rejected: transient,
+  // never dead-letter. `postSale` adds the `Retry-After` delay for both.
+  if (RETRY_AFTER_STATUSES.has(status)) return { kind: 'transient' };
   // Other 4xx (400/404/422/…) is a genuine validation/contract defect — the
   // request will not succeed on retry without intervention; dead-letter it.
   if (status >= 400) return { kind: 'permanent' };
@@ -395,6 +422,7 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
   const { fetch: fetchImpl, baseUrl, getOperatorToken } = deps;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const currencyCode = deps.currencyCode ?? DEFAULT_CURRENCY_CODE;
+  const nowMs = deps.nowMs ?? Date.now;
   const root = baseUrl.replace(/\/$/, '');
 
   return {
@@ -442,11 +470,13 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
       // The outcome is derived from the status only. RT-15 S1: for 200/201 the
       // body is read for `saleRef` and nothing else; RT-190: for 409 it is read
       // for the closed-set conflict code and nothing else. The raw body is never
-      // surfaced or logged (P7). Other statuses' bodies are not read.
+      // surfaced or logged (P7). Other statuses' bodies are not read. RT-194: for
+      // 425/429 only the `Retry-After` header is read.
       const result = classifyStatus(response.status);
       if (result.kind === 'divergent') {
         return { kind: 'divergent', errorCode: await readConflictCode(response) };
       }
+      if (RETRY_AFTER_STATUSES.has(response.status)) return withRetryAfter(response, nowMs());
       if (result.kind !== 'ok') return result;
 
       let bodyText: string;
