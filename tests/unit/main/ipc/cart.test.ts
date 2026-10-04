@@ -179,7 +179,7 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
     expect(arg).not.toHaveProperty('attribution_operator_id');
   });
 
-  it('VOID accepts optional attribution_operator_id', async () => {
+  it('VOID drops a renderer-supplied attribution_operator_id (RT-184)', async () => {
     const { ipcMain, handlers } = mkIpc();
     const bridge = new CartBridgeHandlers({
       getCurrentSession: () => null,
@@ -195,6 +195,7 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
       idempotency_key: 'k',
     });
     expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls[0]?.[0]).not.toHaveProperty('attribution_operator_id');
   });
 
   it('DISCOUNT_PLACEHOLDERS_REMOVE forwards with attribution optional', async () => {
