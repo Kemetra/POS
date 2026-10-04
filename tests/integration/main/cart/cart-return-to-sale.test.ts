@@ -74,10 +74,12 @@ beforeAll(async () => {
 
 const TERMINAL = 'terminal-1';
 
-function operator(
-  id: string,
-  role: OperatorSessionRecord['role'] = 'cashier',
-): OperatorSessionRecord {
+interface OperatorSpec {
+  readonly id: string;
+  readonly role?: OperatorSessionRecord['role'];
+}
+
+function operator({ id, role = 'cashier' }: OperatorSpec): OperatorSessionRecord {
   return {
     id,
     operator_id: `op-${id}`,
@@ -129,7 +131,12 @@ function key(label: string): string {
   return `${label}-${String(keySeq)}`;
 }
 
-function rows(sql: string, params: (string | number)[] = []): Record<string, unknown>[] {
+interface SqlQuery {
+  readonly sql: string;
+  readonly params?: (string | number)[];
+}
+
+function rows({ sql, params = [] }: SqlQuery): Record<string, unknown>[] {
   const stmt = db.prepare(sql);
   stmt.bind(params);
   const out: Record<string, unknown>[] = [];
@@ -138,8 +145,8 @@ function rows(sql: string, params: (string | number)[] = []): Record<string, unk
   return out;
 }
 
-function one(sql: string, params: (string | number)[] = []): Record<string, unknown> | undefined {
-  return rows(sql, params)[0];
+function one(query: SqlQuery): Record<string, unknown> | undefined {
+  return rows(query)[0];
 }
 
 /** Narrows a bridge response to its `ok` branch, failing the fixture otherwise. */
@@ -236,7 +243,7 @@ interface CapturedCartAudit {
 }
 
 /** Production-shaped stack over one database. */
-function buildStack(session: OperatorSessionRecord = operator('sess-1')) {
+function buildStack(session: OperatorSessionRecord = operator({ id: 'sess-1' })) {
   let current: OperatorSessionRecord | null = session;
   const handle = makeSqlJsHandle(db);
   const cartAudit: CapturedCartAudit[] = [];
@@ -279,9 +286,10 @@ function buildStack(session: OperatorSessionRecord = operator('sess-1')) {
 type Stack = ReturnType<typeof buildStack>;
 
 function firstLine(cartId: string): { line_id: string; version: number } {
-  const row = one(`SELECT line_id, version FROM cart_lines WHERE cart_id = ? ORDER BY created_at`, [
-    cartId,
-  ]);
+  const row = one({
+    sql: `SELECT line_id, version FROM cart_lines WHERE cart_id = ? ORDER BY created_at`,
+    params: [cartId],
+  });
   if (row === undefined) throw new Error('no lines');
   return { line_id: row['line_id'] as string, version: row['version'] as number };
 }
@@ -344,7 +352,8 @@ async function startPayment(s: Stack, env: PaymentIntentEnvelope): Promise<strin
   return res.payment_attempt_id;
 }
 
-function back(s: Stack, env: PaymentIntentEnvelope, idempotency_key = key('back')) {
+function back(s: Stack, env: PaymentIntentEnvelope, opts: { key?: string } = {}) {
+  const idempotency_key = opts.key ?? key('back');
   return s.cart.returnToSale({
     cart_id: env.cart_id,
     handoff_action_id: env.handoff_action_id,
@@ -353,32 +362,40 @@ function back(s: Stack, env: PaymentIntentEnvelope, idempotency_key = key('back'
 }
 
 function cartRow(cartId: string) {
-  return one(`SELECT * FROM carts WHERE cart_id = ?`, [cartId]);
+  return one({ sql: `SELECT * FROM carts WHERE cart_id = ?`, params: [cartId] });
 }
 
 function lineProjection(cartId: string) {
-  return rows(
-    `SELECT line_id, item_ref, display_name, quantity, unit_price_minor, line_subtotal_minor,
+  return rows({
+    sql: `SELECT line_id, item_ref, display_name, quantity, unit_price_minor, line_subtotal_minor,
             note, version, removed_at
        FROM cart_lines WHERE cart_id = ? ORDER BY created_at`,
-    [cartId],
-  );
+    params: [cartId],
+  });
 }
 
 function attemptState(attemptId: string): unknown {
-  return one(`SELECT state FROM payment_attempts WHERE payment_attempt_id = ?`, [attemptId])?.[
-    'state'
-  ];
+  return one({
+    sql: `SELECT state FROM payment_attempts WHERE payment_attempt_id = ?`,
+    params: [attemptId],
+  })?.['state'];
 }
 
 function outboxKinds(cartId: string): unknown[] {
-  return rows(`SELECT action_kind FROM cart_action_outbox WHERE cart_id = ?`, [cartId]).map(
-    (r) => r['action_kind'],
-  );
+  return rows({
+    sql: `SELECT action_kind FROM cart_action_outbox WHERE cart_id = ?`,
+    params: [cartId],
+  }).map((r) => r['action_kind']);
 }
 
 /** Same cart row, now editing, envelope cleared, nothing cancelled, lines untouched. */
-function expectReturnedDraft(cartId: string, linesBefore: Record<string, unknown>[]): void {
+function expectReturnedDraft({
+  cartId,
+  linesBefore,
+}: {
+  cartId: string;
+  linesBefore: Record<string, unknown>[];
+}): void {
   expect(cartRow(cartId)).toMatchObject({
     state: 'editing',
     frozen_at: null,
@@ -388,7 +405,7 @@ function expectReturnedDraft(cartId: string, linesBefore: Record<string, unknown
   });
   expect(lineProjection(cartId)).toEqual(linesBefore);
   // No second cart.
-  expect(one(`SELECT COUNT(*) AS n FROM carts`)?.['n']).toBe(1);
+  expect(one({ sql: `SELECT COUNT(*) AS n FROM carts` })?.['n']).toBe(1);
 }
 
 /** The Back is recorded (outbox + audit); no void / cancel is. */
@@ -409,7 +426,7 @@ function expectOnlyReturnRecorded(s: Stack, env: PaymentIntentEnvelope): void {
 }
 
 /** The snapshot the Sale screen hydrates from is editable, unpaid, with no envelope. */
-async function expectEditableSnapshot(s: Stack, cartId: string): Promise<void> {
+async function expectEditableSnapshot(s: Stack, { cartId }: { cartId: string }): Promise<void> {
   const snap = await s.cart.snapshot({ cart_id: cartId });
   assertOk(snap, 'snapshot');
   expect(snap.snapshot).toMatchObject({ state: 'editing', envelope: null, paid: false });
@@ -425,9 +442,9 @@ describe('RT-26 cart.returnToSale — success', () => {
 
     expect(await back(s, env)).toEqual({ kind: 'ok' });
 
-    expectReturnedDraft(cartId, linesBefore);
+    expectReturnedDraft({ cartId: cartId, linesBefore: linesBefore });
     expectOnlyReturnRecorded(s, env);
-    await expectEditableSnapshot(s, cartId);
+    await expectEditableSnapshot(s, { cartId: cartId });
   });
 
   it('cancels a zero-funds started attempt with the Back, leaving no open attempt', async () => {
@@ -436,16 +453,17 @@ describe('RT-26 cart.returnToSale — success', () => {
     const env = await handoff(s, cartId);
     const attemptId = await startPayment(s, env);
 
-    expect(await back(s, env, 'back-zero-funds')).toEqual({ kind: 'ok' });
+    expect(await back(s, env, { key: 'back-zero-funds' })).toEqual({ kind: 'ok' });
 
     expect(attemptState(attemptId)).toBe('cancelled');
-    expect(one(`SELECT COUNT(*) AS n FROM payment_attempts WHERE state = 'started'`)?.['n']).toBe(
-      0,
-    );
     expect(
-      one(`SELECT action_kind FROM payment_action_outbox WHERE action_id = ?`, [
-        'back-zero-funds:payment-cancel',
-      ])?.['action_kind'],
+      one({ sql: `SELECT COUNT(*) AS n FROM payment_attempts WHERE state = 'started'` })?.['n'],
+    ).toBe(0);
+    expect(
+      one({
+        sql: `SELECT action_kind FROM payment_action_outbox WHERE action_id = ?`,
+        params: ['back-zero-funds:payment-cancel'],
+      })?.['action_kind'],
     ).toBe('payment.cancel');
     expect(s.paymentAudit.map((e) => e.action_category)).toEqual(['payment.cancelled']);
     expect(s.cartAudit.at(-1)?.payload['cancelled_payment_attempt_id']).toBe(attemptId);
@@ -549,17 +567,16 @@ describe('RT-26 cart.returnToSale — refused once money or a payment outcome ex
 
   function expectUntouched(
     s: Stack,
-    f: { cartId: string; env: PaymentIntentEnvelope },
-    auditCount: number,
+    f: { cartId: string; env: PaymentIntentEnvelope; auditCount: number },
   ) {
     const cart = cartRow(f.cartId);
     expect(cart?.['state']).toBe('frozen_handed_off');
     expect(cart?.['handoff_envelope_json']).not.toBeNull();
     expect(
-      rows(`SELECT 1 FROM cart_action_outbox WHERE action_kind = 'cart.return_to_sale'`),
+      rows({ sql: `SELECT 1 FROM cart_action_outbox WHERE action_kind = 'cart.return_to_sale'` }),
     ).toHaveLength(0);
     expect(s.cartAudit.map((e) => e.action_category)).not.toContain('cart.return_to_sale');
-    expect(s.cartAudit).toHaveLength(auditCount);
+    expect(s.cartAudit).toHaveLength(f.auditCount);
   }
 
   it('refuses with cash applied, writing nothing; the attempt stays open for the payment flow', async () => {
@@ -576,7 +593,7 @@ describe('RT-26 cart.returnToSale — refused once money or a payment outcome ex
 
     expect(await back(s, f.env)).toEqual({ kind: 'refused', reason: 'frozen' });
 
-    expectUntouched(s, f, audits);
+    expectUntouched(s, { ...f, auditCount: audits });
     expect(attemptState(f.attemptId)).toBe('started');
     expect(s.paymentAudit).toHaveLength(paymentAudits);
   });
@@ -595,7 +612,7 @@ describe('RT-26 cart.returnToSale — refused once money or a payment outcome ex
     const audits = s.cartAudit.length;
 
     expect(await back(s, f.env)).toEqual({ kind: 'refused', reason: 'frozen' });
-    expectUntouched(s, f, audits);
+    expectUntouched(s, { ...f, auditCount: audits });
   });
 
   it('refuses when an attempt was force-failed (UNKNOWN: tender may have been taken)', async () => {
@@ -609,7 +626,7 @@ describe('RT-26 cart.returnToSale — refused once money or a payment outcome ex
     });
     const audits = s.cartAudit.length;
     expect(await back(s, f.env)).toEqual({ kind: 'refused', reason: 'frozen' });
-    expectUntouched(s, f, audits);
+    expectUntouched(s, { ...f, auditCount: audits });
   });
 
   it('refuses after a tender was applied and reversed (external activity happened)', async () => {
@@ -633,7 +650,7 @@ describe('RT-26 cart.returnToSale — refused once money or a payment outcome ex
     expect(reversed.kind).toBe('ok');
     const audits = s.cartAudit.length;
     expect(await back(s, f.env)).toEqual({ kind: 'refused', reason: 'frozen' });
-    expectUntouched(s, f, audits);
+    expectUntouched(s, { ...f, auditCount: audits });
   });
 
   it('refuses after a refused card line (the card terminal was used)', async () => {
@@ -649,7 +666,7 @@ describe('RT-26 cart.returnToSale — refused once money or a payment outcome ex
     expect(over).toEqual({ kind: 'refused', reason: 'non_cash_overpayment_refused' });
     const audits = s.cartAudit.length;
     expect(await back(s, f.env)).toEqual({ kind: 'refused', reason: 'frozen' });
-    expectUntouched(s, f, audits);
+    expectUntouched(s, { ...f, auditCount: audits });
   });
 
   it('still refuses after the payment flow cancelled an attempt that had taken tender', async () => {
@@ -668,7 +685,7 @@ describe('RT-26 cart.returnToSale — refused once money or a payment outcome ex
     expect(cancelled.kind).toBe('ok');
     const audits = s.cartAudit.length;
     expect(await back(s, f.env)).toEqual({ kind: 'refused', reason: 'frozen' });
-    expectUntouched(s, f, audits);
+    expectUntouched(s, { ...f, auditCount: audits });
   });
 
   it('allows Back when only tender-free attempts were cancelled earlier (history)', async () => {
@@ -751,7 +768,7 @@ describe('RT-26 cart.returnToSale — Back vs Confirm race', () => {
 /** The cashier's cart handlers over the same DB, with an injected clock. */
 function withCashierClock(s: Stack, clock: () => Date): Stack {
   const cart = new CartBridgeHandlers({
-    getCurrentSession: () => operator('sess-1'),
+    getCurrentSession: () => operator({ id: 'sess-1' }),
     getTerminalId: () => TERMINAL,
     cartStore: bindCartStore(s.handle),
     clock,
@@ -767,9 +784,12 @@ function withCashierClock(s: Stack, clock: () => Date): Stack {
 }
 
 /** A manager's post-handoff cancel of `cartId`, naming `handoffActionId`. */
-function managerCancel(s: Stack, cartId: string, handoffActionId: string) {
+function managerCancel(
+  s: Stack,
+  { cartId, handoffActionId }: { cartId: string; handoffActionId: string },
+) {
   const manager = new CartBridgeHandlers({
-    getCurrentSession: () => operator('sess-mgr', 'manager'),
+    getCurrentSession: () => operator({ id: 'sess-mgr', role: 'manager' }),
     getTerminalId: () => TERMINAL,
     cartStore: bindCartStore(s.handle),
     cartPaymentStatus: bindCartPaymentStatus(s.handle),
@@ -786,10 +806,10 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     const s = buildStack();
     const cartId = await ringSale(s);
     const env = await handoff(s, cartId);
-    expect(await back(s, env, 'back-once')).toEqual({ kind: 'ok' });
-    expect(await back(s, env, 'back-once')).toEqual({ kind: 'ok' });
+    expect(await back(s, env, { key: 'back-once' })).toEqual({ kind: 'ok' });
+    expect(await back(s, env, { key: 'back-once' })).toEqual({ kind: 'ok' });
     expect(
-      rows(`SELECT 1 FROM cart_action_outbox WHERE action_kind = 'cart.return_to_sale'`),
+      rows({ sql: `SELECT 1 FROM cart_action_outbox WHERE action_kind = 'cart.return_to_sale'` }),
     ).toHaveLength(1);
     expect(s.cartAudit.filter((e) => e.action_category === 'cart.return_to_sale')).toHaveLength(1);
   });
@@ -807,13 +827,13 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     const cartId = await ringSale(s);
     const env = await handoff(s, cartId);
     // The handoff's own action id as the Back key.
-    expect(await back(s, env, env.handoff_action_id)).toEqual({
+    expect(await back(s, env, { key: env.handoff_action_id })).toEqual({
       kind: 'refused',
       reason: 'idempotency_payload_mismatch',
     });
-    expect(await back(s, env, 'back-k')).toEqual({ kind: 'ok' });
+    expect(await back(s, env, { key: 'back-k' })).toEqual({ kind: 'ok' });
     const again = await handoff(s, cartId);
-    expect(await back(s, again, 'back-k')).toEqual({
+    expect(await back(s, again, { key: 'back-k' })).toEqual({
       kind: 'refused',
       reason: 'idempotency_payload_mismatch',
     });
@@ -844,7 +864,9 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     const second = await handoff(t, cartId);
 
     expect(await back(t, first)).toEqual({ kind: 'refused', reason: 'stale_version' });
-    expect(await managerCancel(s, cartId, first.handoff_action_id)).toEqual({
+    expect(
+      await managerCancel(s, { cartId: cartId, handoffActionId: first.handoff_action_id }),
+    ).toEqual({
       kind: 'refused',
       reason: 'stale_version',
     });
@@ -865,17 +887,22 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     expect(await back(t, first)).toEqual({ kind: 'ok' });
     const second = await handoff(t, cartId);
     expect(
-      one(`SELECT applied_at FROM cart_action_outbox WHERE action_id = ?`, [
-        second.handoff_action_id,
-      ])?.['applied_at'],
+      one({
+        sql: `SELECT applied_at FROM cart_action_outbox WHERE action_id = ?`,
+        params: [second.handoff_action_id],
+      })?.['applied_at'],
     ).toBe('2026-10-04T09:00:00.000Z');
 
     // The superseded handoff is stale; the current one (earlier wall clock) cancels.
-    expect(await managerCancel(s, cartId, first.handoff_action_id)).toEqual({
+    expect(
+      await managerCancel(s, { cartId: cartId, handoffActionId: first.handoff_action_id }),
+    ).toEqual({
       kind: 'refused',
       reason: 'stale_version',
     });
-    expect(await managerCancel(s, cartId, second.handoff_action_id)).toEqual({ kind: 'ok' });
+    expect(
+      await managerCancel(s, { cartId: cartId, handoffActionId: second.handoff_action_id }),
+    ).toEqual({ kind: 'ok' });
     expect(cartRow(cartId)?.['state']).toBe('cancelled');
   });
 
@@ -897,7 +924,7 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     const env = await handoff(s, cartId);
     s.setSession(null);
     expect(await back(s, env)).toEqual({ kind: 'refused', reason: 'no_session' });
-    s.setSession(operator('sess-other'));
+    s.setSession(operator({ id: 'sess-other' }));
     expect((await back(s, env)).kind).toBe('refused');
     expect(cartRow(cartId)?.['state']).toBe('frozen_handed_off');
   });
@@ -907,7 +934,7 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     const cartId = await ringSale(s);
     const env = await handoff(s, cartId);
     const unguarded = new CartBridgeHandlers({
-      getCurrentSession: () => operator('sess-1'),
+      getCurrentSession: () => operator({ id: 'sess-1' }),
       getTerminalId: () => TERMINAL,
       cartStore: bindCartStore(s.handle),
     });
@@ -925,7 +952,7 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     const attemptId = await startPayment(s, env);
     const throwing = createCartBridgeHandlers({
       dbHandle: s.handle,
-      getCurrentSession: () => operator('sess-1'),
+      getCurrentSession: () => operator({ id: 'sess-1' }),
       getTerminalId: () => TERMINAL,
       logger,
       auditEmitter: {
@@ -948,7 +975,7 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     expect(cart?.['state']).toBe('frozen_handed_off');
     expect(cart?.['handoff_envelope_json']).not.toBeNull();
     expect(
-      rows(`SELECT 1 FROM payment_action_outbox WHERE action_kind = 'payment.cancel'`),
+      rows({ sql: `SELECT 1 FROM payment_action_outbox WHERE action_kind = 'payment.cancel'` }),
     ).toHaveLength(0);
   });
 
@@ -958,7 +985,7 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
     const env = await handoff(s, cartId);
     expect(await back(s, env)).toEqual({ kind: 'ok' });
     // Back to a pre-handoff draft: post-handoff cancel no longer applies…
-    s.setSession(operator('sess-1', 'cashier'));
+    s.setSession(operator({ id: 'sess-1', role: 'cashier' }));
     expect(
       await s.cart.cancelPostHandoff({
         cart_id: cartId,
@@ -988,7 +1015,7 @@ describe('RT-26 cart.returnToSaleEligibility — read-only twin of the guard', (
       'SELECT COUNT(*) AS n FROM cart_action_outbox',
       'SELECT COUNT(*) AS n FROM payment_action_outbox',
       "SELECT COUNT(*) AS n FROM payment_attempts WHERE state = 'started'",
-    ].map((sql) => one(sql)?.['n']);
+    ].map((sql) => one({ sql: sql })?.['n']);
   }
 
   it('is returnable for a fresh handoff and for a zero-funds started attempt, writing nothing', async () => {
@@ -1049,10 +1076,10 @@ describe('RT-26 cart.returnToSaleEligibility — read-only twin of the guard', (
     const env = await handoff(s, await ringSale(s));
     s.setSession(null);
     expect(await eligibility(s, env)).toEqual({ kind: 'refused', reason: 'no_session' });
-    s.setSession(operator('sess-other'));
+    s.setSession(operator({ id: 'sess-other' }));
     expect((await eligibility(s, env)).kind).toBe('refused');
     const unwired = new CartBridgeHandlers({
-      getCurrentSession: () => operator('sess-1'),
+      getCurrentSession: () => operator({ id: 'sess-1' }),
       getTerminalId: () => TERMINAL,
       cartStore: bindCartStore(s.handle),
     });
