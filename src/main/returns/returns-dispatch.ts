@@ -133,7 +133,9 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
       idempotencyKey: entry.externalId,
       // P1: a send that may follow an earlier one never turns a pre-replay
       // 401/403/404 into a terminal refusal (the return may be recorded).
-      resend: op === 'resolve' || attempted,
+      // `recordAttempt` is committed before every POST, so a pre-increment
+      // count of 0 proves no earlier send reached the server: a first send.
+      resend: attempted,
     });
     try {
       return this.apply(entry, outcome, op);

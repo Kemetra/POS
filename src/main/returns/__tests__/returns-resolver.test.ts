@@ -68,6 +68,36 @@ async function secondUnknownReturn(): Promise<string> {
 
 const SALE_REF_2 = '0190f5a2-7b3c-7d4e-8f90-0000000000b2';
 
+const PENDING_ID = 'ret-pending';
+
+/** A journaled return whose process stopped before any send (attemptCount 0). */
+function crashedBeforeSend(): string {
+  h = returnsHarness();
+  seedSyncedSale(h.db);
+  const externalId = 'pos-pulse-return:0190f5a2-7b3c-7d4e-8f90-000000000123';
+  h.repo.insert({
+    returnId: PENDING_ID,
+    scope: SCOPE,
+    saleId: 'sale-1',
+    saleNumber: SALE_NUMBER,
+    serverSaleRef: SALE_REF,
+    externalId,
+    operatorId: 'op-manager',
+    operatorSessionId: 'sess-manager',
+    currencyCode: 'EGP',
+    quotedTotalMinor: 1500,
+    requestBodyJson: JSON.stringify({
+      sourceSystem: 'pos-pulse',
+      externalId,
+      lines: [{ lineRef: LINE_A, quantity: '1' }],
+      refundTenders: [{ method: 'cash', amount: '15.00' }],
+    }),
+    lines: [{ lineRef: LINE_A, quantity: 1 }],
+    now: '2026-10-04T09:59:00.000Z',
+  });
+  return externalId;
+}
+
 function sameRequest(a: RecordedCall | undefined, b: RecordedCall | undefined): void {
   expect(b?.url).toBe(a?.url);
   expect(b?.body).toBe(a?.body);
@@ -111,34 +141,26 @@ describe('returns resolver', () => {
   });
 
   it('crash before send: a pending journal row is sent by the resolver', async () => {
-    h = returnsHarness();
-    seedSyncedSale(h.db);
-    const externalId = 'pos-pulse-return:0190f5a2-7b3c-7d4e-8f90-000000000123';
-    h.repo.insert({
-      returnId: 'ret-pending',
-      scope: SCOPE,
-      saleId: 'sale-1',
-      saleNumber: SALE_NUMBER,
-      serverSaleRef: SALE_REF,
-      externalId,
-      operatorId: 'op-manager',
-      operatorSessionId: 'sess-manager',
-      currencyCode: 'EGP',
-      quotedTotalMinor: 1500,
-      requestBodyJson: JSON.stringify({
-        sourceSystem: 'pos-pulse',
-        externalId,
-        lines: [{ lineRef: LINE_A, quantity: '1' }],
-        refundTenders: [{ method: 'cash', amount: '15.00' }],
-      }),
-      lines: [{ lineRef: LINE_A, quantity: 1 }],
-      now: '2026-10-04T09:59:00.000Z',
-    });
+    const externalId = crashedBeforeSend();
 
     await h.resolver.resolveOnce(ACTOR);
     expect(h.backend.returnCalls()[0]?.headers['Idempotency-Key']).toBe(externalId);
-    expect(h.repo.read('ret-pending')).toMatchObject({ state: 'confirmed', attemptCount: 1 });
+    expect(h.repo.read(PENDING_ID)).toMatchObject({ state: 'confirmed', attemptCount: 1 });
   });
+
+  it.each<[number, string, string]>([
+    [401, 'unauthorized', 'unauthorized'],
+    [404, 'not_found', 'returns_unavailable'],
+  ])(
+    'Codex P2: a never-attempted pending row is a first send — %s is refused (%s)',
+    async (status, code, reason) => {
+      crashedBeforeSend();
+      h.backend.onReturn = () => jsonResponse(status, errorBody(code));
+      await expect(h.resolver.resolveOnce(ACTOR)).resolves.toMatchObject({ refused: 1 });
+      expect(h.repo.read(PENDING_ID)).toMatchObject({ state: 'refused', refusalReason: reason });
+      expect(h.repo.hasUnresolvedForSale('sale-1')).toBe(false);
+    },
+  );
 
   it('a refusal on resend is final; a still-lost answer stays unknown', async () => {
     await submitWithLostAnswer();
@@ -244,7 +266,7 @@ describe('returns resolver', () => {
     [403, 'forbidden'],
     [404, 'not_found'],
   ])(
-    'P1: a resend that gets %s (%s) keeps the return unknown and retries later',
+    'P1: a row attempted before (attemptCount ≥ 1) that gets %s (%s) stays unknown and retries',
     async (status, code) => {
       const returnId = await submitWithLostAnswer();
       h.backend.onReturn = () => jsonResponse(status, errorBody(code));

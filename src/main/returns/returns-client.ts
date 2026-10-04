@@ -61,8 +61,9 @@ export interface RecordReturnRequest {
   /** The return `externalId` (`pos-pulse-return:<uuidv7>`). */
   readonly idempotencyKey: string;
   /**
-   * True when this send may follow an earlier one that reached the server (a
-   * resolver resend, or a row already attempted). Backend-Core answers 401
+   * True when this send may follow an earlier one that reached the server
+   * (the journal row was already attempted; a never-attempted row — even one
+   * the resolver sends after a crash — is a first send). Backend-Core answers 401
    * (envelope refused) and 404 (`POS_RETURNS_ENABLED` off) BEFORE its
    * provenance replay, so on a resend those say nothing about whether the
    * return was recorded: they map to `unknown`, never a terminal refusal.
