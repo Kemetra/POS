@@ -183,6 +183,20 @@ export interface CartCancelPostHandoffPayload {
 }
 
 /**
+ * `cart.return_to_sale` (RT-26) — Checkout Back: a `frozen_handed_off` cart
+ * with no tender activity returned to `editing`, its envelope invalidated.
+ * Cashier-initiated, no manager attribution. Ids only — no amounts, no lines.
+ */
+export interface CartReturnToSalePayload {
+  /** FK into carts table. */
+  cart_id: string;
+  /** The `cart.handoff_to_payment` action this Back left (now unusable). */
+  handoff_action_id: string;
+  /** The zero-funds started attempt cancelled with the Back, or null. */
+  cancelled_payment_attempt_id: string | null;
+}
+
+/**
  * `cart.discount.above_threshold` — manager-attributed discount placeholder
  * whose magnitude exceeds the Q2 tenant-configured threshold (spec FR-023).
  * The cart layer records only the placeholder; the discounted amount is
@@ -306,6 +320,8 @@ export type AuditPayloadMap = {
   'cart.cancel.post_handoff': CartCancelPostHandoffPayload;
   'cart.discount.above_threshold': CartDiscountAboveThresholdPayload;
   'cart.discarded_on_session_end': CartDiscardedOnSessionEndPayload;
+  // RT-26
+  'cart.return_to_sale': CartReturnToSalePayload;
   // 008-sale-finalization-and-receipts (AD-9 / Slice 1c T093 — shaped;
   // S2/S3/S4 placeholders pending their emitting callers)
   'sale.finalized': SaleFinalizedPayload;

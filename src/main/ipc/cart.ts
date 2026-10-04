@@ -20,6 +20,8 @@ import type {
   CartLinesSetNoteResponse,
   CartLinesUpdateRequest,
   CartLinesUpdateResponse,
+  CartReturnToSaleRequest,
+  CartReturnToSaleResponse,
   CartSnapshotRequest,
   CartSnapshotResponse,
   CartSubscribeRequest,
@@ -232,6 +234,19 @@ function asCancelPostHandoffReq(value: unknown): CartCancelPostHandoffRequest | 
   return { cart_id: cartId, handoff_action_id: handoffActionId, idempotency_key: idempotencyKey };
 }
 
+/** RT-26 — same bounded-identifier shape as `cart:cancelPostHandoff`. */
+function asReturnToSaleReq(value: unknown): CartReturnToSaleRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const cartId = v['cart_id'];
+  const handoffActionId = v['handoff_action_id'];
+  const idempotencyKey = v['idempotency_key'];
+  if (!isBoundedId(cartId) || !isBoundedId(handoffActionId) || !isBoundedId(idempotencyKey)) {
+    return null;
+  }
+  return { cart_id: cartId, handoff_action_id: handoffActionId, idempotency_key: idempotencyKey };
+}
+
 function asHandoffReq(value: unknown): CartHandoffRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -365,6 +380,15 @@ export function registerCartHandlers(ipcMain: IpcMain, deps: CartHandlerDeps): v
       const req = asCancelPostHandoffReq(request);
       if (req === null) return refuseInvalid();
       return handlers.cancelPostHandoff(req);
+    },
+  );
+
+  ipcMain.handle(
+    CART_IPC_CHANNELS.RETURN_TO_SALE,
+    async (_event: IpcMainInvokeEvent, request: unknown): Promise<CartReturnToSaleResponse> => {
+      const req = asReturnToSaleReq(request);
+      if (req === null) return refuseInvalid();
+      return handlers.returnToSale(req);
     },
   );
 

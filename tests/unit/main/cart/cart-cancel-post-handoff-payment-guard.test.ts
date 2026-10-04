@@ -102,6 +102,7 @@ async function frozenCartUnderManager(
     auditEmitter: { emit } as unknown as AuditEmitter,
     isPackaged: true,
     cartPaymentStatus: guard,
+    releaseCheckoutPayment: () => ({ kind: 'blocked' }),
   });
   return { db, cartId: created.cart_id, handlers, emit, guard };
 }

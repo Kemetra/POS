@@ -7,6 +7,7 @@ import type { DatabaseHandle } from '../db/client.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { OperatorSessionRecord } from '../operator/session-manager.js';
 import type { CartPaymentStatus } from '../payments/repositories/payment-attempts.repository.js';
+import type { ReleaseCheckoutPayment } from '../payments/checkout-return-guard.js';
 
 export interface CartHandlersDeps {
   dbHandle: DatabaseHandle;
@@ -43,6 +44,13 @@ export interface CartHandlersDeps {
    * can never cancel a paid or paying sale, or reopen a paid sale as payable.
    */
   cartPaymentStatus: (cart_id: string) => CartPaymentStatus;
+  /**
+   * RT-26 — the payments guard for Checkout Back (`bindCheckoutReturnGuard`).
+   * Required so a dropped wiring can never leave `cart.returnToSale` able to
+   * unfreeze a cart without the payments record's proof (the handler fails
+   * closed without it).
+   */
+  releaseCheckoutPayment: ReleaseCheckoutPayment;
 }
 
 /**
@@ -91,6 +99,7 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
     logger: deps.logger,
     auditEmitter: deps.auditEmitter,
     cartPaymentStatus: deps.cartPaymentStatus,
+    releaseCheckoutPayment: deps.releaseCheckoutPayment,
   };
 
   // Only attach `resolveItemRef` when one was resolved — omitting it lets

@@ -134,6 +134,24 @@ export interface CartCancelPostHandoffRequest {
 
 export type CartCancelPostHandoffResponse = { readonly kind: 'ok' } | CartRefusal;
 
+// ── cart.returnToSale (RT-26) ─────────────────────────────────────────────────
+// Checkout Back/Esc. Main returns the SAME `frozen_handed_off` cart to `editing`
+// only while the cart has no tender activity and no settled / force-failed
+// payment; a zero-funds started attempt is cancelled in the same transaction,
+// and the persisted envelope is cleared so it can never be paid. Lines, notes,
+// versions and the cart id are untouched. The renderer supplies only the cart,
+// the frozen envelope's `handoff_action_id` (binds the request to the exact
+// handoff it is leaving) and an idempotency key — reused on retry so a lost
+// response replays instead of being refused.
+
+export interface CartReturnToSaleRequest {
+  readonly cart_id: string;
+  readonly handoff_action_id: string;
+  readonly idempotency_key: string;
+}
+
+export type CartReturnToSaleResponse = { readonly kind: 'ok' } | CartRefusal;
+
 // ── cart.handoff ──────────────────────────────────────────────────────────────
 
 export interface CartHandoffRequest {

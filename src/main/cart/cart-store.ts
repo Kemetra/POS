@@ -157,6 +157,13 @@ export interface HandoffCartInput {
   updated_at: string;
 }
 
+/** RT-26 — `frozen_handed_off → editing` (Checkout Back). */
+export interface ReturnCartToSaleInput {
+  cart_id: string;
+  last_action_id: string;
+  updated_at: string;
+}
+
 export interface InsertDiscountPlaceholderInput {
   placeholder_id: string;
   cart_id: string;
@@ -233,7 +240,29 @@ export interface CartStore {
     outbox: InsertOutboxInput,
     onInserted?: () => void,
   ): void;
-  /** Returns the action_id of the most recent `cart.handoff_to_payment` outbox row. */
+  /**
+   * RT-26 Checkout Back as ONE transaction (same shape as
+   * `cancelFrozenCartAndOutbox`): ask `releasePayment` (the payments record —
+   * it refuses on any tender activity, and cancels a zero-funds started
+   * attempt), then move the cart to `editing` ONLY while it is still
+   * `frozen_handed_off`, clearing `frozen_at` and the persisted envelope so the
+   * handoff can never be paid. Lines and placeholders are not touched. The
+   * outbox row and `onInserted` (the audit emit) are written only when that
+   * UPDATE changed the row. Returns `false` with nothing written when the
+   * payment guard refuses; throws (rolling everything back, including a
+   * cancelled attempt) if the cart is no longer frozen after the guard ran.
+   */
+  returnFrozenCartToSaleAndOutbox(
+    input: ReturnCartToSaleInput,
+    outbox: InsertOutboxInput,
+    releasePayment: () => boolean,
+    onInserted?: () => void,
+  ): boolean;
+  /**
+   * Returns the action_id of the most recent `cart.handoff_to_payment` outbox
+   * row. Since RT-26 a cart can be handed off more than once (Back, edit,
+   * Checkout again), so insertion order (rowid) breaks an `applied_at` tie.
+   */
   findLatestHandoffActionId(cart_id: string): string | undefined;
   /** Returns the active (non-terminal) draft cart owned by the given session, if any. */
   findDraftCartBySession(operator_session_id: string): CartRow | undefined;
@@ -331,10 +360,16 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
   const cancelFrozenCartStmt = db.prepare(
     `${CANCEL_CART_SQL} WHERE cart_id = ? AND state = 'frozen_handed_off'`,
   ) as PrepareRun;
+  const returnFrozenCartStmt = db.prepare(
+    `UPDATE carts
+        SET state = 'editing', frozen_at = NULL, handoff_envelope_json = NULL,
+            updated_at = ?, last_action_id = ?
+      WHERE cart_id = ? AND state = 'frozen_handed_off'`,
+  ) as PrepareRun;
   const findLatestHandoffStmt = db.prepare(
     `SELECT action_id FROM cart_action_outbox
       WHERE cart_id = ? AND action_kind = 'cart.handoff_to_payment'
-      ORDER BY applied_at DESC LIMIT 1`,
+      ORDER BY applied_at DESC, rowid DESC LIMIT 1`,
   ) as PrepareGet<{ action_id: string }>;
   const findDraftCartBySessionStmt = db.prepare(
     `SELECT * FROM carts
@@ -542,6 +577,22 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
           onInserted?.();
         }
         return updated;
+      })();
+    },
+
+    returnFrozenCartToSaleAndOutbox(input, outbox, releasePayment, onInserted): boolean {
+      return db.transaction((): boolean => {
+        if (!releasePayment()) return false;
+        const updated =
+          returnFrozenCartStmt.run(input.updated_at, input.last_action_id, input.cart_id)
+            .changes === 1;
+        // The caller checked the state just before, on the same thread, so
+        // this cannot happen; if it ever does, roll back the payment release
+        // too rather than commit a cancelled attempt for a cart left frozen.
+        if (!updated) throw new Error('cart.return_to_sale: cart is no longer frozen');
+        writeOutbox(outbox);
+        onInserted?.();
+        return true;
       })();
     },
 

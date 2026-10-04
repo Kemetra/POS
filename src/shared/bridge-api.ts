@@ -35,6 +35,8 @@ import type {
   CartVoidResponse,
   CartCancelPostHandoffRequest,
   CartCancelPostHandoffResponse,
+  CartReturnToSaleRequest,
+  CartReturnToSaleResponse,
   CartHandoffRequest,
   CartHandoffResponse,
   CartSubscribeRequest,
@@ -716,6 +718,15 @@ export interface CartBridgeAPI {
    * caller fails closed when it is absent — never falling back to `void`.
    */
   cancelPostHandoff?(req: CartCancelPostHandoffRequest): Promise<CartCancelPostHandoffResponse>;
+  /**
+   * RT-26 — Checkout Back/Esc: returns the SAME `frozen_handed_off` cart to
+   * `editing`. Main refuses once any tender exists for the cart or a payment
+   * settled / was force-failed; a zero-funds started attempt is cancelled and
+   * the envelope invalidated in the same transaction. Optional on the TYPE
+   * only (same precedent as `cancelPostHandoff?`): the production preload
+   * always wires it, and the sole caller fails closed when it is absent.
+   */
+  returnToSale?(req: CartReturnToSaleRequest): Promise<CartReturnToSaleResponse>;
   /** Freezes the cart and constructs the PaymentIntentEnvelope. */
   handoff(req: CartHandoffRequest): Promise<CartHandoffResponse>;
   /** Push-style cart state updates (type-only in Phase 2; S1+ runtime). */

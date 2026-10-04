@@ -20,6 +20,8 @@ import type {
   CartLinesSetNoteResponse,
   CartLinesUpdateRequest,
   CartLinesUpdateResponse,
+  CartReturnToSaleRequest,
+  CartReturnToSaleResponse,
   CartSnapshotRequest,
   CartSnapshotResponse,
   CartSubscribeRequest,
@@ -37,6 +39,7 @@ import { buildPaymentIntentEnvelope } from './handoff-envelope-builder.js';
 import { freezeEnvelope } from '../../shared/cart/handoff-envelope.js';
 import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope.js';
 import type { CartPaymentStatus } from '../payments/repositories/payment-attempts.repository.js';
+import type { ReleaseCheckoutPayment } from '../payments/checkout-return-guard.js';
 
 /**
  * 005-sales-cart S2 — `cart.*` bridge handlers (T025/T026 from S1 +
@@ -183,6 +186,15 @@ export interface CartBridgeHandlersDeps {
    * and the production factory requires it.
    */
   cartPaymentStatus?: (cart_id: string) => CartPaymentStatus;
+  /**
+   * RT-26 — the payments record's verdict for Checkout Back
+   * (`bindCheckoutReturnGuard`): refuses on any tender activity or a settled /
+   * force-failed payment, and cancels a zero-funds started attempt. Runs inside
+   * the cart transaction. Optional on the type so unrelated fixtures construct
+   * unchanged; `returnToSale` FAILS CLOSED (`not_implemented`) without it, and
+   * the production factory requires it.
+   */
+  releaseCheckoutPayment?: ReleaseCheckoutPayment;
 }
 
 /**
@@ -271,6 +283,37 @@ function recordedHandoffAction(payloadJson: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** A recorded outbox row is a replay of THIS Back (same cart and handoff). */
+function isSameReturnReplay(
+  replay: { action_kind: string; cart_id: string; payload_json: string },
+  req: { cart_id: string; handoff_action_id: string },
+): boolean {
+  return (
+    replay.action_kind === 'cart.return_to_sale' &&
+    replay.cart_id === req.cart_id &&
+    recordedHandoffAction(replay.payload_json) === req.handoff_action_id
+  );
+}
+
+/**
+ * Why a (non-replay) Back cannot proceed, or null. Only a `frozen_handed_off`
+ * cart is in Checkout; a cancelled one is closed, and any other state means the
+ * renderer's view is stale (already back, or never handed off). The request
+ * must name the handoff of the cart's PERSISTED envelope — the one payment
+ * would use — so an old envelope can never drive it.
+ */
+function returnToSaleRefusal(
+  cart: { state: string; handoff_envelope_json: string | null },
+  req: { handoff_action_id: string },
+): CartRefusalReason | null {
+  const state = cart.state as CartState;
+  if (state === CartState.cancelled) return 'closed';
+  if (state !== CartState.frozen_handed_off) return 'stale_version';
+  return parseEnvelope(cart.handoff_envelope_json)?.handoff_action_id === req.handoff_action_id
+    ? null
+    : 'stale_version';
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
@@ -1049,6 +1092,128 @@ export class CartBridgeHandlers {
       },
     );
     return cancelled ? { kind: 'ok' } : refuse('closed');
+  }
+
+  // ── cart.returnToSale (RT-26) ───────────────────────────────────────
+
+  /**
+   * Checkout Back/Esc: return the SAME `frozen_handed_off` cart to `editing`.
+   *
+   * 1. Session gate, then the ownership/tenant gate every cart handler applies
+   *    (without `requireMutable` — the cart is frozen by definition).
+   * 2. Fails closed without the payments guard: main must be able to prove no
+   *    money moved before it unfreezes anything.
+   * 3. Idempotency replay before the state guard, bound to the SAME cart and
+   *    handoff (a lost response is retried with the same key and replays).
+   * 4. The cart must still be frozen, on the handoff of its persisted
+   *    envelope (`closed` / `stale_version` otherwise — a stale or replayed
+   *    Back with a new key, or an old envelope).
+   * 5. ONE transaction: the payments guard (refuses on any tender / settled /
+   *    force-failed; cancels a zero-funds started attempt), the conditional
+   *    `frozen_handed_off → editing` UPDATE that clears the persisted envelope,
+   *    the outbox row and the `cart.return_to_sale` audit event.
+   *
+   * Lines, notes, versions, placeholders and the cart id are untouched: no new
+   * cart, no void, no cancel. A blocked return refuses `frozen` (the cart stays
+   * in Checkout) and writes nothing.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async returnToSale(req: CartReturnToSaleRequest): Promise<CartReturnToSaleResponse> {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    const store = this.deps.cartStore;
+    if (store === undefined) return refuse('not_implemented');
+
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    const release = this.deps.releaseCheckoutPayment;
+    if (release === undefined) return refuse('not_implemented');
+
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      return isSameReturnReplay(replay, req)
+        ? { kind: 'ok' }
+        : refuse('idempotency_payload_mismatch');
+    }
+
+    const precondition = returnToSaleRefusal(cart, req);
+    if (precondition !== null) return refuse(precondition);
+
+    const now = this.clock().toISOString();
+    const event_id = randomUUID();
+    let cancelledAttemptId: string | null = null;
+
+    const returned = store.returnFrozenCartToSaleAndOutbox(
+      { cart_id: req.cart_id, last_action_id: req.idempotency_key, updated_at: now },
+      {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: null,
+        action_kind: 'cart.return_to_sale',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify(
+          scrubPayloadForOutbox({
+            cart_id: req.cart_id,
+            handoff_action_id: req.handoff_action_id,
+          }),
+        ),
+        applied_at: now,
+      },
+      () => {
+        const outcome = release({
+          cart_id: req.cart_id,
+          handoff_action_id: req.handoff_action_id,
+          action_id: req.idempotency_key,
+          at: now,
+          session_id: session.id,
+        });
+        if (outcome.kind !== 'released') return false;
+        cancelledAttemptId = outcome.cancelled_attempt_id;
+        return true;
+      },
+      () => {
+        this.deps.auditEmitter?.emit({
+          event_id,
+          tenant_id: cart.tenant_id,
+          branch_id: cart.branch_id,
+          originating_terminal_id: cart.terminal_id,
+          acting_operator_id: session.operator_id,
+          session_id: session.id,
+          shift_id: null,
+          action_category: 'cart.return_to_sale',
+          created_at: now,
+          approving_supervisor_id: null,
+          payload: {
+            cart_id: req.cart_id,
+            handoff_action_id: req.handoff_action_id,
+            cancelled_payment_attempt_id: cancelledAttemptId,
+          },
+        });
+      },
+    );
+    if (!returned) return refuse('frozen');
+
+    this.deps.logger?.info(
+      { event: 'cart.return_to_sale.ok', cart_id: req.cart_id },
+      'cart.returnToSale',
+    );
+    return { kind: 'ok' };
   }
 
   // ── cart.handoff ────────────────────────────────────────────────────
