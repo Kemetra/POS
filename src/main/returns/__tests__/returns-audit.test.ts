@@ -31,6 +31,7 @@ const ENTRY: JournalEntry = {
   returnTotalMinor: 1500,
   refusalReason: null,
   attemptCount: 1,
+  lastAttemptAt: 't1',
   createdAt: 't0',
   confirmedAt: 't1',
 };

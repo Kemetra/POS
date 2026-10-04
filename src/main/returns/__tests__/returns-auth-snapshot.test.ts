@@ -18,6 +18,7 @@ import {
   initReturnsSql,
   returnsHarness,
   saleBody,
+  secondsAfterNow,
   seedSyncedSale,
   type ReturnsHarness,
 } from './__helpers__/returns-fixture.js';
@@ -103,6 +104,7 @@ describe('A5: the envelope on the wire is the admitted snapshot’s own', () => 
       h.state.token = OTHER_ENVELOPE; // same session, the envelope is replaced mid-pass
       return backend.recordIdempotently(call);
     };
+    h.state.now = secondsAfterNow(30); // the next background tick (past both rows' backoff)
 
     await expect(h.resolver.tick()).resolves.toEqual({ confirmed: 1, refused: 0, unresolved: 1 });
 
@@ -133,6 +135,7 @@ describe('A5: no send path reads the operator token', () => {
 
     await h.service.submit(ONE_A);
     h.backend.onReturn = (call, backend) => backend.recordIdempotently(call);
+    h.state.now = secondsAfterNow(30); // the next background tick (past the row's backoff)
     await h.resolver.tick();
 
     expect(h.backend.calls.map((c) => c.method)).toEqual(['GET', 'POST', 'POST']);

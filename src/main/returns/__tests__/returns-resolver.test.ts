@@ -25,6 +25,7 @@ import {
   jsonResponse,
   returnsHarness,
   saleBody,
+  secondsAfterNow,
   seedSyncedSale,
   type RecordedCall,
   type ReturnsHarness,
@@ -201,6 +202,7 @@ describe('returns resolver', () => {
     });
     expect(h.backend.returnCalls()).toHaveLength(1);
     Object.assign(h.state, ready);
+    h.state.now = secondsAfterNow(30); // RT-197 I2: the next tick, past the row's backoff
     await expect(h.resolver.tick()).resolves.toMatchObject({ confirmed: 1 });
   });
 
@@ -253,6 +255,7 @@ describe('returns resolver', () => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(h.repo.read(returnId)?.state).toBe('unknown');
+      h.state.now = secondsAfterNow(30); // RT-197 I2: past the row's backoff
       h.state.paired = true;
       while (h.repo.read(returnId)?.state !== 'confirmed') {
         await new Promise((resolve) => setTimeout(resolve, 5));

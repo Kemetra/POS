@@ -45,6 +45,8 @@ export interface JournalEntry extends Omit<NewJournalEntry, 'now'> {
   readonly returnTotalMinor: number | null;
   readonly refusalReason: ReturnsRefusalReason | null;
   readonly attemptCount: number;
+  /** When the last send was attempted (the resolver's backoff anchor); null if never. */
+  readonly lastAttemptAt: string | null;
   readonly createdAt: string;
   readonly confirmedAt: string | null;
 }
@@ -117,6 +119,7 @@ interface HeaderRow {
   return_total_minor: number | null;
   refusal_reason: ReturnsRefusalReason | null;
   attempt_count: number;
+  last_attempt_at: string | null;
   created_at: string;
   confirmed_at: string | null;
 }
@@ -147,6 +150,7 @@ function toEntry(row: HeaderRow, lines: JournalLine[]): JournalEntry {
     returnTotalMinor: row.return_total_minor,
     refusalReason: row.refusal_reason,
     attemptCount: row.attempt_count,
+    lastAttemptAt: row.last_attempt_at,
     createdAt: row.created_at,
     confirmedAt: row.confirmed_at,
   };

@@ -76,7 +76,7 @@ import { bindDrawerEventsRepository } from './sales/repositories/drawer-events.r
 import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.repository.js';
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
-import { createSaleSyncEngine } from './sales-sync/sale-sync-engine.js';
+import { createSaleSyncEngine, SALE_SYNC_BACKOFF_POLICY } from './sales-sync/sale-sync-engine.js';
 import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
@@ -1421,7 +1421,7 @@ app
           ),
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.
-          backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },
+          backoff: { ...SALE_SYNC_BACKOFF_POLICY },
           onDeadLetter: (saleId: string, reason?: string) => {
             mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:dead_letter');
           },

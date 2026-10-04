@@ -16,10 +16,23 @@
  * immediately before every send (the `returns-auth` choke point). The first send it refuses stops the pass; the
  * rows wait, unchanged, for a later eligible operator. Passes are single-flight
  * per process (one terminal per process).
+ *
+ * Liveness without hammering (RT-197 I2): a background tick re-sends an
+ * `unknown` row only once its own backoff has elapsed since its last attempt —
+ * the sale-sync policy (1 s doubling per attempt, capped at 5 min) — so a row
+ * whose answers keep getting lost is still retried at least every
+ * cap + one tick, and one row's backoff never delays another. A never-sent
+ * `pending` row is not delayed, and neither is the operator's on-demand
+ * `returns.resolve` (`resolveOnce`).
  */
+import {
+  backoffMs,
+  SALE_SYNC_BACKOFF_POLICY,
+  type BackoffPolicy,
+} from '../sales-sync/sale-sync-engine.js';
 import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
 import type { ReturnsDispatcher } from './returns-dispatch.js';
-import type { ReturnsRepository } from './returns-repository.js';
+import type { JournalEntry, ReturnsRepository } from './returns-repository.js';
 
 export interface ResolveSummary {
   readonly confirmed: number;
@@ -48,16 +61,44 @@ export interface ReturnsResolverDeps {
   readonly dispatcher: ReturnsDispatcher;
   /** The choke point; the dispatcher re-checks the pass's actor before each send. */
   readonly authorizer: Pick<ReturnsAuthorizer, 'current' | 'recheck'>;
+  /** The domain clock (ISO-8601 UTC); the same one that stamps attempts. */
+  readonly now: () => string;
+  /** Per-row backoff for `unknown` rows (default: the sale-sync policy). */
+  readonly backoff?: BackoffPolicy;
 }
 
 const EMPTY: ResolveSummary = { confirmed: 0, refused: 0, unresolved: 0 };
 
+/**
+ * True when a background tick may re-send `entry` at `nowMs`: always for a row
+ * that is not `unknown` or has no recorded attempt; else once
+ * `backoffMs(policy, attemptCount)` has elapsed since its last attempt. An
+ * unreadable stamp is due (fail towards liveness).
+ */
+function isDue(entry: JournalEntry, nowMs: number, policy: BackoffPolicy): boolean {
+  if (entry.state !== 'unknown' || entry.lastAttemptAt === null) return true;
+  const waited = nowMs - Date.parse(entry.lastAttemptAt);
+  return !(waited < backoffMs(policy, entry.attemptCount));
+}
+
 export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolver {
   let running: Promise<ResolveSummary> | null = null;
 
-  async function pass(snapshot: AuthSnapshot): Promise<ResolveSummary> {
-    const tally = { ...EMPTY };
-    const rows = deps.repo.listUnresolved(snapshot.scope);
+  const policy = deps.backoff ?? SALE_SYNC_BACKOFF_POLICY;
+
+  /** This pass's rows: all unresolved, or (background) only those due. */
+  function rowsFor(snapshot: AuthSnapshot, backgroundTick: boolean) {
+    const all = deps.repo.listUnresolved(snapshot.scope);
+    if (!backgroundTick) return { rows: all, waiting: 0 };
+    const nowMs = Date.parse(deps.now());
+    const rows = all.filter((entry) => isDue(entry, nowMs, policy));
+    return { rows, waiting: all.length - rows.length };
+  }
+
+  async function pass(snapshot: AuthSnapshot, backgroundTick: boolean): Promise<ResolveSummary> {
+    const { rows, waiting } = rowsFor(snapshot, backgroundTick);
+    // Rows still backing off stay unresolved.
+    const tally = { ...EMPTY, unresolved: waiting };
     for (const [index, entry] of rows.entries()) {
       const outcome = await deps.dispatcher.send(entry, 'resolve', snapshot);
       // Not sent: the pass's actor lost authorization (sign-out, switch, lock,
@@ -72,9 +113,9 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
     return tally;
   }
 
-  function singleFlight(snapshot: AuthSnapshot): Promise<ResolveSummary> {
+  function singleFlight(snapshot: AuthSnapshot, backgroundTick: boolean): Promise<ResolveSummary> {
     if (running !== null) return running;
-    const current = pass(snapshot).finally(() => {
+    const current = pass(snapshot, backgroundTick).finally(() => {
       running = null;
     });
     running = current;
@@ -98,13 +139,13 @@ export function createReturnsResolver(deps: ReturnsResolverDeps): ReturnsResolve
 
   return {
     drain,
-    resolveOnce: singleFlight,
+    resolveOnce: (snapshot) => singleFlight(snapshot, false),
     tick: () => {
       // The pass's authorization snapshot, taken once at its start.
       const live = deps.authorizer.current();
       if (running !== null || live.kind !== 'ok') return Promise.resolve(null);
       if (deps.authorizer.recheck(live.actor) !== null) return Promise.resolve(null);
-      return singleFlight(live.actor);
+      return singleFlight(live.actor, true);
     },
   };
 }

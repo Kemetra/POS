@@ -84,7 +84,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     isStopped: () => stopped,
     transaction: <T>(fn: () => T): T => deps.db.transaction(fn)(),
   });
-  const resolver = createReturnsResolver({ repo, dispatcher, authorizer });
+  const resolver = createReturnsResolver({ repo, dispatcher, authorizer, now });
   const service = createReturnsService({
     authorizer,
     captureCurrencyCode: deps.captureCurrencyCode ?? DEFAULT_CURRENCY_CODE,

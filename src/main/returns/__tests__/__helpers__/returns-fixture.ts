@@ -48,6 +48,11 @@ export const LINE_B = '0190f5a2-7b3c-7d4e-8f90-00000000000b';
 export const RETURN_REF = '0190f5a2-7b3c-7d4e-8f90-0000000000ff';
 export const NOW = '2026-10-04T10:00:00.000Z';
 
+/** `NOW` plus `seconds`, as the ISO-8601 stamp the domain clock returns. */
+export function secondsAfterNow(seconds: number): string {
+  return new Date(Date.parse(NOW) + seconds * 1_000).toISOString();
+}
+
 export const CASH_SUMMARY = JSON.stringify([{ tender_type: 'cash', amount_applied_minor: 6500 }]);
 export const CARD_SUMMARY = JSON.stringify([
   { tender_type: 'external_card_terminal', amount_applied_minor: 6500 },
@@ -331,6 +336,8 @@ export interface HarnessState {
   locked: boolean;
   /** The live paired terminal id. */
   terminalId: string;
+  /** The domain clock (ISO-8601), read per call; starts at `NOW`. */
+  now: string;
   /** Runs on every audit emit, before it is written (to change state mid-flow). */
   onAudit: ((event: AuditEvent) => void) | null;
   /** When it returns true for an event, that audit insert throws (fault injection). */
@@ -378,6 +385,7 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     paired: true,
     locked: false,
     terminalId: SCOPE.terminalId,
+    now: NOW,
     onAudit: null,
     failAudit: null,
   };
@@ -401,7 +409,7 @@ export function returnsHarness(options: HarnessOptions = {}): ReturnsHarness {
     isSessionLocked: () => state.locked,
     auditSink,
     logger: { warn: (_obj, msg) => warnings.push(msg), error: (_obj, msg) => warnings.push(msg) },
-    now: () => NOW,
+    now: () => state.now,
   });
   return {
     ...composed,

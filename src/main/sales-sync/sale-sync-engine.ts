@@ -54,6 +54,15 @@ export interface BackoffPolicy {
   maxMs: number;
 }
 
+/**
+ * The sale-sync retry policy: 1 s base, doubling per attempt, capped at 5 min.
+ * Also the per-row backoff of the RT-15 returns resolver (RT-197 I2).
+ */
+export const SALE_SYNC_BACKOFF_POLICY: Readonly<BackoffPolicy> = Object.freeze({
+  baseMs: 1_000,
+  maxMs: 5 * 60 * 1_000,
+});
+
 export interface SaleSyncEngineDeps {
   client: SaleSyncClient;
   stateRepo: SaleSyncStateRepo;
