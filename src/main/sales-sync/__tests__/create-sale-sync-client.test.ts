@@ -244,6 +244,9 @@ describe('classifyStatus — HTTP → outcome union', () => {
     // lose a perfectly valid sale just because the device was briefly too fast.
     expect(classifyStatus(429)).toEqual({ kind: 'transient' });
   });
+  it('maps 425 idempotency_in_progress → transient (RT-194: the same key is still in flight, never dead-letter)', () => {
+    expect(classifyStatus(425)).toEqual({ kind: 'transient' });
+  });
   it('maps genuine validation 4xx (400/404/422) → permanent (dead-letter)', () => {
     expect(classifyStatus(400)).toEqual({ kind: 'permanent' });
     expect(classifyStatus(404)).toEqual({ kind: 'permanent' });

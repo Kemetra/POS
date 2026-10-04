@@ -3,8 +3,9 @@
  * server's `Retry-After`.
  *
  * Locks down:
- *   • `parseRetryAfterMs`: delay-seconds and HTTP-date forms, clamped to
- *     [0, MAX_RETRY_AFTER_MS]; missing / invalid → undefined (normal backoff);
+ *   • `parseRetryAfterMs`: delay-seconds and strict IMF-fixdate forms, clamped
+ *     to [0, MAX_RETRY_AFTER_MS]; missing / invalid (incl. non-HTTP dates that
+ *     `Date.parse` would accept) → undefined (normal backoff);
  *   • the live client: 425 with or without the Backend-Core body → `transient`,
  *     never `permanent`; the `Retry-After` header becomes `retryAfterMs`; the 425
  *     body is never read; 429 behaves the same.
@@ -46,11 +47,11 @@ describe('parseRetryAfterMs (RT-194)', () => {
     ['delay-seconds', '2', 2_000],
     ['zero seconds', '0', 0],
     ['surrounding whitespace', ' 7 ', 7_000],
-    ['an HTTP-date 30s ahead', 'Sun, 04 Oct 2026 10:00:30 GMT', 30_000],
-    ['an HTTP-date in the past (→ 0)', 'Sun, 04 Oct 2026 09:59:00 GMT', 0],
+    ['an IMF-fixdate 30s ahead', 'Sun, 04 Oct 2026 10:00:30 GMT', 30_000],
+    ['an IMF-fixdate in the past (→ 0)', 'Sun, 04 Oct 2026 09:59:00 GMT', 0],
     ['absurd seconds (clamped)', '86400', MAX_RETRY_AFTER_MS],
     ['an overflowing number (clamped)', '9'.repeat(400), MAX_RETRY_AFTER_MS],
-    ['an HTTP-date a day ahead (clamped)', 'Mon, 05 Oct 2026 10:00:00 GMT', MAX_RETRY_AFTER_MS],
+    ['an IMF-fixdate a day ahead (clamped)', 'Mon, 05 Oct 2026 10:00:00 GMT', MAX_RETRY_AFTER_MS],
   ])('%s → %s ms', (_label, header, expected) => {
     expect(parseRetryAfterMs(header, NOW_MS)).toBe(expected);
   });
@@ -62,6 +63,12 @@ describe('parseRetryAfterMs (RT-194)', () => {
     ['fractional', '1.5'],
     ['garbage', 'soon'],
     ['a date-like word that does not parse', 'Someday, 99 Foo 2026'],
+    ['a non-HTTP date Date.parse would accept', 'October 5, 2026'],
+    ['an ISO-8601 instant', '2026-10-04T10:00:30.000Z'],
+    ['an obsolete rfc850 date', 'Sunday, 04-Oct-26 10:00:30 GMT'],
+    ['an obsolete asctime date', 'Sun Oct  4 10:00:30 2026'],
+    ['an IMF-fixdate in a non-GMT zone', 'Sun, 04 Oct 2026 10:00:30 UTC'],
+    ['a lower-case IMF-fixdate', 'sun, 04 oct 2026 10:00:30 gmt'],
   ])('%s → undefined (normal backoff applies)', (_label, header) => {
     expect(parseRetryAfterMs(header, NOW_MS)).toBeUndefined();
   });
@@ -93,45 +100,72 @@ describe('createSaleSyncClient — 425 / 429 are transient with Retry-After (RT-
     expect(classifyStatus(429)).toEqual({ kind: 'transient' });
   });
 
-  it.each<[string, number, string | null, Record<string, string>, SaleSyncResult]>([
-    [
-      '425 idempotency_in_progress + Retry-After: 2',
-      425,
-      IN_PROGRESS_BODY,
-      { 'Retry-After': '2' },
-      { kind: 'transient', retryAfterMs: 2_000 },
-    ],
-    ['425 with no body and no header', 425, null, {}, { kind: 'transient' }],
-    [
-      '425 with an HTTP-date Retry-After',
-      425,
-      null,
-      { 'Retry-After': 'Sun, 04 Oct 2026 10:00:05 GMT' },
-      { kind: 'transient', retryAfterMs: 5_000 },
-    ],
-    [
-      '425 with an invalid Retry-After',
-      425,
-      IN_PROGRESS_BODY,
-      { 'Retry-After': 'later' },
-      { kind: 'transient' },
-    ],
-    [
-      '425 with an absurd Retry-After (clamped)',
-      425,
-      IN_PROGRESS_BODY,
-      { 'Retry-After': '999999' },
-      { kind: 'transient', retryAfterMs: MAX_RETRY_AFTER_MS },
-    ],
-    [
-      '429 rate limit + Retry-After: 30',
-      429,
-      null,
-      { 'Retry-After': '30' },
-      { kind: 'transient', retryAfterMs: 30_000 },
-    ],
-    ['429 with no Retry-After', 429, null, {}, { kind: 'transient' }],
-  ])('%s', async (_label, status, body, headers, expected) => {
+  interface StatusRow {
+    name: string;
+    status: number;
+    body: string | null;
+    headers: Record<string, string>;
+    expected: SaleSyncResult;
+  }
+
+  it.each<StatusRow>([
+    {
+      name: '425 idempotency_in_progress + Retry-After: 2',
+      status: 425,
+      body: IN_PROGRESS_BODY,
+      headers: { 'Retry-After': '2' },
+      expected: { kind: 'transient', retryAfterMs: 2_000 },
+    },
+    {
+      name: '425 with no body and no header',
+      status: 425,
+      body: null,
+      headers: {},
+      expected: { kind: 'transient' },
+    },
+    {
+      name: '425 with an IMF-fixdate Retry-After',
+      status: 425,
+      body: null,
+      headers: { 'Retry-After': 'Sun, 04 Oct 2026 10:00:05 GMT' },
+      expected: { kind: 'transient', retryAfterMs: 5_000 },
+    },
+    {
+      name: '425 with an invalid Retry-After',
+      status: 425,
+      body: IN_PROGRESS_BODY,
+      headers: { 'Retry-After': 'later' },
+      expected: { kind: 'transient' },
+    },
+    {
+      name: '425 with a non-HTTP date Retry-After (normal backoff)',
+      status: 425,
+      body: IN_PROGRESS_BODY,
+      headers: { 'Retry-After': 'October 5, 2026' },
+      expected: { kind: 'transient' },
+    },
+    {
+      name: '425 with an absurd Retry-After (clamped)',
+      status: 425,
+      body: IN_PROGRESS_BODY,
+      headers: { 'Retry-After': '999999' },
+      expected: { kind: 'transient', retryAfterMs: MAX_RETRY_AFTER_MS },
+    },
+    {
+      name: '429 rate limit + Retry-After: 30',
+      status: 429,
+      body: null,
+      headers: { 'Retry-After': '30' },
+      expected: { kind: 'transient', retryAfterMs: 30_000 },
+    },
+    {
+      name: '429 with no Retry-After',
+      status: 429,
+      body: null,
+      headers: {},
+      expected: { kind: 'transient' },
+    },
+  ])('$name', async ({ status, body, headers, expected }) => {
     const result = await post(() => answer(status, body, headers));
     expect(result).toStrictEqual(expected);
   });

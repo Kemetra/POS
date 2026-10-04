@@ -9,7 +9,11 @@
  *     server to [1, 300]).
  *
  * RFC 9110 §10.2.3 allows two forms: `delay-seconds` (a non-negative integer) or
- * an `HTTP-date`. Both are accepted. The delay is clamped to
+ * an `HTTP-date`. Both are accepted; the date must be the preferred IMF-fixdate
+ * (`Sun, 06 Nov 1994 08:49:37 GMT`), matched strictly BEFORE `Date.parse`, which
+ * on its own also accepts non-HTTP strings (`October 5, 2026`, ISO-8601). The
+ * obsolete rfc850 / asctime forms are treated as invalid (normal backoff — the
+ * sale is still retried, only without the server's hint). The delay is clamped to
  * [0, `MAX_RETRY_AFTER_MS`] so a hostile or broken value can never park a sale for
  * longer than the engine's own backoff ceiling (5 min). A date in the past is 0.
  * A missing, empty or unparseable value returns `undefined`, and the caller falls
@@ -25,8 +29,9 @@
 export const MAX_RETRY_AFTER_MS = 5 * 60 * 1_000;
 
 const DELAY_SECONDS = /^\d+$/;
-/** An HTTP-date always carries a day/month name; this rejects bare numbers like `-5`. */
-const HAS_LETTER = /[a-z]/i;
+/** RFC 9110 §5.6.7 IMF-fixdate, e.g. `Sun, 06 Nov 1994 08:49:37 GMT`. Case-sensitive. */
+const IMF_FIXDATE =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/;
 
 function clamp(ms: number): number {
   return Math.min(Math.max(ms, 0), MAX_RETRY_AFTER_MS);
@@ -40,7 +45,7 @@ export function parseRetryAfterMs(value: string | null, nowMs: number): number |
   if (value === null) return undefined;
   const trimmed = value.trim();
   if (DELAY_SECONDS.test(trimmed)) return clamp(Number(trimmed) * 1_000);
-  if (!HAS_LETTER.test(trimmed)) return undefined;
+  if (!IMF_FIXDATE.test(trimmed)) return undefined;
   const at = Date.parse(trimmed);
   if (Number.isNaN(at)) return undefined;
   return clamp(at - nowMs);
