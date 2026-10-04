@@ -91,7 +91,7 @@ const CURRENCY_MINOR_UNIT_EXPONENT: Readonly<Record<string, number>> = {
 };
 const DEFAULT_MINOR_UNIT_EXPONENT = 2;
 
-function exponentFor(currencyCode: string): number {
+export function exponentFor(currencyCode: string): number {
   return CURRENCY_MINOR_UNIT_EXPONENT[currencyCode] ?? DEFAULT_MINOR_UNIT_EXPONENT;
 }
 

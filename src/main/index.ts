@@ -80,6 +80,8 @@ import { createSaleSyncEngine } from './sales-sync/sale-sync-engine.js';
 import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
+import { registerReturnsHandlers } from './ipc/returns.js';
+import { composeReturns, scheduleReturnsResolver } from './returns/compose-returns.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
 import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
@@ -518,7 +520,7 @@ app
         cfg.sentryDsn = dsn;
       }
       // 005 cart / 006 payments / 008 saleFinalization / 009 productSearch /
-      // RT-103 voucherTender — all five flags default false (fail-closed).
+      // RT-103 voucherTender / RT-15 returns — all six flags default false (fail-closed).
       // RT-162: parsing lives in `app/feature-flags.ts` (one truthy parser,
       // unchanged semantics). Re-parsed per call, as before; the PAYMENTS-
       // without-SALE_FINALIZATION profile never reaches here (refused at startup).
@@ -1457,6 +1459,52 @@ app
         mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'sale_sync_engine:started');
       } else {
         mainLogger.info('finalize_listener:skipped_unpaired');
+      }
+    }
+
+    // ── RT-15 S2 — cashier returns (main-process domain; no renderer UI yet) ──
+    //
+    // The `returns:*` handlers are registered UNCONDITIONALLY (T094c lesson: the
+    // renderer gets a typed `feature_disabled` refusal, never "no handler"). The
+    // service re-reads `POS_PULSE_FEATURE_RETURNS` per call (default off, AC1),
+    // requires a manager/admin operator session (D-b), and talks only to
+    // Backend-Core `/api/pos/v1/sales/...` (AC7) with the operator envelope read
+    // in-process. The background resolver (startup + interval) re-sends
+    // `pending` / `unknown` returns with the identical request; it starts only
+    // with the flag on and for an already-paired terminal.
+    const returnsDomain = composeReturns({
+      db,
+      http: {
+        baseUrl: resolveApiBaseUrl(),
+        fetch: globalThis.fetch.bind(globalThis),
+        getOperatorToken: createSaleSyncTokenReader(operatorSessionManager, operatorEnvelopeHolder),
+      },
+      isEnabled: () => parseFeatureFlags(process.env).returns,
+      getSession: () =>
+        resolveSessionScope(
+          operatorSessionManager.getCurrent(),
+          pairingStore.getCurrentTerminalId(),
+        ),
+      auditSink: auditEmitter,
+      logger: mainLogger,
+      now: () => new Date().toISOString(),
+    });
+    registerReturnsHandlers(guardedIpcMain, { service: returnsDomain.service });
+    if (parseFeatureFlags(process.env).returns) {
+      const returnsPairing = await pairingStore.getStatus();
+      if (returnsPairing.kind === 'paired') {
+        const RETURNS_RESOLVER_INTERVAL_MS = 30_000;
+        const stopReturnsResolver = scheduleReturnsResolver({
+          resolver: returnsDomain.resolver,
+          scope: {
+            tenantId: returnsPairing.tenant_id,
+            branchId: returnsPairing.branch_id,
+            terminalId: returnsPairing.terminal_id,
+          },
+          intervalMs: RETURNS_RESOLVER_INTERVAL_MS,
+          logger: mainLogger,
+        });
+        workerRegistry.register('returns resolver', stopReturnsResolver);
       }
     }
 

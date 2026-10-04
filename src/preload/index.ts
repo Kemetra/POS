@@ -5,6 +5,7 @@ import { sales } from './sales.js';
 import { receipts } from './receipts.js';
 import { catalogue } from './catalogue.js';
 import { salesSync } from './sales-sync.js';
+import { returns } from './returns.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -166,6 +167,9 @@ const api: PreloadBridgeAPI = {
   // 011-sale-sync-capture-up — read-only salesSync.* namespace (single
   // sales:syncStatus channel; the renderer can never trigger the drain — §A4).
   salesSync,
+  // RT-15 S2 — returns.* (lookup / quote / submit / resolve / list). Gated in
+  // main on the feature flag, session and manager/admin role.
+  returns,
 };
 
 contextBridge.exposeInMainWorld('api', api);

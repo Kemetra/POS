@@ -78,5 +78,14 @@ export interface AppConfig {
      * (RT-79) still dead-letters any voucher-tendered sale regardless.
      */
     voucherTender?: boolean;
+    /**
+     * RT-15 S2 — enables the cashier return flow (`returns.*`).
+     *
+     * Defaults to `false` (AC1). Flip via `POS_PULSE_FEATURE_RETURNS` in main.
+     * Fail-closed: with it off every `returns.*` call is refused
+     * `feature_disabled` and nothing is journaled or sent. Backend-Core has
+     * its own gate (`POS_RETURNS_ENABLED`, 404 while off).
+     */
+    returns?: boolean;
   };
 }

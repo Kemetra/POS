@@ -52,6 +52,12 @@ export const AUDIT_ACTION_CATEGORIES = [
   'sale.drawer.opened',
   'sale.drawer.suppressed',
   'sale.drawer.failed',
+  // RT-15 S2 — cashier returns (AC11). Open-set at the SQL layer (0004); the
+  // categories are recorded in migration 0039's header.
+  'sale.return.attempted',
+  'sale.return.refused',
+  'sale.return.confirmed',
+  'sale.return.payout_ready',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 
