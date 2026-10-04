@@ -7,9 +7,9 @@
  * client lands it implements this interface unchanged and the engine is unaffected.
  *
  * The fetch outcome is a typed union mirroring the HTTP responses the engine
- * acts on (contracts/README.md): `ok` (200/201), `duplicate` (409 — idempotent
- * success), `transient` (5xx / timeout — retry), `permanent` (4xx — dead-letter),
- * `no_connection` (offline / DNS / refused). `postSale` NEVER rejects — transport
+ * acts on (contracts/README.md): `ok` (200/201), `divergent` (409 — terminal
+ * payload divergence, RT-190), `transient` (5xx / timeout — retry), `permanent`
+ * (4xx — dead-letter), `no_connection` (offline / DNS / refused). `postSale` NEVER rejects — transport
  * faults are mapped to the union. The raw response body is NEVER surfaced (P7);
  * the operator token is attached main-process-side and never passed through here.
  *
@@ -17,15 +17,27 @@
  * a UUID) read from the 200/201 `Sale` body — the ONE field taken from the body.
  * It is `null` when the body is missing, unparseable, or has no valid UUID
  * `saleRef`; the sale is still captured server-side, so the outcome stays `ok`.
- * `duplicate` (409) carries none: Backend-Core's capture 409 is an `Error`
- * envelope (`idempotency_key_conflict`) with no `Sale` projection.
+ *
+ * RT-190: `divergent` (409) is NOT success. Backend-Core answers a capture 409
+ * only as `idempotency_key_conflict`: the Idempotency-Key or the
+ * `(tenant, sourceSystem, externalId)` provenance was already used for a
+ * DIFFERENT logical payload (e.g. different tenders). Benign replays are 201
+ * (`Idempotent-Replayed`) or 200, never 409. So a 409 means the server holds a
+ * different sale than the till recorded; the engine dead-letters it with the
+ * `payload_divergence` reason and never retries it. `errorCode` is a closed set:
+ * the contract's code, or `unrecognized` for a malformed body or any other code
+ * (fail closed — the 409 status alone makes it divergent). No server text is
+ * ever echoed (P7).
  */
 
 import type { CaptureSalePayload } from './capture-payload.js';
 
+/** RT-190: the closed-set label of a capture 409 (never the server's raw text). */
+export type CaptureConflictCode = 'idempotency_key_conflict' | 'unrecognized';
+
 export type SaleSyncResult =
   | { kind: 'ok'; saleRef: string | null }
-  | { kind: 'duplicate' }
+  | { kind: 'divergent'; errorCode: CaptureConflictCode }
   | { kind: 'transient' }
   | { kind: 'permanent' }
   | { kind: 'no_connection' };

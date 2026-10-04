@@ -23,18 +23,29 @@
  * RT-15 S1 (migration 0038): `server_sale_ref` holds the Backend-Core `saleRef`
  * (UUID) from a 200/201 capture answer. It is written only by `markSynced` and
  * FIRST WRITE WINS: once stored it is never cleared and never replaced. A later
- * write with no reference (a 409 `duplicate`, a malformed body, a transient/
- * dead-letter transition) keeps it, and so does a later DIFFERENT reference —
+ * write with no reference (a malformed body, a transient/dead-letter
+ * transition) keeps it, and so does a later DIFFERENT reference —
  * Backend-Core's saleRef is stable per sale, so a different value is an anomaly;
  * `markSynced` reports it (`saleRefMismatch`) for the caller to log. NULL means
  * "not known" — every pre-S1 row, and any sale whose capture answer carried no
  * usable reference.
+ *
+ * RT-190: a dead-lettered row records WHY in `last_error_category` (free TEXT
+ * since 0034 — no migration): `permanent` (a 4xx or a sale the POS refused to
+ * send) or `payload_divergence` (a capture 409 — the server holds a different
+ * sale for this provenance). Both are terminal `dead_letter`: never eligible,
+ * never retried. `readSyncStatus` counts both in `deadLetter` and the
+ * divergences again in `payloadDivergence`.
  */
 
 import type { DatabaseHandle } from '../db/client.js';
 
 export type SaleSyncStatus = 'pending' | 'synced' | 'dead_letter';
 export type SaleSyncErrorCategory = 'transient' | 'permanent' | 'no_connection';
+
+/** RT-190: the reason stored with a dead-letter (`last_error_category`). */
+export type SaleSyncDeadLetterReason = 'permanent' | 'payload_divergence';
+export const PAYLOAD_DIVERGENCE_REASON = 'payload_divergence' satisfies SaleSyncDeadLetterReason;
 
 /** The stored bookkeeping row (one per sale that has begun syncing). */
 export interface SaleSyncStateRow {
@@ -89,6 +100,8 @@ export interface MarkSyncedResult {
 export interface MarkDeadLetterInput extends TenantScope {
   saleId: string;
   now: string;
+  /** RT-190: why the sale is terminal. Defaults to `permanent`. */
+  reason?: SaleSyncDeadLetterReason;
 }
 
 export interface RecordTransientInput extends TenantScope {
@@ -102,7 +115,10 @@ export interface RecordTransientInput extends TenantScope {
 /** Read-only counts for the renderer's sync-status surface (P7: no secrets). */
 export interface SaleSyncStatusCounts {
   pending: number;
+  /** Every dead-lettered sale, divergences included. */
   deadLetter: number;
+  /** RT-190: the dead-lettered sales whose capture answered 409 (payload divergence). */
+  payloadDivergence: number;
   lastSuccessAt: string | null;
 }
 
@@ -237,7 +253,7 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       status: 'dead_letter',
       bumpAttempt: false,
       nextRetryAt: null,
-      errorCategory: 'permanent',
+      errorCategory: input.reason ?? 'permanent',
       syncedAt: null,
       serverSaleRef: null,
     });
@@ -253,17 +269,24 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
          AND (s.sale_id IS NULL OR s.sync_status = 'pending')`,
     ) as PrepareGet<{ n: number }>;
     const deadStmt = db.prepare(
-      `SELECT COUNT(*) AS n FROM sale_sync_state
+      `SELECT COUNT(*) AS n,
+              COALESCE(SUM(CASE WHEN last_error_category = ? THEN 1 ELSE 0 END), 0) AS d
+       FROM sale_sync_state
        WHERE tenant_id = ? AND branch_id = ? AND sync_status = 'dead_letter'`,
-    ) as PrepareGet<{ n: number }>;
+    ) as PrepareGet<{ n: number; d: number }>;
     const lastStmt = db.prepare(
       `SELECT MAX(synced_at) AS t FROM sale_sync_state
        WHERE tenant_id = ? AND branch_id = ? AND sync_status = 'synced'`,
     ) as PrepareGet<{ t: string | null }>;
     const pending = pendingStmt.get(scope.tenantId, scope.branchId)?.n ?? 0;
-    const deadLetter = deadStmt.get(scope.tenantId, scope.branchId)?.n ?? 0;
+    const dead = deadStmt.get(PAYLOAD_DIVERGENCE_REASON, scope.tenantId, scope.branchId);
     const lastSuccessAt = lastStmt.get(scope.tenantId, scope.branchId)?.t ?? null;
-    return { pending, deadLetter, lastSuccessAt };
+    return {
+      pending,
+      deadLetter: dead?.n ?? 0,
+      payloadDivergence: dead?.d ?? 0,
+      lastSuccessAt,
+    };
   }
 
   function recordTransient(input: RecordTransientInput): void {

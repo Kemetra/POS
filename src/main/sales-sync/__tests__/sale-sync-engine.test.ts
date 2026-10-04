@@ -7,7 +7,8 @@
  * `runTickOnce()` returns `{ kind:'started', completed }` or `{ kind:'already_running' }`.
  *
  * Outcome handling:
- *   • ok / duplicate(409)  → markSynced (idempotent success)
+ *   • ok(200/201)          → markSynced (incl. idempotent replays)
+ *   • divergent(409)       → markDeadLetter(payload_divergence) + onPayloadDivergence (RT-190)
  *   • transient(5xx/timeout)→ recordTransient (stay pending, attempt++, backoff)
  *   • permanent(4xx)       → markDeadLetter + onDeadLetter notification
  *   • no_connection        → recordTransient-style stay-pending, no count loss
@@ -83,14 +84,50 @@ describe('sale-sync-engine', () => {
     h.db.close();
   });
 
-  it('T030 duplicate (409) is treated as idempotent success (synced, no retry)', async () => {
-    const h = harness({ script: [{ kind: 'duplicate' }] });
+  it('RT-190: divergent (409) → terminal dead_letter with reason payload_divergence, never synced', async () => {
+    const divergences: Array<{ externalId: string; errorCode: string }> = [];
+    const h = harness({
+      script: [{ kind: 'divergent', errorCode: 'idempotency_key_conflict' }],
+    });
+    seedSale(h.db, { sale_id: 'sale-1' });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    await runOnce({ ...h.deps, onPayloadDivergence: (info) => divergences.push(info) });
+    const row = nn(h.stateRepo.read('sale-1'));
+    expect(row.sync_status).toBe('dead_letter');
+    expect(row.last_error_category).toBe('payload_divergence');
+    expect(row.synced_at).toBeNull();
+    expect(row.server_sale_ref).toBeNull();
+    expect(row.attempt_count).toBe(0);
+    expect(row.next_retry_at).toBeNull();
+    expect(divergences).toHaveLength(1);
+    expect(divergences[0]?.errorCode).toBe('idempotency_key_conflict');
+    expect(Object.keys(divergences[0] ?? {}).sort()).toEqual(['errorCode', 'externalId']);
+    // Its own notification only — not the generic dead-letter one.
+    expect(h.deadLetters).toEqual([]);
+    h.db.close();
+  });
+
+  it('RT-190: a divergent sale is never re-sent (no retry, no new key)', async () => {
+    const client = createFakeSaleSyncClient([{ kind: 'divergent', errorCode: 'unrecognized' }]);
+    const h = harness({});
+    seedSale(h.db, { sale_id: 'sale-1' });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    const deps = { ...h.deps, client };
+    await runOnce(deps);
+    // Far past any backoff window: still not eligible, still not POSTed again.
+    await runOnce({ ...deps, now: () => '2027-01-01T00:00:00.000Z' });
+    expect(client.calls).toHaveLength(1);
+    expect(h.stateRepo.eligible(SCOPE, '2027-01-01T00:00:00.000Z')).toEqual([]);
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('dead_letter');
+    h.db.close();
+  });
+
+  it('RT-190: a divergence without an onPayloadDivergence hook still dead-letters', async () => {
+    const h = harness({ script: [{ kind: 'divergent', errorCode: 'unrecognized' }] });
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     await runOnce(h.deps);
-    const row = nn(h.stateRepo.read('sale-1'));
-    expect(row.sync_status).toBe('synced');
-    expect(row.attempt_count).toBe(0);
+    expect(nn(h.stateRepo.read('sale-1')).last_error_category).toBe('payload_divergence');
     h.db.close();
   });
 
@@ -139,6 +176,7 @@ describe('sale-sync-engine', () => {
     seedOutbox(h.db, { sale_id: 'sale-1' });
     await runOnce(h.deps);
     expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('dead_letter');
+    expect(nn(h.stateRepo.read('sale-1')).last_error_category).toBe('permanent');
     expect(h.deadLetters).toEqual(['sale-1']);
     h.db.close();
   });

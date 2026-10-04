@@ -2,12 +2,12 @@
  * RT-15 S1 — the server `saleRef` is persisted on `sale_sync_state` (0038).
  *
  *   • repo: `markSynced` stores `serverSaleRef`; FIRST WRITE WINS — a later write
- *     without one (409 duplicate, malformed body, transient, dead-letter) never
+ *     without one (malformed body, transient, dead-letter) never
  *     clears it, and a different non-null value never replaces it (reported as
  *     `saleRefMismatch`); `findServerSaleRefBySaleId` is tenant/branch-scoped and
  *     only answers for a synced sale.
- *   • engine: `ok` persists the saleRef with the synced transition; `duplicate`
- *     stores none; a retry that ends in a replayed 200 stores it; a mismatch
+ *   • engine: `ok` persists the saleRef with the synced transition; a 409
+ *     (`divergent`, RT-190) dead-letters and stores none; a retry that ends in a replayed 200 stores it; a mismatch
  *     keeps the stored value and fires `onSaleRefMismatch` with the externalId.
  *   • live client: a 201 whose body read fails is retried with the same
  *     Idempotency-Key and the 200 replay's saleRef is stored.
@@ -66,7 +66,7 @@ function withRepo(options: { saleIds?: readonly string[] }, body: (h: RepoHarnes
   }
 }
 
-/** `markSynced` for SALE_ID in SCOPE; omit `serverSaleRef` to model a 409 write. */
+/** `markSynced` for SALE_ID in SCOPE; omit `serverSaleRef` to model an answer with no usable saleRef. */
 function syncSale(
   repo: SaleSyncStateRepo,
   options: { now?: string; serverSaleRef?: string | null } = {},
@@ -77,7 +77,11 @@ function syncSale(
 describe('sale-sync-state-repo — server_sale_ref (RT-15 S1)', () => {
   it.each<{ label: string; write: { serverSaleRef?: string | null }; expectedRef: string | null }>([
     { label: 'stores the serverSaleRef', write: { serverSaleRef: REF_A }, expectedRef: REF_A },
-    { label: 'without a saleRef (e.g. 409) stores NULL', write: {}, expectedRef: null },
+    {
+      label: 'without a saleRef (e.g. a malformed 200/201 body) stores NULL',
+      write: {},
+      expectedRef: null,
+    },
     {
       label: 'with an explicit null stores NULL',
       write: { serverSaleRef: null },
@@ -234,7 +238,6 @@ describe('sale-sync-engine — persists saleRef (RT-15 S1)', () => {
       outcome: { kind: 'ok', saleRef: null },
       expectedRef: null,
     },
-    { label: 'duplicate (409) → no saleRef', outcome: { kind: 'duplicate' }, expectedRef: null },
   ])('$label; the row is synced', async ({ outcome, expectedRef }) => {
     const { db, deps } = engineHarness({ client: createFakeSaleSyncClient([outcome]) });
     try {
@@ -242,6 +245,23 @@ describe('sale-sync-engine — persists saleRef (RT-15 S1)', () => {
       const row = nn(deps.stateRepo.read(SALE_ID));
       expect(row.sync_status).toBe('synced');
       expect(row.server_sale_ref).toBe(expectedRef);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('RT-190: divergent (409) → dead_letter, no saleRef (not returnable)', async () => {
+    const { db, deps } = engineHarness({
+      client: createFakeSaleSyncClient([
+        { kind: 'divergent', errorCode: 'idempotency_key_conflict' },
+      ]),
+    });
+    try {
+      await runOnce(deps);
+      const row = nn(deps.stateRepo.read(SALE_ID));
+      expect(row.sync_status).toBe('dead_letter');
+      expect(row.server_sale_ref).toBeNull();
+      expect(deps.stateRepo.findServerSaleRefBySaleId(SCOPE, SALE_ID)).toBeNull();
     } finally {
       db.close();
     }

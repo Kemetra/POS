@@ -1430,6 +1430,15 @@ app
           onSaleRefMismatch: ({ externalId }) => {
             mainLogger.warn({ external_id: externalId }, 'sale_sync:sale_ref_mismatch');
           },
+          // RT-190: a capture 409 — the server holds a different sale for this
+          // provenance. Dead-lettered (`payload_divergence`), never retried. Only
+          // the opaque externalId + the closed-set error code are logged (P7).
+          onPayloadDivergence: ({ externalId, errorCode }) => {
+            mainLogger.warn(
+              { external_id: externalId, error_code: errorCode },
+              'sale_sync:payload_divergence',
+            );
+          },
         });
 
         // Read-only status surface for the renderer (counts + last-success only;
