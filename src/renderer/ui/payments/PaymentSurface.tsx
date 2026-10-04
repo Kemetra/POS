@@ -65,7 +65,19 @@ export interface PaymentSurfaceProps {
    * omitted (tests / Slice-1), the button still renders and is a safe no-op.
    */
   onNewSale?: () => void;
+  /**
+   * RT-26 — Checkout Back / Esc to the same sale. Resolves `true` once main
+   * returned the cart to the Sale (the route then leaves this surface), `false`
+   * when main refused or the call failed (the cashier stays here). Optional:
+   * without it no Back control renders and Esc does nothing (Slice-1 / bare
+   * renders). The surface only DISABLES Back while it can see tender activity
+   * or an operation in flight — main is the authority either way.
+   */
+  onBackToSale?: () => Promise<boolean>;
 }
+
+/** Shown when main refuses (or cannot be reached for) a Back. Generic, no reason. */
+const BACK_REFUSED_COPY = 'تعذّر الرجوع إلى البيع. أكمل الدفع أو ألغِه.';
 
 type Phase = 'tender_selection' | 'entry' | 'settled';
 
@@ -111,6 +123,7 @@ function resolveBridge(testBridge: ResolvedBridge | undefined): ResolvedBridge |
 export function PaymentSurface({
   _testBridge,
   onNewSale,
+  onBackToSale,
 }: PaymentSurfaceProps = {}): JSX.Element | null {
   const sessionState = useOperatorSessionStore((s) => s.state);
   const envelope = usePaymentStore((s) => s.envelope);
@@ -123,6 +136,11 @@ export function PaymentSurface({
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [reversalPending, setReversalPending] = useState<boolean>(false);
+  // RT-26 — a Back is in flight, and whether this handoff ever had tender
+  // (a payments.cancel that reversed lines clears the projection, but main
+  // still refuses Back for that cart, so the control stays disabled).
+  const [isReturning, setIsReturning] = useState<boolean>(false);
+  const [tenderTouched, setTenderTouched] = useState<boolean>(false);
   // 022 US4a (T011) — the sale id is NO LONGER retained.
   //
   // It existed to mount ReceiptPreview and to discriminate T013a's two settled
@@ -162,6 +180,8 @@ export function PaymentSurface({
     setIsCancelling(false);
     setIsStarting(false);
     setReversalPending(false);
+    setIsReturning(false);
+    setTenderTouched(false);
     // Resume a same-handoff attempt across a remount (leaving checkout and
     // coming back): a `started` one is still held by main, so forgetting it
     // would re-enable sign-out and make the next tender re-run payments.start,
@@ -197,6 +217,46 @@ export function PaymentSurface({
   // asserts the number displays) accepted on safety grounds: a wrong
   // cashier-quotable reference is worse than none. It returns with the
   // correlating identifier, alongside T013a and T017.
+
+  // RT-26 — Back is offered before any tender: any tender line in the
+  // projection (applied, applying, refused, reversed, …), a settled surface or
+  // an operation in flight disables it. Mirrors main's rule; main decides.
+  const tenderActivity = (paymentSlice?.tender_lines.length ?? 0) > 0 || tenderTouched;
+  const backOffered =
+    onBackToSale !== undefined &&
+    sessionState.kind === 'signedIn' &&
+    envelope !== null &&
+    phase !== 'settled';
+  const backEnabled =
+    backOffered && !tenderActivity && !isStarting && !isConfirming && !isCancelling && !isReturning;
+
+  async function handleBackToSale(): Promise<void> {
+    // `backEnabled` implies `onBackToSale` is defined (TS narrows the alias).
+    if (!backEnabled) return;
+    setBridgeRefusalCopy(null);
+    setIsReturning(true);
+    const returned = await onBackToSale().catch(() => false);
+    // On success the route leaves this surface; only a refusal stays here.
+    if (!returned) {
+      setIsReturning(false);
+      setBridgeRefusalCopy(BACK_REFUSED_COPY);
+    }
+  }
+
+  // Esc = Back (RT-24). Re-subscribed every render so it always sees the
+  // current state; inner layers that own Esc call preventDefault first.
+  useEffect(() => {
+    if (!backEnabled) return undefined;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.repeat) return;
+      event.preventDefault();
+      void handleBackToSale();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  });
 
   if (sessionState.kind !== 'signedIn' || envelope === null) {
     return null;
@@ -331,6 +391,12 @@ export function PaymentSurface({
       });
       if (response.kind === 'ok') {
         setReversalPending(response.reversal_pending_tender_line_ids.length > 0);
+        if (
+          response.reversed_tender_line_ids.length > 0 ||
+          response.reversal_pending_tender_line_ids.length > 0
+        ) {
+          setTenderTouched(true);
+        }
         setSelectedTender(null);
         setPhase('tender_selection');
         usePaymentStore.getState().clearAttempt();
@@ -534,8 +600,38 @@ export function PaymentSurface({
     <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
       <header className="payment-surface__header">
         <h1 className="payment-surface__title">الدفع</h1>
+        {/* RT-26 — Back to the same sale (Esc). Disabled, with the reason
+            below, once tender exists; main refuses it in that case too. */}
+        {backOffered && (
+          <button
+            type="button"
+            className="btn btn--md btn--secondary payment-surface__back"
+            data-testid="payment-surface-back"
+            disabled={!backEnabled}
+            aria-disabled={!backEnabled ? 'true' : undefined}
+            aria-keyshortcuts="Escape"
+            onClick={() => {
+              void handleBackToSale();
+            }}
+          >
+            رجوع إلى البيع
+            <kbd className="payment-surface__back-key" dir="ltr">
+              Esc
+            </kbd>
+          </button>
+        )}
         <OperatorBadge display_name={display_name} role={role} />
       </header>
+
+      {backOffered && tenderActivity && (
+        <p
+          className="payment-surface__back-blocked"
+          data-testid="payment-surface-back-blocked"
+          role="status"
+        >
+          لا يمكن الرجوع إلى البيع بعد تسجيل أي مبلغ. أكمل الدفع أو ألغِه.
+        </p>
+      )}
 
       {/*
         022 US3 T070 — three-column composition.
