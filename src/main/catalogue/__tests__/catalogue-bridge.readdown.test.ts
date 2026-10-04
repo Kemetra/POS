@@ -195,3 +195,42 @@ describe('T040 — catalogue:freshness bridge contract (§A4 Addition 2)', () =>
     expect(r.kind).toBe('refused');
   });
 });
+
+describe('RT-202 — catalogue:refresh resolves the driver lazily', () => {
+  it('refuses while the driver does not exist yet, then admits once it does (in-process pairing)', async () => {
+    const driver = fakeDriver(startedAdmission);
+    const holder: { live?: ReturnType<typeof fakeDriver> } = {};
+    const bridge = createCatalogueBridge({
+      getCurrentSession: () => SESSION,
+      getReadDownDriver: () => holder.live,
+    });
+
+    // Terminal not paired yet: no driver → honest refusal, never a fake "started".
+    await expect(bridge.refresh({})).resolves.toEqual({ kind: 'refused', reason: 'no_session' });
+    expect(driver.calls()).toBe(0);
+
+    // Pairing completed in-process: the driver now exists.
+    holder.live = driver;
+    await expect(bridge.refresh({})).resolves.toEqual({ kind: 'started' });
+    expect(driver.calls()).toBe(1);
+  });
+
+  it('still honours a driver passed directly (paired-at-boot shape is unchanged)', async () => {
+    const driver = fakeDriver(startedAdmission);
+    const bridge = createCatalogueBridge({
+      getCurrentSession: () => SESSION,
+      readDownDriver: driver,
+    });
+    await expect(bridge.refresh({})).resolves.toEqual({ kind: 'started' });
+  });
+
+  it('keeps the session gate first even when a lazy driver exists', async () => {
+    const driver = fakeDriver(startedAdmission);
+    const bridge = createCatalogueBridge({
+      getCurrentSession: () => null,
+      getReadDownDriver: () => driver,
+    });
+    await expect(bridge.refresh({})).resolves.toEqual({ kind: 'refused', reason: 'no_session' });
+    expect(driver.calls()).toBe(0);
+  });
+});

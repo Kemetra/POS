@@ -85,6 +85,13 @@ export interface CatalogueBridgeDependencies {
    */
   readDownDriver?: Pick<ReadDownDriver, 'runTickOnce'>;
   /**
+   * RT-202 — resolves the driver at call time, for a terminal that pairs
+   * in-process: the driver does not exist when the bridge is built, and exists
+   * once the paired-only workers have started. Takes precedence over
+   * `readDownDriver` when it returns one; `undefined` still refuses.
+   */
+  getReadDownDriver?: () => Pick<ReadDownDriver, 'runTickOnce'> | undefined;
+  /**
    * 010 — the tenant-scoped freshness source behind `catalogue.freshness`.
    * Optional: when absent, `freshness` refuses (it cannot read truthfully) — it
    * never throws or leaks (IPC-1).
@@ -119,7 +126,7 @@ function searchResultToResponse(result: ProductSearchResult): CatalogueSearchRes
 }
 
 export function createCatalogueBridge(deps: CatalogueBridgeDependencies): CatalogueBridge {
-  const { getCurrentSession, productRepo, readDownDriver, freshness } = deps;
+  const { getCurrentSession, productRepo, freshness } = deps;
 
   // S2: `lookupBarcode` / `lookupSku` gate first (NFR-6a), then query the
   // tenant-scoped repo (the session's `tenant_id` is the only tenant the repo
@@ -181,6 +188,7 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
       // unreachable once the driver is wired (T039), and the reason is never
       // surfaced to the cashier (the renderer maps any refusal to a generic
       // `unavailable`). Do not trust this reason code as a session signal.
+      const readDownDriver = deps.getReadDownDriver?.() ?? deps.readDownDriver;
       if (readDownDriver === undefined)
         return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
       const admission = readDownDriver.runTickOnce();
