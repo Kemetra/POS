@@ -4,7 +4,7 @@
  * The CONCRETE live HTTP client behind the `SaleSyncClient` DI seam
  * (`sale-sync-client-types.ts`). POSTs a capture payload to DP2 `captureSale`
  * (`POST /api/pos/v1/sales`) and maps the HTTP outcome onto the engine's union
- * (`ok` / `duplicate` / `transient` / `permanent` / `no_connection`).
+ * (`ok` / `divergent` / `transient` / `permanent` / `no_connection`).
  *
  * Established repo pattern (mirrors `operator/backend-client.ts`):
  *   • Factory `{ baseUrl, fetch, getOperatorToken, timeoutMs }`; `fetch` injected.
@@ -13,9 +13,9 @@
  *     `{ kind:'no_connection' }`. NEVER throws.
  *
  * Outcome mapping (contracts/README.md):
- *   200/201 → ok ·  409 → duplicate (idempotent success) ·  5xx / timeout →
- *   transient (retry) ·  400/422 (and other 4xx) → permanent (dead-letter) ·
- *   network/DNS/refused/timeout-before-response → no_connection.
+ *   200/201 → ok ·  409 → divergent (terminal payload divergence, RT-190) ·
+ *   5xx / timeout → transient (retry) ·  400/422 (and other 4xx) → permanent
+ *   (dead-letter) ·  network/DNS/refused/timeout-before-response → no_connection.
  *
  * RT-15 S1 — `saleRef`: on 200/201 the body is the Backend-Core `Sale`
  * projection, whose required `saleRef` (UUID, = `sales.id`) is what the return
@@ -30,9 +30,16 @@
  * SAME `Idempotency-Key` / `externalId`. That cannot double-capture — Backend-Core
  * dedups on the key (a same-key retry replays the stored 201) and on provenance
  * `(tenant, sourceSystem, externalId)` (a 200 replay) — and the replay carries
- * the same `saleRef`, which is then stored. Only 200/201 bodies
- * are read: a capture 409 (`duplicate`) is an `Error` envelope
- * (`idempotency_key_conflict`) with no `saleRef`, so its body is not read.
+ * the same `saleRef`, which is then stored.
+ *
+ * RT-190 — 409: Backend-Core answers a capture 409 ONLY as the `Error` envelope
+ * `{ error: { code: 'idempotency_key_conflict', … } }` — the key or the
+ * provenance was reused with a DIFFERENT logical payload. Benign replays are
+ * 201/200, never 409. So a 409 is `divergent`, never success. Its body is read
+ * only to label the code from a closed set (`parseConflictCode`); a malformed
+ * body, an unreadable body or any other code is `unrecognized` and is STILL
+ * divergent (fail closed). The body text is never surfaced or logged (P7).
+ * Bodies of every other non-2xx status are not read.
  *
  * Auth (016 D5/D7, DP-2 #559): the `operatorAuthorization` scheme =
  * `Authorization: Bearer <pos_operator_envelope>` — the OPAQUE operator envelope
@@ -65,7 +72,11 @@
  */
 
 import type { CaptureSalePayload } from './capture-payload.js';
-import type { SaleSyncClient, SaleSyncResult } from './sale-sync-client-types.js';
+import type {
+  CaptureConflictCode,
+  SaleSyncClient,
+  SaleSyncResult,
+} from './sale-sync-client-types.js';
 
 const SALES_PATH = '/api/pos/v1/sales';
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -319,11 +330,46 @@ export function parseSaleRef(bodyText: string): SaleRefParse {
   return { saleRef: value };
 }
 
+const IDEMPOTENCY_KEY_CONFLICT = 'idempotency_key_conflict';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * RT-190 — label a capture 409 body from a closed set. Reads ONLY
+ * `error.code`; returns `idempotency_key_conflict` when it is exactly that, and
+ * `unrecognized` for anything else (unparseable JSON, a missing envelope, another
+ * code). The label never carries server text (P7). Pure; never throws.
+ */
+export function parseConflictCode(bodyText: string): CaptureConflictCode {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    return 'unrecognized';
+  }
+  const error = isRecord(parsed) ? parsed['error'] : undefined;
+  const code = isRecord(error) ? error['code'] : undefined;
+  return code === IDEMPOTENCY_KEY_CONFLICT ? IDEMPOTENCY_KEY_CONFLICT : 'unrecognized';
+}
+
+/** RT-190: read a 409 body for its code; an unreadable body is `unrecognized`. */
+async function readConflictCode(response: Response): Promise<CaptureConflictCode> {
+  try {
+    return parseConflictCode(await response.text());
+  } catch {
+    return 'unrecognized';
+  }
+}
+
 /** Map an HTTP status onto the engine's outcome union (contracts/README.md). */
 export function classifyStatus(status: number): SaleSyncResult {
   // Status-only: `saleRef` comes from the body, which `postSale` reads for 200/201.
   if (status === 200 || status === 201) return { kind: 'ok', saleRef: null };
-  if (status === 409) return { kind: 'duplicate' };
+  // RT-190: a capture 409 is a terminal payload divergence, never success. The
+  // status alone decides; `postSale` reads the body only to label the code.
+  if (status === 409) return { kind: 'divergent', errorCode: 'unrecognized' };
   if (status >= 500) return { kind: 'transient' };
   // 401/403 — auth refusal. 016 (D5/R4): the credential is now the opaque
   // pos_operator ENVELOPE; an expired/revoked envelope legitimately 401/403s.
@@ -394,9 +440,13 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
       }
 
       // The outcome is derived from the status only. RT-15 S1: for 200/201 the
-      // body is read for `saleRef` and nothing else; the raw body is never
+      // body is read for `saleRef` and nothing else; RT-190: for 409 it is read
+      // for the closed-set conflict code and nothing else. The raw body is never
       // surfaced or logged (P7). Other statuses' bodies are not read.
       const result = classifyStatus(response.status);
+      if (result.kind === 'divergent') {
+        return { kind: 'divergent', errorCode: await readConflictCode(response) };
+      }
       if (result.kind !== 'ok') return result;
 
       let bodyText: string;

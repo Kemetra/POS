@@ -14,18 +14,26 @@
  *   2. `stateRepo.eligible(scope, now)` → FIFO list (outbox LEFT JOIN state).
  *   3. For each: read the durable Sale, build the payload (tenders only past the
  *      RT-79 cutoff; integer minor units), POST, and record the outcome:
- *        ok / duplicate(409) → markSynced  (idempotent success, P5); `ok` also
- *          stores the Backend-Core `saleRef` when the answer carried one (RT-15 S1)
+ *        ok(200/201) → markSynced  (incl. idempotent replays, P5); also stores
+ *          the Backend-Core `saleRef` when the answer carried one (RT-15 S1)
+ *        divergent(409) → markDeadLetter(reason `payload_divergence`) +
+ *          onPayloadDivergence (RT-190): the server holds a DIFFERENT sale for
+ *          this provenance. Terminal — never synced, never retried, never
+ *          re-sent under a new key; an operator investigates.
  *        transient(5xx/timeout) / no_connection → recordTransient (stay pending,
  *          attempt++, exponential backoff next_retry_at)  (P3 no silent loss)
  *        permanent(4xx) → markDeadLetter + onDeadLetter notification  (P3/FR-7)
  *
- * Logs (caller's concern) carry only sale_id / status / category / attempt — never
- * PII, card data, or the token (P7/P12).
+ * Logs (caller's concern) carry only sale_id / externalId / status / category /
+ * attempt / closed-set codes — never PII, card data, or the token (P7/P12).
  */
 
-import type { SaleSyncClient } from './sale-sync-client-types.js';
-import type { SaleSyncStateRepo } from './sale-sync-state-repo.js';
+import type {
+  CaptureConflictCode,
+  SaleSyncClient,
+  SaleSyncResult,
+} from './sale-sync-client-types.js';
+import { PAYLOAD_DIVERGENCE_REASON, type SaleSyncStateRepo } from './sale-sync-state-repo.js';
 import {
   buildCapturePayload,
   TenderNotSendableError,
@@ -73,6 +81,13 @@ export interface SaleSyncEngineDeps {
    * Receives only the sale's opaque `externalId` — no PII, no reference values.
    */
   onSaleRefMismatch?: (info: { externalId: string }) => void;
+  /**
+   * RT-190: called once when a capture 409 dead-letters a sale as a payload
+   * divergence. Receives only the opaque `externalId` and the closed-set
+   * conflict code — no PII, no body, no token. `onDeadLetter` is NOT also
+   * called for it.
+   */
+  onPayloadDivergence?: (info: { externalId: string; errorCode: CaptureConflictCode }) => void;
 }
 
 export type TickAdmission =
@@ -116,8 +131,16 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       return;
     }
     const result = await client.postSale(payload);
-    const stamp = now();
+    recordOutcome(saleId, payload.externalId, result, now());
+  }
 
+  /** Persist one POST outcome on `sale_sync_state` and fire its notification. */
+  function recordOutcome(
+    saleId: string,
+    externalId: string,
+    result: SaleSyncResult,
+    stamp: string,
+  ): void {
     switch (result.kind) {
       case 'ok': {
         // RT-15 S1: persist the server reference with the synced transition. The
@@ -131,13 +154,21 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
           serverSaleRef: result.saleRef,
         });
         if (synced.saleRefMismatch) {
-          deps.onSaleRefMismatch?.({ externalId: payload.externalId });
+          deps.onSaleRefMismatch?.({ externalId });
         }
         return;
       }
-      case 'duplicate':
-        // 409 carries no Sale projection, so no saleRef (any stored one is kept).
-        stateRepo.markSynced({ saleId, tenantId, branchId, now: stamp });
+      case 'divergent':
+        // RT-190: the server holds a different sale for this provenance. Terminal
+        // dead-letter with its own reason; never synced, never retried.
+        stateRepo.markDeadLetter({
+          saleId,
+          tenantId,
+          branchId,
+          now: stamp,
+          reason: PAYLOAD_DIVERGENCE_REASON,
+        });
+        deps.onPayloadDivergence?.({ externalId, errorCode: result.errorCode });
         return;
       case 'permanent':
         stateRepo.markDeadLetter({ saleId, tenantId, branchId, now: stamp });

@@ -4,7 +4,8 @@
  * Contract (Backend-Core `pos-sales/sales.yaml` `captureSale`): 201 (first
  * capture) and 200 (provenance replay, `Idempotent-Replayed: true`) both return
  * the `Sale` projection with a required `saleRef` (`format: uuid`). 409 is an
- * `Error` envelope (`idempotency_key_conflict`) with no `saleRef`.
+ * `Error` envelope (`idempotency_key_conflict`) with no `saleRef` — RT-190 makes
+ * it a terminal divergence (see create-sale-sync-client.divergence.test.ts).
  *
  * Locks down (RT-15 D-g, lenient): only `saleRef` is read; unknown keys are
  * allowed; a missing / unparseable body or a non-UUID `saleRef` is still `ok`
@@ -252,20 +253,13 @@ describe('createSaleSyncClient.postSale — carries saleRef on ok (RT-15 S1)', (
     expect(await c.postSale(PAYLOAD)).toEqual({ kind: 'ok', saleRef: null });
   });
 
-  it('409 is unchanged: duplicate, its Error body is not read, no warning', async () => {
+  it('RT-190: 409 is divergent, never ok, and never raises a saleRef warning', async () => {
     const warnings: SaleRefUnavailableInfo[] = [];
-    let bodyRead = false;
     const conflict = json(409, {
       error: { code: 'idempotency_key_conflict', message: 'sale already captured' },
     });
-    const originalText = conflict.text.bind(conflict);
-    conflict.text = () => {
-      bodyRead = true;
-      return originalText();
-    };
     const result = await client(() => conflict, warnings).postSale(PAYLOAD);
-    expect(result).toEqual({ kind: 'duplicate' });
-    expect(bodyRead).toBe(false);
+    expect(result).toEqual({ kind: 'divergent', errorCode: 'idempotency_key_conflict' });
     expect(warnings).toEqual([]);
   });
 

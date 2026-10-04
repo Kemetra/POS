@@ -223,8 +223,8 @@ describe('classifyStatus — HTTP → outcome union', () => {
     expect(classifyStatus(200)).toEqual({ kind: 'ok', saleRef: null });
     expect(classifyStatus(201)).toEqual({ kind: 'ok', saleRef: null });
   });
-  it('maps 409 → duplicate (idempotent success)', () => {
-    expect(classifyStatus(409)).toEqual({ kind: 'duplicate' });
+  it('RT-190: maps 409 → divergent (terminal, NOT success); the status alone decides', () => {
+    expect(classifyStatus(409)).toEqual({ kind: 'divergent', errorCode: 'unrecognized' });
   });
   it('maps 5xx → transient', () => {
     expect(classifyStatus(500)).toEqual({ kind: 'transient' });
@@ -309,7 +309,7 @@ describe('createSaleSyncClient — outcome mapping', () => {
   const cases: Array<[number, string]> = [
     [200, 'ok'],
     [201, 'ok'],
-    [409, 'duplicate'],
+    [409, 'divergent'],
     [500, 'transient'],
     [401, 'transient'], // expired operator JWT — retryable, not dead-lettered
     [403, 'transient'],

@@ -140,22 +140,28 @@ the outcomes it actually has:
 | Path | Result type | Members |
 |:--|:--|:--|
 | Catalogue read-down | `ReadDownFetchResult` | `ok` · `no_connection` · `failed` |
-| Sale capture-up | `SaleSyncResult` | `ok` · `duplicate` · `transient` · `permanent` · `no_connection` |
+| Sale capture-up | `SaleSyncResult` | `ok` · `divergent` · `transient` · `permanent` · `no_connection` |
 | Voucher authority client | `ValidateVoucherOutcome` / `RedeemVoucherOutcome` / `ReverseVoucherOutcome` | `validated` \| `redeemed` \| `reversed` · `refused` · `authority_unreachable` |
 
 Read them as three expressions of the same invariant. Read-down separates *unreachable*
 (`no_connection`) from *reached but failed* (`failed`). Sale-sync separates *unreachable* from a
 backend-issued rejection, and additionally splits retryable (`transient`) from terminal
-(`permanent`) and idempotent-success (`duplicate`) — the distinctions its retry policy needs.
+(`permanent`) and payload divergence (`divergent`) — the distinctions its retry policy needs.
 
 The `refused` / `authority_unreachable` pair belongs specifically to the **authority-client**
 interactions, where a refusal is a genuine business decision made by Data-Pulse-2 and must never be
 manufactured locally from a connection failure. `refused` always carries a closed-set
 `VoucherRefusalReason`; no free-text refusal crosses the bridge.
 
-For sale-sync specifically: `transient` and `no_connection` back off and retry, `permanent`
-dead-letters rather than spinning, and `duplicate` is treated as success (the backend already has
-the sale).
+For sale-sync specifically: `transient` and `no_connection` back off and retry, and `permanent`
+dead-letters rather than spinning. Idempotent replays are `ok`: Backend-Core answers a same-key
+retry with 201 and a provenance replay with 200, both carrying the identical `Sale`. A capture 409
+is never success (RT-190). Backend-Core sends it only as `idempotency_key_conflict`, meaning the
+key or provenance was already used for a **different** payload. So `divergent` dead-letters the
+sale with reason `payload_divergence` (`sale_sync_state.last_error_category`) and never retries
+it. The sale is counted in the sync-status `deadLetter` and `payloadDivergence` counts and logged
+as `sale_sync:payload_divergence` with only the `externalId` and a closed-set error code. A 409
+with a malformed body or another code is treated the same way (fail closed).
 
 **Pairing is outside this table and uses a different transport API.** `src/main/pairing/network.ts`
 throws a typed `TransportError` on a transport failure rather than returning a union member. It

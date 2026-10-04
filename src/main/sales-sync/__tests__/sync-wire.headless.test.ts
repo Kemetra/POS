@@ -12,7 +12,8 @@
  *       →  createSaleSyncClient (the LIVE HTTP client — payload transform +
  *          Authorization: Bearer <envelope> + Idempotency-Key + classifyStatus)
  *       →  createSaleSyncEngine (FIFO drain, single-flight, FR-3 envelope gate,
- *          ok/duplicate→synced · transient/no_connection→retry · permanent→dead-letter)
+ *          ok→synced · divergent(409)→dead-letter · transient/no_connection→retry ·
+ *          permanent→dead-letter)
  *       →  engine.runTickOnce()  (exactly the call the main interval makes)
  *
  * The ONLY seam replaced is `fetch` — the network boundary. The existing

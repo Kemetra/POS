@@ -20,6 +20,9 @@ import type { PreloadBridgeAPI } from '../../../shared/bridge-api.js';
  *   • attention    — N sales dead-lettered. VISIBLE but quiet — this is
  *                    accountability (a sale the backend rejected needs a human),
  *                    not a panic. Never red-screen; icon + plain Arabic text.
+ *                    RT-190: when some of them are payload divergences (the
+ *                    server holds a different sale than the till), the label
+ *                    says how many, so the operator knows what to investigate.
  * A rejected bridge invoke degrades to `unavailable` (loud-but-handled, never a
  * white screen).
  *
@@ -105,6 +108,7 @@ export function SaleSyncStatus({ bridge }: SaleSyncStatusProps): JSX.Element {
   const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
   const [deadLetter, setDeadLetter] = useState(0);
+  const [payloadDivergence, setPayloadDivergence] = useState(0);
 
   const resolveBridge = useCallback((): SaleSyncStatusBridge => {
     /* v8 ignore next — production arm only reachable in Electron; tests inject `bridge` */
@@ -119,6 +123,7 @@ export function SaleSyncStatus({ bridge }: SaleSyncStatusProps): JSX.Element {
       setLastSuccessAt(next.lastSuccessAt);
       setPending(counts.pending);
       setDeadLetter(counts.deadLetter);
+      setPayloadDivergence(counts.payloadDivergence);
     } catch {
       setState('unavailable');
       setLastSuccessAt(null);
@@ -156,6 +161,9 @@ export function SaleSyncStatus({ bridge }: SaleSyncStatusProps): JSX.Element {
         )}
         {state === 'pending' && `في انتظار المزامنة: ${arabicNumber(pending)}`}
         {state === 'attention' && `${arabicNumber(deadLetter)} عملية بحاجة إلى مراجعة`}
+        {state === 'attention' &&
+          payloadDivergence > 0 &&
+          ` (منها ${arabicNumber(payloadDivergence)} تختلف عن المسجَّل على الخادم)`}
         {state === 'unavailable' && 'حالة المزامنة غير متاحة'}
       </span>
     </div>

@@ -28,7 +28,12 @@ describe('T053 — SaleSyncStatus', () => {
   it('shows the never-synced state when nothing has synced and nothing is pending', async () => {
     render(
       <SaleSyncStatus
-        bridge={bridgeReturning({ pending: 0, deadLetter: 0, lastSuccessAt: null })}
+        bridge={bridgeReturning({
+          pending: 0,
+          deadLetter: 0,
+          payloadDivergence: 0,
+          lastSuccessAt: null,
+        })}
       />,
     );
     const el = await screen.findByTestId('sale-sync-status');
@@ -44,6 +49,7 @@ describe('T053 — SaleSyncStatus', () => {
         bridge={bridgeReturning({
           pending: 0,
           deadLetter: 0,
+          payloadDivergence: 0,
           lastSuccessAt: '2026-06-07T10:00:00.000Z',
         })}
       />,
@@ -58,7 +64,12 @@ describe('T053 — SaleSyncStatus', () => {
   it('shows the pending state with the count when sales await sync', async () => {
     render(
       <SaleSyncStatus
-        bridge={bridgeReturning({ pending: 3, deadLetter: 0, lastSuccessAt: null })}
+        bridge={bridgeReturning({
+          pending: 3,
+          deadLetter: 0,
+          payloadDivergence: 0,
+          lastSuccessAt: null,
+        })}
       />,
     );
     await waitFor(() => {
@@ -70,7 +81,12 @@ describe('T053 — SaleSyncStatus', () => {
   it('shows the attention state when sales are dead-lettered (visible, not alarming)', async () => {
     render(
       <SaleSyncStatus
-        bridge={bridgeReturning({ pending: 0, deadLetter: 2, lastSuccessAt: 'x' })}
+        bridge={bridgeReturning({
+          pending: 0,
+          deadLetter: 2,
+          payloadDivergence: 0,
+          lastSuccessAt: 'x',
+        })}
       />,
     );
     await waitFor(() => {
@@ -79,10 +95,51 @@ describe('T053 — SaleSyncStatus', () => {
     expect(screen.getByTestId('sale-sync-status').textContent).toContain('مراجعة');
   });
 
+  it('RT-190: names how many dead-lettered sales are payload divergences', async () => {
+    render(
+      <SaleSyncStatus
+        bridge={bridgeReturning({
+          pending: 0,
+          deadLetter: 3,
+          payloadDivergence: 2,
+          lastSuccessAt: null,
+        })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('attention');
+    });
+    const text = screen.getByTestId('sale-sync-status').textContent;
+    expect(text).toContain('٣ عملية بحاجة إلى مراجعة');
+    expect(text).toContain('منها ٢ تختلف عن المسجَّل على الخادم');
+  });
+
+  it('RT-190: no divergence wording when no dead-letter is a divergence', async () => {
+    render(
+      <SaleSyncStatus
+        bridge={bridgeReturning({
+          pending: 0,
+          deadLetter: 2,
+          payloadDivergence: 0,
+          lastSuccessAt: null,
+        })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('attention');
+    });
+    expect(screen.getByTestId('sale-sync-status').textContent).not.toContain('منها');
+  });
+
   it('is a polite status region and exposes NO button (read-only)', async () => {
     const { container } = render(
       <SaleSyncStatus
-        bridge={bridgeReturning({ pending: 1, deadLetter: 0, lastSuccessAt: null })}
+        bridge={bridgeReturning({
+          pending: 1,
+          deadLetter: 0,
+          payloadDivergence: 0,
+          lastSuccessAt: null,
+        })}
       />,
     );
     const el = await screen.findByTestId('sale-sync-status');
