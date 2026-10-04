@@ -426,6 +426,24 @@ describe('one payout at a time per terminal', () => {
     expect(h.repo.read(b)?.state).toBe('confirmed');
   });
 
+  it('reviewer P2 (60eb2c9): a hanging slip print does not hold the drawer slot', async () => {
+    const [a, b] = await twoReturns();
+    const print = deferredFake<{ ok: true; render_path: 'os_print' }>();
+    h.printer.answer = () => print.promise;
+    const first = h.service.payout({ returnId: a, action: 'start' });
+    await vi.waitFor(() => {
+      expect(h.printer.printed).toHaveLength(1);
+    });
+    h.printer.answer = () => Promise.resolve({ ok: true, render_path: 'os_print' });
+    expect(await h.service.payout({ returnId: b, action: 'start' })).toMatchObject({
+      kind: 'paid_out',
+      ret: { returnId: b },
+    });
+    print.resolve({ ok: true, render_path: 'os_print' });
+    expect(await first).toMatchObject({ kind: 'paid_out', ret: { returnId: a }, slip: 'printed' });
+    expect(h.drawer.kicks).toBe(2);
+  });
+
   it('a reprint does not wait for the drawer', async () => {
     const [a, b] = await twoReturns();
     await h.service.payout({ returnId: b, action: 'start' });

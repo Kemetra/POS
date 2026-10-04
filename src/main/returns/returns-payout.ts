@@ -260,7 +260,8 @@ interface ActivePayout extends InFlight<ReturnsPayoutResponse> {
 
 class ReturnsPayoutService implements ReturnsPayoutAPI {
   /**
-   * One drawer per terminal: one payout at a time (start, retry, commit).
+   * One drawer per terminal: one payout at a time (start + kick, retry +
+   * kick, through the paid commit; released before the slip prints).
    * Process-local by design: cross-process exclusion relies on RT-203's
    * Electron single-instance lock (one app process per terminal); it is not
    * enforced in the database (owner decision on Codex P1, 60eb2c9).
@@ -308,6 +309,16 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
       });
     this.active = { returnId: req.returnId, actor: key, promise };
     return promise;
+  }
+
+  /**
+   * Reviewer P2 (60eb2c9): the drawer work of the running payout is done
+   * (paid): free the slot before its slip prints, so a print that never
+   * answers cannot hold the drawer. The running payout's own promise (shared
+   * by its double click) still settles with the slip.
+   */
+  private releaseSlot(returnId: string): void {
+    if (this.active?.returnId === returnId) this.active = null;
   }
 
   /** Another payout runs on this terminal: refused, with this terminal's own row. */
@@ -487,11 +498,15 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
     }
   }
 
-  /** Step 3: payout row paid + header paid_out + audit, atomically; then the slip. */
+  /**
+   * Step 3: payout row paid + header paid_out + audit, atomically; then the
+   * slip, outside the terminal slot (printing never touches the drawer).
+   */
   private async commit(actor: AuthSnapshot, entry: JournalEntry, method: ReturnPayoutMethod) {
     const paid = this.effect(actor, () => this.completePayout(actor, entry, method));
     if (isLost(paid)) return this.refusePayout(actor, paid.lost, entry);
     if (paid !== 'completed') return this.refusePayout(actor, NOT_COMPLETED[paid], entry);
+    this.releaseSlot(entry.returnId);
     const ret = this.viewOf(entry);
     const printed = await this.printSlip(actor, this.paidOut(entry.returnId), { kind: 'original' });
     const slip = printed.ok ? 'printed' : 'failed';
