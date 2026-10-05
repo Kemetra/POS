@@ -75,9 +75,12 @@ describe('a re-admission waits for the same user’s pending end', () => {
     const fake = fakeCashierAdmission(ADMITTED);
     const end = deferredEnd(fake);
     const order: string[] = [];
-    void endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID).then(() =>
-      order.push('end landed'),
-    );
+    void endAdmissionTracked(
+      fake.deps,
+      ADMITTED.admission_id,
+      ADMITTED.admission_generation,
+      FAKE_USER_ID,
+    ).then(() => order.push('end landed'));
     fake.setAdmit(() => {
       order.push('admit sent');
       return ADMITTED;
@@ -93,7 +96,12 @@ describe('a re-admission waits for the same user’s pending end', () => {
   it('bounded: an end that never lands delays the admit by PENDING_END_WAIT_MS at most', async () => {
     const fake = fakeCashierAdmission(ADMITTED);
     deferredEnd(fake); // never lands
-    void endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    void endAdmissionTracked(
+      fake.deps,
+      ADMITTED.admission_id,
+      ADMITTED.admission_generation,
+      FAKE_USER_ID,
+    );
     const res = admit(fake);
     await vi.advanceTimersByTimeAsync(PENDING_END_WAIT_MS - 1);
     expect(fake.admitCalls).toHaveLength(0);
@@ -113,7 +121,12 @@ describe('a re-admission waits for the same user’s pending end', () => {
   ] as const)('an end answered %o has a known outcome: no early verification', async (answer) => {
     const fake = fakeCashierAdmission(ADMITTED);
     fake.setEnd(() => Promise.resolve(answer as unknown as { kind: 'ended' }));
-    await endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    await endAdmissionTracked(
+      fake.deps,
+      ADMITTED.admission_id,
+      ADMITTED.admission_generation,
+      FAKE_USER_ID,
+    );
     expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(false);
   });
 
@@ -121,7 +134,12 @@ describe('a re-admission waits for the same user’s pending end', () => {
     const fake = fakeCashierAdmission(ADMITTED);
     fake.setEnd(() => Promise.resolve({ kind: 'unavailable' } as unknown as { kind: 'ended' }));
     await expect(
-      endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID),
+      endAdmissionTracked(
+        fake.deps,
+        ADMITTED.admission_id,
+        ADMITTED.admission_generation,
+        FAKE_USER_ID,
+      ),
     ).resolves.toEqual({ kind: 'unavailable' });
     expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(true);
     expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(false); // consumed once
@@ -143,7 +161,12 @@ describe('a re-admission waits for the same user’s pending end', () => {
           }, 5_000);
         }),
     );
-    void endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    void endAdmissionTracked(
+      fake.deps,
+      ADMITTED.admission_id,
+      ADMITTED.admission_generation,
+      FAKE_USER_ID,
+    );
     fake.setAdmit(() => {
       order.push('admit sent');
       return ADMITTED;
@@ -171,7 +194,12 @@ describe('a re-admission waits for the same user’s pending end', () => {
           }, ADMISSION_REQUEST_TIMEOUT_MS);
         }),
     );
-    void endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    void endAdmissionTracked(
+      fake.deps,
+      ADMITTED.admission_id,
+      ADMITTED.admission_generation,
+      FAKE_USER_ID,
+    );
     fake.setAdmit(() => {
       order.push('admit sent');
       return ADMITTED;
@@ -190,7 +218,12 @@ describe('a re-admission waits for the same user’s pending end', () => {
   it('a failed end never blocks: the admit goes out once it fails', async () => {
     const fake = fakeCashierAdmission(ADMITTED);
     const end = deferredEnd(fake);
-    const ended = endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    const ended = endAdmissionTracked(
+      fake.deps,
+      ADMITTED.admission_id,
+      ADMITTED.admission_generation,
+      FAKE_USER_ID,
+    );
     const res = admit(fake);
     end.fail();
     await expect(ended).resolves.toEqual({ kind: 'threw' });
@@ -202,7 +235,12 @@ describe('a re-admission waits for the same user’s pending end', () => {
   it('another user never waits', async () => {
     const fake = fakeCashierAdmission(ADMITTED);
     deferredEnd(fake); // never lands
-    void endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    void endAdmissionTracked(
+      fake.deps,
+      ADMITTED.admission_id,
+      ADMITTED.admission_generation,
+      FAKE_USER_ID,
+    );
     await expect(admit(fake, OTHER_USER)).resolves.toMatchObject({ kind: 'admitted' });
     expect(fake.admitCalls).toHaveLength(1);
   });
@@ -216,10 +254,27 @@ describe('a re-admission waits for the same user’s pending end', () => {
   it('a landed end is forgotten: the next admit does not wait', async () => {
     const fake = fakeCashierAdmission(ADMITTED);
     const end = deferredEnd(fake);
-    const ended = endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    const ended = endAdmissionTracked(
+      fake.deps,
+      ADMITTED.admission_id,
+      ADMITTED.admission_generation,
+      FAKE_USER_ID,
+    );
     end.land();
     await ended;
     await expect(admit(fake)).resolves.toMatchObject({ kind: 'admitted' });
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('RT-219 — the tracked end echoes the generation it is given', () => {
+  it('passes the admission_generation to the client end, unchanged', async () => {
+    const fake = fakeCashierAdmission();
+    await endAdmissionTracked(fake.deps, ADMITTED.admission_id, 'gen-latest-0009', FAKE_USER_ID);
+    await endAdmissionTracked(fake.deps, ADMITTED.admission_id, 'gen-untracked-0010', undefined);
+    expect(fake.endRequests).toEqual([
+      { admission_id: ADMITTED.admission_id, admission_generation: 'gen-latest-0009' },
+      { admission_id: ADMITTED.admission_id, admission_generation: 'gen-untracked-0010' },
+    ]);
   });
 });
