@@ -1,0 +1,162 @@
+openapi: 3.1.0
+info:
+  title: Data-Pulse-2 POS Shifts API
+  version: "1.0.0-draft"
+  description: >
+    POS-Pulse 004 Backend shift-lifecycle surface. Wave 4.1b (stuck-shift
+    discovery).
+
+
+    The endpoint returns shifts that are open past a configurable staleness
+    threshold and whose opening cashier has no active pos_operator session
+    on the same branch. No internal identifiers (users.id, devices.id,
+    Clerk subject, auth-token IDs) are present in any response.
+
+
+    Authentication: the role-named `operator-identity` scheme — a
+    provider-identity JWT bearer (spec 030 / 028 DOC-1; previously `clerkJwt`),
+    manager / admin roles only. Identity proof only — NOT business authorization
+    (028 §6 CM-1); role eligibility is enforced server-side. Caller must have
+    branch access (same store_access_kind rules as sign-in). store_staff is
+    refused.
+
+
+    Cross-cutting conventions live in
+    `specs/001-foundation-auth-tenant-store/contracts/README.md`.
+servers:
+  - url: https://api.example.com
+paths:
+  /api/pos/v1/shifts/stuck:
+    get:
+      summary: List shifts that are open and stale.
+      description: >
+        Returns all shifts on the requested branch whose `lifecycle_state`
+        is `'open'`, whose `opened_at` is older than the server-configured
+        staleness threshold (default 15 minutes), and whose opening cashier
+        has no active `pos_operator` auth-token row on that branch.
+
+
+        Only managers and admins may call this endpoint; store_staff
+        (cashier) callers receive a generic 401.
+      operationId: posShiftsGetStuck
+      tags: [pos-shifts]
+      security:
+        - operator-identity: []
+      parameters:
+        - name: branch_id
+          in: query
+          required: true
+          description: UUID of the branch (store) to query.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Stuck shifts retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StuckShiftsResponse"
+        "400":
+          description: >
+            Validation error — `branch_id` is missing or not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: >
+            Unauthorized. The caller's JWT is missing, malformed, unmapped,
+            refers to a deleted user, or belongs to a role not eligible for
+            this endpoint (store_staff). Also returned when the caller does
+            not have access to the requested branch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    # `operator-identity` is the role-named provider-identity scheme
+    # (spec 030 / 028 DOC-1), replacing the provider-named `clerkJwt` key.
+    # Identity proof only — NOT business authorization (028 §6 CM-1).
+    operator-identity:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Provider-identity JWT (spec 030 / 028 §6 CM-1), presented as
+        `Authorization: Bearer <jwt>`. Identity proof / sign-in evidence ONLY —
+        it is NOT business authorization; role eligibility (manager / admin) is
+        enforced server-side. The provider is Clerk today, named only as the
+        current implementation; the scheme name is provider-neutral. Verified at
+        the API edge; fail-closed. The token is not propagated past the verifier.
+  schemas:
+    StuckShift:
+      type: object
+      required:
+        - shift_id
+        - cashier_display_name
+        - terminal_label
+        - opened_at
+        - duration_minutes
+      properties:
+        shift_id:
+          type: string
+          format: uuid
+          description: Primary key of the shift row.
+          example: "018f1234-0000-7000-8000-000000000001"
+        cashier_display_name:
+          type: string
+          description: Display name of the operator who opened the shift.
+          example: "Jane Smith"
+        terminal_label:
+          type: string
+          description: Human-readable label of the terminal that opened the shift.
+          example: "till-A"
+        opened_at:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when the shift was opened.
+          example: "2024-01-15T08:00:00Z"
+        duration_minutes:
+          type: integer
+          minimum: 0
+          description: >
+            Minutes elapsed since the shift was opened, computed
+            server-side at query time.
+          example: 42
+    StuckShiftsResponse:
+      type: object
+      required:
+        - kind
+        - shifts
+      properties:
+        kind:
+          type: string
+          enum: ["ok"]
+        shifts:
+          type: array
+          items:
+            $ref: "#/components/schemas/StuckShift"
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - request_id
+          properties:
+            code:
+              type: string
+              example: unauthorized
+            message:
+              type: string
+              example: Unauthorized
+            request_id:
+              type: string
+              nullable: true
+              example: "018f1234-0000-7000-8000-000000000099"

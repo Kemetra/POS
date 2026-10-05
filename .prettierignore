@@ -45,3 +45,8 @@ docs/architecture/pos-pulse-live-map.html
 # against; Prettier must never reformat it (that would corrupt the design
 # source). Same rationale as `_reference/` and `src/shared/api-types.ts` above.
 docs/design/
+
+# RT-217: Backend-Core OpenAPI contracts vendored VERBATIM by
+# `npm run contracts:repin`. The conformance suite checks each file against its
+# Backend-Core git blob SHA, so Prettier must never reformat them.
+contracts/backend-core/
