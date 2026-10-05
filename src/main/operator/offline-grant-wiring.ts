@@ -141,7 +141,27 @@ const TERMINAL_STRENGTH = { invalidate_all: 1, purge: 2 } as const;
 /** A held operation the store has not applied yet. */
 type TerminalTombstone =
   | { op: 'invalidate_all'; reason: OfflineGrantInvalidationReason }
-  | { op: 'purge'; reason: OfflineGrantInvalidationReason };
+  /**
+   * Codex P1 4184710216: a held purge keeps the prior pairing epoch its first
+   * attempt had (the max over merged holds), for every retry and for the next
+   * epoch reservation.
+   */
+  | { op: 'purge'; reason: OfflineGrantInvalidationReason; prior_epoch: number | null };
+
+/** The larger of two optional epochs. */
+function maxEpoch(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  return b === null ? a : Math.max(a, b);
+}
+
+/** Merge a new hold into the held one: never weaker, and a purge never loses its epoch. */
+function mergeHold(held: TerminalTombstone | null, next: TerminalTombstone): TerminalTombstone {
+  if (held === null || TERMINAL_STRENGTH[next.op] > TERMINAL_STRENGTH[held.op]) return next;
+  if (held.op === 'purge' && next.op === 'purge') {
+    return { ...held, prior_epoch: maxEpoch(held.prior_epoch, next.prior_epoch) };
+  }
+  return held;
+}
 
 const SEAM_REASON: Readonly<
   Record<
@@ -291,11 +311,14 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   // operation at least as strong as the one held has applied.
 
   function holdTerminal(next: TerminalTombstone): void {
-    const held = terminalTombstone;
-    if (held === null || TERMINAL_STRENGTH[next.op] > TERMINAL_STRENGTH[held.op]) {
-      terminalTombstone = next;
-    }
+    terminalTombstone = mergeHold(terminalTombstone, next);
     hold(next.op);
+  }
+
+  /** The prior epoch a held purge still has to protect, or null. */
+  function heldPurgeEpoch(): number | null {
+    const held = terminalTombstone;
+    return held?.op === 'purge' ? held.prior_epoch : null;
   }
 
   /** `applied` reached the store: lift the terminal hold (and the per-user ones under it) if it covers it. */
@@ -435,7 +458,8 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
 
   /** Re-apply a held terminal-wide operation; true when the store applied it. */
   function applyTerminalHold(held: TerminalTombstone): boolean {
-    return held.op === 'purge' ? purge(held.reason) : invalidateEveryone(held.reason);
+    if (held.op === 'purge') return purge(held.reason, held.prior_epoch ?? undefined);
+    return invalidateEveryone(held.reason);
   }
 
   function retryTerminalHold(): void {
@@ -523,21 +547,27 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
           log('warn', { event: 'operator.offline_grant.storage_failed', op: 'pairing_change' });
         }
       }
-      const epochs = [prior_epoch, before?.pairing_epoch].filter(
-        (e): e is number => typeof e === 'number',
+      // Codex P1 4184710216: the epoch of a still-held purge counts too.
+      const epoch = maxEpoch(
+        maxEpoch(prior_epoch ?? null, before?.pairing_epoch ?? null),
+        heldPurgeEpoch(),
       );
-      if (purge(reason, epochs.length > 0 ? Math.max(...epochs) : undefined)) {
+      if (purge(reason, epoch ?? undefined)) {
         releaseTerminal('purge');
         return;
       }
-      holdTerminal({ op: 'purge', reason });
+      holdTerminal({ op: 'purge', reason, prior_epoch: epoch });
     },
 
     reservePairingEpoch(candidate) {
+      // Codex P1 4184710216: while a purge is held, its epoch is not yet in
+      // the clock mark; reserve above it here.
+      const held = heldPurgeEpoch();
+      const floor = held === null ? candidate : Math.max(candidate, held + 1);
       try {
-        return deps.store.nextPairingEpoch(candidate);
+        return deps.store.nextPairingEpoch(floor);
       } catch {
-        return candidate;
+        return floor;
       }
     },
 
