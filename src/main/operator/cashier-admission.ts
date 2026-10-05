@@ -29,22 +29,44 @@ export interface CashierAdmittedEvent {
   server_time: string;
   /** Local receipt time (D4: expiry is computed from it, not `server_time`). */
   received_at: string;
+  /**
+   * Codex P1 4181552524 — the pairing the request was SENT under
+   * ({@link OfflineGrantSeam.pairingGeneration} read before the request). A
+   * result that comes back after a re-pair must not become a grant of the new
+   * pairing. Absent when the seam does not track pairings.
+   */
+  pairing_generation?: number | undefined;
+  /**
+   * rev545 F-2 — the seam's invalidation sequence when the request was SENT
+   * ({@link OfflineGrantSeam.invalidationSeq}). A late `admitted` must not
+   * resurrect a grant invalidated after its request went out.
+   */
+  invalidation_seq?: number | undefined;
 }
 
-/** D4: a 403 for that user, or a device 401, invalidates offline grants. */
+/**
+ * D4: a 403 for that user, or a device 401, invalidates offline grants; OD6:
+ * so does `active_elsewhere` (the cashier is admitted on another till).
+ */
 export type CashierAdmissionInvalidation =
   | { reason: 'refused'; user_id: string }
+  | { reason: 'active_elsewhere'; user_id: string }
   | { reason: 'device_unauthorized' };
 
 /**
- * P1 SEAM — the offline grant store (RT113-P1) plugs in here. P2 ships only
- * the no-op below: no grant is written, refreshed or invalidated yet.
+ * P1 SEAM — the offline grant store plugs in here. RT113-P1.2 wires the sealed
+ * store (`offline-grant-wiring.ts`); the no-op below remains the default for
+ * callers that do not pass one.
  */
 export interface OfflineGrantSeam {
   /** Every `admitted` (sign-in, takeover, heartbeat): write or refresh the grant. */
   onCashierAdmitted(event: CashierAdmittedEvent): void;
-  /** A 403 for the user or a device 401: invalidate before any further admission. */
+  /** A 403 or `active_elsewhere` for the user, or a device 401: invalidate at once. */
   onCashierAdmissionInvalidated(event: CashierAdmissionInvalidation): void;
+  /** The current pairing, read when an admission request is SENT (Codex P1 4181552524). */
+  pairingGeneration?(): number;
+  /** rev545 F-2: the invalidation sequence, read when an admission request is SENT. */
+  invalidationSeq?(): number;
 }
 
 export const NOOP_OFFLINE_GRANT_SEAM: OfflineGrantSeam = Object.freeze({
@@ -89,19 +111,62 @@ export function newAdmissionIdempotencyKey(): string {
   return `pos-cashier-adm-${randomUUID()}`;
 }
 
+/**
+ * Codex P1 4185012967 — an idempotency key together with the grant seam's send
+ * mark captured when the key was MINTED. A retry that reuses the key (so
+ * Backend-Core may replay the original answer) must reuse this mark too,
+ * never recapture it: a replayed `admitted` predates anything that happened
+ * after the first send.
+ */
+export interface AdmissionKey {
+  idempotency_key: string;
+  send_mark: AdmissionSendMark;
+}
+
+/** Mint a key and bind the current send mark to it. */
+export function mintAdmissionKey(deps: CashierAdmissionDeps): AdmissionKey {
+  return { idempotency_key: nextIdempotencyKey(deps), send_mark: captureSendMark(deps) };
+}
+
 export function nextIdempotencyKey(deps: CashierAdmissionDeps): string {
   return (deps.newIdempotencyKey ?? newAdmissionIdempotencyKey)();
 }
 
+/** What the grant seam recorded when a request was SENT (Codex P1 4181552524, rev545 F-2). */
+export interface AdmissionSendMark {
+  pairing_generation?: number | undefined;
+  invalidation_seq?: number | undefined;
+}
+
+/** Who an outcome is for, and the send mark of its request. */
+export interface AdmissionSubject extends AdmissionSendMark {
+  user_id: string;
+  operator_id: string;
+}
+
+/** The seam's send mark, read just before a request is sent. Never throws. */
+export function captureSendMark(deps: CashierAdmissionDeps): AdmissionSendMark {
+  try {
+    const seam = deps.grantSeam;
+    return {
+      pairing_generation: seam?.pairingGeneration?.(),
+      invalidation_seq: seam?.invalidationSeq?.(),
+    };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * The P1 grant seam for one outcome: `admitted` writes or refreshes the grant;
- * a 403 invalidates that user's grant; a device 401 invalidates every grant.
- * Nothing else (including `no_token`) touches the seam. Never throws.
+ * a 403 or `active_elsewhere` (OD6) invalidates that user's grant; a device
+ * 401 invalidates every grant. Nothing else (5xx, 429, 409, 400, transport,
+ * `no_token`) touches the seam. Never throws.
  */
 export function notifyGrantSeam(
   deps: CashierAdmissionDeps,
   result: CashierAdmissionResult,
-  who: { user_id: string; operator_id: string },
+  who: AdmissionSubject,
 ): void {
   const seam = deps.grantSeam ?? NOOP_OFFLINE_GRANT_SEAM;
   try {
@@ -114,9 +179,11 @@ export function notifyGrantSeam(
         offline_grace_seconds: result.offline_grace_seconds,
         server_time: result.server_time,
         received_at: (deps.now ?? (() => new Date()))().toISOString(),
+        pairing_generation: who.pairing_generation,
+        invalidation_seq: who.invalidation_seq,
       });
-    } else if (result.kind === 'refused') {
-      seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: who.user_id });
+    } else if (result.kind === 'refused' || result.kind === 'active_elsewhere') {
+      seam.onCashierAdmissionInvalidated({ reason: result.kind, user_id: who.user_id });
     } else if (result.kind === 'device_unauthorized') {
       seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
     }
@@ -134,7 +201,7 @@ export function notifyGrantSeam(
 export function reportAdmissionOutcome(
   deps: CashierAdmissionDeps,
   result: CashierAdmissionResult,
-  who: { user_id: string; operator_id: string },
+  who: AdmissionSubject,
 ): void {
   notifyGrantSeam(deps, result, who);
   if (result.kind !== 'device_unauthorized') return;
@@ -269,7 +336,18 @@ export async function awaitPendingEnd(deps: CashierAdmissionDeps, user_id: strin
 /** Call the admission resource for an online sign-in or takeover and report the outcome. */
 export async function admitCashierOnline(
   deps: CashierAdmissionDeps,
-  req: { user_id: string; operator_id: string; takeover: boolean; idempotency_key: string },
+  req: {
+    user_id: string;
+    operator_id: string;
+    takeover: boolean;
+    idempotency_key: string;
+    /**
+     * The mark bound to `idempotency_key` when it was minted
+     * ({@link mintAdmissionKey}). Absent only for a one-shot key: then it is
+     * captured now, just before the send.
+     */
+    send_mark?: AdmissionSendMark;
+  },
 ): Promise<OnlineAdmissionResult> {
   // Review of 024f07c, item 3: a late `end` of this user's previous admission
   // would kill the one the server renews now; let it land first (bounded).
@@ -277,13 +355,18 @@ export async function admitCashierOnline(
   // Stamped BEFORE the request goes out: the server's TTL runs from no
   // earlier than this, so a deadline from it is conservative under latency.
   const requested_at_ms = monotonicNowMs(deps);
+  const sent = req.send_mark ?? captureSendMark(deps);
   const result = await deps.client.admit({
     mode: 'online',
     user_id: req.user_id,
     takeover: req.takeover,
     idempotency_key: req.idempotency_key,
   });
-  reportAdmissionOutcome(deps, result, req);
+  reportAdmissionOutcome(deps, result, {
+    user_id: req.user_id,
+    operator_id: req.operator_id,
+    ...sent,
+  });
   return result.kind === 'admitted' ? { ...result, requested_at_ms } : result;
 }
 

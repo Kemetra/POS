@@ -51,6 +51,11 @@ const STOP_ORDER = [
   // no heartbeat, `end` or session change runs afterwards. It writes nothing
   // to the DB today; stopped last, still before the DB handle closes.
   'cashier admission heartbeat',
+  // RT-113 P1.2 (OD7) — the offline grant clock tick (60 s): raises the clock
+  // high-water mark and retries any held grant invalidation. It writes the DB,
+  // so it stops before the handle closes; after the heartbeat, whose last
+  // outcome may still reach the grant seam.
+  'offline grant clock tick',
 ] as const;
 
 export type WorkerName = (typeof STOP_ORDER)[number];

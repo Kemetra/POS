@@ -151,11 +151,14 @@ import { SessionManager } from './operator/session-manager.js';
 import { CashierSignInHandler, SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
 import { createCashierAdmissionClient } from './operator/cashier-admission-client.js';
-import {
-  NOOP_OFFLINE_GRANT_SEAM,
-  type CashierAdmissionDeps,
-} from './operator/cashier-admission.js';
+import type { CashierAdmissionDeps } from './operator/cashier-admission.js';
 import { CashierAdmissionKeeper } from './operator/cashier-admission-keeper.js';
+import { createOfflineGrantStore } from './operator/offline-grant-store.js';
+import {
+  createOfflineGrantWiring,
+  scopeFromPairingStatus,
+  withOfflineGrantPairing,
+} from './operator/offline-grant-wiring.js';
 import { RosterHandler } from './operator/roster-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
 import { LifecycleCascade } from './operator/lifecycle-cascade.js';
@@ -509,13 +512,38 @@ singleInstanceReady
     // placeholders. Swap to mainLogger is a deferred follow-up — out
     // of Phase 8 scope.
 
+    // RT-113 P1.2 — the sealed offline grant store, wired: the cashier-admission
+    // grant seam (below), the pairing purge + new epoch on every pairing change
+    // (the wrapper; `src/main/pairing/` is untouched), and the 60 s clock tick
+    // (OD7), stopped with the other workers before the DB closes (RT-198 latch).
+    const offlineGrants = createOfflineGrantWiring({
+      store: createOfflineGrantStore({
+        db,
+        safeStorage,
+        now: () => new Date(),
+        logger: mainLogger,
+      }),
+      audit: new AuditEmitter(bindAuditEventsStoreDb(db)),
+      uuid: () => randomUUID(),
+      now: () => new Date(),
+      logger: mainLogger,
+    });
+
     // 002-terminal-pairing T011/T013 — construct the pairing store on
     // the shared DB handle + SecretStore. The store is the only module
     // that touches both halves of pairing state.
-    const pairingStore = createPairingStore({
-      secretStore,
-      db: bindPairingStoreDb(db),
-      deviceTokenKey: DEVICE_TOKEN_KEY,
+    const pairingStore = withOfflineGrantPairing(
+      createPairingStore({
+        secretStore,
+        db: bindPairingStoreDb(db),
+        deviceTokenKey: DEVICE_TOKEN_KEY,
+      }),
+      offlineGrants,
+    );
+    offlineGrants.setScope(scopeFromPairingStatus(await pairingStore.getStatus()));
+    offlineGrants.start();
+    workerRegistry.register('offline grant clock tick', () => {
+      offlineGrants.stop();
     });
 
     // 002-terminal-pairing dev bypass — seeds fixture pairing state so the
@@ -703,8 +731,8 @@ singleInstanceReady
     });
     const cashierAdmission: CashierAdmissionDeps = {
       client: cashierAdmissionClient,
-      // P1 SEAM — RT113-P1 replaces this with the sealed offline grant store.
-      grantSeam: NOOP_OFFLINE_GRANT_SEAM,
+      // RT-113 P1.2 — the sealed offline grant store (OD5/OD6, fail closed).
+      grantSeam: offlineGrants.seam,
       onDeviceRevoked: () => {
         operatorLifecycleCascade.notifyTerminalRevoked();
       },

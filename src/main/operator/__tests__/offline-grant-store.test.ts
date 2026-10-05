@@ -146,6 +146,14 @@ function hwmCount(): number {
   return rows(g.raw, 'cashier_offline_clock_hwm').length;
 }
 
+/** Write an authentic (correctly sealed) clock mark: an older mark written back. */
+function setHwm(hwm_ms: number): void {
+  const blob = ss.encryptString(
+    JSON.stringify({ v: 1, kind: 'cashier_offline_clock_hwm', hwm_ms }),
+  );
+  g.raw.run('UPDATE cashier_offline_clock_hwm SET sealed_body = ? WHERE id = 1', [blob]);
+}
+
 /** Re-create the grant table WITHOUT its NOT NULL / CHECKs: a hand-edited file. */
 function relaxGrantSchema(): void {
   g.raw.exec(`DROP TABLE cashier_offline_grants;
@@ -399,24 +407,59 @@ describe('upsertFromAdmitted — malformed input and failed writes fail closed',
     expect(grantCount()).toBe(0);
   });
 
-  it('a failed seal on refresh removes the old grant and throws storage (fail closed)', () => {
+  // Codex P2 4183383061 (P1.2): a failed refresh that removes a standing grant
+  // now REPORTS it (refresh_failed + attribution) instead of throwing, so its
+  // invalidation can be audited. P1.1 threw storage here and the deleted
+  // grant's attribution was lost. It still throws when even the delete fails.
+  it('a failed seal on refresh removes the old grant and reports it for attribution (fail closed)', () => {
     store.upsertFromAdmitted(scope(), admitted());
     const broken = failingSealStore();
-    let err: unknown;
-    try {
-      broken.upsertFromAdmitted(scope(), admitted({ admission_id: 'adm-2' }));
-    } catch (e) {
-      err = e;
-    }
-    expect((err as OfflineGrantStoreError).category).toBe('storage');
+    expect(broken.upsertFromAdmitted(scope(), admitted({ admission_id: 'adm-2' }))).toEqual({
+      kind: 'refresh_failed',
+      invalidated: [{ user_id: USER, operator_id: OPERATOR }],
+    });
     expect(categoryOf(store.evaluate(scope(), USER, T0))).toBe('grant_missing');
   });
 
-  it('refuses to write when encryption is unavailable, and removes the old grant', () => {
+  it('refuses to write when encryption is unavailable, and removes and reports the old grant', () => {
     store.upsertFromAdmitted(scope(), admitted());
     const off = makeStore({ safeStorage: { ...ss, isEncryptionAvailable: () => false } });
-    expect(() => off.upsertFromAdmitted(scope(), admitted())).toThrow(OfflineGrantStoreError);
+    expect(off.upsertFromAdmitted(scope(), admitted())).toEqual({
+      kind: 'refresh_failed',
+      invalidated: [{ user_id: USER, operator_id: OPERATOR }],
+    });
     expect(categoryOf(store.evaluate(scope(), USER, T0))).toBe('grant_missing');
+  });
+
+  it('a failed refresh reports nothing for a grant already invalidated (audited once)', () => {
+    store.upsertFromAdmitted(scope(), admitted());
+    store.invalidate(scope(), USER, 'forbidden');
+    expect(failingSealStore().upsertFromAdmitted(scope(), admitted())).toEqual({
+      kind: 'refresh_failed',
+      invalidated: [],
+    });
+    expect(grantCount()).toBe(0);
+  });
+
+  it('a failed refresh with no old grant reports nothing', () => {
+    expect(failingSealStore().upsertFromAdmitted(scope(), admitted())).toEqual({
+      kind: 'refresh_failed',
+      invalidated: [],
+    });
+  });
+
+  it('still throws storage when even the delete fails', () => {
+    store.upsertFromAdmitted(scope(), admitted());
+    const handle: DatabaseHandle = {
+      ...g.handle,
+      prepare(sql: string): unknown {
+        if (/^\s*(INSERT|DELETE)/i.test(sql)) throw new Error('disk I/O error');
+        return g.handle.prepare(sql);
+      },
+    };
+    expect(() => makeStore({ handle }).upsertFromAdmitted(scope(), admitted())).toThrow(
+      OfflineGrantStoreError,
+    );
   });
 });
 
@@ -533,21 +576,51 @@ describe('evaluate — clock high-water mark (OD7)', () => {
     expect(store.evaluate(scope(), USER, at(T0_MS + HOUR_MS))).toEqual(refusal('clock_suspect'));
   });
 
-  it('with the mark row deleted, the grant itself still floors the clock at issue time', () => {
+  // RT-113 P1.2 F2 (10893): P1.1 let a grant floor the clock when the mark row
+  // was DELETED, so a deleted mark plus a clock rollback within the grant's own
+  // floor still admitted. P1.2 reverses that: a missing mark while any grant row
+  // exists is `storage`. The grant floor is still covered below, against an
+  // OLDER mark written back (the mark is present, just behind the grant).
+  it('F2: with the mark row deleted while a grant exists, evaluate and consume refuse storage', () => {
     g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    expect(store.evaluate(scope(), USER, T0)).toEqual(refusal('storage'));
+    expect(store.consumeOfflineUse(scope(), USER, T0)).toEqual(refusal('storage'));
+    expect(openBody()['offline_admissions_used']).toBe(0);
+    expect(hwmCount()).toBe(0);
+  });
+
+  it('F2: a tick does not recreate a missing mark while a grant exists; an online write repairs it', () => {
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    expect(store.observeClock(at(T0_MS + HOUR_MS))).toEqual({ kind: 'unavailable' });
+    expect(hwmCount()).toBe(0);
+    expect(store.evaluate(scope(), USER, T0)).toEqual(refusal('storage'));
+    store.upsertFromAdmitted(scope(), admitted());
+    expect(hwmCount()).toBe(1);
+    expect(store.evaluate(scope(), USER, T0).admissible).toBe(true);
+  });
+
+  it('F2: a missing mark with no grant at all is a first run: a tick creates it', () => {
+    store.purgeAll();
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    expect(store.observeClock(T0)).toEqual({ kind: 'raised' });
+    expect(hwmCount()).toBe(1);
+  });
+
+  it('with an older mark written back, the grant itself still floors the clock at issue time', () => {
+    setHwm(T0_MS - 10 * HOUR_MS);
     expect(store.evaluate(scope(), USER, at(T0_MS - OFFLINE_CLOCK_TOLERANCE_MS)).admissible).toBe(
       true,
     );
-    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    setHwm(T0_MS - 10 * HOUR_MS);
     expect(store.evaluate(scope(), USER, at(T0_MS - OFFLINE_CLOCK_TOLERANCE_MS - 1))).toEqual(
       refusal('clock_suspect'),
     );
   });
 
-  it('with the mark row deleted, the last use floors the clock too', () => {
+  it('with an older mark written back, the last use floors the clock too', () => {
     const used = T0_MS + 5 * HOUR_MS;
     store.consumeOfflineUse(scope(), USER, at(used));
-    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    setHwm(T0_MS - 10 * HOUR_MS);
     expect(store.evaluate(scope(), USER, at(used - OFFLINE_CLOCK_TOLERANCE_MS - 1))).toEqual(
       refusal('clock_suspect'),
     );
@@ -718,6 +791,12 @@ describe('evaluate — tampering is no proof (OD2, OD3)', () => {
 });
 
 describe('evaluate — rows not written from an online admitted event (OD2)', () => {
+  // F2 (P1.2): a grant row with no clock mark is refused `storage` before the
+  // row is read. Seed the mark so these tests still reach the row checks.
+  beforeEach(() => {
+    store.observeClock(T0);
+  });
+
   it('a NULL-body row (provisioning-only) is no grant', () => {
     relaxGrantSchema();
     insertRaw(null);
@@ -858,14 +937,181 @@ describe('invalidateAll and purgeAll (D4 device 401, OD4 re-pair)', () => {
   });
 
   it('purgeAll deletes every grant on the device and keeps the clock mark', () => {
-    expect(store.purgeAll()).toEqual({ removed: 3 });
+    expect(store.purgeAll().removed).toBe(3);
     expect(grantCount()).toBe(0);
     expect(hwmCount()).toBe(1);
+  });
+
+  // Codex P2 4183628413: the purge is the reliable audit point for a pairing
+  // change, so it reports every standing grant it deletes, with its own scope.
+  it('purgeAll reports each standing (not yet invalidated) grant it deleted, with its scope', () => {
+    store.invalidate(scope(), 'user-2', 'forbidden'); // already invalidated: not reported again
+    const r = store.purgeAll();
+    expect(r.invalidated).toEqual(
+      expect.arrayContaining([
+        {
+          tenant_id: TENANT,
+          branch_id: BRANCH,
+          terminal_id: TERMINAL,
+          user_id: USER,
+          operator_id: OPERATOR,
+        },
+        {
+          tenant_id: TENANT,
+          branch_id: BRANCH,
+          terminal_id: 'terminal-old',
+          user_id: USER,
+          operator_id: OPERATOR,
+        },
+      ]),
+    );
+    expect(r.invalidated).toHaveLength(2);
+  });
+
+  it('purgeAll reports no unreadable or foreign row (no attribution to trust)', () => {
+    setGrantBlob(g.raw, Buffer.from([1, 2, 3]), 'user-2');
+    g.raw.run(
+      `UPDATE cashier_offline_grants SET terminal_id = 'terminal-moved' WHERE terminal_id = 'terminal-old'`,
+    );
+    const r = store.purgeAll();
+    expect(r.removed).toBe(3);
+    expect(r.invalidated).toEqual([
+      {
+        tenant_id: TENANT,
+        branch_id: BRANCH,
+        terminal_id: TERMINAL,
+        user_id: USER,
+        operator_id: OPERATOR,
+      },
+    ]);
   });
 
   it('purgeAll throws storage when the delete fails', () => {
     const dead = deadDbStore();
     expect(() => dead.purgeAll()).toThrow(OfflineGrantStoreError);
+  });
+});
+
+describe('nextPairingEpoch — every re-pair gets a new epoch (F4)', () => {
+  it('keeps a candidate above the mark and raises the mark to it', () => {
+    store.observeClock(T0);
+    const candidate = Math.floor(T0_MS / 1000) + 60;
+    expect(store.nextPairingEpoch(candidate)).toBe(candidate);
+    expect(store.observeClock(at(candidate * 1000 - 1))).toEqual({ kind: 'unchanged' });
+  });
+
+  it('a repeated paired_at (1 s granularity) still gets a strictly greater epoch', () => {
+    const candidate = Math.floor(T0_MS / 1000);
+    const first = store.nextPairingEpoch(candidate);
+    const second = store.nextPairingEpoch(candidate);
+    const third = store.nextPairingEpoch(candidate);
+    expect(second).toBeGreaterThan(first);
+    expect(third).toBeGreaterThan(second);
+  });
+
+  it('is above the epoch of every grant written on this device', () => {
+    store.upsertFromAdmitted(scope({ pairing_epoch: Math.floor(T0_MS / 1000) }), admitted());
+    expect(store.nextPairingEpoch(Math.floor(T0_MS / 1000))).toBeGreaterThan(
+      Math.floor(T0_MS / 1000),
+    );
+  });
+
+  it('F4: purge, re-pair with the same paired_at, and an old body written back is no proof', () => {
+    const pairedAt = Math.floor(T0_MS / 1000);
+    const epoch1 = store.nextPairingEpoch(pairedAt);
+    store.upsertFromAdmitted(scope({ pairing_epoch: epoch1 }), admitted());
+    const oldBody = grantBlob(g.raw);
+    expect(store.evaluate(scope({ pairing_epoch: epoch1 }), USER, T0).admissible).toBe(true);
+
+    store.purgeAll();
+    const epoch2 = store.nextPairingEpoch(pairedAt);
+    expect(epoch2).not.toBe(epoch1);
+    insertRaw(oldBody);
+    expect(store.evaluate(scope({ pairing_epoch: epoch2 }), USER, T0)).toEqual(
+      refusal('scope_mismatch'),
+    );
+    expect(store.consumeOfflineUse(scope({ pairing_epoch: epoch2 }), USER, T0)).toEqual(
+      refusal('scope_mismatch'),
+    );
+  });
+
+  it('Codex P1 4181552529: a purge with the mark deleted keeps the evidence of the purged epochs', () => {
+    const pairedAt = Math.floor(T0_MS / 1000);
+    const epoch1 = store.nextPairingEpoch(pairedAt);
+    store.upsertFromAdmitted(scope({ pairing_epoch: epoch1 }), admitted());
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    store.purgeAll();
+    expect(hwmCount()).toBe(1);
+    expect(store.nextPairingEpoch(pairedAt)).toBeGreaterThan(epoch1);
+  });
+
+  it('a purge keeps the evidence of a prior pairing epoch it is told about', () => {
+    const prior = Math.floor(T0_MS / 1000) + 3600;
+    store.purgeAll(prior);
+    expect(store.nextPairingEpoch(Math.floor(T0_MS / 1000))).toBeGreaterThan(prior);
+  });
+
+  it('an unreadable mark is not overwritten: the candidate is kept and offline stays refused', () => {
+    store.upsertFromAdmitted(scope(), admitted());
+    g.raw.run(`UPDATE cashier_offline_clock_hwm SET sealed_body = x'00010203'`);
+    expect(store.nextPairingEpoch(EPOCH + 5)).toBe(EPOCH + 5);
+    expect(store.evaluate(scope(), USER, T0)).toEqual(refusal('storage'));
+  });
+
+  it('never throws: a storage failure keeps the candidate', () => {
+    expect(deadDbStore().nextPairingEpoch(EPOCH)).toBe(EPOCH);
+  });
+});
+
+describe('a throwing logger never escapes (F3)', () => {
+  const throwingLogger = {
+    info: (): void => {
+      throw new Error('logger down');
+    },
+    warn: (): void => {
+      throw new Error('logger down');
+    },
+  };
+
+  function loudStore(over: { safeStorage?: SafeStorageLike } = {}): OfflineGrantStore {
+    return createOfflineGrantStore({
+      db: g.handle,
+      safeStorage: over.safeStorage ?? ss,
+      now: () => clock,
+      logger: throwingLogger,
+    });
+  }
+
+  it('consumeOfflineUse returns the use it burned (never burns a use without returning)', () => {
+    const loud = loudStore();
+    loud.upsertFromAdmitted(scope(), admitted());
+    const e = loud.consumeOfflineUse(scope(), USER, T0);
+    expect(e.admissible && e.grant.offline_admissions_used).toBe(1);
+    expect(openBody()['offline_admissions_used']).toBe(1);
+  });
+
+  it('evaluate and consume refuse without throwing', () => {
+    const loud = loudStore();
+    expect(loud.evaluate(scope(), USER, T0)).toEqual(refusal('grant_missing'));
+    expect(loud.consumeOfflineUse(scope(), USER, T0)).toEqual(refusal('grant_missing'));
+    expect(loud.evaluate(scope({ tenant_id: '' }), USER, T0)).toEqual(refusal('scope_mismatch'));
+  });
+
+  it('the writes and the clock never throw on account of the logger', () => {
+    const loud = loudStore();
+    expect(loud.upsertFromAdmitted(scope(), admitted())).toEqual({ kind: 'written' });
+    expect(loud.invalidate(scope(), USER, 'forbidden').invalidated).toHaveLength(1);
+    expect(loud.invalidateAll(scope(), 'device_unauthorized').invalidated).toEqual([]);
+    expect(loud.observeClock(at(T0_MS + HOUR_MS))).toEqual({ kind: 'raised' });
+    expect(loud.purgeAll()).toEqual({ removed: 1, invalidated: [] });
+    expect(loud.nextPairingEpoch(EPOCH)).toBeGreaterThan(0);
+  });
+
+  it('a failing re-seal inside an invalidation still deletes the grant', () => {
+    store.upsertFromAdmitted(scope(), admitted());
+    const loud = loudStore({ safeStorage: { ...ss, encryptString: throwing } });
+    expect(loud.invalidate(scope(), USER, 'forbidden').invalidated).toHaveLength(1);
+    expect(grantCount()).toBe(0);
   });
 });
 
@@ -895,6 +1141,8 @@ describe('logging — categories only, never a grant field', () => {
     attempt(() => store.upsertFromAdmitted(scope({ tenant_id: '' }), admitted()));
     attempt(() => store.invalidateAll(scope(), 'device_unauthorized'));
     attempt(() => store.purgeAll());
+    attempt(() => store.nextPairingEpoch(EPOCH));
+    attempt(() => deadDbStore().nextPairingEpoch(EPOCH));
 
     expect(logCalls.length).toBeGreaterThan(5);
     expect(errors.length).toBeGreaterThan(0);

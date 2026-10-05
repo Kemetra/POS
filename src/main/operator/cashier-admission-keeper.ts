@@ -5,6 +5,7 @@ import type {
   CashierAdmissionResult,
 } from './cashier-admission-client.js';
 import {
+  captureSendMark,
   endAdmissionTracked,
   monotonicNowMs,
   takeUncertainEnd,
@@ -50,8 +51,8 @@ import type {
  * sale IPC call (`recheckSafePoint`, wired at the `sale-boundary-guard.ts`
  * choke point), on every lock-state change, and every
  * {@link SAFE_POINT_RECHECK_MS} as a backstop. Nothing is
- * reversed or discarded. A 403 or confirmed 401 invalidates the P1 grant at
- * once (D4).
+ * reversed or discarded. A 403, `active_elsewhere` (OD6) or the FIRST device
+ * 401 (OD5) invalidates the P1 grant at once (D4).
  *
  * The deadline (Codex P2 4179771036): the server admission lapses at most TTL
  * after the request that got the latest `admitted` was SENT (monotonic clock;
@@ -182,7 +183,18 @@ interface Armed {
   failures: number;
   /** Consecutive device 401s (debounce). */
   device401s: number;
+  /** Codex P1 4181552524: the pairing the in-flight (or last) heartbeat was sent under. */
+  pairing_generation?: number | undefined;
+  /** rev545 F-2: the grant seam's invalidation sequence when that heartbeat was sent. */
+  invalidation_seq?: number | undefined;
 }
+
+/** Outcomes that invalidate offline grants (D4, OD5, OD6), even for an orphaned heartbeat. */
+const INVALIDATING_KINDS: ReadonlySet<CashierAdmissionResult['kind']> = new Set([
+  'refused',
+  'active_elsewhere',
+  'device_unauthorized',
+]);
 
 /** True when the record holds a live online cashier admission to keep alive. */
 function isOnlineAdmitted(
@@ -414,6 +426,9 @@ export class CashierAdmissionKeeper {
     if (!this.stillCurrent(armed) || armed.latched) return;
     // Stamped before the request goes out: a renewal's deadline runs from here.
     armed.last_sent_at_ms = this.nowMs();
+    const mark = captureSendMark(this.deps.admission);
+    armed.pairing_generation = mark.pairing_generation;
+    armed.invalidation_seq = mark.invalidation_seq;
     const seq = ++armed.sent_seq;
     const result = await this.requestHeartbeat(armed);
     // RT-198 latch + session identity: re-checked after the await.
@@ -452,6 +467,9 @@ export class CashierAdmissionKeeper {
    * the orphan request renewed the LIVE admission, so verify it early.
    */
   private releaseOrphan(result: CashierAdmissionResult, orphanOf: Armed): void {
+    // rev545 F-1: a 403, `active_elsewhere` or device 401 for a session that is
+    // gone still invalidates the offline grant (fail closed; D4, OD5).
+    if (INVALIDATING_KINDS.has(result.kind)) notifyGrantSeam(this.deps.admission, result, orphanOf);
     if (result.kind !== 'admitted') return;
     const live = this.armed;
     if (live?.admission_id === result.admission_id) {
@@ -472,6 +490,7 @@ export class CashierAdmissionKeeper {
         this.onAdmitted(armed, result, seq);
         return;
       case 'active_elsewhere':
+        notifyGrantSeam(this.deps.admission, result, armed);
         this.latch(armed, 'superseded_by_takeover');
         return;
       case 'refused':
@@ -524,11 +543,14 @@ export class CashierAdmissionKeeper {
    */
   private onDeviceUnauthorized(armed: Armed, result: CashierAdmissionResult): void {
     armed.device401s += 1;
+    // RT-113 OD5 + Codex P1 4183383053: EVERY device 401 invalidates every
+    // offline grant (fail closed), the first and the confirming one; only the
+    // session waits for the confirming 401.
+    notifyGrantSeam(this.deps.admission, result, armed);
     if (armed.device401s < 2) {
       this.scheduleNext(armed, deviceConfirmCapMs(armed));
       return;
     }
-    notifyGrantSeam(this.deps.admission, result, armed);
     this.latch(armed, 'terminal_session_terminated');
   }
 
