@@ -951,13 +951,20 @@ describe('logging — categories only, never a grant field', () => {
 
 describe('purity', () => {
   it('reads no ambient clock: every time comes from the injected clock or the caller', () => {
-    const spy = vi.spyOn(Date, 'now');
-    store.upsertFromAdmitted(scope(), admitted());
-    store.evaluate(scope(), USER, T0);
-    store.consumeOfflineUse(scope(), USER, T0);
-    store.observeClock(T0);
-    store.invalidate(scope(), USER, 'forbidden');
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+    // The system clock sits 10 years in the future. Were the store to read it,
+    // the write-time mark would refuse T0 (clock_suspect) and the stamps would differ.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2036-01-01T00:00:00.000Z'));
+    try {
+      store.upsertFromAdmitted(scope(), admitted());
+      expect(store.evaluate(scope(), USER, T0).admissible).toBe(true);
+      expect(store.consumeOfflineUse(scope(), USER, T0).admissible).toBe(true);
+      expect(store.observeClock(T0)).toEqual({ kind: 'unchanged' });
+      store.invalidate(scope(), USER, 'forbidden');
+      expect(openBody()['invalidated']).toEqual({ reason: 'forbidden', at_local: T0_MS });
+      expect(rows(g.raw, 'cashier_offline_grants')[0]?.['sealed_at']).toBe(T0.toISOString());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
