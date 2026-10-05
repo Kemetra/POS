@@ -24,6 +24,12 @@ import {
   refusalIfSessionLost,
   type CashierAdmissionDeps,
 } from './cashier-admission.js';
+import {
+  capturePairingEpoch,
+  pairingEpochHolds,
+  type PairingEpochReader,
+  type PairingEpochTicket,
+} from './pairing-epoch.js';
 
 /** TTL for proto-sessions: 60 seconds. */
 const PROTO_SESSION_TTL_MS = 60_000;
@@ -60,6 +66,11 @@ export interface ProtoSession {
   jwt: string | null;
   /** `Date.now()` at creation; used to enforce the 60-second TTL. */
   created_at: number;
+  /**
+   * RT-215 (Codex P1) — the pairing epoch the proto was issued under. A
+   * confirm under any other pairing (revoked, or re-paired) is refused.
+   */
+  pairing_epoch?: string | null;
 }
 
 /**
@@ -120,6 +131,13 @@ export interface TakeoverHandlerDeps {
    * (10763 D9). Without it the cashier path fails closed.
    */
   cashierAdmission?: CashierAdmissionDeps;
+  /**
+   * RT-215 / Codex P1 4181556645 — `PairingStore.getPairingEpoch`: captured at
+   * request start and re-checked right before the session is created, so a
+   * sign-in still in flight when the device is revoked (or re-paired) is
+   * refused instead of completing. Production wires it; tests may omit.
+   */
+  pairingEpoch?: PairingEpochReader;
   logger?: Logger;
 }
 
@@ -184,10 +202,18 @@ export class TakeoverHandler {
       return REFUSE_INVALID;
     }
 
-    if (proto.role === 'cashier') {
-      return this.confirmCashierTakeover(proto);
+    // RT-215 (Codex P1): the proto's pairing must still be the current one.
+    const pairing = capturePairingEpoch(this.deps.pairingEpoch, proto.pairing_epoch);
+    if (!pairingEpochHolds(pairing)) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'pairing_changed');
+      return REFUSE_INVALID;
     }
-    return this.confirmManagerAdminTakeover(proto);
+
+    if (proto.role === 'cashier') {
+      return this.confirmCashierTakeover(proto, pairing);
+    }
+    return this.confirmManagerAdminTakeover(proto, pairing);
   }
 
   cancelTakeover(req: CancelTakeoverRequest): Promise<CancelTakeoverResponse> {
@@ -202,6 +228,7 @@ export class TakeoverHandler {
 
   private async confirmManagerAdminTakeover(
     proto: ProtoSession,
+    pairing: PairingEpochTicket,
   ): Promise<ConfirmTakeoverResponse | OperatorRefusal> {
     const event_id = randomUUID();
     const attestation = await Promise.resolve(this.deps.deviceTokenAttestation());
@@ -220,6 +247,14 @@ export class TakeoverHandler {
     if (backendResult.kind === 'refused') {
       this.deps.protoStore.delete(proto.pending_takeover_id);
       this.log('refused', 'backend_refused');
+      return REFUSE_INVALID;
+    }
+
+    // RT-215 (Codex P1): revoked or re-paired while the confirm was in flight
+    // — drop the late success (synchronous with create() and the holders).
+    if (!pairingEpochHolds(pairing)) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'pairing_changed');
       return REFUSE_INVALID;
     }
 
@@ -258,6 +293,13 @@ export class TakeoverHandler {
     await this.emitTakeoverAudit(event_id, record);
 
     this.deps.protoStore.delete(proto.pending_takeover_id);
+    // RT-215: a revocation during the audit await latched this session (it
+    // ends at its safe point). Never answer it signed_in.
+    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    if (lost !== null) {
+      this.log('refused', 'manager_admin_session_lost');
+      return lost;
+    }
     this.log('signed_in', 'manager_admin_confirm');
 
     return {
@@ -276,6 +318,7 @@ export class TakeoverHandler {
 
   private async confirmCashierTakeover(
     proto: ProtoSession,
+    pairing: PairingEpochTicket,
   ): Promise<ConfirmTakeoverResponse | OperatorRefusal> {
     const admissionDeps = this.deps.cashierAdmission;
     const user_id = proto.user_id;
@@ -302,6 +345,12 @@ export class TakeoverHandler {
       this.deps.protoStore.delete(proto.pending_takeover_id);
       this.log('refused', `cashier_admission_${admission.kind}`);
       return refusalForAdmission(admission);
+    }
+    // RT-215 (Codex P1): revoked or re-paired while the admission was in flight.
+    if (!pairingEpochHolds(pairing)) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'pairing_changed');
+      return REFUSE_INVALID;
     }
 
     const event_id = randomUUID();

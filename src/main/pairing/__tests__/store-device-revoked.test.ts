@@ -287,3 +287,69 @@ describe('createSendableDeviceTokenReader (RT-215: never send a revoked token)',
     expect(await read()).toBeNull();
   });
 });
+
+describe('PairingStore — pairing epoch + isDeviceRevoked (RT-215, Codex P1)', () => {
+  it('is null when unpaired, and a value while paired', async () => {
+    const s = store();
+    expect(s.getPairingEpoch()).toBeNull();
+    expect(s.isDeviceRevoked()).toBe(false);
+    await s.persist(pairing('term-1'));
+    expect(s.getPairingEpoch()).toEqual(expect.any(String));
+    expect(s.isDeviceRevoked()).toBe(false);
+  });
+
+  it('becomes null at once when the device is revoked, and stays null after a restart', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    s.markDeviceRevoked();
+    expect(s.getPairingEpoch()).toBeNull();
+    expect(s.isDeviceRevoked()).toBe(true);
+    const rebooted = store();
+    expect(rebooted.getPairingEpoch()).toBeNull();
+    expect(rebooted.isDeviceRevoked()).toBe(true);
+  });
+
+  it('is null even when the durable write failed (in-memory latch)', async () => {
+    const s0 = store();
+    await s0.persist(pairing('term-1'));
+    const s = store({
+      ...bindPairingStoreDb(handle),
+      markDeviceRevoked: () => {
+        throw new Error('disk');
+      },
+    });
+    expect(() => s.markDeviceRevoked()).toThrow('disk');
+    expect(s.getPairingEpoch()).toBeNull();
+    expect(s.isDeviceRevoked()).toBe(true);
+  });
+
+  it('differs for every pairing, even a re-pair of the same terminal id and time', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    const a = s.getPairingEpoch();
+    await s.persist(pairing('term-1'));
+    const b = s.getPairingEpoch();
+    await s.persist(pairing('term-2', 'device-token-NEW'));
+    const c = s.getPairingEpoch();
+    expect(new Set([a, b, c]).size).toBe(3);
+    expect([a, b, c]).not.toContain(null);
+  });
+
+  it('a re-pair after a revocation yields a fresh, non-null epoch', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    const before = s.getPairingEpoch();
+    s.markDeviceRevoked();
+    await s.persist(pairing('term-2', 'device-token-NEW'));
+    expect(s.getPairingEpoch()).not.toBeNull();
+    expect(s.getPairingEpoch()).not.toBe(before);
+    expect(s.isDeviceRevoked()).toBe(false);
+  });
+
+  it('clear() makes it null', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    await s.clear();
+    expect(s.getPairingEpoch()).toBeNull();
+  });
+});

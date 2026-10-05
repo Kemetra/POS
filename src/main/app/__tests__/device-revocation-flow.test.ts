@@ -232,6 +232,19 @@ describe('device revocation flow — on a successful pairing', () => {
     expect(h.pushed).toEqual([{ kind: 'paired' }]);
   });
 
+  it('Codex P1: a session still open at re-pair (pairing A) is latched so it cannot survive into pairing B', async () => {
+    const h = harness();
+    h.session.current = { id: 's-from-A' };
+    await createDeviceRevocationFlow(h.deps).onPaired({ previouslyRevoked: true });
+    expect(h.calls).toContain('latch');
+  });
+
+  it('with no session at re-pair, nothing is latched', async () => {
+    const h = harness();
+    await createDeviceRevocationFlow(h.deps).onPaired({ previouslyRevoked: true });
+    expect(h.calls).not.toContain('latch');
+  });
+
   it('a first pairing (not revoked) still deletes other terminals’ PINs but audits nothing', async () => {
     const h = harness();
     await createDeviceRevocationFlow(h.deps).onPaired({ previouslyRevoked: false });

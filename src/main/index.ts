@@ -674,14 +674,17 @@ singleInstanceReady
     // that always refuses — the app still launches and `/sign-in` is
     // reachable, but submit fails with the generic refusal copy. CI
     // and production builds set the key; the stub is dev-only.
-    const operatorJwtHolder = createJwtHolder();
+    // RT-215 (Codex P1): neither holder accepts a credential while the device
+    // is revoked, so a sign-in that completes late cannot repopulate one.
+    const refuseWhileRevoked = { refuseWhile: () => pairingStore.isDeviceRevoked() };
+    const operatorJwtHolder = createJwtHolder(refuseWhileRevoked);
     // 016 (review HIGH) — the SECOND credential seam. DP-2 splits POS auth:
     //   • operatorJwtHolder holds the provider JWT (`operator-identity`) for
     //     sign-out + stuck-shifts + the takeover/confirm CALL (028 §6 CM-1).
     //   • operatorEnvelopeHolder holds the opaque pos_operator ENVELOPE (#559,
     //     `operatorAuthorization`) read ONLY by the sale-sync getOperatorToken
     //     closures. Keyed on backend_session_id, in-process only, never bridged.
-    const operatorEnvelopeHolder = createJwtHolder();
+    const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);
     const operatorSessionManager = new SessionManager();
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
     const apiBaseUrl = resolveApiBaseUrl();
@@ -694,6 +697,8 @@ singleInstanceReady
     const deviceTokenAttestation = async (): Promise<string> =>
       (await readSendableDeviceToken()) ?? '';
     const operatorSignInHandler = new SignInHandler({
+      // RT-215 (Codex P1): a late success under a revoked/replaced pairing is dropped.
+      pairingEpoch: () => pairingStore.getPairingEpoch(),
       clerk: clerkExchanger,
       backend: operatorBackend,
       sessionManager: operatorSessionManager,
@@ -750,6 +755,8 @@ singleInstanceReady
       grantSeam: NOOP_OFFLINE_GRANT_SEAM,
     };
     const operatorCashierSignInHandler = new CashierSignInHandler({
+      // RT-215 (Codex P1): a late success under a revoked/replaced pairing is dropped.
+      pairingEpoch: () => pairingStore.getPairingEpoch(),
       db: db,
       safeStorage,
       sessionManager: operatorSessionManager,
@@ -904,6 +911,8 @@ singleInstanceReady
     deviceRevocation.onPaired = (input) => deviceRevocationFlow.onPaired(input);
 
     const operatorTakeoverHandler = new TakeoverHandler({
+      // RT-215 (Codex P1): a late success under a revoked/replaced pairing is dropped.
+      pairingEpoch: () => pairingStore.getPairingEpoch(),
       protoStore: operatorProtoStore,
       sessionManager: operatorSessionManager,
       backend: operatorBackend,

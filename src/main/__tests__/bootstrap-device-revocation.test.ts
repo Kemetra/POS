@@ -65,6 +65,21 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
     );
   });
 
+  it('Codex P1: every sign-in / takeover handler checks the pairing epoch; holders refuse while revoked', () => {
+    for (const ctor of ['SignInHandler', 'CashierSignInHandler', 'TakeoverHandler']) {
+      expect(source, ctor).toMatch(
+        new RegExp(
+          `new ${ctor}\\(\\{[^}]*pairingEpoch: \\(\\) => pairingStore\\.getPairingEpoch\\(\\),`,
+        ),
+      );
+    }
+    expect(source).toMatch(
+      /const refuseWhileRevoked = \{ refuseWhile: \(\) => pairingStore\.isDeviceRevoked\(\) \};/,
+    );
+    expect(source).toContain('const operatorJwtHolder = createJwtHolder(refuseWhileRevoked);');
+    expect(source).toContain('const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);');
+  });
+
   it('no longer ends the session on a single device 401 (the RT-113 P2 immediate cascade is gone)', () => {
     expect(source).not.toContain('onDeviceRevoked');
     expect(source).not.toContain('notifyTerminalRevoked');

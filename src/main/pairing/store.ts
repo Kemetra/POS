@@ -181,6 +181,22 @@ export interface DeviceRevocationStore {
    * and a re-pair (`persist`) overwrites it.
    */
   markDeviceRevoked(): RevokedTerminalScope | null;
+
+  /**
+   * RT-215 / Codex P1 4181556645 — SYNC: true while the pairing row is
+   * revoked (durable marker or the in-memory latch).
+   */
+  isDeviceRevoked(): boolean;
+
+  /**
+   * RT-215 / Codex P1 4181556645 — SYNC identity of the current USABLE
+   * pairing: null while unpaired or revoked; otherwise a value that changes on
+   * every pairing in this process (a re-pair, even of the same terminal id).
+   * Sign-in and takeover capture it at request start and re-check it right
+   * before creating the session, so a late success under a revoked or
+   * replaced pairing is dropped. Not a secret; never leaves the main process.
+   */
+  getPairingEpoch(): string | null;
 }
 
 export interface PersistInput extends TerminalAssignmentRow {
@@ -212,6 +228,12 @@ export function createPairingStore(
    * process even if the durable write fails.
    */
   let revokedInMemory = false;
+  /** RT-215 — bumped on every persist/clear/revoke; part of the pairing epoch. */
+  let generation = 0;
+
+  function rowRevoked(row: StoredAssignmentRow): boolean {
+    return revokedInMemory || typeof row.device_revoked_at === 'number';
+  }
 
   /**
    * Read the token defensively. Returns:
@@ -256,7 +278,7 @@ export function createPairingStore(
 
       // RT-215: the pairing row is the source of truth for revocation. A
       // revoked row needs a re-pair whatever state the token half is in.
-      if (rowPresent && (revokedInMemory || typeof row.device_revoked_at === 'number')) {
+      if (rowPresent && rowRevoked(row)) {
         return { kind: 'invalid', reason: 'device_revoked' };
       }
 
@@ -325,6 +347,7 @@ export function createPairingStore(
         throw err;
       }
       revokedInMemory = false;
+      generation += 1;
     },
 
     markDeviceRevoked(): RevokedTerminalScope | null {
@@ -333,8 +356,20 @@ export function createPairingStore(
       // In memory FIRST: the token stops being sendable at once, even if the
       // durable write below throws (the caller logs that failure).
       revokedInMemory = true;
+      generation += 1;
       db.markDeviceRevoked(Math.floor(now().getTime() / 1000));
       return { tenant_id: row.tenant_id, branch_id: row.branch_id, terminal_id: row.terminal_id };
+    },
+
+    isDeviceRevoked(): boolean {
+      const row = db.readAssignment();
+      return row !== null && rowRevoked(row);
+    },
+
+    getPairingEpoch(): string | null {
+      const row = db.readAssignment();
+      if (row === null || rowRevoked(row)) return null;
+      return `${String(generation)}|${row.terminal_id}|${String(row.paired_at)}`;
     },
 
     async clear(): Promise<void> {
@@ -349,6 +384,7 @@ export function createPairingStore(
       // recovery screen. clear() owns no logger call by design (FR-8 / T071).
       db.deleteAssignment();
       revokedInMemory = false;
+      generation += 1;
       await secretStore.delete(deviceTokenKey);
     },
   };

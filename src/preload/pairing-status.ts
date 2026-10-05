@@ -22,14 +22,17 @@ interface RendererLike {
 
 const REASONS: ReadonlySet<string> = new Set(PAIRING_INVALID_REASONS);
 
+/** A reason the renderer knows how to show (`PAIRING_INVALID_REASONS`). */
+function isKnownReason(reason: unknown): reason is PairingInvalidReason {
+  return typeof reason === 'string' && REASONS.has(reason);
+}
+
 function parse(payload: unknown): PairingStatusChangedEvent | null {
   if (typeof payload !== 'object' || payload === null) return null;
   const { kind, reason } = payload as { kind?: unknown; reason?: unknown };
   if (kind === 'paired' || kind === 'unpaired') return { kind };
-  if (kind === 'invalid' && typeof reason === 'string' && REASONS.has(reason)) {
-    return { kind, reason: reason as PairingInvalidReason };
-  }
-  return null;
+  if (kind !== 'invalid') return null;
+  return isKnownReason(reason) ? { kind, reason } : null;
 }
 
 export function subscribePairingStatus(

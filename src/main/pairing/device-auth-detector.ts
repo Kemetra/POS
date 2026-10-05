@@ -92,10 +92,13 @@ function outcomeForStatus(status: number): DeviceAuthOutcome {
  * TTL (Codex P2 4179701427). Without a usable TTL, 30 s.
  */
 export function deviceAuthConfirmDelayMs(ttlSeconds: number | undefined): number {
-  if (ttlSeconds === undefined || !Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
-    return DEVICE_401_CONFIRM_MS;
-  }
+  if (!isUsableTtl(ttlSeconds)) return DEVICE_401_CONFIRM_MS;
   return Math.min(DEVICE_401_CONFIRM_MS, Math.floor((ttlSeconds * 1000) / 2));
+}
+
+/** A TTL that can bound the confirmation: a finite, positive number of seconds. */
+function isUsableTtl(ttlSeconds: number | undefined): ttlSeconds is number {
+  return ttlSeconds !== undefined && Number.isFinite(ttlSeconds) && ttlSeconds > 0;
 }
 
 export interface DeviceAuthDetectorDeps {

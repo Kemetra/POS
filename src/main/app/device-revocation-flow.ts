@@ -43,7 +43,8 @@ import type { DeviceRevocationStore, RevokedTerminalScope } from '../pairing/sto
  * `device_revoked` reason unconditionally (the state is durable).
  *
  * {@link DeviceRevocationFlow.onPaired} runs after every SUCCESSFUL pairing
- * (via {@link withDeviceRevocationRecovery}): the detector is reset, the
+ * (via {@link withDeviceRevocationRecovery}): the detector is reset, a session
+ * still open from the previous pairing is latched (Codex P1), the
  * `cashier_pin_records` of every OTHER terminal are deleted (decision 5), a
  * revocation that was cleared is audited (`pairing.device_revoked_cleared`),
  * and `{ kind: 'paired' }` is pushed. The re-pair itself (`persist`, INSERT OR
@@ -167,6 +168,10 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
     async onPaired({ previouslyRevoked }) {
       routePending = false;
       step('detector', deps.resetDetector);
+      // Codex P1 4181556645: a session from the previous pairing must not
+      // survive into this one. Latch it; the keeper ends it at its safe point
+      // (a live tender is never cut).
+      if (deps.sessions.getCurrent() !== null) step('latch', deps.latchSession);
       let status: PairingStatus | null = null;
       try {
         status = await deps.getStatus();

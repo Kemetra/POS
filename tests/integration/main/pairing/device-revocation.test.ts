@@ -36,6 +36,10 @@ import {
 import { CashierAdmissionKeeper } from '../../../../src/main/operator/cashier-admission-keeper.js';
 import { SessionManager } from '../../../../src/main/operator/session-manager.js';
 import { createJwtHolder } from '../../../../src/main/operator/jwt-holder.js';
+import { SignInHandler } from '../../../../src/main/operator/sign-in-handler.js';
+import { ProtoSessionStore } from '../../../../src/main/operator/takeover-handler.js';
+import type { BackendClient } from '../../../../src/main/operator/backend-client.js';
+import type { ClerkExchanger } from '../../../../src/main/operator/clerk-client.js';
 import { purgeOtherTerminalPinRecords } from '../../../../src/main/operator/pin-records-purge.js';
 import { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
 import { bindAuditEventsStoreDb } from '../../../../src/main/audit/audit-events-store.js';
@@ -70,47 +74,77 @@ interface SentRequest {
   authorization: string | null;
 }
 
+type DeviceStatus = 200 | 401;
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+const UNAUTHORIZED = (): Response => json(401, { error: 'unauthorized' });
+
+const ADMITTED_BODY = {
+  kind: 'admitted',
+  admission_id: ADMISSION_ID,
+  offline_grace_seconds: 86_400,
+  admission_ttl_seconds: TTL_S,
+  server_time: '2026-10-05T09:00:00.000Z',
+  display_name: 'Mona',
+};
+
+/**
+ * One device-bearer stub route: matched on the path, answering its 2xx while
+ * the device is accepted and 401 while it is refused.
+ */
+interface StubRoute {
+  matches: (path: string) => boolean;
+  ok: () => Response;
+}
+
+const ADMISSIONS = '/api/pos/v1/cashier-admissions';
+
+/** First match wins; anything else is an operator-credential route (sale sync, returns, vouchers). */
+const STUB_ROUTES: readonly StubRoute[] = [
+  {
+    matches: (p) => p === `${ADMISSIONS}/roster`,
+    ok: () => json(200, { cashiers: [] }),
+  },
+  {
+    matches: (p) => p.startsWith(`${ADMISSIONS}/`) && p.endsWith('/end'),
+    ok: () => new Response(null, { status: 204 }),
+  },
+  { matches: (p) => p === ADMISSIONS, ok: () => json(200, ADMITTED_BODY) },
+  {
+    matches: (p) => p === '/api/pos/v1/catalog/snapshot',
+    ok: () => json(200, { items: [], cursor: 'c1', next_page_token: null }),
+  },
+];
+
+function answer(path: string, deviceStatus: DeviceStatus): Response {
+  const route = STUB_ROUTES.find((r) => r.matches(path));
+  if (route === undefined) return UNAUTHORIZED(); // operator-credential route: always 401 here
+  return deviceStatus === 401 ? UNAUTHORIZED() : route.ok();
+}
+
+function urlOf(input: RequestInfo | URL): URL {
+  if (typeof input === 'string') return new URL(input);
+  return new URL(input instanceof URL ? input.href : input.url);
+}
+
 /** Stub Backend-Core: the device-bearer routes answer `deviceStatus`; operator routes 401. */
 function stubBackend(): {
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   sent: SentRequest[];
-  deviceStatus: { value: 200 | 401 };
+  deviceStatus: { value: DeviceStatus };
 } {
   const sent: SentRequest[] = [];
-  const deviceStatus = { value: 200 as 200 | 401 };
+  const deviceStatus = { value: 200 as DeviceStatus };
   const fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = new URL(
-      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
-    );
-    const headers = new Headers(init?.headers);
-    sent.push({ path: url.pathname, authorization: headers.get('Authorization') });
-    const json = (status: number, body: unknown): Response =>
-      new Response(JSON.stringify(body), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    if (url.pathname.startsWith('/api/pos/v1/cashier-admissions')) {
-      if (deviceStatus.value === 401) return Promise.resolve(json(401, { error: 'unauthorized' }));
-      if (url.pathname.endsWith('/roster')) return Promise.resolve(json(200, { cashiers: [] }));
-      if (url.pathname.endsWith('/end'))
-        return Promise.resolve(new Response(null, { status: 204 }));
-      return Promise.resolve(
-        json(200, {
-          kind: 'admitted',
-          admission_id: ADMISSION_ID,
-          offline_grace_seconds: 86_400,
-          admission_ttl_seconds: TTL_S,
-          server_time: '2026-10-05T09:00:00.000Z',
-          display_name: 'Mona',
-        }),
-      );
-    }
-    if (url.pathname === '/api/pos/v1/catalog/snapshot') {
-      if (deviceStatus.value === 401) return Promise.resolve(json(401, { error: 'unauthorized' }));
-      return Promise.resolve(json(200, { items: [], cursor: 'c1', next_page_token: null }));
-    }
-    // Operator-credential routes (sale sync, returns, vouchers): always 401 here.
-    return Promise.resolve(json(401, { error: 'unauthorized' }));
+    const path = urlOf(input).pathname;
+    sent.push({ path, authorization: new Headers(init?.headers).get('Authorization') });
+    return Promise.resolve(answer(path, deviceStatus.value));
   };
   return { fetch, sent, deviceStatus };
 }
@@ -257,8 +291,9 @@ async function wire(): Promise<Wired> {
     admission,
     isAtSafePoint: () => safe.value,
   });
-  const jwt = createJwtHolder();
-  const envelope = createJwtHolder();
+  const refuseWhileRevoked = { refuseWhile: () => store.isDeviceRevoked() };
+  const jwt = createJwtHolder(refuseWhileRevoked);
+  const envelope = createJwtHolder(refuseWhileRevoked);
   const pushed: PairingStatusChangedEvent[] = [];
   const auditEmitter = new AuditEmitter(bindAuditEventsStoreDb(handle));
   let n = 0;
@@ -562,5 +597,66 @@ describe('RT-215 device revocation — end to end', () => {
     w.backend.deviceStatus.value = 401;
     await signInAttempt(w);
     expect(await w.store.getStatus()).toMatchObject({ kind: 'paired' });
+  });
+
+  it('Codex P1: a manager sign-in in flight when revocation is confirmed completes nothing', async () => {
+    const w = await wire();
+    let release: (v: unknown) => void = () => undefined;
+    const signInCall = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const backend = { signIn: signInCall } as unknown as BackendClient;
+    const handler = new SignInHandler({
+      clerk: {
+        exchange: () =>
+          Promise.resolve({
+            kind: 'ok',
+            jwt: 'jwt-SENTINEL',
+            operator_id: 'user_mgr',
+            display_name: 'Sara',
+            role: 'manager',
+          }),
+      } as unknown as ClerkExchanger,
+      backend,
+      sessionManager: w.sessions,
+      jwtHolder: w.jwt,
+      envelopeHolder: w.envelope,
+      protoStore: new ProtoSessionStore(),
+      deviceTokenAttestation: async () => (await w.readSendable()) ?? '',
+      pairingEpoch: () => w.store.getPairingEpoch(),
+    });
+    const pending = handler.signIn({ kind: 'manager_admin', identifier: 'sara', password: 'pw' });
+    await vi.waitFor(() => {
+      expect(signInCall).toHaveBeenCalled();
+    });
+
+    // Revocation confirmed through the real detector while the sign-in waits.
+    w.backend.deviceStatus.value = 401;
+    await signInAttempt(w);
+    await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS);
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
+
+    release({
+      kind: 'signed_in',
+      operator: {
+        id: 'user_mgr',
+        display_name: 'Sara',
+        role: 'manager',
+        tenant_id: 'tenant-1',
+        branch_id: 'branch-1',
+      },
+      operator_session: { id: 'bs-late', issued_at: '2026-10-05T09:00:00.000Z' },
+      pos_operator_envelope: 'envelope-SENTINEL',
+    });
+    await expect(pending).resolves.toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(w.sessions.getCurrent()).toBeNull();
+    expect(w.jwt.get('bs-late')).toBeNull();
+    expect(w.envelope.get('bs-late')).toBeNull();
+    // Defence in depth: the holders refuse any write while revoked.
+    w.jwt.set('bs-late', 'jwt-SENTINEL');
+    expect(w.jwt.get('bs-late')).toBeNull();
   });
 });

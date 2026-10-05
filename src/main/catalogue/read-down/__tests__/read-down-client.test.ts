@@ -195,6 +195,35 @@ describe('createReadDownClient — outcome mapping', () => {
     expect(result.kind).toBe('device_unauthorized');
   });
 
+  it('RT-215 / Codex P2: the token is re-read before EVERY page; revoked between pages → page 2 is never sent', async () => {
+    const tokens: (string | null)[] = [TOKEN, null];
+    const getDeviceToken = vi.fn(() => Promise.resolve(tokens.shift() ?? null));
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(okResponse({ items: [ROW], cursor: 's1', next_page_token: 'p2' })),
+    );
+    const client = createReadDownClient({ baseUrl: BASE, fetch: fetchImpl, getDeviceToken });
+
+    const result = await client.fetchSnapshot();
+    // Aborted like any failed fetch: the driver keeps the prior catalogue.
+    expect(result.kind).toBe('failed');
+    expect(fetchImpl).toHaveBeenCalledTimes(1); // page 2 never left the terminal
+    expect(getDeviceToken).toHaveBeenCalledTimes(2);
+  });
+
+  it('RT-215 / Codex P2: a token read that throws between pages aborts the snapshot', async () => {
+    let n = 0;
+    const getDeviceToken = vi.fn(() => {
+      n += 1;
+      return n === 1 ? Promise.resolve(TOKEN) : Promise.reject(new Error('decrypt'));
+    });
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(okResponse({ items: [ROW], cursor: 's1', next_page_token: 'p2' })),
+    );
+    const client = createReadDownClient({ baseUrl: BASE, fetch: fetchImpl, getDeviceToken });
+    await expect(client.fetchSnapshot()).resolves.toEqual({ kind: 'failed' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('RT-215: a 401 on a later page is device_unauthorized too (no partial snapshot)', async () => {
     let call = 0;
     const fetchImpl = vi.fn(() => {

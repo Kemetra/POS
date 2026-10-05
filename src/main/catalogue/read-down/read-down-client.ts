@@ -205,17 +205,19 @@ export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownCl
 
   return {
     async fetchSnapshot(): Promise<ReadDownFetchResult> {
-      // The device token is the sole credential. No token (unpaired) → treat as a
-      // reached-but-failed request: the driver records a failed attempt and the
-      // working catalogue is preserved (the writer never runs).
-      let deviceToken: string | null;
-      try {
-        deviceToken = await getDeviceToken();
-      } catch {
-        return { kind: 'failed' };
-      }
-      if (deviceToken === null || deviceToken.length === 0) {
-        return { kind: 'failed' };
+      // The device token is the sole credential. No token (unpaired, or RT-215:
+      // the device was revoked) → treat as a reached-but-failed request: the
+      // driver records a failed attempt and the working catalogue is preserved
+      // (the writer never runs). RT-215 / Codex P2: it is re-read before EVERY
+      // page, so a revocation confirmed mid-walk stops the next page from
+      // carrying the revoked token.
+      async function sendableToken(): Promise<string | null> {
+        try {
+          const token = await getDeviceToken();
+          return token !== null && token.length > 0 ? token : null;
+        } catch {
+          return null;
+        }
       }
 
       // Walk every page, accumulating `items`. All pages MUST share one `cursor`
@@ -234,6 +236,10 @@ export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownCl
       // The token alone cannot bound the loop (the server issues it); bound on
       // `maxPages` to fail closed on a bad server that never returns a null token.
       for (let guard = 0; guard < maxPages; guard += 1) {
+        const deviceToken = await sendableToken();
+        if (deviceToken === null) {
+          return { kind: 'failed' };
+        }
         const result = await fetchPage(deviceToken, pageToken);
         if (result.kind !== 'ok') {
           return { kind: result.kind };
