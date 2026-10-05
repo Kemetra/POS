@@ -122,7 +122,7 @@ export function scopeFromPairingStatus(status: PairingStatus): OfflineGrantScope
 /** A held operation the store has not applied yet. */
 type TerminalTombstone =
   | { op: 'invalidate_all'; reason: OfflineGrantInvalidationReason }
-  | { op: 'purge' };
+  | { op: 'purge'; reason: OfflineGrantInvalidationReason };
 
 const SEAM_REASON: Readonly<
   Record<
@@ -217,7 +217,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   }
 
   function audit(
-    at: OfflineGrantScope,
+    at: Pick<OfflineGrantScope, 'tenant_id' | 'branch_id' | 'terminal_id'>,
     grants: readonly InvalidatedGrant[],
     reason: OfflineGrantInvalidationReason,
   ): void {
@@ -270,9 +270,17 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     }
   }
 
-  function purge(prior_epoch?: number): boolean {
+  /**
+   * Codex P2 4183628413 — the purge is the reliable audit point for a pairing
+   * change: every standing grant it deletes is audited with `reason`, in its
+   * own scope. Grants the preceding `invalidateAll` already invalidated (and
+   * audited) are not standing, so none is audited twice.
+   */
+  function purge(reason: OfflineGrantInvalidationReason, prior_epoch?: number): boolean {
     try {
-      deps.store.purgeAll(prior_epoch);
+      for (const grant of deps.store.purgeAll(prior_epoch).invalidated) {
+        audit(grant, [grant], reason);
+      }
       return true;
     } catch {
       return false;
@@ -357,7 +365,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
 
   /** Re-apply a held terminal-wide operation; true when the store applied it. */
   function applyTerminalHold(held: TerminalTombstone): boolean {
-    return held.op === 'purge' ? purge() : invalidateEveryone(held.reason);
+    return held.op === 'purge' ? purge(held.reason) : invalidateEveryone(held.reason);
   }
 
   function retryTerminalHold(): void {
@@ -445,12 +453,12 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       const epochs = [prior_epoch, before?.pairing_epoch].filter(
         (e): e is number => typeof e === 'number',
       );
-      if (purge(epochs.length > 0 ? Math.max(...epochs) : undefined)) {
+      if (purge(reason, epochs.length > 0 ? Math.max(...epochs) : undefined)) {
         terminalTombstone = null;
         userTombstones.clear();
         return;
       }
-      terminalTombstone = { op: 'purge' };
+      terminalTombstone = { op: 'purge', reason };
       hold('purge');
     },
 

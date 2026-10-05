@@ -117,6 +117,23 @@ export interface InvalidatedGrant {
   operator_id: string;
 }
 
+/** A standing grant a purge deleted, with its own scope (for its audit envelope). */
+export interface PurgedGrant extends InvalidatedGrant {
+  tenant_id: string;
+  branch_id: string;
+  terminal_id: string;
+}
+
+export interface PurgeResult {
+  removed: number;
+  /**
+   * Codex P2 4183628413 — every standing (readable, own-key, not yet
+   * invalidated) grant the purge deleted. Already-invalidated grants were
+   * audited when invalidated and are not reported again.
+   */
+  invalidated: PurgedGrant[];
+}
+
 export interface InvalidateResult {
   /** Grants that were valid-shaped and are now invalidated (or removed). */
   invalidated: InvalidatedGrant[];
@@ -178,7 +195,7 @@ export interface OfflineGrantStore {
    * clock floor and above `prior_epoch`, so deleting the grants never erases
    * the evidence {@link nextPairingEpoch} needs.
    */
-  purgeAll(prior_epoch?: number): { removed: number };
+  purgeAll(prior_epoch?: number): PurgeResult;
   /** Is there proof for an offline admission now? Read-only but for the clock mark. */
   evaluate(scope: OfflineGrantScope, user_id: string, nowWall: Date): OfflineGrantEvaluation;
   /** Use one offline admission: evaluate, then increment and re-seal (P3 calls it). */
@@ -384,6 +401,8 @@ const DELETE_GRANT = `DELETE FROM cashier_offline_grants
   WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND user_id = ?`;
 const DELETE_ALL_GRANTS = 'DELETE FROM cashier_offline_grants';
 const SELECT_ALL_BODIES = 'SELECT sealed_body FROM cashier_offline_grants';
+const SELECT_ALL_ROWS = `SELECT tenant_id, branch_id, terminal_id, user_id, sealed_body
+  FROM cashier_offline_grants`;
 const SELECT_ANY_GRANT = 'SELECT 1 AS present FROM cashier_offline_grants LIMIT 1';
 const SELECT_HWM = 'SELECT sealed_body FROM cashier_offline_clock_hwm WHERE id = 1';
 const UPSERT_HWM = `INSERT INTO cashier_offline_clock_hwm (id, sealed_body, sealed_at) VALUES (1, ?, ?)
@@ -763,6 +782,25 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     return invalidateUsers(scope, () => [user_id], reason, 'invalidate');
   }
 
+  /** Codex P2 4183628413: the standing grants on the device, each with its row's scope. */
+  function standingGrants(): PurgedGrant[] {
+    const out: PurgedGrant[] = [];
+    type Row = OfflineGrantScope & { user_id: string; sealed_body: unknown };
+    for (const row of stmt(SELECT_ALL_ROWS).all() as Row[]) {
+      const body = openGrantBody(row.sealed_body);
+      if (body === null || body.invalidated !== null) continue;
+      if (!bodyBelongsTo(body, row, row.user_id)) continue;
+      out.push({
+        tenant_id: row.tenant_id,
+        branch_id: row.branch_id,
+        terminal_id: row.terminal_id,
+        user_id: body.user_id,
+        operator_id: body.operator_id,
+      });
+    }
+    return out;
+  }
+
   /** A standing (readable, not yet invalidated) grant of this key, for attribution. */
   function standingGrant(scope: OfflineGrantScope, user_id: string): InvalidatedGrant[] {
     const read = readGrant(scope, user_id);
@@ -836,18 +874,19 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     },
 
     purgeAll(prior_epoch) {
-      let removed: number;
+      let result: PurgeResult;
       try {
-        removed = tx(() => {
+        result = tx(() => {
           keepPurgeEvidence(prior_epoch);
-          return stmt(DELETE_ALL_GRANTS).run().changes;
+          const invalidated = standingGrants();
+          return { removed: stmt(DELETE_ALL_GRANTS).run().changes, invalidated };
         });
       } catch {
         log('warn', { event: 'operator.offline_grant.storage_failed', op: 'purge' });
         throw new OfflineGrantStoreError('storage');
       }
-      log('info', { event: 'operator.offline_grant.purged', count: removed });
-      return { removed };
+      log('info', { event: 'operator.offline_grant.purged', count: result.removed });
+      return result;
     },
 
     evaluate(scope, user_id, nowWall) {
