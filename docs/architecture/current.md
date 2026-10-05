@@ -218,8 +218,8 @@ do not assume a result union.
 
 | Credential | Scope | Used for |
 |:--|:--|:--|
-| Device token | The terminal | Catalogue read-down, sign-in attestation |
-| Operator envelope | The signed-in operator | Sale-sync routes |
+| Device token | The terminal | Catalogue read-down, sign-in attestation, cashier admissions, sale capture of a cashier's sale (with that sale's own cashier `operatorUserId`, RT-224) |
+| Operator envelope | The signed-in operator | Sale-sync routes for a sale with no recorded cashier (manager/admin sales, sales finalized before RT-224) |
 | Operator JWT | The provider identity | Sign-out, stuck-shifts, roster, takeover-confirm |
 
 Secrets live in Electron `safeStorage` (DPAPI on Windows). **A production build refuses to start**
