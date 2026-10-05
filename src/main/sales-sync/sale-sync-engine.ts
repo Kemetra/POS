@@ -73,7 +73,7 @@ import {
   type SaleSyncStateRepo,
 } from './sale-sync-state-repo.js';
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
-import type { SellingUserIdResolver } from './selling-user-id.js';
+import type { SaleRoute, SellingUserIdResolver } from './selling-user-id.js';
 import {
   buildCapturePayload,
   TenderNotSendableError,
@@ -255,6 +255,9 @@ export function retryDelayMs(
     : backoffDelay;
 }
 
+const ENVELOPE_ROUTE: SaleRoute = Object.freeze({ kind: 'envelope' });
+const HOLD_ROUTE: SaleRoute = Object.freeze({ kind: 'hold' });
+
 /** A terminal outcome: the sale is synced or dead-lettered and never drained again. */
 function leavesQueue(result: SaleSyncResult): boolean {
   return !RETRYABLE_KINDS.has(result.kind);
@@ -304,28 +307,24 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   type SaleCredential = { kind: 'envelope' } | { kind: 'device'; operatorUserId: string };
 
   /**
-   * RT-224 step 2: choose the sale's ONE credential from the sale itself (its own
-   * resolved `operatorUserId`), or null when that credential is not held now (the
-   * sale is skipped, untouched).
+   * RT-224 step 2: the sale's ONE credential from its own route, or null when the
+   * sale is held or its credential is not held now (skipped, untouched).
    */
-  function credentialFor(
-    operatorUserId: string | null,
-    held: HeldCredentials,
-  ): SaleCredential | null {
-    if (operatorUserId !== null) {
-      return held.device ? { kind: 'device', operatorUserId } : null;
+  function credentialFor(route: SaleRoute, held: HeldCredentials): SaleCredential | null {
+    if (route.kind === 'device') {
+      return held.device ? { kind: 'device', operatorUserId: route.operatorUserId } : null;
     }
-    return held.envelope ? { kind: 'envelope' } : null;
+    return route.kind === 'envelope' && held.envelope ? { kind: 'envelope' } : null;
   }
 
   /** Returns the POST outcome, or null when nothing was sent. */
   async function drainOne(
     sale: SaleRow,
-    operatorUserId: string | null,
+    route: SaleRoute,
     held: HeldCredentials,
   ): Promise<SaleSyncResult | null> {
     const saleId = sale.sale_id;
-    const credential = credentialFor(operatorUserId, held);
+    const credential = credentialFor(route, held);
     if (credential === null) return null;
 
     let payload: CaptureSalePayload;
@@ -460,12 +459,22 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     return { envelope: envelopePresent(), device: await devicePresent() };
   }
 
-  function reasonFor(held: HeldCredentials): SaleSyncPausedReason | null {
-    return held.envelope || held.device ? null : 'no_operator_credential';
+  // rev547 F1: the number of due sales routed to the envelope at the last tick.
+  // While no envelope is held they are blocked even when the device path flows,
+  // so they keep the pause visible.
+  let envelopeSalesDue = 0;
+
+  /**
+   * Paused when the drain holds no credential at all, or holds no envelope while
+   * sales routed to the envelope are due (rev547 F1).
+   */
+  function reasonFor(held: HeldCredentials, envelopeDue: number): SaleSyncPausedReason | null {
+    if (held.envelope) return null;
+    return !held.device || envelopeDue > 0 ? 'no_operator_credential' : null;
   }
 
   async function pausedReason(): Promise<SaleSyncPausedReason | null> {
-    return reasonFor(await heldCredentials());
+    return reasonFor(await heldCredentials(), envelopeSalesDue);
   }
 
   // RT-224: the last reported pause state. `null` = nothing reported yet, so the
@@ -473,10 +482,13 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   let reportedPaused: boolean | null = null;
 
   /**
-   * The current terminal's unsent count, for the transition report only; null
-   * when it cannot be read (e.g. a transient SQLite error).
+   * The sales the missing credential blocks, for the transition report only:
+   * with a device credential, the due envelope-routed sales (rev547 F1); without
+   * one, the current terminal's whole unsent count (null when it cannot be read,
+   * e.g. a transient SQLite error).
    */
-  async function pendingCount(): Promise<number | null> {
+  async function pendingCount(held: HeldCredentials): Promise<number | null> {
+    if (held.device) return envelopeSalesDue;
     try {
       const terminalId = await resolveTerminalId();
       return stateRepo.readSyncStatus({ tenantId, branchId, terminalId }).pending;
@@ -490,13 +502,13 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
    * there is no hook). A throwing hook returns false, so the caller leaves the
    * transition unreported and the next tick retries it.
    */
-  async function reportTransition(isPaused: boolean): Promise<boolean> {
+  async function reportTransition(isPaused: boolean, held: HeldCredentials): Promise<boolean> {
     const onPauseTransition = deps.onPauseTransition;
     if (onPauseTransition === undefined) return true;
     const event: SaleSyncPauseTransition = {
       transition: isPaused ? 'paused' : 'resumed',
       reason: 'no_operator_credential',
-      pending: await pendingCount(),
+      pending: await pendingCount(held),
     };
     try {
       onPauseTransition(event);
@@ -508,26 +520,50 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
 
   /**
    * RT-224: read the credentials and report a transition when the pause state
-   * changes. Returns the held credentials, or null when the drain is paused (it
-   * holds neither). Reports at most once per transition, so a paused engine is
-   * silent across ticks. The reported state is committed only AFTER the report is
-   * delivered, so a failed report is retried on the next tick instead of being
-   * lost (Codex P2).
+   * changes. Returns the held credentials, or null when the drain can send
+   * nothing (it holds neither credential). Reports at most once per transition,
+   * so a paused engine is silent across ticks. The reported state is committed
+   * only AFTER the report is delivered, so a failed report is retried on the next
+   * check instead of being lost (Codex P2). rev547 F1: with a device credential
+   * the drain still sends cashier sales, yet it is reported paused while
+   * envelope-routed sales are due and no envelope is held.
    */
   async function credentialGate(): Promise<HeldCredentials | null> {
     const held = await heldCredentials();
-    const isPaused = reasonFor(held) !== null;
-    if (isPaused !== (reportedPaused ?? false) && (await reportTransition(isPaused))) {
+    const isPaused = reasonFor(held, envelopeSalesDue) !== null;
+    if (isPaused !== (reportedPaused ?? false) && (await reportTransition(isPaused, held))) {
       reportedPaused = isPaused;
     }
-    return isPaused ? null : held;
+    return held.envelope || held.device ? held : null;
+  }
+
+  /**
+   * rev547 F6: route every due sale; a resolver that throws holds them all this
+   * tick (never the envelope) and the next tick retries.
+   */
+  function routesFor(
+    sales: readonly SaleRow[],
+    terminalId: string,
+  ): ReadonlyMap<string, SaleRoute> {
+    const resolver = deps.sellingUsers;
+    if (resolver === undefined) return new Map(sales.map((sale) => [sale.sale_id, ENVELOPE_ROUTE]));
+    try {
+      return resolver.resolve(sales, terminalId);
+    } catch {
+      return new Map(sales.map((sale) => [sale.sale_id, HOLD_ROUTE]));
+    }
   }
 
   async function runTick(): Promise<void> {
     try {
       // Credential gate (FR-3): neither an envelope (null or '') nor a device
-      // credential → pause the whole drain.
-      if ((await credentialGate()) === null) return;
+      // credential → pause the whole drain. (The envelope-subset pause, rev547 F1,
+      // is judged below once this tick's routes are known.)
+      const atStart = await heldCredentials();
+      if (!atStart.envelope && !atStart.device) {
+        await credentialGate();
+        return;
+      }
       // RT-221: drain only the current pairing's rows; no pairing → nothing.
       const terminalId = await resolveTerminalId();
       if (terminalId === null) return;
@@ -536,17 +572,22 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
         .map((due) => salesRepo.readById(due.sale_id))
         // An outbox row without a durable Sale is skipped (defensive).
         .filter((sale): sale is SaleRow => sale !== null);
-      // RT-224 step 2 (Codex P2): every due sale's cashier in one lookup.
-      const userIds = deps.sellingUsers?.resolve(sales, terminalId);
+      // RT-224 step 2 (Codex P2): every due sale's route in one lookup.
+      const routes = routesFor(sales, terminalId);
+      const routeOf = (sale: SaleRow): SaleRoute => routes.get(sale.sale_id) ?? HOLD_ROUTE;
+      // rev547 F1: how many due sales need the envelope (the pause's subset).
+      envelopeSalesDue = sales.filter((sale) => routeOf(sale).kind === 'envelope').length;
       // RT-224 step 2: after a device-path 401, no more device-path sends this tick.
       let deviceRejected = false;
+      // Report the (envelope-subset) pause state now, even for an empty queue.
+      if ((await credentialGate()) === null) return;
       for (const sale of sales) {
         // Re-check before each POST so a mid-drain credential loss pauses cleanly.
         const held = await credentialGate();
         if (held === null) return;
         // RT-221: a re-pair mid-drain must not send the rest under the new identity.
         if ((await resolveTerminalId()) !== terminalId) return;
-        const result = await drainOne(sale, userIds?.get(sale.sale_id) ?? null, {
+        const result = await drainOne(sale, routeOf(sale), {
           envelope: held.envelope,
           device: held.device && !deviceRejected,
         });

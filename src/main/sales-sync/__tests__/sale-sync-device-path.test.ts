@@ -658,7 +658,9 @@ describe('rev547 F6 — a failing selling-user lookup holds that batch only', ()
           if (failing) throw new Error('SQLITE_ERROR: malformed JSON');
           return nn(h.deps.sellingUsers).resolve(sales, terminalId);
         },
-        forget: (saleId) => nn(h.deps.sellingUsers).forget(saleId),
+        forget: (saleId) => {
+          nn(h.deps.sellingUsers).forget(saleId);
+        },
       },
     });
     await expect(tick(engine)).resolves.toBeUndefined();
