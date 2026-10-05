@@ -24,7 +24,7 @@
  * before are resolved in ONE single-pass query; results are memoized per sale
  * until `forget` (the sale left the queue).
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   freshSalesSyncDb,
@@ -316,7 +316,11 @@ describe('RT-224 (Codex P2) — one audit_events pass per batch, memoized, never
   // rev547 F5: any backlog is ONE scan (no 500-sale chunking).
   const SALES = 1200;
 
-  function backlog() {
+  // Built ONCE for the block (seeding 21k rows is the slow part); every test
+  // gets a fresh resolver and query counter over it.
+  let shared: { db: SqlJsDatabase; rows: SaleRow[] };
+
+  beforeAll(() => {
     const db = freshSalesSyncDb();
     seedNoise(db, 20_000);
     for (let i = 0; i < SALES; i += 1) {
@@ -324,41 +328,46 @@ describe('RT-224 (Codex P2) — one audit_events pass per batch, memoized, never
       seedSale(db, { sale_id: id });
       seedSettled(db, { sale_id: id, ...(i % 5 === 0 ? {} : { selling_user_id: USER_A }) });
     }
-    const counting = countingHandle(db);
     const sales = bindSalesRepository(handleFor(db));
     const rows = Array.from({ length: SALES }, (_, i) => nn(sales.readById(`sale-${String(i)}`)));
+    shared = { db, rows };
+  }, 60_000);
+
+  afterAll(() => {
+    shared.db.close();
+  });
+
+  function backlog() {
+    const counting = countingHandle(shared.db);
     const resolver = createSellingUserIdResolver({ db: counting.handle });
-    return { db, rows, resolver, auditSql: counting.auditSql };
+    return { db: shared.db, rows: shared.rows, resolver, auditSql: counting.auditSql };
   }
 
   it('1200 queued sales over a 20k-row audit table: ONE query resolves them all', () => {
-    const { db, rows, resolver, auditSql } = backlog();
+    const { rows, resolver, auditSql } = backlog();
     const ids = resolver.resolve(rows, TERMINAL);
     expect(auditSql).toHaveLength(1);
     expect(ids.size).toBe(SALES);
     expect(ids.get('sale-1')).toEqual(DEVICE_A);
     expect(ids.get('sale-0')).toEqual(ENVELOPE); // no selling_user_id (legacy / manager sale)
-    db.close();
   });
 
   it('a later tick over the same queue does not touch audit_events again (memoized)', () => {
-    const { db, rows, resolver, auditSql } = backlog();
+    const { rows, resolver, auditSql } = backlog();
     resolver.resolve(rows, TERMINAL);
     resolver.resolve(rows, TERMINAL);
     resolver.resolve(rows.slice(0, 10), TERMINAL);
     expect(auditSql).toHaveLength(1);
-    db.close();
   });
 
   it('only the sales not seen before are looked up, and a forgotten sale is read again', () => {
-    const { db, rows, resolver, auditSql } = backlog();
+    const { rows, resolver, auditSql } = backlog();
     resolver.resolve(rows.slice(0, 100), TERMINAL);
     resolver.resolve(rows, TERMINAL);
     expect(auditSql).toHaveLength(2);
     resolver.forget('sale-1');
     expect(resolver.resolve(rows, TERMINAL).get('sale-1')).toEqual(DEVICE_A);
     expect(auditSql).toHaveLength(3);
-    db.close();
   });
 
   it('the query reads audit_events in a single pass (EXPLAIN QUERY PLAN: one access, no per-sale loop)', () => {
@@ -370,6 +379,5 @@ describe('RT-224 (Codex P2) — one audit_events pass per batch, memoized, never
     const details = (plan[0]?.values ?? []).map((row) => String(row[row.length - 1]));
     expect(details.filter((d) => /audit_events/.test(d))).toHaveLength(1);
     expect(details.some((d) => /\bsales\b/.test(d))).toBe(false);
-    db.close();
   });
 });

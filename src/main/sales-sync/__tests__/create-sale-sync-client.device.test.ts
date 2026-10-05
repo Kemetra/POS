@@ -309,6 +309,26 @@ describe('RT-224 step 2 (Codex P2 on 988a238) — token and terminal come from o
     },
   );
 
+  it.each<[string, Array<string | null>]>([
+    ['rotated', ['device-token-A', 'device-token-B']],
+    ['removed (e.g. revoked / unpaired)', ['device-token-A', null]],
+  ])(
+    'the device credential is %s between the two reads (same terminal): not sent, never dead-lettered',
+    async (_label, tokens) => {
+      const { fetchImpl, captured } = fetchAnswering(201, '{}');
+      const queue = [...tokens];
+      const c = createSaleSyncClient({
+        baseUrl: BASE,
+        fetch: fetchImpl,
+        getOperatorToken: () => ENVELOPE,
+        getDeviceToken: () => Promise.resolve(queue.shift() ?? null),
+        currentTerminalId: () => PAYLOAD.terminalId,
+      });
+      expect(await c.postSaleAsCashier(PAYLOAD, USER)).toEqual({ kind: 'no_connection' });
+      expect(captured).toHaveLength(0);
+    },
+  );
+
   it('no re-pair: sent once with the token', async () => {
     const { result, sentTokens } = await sendDuringRePair('resolve', NEVER, NEVER);
     expect(result.kind).toBe('ok');
