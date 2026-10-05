@@ -12,7 +12,7 @@ import {
   sentCredential,
   violationsFor,
 } from './conformance.js';
-import { KNOWN_VIOLATIONS } from './known-violations.js';
+import { KNOWN_VIOLATIONS, type KnownViolation } from './known-violations.js';
 import { indexContract, type ContractOperation } from './openapi-index.js';
 
 const ROSTER = 'backendClient.listRoster';
@@ -44,42 +44,57 @@ function rosterContract(scheme: { readonly name: string }): ContractOperation[] 
   });
 }
 
-async function rosterDiff(scheme: {
-  readonly name: string;
-}): Promise<ReturnType<typeof diffAgainstKnown>> {
+/**
+ * A recorded violation used as the fixture for the identity rules. Since RT-214
+ * the roster call sends the operator JWT, so judging it against a `device`-secured
+ * fixture contract yields exactly this violation.
+ */
+const RECORDED: KnownViolation = {
+  call: ROSTER,
+  kind: 'credential-mismatch',
+  sent: 'operator-jwt',
+  requires: ['device'],
+  tickets: ['fixture'],
+  note: 'fixture: the roster judged against a device-secured contract',
+};
+
+async function rosterDiff(
+  scheme: { readonly name: string },
+  known: readonly KnownViolation[] = [RECORDED],
+): Promise<ReturnType<typeof diffAgainstKnown>> {
   const found = violationsFor(await observe(registered(ROSTER)), rosterContract(scheme));
-  return diffAgainstKnown(
-    found,
-    KNOWN_VIOLATIONS.filter((k) => k.call === ROSTER),
-  );
+  return diffAgainstKnown(found, known);
 }
 
 describe('known-violation identity', () => {
-  it('matches the recorded roster violation while the contract is unchanged', async () => {
-    expect(await rosterDiff({ name: 'operator-identity' })).toEqual({ unexpected: [], stale: [] });
+  it('matches the recorded violation while the contract is unchanged', async () => {
+    expect(await rosterDiff({ name: 'device' })).toEqual({ unexpected: [], stale: [] });
   });
 
   it('fails when a re-pin changes the required credential of a known-violation route', async () => {
-    const diff = await rosterDiff({ name: 'device' });
+    const diff = await rosterDiff({ name: 'operatorAuthorization' });
     expect(diff.unexpected).toHaveLength(1);
-    expect(diff.unexpected[0]).toMatch(/sends none \| requires device/);
+    expect(diff.unexpected[0]).toMatch(/sends operator-jwt \| requires operator-envelope/);
     expect(diff.stale).toEqual([
-      `${ROSTER} | credential-mismatch | sends none | requires operator-jwt`,
+      `${ROSTER} | credential-mismatch | sends operator-jwt | requires device`,
     ]);
   });
 
   it('reports a new violation as unexpected and a fixed one as stale', async () => {
-    const found = violationsFor(
-      await observe(registered(ROSTER)),
-      rosterContract({ name: 'device' }),
-    );
-    expect(diffAgainstKnown(found, []).unexpected).toHaveLength(1);
-    expect(
-      diffAgainstKnown(
-        [],
-        KNOWN_VIOLATIONS.filter((k) => k.call === ROSTER),
-      ).stale,
-    ).toHaveLength(1);
+    expect((await rosterDiff({ name: 'device' }, [])).unexpected).toHaveLength(1);
+    expect((await rosterDiff({ name: 'operator-identity' })).stale).toHaveLength(1);
+  });
+});
+
+describe('RT-214 — the manager roster call', () => {
+  it('conforms to an operator-identity route: it sends the operator JWT', async () => {
+    const obs = await observe(registered(ROSTER));
+    expect(obs.requests.map(sentCredential)).toEqual(['operator-jwt']);
+    expect(violationsFor(obs, rosterContract({ name: 'operator-identity' }))).toEqual([]);
+  });
+
+  it('is no longer listed as a known violation', () => {
+    expect(KNOWN_VIOLATIONS.filter((k) => k.call === ROSTER)).toEqual([]);
   });
 });
 

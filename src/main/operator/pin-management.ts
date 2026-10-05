@@ -13,7 +13,9 @@
  *   - `new_pin` is consumed here and never passed to the logger,
  *     never stored as plaintext, never appears in thrown errors.
  *   - No JWT, device_token, device_token_attestation, or Clerk credential
- *     is logged or returned to the renderer.
+ *     is logged or returned to the renderer. The provision path reads the
+ *     manager's JWT from the operator JWT holder and hands it only to
+ *     `backend.listRoster` (RT-214).
  *   - Audit payloads contain only allowlisted identifiers — no PIN values,
  *     no hashes, no credential fragments.
  *
@@ -44,7 +46,8 @@ import type { SafeStorageLike } from '../secrets/safe-storage.js';
 import type { PairingStore } from '../pairing/store.js';
 import type { SessionManager, OperatorSessionRecord } from './session-manager.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
-import type { BackendClient } from './backend-client.js';
+import type { BackendClient, BackendRosterResponse } from './backend-client.js';
+import type { JwtHolder } from './jwt-holder.js';
 import { requireRole } from './role-enforcement.js';
 import { hashPin } from './pin-credential.js';
 import { sealPinMaterial } from './pin-seal.js';
@@ -78,6 +81,32 @@ const REFUSE_INVALID: OperatorRefusal = { kind: 'refused', category: 'invalid_in
 const REFUSE_STATE_INVALID: OperatorRefusal = { kind: 'refused', category: 'state_invalid' };
 const REFUSE_NOT_READY: OperatorRefusal = { kind: 'refused', category: 'not_ready' };
 const REFUSE_NO_CONNECTION: OperatorRefusal = { kind: 'refused', category: 'no_connection' };
+const REFUSE_NOT_SIGNED_IN: OperatorRefusal = { kind: 'refused', category: 'not_signed_in' };
+const REFUSE_ROLE_MISMATCH: OperatorRefusal = { kind: 'refused', category: 'role_mismatch' };
+
+/**
+ * RT-214 — a roster answer that is not a roster, mapped to an existing refusal:
+ *   - no_token / 401 → not_signed_in: the manager's operator-identity JWT is
+ *     absent, expired or rejected; signing in again mints a fresh one.
+ *   - 403 → role_mismatch: Backend-Core says the caller is not manager-eligible
+ *     (RT-150). The contract answers 401 for this today; 403 is defensive.
+ *   - no_connection → no_connection; any other refusal → invalid_input (as before).
+ */
+function rosterRefusal(
+  roster: Exclude<BackendRosterResponse, { kind: 'roster' }>,
+): OperatorRefusal {
+  switch (roster.kind) {
+    case 'no_connection':
+      return REFUSE_NO_CONNECTION;
+    case 'no_token':
+    case 'unauthenticated':
+      return REFUSE_NOT_SIGNED_IN;
+    case 'forbidden':
+      return REFUSE_ROLE_MISMATCH;
+    case 'refused':
+      return REFUSE_INVALID;
+  }
+}
 
 // ─── Dependencies ─────────────────────────────────────────────────────────
 
@@ -94,6 +123,14 @@ export interface PinManagementHandlerDeps {
    * neutral↔clerk mapping is resolved main-side and NEVER crosses the bridge.
    */
   backend: BackendClient;
+  /**
+   * RT-214 — the operator JWT holder (`operatorJwtHolder` in `index.ts`), keyed
+   * on `backend_session_id`. The roster route is `operator-identity` + manager
+   * gated on Backend-Core, so the provision path presents the signed-in
+   * manager's JWT, exactly as sign-out and stuck-shifts do. Never logged,
+   * never returned over IPC.
+   */
+  jwtHolder: Pick<JwtHolder, 'get'>;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -281,18 +318,23 @@ export class PinManagementHandler {
     const { tenant_id, branch_id, terminal_id } = pairingStatus;
     const { target_user_id } = req;
 
+    // RT-214: the roster route needs the manager's operator-identity JWT. With
+    // none held for this session, refuse before any request goes out.
+    const jwt = this.deps.jwtHolder.get(activeSession.backend_session_id) ?? '';
+    if (jwt === '') {
+      this.log('info', 'provision_cashier_pin.refused', 'not_signed_in');
+      return REFUSE_NOT_SIGNED_IN;
+    }
+
     // Resolve the cashier's roster entry by provider-neutral user_id. This is
     // the ONLY source of the user_id→clerk mapping required by both the legacy
     // create-only check and the NOT-NULL clerk PK column. The mapping is
     // resolved here and NEVER crosses the bridge.
-    const roster = await this.deps.backend.listRoster(branch_id);
-    if (roster.kind === 'no_connection') {
-      this.log('info', 'provision_cashier_pin.refused', 'no_connection');
-      return REFUSE_NO_CONNECTION;
-    }
+    const roster = await this.deps.backend.listRoster(branch_id, jwt);
     if (roster.kind !== 'roster') {
-      this.log('info', 'provision_cashier_pin.refused', 'invalid_input');
-      return REFUSE_INVALID;
+      const refusal = rosterRefusal(roster);
+      this.log('info', 'provision_cashier_pin.refused', refusal.category);
+      return refusal;
     }
 
     // FR-11: the cashier must carry a provider-neutral user_id. Absent → not_ready,

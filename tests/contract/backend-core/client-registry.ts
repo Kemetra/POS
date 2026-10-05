@@ -193,8 +193,8 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
     module: BACKEND_CLIENT,
     method: 'get',
     pathTemplate: '/api/pos/v1/operators/roster',
-    wiring: 'none — the method takes no credential (pin-management.ts)',
-    invoke: (fetch) => backendClient(fetch).listRoster(UUID),
+    wiring: 'pin-management.ts: operatorJwtHolder (the manager session, RT-214)',
+    invoke: (fetch) => backendClient(fetch).listRoster(UUID, SENTINEL['operator-jwt']),
   },
   {
     id: 'backendClient.confirmTakeover',
