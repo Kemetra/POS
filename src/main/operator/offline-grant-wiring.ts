@@ -380,6 +380,18 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     }
   }
 
+  /**
+   * RT-113 follow-up A — a held per-user invalidation is applied (and so
+   * audited, through {@link recordInvalidation}) before a fresh `admitted`
+   * replaces the grant it targets; the caller lifts the hold. True when nothing
+   * is held or it applied; on failure the hold stays for the tick and nothing
+   * may be written.
+   */
+  function applyHeldUser(user_id: string): boolean {
+    const reason = userTombstones.get(user_id);
+    return reason === undefined || invalidateUser(user_id, reason);
+  }
+
   // ── seam ──
 
   function onAdmitted(event: CashierAdmittedEvent): void {
@@ -395,6 +407,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       log('info', { event: 'operator.offline_grant.superseded_result' });
       return;
     }
+    if (!applyHeldUser(event.user_id)) return;
     try {
       const result = deps.store.upsertFromAdmitted(at, event);
       // A fresh server admission: the store now holds this user's true state.

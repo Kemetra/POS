@@ -123,6 +123,43 @@ describe('fail closed: a throwing store leaves a tombstone that evaluate consult
     expect(wiring.evaluate(USER, T0).admissible).toBe(true);
   });
 
+  it('RT-113 follow-up A: an admitted that lifts a held invalidation audits it exactly once, then writes the new grant', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    b.broken.add('invalidate');
+    invalidate({ reason: 'refused', user_id: USER });
+    b.broken.clear();
+    admit({ admission_id: 'adm-new' });
+    expect(audits.map(auditOf)).toEqual([{ reason: 'forbidden', operator: OPERATOR }]);
+    expect(wiring.evaluate(USER, T0).admissible).toBe(true);
+    expect(body()).toMatchObject({ admission_id: 'adm-new', invalidated: null });
+    wiring.start(); // the tick has nothing left to retry: no second audit
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(audits).toHaveLength(1);
+  });
+
+  it('RT-113 follow-up A: if the held invalidation still fails, the admitted writes nothing and the hold stays', () => {
+    b.broken.add('invalidate');
+    invalidate({ reason: 'refused', user_id: USER });
+    admit({ admission_id: 'adm-new' });
+    expect(audits).toEqual([]);
+    expect(wiring.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    expect(body()['admission_id']).not.toBe('adm-new');
+  });
+
+  it('RT-113 follow-up A: the held invalidation applied by an admitted is not re-audited when the write then fails', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    b.broken.add('invalidate');
+    invalidate({ reason: 'refused', user_id: USER });
+    b.broken.clear();
+    b.broken.add('upsertFromAdmitted');
+    admit({ admission_id: 'adm-new' });
+    expect(wiring.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    b.broken.clear();
+    wiring.start();
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(audits.map(auditOf)).toEqual([{ reason: 'forbidden', operator: OPERATOR }]);
+  });
+
   it('the clock tick retries the held invalidation into the store, audits it and lifts the tombstone', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     b.broken.add('invalidate');
