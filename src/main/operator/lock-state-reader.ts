@@ -13,7 +13,9 @@ import type { SessionManager } from './session-manager.js';
  *
  * A cart whose sale already SETTLED stays `frozen_handed_off` (005 has no
  * completed state), so it is excluded: a finished sale is never presented as
- * an open, preserved one. An empty cart has nothing to preserve.
+ * an open, preserved one. An empty cart has nothing to preserve, so the
+ * summary shows the session's newest OPEN cart that has active lines: a newer
+ * empty cart never hides an older open sale (Codex P1 4179918798).
  *
  * "Live tender" uses the same predicate as `bindAttemptHasLiveTender`
  * (`applying | applied | reversal_pending`, RT-116 M7).
@@ -28,17 +30,26 @@ export interface LockStateReaderDeps {
 
 type Get<T> = { get(...params: unknown[]): T | undefined };
 
+/**
+ * SQL predicate on cart `c`: an OPEN sale with something to preserve. Not
+ * cancelled (a void), not settled, and at least one active line.
+ */
+const OPEN_CART_WITH_LINES = `c.state <> 'cancelled'
+          AND NOT EXISTS (
+            SELECT 1 FROM payment_attempts a
+             WHERE a.envelope_cart_id = c.cart_id AND a.state = 'settled'
+          )
+          AND EXISTS (
+            SELECT 1 FROM cart_lines l WHERE l.cart_id = c.cart_id AND l.removed_at IS NULL
+          )`;
+
 export function createLockStateReader(deps: LockStateReaderDeps): () => LockStateView {
   const { db, sessionManager, resolveTerminalId } = deps;
 
   const cartStmt = (): Get<{ cart_id: string; cart_subtotal_minor: number }> =>
     db.prepare(
       `SELECT c.cart_id, c.cart_subtotal_minor FROM carts c
-        WHERE c.operator_session_id = ? AND c.state <> 'cancelled'
-          AND NOT EXISTS (
-            SELECT 1 FROM payment_attempts a
-             WHERE a.envelope_cart_id = c.cart_id AND a.state = 'settled'
-          )
+        WHERE c.operator_session_id = ? AND ${OPEN_CART_WITH_LINES}
         ORDER BY c.created_at DESC LIMIT 1`,
     ) as Get<{ cart_id: string; cart_subtotal_minor: number }>;
   const lineCountStmt = (): Get<{ n: number }> =>
@@ -92,22 +103,28 @@ export function createLockStateReader(deps: LockStateReaderDeps): () => LockStat
 }
 
 /**
- * RT-113 P2 (adversarial review of 024f07c, items 2 and 5) — the predicate the
- * cashier admission keeper ends a LATCHED session on: true only when ending
- * the session now preserves everything.
+ * RT-113 P2 (adversarial review of 024f07c, items 2 and 5; Codex P1
+ * 4179918798) — the predicate the cashier admission keeper ends a LATCHED
+ * session on: true only when ending the session now preserves everything.
+ * It queries EVERY cart of the session and never relies on the newest-cart
+ * lock summary.
  *
- *  - no open sale with lines (the RT-117 lock summary is null); and
- *  - no started payment attempt of the session holds live tender, on ANY of
- *    its carts. The lock summary looks only at the session's NEWEST cart, so a
- *    newer empty cart would otherwise hide an older handed-off cart that is
- *    mid-tender (cart.create does not refuse while one exists, and a cart
- *    created before the latch survives it).
+ *  - no unsettled, non-cancelled cart of the session has an active line
+ *    (an open sale: editing, or handed off and not yet settled or voided); and
+ *  - no started payment attempt of the session holds live tender
+ *    (`applying | applied | reversal_pending`, RT-116 M7), on any cart.
  *
- * Live tender: `applying | applied | reversal_pending` (RT-116 M7). Never
- * throws for a missing session (no session: nothing to preserve).
+ * cart.create does not refuse while another cart of the session is open, and
+ * a cart created before the latch survives it, so a newer empty cart can sit
+ * beside an older open sale. No session: nothing to preserve.
  */
 export function createSafePointProbe(deps: LockStateReaderDeps): () => boolean {
-  const readLockState = createLockStateReader(deps);
+  const openSaleStmt = (): Get<{ open: 1 }> =>
+    deps.db.prepare(
+      `SELECT 1 AS open FROM carts c
+        WHERE c.operator_session_id = ? AND ${OPEN_CART_WITH_LINES}
+        LIMIT 1`,
+    ) as Get<{ open: 1 }>;
   const liveTenderStmt = (): Get<{ live: 1 }> =>
     deps.db.prepare(
       `SELECT 1 AS live FROM payment_attempts a
@@ -120,7 +137,7 @@ export function createSafePointProbe(deps: LockStateReaderDeps): () => boolean {
   return function isAtSafePoint(): boolean {
     const session = deps.sessionManager.getCurrent();
     if (session === null) return true;
-    if (readLockState().summary !== null) return false;
+    if (openSaleStmt().get(session.id) !== undefined) return false;
     return liveTenderStmt().get(session.id) === undefined;
   };
 }
