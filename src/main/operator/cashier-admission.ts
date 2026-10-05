@@ -107,12 +107,6 @@ export function nextIdempotencyKey(deps: CashierAdmissionDeps): string {
   return (deps.newIdempotencyKey ?? newAdmissionIdempotencyKey)();
 }
 
-/**
- * The P1 grant seam for one outcome: `admitted` writes or refreshes the grant;
- * a 403 or `active_elsewhere` (OD6) invalidates that user's grant; a device
- * 401 invalidates every grant. Nothing else (5xx, 429, 409, 400, transport,
- * `no_token`) touches the seam. Never throws.
- */
 /** Who an outcome is for, and the pairing its request was sent under. */
 export interface AdmissionSubject {
   user_id: string;
@@ -129,6 +123,12 @@ export function capturePairingGeneration(deps: CashierAdmissionDeps): number | u
   }
 }
 
+/**
+ * The P1 grant seam for one outcome: `admitted` writes or refreshes the grant;
+ * a 403 or `active_elsewhere` (OD6) invalidates that user's grant; a device
+ * 401 invalidates every grant. Nothing else (5xx, 429, 409, 400, transport,
+ * `no_token`) touches the seam. Never throws.
+ */
 export function notifyGrantSeam(
   deps: CashierAdmissionDeps,
   result: CashierAdmissionResult,
@@ -247,14 +247,19 @@ export function takeUncertainEnd(deps: CashierAdmissionDeps, user_id: string): b
  * it is in flight it is remembered for `user_id`, so a re-admission of that
  * user on this device waits for it ({@link awaitPendingEnd}) instead of being
  * renewed by the server and then killed by this late `end`.
+ *
+ * RT-219: `admission_generation` is echoed, so the server ignores this `end`
+ * if the admission was renewed after it. The wait above and the RT-220 early
+ * verification stay as backstops.
  */
 export function endAdmissionTracked(
   deps: CashierAdmissionDeps,
   admission_id: string,
+  admission_generation: string,
   user_id: string | undefined,
 ): Promise<TrackedEndResult> {
   const ending: Promise<TrackedEndResult> = deps.client
-    .end(admission_id)
+    .end(admission_id, admission_generation)
     .catch((): TrackedEndResult => ({ kind: 'threw' }));
   if (user_id === undefined) return ending;
   let byUser = pendingEnds.get(deps);

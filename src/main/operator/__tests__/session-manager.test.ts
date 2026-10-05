@@ -159,6 +159,7 @@ describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', ()
     admission_id: '0192f6a0-aaaa-7bbb-8ccc-000000000001',
     admission_ttl_seconds: 43_200,
     offline_grace_seconds: 86_400,
+    admission_generation: 'gen-signin-0001',
   };
 
   function createCashier(m: SessionManager): ReturnType<SessionManager['create']> {
@@ -180,6 +181,7 @@ describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', ()
       admission_id: ADMISSION.admission_id,
       admission_ttl_seconds: 43_200,
       offline_grace_seconds: 86_400,
+      admission_generation: 'gen-signin-0001',
       authority: 'online_confirmed',
     });
   });
@@ -195,6 +197,7 @@ describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', ()
     });
     expect(record.authority).toBeUndefined();
     expect(record.admission_id).toBeUndefined();
+    expect(record.admission_generation).toBeUndefined();
     expect(record.user_id).toBeUndefined();
   });
 
@@ -208,9 +211,12 @@ describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', ()
       'authority',
       'admission_ttl_seconds',
       'offline_grace_seconds',
+      'admission_generation',
     ]) {
       expect(view).not.toHaveProperty(field);
     }
+    // RT-219: the generation is main-only; it never reaches the renderer.
+    expect(JSON.stringify(view)).not.toContain(ADMISSION.admission_generation);
   });
 
   it('renewAdmission updates the current session only when the id matches', () => {
@@ -221,22 +227,39 @@ describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', ()
         admission_id: 'x',
         admission_ttl_seconds: 1,
         offline_grace_seconds: 1,
+        admission_generation: 'gen-other',
       }),
     ).toBe(false);
     expect(record.admission_id).toBe(ADMISSION.admission_id);
+    expect(record.admission_generation).toBe(ADMISSION.admission_generation);
     expect(
       m.renewAdmission(record.id, {
         admission_id: 'new-id',
         admission_ttl_seconds: 600,
         offline_grace_seconds: 3_600,
+        admission_generation: 'gen-renewed-0002',
       }),
     ).toBe(true);
     expect(m.getCurrent()).toMatchObject({
       admission_id: 'new-id',
       admission_ttl_seconds: 600,
       offline_grace_seconds: 3_600,
+      admission_generation: 'gen-renewed-0002',
       authority: 'online_confirmed',
     });
+  });
+
+  it('RT-219: a renewal of the SAME admission_id still replaces the generation', () => {
+    const m = makeManager();
+    const record = createCashier(m);
+    m.renewAdmission(record.id, {
+      admission_id: ADMISSION.admission_id,
+      admission_ttl_seconds: 43_200,
+      offline_grace_seconds: 86_400,
+      admission_generation: 'gen-heartbeat-0002',
+    });
+    expect(m.getCurrent()?.admission_id).toBe(ADMISSION.admission_id);
+    expect(m.getCurrent()?.admission_generation).toBe('gen-heartbeat-0002');
   });
 
   it('renewAdmission is a no-op without a current session', () => {
@@ -245,6 +268,7 @@ describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', ()
         admission_id: 'x',
         admission_ttl_seconds: 1,
         offline_grace_seconds: 1,
+        admission_generation: 'gen-x',
       }),
     ).toBe(false);
   });

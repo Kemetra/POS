@@ -19,6 +19,7 @@ import { ProtoSessionStore } from '../../../../src/main/operator/takeover-handle
 import type { CashierAdmissionResult } from '../../../../src/main/operator/cashier-admission-client.js';
 import {
   ADMITTED,
+  FAKE_GENERATION,
   FAKE_USER_ID,
   fakeCashierAdmission,
 } from '../../../../src/main/operator/__tests__/__helpers__/fake-cashier-admission.js';
@@ -194,6 +195,8 @@ describe('cashier sign-in — admitted', () => {
       admission_id: ADMITTED.admission_id,
       admission_ttl_seconds: ADMITTED.admission_ttl_seconds,
       offline_grace_seconds: ADMITTED.offline_grace_seconds,
+      // RT-219: stored opaque, as received, for the `end` echo.
+      admission_generation: FAKE_GENERATION,
       // The server-resolved display name is authoritative.
       display_name: 'Server Name',
     });
@@ -202,6 +205,9 @@ describe('cashier sign-in — admitted', () => {
       expect(res.session).not.toHaveProperty('admission_id');
       expect(res.session).not.toHaveProperty('user_id');
     }
+    // RT-219: the generation is main-only; the IPC answer never carries it.
+    expect(res).not.toHaveProperty('session.admission_generation');
+    expect(JSON.stringify(res)).not.toContain(FAKE_GENERATION);
   });
 
   it('calls the P1 grant seam onCashierAdmitted exactly once', async () => {

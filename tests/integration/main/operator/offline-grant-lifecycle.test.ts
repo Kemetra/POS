@@ -118,6 +118,8 @@ const ADMITTED_BODY = {
   admission_ttl_seconds: TTL_S,
   server_time: '2026-10-04T10:00:00.000Z',
   display_name: 'Mona',
+  // RT-219 (#544): every `admitted` carries an opaque generation.
+  admission_generation: 'gen-default-0000',
 };
 
 function errorJson(status: number): Response {

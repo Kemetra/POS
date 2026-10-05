@@ -236,7 +236,7 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
     method: 'post',
     pathTemplate: '/api/pos/v1/cashier-admissions/{admission_id}/end',
     wiring: CASHIER_ADMISSION_WIRING,
-    invoke: (fetch) => cashierAdmissionClient(fetch).end(UUID),
+    invoke: (fetch) => cashierAdmissionClient(fetch).end(UUID, 'contract-conformance-generation'),
   },
   {
     id: 'cashierAdmissionClient.listRoster',

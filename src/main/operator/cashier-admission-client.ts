@@ -5,7 +5,7 @@
  *
  * Contract of record: Kemetra/Backend-Core
  * `packages/contracts/openapi/pos-cashier-admissions.openapi.yaml`
- * (1.0.0-draft; BC1 #696, BC2 #697):
+ * (1.1.0-draft; BC1 #696, BC2 #697; RT-219 generation-scoped `end`, #708):
  *
  *   POST /api/pos/v1/cashier-admissions                   posCreateCashierAdmission
  *   POST /api/pos/v1/cashier-admissions/{admission_id}/end posEndCashierAdmission
@@ -27,6 +27,14 @@
  * reject-only-on-transport, like `backend-client.ts`). No PIN or other secret
  * ever enters this module (AD-2): the admission call is the device's
  * attestation that it verified the PIN locally.
+ *
+ * RT-219: every `admitted` carries an opaque `admission_generation` that the
+ * server changes on each grant and renewal. `end` echoes the generation of the
+ * latest `admitted` for that admission, so a late `end` is a server-side no-op
+ * once the admission has been renewed after it. The value is kept verbatim:
+ * never parsed, ordered, constructed or logged. Backend-Core sends it from
+ * #708 (`689e164`) on; an `admitted` without it is outside the contract and is
+ * `rejected` like any other malformed 200, so Backend-Core deploys first.
  */
 
 const ADMISSIONS_PATH = '/api/pos/v1/cashier-admissions';
@@ -58,6 +66,16 @@ export interface CashierAdmissionAdmitted {
   admission_ttl_seconds: number;
   server_time: string;
   display_name: string;
+  /**
+   * RT-219 `AdmissionGeneration`: opaque, 1–64 printable ASCII without space.
+   * Echoed unchanged on `end`; never parsed, compared for order, or logged.
+   */
+  admission_generation: string;
+}
+
+/** RT-219 `PosCashierAdmissionEndRequest`. */
+export interface CashierAdmissionEndRequest {
+  admission_generation: string;
 }
 
 /**
@@ -117,8 +135,13 @@ export type CashierRosterResult =
 
 export interface CashierAdmissionClient {
   admit(req: CashierAdmissionOnlineRequest): Promise<CashierAdmissionResult>;
-  /** Idempotent and non-disclosing server-side; callers treat it as best-effort. */
-  end(admissionId: string): Promise<CashierAdmissionEndResult>;
+  /**
+   * Idempotent and non-disclosing server-side; callers treat it as best-effort.
+   * RT-219: `admissionGeneration` is the `admission_generation` of the LATEST
+   * `admitted` for `admissionId`. It is a no-op server-side once that admission
+   * has been renewed since.
+   */
+  end(admissionId: string, admissionGeneration: string): Promise<CashierAdmissionEndResult>;
   listRoster(): Promise<CashierRosterResult>;
 }
 
@@ -189,8 +212,10 @@ export function createCashierAdmissionClient(
       return { kind: statusOutcome(sent.response.status, ADMISSION_STATUS) };
     },
 
-    async end(admissionId) {
-      const sent = await send(`${ADMISSIONS_PATH}/${encodeURIComponent(admissionId)}/end`, 'POST');
+    async end(admissionId, admissionGeneration) {
+      const sent = await send(`${ADMISSIONS_PATH}/${encodeURIComponent(admissionId)}/end`, 'POST', {
+        admission_generation: admissionGeneration,
+      } satisfies CashierAdmissionEndRequest);
       if (sent.kind !== 'response') return notSent(sent);
       // Every non-401 answer is informational: `end` is idempotent and the
       // local tear-down is authoritative.
@@ -259,6 +284,13 @@ function isNonEmptyString(value: unknown): value is string {
   return isString(value) && value.length > 0;
 }
 
+/** RT-219 `AdmissionGeneration`: `^[\x21-\x7E]{1,64}$`. */
+const ADMISSION_GENERATION = /^[\x21-\x7E]{1,64}$/;
+
+function isAdmissionGeneration(value: unknown): value is string {
+  return isString(value) && ADMISSION_GENERATION.test(value);
+}
+
 function isIntegerAtLeast(min: number): (value: unknown) => boolean {
   return (value) => typeof value === 'number' && Number.isInteger(value) && value >= min;
 }
@@ -272,6 +304,7 @@ const ADMITTED_FIELDS: Readonly<
   admission_ttl_seconds: isIntegerAtLeast(1),
   server_time: isString,
   display_name: isString,
+  admission_generation: isAdmissionGeneration,
 };
 
 function isAdmittedBody(body: Record<string, unknown>): boolean {
@@ -293,6 +326,7 @@ function interpretAdmission(parsed: unknown): CashierAdmissionResult {
     admission_ttl_seconds: parsed['admission_ttl_seconds'] as number,
     server_time: parsed['server_time'] as string,
     display_name: parsed['display_name'] as string,
+    admission_generation: parsed['admission_generation'] as string,
   };
 }
 

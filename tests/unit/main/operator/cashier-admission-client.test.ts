@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -20,6 +24,8 @@ const DEVICE_TOKEN = 'device-token-SECRET-abc123';
 const USER_ID = '0192f6a0-1b2c-7d3e-8f40-123456789abc';
 const ADMISSION_ID = '0192f6a0-aaaa-7bbb-8ccc-000000000001';
 const KEY = 'pos-cashier-adm-1f0e3c1e-61a4-4c84-a3b1-9d0b2c7c8e11';
+/** RT-219 — an opaque `admission_generation` (contract `AdmissionGeneration`). */
+const GENERATION = '1759572000.123456';
 
 const ADMITTED = {
   kind: 'admitted',
@@ -28,6 +34,7 @@ const ADMITTED = {
   admission_ttl_seconds: 43_200,
   server_time: '2026-10-04T10:00:00.000Z',
   display_name: 'Mona',
+  admission_generation: GENERATION,
 } as const;
 
 interface Recorded {
@@ -84,9 +91,15 @@ const ONLINE_REQ = {
   idempotency_key: KEY,
 };
 
+/** The RT-217 pinned snapshot of the same contract (`npm run contracts:repin`). */
+const PINNED_YAML = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../../contracts/backend-core/openapi/pos-cashier-admissions.openapi.yaml',
+);
+
 describe('contract fixtures', () => {
-  it('validates against the vendored Backend-Core contract of record (1.0.0-draft)', () => {
-    expect(cashierAdmissionsContract.info.version).toBe('1.0.0-draft');
+  it('validates against the vendored Backend-Core contract of record (1.1.0-draft, RT-219)', () => {
+    expect(cashierAdmissionsContract.info.version).toBe('1.1.0-draft');
     expect(Object.keys(cashierAdmissionsContract.paths).sort()).toEqual([
       '/api/pos/v1/cashier-admissions',
       '/api/pos/v1/cashier-admissions/roster',
@@ -100,6 +113,20 @@ describe('contract fixtures', () => {
     expect(contractErrors('RefusedError', errorBody('refused'))).toEqual([]);
     expect(contractErrors('PosCashierAdmissionEnded', { kind: 'ended' })).toEqual([]);
     expect(contractErrors('PosCashierAdmissionOnlineRequest', ONLINE_REQ)).toEqual([]);
+    expect(
+      contractErrors('PosCashierAdmissionEndRequest', { admission_generation: GENERATION }),
+    ).toEqual([]);
+  });
+
+  it('RT-219: the JSON fixture is the same contract version as the RT-217 pinned YAML', () => {
+    const pinned = readFileSync(PINNED_YAML, 'utf8');
+    const version = /^\s+version:\s*"([^"]+)"/m.exec(pinned)?.[1];
+    expect(version).toBe(cashierAdmissionsContract.info.version);
+  });
+
+  it('RT-219: admitted requires admission_generation in the pinned contract', () => {
+    const withoutGeneration = { ...ADMITTED, admission_generation: undefined };
+    expect(contractErrors('PosCashierAdmissionAdmitted', withoutGeneration)).not.toEqual([]);
   });
 });
 
@@ -171,9 +198,40 @@ describe('admit — outcome mapping', () => {
     ['non-string display name', { ...ADMITTED, display_name: 7 }],
     ['non-string server time', { ...ADMITTED, server_time: null }],
     ['array body', [ADMITTED]],
+    // RT-219: `admission_generation` is required (`AdmissionGeneration`: 1–64 of \x21-\x7E).
+    ['missing generation', { ...ADMITTED, admission_generation: undefined }],
+    ['null generation', { ...ADMITTED, admission_generation: null }],
+    ['numeric generation', { ...ADMITTED, admission_generation: 7 }],
+    ['empty generation', { ...ADMITTED, admission_generation: '' }],
+    ['65-character generation', { ...ADMITTED, admission_generation: 'g'.repeat(65) }],
+    ['generation with a space', { ...ADMITTED, admission_generation: 'gen 1' }],
+    ['generation with a control character', { ...ADMITTED, admission_generation: 'gen\n1' }],
+    ['generation with non-ASCII', { ...ADMITTED, admission_generation: 'génération' }],
   ])('a malformed 200 (%s) → rejected', async (_label, body) => {
     const { client } = makeClient(() => jsonResponse(200, body));
     await expect(client.admit(ONLINE_REQ)).resolves.toEqual({ kind: 'rejected' });
+  });
+
+  it.each([
+    ['one character', '!'],
+    ['64 characters', `${'~'.repeat(63)}x`],
+    ['the replayed pre-deploy value', '0'],
+  ])('RT-219: a contract-valid generation (%s) is kept verbatim', async (_label, generation) => {
+    const body = { ...ADMITTED, admission_generation: generation };
+    expect(contractErrors('PosCashierAdmissionAdmitted', body)).toEqual([]);
+    const { client } = makeClient(() => jsonResponse(200, body));
+    await expect(client.admit(ONLINE_REQ)).resolves.toEqual(body);
+  });
+
+  it('RT-219: the parser rejects exactly what the contract rejects', () => {
+    for (const generation of ['', ' ', 'a b', 'g'.repeat(65), 'é', '\u007f']) {
+      expect(
+        contractErrors('PosCashierAdmissionAdmitted', {
+          ...ADMITTED,
+          admission_generation: generation,
+        }),
+      ).not.toEqual([]);
+    }
   });
 
   it('a 200 that is not JSON → rejected', async () => {
@@ -183,20 +241,34 @@ describe('admit — outcome mapping', () => {
 });
 
 describe('end', () => {
-  it('POSTs to …/{admission_id}/end with the device bearer and no body', async () => {
+  it('RT-219: POSTs to …/{admission_id}/end with the device bearer and the echoed generation', async () => {
     const { client, calls } = makeClient(() => jsonResponse(200, { kind: 'ended' }));
-    await expect(client.end(ADMISSION_ID)).resolves.toEqual({ kind: 'ended' });
+    await expect(client.end(ADMISSION_ID, GENERATION)).resolves.toEqual({ kind: 'ended' });
     expect(calls[0]?.url).toBe(`${BASE}/api/pos/v1/cashier-admissions/${ADMISSION_ID}/end`);
     expect(calls[0]?.init.method).toBe('POST');
-    expect(calls[0]?.init.body).toBeUndefined();
     expect(headersOf(calls[0] ?? { url: '', init: {} })).toEqual({
       authorization: `Bearer ${DEVICE_TOKEN}`,
+      'content-type': 'application/json',
     });
+    const body = JSON.parse(calls[0]?.init.body as string) as unknown;
+    expect(body).toEqual({ admission_generation: GENERATION });
+    expect(contractErrors('PosCashierAdmissionEndRequest', body)).toEqual([]);
+    expect(calls[0]?.init.body as string).not.toContain(DEVICE_TOKEN);
+  });
+
+  it('RT-219: echoes exactly the generation it is given, unchanged', async () => {
+    const { client, calls } = makeClient(() => jsonResponse(200, { kind: 'ended' }));
+    await client.end(ADMISSION_ID, 'first');
+    await client.end(ADMISSION_ID, 'second~!');
+    expect(calls.map((c) => JSON.parse(c.init.body as string) as unknown)).toEqual([
+      { admission_generation: 'first' },
+      { admission_generation: 'second~!' },
+    ]);
   });
 
   it('encodes the admission id into the path', async () => {
     const { client, calls } = makeClient(() => jsonResponse(200, { kind: 'ended' }));
-    await client.end('a/b?c');
+    await client.end('a/b?c', GENERATION);
     expect(calls[0]?.url).toBe(`${BASE}/api/pos/v1/cashier-admissions/a%2Fb%3Fc/end`);
   });
 
@@ -215,14 +287,18 @@ describe('end', () => {
     [504, 'unavailable'],
   ])('HTTP %i → %s', async (status, kind) => {
     const { client } = makeClient(() => jsonResponse(status, errorBody('x')));
-    await expect(client.end(ADMISSION_ID)).resolves.toEqual({ kind });
+    await expect(client.end(ADMISSION_ID, GENERATION)).resolves.toEqual({ kind });
   });
 
   it('a transport failure → no_connection; no token → no_token', async () => {
     const down = makeClient(() => Promise.reject(new Error('ECONNREFUSED')));
-    await expect(down.client.end(ADMISSION_ID)).resolves.toEqual({ kind: 'no_connection' });
+    await expect(down.client.end(ADMISSION_ID, GENERATION)).resolves.toEqual({
+      kind: 'no_connection',
+    });
     const noToken = makeClient(() => jsonResponse(200, { kind: 'ended' }), { token: '' });
-    await expect(noToken.client.end(ADMISSION_ID)).resolves.toEqual({ kind: 'no_token' });
+    await expect(noToken.client.end(ADMISSION_ID, GENERATION)).resolves.toEqual({
+      kind: 'no_token',
+    });
     expect(noToken.calls).toHaveLength(0);
   });
 });
@@ -231,7 +307,7 @@ describe('review F8: a missing or unreadable device token', () => {
   it('a token read that throws resolves no_token on every call and never throws', async () => {
     const { client, calls } = makeClient(() => jsonResponse(200, ADMITTED), { tokenThrows: true });
     await expect(client.admit(ONLINE_REQ)).resolves.toEqual({ kind: 'no_token' });
-    await expect(client.end(ADMISSION_ID)).resolves.toEqual({ kind: 'no_token' });
+    await expect(client.end(ADMISSION_ID, GENERATION)).resolves.toEqual({ kind: 'no_token' });
     await expect(client.listRoster()).resolves.toEqual({ kind: 'no_token' });
     expect(calls).toHaveLength(0);
   });
@@ -319,7 +395,7 @@ describe('Clerk-gated operator routes are never requested', () => {
           : jsonResponse(200, ADMITTED),
     );
     await client.admit(ONLINE_REQ);
-    await client.end(ADMISSION_ID);
+    await client.end(ADMISSION_ID, GENERATION);
     await client.listRoster();
     expect(calls).toHaveLength(3);
     for (const c of calls) {
