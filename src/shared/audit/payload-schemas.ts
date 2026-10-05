@@ -97,6 +97,40 @@ export interface OperatorSessionUnlockedPayload {
   locked_duration_ms: number;
 }
 
+// ─── operator.offline_grant.invalidated (RT-113 P1.2) ────────────────────────
+
+/**
+ * Why an offline grant was invalidated (RT-113 10763 D4, OD6, OD8). Closed
+ * set, shared by the grant store and this audit payload.
+ */
+export const OFFLINE_GRANT_INVALIDATION_REASONS = [
+  /** Backend-Core answered 403 for this user. */
+  'forbidden',
+  /** Backend-Core answered 401 for the device (RT-138 L6). */
+  'device_unauthorized',
+  /** OD6: the cashier was admitted on another till (`active_elsewhere`). */
+  'superseded',
+  /** The terminal was paired again. */
+  'repair',
+  /** The terminal was unpaired. */
+  'unpair',
+  /** OD8: Backend-Core answered `offline_grace_seconds = 0`. */
+  'grace_disabled',
+  /** An `admitted` event could not be recorded, so the old grant must not stand. */
+  'refresh_failed',
+] as const;
+
+export type OfflineGrantInvalidationReason = (typeof OFFLINE_GRANT_INVALIDATION_REASONS)[number];
+
+/**
+ * `operator.offline_grant.invalidated` — one event per grant (OD10), attributed
+ * to that grant's operator through `acting_operator_id`. The reason only: no
+ * grant field (user id, admission id, display name, times) is ever recorded.
+ */
+export interface OperatorOfflineGrantInvalidatedPayload {
+  reason: OfflineGrantInvalidationReason;
+}
+
 // ─── operator.session.takeover ─────────────────────────────────────────────
 
 export interface OperatorSessionTakeoverPayload {
@@ -421,6 +455,8 @@ export type AuditPayloadMap = {
   // RT-117 (RT-116 §7.3)
   'operator.session.locked': OperatorSessionLockedPayload;
   'operator.session.unlocked': OperatorSessionUnlockedPayload;
+  // RT-113 P1.2 (OD10)
+  'operator.offline_grant.invalidated': OperatorOfflineGrantInvalidatedPayload;
   'cashier.pin.reset': CashierPinResetPayload;
   'cashier.pin.unlock': CashierPinUnlockPayload;
   'cashier.pin.provisioned': CashierPinProvisionedPayload;

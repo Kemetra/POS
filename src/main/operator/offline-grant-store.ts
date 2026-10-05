@@ -1,5 +1,9 @@
 import type { Logger } from 'pino';
 
+import {
+  OFFLINE_GRANT_INVALIDATION_REASONS,
+  type OfflineGrantInvalidationReason,
+} from '../../shared/audit/payload-schemas.js';
 import type { DatabaseHandle } from '../db/client.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
 
@@ -12,8 +16,9 @@ import type { CashierAdmittedEvent } from './cashier-admission.js';
  * A grant is the local proof that Backend-Core admitted a cashier ONLINE on
  * this terminal. P3 will let that cashier sign in offline, within bounds, on
  * the strength of it. This module only stores, bounds and checks grants. It is
- * pure (injected seal, DB handle and clock) and is NOT wired into anything:
- * P1.2 plugs it into the cashier-admission grant seam and the pairing changes.
+ * pure (injected seal, DB handle and clock). P1.2 wires it into the
+ * cashier-admission grant seam, the pairing changes and the clock tick
+ * (`offline-grant-wiring.ts`).
  *
  * Storage (migration 0041): one `cashier_offline_grants` row per
  * (tenant, branch, terminal, user_id). Everything that decides admissibility
@@ -27,11 +32,15 @@ import type { CashierAdmittedEvent } from './cashier-admission.js';
  *    `issued_at_local` is the local receipt time of the admission;
  *  - count: at most 8 offline uses per grant; the 9th is refused;
  *  - clock: refused when `now < high-water mark − 5 min`. The mark only rises.
- *    The grant's own issue and last-use times floor the clock too, so deleting
- *    the mark row does not reopen a rolled-back clock below them.
+ *    The grant's own issue and last-use times floor the clock too, so an older
+ *    mark written back does not reopen a rolled-back clock below them. F2
+ *    (P1.2): a mark that is MISSING while any grant row exists is `storage`.
+ *  - epoch: every new pairing gets an epoch above the mark (F4), so a grant
+ *    from an earlier pairing never matches, even when `paired_at` repeats.
  *
  * Failure is never proof (D10): any read, unseal or parse failure refuses.
- * `evaluate`, `consumeOfflineUse` and `observeClock` never throw. The writes
+ * `evaluate`, `consumeOfflineUse`, `observeClock` and `nextPairingEpoch` never
+ * throw, not even on a throwing logger (F3). The writes
  * (`upsertFromAdmitted`, `invalidate`, `invalidateAll`, `purgeAll`) throw an
  * {@link OfflineGrantStoreError} carrying a category only. When a write that
  * should end or replace a grant fails, the store first deletes that grant, so
@@ -58,25 +67,8 @@ export const OFFLINE_GRANT_MAX_USES = 8;
 /** D4/OD7: how far the wall clock may sit behind the high-water mark. */
 export const OFFLINE_CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
 
-/** Why a grant was invalidated (10763 D4, OD6, OD8). Closed set. */
-export const OFFLINE_GRANT_INVALIDATION_REASONS = [
-  /** Backend-Core answered 403 for this user. */
-  'forbidden',
-  /** Backend-Core answered 401 for the device (RT-138 L6). */
-  'device_unauthorized',
-  /** OD6: the cashier was admitted on another till (`active_elsewhere`). */
-  'superseded',
-  /** The terminal was paired again. */
-  'repair',
-  /** The terminal was unpaired. */
-  'unpair',
-  /** OD8: Backend-Core answered `offline_grace_seconds = 0`. */
-  'grace_disabled',
-  /** An `admitted` event could not be recorded, so the old grant must not stand. */
-  'refresh_failed',
-] as const;
-
-export type OfflineGrantInvalidationReason = (typeof OFFLINE_GRANT_INVALIDATION_REASONS)[number];
+/** Why a grant was invalidated (10763 D4, OD6, OD8). Closed set, shared with the audit payload. */
+export { OFFLINE_GRANT_INVALIDATION_REASONS, type OfflineGrantInvalidationReason };
 
 /** Why there is no proof. Closed set; logged and audited as-is, never a field. */
 export const OFFLINE_GRANT_REFUSAL_CATEGORIES = [
@@ -125,6 +117,23 @@ export interface InvalidatedGrant {
   operator_id: string;
 }
 
+/** A standing grant a purge deleted, with its own scope (for its audit envelope). */
+export interface PurgedGrant extends InvalidatedGrant {
+  tenant_id: string;
+  branch_id: string;
+  terminal_id: string;
+}
+
+export interface PurgeResult {
+  removed: number;
+  /**
+   * Codex P2 4183628413 — every standing (readable, own-key, not yet
+   * invalidated) grant the purge deleted. Already-invalidated grants were
+   * audited when invalidated and are not reported again.
+   */
+  invalidated: PurgedGrant[];
+}
+
 export interface InvalidateResult {
   /** Grants that were valid-shaped and are now invalidated (or removed). */
   invalidated: InvalidatedGrant[];
@@ -137,7 +146,13 @@ export type UpsertResult =
   /** OD8: grace 0 — nothing written; any existing grant invalidated. */
   | { kind: 'grace_disabled'; invalidated: InvalidatedGrant[] }
   /** The event was malformed — nothing written; any existing grant invalidated. */
-  | { kind: 'rejected'; invalidated: InvalidatedGrant[] };
+  | { kind: 'rejected'; invalidated: InvalidatedGrant[] }
+  /**
+   * Codex P2 4183383061 — the fresh grant could not be written, so the old one
+   * was deleted (fail closed). `invalidated` names a standing (not yet
+   * invalidated) grant that this removed, for its `refresh_failed` audit.
+   */
+  | { kind: 'refresh_failed'; invalidated: InvalidatedGrant[] };
 
 export type ClockObservation = { kind: 'raised' } | { kind: 'unchanged' } | { kind: 'unavailable' };
 
@@ -173,8 +188,14 @@ export interface OfflineGrantStore {
   ): InvalidateResult;
   /** Invalidate every grant of the scope's tenant, branch and terminal. */
   invalidateAll(scope: OfflineGrantScope, reason: OfflineGrantInvalidationReason): InvalidateResult;
-  /** OD4: delete every grant on this device (pairing persisted or cleared). */
-  purgeAll(): { removed: number };
+  /**
+   * OD4: delete every grant on this device (pairing persisted or cleared).
+   * Codex P1 4181552529: the purge first raises (or, when missing or
+   * unreadable, re-seals) the clock mark above every purged grant's epoch and
+   * clock floor and above `prior_epoch`, so deleting the grants never erases
+   * the evidence {@link nextPairingEpoch} needs.
+   */
+  purgeAll(prior_epoch?: number): PurgeResult;
   /** Is there proof for an offline admission now? Read-only but for the clock mark. */
   evaluate(scope: OfflineGrantScope, user_id: string, nowWall: Date): OfflineGrantEvaluation;
   /** Use one offline admission: evaluate, then increment and re-seal (P3 calls it). */
@@ -185,6 +206,15 @@ export interface OfflineGrantStore {
   ): OfflineGrantEvaluation;
   /** OD7: raise the clock high-water mark to `nowWall`; never lowers it. */
   observeClock(nowWall: Date): ClockObservation;
+  /**
+   * F4 (10893): the epoch for a NEW pairing. `paired_at` has 1 s granularity,
+   * so two pairings can share it; the epoch returned is strictly above every
+   * epoch a grant on this device can hold. The mark is raised to it, so the
+   * next call is above it again. Never throws: on a storage failure, or an
+   * unreadable mark, it returns `candidate` (offline then stays refused until
+   * an online write repairs the mark).
+   */
+  nextPairingEpoch(candidate: number): number;
 }
 
 // ── Sealed body ──────────────────────────────────────────────────────────────
@@ -370,6 +400,10 @@ const CAS_GRANT = `UPDATE cashier_offline_grants SET sealed_body = ?, sealed_at 
 const DELETE_GRANT = `DELETE FROM cashier_offline_grants
   WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND user_id = ?`;
 const DELETE_ALL_GRANTS = 'DELETE FROM cashier_offline_grants';
+const SELECT_ALL_BODIES = 'SELECT sealed_body FROM cashier_offline_grants';
+const SELECT_ALL_ROWS = `SELECT tenant_id, branch_id, terminal_id, user_id, sealed_body
+  FROM cashier_offline_grants`;
+const SELECT_ANY_GRANT = 'SELECT 1 AS present FROM cashier_offline_grants LIMIT 1';
 const SELECT_HWM = 'SELECT sealed_body FROM cashier_offline_clock_hwm WHERE id = 1';
 const UPSERT_HWM = `INSERT INTO cashier_offline_clock_hwm (id, sealed_body, sealed_at) VALUES (1, ?, ?)
   ON CONFLICT (id) DO UPDATE SET sealed_body = excluded.sealed_body, sealed_at = excluded.sealed_at`;
@@ -498,8 +532,13 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     return deps.now().toISOString();
   }
 
+  /** F3 (10893): a throwing logger never escapes, and never aborts a write. */
   function log(level: 'info' | 'warn', fields: Record<string, string | number>): void {
-    deps.logger?.[level](fields, String(fields['event']).replace(/\./g, ' '));
+    try {
+      deps.logger?.[level](fields, String(fields['event']).replace(/\./g, ' '));
+    } catch {
+      // Logging is best-effort.
+    }
   }
 
   function seal(text: string): Buffer {
@@ -508,6 +547,17 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
   }
 
   // ── grant rows ──
+
+  /** A sealed grant body, opened and shape-checked; null when it is no readable grant. */
+  function openGrantBody(sealed: unknown): GrantBody | null {
+    const blob = asBlob(sealed);
+    if (blob === null) return null;
+    try {
+      return parseBody(safeStorage.decryptString(blob), GRANT_SHAPE);
+    } catch {
+      return null;
+    }
+  }
 
   function readGrant(scope: OfflineGrantScope, user_id: string): GrantRead {
     const row = stmt(SELECT_GRANT).get(
@@ -567,13 +617,31 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     stmt(UPSERT_HWM).run(seal(JSON.stringify(body)), stamp());
   }
 
+  function anyGrantRow(): boolean {
+    return stmt(SELECT_ANY_GRANT).get() !== undefined;
+  }
+
   /**
-   * Raise the mark to `now_ms` (never lower). An unreadable mark is left as it
-   * is, unless `repair` (an online admission): then it is re-sealed at `now_ms`.
-   * Returns the mark after the call, or null when it is unreadable.
+   * F2 (10893): a mark that is missing while a grant row exists was deleted,
+   * not never written. It is as good as unreadable: a deleted mark plus a clock
+   * rollback must not extend a grant. With no grant at all it is a first run.
+   */
+  function readHwmChecked(): HwmRead {
+    const current = readHwm();
+    if (current.kind === 'ok' && current.hwm_ms === null && anyGrantRow()) {
+      return { kind: 'unreadable' };
+    }
+    return current;
+  }
+
+  /**
+   * Raise the mark to `now_ms` (never lower). An unreadable (or F2: deleted)
+   * mark is left as it is, unless `repair` (an online admission): then it is
+   * re-sealed at `now_ms`. Returns the mark after the call, or null when it is
+   * unreadable.
    */
   function raiseHwm(now_ms: number, repair: boolean): { hwm_ms: number; raised: boolean } | null {
-    const current = readHwm();
+    const current = readHwmChecked();
     if (current.kind === 'unreadable') {
       if (!repair) return null;
       writeHwm(now_ms);
@@ -584,6 +652,29 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     }
     writeHwm(now_ms);
     return { hwm_ms: now_ms, raised: true };
+  }
+
+  /** The latest time any grant row (readable ones) or the prior pairing vouches for. */
+  function purgeEvidenceMs(prior_epoch: number | undefined): number {
+    let floor = isCount(prior_epoch) ? prior_epoch * 1000 : 0;
+    for (const row of stmt(SELECT_ALL_BODIES).all() as { sealed_body: unknown }[]) {
+      const body = openGrantBody(row.sealed_body);
+      if (body !== null) floor = Math.max(floor, body.pairing_epoch * 1000, clockFloor(body));
+    }
+    return floor;
+  }
+
+  /** Codex P1 4181552529: a purge never lowers, and never erases, the evidence in the mark. */
+  function keepPurgeEvidence(prior_epoch: number | undefined): void {
+    const evidence = purgeEvidenceMs(prior_epoch);
+    const current = readHwm();
+    if (current.kind === 'ok' && current.hwm_ms !== null) {
+      if (current.hwm_ms < evidence) writeHwm(evidence);
+      return;
+    }
+    if (current.kind === 'ok' && evidence === 0) return; // a first run: nothing to keep
+    // Missing (with evidence) or unreadable: re-seal, never below now.
+    writeHwm(Math.max(evidence, deps.now().getTime()));
   }
 
   // ── evaluation ──
@@ -691,24 +782,57 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     return invalidateUsers(scope, () => [user_id], reason, 'invalidate');
   }
 
+  /** Codex P2 4183628413: the standing grants on the device, each with its row's scope. */
+  function standingGrants(): PurgedGrant[] {
+    const out: PurgedGrant[] = [];
+    type Row = OfflineGrantScope & { user_id: string; sealed_body: unknown };
+    for (const row of stmt(SELECT_ALL_ROWS).all() as Row[]) {
+      const body = openGrantBody(row.sealed_body);
+      if (body === null || body.invalidated !== null) continue;
+      if (!bodyBelongsTo(body, row, row.user_id)) continue;
+      out.push({
+        tenant_id: row.tenant_id,
+        branch_id: row.branch_id,
+        terminal_id: row.terminal_id,
+        user_id: body.user_id,
+        operator_id: body.operator_id,
+      });
+    }
+    return out;
+  }
+
+  /** A standing (readable, not yet invalidated) grant of this key, for attribution. */
+  function standingGrant(scope: OfflineGrantScope, user_id: string): InvalidatedGrant[] {
+    const read = readGrant(scope, user_id);
+    if (read.kind !== 'ok' || read.body.invalidated !== null) return [];
+    return [{ user_id: read.body.user_id, operator_id: read.body.operator_id }];
+  }
+
   /**
    * Write a fresh grant and raise (or repair) the clock mark, atomically. If
-   * that fails, the old grant is deleted first: a refresh that cannot be
-   * recorded must not leave the old grant standing.
+   * that fails, the old grant is deleted: a refresh that cannot be recorded
+   * must not leave the old grant standing. Returns null when written, else the
+   * standing grant the delete removed (Codex P2 4183383061: so its
+   * `refresh_failed` invalidation can be audited). Throws storage only when
+   * even the delete fails (the wiring then holds a tombstone).
    */
-  function writeFreshGrant(scope: OfflineGrantScope, body: GrantBody): void {
+  function writeFreshGrant(scope: OfflineGrantScope, body: GrantBody): InvalidatedGrant[] | null {
     try {
       tx(() => {
         writeGrant(body);
         raiseHwm(deps.now().getTime(), true);
       });
+      return null;
     } catch {
       log('warn', { event: 'operator.offline_grant.storage_failed', op: 'upsert' });
-      try {
+    }
+    try {
+      return tx(() => {
+        const removed = standingGrant(scope, body.user_id);
         deleteGrant(scope, body.user_id);
-      } catch {
-        // P1.2 holds an in-memory tombstone for this case.
-      }
+        return removed;
+      });
+    } catch {
       throw new OfflineGrantStoreError('storage');
     }
   }
@@ -729,7 +853,8 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
         const r = invalidate(scope, event.user_id, 'grace_disabled');
         return { kind: 'grace_disabled', invalidated: r.invalidated };
       }
-      writeFreshGrant(scope, body);
+      const removed = writeFreshGrant(scope, body);
+      if (removed !== null) return { kind: 'refresh_failed', invalidated: removed };
       log('info', { event: 'operator.offline_grant.written' });
       return { kind: 'written' };
     },
@@ -748,16 +873,20 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
       return invalidateUsers(scope, users, reason, 'invalidate_all');
     },
 
-    purgeAll() {
-      let removed: number;
+    purgeAll(prior_epoch) {
+      let result: PurgeResult;
       try {
-        removed = stmt(DELETE_ALL_GRANTS).run().changes;
+        result = tx(() => {
+          keepPurgeEvidence(prior_epoch);
+          const invalidated = standingGrants();
+          return { removed: stmt(DELETE_ALL_GRANTS).run().changes, invalidated };
+        });
       } catch {
         log('warn', { event: 'operator.offline_grant.storage_failed', op: 'purge' });
         throw new OfflineGrantStoreError('storage');
       }
-      log('info', { event: 'operator.offline_grant.purged', count: removed });
-      return { removed };
+      log('info', { event: 'operator.offline_grant.purged', count: result.removed });
+      return result;
     },
 
     evaluate(scope, user_id, nowWall) {
@@ -802,6 +931,25 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
       if (!outcome.admissible) return refused(outcome.category);
       log('info', { event: 'operator.offline_grant.consumed' });
       return { admissible: true, grant: grantView(outcome.body) };
+    },
+
+    nextPairingEpoch(candidate) {
+      try {
+        return tx(() => {
+          const current = readHwmChecked();
+          const above =
+            current.kind === 'ok' && current.hwm_ms !== null
+              ? Math.floor(current.hwm_ms / 1000) + 1
+              : 0;
+          const epoch = Math.max(candidate, above);
+          // An unreadable mark stays as it is (raiseHwm leaves it; no repair here).
+          raiseHwm(epoch * 1000, false);
+          return epoch;
+        });
+      } catch {
+        log('warn', { event: 'operator.offline_grant.storage_failed', op: 'pairing_epoch' });
+        return candidate;
+      }
     },
 
     observeClock(nowWall) {

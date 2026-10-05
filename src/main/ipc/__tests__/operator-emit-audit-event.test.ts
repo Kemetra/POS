@@ -481,22 +481,24 @@ describe('operator:emit-audit-event — idempotency', () => {
 });
 
 describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', () => {
-  it.each(['operator.session.locked', 'operator.session.unlocked'])(
-    'refuses a renderer-forged %s and never emits it',
-    async (action_category) => {
-      const emit = vi.fn();
-      const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });
+  // RT-113 P1.2: the offline grant invalidation is recorded by main only.
+  it.each([
+    'operator.session.locked',
+    'operator.session.unlocked',
+    'operator.offline_grant.invalidated',
+  ])('refuses a renderer-forged %s and never emits it', async (action_category) => {
+    const emit = vi.fn();
+    const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });
 
-      const res = await emitAuditEvent(FAKE_EVENT, {
-        ...VALID_REQUEST,
-        action_category,
-        payload: { lock_cause: 'inactivity' },
-      });
+    const res = await emitAuditEvent(FAKE_EVENT, {
+      ...VALID_REQUEST,
+      action_category,
+      payload: { lock_cause: 'inactivity' },
+    });
 
-      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
-      expect(emit).not.toHaveBeenCalled();
-    },
-  );
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(emit).not.toHaveBeenCalled();
+  });
 });
 
 describe('operator:emit-audit-event — no T051 lifecycle behavior', () => {

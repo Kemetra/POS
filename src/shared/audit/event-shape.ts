@@ -27,6 +27,10 @@ export const AUDIT_ACTION_CATEGORIES = [
   // same-operator unlock. Neither ends the session.
   'operator.session.locked',
   'operator.session.unlocked',
+  // RT-113 P1.2 (OD10) — an offline grant was invalidated or purged. One event
+  // per grant, attributed to that grant's operator; payload `{reason}` only.
+  // Main-only (a renderer cannot forge it). Open-set at the SQL layer (0004).
+  'operator.offline_grant.invalidated',
   'cashier.pin.reset',
   'cashier.pin.unlock',
   // 019-cashier-pin-provisioning (R-2) — first-PIN create path; sibling to

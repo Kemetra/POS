@@ -216,3 +216,19 @@ describe('RT-113 P2 — worker registry: the cashier admission heartbeat', () =>
     expect(registry.hasRegistered()).toBe(false);
   });
 });
+
+describe('RT-113 P1.2 — worker registry: the offline grant clock tick', () => {
+  it('stops the offline grant clock tick after the heartbeat, still before the DB closes', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('offline grant clock tick', () => order.push('offline grant clock tick'));
+    registry.register('cashier admission heartbeat', () =>
+      order.push('cashier admission heartbeat'),
+    );
+
+    registry.stopAll();
+
+    expect(order).toEqual(['cashier admission heartbeat', 'offline grant clock tick']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});
