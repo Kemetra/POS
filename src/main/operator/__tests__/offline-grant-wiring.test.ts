@@ -635,6 +635,73 @@ describe('the clock high-water-mark tick (OD7) under the RT-198 stop latch', () 
   });
 });
 
+describe('a failed audit insert is retried, never lost (Codex P2 4183175501)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  });
+
+  /** An emitter that throws `failures` times, then records like the real one (idempotent by event_id). */
+  function flakyEmitter(failures: number): { emit: (e: AuditEvent) => void; landed: AuditEvent[] } {
+    let left = failures;
+    const landed: AuditEvent[] = [];
+    return {
+      landed,
+      emit(e) {
+        if (left > 0) {
+          left -= 1;
+          throw new Error('SQLITE_FULL');
+        }
+        if (!landed.some((x) => x.event_id === e.event_id)) landed.push(e);
+      },
+    };
+  }
+
+  it('an audit that throws once lands exactly once on the next tick', () => {
+    const flaky = flakyEmitter(1);
+    const w = makeWiring({ emit: flaky.emit });
+    w.setScope(scope());
+    w.seam.onCashierAdmitted(current(w));
+    w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
+    expect(flaky.landed).toEqual([]);
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated')); // the invalidation stands
+    w.start();
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(flaky.landed.map(auditOf)).toEqual([{ reason: 'forbidden', operator: OPERATOR }]);
+    expect(flaky.landed[0]?.created_at).toBe(T0.toISOString());
+    expect(JSON.stringify(logCalls)).toContain('operator.offline_grant.audit_failed');
+    w.stop();
+  });
+
+  it('keeps retrying across several failed ticks, one event per grant', () => {
+    const flaky = flakyEmitter(5);
+    const w = makeWiring({ emit: flaky.emit });
+    w.setScope(scope());
+    w.seam.onCashierAdmitted(current(w));
+    w.seam.onCashierAdmitted(current(w, { user_id: USER_2, operator_id: OPERATOR_2 }));
+    w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
+    w.start();
+    for (let i = 0; i < 5; i += 1) vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(flaky.landed).toHaveLength(2);
+    expect(new Set(flaky.landed.map((e) => e.acting_operator_id))).toEqual(
+      new Set([OPERATOR, OPERATOR_2]),
+    );
+    w.stop();
+  });
+
+  it('nothing is retried after stop()', () => {
+    const flaky = flakyEmitter(1);
+    const w = makeWiring({ emit: flaky.emit });
+    w.setScope(scope());
+    w.seam.onCashierAdmitted(current(w));
+    w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
+    w.start();
+    w.stop();
+    vi.advanceTimersByTime(10 * OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(flaky.landed).toEqual([]);
+  });
+});
+
 describe('scopeFromPairingStatus', () => {
   it('takes the scope and epoch from a paired status, null otherwise', () => {
     expect(
@@ -906,6 +973,28 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     );
     admit();
     expect(body()).toMatchObject({ terminal_id: TERMINAL });
+  });
+
+  it('Codex P2 4183175505: a failed clear rethrows and rebinds the scope (still paired); the purge stands', async () => {
+    const db = bindPairingStoreDb(g.handle);
+    const stuck = createPairingStore({
+      secretStore: memorySecretStore(),
+      db: {
+        ...db,
+        deleteAssignment: () => {
+          throw new Error('SQLITE_BUSY');
+        },
+      },
+      deviceTokenKey: TOKEN_KEY,
+    });
+    const p = withOfflineGrantPairing(stuck, wiring);
+    await p.persist(pairInput());
+    admit();
+    await expect(p.clear()).rejects.toThrow('SQLITE_BUSY');
+    expect((await stuck.getStatus()).kind).toBe('paired');
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]); // purged: fails closed
+    admit();
+    expect(wiring.evaluate(USER, T0).admissible).toBe(true);
   });
 
   it('passes every other method through to the pairing store', async () => {
