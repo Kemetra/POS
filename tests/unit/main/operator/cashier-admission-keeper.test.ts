@@ -1372,3 +1372,242 @@ describe('RT-219 — every end echoes the latest admission_generation', () => {
     expect(server.state.live).toBe(true);
   });
 });
+
+/**
+ * RT-219 review F1: a slow heartbeat H of a signed-out session lands on the
+ * server AFTER the same user signed in again on this device. The server
+ * renews the NEW live admission Y with H, so H's `admitted(Y, G_H)` reaches
+ * `releaseOrphan` for the id the live session holds. The live session still
+ * stores the older sign-in generation; a sign-out echoing it is a server-side
+ * no-op. The keeper must verify early (never adopt the orphan's generation:
+ * out-of-order answers make it possibly the older one).
+ */
+describe('RT-219 review F1 — an orphan answer for the LIVE admission triggers an early verification', () => {
+  const Y = '0192f6a0-aaaa-7bbb-8ccc-0000000000c1';
+
+  /** Backend-Core stand-in: one admission per (user, device); 1.1.0-draft end rule. */
+  function server() {
+    const state = { id: FAKE_ADMISSION_ID, n: 1, live: true };
+    const ids = [Y, '0192f6a0-aaaa-7bbb-8ccc-0000000000c2'];
+    const generation = (): string => `gen-${String(state.n).padStart(4, '0')}`;
+    return {
+      state,
+      generation,
+      admit(): CashierAdmissionResult {
+        if (!state.live) state.id = ids.shift() ?? state.id;
+        state.n += 1;
+        state.live = true;
+        return {
+          ...ADMITTED,
+          admission_id: state.id,
+          admission_ttl_seconds: TTL_S,
+          admission_generation: generation(),
+        };
+      },
+      end(id: string, echoed: string): Promise<{ kind: 'ended' }> {
+        if (id === state.id && echoed === generation()) state.live = false;
+        return Promise.resolve({ kind: 'ended' });
+      },
+    };
+  }
+
+  /**
+   * Sign in (X), let heartbeat H go out but hold it before the server; sign
+   * out (ends X); sign the same user in again (Y). Returns `landH`, which makes
+   * the server process H now and delivers its answer.
+   */
+  async function slowHeartbeatThenReSignIn(
+    h: Harness,
+    srv: ReturnType<typeof server>,
+  ): Promise<{
+    landH: () => Promise<void>;
+    processH: () => void;
+    answerH: () => Promise<void>;
+    signInAt: number;
+  }> {
+    signInCashier(h.sessions, TTL_S, undefined, srv.generation());
+    h.fake.setEnd((id, generation) => srv.end(id, generation));
+    let processedH: CashierAdmissionResult | null = null;
+    let resolveH: (r: CashierAdmissionResult) => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          resolveH = resolve;
+        }),
+    );
+    const processH = (): void => {
+      processedH ??= srv.admit();
+    };
+    const answerH = async (): Promise<void> => {
+      processH();
+      if (processedH !== null) resolveH(processedH);
+      await advance(0);
+    };
+    await advance(HALF_TTL_MS); // H is out, held before the server
+    h.sessions.end('signed_out'); // end(X, gen-0001): X ended
+    expect(srv.state.live).toBe(false);
+    h.fake.setAdmit(() => srv.admit());
+    const res = await admitCashierOnline(h.fake.deps, {
+      user_id: FAKE_USER_ID,
+      operator_id: 'user_clerk_1',
+      takeover: false,
+      idempotency_key: 'test-idempotency-key-9999',
+    });
+    if (res.kind !== 'admitted') throw new Error('re-sign-in not admitted');
+    expect(res.admission_id).toBe(Y);
+    h.sessions.create({
+      operator_id: 'user_clerk_1',
+      display_name: 'Mona',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: '',
+      cashier_admission: {
+        user_id: FAKE_USER_ID,
+        admission_id: res.admission_id,
+        admission_ttl_seconds: res.admission_ttl_seconds,
+        offline_grace_seconds: res.offline_grace_seconds,
+        admission_generation: res.admission_generation,
+        admission_requested_at_ms: res.requested_at_ms,
+      },
+    });
+    return { signInAt: h.fake.admitCalls.length, landH: answerH, processH, answerH };
+  }
+
+  async function signOut(h: Harness): Promise<void> {
+    await new SignOutHandler({
+      backend: {} as BackendClient,
+      sessionManager: h.sessions,
+      jwtFor: () => null,
+    }).signOut();
+    await advance(0);
+  }
+
+  it('after the early verification, a sign-out ends the renewed admission Y', async () => {
+    const h = harness();
+    const srv = server();
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    await landH(); // the server renews Y with H: gen-0003; the session still holds gen-0002
+    expect(h.sessions.getCurrent()?.admission_generation).toBe('gen-0002');
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: 'gen-0001' },
+    ]); // the orphan for the LIVE id is never ended
+
+    await advance(EARLY_VERIFY_MS - 1);
+    expect(h.fake.admitCalls).toHaveLength(signInAt);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1); // not TTL/2 later
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+
+    await signOut(h);
+    expect(h.fake.endRequests.at(-1)).toEqual({
+      admission_id: Y,
+      admission_generation: 'gen-0004',
+    });
+    expect(srv.state.live).toBe(false);
+  });
+
+  it('never adopts the orphan generation: a late orphan answer can be OLDER than the live one', async () => {
+    const h = harness();
+    const srv = server();
+    const { processH, answerH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    processH(); // the server renews Y with H first: gen-0003 (answer still in transit)
+    await advance(HALF_TTL_MS); // the live heartbeat renews Y again: gen-0004, answered
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe('gen-0004');
+    await answerH(); // H's late answer: admitted(Y, gen-0003), the OLDER one
+    expect(h.sessions.getCurrent()?.admission_generation).toBe('gen-0004');
+    await signOut(h); // at once, before any early verification
+    expect(h.fake.endRequests.at(-1)).toEqual({
+      admission_id: Y,
+      admission_generation: 'gen-0004',
+    });
+    expect(srv.state.live).toBe(false);
+  });
+
+  it('a live heartbeat already in flight: its answer may be older, so the next one is early too', async () => {
+    const h = harness();
+    const srv = server();
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    // The live session's first heartbeat L reaches the server at once
+    // (gen-0003) but its answer is slow.
+    let answerL: () => void = () => undefined;
+    h.fake.setAdmit(() => {
+      const processed = srv.admit();
+      return new Promise<CashierAdmissionResult>((resolve) => {
+        answerL = () => {
+          resolve(processed);
+        };
+      });
+    });
+    await advance(HALF_TTL_MS);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1);
+    await landH(); // H processed after L: gen-0004 is current
+    h.fake.setAdmit(() => srv.admit());
+    answerL();
+    await advance(0);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe('gen-0003'); // stale
+
+    await advance(EARLY_VERIFY_MS);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 2);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+    await signOut(h);
+    expect(srv.state.live).toBe(false);
+  });
+
+  it('a call already due sooner than the early verification is not postponed', async () => {
+    const h = harness();
+    const srv = server();
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    await advance(HALF_TTL_MS - 2_000); // the live first heartbeat is due in 2 s
+    await landH();
+    await advance(2_000);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1);
+  });
+
+  it('a latched live session is not re-verified (the heartbeat stays stopped)', async () => {
+    const h = harness();
+    const srv = server();
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    h.safe.value = false; // mid-sale: the latch holds the session open
+    h.fake.setAdmit({ kind: 'active_elsewhere' });
+    await advance(HALF_TTL_MS);
+    expect(h.sessions.getCurrent()?.authority_latch).toBe('superseded_by_takeover');
+    const calls = h.fake.admitCalls.length;
+    expect(calls).toBe(signInAt + 1);
+    await landH();
+    await advance(HALF_TTL_MS);
+    expect(h.fake.admitCalls).toHaveLength(calls);
+  });
+});
+
+describe('RT-219 review F2 — a cashier superseded by ANOTHER cashier is ended with its own latest generation', () => {
+  it('cashier B replacing cashier A ends A with A’s post-heartbeat generation, not B’s', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    h.fake.setAdmit({
+      ...ADMITTED,
+      admission_ttl_seconds: TTL_S,
+      admission_generation: 'gen-A-heartbeat',
+    });
+    await advance(HALF_TTL_MS);
+    h.sessions.create({
+      operator_id: 'user_clerk_2',
+      display_name: 'Karim',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: '',
+      cashier_admission: {
+        user_id: '0192f6a0-1b2c-7d3e-8f40-123456789abd',
+        admission_id: '0192f6a0-aaaa-7bbb-8ccc-0000000000b2',
+        admission_ttl_seconds: TTL_S,
+        offline_grace_seconds: 86_400,
+        admission_generation: 'gen-B-signin',
+      },
+    });
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: 'gen-A-heartbeat' },
+    ]);
+  });
+});
