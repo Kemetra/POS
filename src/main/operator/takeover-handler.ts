@@ -317,6 +317,7 @@ export class TakeoverHandler {
         admission_id: admission.admission_id,
         admission_ttl_seconds: admission.admission_ttl_seconds,
         offline_grace_seconds: admission.offline_grace_seconds,
+        admission_generation: admission.admission_generation,
         admission_requested_at_ms: admission.requested_at_ms,
       },
     });

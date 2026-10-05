@@ -4,8 +4,10 @@
  *
  * The contract is vendored verbatim (YAML → JSON, no edits) as
  * `../__fixtures__/pos-cashier-admissions.openapi.json` from Kemetra/Backend-Core
- * `main` 5ad29f1, `packages/contracts/openapi/pos-cashier-admissions.openapi.yaml`
- * (git blob 556f1fe; BC1 #696, BC2 #697). It is a test fixture only: the
+ * `main` 689e164, `packages/contracts/openapi/pos-cashier-admissions.openapi.yaml`
+ * (1.1.0-draft, git blob aec995a; BC1 #696, BC2 #697, RT-219 #708), the same
+ * file the RT-217 snapshot pins in `contracts/backend-core/`. The client test
+ * checks the two carry the same version. It is a test fixture only: the
  * 004-era owner decision keeps operator-surface types hand-written in
  * `src/main/operator/*` rather than regenerating `src/shared/api-types.ts`, so
  * these tests are what binds the POS client to the contract.

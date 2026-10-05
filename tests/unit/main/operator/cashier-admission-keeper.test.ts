@@ -29,6 +29,7 @@ import {
 import {
   ADMITTED,
   FAKE_ADMISSION_ID,
+  FAKE_GENERATION,
   FAKE_USER_ID,
   fakeCashierAdmission,
 } from '../../../../src/main/operator/__tests__/__helpers__/fake-cashier-admission.js';
@@ -87,6 +88,7 @@ function signInCashier(
   sessions: SessionManager,
   ttl = TTL_S,
   admission_requested_at_ms?: number,
+  admission_generation = FAKE_GENERATION,
 ): ReturnType<SessionManager['create']> {
   return sessions.create({
     operator_id: 'user_clerk_1',
@@ -100,6 +102,7 @@ function signInCashier(
       admission_id: FAKE_ADMISSION_ID,
       admission_ttl_seconds: ttl,
       offline_grace_seconds: 86_400,
+      admission_generation,
       ...(admission_requested_at_ms !== undefined ? { admission_requested_at_ms } : {}),
     },
   });
@@ -800,7 +803,7 @@ describe('end and timer lifecycle', () => {
         () =>
           new Promise((resolve) => {
             setTimeout(() => {
-              resolve({ kind: 'no_connection' } as unknown as { kind: 'ended' });
+              resolve({ kind: 'no_connection' });
             }, ADMISSION_REQUEST_TIMEOUT_MS);
           }),
       );
@@ -870,7 +873,7 @@ describe('end and timer lifecycle', () => {
           ),
         getDeviceToken: () => Promise.resolve('device-token-test'),
       });
-      h.fake.setEnd(() => client.end(FAKE_ADMISSION_ID) as Promise<{ kind: 'ended' }>);
+      h.fake.setEnd((id, generation) => client.end(id, generation));
       h.sessions.end();
       h.fake.setAdmit({
         ...ADMITTED,
@@ -1031,7 +1034,7 @@ describe('end and timer lifecycle', () => {
 });
 
 describe('redaction', () => {
-  it('logs carry outcome kinds only — no admission id, user id, key or name', async () => {
+  it('logs carry outcome kinds only — no admission id, user id, key, name or generation', async () => {
     const h = harness();
     signInCashier(h.sessions);
     await advance(HALF_TTL_MS);
@@ -1045,5 +1048,646 @@ describe('redaction', () => {
     expect(logged).not.toContain('test-idempotency-key');
     expect(logged).not.toContain('Mona');
     expect(logged).not.toContain('Server Name');
+    expect(logged).not.toContain(FAKE_GENERATION);
+  });
+
+  it('RT-219: no admission_generation is logged on renewal, rotation, end or orphan release', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    h.fake.setAdmit({
+      ...ADMITTED,
+      admission_ttl_seconds: TTL_S,
+      admission_generation: 'gen-hb-AAA',
+    });
+    await advance(HALF_TTL_MS);
+    h.fake.setAdmit({
+      ...ADMITTED,
+      admission_id: '0192f6a0-aaaa-7bbb-8ccc-000000000002',
+      admission_ttl_seconds: TTL_S,
+      admission_generation: 'gen-rotated-BBB',
+    });
+    await advance(HALF_TTL_MS);
+    let settle: (r: CashierAdmissionResult) => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    await advance(HALF_TTL_MS);
+    h.sessions.end('signed_out');
+    settle({ ...ADMITTED, admission_ttl_seconds: TTL_S, admission_generation: 'gen-orphan-CCC' });
+    await advance(0);
+    expect(h.fake.endRequests.map((r) => r.admission_generation)).toEqual([
+      'gen-rotated-BBB',
+      'gen-orphan-CCC',
+    ]);
+    const logged = JSON.stringify(h.logs);
+    expect(logged).toContain('operator.cashier_admission.heartbeat.rotated');
+    for (const generation of [FAKE_GENERATION, 'gen-hb-AAA', 'gen-rotated-BBB', 'gen-orphan-CCC']) {
+      expect(logged).not.toContain(generation);
+    }
+  });
+});
+
+/**
+ * RT-219 (Backend-Core #708, contract 1.1.0-draft): `end` echoes the
+ * `admission_generation` of the LATEST `admitted` response for that
+ * `admission_id`, so a late `end` can never end an admission renewed after it.
+ */
+describe('RT-219 — every end echoes the latest admission_generation', () => {
+  const GEN_HB_1 = 'gen-heartbeat-0001';
+  const GEN_HB_2 = 'gen-heartbeat-0002';
+  const ROTATED_ID = '0192f6a0-aaaa-7bbb-8ccc-000000000002';
+
+  function renewWith(h: Harness, admission_generation: string, admission_id = FAKE_ADMISSION_ID) {
+    h.fake.setAdmit({
+      ...ADMITTED,
+      admission_id,
+      admission_ttl_seconds: TTL_S,
+      admission_generation,
+    });
+  }
+
+  async function signOut(h: Harness): Promise<void> {
+    const handler = new SignOutHandler({
+      backend: {} as BackendClient,
+      sessionManager: h.sessions,
+      jwtFor: () => null,
+    });
+    await expect(handler.signOut()).resolves.toEqual({ kind: 'signed_out' });
+  }
+
+  it('sign-out straight after sign-in echoes the sign-in generation', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    await signOut(h);
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: FAKE_GENERATION },
+    ]);
+  });
+
+  it('EVERY heartbeat admitted refreshes the stored generation, even for the same admission_id', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    renewWith(h, GEN_HB_1);
+    await advance(HALF_TTL_MS);
+    expect(h.sessions.getCurrent()?.admission_id).toBe(FAKE_ADMISSION_ID);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(GEN_HB_1);
+    renewWith(h, GEN_HB_2);
+    await advance(HALF_TTL_MS);
+    expect(h.fake.admitCalls).toHaveLength(2);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(GEN_HB_2);
+  });
+
+  it('a sign-out after a heartbeat sends the post-heartbeat generation, not the sign-in one', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    renewWith(h, GEN_HB_1);
+    await advance(HALF_TTL_MS);
+    renewWith(h, GEN_HB_2);
+    await advance(HALF_TTL_MS);
+    await signOut(h);
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: GEN_HB_2 },
+    ]);
+  });
+
+  it('a re-issued admission_id is ended with the generation of the response that issued it', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    renewWith(h, 'gen-rotated-0001', ROTATED_ID);
+    await advance(HALF_TTL_MS);
+    h.sessions.end('signed_out');
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: ROTATED_ID, admission_generation: 'gen-rotated-0001' },
+    ]);
+  });
+
+  it.each([
+    [
+      'a lifecycle end (account disabled)',
+      (h: Harness): void => {
+        h.sessions.end('account_disabled_mid_session');
+      },
+    ],
+    [
+      'a replacing session (supersede)',
+      (h: Harness): void => {
+        h.sessions.create({
+          operator_id: 'mgr',
+          display_name: 'M',
+          role: 'manager',
+          tenant_id: 't1',
+          branch_id: 'b1',
+          backend_session_id: 'be',
+        });
+      },
+    ],
+  ])('%s after a heartbeat echoes the post-heartbeat generation', async (_label, endIt) => {
+    const h = harness();
+    signInCashier(h.sessions);
+    renewWith(h, GEN_HB_1);
+    await advance(HALF_TTL_MS);
+    endIt(h);
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: GEN_HB_1 },
+    ]);
+  });
+
+  it('a latched session ended at its safe point echoes the latest admitted generation', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    renewWith(h, GEN_HB_1);
+    await advance(HALF_TTL_MS);
+    h.fake.setAdmit({ kind: 'active_elsewhere' });
+    await advance(HALF_TTL_MS);
+    expect(h.ends).toEqual(['superseded_by_takeover']);
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: GEN_HB_1 },
+    ]);
+  });
+
+  it('a session the keeper never armed (created before it) is ended with the record generation', () => {
+    const sessions = new SessionManager();
+    signInCashier(sessions, TTL_S, undefined, 'gen-record-0005');
+    const fake = fakeCashierAdmission();
+    new CashierAdmissionKeeper({
+      sessionManager: sessions,
+      admission: fake.deps,
+      isAtSafePoint: () => true,
+    });
+    sessions.end('signed_out');
+    expect(fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: 'gen-record-0005' },
+    ]);
+  });
+
+  it('a non-admitted heartbeat outcome keeps the last admitted generation', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    renewWith(h, GEN_HB_1);
+    await advance(HALF_TTL_MS);
+    h.fake.setAdmit({ kind: 'no_connection' });
+    await advance(HALF_TTL_MS);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(GEN_HB_1);
+    await signOut(h);
+    expect(h.fake.endRequests[0]?.admission_generation).toBe(GEN_HB_1);
+  });
+
+  /** Sign in, hold the next heartbeat in flight, sign out; returns the heartbeat's settle. */
+  async function signOutDuringHeartbeat(h: Harness): Promise<(r: CashierAdmissionResult) => void> {
+    signInCashier(h.sessions);
+    let settle: (r: CashierAdmissionResult) => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    await advance(HALF_TTL_MS);
+    h.sessions.end('signed_out');
+    return (r) => {
+      settle(r);
+    };
+  }
+
+  it('10869 item 2: an admitted for an admission already ended locally is ended AGAIN, echoing THAT response generation', async () => {
+    const h = harness();
+    const settle = await signOutDuringHeartbeat(h);
+    settle({ ...ADMITTED, admission_ttl_seconds: TTL_S, admission_generation: 'gen-orphan-0003' });
+    await advance(0);
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: FAKE_GENERATION },
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: 'gen-orphan-0003' },
+    ]);
+  });
+
+  it('releaseOrphan of a re-issued id echoes that response generation', async () => {
+    const h = harness();
+    const settle = await signOutDuringHeartbeat(h);
+    const LATE_ID = '0192f6a0-aaaa-7bbb-8ccc-0000000000aa';
+    settle({ ...ADMITTED, admission_id: LATE_ID, admission_generation: 'gen-late-0004' });
+    await advance(0);
+    expect(h.fake.endRequests[1]).toEqual({
+      admission_id: LATE_ID,
+      admission_generation: 'gen-late-0004',
+    });
+  });
+
+  /**
+   * A Backend-Core stand-in that applies the 1.1.0-draft rule: an `end` whose
+   * echoed generation is not the current one is a no-op; an `end` without one
+   * is unconditional (1.0.0-draft behaviour).
+   */
+  function generationCheckingServer() {
+    const state = { generation: 1, live: true };
+    const current = (): string => `gen-${String(state.generation).padStart(4, '0')}`;
+    return {
+      state,
+      current,
+      renew(): CashierAdmissionResult {
+        state.generation += 1;
+        state.live = true;
+        return { ...ADMITTED, admission_ttl_seconds: TTL_S, admission_generation: current() };
+      },
+      applyEnd(echoed: string | undefined): void {
+        if (echoed === undefined || echoed === current()) state.live = false;
+      },
+    };
+  }
+
+  /**
+   * The 10869 item 2 race up to the orphan release: a heartbeat renews
+   * server-side while its answer is slow; the cashier signs out meanwhile (that
+   * `end` is now stale, a no-op); the heartbeat answer then arrives for a
+   * session that is gone, so the keeper releases the orphan.
+   */
+  async function raceToOrphanRelease(
+    h: Harness,
+    server: ReturnType<typeof generationCheckingServer>,
+    orphanEnd: (generation: string) => Promise<{ kind: 'ended' } | { kind: 'no_connection' }>,
+  ): Promise<void> {
+    signInCashier(h.sessions, TTL_S, undefined, server.current());
+    let answer: () => void = () => undefined;
+    h.fake.setAdmit(() => {
+      const renewed = server.renew();
+      return new Promise<CashierAdmissionResult>((resolve) => {
+        answer = () => {
+          resolve(renewed);
+        };
+      });
+    });
+    await advance(HALF_TTL_MS);
+    h.fake.setEnd((_id, generation) => {
+      server.applyEnd(generation);
+      return Promise.resolve({ kind: 'ended' });
+    });
+    h.sessions.end('signed_out');
+    expect(server.state.live).toBe(true); // the sign-out `end` was stale: a no-op
+    h.fake.setEnd((_id, generation) => orphanEnd(generation));
+    answer();
+    await advance(0);
+    expect(h.fake.endRequests).toHaveLength(2);
+  }
+
+  it('10869 item 2: the orphan release ends the renewed admission on a generation-checking server', async () => {
+    const h = harness();
+    const server = generationCheckingServer();
+    await raceToOrphanRelease(h, server, (generation) => {
+      server.applyEnd(generation);
+      return Promise.resolve({ kind: 'ended' });
+    });
+    expect(server.state.live).toBe(false);
+  });
+
+  it('10869 item 2: an orphan end that reaches the server only after the re-sign-in renewal is a no-op', async () => {
+    const h = harness();
+    const server = generationCheckingServer();
+    const stalled: string[] = [];
+    await raceToOrphanRelease(h, server, (generation) => {
+      // Stalls in the network: the client gives up at its timeout, the server
+      // applies it later.
+      stalled.push(generation);
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({ kind: 'no_connection' });
+        }, ADMISSION_REQUEST_TIMEOUT_MS);
+      });
+    });
+    h.fake.setAdmit(() => server.renew());
+    const readmitted = admitCashierOnline(h.fake.deps, {
+      user_id: FAKE_USER_ID,
+      operator_id: 'user_clerk_1',
+      takeover: false,
+      idempotency_key: 'test-idempotency-key-9999',
+    });
+    await advance(ADMISSION_REQUEST_TIMEOUT_MS);
+    const result = await readmitted;
+    expect(result.kind).toBe('admitted');
+    expect(server.state.live).toBe(true);
+    // The stalled orphan `end` finally reaches the server: the renewal survives.
+    expect(stalled).toHaveLength(1);
+    server.applyEnd(stalled[0]);
+    expect(server.state.live).toBe(true);
+  });
+});
+
+/**
+ * RT-219 review F1: a slow heartbeat H of a signed-out session lands on the
+ * server AFTER the same user signed in again on this device. The server
+ * renews the NEW live admission Y with H, so H's `admitted(Y, G_H)` reaches
+ * `releaseOrphan` for the id the live session holds. The live session still
+ * stores the older sign-in generation; a sign-out echoing it is a server-side
+ * no-op. The keeper must verify early (never adopt the orphan's generation:
+ * out-of-order answers make it possibly the older one).
+ */
+describe('RT-219 review F1 — an orphan answer for the LIVE admission triggers an early verification', () => {
+  const Y = '0192f6a0-aaaa-7bbb-8ccc-0000000000c1';
+
+  /** Backend-Core stand-in: one admission per (user, device); 1.1.0-draft end rule. */
+  function server() {
+    const state = { id: FAKE_ADMISSION_ID, n: 1, live: true };
+    const ids = [Y, '0192f6a0-aaaa-7bbb-8ccc-0000000000c2'];
+    const generation = (): string => `gen-${String(state.n).padStart(4, '0')}`;
+    return {
+      state,
+      generation,
+      admit(): CashierAdmissionResult {
+        if (!state.live) state.id = ids.shift() ?? state.id;
+        state.n += 1;
+        state.live = true;
+        return {
+          ...ADMITTED,
+          admission_id: state.id,
+          admission_ttl_seconds: TTL_S,
+          admission_generation: generation(),
+        };
+      },
+      end(id: string, echoed: string): Promise<{ kind: 'ended' }> {
+        if (id === state.id && echoed === generation()) state.live = false;
+        return Promise.resolve({ kind: 'ended' });
+      },
+    };
+  }
+
+  /**
+   * Sign in (X), let heartbeat H go out but hold it before the server; sign
+   * out (ends X); sign the same user in again (Y). Returns `landH`, which makes
+   * the server process H now and delivers its answer.
+   */
+  async function slowHeartbeatThenReSignIn(
+    h: Harness,
+    srv: ReturnType<typeof server>,
+  ): Promise<{
+    landH: () => Promise<void>;
+    processH: () => void;
+    answerH: () => Promise<void>;
+    signInAt: number;
+  }> {
+    signInCashier(h.sessions, TTL_S, undefined, srv.generation());
+    h.fake.setEnd((id, generation) => srv.end(id, generation));
+    let processedH: CashierAdmissionResult | null = null;
+    let resolveH: (r: CashierAdmissionResult) => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          resolveH = resolve;
+        }),
+    );
+    const processH = (): void => {
+      processedH ??= srv.admit();
+    };
+    const answerH = async (): Promise<void> => {
+      processH();
+      if (processedH !== null) resolveH(processedH);
+      await advance(0);
+    };
+    await advance(HALF_TTL_MS); // H is out, held before the server
+    h.sessions.end('signed_out'); // end(X, gen-0001): X ended
+    expect(srv.state.live).toBe(false);
+    h.fake.setAdmit(() => srv.admit());
+    const res = await admitCashierOnline(h.fake.deps, {
+      user_id: FAKE_USER_ID,
+      operator_id: 'user_clerk_1',
+      takeover: false,
+      idempotency_key: 'test-idempotency-key-9999',
+    });
+    if (res.kind !== 'admitted') throw new Error('re-sign-in not admitted');
+    expect(res.admission_id).toBe(Y);
+    h.sessions.create({
+      operator_id: 'user_clerk_1',
+      display_name: 'Mona',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: '',
+      cashier_admission: {
+        user_id: FAKE_USER_ID,
+        admission_id: res.admission_id,
+        admission_ttl_seconds: res.admission_ttl_seconds,
+        offline_grace_seconds: res.offline_grace_seconds,
+        admission_generation: res.admission_generation,
+        admission_requested_at_ms: res.requested_at_ms,
+      },
+    });
+    return { signInAt: h.fake.admitCalls.length, landH: answerH, processH, answerH };
+  }
+
+  async function signOut(h: Harness): Promise<void> {
+    await new SignOutHandler({
+      backend: {} as BackendClient,
+      sessionManager: h.sessions,
+      jwtFor: () => null,
+    }).signOut();
+    await advance(0);
+  }
+
+  it('after the early verification, a sign-out ends the renewed admission Y', async () => {
+    const h = harness();
+    const srv = server();
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    await landH(); // the server renews Y with H: gen-0003; the session still holds gen-0002
+    expect(h.sessions.getCurrent()?.admission_generation).toBe('gen-0002');
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: 'gen-0001' },
+    ]); // the orphan for the LIVE id is never ended
+
+    await advance(EARLY_VERIFY_MS - 1);
+    expect(h.fake.admitCalls).toHaveLength(signInAt);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1); // not TTL/2 later
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+
+    await signOut(h);
+    expect(h.fake.endRequests.at(-1)).toEqual({
+      admission_id: Y,
+      admission_generation: 'gen-0004',
+    });
+    expect(srv.state.live).toBe(false);
+  });
+
+  it('never adopts the orphan generation: a late orphan answer can be OLDER than the live one', async () => {
+    const h = harness();
+    const srv = server();
+    const { processH, answerH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    processH(); // the server renews Y with H first: gen-0003 (answer still in transit)
+    await advance(HALF_TTL_MS); // the live heartbeat renews Y again: gen-0004, answered
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe('gen-0004');
+    await answerH(); // H's late answer: admitted(Y, gen-0003), the OLDER one
+    expect(h.sessions.getCurrent()?.admission_generation).toBe('gen-0004');
+    await signOut(h); // at once, before any early verification
+    expect(h.fake.endRequests.at(-1)).toEqual({
+      admission_id: Y,
+      admission_generation: 'gen-0004',
+    });
+    expect(srv.state.live).toBe(false);
+  });
+
+  it('a live heartbeat already in flight: its answer may be older, so the next one is early too', async () => {
+    const h = harness();
+    const srv = server();
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    // The live session's first heartbeat L reaches the server at once
+    // (gen-0003) but its answer is slow.
+    let answerL: () => void = () => undefined;
+    h.fake.setAdmit(() => {
+      const processed = srv.admit();
+      return new Promise<CashierAdmissionResult>((resolve) => {
+        answerL = () => {
+          resolve(processed);
+        };
+      });
+    });
+    await advance(HALF_TTL_MS);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1);
+    await landH(); // H processed after L: gen-0004 is current
+    h.fake.setAdmit(() => srv.admit());
+    answerL();
+    await advance(0);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe('gen-0003'); // stale
+
+    await advance(EARLY_VERIFY_MS);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 2);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+    await signOut(h);
+    expect(srv.state.live).toBe(false);
+  });
+
+  it('a call already due sooner than the early verification is not postponed', async () => {
+    const h = harness();
+    const srv = server();
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    await advance(HALF_TTL_MS - 2_000); // the live first heartbeat is due in 2 s
+    await landH();
+    await advance(2_000);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1);
+  });
+
+  it('a latched live session is not re-verified (the heartbeat stays stopped)', async () => {
+    const h = harness();
+    const srv = server();
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    h.safe.value = false; // mid-sale: the latch holds the session open
+    h.fake.setAdmit({ kind: 'active_elsewhere' });
+    await advance(HALF_TTL_MS);
+    expect(h.sessions.getCurrent()?.authority_latch).toBe('superseded_by_takeover');
+    const calls = h.fake.admitCalls.length;
+    expect(calls).toBe(signInAt + 1);
+    await landH();
+    await advance(HALF_TTL_MS);
+    expect(h.fake.admitCalls).toHaveLength(calls);
+  });
+
+  /** Hold the live session's first heartbeat L in flight, land H, then answer L with `answer`. */
+  async function orphanLandsWhileLiveHeartbeatFails(
+    h: Harness,
+    srv: ReturnType<typeof server>,
+    answer: CashierAdmissionResult,
+  ): Promise<number> {
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    let answerL: () => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          answerL = () => {
+            resolve(answer);
+          };
+        }),
+    );
+    await advance(HALF_TTL_MS);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1); // L in flight
+    await landH(); // the server renews Y with H: gen-0003
+    h.fake.setAdmit(() => srv.admit());
+    answerL();
+    await advance(0);
+    return signInAt + 1;
+  }
+
+  it.each([{ kind: 'no_connection' }, { kind: 'unavailable' }] as const)(
+    'Codex P2 4181547527: the in-flight heartbeat answers %o: the retry is still an early verification',
+    async (failed) => {
+      const h = harness();
+      const srv = server();
+      const calls = await orphanLandsWhileLiveHeartbeatFails(h, srv, failed);
+      await advance(EARLY_VERIFY_MS - 1);
+      expect(h.fake.admitCalls).toHaveLength(calls);
+      await advance(1);
+      expect(h.fake.admitCalls).toHaveLength(calls + 1); // not the 60 s backoff
+      expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+      await signOut(h);
+      expect(srv.state.live).toBe(false);
+    },
+  );
+
+  it('Codex P2 4181547527: a rate_limited in-flight heartbeat keeps its backoff (no hammering)', async () => {
+    const h = harness();
+    const srv = server();
+    const calls = await orphanLandsWhileLiveHeartbeatFails(h, srv, { kind: 'rate_limited' });
+    await advance(FAILED_TICK_RETRY_MS - 1);
+    expect(h.fake.admitCalls).toHaveLength(calls);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(calls + 1);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+  });
+
+  it.each([{ kind: 'no_connection' }, { kind: 'rejected' }] as const)(
+    'Codex P2 4181547527: while the verification keeps answering %o, only ONE call is early; then the normal cadence',
+    async (failed) => {
+      const h = harness();
+      const srv = server();
+      const calls = await orphanLandsWhileLiveHeartbeatFails(h, srv, failed);
+      h.fake.setAdmit(failed);
+      await advance(EARLY_VERIFY_MS);
+      expect(h.fake.admitCalls).toHaveLength(calls + 1); // the early verification
+      await advance(EARLY_VERIFY_MS * 2);
+      expect(h.fake.admitCalls).toHaveLength(calls + 1); // no 5 s loop
+    },
+  );
+
+  it('Codex P2 4181547527: the flag survives a failure and clears only on a fresh admitted', async () => {
+    const h = harness();
+    const srv = server();
+    const calls = await orphanLandsWhileLiveHeartbeatFails(h, srv, { kind: 'no_connection' });
+    await advance(EARLY_VERIFY_MS); // the early retry: admitted, sent after the orphan answer
+    expect(h.fake.admitCalls).toHaveLength(calls + 1);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+    // Fresh: back to TTL/2, no further early call.
+    await advance(HALF_TTL_MS - 1);
+    expect(h.fake.admitCalls).toHaveLength(calls + 1);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(calls + 2);
+  });
+});
+
+describe('RT-219 review F2 — a cashier superseded by ANOTHER cashier is ended with its own latest generation', () => {
+  it('cashier B replacing cashier A ends A with A’s post-heartbeat generation, not B’s', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    h.fake.setAdmit({
+      ...ADMITTED,
+      admission_ttl_seconds: TTL_S,
+      admission_generation: 'gen-A-heartbeat',
+    });
+    await advance(HALF_TTL_MS);
+    h.sessions.create({
+      operator_id: 'user_clerk_2',
+      display_name: 'Karim',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: '',
+      cashier_admission: {
+        user_id: '0192f6a0-1b2c-7d3e-8f40-123456789abd',
+        admission_id: '0192f6a0-aaaa-7bbb-8ccc-0000000000b2',
+        admission_ttl_seconds: TTL_S,
+        offline_grace_seconds: 86_400,
+        admission_generation: 'gen-B-signin',
+      },
+    });
+    expect(h.fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: 'gen-A-heartbeat' },
+    ]);
   });
 });
