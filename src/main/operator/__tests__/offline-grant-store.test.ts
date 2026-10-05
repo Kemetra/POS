@@ -78,6 +78,25 @@ function makeStore(
   });
 }
 
+function throwing(): never {
+  throw new Error('injected failure');
+}
+
+/** The seal fails (DPAPI unavailable mid-run). */
+function failingSealStore(): OfflineGrantStore {
+  return makeStore({ safeStorage: { ...ss, encryptString: throwing } });
+}
+
+/** The unseal fails. */
+function failingUnsealStore(): OfflineGrantStore {
+  return makeStore({ safeStorage: { ...ss, decryptString: throwing } });
+}
+
+/** Every statement fails to prepare (disk or I/O error). */
+function deadDbStore(): OfflineGrantStore {
+  return makeStore({ handle: { ...g.handle, prepare: throwing } });
+}
+
 let store: OfflineGrantStore;
 
 beforeAll(async () => {
@@ -338,13 +357,7 @@ describe('upsertFromAdmitted — malformed input and failed writes fail closed',
 
   it('a failed seal on refresh removes the old grant and throws storage (fail closed)', () => {
     store.upsertFromAdmitted(scope(), admitted());
-    const failing: SafeStorageLike = {
-      ...ss,
-      encryptString: () => {
-        throw new Error('DPAPI down');
-      },
-    };
-    const broken = makeStore({ safeStorage: failing });
+    const broken = failingSealStore();
     let err: unknown;
     try {
       broken.upsertFromAdmitted(scope(), admitted({ admission_id: 'adm-2' }));
@@ -423,14 +436,7 @@ describe('consumeOfflineUse — the 8-use budget', () => {
   });
 
   it('refuses (storage) and keeps the counter when the re-seal fails', () => {
-    const failing = makeStore({
-      safeStorage: {
-        ...ss,
-        encryptString: () => {
-          throw new Error('DPAPI down');
-        },
-      },
-    });
+    const failing = failingSealStore();
     expect(failing.consumeOfflineUse(scope(), USER, T0)).toEqual(refusal('storage'));
     expect(openBody()['offline_admissions_used']).toBe(0);
   });
@@ -513,14 +519,7 @@ describe('evaluate — clock high-water mark (OD7)', () => {
   });
 
   it('observeClock never throws on a storage failure', () => {
-    const broken = makeStore({
-      handle: {
-        ...g.handle,
-        prepare: () => {
-          throw new Error('disk I/O error');
-        },
-      },
-    });
+    const broken = deadDbStore();
     expect(broken.observeClock(T0)).toEqual({ kind: 'unavailable' });
   });
 });
@@ -571,27 +570,13 @@ describe('evaluate — unseal and read failures are no proof (D10)', () => {
   });
 
   it('a throwing decrypt is storage', () => {
-    const failing = makeStore({
-      safeStorage: {
-        ...ss,
-        decryptString: () => {
-          throw new Error('DPAPI down');
-        },
-      },
-    });
+    const failing = failingUnsealStore();
     expect(failing.evaluate(scope(), USER, T0)).toEqual(refusal('storage'));
     expect(failing.consumeOfflineUse(scope(), USER, T0)).toEqual(refusal('storage'));
   });
 
   it('a failing read is storage, never a throw', () => {
-    const broken = makeStore({
-      handle: {
-        ...g.handle,
-        prepare: () => {
-          throw new Error('disk I/O error');
-        },
-      },
-    });
+    const broken = deadDbStore();
     expect(broken.evaluate(scope(), USER, T0)).toEqual(refusal('storage'));
     expect(broken.consumeOfflineUse(scope(), USER, T0)).toEqual(refusal('storage'));
   });
@@ -765,14 +750,7 @@ describe('invalidate (D4, OD6)', () => {
   });
 
   it('a failed re-seal falls back to deleting the grant (fail closed)', () => {
-    const failing = makeStore({
-      safeStorage: {
-        ...ss,
-        encryptString: () => {
-          throw new Error('DPAPI down');
-        },
-      },
-    });
+    const failing = failingSealStore();
     expect(failing.invalidate(scope(), USER, 'forbidden').invalidated).toEqual([
       { user_id: USER, operator_id: OPERATOR },
     ]);
@@ -780,14 +758,7 @@ describe('invalidate (D4, OD6)', () => {
   });
 
   it('throws storage when even the delete fails', () => {
-    const dead = makeStore({
-      handle: {
-        ...g.handle,
-        prepare: () => {
-          throw new Error('disk I/O error');
-        },
-      },
-    });
+    const dead = deadDbStore();
     expect(() => dead.invalidate(scope(), USER, 'forbidden')).toThrow(OfflineGrantStoreError);
   });
 
@@ -838,14 +809,7 @@ describe('invalidateAll and purgeAll (D4 device 401, OD4 re-pair)', () => {
   });
 
   it('throws storage when the scope cannot be read', () => {
-    const dead = makeStore({
-      handle: {
-        ...g.handle,
-        prepare: () => {
-          throw new Error('disk I/O error');
-        },
-      },
-    });
+    const dead = deadDbStore();
     expect(() => dead.invalidateAll(scope(), 'unpair')).toThrow(OfflineGrantStoreError);
   });
 
@@ -856,14 +820,7 @@ describe('invalidateAll and purgeAll (D4 device 401, OD4 re-pair)', () => {
   });
 
   it('purgeAll throws storage when the delete fails', () => {
-    const dead = makeStore({
-      handle: {
-        ...g.handle,
-        prepare: () => {
-          throw new Error('disk I/O error');
-        },
-      },
-    });
+    const dead = deadDbStore();
     expect(() => dead.purgeAll()).toThrow(OfflineGrantStoreError);
   });
 });
@@ -878,14 +835,7 @@ describe('logging — categories only, never a grant field', () => {
         errors.push(e instanceof Error ? `${e.name} ${e.message} ${String(e.stack)}` : String(e));
       }
     };
-    const failingSeal = makeStore({
-      safeStorage: {
-        ...ss,
-        encryptString: () => {
-          throw new Error('seal failed');
-        },
-      },
-    });
+    const failingSeal = failingSealStore();
 
     attempt(() => store.upsertFromAdmitted(scope(), admitted()));
     attempt(() => store.evaluate(scope(), USER, T0));
@@ -920,26 +870,22 @@ describe('logging — categories only, never a grant field', () => {
     }
   });
 
-  it('logs the refusal category', () => {
-    store.upsertFromAdmitted(scope(), admitted());
-    logCalls = [];
-    store.evaluate(scope(), USER, at(T0_MS + 30 * HOUR_MS));
-    expect(logCalls).toContainEqual([
-      'info',
+  it.each([
+    [
+      'the refusal category',
+      (): unknown => store.evaluate(scope(), USER, at(T0_MS + 30 * HOUR_MS)),
       { event: 'operator.offline_grant.refused', category: 'grant_expired' },
-      expect.any(String),
-    ]);
-  });
-
-  it('logs the invalidation reason and count', () => {
+    ],
+    [
+      'the invalidation reason and count',
+      (): unknown => store.invalidate(scope(), USER, 'superseded'),
+      { event: 'operator.offline_grant.invalidated', reason: 'superseded', count: 1 },
+    ],
+  ])('logs %s', (_label, act, fields) => {
     store.upsertFromAdmitted(scope(), admitted());
     logCalls = [];
-    store.invalidate(scope(), USER, 'superseded');
-    expect(logCalls).toContainEqual([
-      'info',
-      { event: 'operator.offline_grant.invalidated', reason: 'superseded', count: 1 },
-      expect.any(String),
-    ]);
+    act();
+    expect(logCalls).toContainEqual(['info', fields, expect.any(String)]);
   });
 
   it('works without a logger', () => {

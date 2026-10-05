@@ -211,30 +211,16 @@ interface GrantBody {
   invalidated: { reason: OfflineGrantInvalidationReason; at_local: number } | null;
 }
 
-const GRANT_BODY_KEYS: readonly (keyof GrantBody)[] = [
-  'v',
-  'kind',
-  'tenant_id',
-  'branch_id',
-  'terminal_id',
-  'user_id',
-  'pairing_epoch',
-  'admission_id',
-  'operator_id',
-  'display_name',
-  'issued_at_local',
-  'ttl_ms',
-  'server_time_at_issue',
-  'offline_admissions_used',
-  'last_used_at_local',
-  'invalidated',
-];
-
 interface HwmBody {
   v: 1;
   kind: typeof HWM_KIND;
   hwm_ms: number;
 }
+
+type Check = (v: unknown) => boolean;
+
+/** A body shape: one check per field. A body must have exactly these fields. */
+type Shape<T> = Readonly<Record<keyof T, Check>>;
 
 function isText(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0;
@@ -244,63 +230,78 @@ function isCount(v: unknown): v is number {
   return typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
 }
 
-function hasExactKeys(o: Record<string, unknown>, keys: readonly string[]): boolean {
-  const own = Object.keys(o);
-  return own.length === keys.length && keys.every((k) => Object.hasOwn(o, k));
+function isPositiveCount(v: unknown): boolean {
+  return isCount(v) && v > 0;
+}
+
+function isNullOrCount(v: unknown): boolean {
+  return v === null || isCount(v);
+}
+
+function isString(v: unknown): boolean {
+  return typeof v === 'string';
+}
+
+function is(expected: unknown): Check {
+  return (v) => v === expected;
 }
 
 function isReason(v: unknown): v is OfflineGrantInvalidationReason {
   return (OFFLINE_GRANT_INVALIDATION_REASONS as readonly unknown[]).includes(v);
 }
 
-function parseJsonObject(text: string): Record<string, unknown> | null {
+function isRecord(v: unknown): v is Record<string, unknown> {
+  if (typeof v !== 'object' || v === null) return false;
+  return !Array.isArray(v);
+}
+
+/** Exactly the shape's fields (none missing, none extra), each passing its check. */
+function matchesShape<T>(v: unknown, shape: Shape<T>): v is T {
+  if (!isRecord(v)) return false;
+  const fields = Object.keys(shape) as (keyof T & string)[];
+  if (Object.keys(v).length !== fields.length) return false;
+  return fields.every((f) => Object.hasOwn(v, f) && shape[f](v[f]));
+}
+
+const INVALIDATION_SHAPE: Shape<NonNullable<GrantBody['invalidated']>> = {
+  reason: isReason,
+  at_local: isCount,
+};
+
+const GRANT_SHAPE: Shape<GrantBody> = {
+  v: is(BODY_VERSION),
+  kind: is(GRANT_KIND),
+  tenant_id: isText,
+  branch_id: isText,
+  terminal_id: isText,
+  user_id: isText,
+  pairing_epoch: isCount,
+  admission_id: isText,
+  operator_id: isText,
+  display_name: isText,
+  issued_at_local: isCount,
+  ttl_ms: isPositiveCount,
+  server_time_at_issue: isString,
+  offline_admissions_used: isCount,
+  last_used_at_local: isNullOrCount,
+  invalidated: (v) => v === null || matchesShape(v, INVALIDATION_SHAPE),
+};
+
+const HWM_SHAPE: Shape<HwmBody> = {
+  v: is(BODY_VERSION),
+  kind: is(HWM_KIND),
+  hwm_ms: isCount,
+};
+
+/** Strict JSON parse against a shape; anything else is null. */
+function parseBody<T>(text: string, shape: Shape<T>): T | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
     return null;
   }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
-  return parsed as Record<string, unknown>;
-}
-
-function isInvalidation(v: unknown): v is GrantBody['invalidated'] {
-  if (v === null) return true;
-  if (typeof v !== 'object' || Array.isArray(v)) return false;
-  const o = v as Record<string, unknown>;
-  return hasExactKeys(o, ['reason', 'at_local']) && isReason(o['reason']) && isCount(o['at_local']);
-}
-
-/** Strict: every field present with its exact type, and nothing else. */
-function parseGrantBody(text: string): GrantBody | null {
-  const o = parseJsonObject(text);
-  if (o === null || !hasExactKeys(o, GRANT_BODY_KEYS)) return null;
-  const ok =
-    o['v'] === BODY_VERSION &&
-    o['kind'] === GRANT_KIND &&
-    isText(o['tenant_id']) &&
-    isText(o['branch_id']) &&
-    isText(o['terminal_id']) &&
-    isText(o['user_id']) &&
-    isCount(o['pairing_epoch']) &&
-    isText(o['admission_id']) &&
-    isText(o['operator_id']) &&
-    isText(o['display_name']) &&
-    isCount(o['issued_at_local']) &&
-    isCount(o['ttl_ms']) &&
-    o['ttl_ms'] > 0 &&
-    typeof o['server_time_at_issue'] === 'string' &&
-    isCount(o['offline_admissions_used']) &&
-    (o['last_used_at_local'] === null || isCount(o['last_used_at_local'])) &&
-    isInvalidation(o['invalidated']);
-  return ok ? (o as unknown as GrantBody) : null;
-}
-
-function parseHwmBody(text: string): HwmBody | null {
-  const o = parseJsonObject(text);
-  if (o === null || !hasExactKeys(o, ['v', 'kind', 'hwm_ms'])) return null;
-  const ok = o['v'] === BODY_VERSION && o['kind'] === HWM_KIND && isCount(o['hwm_ms']);
-  return ok ? (o as unknown as HwmBody) : null;
+  return matchesShape(parsed, shape) ? parsed : null;
 }
 
 /** The body seals the row's own key: a body read from another row is no proof. */
@@ -395,6 +396,85 @@ const REFUSAL_BY_READ: Readonly<
   foreign: 'tampered',
 };
 
+/** An `admitted` event the store can record. Its `user_id` is checked by the caller. */
+const EVENT_RULES: readonly ((event: CashierAdmittedEvent) => boolean)[] = [
+  (event) => isCount(event.offline_grace_seconds),
+  (event) => isCount(event.offline_grace_seconds * 1000),
+  (event) => isCount(Date.parse(event.received_at)),
+  (event) => isText(event.operator_id),
+  (event) => isText(event.admission_id),
+  (event) => isText(event.display_name),
+  (event) => isString(event.server_time),
+];
+
+/** The sealed body for an `admitted` event: counter 0, no invalidation. Null when malformed. */
+function grantBodyFromEvent(
+  scope: OfflineGrantScope,
+  event: CashierAdmittedEvent,
+): GrantBody | null {
+  if (!EVENT_RULES.every((rule) => rule(event))) return null;
+  return {
+    v: BODY_VERSION,
+    kind: GRANT_KIND,
+    tenant_id: scope.tenant_id,
+    branch_id: scope.branch_id,
+    terminal_id: scope.terminal_id,
+    user_id: event.user_id,
+    pairing_epoch: scope.pairing_epoch,
+    admission_id: event.admission_id,
+    operator_id: event.operator_id,
+    display_name: event.display_name,
+    // D4: the local receipt time, never server_time (clock skew).
+    issued_at_local: Date.parse(event.received_at),
+    ttl_ms: Math.min(event.offline_grace_seconds * 1000, OFFLINE_GRANT_MAX_TTL_MS),
+    server_time_at_issue: event.server_time,
+    offline_admissions_used: 0,
+    last_used_at_local: null,
+    invalidated: null,
+  };
+}
+
+type Judged =
+  | { admissible: true; body: GrantBody; blob: Buffer }
+  | { admissible: false; category: OfflineGrantRefusalCategory };
+
+function refusedJudgement(category: OfflineGrantRefusalCategory): Judged {
+  return { admissible: false, category };
+}
+
+function isAddressable(scope: OfflineGrantScope, user_id: string, now_ms: number): boolean {
+  if (!isValidScope(scope)) return false;
+  if (!isText(user_id)) return false;
+  return isCount(now_ms);
+}
+
+/** The latest local time the grant itself saw: its issue or its last use. */
+function clockFloor(body: GrantBody): number {
+  return Math.max(body.issued_at_local, body.last_used_at_local ?? 0);
+}
+
+type BodyRule = readonly [
+  OfflineGrantRefusalCategory,
+  (body: GrantBody, scope: OfflineGrantScope, now_ms: number) => boolean,
+];
+
+/** Checked in order once the body is authentic and belongs to its row (D4, D5). */
+const BODY_RULES: readonly BodyRule[] = [
+  ['scope_mismatch', (body, scope) => body.pairing_epoch !== scope.pairing_epoch],
+  ['grant_invalidated', (body) => body.invalidated !== null],
+  ['clock_suspect', (body, _s, now_ms) => now_ms < clockFloor(body) - OFFLINE_CLOCK_TOLERANCE_MS],
+  ['grant_expired', (body, _s, now_ms) => now_ms >= expiresAt(body)],
+  ['count_exhausted', (body) => body.offline_admissions_used >= OFFLINE_GRANT_MAX_USES],
+];
+
+function refusalForBody(
+  body: GrantBody,
+  scope: OfflineGrantScope,
+  now_ms: number,
+): OfflineGrantRefusalCategory | null {
+  return BODY_RULES.find(([, refuses]) => refuses(body, scope, now_ms))?.[0] ?? null;
+}
+
 export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGrantStore {
   const { db, safeStorage } = deps;
 
@@ -437,7 +517,7 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     } catch {
       return { kind: 'unsealable' };
     }
-    const body = parseGrantBody(text);
+    const body = parseBody(text, GRANT_SHAPE);
     if (body === null) return { kind: 'malformed' };
     if (!bodyBelongsTo(body, scope, user_id)) return { kind: 'foreign' };
     return { kind: 'ok', body, blob };
@@ -467,7 +547,7 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     if (blob === null) return { kind: 'unreadable' };
     let body: HwmBody | null;
     try {
-      body = parseHwmBody(safeStorage.decryptString(blob));
+      body = parseBody(safeStorage.decryptString(blob), HWM_SHAPE);
     } catch {
       return { kind: 'unreadable' };
     }
@@ -500,35 +580,22 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
 
   // ── evaluation ──
 
-  type Judged =
-    | { admissible: true; body: GrantBody; blob: Buffer }
-    | { admissible: false; category: OfflineGrantRefusalCategory };
+  /** The clock against the high-water mark (raised first, OD7); null when it is sane. */
+  function clockRefusal(now_ms: number): OfflineGrantRefusalCategory | null {
+    const mark = raiseHwm(now_ms, false);
+    if (mark === null) return 'storage';
+    return now_ms < mark.hwm_ms - OFFLINE_CLOCK_TOLERANCE_MS ? 'clock_suspect' : null;
+  }
 
   function judge(scope: OfflineGrantScope, user_id: string, now_ms: number): Judged {
-    if (!isValidScope(scope) || !isText(user_id) || !isCount(now_ms)) {
-      return { admissible: false, category: 'scope_mismatch' };
-    }
-    const mark = raiseHwm(now_ms, false);
-    if (mark === null) return { admissible: false, category: 'storage' };
-    if (now_ms < mark.hwm_ms - OFFLINE_CLOCK_TOLERANCE_MS) {
-      return { admissible: false, category: 'clock_suspect' };
-    }
+    if (!isAddressable(scope, user_id, now_ms)) return refusedJudgement('scope_mismatch');
+    const clock = clockRefusal(now_ms);
+    if (clock !== null) return refusedJudgement(clock);
     const read = readGrant(scope, user_id);
-    if (read.kind !== 'ok') return { admissible: false, category: REFUSAL_BY_READ[read.kind] };
-    const { body } = read;
-    if (body.pairing_epoch !== scope.pairing_epoch) {
-      return { admissible: false, category: 'scope_mismatch' };
-    }
-    if (body.invalidated !== null) return { admissible: false, category: 'grant_invalidated' };
-    const floor = Math.max(body.issued_at_local, body.last_used_at_local ?? 0);
-    if (now_ms < floor - OFFLINE_CLOCK_TOLERANCE_MS) {
-      return { admissible: false, category: 'clock_suspect' };
-    }
-    if (now_ms >= expiresAt(body)) return { admissible: false, category: 'grant_expired' };
-    if (body.offline_admissions_used >= OFFLINE_GRANT_MAX_USES) {
-      return { admissible: false, category: 'count_exhausted' };
-    }
-    return { admissible: true, body, blob: read.blob };
+    if (read.kind !== 'ok') return refusedJudgement(REFUSAL_BY_READ[read.kind]);
+    const category = refusalForBody(read.body, scope, now_ms);
+    if (category !== null) return refusedJudgement(category);
+    return { admissible: true, body: read.body, blob: read.blob };
   }
 
   function refused(category: OfflineGrantRefusalCategory): OfflineGrantEvaluation {
@@ -616,65 +683,45 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     return invalidateUsers(scope, () => [user_id], reason, 'invalidate');
   }
 
+  /**
+   * Write a fresh grant and raise (or repair) the clock mark, atomically. If
+   * that fails, the old grant is deleted first: a refresh that cannot be
+   * recorded must not leave the old grant standing.
+   */
+  function writeFreshGrant(scope: OfflineGrantScope, body: GrantBody): void {
+    try {
+      tx(() => {
+        writeGrant(body);
+        raiseHwm(deps.now().getTime(), true);
+      });
+    } catch {
+      log('warn', { event: 'operator.offline_grant.storage_failed', op: 'upsert' });
+      try {
+        deleteGrant(scope, body.user_id);
+      } catch {
+        // P1.2 holds an in-memory tombstone for this case.
+      }
+      throw new OfflineGrantStoreError('storage');
+    }
+  }
+
   // ── public ──
 
   return {
     upsertFromAdmitted(scope, event) {
-      if (!isValidScope(scope) || !isText(event.user_id)) {
-        throw new OfflineGrantStoreError('invalid_input');
-      }
-      const grace = event.offline_grace_seconds;
-      const issued = Date.parse(event.received_at);
-      const wellFormed =
-        isCount(grace) &&
-        isCount(grace * 1000) &&
-        isCount(issued) &&
-        isText(event.operator_id) &&
-        isText(event.admission_id) &&
-        isText(event.display_name) &&
-        typeof event.server_time === 'string';
-      if (!wellFormed) {
+      if (!isValidScope(scope)) throw new OfflineGrantStoreError('invalid_input');
+      if (!isText(event.user_id)) throw new OfflineGrantStoreError('invalid_input');
+      const body = grantBodyFromEvent(scope, event);
+      if (body === null) {
         const r = invalidate(scope, event.user_id, 'refresh_failed');
         log('warn', { event: 'operator.offline_grant.rejected', category: 'invalid_event' });
         return { kind: 'rejected', invalidated: r.invalidated };
       }
-      if (grace === 0) {
+      if (event.offline_grace_seconds === 0) {
         const r = invalidate(scope, event.user_id, 'grace_disabled');
         return { kind: 'grace_disabled', invalidated: r.invalidated };
       }
-      const body: GrantBody = {
-        v: BODY_VERSION,
-        kind: GRANT_KIND,
-        tenant_id: scope.tenant_id,
-        branch_id: scope.branch_id,
-        terminal_id: scope.terminal_id,
-        user_id: event.user_id,
-        pairing_epoch: scope.pairing_epoch,
-        admission_id: event.admission_id,
-        operator_id: event.operator_id,
-        display_name: event.display_name,
-        issued_at_local: issued,
-        ttl_ms: Math.min(grace * 1000, OFFLINE_GRANT_MAX_TTL_MS),
-        server_time_at_issue: event.server_time,
-        offline_admissions_used: 0,
-        last_used_at_local: null,
-        invalidated: null,
-      };
-      try {
-        tx(() => {
-          writeGrant(body);
-          raiseHwm(deps.now().getTime(), true);
-        });
-      } catch {
-        // A refresh that cannot be recorded must not leave the old grant standing.
-        log('warn', { event: 'operator.offline_grant.storage_failed', op: 'upsert' });
-        try {
-          deleteGrant(scope, event.user_id);
-        } catch {
-          // P1.2 holds an in-memory tombstone for this case.
-        }
-        throw new OfflineGrantStoreError('storage');
-      }
+      writeFreshGrant(scope, body);
       log('info', { event: 'operator.offline_grant.written' });
       return { kind: 'written' };
     },
