@@ -391,6 +391,26 @@ describe('RT-224 step 2 — device-path outcomes', () => {
     h.db.close();
   });
 
+  it('a device-path no_connection (no answer) neither ends nor restarts a 401 episode', async () => {
+    const h = harness({
+      sales: [{ id: 'sale-1', user: USER_A }],
+      script: [
+        { kind: 'device_unauthorized' },
+        { kind: 'no_connection' },
+        { kind: 'device_unauthorized' },
+      ],
+    });
+    let clock = Date.parse('2026-06-07T10:05:00.000Z');
+    const engine = createSaleSyncEngine({ ...h.deps, now: () => new Date(clock).toISOString() });
+    for (let i = 0; i < 3; i += 1) {
+      await tick(engine);
+      clock += 10 * 60 * 1000; // past any backoff
+    }
+    expect(h.client.cashierCalls).toHaveLength(3);
+    expect(h.unauthorized).toEqual([1]);
+    h.db.close();
+  });
+
   it('a 401 never pauses the drain and never dead-letters', async () => {
     const h = harness({
       sales: [{ id: 'sale-1', user: USER_A }],

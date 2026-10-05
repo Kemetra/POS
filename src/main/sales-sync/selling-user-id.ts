@@ -66,38 +66,47 @@ interface PrepareAll<Row> {
 
 type Resolution = { userId: string | null } | { unresolved: SellingUserUnresolvedReason };
 
-function parsePayload(raw: string | null): Record<string, unknown> | null {
-  if (raw === null) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
+/** Exactly one row may describe a sale; 0 or more than 1 is unresolved. */
+function countProblem(rows: readonly SettledRow[]): SellingUserUnresolvedReason | null {
+  if (rows.length === 0) return 'no_settled_event';
+  return rows.length > 1 ? 'multiple_settled_events' : null;
+}
+
+/**
+ * The row's payload. It matched `json_extract(payload, '$.handoff_action_id') = ?`,
+ * which only a JSON object can, so it is a well-formed object here.
+ */
+function payloadOf(row: SettledRow): Record<string, unknown> {
+  return JSON.parse(row.payload ?? '{}') as Record<string, unknown>;
+}
+
+/** The single row is THIS sale's: same payment attempt and same selling operator. */
+function belongsToSale(sale: SaleRow, row: SettledRow, payload: Record<string, unknown>): boolean {
+  const sameAttempt = payload['payment_attempt_id'] === sale.payment_attempt_id;
+  const sameOperator = payload['attribution_operator_id'] === sale.selling_operator_id;
+  const sameActor = row.acting_operator_id === sale.selling_operator_id;
+  return [sameAttempt, sameOperator, sameActor].every(Boolean);
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+/** No key → null (envelope path); a key that is not a UUID → unresolved. */
+function sellingUserIdIn(payload: Record<string, unknown>): Resolution {
+  if (!('selling_user_id' in payload)) return { userId: null };
+  const userId = payload['selling_user_id'];
+  return isUuid(userId) ? { userId } : { unresolved: 'malformed_selling_user_id' };
 }
 
 /** Judge the matched rows for one sale. Pure. */
 function resolve(sale: SaleRow, rows: readonly SettledRow[]): Resolution {
-  if (rows.length === 0) return { unresolved: 'no_settled_event' };
-  if (rows.length > 1) return { unresolved: 'multiple_settled_events' };
+  const problem = countProblem(rows);
+  if (problem !== null) return { unresolved: problem };
   const row = rows[0] as SettledRow;
-  const payload = parsePayload(row.payload);
-  if (
-    payload === null ||
-    payload['payment_attempt_id'] !== sale.payment_attempt_id ||
-    payload['attribution_operator_id'] !== sale.selling_operator_id ||
-    row.acting_operator_id !== sale.selling_operator_id
-  ) {
-    return { unresolved: 'settled_event_mismatch' };
-  }
-  if (!('selling_user_id' in payload)) return { userId: null };
-  const userId = payload['selling_user_id'];
-  if (typeof userId !== 'string' || !UUID_PATTERN.test(userId)) {
-    return { unresolved: 'malformed_selling_user_id' };
-  }
-  return { userId };
+  const payload = payloadOf(row);
+  if (!belongsToSale(sale, row, payload)) return { unresolved: 'settled_event_mismatch' };
+  return sellingUserIdIn(payload);
 }
 
 export function createSellingUserIdReader(deps: SellingUserIdReaderDeps): SellingUserIdReader {
