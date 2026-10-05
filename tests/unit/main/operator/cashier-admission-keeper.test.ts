@@ -262,6 +262,8 @@ describe('heartbeat outcomes', () => {
     await advance(HALF_TTL_MS);
     expect(h.sessions.getCurrent()).toBeNull();
     expect(h.sessions.getLastEndCause()).toBe('superseded_by_takeover');
+    // RT-113 P1.2 / OD6: taken over elsewhere invalidates this till's grant for that user.
+    expect(h.fake.invalidated).toEqual([{ reason: 'active_elsewhere', user_id: FAKE_USER_ID }]);
     await advance(HALF_TTL_MS * 4);
     expect(h.fake.admitCalls).toHaveLength(1);
     expect(vi.getTimerCount()).toBe(0);
@@ -351,7 +353,9 @@ describe('heartbeat outcomes', () => {
     h.fake.setAdmit({ kind: 'device_unauthorized' });
     await advance(HALF_TTL_MS);
     expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
-    expect(h.fake.invalidated).toEqual([]);
+    // RT-113 P1.2 / OD5: the FIRST device 401 already invalidates every offline
+    // grant (fail closed); only the session waits for the confirming 401.
+    expect(h.fake.invalidated).toEqual([{ reason: 'device_unauthorized' }]);
     h.fake.setAdmit({ ...ADMITTED, admission_ttl_seconds: TTL_S });
     await advance(DEVICE_401_CONFIRM_MS - 1);
     expect(h.fake.admitCalls).toHaveLength(1);
@@ -419,6 +423,9 @@ describe('heartbeat outcomes', () => {
       expect(h.fake.admitCalls).toHaveLength(2);
       expect(h.sessions.getCurrent()?.id).toBe(record.id);
       expect(h.fake.deviceRevoked).not.toHaveBeenCalled();
+      // RT-113 P1.2: a transient outcome never touches the offline grant.
+      expect(h.fake.invalidated).toEqual([]);
+      expect(h.fake.admitted).toEqual([]);
     },
   );
 

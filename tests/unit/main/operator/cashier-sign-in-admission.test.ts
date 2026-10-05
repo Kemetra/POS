@@ -221,6 +221,14 @@ describe('cashier sign-in — admitted', () => {
 });
 
 describe('cashier sign-in — active_elsewhere', () => {
+  it("RT-113 P1.2 / OD6: invalidates this till's offline grant for that user (superseded)", async () => {
+    const { handler, fake } = build({ kind: 'active_elsewhere' });
+    await handler.signIn(request());
+    expect(fake.invalidated).toEqual([{ reason: 'active_elsewhere', user_id: FAKE_USER_ID }]);
+    expect(fake.admitted).toEqual([]);
+    expect(fake.deviceRevoked).not.toHaveBeenCalled();
+  });
+
   it('returns takeover_required and keeps the user_id on the proto-session', async () => {
     const { handler, sessions, protoStore } = build({ kind: 'active_elsewhere' });
     const res = await handler.signIn(request());
@@ -280,6 +288,22 @@ describe('cashier sign-in — refusal outcome table', () => {
     expect(fake.deviceRevoked).not.toHaveBeenCalled();
     expect(fake.invalidated).toEqual([]);
   });
+
+  it.each([
+    { kind: 'unavailable' },
+    { kind: 'rate_limited' },
+    { kind: 'idempotency_conflict' },
+    { kind: 'rejected' },
+  ] as const)(
+    'RT-113 P1.2: %o (5xx, 429, 409, 400) never touches the offline grant',
+    async (result) => {
+      const { handler, fake } = build(result);
+      await handler.signIn(request());
+      expect(fake.admitted).toEqual([]);
+      expect(fake.invalidated).toEqual([]);
+      expect(fake.deviceRevoked).not.toHaveBeenCalled();
+    },
+  );
 
   it('a network failure keeps today’s behaviour: offline sign-in is refused no_connection', async () => {
     const { handler, fake } = build({ kind: 'no_connection' });
