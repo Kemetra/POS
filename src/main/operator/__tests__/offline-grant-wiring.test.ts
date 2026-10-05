@@ -787,6 +787,68 @@ describe('every device 401 invalidates, not only the first (Codex P1 4183383053)
   });
 });
 
+describe('the purge is the reliable audit point for a pairing change (Codex P2 4183628413)', () => {
+  it('(a) invalidateAll throws, the purge succeeds: one event per grant', () => {
+    admitBoth();
+    const b = breakable();
+    b.broken.add('invalidateAll');
+    const w = makeWiring({ store: b.store });
+    w.setScope(scope());
+    w.onPairingChange('repair');
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    expect(audits.map(auditOf)).toEqual(
+      expect.arrayContaining([
+        { reason: 'repair', operator: OPERATOR },
+        { reason: 'repair', operator: OPERATOR_2 },
+      ]),
+    );
+    expect(audits).toHaveLength(2);
+    w.stop();
+  });
+
+  it('(b) no scope (invalid pairing at start) with leftover rows: one event per grant', () => {
+    admitBoth();
+    wiring.setScope(null);
+    wiring.onPairingChange('unpair');
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    expect(audits.map(auditOf)).toEqual(
+      expect.arrayContaining([
+        { reason: 'unpair', operator: OPERATOR },
+        { reason: 'unpair', operator: OPERATOR_2 },
+      ]),
+    );
+    expect(audits).toHaveLength(2);
+    expect(audits.every((a) => a.originating_terminal_id === TERMINAL)).toBe(true);
+  });
+
+  it('(c) the normal path: exactly one event per grant, none twice, none for an already-invalidated grant', () => {
+    admitBoth();
+    invalidate({ reason: 'refused', user_id: USER }); // audited once, as forbidden
+    wiring.onPairingChange('repair');
+    expect(audits.map(auditOf)).toEqual([
+      { reason: 'forbidden', operator: OPERATOR },
+      { reason: 'repair', operator: OPERATOR_2 },
+    ]);
+  });
+
+  it('a held purge retried by the tick audits what it deletes', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    admitBoth();
+    const b = breakable();
+    b.broken.add('invalidateAll');
+    b.broken.add('purgeAll');
+    const w = makeWiring({ store: b.store });
+    w.setScope(scope());
+    w.start();
+    w.onPairingChange('unpair');
+    expect(audits).toEqual([]);
+    b.broken.clear();
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(audits.map((a) => a.payload['reason'])).toEqual(['unpair', 'unpair']);
+    w.stop();
+  });
+});
+
 describe('scopeFromPairingStatus', () => {
   it('takes the scope and epoch from a paired status, null otherwise', () => {
     expect(
@@ -870,13 +932,18 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
 
     await pairing.persist(pairInput({ terminal_id: 'terminal-new' }));
     expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
-    expect(audits.map(auditOf)).toEqual(
+    // Codex P2 4183628413: the terminal-old grant (another scope) is audited by
+    // the purge too; P1.2 before this fix deleted it silently.
+    expect(
+      audits.map((a) => [a.payload['reason'], a.acting_operator_id, a.originating_terminal_id]),
+    ).toEqual(
       expect.arrayContaining([
-        { reason: 'repair', operator: OPERATOR },
-        { reason: 'repair', operator: OPERATOR_2 },
+        ['repair', OPERATOR, TERMINAL],
+        ['repair', OPERATOR_2, TERMINAL],
+        ['repair', OPERATOR, 'terminal-old'],
       ]),
     );
-    expect(audits).toHaveLength(2);
+    expect(audits).toHaveLength(3);
     admit();
     expect(body()).toMatchObject({
       terminal_id: 'terminal-new',

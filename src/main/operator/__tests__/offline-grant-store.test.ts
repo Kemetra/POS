@@ -937,9 +937,53 @@ describe('invalidateAll and purgeAll (D4 device 401, OD4 re-pair)', () => {
   });
 
   it('purgeAll deletes every grant on the device and keeps the clock mark', () => {
-    expect(store.purgeAll()).toEqual({ removed: 3 });
+    expect(store.purgeAll().removed).toBe(3);
     expect(grantCount()).toBe(0);
     expect(hwmCount()).toBe(1);
+  });
+
+  // Codex P2 4183628413: the purge is the reliable audit point for a pairing
+  // change, so it reports every standing grant it deletes, with its own scope.
+  it('purgeAll reports each standing (not yet invalidated) grant it deleted, with its scope', () => {
+    store.invalidate(scope(), 'user-2', 'forbidden'); // already invalidated: not reported again
+    const r = store.purgeAll();
+    expect(r.invalidated).toEqual(
+      expect.arrayContaining([
+        {
+          tenant_id: TENANT,
+          branch_id: BRANCH,
+          terminal_id: TERMINAL,
+          user_id: USER,
+          operator_id: OPERATOR,
+        },
+        {
+          tenant_id: TENANT,
+          branch_id: BRANCH,
+          terminal_id: 'terminal-old',
+          user_id: USER,
+          operator_id: OPERATOR,
+        },
+      ]),
+    );
+    expect(r.invalidated).toHaveLength(2);
+  });
+
+  it('purgeAll reports no unreadable or foreign row (no attribution to trust)', () => {
+    setGrantBlob(g.raw, Buffer.from([1, 2, 3]), 'user-2');
+    g.raw.run(
+      `UPDATE cashier_offline_grants SET terminal_id = 'terminal-moved' WHERE terminal_id = 'terminal-old'`,
+    );
+    const r = store.purgeAll();
+    expect(r.removed).toBe(3);
+    expect(r.invalidated).toEqual([
+      {
+        tenant_id: TENANT,
+        branch_id: BRANCH,
+        terminal_id: TERMINAL,
+        user_id: USER,
+        operator_id: OPERATOR,
+      },
+    ]);
   });
 
   it('purgeAll throws storage when the delete fails', () => {
@@ -1059,7 +1103,7 @@ describe('a throwing logger never escapes (F3)', () => {
     expect(loud.invalidate(scope(), USER, 'forbidden').invalidated).toHaveLength(1);
     expect(loud.invalidateAll(scope(), 'device_unauthorized').invalidated).toEqual([]);
     expect(loud.observeClock(at(T0_MS + HOUR_MS))).toEqual({ kind: 'raised' });
-    expect(loud.purgeAll()).toEqual({ removed: 1 });
+    expect(loud.purgeAll()).toEqual({ removed: 1, invalidated: [] });
     expect(loud.nextPairingEpoch(EPOCH)).toBeGreaterThan(0);
   });
 
