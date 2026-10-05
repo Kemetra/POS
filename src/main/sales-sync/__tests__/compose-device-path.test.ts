@@ -21,6 +21,7 @@ import { composeSaleSyncDevicePath } from '../compose-device-path.js';
 import { createSaleSyncEngine } from '../sale-sync-engine.js';
 import { createSaleSyncStateRepo } from '../sale-sync-state-repo.js';
 import { createFakeSaleSyncClient } from '../sale-sync-client-types.js';
+import { createSaleSyncClient } from '../create-sale-sync-client.js';
 import { bindSalesRepository } from '../../sales/repositories/sales.repository.js';
 
 beforeAll(async () => {
@@ -47,6 +48,7 @@ function setup(opts: { paired?: boolean; read?: () => Promise<string | null | un
     db: handle,
     isPaired: () => Promise.resolve(opts.paired ?? true),
     readToken: opts.read ?? (() => Promise.resolve(TOKEN)),
+    currentTerminalId: () => 'term-1',
     logger: log.logger,
   });
   return { db, handle, devicePath, log };
@@ -89,17 +91,17 @@ describe('rev547 F2 — composeSaleSyncDevicePath', () => {
 
   it('the device token: paired → token; unpaired → null; a read failure → null, logged once with no data', async () => {
     const paired = setup();
-    expect(await paired.devicePath.readDeviceToken()).toBe(TOKEN);
+    expect(await paired.devicePath.client.getDeviceToken()).toBe(TOKEN);
     expect(await nn(paired.devicePath.engine.hasDeviceCredential)()).toBe(true);
     paired.db.close();
 
     const unpaired = setup({ paired: false });
-    expect(await unpaired.devicePath.readDeviceToken()).toBeNull();
+    expect(await unpaired.devicePath.client.getDeviceToken()).toBeNull();
     expect(await nn(unpaired.devicePath.engine.hasDeviceCredential)()).toBe(false);
     unpaired.db.close();
 
     const failing = setup({ read: () => Promise.reject(new Error(`DPAPI ${TOKEN}`)) });
-    expect(await failing.devicePath.readDeviceToken()).toBeNull();
+    expect(await failing.devicePath.client.getDeviceToken()).toBeNull();
     expect(await nn(failing.devicePath.engine.hasDeviceCredential)()).toBe(false);
     expect(failing.log.lines).toEqual([{ obj: {}, msg: 'sale_sync:device_token_unreadable' }]);
     failing.db.close();
@@ -137,12 +139,74 @@ describe('rev547 F2 — composeSaleSyncDevicePath', () => {
       },
       isPaired: () => Promise.resolve(true),
       readToken: () => Promise.resolve(TOKEN),
+      currentTerminalId: () => 'term-1',
       logger: log.logger,
     });
     const sale = nn(bindSalesRepository(handle).readById('sale-1'));
     nn(broken.engine.sellingUsers).resolve([sale], 'term-1');
     nn(broken.engine.sellingUsers).resolve([sale], 'term-1');
     expect(log.lines).toEqual([{ obj: {}, msg: 'sale_sync:selling_user_lookup_failed' }]);
+    db.close();
+  });
+});
+
+describe('RT-224 (Codex P2 on 0020877) — a re-pair during the token read never sends the old sale', () => {
+  it('real client + composed wiring: no request, the sale stays pending (not dead-lettered), logged once', async () => {
+    const db = freshSalesSyncDb();
+    const handle = handleFor(db);
+    seedSale(db, { sale_id: 'sale-1' });
+    seedOutbox(db, { sale_id: 'sale-1' });
+    seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
+    let terminal = 'term-1';
+    let release!: (token: string) => void;
+    let tokenReadStarted = false;
+    const log = memoryLogger();
+    const devicePath = composeSaleSyncDevicePath({
+      db: handle,
+      isPaired: () => Promise.resolve(true),
+      readToken: () => {
+        tokenReadStarted = true;
+        return new Promise<string>((resolve) => {
+          release = resolve;
+        });
+      },
+      currentTerminalId: () => terminal,
+      logger: log.logger,
+    });
+    const requests: unknown[] = [];
+    const client = createSaleSyncClient({
+      baseUrl: 'https://example.invalid',
+      fetch: (input) => {
+        requests.push(input);
+        return Promise.resolve(new Response('{}', { status: 201 }));
+      },
+      getOperatorToken: () => null,
+      ...devicePath.client,
+    });
+    const stateRepo = createSaleSyncStateRepo(handle);
+    const engine = createSaleSyncEngine({
+      client,
+      stateRepo,
+      salesRepo: bindSalesRepository(handle),
+      tenantId: 'tenant-1',
+      branchId: 'branch-1',
+      resolveTerminalId: () => terminal,
+      getOperatorToken: () => null,
+      ...devicePath.engine,
+      // Only the client's own read is the deferred one.
+      hasDeviceCredential: () => true,
+      now: () => '2026-06-07T10:05:00.000Z',
+      backoff: { baseMs: 1000, maxMs: 300_000 },
+    });
+    const admission = engine.runTickOnce();
+    for (let i = 0; i < 50 && !tokenReadStarted; i += 1) await new Promise((r) => setImmediate(r));
+    expect(tokenReadStarted).toBe(true);
+    terminal = 'term-NEW'; // the same-branch re-pair completes while the read is pending
+    release('new-device-token');
+    if (admission.kind === 'started') await admission.completed;
+    expect(requests).toHaveLength(0);
+    expect(nn(stateRepo.read('sale-1')).sync_status).toBe('pending');
+    expect(log.lines).toEqual([{ obj: {}, msg: 'sale_sync:device_terminal_changed' }]);
     db.close();
   });
 });

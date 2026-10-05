@@ -116,6 +116,7 @@ const saleSyncClient = (fetch: FetchLike): ReturnType<typeof createSaleSyncClien
     fetch,
     getOperatorToken: () => SENTINEL['operator-envelope'],
     getDeviceToken: () => Promise.resolve(SENTINEL.device),
+    currentTerminalId: () => CAPTURE_PAYLOAD.terminalId,
   });
 const pairingNetwork = (fetch: FetchLike): ReturnType<typeof createNetwork> =>
   createNetwork({ baseUrl: BASE_URL, fetch });

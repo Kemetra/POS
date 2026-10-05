@@ -75,6 +75,7 @@ function client(
     fetch: fetchImpl,
     getOperatorToken: () => ENVELOPE,
     getDeviceToken: () => Promise.resolve(device),
+    currentTerminalId: () => PAYLOAD.terminalId,
   });
 }
 
@@ -140,8 +141,107 @@ describe('RT-224 step 2 (Codex P2) — a device-token read failure never rejects
       fetch: fetchImpl,
       getOperatorToken: () => ENVELOPE,
       getDeviceToken: () => Promise.reject(new Error('DPAPI failure')),
+      currentTerminalId: () => PAYLOAD.terminalId,
     });
     await expect(c.postSaleAsCashier(PAYLOAD, USER)).resolves.toEqual({ kind: 'no_connection' });
+    expect(captured).toHaveLength(0);
+  });
+});
+
+describe('RT-224 step 2 (Codex P2 on 0020877) — the send is bound to the sale’s terminal', () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  }
+
+  function racingClient() {
+    const { fetchImpl, captured } = fetchAnswering(201, '{}');
+    let terminal: string | null = PAYLOAD.terminalId;
+    let pending = deferred<string | null>();
+    let tokenReads = 0;
+    const changes: unknown[][] = [];
+    const c = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => ENVELOPE,
+      getDeviceToken: () => {
+        tokenReads += 1;
+        return pending.promise;
+      },
+      currentTerminalId: () => terminal,
+      onDeviceTerminalChanged: (...args: unknown[]) => changes.push(args),
+    });
+    return {
+      c,
+      captured,
+      changes,
+      reads: () => tokenReads,
+      rePair: (next: string) => {
+        terminal = next;
+      },
+      resolveRead: (token: string | null) => {
+        pending.resolve(token);
+      },
+      reArm: () => {
+        pending = deferred<string | null>();
+      },
+    };
+  }
+
+  it('a re-pair while the token read is pending: no request, no_connection (never dead-lettered), reported once', async () => {
+    const r = racingClient();
+    const first = r.c.postSaleAsCashier(PAYLOAD, USER);
+    await Promise.resolve();
+    expect(r.reads()).toBe(1);
+    r.rePair('term-NEW');
+    r.resolveRead('new-device-token');
+    expect(await first).toEqual({ kind: 'no_connection' });
+    expect(r.captured).toHaveLength(0);
+    // A second sale of the old pairing: still not sent, not reported again.
+    r.reArm();
+    r.resolveRead('new-device-token');
+    expect(await r.c.postSaleAsCashier(PAYLOAD, USER)).toEqual({ kind: 'no_connection' });
+    expect(r.captured).toHaveLength(0);
+    expect(r.changes).toEqual([[]]);
+  });
+
+  it('the same terminal before and after the read: sent, and the report re-arms', async () => {
+    const r = racingClient();
+    r.resolveRead(DEVICE_TOKEN);
+    expect((await r.c.postSaleAsCashier(PAYLOAD, USER)).kind).toBe('ok');
+    expect(r.captured).toHaveLength(1);
+    r.rePair('term-NEW');
+    await r.c.postSaleAsCashier(PAYLOAD, USER);
+    r.rePair(PAYLOAD.terminalId);
+    await r.c.postSaleAsCashier(PAYLOAD, USER);
+    r.rePair('term-NEWER');
+    await r.c.postSaleAsCashier(PAYLOAD, USER);
+    expect(r.changes).toEqual([[], []]);
+    expect(r.captured).toHaveLength(2);
+  });
+
+  it('unpaired after the read (no current terminal) → not sent', async () => {
+    const r = racingClient();
+    const sent = r.c.postSaleAsCashier(PAYLOAD, USER);
+    await Promise.resolve();
+    r.rePair(null as unknown as string);
+    r.resolveRead(DEVICE_TOKEN);
+    expect(await sent).toEqual({ kind: 'no_connection' });
+    expect(r.captured).toHaveLength(0);
+  });
+
+  it('no current-terminal reader wired → fail closed (not sent)', async () => {
+    const { fetchImpl, captured } = fetchAnswering(201, '{}');
+    const c = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => ENVELOPE,
+      getDeviceToken: () => Promise.resolve(DEVICE_TOKEN),
+    });
+    expect(await c.postSaleAsCashier(PAYLOAD, USER)).toEqual({ kind: 'no_connection' });
     expect(captured).toHaveLength(0);
   });
 });

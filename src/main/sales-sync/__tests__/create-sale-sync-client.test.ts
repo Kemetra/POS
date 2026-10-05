@@ -514,6 +514,7 @@ describe('RT-224 step 2 — device-path helpers', () => {
       fetch: fetchImpl,
       getOperatorToken: () => TOKEN,
       getDeviceToken: () => Promise.resolve('device-token'),
+      currentTerminalId: () => PAYLOAD.terminalId,
     });
     const corrupt: CaptureSalePayload = { ...PAYLOAD, totalMinor: 10.5 };
     expect(await client.postSaleAsCashier(corrupt, USER_ID)).toEqual({ kind: 'permanent' });
