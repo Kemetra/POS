@@ -246,6 +246,76 @@ describe('RT-224 step 2 (Codex P2 on 0020877) — the send is bound to the sale�
   });
 });
 
+describe('RT-224 step 2 (Codex P2 on 988a238) — token and terminal come from one pairing', () => {
+  /**
+   * `PairingStore.persist` writes the new device token, then (after ONE await)
+   * the new terminal row. Model a re-pair that advances one step at each of the
+   * client's awaits: step `s` (new token) lands in slot `sAt`, step `r` (new
+   * terminal) in the same or the next slot. Slot 0 is before the send starts;
+   * slot i is the client's i-th await; NEVER = after the request. The token is
+   * read either when the read is called or when it resolves.
+   */
+  type ReadAt = 'call' | 'resolve';
+  const NEVER = 99;
+
+  async function sendDuringRePair(readAt: ReadAt, sAt: number, rAt: number) {
+    const store = { token: 'old-device-token', terminal: PAYLOAD.terminalId };
+    const steps: Array<{ at: number; run: () => void }> = [
+      { at: sAt, run: () => (store.token = 'new-device-token') },
+      { at: rAt, run: () => (store.terminal = 'term-NEW') },
+    ];
+    const advance = (slot: number) => {
+      for (const step of steps) if (step.at === slot) step.run();
+    };
+    let slot = 0;
+    advance(0);
+    const { fetchImpl, captured } = fetchAnswering(201, '{}');
+    const c = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => ENVELOPE,
+      getDeviceToken: async () => {
+        const atCall = store.token;
+        await Promise.resolve();
+        slot += 1;
+        advance(slot);
+        return readAt === 'call' ? atCall : store.token;
+      },
+      currentTerminalId: () => store.terminal,
+    });
+    const result = await c.postSaleAsCashier(PAYLOAD, USER);
+    const sentTokens = captured.map((req) => header(req, 'Authorization'));
+    return { result, sentTokens };
+  }
+
+  const schedules: Array<[ReadAt, number, number]> = [];
+  for (const readAt of ['call', 'resolve'] as const) {
+    for (let sAt = 0; sAt <= 3; sAt += 1) {
+      for (const rAt of [sAt, sAt + 1, NEVER]) {
+        // `r` follows `s` by at most one await (persist's single await) — except
+        // NEVER, which models a re-pair starting after the send was decided.
+        if (rAt === NEVER && sAt < 3) continue;
+        schedules.push([readAt, sAt, rAt]);
+      }
+    }
+  }
+
+  it.each(schedules)(
+    'read at %s, new token at slot %i, new terminal at slot %i: never sends the new token for the old terminal’s sale',
+    async (readAt, sAt, rAt) => {
+      const { result, sentTokens } = await sendDuringRePair(readAt, sAt, rAt);
+      expect(sentTokens).not.toContain('Bearer new-device-token');
+      if (sentTokens.length === 0) expect(result).toEqual({ kind: 'no_connection' });
+    },
+  );
+
+  it('no re-pair: sent once with the token', async () => {
+    const { result, sentTokens } = await sendDuringRePair('resolve', NEVER, NEVER);
+    expect(result.kind).toBe('ok');
+    expect(sentTokens).toEqual(['Bearer old-device-token']);
+  });
+});
+
 describe('RT-224 step 2 — the envelope request is unchanged', () => {
   it('postSale carries the envelope and NO operatorUserId', async () => {
     const { fetchImpl, captured } = fetchAnswering(201, '{}');
