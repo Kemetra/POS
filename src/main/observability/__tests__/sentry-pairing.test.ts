@@ -91,12 +91,12 @@ function makeNetwork(
       const envelope: {
         ok: false;
         status: number;
-        body: { code: string };
+        body: { error: { code: string } };
         retry_after_s?: number;
       } = {
         ok: false,
         status: result.status,
-        body: { code: result.code },
+        body: { error: { code: result.code } },
       };
       if (result.retry_after_s !== undefined) envelope.retry_after_s = result.retry_after_s;
       return Promise.resolve(envelope);

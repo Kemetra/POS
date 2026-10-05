@@ -194,3 +194,28 @@ export const RT_215_DEVICE_REVOKED_BRANCH_PREFIX = 'claude/rt-215-' as const;
 export const RT_215_DEVICE_REVOKED_EXEMPT_PREFIXES = [
   'src/main/pairing/',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `claude/rt-228-*` implements Jira RT-228: Backend-Core returns terminal-pairing
+ * errors in the canonical envelope `{ "error": { "code", "message" } }`
+ * (`pos-terminal-pairing.openapi.yaml` `components.schemas.Error`), but POS's
+ * `mapFailure` switched on a flat top-level `body.code`, so every pairing error
+ * (INVALID_CODE, EXPIRED_CODE, ALREADY_PAIRED, BRANCH_MISMATCH, RATE_LIMITED)
+ * collapsed to `unknown_error`. The pairing module owns that mapping
+ * (`src/main/pairing/failure-mapping.ts` + the `PairFailureBody` type in
+ * `network.ts`), so the fix necessarily touches `src/main/pairing/`.
+ *
+ * Authority: owner approval, Jira RT-228 (2026-10-05) — "a narrow source-scope
+ * exemption for the `claude/rt-228-` branch prefix, covering `src/main/pairing/`
+ * only", following the RT-215 pattern.
+ *
+ * Exemption is narrow: ONLY `src/main/pairing/`, ONLY on `claude/rt-228-*`.
+ * All other forbidden prefixes (`src/main/secrets/`, `src/shared/api-types.ts`,
+ * `scripts/codegen-api.ts`, `scripts/openapi-snapshot.json`,
+ * `.github/workflows/`) remain blocked on these branches. Narrowness is
+ * asserted by `source-scope-guard-rt228.test.ts`.
+ */
+export const RT_228_PAIRING_ERROR_ENVELOPE_BRANCH_PREFIX = 'claude/rt-228-' as const;
+export const RT_228_PAIRING_ERROR_ENVELOPE_EXEMPT_PREFIXES = [
+  'src/main/pairing/',
+] as const satisfies readonly ForbiddenPathPrefix[];
