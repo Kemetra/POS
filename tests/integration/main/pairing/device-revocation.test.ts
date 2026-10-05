@@ -125,10 +125,16 @@ const STUB_ROUTES: readonly StubRoute[] = [
   },
 ];
 
-function answer(path: string, deviceStatus: DeviceStatus): Response {
-  const route = STUB_ROUTES.find((r) => r.matches(path));
+/** One request as the stub sees it. */
+interface StubRequest {
+  path: string;
+  deviceStatus: DeviceStatus;
+}
+
+function answer(request: StubRequest): Response {
+  const route = STUB_ROUTES.find((r) => r.matches(request.path));
   if (route === undefined) return UNAUTHORIZED(); // operator-credential route: always 401 here
-  return deviceStatus === 401 ? UNAUTHORIZED() : route.ok();
+  return request.deviceStatus === 401 ? UNAUTHORIZED() : route.ok();
 }
 
 function urlOf(input: RequestInfo | URL): URL {
@@ -147,12 +153,21 @@ function stubBackend(): {
   const fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const path = urlOf(input).pathname;
     sent.push({ path, authorization: new Headers(init?.headers).get('Authorization') });
-    return Promise.resolve(answer(path, deviceStatus.value));
+    return Promise.resolve(answer({ path, deviceStatus: deviceStatus.value }));
   };
   return { fetch, sent, deviceStatus };
 }
 
-function pairing(terminal_id: string, device_token: string): PersistInput {
+/** A pairing as the test persists it: the terminal and its device token. */
+interface PairingFixture {
+  terminal_id: string;
+  device_token: string;
+}
+
+const PAIRING_A: PairingFixture = { terminal_id: 'term-1', device_token: OLD_TOKEN };
+const PAIRING_B: PairingFixture = { terminal_id: 'term-2', device_token: NEW_TOKEN };
+
+function pairing({ terminal_id, device_token }: PairingFixture): PersistInput {
   return {
     tenant_id: 'tenant-1',
     branch_id: 'branch-1',
@@ -189,12 +204,27 @@ afterEach(() => {
   raw.close();
 });
 
-function rows(sql: string): unknown[][] {
-  return raw.exec(sql)[0]?.values ?? [];
+/** A read-only query against the test database. */
+interface SqlQuery {
+  sql: string;
+}
+
+function rows(query: SqlQuery): unknown[][] {
+  return raw.exec(query.sql)[0]?.values ?? [];
 }
 
 /** Seed one sale + its outbox row + sync state, as a finalized unsent sale. */
-function seedUnsentSale(terminal_id: string): void {
+/** Which terminal a seeded row belongs to. */
+interface TerminalRef {
+  terminal_id: string;
+}
+
+/** A seeded PIN record: the terminal it was provisioned on and the cashier. */
+interface PinFixture extends TerminalRef {
+  user_id: string;
+}
+
+function seedUnsentSale({ terminal_id }: TerminalRef): void {
   raw.run(
     `INSERT INTO sales (sale_id, sale_number, receipt_number, envelope_handoff_action_id, payment_attempt_id, envelope_cart_id, tenant_id, branch_id, terminal_id, terminal_label, selling_operator_id, selling_operator_display_name, selling_operator_session_id, subtotal_minor, total_tax_minor, total_change_due_minor, tender_lines_summary_json, settled_at, finalized_at, tenant_tax_registration_id, branch_name, branch_address, local_calendar_day)
      VALUES ('sale-1', 'SN-1', 'R-1', 'h-1', 'pa', 'c', 'tenant-1', 'branch-1', ?, 'Till 1', 'op1', 'Op', 'sess1', 1000, 0, 0, '[]', '2026-10-05T00:00:00Z', '2026-10-05T00:00:00Z', 'TRN', 'Branch', 'Addr', '2026-10-05')`,
@@ -207,7 +237,7 @@ function seedUnsentSale(terminal_id: string): void {
   );
 }
 
-function seedPin(terminal_id: string, user_id: string): void {
+function seedPin({ terminal_id, user_id }: PinFixture): void {
   raw.run(
     `INSERT INTO cashier_pin_records
        (tenant_id, branch_id, terminal_id, user_id, cashier_clerk_user_id, pin_hash, pin_salt,
@@ -219,9 +249,9 @@ function seedPin(terminal_id: string, user_id: string): void {
 
 function salesSnapshot(): unknown {
   return {
-    sales: rows('SELECT * FROM sales ORDER BY sale_id'),
-    outbox: rows('SELECT * FROM sale_sync_outbox ORDER BY outbox_row_id'),
-    state: rows('SELECT * FROM sale_sync_state ORDER BY sale_id'),
+    sales: rows({ sql: 'SELECT * FROM sales ORDER BY sale_id' }),
+    outbox: rows({ sql: 'SELECT * FROM sale_sync_outbox ORDER BY outbox_row_id' }),
+    state: rows({ sql: 'SELECT * FROM sale_sync_state ORDER BY sale_id' }),
   };
 }
 
@@ -254,7 +284,7 @@ async function wire(): Promise<Wired> {
     deviceTokenKey: KEY,
     now: () => new Date('2026-10-05T09:00:00.000Z'),
   });
-  await store.persist(pairing('term-1', OLD_TOKEN));
+  await store.persist(pairing(PAIRING_A));
   const readSendable = createSendableDeviceTokenReader({
     pairingStore: store,
     secretStore: secrets,
@@ -347,7 +377,7 @@ async function wire(): Promise<Wired> {
     {
       // The real service persists on success; this one pairs to term-2.
       submit: async () => {
-        await store.persist(pairing('term-2', NEW_TOKEN));
+        await store.persist(pairing(PAIRING_B));
         return {
           outcome: 'success',
           tenant_id: 'tenant-1',
@@ -449,10 +479,10 @@ describe('RT-215 device revocation — end to end', () => {
     expect(w.invalidated).toContainEqual({ reason: 'device_unauthorized' });
     expect(w.pushed).toEqual([{ kind: 'invalid', reason: 'device_revoked' }]); // no session: at once
 
-    const audit = rows(
-      `SELECT acting_operator_id, action_category, payload, originating_terminal_id, session_id
+    const audit = rows({
+      sql: `SELECT acting_operator_id, action_category, payload, originating_terminal_id, session_id
          FROM audit_events WHERE action_category LIKE 'pairing.%'`,
-    );
+    });
     expect(audit).toEqual([
       [
         'system:device',
@@ -462,7 +492,7 @@ describe('RT-215 device revocation — end to end', () => {
         null,
       ],
     ]);
-    expect(JSON.stringify(rows('SELECT * FROM audit_events'))).not.toContain('SENTINEL');
+    expect(JSON.stringify(rows({ sql: 'SELECT * FROM audit_events' }))).not.toContain('SENTINEL');
   });
 
   it('a device-bearer 2xx in between resets the count (no confirmation call is made)', async () => {
@@ -483,7 +513,7 @@ describe('RT-215 device revocation — end to end', () => {
     await expect(w.readDown.fetchSnapshot()).resolves.toEqual({ kind: 'device_unauthorized' });
     await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS);
     expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
-    expect(rows(`SELECT payload FROM audit_events`)).toEqual([['{"source":"read_down"}']]);
+    expect(rows({ sql: `SELECT payload FROM audit_events` })).toEqual([['{"source":"read_down"}']]);
   });
 
   it('operator-credential 401s are ignored, even on the observed fetch', async () => {
@@ -587,9 +617,9 @@ describe('RT-215 device revocation — end to end', () => {
 
   it('re-pair clears the state, deletes other terminals’ PINs, and never touches a sale or the outbox', async () => {
     const w = await wire();
-    seedUnsentSale('term-1');
-    seedPin('term-1', 'u1');
-    seedPin('term-1', 'u2');
+    seedUnsentSale({ terminal_id: 'term-1' });
+    seedPin({ terminal_id: 'term-1', user_id: 'u1' });
+    seedPin({ terminal_id: 'term-1', user_id: 'u2' });
     const salesBefore = salesSnapshot();
 
     w.backend.deviceStatus.value = 401;
@@ -598,23 +628,23 @@ describe('RT-215 device revocation — end to end', () => {
     expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
     expect(salesSnapshot()).toEqual(salesBefore);
 
-    seedPin('term-2', 'u3'); // a PIN provisioned for the new terminal is kept
+    seedPin({ terminal_id: 'term-2', user_id: 'u3' }); // a PIN provisioned for the new terminal is kept
     w.pushed.length = 0;
     await w.service.submit('NEW-CODE');
 
     expect(await w.store.getStatus()).toMatchObject({ kind: 'paired', terminal_id: 'term-2' });
-    expect(rows('SELECT device_revoked_at FROM terminal_assignment')).toEqual([[null]]);
+    expect(rows({ sql: 'SELECT device_revoked_at FROM terminal_assignment' })).toEqual([[null]]);
     expect(await w.readSendable()).toBe(NEW_TOKEN);
     expect(w.detector.state).toBe('clear');
-    expect(rows('SELECT terminal_id, user_id FROM cashier_pin_records')).toEqual([
+    expect(rows({ sql: 'SELECT terminal_id, user_id FROM cashier_pin_records' })).toEqual([
       ['term-2', 'u3'],
     ]);
     expect(w.pushed).toEqual([{ kind: 'paired' }]);
     expect(
-      rows(
-        `SELECT action_category, payload, originating_terminal_id FROM audit_events
+      rows({
+        sql: `SELECT action_category, payload, originating_terminal_id FROM audit_events
           WHERE action_category = 'pairing.device_revoked_cleared'`,
-      ),
+      }),
     ).toEqual([['pairing.device_revoked_cleared', '{"source":"re_pair"}', 'term-2']]);
     // The old terminal's unsent sale and outbox row: untouched (held, RT-221).
     expect(salesSnapshot()).toEqual(salesBefore);
@@ -723,13 +753,13 @@ describe('RT-215 device revocation — end to end', () => {
     await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS);
     await w.service.submit('NEW-CODE');
     expect(w.relaunches.count).toBe(1);
-    expect(rows('SELECT terminal_id, device_revoked_at FROM terminal_assignment')).toEqual([
-      ['term-2', null],
-    ]);
+    expect(rows({ sql: 'SELECT terminal_id, device_revoked_at FROM terminal_assignment' })).toEqual(
+      [['term-2', null]],
+    );
     expect(
-      rows(
-        `SELECT count(*) FROM audit_events WHERE action_category = 'pairing.device_revoked_cleared'`,
-      ),
+      rows({
+        sql: `SELECT count(*) FROM audit_events WHERE action_category = 'pairing.device_revoked_cleared'`,
+      }),
     ).toEqual([[1]]);
   });
 

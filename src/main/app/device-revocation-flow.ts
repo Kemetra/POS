@@ -164,6 +164,68 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
     logger.info({ event: 'pairing.device_revoked.routed' }, 'routed to pairing recovery');
   }
 
+  // ── onPaired steps ──
+
+  /**
+   * Codex P1 4181556645: a session from the previous pairing must not survive
+   * into this one. Latch it; the keeper ends it at its safe point (a live
+   * tender is never cut).
+   */
+  function latchLeftoverSession(): void {
+    if (deps.sessions.getCurrent() !== null) step('latch', deps.latchSession);
+  }
+
+  /** The status after the pairing, or null when it cannot be read (logged). */
+  async function readStatus(): Promise<PairingStatus | null> {
+    try {
+      return await deps.getStatus();
+    } catch {
+      logger.error({ event: 'pairing.device_revoked.step_failed', step: 'status' }, 'step failed');
+      return null;
+    }
+  }
+
+  /** The new pairing's scope, or null when the terminal is not paired. */
+  function pairedScope(status: PairingStatus | null): RevokedTerminalScope | null {
+    if (status?.kind !== 'paired') return null;
+    return {
+      tenant_id: status.tenant_id,
+      branch_id: status.branch_id,
+      terminal_id: status.terminal_id,
+    };
+  }
+
+  /** Delete other terminals' PIN records; audit a revocation that was cleared. */
+  function recoverOnto(scope: RevokedTerminalScope, previouslyRevoked: boolean): void {
+    step('pins', () => {
+      const deleted = deps.purgeOtherTerminalPins(scope.terminal_id);
+      logger.info(
+        { event: 'pairing.repaired.pin_records_purged', count: deleted },
+        'PIN records of other terminals deleted',
+      );
+    });
+    if (previouslyRevoked) audit('pairing.device_revoked_cleared', scope, { source: 're_pair' });
+  }
+
+  /**
+   * Review F2: the paired-only workers keep the scope they started with
+   * (RT-202). After a re-pair in a process where they already ran, the
+   * finalize listener and the read-down would keep the OLD pairing, so the
+   * app relaunches — only once the new pairing is persisted and audited, and
+   * never while an operator session is alive (`submit` is refused then,
+   * review F3).
+   */
+  function shouldRelaunch(scope: RevokedTerminalScope | null): boolean {
+    if (scope === null || !deps.workersAlreadyStarted()) return false;
+    return deps.sessions.getCurrent() === null;
+  }
+
+  function relaunchIfWorkersRan(scope: RevokedTerminalScope | null): void {
+    if (!shouldRelaunch(scope)) return;
+    logger.info({ event: 'pairing.repaired.relaunch' }, 're-paired; relaunching');
+    step('relaunch', deps.relaunch);
+  }
+
   // The latched session ended (at its safe point, or any other way): route now.
   deps.sessions.onEnded(() => {
     routeIfPending();
@@ -199,53 +261,14 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
     async onPaired({ previouslyRevoked }) {
       routePending = false;
       step('detector', deps.resetDetector);
-      // Codex P1 4181556645: a session from the previous pairing must not
-      // survive into this one. Latch it; the keeper ends it at its safe point
-      // (a live tender is never cut).
-      if (deps.sessions.getCurrent() !== null) step('latch', deps.latchSession);
-      let status: PairingStatus | null = null;
-      try {
-        status = await deps.getStatus();
-      } catch {
-        logger.error(
-          { event: 'pairing.device_revoked.step_failed', step: 'status' },
-          'step failed',
-        );
-      }
-      if (status?.kind === 'paired') {
-        const scope: RevokedTerminalScope = {
-          tenant_id: status.tenant_id,
-          branch_id: status.branch_id,
-          terminal_id: status.terminal_id,
-        };
-        step('pins', () => {
-          const deleted = deps.purgeOtherTerminalPins(scope.terminal_id);
-          logger.info(
-            { event: 'pairing.repaired.pin_records_purged', count: deleted },
-            'PIN records of other terminals deleted',
-          );
-        });
-        if (previouslyRevoked) {
-          audit('pairing.device_revoked_cleared', scope, { source: 're_pair' });
-        }
-      }
+      latchLeftoverSession();
+      const status = await readStatus();
+      const scope = pairedScope(status);
+      if (scope !== null) recoverOnto(scope, previouslyRevoked);
       step('push', () => {
         deps.pushStatus({ kind: 'paired' });
       });
-      // Review F2: the paired-only workers keep the scope they started with
-      // (RT-202). After a re-pair in a process where they already ran, the
-      // finalize listener and the read-down would keep the OLD pairing, so the
-      // app relaunches — only once the new pairing is persisted and audited
-      // (above), and never while an operator session is alive (`submit` is
-      // refused then, review F3).
-      if (
-        status?.kind === 'paired' &&
-        deps.workersAlreadyStarted() &&
-        deps.sessions.getCurrent() === null
-      ) {
-        logger.info({ event: 'pairing.repaired.relaunch' }, 're-paired; relaunching');
-        step('relaunch', deps.relaunch);
-      }
+      relaunchIfWorkersRan(scope);
     },
   };
 }

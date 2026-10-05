@@ -87,8 +87,18 @@ export function isDeviceBearerRoute(
 ): boolean {
   const target = parseUrl(url);
   const route = parseUrl(`${baseUrl.replace(/\/$/, '')}${DEVICE_BEARER_ROUTE[source]}`);
-  if (target === null || route === null || target.origin !== route.origin) return false;
-  return target.pathname === route.pathname || target.pathname.startsWith(`${route.pathname}/`);
+  if (target === null || route === null) return false;
+  return isWithinRoute(target, route);
+}
+
+/** Same origin, and the route's own path or one of its sub-paths. */
+function isWithinRoute(target: URL, route: URL): boolean {
+  return target.origin === route.origin && isSameOrSubPath(target.pathname, route.pathname);
+}
+
+/** `path` is `routePath` itself or below it — never a look-alike prefix. */
+function isSameOrSubPath(path: string, routePath: string): boolean {
+  return path === routePath || path.startsWith(`${routePath}/`);
 }
 
 function outcomeForStatus(status: number): DeviceAuthOutcome {
