@@ -255,6 +255,26 @@ describe('upsertFromAdmitted — seal round-trip', () => {
     expect(openBody()['invalidated']).toBeNull();
   });
 
+  // Codex P2 4180957481: the contract types display_name as any string, and
+  // the admission client accepts "". Writing and re-reading use the same rule.
+  it('accepts an empty display name: the grant is written and admissible', () => {
+    store.upsertFromAdmitted(scope(), admitted());
+    expect(store.upsertFromAdmitted(scope(), admitted({ display_name: '' }))).toEqual({
+      kind: 'written',
+    });
+    const e = store.evaluate(scope(), USER, T0);
+    expect(e.admissible && e.grant.display_name).toBe('');
+    expect(store.consumeOfflineUse(scope(), USER, T0).admissible).toBe(true);
+  });
+
+  it('still rejects a non-string display name', () => {
+    store.upsertFromAdmitted(scope(), admitted());
+    expect(
+      store.upsertFromAdmitted(scope(), admitted({ display_name: 7 as unknown as string })).kind,
+    ).toBe('rejected');
+    expect(store.evaluate(scope(), USER, T0)).toEqual(refusal('grant_invalidated'));
+  });
+
   it('keeps one row per (scope, user)', () => {
     store.upsertFromAdmitted(scope(), admitted());
     store.upsertFromAdmitted(scope(), admitted());
@@ -289,6 +309,31 @@ describe('upsertFromAdmitted — the 72 h clamp and grace 0 (D4, OD8)', () => {
     expect(openBody()['ttl_ms']).toBe(1000);
   });
 
+  // Codex P2 4180957478: the contract sets no maximum and the client accepts
+  // any integer >= 0, so a huge grace is clamped (before x1000), never rejected.
+  it.each([
+    ['72 h + 1 s', 72 * 3600 + 1],
+    ['1e13 s', 1e13],
+    ['Number.MAX_SAFE_INTEGER s', Number.MAX_SAFE_INTEGER],
+    ['Number.MAX_VALUE s (an integer to JS)', Number.MAX_VALUE],
+  ])('clamps a grace of %s to 72 h and replaces the old grant', (_label, grace) => {
+    store.upsertFromAdmitted(scope(), admitted());
+    store.consumeOfflineUse(scope(), USER, T0);
+    expect(
+      store.upsertFromAdmitted(
+        scope(),
+        admitted({ offline_grace_seconds: grace, admission_id: 'adm-2' }),
+      ),
+    ).toEqual({ kind: 'written' });
+    expect(openBody()['ttl_ms']).toBe(OFFLINE_GRANT_MAX_TTL_MS);
+    const e = store.evaluate(scope(), USER, at(T0_MS + 72 * HOUR_MS - 1));
+    expect(e.admissible && e.grant.admission_id).toBe('adm-2');
+    expect(e.admissible && e.grant.offline_admissions_used).toBe(0);
+    expect(store.evaluate(scope(), USER, at(T0_MS + 72 * HOUR_MS))).toEqual(
+      refusal('grant_expired'),
+    );
+  });
+
   it('grace 0 writes nothing', () => {
     expect(store.upsertFromAdmitted(scope(), admitted({ offline_grace_seconds: 0 }))).toEqual({
       kind: 'grace_disabled',
@@ -314,11 +359,10 @@ describe('upsertFromAdmitted — malformed input and failed writes fail closed',
     ['a negative grace', { offline_grace_seconds: -1 }],
     ['a fractional grace', { offline_grace_seconds: 1.5 }],
     ['a NaN grace', { offline_grace_seconds: Number.NaN }],
-    ['an unsafe grace', { offline_grace_seconds: Number.MAX_VALUE }],
+    ['an infinite grace', { offline_grace_seconds: Number.POSITIVE_INFINITY }],
     ['an unparseable receipt time', { received_at: 'yesterday' }],
     ['an empty operator_id', { operator_id: '' }],
     ['an empty admission_id', { admission_id: '' }],
-    ['an empty display_name', { display_name: '' }],
     ['a non-string server_time', { server_time: 7 as unknown as string }],
   ])('rejects %s and invalidates the existing grant', (_label, over) => {
     store.upsertFromAdmitted(scope(), admitted());
