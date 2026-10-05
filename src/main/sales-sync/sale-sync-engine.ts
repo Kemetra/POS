@@ -575,6 +575,54 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     }
   }
 
+  /** The current terminal's due sales with their durable Sale (defensive skip). */
+  function dueSales(terminalId: string): SaleRow[] {
+    return stateRepo
+      .eligible({ tenantId, branchId, terminalId }, now())
+      .map((due) => salesRepo.readById(due.sale_id))
+      .filter((sale): sale is SaleRow => sale !== null);
+  }
+
+  /** rev547 F1: the due sales that need the envelope (the pause's subset). */
+  function trackEnvelopeDue(
+    sales: readonly SaleRow[],
+    routeOf: (sale: SaleRow) => SaleRoute,
+  ): void {
+    envelopeDue.clear();
+    for (const sale of sales) {
+      if (routeOf(sale).kind === 'envelope') envelopeDue.add(sale.sale_id);
+    }
+  }
+
+  /** Codex P2 (bf5960d): a sale that left the queue leaves the envelope-due set. */
+  function settleAfterSend(saleId: string): void {
+    if (!leftQueue(saleId)) return;
+    envelopeDue.delete(saleId);
+  }
+
+  /** Send the due sales in order; stops on a credential loss or a re-pair. */
+  async function drainAll(
+    sales: readonly SaleRow[],
+    terminalId: string,
+    routeOf: (sale: SaleRow) => SaleRoute,
+  ): Promise<void> {
+    // RT-224 step 2: after a device-path 401, no more device-path sends this tick.
+    let deviceRejected = false;
+    for (const sale of sales) {
+      // Re-check before each POST so a mid-drain credential loss pauses cleanly.
+      const held = await credentialGate();
+      if (held === null) return;
+      // RT-221: a re-pair mid-drain must not send the rest under the new identity.
+      if ((await resolveTerminalId()) !== terminalId) return;
+      const result = await drainOne(sale, routeOf(sale), {
+        envelope: held.envelope,
+        device: held.device && !deviceRejected,
+      });
+      deviceRejected ||= result?.kind === 'device_unauthorized';
+      settleAfterSend(sale.sale_id);
+    }
+  }
+
   async function runTick(): Promise<void> {
     try {
       // Credential gate (FR-3): neither an envelope (null or '') nor a device
@@ -588,36 +636,14 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       // RT-221: drain only the current pairing's rows; no pairing → nothing.
       const terminalId = await resolveTerminalId();
       if (terminalId === null) return;
-      const sales = stateRepo
-        .eligible({ tenantId, branchId, terminalId }, now())
-        .map((due) => salesRepo.readById(due.sale_id))
-        // An outbox row without a durable Sale is skipped (defensive).
-        .filter((sale): sale is SaleRow => sale !== null);
+      const sales = dueSales(terminalId);
       // RT-224 step 2 (Codex P2): every due sale's route in one lookup.
       const routes = routesFor(sales, terminalId);
       const routeOf = (sale: SaleRow): SaleRoute => routes.get(sale.sale_id) ?? HOLD_ROUTE;
-      // rev547 F1: how many due sales need the envelope (the pause's subset).
-      envelopeDue.clear();
-      for (const sale of sales) {
-        if (routeOf(sale).kind === 'envelope') envelopeDue.add(sale.sale_id);
-      }
-      // RT-224 step 2: after a device-path 401, no more device-path sends this tick.
-      let deviceRejected = false;
+      trackEnvelopeDue(sales, routeOf);
       // Report the (envelope-subset) pause state now, even for an empty queue.
       if ((await credentialGate()) === null) return;
-      for (const sale of sales) {
-        // Re-check before each POST so a mid-drain credential loss pauses cleanly.
-        const held = await credentialGate();
-        if (held === null) return;
-        // RT-221: a re-pair mid-drain must not send the rest under the new identity.
-        if ((await resolveTerminalId()) !== terminalId) return;
-        const result = await drainOne(sale, routeOf(sale), {
-          envelope: held.envelope,
-          device: held.device && !deviceRejected,
-        });
-        if (result?.kind === 'device_unauthorized') deviceRejected = true;
-        if (leftQueue(sale.sale_id)) envelopeDue.delete(sale.sale_id);
-      }
+      await drainAll(sales, terminalId, routeOf);
     } finally {
       inFlight = false;
     }
