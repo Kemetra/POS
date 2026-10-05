@@ -19,9 +19,10 @@ import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { PairingStore } from '../pairing/store.js';
 import {
   admitCashierOnline,
-  nextIdempotencyKey,
+  mintAdmissionKey,
   refusalForAdmission,
   refusalIfSessionLost,
+  type AdmissionKey,
   type CashierAdmissionDeps,
 } from './cashier-admission.js';
 import {
@@ -57,8 +58,11 @@ export interface ProtoSession {
    * RT-113 P2 — cashier only: the takeover admission's idempotency key, minted
    * on the first confirm and REUSED on a retry after `no_connection`, so a
    * request that did reach the server replays instead of taking over twice.
+   * Codex P1 4185012967: the grant seam's send mark is bound to it and reused
+   * with it, so a replayed `admitted` never resurrects a grant invalidated
+   * after the first send.
    */
-  admission_idempotency_key?: string;
+  admission_key?: AdmissionKey;
   display_name: string;
   role: Role;
   tenant_id: string;
@@ -328,12 +332,12 @@ export class TakeoverHandler {
       return REFUSE_INVALID;
     }
 
-    proto.admission_idempotency_key ??= nextIdempotencyKey(admissionDeps);
+    proto.admission_key ??= mintAdmissionKey(admissionDeps);
     const admission = await admitCashierOnline(admissionDeps, {
       user_id,
       operator_id: proto.operator_id,
       takeover: true,
-      idempotency_key: proto.admission_idempotency_key,
+      ...proto.admission_key,
     });
 
     if (admission.kind === 'no_connection' || admission.kind === 'unavailable') {

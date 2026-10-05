@@ -20,7 +20,7 @@ import type { SafeStorageLike } from '../secrets/safe-storage.js';
 import type { PairingStore } from '../pairing/store.js';
 import {
   admitCashierOnline,
-  nextIdempotencyKey,
+  mintAdmissionKey,
   refusalForAdmission,
   refusalIfSessionLost,
   type CashierAdmissionDeps,
@@ -428,7 +428,8 @@ export class CashierSignInHandler {
       user_id,
       operator_id: req.cashier_clerk_user_id,
       takeover: false,
-      idempotency_key: nextIdempotencyKey(this.deps.admission),
+      // A one-shot key: a retry is a new sign-in with a new key and mark.
+      ...mintAdmissionKey(this.deps.admission),
     });
     if (admission.kind === 'active_elsewhere') {
       const pending_takeover_id = randomUUID();

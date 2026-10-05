@@ -12,6 +12,7 @@ import type {
   PairingSubmitResult,
 } from '../../shared/pairing-types.js';
 import type { CashierAdmissionClient } from '../operator/cashier-admission-client.js';
+import type { OfflineGrantSeam } from '../operator/cashier-admission.js';
 import type { SessionManager } from '../operator/session-manager.js';
 import type { DeviceAuthOutcome } from '../pairing/device-auth-detector.js';
 import type { PairingService } from '../pairing/service.js';
@@ -299,5 +300,36 @@ export function createRosterConfirmationProbe(
     } catch {
       return 'other';
     }
+  };
+}
+
+/**
+ * RT-215 review F4 × RT-113 P1.2 — what the device-401 detector does to the
+ * offline grants, always THROUGH the grant seam (so the tombstones, the
+ * invalidation sequence and the audit apply), never the store directly.
+ *
+ *  - `onSuspect` (the FIRST device 401 of a count, from ANY observed source:
+ *    admit, `end`, roster, read-down): invalidate every grant (OD5). Within one
+ *    count no grant can be written again — any device-bearer 2xx (an
+ *    `admitted` included) resets the count — so the first 401 of each count
+ *    covers every 401 of it. The admission path ALSO reports its own 401s
+ *    (`notifyGrantSeam`, every 401); the second invalidation finds no standing
+ *    grant and audits nothing.
+ *  - `onConfirmed`: invalidate every grant AND clear the grant scope, so
+ *    nothing is admissible or written until a re-pair sets a new scope.
+ */
+export function deviceRevocationGrantHooks(grants: {
+  seam: Pick<OfflineGrantSeam, 'onCashierAdmissionInvalidated'>;
+  setScope(scope: null): void;
+}): { onSuspect: () => void; onConfirmed: () => void } {
+  const invalidateAll = (): void => {
+    grants.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
+  };
+  return {
+    onSuspect: invalidateAll,
+    onConfirmed: () => {
+      invalidateAll();
+      grants.setScope(null);
+    },
   };
 }

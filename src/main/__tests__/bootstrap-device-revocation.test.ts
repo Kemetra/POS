@@ -91,6 +91,16 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
     expect(source).toMatch(/isDeviceRevoked: \(\) => pairingStore\.isDeviceRevoked\(\),/);
   });
 
+  it('review F4: the detector drives the offline grants through the #545 seam (never the store)', () => {
+    expect(source).toContain('const deviceGrantHooks = deviceRevocationGrantHooks(offlineGrants);');
+    expect(source).toMatch(/onSuspect: \(\) => \{\s*deviceGrantHooks\.onSuspect\(\);\s*\}/);
+    expect(source).toMatch(
+      /invalidateGrants: \(\) => \{\s*deviceGrantHooks\.onConfirmed\(\);\s*\}/,
+    );
+    expect(source).toContain('grantSeam: offlineGrants.seam,');
+    expect(source).not.toContain('NOOP_OFFLINE_GRANT_SEAM');
+  });
+
   it('no longer ends the session on a single device 401 (the RT-113 P2 immediate cascade is gone)', () => {
     expect(source).not.toContain('onDeviceRevoked');
     expect(source).not.toContain('notifyTerminalRevoked');
