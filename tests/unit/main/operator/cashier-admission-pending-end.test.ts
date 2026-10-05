@@ -9,8 +9,12 @@ import {
   PENDING_END_WAIT_MS,
   admitCashierOnline,
   endAdmissionTracked,
+  takeUncertainEnd,
 } from '../../../../src/main/operator/cashier-admission.js';
-import type { CashierAdmissionEndResult } from '../../../../src/main/operator/cashier-admission-client.js';
+import {
+  ADMISSION_REQUEST_TIMEOUT_MS,
+  type CashierAdmissionEndResult,
+} from '../../../../src/main/operator/cashier-admission-client.js';
 
 /**
  * RT-113 P2 (adversarial review of 024f07c, item 3) — sign-out fires the
@@ -97,6 +101,80 @@ describe('a re-admission waits for the same user’s pending end', () => {
     await expect(res).resolves.toMatchObject({ kind: 'admitted' });
     expect(fake.admitCalls).toHaveLength(1);
     expect(vi.getTimerCount()).toBe(0);
+    // Gave up waiting: the outcome is unknown, so verify early.
+    expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(true);
+  });
+
+  it.each([
+    { kind: 'ended' },
+    { kind: 'failed' },
+    { kind: 'device_unauthorized' },
+    { kind: 'no_token' },
+  ] as const)('an end answered %o has a known outcome: no early verification', async (answer) => {
+    const fake = fakeCashierAdmission(ADMITTED);
+    fake.setEnd(() => Promise.resolve(answer as unknown as { kind: 'ended' }));
+    await endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(false);
+  });
+
+  it('Codex P1 4180025698: the wait outlasts the end request’s own timeout, so a slow end cannot land after the admit', () => {
+    expect(PENDING_END_WAIT_MS).toBeGreaterThan(ADMISSION_REQUEST_TIMEOUT_MS);
+  });
+
+  it('Codex P1 4180025698: a slow end that resolves after 5 s: the admit is sent only after it settles', async () => {
+    const fake = fakeCashierAdmission(ADMITTED);
+    const order: string[] = [];
+    fake.setEnd(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            order.push('end settled');
+            resolve({ kind: 'ended' });
+          }, 5_000);
+        }),
+    );
+    void endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    fake.setAdmit(() => {
+      order.push('admit sent');
+      return ADMITTED;
+    });
+    const res = admit(fake);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(fake.admitCalls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(res).resolves.toMatchObject({ kind: 'admitted' });
+    expect(order).toEqual(['end settled', 'admit sent']);
+    // A definite answer: the admission needs no early verification.
+    expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(false);
+  });
+
+  it('Codex P1 4180025698: an end that settles only at the client timeout (aborted) still goes before the admit', async () => {
+    const fake = fakeCashierAdmission(ADMITTED);
+    const order: string[] = [];
+    fake.setEnd(
+      () =>
+        new Promise((resolve) => {
+          // The production client aborts the request at its timeout.
+          setTimeout(() => {
+            order.push('end settled');
+            resolve({ kind: 'no_connection' } as unknown as { kind: 'ended' });
+          }, ADMISSION_REQUEST_TIMEOUT_MS);
+        }),
+    );
+    void endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
+    fake.setAdmit(() => {
+      order.push('admit sent');
+      return ADMITTED;
+    });
+    const res = admit(fake);
+    await vi.advanceTimersByTimeAsync(ADMISSION_REQUEST_TIMEOUT_MS - 1);
+    expect(fake.admitCalls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(res).resolves.toMatchObject({ kind: 'admitted' });
+    expect(order).toEqual(['end settled', 'admit sent']);
+    // Aborted: the server may still apply it. The new admission is verified early.
+    expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(true);
+    expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(false); // consumed once
   });
 
   it('a failed end never blocks: the admit goes out once it fails', async () => {
@@ -107,6 +185,7 @@ describe('a re-admission waits for the same user’s pending end', () => {
     end.fail();
     await expect(ended).resolves.toEqual({ kind: 'threw' });
     await expect(res).resolves.toMatchObject({ kind: 'admitted' });
+    expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
 

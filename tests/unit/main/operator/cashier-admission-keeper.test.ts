@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CashierAdmissionKeeper,
   DEVICE_401_CONFIRM_MS,
+  EARLY_VERIFY_MS,
   FAILED_TICK_RETRY_MS,
   MIN_RETRY_MS,
   SAFE_POINT_RECHECK_MS,
@@ -20,7 +21,10 @@ import { SessionManager } from '../../../../src/main/operator/session-manager.js
 import { LifecycleCascade } from '../../../../src/main/operator/lifecycle-cascade.js';
 import { SignOutHandler } from '../../../../src/main/operator/sign-out-handler.js';
 import type { BackendClient } from '../../../../src/main/operator/backend-client.js';
-import type { CashierAdmissionResult } from '../../../../src/main/operator/cashier-admission-client.js';
+import {
+  ADMISSION_REQUEST_TIMEOUT_MS,
+  type CashierAdmissionResult,
+} from '../../../../src/main/operator/cashier-admission-client.js';
 import {
   ADMITTED,
   FAKE_ADMISSION_ID,
@@ -786,6 +790,83 @@ describe('end and timer lifecycle', () => {
     land();
     await res;
     expect(order).toEqual(['end landed', 'admit sent']);
+  });
+
+  describe('Codex P1 4180025698 — an end whose outcome is unknown is followed by an early verification heartbeat', () => {
+    /** Sign the cashier out with an `end` that times out (aborted: outcome unknown), then sign in again. */
+    async function signOutThenInAgain(h: Harness): Promise<void> {
+      h.fake.setEnd(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => {
+              resolve({ kind: 'no_connection' } as unknown as { kind: 'ended' });
+            }, ADMISSION_REQUEST_TIMEOUT_MS);
+          }),
+      );
+      h.sessions.end();
+      h.fake.setAdmit({
+        ...ADMITTED,
+        admission_id: FAKE_ADMISSION_ID,
+        admission_ttl_seconds: TTL_S,
+      });
+      const admitted = admitCashierOnline(h.fake.deps, {
+        user_id: FAKE_USER_ID,
+        operator_id: 'user_clerk_1',
+        takeover: false,
+        idempotency_key: 'test-idempotency-key-9999',
+      });
+      await advance(ADMISSION_REQUEST_TIMEOUT_MS);
+      await admitted;
+      expect(h.fake.admitCalls).toHaveLength(1); // only after the end settled
+      signInCashier(h.sessions);
+    }
+
+    it('the end times out: the admit goes after the client timeout and a verification heartbeat follows early', async () => {
+      const h = harness();
+      signInCashier(h.sessions);
+      await signOutThenInAgain(h);
+      await advance(EARLY_VERIFY_MS - 1);
+      expect(h.fake.admitCalls).toHaveLength(1);
+      await advance(1);
+      expect(h.fake.admitCalls).toHaveLength(2); // not TTL/2 (300 s) later
+      // Verified live: back to the normal cadence.
+      await advance(HALF_TTL_MS - 1);
+      expect(h.fake.admitCalls).toHaveLength(2);
+      await advance(1);
+      expect(h.fake.admitCalls).toHaveLength(3);
+    });
+
+    it('the late end landed after the admit: the early heartbeat gets a NEW admission_id and the session adopts it', async () => {
+      const h = harness();
+      signInCashier(h.sessions);
+      await signOutThenInAgain(h);
+      const reissued = '0192f6a0-aaaa-7bbb-8ccc-000000000002';
+      h.fake.setAdmit({ ...ADMITTED, admission_id: reissued, admission_ttl_seconds: TTL_S });
+      await advance(EARLY_VERIFY_MS);
+      expect(h.sessions.getCurrent()?.admission_id).toBe(reissued);
+      expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+    });
+
+    it('the late end landed and another till claimed the cashier: the early heartbeat latches the session', async () => {
+      const h = harness();
+      signInCashier(h.sessions);
+      await signOutThenInAgain(h);
+      h.fake.setAdmit({ kind: 'active_elsewhere' });
+      await advance(EARLY_VERIFY_MS);
+      expect(h.ends).toEqual([undefined, 'superseded_by_takeover']);
+    });
+
+    it('an end with a known outcome: no early heartbeat, the normal cadence', async () => {
+      const h = harness();
+      signInCashier(h.sessions);
+      h.sessions.end(); // the fake end answers `ended` at once
+      await advance(0);
+      signInCashier(h.sessions);
+      await advance(EARLY_VERIFY_MS);
+      expect(h.fake.admitCalls).toHaveLength(0);
+      await advance(HALF_TTL_MS - EARLY_VERIFY_MS);
+      expect(h.fake.admitCalls).toHaveLength(1);
+    });
   });
 
   it('review (024f07c) — an `admitted` in flight at shutdown has no effect: no renewal, no `end` POST after stop (RT-198)', async () => {
