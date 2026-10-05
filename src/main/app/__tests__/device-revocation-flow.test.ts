@@ -538,3 +538,62 @@ describe('rev546b S-1 — pairing:submit is refused while the terminal is paired
     await expect(wrapped.submit('CODE')).resolves.toBe(ok);
   });
 });
+
+describe('RT-215 10897-A — onRecheckCleared (a "Check again" answered 2xx)', () => {
+  it('resets the detector, audits the clear ONCE as {source:"recheck"} (system:device), pushes paired', () => {
+    const h = harness();
+    createDeviceRevocationFlow(h.deps).onRecheckCleared(SCOPE);
+    expect(h.calls).toEqual(['reset']);
+    expect(h.audits).toEqual([
+      {
+        event_id: 'evt-1',
+        tenant_id: 'tenant-1',
+        branch_id: 'branch-1',
+        originating_terminal_id: 'term-old',
+        acting_operator_id: SYSTEM_DEVICE_ACTOR_ID,
+        session_id: null,
+        shift_id: null,
+        action_category: 'pairing.device_revoked_cleared',
+        created_at: NOW.toISOString(),
+        approving_supervisor_id: null,
+        payload: { source: 'recheck' },
+      },
+    ]);
+    expect(h.pushed).toEqual([{ kind: 'paired' }]);
+  });
+
+  it('same pairing: no PIN purge, no relaunch (the paired-only workers keep the same scope)', () => {
+    const h = harness();
+    h.workersStarted.value = true;
+    createDeviceRevocationFlow(h.deps).onRecheckCleared(SCOPE);
+    expect(h.relaunched.count).toBe(0);
+    expect(h.calls.some((c) => c.startsWith('purge:'))).toBe(false);
+  });
+
+  it('cancels a routing still pending from the revocation (the latched session then ends quietly)', () => {
+    const h = harness();
+    h.session.current = { id: 's1' };
+    const flow = createDeviceRevocationFlow(h.deps);
+    flow.onConfirmed('cashier_admissions');
+    flow.onRecheckCleared(SCOPE);
+    h.endSession();
+    expect(h.pushed).toEqual([{ kind: 'paired' }]);
+  });
+
+  it('a throwing detector reset or audit is logged, never thrown, and the push still happens', () => {
+    const h = harness({
+      resetDetector: () => {
+        throw new Error('x');
+      },
+      audit: {
+        emit: () => {
+          throw new Error('y');
+        },
+      },
+    });
+    expect(() => {
+      createDeviceRevocationFlow(h.deps).onRecheckCleared(SCOPE);
+    }).not.toThrow();
+    expect(h.pushed).toEqual([{ kind: 'paired' }]);
+  });
+});

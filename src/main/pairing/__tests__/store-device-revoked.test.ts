@@ -9,7 +9,11 @@ import type { DatabaseHandle } from '../../db/client.js';
 import { createInMemorySecretStore } from '../../secrets/in-memory.js';
 import { makeSecretKey, type SecretStore } from '../../../shared/secret-store.js';
 import type { PairingStatus } from '../../../shared/pairing-types.js';
-import { createSendableDeviceTokenReader } from '../device-token.js';
+import {
+  createRevocationRecheckTokenRead,
+  createSendableDeviceTokenRead,
+  createSendableDeviceTokenReader,
+} from '../device-token.js';
 import {
   bindPairingStoreDb,
   createPairingStore,
@@ -434,5 +438,146 @@ describe('Codex P1 4186568808 — a revocation latched during an await wins', ()
     s.markDeviceRevoked();
     h.release();
     await expect(pending).resolves.toBeNull();
+  });
+});
+
+// ── RT-215 10897-A: the user-initiated "Check again" ─────────────────────────
+
+describe('RT-215 10897-A — clearDeviceRevoked (a recheck answered 2xx)', () => {
+  it('clears the revocation durably AND in memory, and returns the pairing scope', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    s.markDeviceRevoked();
+    expect(s.clearDeviceRevoked()).toEqual({
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'term-1',
+    });
+    expect(revokedAtColumn()).toBeNull();
+    expect(s.isDeviceRevoked()).toBe(false);
+    expect(await s.getStatus()).toMatchObject({ kind: 'paired', terminal_id: 'term-1' });
+    // Durable: a restart over the same database is paired too.
+    expect(await store().getStatus()).toMatchObject({ kind: 'paired', terminal_id: 'term-1' });
+  });
+
+  it('clears the in-memory latch even when the durable mark had failed', async () => {
+    const s0 = store();
+    await s0.persist(pairing('term-1'));
+    const real = bindPairingStoreDb(handle);
+    const s = store({
+      ...real,
+      markDeviceRevoked: () => {
+        throw new Error('disk');
+      },
+    });
+    expect(() => s.markDeviceRevoked()).toThrow('disk');
+    expect(s.clearDeviceRevoked()).not.toBeNull();
+    expect(s.isDeviceRevoked()).toBe(false);
+  });
+
+  it('gives the pairing a fresh, non-null epoch (a sign-in captured under the revocation stays stale)', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    const before = s.getPairingEpoch();
+    s.markDeviceRevoked();
+    s.clearDeviceRevoked();
+    expect(s.getPairingEpoch()).not.toBeNull();
+    expect(s.getPairingEpoch()).not.toBe(before);
+  });
+
+  it('is a no-op returning null when the terminal is not revoked (paired, or unpaired)', async () => {
+    const s = store();
+    expect(s.clearDeviceRevoked()).toBeNull();
+    await s.persist(pairing('term-1'));
+    const epoch = s.getPairingEpoch();
+    expect(s.clearDeviceRevoked()).toBeNull();
+    expect(s.getPairingEpoch()).toBe(epoch);
+  });
+
+  it('fails closed: a failing durable clear rethrows and the terminal stays revoked', async () => {
+    const s0 = store();
+    await s0.persist(pairing('term-1'));
+    s0.markDeviceRevoked();
+    const s = store({
+      ...bindPairingStoreDb(handle),
+      clearDeviceRevoked: () => {
+        throw new Error('disk');
+      },
+    });
+    expect(() => s.clearDeviceRevoked()).toThrow('disk');
+    expect(s.isDeviceRevoked()).toBe(true);
+    expect(await s.getStatus()).toEqual(DEVICE_REVOKED);
+  });
+});
+
+describe('RT-215 10897-A — createRevocationRecheckTokenRead (the ONE deliberate exception)', () => {
+  function recheckReadOver(
+    pairingStore: Parameters<typeof createRevocationRecheckTokenRead>[0]['pairingStore'],
+    secretStore: SecretStore = secrets,
+  ) {
+    return createRevocationRecheckTokenRead({ pairingStore, secretStore, deviceTokenKey: KEY });
+  }
+
+  it('returns the sealed token ONLY while revoked; the default send paths stay null', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    s.markDeviceRevoked();
+    expect(await recheckReadOver(s)()).toBe(TOKEN);
+    // The default readers are NOT weakened by the recheck reader.
+    expect(await readerOver(s)()).toBeNull();
+    expect(
+      await createSendableDeviceTokenRead({
+        pairingStore: s,
+        secretStore: secrets,
+        deviceTokenKey: KEY,
+      })(),
+    ).toBeNull();
+  });
+
+  it('returns null while paired (not revoked), without even reading the sealed token', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    let reads = 0;
+    const counting: SecretStore = {
+      ...secrets,
+      get: (k) => {
+        reads += 1;
+        return secrets.get(k);
+      },
+    };
+    expect(await recheckReadOver(s, counting)()).toBeNull();
+    expect(reads).toBe(0);
+  });
+
+  it('returns null when unpaired, and once the revocation was cleared', async () => {
+    const s = store();
+    expect(await recheckReadOver(s)()).toBeNull();
+    await s.persist(pairing('term-1'));
+    s.markDeviceRevoked();
+    s.clearDeviceRevoked();
+    expect(await recheckReadOver(s)()).toBeNull();
+  });
+
+  it('returns null when the revocation ends while its token read is pending (a re-pair raced it)', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    s.markDeviceRevoked();
+    const h = heldSecrets(secrets);
+    const pending = recheckReadOver(s, h.held)();
+    await h.called;
+    s.clearDeviceRevoked();
+    h.release();
+    await expect(pending).resolves.toBeNull();
+  });
+
+  it.each<[string, SecretStore['get']]>([
+    ['absent', () => Promise.resolve(null)],
+    ['empty', () => Promise.resolve('')],
+    ['undecryptable', () => Promise.reject(new Error('decrypt'))],
+  ])('returns null (never throws) for an %s sealed token', async (_label, get) => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    s.markDeviceRevoked();
+    await expect(recheckReadOver(s, { ...secrets, get })()).resolves.toBeNull();
   });
 });

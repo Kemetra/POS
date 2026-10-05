@@ -90,6 +90,16 @@ export const TERMINAL_ALREADY_PAIRED_MESSAGE = 'This terminal is already paired.
 export const EMPTY_INPUT_MESSAGE = 'Enter a pairing code.';
 
 /**
+ * RT-215 10897-A — the "Check again" on a device-revoked terminal: the server
+ * still refuses the device credential (401). Recovery stays a new pairing code.
+ */
+export const RECHECK_STILL_REVOKED_MESSAGE =
+  'Still revoked — the server still refuses this terminal. Enter a new pairing code from the admin portal.';
+
+/** RT-215 10897-A — the "Check again" got no answer (network, server error): still revoked. */
+export const RECHECK_UNREACHABLE_MESSAGE = 'Couldn’t reach the server — try again.';
+
+/**
  * Resolve a `PairingOutcome` to its operator-facing message.
  *
  * Covers all ten `PairingOutcome` values:

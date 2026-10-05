@@ -168,6 +168,7 @@ import {
   withDeviceAuthObservation,
 } from './pairing/device-auth-detector.js';
 import {
+  createRevocationRecheckTokenRead,
   createSendableDeviceTokenRead,
   createSendableDeviceTokenReader,
 } from './pairing/device-token.js';
@@ -178,8 +179,9 @@ import {
   withDeviceRevocationRecovery,
   type DeviceRevocationFlow,
 } from './app/device-revocation-flow.js';
+import { createRevocationRecheck } from './app/revocation-recheck.js';
 import { purgeOtherTerminalPinRecords } from './operator/pin-records-purge.js';
-import { PAIRING_PUSH_CHANNELS } from '../shared/pairing-types.js';
+import { PAIRING_PUSH_CHANNELS, type PairingRecheckResult } from '../shared/pairing-types.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
 import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
 import { PinManagementHandler } from './operator/pin-management.js';
@@ -572,10 +574,15 @@ singleInstanceReady
       secretStore,
       deviceTokenKey: DEVICE_TOKEN_KEY,
     });
-    const deviceRevocation: DeviceRevocationFlow & { hasSession: () => boolean } = {
+    const deviceRevocation: Pick<DeviceRevocationFlow, 'onConfirmed' | 'onPaired'> & {
+      hasSession: () => boolean;
+      /** RT-215 10897-A — the "Check again" (`pairing:recheck`), bound below. */
+      recheck: () => Promise<PairingRecheckResult>;
+    } = {
       onConfirmed: () => undefined,
       onPaired: () => Promise.resolve(),
       hasSession: () => false,
+      recheck: () => Promise.resolve({ outcome: 'unreachable' }),
     };
 
     // 002-terminal-pairing dev bypass — seeds fixture pairing state so the
@@ -698,7 +705,12 @@ singleInstanceReady
     // 002-terminal-pairing T013 + T025 — wire BOTH pairing channels.
     // T025 lands `pairing:submit`; the SUBMIT handler validates the
     // argument shape and forwards the service result unchanged.
-    registerPairingHandlers(guardedIpcMain, { store: pairingStore, service: pairingService });
+    // RT-215 10897-A: + `pairing:recheck` (the "Check again"; late-bound below).
+    registerPairingHandlers(guardedIpcMain, {
+      store: pairingStore,
+      service: pairingService,
+      recheck: () => deviceRevocation.recheck(),
+    });
 
     // 004-operator-session — wire `operator.*` IPC.
     //
@@ -962,6 +974,35 @@ singleInstanceReady
     };
     deviceRevocation.onPaired = (input) => deviceRevocationFlow.onPaired(input);
     deviceRevocation.hasSession = () => operatorSessionManager.getCurrent() !== null;
+    // RT-215 10897-A (owner approval 10906) — the user-initiated "Check again"
+    // on /pairing while revoked: ONE roster call with the sealed token, read
+    // through the narrow recheck reader (the default send paths stay null) on
+    // an UNOBSERVED client (its answer is never a 2×401 detector count). A 2xx
+    // clears the revocation through the flow, then re-binds what the
+    // revocation unbound exactly as boot does: the offline grant scope, and the
+    // paired-only workers if they never started. Same pairing, so no relaunch.
+    deviceRevocation.recheck = createRevocationRecheck({
+      probe: createRosterConfirmationProbe(
+        createCashierAdmissionClient({
+          baseUrl: apiBaseUrl,
+          fetch: globalThis.fetch.bind(globalThis),
+          getDeviceToken: createRevocationRecheckTokenRead({
+            pairingStore,
+            secretStore,
+            deviceTokenKey: DEVICE_TOKEN_KEY,
+          }),
+        }),
+      ),
+      store: pairingStore,
+      onCleared: (scope) => {
+        deviceRevocationFlow.onRecheckCleared(scope);
+      },
+      rebindPaired: async () => {
+        offlineGrants.setScope(scopeFromPairingStatus(await pairingStore.getStatus()));
+        await notifyPairedFromStore();
+      },
+      logger: mainLogger,
+    });
 
     const operatorTakeoverHandler = new TakeoverHandler({
       // RT-215 (Codex P1): a late success under a revoked/replaced pairing is dropped.

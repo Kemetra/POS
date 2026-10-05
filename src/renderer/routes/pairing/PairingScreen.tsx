@@ -2,8 +2,9 @@ import type { JSX } from 'react';
 
 import { PairingForm } from './PairingForm';
 import { InvalidStateBanner } from './InvalidStateBanner';
+import { RevocationRecheck } from './RevocationRecheck';
 import { CenterStage } from '../../shell/regions/CenterStage';
-import type { PairingBridgeAPI } from '../../../shared/bridge-api';
+import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 import type { PairingStatus } from '../../../shared/pairing-types';
 
 /**
@@ -48,6 +49,9 @@ export function PairingScreen(props: PairingScreenProps): JSX.Element {
   // accepts `pairing?: PairingBridgeAPI` and falls back to `window.api`
   // when omitted. exactOptionalPropertyTypes forbids `{ pairing: undefined }`.
   const formProps = props.pairing !== undefined ? { pairing: props.pairing } : {};
+  // RT-215 10897-A — "Check again" only while the terminal is device-revoked.
+  const recheckVia =
+    props.invalidReason === 'device_revoked' ? recheckBridge(props.pairing) : undefined;
   return (
     <CenterStage>
       <main className="pairing-screen__root" data-testid="route-pairing" {...reasonAttr}>
@@ -58,8 +62,15 @@ export function PairingScreen(props: PairingScreenProps): JSX.Element {
             <p>Enter the pairing code shown in the admin portal.</p>
           </div>
           <PairingForm {...formProps} />
+          {recheckVia !== undefined && <RevocationRecheck pairing={recheckVia} />}
         </div>
       </main>
     </CenterStage>
   );
+}
+
+/** The bridge, when it offers the "Check again" (an older preload / a test fake may not). */
+function recheckBridge(pairing: PairingBridgeAPI | undefined): PairingBridgeAPI | undefined {
+  const bridge = pairing ?? (window as unknown as { api?: PreloadBridgeAPI }).api?.pairing;
+  return bridge?.recheckRevocation !== undefined ? bridge : undefined;
 }

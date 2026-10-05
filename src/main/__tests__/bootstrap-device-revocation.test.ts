@@ -113,6 +113,31 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
     expect(source).not.toContain('NOOP_OFFLINE_GRANT_SEAM');
   });
 
+  it('RT-215 10897-A: "Check again" reads the sealed token through the narrow recheck reader, on an UNOBSERVED client', () => {
+    // Still no raw read in the composition root: the one deliberate exception
+    // lives in the pairing module (`createRevocationRecheckTokenRead`).
+    expect(count(/secretStore\.get\(\s*DEVICE_TOKEN_KEY\s*\)/g)).toBe(0);
+    expect(count(/createRevocationRecheckTokenRead\(/g)).toBe(1);
+    expect(source).toMatch(
+      /createRevocationRecheck\(\{\s*probe: createRosterConfirmationProbe\(\s*createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: globalThis\.fetch\.bind\(globalThis\),\s*getDeviceToken: createRevocationRecheckTokenRead\(\{\s*pairingStore,\s*secretStore,\s*deviceTokenKey: DEVICE_TOKEN_KEY,\s*\}\),/,
+    );
+    // The default send paths are unchanged (the counts above still hold).
+    expect(count(/getDeviceToken: readSendableDeviceToken/g)).toBe(3);
+    expect(count(/withDeviceAuthObservation\(/g)).toBe(2);
+  });
+
+  it('RT-215 10897-A: pairing:recheck is registered, and a 2xx clears through the flow then re-binds like boot', () => {
+    expect(source).toMatch(
+      /registerPairingHandlers\(guardedIpcMain, \{\s*store: pairingStore,\s*service: pairingService,\s*recheck: \(\) => deviceRevocation\.recheck\(\),\s*\}\);/,
+    );
+    expect(source).toMatch(
+      /onCleared: \(scope\) => \{\s*deviceRevocationFlow\.onRecheckCleared\(scope\);\s*\}/,
+    );
+    expect(source).toMatch(
+      /rebindPaired: async \(\) => \{\s*offlineGrants\.setScope\(scopeFromPairingStatus\(await pairingStore\.getStatus\(\)\)\);\s*await notifyPairedFromStore\(\);\s*\}/,
+    );
+  });
+
   it('no longer ends the session on a single device 401 (the RT-113 P2 immediate cascade is gone)', () => {
     expect(source).not.toContain('onDeviceRevoked');
     expect(source).not.toContain('notifyTerminalRevoked');
