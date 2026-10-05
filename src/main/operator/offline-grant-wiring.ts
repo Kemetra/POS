@@ -135,6 +135,9 @@ const STORE_RESULT_REASON: Readonly<
   refresh_failed: 'refresh_failed',
 };
 
+/** Codex P2 4184105427: a held purge covers every scope, invalidate_all only the bound one. */
+const TERMINAL_STRENGTH = { invalidate_all: 1, purge: 2 } as const;
+
 /** A held operation the store has not applied yet. */
 type TerminalTombstone =
   | { op: 'invalidate_all'; reason: OfflineGrantInvalidationReason }
@@ -280,6 +283,38 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     log('warn', { event: 'operator.offline_grant.tombstoned', op });
   }
 
+  // ── held operations (Codex P2 4184105427) ──
+  //
+  // Every write of the tombstone state goes through these four helpers. A
+  // terminal-wide hold only ever strengthens (purge > invalidate_all); per-user
+  // holds sit under it and are kept alongside. A hold is lifted only once an
+  // operation at least as strong as the one held has applied.
+
+  function holdTerminal(next: TerminalTombstone): void {
+    const held = terminalTombstone;
+    if (held === null || TERMINAL_STRENGTH[next.op] > TERMINAL_STRENGTH[held.op]) {
+      terminalTombstone = next;
+    }
+    hold(next.op);
+  }
+
+  /** `applied` reached the store: lift the terminal hold (and the per-user ones under it) if it covers it. */
+  function releaseTerminal(applied: TerminalTombstone['op']): void {
+    const held = terminalTombstone;
+    if (held !== null && TERMINAL_STRENGTH[applied] < TERMINAL_STRENGTH[held.op]) return;
+    terminalTombstone = null;
+    userTombstones.clear();
+  }
+
+  function holdUser(user_id: string, reason: OfflineGrantInvalidationReason, op: string): void {
+    if (!userTombstones.has(user_id)) userTombstones.set(user_id, reason);
+    hold(op);
+  }
+
+  function releaseUser(user_id: string): void {
+    userTombstones.delete(user_id);
+  }
+
   // ── store operations: each returns true when the store applied it ──
 
   function invalidateUser(user_id: string, reason: OfflineGrantInvalidationReason): boolean {
@@ -340,7 +375,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     try {
       const result = deps.store.upsertFromAdmitted(at, event);
       // A fresh server admission: the store now holds this user's true state.
-      userTombstones.delete(event.user_id);
+      releaseUser(event.user_id);
       if (result.kind !== 'written') {
         // grace_disabled, rejected, refresh_failed: the user lost offline
         // authority, even with no grant to audit (Codex P1 4183852355).
@@ -350,28 +385,25 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     } catch {
       // The store deleted the old grant if it could; if not, it must not stand.
       noteInvalidation({ user_id: event.user_id });
-      userTombstones.set(event.user_id, 'refresh_failed');
-      hold('upsert');
+      holdUser(event.user_id, 'refresh_failed', 'upsert');
     }
   }
 
   function onUserInvalidated(user_id: string, reason: OfflineGrantInvalidationReason): void {
     if (invalidateUser(user_id, reason)) {
-      userTombstones.delete(user_id);
+      releaseUser(user_id);
       return;
     }
-    userTombstones.set(user_id, reason);
-    hold('invalidate');
+    holdUser(user_id, reason, 'invalidate');
   }
 
   function onDeviceUnauthorized(): void {
     if (invalidateEveryone('device_unauthorized')) {
-      // Every grant of the scope is now invalidated in the store.
-      userTombstones.clear();
+      // Every grant of the scope is now invalidated; a held purge stays held.
+      releaseTerminal('invalidate_all');
       return;
     }
-    terminalTombstone = { op: 'invalidate_all', reason: 'device_unauthorized' };
-    hold('invalidate_all');
+    holdTerminal({ op: 'invalidate_all', reason: 'device_unauthorized' });
   }
 
   const seam: OfflineGrantSeam = {
@@ -407,14 +439,14 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   }
 
   function retryTerminalHold(): void {
-    if (terminalTombstone === null || !applyTerminalHold(terminalTombstone)) return;
-    terminalTombstone = null;
-    userTombstones.clear();
+    const held = terminalTombstone;
+    if (held === null || !applyTerminalHold(held)) return;
+    releaseTerminal(held.op);
   }
 
   function retryUserHolds(): void {
     for (const [user_id, reason] of [...userTombstones]) {
-      if (invalidateUser(user_id, reason)) userTombstones.delete(user_id);
+      if (invalidateUser(user_id, reason)) releaseUser(user_id);
     }
   }
 
@@ -495,12 +527,10 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
         (e): e is number => typeof e === 'number',
       );
       if (purge(reason, epochs.length > 0 ? Math.max(...epochs) : undefined)) {
-        terminalTombstone = null;
-        userTombstones.clear();
+        releaseTerminal('purge');
         return;
       }
-      terminalTombstone = { op: 'purge', reason };
-      hold('purge');
+      holdTerminal({ op: 'purge', reason });
     },
 
     reservePairingEpoch(candidate) {

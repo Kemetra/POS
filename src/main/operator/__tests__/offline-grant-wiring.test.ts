@@ -1188,6 +1188,37 @@ describe('held terminal-wide operations merge by strength (Codex P2 4184105427)'
     w.stop();
   });
 
+  it('a weaker op that applies does not lift a held purge (401 applied for the new scope only)', () => {
+    const { w, broken } = rig();
+    store.upsertFromAdmitted(
+      scope({ terminal_id: 'terminal-old' }),
+      admitted({ operator_id: 'op-old' }),
+    );
+    broken.add('invalidateAll');
+    broken.add('purgeAll');
+    w.onPairingChange('repair');
+    broken.clear();
+    w.setScope(scope({ terminal_id: 'terminal-new', pairing_epoch: EPOCH + 1 }));
+    w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' }); // applies (new scope)
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated')); // the purge still holds
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    expect(audits.filter((a) => a.originating_terminal_id === 'terminal-old')).toHaveLength(1);
+    w.stop();
+  });
+
+  it('a per-user hold keeps its first reason; a later one never replaces it', () => {
+    const { w, broken } = rig();
+    broken.add('invalidate');
+    w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
+    w.seam.onCashierAdmissionInvalidated({ reason: 'active_elsewhere', user_id: USER });
+    broken.clear();
+    audits = [];
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(audits.map(auditOf)).toEqual([{ reason: 'forbidden', operator: OPERATOR }]);
+    w.stop();
+  });
+
   it('a failed retry keeps the strongest hold for the next tick', () => {
     const { w, broken } = rig();
     holdOp(w, broken, 'purge');
