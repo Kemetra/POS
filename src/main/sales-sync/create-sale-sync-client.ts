@@ -563,7 +563,13 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
     ): Promise<SaleSyncResult> {
       // RT-224 step 2: the device token, read fresh per POST. None (unpaired, not
       // wired, or empty) → no request; the sale stays pending.
-      const deviceToken = deps.getDeviceToken === undefined ? null : await deps.getDeviceToken();
+      // Codex P2 (#547): a failing read is "no token" — never a rejection.
+      let deviceToken: string | null;
+      try {
+        deviceToken = deps.getDeviceToken === undefined ? null : await deps.getDeviceToken();
+      } catch {
+        deviceToken = null;
+      }
       if (deviceToken === null || deviceToken.length === 0) {
         return { kind: 'no_connection' };
       }

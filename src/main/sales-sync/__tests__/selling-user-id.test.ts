@@ -292,7 +292,7 @@ describe('RT-224 (Codex P2) — one audit_events pass per batch, memoized, never
     resolver.resolve(rows, TERMINAL);
     const sql = nn(auditSql[0]);
     const params = Array.from({ length: (sql.match(/\?/g) ?? []).length }, () => 'x');
-    const plan = db.exec(`EXPLAIN QUERY PLAN ${sql}`, params as never[]);
+    const plan = db.exec(`EXPLAIN QUERY PLAN ${sql}`, params);
     const details = (plan[0]?.values ?? []).map((row) => String(row[row.length - 1]));
     expect(details.filter((d) => /audit_events/.test(d))).toHaveLength(1);
     expect(details.some((d) => /\bsales\b/.test(d))).toBe(false);

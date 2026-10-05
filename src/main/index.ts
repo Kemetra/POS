@@ -83,7 +83,8 @@ import {
   SALE_SYNC_BACKOFF_POLICY,
 } from './sales-sync/sale-sync-engine.js';
 import { createSaleSyncStatusReader } from './sales-sync/sale-sync-status-reader.js';
-import { createSellingUserIdReader } from './sales-sync/selling-user-id.js';
+import { createSellingUserIdResolver } from './sales-sync/selling-user-id.js';
+import { createSaleSyncDeviceTokenReader } from './sales-sync/sale-sync-device-token.js';
 import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
 import {
   createPairedWorkers,
@@ -1555,15 +1556,19 @@ singleInstanceReady
         // `createSendableDeviceTokenReader` (whichever PR merges second switches).
         // A device-path 401 is logged once per episode and the sale stays queued:
         // revocation is RT-215's detector's call, not the drain's.
-        const readSaleSyncDeviceToken = async (): Promise<string | null> => {
-          const status = await pairingStore.getStatus();
-          if (status.kind !== 'paired') return null;
-          return (await secretStore.get(DEVICE_TOKEN_KEY)) ?? null;
-        };
+        // Codex P2 (#547): a secret-store failure reads as "no device credential"
+        // (logged once per episode) — it never aborts the drain or rejects a POST.
+        const readSaleSyncDeviceToken = createSaleSyncDeviceTokenReader({
+          isPaired: async () => (await pairingStore.getStatus()).kind === 'paired',
+          readToken: () => secretStore.get(DEVICE_TOKEN_KEY),
+          onReadFailure: () => {
+            mainLogger.warn('sale_sync:device_token_unreadable');
+          },
+        });
         const saleSyncDevicePath = {
           hasDeviceCredential: async (): Promise<boolean> =>
-            ((await readSaleSyncDeviceToken()) ?? '').length > 0,
-          sellingUserIdOf: createSellingUserIdReader({
+            (await readSaleSyncDeviceToken()) !== null,
+          sellingUsers: createSellingUserIdResolver({
             db,
             onUnresolved: ({ saleId, reason }) => {
               mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:selling_user_unresolved');

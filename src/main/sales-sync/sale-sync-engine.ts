@@ -73,6 +73,7 @@ import {
   type SaleSyncStateRepo,
 } from './sale-sync-state-repo.js';
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
+import type { SellingUserIdResolver } from './selling-user-id.js';
 import {
   buildCapturePayload,
   TenderNotSendableError,
@@ -168,11 +169,13 @@ export interface SaleSyncEngineDeps {
    */
   hasDeviceCredential?: () => boolean | Promise<boolean>;
   /**
-   * RT-224 step 2: the `users.id` of the cashier who made THIS sale, from its own
-   * `payment.settled` payload (`createSellingUserIdReader`); null → envelope
-   * path. Never the current session's user. Not wired → always null.
+   * RT-224 step 2: the `users.id` of the cashier who made each sale, from its own
+   * `payment.settled` payload (`createSellingUserIdResolver`); null → envelope
+   * path. Never the current session's user. Resolved once per tick for all due
+   * sales (one query for the sales not seen before; Codex P2) and forgotten when
+   * a sale leaves the queue. Not wired → always null.
    */
-  sellingUserIdOf?: (sale: SaleRow, terminalId: string) => string | null;
+  sellingUsers?: SellingUserIdResolver;
   /**
    * RT-224 step 2: a device-path 401. Called once per episode (until a
    * device-path answer that is not a 401). Receives nothing — no token, no ids.
@@ -252,6 +255,17 @@ export function retryDelayMs(
     : backoffDelay;
 }
 
+/** A terminal outcome: the sale is synced or dead-lettered and never drained again. */
+function leavesQueue(result: SaleSyncResult): boolean {
+  return !RETRYABLE_KINDS.has(result.kind);
+}
+
+const RETRYABLE_KINDS: ReadonlySet<SaleSyncResult['kind']> = new Set([
+  'transient',
+  'no_connection',
+  'device_unauthorized',
+]);
+
 /** The stored category of a retryable outcome. */
 function transientCategory(
   kind: 'transient' | 'no_connection' | 'device_unauthorized',
@@ -290,15 +304,14 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   type SaleCredential = { kind: 'envelope' } | { kind: 'device'; operatorUserId: string };
 
   /**
-   * RT-224 step 2: choose the sale's ONE credential from the sale itself, or null
-   * when that credential is not held now (the sale is skipped, untouched).
+   * RT-224 step 2: choose the sale's ONE credential from the sale itself (its own
+   * resolved `operatorUserId`), or null when that credential is not held now (the
+   * sale is skipped, untouched).
    */
   function credentialFor(
-    sale: SaleRow,
-    terminalId: string,
+    operatorUserId: string | null,
     held: HeldCredentials,
   ): SaleCredential | null {
-    const operatorUserId = deps.sellingUserIdOf?.(sale, terminalId) ?? null;
     if (operatorUserId !== null) {
       return held.device ? { kind: 'device', operatorUserId } : null;
     }
@@ -307,13 +320,12 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
 
   /** Returns the POST outcome, or null when nothing was sent. */
   async function drainOne(
-    saleId: string,
-    terminalId: string,
+    sale: SaleRow,
+    operatorUserId: string | null,
     held: HeldCredentials,
   ): Promise<SaleSyncResult | null> {
-    const sale = salesRepo.readById(saleId);
-    if (sale === null) return null; // outbox row without a durable Sale — skip (defensive)
-    const credential = credentialFor(sale, terminalId, held);
+    const saleId = sale.sale_id;
+    const credential = credentialFor(operatorUserId, held);
     if (credential === null) return null;
 
     let payload: CaptureSalePayload;
@@ -325,6 +337,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       // method, corrupt amounts) is dead-lettered observably — never POSTed, never
       // given a fabricated method. The typed reason goes to `onDeadLetter`.
       stateRepo.markDeadLetter({ saleId, tenantId, branchId, now: now() });
+      deps.sellingUsers?.forget(saleId);
       deps.onDeadLetter?.(saleId, err.message);
       return null;
     }
@@ -333,6 +346,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
         ? await client.postSaleAsCashier(payload, credential.operatorUserId)
         : await client.postSale(payload);
     recordOutcome(saleId, payload.externalId, result, now());
+    if (leavesQueue(result)) deps.sellingUsers?.forget(saleId);
     if (credential.kind === 'device') noteDeviceAnswer(result);
     return result;
   }
@@ -431,8 +445,15 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   }
 
   /** RT-224 step 2: the device credential, read live; not wired → not held. */
+  // Codex P2 (#547): a failing credential read is "not held" — it must never
+  // abort the tick (and stop the envelope sales) or reject pausedReason().
   async function devicePresent(): Promise<boolean> {
-    return deps.hasDeviceCredential === undefined ? false : await deps.hasDeviceCredential();
+    if (deps.hasDeviceCredential === undefined) return false;
+    try {
+      return await deps.hasDeviceCredential();
+    } catch {
+      return false;
+    }
   }
 
   async function heldCredentials(): Promise<HeldCredentials> {
@@ -510,16 +531,22 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       // RT-221: drain only the current pairing's rows; no pairing → nothing.
       const terminalId = await resolveTerminalId();
       if (terminalId === null) return;
-      const due = stateRepo.eligible({ tenantId, branchId, terminalId }, now());
+      const sales = stateRepo
+        .eligible({ tenantId, branchId, terminalId }, now())
+        .map((due) => salesRepo.readById(due.sale_id))
+        // An outbox row without a durable Sale is skipped (defensive).
+        .filter((sale): sale is SaleRow => sale !== null);
+      // RT-224 step 2 (Codex P2): every due sale's cashier in one lookup.
+      const userIds = deps.sellingUsers?.resolve(sales, terminalId);
       // RT-224 step 2: after a device-path 401, no more device-path sends this tick.
       let deviceRejected = false;
-      for (const sale of due) {
+      for (const sale of sales) {
         // Re-check before each POST so a mid-drain credential loss pauses cleanly.
         const held = await credentialGate();
         if (held === null) return;
         // RT-221: a re-pair mid-drain must not send the rest under the new identity.
         if ((await resolveTerminalId()) !== terminalId) return;
-        const result = await drainOne(sale.sale_id, terminalId, {
+        const result = await drainOne(sale, userIds?.get(sale.sale_id) ?? null, {
           envelope: held.envelope,
           device: held.device && !deviceRejected,
         });

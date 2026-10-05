@@ -1,6 +1,6 @@
 /**
  * RT-224 step 2 (Option B; coordinator decision P3, no migration) — the cashier
- * `users.id` of ONE queued sale, for Backend-Core's device-path `captureSale`
+ * `users.id` of each queued sale, for Backend-Core's device-path `captureSale`
  * (`operatorUserId`).
  *
  * Source: the sale's own `payment.settled` audit payload. payments-confirm writes
@@ -25,8 +25,24 @@
  *       | settled_event_mismatch | malformed_selling_user_id | terminal_mismatch
  *
  * The report carries the opaque local `saleId` and the closed-set reason only —
- * never the user id (P7). No index is added (no migration): the scan is bounded
- * by `action_category` and only runs for a sale the drain is about to route.
+ * never the user id (P7).
+ *
+ * Cost (Codex P2 on #547). `audit_events` has no index on the category or the
+ * payload (0004 indexes only `(event_id, tenant_id)`) and none is added (a
+ * migration is [GATED]). No existing per-sale column can carry the id either:
+ * `sales` is append-only with fixed columns, `sale_sync_outbox` /
+ * `sale_sync_state` have no payload column. So the lookup is BATCHED and
+ * MEMOIZED instead of per sale:
+ *   • `resolve(sales)` looks up every sale not seen before in ONE single-pass
+ *     query (a full scan of `audit_events`, `json_extract` only on the in-scope
+ *     `payment.settled` rows), chunked at {@link LOOKUP_CHUNK} sales;
+ *   • each outcome is memoized per `sale_id` — immutable, since the settled row is
+ *     written before its sale is finalized and the table is append-only — until
+ *     `forget(saleId)` once the sale leaves the queue (synced / dead-lettered).
+ * So a tick costs at most one scan, and only when it holds a sale not seen
+ * before (a new sale, or the whole queue once after a restart); a retried sale
+ * or a sale waiting for an envelope is never looked up again. The residual cost
+ * is one O(audit rows) scan per batch of new sales on the main thread.
  */
 import type { DatabaseHandle } from '../db/client.js';
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
@@ -43,14 +59,24 @@ export interface SellingUserUnresolved {
   reason: SellingUserUnresolvedReason;
 }
 
-export interface SellingUserIdReaderDeps {
+export interface SellingUserIdResolverDeps {
   db: DatabaseHandle;
   /** Told once per sale when its id cannot be proven (closed-set reason, no PII). */
   onUnresolved?: (info: SellingUserUnresolved) => void;
 }
 
-/** `(sale, drainTerminalId) → users.id | null`. */
-export type SellingUserIdReader = (sale: SaleRow, terminalId: string) => string | null;
+export interface SellingUserIdResolver {
+  /**
+   * The `users.id` of each listed sale, keyed by `sale_id` (null = envelope
+   * path). The sales not seen before are looked up in one single-pass query.
+   */
+  resolve(sales: readonly SaleRow[], terminalId: string): ReadonlyMap<string, string | null>;
+  /** Drop a sale that left the queue (synced or dead-lettered). */
+  forget(saleId: string): void;
+}
+
+/** Sales per lookup query (bounded bind-parameter count). */
+export const LOOKUP_CHUNK = 500;
 
 /** Backend-Core's `format: uuid` (8-4-4-4-12 hex, case-insensitive), as the capture client uses. */
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,6 +84,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 interface SettledRow {
   acting_operator_id: string;
   payload: string | null;
+  handoff: string;
 }
 
 interface PrepareAll<Row> {
@@ -109,8 +136,18 @@ function resolve(sale: SaleRow, rows: readonly SettledRow[]): Resolution {
   return sellingUserIdIn(payload);
 }
 
-export function createSellingUserIdReader(deps: SellingUserIdReaderDeps): SellingUserIdReader {
+/** Split `items` into chunks of at most `size`. */
+function chunks<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+export function createSellingUserIdResolver(
+  deps: SellingUserIdResolverDeps,
+): SellingUserIdResolver {
   const reported = new Set<string>();
+  const known = new Map<string, string | null>();
 
   function report(saleId: string, reason: SellingUserUnresolvedReason): null {
     if (!reported.has(saleId)) {
@@ -120,20 +157,70 @@ export function createSellingUserIdReader(deps: SellingUserIdReaderDeps): Sellin
     return null;
   }
 
-  return (sale, terminalId) => {
-    // RT-221: only a sale of the drain's own terminal can be attributed here.
-    if (sale.terminal_id !== terminalId) return report(sale.sale_id, 'terminal_mismatch');
+  /** ONE single-pass query for up to LOOKUP_CHUNK sales of one tenant / branch. */
+  function settledRowsByHandoff(
+    batch: readonly SaleRow[],
+    terminalId: string,
+  ): Map<string, SettledRow[]> {
+    const first = batch[0] as SaleRow;
+    const marks = batch.map(() => '?').join(', ');
     const rows = (
       deps.db.prepare(
-        `SELECT acting_operator_id, payload FROM audit_events
+        `SELECT acting_operator_id, payload,
+                json_extract(payload, '$.handoff_action_id') AS handoff
+           FROM audit_events
           WHERE action_category = 'payment.settled'
             AND tenant_id = ? AND branch_id = ? AND originating_terminal_id = ?
-            AND json_extract(payload, '$.handoff_action_id') = ?`,
+            AND json_extract(payload, '$.handoff_action_id') IN (${marks})`,
       ) as PrepareAll<SettledRow>
-    ).all(sale.tenant_id, sale.branch_id, terminalId, sale.envelope_handoff_action_id);
-    const resolution = resolve(sale, rows);
-    return 'unresolved' in resolution
-      ? report(sale.sale_id, resolution.unresolved)
-      : resolution.userId;
+    ).all(
+      first.tenant_id,
+      first.branch_id,
+      terminalId,
+      ...batch.map((sale) => sale.envelope_handoff_action_id),
+    );
+    const byHandoff = new Map<string, SettledRow[]>();
+    for (const row of rows)
+      byHandoff.set(row.handoff, [...(byHandoff.get(row.handoff) ?? []), row]);
+    return byHandoff;
+  }
+
+  /** Look up the unseen sales (grouped by tenant / branch, chunked) and memoize. */
+  function lookUp(unseen: readonly SaleRow[], terminalId: string): void {
+    const groups = new Map<string, SaleRow[]>();
+    for (const sale of unseen) {
+      const key = JSON.stringify([sale.tenant_id, sale.branch_id]);
+      groups.set(key, [...(groups.get(key) ?? []), sale]);
+    }
+    for (const batch of [...groups.values()].flatMap((g) => chunks(g, LOOKUP_CHUNK))) {
+      const byHandoff = settledRowsByHandoff(batch, terminalId);
+      for (const sale of batch) {
+        const resolution = resolve(sale, byHandoff.get(sale.envelope_handoff_action_id) ?? []);
+        known.set(
+          sale.sale_id,
+          'unresolved' in resolution
+            ? report(sale.sale_id, resolution.unresolved)
+            : resolution.userId,
+        );
+      }
+    }
+  }
+
+  return {
+    resolve(sales, terminalId) {
+      // RT-221: only a sale of the drain's own terminal can be attributed here.
+      const own = sales.filter((sale) => sale.terminal_id === terminalId);
+      for (const sale of sales) {
+        if (sale.terminal_id !== terminalId) report(sale.sale_id, 'terminal_mismatch');
+      }
+      lookUp(
+        own.filter((sale) => !known.has(sale.sale_id)),
+        terminalId,
+      );
+      return new Map(sales.map((sale) => [sale.sale_id, known.get(sale.sale_id) ?? null]));
+    },
+    forget(saleId) {
+      known.delete(saleId);
+    },
   };
 }
