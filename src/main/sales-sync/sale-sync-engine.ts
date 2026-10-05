@@ -10,7 +10,9 @@
  * One tick:
  *   1. If no operator session token is present → pause (no POST); resume next tick
  *      once a token returns (FR-3 / clarify Q1). The token is read in-process and
- *      never crosses the bridge.
+ *      never crosses the bridge. RT-224: the pause is visible — `onPauseTransition`
+ *      fires ONCE on entering the paused state and once on resuming (never per
+ *      tick), and `pausedReason()` gives the live reason for the status surface.
  *   2. Resolve the CURRENT pairing's `terminal_id` (RT-221); none (unpaired /
  *      invalid) → nothing to drain. `stateRepo.eligible(scope, now)` → FIFO list
  *      (outbox LEFT JOIN state) of THIS terminal's rows only. Rows queued under an
@@ -68,6 +70,51 @@ export const SALE_SYNC_BACKOFF_POLICY: Readonly<BackoffPolicy> = Object.freeze({
   maxMs: 5 * 60 * 1_000,
 });
 
+/**
+ * RT-224: the closed set of reasons the drain can be paused for. Today there is
+ * one: the current session holds no sale credential (no session, or a cashier
+ * session, whose envelope is '').
+ */
+export const SALE_SYNC_PAUSED_REASONS = ['no_operator_credential'] as const;
+export type SaleSyncPausedReason = (typeof SALE_SYNC_PAUSED_REASONS)[number];
+
+/**
+ * RT-224: one pause-state transition. `pending` is the current terminal's unsent
+ * count at the transition. Nothing else — no token, no ids, no PII (P7).
+ */
+export interface SaleSyncPauseTransition {
+  transition: 'paused' | 'resumed';
+  reason: SaleSyncPausedReason;
+  pending: number;
+}
+
+/** RT-224: the closed-set log messages for a pause transition. */
+export const SALE_SYNC_PAUSED_LOG = 'sale_sync:paused_no_operator_credential';
+export const SALE_SYNC_RESUMED_LOG = 'sale_sync:resumed_operator_credential';
+
+/** The logger surface the pause log needs (pino's `warn` / `info`). */
+export interface SaleSyncPauseLogger {
+  warn(obj: Record<string, unknown>, msg: string): void;
+  info(obj: Record<string, unknown>, msg: string): void;
+}
+
+/**
+ * RT-224: write one pause transition. The payload is built from an allowlist
+ * ({ reason, pending }) — never by spreading the event — so nothing else can
+ * reach the log line.
+ */
+export function logSaleSyncPauseTransition(
+  logger: SaleSyncPauseLogger,
+  event: SaleSyncPauseTransition,
+): void {
+  const payload = { reason: event.reason, pending: event.pending };
+  if (event.transition === 'paused') {
+    logger.warn(payload, SALE_SYNC_PAUSED_LOG);
+  } else {
+    logger.info(payload, SALE_SYNC_RESUMED_LOG);
+  }
+}
+
 export interface SaleSyncEngineDeps {
   client: SaleSyncClient;
   stateRepo: SaleSyncStateRepo;
@@ -112,6 +159,13 @@ export interface SaleSyncEngineDeps {
    * called for it.
    */
   onPayloadDivergence?: (info: { externalId: string; errorCode: CaptureConflictCode }) => void;
+  /**
+   * RT-224: called ONCE when the drain enters the paused state (no sale
+   * credential) and once when it resumes — never on every tick. The first tick
+   * reports a pause if it starts paused; a drain that starts with a credential
+   * reports nothing until it is first paused.
+   */
+  onPauseTransition?: (event: SaleSyncPauseTransition) => void;
 }
 
 export type TickAdmission =
@@ -121,6 +175,11 @@ export type TickAdmission =
 export interface SaleSyncEngine {
   /** Admit one drain tick synchronously; the drain resolves on `completed`. */
   runTickOnce(): TickAdmission;
+  /**
+   * RT-224: why the drain cannot send right now, read live from the credential
+   * (not from the last tick); null when a credential is held.
+   */
+  pausedReason(): SaleSyncPausedReason | null;
 }
 
 /** Exponential backoff: baseMs * 2^(attempt-1), capped at maxMs. `attempt` is 1-based. */
@@ -250,17 +309,54 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     return token !== null && token.length > 0;
   }
 
+  function pausedReason(): SaleSyncPausedReason | null {
+    return envelopePresent() ? null : 'no_operator_credential';
+  }
+
+  // RT-224: the last reported pause state. `null` = nothing reported yet, so the
+  // first tick reports a pause but never a resume.
+  let reportedPaused: boolean | null = null;
+
+  /** The current terminal's unsent count, for the transition report only. */
+  async function pendingCount(): Promise<number> {
+    const terminalId = await resolveTerminalId();
+    return stateRepo.readSyncStatus({ tenantId, branchId, terminalId }).pending;
+  }
+
+  /**
+   * RT-224: check the credential and report a transition when the pause state
+   * changes. Returns true when the drain may send. Reports at most once per
+   * transition, so a paused engine is silent across ticks.
+   */
+  async function credentialGate(): Promise<boolean> {
+    const paused = pausedReason();
+    const isPaused = paused !== null;
+    if (isPaused === (reportedPaused ?? false)) {
+      reportedPaused = isPaused;
+      return !isPaused;
+    }
+    reportedPaused = isPaused;
+    if (deps.onPauseTransition !== undefined) {
+      deps.onPauseTransition({
+        transition: isPaused ? 'paused' : 'resumed',
+        reason: 'no_operator_credential',
+        pending: await pendingCount(),
+      });
+    }
+    return !isPaused;
+  }
+
   async function runTick(): Promise<void> {
     try {
       // Operator-session gate (FR-3): no envelope (null or '') → pause the whole drain.
-      if (!envelopePresent()) return;
+      if (!(await credentialGate())) return;
       // RT-221: drain only the current pairing's rows; no pairing → nothing.
       const terminalId = await resolveTerminalId();
       if (terminalId === null) return;
       const due = stateRepo.eligible({ tenantId, branchId, terminalId }, now());
       for (const sale of due) {
         // Re-check the session before each POST so a mid-drain expiry pauses cleanly.
-        if (!envelopePresent()) return;
+        if (!(await credentialGate())) return;
         // RT-221: a re-pair mid-drain must not send the rest under the new identity.
         if ((await resolveTerminalId()) !== terminalId) return;
         await drainOne(sale.sale_id);
@@ -276,5 +372,5 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     return { kind: 'started', completed: runTick() };
   }
 
-  return { runTickOnce };
+  return { runTickOnce, pausedReason };
 }
