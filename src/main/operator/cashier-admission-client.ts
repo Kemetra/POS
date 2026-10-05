@@ -83,11 +83,20 @@ export type CashierAdmissionResult =
   | { kind: 'unavailable' }
   | { kind: 'no_connection' };
 
+/**
+ * Outcome of `posEndCashierAdmission`:
+ *  - `ended`: 2xx; `device_unauthorized`: 401; `no_token`: nothing was sent;
+ *  - `rejected`: any other 4xx, a definite refusal of the request;
+ *  - `unavailable`: 5xx (RT-220). A gateway can answer 502/503/504 while
+ *    Backend-Core goes on to commit the `end`, so the outcome is unknown;
+ *  - `no_connection`: transport failure or timeout.
+ */
 export type CashierAdmissionEndResult =
   | { kind: 'ended' }
   | { kind: 'device_unauthorized' }
   | { kind: 'no_token' }
-  | { kind: 'failed' }
+  | { kind: 'rejected' }
+  | { kind: 'unavailable' }
   | { kind: 'no_connection' };
 
 /** `PosCashierRosterEntry` — minimum disclosure (D11). */
@@ -192,7 +201,7 @@ export function createCashierAdmissionClient(
       const sent = await send(ROSTER_PATH, 'GET');
       if (sent.kind !== 'response') return notSent(sent);
       if (sent.response.status === 200) return interpretRoster(await readJson(sent.response));
-      return { kind: statusOutcome(sent.response.status, ROSTER_STATUS) };
+      return { kind: statusOutcome(sent.response.status, DEVICE_ONLY_STATUS) };
     },
   };
 }
@@ -214,8 +223,8 @@ const ADMISSION_STATUS: Readonly<Partial<Record<number, NonOkKind>>> = {
   429: 'rate_limited',
 };
 
-/** posListCashierAdmissionRoster: only 401 has a contract meaning. */
-const ROSTER_STATUS: Readonly<Partial<Record<number, 'device_unauthorized'>>> = {
+/** posListCashierAdmissionRoster and posEndCashierAdmission: only 401 has a contract meaning. */
+const DEVICE_ONLY_STATUS: Readonly<Partial<Record<number, 'device_unauthorized'>>> = {
   401: 'device_unauthorized',
 };
 
@@ -227,9 +236,8 @@ function statusOutcome<K extends string>(
   return table[status] ?? (status >= 500 ? 'unavailable' : 'rejected');
 }
 
-function endOutcome(response: Response): 'device_unauthorized' | 'ended' | 'failed' {
-  if (response.status === 401) return 'device_unauthorized';
-  return response.ok ? 'ended' : 'failed';
+function endOutcome(response: Response): CashierAdmissionEndResult['kind'] {
+  return response.ok ? 'ended' : statusOutcome(response.status, DEVICE_ONLY_STATUS);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

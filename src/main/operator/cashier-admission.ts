@@ -159,18 +159,28 @@ export const PENDING_END_WAIT_MS = ADMISSION_REQUEST_TIMEOUT_MS + 1_000;
 const pendingEnds = new WeakMap<CashierAdmissionDeps, Map<string, Set<Promise<unknown>>>>();
 
 /**
- * Users whose latest `end` settled WITHOUT an answer (aborted, timed out,
- * threw, or the wait cap hit). The server may still apply that `end`, after
- * the user's next admission. That admission is therefore verified early
- * ({@link takeUncertainEnd}).
+ * Users whose latest `end` settled WITHOUT a definite answer (aborted, timed
+ * out, threw, answered 5xx, or the wait cap hit). The server may still apply
+ * that `end` after the user's next admission. That admission is therefore
+ * verified early ({@link takeUncertainEnd}).
  */
 const uncertainEnds = new WeakMap<CashierAdmissionDeps, Set<string>>();
 
 export type TrackedEndResult = CashierAdmissionEndResult | { kind: 'threw' };
 
-/** No answer arrived, so the server may still apply the `end` later. */
+/**
+ * No definite answer arrived, so the server may still apply the `end` later.
+ * RT-220: a 5xx (`unavailable`) counts. A gateway can answer 502/503/504 while
+ * Backend-Core goes on to commit the `end`.
+ */
+const UNCERTAIN_END_KINDS: ReadonlySet<TrackedEndResult['kind']> = new Set([
+  'no_connection',
+  'unavailable',
+  'threw',
+]);
+
 function isUncertainEnd(result: TrackedEndResult): boolean {
-  return result.kind === 'no_connection' || result.kind === 'threw';
+  return UNCERTAIN_END_KINDS.has(result.kind);
 }
 
 /** The settled outcome of a user's `end`, as far as this device can know it. */
