@@ -192,6 +192,84 @@ describe('RT-224 — the engine reports a pause transition once, not every tick'
   });
 });
 
+describe('RT-224 (Codex P2) — a failed report is not lost', () => {
+  it('a pending-count lookup that throws once still reports the pause, with an unknown count', async () => {
+    const h = harness(null, ['sale-1']);
+    const readSyncStatus = h.stateRepo.readSyncStatus.bind(h.stateRepo);
+    let failures = 1;
+    const engine = createSaleSyncEngine({
+      ...h.deps,
+      stateRepo: {
+        ...h.stateRepo,
+        readSyncStatus: (scope) => {
+          if (failures > 0) {
+            failures -= 1;
+            throw new Error('SQLITE_BUSY: database is locked');
+          }
+          return readSyncStatus(scope);
+        },
+      },
+    });
+    await ticks(engine, 8);
+    expect(h.events).toEqual([
+      { transition: 'paused', reason: 'no_operator_credential', pending: null },
+    ]);
+    h.db.close();
+  });
+
+  it('a pause hook that throws once does not wedge the tick; the pause is reported on the next tick, once', async () => {
+    const h = harness(null, ['sale-1']);
+    let failures = 1;
+    const engine = createSaleSyncEngine({
+      ...h.deps,
+      onPauseTransition: (event) => {
+        if (failures > 0) {
+          failures -= 1;
+          throw new Error('log sink unavailable');
+        }
+        h.events.push(event);
+      },
+    });
+    // The failing tick resolves (it does not reject) and sends nothing.
+    await expect(tick(engine)).resolves.toBeUndefined();
+    expect(h.events).toEqual([]);
+    await ticks(engine, 8);
+    expect(h.events).toEqual([
+      { transition: 'paused', reason: 'no_operator_credential', pending: 1 },
+    ]);
+    expect(h.client.calls).toHaveLength(0);
+    h.db.close();
+  });
+
+  it('a resume hook that throws once still lets that tick drain; the resume is reported once, next tick', async () => {
+    const h = harness(null, ['sale-1', 'sale-2']);
+    let failResume = 1;
+    const engine = createSaleSyncEngine({
+      ...h.deps,
+      onPauseTransition: (event) => {
+        if (event.transition === 'resumed' && failResume > 0) {
+          failResume -= 1;
+          throw new Error('log sink unavailable');
+        }
+        h.events.push(event);
+      },
+    });
+    await ticks(engine, 2);
+    h.setToken(SECRET_ENVELOPE);
+    await tick(engine);
+    // Sending is possible again, so the queue drains even though the report failed.
+    expect(h.client.calls).toHaveLength(2);
+    await ticks(engine, 6);
+    expect(h.events.map((e) => e.transition)).toEqual(['paused', 'resumed']);
+    expect(h.events[1]).toEqual({
+      transition: 'resumed',
+      reason: 'no_operator_credential',
+      pending: 0,
+    });
+    h.db.close();
+  });
+});
+
 /** A real pino logger writing JSON lines into memory. */
 function memoryLogger(): { logger: pino.Logger; lines: () => Array<Record<string, unknown>> } {
   const chunks: string[] = [];
@@ -237,6 +315,18 @@ describe('RT-224 — the pause log line', () => {
     expect(SALE_SYNC_RESUMED_LOG).toBe('sale_sync:resumed_operator_credential');
     expect(lines()).toEqual([
       { level: 30, msg: SALE_SYNC_RESUMED_LOG, reason: 'no_operator_credential', pending: 0 },
+    ]);
+  });
+
+  it('an unknown pending count is logged as null', () => {
+    const { logger, lines } = memoryLogger();
+    logSaleSyncPauseTransition(logger, {
+      transition: 'paused',
+      reason: 'no_operator_credential',
+      pending: null,
+    });
+    expect(lines()).toEqual([
+      { level: 40, msg: SALE_SYNC_PAUSED_LOG, reason: 'no_operator_credential', pending: null },
     ]);
   });
 
