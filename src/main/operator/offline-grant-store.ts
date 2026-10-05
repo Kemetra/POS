@@ -129,7 +129,13 @@ export type UpsertResult =
   /** OD8: grace 0 — nothing written; any existing grant invalidated. */
   | { kind: 'grace_disabled'; invalidated: InvalidatedGrant[] }
   /** The event was malformed — nothing written; any existing grant invalidated. */
-  | { kind: 'rejected'; invalidated: InvalidatedGrant[] };
+  | { kind: 'rejected'; invalidated: InvalidatedGrant[] }
+  /**
+   * Codex P2 4183383061 — the fresh grant could not be written, so the old one
+   * was deleted (fail closed). `invalidated` names a standing (not yet
+   * invalidated) grant that this removed, for its `refresh_failed` audit.
+   */
+  | { kind: 'refresh_failed'; invalidated: InvalidatedGrant[] };
 
 export type ClockObservation = { kind: 'raised' } | { kind: 'unchanged' } | { kind: 'unavailable' };
 
@@ -757,24 +763,38 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     return invalidateUsers(scope, () => [user_id], reason, 'invalidate');
   }
 
+  /** A standing (readable, not yet invalidated) grant of this key, for attribution. */
+  function standingGrant(scope: OfflineGrantScope, user_id: string): InvalidatedGrant[] {
+    const read = readGrant(scope, user_id);
+    if (read.kind !== 'ok' || read.body.invalidated !== null) return [];
+    return [{ user_id: read.body.user_id, operator_id: read.body.operator_id }];
+  }
+
   /**
    * Write a fresh grant and raise (or repair) the clock mark, atomically. If
-   * that fails, the old grant is deleted first: a refresh that cannot be
-   * recorded must not leave the old grant standing.
+   * that fails, the old grant is deleted: a refresh that cannot be recorded
+   * must not leave the old grant standing. Returns null when written, else the
+   * standing grant the delete removed (Codex P2 4183383061: so its
+   * `refresh_failed` invalidation can be audited). Throws storage only when
+   * even the delete fails (the wiring then holds a tombstone).
    */
-  function writeFreshGrant(scope: OfflineGrantScope, body: GrantBody): void {
+  function writeFreshGrant(scope: OfflineGrantScope, body: GrantBody): InvalidatedGrant[] | null {
     try {
       tx(() => {
         writeGrant(body);
         raiseHwm(deps.now().getTime(), true);
       });
+      return null;
     } catch {
       log('warn', { event: 'operator.offline_grant.storage_failed', op: 'upsert' });
-      try {
+    }
+    try {
+      return tx(() => {
+        const removed = standingGrant(scope, body.user_id);
         deleteGrant(scope, body.user_id);
-      } catch {
-        // The wiring holds an in-memory tombstone for this case (P1.2).
-      }
+        return removed;
+      });
+    } catch {
       throw new OfflineGrantStoreError('storage');
     }
   }
@@ -795,7 +815,8 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
         const r = invalidate(scope, event.user_id, 'grace_disabled');
         return { kind: 'grace_disabled', invalidated: r.invalidated };
       }
-      writeFreshGrant(scope, body);
+      const removed = writeFreshGrant(scope, body);
+      if (removed !== null) return { kind: 'refresh_failed', invalidated: removed };
       log('info', { event: 'operator.offline_grant.written' });
       return { kind: 'written' };
     },

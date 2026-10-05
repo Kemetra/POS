@@ -299,7 +299,9 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       // A fresh server admission: the store now holds this user's true state.
       userTombstones.delete(event.user_id);
       if (result.kind === 'grace_disabled') audit(at, result.invalidated, 'grace_disabled');
-      if (result.kind === 'rejected') audit(at, result.invalidated, 'refresh_failed');
+      if (result.kind === 'rejected' || result.kind === 'refresh_failed') {
+        audit(at, result.invalidated, 'refresh_failed');
+      }
     } catch {
       // The store deleted the old grant if it could; if not, it must not stand.
       userTombstones.set(event.user_id, 'refresh_failed');

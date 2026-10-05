@@ -543,9 +543,10 @@ export class CashierAdmissionKeeper {
    */
   private onDeviceUnauthorized(armed: Armed, result: CashierAdmissionResult): void {
     armed.device401s += 1;
-    // RT-113 OD5: the FIRST 401 already invalidates every offline grant (fail
-    // closed); only the session waits for the confirming 401.
-    if (armed.device401s === 1) notifyGrantSeam(this.deps.admission, result, armed);
+    // RT-113 OD5 + Codex P1 4183383053: EVERY device 401 invalidates every
+    // offline grant (fail closed), the first and the confirming one; only the
+    // session waits for the confirming 401.
+    notifyGrantSeam(this.deps.admission, result, armed);
     if (armed.device401s < 2) {
       this.scheduleNext(armed, deviceConfirmCapMs(armed));
       return;
