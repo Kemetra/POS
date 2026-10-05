@@ -262,6 +262,10 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       onAdmitted(event);
     },
     onCashierAdmissionInvalidated(event) {
+      // Not filtered by pairing generation (Codex P2 4182060617, decided): a
+      // stale refusal from an earlier pairing only removes offline authority
+      // (fail closed) and the next `admitted` restores it; dropping it could
+      // drop a real refusal.
       if (stopped) return;
       if (event.reason === 'device_unauthorized') {
         onDeviceUnauthorized();

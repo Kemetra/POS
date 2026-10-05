@@ -261,6 +261,29 @@ describe('an admission result is bound to the pairing that sent it (Codex P1 418
     expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
   });
 
+  // Codex P2 4182060617, decided (coordinator): invalidations are NOT filtered
+  // by pairing. A stale refusal only removes offline authority (fail closed);
+  // dropping it could drop a real refusal. The next `admitted` restores it.
+  it.each([
+    { reason: 'refused', user_id: USER },
+    { reason: 'active_elsewhere', user_id: USER },
+    { reason: 'device_unauthorized' },
+  ] as const)(
+    "a stale %o from pairing A after a re-pair to B removes B's grant; the next admitted under B restores it",
+    (stale) => {
+      wiring.onPairingChange('repair');
+      wiring.setScope(scope({ terminal_id: 'terminal-b', pairing_epoch: EPOCH + 1 }));
+      admit();
+      expect(wiring.evaluate(USER, T0).admissible).toBe(true);
+      // The answer to a request sent under pairing A lands now.
+      invalidate(stale);
+      expect(wiring.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+      admit();
+      expect(wiring.evaluate(USER, T0).admissible).toBe(true);
+      expect(body()).toMatchObject({ terminal_id: 'terminal-b', pairing_epoch: EPOCH + 1 });
+    },
+  );
+
   it('a result for the current pairing is written', () => {
     const sentUnder = wiring.seam.pairingGeneration?.();
     wiring.seam.onCashierAdmitted(admitted({ pairing_generation: sentUnder }));
