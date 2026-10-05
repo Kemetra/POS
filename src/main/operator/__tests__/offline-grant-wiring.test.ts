@@ -849,6 +849,214 @@ describe('the purge is the reliable audit point for a pairing change (Codex P2 4
   });
 });
 
+// ── Every invalidation path, against the four invariants (Codex P1 4183852355) ──
+//
+//  (a) the per-user (or terminal-wide) invalidation sequence advances;
+//  (b) exactly one audit per standing grant affected (through the retry queue);
+//  (c) a late `admitted` whose request was sent BEFORE the path is dropped;
+//  (d) a throwing store fails closed (the store-throws rows below).
+
+interface PathCase {
+  name: string;
+  /** Standing grants the path affects, as (operator, reason) audits. */
+  audits: { reason: string; operator: string }[];
+  /** Whether a request sent after the path writes an admissible grant (default true). */
+  restores?: boolean;
+  trigger: (
+    w: OfflineGrantWiring,
+    ctl: { sealFails: boolean; broken: Set<keyof OfflineGrantStore> },
+  ) => void;
+}
+
+const PATHS: PathCase[] = [
+  {
+    name: 'seam 403 (forbidden)',
+    audits: [{ reason: 'forbidden', operator: OPERATOR }],
+    trigger: (w) => w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER }),
+  },
+  {
+    name: 'seam active_elsewhere (superseded)',
+    audits: [{ reason: 'superseded', operator: OPERATOR }],
+    trigger: (w) =>
+      w.seam.onCashierAdmissionInvalidated({ reason: 'active_elsewhere', user_id: USER }),
+  },
+  {
+    name: 'seam device 401 (all users)',
+    audits: [
+      { reason: 'device_unauthorized', operator: OPERATOR },
+      { reason: 'device_unauthorized', operator: OPERATOR_2 },
+    ],
+    trigger: (w) => w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' }),
+  },
+  {
+    name: 'store grace_disabled (offline_grace_seconds = 0)',
+    audits: [{ reason: 'grace_disabled', operator: OPERATOR }],
+    trigger: (w) => w.seam.onCashierAdmitted(current(w, { offline_grace_seconds: 0 })),
+  },
+  {
+    name: 'store rejected (malformed admitted → refresh_failed)',
+    audits: [{ reason: 'refresh_failed', operator: OPERATOR }],
+    trigger: (w) => w.seam.onCashierAdmitted(current(w, { received_at: 'not a time' })),
+  },
+  {
+    name: 'store refresh_failed (seal fails, old grant deleted)',
+    audits: [{ reason: 'refresh_failed', operator: OPERATOR }],
+    trigger: (w, ctl) => {
+      ctl.sealFails = true;
+      w.seam.onCashierAdmitted(current(w, { admission_id: 'adm-new' }));
+      ctl.sealFails = false;
+    },
+  },
+  {
+    name: 'upsert throws (tombstone; audited when the retry applies it)',
+    audits: [],
+    trigger: (w, ctl) => {
+      ctl.broken.add('upsertFromAdmitted');
+      w.seam.onCashierAdmitted(current(w, { admission_id: 'adm-new' }));
+      ctl.broken.delete('upsertFromAdmitted');
+    },
+  },
+  {
+    name: 'seam 403 with the store down (tombstone)',
+    audits: [],
+    trigger: (w, ctl) => {
+      ctl.broken.add('invalidate');
+      w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
+      ctl.broken.delete('invalidate');
+    },
+  },
+  {
+    name: 'seam active_elsewhere with the store down (tombstone)',
+    audits: [],
+    trigger: (w, ctl) => {
+      ctl.broken.add('invalidate');
+      w.seam.onCashierAdmissionInvalidated({ reason: 'active_elsewhere', user_id: USER });
+      ctl.broken.delete('invalidate');
+    },
+  },
+  {
+    name: 'seam device 401 with the store down (terminal tombstone)',
+    audits: [],
+    restores: false,
+    trigger: (w, ctl) => {
+      ctl.broken.add('invalidateAll');
+      w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
+      ctl.broken.delete('invalidateAll');
+    },
+  },
+  {
+    name: 're-pair (purge, repair)',
+    audits: [
+      { reason: 'repair', operator: OPERATOR },
+      { reason: 'repair', operator: OPERATOR_2 },
+    ],
+    trigger: (w) => {
+      w.onPairingChange('repair');
+      w.setScope(scope());
+    },
+  },
+  {
+    name: 'unpair (purge, unpair)',
+    audits: [
+      { reason: 'unpair', operator: OPERATOR },
+      { reason: 'unpair', operator: OPERATOR_2 },
+    ],
+    trigger: (w) => {
+      w.onPairingChange('unpair');
+      w.setScope(scope());
+    },
+  },
+];
+
+describe('every invalidation path keeps the four invariants (Codex P1 4183852355)', () => {
+  function rig(): {
+    w: OfflineGrantWiring;
+    ctl: { sealFails: boolean; broken: Set<keyof OfflineGrantStore> };
+  } {
+    const ctl = { sealFails: false, broken: new Set<keyof OfflineGrantStore>() };
+    const sealFailing = createOfflineGrantStore({
+      db: g.handle,
+      safeStorage: {
+        ...ss,
+        encryptString: () => {
+          throw new Error('DPAPI unavailable');
+        },
+      },
+      now: () => clock,
+      logger,
+    });
+    const proxy = new Proxy(store, {
+      get(target, prop: keyof OfflineGrantStore) {
+        if (ctl.broken.has(prop)) {
+          return () => {
+            throw new Error('store down');
+          };
+        }
+        if (ctl.sealFails && prop === 'upsertFromAdmitted') return sealFailing.upsertFromAdmitted;
+        return target[prop];
+      },
+    });
+    const w = makeWiring({ store: proxy });
+    w.setScope(scope());
+    w.seam.onCashierAdmitted(current(w));
+    w.seam.onCashierAdmitted(current(w, { user_id: USER_2, operator_id: OPERATOR_2 }));
+    return { w, ctl };
+  }
+
+  it.each(PATHS)('$name', ({ audits: expected, trigger, restores }) => {
+    const { w, ctl } = rig();
+    expect(w.evaluate(USER, T0).admissible).toBe(true);
+    // A positive admission for U is in flight: its send mark is taken now.
+    const inFlight = {
+      pairing_generation: w.seam.pairingGeneration?.(),
+      invalidation_seq: w.seam.invalidationSeq?.(),
+    };
+    audits = [];
+    trigger(w, ctl);
+    // (a)
+    expect(w.seam.invalidationSeq?.()).toBeGreaterThan(inFlight.invalidation_seq ?? Infinity);
+    // (b)
+    expect(audits.map(auditOf)).toEqual(expect.arrayContaining(expected));
+    expect(audits).toHaveLength(expected.length);
+    // (c) the late answer of the in-flight request
+    w.seam.onCashierAdmitted(admitted({ ...inFlight, admission_id: 'adm-late' }));
+    expect(w.evaluate(USER, T0).admissible).toBe(false);
+    // (d) nothing threw; a request sent AFTER the path restores the grant,
+    // except while a terminal-wide tombstone stands (fail closed until retried)
+    w.seam.onCashierAdmitted(current(w, { admission_id: 'adm-after' }));
+    expect(w.evaluate(USER, T0).admissible).toBe(restores ?? true);
+    w.stop();
+  });
+
+  it("Codex's overlap: zero grace answered first, then the earlier positive answer: no grant", () => {
+    const { w } = rig();
+    const sentA = {
+      pairing_generation: w.seam.pairingGeneration?.(),
+      invalidation_seq: w.seam.invalidationSeq?.(),
+    };
+    const sentB = { ...sentA };
+    w.seam.onCashierAdmitted(admitted({ ...sentB, offline_grace_seconds: 0 })); // B lands first
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    w.seam.onCashierAdmitted(admitted({ ...sentA, offline_grace_seconds: 86_400 })); // then A
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    expect(audits.filter((a) => a.payload['reason'] === 'grace_disabled')).toHaveLength(1);
+    w.stop();
+  });
+
+  it('zero grace with no grant yet still blocks an earlier positive answer', () => {
+    const w = makeWiring();
+    w.setScope(scope());
+    const sent = {
+      pairing_generation: w.seam.pairingGeneration?.(),
+      invalidation_seq: w.seam.invalidationSeq?.(),
+    };
+    w.seam.onCashierAdmitted(admitted({ ...sent, offline_grace_seconds: 0 }));
+    w.seam.onCashierAdmitted(admitted({ ...sent }));
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    w.stop();
+  });
+});
+
 describe('scopeFromPairingStatus', () => {
   it('takes the scope and epoch from a paired status, null otherwise', () => {
     expect(
