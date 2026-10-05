@@ -43,7 +43,11 @@ import {
   type SaleSyncEngineDeps,
   type SaleSyncPauseTransition,
 } from '../sale-sync-engine.js';
-import { createSellingUserIdResolver, type SellingUserUnresolved } from '../selling-user-id.js';
+import {
+  createSellingUserIdResolver,
+  type SellingUserIdResolver,
+  type SellingUserUnresolved,
+} from '../selling-user-id.js';
 import type { DatabaseHandle } from '../../db/client.js';
 import { createSaleSyncStatusReader } from '../sale-sync-status-reader.js';
 
@@ -81,14 +85,9 @@ interface Harness {
   db: ReturnType<typeof freshSalesSyncDb>;
 }
 
-function harness(opts: {
-  sales: QueuedSale[];
-  envelope?: string | null;
-  device?: boolean;
-  script?: SaleSyncResult[];
-}): Harness & { auditQueries: () => number } {
-  const db = freshSalesSyncDb();
-  opts.sales.forEach((s, i) => {
+/** Seed each queued sale: the durable Sale, its outbox row and its settled row. */
+function seedQueue(db: ReturnType<typeof freshSalesSyncDb>, sales: QueuedSale[]): void {
+  sales.forEach((s, i) => {
     seedSale(db, { sale_id: s.id });
     seedOutbox(db, {
       sale_id: s.id,
@@ -99,10 +98,12 @@ function harness(opts: {
       ...(s.user === undefined ? {} : { selling_user_id: s.user }),
     });
   });
-  const handle = handleFor(db);
-  // Counts executions of statements that read `audit_events` (Codex P2).
+}
+
+/** A handle that counts executions of statements reading `audit_events` (Codex P2). */
+function countingAuditHandle(handle: DatabaseHandle): { db: DatabaseHandle; count: () => number } {
   let auditQueries = 0;
-  const countingHandle: DatabaseHandle = {
+  const db: DatabaseHandle = {
     ...handle,
     prepare: (sql: string) => {
       const stmt = handle.prepare(sql) as { all: (...p: unknown[]) => unknown };
@@ -115,18 +116,43 @@ function harness(opts: {
       };
     },
   };
+  return { db, count: () => auditQueries };
+}
+
+/** The real resolver, recording the sales the engine tells it to forget (rev547 F7). */
+function spyingResolver(db: DatabaseHandle) {
+  const forgotten: string[] = [];
+  const unresolved: SellingUserUnresolved[] = [];
+  const resolver = createSellingUserIdResolver({
+    db,
+    onUnresolved: (info) => unresolved.push(info),
+  });
+  const sellingUsers: SellingUserIdResolver = {
+    resolve: (sales, terminalId) => resolver.resolve(sales, terminalId),
+    forget: (saleId) => {
+      forgotten.push(saleId);
+      resolver.forget(saleId);
+    },
+  };
+  return { sellingUsers, forgotten, unresolved };
+}
+
+function harness(opts: {
+  sales: QueuedSale[];
+  envelope?: string | null;
+  device?: boolean;
+  script?: SaleSyncResult[];
+}): Harness & { auditQueries: () => number } {
+  const db = freshSalesSyncDb();
+  seedQueue(db, opts.sales);
+  const handle = handleFor(db);
+  const audit = countingAuditHandle(handle);
+  const spy = spyingResolver(audit.db);
   const stateRepo = createSaleSyncStateRepo(handle);
   const client = createFakeSaleSyncClient(opts.script ?? [{ kind: 'ok', saleRef: null }]);
-  const forgotten: string[] = [];
-  const unresolvedSink: SellingUserUnresolved[] = [];
-  const resolver = createSellingUserIdResolver({
-    db: countingHandle,
-    onUnresolved: (info) => unresolvedSink.push(info),
-  });
   const events: SaleSyncPauseTransition[] = [];
   const deadLetters: Array<{ saleId: string; reason: string | undefined }> = [];
   const unauthorized: number[] = [];
-  const unresolved = unresolvedSink;
   let envelope = opts.envelope ?? null;
   let device = opts.device ?? true;
   const deps: SaleSyncEngineDeps = {
@@ -138,13 +164,7 @@ function harness(opts: {
     resolveTerminalId: () => TERMINAL,
     getOperatorToken: () => envelope,
     hasDeviceCredential: () => Promise.resolve(device),
-    sellingUsers: {
-      resolve: (sales, terminalId) => resolver.resolve(sales, terminalId),
-      forget: (saleId) => {
-        forgotten.push(saleId);
-        resolver.forget(saleId);
-      },
-    },
+    sellingUsers: spy.sellingUsers,
     now: () => '2026-06-07T10:05:00.000Z',
     backoff: { baseMs: 1000, maxMs: 300_000 },
     onPauseTransition: (event) => events.push(event),
@@ -159,7 +179,7 @@ function harness(opts: {
     events,
     deadLetters,
     unauthorized,
-    unresolved,
+    unresolved: spy.unresolved,
     setEnvelope: (t) => {
       envelope = t;
     },
@@ -167,8 +187,8 @@ function harness(opts: {
       device = d;
     },
     db,
-    forgotten,
-    auditQueries: () => auditQueries,
+    forgotten: spy.forgotten,
+    auditQueries: audit.count,
   };
 }
 
