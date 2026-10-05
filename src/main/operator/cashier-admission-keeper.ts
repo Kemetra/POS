@@ -7,6 +7,7 @@ import type {
 import {
   endAdmissionTracked,
   monotonicNowMs,
+  takeUncertainEnd,
   nextIdempotencyKey,
   notifyGrantSeam,
   type CashierAdmissionDeps,
@@ -87,6 +88,14 @@ export const FAILED_TICK_RETRY_MS = 60_000;
  * (at or below it, the admission counts as lapsed).
  */
 export const MIN_RETRY_MS = 250;
+
+/**
+ * Codex P1 4180025698 — after an `end` with an unknown outcome (aborted or
+ * timed out; the server may still apply it), the user's next session sends
+ * its first heartbeat this soon instead of TTL/2, to verify that the admission
+ * is still live.
+ */
+export const EARLY_VERIFY_MS = 5_000;
 
 /** The largest delay `setTimeout` honours (a larger one fires at once). */
 const MAX_INTERVAL_MS = 2_147_483_647;
@@ -261,7 +270,18 @@ export class CashierAdmissionKeeper {
     const armed = armedFor(record, () => this.nowMs());
     if (armed === null) return;
     this.armed = armed;
-    this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
+    this.scheduleNext(armed, this.firstHeartbeatCapMs(armed));
+  }
+
+  /**
+   * TTL/2, or {@link EARLY_VERIFY_MS} when this user's previous `end` has an
+   * unknown outcome (Codex P1 4180025698). Either way, bounded by the deadline.
+   */
+  private firstHeartbeatCapMs(armed: Armed): number {
+    const interval = heartbeatIntervalMs(armed.ttl_seconds);
+    return takeUncertainEnd(this.deps.admission, armed.user_id)
+      ? Math.min(interval, EARLY_VERIFY_MS)
+      : interval;
   }
 
   private onSessionEnded(record: OperatorSessionRecord): void {

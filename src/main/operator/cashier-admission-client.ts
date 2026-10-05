@@ -31,7 +31,13 @@
 
 const ADMISSIONS_PATH = '/api/pos/v1/cashier-admissions';
 const ROSTER_PATH = '/api/pos/v1/cashier-admissions/roster';
-const DEFAULT_TIMEOUT_MS = 15_000;
+/**
+ * The hard per-request timeout (an AbortSignal on the fetch). It also bounds
+ * how long an `end` can stay in flight, which the pending-end wait relies on
+ * (Codex P1 4180025698).
+ */
+export const ADMISSION_REQUEST_TIMEOUT_MS = 15_000;
+const DEFAULT_TIMEOUT_MS = ADMISSION_REQUEST_TIMEOUT_MS;
 
 /** `PosCashierAdmissionOnlineRequest`. */
 export interface CashierAdmissionOnlineRequest {

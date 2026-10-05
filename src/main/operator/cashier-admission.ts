@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto';
 
 import type { OperatorRefusal } from '../../shared/audit/event-shape.js';
 
-import type {
-  CashierAdmissionAdmitted,
-  CashierAdmissionClient,
-  CashierAdmissionEndResult,
-  CashierAdmissionResult,
+import {
+  ADMISSION_REQUEST_TIMEOUT_MS,
+  type CashierAdmissionAdmitted,
+  type CashierAdmissionClient,
+  type CashierAdmissionEndResult,
+  type CashierAdmissionResult,
 } from './cashier-admission-client.js';
 import type { SessionManager } from './session-manager.js';
 
@@ -145,18 +146,59 @@ export function reportAdmissionOutcome(
 }
 
 /**
- * Review of 024f07c, item 3 — the longest an admission waits for the same
- * user's pending `end`. Long enough for a normal round trip on the shop LAN or
- * uplink; short enough that a hung `end` only delays sign-in briefly. Past it
- * the sign-in goes ahead (best-effort): a late `end` can then still land, and
- * the next heartbeat re-admits (a re-issued id is adopted).
+ * Review of 024f07c item 3 and Codex P1 4180025698 — a re-admission of a user
+ * waits for that user's pending `end` to SETTLE. The production client aborts
+ * every request at {@link ADMISSION_REQUEST_TIMEOUT_MS}, so the wait is
+ * bounded by that. This cap, strictly longer, only guards a client that never
+ * settles, so sign-in can never hang. It is never a shorter race that leaves
+ * an `end` in flight.
  */
-export const PENDING_END_WAIT_MS = 3_000;
+export const PENDING_END_WAIT_MS = ADMISSION_REQUEST_TIMEOUT_MS + 1_000;
 
 /** The `end` calls still in flight, per shared admission deps and per user. */
 const pendingEnds = new WeakMap<CashierAdmissionDeps, Map<string, Set<Promise<unknown>>>>();
 
+/**
+ * Users whose latest `end` settled WITHOUT an answer (aborted, timed out,
+ * threw, or the wait cap hit). The server may still apply that `end`, after
+ * the user's next admission. That admission is therefore verified early
+ * ({@link takeUncertainEnd}).
+ */
+const uncertainEnds = new WeakMap<CashierAdmissionDeps, Set<string>>();
+
 export type TrackedEndResult = CashierAdmissionEndResult | { kind: 'threw' };
+
+/** No answer arrived, so the server may still apply the `end` later. */
+function isUncertainEnd(result: TrackedEndResult): boolean {
+  return result.kind === 'no_connection' || result.kind === 'threw';
+}
+
+/** The settled outcome of a user's `end`, as far as this device can know it. */
+interface EndOutcome {
+  user_id: string;
+  uncertain: boolean;
+}
+
+function noteEndOutcome(deps: CashierAdmissionDeps, outcome: EndOutcome): void {
+  let users = uncertainEnds.get(deps);
+  if (users === undefined) {
+    users = new Set();
+    uncertainEnds.set(deps, users);
+  }
+  if (outcome.uncertain) users.add(outcome.user_id);
+  else users.delete(outcome.user_id);
+}
+
+/**
+ * Codex P1 4180025698 — true (once) when the user's latest `end` has an
+ * unknown outcome. The keeper then sends the first heartbeat of the user's new
+ * session early, to check the admission is still live. A late `end` makes the
+ * server re-issue a new id, which is adopted; a claim by another till answers
+ * `active_elsewhere`, which latches.
+ */
+export function takeUncertainEnd(deps: CashierAdmissionDeps, user_id: string): boolean {
+  return uncertainEnds.get(deps)?.delete(user_id) ?? false;
+}
 
 /**
  * End an admission best-effort: never throws, never blocks the caller. While
@@ -181,27 +223,32 @@ export function endAdmissionTracked(
   const forUser = byUser.get(user_id) ?? new Set<Promise<unknown>>();
   byUser.set(user_id, forUser);
   forUser.add(ending);
-  void ending.then(() => {
+  void ending.then((result) => {
+    noteEndOutcome(deps, { user_id, uncertain: isUncertainEnd(result) });
     forUser.delete(ending);
     if (forUser.size === 0 && byUser.get(user_id) === forUser) byUser.delete(user_id);
   });
   return ending;
 }
 
-/** Wait for every pending `end` of `user_id`, at most `timeoutMs`. Never throws. */
-export async function awaitPendingEnd(
-  deps: CashierAdmissionDeps,
-  user_id: string,
-  timeoutMs = PENDING_END_WAIT_MS,
-): Promise<void> {
+/**
+ * Wait until every pending `end` of `user_id` has settled (the client's own
+ * request timeout bounds it), capped at PENDING_END_WAIT_MS for a client that never
+ * settles. A hit cap counts as an unknown outcome. Never throws.
+ */
+export async function awaitPendingEnd(deps: CashierAdmissionDeps, user_id: string): Promise<void> {
   const forUser = pendingEnds.get(deps)?.get(user_id);
   if (forUser === undefined || forUser.size === 0) return;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, timeoutMs);
+  const capped = new Promise<'capped'>((resolve) => {
+    timer = setTimeout(() => {
+      resolve('capped');
+    }, PENDING_END_WAIT_MS);
   });
-  await Promise.race([Promise.all([...forUser]), timeout]);
+  const settled = Promise.all([...forUser]).then(() => 'settled' as const);
+  const outcome = await Promise.race([settled, capped]);
   clearTimeout(timer);
+  if (outcome === 'capped') noteEndOutcome(deps, { user_id, uncertain: true });
 }
 
 /** Call the admission resource for an online sign-in or takeover and report the outcome. */
