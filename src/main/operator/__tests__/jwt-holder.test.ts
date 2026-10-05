@@ -66,4 +66,15 @@ describe('JwtHolder', () => {
     h.clear('be-1');
     expect(h.get('be-1')).toBeNull();
   });
+
+  it('RT-215: clearAll drops every held credential (device revoked)', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt-1');
+    h.set('be-2', 'jwt-2');
+    h.clearAll();
+    expect(h.get('be-1')).toBeNull();
+    expect(h.get('be-2')).toBeNull();
+    h.set('be-3', 'jwt-3'); // still usable after a later sign-in
+    expect(h.get('be-3')).toBe('jwt-3');
+  });
 });

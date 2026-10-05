@@ -157,7 +157,21 @@ import {
 import { CashierAdmissionKeeper } from './operator/cashier-admission-keeper.js';
 import { RosterHandler } from './operator/roster-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
-import { LifecycleCascade } from './operator/lifecycle-cascade.js';
+// RT-215 — device-revoked state + pairing recovery.
+import {
+  createDeviceAuthDetector,
+  deviceAuthConfirmDelayMs,
+  withDeviceAuthObservation,
+} from './pairing/device-auth-detector.js';
+import { createSendableDeviceTokenReader } from './pairing/device-token.js';
+import {
+  createDeviceRevocationFlow,
+  createRosterConfirmationProbe,
+  withDeviceRevocationRecovery,
+  type DeviceRevocationFlow,
+} from './app/device-revocation-flow.js';
+import { purgeOtherTerminalPinRecords } from './operator/pin-records-purge.js';
+import { PAIRING_PUSH_CHANNELS } from '../shared/pairing-types.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
 import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
 import { PinManagementHandler } from './operator/pin-management.js';
@@ -516,6 +530,19 @@ singleInstanceReady
       db: bindPairingStoreDb(db),
       deviceTokenKey: DEVICE_TOKEN_KEY,
     });
+    // RT-215 — the ONE reader of the device token for sending: null unless the
+    // pairing is `paired`, so a revoked device never sends its (still sealed)
+    // token. The revocation flow is built further down (it needs the keeper);
+    // it is late-bound here, like `saleBoundaryProbe`.
+    const readSendableDeviceToken = createSendableDeviceTokenReader({
+      pairingStore,
+      secretStore,
+      deviceTokenKey: DEVICE_TOKEN_KEY,
+    });
+    const deviceRevocation: DeviceRevocationFlow = {
+      onConfirmed: () => undefined,
+      onPaired: () => Promise.resolve(),
+    };
 
     // 002-terminal-pairing dev bypass — seeds fixture pairing state so the
     // renderer routes past /pairing in unpackaged dev builds.
@@ -565,13 +592,21 @@ singleInstanceReady
     // The ONLY pairing service handed to the IPC handler is the wrapped one, so a
     // successful in-process pairing always notifies the latch. `src/main/pairing/`
     // itself is unchanged.
+    // RT-215: every successful pairing also runs the recovery step (detector
+    // reset, other terminals' PIN records deleted, revocation-cleared audit).
     const pairingService = withPairedNotification(
-      createPairingService({
-        store: pairingStore,
-        network: pairingNetwork,
-        pairingLog: createPairingLog(mainLogger),
-        clock: () => new Date(),
-      }),
+      withDeviceRevocationRecovery(
+        createPairingService({
+          store: pairingStore,
+          network: pairingNetwork,
+          pairingLog: createPairingLog(mainLogger),
+          clock: () => new Date(),
+        }),
+        {
+          getStatus: () => pairingStore.getStatus(),
+          onPaired: (input) => deviceRevocation.onPaired(input),
+        },
+      ),
       notifyPairedFromStore,
     );
 
@@ -656,12 +691,8 @@ singleInstanceReady
     });
     const operatorProtoStore = new ProtoSessionStore();
     const clerkExchanger = resolveClerkExchanger(mainLogger);
-    const deviceTokenAttestation = async (): Promise<string> => {
-      const status = await pairingStore.getStatus();
-      if (status.kind !== 'paired') return '';
-      const token = await secretStore.get(DEVICE_TOKEN_KEY);
-      return token ?? '';
-    };
+    const deviceTokenAttestation = async (): Promise<string> =>
+      (await readSendableDeviceToken()) ?? '';
     const operatorSignInHandler = new SignInHandler({
       clerk: clerkExchanger,
       backend: operatorBackend,
@@ -676,15 +707,32 @@ singleInstanceReady
       deviceTokenAttestation,
       logger: mainLogger,
     });
-    // T051b + T051d — lifecycle cascade for terminal-revocation (FR-014) and
-    // account-disabled-mid-session. RT-113 P2 wires one caller: a device 401 on
-    // a cashier sign-in or takeover (RT-138 L6 / 10763 D8; a no-op without a
-    // session). The heartbeat ends at the safe point instead (review F1). It is
-    // NOT exposed to the renderer bridge.
-    const operatorLifecycleCascade = new LifecycleCascade({
-      sessionManager: operatorSessionManager,
+    // RT-215 — the ONE device-401 detector. Every device-bearer client below
+    // (cashier admissions: sign-in, takeover, heartbeat, roster, end; the
+    // catalogue read-down) is built on its observed fetch. Revocation needs two
+    // consecutive device 401s, the second from a roster call min(30 s, TTL/2)
+    // later on an UNOBSERVED client; a device-bearer 2xx in between resets it.
+    // Operator-credential routes are ignored. (This replaces the RT-113 P2
+    // immediate cascade on a single 401.)
+    const deviceAuthDetector = createDeviceAuthDetector({
+      probe: createRosterConfirmationProbe(
+        createCashierAdmissionClient({
+          baseUrl: apiBaseUrl,
+          fetch: globalThis.fetch.bind(globalThis),
+          getDeviceToken: readSendableDeviceToken,
+        }),
+      ),
+      confirmDelayMs: () =>
+        deviceAuthConfirmDelayMs(operatorSessionManager.getCurrent()?.admission_ttl_seconds),
+      onConfirmed: (source) => {
+        deviceRevocation.onConfirmed(source);
+      },
       logger: mainLogger,
     });
+    const deviceBearerFetch = withDeviceAuthObservation(
+      globalThis.fetch.bind(globalThis),
+      deviceAuthDetector,
+    );
 
     // RT-113 P2 (10763 D2/D11, owner decision 10844; fixes RT-182) — the
     // cashier path's server authority: the device-authenticated Backend-Core
@@ -693,20 +741,13 @@ singleInstanceReady
     // the cashier path.
     const cashierAdmissionClient = createCashierAdmissionClient({
       baseUrl: apiBaseUrl,
-      fetch: globalThis.fetch.bind(globalThis),
-      getDeviceToken: async () => {
-        const status = await pairingStore.getStatus();
-        if (status.kind !== 'paired') return null;
-        return (await secretStore.get(DEVICE_TOKEN_KEY)) ?? null;
-      },
+      fetch: deviceBearerFetch,
+      getDeviceToken: readSendableDeviceToken,
     });
     const cashierAdmission: CashierAdmissionDeps = {
       client: cashierAdmissionClient,
       // P1 SEAM — RT113-P1 replaces this with the sealed offline grant store.
       grantSeam: NOOP_OFFLINE_GRANT_SEAM,
-      onDeviceRevoked: () => {
-        operatorLifecycleCascade.notifyTerminalRevoked();
-      },
     };
     const operatorCashierSignInHandler = new CashierSignInHandler({
       db: db,
@@ -818,7 +859,49 @@ singleInstanceReady
     };
     workerRegistry.register('cashier admission heartbeat', () => {
       cashierAdmissionKeeper.stop();
+      // RT-215: the device-401 detector's pending confirmation stops with it.
+      deviceAuthDetector.stop();
     });
+
+    // RT-215 — what a CONFIRMED revocation does: record it on the pairing row
+    // (the token is then never sent), clear the credential holders, invalidate
+    // the offline grants through the existing seam, latch the session at once
+    // and end it at its safe point (the keeper), audit it (`system:device`,
+    // `{source}`), and push `pairing:status-changed` to route to recovery.
+    const deviceRevocationFlow = createDeviceRevocationFlow({
+      markDeviceRevoked: () => pairingStore.markDeviceRevoked(),
+      getStatus: () => pairingStore.getStatus(),
+      sessions: operatorSessionManager,
+      latchSession: () => {
+        cashierAdmissionKeeper.latchCurrentSession('terminal_session_terminated');
+      },
+      clearCredentials: () => {
+        operatorJwtHolder.clearAll();
+        operatorEnvelopeHolder.clearAll();
+      },
+      invalidateGrants: () => {
+        (cashierAdmission.grantSeam ?? NOOP_OFFLINE_GRANT_SEAM).onCashierAdmissionInvalidated({
+          reason: 'device_unauthorized',
+        });
+      },
+      resetDetector: () => {
+        deviceAuthDetector.reset();
+      },
+      purgeOtherTerminalPins: (terminalId) => purgeOtherTerminalPinRecords(db, terminalId),
+      pushStatus: (event) => {
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send(PAIRING_PUSH_CHANNELS.STATUS_CHANGED, event);
+        }
+      },
+      audit: auditEmitter,
+      uuid: () => randomUUID(),
+      now: () => new Date(),
+      logger: mainLogger,
+    });
+    deviceRevocation.onConfirmed = (source) => {
+      deviceRevocationFlow.onConfirmed(source);
+    };
+    deviceRevocation.onPaired = (input) => deviceRevocationFlow.onPaired(input);
 
     const operatorTakeoverHandler = new TakeoverHandler({
       protoStore: operatorProtoStore,
@@ -1056,13 +1139,12 @@ singleInstanceReady
     pairedWorkersLatch.register('read-down driver', (terminal) => {
       const readDownClient = createReadDownClient({
         baseUrl: catalogueApiBaseUrl,
-        fetch: globalThis.fetch.bind(globalThis),
+        // RT-215: observed by the device-401 detector (a read-down 401 counts).
+        fetch: deviceBearerFetch,
         // Device token (the paired-terminal credential) read in-process; never
         // logged, never bridged. Sole credential for the non-session-gated driver.
-        getDeviceToken: async () => {
-          const token = await secretStore.get(DEVICE_TOKEN_KEY);
-          return token ?? null;
-        },
+        // RT-215: null once the device is revoked, so it is never sent again.
+        getDeviceToken: readSendableDeviceToken,
       });
       const driver = createReadDownDriver({
         client: readDownClient,

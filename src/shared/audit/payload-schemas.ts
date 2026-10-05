@@ -18,6 +18,7 @@
 import type { SessionEndCause } from '../operator/session-end-cause.js';
 import type { ActionCategory } from './event-shape.js';
 import type { SaleFinalizationRefusalReason } from '../sales/types.js';
+import type { DeviceRevokedSource } from '../pairing-types.js';
 
 // ─── shift.open ────────────────────────────────────────────────────────────
 
@@ -402,6 +403,22 @@ export interface SaleReturnSlipPrintFailedPayload {
   failure_reason: string;
 }
 
+// ─── pairing.device_revoked / pairing.device_revoked_cleared (RT-215) ──────
+
+/**
+ * `{ source }` ONLY (Jira RT-215 comment 10879): the device-bearer route
+ * family whose 401 started the confirmed revocation. No token, no device
+ * secret, no URL. The actor is `SYSTEM_DEVICE_ACTOR_ID`.
+ */
+export interface PairingDeviceRevokedPayload {
+  source: DeviceRevokedSource;
+}
+
+/** `{ source }` ONLY: the revocation was cleared by a successful re-pair. */
+export interface PairingDeviceRevokedClearedPayload {
+  source: 're_pair';
+}
+
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────
 
 /**
@@ -456,6 +473,9 @@ export type AuditPayloadMap = {
   'sale.return.slip_printed': SaleReturnSlipPrintedPayload;
   'sale.return.slip_print_failed': SaleReturnSlipPrintFailedPayload;
   'sale.return.slip_reprinted': SaleReturnSlipPrintedPayload;
+  // RT-215
+  'pairing.device_revoked': PairingDeviceRevokedPayload;
+  'pairing.device_revoked_cleared': PairingDeviceRevokedClearedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

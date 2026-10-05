@@ -1,5 +1,7 @@
 import type { Logger } from 'pino';
 
+import { DEVICE_401_CONFIRM_MS } from '../pairing/device-auth-detector.js';
+
 import type {
   CashierAdmissionAdmitted,
   CashierAdmissionResult,
@@ -39,9 +41,12 @@ import type {
  *  - `stop()` is the shutdown latch (RT-198 pattern): it clears every timer,
  *    and nothing runs afterwards, even when an in-flight request settles.
  *
- * Losing authority (Codex P1 #1, review F1/F2/F3): `active_elsewhere`, a 403
- * and two CONSECUTIVE device 401s (the second a confirmation call 30 s after
- * the first) LATCH the session (`SessionManager.latchAuthority`). While
+ * Losing authority (Codex P1 #1, review F1/F2/F3): `active_elsewhere` and a
+ * 403 LATCH the session (`SessionManager.latchAuthority`). A confirmed device
+ * revocation latches it too, through {@link CashierAdmissionKeeper.latchCurrentSession}:
+ * since RT-215 the keeper no longer counts device 401s itself — the shared
+ * device-401 detector (`pairing/device-auth-detector.ts`) sees every
+ * device-bearer answer, the heartbeat's included, and decides. While
  * latched no new sale may start (`cart.create`, and adding a line to an empty
  * cart, refuse `authority_conflict`) and the heartbeat stops. The session ends with its own cause
  * (`superseded_by_takeover` / `account_disabled_mid_session` /
@@ -50,8 +55,8 @@ import type {
  * sale IPC call (`recheckSafePoint`, wired at the `sale-boundary-guard.ts`
  * choke point), on every lock-state change, and every
  * {@link SAFE_POINT_RECHECK_MS} as a backstop. Nothing is
- * reversed or discarded. A 403 or confirmed 401 invalidates the P1 grant at
- * once (D4).
+ * reversed or discarded. A 403 invalidates the P1 grant at once (D4); a
+ * confirmed revocation invalidates every grant through the same seam (RT-215).
  *
  * The deadline (Codex P2 4179771036): the server admission lapses at most TTL
  * after the request that got the latest `admitted` was SENT (monotonic clock;
@@ -66,7 +71,8 @@ import type {
  * Other outcomes: `admitted` renews (a re-issued id is adopted and logged);
  * network, 5xx and 429 retry after min(TTL/2, 60 s), backing off
  * exponentially up to TTL/2 (review F6); 400, 409 and `no_token` keep the
- * normal cadence; a first device 401 is confirmed after 30 s (F3). Each of
+ * normal cadence; a device 401 is retried after min(30 s, TTL/2) (F3), so a
+ * transient one renews the admission before it lapses. Each of
  * these is ALSO capped by the deadline. A late `admitted` for a session that
  * is gone ends that admission unless the live session holds it (review F7).
  *
@@ -75,8 +81,11 @@ import type {
 
 /** How often a latched session re-checks for its next safe point (backstop). */
 export const SAFE_POINT_RECHECK_MS = 5_000;
-/** Review F3: the confirmation call after a first device 401 (at most TTL/2, Codex P2 4179701427). */
-export const DEVICE_401_CONFIRM_MS = 30_000;
+/**
+ * Review F3: the retry after a device 401 (at most TTL/2, Codex P2 4179701427).
+ * RT-215: the same constant as the shared detector's confirmation delay.
+ */
+export { DEVICE_401_CONFIRM_MS };
 /** Review F6: the first retry after a failed tick (network, 5xx, 429). */
 export const FAILED_TICK_RETRY_MS = 60_000;
 
@@ -144,8 +153,13 @@ interface AdmissionToEnd {
   user_id: string | undefined;
 }
 
-interface Armed {
+/** A session the keeper may end at its safe point. */
+interface Tracked {
   session_id: string;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+interface Armed extends Tracked {
   user_id: string;
   operator_id: string;
   admission_id: string;
@@ -153,12 +167,9 @@ interface Armed {
   deadline: AdmissionDeadline;
   /** When the in-flight (or last) heartbeat was sent; heartbeats never overlap. */
   last_sent_at_ms: number;
-  timer: ReturnType<typeof setTimeout> | null;
   latched: boolean;
   /** Consecutive failed ticks (backoff). */
   failures: number;
-  /** Consecutive device 401s (debounce). */
-  device401s: number;
 }
 
 /** True when the record holds a live online cashier admission to keep alive. */
@@ -191,11 +202,10 @@ function armedFor(record: OperatorSessionRecord, clock: () => number): Armed | n
     timer: null,
     latched: false,
     failures: 0,
-    device401s: 0,
   };
 }
 
-/** Review F3 + Codex P2 4179701427: the 401 confirmation, min(30 s, TTL/2), before the deadline. */
+/** Review F3 + Codex P2 4179701427: the retry after a 401, min(30 s, TTL/2), before the deadline. */
 function deviceConfirmCapMs(armed: Armed): number {
   return Math.min(DEVICE_401_CONFIRM_MS, heartbeatIntervalMs(armed.ttl_seconds));
 }
@@ -226,6 +236,11 @@ export function nextCallDelayMs(capMs: number, deadline: AdmissionDeadline, nowM
 
 export class CashierAdmissionKeeper {
   private armed: Armed | null = null;
+  /**
+   * RT-215 — a latched session WITHOUT an online admission (a manager, or a
+   * cashier whose admission is not armed): only its safe-point wait.
+   */
+  private latchOnly: Tracked | null = null;
   private stopped = false;
 
   constructor(private readonly deps: CashierAdmissionKeeperDeps) {
@@ -244,6 +259,7 @@ export class CashierAdmissionKeeper {
   stop(): void {
     this.stopped = true;
     this.disarm();
+    this.releaseLatchOnly();
   }
 
   /**
@@ -252,12 +268,40 @@ export class CashierAdmissionKeeper {
    */
   recheckSafePoint(): void {
     const armed = this.armed;
-    if (armed === null || !armed.latched) return;
-    this.endAtSafePoint(armed);
+    if (armed !== null && armed.latched) this.endAtSafePoint(armed);
+    if (this.latchOnly !== null) this.endAtSafePoint(this.latchOnly);
+  }
+
+  /**
+   * RT-215 — the device was confirmed revoked: latch the CURRENT session at
+   * once (no new sale may start) and end it with `cause` at its first safe
+   * point (no open sale with lines, no live tender), with the same machinery
+   * as a lost admission. Works for any session, with or without an online
+   * cashier admission. A session already latched keeps its own cause. No-op
+   * without a session or after {@link stop}. Nothing is reversed or discarded.
+   */
+  latchCurrentSession(cause: AuthorityLatchCause): void {
+    if (this.stopped) return;
+    const current = this.deps.sessionManager.getCurrent();
+    if (current === null) return;
+    const armed = this.armed;
+    if (armed !== null && armed.session_id === current.id) {
+      if (!armed.latched) this.latch(armed, cause);
+      return;
+    }
+    if (this.latchOnly?.session_id === current.id) return;
+    this.releaseLatchOnly();
+    const tracked: Tracked = { session_id: current.id, timer: null };
+    this.latchOnly = tracked;
+    this.deps.sessionManager.latchAuthority(current.id, cause);
+    this.endAtSafePoint(tracked);
   }
 
   private onSessionStarted(record: OperatorSessionRecord): void {
     if (this.stopped) return;
+    if (this.latchOnly !== null && this.latchOnly.session_id !== record.id) {
+      this.releaseLatchOnly();
+    }
     const previous = this.armed;
     if (previous !== null && previous.session_id !== record.id) {
       // A new session replaced the old one without an end: release the old
@@ -286,6 +330,7 @@ export class CashierAdmissionKeeper {
 
   private onSessionEnded(record: OperatorSessionRecord): void {
     if (this.stopped) return;
+    if (this.latchOnly?.session_id === record.id) this.releaseLatchOnly();
     const armed = this.armed;
     if (armed !== null && armed.session_id === record.id) {
       this.disarm();
@@ -297,10 +342,10 @@ export class CashierAdmissionKeeper {
     }
   }
 
-  private schedule(armed: Armed, ms: number, run: () => void): void {
-    if (armed.timer !== null) clearTimeout(armed.timer);
-    armed.timer = setTimeout(() => {
-      armed.timer = null;
+  private schedule(target: Tracked, ms: number, run: () => void): void {
+    if (target.timer !== null) clearTimeout(target.timer);
+    target.timer = setTimeout(() => {
+      target.timer = null;
       run();
     }, ms);
   }
@@ -321,12 +366,17 @@ export class CashierAdmissionKeeper {
     this.armed = null;
   }
 
-  /** True while `armed` is still the live, current session and the keeper runs. */
-  private stillCurrent(armed: Armed): boolean {
+  private releaseLatchOnly(): void {
+    if (this.latchOnly?.timer != null) clearTimeout(this.latchOnly.timer);
+    this.latchOnly = null;
+  }
+
+  /** True while `target` is still the tracked, current session and the keeper runs. */
+  private stillCurrent(target: Tracked): boolean {
     return (
       !this.stopped &&
-      this.armed === armed &&
-      this.deps.sessionManager.getCurrent()?.id === armed.session_id
+      (this.armed === target || this.latchOnly === target) &&
+      this.deps.sessionManager.getCurrent()?.id === target.session_id
     );
   }
 
@@ -370,7 +420,6 @@ export class CashierAdmissionKeeper {
   }
 
   private handleOutcome(armed: Armed, result: CashierAdmissionResult): void {
-    if (result.kind !== 'device_unauthorized') armed.device401s = 0;
     switch (result.kind) {
       case 'admitted':
         this.onAdmitted(armed, result);
@@ -383,7 +432,7 @@ export class CashierAdmissionKeeper {
         this.latch(armed, 'account_disabled_mid_session');
         return;
       case 'device_unauthorized':
-        this.onDeviceUnauthorized(armed, result);
+        this.onDeviceUnauthorized(armed);
         return;
       default:
         this.onNotAnswered(armed, result);
@@ -415,19 +464,16 @@ export class CashierAdmissionKeeper {
   }
 
   /**
-   * Review F3: act only on the second consecutive 401, confirmed 30 s later,
-   * or sooner: never later than TTL/2 (Codex P2 4179701427) nor than half the
-   * time left before the deadline (4179771036), or the admission lapses while
-   * this till still treats the cashier as admitted.
+   * RT-215: the keeper does not count device 401s — the shared detector saw
+   * this one (the client's fetch is observed) and decides whether the device
+   * is revoked; when it is, it latches this session through
+   * {@link latchCurrentSession}. Here the heartbeat only retries soon (review
+   * F3): never later than TTL/2 (Codex P2 4179701427) nor than half the time
+   * left before the deadline (4179771036), so a transient 401 still renews the
+   * admission before it lapses.
    */
-  private onDeviceUnauthorized(armed: Armed, result: CashierAdmissionResult): void {
-    armed.device401s += 1;
-    if (armed.device401s < 2) {
-      this.scheduleNext(armed, deviceConfirmCapMs(armed));
-      return;
-    }
-    notifyGrantSeam(this.deps.admission, result, armed);
-    this.latch(armed, 'terminal_session_terminated');
+  private onDeviceUnauthorized(armed: Armed): void {
+    this.scheduleNext(armed, deviceConfirmCapMs(armed));
   }
 
   /**
@@ -451,15 +497,15 @@ export class CashierAdmissionKeeper {
     this.endAtSafePoint(armed);
   }
 
-  private endAtSafePoint(armed: Armed): void {
-    if (!this.stillCurrent(armed)) return;
+  private endAtSafePoint(target: Tracked): void {
+    if (!this.stillCurrent(target)) return;
     if (this.atSafePoint()) {
       const cause = this.deps.sessionManager.getCurrent()?.authority_latch;
       this.deps.sessionManager.end(cause ?? 'superseded_by_takeover');
       return;
     }
-    this.schedule(armed, this.deps.safePointRecheckMs ?? SAFE_POINT_RECHECK_MS, () => {
-      this.endAtSafePoint(armed);
+    this.schedule(target, this.deps.safePointRecheckMs ?? SAFE_POINT_RECHECK_MS, () => {
+      this.endAtSafePoint(target);
     });
   }
 

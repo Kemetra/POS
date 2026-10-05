@@ -180,61 +180,65 @@ describe('T037 — read-down driver', () => {
     db.close();
   });
 
-  it('transport failure: the writer is NOT called, a failed attempt is recorded, prior catalogue preserved', async () => {
-    const db = freshCatalogueDb();
-    const handle = handleFor(db);
-    const syncStateRepo = createCatalogueSyncStateRepo(handle);
-    const writer = createReadDownWriter({ db: handle, syncStateRepo });
+  // RT-215: a 401 (`device_unauthorized`) is preserved exactly like any other failed fetch.
+  it.each(['no_connection', 'failed', 'device_unauthorized'] as const)(
+    'transport failure (%s): the writer is NOT called, a failed attempt is recorded, prior catalogue preserved',
+    async (failureKind) => {
+      const db = freshCatalogueDb();
+      const handle = handleFor(db);
+      const syncStateRepo = createCatalogueSyncStateRepo(handle);
+      const writer = createReadDownWriter({ db: handle, syncStateRepo });
 
-    // Seed a working catalogue with a successful first tick.
-    {
-      const { client } = fakeClient([
-        { kind: 'ok', sourceSnapshotId: 'snap-1', rows: [good('p-1')] },
-      ]);
-      const seedDriver = createReadDownDriver({
-        client,
+      // Seed a working catalogue with a successful first tick.
+      {
+        const { client } = fakeClient([
+          { kind: 'ok', sourceSnapshotId: 'snap-1', rows: [good('p-1')] },
+        ]);
+        const seedDriver = createReadDownDriver({
+          client,
+          writer,
+          tenantId: TENANT,
+          branchId: BRANCH,
+          now: () => '2026-06-07T09:00:00.000Z',
+          tickIntervalMs: 60_000,
+        });
+        const a = seedDriver.runTickOnce();
+        await nn(a.kind === 'started' ? a.completed : null);
+      }
+      expect(countRows(handle, 'products')).toBe(1);
+
+      // Now a transport failure. The writer must NOT run; the prior catalogue stays.
+      const { client: failing, calls } = fakeClient([{ kind: failureKind }]);
+      const driver = createReadDownDriver({
+        client: failing,
         writer,
         tenantId: TENANT,
         branchId: BRANCH,
-        now: () => '2026-06-07T09:00:00.000Z',
+        now: () => '2026-06-07T10:00:00.000Z',
         tickIntervalMs: 60_000,
       });
-      const a = seedDriver.runTickOnce();
-      await nn(a.kind === 'started' ? a.completed : null);
-    }
-    expect(countRows(handle, 'products')).toBe(1);
 
-    // Now a transport failure. The writer must NOT run; the prior catalogue stays.
-    const { client: failing, calls } = fakeClient([{ kind: 'no_connection' }]);
-    const driver = createReadDownDriver({
-      client: failing,
-      writer,
-      tenantId: TENANT,
-      branchId: BRANCH,
-      now: () => '2026-06-07T10:00:00.000Z',
-      tickIntervalMs: 60_000,
-    });
+      const admission = driver.runTickOnce();
+      expect(admission.kind).toBe('started');
+      const outcome = await nn(admission.kind === 'started' ? admission.completed : null);
 
-    const admission = driver.runTickOnce();
-    expect(admission.kind).toBe('started');
-    const outcome = await nn(admission.kind === 'started' ? admission.completed : null);
+      expect(outcome.outcome).toBe('failed');
+      expect(outcome.failureCategory).toBe('transport');
+      expect(calls()).toBe(1);
 
-    expect(outcome.outcome).toBe('failed');
-    expect(outcome.failureCategory).toBe('transport');
-    expect(calls()).toBe(1);
+      // Prior catalogue intact + still resolvable.
+      const repo = createProductRepo(handle);
+      expect(repo.lookupBySku(TENANT, 'SKU-p-1').kind).toBe('one');
+      expect(countRows(handle, 'products')).toBe(1);
 
-    // Prior catalogue intact + still resolvable.
-    const repo = createProductRepo(handle);
-    expect(repo.lookupBySku(TENANT, 'SKU-p-1').kind).toBe('one');
-    expect(countRows(handle, 'products')).toBe(1);
-
-    // Freshness clock NOT advanced; failure recorded for diagnostics.
-    const state = nn(syncStateRepo.read(TENANT));
-    expect(state.last_success_at).toBe('2026-06-07T09:00:00.000Z');
-    expect(state.last_outcome).toBe('failed');
-    expect(state.last_attempt_at).toBe('2026-06-07T10:00:00.000Z');
-    db.close();
-  });
+      // Freshness clock NOT advanced; failure recorded for diagnostics.
+      const state = nn(syncStateRepo.read(TENANT));
+      expect(state.last_success_at).toBe('2026-06-07T09:00:00.000Z');
+      expect(state.last_outcome).toBe('failed');
+      expect(state.last_attempt_at).toBe('2026-06-07T10:00:00.000Z');
+      db.close();
+    },
+  );
 });
 
 describe('T038 — driver lifecycle (start/stop)', () => {

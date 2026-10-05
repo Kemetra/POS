@@ -169,3 +169,28 @@ export const FEAT_349_REPIN_EXEMPT_PREFIXES = [
   'src/shared/api-types.ts',
   'scripts/openapi-snapshot.json',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `claude/rt-215-*` implements Jira RT-215 (RT-138 P-1): the durable
+ * device-revoked state and the pairing-recovery flow. A confirmed device 401
+ * must be recorded on the pairing row (`terminal_assignment.device_revoked_at`,
+ * migration 0042), reported by `PairingStore.getStatus()` as
+ * `invalid / device_revoked`, cleared by a re-pair, and must stop the device
+ * token from being read for sending. The pairing module is the single owner of
+ * that state, so the change necessarily touches `src/main/pairing/` (store +
+ * the device-401 detector + the sendable-token reader, and their tests).
+ *
+ * Authority: owner approval, Jira RT-215 comment 10875 (2026-10-05), decision
+ * (4) — "a narrow, owner-approved exemption in `source-scope-guard.const.ts`
+ * for the `claude/rt-215-` branch prefix, covering `src/main/pairing/` only".
+ *
+ * Exemption is narrow: ONLY `src/main/pairing/`, ONLY on `claude/rt-215-*`.
+ * All other forbidden prefixes (`src/main/secrets/`, `src/shared/api-types.ts`,
+ * `scripts/codegen-api.ts`, `scripts/openapi-snapshot.json`,
+ * `.github/workflows/`) remain blocked on these branches. Narrowness is
+ * asserted by `source-scope-guard-rt215.test.ts`.
+ */
+export const RT_215_DEVICE_REVOKED_BRANCH_PREFIX = 'claude/rt-215-' as const;
+export const RT_215_DEVICE_REVOKED_EXEMPT_PREFIXES = [
+  'src/main/pairing/',
+] as const satisfies readonly ForbiddenPathPrefix[];

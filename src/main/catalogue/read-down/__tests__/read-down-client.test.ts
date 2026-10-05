@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createReadDownClient } from '../read-down-client.js';
 import type { SellableCatalogRow } from '../map-sellable-row.js';
@@ -168,7 +168,22 @@ describe('createReadDownClient — outcome mapping', () => {
     expect(result.kind).toBe('no_connection');
   });
 
-  it('maps a non-2xx response to failed', async () => {
+  it.each([403, 404, 500, 503])(
+    'maps a non-2xx, non-401 response (%s) to failed',
+    async (status) => {
+      const { fetchImpl } = captureFetch(new Response('nope', { status }));
+      const client = createReadDownClient({
+        baseUrl: BASE,
+        fetch: fetchImpl,
+        getDeviceToken: () => Promise.resolve(TOKEN),
+      });
+
+      const result = await client.fetchSnapshot();
+      expect(result.kind).toBe('failed');
+    },
+  );
+
+  it('RT-215 decision 2: maps a 401 to device_unauthorized (distinct from failed)', async () => {
     const { fetchImpl } = captureFetch(new Response('nope', { status: 401 }));
     const client = createReadDownClient({
       baseUrl: BASE,
@@ -177,7 +192,28 @@ describe('createReadDownClient — outcome mapping', () => {
     });
 
     const result = await client.fetchSnapshot();
-    expect(result.kind).toBe('failed');
+    expect(result.kind).toBe('device_unauthorized');
+  });
+
+  it('RT-215: a 401 on a later page is device_unauthorized too (no partial snapshot)', async () => {
+    let call = 0;
+    const fetchImpl = vi.fn(() => {
+      call += 1;
+      return Promise.resolve(
+        call === 1
+          ? okResponse({ items: [ROW], cursor: 's1', next_page_token: 'p2' })
+          : new Response('nope', { status: 401 }),
+      );
+    });
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+    });
+
+    const result = await client.fetchSnapshot();
+    expect(result.kind).toBe('device_unauthorized');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it('maps a malformed (non-array items) body to failed', async () => {

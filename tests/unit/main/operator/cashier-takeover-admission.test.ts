@@ -166,7 +166,7 @@ describe('cashier takeover via takeover:true', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it('403 invalidates the grant; 401 runs the device-revoked handling', async () => {
+  it('403 invalidates the grant; a single 401 invalidates every grant and revokes nothing here (RT-215)', async () => {
     const refused = build({ kind: 'refused' });
     const p1 = cashierProto();
     refused.store.set(p1);
@@ -177,8 +177,8 @@ describe('cashier takeover via takeover:true', () => {
     const p2 = cashierProto();
     revoked.store.set(p2);
     await revoked.handler.confirmTakeover({ pending_takeover_id: p2.pending_takeover_id });
-    expect(revoked.fake.deviceRevoked).toHaveBeenCalledOnce();
     expect(revoked.fake.invalidated).toEqual([{ reason: 'device_unauthorized' }]);
+    expect(revoked.sessions.getLastEndCause()).not.toBe('terminal_session_terminated');
   });
 
   it('a cashier proto without a user_id is refused without any admission call', async () => {

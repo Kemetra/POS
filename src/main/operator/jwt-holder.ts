@@ -19,6 +19,8 @@ export interface JwtHolder {
   set(backendSessionId: string, jwt: string): void;
   get(backendSessionId: string): string | null;
   clear(backendSessionId: string): void;
+  /** RT-215 — drop every held credential (a confirmed device revocation). */
+  clearAll(): void;
 }
 
 export function createJwtHolder(): JwtHolder {
@@ -42,6 +44,9 @@ export function createJwtHolder(): JwtHolder {
     },
     clear(backendSessionId) {
       tokens.delete(backendSessionId);
+    },
+    clearAll() {
+      tokens.clear();
     },
   };
 }

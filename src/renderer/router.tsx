@@ -8,7 +8,7 @@ import {
   type RouteObject,
 } from 'react-router-dom';
 
-import { PairingScreen } from './routes/pairing/PairingScreen';
+import { PairingRecoveryListener, PairingRoute } from './routes/pairing/PairingRecoveryListener';
 import { PairedScreen } from './routes/paired/PairedScreen';
 import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
@@ -129,11 +129,12 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // which self-fetches and shows the fresh assignment. PairedScreen
   // redirects back to /pairing on its own if the status it reads is
   // not 'paired' — so a stale boot state cannot strand the operator.
+  // RT-215: a reason pushed at runtime (device revoked) wins over the boot one.
   const pairingScreenElement =
     boot.invalidReason !== undefined ? (
-      <PairingScreen pairing={props.pairing} invalidReason={boot.invalidReason} />
+      <PairingRoute pairing={props.pairing} bootReason={boot.invalidReason} />
     ) : (
-      <PairingScreen pairing={props.pairing} />
+      <PairingRoute pairing={props.pairing} />
     );
   // T035 — /app/* parent route wired per contracts/shell-routes.ts.
   // Existing /pairing and /paired routes are unchanged.
@@ -170,7 +171,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       <Outlet />
     );
 
-  const routes: RouteObject[] = [
+  const appRoutes: RouteObject[] = [
     { path: '/', element: <Navigate to={boot.startPath} replace /> },
     { path: '/pairing', element: pairingScreenElement },
     { path: '/paired', element: <PairedScreen pairing={props.pairing} /> },
@@ -268,6 +269,11 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
         },
       ],
     },
+  ];
+  // RT-215 — one pathless layout over every route: it listens for the
+  // `pairing:status-changed` push and moves a revoked terminal to /pairing.
+  const routes: RouteObject[] = [
+    { element: <PairingRecoveryListener pairing={props.pairing} />, children: appRoutes },
   ];
 
   // Tests use a memory router so window.location.pathname remains
