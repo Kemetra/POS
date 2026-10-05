@@ -382,7 +382,12 @@ describe('heartbeat outcomes', () => {
     expect(h.fake.admitCalls).toHaveLength(2);
     expect(h.sessions.getCurrent()?.id).toBe(record.id);
     expect(h.sessions.getCurrent()?.authority_latch).toBe('terminal_session_terminated');
-    expect(h.fake.invalidated).toEqual([{ reason: 'device_unauthorized' }]);
+    // Codex P1 4183383053: EVERY device 401 invalidates (the confirming one too);
+    // only the session waits for the second.
+    expect(h.fake.invalidated).toEqual([
+      { reason: 'device_unauthorized' },
+      { reason: 'device_unauthorized' },
+    ]);
     expect(h.fake.deviceRevoked).not.toHaveBeenCalled(); // no immediate cascade
     expect(h.ends).toEqual([]);
     h.safe.value = true;

@@ -394,6 +394,20 @@ describe('RT-113 P1.2 — the offline grant over the real cashier paths', () => 
     w.keeper.stop();
   });
 
+  it('Codex P1 4183383053: a grant written between the first and the confirming heartbeat 401 is invalidated by the second', async () => {
+    const w = wire();
+    await signIn(w);
+    w.answers.push(() => errorJson(401));
+    await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
+    expect(w.sessions.getCurrent()?.authority_latch).toBeUndefined();
+    seedOtherCashier(w); // an online admission lands between the two 401s
+    expect(admissibleNow(w, OTHER_USER_ID)).toBe(true);
+    w.answers.push(() => errorJson(401));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(admissibleNow(w, OTHER_USER_ID)).toBe(false);
+    w.keeper.stop();
+  });
+
   it('a sign-in device 401 invalidates all grants', async () => {
     const w = wire();
     seedOtherCashier(w);

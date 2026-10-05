@@ -407,24 +407,59 @@ describe('upsertFromAdmitted — malformed input and failed writes fail closed',
     expect(grantCount()).toBe(0);
   });
 
-  it('a failed seal on refresh removes the old grant and throws storage (fail closed)', () => {
+  // Codex P2 4183383061 (P1.2): a failed refresh that removes a standing grant
+  // now REPORTS it (refresh_failed + attribution) instead of throwing, so its
+  // invalidation can be audited. P1.1 threw storage here and the deleted
+  // grant's attribution was lost. It still throws when even the delete fails.
+  it('a failed seal on refresh removes the old grant and reports it for attribution (fail closed)', () => {
     store.upsertFromAdmitted(scope(), admitted());
     const broken = failingSealStore();
-    let err: unknown;
-    try {
-      broken.upsertFromAdmitted(scope(), admitted({ admission_id: 'adm-2' }));
-    } catch (e) {
-      err = e;
-    }
-    expect((err as OfflineGrantStoreError).category).toBe('storage');
+    expect(broken.upsertFromAdmitted(scope(), admitted({ admission_id: 'adm-2' }))).toEqual({
+      kind: 'refresh_failed',
+      invalidated: [{ user_id: USER, operator_id: OPERATOR }],
+    });
     expect(categoryOf(store.evaluate(scope(), USER, T0))).toBe('grant_missing');
   });
 
-  it('refuses to write when encryption is unavailable, and removes the old grant', () => {
+  it('refuses to write when encryption is unavailable, and removes and reports the old grant', () => {
     store.upsertFromAdmitted(scope(), admitted());
     const off = makeStore({ safeStorage: { ...ss, isEncryptionAvailable: () => false } });
-    expect(() => off.upsertFromAdmitted(scope(), admitted())).toThrow(OfflineGrantStoreError);
+    expect(off.upsertFromAdmitted(scope(), admitted())).toEqual({
+      kind: 'refresh_failed',
+      invalidated: [{ user_id: USER, operator_id: OPERATOR }],
+    });
     expect(categoryOf(store.evaluate(scope(), USER, T0))).toBe('grant_missing');
+  });
+
+  it('a failed refresh reports nothing for a grant already invalidated (audited once)', () => {
+    store.upsertFromAdmitted(scope(), admitted());
+    store.invalidate(scope(), USER, 'forbidden');
+    expect(failingSealStore().upsertFromAdmitted(scope(), admitted())).toEqual({
+      kind: 'refresh_failed',
+      invalidated: [],
+    });
+    expect(grantCount()).toBe(0);
+  });
+
+  it('a failed refresh with no old grant reports nothing', () => {
+    expect(failingSealStore().upsertFromAdmitted(scope(), admitted())).toEqual({
+      kind: 'refresh_failed',
+      invalidated: [],
+    });
+  });
+
+  it('still throws storage when even the delete fails', () => {
+    store.upsertFromAdmitted(scope(), admitted());
+    const handle: DatabaseHandle = {
+      ...g.handle,
+      prepare(sql: string): unknown {
+        if (/^\s*(INSERT|DELETE)/i.test(sql)) throw new Error('disk I/O error');
+        return g.handle.prepare(sql);
+      },
+    };
+    expect(() => makeStore({ handle }).upsertFromAdmitted(scope(), admitted())).toThrow(
+      OfflineGrantStoreError,
+    );
   });
 });
 

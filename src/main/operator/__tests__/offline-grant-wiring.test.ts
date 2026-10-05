@@ -744,6 +744,49 @@ describe('a failed audit insert is retried, never lost (Codex P2 4183175501)', (
   });
 });
 
+describe('a failed refresh that deletes a standing grant is audited (Codex P2 4183383061)', () => {
+  it('exactly one refresh_failed event, attributed to the old grant operator; no tombstone needed', () => {
+    admit();
+    const sealFails = createOfflineGrantStore({
+      db: g.handle,
+      safeStorage: {
+        ...ss,
+        encryptString: () => {
+          throw new Error('DPAPI unavailable');
+        },
+      },
+      now: () => clock,
+      logger,
+    });
+    const w = makeWiring({ store: sealFails });
+    w.setScope(scope());
+    w.seam.onCashierAdmitted(current(w, { admission_id: 'adm-new' }));
+    expect(audits.map(auditOf)).toEqual([{ reason: 'refresh_failed', operator: OPERATOR }]);
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_missing'));
+    w.stop();
+  });
+});
+
+describe('every device 401 invalidates, not only the first (Codex P1 4183383053)', () => {
+  it('a grant written between two 401s is invalidated by the second; a late admitted sent before it is dropped', () => {
+    admit();
+    invalidate({ reason: 'device_unauthorized' });
+    admit({ user_id: USER_2, operator_id: OPERATOR_2 }); // an online sign-in between the 401s
+    expect(wiring.evaluate(USER_2, T0).admissible).toBe(true);
+    const inFlight = {
+      pairing_generation: wiring.seam.pairingGeneration?.(),
+      invalidation_seq: wiring.seam.invalidationSeq?.(),
+    };
+    invalidate({ reason: 'device_unauthorized' }); // the confirming 401
+    expect(wiring.evaluate(USER_2, T0)).toEqual(refusal('grant_invalidated'));
+    wiring.seam.onCashierAdmitted(
+      admitted({ user_id: USER_2, operator_id: OPERATOR_2, ...inFlight }),
+    );
+    expect(wiring.evaluate(USER_2, T0)).toEqual(refusal('grant_invalidated'));
+  });
+});
+
 describe('scopeFromPairingStatus', () => {
   it('takes the scope and epoch from a paired status, null otherwise', () => {
     expect(
