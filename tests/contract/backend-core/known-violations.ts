@@ -30,21 +30,11 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     kind: 'credential-mismatch',
     sent: 'none',
     requires: ['operator-jwt'],
-    tickets: ['RT-214', 'RT-182'],
+    tickets: ['RT-214'],
     note:
       'GET /operators/roster requires operator-identity (+ RT-150 manager role); the client sends ' +
-      'no Authorization. Callers: manager PIN provisioning (RT-214) and the cashier picker ' +
-      '(RT-182, moving to the device-auth cashier-admissions roster in RT-113 P2 / POS #535).',
-  },
-  {
-    call: 'backendClient.getActiveSession',
-    kind: 'credential-mismatch',
-    sent: 'none',
-    requires: ['operator-jwt'],
-    tickets: ['RT-182'],
-    note:
-      'GET /operators/active-session requires operator-identity; the cashier PIN path sends no ' +
-      'Authorization. RT-113 P2 (POS #535) replaces it with the device-auth cashier admission.',
+      'no Authorization. Since RT-113 P2 (POS #535) the cashier picker uses the device-auth ' +
+      'cashier-admissions roster; the only caller left is manager PIN provisioning (RT-214).',
   },
   {
     call: 'validateVoucher',

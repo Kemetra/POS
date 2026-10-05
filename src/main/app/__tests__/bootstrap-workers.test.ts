@@ -200,3 +200,19 @@ describe('RT-15 S2 — worker registry: the returns resolver', () => {
     expect(registry.hasRegistered()).toBe(false);
   });
 });
+
+describe('RT-113 P2 — worker registry: the cashier admission heartbeat', () => {
+  it('stops the cashier admission heartbeat last, still before the DB closes', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('cashier admission heartbeat', () =>
+      order.push('cashier admission heartbeat'),
+    );
+    registry.register('returns resolver', () => order.push('returns resolver'));
+
+    registry.stopAll();
+
+    expect(order).toEqual(['returns resolver', 'cashier admission heartbeat']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});

@@ -394,6 +394,13 @@ export interface BranchRosterCashier {
 
 export interface ListBranchRosterSuccess {
   kind: 'roster';
+  /**
+   * RT-113 (10763 §3) — where the roster came from: `online` = the
+   * device-authenticated Backend-Core roster (P2); `offline` = the cashiers
+   * with a valid offline grant on this terminal (P1/P3). Main always sets it;
+   * optional only so existing renderer fixtures stay valid.
+   */
+  source?: 'online' | 'offline';
   cashiers: BranchRosterCashier[];
 }
 

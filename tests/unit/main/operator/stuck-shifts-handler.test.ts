@@ -61,7 +61,6 @@ function fakeBackend(
     signOut: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
     listRoster: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
     confirmTakeover: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
-    getActiveSession: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
     getStuckShifts: vi.fn((branchId: string, jwt: string) => {
       calls.push({ branchId, jwt });
       return Promise.resolve(result);

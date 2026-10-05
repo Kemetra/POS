@@ -45,8 +45,12 @@ const STOP_ORDER = [
   'read-down driver',
   'sale-sync interval',
   // RT-15 S2 — the return resolver (startup + interval re-send of unresolved
-  // returns). Stopped last, still before the DB handle closes.
+  // returns). Stopped after the sale-sync interval, before the DB handle closes.
   'returns resolver',
+  // RT-113 P2 — the cashier admission heartbeat. Its stop is the shutdown latch:
+  // no heartbeat, `end` or session change runs afterwards. It writes nothing
+  // to the DB today; stopped last, still before the DB handle closes.
+  'cashier admission heartbeat',
 ] as const;
 
 export type WorkerName = (typeof STOP_ORDER)[number];

@@ -173,6 +173,7 @@ export interface CartBridgeHandlersDeps {
   resolveItemRef?: ItemRefResolver;
   /** Optional clock for testability. Defaults to `() => new Date()`. */
   clock?: () => Date;
+
   /**
    * Optional audit emitter. Required for post-handoff cancel audit emission.
    * When omitted, pre-handoff void still works (no audit for cashier_voided).
@@ -432,6 +433,11 @@ export class CartBridgeHandlers {
 
     const session = gate.session;
 
+    // RT-113 P2 — a session that lost its authority may finish or void the
+    // current sale but must not start a new one. (The safe-point re-check
+    // after this call runs at the IPC choke point, `sale-boundary-guard.ts`.)
+    if (session.authority_latch !== undefined) return refuse('authority_conflict');
+
     // #380 (F-007) — resolve the REAL terminal_id before doing any work. An
     // unpaired terminal cannot stamp a cart row (carts.terminal_id is NOT
     // NULL); refuse `no_session` consistently with the payments/sales adapters
@@ -519,6 +525,17 @@ export class CartBridgeHandlers {
     if (resolved.kind !== 'ok') {
       // The bridge contract has no per-resolver reason; collapse to generic.
       return refuse('wrong_owner');
+    }
+
+    // RT-113 P2 — while the session is latched, an EMPTY cart is a safe point,
+    // not the start of a new sale: refuse. The current non-empty sale may grow.
+    // Checked AFTER the lookup await (the heartbeat may latch the session
+    // during it) and before the synchronous write below.
+    if (
+      gated.session.authority_latch !== undefined &&
+      store.getActiveLines(req.cart_id).length === 0
+    ) {
+      return refuse('authority_conflict');
     }
 
     // Q4 merge path — application-layer uniqueness on (cart_id, item_ref) among active lines.

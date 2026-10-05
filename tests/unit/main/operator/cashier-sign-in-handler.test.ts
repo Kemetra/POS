@@ -8,10 +8,12 @@ import {
 } from '../../../../src/main/operator/sign-in-handler.js';
 import type { SafeStorageLike } from '../../../../src/main/secrets/safe-storage.js';
 import type { PairingStore } from '../../../../src/main/pairing/store.js';
-import type {
-  CheckActiveSessionHandler,
-  CheckActiveSessionResult,
-} from '../../../../src/main/operator/check-active-session.js';
+import type { CashierAdmissionResult } from '../../../../src/main/operator/cashier-admission-client.js';
+import {
+  ADMITTED,
+  FAKE_USER_ID,
+  fakeCashierAdmission,
+} from '../../../../src/main/operator/__tests__/__helpers__/fake-cashier-admission.js';
 import { SessionManager } from '../../../../src/main/operator/session-manager.js';
 import type { DatabaseHandle } from '../../../../src/main/db/client.js';
 import { ProtoSessionStore } from '../../../../src/main/operator/takeover-handler.js';
@@ -26,10 +28,12 @@ import { ProtoSessionStore } from '../../../../src/main/operator/takeover-handle
  *  - Wrong PIN → refused (invalid_input), DB updated with incremented count.
  *  - 5th wrong PIN triggers lockout → DB updated with lockout_until.
  *  - Expired lockout + correct PIN → proceeds to sign_in.
- *  - Correct PIN + no active session → signed_in, failure counter reset.
- *  - Correct PIN + active session → takeover_required.
- *  - checkActiveSession refused (no_connection) → refused (no_connection).
- *  - checkActiveSession refused (invalid_input) → refused (invalid_input).
+ *  - Correct PIN + admitted → signed_in, failure counter reset.
+ *  - Correct PIN + active_elsewhere → takeover_required.
+ *  - Admission no_connection → refused (no_connection).
+ *  - Admission 403 refused → refused (invalid_input).
+ *  (RT-113 P2: the full admission outcome table is in
+ *  cashier-sign-in-admission.test.ts.)
  *  - PR-1: response for wrong PIN contains no PIN value.
  *
  * One Argon2id hash is computed in beforeAll and shared across tests.
@@ -70,6 +74,7 @@ interface TestDbRow {
   branch_id: string;
   terminal_id: string;
   cashier_clerk_user_id: string;
+  user_id: string;
   pin_hash: Buffer;
   pin_salt: Buffer;
   failed_attempt_count: number;
@@ -86,6 +91,7 @@ beforeAll(async () => {
     branch_id: BRANCH,
     terminal_id: TERMINAL,
     cashier_clerk_user_id: CASHIER_ID,
+    user_id: FAKE_USER_ID,
     pin_hash: sealed.pin_hash,
     pin_salt: sealed.pin_salt,
     failed_attempt_count: 0,
@@ -141,10 +147,10 @@ function makeUnpairedStore(): PairingStore {
   };
 }
 
-function makeCheckActive(result: CheckActiveSessionResult): CheckActiveSessionHandler {
-  return {
-    checkActiveSession: vi.fn().mockResolvedValue(result),
-  } as unknown as CheckActiveSessionHandler;
+function makeAdmission(
+  result: CashierAdmissionResult = ADMITTED,
+): ReturnType<typeof fakeCashierAdmission>['deps'] {
+  return fakeCashierAdmission(result).deps;
 }
 
 function makeRequest(overrides: Partial<CashierSignInRequest> = {}): CashierSignInRequest {
@@ -161,7 +167,7 @@ function makeHandler(
   overrides: Partial<{
     db: DatabaseHandle;
     pairingStore: PairingStore;
-    checkActiveSession: CheckActiveSessionHandler;
+    admission: ReturnType<typeof makeAdmission>;
     sessionManager: SessionManager;
     protoStore: ProtoSessionStore;
   }> = {},
@@ -170,7 +176,7 @@ function makeHandler(
     db: overrides.db ?? makeDb(baseRow),
     safeStorage: ss,
     sessionManager: overrides.sessionManager ?? new SessionManager(),
-    checkActiveSession: overrides.checkActiveSession ?? makeCheckActive({ kind: 'none' }),
+    admission: overrides.admission ?? makeAdmission(),
     pairingStore: overrides.pairingStore ?? makePairedStore(),
     protoStore: overrides.protoStore ?? new ProtoSessionStore(),
   });
@@ -274,7 +280,7 @@ describe('CashierSignInHandler — correct PIN, no active session', () => {
         capturedFailed = f;
         capturedLockout = l;
       }),
-      checkActiveSession: makeCheckActive({ kind: 'none' }),
+      admission: makeAdmission(),
     });
     const result = await handler.signIn(makeRequest());
     expect(result.kind).toBe('signed_in');
@@ -288,36 +294,20 @@ describe('CashierSignInHandler — correct PIN, no active session', () => {
     expect(capturedLockout).toBeNull();
   });
 
-  it('session display_name matches the request field', async () => {
+  it('session display_name is the server-resolved name from the admission (RT-113 P2)', async () => {
     const handler = makeHandler();
     const result = await handler.signIn(makeRequest({ display_name: 'Jane Smith' }));
     expect(result.kind).toBe('signed_in');
     if (result.kind !== 'signed_in') return;
-    expect(result.session.display_name).toBe('Jane Smith');
-  });
-
-  it('passes the paired branch_id into active-session lookup', async () => {
-    const checkActiveSession = {
-      checkActiveSession: vi.fn().mockResolvedValue({ kind: 'none' }),
-    } as unknown as CheckActiveSessionHandler;
-    const handler = makeHandler({ checkActiveSession });
-
-    const result = await handler.signIn(makeRequest());
-
-    expect(result.kind).toBe('signed_in');
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(vi.mocked(checkActiveSession.checkActiveSession)).toHaveBeenCalledWith(
-      CASHIER_ID,
-      BRANCH,
-    );
+    expect(result.session.display_name).toBe(ADMITTED.display_name);
   });
 });
 
-describe('CashierSignInHandler — correct PIN, active session exists', () => {
+describe('CashierSignInHandler — correct PIN, admission active elsewhere', () => {
   it('returns takeover_required with capability token without creating a new session', async () => {
     const sm = new SessionManager();
     const handler = makeHandler({
-      checkActiveSession: makeCheckActive({ kind: 'active' }),
+      admission: makeAdmission({ kind: 'active_elsewhere' }),
       sessionManager: sm,
     });
     const result = await handler.signIn(makeRequest());
@@ -331,18 +321,18 @@ describe('CashierSignInHandler — correct PIN, active session exists', () => {
   });
 });
 
-describe('CashierSignInHandler — active-session check refusals', () => {
-  it('propagates no_connection refusal from checkActiveSession', async () => {
+describe('CashierSignInHandler — admission refusals', () => {
+  it('maps an unreachable Backend-Core to no_connection', async () => {
     const handler = makeHandler({
-      checkActiveSession: makeCheckActive({ kind: 'refused', category: 'no_connection' }),
+      admission: makeAdmission({ kind: 'no_connection' }),
     });
     const result = await handler.signIn(makeRequest());
     expect(result).toEqual({ kind: 'refused', category: 'no_connection' });
   });
 
-  it('propagates invalid_input refusal from checkActiveSession', async () => {
+  it('maps the generic 403 refusal to invalid_input', async () => {
     const handler = makeHandler({
-      checkActiveSession: makeCheckActive({ kind: 'refused', category: 'invalid_input' }),
+      admission: makeAdmission({ kind: 'refused' }),
     });
     const result = await handler.signIn(makeRequest());
     expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });

@@ -385,13 +385,14 @@ function registerRosterHandler(ipcMain: IpcMain, deps: OperatorHandlerDeps): voi
     OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
     async (): Promise<ListBranchRosterResponse> => {
       // Pre-sign-in roster: sourced from pairing state, not an operator session.
-      // The /sign-in route fetches the roster before any operator has signed in;
-      // the paired terminal_id provides the branch scope.
+      // The /sign-in route fetches the roster before any operator has signed in.
+      // RT-113 P2: the device-authenticated roster takes the store from the
+      // paired device itself, so only the paired check remains here.
       const pairingStatus = await pairingStore.getStatus();
       if (pairingStatus.kind !== 'paired') {
         return refuseInvalid();
       }
-      return rosterHandler.listRoster(pairingStatus.branch_id);
+      return rosterHandler.listRoster();
     },
   );
 }

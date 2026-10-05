@@ -11,8 +11,12 @@
  *   POST /api/pos/v1/operators/sign-out          (Wave 1 — Endpoint 3)
  *   GET  /api/pos/v1/operators/roster            (Wave 3 — Endpoint 1)
  *   POST /api/pos/v1/operators/takeover/confirm  (Wave 3 — Endpoint 4)
- *   GET  /api/pos/v1/operators/active-session    (Wave 3 — Endpoint 6)
  *   GET  /api/pos/v1/shifts/stuck                (Wave 4.1 — Endpoint 7)
+ *
+ * RT-113 P2 retired Endpoint 6 (`GET /operators/active-session`): it was the
+ * cashier path's only use and is Clerk + manager gated on Backend-Core
+ * (RT-182). The cashier path uses `cashier-admission-client.ts` instead; the
+ * roster below remains for the manager PIN-provisioning path only.
  *
  * The Clerk JWT travels in the `Authorization: Bearer …` header; the
  * device token travels in the platform's existing terminal-token
@@ -135,15 +139,6 @@ export type BackendTakeoverConfirmResponse =
   | { kind: 'refused' }
   | { kind: 'no_connection' };
 
-// ─── Wave 3 — Active session (Endpoint 6) ────────────────────────────────────
-
-/** Binary envelope — minimum-disclosure per FR-013. No extra fields. */
-export type BackendActiveSessionResponse =
-  | { kind: 'none' }
-  | { kind: 'active' }
-  | { kind: 'refused' }
-  | { kind: 'no_connection' };
-
 // ─── Wave 4.1 — Stuck shifts (Endpoint 7) ────────────────────────────────────
 
 /** One row in the stuck-shift list (per s5-stuck-shift-discovery-verification.md §3). */
@@ -176,15 +171,18 @@ export type BackendStuckShiftsResponse =
 export interface BackendClient {
   signIn(req: BackendSignInRequest, jwt: string): Promise<BackendSignInResponse>;
   signOut(req: BackendSignOutRequest, jwt: string): Promise<BackendSignOutResponse>;
-  /** GET /api/pos/v1/operators/roster — no JWT; device token authenticates. */
+  /**
+   * GET /api/pos/v1/operators/roster — sent with no credential. Backend-Core
+   * requires a Clerk JWT plus a manager-eligible role (RT-150), so this route
+   * 401s as called (RT-182). The cashier picker no longer uses it (RT-113 P2:
+   * `cashier-admission-client.ts`); only manager PIN provisioning still does.
+   */
   listRoster(branchId: string): Promise<BackendRosterResponse>;
   /** POST /api/pos/v1/operators/takeover/confirm */
   confirmTakeover(
     req: BackendTakeoverConfirmRequest,
     jwt: string,
   ): Promise<BackendTakeoverConfirmResponse>;
-  /** GET /api/pos/v1/operators/active-session — no JWT (cashier path); AD-2 invariant enforced. */
-  getActiveSession(operatorId: string, branchId: string): Promise<BackendActiveSessionResponse>;
   /** GET /api/pos/v1/shifts/stuck — manager/admin JWT required (AD-2; cashier MUST NOT call this). */
   getStuckShifts(branchId: string, jwt: string): Promise<BackendStuckShiftsResponse>;
 }
@@ -195,7 +193,6 @@ const SIGN_IN_PATH = '/api/pos/v1/operators/sign-in';
 const SIGN_OUT_PATH = '/api/pos/v1/operators/sign-out';
 const ROSTER_PATH = '/api/pos/v1/operators/roster';
 const TAKEOVER_CONFIRM_PATH = '/api/pos/v1/operators/takeover/confirm';
-const ACTIVE_SESSION_PATH = '/api/pos/v1/operators/active-session';
 const STUCK_SHIFTS_PATH = '/api/pos/v1/shifts/stuck';
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -304,14 +301,6 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
         `${root}${TAKEOVER_CONFIRM_PATH}`,
         jsonPost(jwt, req),
         interpretTakeoverConfirmResponse,
-      );
-    },
-
-    getActiveSession(operatorId: string, branchId: string): Promise<BackendActiveSessionResponse> {
-      return fetchAndInterpret(
-        `${root}${ACTIVE_SESSION_PATH}?operator_id=${encodeURIComponent(operatorId)}&branch_id=${encodeURIComponent(branchId)}`,
-        { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
-        interpretActiveSessionResponse,
       );
     },
 
@@ -436,14 +425,6 @@ function interpretTakeoverConfirmResponse(parsed: unknown): BackendTakeoverConfi
   // takeover_required is not a valid confirm outcome — treat as refused.
   if (res.kind === 'takeover_required') return { kind: 'refused' };
   return res;
-}
-
-function interpretActiveSessionResponse(parsed: unknown): BackendActiveSessionResponse {
-  if (typeof parsed !== 'object' || parsed === null) return { kind: 'refused' };
-  const v = parsed as Record<string, unknown>;
-  if (v['kind'] === 'none') return { kind: 'none' };
-  if (v['kind'] === 'active') return { kind: 'active' };
-  return { kind: 'refused' };
 }
 
 /**

@@ -5,6 +5,7 @@ import '@testing-library/jest-dom/vitest';
 import { useState, type JSX } from 'react';
 
 import { SessionLockGate } from '../SessionLockGate';
+import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import type {
   LockStateView,
   SessionStateEvent,
@@ -296,6 +297,62 @@ describe('RT-117 SessionLockGate', () => {
     await screen.findByRole('dialog');
     op.push({ state: 'ended' });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('RT-113 P2 — an ended push signs the renderer out (main ended the session itself)', async () => {
+    useOperatorSessionStore.getState().reset();
+    useOperatorSessionStore.getState().hydrateSignedIn({
+      id: 's-1',
+      operator_id: 'user_clerk_1',
+      display_name: 'Cashier One',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      started_at: '2026-10-04T10:00:00.000Z',
+    });
+    const op = fakeOperator(ACTIVE);
+    render(
+      <SessionLockGate operator={op.api}>
+        <Counter />
+      </SessionLockGate>,
+    );
+    await waitFor(() => {
+      expect(op.api.onSessionStateChanged).toHaveBeenCalled();
+    });
+    op.push({ state: 'active' });
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+    op.push({ state: 'ended' });
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    // Idempotent: a second ended push (or a later renderer sign-out) is a no-op.
+    op.push({ state: 'ended' });
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    useOperatorSessionStore.getState().reset();
+  });
+
+  it('Codex P2 4179701431 — an ended push during signingIn discards that attempt’s late signed_in', async () => {
+    useOperatorSessionStore.getState().reset();
+    const op = fakeOperator(ACTIVE);
+    render(
+      <SessionLockGate operator={op.api}>
+        <Counter />
+      </SessionLockGate>,
+    );
+    await waitFor(() => {
+      expect(op.api.onSessionStateChanged).toHaveBeenCalled();
+    });
+    useOperatorSessionStore.getState().beginSignIn();
+    op.push({ state: 'ended' });
+    useOperatorSessionStore.getState().resolveSignedIn({
+      id: 's-1',
+      operator_id: 'user_clerk_1',
+      display_name: 'Cashier One',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      started_at: '2026-10-04T10:00:00.000Z',
+    });
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    useOperatorSessionStore.getState().reset();
   });
 
   it('unsubscribes from the push on unmount', async () => {

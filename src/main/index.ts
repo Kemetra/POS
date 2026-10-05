@@ -4,9 +4,10 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
+import { createSaleBoundaryIpcMain } from './ipc/sale-boundary-guard.js';
 import { registerSessionLockHandlers } from './ipc/session-lock.js';
 import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
-import { createLockStateReader } from './operator/lock-state-reader.js';
+import { createLockStateReader, createSafePointProbe } from './operator/lock-state-reader.js';
 import { wireSessionStatePush } from './operator/session-state-push.js';
 import { wireSessionLockAudit } from './operator/session-lock-audit.js';
 import { createSaleSyncTokenReader } from './operator/sale-sync-token.js';
@@ -142,7 +143,12 @@ import { createBackendClient } from './operator/backend-client.js';
 import { SessionManager } from './operator/session-manager.js';
 import { CashierSignInHandler, SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
-import { CheckActiveSessionHandler } from './operator/check-active-session.js';
+import { createCashierAdmissionClient } from './operator/cashier-admission-client.js';
+import {
+  NOOP_OFFLINE_GRANT_SEAM,
+  type CashierAdmissionDeps,
+} from './operator/cashier-admission.js';
+import { CashierAdmissionKeeper } from './operator/cashier-admission-keeper.js';
 import { RosterHandler } from './operator/roster-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
 import { LifecycleCascade } from './operator/lifecycle-cascade.js';
@@ -572,9 +578,18 @@ singleInstanceReady
     // the operator session is LOCKED unless its channel is on the allowlist.
     // The session manager is built below; bind the probe to it there.
     const sessionLockProbe: { isLocked: () => boolean } = { isLocked: () => false };
-    const guardedIpcMain = createSessionLockGuardedIpcMain(
-      createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
-      () => sessionLockProbe.isLocked(),
+    // RT-113 P2 — after EVERY cart/payments/tender call, re-check whether a
+    // session that lost its authority has reached its safe point (one choke
+    // point; bound to the keeper once it is built below).
+    const saleBoundaryProbe: { recheck: () => void } = { recheck: () => undefined };
+    const guardedIpcMain = createSaleBoundaryIpcMain(
+      createSessionLockGuardedIpcMain(
+        createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
+        () => sessionLockProbe.isLocked(),
+      ),
+      () => {
+        saleBoundaryProbe.recheck();
+      },
     );
 
     // Register IPC handlers BEFORE the first window loads so the renderer's
@@ -655,14 +670,43 @@ singleInstanceReady
       deviceTokenAttestation,
       logger: mainLogger,
     });
-    const checkActiveSessionHandler = new CheckActiveSessionHandler({
-      backend: operatorBackend,
+    // T051b + T051d — lifecycle cascade for terminal-revocation (FR-014) and
+    // account-disabled-mid-session. RT-113 P2 wires one caller: a device 401 on
+    // a cashier sign-in or takeover (RT-138 L6 / 10763 D8; a no-op without a
+    // session). The heartbeat ends at the safe point instead (review F1). It is
+    // NOT exposed to the renderer bridge.
+    const operatorLifecycleCascade = new LifecycleCascade({
+      sessionManager: operatorSessionManager,
+      logger: mainLogger,
     });
+
+    // RT-113 P2 (10763 D2/D11, owner decision 10844; fixes RT-182) — the
+    // cashier path's server authority: the device-authenticated Backend-Core
+    // cashier-admissions resource. Device token as the bearer, read in-process
+    // per call; never logged, never bridged. No Clerk-gated call remains on
+    // the cashier path.
+    const cashierAdmissionClient = createCashierAdmissionClient({
+      baseUrl: apiBaseUrl,
+      fetch: globalThis.fetch.bind(globalThis),
+      getDeviceToken: async () => {
+        const status = await pairingStore.getStatus();
+        if (status.kind !== 'paired') return null;
+        return (await secretStore.get(DEVICE_TOKEN_KEY)) ?? null;
+      },
+    });
+    const cashierAdmission: CashierAdmissionDeps = {
+      client: cashierAdmissionClient,
+      // P1 SEAM — RT113-P1 replaces this with the sealed offline grant store.
+      grantSeam: NOOP_OFFLINE_GRANT_SEAM,
+      onDeviceRevoked: () => {
+        operatorLifecycleCascade.notifyTerminalRevoked();
+      },
+    };
     const operatorCashierSignInHandler = new CashierSignInHandler({
       db: db,
       safeStorage,
       sessionManager: operatorSessionManager,
-      checkActiveSession: checkActiveSessionHandler,
+      admission: cashierAdmission,
       pairingStore,
       protoStore: operatorProtoStore,
       secretStore,
@@ -683,7 +727,7 @@ singleInstanceReady
       logger: mainLogger,
     });
     const operatorRosterHandler = new RosterHandler({
-      backend: operatorBackend,
+      cashierAdmissions: cashierAdmissionClient,
       logger: mainLogger,
     });
     const operatorInactivityMonitor = new InactivityMonitor({
@@ -692,20 +736,6 @@ singleInstanceReady
       logger: mainLogger,
     });
     operatorInactivityMonitor.start();
-
-    // T051b + T051d — lifecycle cascade for terminal-revocation (FR-014) and
-    // account-disabled-mid-session edge cases. The cascade holds the session-
-    // manager reference so the future US7 401-interceptor can call
-    // operatorLifecycleCascade.notifyTerminalRevoked() /
-    // operatorLifecycleCascade.notifyAccountDisabled() without importing any
-    // singleton. Exported as a module-level let so future interceptors can
-    // reach it; it is NOT exposed to the renderer bridge.
-    const operatorLifecycleCascade = new LifecycleCascade({
-      sessionManager: operatorSessionManager,
-      logger: mainLogger,
-    });
-    // Suppress "declared but never read" until the US7 interceptor wires it.
-    void operatorLifecycleCascade;
 
     // T048 — construct the audit-events outbox chain on the shared DB handle.
     // Lazy statement preparation in bindAuditEventsStoreDb ensures migration
@@ -739,6 +769,11 @@ singleInstanceReady
         mainLogger.error({ err }, 'operator.session_lock_audit:failed');
       },
     });
+    const getOperatorLockState = createLockStateReader({
+      db,
+      sessionManager: operatorSessionManager,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+    });
     registerSessionLockHandlers(guardedIpcMain, {
       unlockHandler: new SessionUnlockHandler({
         sessionManager: operatorSessionManager,
@@ -747,11 +782,36 @@ singleInstanceReady
         clerk: clerkExchanger,
         logger: mainLogger,
       }),
-      getLockState: createLockStateReader({
-        db,
-        sessionManager: operatorSessionManager,
-        resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
-      }),
+      getLockState: getOperatorLockState,
+    });
+
+    // RT-113 P2 — keep the online cashier admission live (heartbeat at ≤ TTL/2
+    // with a fresh key) and end it on sign-out / session end (best-effort).
+    // Lost authority (taken over elsewhere, 403, two consecutive device 401s)
+    // latches the session (cart.create, and an add to an empty cart, refuse
+    // `authority_conflict`) and ends
+    // it at its first safe point: no open sale with lines (the RT-117 lock
+    // summary is null) and no live tender on ANY cart of the session
+    // (`createSafePointProbe`, review of 024f07c items 2 and 5).
+    // Re-checked after every sale IPC call (sale-boundary-guard), on lock
+    // changes and by a backstop poll. Stopped on quit with the other workers (RT-198
+    // latch: nothing runs after stop).
+    const isCashierAtSafePoint = createSafePointProbe({
+      db,
+      sessionManager: operatorSessionManager,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+    });
+    const cashierAdmissionKeeper = new CashierAdmissionKeeper({
+      sessionManager: operatorSessionManager,
+      admission: cashierAdmission,
+      isAtSafePoint: isCashierAtSafePoint,
+      logger: mainLogger,
+    });
+    saleBoundaryProbe.recheck = () => {
+      cashierAdmissionKeeper.recheckSafePoint();
+    };
+    workerRegistry.register('cashier admission heartbeat', () => {
+      cashierAdmissionKeeper.stop();
     });
 
     const operatorTakeoverHandler = new TakeoverHandler({
@@ -765,6 +825,8 @@ singleInstanceReady
       auditEmitter,
       pairingStore,
       deviceTokenAttestation,
+      // RT-113 P2 — the cashier takeover is an admission with takeover:true.
+      cashierAdmission,
       logger: mainLogger,
     });
 

@@ -17,6 +17,13 @@ import type { SessionManager } from './session-manager.js';
 import type { JwtHolder } from './jwt-holder.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { PairingStore } from '../pairing/store.js';
+import {
+  admitCashierOnline,
+  nextIdempotencyKey,
+  refusalForAdmission,
+  refusalIfSessionLost,
+  type CashierAdmissionDeps,
+} from './cashier-admission.js';
 
 /** TTL for proto-sessions: 60 seconds. */
 const PROTO_SESSION_TTL_MS = 60_000;
@@ -29,12 +36,23 @@ const REFUSE_NO_CONN: OperatorRefusal = { kind: 'refused', category: 'no_connect
  * reports `takeover_required`. Holds everything needed to complete or
  * abandon the takeover without re-submitting credentials.
  *
- * `jwt` is `null` for the cashier path — cashier sessions are local-only
+ * `jwt` is `null` for the cashier path — cashier sessions hold no Clerk JWT
  * (AD-2) and never call Endpoint 4.
  */
 export interface ProtoSession {
   pending_takeover_id: string;
   operator_id: string;
+  /**
+   * RT-113 P2 — cashier only: `users.id`, the admission's `user_id` for the
+   * `takeover: true` call.
+   */
+  user_id?: string;
+  /**
+   * RT-113 P2 — cashier only: the takeover admission's idempotency key, minted
+   * on the first confirm and REUSED on a retry after `no_connection`, so a
+   * request that did reach the server replays instead of taking over twice.
+   */
+  admission_idempotency_key?: string;
   display_name: string;
   role: Role;
   tenant_id: string;
@@ -96,6 +114,12 @@ export interface TakeoverHandlerDeps {
   auditEmitter: AuditEmitter;
   pairingStore: PairingStore;
   deviceTokenAttestation: () => Promise<string> | string;
+  /**
+   * RT-113 P2 — the device-authenticated cashier admission. The cashier
+   * takeover is `POST /api/pos/v1/cashier-admissions` with `takeover: true`
+   * (10763 D9). Without it the cashier path fails closed.
+   */
+  cashierAdmission?: CashierAdmissionDeps;
   logger?: Logger;
 }
 
@@ -111,16 +135,17 @@ export interface TakeoverHandlerDeps {
  * event, no session change. Returns `{ kind: 'cancelled' }` idempotently.
  *
  * Cashier path — Endpoint 4 is skipped (AD-2, permanent decision):
- *   Cashier sessions are local-only. Cashier operators have no Clerk JWT to
- *   present to Endpoint 4's `Authorization: Bearer` header, so calling
- *   `backend.confirmTakeover` for the cashier path is permanently excluded
- *   under AD-2. The cashier takeover creates the new session locally without
- *   a backend round-trip, mirroring the cashier sign-in path. This is an
- *   architectural invariant, not a deferred gap: a future backend contract
- *   providing a non-Clerk-JWT cashier-safe confirmation path would require
- *   an approved AD amendment before this handler may call any backend
- *   endpoint for the cashier path. Decision recorded in
- *   `specs/004-operator-session/coordination.md` (2026-05-11, issue 85).
+ *   Cashier operators have no Clerk JWT to present to Endpoint 4's
+ *   `Authorization: Bearer` header, so calling `backend.confirmTakeover` for
+ *   the cashier path stays excluded under AD-2 (`specs/004-operator-session/
+ *   coordination.md`, 2026-05-11, issue 85).
+ *
+ *   RT-113 P2 — the approved non-Clerk, device-authenticated path now exists
+ *   (Backend-Core cashier-admissions, BC1 #696 / BC2 #697; RT-113 10763 D9,
+ *   owner decision 10844): the cashier takeover is an online admission with
+ *   `takeover: true`. The server ends the other device's admission; that
+ *   device learns on its next heartbeat. `no_connection` (or a 5xx) keeps the
+ *   proto-session and its idempotency key for a retry.
  *
  * Terminal-A passive polling (T069c):
  *   Terminal A discovers the takeover at its next `getCurrentSession` poll,
@@ -252,22 +277,60 @@ export class TakeoverHandler {
   private async confirmCashierTakeover(
     proto: ProtoSession,
   ): Promise<ConfirmTakeoverResponse | OperatorRefusal> {
-    // AD-2: cashier sessions are local-only; no Clerk JWT exists for the
-    // cashier identity, so Endpoint 4 cannot be called. See class-level JSDoc.
-    const event_id = randomUUID();
+    const admissionDeps = this.deps.cashierAdmission;
+    const user_id = proto.user_id;
+    if (admissionDeps === undefined || user_id === undefined || user_id.length === 0) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'cashier_admission_unavailable');
+      return REFUSE_INVALID;
+    }
 
+    proto.admission_idempotency_key ??= nextIdempotencyKey(admissionDeps);
+    const admission = await admitCashierOnline(admissionDeps, {
+      user_id,
+      operator_id: proto.operator_id,
+      takeover: true,
+      idempotency_key: proto.admission_idempotency_key,
+    });
+
+    if (admission.kind === 'no_connection' || admission.kind === 'unavailable') {
+      // Retain the proto-session (and its key) so the renderer can retry.
+      this.log('refused', `cashier_admission_${admission.kind}`);
+      return REFUSE_NO_CONN;
+    }
+    if (admission.kind !== 'admitted') {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', `cashier_admission_${admission.kind}`);
+      return refusalForAdmission(admission);
+    }
+
+    const event_id = randomUUID();
     const record = this.deps.sessionManager.create({
       operator_id: proto.operator_id,
-      display_name: proto.display_name,
+      display_name: admission.display_name,
       role: 'cashier',
       tenant_id: proto.tenant_id,
       branch_id: proto.branch_id,
       backend_session_id: '',
+      cashier_admission: {
+        user_id,
+        admission_id: admission.admission_id,
+        admission_ttl_seconds: admission.admission_ttl_seconds,
+        offline_grace_seconds: admission.offline_grace_seconds,
+        admission_requested_at_ms: admission.requested_at_ms,
+      },
     });
 
     await this.emitTakeoverAudit(event_id, record);
 
     this.deps.protoStore.delete(proto.pending_takeover_id);
+    // Codex P2 4179701431 — the keeper armed at create; the session may have
+    // been latched or ended during the await above. Never answer it signed_in.
+    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    if (lost !== null) {
+      this.log('refused', 'cashier_session_lost');
+      return lost;
+    }
     this.log('signed_in', 'cashier_confirm');
 
     return {
