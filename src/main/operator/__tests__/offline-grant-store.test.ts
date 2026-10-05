@@ -956,6 +956,22 @@ describe('nextPairingEpoch — every re-pair gets a new epoch (F4)', () => {
     );
   });
 
+  it('Codex P1 4181552529: a purge with the mark deleted keeps the evidence of the purged epochs', () => {
+    const pairedAt = Math.floor(T0_MS / 1000);
+    const epoch1 = store.nextPairingEpoch(pairedAt);
+    store.upsertFromAdmitted(scope({ pairing_epoch: epoch1 }), admitted());
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    store.purgeAll();
+    expect(hwmCount()).toBe(1);
+    expect(store.nextPairingEpoch(pairedAt)).toBeGreaterThan(epoch1);
+  });
+
+  it('a purge keeps the evidence of a prior pairing epoch it is told about', () => {
+    const prior = Math.floor(T0_MS / 1000) + 3600;
+    store.purgeAll(prior);
+    expect(store.nextPairingEpoch(Math.floor(T0_MS / 1000))).toBeGreaterThan(prior);
+  });
+
   it('an unreadable mark is not overwritten: the candidate is kept and offline stays refused', () => {
     store.upsertFromAdmitted(scope(), admitted());
     g.raw.run(`UPDATE cashier_offline_clock_hwm SET sealed_body = x'00010203'`);

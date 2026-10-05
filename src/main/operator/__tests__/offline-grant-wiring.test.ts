@@ -137,8 +137,16 @@ function categoryOf(e: OfflineGrantEvaluation): string {
   return e.admissible ? 'admissible' : e.category;
 }
 
+/** An `admitted` for a request sent under the CURRENT pairing (P1-b). */
+function current(
+  w: OfflineGrantWiring,
+  over: Partial<CashierAdmittedEvent> = {},
+): CashierAdmittedEvent {
+  return admitted({ pairing_generation: w.seam.pairingGeneration?.(), ...over });
+}
+
 function admit(over: Partial<CashierAdmittedEvent> = {}): void {
-  wiring.seam.onCashierAdmitted(admitted(over));
+  wiring.seam.onCashierAdmitted(current(wiring, over));
 }
 
 function admitBoth(): void {
@@ -224,6 +232,39 @@ describe('admitted writes or refreshes the grant (D3)', () => {
     admit({ received_at: 'not a time' });
     expect(wiring.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
     expect(audits.map(auditOf)).toEqual([{ reason: 'refresh_failed', operator: OPERATOR }]);
+  });
+});
+
+describe('an admission result is bound to the pairing that sent it (Codex P1 4181552524)', () => {
+  it('a result for a request sent before a re-pair writes no grant for the new pairing', () => {
+    const sentUnder = wiring.seam.pairingGeneration?.();
+    wiring.onPairingChange('repair');
+    wiring.setScope(scope({ terminal_id: 'terminal-new', pairing_epoch: EPOCH + 1 }));
+    wiring.seam.onCashierAdmitted(admitted({ pairing_generation: sentUnder }));
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    expect(wiring.evaluate(USER, T0)).toEqual(refusal('grant_missing'));
+    expect(JSON.stringify(logCalls)).toContain('operator.offline_grant.stale_result');
+  });
+
+  it('a result for a request sent before an unpair-and-pair writes nothing either', () => {
+    const sentUnder = wiring.seam.pairingGeneration?.();
+    wiring.onPairingChange('unpair');
+    wiring.setScope(null);
+    wiring.onPairingChange('repair');
+    wiring.setScope(scope());
+    wiring.seam.onCashierAdmitted(admitted({ pairing_generation: sentUnder }));
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+  });
+
+  it('an admitted event that does not say which pairing sent it is dropped (fail closed)', () => {
+    wiring.seam.onCashierAdmitted(admitted());
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+  });
+
+  it('a result for the current pairing is written', () => {
+    const sentUnder = wiring.seam.pairingGeneration?.();
+    wiring.seam.onCashierAdmitted(admitted({ pairing_generation: sentUnder }));
+    expect(wiring.evaluate(USER, T0).admissible).toBe(true);
   });
 });
 
@@ -433,7 +474,7 @@ describe('fail closed: a throwing store leaves a tombstone that evaluate consult
     });
     loud.setScope(scope());
     expect(() => {
-      loud.seam.onCashierAdmitted(admitted());
+      loud.seam.onCashierAdmitted(current(loud));
       loud.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
       loud.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
       loud.onPairingChange('unpair');
@@ -646,6 +687,36 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     expect(wiring.consumeOfflineUse(USER, T0)).toEqual(refusal('scope_mismatch'));
   });
 
+  it('Codex P1 4181552529: a deleted mark, then unpair and a same-second re-pair: an old body written back is no proof', async () => {
+    await pairing.persist(pairInput());
+    admit();
+    const oldBody = grantBlob(g.raw);
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    await pairing.clear();
+    await pairing.persist(pairInput()); // the same paired_at second
+    g.raw.run(
+      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
+       VALUES (?, ?, ?, ?, ?, 'x')`,
+      [TENANT, BRANCH, TERMINAL, USER, oldBody],
+    );
+    expect(wiring.evaluate(USER, T0).admissible).toBe(false);
+    expect(wiring.consumeOfflineUse(USER, T0).admissible).toBe(false);
+  });
+
+  it('Codex P1 4181552529: a deleted mark, then a same-second re-pair over the old pairing', async () => {
+    await pairing.persist(pairInput());
+    admit();
+    const oldBody = grantBlob(g.raw);
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    await pairing.persist(pairInput());
+    g.raw.run(
+      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
+       VALUES (?, ?, ?, ?, ?, 'x')`,
+      [TENANT, BRANCH, TERMINAL, USER, oldBody],
+    );
+    expect(wiring.evaluate(USER, T0).admissible).toBe(false);
+  });
+
   it('F4 without a clear: a re-pair over the old pairing in the same second', async () => {
     await pairing.persist(pairInput());
     admit();
@@ -670,13 +741,13 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     await p.persist(pairInput());
     w.start();
     expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
-    w.seam.onCashierAdmitted(admitted());
+    w.seam.onCashierAdmitted(current(w));
     expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
     b.broken.clear();
     vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
     // The retried purge lifts the tombstone (and, fail closed, takes the fresh grant too).
     expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
-    w.seam.onCashierAdmitted(admitted());
+    w.seam.onCashierAdmitted(current(w));
     expect(w.evaluate(USER, T0).admissible).toBe(true);
     w.stop();
   });

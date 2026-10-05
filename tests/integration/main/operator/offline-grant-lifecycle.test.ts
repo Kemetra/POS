@@ -132,7 +132,7 @@ function urlOf(input: RequestInfo | URL): string {
 interface Wired {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
   /** The next admission answers, in order; then `admitted`. */
-  answers: (() => Response)[];
+  answers: (() => Response | Promise<Response>)[];
   sessions: SessionManager;
   keeper: CashierAdmissionKeeper;
   grants: OfflineGrantWiring;
@@ -144,7 +144,7 @@ let g: GrantDb;
 let store: OfflineGrantStore;
 
 function wire(grantStore: OfflineGrantStore = store): Wired {
-  const answers: (() => Response)[] = [];
+  const answers: (() => Response | Promise<Response>)[] = [];
   const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const path = urlOf(input).slice(BASE.length);
     if (init?.method === 'POST' && path === ADMISSIONS) {
@@ -294,6 +294,7 @@ function seedOtherCashier(w: Wired): void {
     offline_grace_seconds: 86_400,
     server_time: '2026-10-04T10:00:00.000Z',
     received_at: new Date().toISOString(),
+    pairing_generation: w.grants.seam.pairingGeneration?.(),
   });
 }
 
@@ -411,6 +412,50 @@ describe('RT-113 P1.2 — the offline grant over the real cashier paths', () => 
     await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
     expect(admissibleNow(w)).toBe(true);
     expect(w.audits).toEqual([]);
+    w.keeper.stop();
+  });
+
+  it('Codex P1 4181552524: a sign-in answered after a re-pair writes no grant for the new pairing', async () => {
+    const w = wire();
+    let answer: (r: Response) => void = () => undefined;
+    w.answers.push(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const pending = signIn(w);
+    await vi.advanceTimersByTimeAsync(0);
+    // The terminal is paired again while the request is in flight.
+    w.grants.onPairingChange('repair');
+    const NEW_SCOPE = { ...SCOPE, terminal_id: 'term-2', pairing_epoch: SCOPE.pairing_epoch + 1 };
+    w.grants.setScope(NEW_SCOPE);
+    answer(json(200, ADMITTED_BODY));
+    expect(await pending).toMatchObject({ kind: 'signed_in' });
+    expect(grantRows()).toBe(0);
+    expect(w.grants.evaluate(USER_ID, new Date())).toEqual({
+      admissible: false,
+      category: 'grant_missing',
+    });
+    w.keeper.stop();
+  });
+
+  it('Codex P1 4181552524: a heartbeat answered after a re-pair writes no grant for the new pairing', async () => {
+    const w = wire();
+    await signIn(w);
+    let answer: (r: Response) => void = () => undefined;
+    w.answers.push(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
+    w.grants.onPairingChange('repair');
+    w.grants.setScope({ ...SCOPE, terminal_id: 'term-2', pairing_epoch: SCOPE.pairing_epoch + 1 });
+    answer(json(200, ADMITTED_BODY));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(grantRows()).toBe(0);
     w.keeper.stop();
   });
 
