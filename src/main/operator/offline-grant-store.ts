@@ -49,7 +49,8 @@ import type { CashierAdmittedEvent } from './cashier-admission.js';
  */
 
 /** D4: the hard ceiling on a grant's lifetime, whatever the server says. */
-export const OFFLINE_GRANT_MAX_TTL_MS = 72 * 60 * 60 * 1000;
+const OFFLINE_GRANT_MAX_TTL_SECONDS = 72 * 60 * 60;
+export const OFFLINE_GRANT_MAX_TTL_MS = OFFLINE_GRANT_MAX_TTL_SECONDS * 1000;
 
 /** D4: offline admissions per grant. */
 export const OFFLINE_GRANT_MAX_USES = 8;
@@ -230,6 +231,11 @@ function isCount(v: unknown): v is number {
   return typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
 }
 
+/** An integer >= 0 of any size (`Number.isInteger`), as the admission client checks it. */
+function isWholeNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0;
+}
+
 function isPositiveCount(v: unknown): boolean {
   return isCount(v) && v > 0;
 }
@@ -278,7 +284,7 @@ const GRANT_SHAPE: Shape<GrantBody> = {
   pairing_epoch: isCount,
   admission_id: isText,
   operator_id: isText,
-  display_name: isText,
+  display_name: isString,
   issued_at_local: isCount,
   ttl_ms: isPositiveCount,
   server_time_at_issue: isString,
@@ -398,12 +404,13 @@ const REFUSAL_BY_READ: Readonly<
 
 /** An `admitted` event the store can record. Its `user_id` is checked by the caller. */
 const EVENT_RULES: readonly ((event: CashierAdmittedEvent) => boolean)[] = [
-  (event) => isCount(event.offline_grace_seconds),
-  (event) => isCount(event.offline_grace_seconds * 1000),
+  // The client's own rule (any integer >= 0, no maximum): a huge grace is clamped, never rejected.
+  (event) => isWholeNumber(event.offline_grace_seconds),
   (event) => isCount(Date.parse(event.received_at)),
   (event) => isText(event.operator_id),
   (event) => isText(event.admission_id),
-  (event) => isText(event.display_name),
+  // The contract types display_name as any string; "" is valid.
+  (event) => isString(event.display_name),
   (event) => isString(event.server_time),
 ];
 
@@ -426,7 +433,8 @@ function grantBodyFromEvent(
     display_name: event.display_name,
     // D4: the local receipt time, never server_time (clock skew).
     issued_at_local: Date.parse(event.received_at),
-    ttl_ms: Math.min(event.offline_grace_seconds * 1000, OFFLINE_GRANT_MAX_TTL_MS),
+    // Clamp BEFORE scaling: a huge grace times 1000 is no longer a safe integer.
+    ttl_ms: Math.min(event.offline_grace_seconds, OFFLINE_GRANT_MAX_TTL_SECONDS) * 1000,
     server_time_at_issue: event.server_time,
     offline_admissions_used: 0,
     last_used_at_local: null,
