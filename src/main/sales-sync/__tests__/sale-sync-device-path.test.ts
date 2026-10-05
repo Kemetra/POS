@@ -43,7 +43,8 @@ import {
   type SaleSyncEngineDeps,
   type SaleSyncPauseTransition,
 } from '../sale-sync-engine.js';
-import { createSellingUserIdReader, type SellingUserUnresolved } from '../selling-user-id.js';
+import { createSellingUserIdResolver, type SellingUserUnresolved } from '../selling-user-id.js';
+import type { DatabaseHandle } from '../../db/client.js';
 import { createSaleSyncStatusReader } from '../sale-sync-status-reader.js';
 
 beforeAll(async () => {
@@ -83,7 +84,7 @@ function harness(opts: {
   envelope?: string | null;
   device?: boolean;
   script?: SaleSyncResult[];
-}): Harness {
+}): Harness & { auditQueries: () => number } {
   const db = freshSalesSyncDb();
   opts.sales.forEach((s, i) => {
     seedSale(db, { sale_id: s.id });
@@ -97,6 +98,21 @@ function harness(opts: {
     });
   });
   const handle = handleFor(db);
+  // Counts executions of statements that read `audit_events` (Codex P2).
+  let auditQueries = 0;
+  const countingHandle: DatabaseHandle = {
+    ...handle,
+    prepare: (sql: string) => {
+      const stmt = handle.prepare(sql) as { all: (...p: unknown[]) => unknown };
+      if (!sql.includes('audit_events')) return stmt;
+      return {
+        all: (...p: unknown[]) => {
+          auditQueries += 1;
+          return stmt.all(...p);
+        },
+      };
+    },
+  };
   const stateRepo = createSaleSyncStateRepo(handle);
   const client = createFakeSaleSyncClient(opts.script ?? [{ kind: 'ok', saleRef: null }]);
   const events: SaleSyncPauseTransition[] = [];
@@ -114,8 +130,8 @@ function harness(opts: {
     resolveTerminalId: () => TERMINAL,
     getOperatorToken: () => envelope,
     hasDeviceCredential: () => Promise.resolve(device),
-    sellingUserIdOf: createSellingUserIdReader({
-      db: handle,
+    sellingUsers: createSellingUserIdResolver({
+      db: countingHandle,
       onUnresolved: (info) => unresolved.push(info),
     }),
     now: () => '2026-06-07T10:05:00.000Z',
@@ -140,6 +156,7 @@ function harness(opts: {
       device = d;
     },
     db,
+    auditQueries: () => auditQueries,
   };
 }
 
@@ -458,6 +475,72 @@ describe('RT-224 step 2 — device-path outcomes', () => {
     await tick(h.engine);
     const seen = JSON.stringify([h.deadLetters, h.unauthorized, h.events, h.unresolved]);
     for (const secret of [USER_A, USER_B, ENVELOPE]) expect(seen).not.toContain(secret);
+    h.db.close();
+  });
+});
+
+describe('RT-224 step 2 (Codex P2) — the audit log is read once per batch, not per sale', () => {
+  it('a tick over many cashier sales runs ONE audit_events query', async () => {
+    const sales = Array.from({ length: 40 }, (_, i) => ({
+      id: `sale-${String(i).padStart(2, '0')}`,
+      user: i % 2 === 0 ? USER_A : USER_B,
+      enqueuedAt: `2026-06-07T10:00:${String(i).padStart(2, '0')}.000Z`,
+    }));
+    const h = harness({ sales });
+    await tick(h.engine);
+    expect(h.client.cashierCalls).toHaveLength(40);
+    expect(h.auditQueries()).toBe(1);
+    h.db.close();
+  });
+
+  it('a retried sale is not looked up again; a waiting legacy sale is not re-scanned each tick', async () => {
+    const h = harness({
+      sales: [{ id: 'legacy-1' }, { id: 'sale-1', user: USER_A }],
+      envelope: null,
+      script: [{ kind: 'transient' }, { kind: 'ok', saleRef: null }],
+    });
+    let clock = Date.parse('2026-06-07T10:05:00.000Z');
+    const engine = createSaleSyncEngine({ ...h.deps, now: () => new Date(clock).toISOString() });
+    for (let i = 0; i < 4; i += 1) {
+      await tick(engine);
+      clock += 10 * 60 * 1000; // past any backoff
+    }
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('synced');
+    expect(h.stateRepo.read('legacy-1')).toBeNull();
+    expect(h.auditQueries()).toBe(1);
+    h.db.close();
+  });
+});
+
+describe('RT-224 step 2 (Codex P2) — a device-credential read failure never aborts the drain', () => {
+  it('hasDeviceCredential rejecting: the envelope sale still goes out, the cashier sale waits', async () => {
+    const h = harness({
+      sales: [{ id: 'sale-1', user: USER_A }, { id: 'legacy-1' }],
+      envelope: ENVELOPE,
+    });
+    const engine = createSaleSyncEngine({
+      ...h.deps,
+      hasDeviceCredential: () => Promise.reject(new Error('DPAPI failure')),
+    });
+    await expect(tick(engine)).resolves.toBeUndefined();
+    expect(h.client.calls.map((p) => p.externalId)).toEqual(['pos-pulse:handoff-legacy-1']);
+    expect(h.client.cashierCalls).toHaveLength(0);
+    expect(h.stateRepo.read('sale-1')).toBeNull();
+    await expect(engine.pausedReason()).resolves.toBeNull();
+    h.db.close();
+  });
+
+  it('hasDeviceCredential throwing with no envelope: paused, and pausedReason resolves', async () => {
+    const h = harness({ sales: [{ id: 'sale-1', user: USER_A }], envelope: null });
+    const engine = createSaleSyncEngine({
+      ...h.deps,
+      hasDeviceCredential: () => {
+        throw new Error('keychain unavailable');
+      },
+    });
+    await expect(tick(engine)).resolves.toBeUndefined();
+    await expect(engine.pausedReason()).resolves.toBe('no_operator_credential');
+    expect(h.events.map((e) => e.transition)).toEqual(['paused']);
     h.db.close();
   });
 });

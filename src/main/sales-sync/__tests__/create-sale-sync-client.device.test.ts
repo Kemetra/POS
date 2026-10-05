@@ -132,6 +132,20 @@ describe('RT-224 step 2 — postSaleAsCashier request', () => {
   });
 });
 
+describe('RT-224 step 2 (Codex P2) — a device-token read failure never rejects', () => {
+  it('getDeviceToken rejecting → no request, no_connection (the client never rejects)', async () => {
+    const { fetchImpl, captured } = fetchAnswering(201, '{}');
+    const c = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => ENVELOPE,
+      getDeviceToken: () => Promise.reject(new Error('DPAPI failure')),
+    });
+    await expect(c.postSaleAsCashier(PAYLOAD, USER)).resolves.toEqual({ kind: 'no_connection' });
+    expect(captured).toHaveLength(0);
+  });
+});
+
 describe('RT-224 step 2 — the envelope request is unchanged', () => {
   it('postSale carries the envelope and NO operatorUserId', async () => {
     const { fetchImpl, captured } = fetchAnswering(201, '{}');
