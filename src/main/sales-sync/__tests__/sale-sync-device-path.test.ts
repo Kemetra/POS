@@ -720,3 +720,51 @@ describe('rev547 F7 — a memoized cashier is forgotten when its sale leaves the
     h.db.close();
   });
 });
+
+describe('RT-224 step 2 (Codex P2 on bf5960d) — the envelope-due count follows the queue', () => {
+  it('envelope sales drained mid-tick, then the envelope disappears before a later sale: no pause, no transition', async () => {
+    const h = harness({
+      sales: [{ id: 'legacy-1' }, { id: 'sale-a', user: USER_A }],
+      envelope: ENVELOPE,
+    });
+    // The manager signs out right after the envelope sale is captured.
+    const postSale = h.client.postSale.bind(h.client);
+    h.client.postSale = async (payload) => {
+      const result = await postSale(payload);
+      h.setEnvelope(null);
+      return result;
+    };
+    await tick(h.engine);
+    expect(h.client.calls.map((p) => p.externalId)).toEqual(['pos-pulse:handoff-legacy-1']);
+    expect(sentAsCashier(h)).toEqual([['pos-pulse:handoff-sale-a', USER_A]]);
+    expect(h.events).toEqual([]);
+    expect(await h.engine.pausedReason()).toBeNull();
+    h.db.close();
+  });
+
+  it('a dead-lettered envelope sale leaves the count too', async () => {
+    const h = harness({
+      sales: [{ id: 'legacy-1' }],
+      envelope: ENVELOPE,
+      script: [{ kind: 'permanent' }],
+    });
+    await tick(h.engine);
+    h.setEnvelope(null);
+    expect(await h.engine.pausedReason()).toBeNull();
+    await tick(h.engine);
+    expect(h.events).toEqual([]);
+    h.db.close();
+  });
+
+  it('an envelope sale that is still queued (transient) keeps the pause visible', async () => {
+    const h = harness({
+      sales: [{ id: 'legacy-1' }],
+      envelope: ENVELOPE,
+      script: [{ kind: 'transient' }],
+    });
+    await tick(h.engine);
+    h.setEnvelope(null);
+    expect(await h.engine.pausedReason()).toBe('no_operator_credential');
+    h.db.close();
+  });
+});

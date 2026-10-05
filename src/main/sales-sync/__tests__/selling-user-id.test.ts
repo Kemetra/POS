@@ -381,3 +381,36 @@ describe('RT-224 (Codex P2) — one audit_events pass per batch, memoized, never
     expect(details.some((d) => /\bsales\b/.test(d))).toBe(false);
   });
 });
+
+describe('RT-224 (Codex P2 on bf5960d) — grouping a backlog is linear', () => {
+  it('10k due sales are grouped without re-copying the group per sale', () => {
+    const sales: SaleRow[] = Array.from({ length: 10_000 }, (_, i) => ({
+      sale_id: `sale-${String(i)}`,
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'term-1',
+      envelope_handoff_action_id: `handoff-${String(i)}`,
+      payment_attempt_id: 'pa-1',
+      selling_operator_id: 'op-1',
+    })) as unknown as SaleRow[];
+    const resolver = createSellingUserIdResolver({
+      db: { prepare: () => ({ all: () => [] }) } as unknown as DatabaseHandle,
+    });
+    // Count array iterations (a spread re-copy iterates the whole group each
+    // time). A linear pass iterates a constant number of arrays per call.
+    const original = Array.prototype[Symbol.iterator];
+    let iterations = 0;
+    Array.prototype[Symbol.iterator] = function counted(this: unknown[]) {
+      iterations += 1;
+      return original.call(this);
+    } as typeof original;
+    let routes: ReadonlyMap<string, SaleRoute>;
+    try {
+      routes = resolver.resolve(sales, TERMINAL);
+    } finally {
+      Array.prototype[Symbol.iterator] = original;
+    }
+    expect(routes.size).toBe(10_000);
+    expect(iterations).toBeLessThan(100);
+  });
+});
