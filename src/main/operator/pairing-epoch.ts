@@ -1,3 +1,7 @@
+import type { Logger } from 'pino';
+
+import type { BackendClient } from './backend-client.js';
+
 /**
  * RT-215 / Codex P1 4181556645 — a sign-in or takeover must not complete under
  * a pairing other than the one it started under.
@@ -54,4 +58,47 @@ export function pairingEpochHolds(ticket: PairingEpochTicket): boolean {
 /** The epoch to record on a takeover proto, when wired. */
 export function epochToRecord(ticket: PairingEpochTicket): { pairing_epoch?: string | null } {
   return ticket.read === undefined ? {} : { pairing_epoch: ticket.epoch };
+}
+
+/**
+ * Codex P2 4186872826 — when the epoch refusal drops a late manager/admin
+ * success (sign-in or takeover confirm), the backend already created an
+ * operator session for it. Release it with the existing best-effort
+ * `POST /operators/sign-out` rather than abandoning it.
+ *
+ * That route is the `operator-identity` scheme only: the provider JWT in
+ * `Authorization` and `{ session_id }` in the body (`createBackendClient`
+ * over the plain global fetch). The device bearer is NEVER involved, so this
+ * stays safe after a revocation. Fire-and-forget: the refusal is not delayed,
+ * and every failure (rejection or synchronous throw) is contained. Nothing
+ * about the credential or the session id is logged.
+ */
+export function signOutAbandonedSession(
+  backend: Pick<BackendClient, 'signOut'>,
+  abandoned: { readonly session_id: string; readonly jwt: string | null | undefined },
+  logger?: Logger,
+): void {
+  const jwt = abandoned.jwt ?? '';
+  if (jwt === '') return;
+  const log = (outcome: string): void => {
+    logger?.info(
+      { event: 'operator.pairing_changed.abandoned_session_sign_out', outcome },
+      'abandoned backend session sign-out',
+    );
+  };
+  let sent: Promise<unknown>;
+  try {
+    sent = backend.signOut({ session_id: abandoned.session_id }, jwt);
+  } catch {
+    log('threw');
+    return;
+  }
+  void Promise.resolve(sent).then(
+    () => {
+      log('sent');
+    },
+    () => {
+      log('failed');
+    },
+  );
 }

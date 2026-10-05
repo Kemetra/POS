@@ -91,6 +91,40 @@ function revokedAtColumn(): unknown {
 
 const DEVICE_REVOKED: PairingStatus = { kind: 'invalid', reason: 'device_revoked' };
 
+/** A SecretStore whose `get` is held until released; `called` resolves once it is reached. */
+function heldSecrets(inner: SecretStore) {
+  let release: () => void = () => undefined;
+  let reached: () => void = () => undefined;
+  const called = new Promise<void>((r) => {
+    reached = r;
+  });
+  const held: SecretStore = {
+    ...inner,
+    get: (k) =>
+      new Promise((resolve, reject) => {
+        release = () => {
+          inner.get(k).then(resolve, reject);
+        };
+        reached();
+      }),
+  };
+  return {
+    held,
+    called,
+    release: () => {
+      release();
+    },
+  };
+}
+
+/** The sendable device-token reader over `pairingStore` (default secrets unless one is given). */
+function readerOver(
+  pairingStore: Parameters<typeof createSendableDeviceTokenReader>[0]['pairingStore'],
+  secretStore: Parameters<typeof createSendableDeviceTokenReader>[0]['secretStore'] = secrets,
+) {
+  return createSendableDeviceTokenReader({ pairingStore, secretStore, deviceTokenKey: KEY });
+}
+
 describe('PairingStore — device revoked (RT-215)', () => {
   it('markDeviceRevoked records the time on the row and returns the revoked scope', async () => {
     const s = store();
@@ -201,40 +235,60 @@ describe('PairingStore — device revoked (RT-215)', () => {
 });
 
 describe('createSendableDeviceTokenReader (RT-215: never send a revoked token)', () => {
-  it('returns the token while paired', async () => {
+  /**
+   * One table for the read-through scenarios (CodeScene 4186773598 dedupe):
+   * `setup` picks the store/secret seam, `revokeAt` when the revocation lands.
+   */
+  interface ReadScenario {
+    title: string;
+    setup: 'paired' | 'restart' | 'held-token-read';
+    revokeAt: 'never' | 'before-read' | 'during-token-read';
+    expect: string | null;
+  }
+  it.each<ReadScenario>([
+    { title: 'returns the token while paired', setup: 'paired', revokeAt: 'never', expect: TOKEN },
+    {
+      title: 'returns null after a restart into the revoked state',
+      setup: 'restart',
+      revokeAt: 'before-read',
+      expect: null,
+    },
+    {
+      title:
+        'Codex P1 4186568808 — revoked while ITS token read is pending → null (the token is never handed out)',
+      setup: 'held-token-read',
+      revokeAt: 'during-token-read',
+      expect: null,
+    },
+    {
+      title:
+        'Codex P1 4186568808 — control: no revocation during the reads → the token is handed out',
+      setup: 'held-token-read',
+      revokeAt: 'never',
+      expect: TOKEN,
+    },
+  ])('$title', async ({ setup, revokeAt, expect: expected }) => {
     const s = store();
     await s.persist(pairing('term-1'));
-    const read = createSendableDeviceTokenReader({
-      pairingStore: s,
-      secretStore: secrets,
-      deviceTokenKey: KEY,
-    });
-    expect(await read()).toBe(TOKEN);
+    if (revokeAt === 'before-read') s.markDeviceRevoked();
+    const h = heldSecrets(secrets);
+    const held = setup === 'held-token-read';
+    const pending = readerOver(setup === 'restart' ? store() : s, held ? h.held : secrets)();
+    if (held) {
+      await h.called;
+      if (revokeAt === 'during-token-read') s.markDeviceRevoked();
+      h.release();
+    }
+    await expect(pending).resolves.toBe(expected);
   });
 
   it('returns null once the device is revoked, although the token is still sealed', async () => {
     const s = store();
     await s.persist(pairing('term-1'));
-    const read = createSendableDeviceTokenReader({
-      pairingStore: s,
-      secretStore: secrets,
-      deviceTokenKey: KEY,
-    });
+    const read = readerOver(s);
     s.markDeviceRevoked();
     expect(await read()).toBeNull();
     expect(await secrets.get(KEY)).toBe(TOKEN);
-  });
-
-  it('returns null after a restart into the revoked state', async () => {
-    const s = store();
-    await s.persist(pairing('term-1'));
-    s.markDeviceRevoked();
-    const read = createSendableDeviceTokenReader({
-      pairingStore: store(),
-      secretStore: secrets,
-      deviceTokenKey: KEY,
-    });
-    expect(await read()).toBeNull();
   });
 
   it('returns the NEW token after a re-pair', async () => {
@@ -242,11 +296,7 @@ describe('createSendableDeviceTokenReader (RT-215: never send a revoked token)',
     await s.persist(pairing('term-1'));
     s.markDeviceRevoked();
     await s.persist(pairing('term-2', 'device-token-NEW'));
-    const read = createSendableDeviceTokenReader({
-      pairingStore: s,
-      secretStore: secrets,
-      deviceTokenKey: KEY,
-    });
+    const read = readerOver(s);
     expect(await read()).toBe('device-token-NEW');
   });
 
@@ -256,28 +306,19 @@ describe('createSendableDeviceTokenReader (RT-215: never send a revoked token)',
     ['missing_token', { kind: 'invalid', reason: 'missing_token' }],
   ])('returns null when the status is %s', async (_label, status) => {
     await secrets.set(KEY, TOKEN);
-    const read = createSendableDeviceTokenReader({
-      pairingStore: { getStatus: () => Promise.resolve(status) },
-      secretStore: secrets,
-      deviceTokenKey: KEY,
-    });
+    const read = readerOver({ getStatus: () => Promise.resolve(status) });
     expect(await read()).toBeNull();
   });
 
   it('returns null (never throws) when the status or the token read fails', async () => {
     await secrets.set(KEY, TOKEN);
-    const failingStatus = createSendableDeviceTokenReader({
-      pairingStore: { getStatus: () => Promise.reject(new Error('boom')) },
-      secretStore: secrets,
-      deviceTokenKey: KEY,
-    });
+    const failingStatus = readerOver({ getStatus: () => Promise.reject(new Error('boom')) });
     expect(await failingStatus()).toBeNull();
     const s = store();
     await s.persist(pairing('term-1'));
-    const failingSecret = createSendableDeviceTokenReader({
-      pairingStore: s,
-      secretStore: { ...secrets, get: () => Promise.reject(new Error('decrypt')) },
-      deviceTokenKey: KEY,
+    const failingSecret = readerOver(s, {
+      ...secrets,
+      get: () => Promise.reject(new Error('decrypt')),
     });
     expect(await failingSecret()).toBeNull();
   });
@@ -286,11 +327,10 @@ describe('createSendableDeviceTokenReader (RT-215: never send a revoked token)',
     ['empty', ''],
     ['absent', null],
   ])('returns null for an %s stored token', async (_label, value) => {
-    const read = createSendableDeviceTokenReader({
-      pairingStore: { getStatus: () => Promise.resolve({ kind: 'paired' } as PairingStatus) },
-      secretStore: { get: () => Promise.resolve(value) },
-      deviceTokenKey: KEY,
-    });
+    const read = readerOver(
+      { getStatus: () => Promise.resolve({ kind: 'paired' } as PairingStatus) },
+      { get: () => Promise.resolve(value) },
+    );
     expect(await read()).toBeNull();
   });
 });
@@ -364,32 +404,6 @@ describe('PairingStore — pairing epoch + isDeviceRevoked (RT-215, Codex P1)', 
 // ── Codex P1 4186568808: revoked DURING an await ────────────────────────────
 
 describe('Codex P1 4186568808 — a revocation latched during an await wins', () => {
-  /** A SecretStore whose `get` is held until released; `called` resolves once it is reached. */
-  function heldSecrets(inner: SecretStore) {
-    let release: () => void = () => undefined;
-    let reached: () => void = () => undefined;
-    const called = new Promise<void>((r) => {
-      reached = r;
-    });
-    const held: SecretStore = {
-      ...inner,
-      get: (k) =>
-        new Promise((resolve, reject) => {
-          release = () => {
-            inner.get(k).then(resolve, reject);
-          };
-          reached();
-        }),
-    };
-    return {
-      held,
-      called,
-      release: () => {
-        release();
-      },
-    };
-  }
-
   function storeOver(secretStore: SecretStore) {
     return createPairingStore({
       secretStore,
@@ -410,50 +424,15 @@ describe('Codex P1 4186568808 — a revocation latched during an await wins', ()
     await expect(pending).resolves.toEqual(DEVICE_REVOKED);
   });
 
-  it('sendable reader: revoked while ITS token read is pending → null (the token is never handed out)', async () => {
-    const s = store();
-    await s.persist(pairing('term-1'));
-    const h = heldSecrets(secrets);
-    const read = createSendableDeviceTokenReader({
-      pairingStore: s, // its status read is not held: it reports paired
-      secretStore: h.held,
-      deviceTokenKey: KEY,
-    });
-    const pending = read();
-    await h.called;
-    s.markDeviceRevoked();
-    h.release();
-    await expect(pending).resolves.toBeNull();
-  });
-
   it('sendable reader: revoked during the status read → null', async () => {
     await store().persist(pairing('term-1'));
     const h = heldSecrets(secrets);
     const s = storeOver(h.held);
-    const read = createSendableDeviceTokenReader({
-      pairingStore: s,
-      secretStore: secrets,
-      deviceTokenKey: KEY,
-    });
+    const read = readerOver(s);
     const pending = read();
     await h.called;
     s.markDeviceRevoked();
     h.release();
     await expect(pending).resolves.toBeNull();
-  });
-
-  it('control: no revocation during the reads → the token is handed out', async () => {
-    const s = store();
-    await s.persist(pairing('term-1'));
-    const h = heldSecrets(secrets);
-    const read = createSendableDeviceTokenReader({
-      pairingStore: s,
-      secretStore: h.held,
-      deviceTokenKey: KEY,
-    });
-    const pending = read();
-    await h.called;
-    h.release();
-    await expect(pending).resolves.toBe(TOKEN);
   });
 });

@@ -94,13 +94,23 @@ const BACKEND_SIGNED_IN = {
   pos_operator_envelope: 'envelope-SENTINEL',
 } as const;
 
-function managerHarness(epochs: ReturnType<typeof epochSource>) {
+/**
+ * The best-effort backend sign-out the epoch refusal issues for the session the
+ * late success created (Codex P2 4186872826). Defaults to a resolved
+ * `signed_out`; a test may make it reject or throw.
+ */
+function signOutFake(impl: () => unknown = () => Promise.resolve({ kind: 'signed_out' })) {
+  return vi.fn<(req: { session_id: string }, jwt: string) => unknown>(impl);
+}
+
+function managerHarness(epochs: ReturnType<typeof epochSource>, signOut = signOutFake()) {
   const sessions = new SessionManager();
   const jwt = createJwtHolder();
   const envelope = createJwtHolder();
   const backendAnswer = deferred<unknown>();
   const backend = {
     signIn: vi.fn(() => backendAnswer.promise),
+    signOut,
   } as unknown as BackendClient;
   const clerk = {
     exchange: vi.fn(() =>
@@ -123,11 +133,11 @@ function managerHarness(epochs: ReturnType<typeof epochSource>) {
     deviceTokenAttestation: () => 'att',
     pairingEpoch: epochs.read,
   });
-  return { handler, sessions, jwt, envelope, backendAnswer };
+  return { handler, sessions, jwt, envelope, backendAnswer, signOut };
 }
 
 describe('manager sign-in in flight when the device is revoked (Codex P1)', () => {
-  it('a late backend success is dropped: refused, no session, empty holders', async () => {
+  it('a late backend success is dropped: refused, no session, empty holders, its backend session signed out (Codex P2 4186872826)', async () => {
     const epochs = epochSource();
     const h = managerHarness(epochs);
     const pending = h.handler.signIn({ kind: 'manager_admin', identifier: 'sara', password: 'pw' });
@@ -140,7 +150,35 @@ describe('manager sign-in in flight when the device is revoked (Codex P1)', () =
     expect(h.sessions.getCurrent()).toBeNull();
     expect(h.jwt.get('bs-1')).toBeNull();
     expect(h.envelope.get('bs-1')).toBeNull();
+    // Best-effort, provider JWT only (operator-identity) — never the device bearer.
+    expect(h.signOut.mock.calls).toEqual([[{ session_id: 'bs-1' }, 'jwt-SENTINEL']]);
   });
+
+  it.each<[string, () => unknown]>([
+    ['rejects', () => Promise.reject(new Error('down'))],
+    [
+      'throws',
+      () => {
+        throw new Error('boom');
+      },
+    ],
+  ])(
+    'Codex P2 4186872826: a sign-out that %s is contained (still the refusal)',
+    async (_l, impl) => {
+      const epochs = epochSource();
+      const h = managerHarness(epochs, signOutFake(impl));
+      const pending = h.handler.signIn({
+        kind: 'manager_admin',
+        identifier: 'sara',
+        password: 'pw',
+      });
+      epochs.set(EPOCH_B);
+      h.backendAnswer.resolve(BACKEND_SIGNED_IN);
+      await expect(pending).resolves.toEqual(REFUSED);
+      expect(h.signOut).toHaveBeenCalledTimes(1);
+      expect(h.sessions.getCurrent()).toBeNull();
+    },
+  );
 
   it('a re-pair to another pairing while in flight also refuses', async () => {
     const epochs = epochSource();
@@ -158,6 +196,7 @@ describe('manager sign-in in flight when the device is revoked (Codex P1)', () =
     h.backendAnswer.resolve(BACKEND_SIGNED_IN);
     await expect(pending).resolves.toMatchObject({ kind: 'signed_in' });
     expect(h.jwt.get('bs-1')).toBe('jwt-SENTINEL');
+    expect(h.signOut).not.toHaveBeenCalled();
   });
 
   it('a revoked device at request start is refused before any session', async () => {
@@ -278,8 +317,10 @@ function takeoverHarness(
   const jwt = createJwtHolder();
   const envelope = createJwtHolder();
   const confirm = deferred<unknown>();
+  const signOut = signOutFake();
   const backend = {
     confirmTakeover: vi.fn(() => confirm.promise),
+    signOut,
   } as unknown as BackendClient;
   const fake = fakeCashierAdmission(admit ?? ADMITTED);
   const handler = new TakeoverHandler({
@@ -294,7 +335,7 @@ function takeoverHarness(
     cashierAdmission: fake.deps,
     pairingEpoch: epochs.read,
   });
-  return { handler, store, sessions, jwt, envelope, confirm, fake };
+  return { handler, store, sessions, jwt, envelope, confirm, fake, signOut };
 }
 
 function managerProto(over: Partial<ProtoSession> = {}): ProtoSession {
@@ -313,7 +354,7 @@ function managerProto(over: Partial<ProtoSession> = {}): ProtoSession {
 }
 
 describe('takeover in flight when the device is revoked (Codex P1)', () => {
-  it('manager: a late confirm success is dropped: refused, no session, empty holders', async () => {
+  it('manager: a late confirm success is dropped: refused, no session, empty holders, its backend session signed out (Codex P2 4186872826)', async () => {
     const epochs = epochSource();
     const h = takeoverHarness(epochs);
     h.store.set(managerProto());
@@ -327,6 +368,7 @@ describe('takeover in flight when the device is revoked (Codex P1)', () => {
     expect(h.sessions.getCurrent()).toBeNull();
     expect(h.jwt.get('bs-1')).toBeNull();
     expect(h.envelope.get('bs-1')).toBeNull();
+    expect(h.signOut.mock.calls).toEqual([[{ session_id: 'bs-1' }, 'jwt-SENTINEL']]);
   });
 
   it('cashier: a late admitted (takeover:true) is dropped', async () => {

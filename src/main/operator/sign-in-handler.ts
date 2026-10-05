@@ -33,6 +33,7 @@ import {
   capturePairingEpoch,
   epochToRecord,
   pairingEpochHolds,
+  signOutAbandonedSession,
   type PairingEpochReader,
 } from './pairing-epoch.js';
 
@@ -204,6 +205,12 @@ export class SignInHandler {
     // create() and the holder writes below (no await in between).
     if (!pairingEpochHolds(pairing)) {
       this.logRefusal('invalid_input', 'pairing_changed');
+      // Codex P2 4186872826: do not abandon the backend session it created.
+      signOutAbandonedSession(
+        this.deps.backend,
+        { session_id: backend.operator_session.id, jwt: exchange.jwt },
+        this.deps.logger,
+      );
       return REFUSE_INVALID;
     }
 

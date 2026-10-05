@@ -28,6 +28,7 @@ import {
 import {
   capturePairingEpoch,
   pairingEpochHolds,
+  signOutAbandonedSession,
   type PairingEpochReader,
   type PairingEpochTicket,
 } from './pairing-epoch.js';
@@ -259,6 +260,12 @@ export class TakeoverHandler {
     if (!pairingEpochHolds(pairing)) {
       this.deps.protoStore.delete(proto.pending_takeover_id);
       this.log('refused', 'pairing_changed');
+      // Codex P2 4186872826: do not abandon the backend session it created.
+      signOutAbandonedSession(
+        this.deps.backend,
+        { session_id: backendResult.operator_session.id, jwt: proto.jwt },
+        this.deps.logger,
+      );
       return REFUSE_INVALID;
     }
 
