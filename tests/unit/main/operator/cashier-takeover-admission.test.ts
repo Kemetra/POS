@@ -119,6 +119,20 @@ describe('cashier takeover via takeover:true', () => {
     expect(fake.admitted).toHaveLength(1);
   });
 
+  it('RT-219: stores the takeover response generation main-only; never in the IPC answer or the audit', async () => {
+    const { handler, store, sessions, fake, emit } = build();
+    fake.setAdmit({ ...ADMITTED, admission_generation: 'gen-takeover-0007' });
+    const proto = cashierProto();
+    store.set(proto);
+
+    const res = await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
+
+    expect(res.kind).toBe('signed_in');
+    expect(sessions.getCurrent()?.admission_generation).toBe('gen-takeover-0007');
+    expect(JSON.stringify(res)).not.toContain('gen-takeover-0007');
+    expect(JSON.stringify(emit.mock.calls)).not.toContain('gen-takeover-0007');
+  });
+
   it('no_connection keeps the proto-session and retries with the SAME idempotency key', async () => {
     const { handler, store, fake, sessions } = build({ kind: 'no_connection' });
     const proto = cashierProto();
