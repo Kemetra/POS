@@ -38,7 +38,11 @@ import type { Database as SqlJsDatabase } from 'sql.js';
 
 import type { DatabaseHandle } from '../../db/client.js';
 import { bindSalesRepository, type SaleRow } from '../../sales/repositories/sales.repository.js';
-import { createSellingUserIdResolver, type SellingUserUnresolved } from '../selling-user-id.js';
+import {
+  createSellingUserIdResolver,
+  type SaleRoute,
+  type SellingUserUnresolved,
+} from '../selling-user-id.js';
 
 beforeAll(async () => {
   await initSalesSyncSql();
@@ -48,27 +52,33 @@ const USER_A = '0190a3c4-0000-7000-8000-00000000000a';
 const USER_B = '0190a3c4-0000-7000-8000-00000000000b';
 const TERMINAL = 'term-1';
 
+const DEVICE_A = { kind: 'device', operatorUserId: USER_A } as const;
+const ENVELOPE = { kind: 'envelope' } as const;
+const HOLD = { kind: 'hold' } as const;
+
 function setup() {
   const db = freshSalesSyncDb();
   const handle = handleFor(db);
   const sales = bindSalesRepository(handle);
   const unresolved: SellingUserUnresolved[] = [];
+  const lookupFailures: unknown[][] = [];
   const resolver = createSellingUserIdResolver({
     db: handle,
     onUnresolved: (info) => unresolved.push(info),
+    onLookupFailed: (...args: unknown[]) => lookupFailures.push(args),
   });
-  const read = (one: SaleRow, terminalId: string): string | null =>
-    resolver.resolve([one], terminalId).get(one.sale_id) ?? null;
+  const read = (one: SaleRow, terminalId: string): SaleRoute | undefined =>
+    resolver.resolve([one], terminalId).get(one.sale_id);
   const sale = (id: string) => nn(sales.readById(id));
-  return { db, read, sale, unresolved };
+  return { db, handle, read, sale, unresolved, lookupFailures, resolver };
 }
 
-describe('RT-224 — selling_user_id is read from the sale’s own payment.settled payload', () => {
-  it('returns the cashier id written at confirm time', () => {
+describe('RT-224 — each sale is routed from its own payment.settled payload', () => {
+  it('a UUID selling_user_id → the device path with that cashier', () => {
     const { db, read, sale, unresolved } = setup();
     seedSale(db, { sale_id: 'sale-1' });
     seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
-    expect(read(sale('sale-1'), TERMINAL)).toBe(USER_A);
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(DEVICE_A);
     expect(unresolved).toEqual([]);
     db.close();
   });
@@ -77,26 +87,18 @@ describe('RT-224 — selling_user_id is read from the sale’s own payment.settl
     const { db, read, sale } = setup();
     seedSale(db, { sale_id: 'sale-a' });
     seedSale(db, { sale_id: 'sale-b' });
-    seedSettled(db, {
-      sale_id: 'sale-a',
-      selling_user_id: USER_A,
-      created_at: '2026-06-07T09:00:00.000Z',
-    });
-    seedSettled(db, {
-      sale_id: 'sale-b',
-      selling_user_id: USER_B,
-      created_at: '2026-06-07T11:00:00.000Z',
-    });
-    expect(read(sale('sale-a'), TERMINAL)).toBe(USER_A);
-    expect(read(sale('sale-b'), TERMINAL)).toBe(USER_B);
+    seedSettled(db, { sale_id: 'sale-a', selling_user_id: USER_A });
+    seedSettled(db, { sale_id: 'sale-b', selling_user_id: USER_B });
+    expect(read(sale('sale-a'), TERMINAL)).toEqual(DEVICE_A);
+    expect(read(sale('sale-b'), TERMINAL)).toEqual({ kind: 'device', operatorUserId: USER_B });
     db.close();
   });
 
-  it('a payload with no selling_user_id (manager/admin or legacy sale) → null, silently', () => {
+  it('no selling_user_id key (manager/admin or pre-RT-224 sale) → the envelope path, silently', () => {
     const { db, read, sale, unresolved } = setup();
     seedSale(db, { sale_id: 'sale-1' });
     seedSettled(db, { sale_id: 'sale-1' });
-    expect(read(sale('sale-1'), TERMINAL)).toBeNull();
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
     expect(unresolved).toEqual([]);
     db.close();
   });
@@ -108,79 +110,109 @@ describe('RT-224 — selling_user_id is read from the sale’s own payment.settl
     seedSettled(db, { sale_id: 'sale-1', branch_id: 'branch-OTHER', selling_user_id: USER_B });
     seedSettled(db, { sale_id: 'sale-1', terminal_id: 'term-OTHER', selling_user_id: USER_B });
     seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
-    expect(read(sale('sale-1'), TERMINAL)).toBe(USER_A);
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(DEVICE_A);
     expect(unresolved).toEqual([]);
     db.close();
   });
 
-  it('a sale of another terminal than the drain’s → null + terminal_mismatch', () => {
+  it('F4a: the sale’s own attempt is chosen when another attempt settled the same handoff', () => {
     const { db, read, sale, unresolved } = setup();
-    seedSale(db, { sale_id: 'sale-1', terminal_id: 'term-OLD' });
-    seedSettled(db, { sale_id: 'sale-1', terminal_id: 'term-OLD', selling_user_id: USER_A });
-    expect(read(sale('sale-1'), TERMINAL)).toBeNull();
-    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'terminal_mismatch' }]);
+    seedSale(db, { sale_id: 'sale-1' });
+    seedSettled(db, { sale_id: 'sale-1', payment_attempt_id: 'pa-OTHER', selling_user_id: USER_B });
+    seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(DEVICE_A);
+    expect(unresolved).toEqual([]);
     db.close();
   });
 
-  it('0 matching rows → null + no_settled_event', () => {
+  it('a row of another attempt only is not this sale’s → envelope + no_settled_event', () => {
     const { db, read, sale, unresolved } = setup();
     seedSale(db, { sale_id: 'sale-1' });
-    seedSettled(db, { sale_id: 'sale-OTHER', selling_user_id: USER_B });
-    expect(read(sale('sale-1'), TERMINAL)).toBeNull();
+    seedSettled(db, { sale_id: 'sale-1', payment_attempt_id: 'pa-OTHER', selling_user_id: USER_A });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
     expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'no_settled_event' }]);
     db.close();
   });
 
-  it('more than 1 matching row → null + multiple_settled_events (never picks one)', () => {
+  it('a sale of another terminal than the drain’s → held + terminal_mismatch', () => {
+    const { db, read, sale, unresolved } = setup();
+    seedSale(db, { sale_id: 'sale-1', terminal_id: 'term-OLD' });
+    seedSettled(db, { sale_id: 'sale-1', terminal_id: 'term-OLD', selling_user_id: USER_A });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(HOLD);
+    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'terminal_mismatch' }]);
+    db.close();
+  });
+
+  it('0 matching rows → envelope + no_settled_event', () => {
+    const { db, read, sale, unresolved } = setup();
+    seedSale(db, { sale_id: 'sale-1' });
+    seedSettled(db, { sale_id: 'sale-OTHER', selling_user_id: USER_B });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
+    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'no_settled_event' }]);
+    db.close();
+  });
+
+  it('more than 1 own row, one carrying selling_user_id → HELD (a cashier sale is never sent under a manager)', () => {
     const { db, read, sale, unresolved } = setup();
     seedSale(db, { sale_id: 'sale-1' });
     seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
-    seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
-    expect(read(sale('sale-1'), TERMINAL)).toBeNull();
+    seedSettled(db, { sale_id: 'sale-1' });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(HOLD);
     expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'multiple_settled_events' }]);
     db.close();
   });
 
-  it('a row for another payment attempt or another operator is not this sale’s → null + settled_event_mismatch', () => {
-    const a = setup();
-    seedSale(a.db, { sale_id: 'sale-1' });
-    seedSettled(a.db, {
-      sale_id: 'sale-1',
-      payment_attempt_id: 'pa-OTHER',
-      selling_user_id: USER_A,
-    });
-    expect(a.read(a.sale('sale-1'), TERMINAL)).toBeNull();
-    expect(a.unresolved).toEqual([{ saleId: 'sale-1', reason: 'settled_event_mismatch' }]);
-    a.db.close();
+  it('more than 1 own row, none carrying the key → envelope + multiple_settled_events', () => {
+    const { db, read, sale, unresolved } = setup();
+    seedSale(db, { sale_id: 'sale-1' });
+    seedSettled(db, { sale_id: 'sale-1' });
+    seedSettled(db, { sale_id: 'sale-1' });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
+    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'multiple_settled_events' }]);
+    db.close();
+  });
 
-    const b = setup();
-    seedSale(b.db, { sale_id: 'sale-1' });
-    seedSettled(b.db, {
+  it('a row of another operator carrying the key → HELD + settled_event_mismatch', () => {
+    const { db, read, sale, unresolved } = setup();
+    seedSale(db, { sale_id: 'sale-1' });
+    seedSettled(db, {
       sale_id: 'sale-1',
       attribution_operator_id: 'op-OTHER',
       selling_user_id: USER_A,
     });
-    expect(b.read(b.sale('sale-1'), TERMINAL)).toBeNull();
-    expect(b.unresolved).toEqual([{ saleId: 'sale-1', reason: 'settled_event_mismatch' }]);
-    b.db.close();
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(HOLD);
+    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'settled_event_mismatch' }]);
+    db.close();
+  });
+
+  it('a row of another operator without the key → envelope + settled_event_mismatch', () => {
+    const { db, read, sale, unresolved } = setup();
+    seedSale(db, { sale_id: 'sale-1' });
+    seedSettled(db, { sale_id: 'sale-1', attribution_operator_id: 'op-OTHER' });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
+    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'settled_event_mismatch' }]);
+    db.close();
   });
 
   it.each([[''], ['not-a-uuid'], [42], [null]])(
-    'a malformed selling_user_id (%j) → null + malformed_selling_user_id',
+    'F4b: a malformed selling_user_id (%j) → HELD + malformed_selling_user_id (never the envelope)',
     (bad) => {
       const { db, read, sale, unresolved } = setup();
       seedSale(db, { sale_id: 'sale-1' });
       seedSettled(db, { sale_id: 'sale-1', selling_user_id: bad });
-      expect(read(sale('sale-1'), TERMINAL)).toBeNull();
+      expect(read(sale('sale-1'), TERMINAL)).toEqual(HOLD);
       expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'malformed_selling_user_id' }]);
       db.close();
     },
   );
 
   it('reports an unresolved sale ONCE, however often it is read', () => {
-    const { db, read, sale, unresolved } = setup();
+    const { db, read, sale, unresolved, resolver } = setup();
     seedSale(db, { sale_id: 'sale-1' });
-    for (let i = 0; i < 5; i += 1) expect(read(sale('sale-1'), TERMINAL)).toBeNull();
+    for (let i = 0; i < 5; i += 1) {
+      expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
+      resolver.forget('sale-1');
+    }
     expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'no_settled_event' }]);
     db.close();
   });
@@ -188,10 +220,60 @@ describe('RT-224 — selling_user_id is read from the sale’s own payment.settl
   it('the unresolved report carries only { saleId, reason } — never a user id', () => {
     const { db, read, sale, unresolved } = setup();
     seedSale(db, { sale_id: 'sale-1' });
-    seedSettled(db, { sale_id: 'sale-1', payment_attempt_id: 'pa-OTHER', selling_user_id: USER_A });
+    seedSettled(db, {
+      sale_id: 'sale-1',
+      attribution_operator_id: 'op-OTHER',
+      selling_user_id: USER_A,
+    });
     read(sale('sale-1'), TERMINAL);
     expect(Object.keys(nn(unresolved[0])).sort()).toEqual(['reason', 'saleId']);
     expect(JSON.stringify(unresolved)).not.toContain(USER_A);
+    db.close();
+  });
+});
+
+describe('RT-224 (rev547 F6) — a bad audit row or a failing lookup never stops the drain', () => {
+  it('a malformed-JSON payment.settled row elsewhere does not break the lookup', () => {
+    const { db, read, sale, lookupFailures } = setup();
+    seedSale(db, { sale_id: 'sale-1' });
+    db.run(
+      `INSERT INTO audit_events
+         (event_id, tenant_id, branch_id, originating_terminal_id, acting_operator_id, session_id,
+          shift_id, action_category, created_at, approving_supervisor_id, payload)
+       VALUES ('evt-bad', 'tenant-1', 'branch-1', 'term-1', 'op-1', 'sess-1', NULL,
+               'payment.settled', '2026-06-07T10:00:00.000Z', NULL, '{not json')`,
+    );
+    seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(DEVICE_A);
+    expect(lookupFailures).toEqual([]);
+    db.close();
+  });
+
+  it('a lookup that throws HOLDS the batch (not memoized), is reported once, and is retried', () => {
+    const { db, handle, sale } = setup();
+    seedSale(db, { sale_id: 'sale-1' });
+    seedSale(db, { sale_id: 'sale-2' });
+    seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
+    seedSettled(db, { sale_id: 'sale-2' });
+    let failing = true;
+    const failures: unknown[][] = [];
+    const resolver = createSellingUserIdResolver({
+      db: {
+        ...handle,
+        prepare: (sql: string) => {
+          if (failing && sql.includes('audit_events'))
+            throw new Error('SQLITE_ERROR: malformed JSON');
+          return handle.prepare(sql);
+        },
+      },
+      onLookupFailed: (...args: unknown[]) => failures.push(args),
+    });
+    const both = [sale('sale-1'), sale('sale-2')];
+    expect([...resolver.resolve(both, TERMINAL).values()]).toEqual([HOLD, HOLD]);
+    expect([...resolver.resolve(both, TERMINAL).values()]).toEqual([HOLD, HOLD]);
+    expect(failures).toEqual([[]]);
+    failing = false;
+    expect([...resolver.resolve(both, TERMINAL).values()]).toEqual([DEVICE_A, ENVELOPE]);
     db.close();
   });
 });
@@ -240,7 +322,8 @@ function seedNoise(db: SqlJsDatabase, n: number): void {
 }
 
 describe('RT-224 (Codex P2) — one audit_events pass per batch, memoized, never per sale', () => {
-  const SALES = 500;
+  // rev547 F5: any backlog is ONE scan (no 500-sale chunking).
+  const SALES = 1200;
 
   function backlog() {
     const db = freshSalesSyncDb();
@@ -257,13 +340,13 @@ describe('RT-224 (Codex P2) — one audit_events pass per batch, memoized, never
     return { db, rows, resolver, auditSql: counting.auditSql };
   }
 
-  it('500 queued sales over a 20k-row audit table: ONE query resolves them all', () => {
+  it('1200 queued sales over a 20k-row audit table: ONE query resolves them all', () => {
     const { db, rows, resolver, auditSql } = backlog();
     const ids = resolver.resolve(rows, TERMINAL);
     expect(auditSql).toHaveLength(1);
     expect(ids.size).toBe(SALES);
-    expect(ids.get('sale-1')).toBe(USER_A);
-    expect(ids.get('sale-0')).toBeNull(); // no selling_user_id (legacy / manager sale)
+    expect(ids.get('sale-1')).toEqual(DEVICE_A);
+    expect(ids.get('sale-0')).toEqual(ENVELOPE); // no selling_user_id (legacy / manager sale)
     db.close();
   });
 
@@ -282,7 +365,7 @@ describe('RT-224 (Codex P2) — one audit_events pass per batch, memoized, never
     resolver.resolve(rows, TERMINAL);
     expect(auditSql).toHaveLength(2);
     resolver.forget('sale-1');
-    expect(resolver.resolve(rows, TERMINAL).get('sale-1')).toBe(USER_A);
+    expect(resolver.resolve(rows, TERMINAL).get('sale-1')).toEqual(DEVICE_A);
     expect(auditSql).toHaveLength(3);
     db.close();
   });

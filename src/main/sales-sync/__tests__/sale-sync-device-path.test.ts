@@ -74,6 +74,8 @@ interface Harness {
   deadLetters: Array<{ saleId: string; reason: string | undefined }>;
   unauthorized: number[];
   unresolved: SellingUserUnresolved[];
+  /** Sale ids the engine told the resolver to forget (rev547 F7). */
+  forgotten: string[];
   setEnvelope: (token: string | null) => void;
   setDevice: (available: boolean) => void;
   db: ReturnType<typeof freshSalesSyncDb>;
@@ -115,10 +117,16 @@ function harness(opts: {
   };
   const stateRepo = createSaleSyncStateRepo(handle);
   const client = createFakeSaleSyncClient(opts.script ?? [{ kind: 'ok', saleRef: null }]);
+  const forgotten: string[] = [];
+  const unresolvedSink: SellingUserUnresolved[] = [];
+  const resolver = createSellingUserIdResolver({
+    db: countingHandle,
+    onUnresolved: (info) => unresolvedSink.push(info),
+  });
   const events: SaleSyncPauseTransition[] = [];
   const deadLetters: Array<{ saleId: string; reason: string | undefined }> = [];
   const unauthorized: number[] = [];
-  const unresolved: SellingUserUnresolved[] = [];
+  const unresolved = unresolvedSink;
   let envelope = opts.envelope ?? null;
   let device = opts.device ?? true;
   const deps: SaleSyncEngineDeps = {
@@ -130,10 +138,13 @@ function harness(opts: {
     resolveTerminalId: () => TERMINAL,
     getOperatorToken: () => envelope,
     hasDeviceCredential: () => Promise.resolve(device),
-    sellingUsers: createSellingUserIdResolver({
-      db: countingHandle,
-      onUnresolved: (info) => unresolved.push(info),
-    }),
+    sellingUsers: {
+      resolve: (sales, terminalId) => resolver.resolve(sales, terminalId),
+      forget: (saleId) => {
+        forgotten.push(saleId);
+        resolver.forget(saleId);
+      },
+    },
     now: () => '2026-06-07T10:05:00.000Z',
     backoff: { baseMs: 1000, maxMs: 300_000 },
     onPauseTransition: (event) => events.push(event),
@@ -156,6 +167,7 @@ function harness(opts: {
       device = d;
     },
     db,
+    forgotten,
     auditQueries: () => auditQueries,
   };
 }
@@ -245,16 +257,37 @@ describe('RT-224 step 2 — credential per sale', () => {
     h.db.close();
   });
 
-  it('an unresolvable sale (two settled rows) falls back to the envelope path and is reported once', async () => {
+  it('rev547 F4b: a sale whose cashier cannot be proven (two settled rows with the key) is HELD, never sent under the envelope', async () => {
     const h = harness({ sales: [{ id: 'sale-1', user: USER_A }], envelope: null });
     seedSettled(h.db, { sale_id: 'sale-1', selling_user_id: USER_B });
     await ticks(h.engine, 3);
     expect(h.client.cashierCalls).toHaveLength(0);
     expect(h.unresolved).toEqual([{ saleId: 'sale-1', reason: 'multiple_settled_events' }]);
     h.setEnvelope(ENVELOPE);
-    await tick(h.engine);
-    expect(h.client.calls.map((p) => p.externalId)).toEqual(['pos-pulse:handoff-sale-1']);
+    await ticks(h.engine, 3);
+    expect(h.client.calls).toHaveLength(0);
     expect(h.client.cashierCalls).toHaveLength(0);
+    expect(h.stateRepo.read('sale-1')).toBeNull();
+    expect(h.deadLetters).toEqual([]);
+    h.db.close();
+  });
+
+  it('rev547 F4b: a malformed selling_user_id is HELD even with an envelope; the sales behind it still go', async () => {
+    const h = harness({
+      sales: [
+        { id: 'sale-bad', user: 'not-a-uuid' },
+        { id: 'sale-1', user: USER_A },
+        { id: 'legacy-1' },
+      ],
+      envelope: ENVELOPE,
+    });
+    await tick(h.engine);
+    expect(h.unresolved).toEqual([{ saleId: 'sale-bad', reason: 'malformed_selling_user_id' }]);
+    expect(h.client.calls.map((p) => p.externalId)).toEqual(['pos-pulse:handoff-legacy-1']);
+    expect(h.client.cashierCalls.map((c) => c.payload.externalId)).toEqual([
+      'pos-pulse:handoff-sale-1',
+    ]);
+    expect(h.stateRepo.read('sale-bad')).toBeNull();
     h.db.close();
   });
 
@@ -541,6 +574,127 @@ describe('RT-224 step 2 (Codex P2) — a device-credential read failure never ab
     await expect(tick(engine)).resolves.toBeUndefined();
     await expect(engine.pausedReason()).resolves.toBe('no_operator_credential');
     expect(h.events.map((e) => e.transition)).toEqual(['paused']);
+    h.db.close();
+  });
+});
+
+describe('rev547 F1 — the pause stays visible for sales that need an envelope', () => {
+  it('upgrade with a legacy queue on a cashier-only day: cashier sales flow, the pause is logged once (envelope subset), resume once', async () => {
+    const h = harness({
+      sales: [{ id: 'legacy-1' }, { id: 'legacy-2' }, { id: 'sale-a', user: USER_A }],
+      envelope: null,
+      device: true,
+    });
+    await ticks(h.engine, 4);
+    // The cashier sale went out on the device path …
+    expect(sentAsCashier(h)).toEqual([['pos-pulse:handoff-sale-a', USER_A]]);
+    // … while the two envelope-routed sales are blocked: ONE pause, counting them only.
+    expect(h.events).toEqual([
+      { transition: 'paused', reason: 'no_operator_credential', pending: 2 },
+    ]);
+    expect(await h.engine.pausedReason()).toBe('no_operator_credential');
+    const status = await createSaleSyncStatusReader({
+      stateRepo: h.stateRepo,
+      tenantId: TENANT,
+      branchId: BRANCH,
+      resolveTerminalId: () => TERMINAL,
+      pausedReason: () => h.engine.pausedReason(),
+    })();
+    expect(status.paused).toBe('no_operator_credential');
+    // A manager signs in: resumed once, the legacy sales drain.
+    h.setEnvelope(ENVELOPE);
+    expect(await h.engine.pausedReason()).toBeNull();
+    await ticks(h.engine, 3);
+    expect(h.events).toEqual([
+      { transition: 'paused', reason: 'no_operator_credential', pending: 2 },
+      { transition: 'resumed', reason: 'no_operator_credential', pending: 2 },
+    ]);
+    expect(h.client.calls.map((p) => p.externalId)).toEqual([
+      'pos-pulse:handoff-legacy-1',
+      'pos-pulse:handoff-legacy-2',
+    ]);
+    // The manager signs out with nothing envelope-routed left: no pause.
+    h.setEnvelope(null);
+    await ticks(h.engine, 2);
+    expect(h.events.map((e) => e.transition)).toEqual(['paused', 'resumed']);
+    expect(await h.engine.pausedReason()).toBeNull();
+    h.db.close();
+  });
+
+  it('a cashier-only queue with a device credential never pauses', async () => {
+    const h = harness({
+      sales: [
+        { id: 'sale-a', user: USER_A },
+        { id: 'sale-b', user: USER_B },
+      ],
+      envelope: null,
+    });
+    await ticks(h.engine, 3);
+    expect(h.events).toEqual([]);
+    expect(await h.engine.pausedReason()).toBeNull();
+    h.db.close();
+  });
+
+  it('a held sale (unprovable cashier) does not count as waiting for an envelope', async () => {
+    const h = harness({ sales: [{ id: 'sale-bad', user: 'not-a-uuid' }], envelope: null });
+    await ticks(h.engine, 3);
+    expect(h.events).toEqual([]);
+    expect(await h.engine.pausedReason()).toBeNull();
+    h.db.close();
+  });
+});
+
+describe('rev547 F6 — a failing selling-user lookup holds that batch only', () => {
+  it('a lookup that throws: no send this tick (never the envelope), the tick resolves; the next tick sends', async () => {
+    const h = harness({
+      sales: [{ id: 'sale-1', user: USER_A }, { id: 'legacy-1' }],
+      envelope: ENVELOPE,
+    });
+    let failing = true;
+    const engine = createSaleSyncEngine({
+      ...h.deps,
+      sellingUsers: {
+        resolve: (sales, terminalId) => {
+          if (failing) throw new Error('SQLITE_ERROR: malformed JSON');
+          return nn(h.deps.sellingUsers).resolve(sales, terminalId);
+        },
+        forget: (saleId) => nn(h.deps.sellingUsers).forget(saleId),
+      },
+    });
+    await expect(tick(engine)).resolves.toBeUndefined();
+    expect(h.client.calls).toHaveLength(0);
+    expect(h.client.cashierCalls).toHaveLength(0);
+    expect(h.stateRepo.read('sale-1')).toBeNull();
+    failing = false;
+    await tick(engine);
+    expect(sentAsCashier(h)).toEqual([['pos-pulse:handoff-sale-1', USER_A]]);
+    expect(h.client.calls.map((p) => p.externalId)).toEqual(['pos-pulse:handoff-legacy-1']);
+    h.db.close();
+  });
+});
+
+describe('rev547 F7 — a memoized cashier is forgotten when its sale leaves the queue', () => {
+  it('synced, refused, permanent and divergent sales are forgotten; a transient one is kept', async () => {
+    const h = harness({
+      sales: [
+        { id: 'sale-ok', user: USER_A },
+        { id: 'sale-refused', user: USER_A },
+        { id: 'sale-permanent', user: USER_A },
+        { id: 'sale-divergent', user: USER_A },
+        { id: 'sale-transient', user: USER_A },
+      ],
+      script: [
+        { kind: 'ok', saleRef: null },
+        { kind: 'refused' },
+        { kind: 'permanent' },
+        { kind: 'divergent', errorCode: 'idempotency_key_conflict' },
+        { kind: 'transient' },
+      ],
+    });
+    await tick(h.engine);
+    expect([...h.forgotten].sort()).toEqual(
+      ['sale-divergent', 'sale-ok', 'sale-permanent', 'sale-refused'].sort(),
+    );
     h.db.close();
   });
 });
