@@ -166,12 +166,16 @@ interface Armed {
   last_sent_at_ms: number;
   /** When the scheduled admission call fires (monotonic ms); null when none is scheduled. */
   next_call_at_ms: number | null;
+  /** Heartbeats sent by this session so far (the latest one's sequence number). */
+  sent_seq: number;
   /**
-   * RT-219 review F1: an orphan answer renewed this admission while a heartbeat
-   * of this session was in flight, so that heartbeat's answer may carry an
-   * older generation. Its next call is then an early verification.
+   * RT-219 review F1 / Codex P2 4181547527: an orphan answer renewed this
+   * admission, so the generation held may be stale. Set until an `admitted`
+   * for a heartbeat sent AFTER that answer (`sent_seq > stale_upto_seq`)
+   * refreshes it; a non-admitted outcome keeps it. `early_scheduled`: the one
+   * early verification call has been scheduled (no 5 s retry loop).
    */
-  reverify: boolean;
+  reverify: { stale_upto_seq: number; early_scheduled: boolean } | null;
   timer: ReturnType<typeof setTimeout> | null;
   latched: boolean;
   /** Consecutive failed ticks (backoff). */
@@ -217,7 +221,8 @@ function armedFor(record: OperatorSessionRecord, clock: () => number): Armed | n
     deadline: { requested_at_ms: sentAt, ttl_ms: record.admission_ttl_seconds * 1000 },
     last_sent_at_ms: sentAt,
     next_call_at_ms: null,
-    reverify: false,
+    sent_seq: 0,
+    reverify: null,
     timer: null,
     latched: false,
     failures: 0,
@@ -365,14 +370,26 @@ export class CashierAdmissionKeeper {
    * again, so nothing is sent for it.
    */
   private reverifySoon(live: Armed): void {
-    if (live.next_call_at_ms === null) {
-      live.reverify = true; // no call scheduled: a heartbeat is in flight
-      return;
-    }
+    // Every heartbeat sent so far may hold a stale answer.
+    live.reverify = { stale_upto_seq: live.sent_seq, early_scheduled: false };
+    if (live.next_call_at_ms === null) return; // in flight: its outcome schedules the early call
+    live.reverify.early_scheduled = true; // the scheduled call is the verification
     const earlyAt =
       this.nowMs() + nextCallDelayMs(this.earlyVerifyCapMs(live), live.deadline, this.nowMs());
     if (live.next_call_at_ms <= earlyAt) return;
     this.scheduleNext(live, this.earlyVerifyCapMs(live));
+  }
+
+  /**
+   * The cap for the next call after an outcome: `normalCapMs`, or, once per
+   * stale period (review F1 / Codex P2 4181547527), the early verification,
+   * never below `floorMs` (a `rate_limited` backoff is honoured, no hammering).
+   */
+  private nextCapMs(armed: Armed, normalCapMs: number, floorMs = 0): number {
+    const r = armed.reverify;
+    if (r === null || r.early_scheduled) return normalCapMs;
+    r.early_scheduled = true;
+    return Math.min(normalCapMs, Math.max(this.earlyVerifyCapMs(armed), floorMs));
   }
 
   private nowMs(): number {
@@ -397,6 +414,7 @@ export class CashierAdmissionKeeper {
     if (!this.stillCurrent(armed) || armed.latched) return;
     // Stamped before the request goes out: a renewal's deadline runs from here.
     armed.last_sent_at_ms = this.nowMs();
+    const seq = ++armed.sent_seq;
     const result = await this.requestHeartbeat(armed);
     // RT-198 latch + session identity: re-checked after the await.
     if (this.stopped) return;
@@ -405,7 +423,7 @@ export class CashierAdmissionKeeper {
       return;
     }
     this.log(result.kind);
-    this.handleOutcome(armed, result);
+    this.handleOutcome(armed, result, seq);
   }
 
   private async requestHeartbeat(armed: Armed): Promise<CashierAdmissionResult> {
@@ -447,15 +465,11 @@ export class CashierAdmissionKeeper {
     });
   }
 
-  private handleOutcome(armed: Armed, result: CashierAdmissionResult): void {
+  private handleOutcome(armed: Armed, result: CashierAdmissionResult, seq: number): void {
     if (result.kind !== 'device_unauthorized') armed.device401s = 0;
-    // Review F1: only an `admitted` can carry a stale generation; any other
-    // outcome's next call is sent after the orphan answer, so it is current.
-    const reverify = armed.reverify;
-    armed.reverify = false;
     switch (result.kind) {
       case 'admitted':
-        this.onAdmitted(armed, result, reverify);
+        this.onAdmitted(armed, result, seq);
         return;
       case 'active_elsewhere':
         this.latch(armed, 'superseded_by_takeover');
@@ -472,7 +486,7 @@ export class CashierAdmissionKeeper {
     }
   }
 
-  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted, reverify: boolean): void {
+  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted, seq: number): void {
     armed.failures = 0;
     notifyGrantSeam(this.deps.admission, result, armed);
     if (result.admission_id !== armed.admission_id) {
@@ -496,10 +510,10 @@ export class CashierAdmissionKeeper {
       admission_generation: result.admission_generation,
       admission_requested_at_ms: armed.last_sent_at_ms,
     });
-    this.scheduleNext(
-      armed,
-      reverify ? this.earlyVerifyCapMs(armed) : heartbeatIntervalMs(armed.ttl_seconds),
-    );
+    // Review F1: an answer to a heartbeat sent after the orphan answer is
+    // current; one sent before it may be older, so verify early once.
+    if (armed.reverify !== null && seq > armed.reverify.stale_upto_seq) armed.reverify = null;
+    this.scheduleNext(armed, this.nextCapMs(armed, heartbeatIntervalMs(armed.ttl_seconds)));
   }
 
   /**
@@ -525,11 +539,13 @@ export class CashierAdmissionKeeper {
   private onNotAnswered(armed: Armed, result: CashierAdmissionResult): void {
     if (!BACKOFF_KINDS.has(result.kind)) {
       armed.failures = 0;
-      this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
+      this.scheduleNext(armed, this.nextCapMs(armed, heartbeatIntervalMs(armed.ttl_seconds)));
       return;
     }
     armed.failures += 1;
-    this.scheduleNext(armed, backoffCapMs(armed));
+    // A `rate_limited` answer's backoff is a floor for the early verification.
+    const floor = result.kind === 'rate_limited' ? backoffCapMs(armed) : 0;
+    this.scheduleNext(armed, this.nextCapMs(armed, backoffCapMs(armed), floor));
   }
 
   /** Lose authority: no new sale, no more heartbeats; end at the first safe point. */
