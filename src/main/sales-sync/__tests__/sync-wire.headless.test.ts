@@ -55,7 +55,7 @@ beforeAll(async () => {
 const TENANT_ID = 'tenant-1';
 const BRANCH_ID = 'branch-1';
 const TERMINAL_ID = 'term-1';
-const SCOPE = { tenantId: TENANT_ID, branchId: BRANCH_ID };
+const SCOPE = { tenantId: TENANT_ID, branchId: BRANCH_ID, terminalId: TERMINAL_ID };
 
 const BASE = 'https://example.invalid';
 const SALES_PATH = '/api/pos/v1/sales';
@@ -127,6 +127,7 @@ function wireProductionSyncPath(opts: {
     salesRepo,
     tenantId: TENANT_ID,
     branchId: BRANCH_ID,
+    resolveTerminalId: () => TERMINAL_ID,
     getOperatorToken: opts.getOperatorToken,
     now: opts.now ?? (() => FIXED_NOW),
     backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },

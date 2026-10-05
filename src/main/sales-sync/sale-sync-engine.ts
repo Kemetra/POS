@@ -11,7 +11,12 @@
  *   1. If no operator session token is present → pause (no POST); resume next tick
  *      once a token returns (FR-3 / clarify Q1). The token is read in-process and
  *      never crosses the bridge.
- *   2. `stateRepo.eligible(scope, now)` → FIFO list (outbox LEFT JOIN state).
+ *   2. Resolve the CURRENT pairing's `terminal_id` (RT-221); none (unpaired /
+ *      invalid) → nothing to drain. `stateRepo.eligible(scope, now)` → FIFO list
+ *      (outbox LEFT JOIN state) of THIS terminal's rows only. Rows queued under an
+ *      earlier pairing are held — never sent under the new device identity
+ *      (RT-138 L6). The terminal is re-resolved before each POST, so a re-pair
+ *      mid-drain stops the drain.
  *   3. For each: read the durable Sale, build the payload (tenders only past the
  *      RT-79 cutoff; integer minor units), POST, and record the outcome:
  *        ok(200/201) → markSynced  (incl. idempotent replays, P5); also stores
@@ -69,6 +74,13 @@ export interface SaleSyncEngineDeps {
   salesRepo: SaleReadPort;
   tenantId: string;
   branchId: string;
+  /**
+   * RT-221: the CURRENT pairing's `terminal_id`, read live from the pairing
+   * status on every tick (and before every POST); null when the terminal is
+   * unpaired or its pairing is invalid. Only this terminal's outbox rows are
+   * drained.
+   */
+  resolveTerminalId: () => string | null | Promise<string | null>;
   /** In-process read of 004's operator session token; null when no session. */
   getOperatorToken: () => string | null;
   /** One ISO-8601 UTC stamp source (determinism in tests). */
@@ -137,8 +149,17 @@ function addMs(iso: string, ms: number): string {
 }
 
 export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
-  const { client, stateRepo, salesRepo, tenantId, branchId, getOperatorToken, now, backoff } = deps;
-  const scope = { tenantId, branchId };
+  const {
+    client,
+    stateRepo,
+    salesRepo,
+    tenantId,
+    branchId,
+    resolveTerminalId,
+    getOperatorToken,
+    now,
+    backoff,
+  } = deps;
   let inFlight = false;
 
   async function drainOne(saleId: string): Promise<void> {
@@ -233,10 +254,15 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     try {
       // Operator-session gate (FR-3): no envelope (null or '') → pause the whole drain.
       if (!envelopePresent()) return;
-      const due = stateRepo.eligible(scope, now());
+      // RT-221: drain only the current pairing's rows; no pairing → nothing.
+      const terminalId = await resolveTerminalId();
+      if (terminalId === null) return;
+      const due = stateRepo.eligible({ tenantId, branchId, terminalId }, now());
       for (const sale of due) {
         // Re-check the session before each POST so a mid-drain expiry pauses cleanly.
         if (!envelopePresent()) return;
+        // RT-221: a re-pair mid-drain must not send the rest under the new identity.
+        if ((await resolveTerminalId()) !== terminalId) return;
         await drainOne(sale.sale_id);
       }
     } finally {

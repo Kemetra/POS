@@ -44,7 +44,7 @@ beforeAll(async () => {
 
 type SalesSyncDb = ReturnType<typeof freshSalesSyncDb>;
 
-const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1' };
+const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
 const SALE_ID = 'sale-1';
 const REF_A = '0190f5a2-7b3c-7d4e-8f90-a1b2c3d4e5f6';
 const REF_B = '0190f5a2-7b3c-7d4e-8f90-0000000000bb';
@@ -211,6 +211,7 @@ function engineHarness(options: EngineHarnessOptions): EngineHarness {
     salesRepo: bindSalesRepository(handle),
     tenantId: SCOPE.tenantId,
     branchId: SCOPE.branchId,
+    resolveTerminalId: () => SCOPE.terminalId,
     getOperatorToken: () => 'tok-1',
     now: options.now ?? (() => '2026-10-04T10:05:00.000Z'),
     backoff: { baseMs: 1000, maxMs: 300_000 },

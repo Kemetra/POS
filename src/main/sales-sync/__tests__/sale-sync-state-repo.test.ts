@@ -27,7 +27,7 @@ beforeAll(async () => {
   await initSalesSyncSql();
 });
 
-const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1' };
+const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
 
 describe('T020 — sale-sync-state-repo', () => {
   it('read returns null before any attempt is recorded', () => {
@@ -90,7 +90,10 @@ describe('T020 — sale-sync-state-repo', () => {
     const repo = createSaleSyncStateRepo(handleFor(db));
     repo.markSynced({ saleId: 'sale-1', tenantId: 'tenant-1', branchId: 'branch-1', now: 'X' });
     // eligible() for a different tenant must not see sale-1.
-    const other = repo.eligible({ tenantId: 'tenant-2', branchId: 'branch-9' }, 'Z');
+    const other = repo.eligible(
+      { tenantId: 'tenant-2', branchId: 'branch-9', terminalId: 'term-1' },
+      'Z',
+    );
     expect(other.find((e) => e.sale_id === 'sale-1')).toBeUndefined();
     db.close();
   });

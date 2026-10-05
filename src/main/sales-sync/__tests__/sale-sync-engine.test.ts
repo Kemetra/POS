@@ -34,7 +34,7 @@ beforeAll(async () => {
   await initSalesSyncSql();
 });
 
-const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1' };
+const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
 
 interface Harness {
   deps: SaleSyncEngineDeps;
@@ -60,6 +60,7 @@ function harness(opts: {
     salesRepo,
     tenantId: SCOPE.tenantId,
     branchId: SCOPE.branchId,
+    resolveTerminalId: () => SCOPE.terminalId,
     getOperatorToken: () => (opts.token === undefined ? 'tok-1' : opts.token),
     now: opts.now ?? (() => '2026-06-07T10:05:00.000Z'),
     backoff: { baseMs: 1000, maxMs: 300_000 },

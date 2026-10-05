@@ -35,7 +35,7 @@ beforeAll(async () => {
 const TENANT_ID = 'tenant-1';
 const BRANCH_ID = 'branch-1';
 const TERMINAL_ID = 'term-1';
-const SCOPE = { tenantId: TENANT_ID, branchId: BRANCH_ID };
+const SCOPE = { tenantId: TENANT_ID, branchId: BRANCH_ID, terminalId: TERMINAL_ID };
 const ENVELOPE = 'opaque-pos-operator-envelope-rt190';
 const NOW = '2026-10-04T10:00:00.000Z';
 const LATER = '2027-01-01T00:00:00.000Z';
@@ -82,6 +82,7 @@ function wire(replies: Reply[]) {
     salesRepo: bindSalesRepository(handle),
     tenantId: TENANT_ID,
     branchId: BRANCH_ID,
+    resolveTerminalId: () => TERMINAL_ID,
     getOperatorToken: () => ENVELOPE,
     now: () => clock,
     backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },
@@ -197,6 +198,7 @@ describe('RT-190 — capture 409 is a terminal payload divergence (production wi
       expect(h.divergences).toEqual([]);
       expect(h.stateRepo.readSyncStatus(SCOPE)).toEqual({
         pending: 0,
+        heldPreviousPairing: 0,
         deadLetter: 0,
         payloadDivergence: 0,
         lastSuccessAt: NOW,
@@ -220,6 +222,7 @@ describe('RT-190 — capture 409 is a terminal payload divergence (production wi
       await h.tick();
       expect(h.stateRepo.readSyncStatus(SCOPE)).toEqual({
         pending: 0,
+        heldPreviousPairing: 0,
         deadLetter: 3,
         payloadDivergence: 1,
         lastSuccessAt: NOW,
