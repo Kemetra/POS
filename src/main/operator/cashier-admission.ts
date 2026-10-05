@@ -111,6 +111,23 @@ export function newAdmissionIdempotencyKey(): string {
   return `pos-cashier-adm-${randomUUID()}`;
 }
 
+/**
+ * Codex P1 4185012967 — an idempotency key together with the grant seam's send
+ * mark captured when the key was MINTED. A retry that reuses the key (so
+ * Backend-Core may replay the original answer) must reuse this mark too,
+ * never recapture it: a replayed `admitted` predates anything that happened
+ * after the first send.
+ */
+export interface AdmissionKey {
+  idempotency_key: string;
+  send_mark: AdmissionSendMark;
+}
+
+/** Mint a key and bind the current send mark to it. */
+export function mintAdmissionKey(deps: CashierAdmissionDeps): AdmissionKey {
+  return { idempotency_key: nextIdempotencyKey(deps), send_mark: captureSendMark(deps) };
+}
+
 export function nextIdempotencyKey(deps: CashierAdmissionDeps): string {
   return (deps.newIdempotencyKey ?? newAdmissionIdempotencyKey)();
 }
@@ -319,7 +336,18 @@ export async function awaitPendingEnd(deps: CashierAdmissionDeps, user_id: strin
 /** Call the admission resource for an online sign-in or takeover and report the outcome. */
 export async function admitCashierOnline(
   deps: CashierAdmissionDeps,
-  req: { user_id: string; operator_id: string; takeover: boolean; idempotency_key: string },
+  req: {
+    user_id: string;
+    operator_id: string;
+    takeover: boolean;
+    idempotency_key: string;
+    /**
+     * The mark bound to `idempotency_key` when it was minted
+     * ({@link mintAdmissionKey}). Absent only for a one-shot key: then it is
+     * captured now, just before the send.
+     */
+    send_mark?: AdmissionSendMark;
+  },
 ): Promise<OnlineAdmissionResult> {
   // Review of 024f07c, item 3: a late `end` of this user's previous admission
   // would kill the one the server renews now; let it land first (bounded).
@@ -327,14 +355,18 @@ export async function admitCashierOnline(
   // Stamped BEFORE the request goes out: the server's TTL runs from no
   // earlier than this, so a deadline from it is conservative under latency.
   const requested_at_ms = monotonicNowMs(deps);
-  const sent = captureSendMark(deps);
+  const sent = req.send_mark ?? captureSendMark(deps);
   const result = await deps.client.admit({
     mode: 'online',
     user_id: req.user_id,
     takeover: req.takeover,
     idempotency_key: req.idempotency_key,
   });
-  reportAdmissionOutcome(deps, result, { ...req, ...sent });
+  reportAdmissionOutcome(deps, result, {
+    user_id: req.user_id,
+    operator_id: req.operator_id,
+    ...sent,
+  });
   return result.kind === 'admitted' ? { ...result, requested_at_ms } : result;
 }
 
