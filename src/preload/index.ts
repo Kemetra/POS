@@ -36,6 +36,7 @@ import type {
 } from '../shared/bridge-api';
 import { subscribeSessionState } from './session-state.js';
 import { subscribePairingStatus } from './pairing-status.js';
+import { invokePairingRecheck } from './pairing-recheck.js';
 import type { OperatorRefusal } from '../shared/audit/event-shape';
 import type { LogRecord } from '../shared/log-record';
 import type { AppConfig } from '../shared/app-config';
@@ -71,6 +72,8 @@ const pairing: PairingBridgeAPI = {
     ipcRenderer.invoke(PAIRING_IPC_CHANNELS.SUBMIT, pairing_code) as Promise<PairingSubmitResult>,
   // RT-215 — the pairing-status push (validated `{ kind, reason? }` only).
   onStatusChanged: (cb) => subscribePairingStatus(ipcRenderer, cb),
+  // RT-215 10897-A — the "Check again" (trigger only; validated `{ outcome }`).
+  recheckRevocation: () => invokePairingRecheck(ipcRenderer),
 };
 
 /**

@@ -40,7 +40,8 @@ export type PairingStatus =
    * credential (two consecutive device-bearer 401s, the second from a
    * confirmation call). Durable on the pairing row until a re-pair; the
    * device token is kept sealed but never sent. Recovery is a normal pair
-   * attempt with a new pairing code.
+   * attempt with a new pairing code, or (RT-215 10897-A) a user-initiated
+   * "Check again" that the server answers 2xx (`pairing:recheck`).
    */
   | { kind: 'invalid'; reason: PairingInvalidReason }
   | {
@@ -116,7 +117,28 @@ export type PairingSubmitResult =
 export const PAIRING_IPC_CHANNELS = {
   GET_STATUS: 'pairing:get-status',
   SUBMIT: 'pairing:submit',
+  /**
+   * RT-215 10897-A (owner approval 10906) — the user-initiated "Check again"
+   * on `/pairing` while the terminal is device-revoked. The renderer only
+   * triggers it (no argument); it answers a {@link PairingRecheckResult}.
+   */
+  RECHECK: 'pairing:recheck',
 } as const;
+
+/**
+ * RT-215 10897-A — what one "Check again" found. The ONE roster call (with the
+ * sealed device token) answered:
+ *  - `cleared`: 2xx — the revocation is cleared, durably and in memory;
+ *  - `still_revoked`: 401 — the terminal stays revoked;
+ *  - `unreachable`: anything else (no connection, 5xx, an unreadable token,
+ *    nothing to check) — the terminal stays revoked; try again.
+ * No token, no identifier: the result is the outcome only.
+ */
+export const PAIRING_RECHECK_OUTCOMES = ['cleared', 'still_revoked', 'unreachable'] as const;
+export type PairingRecheckOutcome = (typeof PAIRING_RECHECK_OUTCOMES)[number];
+export interface PairingRecheckResult {
+  outcome: PairingRecheckOutcome;
+}
 
 /**
  * RT-215 — main → renderer PUSH channels of the pairing namespace. Kept apart

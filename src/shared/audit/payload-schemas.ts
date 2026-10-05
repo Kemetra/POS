@@ -448,9 +448,13 @@ export interface PairingDeviceRevokedPayload {
   source: DeviceRevokedSource;
 }
 
-/** `{ source }` ONLY: the revocation was cleared by a successful re-pair. */
+/**
+ * `{ source }` ONLY: the revocation was cleared by a successful re-pair
+ * (`re_pair`), or by a user-initiated "Check again" the server answered 2xx
+ * (`recheck`, RT-215 10897-A / 10906).
+ */
 export interface PairingDeviceRevokedClearedPayload {
-  source: 're_pair';
+  source: 're_pair' | 'recheck';
 }
 
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────

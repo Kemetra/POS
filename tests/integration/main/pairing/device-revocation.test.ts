@@ -14,7 +14,10 @@ import {
   createPairingStore,
   type PersistInput,
 } from '../../../../src/main/pairing/store.js';
-import { createSendableDeviceTokenReader } from '../../../../src/main/pairing/device-token.js';
+import {
+  createRevocationRecheckTokenRead,
+  createSendableDeviceTokenReader,
+} from '../../../../src/main/pairing/device-token.js';
 import {
   DEVICE_401_CONFIRM_MS,
   createDeviceAuthDetector,
@@ -27,6 +30,7 @@ import {
   createRosterConfirmationProbe,
   withDeviceRevocationRecovery,
 } from '../../../../src/main/app/device-revocation-flow.js';
+import { createRevocationRecheck } from '../../../../src/main/app/revocation-recheck.js';
 import { createCashierAdmissionClient } from '../../../../src/main/operator/cashier-admission-client.js';
 import {
   admitCashierOnline,
@@ -49,6 +53,7 @@ import type { PairingService } from '../../../../src/main/pairing/service.js';
 import type {
   DeviceRevokedSource,
   PairingStatus,
+  PairingRecheckResult,
   PairingStatusChangedEvent,
 } from '../../../../src/shared/pairing-types.js';
 
@@ -273,6 +278,11 @@ interface Wired {
   service: PairingService;
   relaunches: { count: number };
   workersStarted: { value: boolean };
+  /** RT-215 10897-A — the "Check again" (`pairing:recheck`). */
+  recheck: () => Promise<PairingRecheckResult>;
+  /** Every device 401 the detector observed (rev546b F-A hook). */
+  unauthorizedReports: DeviceRevokedSource[];
+  rebinds: { count: number };
 }
 
 /** Everything wired as `src/main/index.ts` wires it. */
@@ -294,6 +304,7 @@ async function wire(): Promise<Wired> {
   const late: { onConfirmed: (source: DeviceRevokedSource) => void } = {
     onConfirmed: () => undefined,
   };
+  const unauthorizedReports: DeviceRevokedSource[] = [];
   const detector = createDeviceAuthDetector({
     probe: createRosterConfirmationProbe(
       createCashierAdmissionClient({
@@ -305,6 +316,9 @@ async function wire(): Promise<Wired> {
     confirmDelayMs: () => deviceAuthConfirmDelayMs(sessions.getCurrent()?.admission_ttl_seconds),
     onConfirmed: (source) => {
       late.onConfirmed(source);
+    },
+    onUnauthorized: (source) => {
+      unauthorizedReports.push(source);
     },
   });
   const admissionsFetch = withDeviceAuthObservation(backend.fetch, detector, {
@@ -373,6 +387,31 @@ async function wire(): Promise<Wired> {
   late.onConfirmed = (source) => {
     flow.onConfirmed(source);
   };
+  // RT-215 10897-A — wired as `src/main/index.ts` wires it: an UNOBSERVED
+  // roster client whose token comes from the narrow recheck reader.
+  const rebinds = { count: 0 };
+  const recheck = createRevocationRecheck({
+    probe: createRosterConfirmationProbe(
+      createCashierAdmissionClient({
+        baseUrl: BASE,
+        fetch: backend.fetch,
+        getDeviceToken: createRevocationRecheckTokenRead({
+          pairingStore: store,
+          secretStore: secrets,
+          deviceTokenKey: KEY,
+        }),
+      }),
+    ),
+    store,
+    onCleared: (scope) => {
+      flow.onRecheckCleared(scope);
+    },
+    rebindPaired: () => {
+      rebinds.count += 1;
+      return Promise.resolve();
+    },
+    logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+  });
   const service = withDeviceRevocationRecovery(
     {
       // The real service persists on success; this one pairs to term-2.
@@ -416,6 +455,9 @@ async function wire(): Promise<Wired> {
     service,
     relaunches,
     workersStarted,
+    recheck,
+    unauthorizedReports,
+    rebinds,
   };
 }
 
@@ -778,5 +820,149 @@ describe('RT-215 device revocation — end to end', () => {
     });
     expect(await w.store.getStatus()).toMatchObject({ kind: 'paired', terminal_id: 'term-1' });
     expect(w.relaunches.count).toBe(0);
+  });
+});
+
+describe('RT-215 10897-A — "Check again" end to end', () => {
+  /** Revoke through the real 2×401 path; returns the wired terminal. */
+  async function revoked(): Promise<Wired> {
+    const w = await wire();
+    w.backend.deviceStatus.value = 401;
+    await signInAttempt(w);
+    await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS);
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
+    return w;
+  }
+
+  const pairingAudits = (): unknown[][] =>
+    rows({
+      sql: `SELECT acting_operator_id, action_category, payload, originating_terminal_id
+         FROM audit_events WHERE action_category LIKE 'pairing.%' ORDER BY rowid`,
+    });
+
+  it('2xx: ONE roster call with the sealed token clears the revocation, audits it once, routes paired', async () => {
+    const w = await revoked();
+    const sentBefore = w.backend.sent.length;
+    w.backend.deviceStatus.value = 200; // e.g. the tenant was un-suspended
+    await expect(w.recheck()).resolves.toEqual({ outcome: 'cleared' });
+
+    expect(w.backend.sent.slice(sentBefore)).toEqual([
+      { path: `${ADMISSIONS}/roster`, authorization: `Bearer ${OLD_TOKEN}` },
+    ]);
+    expect(await w.store.getStatus()).toMatchObject({ kind: 'paired', terminal_id: 'term-1' });
+    expect(rows({ sql: 'SELECT device_revoked_at FROM terminal_assignment' })).toEqual([[null]]);
+    expect(await w.readSendable()).toBe(OLD_TOKEN); // the normal send paths work again
+    expect(w.detector.state).toBe('clear');
+    expect(w.pushed.at(-1)).toEqual({ kind: 'paired' });
+    expect(w.rebinds.count).toBe(1);
+    expect(w.relaunches.count).toBe(0); // same pairing: the workers keep a valid scope
+    expect(pairingAudits()).toEqual([
+      ['system:device', 'pairing.device_revoked', '{"source":"cashier_admissions"}', 'term-1'],
+      ['system:device', 'pairing.device_revoked_cleared', '{"source":"recheck"}', 'term-1'],
+    ]);
+    expect(JSON.stringify(rows({ sql: 'SELECT * FROM audit_events' }))).not.toContain('SENTINEL');
+  });
+
+  it('after a recheck clear, the detector works again: two new 401s revoke again', async () => {
+    const w = await revoked();
+    w.backend.deviceStatus.value = 200;
+    await w.recheck();
+    w.backend.deviceStatus.value = 401;
+    await signInAttempt(w);
+    await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS);
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
+  });
+
+  it('401: stays revoked; the answer is NOT a detector count (no grant invalidation, no second revocation)', async () => {
+    const w = await revoked();
+    const reports = w.unauthorizedReports.length;
+    const invalidations = w.invalidated.length;
+    const pushes = w.pushed.length;
+    await expect(w.recheck()).resolves.toEqual({ outcome: 'still_revoked' });
+
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
+    expect(w.unauthorizedReports).toHaveLength(reports);
+    expect(w.invalidated).toHaveLength(invalidations);
+    expect(w.pushed).toHaveLength(pushes);
+    expect(w.detector.state).toBe('confirmed');
+    await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS * 2); // no confirmation is scheduled
+    expect(pairingAudits()).toEqual([
+      ['system:device', 'pairing.device_revoked', '{"source":"cashier_admissions"}', 'term-1'],
+    ]);
+    expect(await w.readSendable()).toBeNull(); // the default readers stay null
+  });
+
+  it('network error: stays revoked, "couldn’t reach the server"', async () => {
+    const w = await revoked();
+    // The same wiring, on a transport that fails (no connection).
+    const recheck = createRevocationRecheck({
+      probe: createRosterConfirmationProbe(
+        createCashierAdmissionClient({
+          baseUrl: BASE,
+          fetch: () => Promise.reject(new TypeError('fetch failed')),
+          getDeviceToken: createRevocationRecheckTokenRead({
+            pairingStore: w.store,
+            secretStore: secrets,
+            deviceTokenKey: KEY,
+          }),
+        }),
+      ),
+      store: w.store,
+      onCleared: () => {
+        throw new Error('must not clear');
+      },
+      rebindPaired: () => Promise.reject(new Error('must not rebind')),
+      logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+    });
+    await expect(recheck()).resolves.toEqual({ outcome: 'unreachable' });
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
+  });
+
+  it('a 5xx answer stays revoked (only a 2xx clears)', async () => {
+    const w = await revoked();
+    const json503 = (): Promise<Response> => Promise.resolve(json(503, {}));
+    const recheck = createRevocationRecheck({
+      probe: createRosterConfirmationProbe(
+        createCashierAdmissionClient({
+          baseUrl: BASE,
+          fetch: json503,
+          getDeviceToken: createRevocationRecheckTokenRead({
+            pairingStore: w.store,
+            secretStore: secrets,
+            deviceTokenKey: KEY,
+          }),
+        }),
+      ),
+      store: w.store,
+      onCleared: () => undefined,
+      rebindPaired: () => Promise.resolve(),
+      logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+    });
+    await expect(recheck()).resolves.toEqual({ outcome: 'unreachable' });
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
+  });
+
+  it('single-flight: two presses at once make ONE roster call', async () => {
+    const w = await revoked();
+    w.backend.deviceStatus.value = 200;
+    const before = rosterCalls(w);
+    const [a, b] = await Promise.all([w.recheck(), w.recheck()]);
+    expect(a).toEqual({ outcome: 'cleared' });
+    expect(b).toEqual({ outcome: 'cleared' });
+    expect(rosterCalls(w) - before).toBe(1);
+    expect(pairingAudits().filter((r) => r[1] === 'pairing.device_revoked_cleared')).toHaveLength(
+      1,
+    );
+  });
+
+  it('the token is sent ONLY on the explicit recheck: never by the normal paths while revoked', async () => {
+    const w = await revoked();
+    const before = w.backend.sent.length;
+    await signInAttempt(w);
+    await w.readDown.fetchSnapshot();
+    await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS * 2);
+    expect(w.backend.sent.slice(before)).toEqual([]);
+    await w.recheck();
+    expect(w.backend.sent.slice(before)).toHaveLength(1);
   });
 });

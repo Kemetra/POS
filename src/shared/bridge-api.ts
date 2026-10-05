@@ -4,6 +4,7 @@ import type { LogRecord } from './log-record.js';
 import type { AppConfig } from './app-config.js';
 import type {
   PairingStatus,
+  PairingRecheckResult,
   PairingStatusChangedEvent,
   PairingSubmitResult,
 } from './pairing-types.js';
@@ -134,6 +135,14 @@ export interface PairingBridgeAPI {
    * stay valid; production preload always provides it.
    */
   onStatusChanged?(cb: (event: PairingStatusChangedEvent) => void): () => void;
+
+  /**
+   * RT-215 10897-A (owner approval 10906) — the user-initiated "Check again"
+   * on `/pairing` while the terminal is device-revoked. Takes nothing (the
+   * renderer only triggers it) and resolves `{ outcome }` only. Optional so
+   * test fakes that predate it stay valid; production preload provides it.
+   */
+  recheckRevocation?(): Promise<PairingRecheckResult>;
 }
 
 /**

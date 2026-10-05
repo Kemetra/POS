@@ -113,6 +113,11 @@ export interface PairingStoreDb {
    * `writeAssignment` (INSERT OR REPLACE) resets it to NULL.
    */
   markDeviceRevoked(atEpochSeconds: number): void;
+  /**
+   * RT-215 10897-A — set `device_revoked_at` back to NULL on the single row
+   * (a "Check again" the server answered 2xx). Idempotent.
+   */
+  clearDeviceRevoked(): void;
   /** Run `fn` inside BEGIN/COMMIT; rollback + rethrow on error. */
   transaction<T>(fn: () => T): T;
 }
@@ -189,12 +194,24 @@ export interface DeviceRevocationStore {
    * nothing is recorded). The device token is NOT deleted: it stays sealed,
    * is never sent again, and a re-pair (`persist`) overwrites it.
    *
-   * ONE-WAY (review F1, fail closed): nothing in this terminal un-revokes it.
-   * Because the sealed token is never sent again (owner approval (3), RT-215
-   * 10875), a false positive also needs a new pairing code and yields a new
-   * terminal_id; the old unsent sales are then held (RT-221).
+   * Fail closed (review F1): nothing automatic un-revokes it. The sealed token
+   * is never sent by a normal path again (owner approval (3), RT-215 10875).
+   * The two ways out are a re-pair with a new code, or the ONE user-initiated
+   * "Check again" that the server answers 2xx ({@link clearDeviceRevoked},
+   * RT-215 10897-A / 10906).
    */
   markDeviceRevoked(): RevokedTerminalScope | null;
+
+  /**
+   * RT-215 10897-A (owner approval 10906) — clear a revocation after the
+   * user-initiated "Check again" was answered 2xx. ONLY that flow calls it.
+   *
+   * Durable FIRST, then in memory: a failing row write is rethrown and the
+   * terminal stays revoked (fail closed). The pairing epoch changes, so a
+   * sign-in captured under the revocation stays stale. Returns the pairing's
+   * scope, or null (nothing done) when the terminal is not revoked.
+   */
+  clearDeviceRevoked(): RevokedTerminalScope | null;
 
   /**
    * RT-215 / Codex P1 4181556645 — SYNC: true while the pairing row is
@@ -394,6 +411,16 @@ export function createPairingStore(
       return { tenant_id: row.tenant_id, branch_id: row.branch_id, terminal_id: row.terminal_id };
     },
 
+    clearDeviceRevoked(): RevokedTerminalScope | null {
+      const row = db.readAssignment();
+      if (row === null || !rowRevoked(row)) return null;
+      // Durable first: if this throws, the in-memory latch stays set.
+      db.clearDeviceRevoked();
+      revokedInMemory = false;
+      generation += 1;
+      return { tenant_id: row.tenant_id, branch_id: row.branch_id, terminal_id: row.terminal_id };
+    },
+
     isDeviceRevoked(): boolean {
       return isRevokedNow();
     },
@@ -440,6 +467,7 @@ export function bindPairingStoreDb(handle: DatabaseHandle): PairingStoreDb {
   let insertStmt: RunStmt | null = null;
   let deleteStmt: RunStmt | null = null;
   let revokeStmt: RunStmt | null = null;
+  let unrevokeStmt: RunStmt | null = null;
 
   return {
     readAssignment(): StoredAssignmentRow | null {
@@ -495,6 +523,13 @@ export function bindPairingStoreDb(handle: DatabaseHandle): PairingStoreDb {
          WHERE id = 1 AND device_revoked_at IS NULL`,
       ) as RunStmt;
       revokeStmt.run(atEpochSeconds);
+    },
+    clearDeviceRevoked(): void {
+      // RT-215 10897-A — a row update; no schema change (migration 0042's column).
+      unrevokeStmt ??= handle.prepare(
+        'UPDATE terminal_assignment SET device_revoked_at = NULL WHERE id = 1',
+      ) as RunStmt;
+      unrevokeStmt.run();
     },
     transaction<T>(fn: () => T): T {
       // better-sqlite3's transaction() returns a wrapped callable.
