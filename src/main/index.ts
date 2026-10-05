@@ -77,7 +77,12 @@ import { bindDrawerEventsRepository } from './sales/repositories/drawer-events.r
 import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.repository.js';
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
-import { createSaleSyncEngine, SALE_SYNC_BACKOFF_POLICY } from './sales-sync/sale-sync-engine.js';
+import {
+  createSaleSyncEngine,
+  logSaleSyncPauseTransition,
+  SALE_SYNC_BACKOFF_POLICY,
+} from './sales-sync/sale-sync-engine.js';
+import { createSaleSyncStatusReader } from './sales-sync/sale-sync-status-reader.js';
 import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
 import {
   createPairedWorkers,
@@ -1609,17 +1614,26 @@ singleInstanceReady
               'sale_sync:payload_divergence',
             );
           },
+          // RT-224: the drain pauses while the session holds no sale credential
+          // (every cashier session today). Log it once per transition — the
+          // closed-set `sale_sync:paused_no_operator_credential` and its resume
+          // line — with { reason, pending } only (P7).
+          onPauseTransition: (event) => {
+            logSaleSyncPauseTransition(mainLogger, event);
+          },
         });
 
-        // Read-only status surface for the renderer (counts + last-success only;
-        // no token/PII/raw body crosses the bridge). No write/trigger handler.
+        // Read-only status surface for the renderer (counts + last-success + the
+        // RT-224 closed-set paused reason; no token/PII/raw body crosses the
+        // bridge). No write/trigger handler.
         registerSalesSyncHandlers(guardedIpcMain, {
-          readStatus: async () =>
-            saleSyncStateRepo.readSyncStatus({
-              tenantId: pairingStatus.tenant_id,
-              branchId: pairingStatus.branch_id,
-              terminalId: await resolveSaleSyncTerminalId(),
-            }),
+          readStatus: createSaleSyncStatusReader({
+            stateRepo: saleSyncStateRepo,
+            tenantId: pairingStatus.tenant_id,
+            branchId: pairingStatus.branch_id,
+            resolveTerminalId: resolveSaleSyncTerminalId,
+            pausedReason: () => saleSyncEngine.pausedReason(),
+          }),
         });
 
         // Background drain on an interval. Single-flight in the engine coalesces

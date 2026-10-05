@@ -703,14 +703,14 @@ export interface PreloadBridgeAPI {
 
 /**
  * 011-sale-sync-capture-up: typed read-only `salesSync.*` namespace. No write
- * channel exists. The response carries counts + one timestamp only — no token,
- * PII, or raw error (P7).
+ * channel exists. The response carries counts + one timestamp + one closed-set
+ * paused code only — no token, PII, or raw error (P7).
  */
 export interface SalesSyncBridgeAPI {
   syncStatus(): Promise<SaleSyncStatusResponse>;
 }
 
-/** The read-only sync-status payload (mirrors main `SaleSyncStatusCounts`). */
+/** The read-only sync-status payload (mirrors main `SaleSyncStatusSnapshot`). */
 export interface SaleSyncStatusResponse {
   /** Unsent sales of the current terminal (RT-221). */
   pending: number;
@@ -724,6 +724,13 @@ export interface SaleSyncStatusResponse {
   /** RT-190: dead-lettered sales whose capture answered 409 (payload divergence). */
   payloadDivergence: number;
   lastSuccessAt: string | null;
+  /**
+   * RT-224: why the sale-sync drain cannot send right now, as a closed-set code;
+   * null when it can. `no_operator_credential` = the current session holds no sale
+   * credential (no session, or a cashier session — RT-224), so sales stay pending.
+   * Additive: the fields above keep their meaning.
+   */
+  paused: 'no_operator_credential' | null;
 }
 
 /**
