@@ -8,7 +8,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { bindPairingStoreDb, createPairingStore, type PairingStore } from '../../pairing/store.js';
-import { OFFLINE_GRANT_CLOCK_TICK_MS, withOfflineGrantPairing } from '../offline-grant-wiring.js';
+import type { OfflineGrantStore } from '../offline-grant-store.js';
+import {
+  OFFLINE_GRANT_CLOCK_TICK_MS,
+  withOfflineGrantPairing,
+  type OfflineGrantWiring,
+} from '../offline-grant-wiring.js';
 import {
   BRANCH,
   OPERATOR,
@@ -80,6 +85,28 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     if (opts.unpair) await pairing.clear();
     await pairing.persist(pairInput()); // the same paired_at second
     writeBack(oldBody);
+  }
+
+  /**
+   * A second wiring over a store whose purge fails (it starts held), bound to
+   * the current pairing, and a pairing wrapper over the same inner store.
+   */
+  function purgeFailingRig(first: number): {
+    broken: Set<keyof OfflineGrantStore>;
+    w: OfflineGrantWiring;
+    p: PairingStore;
+  } {
+    const b = breakable();
+    b.broken.add('purgeAll');
+    const w = makeWiring({ store: b.store });
+    w.setScope(scope({ pairing_epoch: first }));
+    return { broken: b.broken, w, p: withOfflineGrantPairing(inner, w) };
+  }
+
+  async function epochOf(p: PairingStore): Promise<number> {
+    const s = await p.getStatus();
+    if (s.kind !== 'paired') throw new Error('not paired');
+    return s.paired_at;
   }
 
   beforeEach(() => {
@@ -187,19 +214,26 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     expect(wiring.evaluate(USER, T0).admissible).toBe(false);
   });
 
-  it('a deleted mark and a failed purge: the re-pair epoch is still above the replaced pairing', async () => {
+  it.each([
+    {
+      name: 'a deleted mark and a failed purge: the re-pair epoch is still above the replaced pairing',
+      withGrant: true,
+      unpairFirst: false,
+    },
+    {
+      name: 'Codex P1 4184710216: while the purge is still held, the re-pair reservation stays above the cleared epoch',
+      withGrant: false,
+      unpairFirst: true,
+    },
+  ])('$name', async ({ withGrant, unpairFirst }) => {
     await pairing.persist(pairInput());
     const first = await currentEpoch();
-    admit();
+    if (withGrant) admit();
     g.raw.run('DELETE FROM cashier_offline_clock_hwm');
-    const b = breakable();
-    b.broken.add('purgeAll');
-    const w = makeWiring({ store: b.store });
-    w.setScope(scope({ pairing_epoch: first }));
-    const p = withOfflineGrantPairing(inner, w);
-    await p.persist(pairInput());
-    const s2 = await p.getStatus();
-    expect(s2.kind === 'paired' && s2.paired_at).toBeGreaterThan(first);
+    const { w, p } = purgeFailingRig(first);
+    if (unpairFirst) await p.clear(); // the purge fails and stays held
+    await p.persist(pairInput()); // the purge fails (again): still held
+    expect(await epochOf(p)).toBeGreaterThan(first);
     w.stop();
   });
 
@@ -283,34 +317,13 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     // An empty grant table and no clock mark: the store holds no evidence.
     g.raw.run('DELETE FROM cashier_offline_grants');
     g.raw.run('DELETE FROM cashier_offline_clock_hwm');
-    const b = breakable();
-    const w = makeWiring({ store: b.store });
-    w.setScope(scope({ pairing_epoch: first }));
-    const p = withOfflineGrantPairing(inner, w);
-    b.broken.add('purgeAll');
+    const { broken, w, p } = purgeFailingRig(first);
     await p.clear(); // the purge fails and is held; clear itself succeeds
-    b.broken.clear();
+    broken.clear();
     await p.persist(pairInput()); // the same paired_at second, before any tick
-    const s2 = await p.getStatus();
-    expect(s2.kind === 'paired' && s2.paired_at).toBeGreaterThan(first);
+    expect(await epochOf(p)).toBeGreaterThan(first);
     writeBack(oldBody);
     expect(w.evaluate(USER, T0).admissible).toBe(false);
-    w.stop();
-  });
-
-  it('Codex P1 4184710216: while the purge is still held, the re-pair reservation stays above the cleared epoch', async () => {
-    await pairing.persist(pairInput());
-    const first = await currentEpoch();
-    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
-    const b = breakable();
-    const w = makeWiring({ store: b.store });
-    w.setScope(scope({ pairing_epoch: first }));
-    const p = withOfflineGrantPairing(inner, w);
-    b.broken.add('purgeAll');
-    await p.clear();
-    await p.persist(pairInput()); // the purge fails again: still held
-    const s2 = await p.getStatus();
-    expect(s2.kind === 'paired' && s2.paired_at).toBeGreaterThan(first);
     w.stop();
   });
 
