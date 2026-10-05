@@ -353,10 +353,75 @@ describe('RT-113 P2 createSafePointProbe', () => {
       subtotal: 0,
       created_at: '2026-10-01T10:05:00.000Z',
     });
-    // The lock summary only looks at the newest cart, which is empty …
-    expect(reader(sm)().summary).toBeNull();
-    // … but the live tender on the older cart must keep the session alive.
+    // The live tender on the older cart keeps the session alive.
     expect(probe(sm)()).toBe(false);
+  });
+
+  it('Codex P1 4179918798: an older cart with active lines (no tender) plus a newer empty cart: not safe', () => {
+    const sm = signedIn();
+    const sid = sm.getCurrent()?.id ?? '';
+    insertCart({
+      cart_id: 'cart-old',
+      session_id: sid,
+      state: 'frozen_handed_off',
+      subtotal: 700,
+      created_at: '2026-10-01T10:00:00.000Z',
+    });
+    insertLine({ line_id: 'l-old', cart_id: 'cart-old', subtotal: 700 });
+    insertCart({
+      cart_id: 'cart-new',
+      session_id: sid,
+      state: 'empty',
+      subtotal: 0,
+      created_at: '2026-10-01T10:05:00.000Z',
+    });
+    expect(probe(sm)()).toBe(false);
+  });
+
+  it('Codex P1 4179918798: every cart settled or cancelled (even with lines): safe', () => {
+    const sm = signedIn();
+    const sid = sm.getCurrent()?.id ?? '';
+    handedOffWithLiveTender(sid, 'cart-settled', '2026-10-01T10:00:00.000Z');
+    db.run(
+      `UPDATE payment_attempts SET state = 'settled', settled_at = ? WHERE payment_attempt_id = 'cart-settled-pa'`,
+      [NOW],
+    );
+    insertCart({
+      cart_id: 'cart-void',
+      session_id: sid,
+      state: 'cancelled',
+      subtotal: 300,
+      created_at: '2026-10-01T10:05:00.000Z',
+    });
+    insertLine({ line_id: 'l-void', cart_id: 'cart-void', subtotal: 300 });
+    expect(probe(sm)()).toBe(true);
+  });
+
+  it('Codex P1 4179918798, lock screen: a newer empty cart does not hide the older open sale', () => {
+    const sm = signedIn();
+    const sid = sm.getCurrent()?.id ?? '';
+    insertCart({
+      cart_id: 'cart-old',
+      session_id: sid,
+      state: 'editing',
+      subtotal: 700,
+      created_at: '2026-10-01T10:00:00.000Z',
+    });
+    insertLine({ line_id: 'l-old', cart_id: 'cart-old', subtotal: 700 });
+    insertCart({
+      cart_id: 'cart-new',
+      session_id: sid,
+      state: 'empty',
+      subtotal: 0,
+      created_at: '2026-10-01T10:05:00.000Z',
+    });
+    sm.lock('2026-10-01T10:10:00.000Z');
+    expect(reader(sm)().summary).toEqual({
+      line_count: 1,
+      total_minor: 700,
+      tender_applied_minor: 0,
+      has_live_tender: false,
+    });
   });
 
   it("another session's live tender does not count", () => {
@@ -399,6 +464,60 @@ describe('RT-113 P2 createSafePointProbe', () => {
         `UPDATE payment_attempts SET state = 'settled', settled_at = ? WHERE payment_attempt_id = 'cart-1-pa'`,
         [NOW],
       );
+      keeper.recheckSafePoint();
+      expect(ends).toEqual(['superseded_by_takeover']);
+      keeper.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('Codex P1 4179918798 — end to end: a latched session does not strand an older open sale', () => {
+  it('older sale with lines plus a newer empty cart: no end until the older sale is voided', async () => {
+    vi.useFakeTimers();
+    try {
+      const sm = new SessionManager();
+      const fake = fakeCashierAdmission({ ...ADMITTED, admission_ttl_seconds: 600 });
+      const ends: (string | undefined)[] = [];
+      sm.onEnded((_r, cause) => ends.push(cause));
+      const keeper = new CashierAdmissionKeeper({
+        sessionManager: sm,
+        admission: fake.deps,
+        isAtSafePoint: probe(sm),
+      });
+      const record = sm.create({
+        ...CASHIER_ONE,
+        cashier_admission: {
+          user_id: FAKE_USER_ID,
+          admission_id: FAKE_ADMISSION_ID,
+          admission_ttl_seconds: 600,
+          offline_grace_seconds: 86_400,
+        },
+      });
+      insertCart({
+        cart_id: 'cart-old',
+        session_id: record.id,
+        state: 'editing',
+        subtotal: 700,
+        created_at: '2026-10-01T10:00:00.000Z',
+      });
+      insertLine({ line_id: 'l-old', cart_id: 'cart-old', subtotal: 700 });
+      insertCart({
+        cart_id: 'cart-new',
+        session_id: record.id,
+        state: 'empty',
+        subtotal: 0,
+        created_at: '2026-10-01T10:05:00.000Z',
+      });
+
+      fake.setAdmit({ kind: 'active_elsewhere' });
+      await vi.advanceTimersByTimeAsync(300_000);
+      expect(sm.getCurrent()?.authority_latch).toBe('superseded_by_takeover');
+      await vi.advanceTimersByTimeAsync(60_000); // many backstop re-checks
+      expect(ends).toEqual([]);
+
+      db.run(`UPDATE carts SET state = 'cancelled' WHERE cart_id = 'cart-old'`); // voided
       keeper.recheckSafePoint();
       expect(ends).toEqual(['superseded_by_takeover']);
       keeper.stop();
