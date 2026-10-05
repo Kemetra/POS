@@ -4,6 +4,8 @@ import {
   createSaleSyncClient,
   toWireBody,
   classifyStatus,
+  classifyDeviceStatus,
+  toCashierWireBody,
   exponentFor,
   minorUnitsToDecimalString,
 } from '../create-sale-sync-client.js';
@@ -482,5 +484,40 @@ describe('RT-79 — tenders on the wire (RT-10 D1; SaleTender contract)', () => 
     expect((await client.postSale(TENDERED)).kind).toBe('ok');
     const sent = JSON.parse(captured[0]?.init.body as string) as { tenders?: unknown[] };
     expect(sent.tenders).toHaveLength(2);
+  });
+});
+
+// RT-224 step 2 — the device path's pure helpers and its local-defect guard
+// (the request/response behaviour is in create-sale-sync-client.device.test.ts).
+describe('RT-224 step 2 — device-path helpers', () => {
+  const USER_ID = '0190a3c4-0000-7000-8000-00000000000a';
+
+  it('toCashierWireBody = toWireBody + operatorUserId, nothing else', () => {
+    expect(toCashierWireBody(PAYLOAD, 'EGP', USER_ID)).toEqual({
+      ...toWireBody(PAYLOAD, 'EGP'),
+      operatorUserId: USER_ID,
+    });
+  });
+
+  it('classifyDeviceStatus: 401 → device_unauthorized, 403 → refused, the rest as classifyStatus', () => {
+    expect(classifyDeviceStatus(401)).toEqual({ kind: 'device_unauthorized' });
+    expect(classifyDeviceStatus(403)).toEqual({ kind: 'refused' });
+    for (const status of [200, 201, 302, 400, 404, 409, 422, 425, 429, 500, 503]) {
+      expect(classifyDeviceStatus(status)).toEqual(classifyStatus(status));
+    }
+  });
+
+  it('postSaleAsCashier: a corrupt amount is permanent and never POSTed (like postSale)', async () => {
+    const { fetchImpl, captured } = captureFetch(201);
+    const client = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => TOKEN,
+      getDeviceToken: () => Promise.resolve('device-token'),
+      currentTerminalId: () => PAYLOAD.terminalId,
+    });
+    const corrupt: CaptureSalePayload = { ...PAYLOAD, totalMinor: 10.5 };
+    expect(await client.postSaleAsCashier(corrupt, USER_ID)).toEqual({ kind: 'permanent' });
+    expect(captured).toHaveLength(0);
   });
 });

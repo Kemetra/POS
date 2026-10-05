@@ -35,7 +35,10 @@
  * send) or `payload_divergence` (a capture 409 — the server holds a different
  * sale for this provenance). Both are terminal `dead_letter`: never eligible,
  * never retried. `readSyncStatus` counts both in `deadLetter` and the
- * divergences again in `payloadDivergence`.
+ * divergences again in `payloadDivergence`. RT-224 step 2 adds
+ * `cashier_claim_refused` (a device-path 403: the server refused the sale's
+ * cashier claim), also terminal and counted in `deadLetter`. A pending row's
+ * category may now also be `device_unauthorized` (a device-path 401; retried).
  *
  * RT-221: the drain is scoped to the CURRENT pairing's `terminal_id` as well as
  * (tenant_id, branch_id) — the outbox index on (tenant_id, branch_id,
@@ -50,11 +53,18 @@
 import type { DatabaseHandle } from '../db/client.js';
 
 export type SaleSyncStatus = 'pending' | 'synced' | 'dead_letter';
-export type SaleSyncErrorCategory = 'transient' | 'permanent' | 'no_connection';
+export type SaleSyncErrorCategory =
+  | 'transient'
+  | 'permanent'
+  | 'no_connection'
+  | 'device_unauthorized';
 
 /** RT-190: the reason stored with a dead-letter (`last_error_category`). */
-export type SaleSyncDeadLetterReason = 'permanent' | 'payload_divergence';
+export type SaleSyncDeadLetterReason = 'permanent' | 'payload_divergence' | 'cashier_claim_refused';
 export const PAYLOAD_DIVERGENCE_REASON = 'payload_divergence' satisfies SaleSyncDeadLetterReason;
+/** RT-224 step 2: a device-path 403 `refused` — this sale's cashier claim was refused. */
+export const CASHIER_CLAIM_REFUSED_REASON =
+  'cashier_claim_refused' satisfies SaleSyncDeadLetterReason;
 
 /** The stored bookkeeping row (one per sale that has begun syncing). */
 export interface SaleSyncStateRow {

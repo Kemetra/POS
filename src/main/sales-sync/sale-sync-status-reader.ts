@@ -4,8 +4,8 @@
  *
  * `paused` is additive. The existing fields keep their meaning (RT-221: `pending`
  * is the current terminal's unsent sales, `heldPreviousPairing` an earlier
- * pairing's). It is 'no_operator_credential' while the current session holds no
- * sale credential, else null. Counts, one timestamp and one closed-set code only —
+ * pairing's). It is 'no_operator_credential' while the drain holds neither an
+ * operator envelope nor a device credential (RT-224 step 2), else null. Counts, one timestamp and one closed-set code only —
  * no token, PII or raw error (P7).
  */
 import type { SaleSyncPausedReason } from './sale-sync-engine.js';
@@ -23,7 +23,7 @@ export interface SaleSyncStatusReaderDeps {
   /** RT-221: the current pairing's terminal_id, read live; null when unpaired. */
   resolveTerminalId: () => string | null | Promise<string | null>;
   /** RT-224: the engine's live paused reason (`SaleSyncEngine.pausedReason`). */
-  pausedReason: () => SaleSyncPausedReason | null;
+  pausedReason: () => SaleSyncPausedReason | null | Promise<SaleSyncPausedReason | null>;
 }
 
 export function createSaleSyncStatusReader(
@@ -35,6 +35,6 @@ export function createSaleSyncStatusReader(
       branchId: deps.branchId,
       terminalId: await deps.resolveTerminalId(),
     });
-    return { ...counts, paused: deps.pausedReason() };
+    return { ...counts, paused: await deps.pausedReason() };
   };
 }

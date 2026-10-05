@@ -115,6 +115,8 @@ const saleSyncClient = (fetch: FetchLike): ReturnType<typeof createSaleSyncClien
     baseUrl: BASE_URL,
     fetch,
     getOperatorToken: () => SENTINEL['operator-envelope'],
+    getDeviceToken: () => Promise.resolve(SENTINEL.device),
+    currentTerminalId: () => CAPTURE_PAYLOAD.terminalId,
   });
 const pairingNetwork = (fetch: FetchLike): ReturnType<typeof createNetwork> =>
   createNetwork({ baseUrl: BASE_URL, fetch });
@@ -269,6 +271,16 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
     pathTemplate: '/api/pos/v1/sales',
     wiring: 'index.ts: `getOperatorToken` = createSaleSyncTokenReader(…, operatorEnvelopeHolder)',
     invoke: (fetch) => saleSyncClient(fetch).postSale(CAPTURE_PAYLOAD),
+  },
+  {
+    // RT-224 step 2 (Option B, sales.yaml 1.5.0-draft): the device bearer plus the
+    // sale's own cashier `operatorUserId` (never the envelope).
+    id: 'saleSyncClient.postSaleAsCashier',
+    module: 'src/main/sales-sync/create-sale-sync-client.ts',
+    method: 'post',
+    pathTemplate: '/api/pos/v1/sales',
+    wiring: 'index.ts: `getDeviceToken` reads DEVICE_TOKEN_KEY (paired only)',
+    invoke: (fetch) => saleSyncClient(fetch).postSaleAsCashier(CAPTURE_PAYLOAD, UUID),
   },
   {
     id: 'returnsClient.readSale',

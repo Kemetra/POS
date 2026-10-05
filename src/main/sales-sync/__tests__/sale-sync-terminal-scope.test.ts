@@ -357,13 +357,18 @@ describe('RT-221 — sale-sync-engine drains only the current terminal', () => {
       throw new Error('pairing store unavailable');
     });
     seedRepairedTerminal(h.db);
-    const engine = createSaleSyncEngine(h.deps);
+    // RT-224 step 2 (Codex P2 on #547): a throwing dependency never aborts the
+    // tick — it resolves, sends nothing, and reports the failure once.
+    const failures: unknown[][] = [];
+    const engine = createSaleSyncEngine({
+      ...h.deps,
+      onDependencyFailure: (...args: unknown[]) => failures.push(args),
+    });
     const first = engine.runTickOnce();
     expect(first.kind).toBe('started');
-    if (first.kind === 'started') {
-      await expect(first.completed).rejects.toThrow('pairing store unavailable');
-    }
+    if (first.kind === 'started') await expect(first.completed).resolves.toBeUndefined();
     expect(h.client.calls).toEqual([]);
+    expect(failures).toEqual([[]]);
     // The engine is not wedged: the next tick is admitted.
     const second = engine.runTickOnce();
     expect(second.kind).toBe('started');

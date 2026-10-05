@@ -83,6 +83,7 @@ import {
   SALE_SYNC_BACKOFF_POLICY,
 } from './sales-sync/sale-sync-engine.js';
 import { createSaleSyncStatusReader } from './sales-sync/sale-sync-status-reader.js';
+import { composeSaleSyncDevicePath } from './sales-sync/compose-device-path.js';
 import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
 import {
   createPairedWorkers,
@@ -1573,6 +1574,17 @@ singleInstanceReady
         // (D7): X-Device-Attestation is retired from the sale wire (#559), so the
         // client takes no getDeviceAttestation dep. The device token keeps its proper
         // roles (read-down Bearer + sign-in attestation body) elsewhere — untouched.
+        // RT-224 step 2 (Option B, Backend-Core #709) — device-path sale capture: a
+        // sale with its cashier's `selling_user_id` goes out with the device bearer
+        // + that id; any other sale keeps the envelope path. Wiring and its tests:
+        // `sales-sync/compose-device-path.ts` (RT-215 #546 integration noted there).
+        const saleSyncDevicePath = composeSaleSyncDevicePath({
+          db,
+          isPaired: async () => (await pairingStore.getStatus()).kind === 'paired',
+          readToken: () => secretStore.get(DEVICE_TOKEN_KEY),
+          currentTerminalId: () => pairingStore.getCurrentTerminalId(),
+          logger: mainLogger,
+        });
         const saleSyncClient = createSaleSyncClient({
           baseUrl: resolveApiBaseUrl(),
           fetch: globalThis.fetch.bind(globalThis),
@@ -1580,6 +1592,7 @@ singleInstanceReady
             operatorSessionManager,
             operatorEnvelopeHolder,
           ),
+          ...saleSyncDevicePath.client,
           // RT-15 S1: a 200/201 without a usable saleRef — the sale is captured but
           // the till cannot return it. Logs the opaque externalId + a closed-set
           // reason only (never the body or the rejected value; P7).
@@ -1622,6 +1635,7 @@ singleInstanceReady
             operatorSessionManager,
             operatorEnvelopeHolder,
           ),
+          ...saleSyncDevicePath.engine,
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.
           backoff: { ...SALE_SYNC_BACKOFF_POLICY },
@@ -1642,8 +1656,8 @@ singleInstanceReady
               'sale_sync:payload_divergence',
             );
           },
-          // RT-224: the drain pauses while the session holds no sale credential
-          // (every cashier session today). Log it once per transition — the
+          // RT-224: the drain is paused while it holds no sale credential at all, or
+          // no envelope while envelope-routed sales are due. Log it once per transition — the
           // closed-set `sale_sync:paused_no_operator_credential` and its resume
           // line — with { reason, pending } only (P7).
           onPauseTransition: (event) => {
