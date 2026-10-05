@@ -37,7 +37,8 @@
  * `rejected` like any other malformed 200, so Backend-Core deploys first.
  */
 
-const ADMISSIONS_PATH = '/api/pos/v1/cashier-admissions';
+/** RT-215: exported so the device-401 detector matches the same routes. */
+export const ADMISSIONS_PATH = '/api/pos/v1/cashier-admissions';
 const ROSTER_PATH = '/api/pos/v1/cashier-admissions/roster';
 /**
  * The hard per-request timeout (an AbortSignal on the fetch). It also bounds

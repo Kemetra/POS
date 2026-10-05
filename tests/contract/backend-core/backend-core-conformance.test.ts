@@ -26,6 +26,7 @@ import {
   CLIENT_MODULES,
   NON_BACKEND_CORE_TRANSPORTS,
   SENTINEL,
+  TRANSPORT_DECORATORS,
   type ClientCall,
   type ClientModule,
 } from './client-registry.js';
@@ -115,7 +116,9 @@ describe('POS Backend-Core client registry is complete', () => {
       .filter(([, scan]) => scan.fetchCallSites > 0)
       .map(([module, scan]) => countLine({ module, fetchCallSites: scan.fetchCallSites }))
       .sort();
-    const declared = [...CLIENT_MODULES, ...NON_BACKEND_CORE_TRANSPORTS].map(countLine).sort();
+    const declared = [...CLIENT_MODULES, ...NON_BACKEND_CORE_TRANSPORTS, ...TRANSPORT_DECORATORS]
+      .map(countLine)
+      .sort();
     expect(
       found,
       'a module calls fetch but is not in CLIENT_MODULES / NON_BACKEND_CORE_TRANSPORTS ' +
@@ -156,7 +159,11 @@ describe('POS Backend-Core client registry is complete', () => {
   it('keeps registry ids unique and every registered module present', () => {
     const ids = CLIENT_CALLS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const mod of [...CLIENT_MODULES, ...NON_BACKEND_CORE_TRANSPORTS]) {
+    for (const mod of [
+      ...CLIENT_MODULES,
+      ...NON_BACKEND_CORE_TRANSPORTS,
+      ...TRANSPORT_DECORATORS,
+    ]) {
       expect(existsSync(path.join(REPO_ROOT, mod.module)), mod.module).toBe(true);
     }
     const modules = CLIENT_MODULES.map((m) => m.module);

@@ -66,4 +66,37 @@ describe('JwtHolder', () => {
     h.clear('be-1');
     expect(h.get('be-1')).toBeNull();
   });
+
+  it('RT-215: clearAll drops every held credential (device revoked)', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt-1');
+    h.set('be-2', 'jwt-2');
+    h.clearAll();
+    expect(h.get('be-1')).toBeNull();
+    expect(h.get('be-2')).toBeNull();
+    h.set('be-3', 'jwt-3'); // still usable after a later sign-in
+    expect(h.get('be-3')).toBe('jwt-3');
+  });
+});
+
+describe('JwtHolder — RT-215 refuseWhile (Codex P1)', () => {
+  it('drops every write while the device is revoked, and stores again once it is not', () => {
+    const revoked = { value: true };
+    const h = createJwtHolder({ refuseWhile: () => revoked.value });
+    h.set('be-1', 'late-jwt');
+    expect(h.get('be-1')).toBeNull();
+    revoked.value = false;
+    h.set('be-1', 'jwt-after-repair');
+    expect(h.get('be-1')).toBe('jwt-after-repair');
+  });
+
+  it('a throwing predicate refuses (fail closed)', () => {
+    const h = createJwtHolder({
+      refuseWhile: () => {
+        throw new Error('boom');
+      },
+    });
+    h.set('be-1', 'jwt');
+    expect(h.get('be-1')).toBeNull();
+  });
 });

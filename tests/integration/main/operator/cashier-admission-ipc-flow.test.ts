@@ -18,7 +18,6 @@ import {
 import { SignOutHandler } from '../../../../src/main/operator/sign-out-handler.js';
 import { RosterHandler } from '../../../../src/main/operator/roster-handler.js';
 import { SessionManager } from '../../../../src/main/operator/session-manager.js';
-import { LifecycleCascade } from '../../../../src/main/operator/lifecycle-cascade.js';
 import {
   ProtoSessionStore,
   TakeoverHandler,
@@ -203,7 +202,6 @@ function wire(opts: { deviceToken?: string } = {}): {
     },
   );
   const sessions = new SessionManager();
-  const cascade = new LifecycleCascade({ sessionManager: sessions, logger });
   const protoStore = new ProtoSessionStore();
   const backend = createBackendClient({ baseUrl: BASE, fetch });
   const admissionClient = createCashierAdmissionClient({
@@ -214,9 +212,6 @@ function wire(opts: { deviceToken?: string } = {}): {
   const admission: CashierAdmissionDeps = {
     client: admissionClient,
     grantSeam: NOOP_OFFLINE_GRANT_SEAM,
-    onDeviceRevoked: () => {
-      cascade.notifyTerminalRevoked();
-    },
   };
   const keeper = new CashierAdmissionKeeper({
     sessionManager: sessions,

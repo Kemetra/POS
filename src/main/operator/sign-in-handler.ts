@@ -29,6 +29,12 @@ import { unsealPinMaterial } from './pin-seal.js';
 import { verifyPinWithWindow, rowMatchesScope, type PinScope } from './pin-lockout.js';
 import type { PinRow } from './pin-credential.js';
 import { ProtoSessionStore } from './takeover-handler.js';
+import {
+  capturePairingEpoch,
+  epochToRecord,
+  pairingEpochHolds,
+  type PairingEpochReader,
+} from './pairing-epoch.js';
 
 /**
  * 004-operator-session T026 — manager/admin sign-in handler.
@@ -92,6 +98,13 @@ export interface SignInHandlerDeps {
    * main-process memory only — NEVER bridged, NEVER logged (P7/P8).
    */
   envelopeHolder?: JwtHolder;
+  /**
+   * RT-215 / Codex P1 4181556645 — `PairingStore.getPairingEpoch`: captured at
+   * request start and re-checked right before the session is created, so a
+   * sign-in still in flight when the device is revoked (or re-paired) is
+   * refused instead of completing. Production wires it; tests may omit.
+   */
+  pairingEpoch?: PairingEpochReader;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -118,6 +131,7 @@ export class SignInHandler {
     // deliberately NOT trimmed or transformed — its bytes are passed through
     // exactly as entered (leading/trailing spaces can be part of a password).
     const identifier = req.identifier.trim();
+    const pairing = capturePairingEpoch(this.deps.pairingEpoch);
     if (identifier.length === 0 || req.password.length === 0) {
       this.logRefusal('invalid_input', 'shape');
       return REFUSE_INVALID;
@@ -170,6 +184,7 @@ export class SignInHandler {
         branch_id: '',
         jwt: exchange.jwt,
         created_at: Date.now(),
+        ...epochToRecord(pairing),
       });
       this.logSuccess('takeover_required');
       return { kind: 'takeover_required', pending_takeover_id } satisfies TakeoverRequiredResponse;
@@ -181,6 +196,14 @@ export class SignInHandler {
     //    here keeps the local trust boundary explicit.
     if (backend.operator.role === 'cashier') {
       this.logRefusal('invalid_input', 'role');
+      return REFUSE_INVALID;
+    }
+
+    // RT-215 (Codex P1): the device was revoked or re-paired while this
+    // sign-in was in flight — drop the late success. Synchronous with
+    // create() and the holder writes below (no await in between).
+    if (!pairingEpochHolds(pairing)) {
+      this.logRefusal('invalid_input', 'pairing_changed');
       return REFUSE_INVALID;
     }
 
@@ -312,6 +335,13 @@ export interface CashierSignInHandlerDeps {
   protoStore: ProtoSessionStore;
   /** T091 — DPAPI-backed secret store for dismiss records. Tests omit it. */
   secretStore?: SecretStore;
+  /**
+   * RT-215 / Codex P1 4181556645 — `PairingStore.getPairingEpoch`: captured at
+   * request start and re-checked right before the session is created, so a
+   * sign-in still in flight when the device is revoked (or re-paired) is
+   * refused instead of completing. Production wires it; tests may omit.
+   */
+  pairingEpoch?: PairingEpochReader;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -363,6 +393,7 @@ export class CashierSignInHandler {
   }
 
   async signIn(req: CashierSignInRequest): Promise<SignInResponse> {
+    const pairing = capturePairingEpoch(this.deps.pairingEpoch);
     // 1. Terminal scope — must be paired to know tenant/branch/terminal
     const pairingStatus = await this.deps.pairingStore.getStatus();
     if (pairingStatus.kind !== 'paired') {
@@ -412,6 +443,7 @@ export class CashierSignInHandler {
         branch_id: scope.branch_id,
         jwt: null,
         created_at: Date.now(),
+        ...epochToRecord(pairing),
       });
       this.logSuccess('takeover_required');
       return { kind: 'takeover_required', pending_takeover_id } satisfies TakeoverRequiredResponse;
@@ -420,6 +452,12 @@ export class CashierSignInHandler {
       const refusal = refusalForAdmission(admission);
       this.logRefusal(refusal.category, `admission_${admission.kind}`);
       return refusal;
+    }
+    // RT-215 (Codex P1): revoked or re-paired while the admission was in
+    // flight — drop the late `admitted` (synchronous with create() below).
+    if (!pairingEpochHolds(pairing)) {
+      this.logRefusal('invalid_input', 'pairing_changed');
+      return REFUSE_INVALID;
     }
 
     // 7. Admitted — create the local in-memory session. Cashier sessions hold

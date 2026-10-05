@@ -18,7 +18,6 @@ import { registerCartHandlers } from '../../../../src/main/ipc/cart.js';
 import { createSaleBoundaryIpcMain } from '../../../../src/main/ipc/sale-boundary-guard.js';
 import { CART_IPC_CHANNELS } from '../../../../src/shared/cart/channels.js';
 import { SessionManager } from '../../../../src/main/operator/session-manager.js';
-import { LifecycleCascade } from '../../../../src/main/operator/lifecycle-cascade.js';
 import { SignOutHandler } from '../../../../src/main/operator/sign-out-handler.js';
 import type { BackendClient } from '../../../../src/main/operator/backend-client.js';
 import {
@@ -59,13 +58,6 @@ interface Harness {
 function harness(): Harness {
   const sessions = new SessionManager();
   const fake = fakeCashierAdmission({ ...ADMITTED, admission_ttl_seconds: TTL_S });
-  const cascade = new LifecycleCascade({ sessionManager: sessions });
-  // The immediate RT-138 cascade (sign-in path). Review F1: the heartbeat must
-  // NOT use it; it ends at the safe point instead.
-  fake.deps.onDeviceRevoked = vi.fn(() => {
-    cascade.notifyTerminalRevoked();
-  });
-  fake.deviceRevoked = fake.deps.onDeviceRevoked as ReturnType<typeof vi.fn>;
   const ends: (string | undefined)[] = [];
   sessions.onEnded((_record, cause) => ends.push(cause));
   const safe = { value: true };
@@ -105,6 +97,18 @@ function signInCashier(
       admission_generation,
       ...(admission_requested_at_ms !== undefined ? { admission_requested_at_ms } : {}),
     },
+  });
+}
+
+/** A manager session: no online cashier admission, so the keeper never arms for it. */
+function signInManager(sessions: SessionManager): ReturnType<SessionManager['create']> {
+  return sessions.create({
+    operator_id: 'user_clerk_mgr',
+    display_name: 'Sara',
+    role: 'manager',
+    tenant_id: 't1',
+    branch_id: 'b1',
+    backend_session_id: 'bs-1',
   });
 }
 
@@ -373,27 +377,91 @@ describe('heartbeat outcomes', () => {
     expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
   });
 
-  it('review F3 + F1: two consecutive device 401s latch and end terminal_session_terminated at the safe point', async () => {
+  it('RT-215: heartbeat device 401s never latch the session by themselves; the shared detector decides', async () => {
+    const h = harness();
+    const record = signInCashier(h.sessions);
+    h.fake.setAdmit({ kind: 'device_unauthorized' });
+    await advance(HALF_TTL_MS + DEVICE_401_CONFIRM_MS * 3);
+    expect(h.fake.admitCalls.length).toBeGreaterThanOrEqual(2);
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+    expect(h.ends).toEqual([]);
+    // RT-113 OD5 + Codex P1 4183383053: EVERY heartbeat device 401 invalidates
+    // every grant (fail closed) — one notification per 401, none skipped.
+    expect(h.fake.invalidated.length).toBe(h.fake.admitCalls.length);
+    expect(new Set(h.fake.invalidated.map((i) => i.reason))).toEqual(
+      new Set(['device_unauthorized']),
+    );
+  });
+
+  it('RT-215: latchCurrentSession latches at once (no new sale) and ends terminal_session_terminated at the safe point, keeping a live tender', async () => {
     const h = harness();
     const record = signInCashier(h.sessions);
     h.safe.value = false; // mid-tender
-    h.fake.setAdmit({ kind: 'device_unauthorized' });
-    await advance(HALF_TTL_MS + DEVICE_401_CONFIRM_MS);
-    expect(h.fake.admitCalls).toHaveLength(2);
+    h.keeper.latchCurrentSession('terminal_session_terminated');
     expect(h.sessions.getCurrent()?.id).toBe(record.id);
     expect(h.sessions.getCurrent()?.authority_latch).toBe('terminal_session_terminated');
-    // Codex P1 4183383053: EVERY device 401 invalidates (the confirming one too);
-    // only the session waits for the second.
-    expect(h.fake.invalidated).toEqual([
-      { reason: 'device_unauthorized' },
-      { reason: 'device_unauthorized' },
-    ]);
-    expect(h.fake.deviceRevoked).not.toHaveBeenCalled(); // no immediate cascade
     expect(h.ends).toEqual([]);
+    await advance(SAFE_POINT_RECHECK_MS * 3);
+    expect(h.ends).toEqual([]); // the tender is still live: nothing ends, nothing is discarded
+    expect(h.fake.admitCalls).toHaveLength(0); // latched: no heartbeat
     h.safe.value = true;
-    await advance(SAFE_POINT_RECHECK_MS);
+    h.keeper.recheckSafePoint(); // the sale boundary (tender settled)
     expect(h.ends).toEqual(['terminal_session_terminated']);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('RT-215: latchCurrentSession also latches a session WITHOUT an online admission (manager) and ends it at the safe point', async () => {
+    const h = harness();
+    signInManager(h.sessions);
+    h.safe.value = false;
+    h.keeper.latchCurrentSession('terminal_session_terminated');
+    expect(h.sessions.getCurrent()?.authority_latch).toBe('terminal_session_terminated');
+    await advance(SAFE_POINT_RECHECK_MS);
+    expect(h.ends).toEqual([]);
+    h.safe.value = true;
+    await advance(SAFE_POINT_RECHECK_MS); // the backstop poll
+    expect(h.ends).toEqual(['terminal_session_terminated']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('RT-215: latchCurrentSession at a safe point ends the session at once; with no session it is a no-op', () => {
+    const h = harness();
+    h.keeper.latchCurrentSession('terminal_session_terminated');
+    expect(h.ends).toEqual([]);
+    signInCashier(h.sessions);
+    h.keeper.latchCurrentSession('terminal_session_terminated');
+    expect(h.ends).toEqual(['terminal_session_terminated']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('RT-215: a session that is already latched keeps its own cause', async () => {
+    const h = harness();
+    signInCashier(h.sessions);
+    h.safe.value = false;
+    h.fake.setAdmit({ kind: 'active_elsewhere' });
+    await advance(HALF_TTL_MS);
+    h.keeper.latchCurrentSession('terminal_session_terminated');
+    h.safe.value = true;
+    h.keeper.recheckSafePoint();
+    expect(h.ends).toEqual(['superseded_by_takeover']);
+  });
+
+  it('RT-215: a latch-only session that ends, or is replaced, stops its safe-point timer; nothing runs after stop()', () => {
+    const h = harness();
+    signInManager(h.sessions);
+    h.safe.value = false;
+    h.keeper.latchCurrentSession('terminal_session_terminated');
+    h.sessions.end('signed_out');
+    expect(vi.getTimerCount()).toBe(0);
+    signInManager(h.sessions);
+    h.keeper.latchCurrentSession('terminal_session_terminated');
+    signInCashier(h.sessions); // replaces the manager session without an end
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
+    h.keeper.stop();
+    expect(vi.getTimerCount()).toBe(0);
+    h.keeper.latchCurrentSession('terminal_session_terminated'); // after stop: nothing
+    expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
   });
 
   it.each([{ kind: 'rejected' }, { kind: 'idempotency_conflict' }, { kind: 'no_token' }] as const)(
@@ -412,7 +480,6 @@ describe('heartbeat outcomes', () => {
       expect(h.fake.admitCalls).toHaveLength(2);
       expect(h.fake.admitCalls[0]?.idempotency_key).not.toBe(h.fake.admitCalls[1]?.idempotency_key);
       expect(h.sessions.getCurrent()?.authority_latch).toBeUndefined();
-      expect(h.fake.deviceRevoked).not.toHaveBeenCalled();
       expect(h.fake.invalidated).toEqual([]);
     },
   );
@@ -430,7 +497,6 @@ describe('heartbeat outcomes', () => {
       await advance(1);
       expect(h.fake.admitCalls).toHaveLength(2);
       expect(h.sessions.getCurrent()?.id).toBe(record.id);
-      expect(h.fake.deviceRevoked).not.toHaveBeenCalled();
       // RT-113 P1.2: a transient outcome never touches the offline grant.
       expect(h.fake.invalidated).toEqual([]);
       expect(h.fake.admitted).toEqual([]);
@@ -540,14 +606,14 @@ describe('heartbeat outcomes', () => {
     expect(h.fake.admitCalls).toHaveLength(1);
   });
 
-  it('Codex P2 4179771036: TTL 60 s, a first device 401 at 30 s is confirmed before the deadline', async () => {
+  it('Codex P2 4179771036: TTL 60 s, after a first device 401 at 30 s the retry lands before the deadline', async () => {
     const h = harness();
     signInCashier(h.sessions, 60);
     const times = recordCallTimes(h, () => ({ kind: 'device_unauthorized' }));
-    await advance(60_000);
+    await advance(45_000);
     // min(30 s, half of the 30 s left) → 45 s, not 60 s.
     expect(times).toEqual([30_000, 45_000]);
-    expect(h.ends).toEqual(['terminal_session_terminated']);
+    expect(h.ends).toEqual([]); // RT-215: the shared detector, not the keeper, confirms
   });
 
   it('Codex P2 4179701427 / 4179771036: with a 1 s TTL a first device 401 is confirmed before the 1 s deadline, not 30 s later', async () => {
@@ -561,9 +627,9 @@ describe('heartbeat outcomes', () => {
     expect(h.fake.admitCalls).toHaveLength(1);
     await advance(1);
     expect(h.fake.admitCalls).toHaveLength(2);
-    // Two consecutive 401s, 250 ms apart: latched and ended (no sale open).
-    expect(h.ends).toEqual(['terminal_session_terminated']);
-    expect(h.sessions.getCurrent()?.id).not.toBe(record.id);
+    // RT-215: the keeper only retries; revocation is the shared detector's call.
+    expect(h.ends).toEqual([]);
+    expect(h.sessions.getCurrent()?.id).toBe(record.id);
   });
 
   it.each([
@@ -926,8 +992,7 @@ describe('end and timer lifecycle', () => {
         expect(h.fake.admitCalls).toHaveLength(1); // the sign-in admit only
         await advance(HALF_TTL_MS - EARLY_VERIFY_MS);
         expect(h.fake.admitCalls).toHaveLength(2);
-        // As before RT-220: an `end` answered 401 never runs the device-revoked cascade.
-        expect(h.fake.deviceRevoked).not.toHaveBeenCalled();
+        // As before RT-220: an `end` answered 401 never ends or latches anything here.
         expect(h.ends).toEqual([undefined]);
       },
     );

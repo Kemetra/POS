@@ -232,7 +232,6 @@ describe('cashier sign-in — active_elsewhere', () => {
     await handler.signIn(request());
     expect(fake.invalidated).toEqual([{ reason: 'active_elsewhere', user_id: FAKE_USER_ID }]);
     expect(fake.admitted).toEqual([]);
-    expect(fake.deviceRevoked).not.toHaveBeenCalled();
   });
 
   it('returns takeover_required and keeps the user_id on the proto-session', async () => {
@@ -277,21 +276,21 @@ describe('cashier sign-in — refusal outcome table', () => {
     const { handler, fake } = build({ kind: 'refused' });
     await handler.signIn(request());
     expect(fake.invalidated).toEqual([{ reason: 'refused', user_id: FAKE_USER_ID }]);
-    expect(fake.deviceRevoked).not.toHaveBeenCalled();
   });
 
-  it('device 401 runs the device-revoked handling and invalidates every grant (P1 seam)', async () => {
-    const { handler, fake } = build({ kind: 'device_unauthorized' });
-    await handler.signIn(request());
-    expect(fake.deviceRevoked).toHaveBeenCalledOnce();
+  it('RT-215: a single device 401 revokes nothing here (the shared detector confirms it); it still invalidates every grant (P1 seam)', async () => {
+    const { handler, sessions, fake } = build({ kind: 'device_unauthorized' });
+    const res = await handler.signIn(request());
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(sessions.getCurrent()).toBeNull();
+    expect(sessions.getLastEndCause()).toBeNull();
     expect(fake.invalidated).toEqual([{ reason: 'device_unauthorized' }]);
   });
 
-  it('review F8: no local device token is a generic refusal with NO device-revoked cascade or grant invalidation', async () => {
+  it('review F8: no local device token is a generic refusal with NO grant invalidation', async () => {
     const { handler, fake } = build({ kind: 'no_token' });
     const res = await handler.signIn(request());
     expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
-    expect(fake.deviceRevoked).not.toHaveBeenCalled();
     expect(fake.invalidated).toEqual([]);
   });
 
@@ -307,7 +306,6 @@ describe('cashier sign-in — refusal outcome table', () => {
       await handler.signIn(request());
       expect(fake.admitted).toEqual([]);
       expect(fake.invalidated).toEqual([]);
-      expect(fake.deviceRevoked).not.toHaveBeenCalled();
     },
   );
 
@@ -316,7 +314,6 @@ describe('cashier sign-in — refusal outcome table', () => {
     const res = await handler.signIn(request());
     expect(res).toEqual({ kind: 'refused', category: 'no_connection' });
     expect(fake.invalidated).toEqual([]);
-    expect(fake.deviceRevoked).not.toHaveBeenCalled();
   });
 });
 

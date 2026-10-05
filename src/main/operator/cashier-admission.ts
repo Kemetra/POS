@@ -78,12 +78,6 @@ export interface CashierAdmissionDeps {
   client: CashierAdmissionClient;
   /** Defaults to {@link NOOP_OFFLINE_GRANT_SEAM}. */
   grantSeam?: OfflineGrantSeam;
-  /**
-   * The device-revoked handling for a device 401 (RT-138 L6 / 10763 D8):
-   * production wires `LifecycleCascade.notifyTerminalRevoked()`, which ends a
-   * running session `terminal_session_terminated`.
-   */
-  onDeviceRevoked?: () => void;
   /** Defaults to {@link newAdmissionIdempotencyKey}. */
   newIdempotencyKey?: () => string;
   /** Defaults to the wall clock. */
@@ -194,9 +188,13 @@ export function notifyGrantSeam(
 
 /**
  * Side effects of one sign-in or takeover admission outcome: the P1 grant
- * seam, and on a device 401 the immediate device-revoked handling. (The
- * heartbeat does NOT use this: it debounces a 401 and defers the end to the
- * safe point, review F1/F3.) Never throws.
+ * seam. Never throws.
+ *
+ * RT-215: a device 401 no longer ends anything here. One 401 can be transient;
+ * the shared device-401 detector (`pairing/device-auth-detector.ts`) sees this
+ * answer through the client's observed fetch, confirms it with a second call,
+ * and only then runs the device-revoked flow (latch, then route to pairing
+ * recovery at the safe point).
  */
 export function reportAdmissionOutcome(
   deps: CashierAdmissionDeps,
@@ -204,12 +202,6 @@ export function reportAdmissionOutcome(
   who: AdmissionSubject,
 ): void {
   notifyGrantSeam(deps, result, who);
-  if (result.kind !== 'device_unauthorized') return;
-  try {
-    deps.onDeviceRevoked?.();
-  } catch {
-    // Best-effort.
-  }
 }
 
 /**

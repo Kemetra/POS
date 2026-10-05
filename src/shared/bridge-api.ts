@@ -2,7 +2,11 @@
 // is a planning snapshot and is NOT re-synced after this file exists.
 import type { LogRecord } from './log-record.js';
 import type { AppConfig } from './app-config.js';
-import type { PairingStatus, PairingSubmitResult } from './pairing-types.js';
+import type {
+  PairingStatus,
+  PairingStatusChangedEvent,
+  PairingSubmitResult,
+} from './pairing-types.js';
 import type { Role } from './operator/role.js';
 import type { OperatorRefusal } from './audit/event-shape.js';
 import type { ForcedCloseReason } from './audit/payload-schemas.js';
@@ -121,6 +125,15 @@ export interface PairingBridgeAPI {
    * the appropriate outcome category (US2 + US3-7).
    */
   submit(pairing_code: string): Promise<PairingSubmitResult>;
+
+  /**
+   * RT-215 — subscribe to the main → renderer `pairing:status-changed` push
+   * (a confirmed device revocation reached its routing point, or a pairing
+   * succeeded). The payload is `{ kind }` / `{ kind: 'invalid', reason }` only.
+   * Returns the unsubscribe function. Optional so test fakes that predate it
+   * stay valid; production preload always provides it.
+   */
+  onStatusChanged?(cb: (event: PairingStatusChangedEvent) => void): () => void;
 }
 
 /**

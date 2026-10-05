@@ -132,7 +132,7 @@ const cashierAdmissionClient = (
 const BACKEND_CLIENT = 'src/main/operator/backend-client.ts';
 const CASHIER_ADMISSION_CLIENT = 'src/main/operator/cashier-admission-client.ts';
 const CASHIER_ADMISSION_WIRING =
-  'index.ts createCashierAdmissionClient: `getDeviceToken` reads DEVICE_TOKEN_KEY (paired only)';
+  'index.ts createCashierAdmissionClient: `getDeviceToken` = createSendableDeviceTokenReader (paired only; never once revoked, RT-215)';
 const VOUCHER_DIR = 'src/main/payments/voucher-authority-client';
 
 export const CLIENT_MODULES: readonly ClientModule[] = [
@@ -166,6 +166,24 @@ export const NON_BACKEND_CORE_TRANSPORTS: ReadonlyArray<{
     fetchCallSites: 2,
     reason:
       'Clerk Frontend API (the identity provider) — mints the operator-identity JWT; not a Backend-Core route.',
+  },
+];
+
+/**
+ * RT-215 — transport DECORATORS: they call the fetch they wrap with the request
+ * an already-registered client built, unchanged, and originate no request of
+ * their own. Each needs a reason.
+ */
+export const TRANSPORT_DECORATORS: ReadonlyArray<{
+  readonly module: string;
+  readonly fetchCallSites: number;
+  readonly reason: string;
+}> = [
+  {
+    module: 'src/main/pairing/device-auth-detector.ts',
+    fetchCallSites: 1,
+    reason:
+      'withDeviceAuthObservation wraps the fetch of the device-bearer clients (cashier admissions, read-down) and only reads the response status for the RT-215 device-401 detector.',
   },
 ];
 
@@ -261,7 +279,8 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
     module: 'src/main/catalogue/read-down/read-down-client.ts',
     method: 'get',
     pathTemplate: '/api/pos/v1/catalog/snapshot',
-    wiring: 'index.ts read-down driver: `getDeviceToken` reads DEVICE_TOKEN_KEY',
+    wiring:
+      'index.ts read-down driver: `getDeviceToken` = createSendableDeviceTokenReader (paired only; never once revoked, RT-215)',
     invoke: (fetch) => readDownClient(fetch).fetchSnapshot(),
   },
   {

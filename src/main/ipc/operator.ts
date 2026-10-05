@@ -120,12 +120,15 @@ function asCashierRequest(value: unknown): CashierSignInRequest | null {
 /**
  * RT-117 §A4 L1 — categories only main may emit. The lock audit records a
  * main-side state change; a renderer must not be able to forge one. RT-113
- * P1.2: so does the offline grant invalidation.
+ * P1.2: so does the offline grant invalidation. RT-215: likewise the
+ * device-revoked pairing events (system-attributed).
  */
 const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'operator.session.locked',
   'operator.session.unlocked',
   'operator.offline_grant.invalidated',
+  'pairing.device_revoked',
+  'pairing.device_revoked_cleared',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {

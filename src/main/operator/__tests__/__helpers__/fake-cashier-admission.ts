@@ -56,7 +56,6 @@ export interface FakeAdmission {
   endRequests: FakeEndRequest[];
   admitted: CashierAdmittedEvent[];
   invalidated: CashierAdmissionInvalidation[];
-  deviceRevoked: ReturnType<typeof vi.fn>;
   deps: CashierAdmissionDeps;
   /** Replace the admit behaviour for the next calls. */
   setAdmit(impl: AdmitImpl): void;
@@ -75,7 +74,6 @@ export function fakeCashierAdmission(
   const endRequests: FakeEndRequest[] = [];
   const admitted: CashierAdmittedEvent[] = [];
   const invalidated: CashierAdmissionInvalidation[] = [];
-  const deviceRevoked = vi.fn();
   const client: CashierAdmissionClient = {
     admit: vi.fn((req: CashierAdmissionOnlineRequest) => {
       admitCalls.push(req);
@@ -94,7 +92,6 @@ export function fakeCashierAdmission(
       onCashierAdmitted: (e) => admitted.push(e),
       onCashierAdmissionInvalidated: (e) => invalidated.push(e),
     },
-    onDeviceRevoked: deviceRevoked,
     newIdempotencyKey: () => `test-idempotency-key-${String(++keyCounter).padStart(4, '0')}`,
   };
   return {
@@ -104,7 +101,6 @@ export function fakeCashierAdmission(
     endRequests,
     admitted,
     invalidated,
-    deviceRevoked,
     deps,
     setAdmit(impl) {
       admitImpl = impl;

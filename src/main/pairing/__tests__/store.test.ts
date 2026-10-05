@@ -60,6 +60,12 @@ const MIGRATION_0027_SQL = readFileSync(
   'utf8',
 );
 
+// RT-215 — the durable device-revoked marker (`device_revoked_at`).
+const MIGRATION_0042_SQL = readFileSync(
+  path.join(REPO_ROOT, 'migrations', '0042_terminal_assignment_device_revoked.sql'),
+  'utf8',
+);
+
 const DEVICE_TOKEN_KEY: SecretKey = makeSecretKey('terminal.device-token');
 
 /**
@@ -153,6 +159,14 @@ function makeSqlJsAdapter(db: SqlJsDatabase): PairingStoreDb {
     deleteAssignment() {
       db.run('DELETE FROM terminal_assignment WHERE id = 1');
     },
+    // RT-215 — mirrors production `bindPairingStoreDb.markDeviceRevoked`
+    // (migration 0042 is applied by makeHarness).
+    markDeviceRevoked(atEpochSeconds) {
+      db.run(
+        'UPDATE terminal_assignment SET device_revoked_at = ? WHERE id = 1 AND device_revoked_at IS NULL',
+        [atEpochSeconds],
+      );
+    },
     transaction(fn) {
       db.run('BEGIN');
       try {
@@ -188,6 +202,7 @@ async function makeHarness(opts: { secretStore?: SecretStore } = {}): Promise<Te
   // Apply 0027 right after 0003 so the table is in its post-extension
   // shape for every test.
   db.run(MIGRATION_0027_SQL);
+  db.run(MIGRATION_0042_SQL);
   const storeDb = makeSqlJsAdapter(db);
   const secretStore = opts.secretStore ?? createInMemorySecretStore();
   const store = createPairingStore({

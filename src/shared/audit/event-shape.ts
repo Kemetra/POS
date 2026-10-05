@@ -71,8 +71,29 @@ export const AUDIT_ACTION_CATEGORIES = [
   'sale.return.slip_printed',
   'sale.return.slip_print_failed',
   'sale.return.slip_reprinted',
+  // RT-215 (RT-138 P-1) — the device credential was confirmed revoked, and a
+  // later re-pair cleared it. System-attributed (no operator acts): the
+  // actor is SYSTEM_DEVICE_ACTOR_ID below. Payload `{ source }` only — never a
+  // token or device secret. Main-only (the renderer cannot emit them).
+  // Open-set at the SQL layer (0004: no CHECK); recorded in migration 0042's
+  // header.
+  'pairing.device_revoked',
+  'pairing.device_revoked_cleared',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
+
+/**
+ * RT-215 / Jira RT-215 comment 10879 (audit actor, branch 2) — the reserved
+ * `acting_operator_id` for audit events that no operator performs: the
+ * device-revoked pairing events. There was no existing system-actor
+ * convention, and `audit_events.acting_operator_id` is free TEXT NOT NULL with
+ * no FK (0004), so a named sentinel is used instead of a fake operator row.
+ *
+ * It cannot collide with a real operator id: those are provider subjects
+ * (Clerk `user_<base62>`) or `users.id` UUIDs, neither of which can contain a
+ * `:`. Used ONLY by the `pairing.device_revoked*` categories.
+ */
+export const SYSTEM_DEVICE_ACTOR_ID = 'system:device' as const;
 
 /**
  * The FR-025 mandatory five attributes plus the optional `session_id`,

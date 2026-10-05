@@ -499,6 +499,23 @@ describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', 
     expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
     expect(emit).not.toHaveBeenCalled();
   });
+
+  it.each(['pairing.device_revoked', 'pairing.device_revoked_cleared'])(
+    'RT-215: refuses a renderer-forged %s (a main-side pairing state change) and never emits it',
+    async (action_category) => {
+      const emit = vi.fn();
+      const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });
+
+      const res = await emitAuditEvent(FAKE_EVENT, {
+        ...VALID_REQUEST,
+        action_category,
+        payload: { source: 'cashier_admissions' },
+      });
+
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+      expect(emit).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('operator:emit-audit-event — no T051 lifecycle behavior', () => {

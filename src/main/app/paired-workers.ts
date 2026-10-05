@@ -29,9 +29,9 @@
  * The pairing service itself is not touched (`src/main/pairing/` belongs to 002):
  * {@link withPairedNotification} wraps it at the composition root instead.
  *
- * Out of scope: re-pairing an already-paired terminal. The latch is set by the
- * first pairing, so workers keep the scope they started with — as they did when
- * they were bound at boot.
+ * Re-pairing an already-paired terminal: the latch is set by the first
+ * pairing, so workers keep the scope they started with. RT-215 (review F2)
+ * relaunches the app after such a re-pair (see `hasStarted`).
  */
 
 import type { PairingSubmitResult } from '../../shared/pairing-types.js';
@@ -71,6 +71,12 @@ export interface PairedWorkers {
   notifyPaired(terminal: PairedTerminal): void;
   /** Refuse any further start. Idempotent. */
   close(): void;
+  /**
+   * RT-215 review F2 — true once the paired-only workers started in this
+   * process (the first `notifyPaired`). They keep that scope; a re-pair after
+   * this point needs a relaunch.
+   */
+  hasStarted(): boolean;
 }
 
 interface Pending {
@@ -114,6 +120,10 @@ export function createPairedWorkers(deps: PairedWorkersDeps): PairedWorkers {
     close(): void {
       closed = true;
       pending = [];
+    },
+
+    hasStarted(): boolean {
+      return paired !== null;
     },
   };
 }
