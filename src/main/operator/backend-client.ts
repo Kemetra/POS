@@ -16,7 +16,8 @@
  * RT-113 P2 retired Endpoint 6 (`GET /operators/active-session`): it was the
  * cashier path's only use and is Clerk + manager gated on Backend-Core
  * (RT-182). The cashier path uses `cashier-admission-client.ts` instead; the
- * roster below remains for the manager PIN-provisioning path only.
+ * roster below remains for the manager PIN-provisioning path only, and since
+ * RT-214 it carries the signed-in manager's JWT like the other calls here.
  *
  * The Clerk JWT travels in the `Authorization: Bearer …` header; the
  * device token travels in the platform's existing terminal-token
@@ -119,8 +120,18 @@ export interface BackendRosterSuccess {
   cashiers: BackendRosterCashier[];
 }
 
+/**
+ * RT-214: the roster is the one call here whose 401/403 the caller tells apart
+ * from other refusals. `no_token` = no request was sent (empty JWT);
+ * `unauthenticated` = Backend-Core answered 401 (the contract's generic refusal:
+ * invalid/expired JWT, unmapped user, missing membership or not manager-eligible);
+ * `forbidden` = 403 (not in the contract today; handled defensively).
+ */
 export type BackendRosterResponse =
   | BackendRosterSuccess
+  | { kind: 'no_token' }
+  | { kind: 'unauthenticated' }
+  | { kind: 'forbidden' }
   | { kind: 'refused' }
   | { kind: 'no_connection' };
 
@@ -172,12 +183,13 @@ export interface BackendClient {
   signIn(req: BackendSignInRequest, jwt: string): Promise<BackendSignInResponse>;
   signOut(req: BackendSignOutRequest, jwt: string): Promise<BackendSignOutResponse>;
   /**
-   * GET /api/pos/v1/operators/roster — sent with no credential. Backend-Core
-   * requires a Clerk JWT plus a manager-eligible role (RT-150), so this route
-   * 401s as called (RT-182). The cashier picker no longer uses it (RT-113 P2:
-   * `cashier-admission-client.ts`); only manager PIN provisioning still does.
+   * GET /api/pos/v1/operators/roster — `operator-identity` (Clerk JWT) plus a
+   * manager-eligible caller (RT-150) on Backend-Core. The JWT travels as
+   * `Authorization: Bearer …` (RT-214); an empty JWT resolves `no_token` without
+   * sending anything. The cashier picker no longer uses this route (RT-113 P2:
+   * `cashier-admission-client.ts`); only manager PIN provisioning does.
    */
-  listRoster(branchId: string): Promise<BackendRosterResponse>;
+  listRoster(branchId: string, jwt: string): Promise<BackendRosterResponse>;
   /** POST /api/pos/v1/operators/takeover/confirm */
   confirmTakeover(
     req: BackendTakeoverConfirmRequest,
@@ -235,6 +247,7 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
     url: string,
     init: RequestInit,
     interpret: (parsed: unknown) => T,
+    refusalFor: (status: number) => T | { kind: 'refused' } = () => ({ kind: 'refused' }),
   ): Promise<T | { kind: 'refused' } | { kind: 'no_connection' }> {
     let response: Response;
     try {
@@ -242,7 +255,7 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
     } catch {
       return { kind: 'no_connection' };
     }
-    if (!response.ok) return { kind: 'refused' };
+    if (!response.ok) return refusalFor(response.status);
     let parsed: unknown;
     try {
       parsed = (await response.json()) as unknown;
@@ -285,11 +298,18 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
       return { kind: 'signed_out' };
     },
 
-    listRoster(branchId: string): Promise<BackendRosterResponse> {
+    async listRoster(branchId: string, jwt: string): Promise<BackendRosterResponse> {
+      // RT-214: never send this request unauthenticated.
+      if (jwt === '') return { kind: 'no_token' };
       return fetchAndInterpret(
         `${root}${ROSTER_PATH}?branch_id=${encodeURIComponent(branchId)}`,
-        { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${jwt}` },
+          signal: AbortSignal.timeout(timeoutMs),
+        },
         interpretRosterResponse,
+        rosterRefusal,
       );
     },
 
@@ -405,6 +425,13 @@ function parseRosterCashier(entry: unknown): BackendRosterCashier | null {
   };
   if (typeof e['user_id'] === 'string') cashier.user_id = e['user_id'];
   return cashier;
+}
+
+/** RT-214: a non-2xx roster answer. 401/403 are told apart; the rest collapse (PR-2). */
+function rosterRefusal(status: number): BackendRosterResponse {
+  if (status === 401) return { kind: 'unauthenticated' };
+  if (status === 403) return { kind: 'forbidden' };
+  return { kind: 'refused' };
 }
 
 function interpretRosterResponse(parsed: unknown): BackendRosterResponse {

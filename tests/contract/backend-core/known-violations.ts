@@ -26,17 +26,6 @@ export interface KnownViolation {
 
 export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   {
-    call: 'backendClient.listRoster',
-    kind: 'credential-mismatch',
-    sent: 'none',
-    requires: ['operator-jwt'],
-    tickets: ['RT-214'],
-    note:
-      'GET /operators/roster requires operator-identity (+ RT-150 manager role); the client sends ' +
-      'no Authorization. Since RT-113 P2 (POS #535) the cashier picker uses the device-auth ' +
-      'cashier-admissions roster; the only caller left is manager PIN provisioning (RT-214).',
-  },
-  {
     call: 'validateVoucher',
     kind: 'credential-mismatch',
     sent: 'none',

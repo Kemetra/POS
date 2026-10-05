@@ -381,6 +381,9 @@ describe('createBackendClient — sign-out request shape', () => {
 });
 
 describe('createBackendClient — roster request shape', () => {
+  /** The signed-in manager's operator-identity JWT (opaque test value). */
+  const MANAGER_JWT = 'manager-operator-identity-jwt';
+
   const HAPPY_ROSTER_BODY = {
     kind: 'roster',
     cashiers: [
@@ -394,7 +397,7 @@ describe('createBackendClient — roster request shape', () => {
       new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    await client.listRoster('branch-abc');
+    await client.listRoster('branch-abc', MANAGER_JWT);
 
     expect(captured).toHaveLength(1);
     const call = captured[0];
@@ -407,19 +410,32 @@ describe('createBackendClient — roster request shape', () => {
       new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    await client.listRoster('branch/with spaces&special');
+    await client.listRoster('branch/with spaces&special', MANAGER_JWT);
     expect(captured[0]?.url).toContain(encodeURIComponent('branch/with spaces&special'));
   });
 
-  it('NEVER includes an Authorization header (no JWT on roster path)', async () => {
+  // RT-214 — the roster is `operator-identity` (Clerk JWT) + RT-150 manager-gated
+  // on Backend-Core (`posOperatorRoster`). It used to go out with no credential.
+  it('RT-214: sends the manager operator JWT as Authorization: Bearer', async () => {
     const { fetchImpl, captured } = captureFetch(
       new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    await client.listRoster('b1');
-    const headers = captured[0]?.init.headers as Record<string, string> | undefined;
-    expect(headers?.['Authorization']).toBeUndefined();
-    expect(headers?.['authorization']).toBeUndefined();
+    await client.listRoster('b1', MANAGER_JWT);
+    expect(captured).toHaveLength(1);
+    const headers = new Headers(captured[0]?.init.headers);
+    expect(headers.get('authorization')).toBe(`Bearer ${MANAGER_JWT}`);
+    // The credential travels in the header only, never in the URL.
+    expect(captured[0]?.url).not.toContain(MANAGER_JWT);
+  });
+
+  it('RT-214: never sends a request without a token (empty JWT → no_token, no fetch)', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 })),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await expect(client.listRoster('b1', '')).resolves.toEqual({ kind: 'no_token' });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it('NEVER includes pin / password in the request', async () => {
@@ -427,7 +443,7 @@ describe('createBackendClient — roster request shape', () => {
       new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    await client.listRoster('b1');
+    await client.listRoster('b1', MANAGER_JWT);
     const serialized = JSON.stringify({
       url: captured[0]?.url,
       headers: captured[0]?.init.headers,
@@ -441,7 +457,7 @@ describe('createBackendClient — roster request shape', () => {
       new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.listRoster('b1');
+    const res = await client.listRoster('b1', MANAGER_JWT);
     expect(res.kind).toBe('roster');
     if (res.kind === 'roster') {
       expect(res.cashiers).toHaveLength(2);
@@ -465,7 +481,7 @@ describe('createBackendClient — roster request shape', () => {
     };
     const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.listRoster('b1');
+    const res = await client.listRoster('b1', MANAGER_JWT);
     expect(res.kind).toBe('roster');
     if (res.kind === 'roster') {
       const cashier = res.cashiers[0];
@@ -492,7 +508,7 @@ describe('createBackendClient — roster request shape', () => {
     };
     const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.listRoster('b1');
+    const res = await client.listRoster('b1', MANAGER_JWT);
     expect(res.kind).toBe('roster');
     if (res.kind === 'roster') {
       const cashier = res.cashiers[0];
@@ -513,7 +529,7 @@ describe('createBackendClient — roster request shape', () => {
       new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.listRoster('b1');
+    const res = await client.listRoster('b1', MANAGER_JWT);
     expect(res.kind).toBe('roster');
     if (res.kind === 'roster') {
       const cashier = res.cashiers[0];
@@ -529,7 +545,7 @@ describe('createBackendClient — roster request shape', () => {
     };
     const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.listRoster('b1');
+    const res = await client.listRoster('b1', MANAGER_JWT);
     expect(res.kind).toBe('refused');
   });
 
@@ -538,15 +554,26 @@ describe('createBackendClient — roster request shape', () => {
       new Response(JSON.stringify({ kind: 'roster', cashiers: [] }), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.listRoster('b1');
+    const res = await client.listRoster('b1', MANAGER_JWT);
     expect(res).toEqual({ kind: 'roster', cashiers: [] });
   });
 
-  it('collapses 4xx/5xx to refused', async () => {
-    for (const status of [400, 401, 403, 500]) {
+  it('RT-214: maps 401 to unauthenticated and 403 to forbidden', async () => {
+    for (const [status, kind] of [
+      [401, 'unauthenticated'],
+      [403, 'forbidden'],
+    ] as const) {
       const { fetchImpl } = captureFetch(new Response('{}', { status }));
       const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-      const res = await client.listRoster('b1');
+      await expect(client.listRoster('b1', MANAGER_JWT)).resolves.toEqual({ kind });
+    }
+  });
+
+  it('collapses every other 4xx/5xx to refused', async () => {
+    for (const status of [400, 404, 409, 500, 503]) {
+      const { fetchImpl } = captureFetch(new Response('{}', { status }));
+      const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+      const res = await client.listRoster('b1', MANAGER_JWT);
       expect(res.kind).toBe('refused');
     }
   });
@@ -554,14 +581,14 @@ describe('createBackendClient — roster request shape', () => {
   it('returns no_connection on network failure', async () => {
     const fetchImpl = vi.fn(() => Promise.reject(new Error('ECONNREFUSED')));
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.listRoster('b1');
+    const res = await client.listRoster('b1', MANAGER_JWT);
     expect(res.kind).toBe('no_connection');
   });
 
   it('returns refused on malformed JSON body', async () => {
     const { fetchImpl } = captureFetch(new Response('not-json', { status: 200 }));
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.listRoster('b1');
+    const res = await client.listRoster('b1', MANAGER_JWT);
     expect(res.kind).toBe('refused');
   });
 });
