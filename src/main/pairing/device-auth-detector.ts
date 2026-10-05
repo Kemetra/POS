@@ -26,15 +26,16 @@ import { ADMISSIONS_PATH } from '../operator/cashier-admission-client.js';
  *     JWT was refused, not the device.
  *
  * Every device-bearer call reaches this detector through ONE seam: the fetch
- * the device-bearer clients are built with is wrapped by
- * {@link withDeviceAuthObservation}. The sign-in, takeover, keeper
+ * each device-bearer client is built with is wrapped by
+ * {@link withDeviceAuthObservation}, tagged with that client's route family
+ * and base URL (review F5). The sign-in, takeover, keeper
  * (heartbeat), roster and read-down paths therefore all go through it. The
  * confirmation call itself uses an UNOBSERVED client, and its outcome is fed
  * back here directly.
  *
- * This detector covers the session + pairing revocation only. Invalidating
- * offline grants on the FIRST 401 is RT113-P1.2's grant seam (10871 OD5) and
- * is not done here.
+ * Review F4 / RT-113 10871 OD5: the FIRST device 401 of a count fires
+ * `onSuspect`, where the offline grants are invalidated through the grant
+ * seam; the confirmation drives the session + pairing revocation.
  *
  * Logs carry the route family and the transition only — never a URL, a token
  * or a body.
@@ -42,17 +43,22 @@ import { ADMISSIONS_PATH } from '../operator/cashier-admission-client.js';
 
 /** Review F3 / RT-215 decision 1: the confirmation call follows the first 401 by at most 30 s. */
 export const DEVICE_401_CONFIRM_MS = 30_000;
+/**
+ * RT-215 review F7: ... and by at least 5 s, so a very short admission TTL
+ * cannot turn the debounce into two near-simultaneous calls.
+ */
+export const DEVICE_401_MIN_CONFIRM_MS = 5_000;
 
 /**
- * The device-bearer route families (decision 2), matched on the URL path. The
- * paths are the clients' own constants, so the detector cannot drift from them.
+ * The device-bearer route of each family (decision 2). The paths are the
+ * clients' own constants, so the detector cannot drift from them.
  */
-const DEVICE_BEARER_ROUTES: readonly { source: DeviceRevokedSource; path: string }[] = [
+const DEVICE_BEARER_ROUTE: Readonly<Record<DeviceRevokedSource, string>> = {
   // posCreateCashierAdmission, posEndCashierAdmission, posListCashierAdmissionRoster
-  { source: 'cashier_admissions', path: ADMISSIONS_PATH },
+  cashier_admissions: ADMISSIONS_PATH,
   // the 010 catalogue read-down (AD-7: `Authorization: Bearer <device_token>`)
-  { source: 'read_down', path: SNAPSHOT_PATH },
-];
+  read_down: SNAPSHOT_PATH,
+};
 
 /** `ok` = a 2xx; `unauthorized` = a 401; `other` = any other answer or none. */
 export type DeviceAuthOutcome = 'ok' | 'unauthorized' | 'other';
@@ -60,26 +66,29 @@ export type DeviceAuthOutcome = 'ok' | 'unauthorized' | 'other';
 /** The detector's state: `suspect` = one 401 seen, confirmation pending. */
 export type DeviceAuthState = 'clear' | 'suspect' | 'confirmed';
 
-function pathnameOf(url: string): string | null {
+function parseUrl(url: string): URL | null {
   try {
-    return new URL(url, 'http://relative.invalid').pathname;
+    return new URL(url);
   } catch {
     return null;
   }
 }
 
 /**
- * The device-bearer route family of `url`, or null for any other route. A
- * route matches its own path or a sub-path (`…/roster`, `…/{id}/end`), never a
- * look-alike prefix.
+ * Review F5 — does `url` hit the `source` route of a client whose base URL is
+ * `baseUrl`? Matched relative to THAT client's base (origin + any path prefix,
+ * e.g. a prefixed `VITE_API_BASE_URL`), on the route itself or a sub-path
+ * (`…/roster`, `…/{id}/end`), never a look-alike prefix.
  */
-export function deviceBearerSource(url: string): DeviceRevokedSource | null {
-  const pathname = pathnameOf(url);
-  if (pathname === null) return null;
-  const route = DEVICE_BEARER_ROUTES.find(
-    (r) => pathname === r.path || pathname.startsWith(`${r.path}/`),
-  );
-  return route?.source ?? null;
+export function isDeviceBearerRoute(
+  url: string,
+  baseUrl: string,
+  source: DeviceRevokedSource,
+): boolean {
+  const target = parseUrl(url);
+  const route = parseUrl(`${baseUrl.replace(/\/$/, '')}${DEVICE_BEARER_ROUTE[source]}`);
+  if (target === null || route === null || target.origin !== route.origin) return false;
+  return target.pathname === route.pathname || target.pathname.startsWith(`${route.pathname}/`);
 }
 
 function outcomeForStatus(status: number): DeviceAuthOutcome {
@@ -88,12 +97,14 @@ function outcomeForStatus(status: number): DeviceAuthOutcome {
 }
 
 /**
- * min(30 s, TTL/2): the confirmation lands well inside a short admission's
- * TTL (Codex P2 4179701427). Without a usable TTL, 30 s.
+ * max(5 s, min(30 s, TTL/2)): the confirmation lands well inside a short
+ * admission's TTL (Codex P2 4179701427), but never so soon that one transient
+ * blip is confirmed by the next call (review F7). Without a usable TTL, 30 s.
  */
 export function deviceAuthConfirmDelayMs(ttlSeconds: number | undefined): number {
   if (!isUsableTtl(ttlSeconds)) return DEVICE_401_CONFIRM_MS;
-  return Math.min(DEVICE_401_CONFIRM_MS, Math.floor((ttlSeconds * 1000) / 2));
+  const halfTtl = Math.floor((ttlSeconds * 1000) / 2);
+  return Math.max(DEVICE_401_MIN_CONFIRM_MS, Math.min(DEVICE_401_CONFIRM_MS, halfTtl));
 }
 
 /** A TTL that can bound the confirmation: a finite, positive number of seconds. */
@@ -108,12 +119,18 @@ export interface DeviceAuthDetectorDeps {
   confirmDelayMs: () => number;
   /** Revocation confirmed; `source` is the route family of the FIRST 401. Called once. */
   onConfirmed: (source: DeviceRevokedSource) => void;
+  /**
+   * Review F4 / RT-113 10871 OD5 — the FIRST device 401 of a count (from any
+   * observed source): offline grants are invalidated here, before any
+   * confirmation. Optional; a throw is contained.
+   */
+  onSuspect?: (source: DeviceRevokedSource) => void;
   logger?: Pick<Logger, 'info' | 'warn'>;
 }
 
 export interface DeviceAuthDetector {
-  /** One device-bearer answer: an HTTP status for `url`. Non-device-bearer URLs are ignored. */
-  observeResponse(url: string, status: number): void;
+  /** One answer from a device-bearer route of `source` (the observed fetch filters routes). */
+  observe(source: DeviceRevokedSource, status: number): void;
   readonly state: DeviceAuthState;
   /** Back to `clear` (a successful re-pair). */
   reset(): void;
@@ -167,7 +184,7 @@ export function createDeviceAuthDetector(deps: DeviceAuthDetectorDeps): DeviceAu
     if (gen !== generation || state !== 'suspect') {
       // The count was reset while the call was in flight: its answer is just
       // another device-bearer answer (the roster is a cashier-admissions route).
-      observe('cashier_admissions', outcome);
+      observeOutcome('cashier_admissions', outcome);
       return;
     }
     if (outcome === 'unauthorized') {
@@ -190,7 +207,7 @@ export function createDeviceAuthDetector(deps: DeviceAuthDetectorDeps): DeviceAu
     scheduleConfirmation(); // no answer: keep the count, confirm again later
   }
 
-  function observe(source: DeviceRevokedSource, outcome: DeviceAuthOutcome): void {
+  function observeOutcome(source: DeviceRevokedSource, outcome: DeviceAuthOutcome): void {
     if (stopped || state === 'confirmed') return;
     if (outcome === 'ok') {
       toClear();
@@ -203,14 +220,17 @@ export function createDeviceAuthDetector(deps: DeviceAuthDetectorDeps): DeviceAu
       { event: 'pairing.device_auth.suspect', source },
       'device credential refused once; confirming',
     );
+    try {
+      deps.onSuspect?.(source);
+    } catch {
+      // The grant seam logs its own failures; the confirmation still runs.
+    }
     scheduleConfirmation();
   }
 
   return {
-    observeResponse(url, status) {
-      const source = deviceBearerSource(url);
-      if (source === null) return;
-      observe(source, outcomeForStatus(status));
+    observe(source, status) {
+      observeOutcome(source, outcomeForStatus(status));
     },
     get state() {
       return state;
@@ -234,20 +254,32 @@ function urlOf(input: RequestInfo | URL): string {
   return input.url;
 }
 
+/** Review F5 — which client an observed fetch belongs to. */
+export interface DeviceAuthObservationTag {
+  /** The client's route family. */
+  source: DeviceRevokedSource;
+  /** The client's own base URL; routes are matched relative to it. */
+  baseUrl: string;
+}
+
 /**
- * The fetch for the device-bearer clients: every answer is reported to the
- * detector (which ignores non-device-bearer routes). The response is returned
- * untouched; a transport failure is rethrown unreported (it is not an
- * answer). A failing observer never breaks the call.
+ * The fetch for ONE device-bearer client, tagged with its route family and
+ * base URL (review F5): an answer on that client's device-bearer route is
+ * reported to the detector; any other URL is ignored. The response is
+ * returned untouched; a transport failure is rethrown unreported (it is not
+ * an answer). A failing observer never breaks the call.
  */
 export function withDeviceAuthObservation(
   fetchImpl: FetchLike,
-  detector: Pick<DeviceAuthDetector, 'observeResponse'>,
+  detector: Pick<DeviceAuthDetector, 'observe'>,
+  tag: DeviceAuthObservationTag,
 ): FetchLike {
   return async (input, init) => {
     const response = await fetchImpl(input, init);
     try {
-      detector.observeResponse(urlOf(input), response.status);
+      if (isDeviceBearerRoute(urlOf(input), tag.baseUrl, tag.source)) {
+        detector.observe(tag.source, response.status);
+      }
     } catch {
       // Observation is best-effort.
     }

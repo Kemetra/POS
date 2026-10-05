@@ -42,12 +42,16 @@ import type { DeviceRevocationStore, RevokedTerminalScope } from '../pairing/sto
  * At boot the router reads `getStatus()` and lands on `/pairing` with the
  * `device_revoked` reason unconditionally (the state is durable).
  *
+ * Review F3: a session that starts while revoked is latched at once; a
+ * pairing is refused while any operator session is alive.
+ *
  * {@link DeviceRevocationFlow.onPaired} runs after every SUCCESSFUL pairing
  * (via {@link withDeviceRevocationRecovery}): the detector is reset, a session
  * still open from the previous pairing is latched (Codex P1), the
  * `cashier_pin_records` of every OTHER terminal are deleted (decision 5), a
  * revocation that was cleared is audited (`pairing.device_revoked_cleared`),
- * and `{ kind: 'paired' }` is pushed. The re-pair itself (`persist`, INSERT OR
+ * and `{ kind: 'paired' }` is pushed; if the paired-only workers already ran in
+ * this process, the app then relaunches (review F2). The re-pair itself (`persist`, INSERT OR
  * REPLACE) already cleared `device_revoked_at`.
  */
 
@@ -55,7 +59,17 @@ export interface DeviceRevocationFlowDeps {
   /** {@link DeviceRevocationStore.markDeviceRevoked}. */
   markDeviceRevoked: DeviceRevocationStore['markDeviceRevoked'];
   getStatus: () => Promise<PairingStatus>;
-  sessions: Pick<SessionManager, 'getCurrent' | 'onEnded'>;
+  sessions: Pick<SessionManager, 'getCurrent' | 'onEnded' | 'onStarted'>;
+  /** Review F3 — SYNC: is the pairing revoked right now (`PairingStore.isDeviceRevoked`)? */
+  isDeviceRevoked: () => boolean;
+  /**
+   * Review F2 — have the paired-only workers (read-down, finalize listener,
+   * sale-sync) already started in this process? They keep the scope they
+   * started with, so a re-pair after that needs a relaunch.
+   */
+  workersAlreadyStarted: () => boolean;
+  /** Review F2 — `app.relaunch(); app.exit(0)` in production. */
+  relaunch: () => void;
   /** The keeper: latch the current session and end it at its safe point. */
   latchSession: () => void;
   /** Clear the operator JWT + envelope holders. */
@@ -90,7 +104,8 @@ type Step =
   | 'push'
   | 'detector'
   | 'status'
-  | 'pins';
+  | 'pins'
+  | 'relaunch';
 
 const DEVICE_REVOKED_EVENT: PairingStatusChangedEvent = {
   kind: 'invalid',
@@ -153,6 +168,21 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
     routeIfPending();
   });
 
+  // Review F3 + Codex P1: no session may start under a revoked pairing. One
+  // that slips past the handlers' own checks is latched at once (it ends at
+  // its safe point — immediately, as it has no sale) and its credentials are
+  // cleared. The keeper's own start subscriber runs first (it is constructed
+  // first), so an online cashier admission is already armed here.
+  deps.sessions.onStarted(() => {
+    if (!deps.isDeviceRevoked()) return;
+    logger.warn(
+      { event: 'pairing.device_revoked.session_refused' },
+      'session started while revoked',
+    );
+    step('latch', deps.latchSession);
+    step('credentials', deps.clearCredentials);
+  });
+
   return {
     onConfirmed(source) {
       logger.warn({ event: 'pairing.device_revoked', source }, 'device revoked; re-pair required');
@@ -201,6 +231,20 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
       step('push', () => {
         deps.pushStatus({ kind: 'paired' });
       });
+      // Review F2: the paired-only workers keep the scope they started with
+      // (RT-202). After a re-pair in a process where they already ran, the
+      // finalize listener and the read-down would keep the OLD pairing, so the
+      // app relaunches — only once the new pairing is persisted and audited
+      // (above), and never while an operator session is alive (`submit` is
+      // refused then, review F3).
+      if (
+        status?.kind === 'paired' &&
+        deps.workersAlreadyStarted() &&
+        deps.sessions.getCurrent() === null
+      ) {
+        logger.info({ event: 'pairing.repaired.relaunch' }, 're-paired; relaunching');
+        step('relaunch', deps.relaunch);
+      }
     },
   };
 }
@@ -216,10 +260,17 @@ export function withDeviceRevocationRecovery(
   deps: {
     getStatus: () => Promise<PairingStatus>;
     onPaired: DeviceRevocationFlow['onPaired'];
+    /**
+     * Review F3 — is an operator session alive? A pairing is refused while one
+     * is (a latched session first ends at its safe point), so a renderer reload
+     * in the middle of a tender cannot re-pair under it. Defaults to none.
+     */
+    hasSession?: () => boolean;
   },
 ): PairingService {
   return {
     async submit(pairing_code: string): Promise<PairingSubmitResult> {
+      if (deps.hasSession?.() === true) return { outcome: 'session_active' };
       const before = await deps.getStatus().catch(() => null);
       const result = await inner.submit(pairing_code);
       if (result.outcome === 'success') {

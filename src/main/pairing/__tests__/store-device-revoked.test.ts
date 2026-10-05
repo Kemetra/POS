@@ -143,10 +143,17 @@ describe('PairingStore — device revoked (RT-215)', () => {
     expect(await s.getStatus()).toEqual(DEVICE_REVOKED);
   });
 
-  it('decrypt_failed still dominates (the SecretStore is unhealthy)', async () => {
+  it('review F7: device_revoked is reported before decrypt_failed (the revocation is the operator’s first concern)', async () => {
     const s = store();
     await s.persist(pairing('term-1'));
     s.markDeviceRevoked();
+    secrets.get = () => Promise.reject(new Error('decrypt'));
+    expect(await s.getStatus()).toEqual(DEVICE_REVOKED);
+  });
+
+  it('decrypt_failed still dominates when the row is not revoked', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
     secrets.get = () => Promise.reject(new Error('decrypt'));
     expect(await s.getStatus()).toEqual({ kind: 'invalid', reason: 'decrypt_failed' });
   });

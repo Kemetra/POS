@@ -61,7 +61,13 @@ export type PairingOutcome =
   | 'branch_mismatch'
   | 'rate_limited'
   | 'network_error'
-  | 'unknown_error';
+  | 'unknown_error'
+  /**
+   * RT-215 review F3 — refused locally: an operator session is still alive
+   * (a revoked terminal's latched session ends at its safe point first). The
+   * code is not sent.
+   */
+  | 'session_active';
 
 /**
  * Result returned to the renderer after a submit. Discriminated on
@@ -89,7 +95,8 @@ export type PairingSubmitResult =
         | 'already_paired'
         | 'branch_mismatch'
         | 'network_error'
-        | 'unknown_error';
+        | 'unknown_error'
+        | 'session_active';
     };
 
 /**

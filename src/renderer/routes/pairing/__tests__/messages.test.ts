@@ -4,6 +4,7 @@ import {
   ALREADY_PAIRED_MESSAGE,
   BRANCH_MISMATCH_MESSAGE,
   EMPTY_INPUT_MESSAGE,
+  SESSION_ACTIVE_MESSAGE,
   EXPIRED_CODE_MESSAGE,
   GENERIC_FAILURE_MESSAGE,
   INVALID_CODE_MESSAGE,
@@ -192,7 +193,7 @@ describe('messages dictionary — distinct constants', () => {
     }
   });
 
-  it('all nine message constants are pairwise distinct', () => {
+  it('all ten message constants are pairwise distinct', () => {
     const set = new Set([
       INVALID_CODE_MESSAGE,
       EXPIRED_CODE_MESSAGE,
@@ -203,8 +204,9 @@ describe('messages dictionary — distinct constants', () => {
       NETWORK_ERROR_MESSAGE,
       UNKNOWN_ERROR_MESSAGE,
       EMPTY_INPUT_MESSAGE,
+      SESSION_ACTIVE_MESSAGE,
     ]);
-    expect(set.size).toBe(9);
+    expect(set.size).toBe(10);
   });
 
   it('every PairingOutcome maps to a non-empty message (totality)', () => {
@@ -217,11 +219,19 @@ describe('messages dictionary — distinct constants', () => {
       'rate_limited',
       'network_error',
       'unknown_error',
+      'session_active',
     ];
     for (const outcome of all) {
       const msg = messageFor(outcome);
       expect(typeof msg).toBe('string');
       expect(msg.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('RT-215 review F3 — session_active', () => {
+  it('maps to the finish-and-sign-out copy', () => {
+    expect(messageFor('session_active')).toBe(SESSION_ACTIVE_MESSAGE);
+    expect(SESSION_ACTIVE_MESSAGE).toMatch(/sign out/i);
   });
 });

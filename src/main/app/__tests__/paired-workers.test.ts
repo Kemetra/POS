@@ -242,3 +242,23 @@ describe('RT-202 withPairedNotification — pairing-service wrapper', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });
+
+describe('RT-215 review F2 — hasStarted (did the paired-only workers run in this process?)', () => {
+  const TERMINAL = { tenant_id: 't', branch_id: 'b', terminal_id: 'term' };
+
+  it('is false until the first notifyPaired, then true for the rest of the process', () => {
+    const latch = createPairedWorkers({ logger: makeLogger() });
+    expect(latch.hasStarted()).toBe(false);
+    latch.notifyPaired(TERMINAL);
+    expect(latch.hasStarted()).toBe(true);
+    latch.notifyPaired({ ...TERMINAL, terminal_id: 'term-2' }); // a re-pair: no restart
+    expect(latch.hasStarted()).toBe(true);
+  });
+
+  it('a notifyPaired after close() starts nothing and reports false', () => {
+    const latch = createPairedWorkers({ logger: makeLogger() });
+    latch.close();
+    latch.notifyPaired(TERMINAL);
+    expect(latch.hasStarted()).toBe(false);
+  });
+});

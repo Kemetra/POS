@@ -18,8 +18,8 @@ import type { PairingStatus } from '../../shared/pairing-types.js';
  *   ok     | present | paired     | n/a
  *   missing| present | invalid    | orphaned_row    (row sits alone)
  *   ok     | absent  | invalid    | missing_token   (token sits alone)
+ *   any    | revoked | invalid    | device_revoked  (RT-215; checked FIRST, review F7)
  *   garbled| any     | invalid    | decrypt_failed  (DPAPI cannot decrypt)
- *   any    | revoked | invalid    | device_revoked  (RT-215; row's device_revoked_at set)
  *
  * Reason mapping rationale: `orphaned_row` describes the row's state
  * (it is orphaned); `missing_token` describes what is missing relative
@@ -178,7 +178,12 @@ export interface DeviceRevocationStore {
    *
    * Returns the revoked pairing's scope, or null when nothing is paired (then
    * nothing is recorded). The device token is NOT deleted: it stays sealed,
-   * and a re-pair (`persist`) overwrites it.
+   * is never sent again, and a re-pair (`persist`) overwrites it.
+   *
+   * ONE-WAY (review F1, fail closed): nothing in this terminal un-revokes it.
+   * Because the sealed token is never sent again (owner approval (3), RT-215
+   * 10875), a false positive also needs a new pairing code and yields a new
+   * terminal_id; the old unsent sales are then held (RT-221).
    */
   markDeviceRevoked(): RevokedTerminalScope | null;
 
@@ -263,24 +268,25 @@ export function createPairingStore(
 
   return {
     async getStatus(): Promise<PairingStatus> {
+      const row = db.readAssignment();
+      // RT-215 (review F7): the pairing row is the source of truth for
+      // revocation, and it is reported FIRST — whatever state the token half
+      // is in, even an undecryptable one, the terminal must re-pair.
+      if (row !== null && rowRevoked(row)) {
+        return { kind: 'invalid', reason: 'device_revoked' };
+      }
+
       const tokenState = await readTokenState();
 
-      // decrypt_failed dominates: the operator's first concern is
+      // decrypt_failed dominates the rest: the operator's first concern is
       // "the SecretStore is unhealthy on this machine". The orphan
       // direction beneath does not matter for the recovery flow.
       if (tokenState.kind === 'decrypt_failed') {
         return { kind: 'invalid', reason: 'decrypt_failed' };
       }
 
-      const row = db.readAssignment();
       const tokenPresent = tokenState.kind === 'present';
       const rowPresent = row !== null;
-
-      // RT-215: the pairing row is the source of truth for revocation. A
-      // revoked row needs a re-pair whatever state the token half is in.
-      if (rowPresent && rowRevoked(row)) {
-        return { kind: 'invalid', reason: 'device_revoked' };
-      }
 
       if (!tokenPresent && !rowPresent) return { kind: 'unpaired' };
       if (tokenPresent && rowPresent) {
@@ -379,8 +385,8 @@ export function createPairingStore(
       //
       // RT-215 (supersedes the T072 / US7 "clear() on 401" seam): a
       // confirmed device 401 does NOT clear pairing state. It calls
-      // markDeviceRevoked(), which keeps the token sealed (so a false
-      // positive needs no new pairing code) and keeps the row for the
+      // markDeviceRevoked(), which keeps the token sealed (never sent again;
+      // recovery is a re-pair with a new code) and keeps the row for the
       // recovery screen. clear() owns no logger call by design (FR-8 / T071).
       db.deleteAssignment();
       revokedInMemory = false;

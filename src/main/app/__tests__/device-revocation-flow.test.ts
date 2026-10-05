@@ -37,6 +37,11 @@ const PAIRED_NEW: PairingStatus = {
 
 interface Harness {
   deps: DeviceRevocationFlowDeps;
+  /** Simulate SessionManager.create() firing its start subscribers. */
+  startSession(id: string): void;
+  revoked: { value: boolean };
+  workersStarted: { value: boolean };
+  relaunched: { count: number };
   calls: string[];
   pushed: PairingStatusChangedEvent[];
   audits: AuditEvent[];
@@ -52,6 +57,10 @@ function harness(over: Partial<DeviceRevocationFlowDeps> = {}): Harness {
   const logs: unknown[][] = [];
   const session: { current: object | null } = { current: null };
   const ended: (() => void)[] = [];
+  const started: ((record: { id: string }) => void)[] = [];
+  const revoked = { value: false };
+  const workersStarted = { value: false };
+  const relaunched = { count: 0 };
   const status: { value: PairingStatus } = { value: PAIRED_NEW };
   const deps: DeviceRevocationFlowDeps = {
     markDeviceRevoked: () => {
@@ -66,6 +75,15 @@ function harness(over: Partial<DeviceRevocationFlowDeps> = {}): Harness {
           cb(undefined as never, undefined);
         });
       },
+      onStarted: (cb) => {
+        started.push(cb as (record: { id: string }) => void);
+      },
+    },
+    isDeviceRevoked: () => revoked.value,
+    workersAlreadyStarted: () => workersStarted.value,
+    relaunch: () => {
+      relaunched.count += 1;
+      calls.push('relaunch');
     },
     latchSession: () => calls.push('latch'),
     clearCredentials: () => calls.push('credentials'),
@@ -88,6 +106,13 @@ function harness(over: Partial<DeviceRevocationFlowDeps> = {}): Harness {
   };
   return {
     deps,
+    revoked,
+    workersStarted,
+    relaunched,
+    startSession(id) {
+      session.current = { id };
+      for (const cb of started) cb({ id });
+    },
     calls,
     pushed,
     audits,
@@ -368,5 +393,94 @@ describe('createRosterConfirmationProbe (the confirmation call)', () => {
       listRoster: () => Promise.reject(new Error('boom')),
     });
     await expect(probe()).resolves.toBe('other');
+  });
+});
+
+describe('review F3 — no session may start after a confirmed revocation', () => {
+  it('a session that starts while revoked is latched at once and its credentials cleared', () => {
+    const h = harness();
+    createDeviceRevocationFlow(h.deps);
+    h.revoked.value = true;
+    h.startSession('late');
+    expect(h.calls).toEqual(['latch', 'credentials']);
+  });
+
+  it('a session that starts while NOT revoked is left alone', () => {
+    const h = harness();
+    createDeviceRevocationFlow(h.deps);
+    h.startSession('normal');
+    expect(h.calls).toEqual([]);
+  });
+});
+
+describe('review F2 — relaunch after an in-process re-pair', () => {
+  it('relaunches after the re-pair is persisted, audited and pushed, when the paired workers already ran', async () => {
+    const h = harness();
+    h.workersStarted.value = true;
+    await createDeviceRevocationFlow(h.deps).onPaired({ previouslyRevoked: true });
+    expect(h.relaunched.count).toBe(1);
+    expect(h.calls.at(-1)).toBe('relaunch'); // last: after the PIN purge
+    expect(h.audits).toHaveLength(1); // the clear was audited first
+    expect(h.pushed).toEqual([{ kind: 'paired' }]);
+  });
+
+  it('a first-ever pairing in this process (workers not started yet) does NOT relaunch', async () => {
+    const h = harness();
+    await createDeviceRevocationFlow(h.deps).onPaired({ previouslyRevoked: false });
+    expect(h.relaunched.count).toBe(0);
+  });
+
+  it('never relaunches while an operator session is alive', async () => {
+    const h = harness();
+    h.workersStarted.value = true;
+    h.session.current = { id: 's1' };
+    await createDeviceRevocationFlow(h.deps).onPaired({ previouslyRevoked: true });
+    expect(h.relaunched.count).toBe(0);
+  });
+
+  it('does not relaunch when the status read after the pairing is not paired', async () => {
+    const h = harness({ getStatus: () => Promise.resolve({ kind: 'unpaired' }) });
+    h.workersStarted.value = true;
+    await createDeviceRevocationFlow(h.deps).onPaired({ previouslyRevoked: true });
+    expect(h.relaunched.count).toBe(0);
+  });
+});
+
+describe('review F3 — pairing:submit is refused while an operator session exists', () => {
+  const ok: PairingSubmitResult = {
+    outcome: 'success',
+    tenant_id: 'tenant-1',
+    branch_id: 'branch-1',
+    terminal_id: 'term-new',
+    terminal_label: 'Till 1',
+  };
+
+  it('refuses session_active and never sends the code', async () => {
+    const submit = vi.fn(() => Promise.resolve(ok));
+    const onPaired = vi.fn(() => Promise.resolve());
+    const wrapped = withDeviceRevocationRecovery(
+      { submit },
+      {
+        getStatus: () => Promise.resolve({ kind: 'invalid', reason: 'device_revoked' }),
+        onPaired,
+        hasSession: () => true,
+      },
+    );
+    await expect(wrapped.submit('CODE')).resolves.toEqual({ outcome: 'session_active' });
+    expect(submit).not.toHaveBeenCalled();
+    expect(onPaired).not.toHaveBeenCalled();
+  });
+
+  it('submits normally with no session', async () => {
+    const submit = vi.fn(() => Promise.resolve(ok));
+    const wrapped = withDeviceRevocationRecovery(
+      { submit },
+      {
+        getStatus: () => Promise.resolve({ kind: 'unpaired' }),
+        onPaired: () => Promise.resolve(),
+        hasSession: () => false,
+      },
+    );
+    await expect(wrapped.submit('CODE')).resolves.toBe(ok);
   });
 });

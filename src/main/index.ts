@@ -539,9 +539,10 @@ singleInstanceReady
       secretStore,
       deviceTokenKey: DEVICE_TOKEN_KEY,
     });
-    const deviceRevocation: DeviceRevocationFlow = {
+    const deviceRevocation: DeviceRevocationFlow & { hasSession: () => boolean } = {
       onConfirmed: () => undefined,
       onPaired: () => Promise.resolve(),
+      hasSession: () => false,
     };
 
     // 002-terminal-pairing dev bypass — seeds fixture pairing state so the
@@ -605,6 +606,8 @@ singleInstanceReady
         {
           getStatus: () => pairingStore.getStatus(),
           onPaired: (input) => deviceRevocation.onPaired(input),
+          // Review F3: no pairing while an operator session is alive.
+          hasSession: () => deviceRevocation.hasSession(),
         },
       ),
       notifyPairedFromStore,
@@ -734,9 +737,12 @@ singleInstanceReady
       },
       logger: mainLogger,
     });
-    const deviceBearerFetch = withDeviceAuthObservation(
+    // Review F5: each device-bearer client gets its OWN observed fetch, tagged
+    // with its route family and base URL (a path-prefixed base still matches).
+    const admissionsFetch = withDeviceAuthObservation(
       globalThis.fetch.bind(globalThis),
       deviceAuthDetector,
+      { source: 'cashier_admissions', baseUrl: apiBaseUrl },
     );
 
     // RT-113 P2 (10763 D2/D11, owner decision 10844; fixes RT-182) — the
@@ -746,7 +752,7 @@ singleInstanceReady
     // the cashier path.
     const cashierAdmissionClient = createCashierAdmissionClient({
       baseUrl: apiBaseUrl,
-      fetch: deviceBearerFetch,
+      fetch: admissionsFetch,
       getDeviceToken: readSendableDeviceToken,
     });
     const cashierAdmission: CashierAdmissionDeps = {
@@ -879,6 +885,13 @@ singleInstanceReady
       markDeviceRevoked: () => pairingStore.markDeviceRevoked(),
       getStatus: () => pairingStore.getStatus(),
       sessions: operatorSessionManager,
+      isDeviceRevoked: () => pairingStore.isDeviceRevoked(),
+      // Review F2: after a re-pair in a process whose paired-only workers ran.
+      workersAlreadyStarted: () => pairedWorkersLatch.hasStarted(),
+      relaunch: () => {
+        app.relaunch();
+        app.exit(0);
+      },
       latchSession: () => {
         cashierAdmissionKeeper.latchCurrentSession('terminal_session_terminated');
       },
@@ -909,6 +922,7 @@ singleInstanceReady
       deviceRevocationFlow.onConfirmed(source);
     };
     deviceRevocation.onPaired = (input) => deviceRevocationFlow.onPaired(input);
+    deviceRevocation.hasSession = () => operatorSessionManager.getCurrent() !== null;
 
     const operatorTakeoverHandler = new TakeoverHandler({
       // RT-215 (Codex P1): a late success under a revoked/replaced pairing is dropped.
@@ -1149,7 +1163,10 @@ singleInstanceReady
       const readDownClient = createReadDownClient({
         baseUrl: catalogueApiBaseUrl,
         // RT-215: observed by the device-401 detector (a read-down 401 counts).
-        fetch: deviceBearerFetch,
+        fetch: withDeviceAuthObservation(globalThis.fetch.bind(globalThis), deviceAuthDetector, {
+          source: 'read_down',
+          baseUrl: catalogueApiBaseUrl,
+        }),
         // Device token (the paired-terminal credential) read in-process; never
         // logged, never bridged. Sole credential for the non-session-gated driver.
         // RT-215: null once the device is revoked, so it is never sent again.

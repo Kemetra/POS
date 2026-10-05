@@ -241,6 +241,8 @@ interface Wired {
   readDown: ReturnType<typeof createReadDownClient>;
   observedFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   service: PairingService;
+  relaunches: { count: number };
+  workersStarted: { value: boolean };
 }
 
 /** Everything wired as `src/main/index.ts` wires it. */
@@ -275,12 +277,19 @@ async function wire(): Promise<Wired> {
       late.onConfirmed(source);
     },
   });
-  const observedFetch = withDeviceAuthObservation(backend.fetch, detector);
+  const admissionsFetch = withDeviceAuthObservation(backend.fetch, detector, {
+    source: 'cashier_admissions',
+    baseUrl: BASE,
+  });
+  const readDownFetch = withDeviceAuthObservation(backend.fetch, detector, {
+    source: 'read_down',
+    baseUrl: BASE,
+  });
   const invalidated: CashierAdmissionInvalidation[] = [];
   const admission: CashierAdmissionDeps = {
     client: createCashierAdmissionClient({
       baseUrl: BASE,
-      fetch: observedFetch,
+      fetch: admissionsFetch,
       getDeviceToken: readSendable,
     }),
     grantSeam: {
@@ -298,12 +307,19 @@ async function wire(): Promise<Wired> {
   const jwt = createJwtHolder(refuseWhileRevoked);
   const envelope = createJwtHolder(refuseWhileRevoked);
   const pushed: PairingStatusChangedEvent[] = [];
+  const workersStarted = { value: true }; // booted paired: the workers ran
+  const relaunches = { count: 0 };
   const auditEmitter = new AuditEmitter(bindAuditEventsStoreDb(handle));
   let n = 0;
   const flow = createDeviceRevocationFlow({
     markDeviceRevoked: () => store.markDeviceRevoked(),
     getStatus: () => store.getStatus(),
     sessions,
+    isDeviceRevoked: () => store.isDeviceRevoked(),
+    workersAlreadyStarted: () => workersStarted.value,
+    relaunch: () => {
+      relaunches.count += 1;
+    },
     latchSession: () => {
       keeper.latchCurrentSession('terminal_session_terminated');
     },
@@ -341,11 +357,15 @@ async function wire(): Promise<Wired> {
         };
       },
     },
-    { getStatus: () => store.getStatus(), onPaired: (i) => flow.onPaired(i) },
+    {
+      getStatus: () => store.getStatus(),
+      onPaired: (i) => flow.onPaired(i),
+      hasSession: () => sessions.getCurrent() !== null,
+    },
   );
   const readDown = createReadDownClient({
     baseUrl: BASE,
-    fetch: observedFetch,
+    fetch: readDownFetch,
     getDeviceToken: readSendable,
   });
   return {
@@ -362,8 +382,10 @@ async function wire(): Promise<Wired> {
     safe,
     readSendable,
     readDown,
-    observedFetch,
+    observedFetch: admissionsFetch,
     service,
+    relaunches,
+    workersStarted,
   };
 }
 
@@ -662,5 +684,59 @@ describe('RT-215 device revocation — end to end', () => {
     // Defence in depth: the holders refuse any write while revoked.
     w.jwt.set('bs-late', 'jwt-SENTINEL');
     expect(w.jwt.get('bs-late')).toBeNull();
+  });
+
+  it('review F3: a session started after the revocation is latched and ended at once; holders cleared', async () => {
+    const w = await wire();
+    w.backend.deviceStatus.value = 401;
+    await signInAttempt(w);
+    await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS);
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
+
+    signInCashier(w); // slipped past the handler checks (e.g. a dev fixture)
+    expect(w.sessions.getCurrent()).toBeNull(); // no sale open: ended at its safe point at once
+    expect(w.sessions.getLastEndCause()).toBe('terminal_session_terminated');
+  });
+
+  it('review F3: pairing is refused while a (latched) session is alive; allowed once it ends', async () => {
+    const w = await wire();
+    signInCashier(w);
+    w.safe.value = false; // a live tender
+    w.backend.deviceStatus.value = 401;
+    await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2 + DEVICE_401_CONFIRM_MS);
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED);
+
+    // e.g. a renderer reload mid-tender reaching /pairing
+    await expect(w.service.submit('NEW-CODE')).resolves.toEqual({ outcome: 'session_active' });
+    expect(await w.store.getStatus()).toEqual(DEVICE_REVOKED); // nothing was paired
+
+    w.safe.value = true;
+    w.keeper.recheckSafePoint();
+    expect(w.sessions.getCurrent()).toBeNull();
+    await expect(w.service.submit('NEW-CODE')).resolves.toMatchObject({ outcome: 'success' });
+  });
+
+  it('review F2: a re-pair in a process whose workers ran relaunches; after it is persisted and audited', async () => {
+    const w = await wire();
+    w.backend.deviceStatus.value = 401;
+    await signInAttempt(w);
+    await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS);
+    await w.service.submit('NEW-CODE');
+    expect(w.relaunches.count).toBe(1);
+    expect(rows('SELECT terminal_id, device_revoked_at FROM terminal_assignment')).toEqual([
+      ['term-2', null],
+    ]);
+    expect(
+      rows(
+        `SELECT count(*) FROM audit_events WHERE action_category = 'pairing.device_revoked_cleared'`,
+      ),
+    ).toEqual([[1]]);
+  });
+
+  it('review F2: a first-ever pairing in this process does not relaunch', async () => {
+    const w = await wire();
+    w.workersStarted.value = false;
+    await w.service.submit('NEW-CODE');
+    expect(w.relaunches.count).toBe(0);
   });
 });

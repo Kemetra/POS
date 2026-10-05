@@ -8,7 +8,7 @@ import type { PairingOutcome } from '../../../shared/pairing-types';
  * T074 (Phase Final) adds friendly, action-oriented copy for the two
  * remaining categories: `network_error` and `unknown_error`.
  *
- * All eight `PairingOutcome` values now map to a distinct string.
+ * All nine `PairingOutcome` values now map to a distinct string.
  * The `success` outcome maps to the generic fallback — the form
  * navigates before that string is ever rendered.
  *
@@ -70,6 +70,13 @@ export const NETWORK_ERROR_MESSAGE = 'No connection — check your network and t
 export const UNKNOWN_ERROR_MESSAGE = 'Pairing failed — please try again.';
 
 /**
+ * Message for `outcome: 'session_active'` (RT-215 review F3): pairing is
+ * refused while an operator session is alive; the code was not used.
+ */
+export const SESSION_ACTIVE_MESSAGE =
+  'Finish the current sale and sign out before pairing this terminal again.';
+
+/**
  * Client-side validation copy for an empty / whitespace-only submit.
  * Surfaces visibly via `role="status"` so the operator sees a reason
  * instead of a silent no-op (T045).
@@ -79,11 +86,12 @@ export const EMPTY_INPUT_MESSAGE = 'Enter a pairing code.';
 /**
  * Resolve a `PairingOutcome` to its operator-facing message.
  *
- * Covers all eight `PairingOutcome` values:
+ * Covers all nine `PairingOutcome` values:
  *   - US3: invalid_code / expired_code / already_paired
  *   - US4: branch_mismatch
  *   - US5: rate_limited
  *   - T074: network_error / unknown_error
+ *   - RT-215: session_active
  *   - success: generic fallback (form navigates before this is rendered)
  */
 export function messageFor(outcome: PairingOutcome): string {
@@ -107,5 +115,7 @@ export function messageFor(outcome: PairingOutcome): string {
       return NETWORK_ERROR_MESSAGE;
     case 'unknown_error':
       return UNKNOWN_ERROR_MESSAGE;
+    case 'session_active':
+      return SESSION_ACTIVE_MESSAGE;
   }
 }

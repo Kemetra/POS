@@ -30,16 +30,17 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
     expect(source).toMatch(/\(await readSendableDeviceToken\(\)\) \?\? ''/); // sign-in attestation
   });
 
-  it('builds exactly the two device-bearer clients on the observed fetch', () => {
+  it('builds exactly the two device-bearer clients on a fetch tagged with their own route + base (review F5)', () => {
     expect(source).toMatch(
-      /const deviceBearerFetch = withDeviceAuthObservation\(\s*globalThis\.fetch\.bind\(globalThis\),\s*deviceAuthDetector,\s*\)/,
+      /const admissionsFetch = withDeviceAuthObservation\(\s*globalThis\.fetch\.bind\(globalThis\),\s*deviceAuthDetector,\s*\{ source: 'cashier_admissions', baseUrl: apiBaseUrl \},\s*\)/,
     );
-    expect(count(/fetch: deviceBearerFetch/g)).toBe(2);
+    expect(count(/withDeviceAuthObservation\(/g)).toBe(2);
+    expect(count(/fetch: admissionsFetch/g)).toBe(1);
     expect(source).toMatch(
-      /createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: deviceBearerFetch,/,
+      /createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: admissionsFetch,/,
     );
     expect(source).toMatch(
-      /createReadDownClient\(\{\s*baseUrl: catalogueApiBaseUrl,\s*\/\/[^\n]*\n\s*fetch: deviceBearerFetch,/,
+      /createReadDownClient\(\{\s*baseUrl: catalogueApiBaseUrl,\s*\/\/[^\n]*\n\s*fetch: withDeviceAuthObservation\(globalThis\.fetch\.bind\(globalThis\), deviceAuthDetector, \{\s*source: 'read_down',\s*baseUrl: catalogueApiBaseUrl,\s*\}\),/,
     );
   });
 
@@ -78,6 +79,16 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
     );
     expect(source).toContain('const operatorJwtHolder = createJwtHolder(refuseWhileRevoked);');
     expect(source).toContain('const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);');
+  });
+
+  it('review F2/F3: relaunch after a re-pair once the workers ran; no pairing while a session is alive', () => {
+    expect(source).toMatch(/workersAlreadyStarted: \(\) => pairedWorkersLatch\.hasStarted\(\),/);
+    expect(source).toMatch(/relaunch: \(\) => \{\s*app\.relaunch\(\);\s*app\.exit\(0\);\s*\}/);
+    expect(source).toMatch(/hasSession: \(\) => deviceRevocation\.hasSession\(\),/);
+    expect(source).toMatch(
+      /deviceRevocation\.hasSession = \(\) => operatorSessionManager\.getCurrent\(\) !== null;/,
+    );
+    expect(source).toMatch(/isDeviceRevoked: \(\) => pairingStore\.isDeviceRevoked\(\),/);
   });
 
   it('no longer ends the session on a single device 401 (the RT-113 P2 immediate cascade is gone)', () => {
