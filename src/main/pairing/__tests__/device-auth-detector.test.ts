@@ -259,31 +259,47 @@ describe('device-401 detector — debounce (decision 1)', () => {
     expect(h.probe).toHaveBeenCalledTimes(1);
   });
 
-  it('review F4: onSuspect fires on the FIRST device 401 only (once per count), never on a 2xx', async () => {
-    const suspects: DeviceRevokedSource[] = [];
+  it('rev546b F-A: onUnauthorized fires on EVERY device 401 while not confirmed, never on a 2xx', async () => {
+    const seen: DeviceRevokedSource[] = [];
+    const detector = createDeviceAuthDetector({
+      probe: () => Promise.resolve('unauthorized'),
+      confirmDelayMs: () => 10,
+      onConfirmed: () => undefined,
+      onUnauthorized: (source) => seen.push(source),
+    });
+    detector.observe('cashier_admissions', 200);
+    expect(seen).toEqual([]);
+    detector.observe('read_down', 401);
+    detector.observe('cashier_admissions', 401); // same count: still reported
+    detector.observe('read_down', 401);
+    expect(seen).toEqual(['read_down', 'cashier_admissions', 'read_down']);
+    expect(detector.state).toBe('suspect'); // the confirmation logic is unchanged
+    await advance(10);
+    expect(detector.state).toBe('confirmed');
+    detector.observe('cashier_admissions', 401); // after confirmation: nothing is sent anyway
+    expect(seen).toHaveLength(3);
+  });
+
+  it('rev546b F-A: a stopped detector reports nothing', () => {
+    const seen: DeviceRevokedSource[] = [];
     const detector = createDeviceAuthDetector({
       probe: () => Promise.resolve('ok'),
       confirmDelayMs: () => 10,
       onConfirmed: () => undefined,
-      onSuspect: (source) => suspects.push(source),
+      onUnauthorized: (source) => seen.push(source),
     });
-    detector.observe('cashier_admissions', 200);
-    expect(suspects).toEqual([]);
+    detector.stop();
     detector.observe('read_down', 401);
-    detector.observe('cashier_admissions', 401); // still the same count
-    expect(suspects).toEqual(['read_down']);
-    await advance(10); // the confirmation answers 2xx: count cleared
-    detector.observe('cashier_admissions', 401); // a new first 401
-    expect(suspects).toEqual(['read_down', 'cashier_admissions']);
+    expect(seen).toEqual([]);
   });
 
-  it('review F4: a throwing onSuspect does not stop the confirmation', async () => {
+  it('review F4: a throwing onUnauthorized does not stop the confirmation', async () => {
     const onConfirmed = vi.fn();
     const detector = createDeviceAuthDetector({
       probe: () => Promise.resolve('unauthorized'),
       confirmDelayMs: () => 10,
       onConfirmed,
-      onSuspect: () => {
+      onUnauthorized: () => {
         throw new Error('seam failed');
       },
     });

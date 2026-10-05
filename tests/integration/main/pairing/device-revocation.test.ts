@@ -765,8 +765,18 @@ describe('RT-215 device revocation — end to end', () => {
 
   it('review F2: a first-ever pairing in this process does not relaunch', async () => {
     const w = await wire();
+    await w.store.clear(); // booted unpaired: the workers never ran
     w.workersStarted.value = false;
-    await w.service.submit('NEW-CODE');
+    await expect(w.service.submit('NEW-CODE')).resolves.toMatchObject({ outcome: 'success' });
+    expect(w.relaunches.count).toBe(0);
+  });
+
+  it('rev546b S-1: a paired (not revoked) terminal refuses pairing:submit; nothing changes', async () => {
+    const w = await wire();
+    await expect(w.service.submit('NEW-CODE')).resolves.toEqual({
+      outcome: 'terminal_already_paired',
+    });
+    expect(await w.store.getStatus()).toMatchObject({ kind: 'paired', terminal_id: 'term-1' });
     expect(w.relaunches.count).toBe(0);
   });
 });

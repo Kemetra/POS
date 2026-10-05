@@ -606,9 +606,16 @@ export function withOfflineGrantPairing<S extends PairingStore>(inner: S, grants
     }
   }
 
-  /** The epoch of the pairing being replaced, from the pairing store itself. */
+  /**
+   * The epoch of the pairing being replaced, from the pairing store itself.
+   * RT-215 rev546b S-2: a revoked pairing reports `invalid/device_revoked`, so
+   * its stored epoch is read directly when the store offers it; otherwise the
+   * `prior + 1` floor would be lost on a re-pair after a revocation.
+   */
   async function priorEpoch(): Promise<number | null> {
     try {
+      const stored = inner.getStoredPairingEpoch?.();
+      if (stored !== undefined) return stored;
       return scopeFromPairingStatus(await inner.getStatus())?.pairing_epoch ?? null;
     } catch {
       return null;

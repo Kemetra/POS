@@ -765,10 +765,10 @@ singleInstanceReady
       onConfirmed: (source) => {
         deviceRevocation.onConfirmed(source);
       },
-      // Review F4 / OD5: the FIRST device 401 from any observed source
-      // invalidates every offline grant through the seam.
-      onSuspect: () => {
-        deviceGrantHooks.onSuspect();
+      // Review F4 / OD5 (+ rev546b F-A): EVERY device 401 from any observed
+      // source invalidates every offline grant through the seam.
+      onUnauthorized: () => {
+        deviceGrantHooks.onUnauthorized();
       },
       logger: mainLogger,
     });

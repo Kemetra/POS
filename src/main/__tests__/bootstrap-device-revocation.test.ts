@@ -93,7 +93,9 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
 
   it('review F4: the detector drives the offline grants through the #545 seam (never the store)', () => {
     expect(source).toContain('const deviceGrantHooks = deviceRevocationGrantHooks(offlineGrants);');
-    expect(source).toMatch(/onSuspect: \(\) => \{\s*deviceGrantHooks\.onSuspect\(\);\s*\}/);
+    expect(source).toMatch(
+      /onUnauthorized: \(\) => \{\s*deviceGrantHooks\.onUnauthorized\(\);\s*\}/,
+    );
     expect(source).toMatch(
       /invalidateGrants: \(\) => \{\s*deviceGrantHooks\.onConfirmed\(\);\s*\}/,
     );

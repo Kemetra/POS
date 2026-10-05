@@ -67,7 +67,14 @@ export type PairingOutcome =
    * (a revoked terminal's latched session ends at its safe point first). The
    * code is not sent.
    */
-  | 'session_active';
+  | 'session_active'
+  /**
+   * RT-215 rev546b S-1 — refused locally: the terminal is paired (and not
+   * revoked). Pairing is a recovery from unpaired / invalid / revoked only, so
+   * a sign-in cannot complete during a re-pair and skip the relaunch. The code
+   * is not sent. (Distinct from the server's `already_paired`: code used.)
+   */
+  | 'terminal_already_paired';
 
 /**
  * Result returned to the renderer after a submit. Discriminated on
@@ -96,7 +103,8 @@ export type PairingSubmitResult =
         | 'branch_mismatch'
         | 'network_error'
         | 'unknown_error'
-        | 'session_active';
+        | 'session_active'
+        | 'terminal_already_paired';
     };
 
 /**

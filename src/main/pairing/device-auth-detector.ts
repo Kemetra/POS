@@ -33,9 +33,9 @@ import { ADMISSIONS_PATH } from '../operator/cashier-admission-client.js';
  * confirmation call itself uses an UNOBSERVED client, and its outcome is fed
  * back here directly.
  *
- * Review F4 / RT-113 10871 OD5: the FIRST device 401 of a count fires
- * `onSuspect`, where the offline grants are invalidated through the grant
- * seam; the confirmation drives the session + pairing revocation.
+ * Review F4 / RT-113 10871 OD5 (+ rev546b F-A): EVERY observed device 401
+ * fires `onUnauthorized`, where the offline grants are invalidated through the
+ * grant seam; the confirmation drives the session + pairing revocation.
  *
  * Logs carry the route family and the transition only — never a URL, a token
  * or a body.
@@ -130,11 +130,14 @@ export interface DeviceAuthDetectorDeps {
   /** Revocation confirmed; `source` is the route family of the FIRST 401. Called once. */
   onConfirmed: (source: DeviceRevokedSource) => void;
   /**
-   * Review F4 / RT-113 10871 OD5 — the FIRST device 401 of a count (from any
-   * observed source): offline grants are invalidated here, before any
-   * confirmation. Optional; a throw is contained.
+   * Review F4 / RT-113 10871 OD5 + rev546b F-A — EVERY observed device 401
+   * (from any source, the first of a count and every later one) while the
+   * detector is neither stopped nor confirmed: offline grants are invalidated
+   * here, before any confirmation. An admission minted after the first 401
+   * can still be answered `admitted`; only a later invalidation drops it (the
+   * #545 send mark). Optional; a throw is contained.
    */
-  onSuspect?: (source: DeviceRevokedSource) => void;
+  onUnauthorized?: (source: DeviceRevokedSource) => void;
   logger?: Pick<Logger, 'info' | 'warn'>;
 }
 
@@ -217,24 +220,30 @@ export function createDeviceAuthDetector(deps: DeviceAuthDetectorDeps): DeviceAu
     scheduleConfirmation(); // no answer: keep the count, confirm again later
   }
 
+  /** rev546b F-A: EVERY observed device 401 reaches the hook (contained). */
+  function reportUnauthorized(source: DeviceRevokedSource): void {
+    try {
+      deps.onUnauthorized?.(source);
+    } catch {
+      // The grant seam logs its own failures; the confirmation still runs.
+    }
+  }
+
   function observeOutcome(source: DeviceRevokedSource, outcome: DeviceAuthOutcome): void {
     if (stopped || state === 'confirmed') return;
     if (outcome === 'ok') {
       toClear();
       return;
     }
-    if (outcome !== 'unauthorized' || state === 'suspect') return;
+    if (outcome !== 'unauthorized') return;
+    reportUnauthorized(source);
+    if (state === 'suspect') return; // the confirmation is already pending
     state = 'suspect';
     firstSource = source;
     deps.logger?.info(
       { event: 'pairing.device_auth.suspect', source },
       'device credential refused once; confirming',
     );
-    try {
-      deps.onSuspect?.(source);
-    } catch {
-      // The grant seam logs its own failures; the confirmation still runs.
-    }
     scheduleConfirmation();
   }
 

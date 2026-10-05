@@ -147,6 +147,15 @@ export interface PairingStore {
   getCurrentTerminalId(): string | null;
 
   /**
+   * RT-215 rev546b S-2 — the STORED pairing epoch (`paired_at`) whatever the
+   * status, revoked included; null when no row exists. For the offline grant
+   * wrapper's prior-epoch floor ONLY (RT-113 F4 `prior + 1`): a send path must
+   * use `getStatus()` / `getPairingEpoch()`, which are null while revoked.
+   * Optional so the many read-only fakes stay valid.
+   */
+  getStoredPairingEpoch?(): number | null;
+
+  /**
    * Persist a successful pairing: write the device_token to the
    * SecretStore AND insert the assignment row, in a single
    * transactional unit. Rolls back the SecretStore write if the SQL
@@ -202,6 +211,9 @@ export interface DeviceRevocationStore {
    * replaced pairing is dropped. Not a secret; never leaves the main process.
    */
   getPairingEpoch(): string | null;
+
+  /** See {@link PairingStore.getStoredPairingEpoch} (required on the real store). */
+  getStoredPairingEpoch(): number | null;
 }
 
 export interface PersistInput extends TerminalAssignmentRow {
@@ -302,6 +314,10 @@ export function createPairingStore(
       // tokenPresent XOR rowPresent — orphan in one direction.
       if (rowPresent) return { kind: 'invalid', reason: 'orphaned_row' };
       return { kind: 'invalid', reason: 'missing_token' };
+    },
+
+    getStoredPairingEpoch(): number | null {
+      return db.readAssignment()?.paired_at ?? null;
     },
 
     getCurrentTerminalId(): string | null {

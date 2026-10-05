@@ -296,6 +296,8 @@ export function withDeviceRevocationRecovery(
     async submit(pairing_code: string): Promise<PairingSubmitResult> {
       if (deps.hasSession?.() === true) return { outcome: 'session_active' };
       const before = await deps.getStatus().catch(() => null);
+      // rev546b S-1: pairing recovers from unpaired / invalid / revoked only.
+      if (before?.kind === 'paired') return { outcome: 'terminal_already_paired' };
       const result = await inner.submit(pairing_code);
       if (result.outcome === 'success') {
         const previouslyRevoked = before?.kind === 'invalid' && before.reason === 'device_revoked';
@@ -331,25 +333,25 @@ export function createRosterConfirmationProbe(
  * offline grants, always THROUGH the grant seam (so the tombstones, the
  * invalidation sequence and the audit apply), never the store directly.
  *
- *  - `onSuspect` (the FIRST device 401 of a count, from ANY observed source:
- *    admit, `end`, roster, read-down): invalidate every grant (OD5). Within one
- *    count no grant can be written again — any device-bearer 2xx (an
- *    `admitted` included) resets the count — so the first 401 of each count
- *    covers every 401 of it. The admission path ALSO reports its own 401s
- *    (`notifyGrantSeam`, every 401); the second invalidation finds no standing
- *    grant and audits nothing.
+ *  - `onUnauthorized` (EVERY observed device 401, from ANY source: admit,
+ *    `end`, roster, read-down): invalidate every grant (OD5). Not only the
+ *    first of a count (rev546b F-A): an admission minted after the first 401
+ *    can still be answered `admitted`, and only an invalidation recorded after
+ *    its send mark drops it. The admission path ALSO reports its own 401s
+ *    (`notifyGrantSeam`); a repeated invalidation finds no standing grant and
+ *    audits nothing.
  *  - `onConfirmed`: invalidate every grant AND clear the grant scope, so
  *    nothing is admissible or written until a re-pair sets a new scope.
  */
 export function deviceRevocationGrantHooks(grants: {
   seam: Pick<OfflineGrantSeam, 'onCashierAdmissionInvalidated'>;
   setScope(scope: null): void;
-}): { onSuspect: () => void; onConfirmed: () => void } {
+}): { onUnauthorized: () => void; onConfirmed: () => void } {
   const invalidateAll = (): void => {
     grants.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
   };
   return {
-    onSuspect: invalidateAll,
+    onUnauthorized: invalidateAll,
     onConfirmed: () => {
       invalidateAll();
       grants.setScope(null);

@@ -484,3 +484,57 @@ describe('review F3 — pairing:submit is refused while an operator session exis
     await expect(wrapped.submit('CODE')).resolves.toBe(ok);
   });
 });
+
+describe('rev546b S-1 — pairing:submit is refused while the terminal is paired (not revoked)', () => {
+  const ok: PairingSubmitResult = {
+    outcome: 'success',
+    tenant_id: 'tenant-1',
+    branch_id: 'branch-1',
+    terminal_id: 'term-new',
+    terminal_label: 'Till 1',
+  };
+  const PAIRED: PairingStatus = {
+    kind: 'paired',
+    tenant_id: 'tenant-1',
+    branch_id: 'branch-1',
+    terminal_id: 'term-1',
+    terminal_label: 'Till 1',
+    paired_at: 1,
+  };
+
+  it('refuses terminal_already_paired and never sends the code', async () => {
+    const submit = vi.fn(() => Promise.resolve(ok));
+    const onPaired = vi.fn(() => Promise.resolve());
+    const wrapped = withDeviceRevocationRecovery(
+      { submit },
+      { getStatus: () => Promise.resolve(PAIRED), onPaired, hasSession: () => false },
+    );
+    await expect(wrapped.submit('CODE')).resolves.toEqual({ outcome: 'terminal_already_paired' });
+    expect(submit).not.toHaveBeenCalled();
+    expect(onPaired).not.toHaveBeenCalled();
+  });
+
+  it.each<PairingStatus>([
+    { kind: 'unpaired' },
+    { kind: 'invalid', reason: 'device_revoked' },
+    { kind: 'invalid', reason: 'decrypt_failed' },
+    { kind: 'invalid', reason: 'orphaned_row' },
+    { kind: 'invalid', reason: 'missing_token' },
+  ])('recovery from %j is allowed', async (status) => {
+    const submit = vi.fn(() => Promise.resolve(ok));
+    const wrapped = withDeviceRevocationRecovery(
+      { submit },
+      { getStatus: () => Promise.resolve(status), onPaired: () => Promise.resolve() },
+    );
+    await expect(wrapped.submit('CODE')).resolves.toBe(ok);
+  });
+
+  it('an unreadable status does not block recovery (the backend decides)', async () => {
+    const submit = vi.fn(() => Promise.resolve(ok));
+    const wrapped = withDeviceRevocationRecovery(
+      { submit },
+      { getStatus: () => Promise.reject(new Error('dpapi')), onPaired: () => Promise.resolve() },
+    );
+    await expect(wrapped.submit('CODE')).resolves.toBe(ok);
+  });
+});
