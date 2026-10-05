@@ -16,6 +16,7 @@ import type {
   OfflineGrantRefusalCategory,
   OfflineGrantScope,
   OfflineGrantStore,
+  UpsertResult,
 } from './offline-grant-store.js';
 
 /**
@@ -119,6 +120,21 @@ export function scopeFromPairingStatus(status: PairingStatus): OfflineGrantScope
   };
 }
 
+/** Who an invalidation affects: one user, or every user of the terminal. */
+type InvalidationTarget = { user_id: string } | 'terminal';
+
+/** The envelope fields an audit event takes from a scope. */
+type AuditScope = Pick<OfflineGrantScope, 'tenant_id' | 'branch_id' | 'terminal_id'>;
+
+/** The reason for each store-side result that invalidates (Codex P1 4183852355). */
+const STORE_RESULT_REASON: Readonly<
+  Record<Exclude<UpsertResult['kind'], 'written'>, OfflineGrantInvalidationReason>
+> = {
+  grace_disabled: 'grace_disabled',
+  rejected: 'refresh_failed',
+  refresh_failed: 'refresh_failed',
+};
+
 /** A held operation the store has not applied yet. */
 type TerminalTombstone =
   | { op: 'invalidate_all'; reason: OfflineGrantInvalidationReason }
@@ -159,10 +175,11 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   const userInvalidatedAt = new Map<string, number>();
   let terminalInvalidatedAt = 0;
 
-  function noteInvalidation(event: CashierAdmissionInvalidation): void {
+  /** Advance the sequence for one user, or for every user (`'terminal'`). */
+  function noteInvalidation(target: InvalidationTarget): void {
     invalidationSeq += 1;
-    if (event.reason === 'device_unauthorized') terminalInvalidatedAt = invalidationSeq;
-    else userInvalidatedAt.set(event.user_id, invalidationSeq);
+    if (target === 'terminal') terminalInvalidatedAt = invalidationSeq;
+    else userInvalidatedAt.set(target.user_id, invalidationSeq);
   }
 
   /** True when the request was sent before an invalidation for this user (or unknown). */
@@ -217,7 +234,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   }
 
   function audit(
-    at: Pick<OfflineGrantScope, 'tenant_id' | 'branch_id' | 'terminal_id'>,
+    at: AuditScope,
     grants: readonly InvalidatedGrant[],
     reason: OfflineGrantInvalidationReason,
   ): void {
@@ -242,6 +259,23 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     }
   }
 
+  /**
+   * Codex P1 4183852355 — THE one way a path reports grants it invalidated or
+   * removed: it advances the invalidation sequence (so a late `admitted` sent
+   * before it is dropped) and queues one audit per grant, together. A path
+   * whose store call throws still calls {@link noteInvalidation} itself and
+   * holds a tombstone; its audit follows when the retry applies it here.
+   */
+  function recordInvalidation(
+    target: InvalidationTarget,
+    reason: OfflineGrantInvalidationReason,
+    at: AuditScope,
+    grants: readonly InvalidatedGrant[],
+  ): void {
+    noteInvalidation(target);
+    audit(at, grants, reason);
+  }
+
   function hold(op: string): void {
     log('warn', { event: 'operator.offline_grant.tombstoned', op });
   }
@@ -252,7 +286,8 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     const at = scope;
     if (at === null) return false;
     try {
-      audit(at, deps.store.invalidate(at, user_id, reason).invalidated, reason);
+      const r = deps.store.invalidate(at, user_id, reason);
+      recordInvalidation({ user_id }, reason, at, r.invalidated);
       return true;
     } catch {
       return false;
@@ -263,7 +298,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     const at = scope;
     if (at === null) return false;
     try {
-      audit(at, deps.store.invalidateAll(at, reason).invalidated, reason);
+      recordInvalidation('terminal', reason, at, deps.store.invalidateAll(at, reason).invalidated);
       return true;
     } catch {
       return false;
@@ -279,7 +314,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   function purge(reason: OfflineGrantInvalidationReason, prior_epoch?: number): boolean {
     try {
       for (const grant of deps.store.purgeAll(prior_epoch).invalidated) {
-        audit(grant, [grant], reason);
+        recordInvalidation('terminal', reason, grant, [grant]);
       }
       return true;
     } catch {
@@ -306,12 +341,15 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       const result = deps.store.upsertFromAdmitted(at, event);
       // A fresh server admission: the store now holds this user's true state.
       userTombstones.delete(event.user_id);
-      if (result.kind === 'grace_disabled') audit(at, result.invalidated, 'grace_disabled');
-      if (result.kind === 'rejected' || result.kind === 'refresh_failed') {
-        audit(at, result.invalidated, 'refresh_failed');
+      if (result.kind !== 'written') {
+        // grace_disabled, rejected, refresh_failed: the user lost offline
+        // authority, even with no grant to audit (Codex P1 4183852355).
+        const user = { user_id: event.user_id };
+        recordInvalidation(user, STORE_RESULT_REASON[result.kind], at, result.invalidated);
       }
     } catch {
       // The store deleted the old grant if it could; if not, it must not stand.
+      noteInvalidation({ user_id: event.user_id });
       userTombstones.set(event.user_id, 'refresh_failed');
       hold('upsert');
     }
@@ -346,7 +384,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       // (fail closed) and the next `admitted` restores it; dropping it could
       // drop a real refusal.
       if (stopped) return;
-      noteInvalidation(event);
+      noteInvalidation(event.reason === 'device_unauthorized' ? 'terminal' : event);
       if (event.reason === 'device_unauthorized') {
         onDeviceUnauthorized();
         return;
@@ -443,9 +481,12 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       const before = scope;
       scope = null;
       pairingGeneration += 1;
+      // Every user loses offline authority, whatever the store does below.
+      noteInvalidation('terminal');
       if (before !== null) {
         try {
-          audit(before, deps.store.invalidateAll(before, reason).invalidated, reason);
+          const r = deps.store.invalidateAll(before, reason);
+          recordInvalidation('terminal', reason, before, r.invalidated);
         } catch {
           log('warn', { event: 'operator.offline_grant.storage_failed', op: 'pairing_change' });
         }

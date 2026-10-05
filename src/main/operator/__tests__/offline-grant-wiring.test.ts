@@ -34,6 +34,7 @@ import type { CashierAdmissionInvalidation, CashierAdmittedEvent } from '../cash
 import {
   createOfflineGrantStore,
   type OfflineGrantEvaluation,
+  type OfflineGrantScope,
   type OfflineGrantStore,
 } from '../offline-grant-store.js';
 import {
@@ -872,13 +873,16 @@ const PATHS: PathCase[] = [
   {
     name: 'seam 403 (forbidden)',
     audits: [{ reason: 'forbidden', operator: OPERATOR }],
-    trigger: (w) => w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER }),
+    trigger: (w) => {
+      w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
+    },
   },
   {
     name: 'seam active_elsewhere (superseded)',
     audits: [{ reason: 'superseded', operator: OPERATOR }],
-    trigger: (w) =>
-      w.seam.onCashierAdmissionInvalidated({ reason: 'active_elsewhere', user_id: USER }),
+    trigger: (w) => {
+      w.seam.onCashierAdmissionInvalidated({ reason: 'active_elsewhere', user_id: USER });
+    },
   },
   {
     name: 'seam device 401 (all users)',
@@ -886,17 +890,23 @@ const PATHS: PathCase[] = [
       { reason: 'device_unauthorized', operator: OPERATOR },
       { reason: 'device_unauthorized', operator: OPERATOR_2 },
     ],
-    trigger: (w) => w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' }),
+    trigger: (w) => {
+      w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
+    },
   },
   {
     name: 'store grace_disabled (offline_grace_seconds = 0)',
     audits: [{ reason: 'grace_disabled', operator: OPERATOR }],
-    trigger: (w) => w.seam.onCashierAdmitted(current(w, { offline_grace_seconds: 0 })),
+    trigger: (w) => {
+      w.seam.onCashierAdmitted(current(w, { offline_grace_seconds: 0 }));
+    },
   },
   {
     name: 'store rejected (malformed admitted → refresh_failed)',
     audits: [{ reason: 'refresh_failed', operator: OPERATOR }],
-    trigger: (w) => w.seam.onCashierAdmitted(current(w, { received_at: 'not a time' })),
+    trigger: (w) => {
+      w.seam.onCashierAdmitted(current(w, { received_at: 'not a time' }));
+    },
   },
   {
     name: 'store refresh_failed (seal fails, old grant deleted)',
@@ -956,6 +966,18 @@ const PATHS: PathCase[] = [
     },
   },
   {
+    name: 're-pair with the store down (terminal tombstone)',
+    audits: [],
+    restores: false,
+    trigger: (w, ctl) => {
+      ctl.broken.add('invalidateAll');
+      ctl.broken.add('purgeAll');
+      w.onPairingChange('repair');
+      w.setScope(scope());
+      ctl.broken.clear();
+    },
+  },
+  {
     name: 'unpair (purge, unpair)',
     audits: [
       { reason: 'unpair', operator: OPERATOR },
@@ -992,7 +1014,10 @@ describe('every invalidation path keeps the four invariants (Codex P1 4183852355
             throw new Error('store down');
           };
         }
-        if (ctl.sealFails && prop === 'upsertFromAdmitted') return sealFailing.upsertFromAdmitted;
+        if (ctl.sealFails && prop === 'upsertFromAdmitted') {
+          return (sc: OfflineGrantScope, e: CashierAdmittedEvent) =>
+            sealFailing.upsertFromAdmitted(sc, e);
+        }
         return target[prop];
       },
     });
