@@ -1208,6 +1208,21 @@ describe('RT-219 — every end echoes the latest admission_generation', () => {
     ]);
   });
 
+  it('a session the keeper never armed (created before it) is ended with the record generation', () => {
+    const sessions = new SessionManager();
+    signInCashier(sessions, TTL_S, undefined, 'gen-record-0005');
+    const fake = fakeCashierAdmission();
+    new CashierAdmissionKeeper({
+      sessionManager: sessions,
+      admission: fake.deps,
+      isAtSafePoint: () => true,
+    });
+    sessions.end('signed_out');
+    expect(fake.endRequests).toEqual([
+      { admission_id: FAKE_ADMISSION_ID, admission_generation: 'gen-record-0005' },
+    ]);
+  });
+
   it('a non-admitted heartbeat outcome keeps the last admitted generation', async () => {
     const h = harness();
     signInCashier(h.sessions);
