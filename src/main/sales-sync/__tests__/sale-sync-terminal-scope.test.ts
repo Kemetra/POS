@@ -305,16 +305,32 @@ describe('RT-221 — sale-sync-engine drains only the current terminal', () => {
 
   it('re-resolves the terminal every tick: a re-pair between ticks holds the earlier rows', async () => {
     let current: string | null = OLD_TERMINAL;
-    const h = engineHarness(() => current, [{ kind: 'no_connection' }]);
+    let clock = NOW;
+    const h = engineHarness(
+      () => current,
+      [{ kind: 'no_connection' }, { kind: 'ok', saleRef: null }],
+    );
+    h.deps.now = () => clock;
+    // ONE engine across both ticks — the scope must not be captured at creation.
+    const engine = createSaleSyncEngine(h.deps);
+    const tick = async (): Promise<void> => {
+      const admission = engine.runTickOnce();
+      if (admission.kind === 'started') await admission.completed;
+    };
     seedSaleFor(h.db, 'old-1', OLD_TERMINAL, '2026-06-07T09:00:00.000Z');
-    await runOnce(h.deps); // old pairing: attempted, stays pending (retry)
+    await tick(); // old pairing: attempted, stays pending (retry)
     expect(h.client.calls).toHaveLength(1);
     const oldStateBefore = dump(h.db, 'sale_sync_state', OLD_ROWS);
 
     current = NEW_TERMINAL; // re-paired in-process
-    h.deps.now = () => '2026-06-07T12:00:00.000Z'; // the retry is long due
-    await runOnce(h.deps);
-    expect(h.client.calls).toHaveLength(1); // the retry is never re-sent
+    clock = '2026-06-07T12:00:00.000Z'; // the old retry is long due
+    seedSaleFor(h.db, 'new-1', NEW_TERMINAL, '2026-06-07T11:00:00.000Z');
+    await tick();
+    // Only the new pairing's sale is sent; the old retry is never re-sent.
+    expect(sentSaleIds(h)).toEqual([
+      deriveExternalId(nn(h.deps.salesRepo.readById('old-1'))),
+      deriveExternalId(nn(h.deps.salesRepo.readById('new-1'))),
+    ]);
     expect(dump(h.db, 'sale_sync_state', OLD_ROWS)).toEqual(oldStateBefore);
     h.db.close();
   });

@@ -75,6 +75,7 @@ function makeEngine(over: Partial<SaleSyncEngineDeps>): SaleSyncEngineDeps {
     salesRepo,
     tenantId: TENANT,
     branchId: BRANCH,
+    resolveTerminalId: () => 'terminal-1',
     getOperatorToken: () => 'envelope-present',
     now: () => '2026-06-19T09:00:00.000Z',
     backoff: { baseMs: 1000, maxMs: 300000 },

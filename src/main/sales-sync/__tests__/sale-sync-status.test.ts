@@ -2,7 +2,9 @@
  * 011 T050 (RED) — sale-sync status reader (the read-only surface source).
  *
  * `readSyncStatus(scope)` returns the tenant-scoped counts the renderer shows:
- *   • pending      — sales not yet synced (state pending OR no state row yet)
+ *   • pending      — sales not yet synced (state pending OR no state row yet) of the
+ *                    current terminal (RT-221)
+ *   • heldPreviousPairing — RT-221: unsent sales of an earlier pairing (held)
  *   • deadLetter   — sales in dead_letter (payload divergences included)
  *   • payloadDivergence — RT-190: the dead-lettered sales whose capture answered 409
  *   • lastSuccessAt — the most recent synced_at, or null if none ever synced
@@ -24,7 +26,7 @@ beforeAll(async () => {
   await initSalesSyncSql();
 });
 
-const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1' };
+const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
 
 describe('T050 — readSyncStatus', () => {
   it('reports zero/null on an empty terminal', () => {
@@ -32,6 +34,7 @@ describe('T050 — readSyncStatus', () => {
     const repo = createSaleSyncStateRepo(handleFor(db));
     expect(repo.readSyncStatus(SCOPE)).toEqual({
       pending: 0,
+      heldPreviousPairing: 0,
       deadLetter: 0,
       payloadDivergence: 0,
       lastSuccessAt: null,
@@ -82,6 +85,7 @@ describe('T050 — readSyncStatus', () => {
     repo.markDeadLetter({ saleId: 'sale-2', ...SCOPE, now, reason: 'payload_divergence' });
     expect(repo.readSyncStatus(SCOPE)).toEqual({
       pending: 0,
+      heldPreviousPairing: 0,
       deadLetter: 2,
       payloadDivergence: 1,
       lastSuccessAt: null,
@@ -101,8 +105,11 @@ describe('T050 — readSyncStatus', () => {
       now: '2026-06-07T10:00:00.000Z',
       reason: 'payload_divergence',
     });
-    expect(repo.readSyncStatus({ tenantId: 'tenant-2', branchId: 'branch-9' })).toEqual({
+    expect(
+      repo.readSyncStatus({ tenantId: 'tenant-2', branchId: 'branch-9', terminalId: 'term-1' }),
+    ).toEqual({
       pending: 0,
+      heldPreviousPairing: 0,
       deadLetter: 0,
       payloadDivergence: 0,
       lastSuccessAt: null,
@@ -115,7 +122,10 @@ describe('T050 — readSyncStatus', () => {
     seedSale(db, { sale_id: 'sale-1', tenant_id: 'tenant-1' });
     seedOutbox(db, { sale_id: 'sale-1', tenant_id: 'tenant-1' });
     const repo = createSaleSyncStateRepo(handleFor(db));
-    expect(repo.readSyncStatus({ tenantId: 'tenant-2', branchId: 'branch-9' }).pending).toBe(0);
+    expect(
+      repo.readSyncStatus({ tenantId: 'tenant-2', branchId: 'branch-9', terminalId: 'term-1' })
+        .pending,
+    ).toBe(0);
     db.close();
   });
 });

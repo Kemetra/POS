@@ -85,6 +85,7 @@ function harness(client: SaleSyncClient, backoff: BackoffPolicy = BACKOFF): Harn
     salesRepo: bindSalesRepository(handle),
     tenantId: 'tenant-1',
     branchId: 'branch-1',
+    resolveTerminalId: () => 'term-1',
     getOperatorToken: () => 'tok-1',
     now: () => clock,
     backoff,
@@ -263,7 +264,11 @@ describe('sale-sync-engine — a 425 storm never dead-letters (RT-194)', () => {
         BACKOFF.maxMs,
       );
       expect(
-        h.deps.stateRepo.readSyncStatus({ tenantId: 'tenant-1', branchId: 'branch-1' }),
+        h.deps.stateRepo.readSyncStatus({
+          tenantId: 'tenant-1',
+          branchId: 'branch-1',
+          terminalId: 'term-1',
+        }),
       ).toMatchObject({ pending: 1, deadLetter: 0 });
 
       h.setClock(offset);

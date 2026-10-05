@@ -78,6 +78,7 @@ import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.rep
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
 import { createSaleSyncEngine, SALE_SYNC_BACKOFF_POLICY } from './sales-sync/sale-sync-engine.js';
+import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
 import {
   createPairedWorkers,
   withPairedNotification,
@@ -1568,6 +1569,14 @@ singleInstanceReady
         ) {
           mainLogger.warn('sale_sync:tenders_since_unparseable_tenders_off');
         }
+        // RT-221: the drain (and the pending / held counts) is scoped to the
+        // CURRENT pairing's terminal_id, read live from the pairing status each
+        // tick. After a re-pair, the earlier pairing's queued sales are held —
+        // never replayed under the new device identity (RT-138 L6). Unpaired /
+        // invalid → nothing is eligible.
+        const resolveSaleSyncTerminalId = createCurrentTerminalResolver(() =>
+          pairingStore.getStatus(),
+        );
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
           tendersSince,
@@ -1575,6 +1584,7 @@ singleInstanceReady
           salesRepo,
           tenantId: pairingStatus.tenant_id,
           branchId: pairingStatus.branch_id,
+          resolveTerminalId: resolveSaleSyncTerminalId,
           getOperatorToken: createSaleSyncTokenReader(
             operatorSessionManager,
             operatorEnvelopeHolder,
@@ -1604,10 +1614,11 @@ singleInstanceReady
         // Read-only status surface for the renderer (counts + last-success only;
         // no token/PII/raw body crosses the bridge). No write/trigger handler.
         registerSalesSyncHandlers(guardedIpcMain, {
-          readStatus: () =>
+          readStatus: async () =>
             saleSyncStateRepo.readSyncStatus({
               tenantId: pairingStatus.tenant_id,
               branchId: pairingStatus.branch_id,
+              terminalId: await resolveSaleSyncTerminalId(),
             }),
         });
 

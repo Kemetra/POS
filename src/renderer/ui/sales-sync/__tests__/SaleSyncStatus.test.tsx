@@ -30,6 +30,7 @@ describe('T053 — SaleSyncStatus', () => {
       <SaleSyncStatus
         bridge={bridgeReturning({
           pending: 0,
+          heldPreviousPairing: 0,
           deadLetter: 0,
           payloadDivergence: 0,
           lastSuccessAt: null,
@@ -48,6 +49,7 @@ describe('T053 — SaleSyncStatus', () => {
       <SaleSyncStatus
         bridge={bridgeReturning({
           pending: 0,
+          heldPreviousPairing: 0,
           deadLetter: 0,
           payloadDivergence: 0,
           lastSuccessAt: '2026-06-07T10:00:00.000Z',
@@ -66,6 +68,7 @@ describe('T053 — SaleSyncStatus', () => {
       <SaleSyncStatus
         bridge={bridgeReturning({
           pending: 3,
+          heldPreviousPairing: 0,
           deadLetter: 0,
           payloadDivergence: 0,
           lastSuccessAt: null,
@@ -83,6 +86,7 @@ describe('T053 — SaleSyncStatus', () => {
       <SaleSyncStatus
         bridge={bridgeReturning({
           pending: 0,
+          heldPreviousPairing: 0,
           deadLetter: 2,
           payloadDivergence: 0,
           lastSuccessAt: 'x',
@@ -100,6 +104,7 @@ describe('T053 — SaleSyncStatus', () => {
       <SaleSyncStatus
         bridge={bridgeReturning({
           pending: 0,
+          heldPreviousPairing: 0,
           deadLetter: 3,
           payloadDivergence: 2,
           lastSuccessAt: null,
@@ -119,6 +124,7 @@ describe('T053 — SaleSyncStatus', () => {
       <SaleSyncStatus
         bridge={bridgeReturning({
           pending: 0,
+          heldPreviousPairing: 0,
           deadLetter: 2,
           payloadDivergence: 0,
           lastSuccessAt: null,
@@ -136,6 +142,7 @@ describe('T053 — SaleSyncStatus', () => {
       <SaleSyncStatus
         bridge={bridgeReturning({
           pending: 1,
+          heldPreviousPairing: 0,
           deadLetter: 0,
           payloadDivergence: 0,
           lastSuccessAt: null,

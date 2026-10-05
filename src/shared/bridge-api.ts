@@ -712,7 +712,13 @@ export interface SalesSyncBridgeAPI {
 
 /** The read-only sync-status payload (mirrors main `SaleSyncStatusCounts`). */
 export interface SaleSyncStatusResponse {
+  /** Unsent sales of the current terminal (RT-221). */
   pending: number;
+  /**
+   * RT-221: unsent sales queued under an earlier pairing of this terminal (a
+   * different `terminal_id`). Held — never sent under the new device identity.
+   */
+  heldPreviousPairing: number;
   /** Every dead-lettered sale, payload divergences included. */
   deadLetter: number;
   /** RT-190: dead-lettered sales whose capture answered 409 (payload divergence). */

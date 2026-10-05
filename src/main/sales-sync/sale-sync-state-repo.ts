@@ -36,6 +36,15 @@
  * sale for this provenance). Both are terminal `dead_letter`: never eligible,
  * never retried. `readSyncStatus` counts both in `deadLetter` and the
  * divergences again in `payloadDivergence`.
+ *
+ * RT-221: the drain is scoped to the CURRENT pairing's `terminal_id` as well as
+ * (tenant_id, branch_id) — the outbox index on (tenant_id, branch_id,
+ * terminal_id, state, enqueued_at) from 0024 covers it, so no migration. After a
+ * re-pair into the same store the terminal has a new device identity; RT-138 L6
+ * forbids replaying the earlier pairing's sales under it. Those rows are HELD:
+ * never eligible, never deleted or mutated (the outbox is append-only anyway),
+ * and counted in `heldPreviousPairing`. A null `terminalId` (unpaired / invalid
+ * terminal) makes nothing eligible. Recovering held rows is a support flow.
  */
 
 import type { DatabaseHandle } from '../db/client.js';
@@ -77,6 +86,15 @@ export interface TenantScope {
   branchId: string;
 }
 
+/**
+ * RT-221: the drain scope — tenant/branch plus the CURRENT pairing's
+ * `terminal_id`. Null when the terminal is not paired (or its pairing is
+ * invalid): nothing is eligible then.
+ */
+export interface DrainScope extends TenantScope {
+  terminalId: string | null;
+}
+
 export interface MarkSyncedInput extends TenantScope {
   saleId: string;
   /** ISO-8601 UTC. */
@@ -114,7 +132,15 @@ export interface RecordTransientInput extends TenantScope {
 
 /** Read-only counts for the renderer's sync-status surface (P7: no secrets). */
 export interface SaleSyncStatusCounts {
+  /** Unsent sales of the CURRENT terminal (RT-221) — the ones the drain will send. */
   pending: number;
+  /**
+   * RT-221: unsent sales of this tenant/branch queued under an EARLIER pairing
+   * (a different `terminal_id`, or every unsent sale while the terminal has no
+   * current pairing). They are held: never sent, never deleted. Recovering them
+   * is a support flow.
+   */
+  heldPreviousPairing: number;
   /** Every dead-lettered sale, divergences included. */
   deadLetter: number;
   /** RT-190: the dead-lettered sales whose capture answered 409 (payload divergence). */
@@ -124,10 +150,13 @@ export interface SaleSyncStatusCounts {
 
 export interface SaleSyncStateRepo {
   read(saleId: string): SaleSyncStateRow | null;
-  /** Sales due for a send now: outbox rows with no terminal state and (if pending) a due retry. */
-  eligible(scope: TenantScope, now: string): EligibleSale[];
-  /** Tenant-scoped counts for the read-only status surface. */
-  readSyncStatus(scope: TenantScope): SaleSyncStatusCounts;
+  /**
+   * Sales due for a send now: the current terminal's outbox rows with no terminal
+   * state and (if pending) a due retry. Empty when `scope.terminalId` is null.
+   */
+  eligible(scope: DrainScope, now: string): EligibleSale[];
+  /** Tenant-scoped counts for the read-only status surface (pending per terminal). */
+  readSyncStatus(scope: DrainScope): SaleSyncStatusCounts;
   markSynced(input: MarkSyncedInput): MarkSyncedResult;
   markDeadLetter(input: MarkDeadLetterInput): void;
   recordTransient(input: RecordTransientInput): void;
@@ -160,23 +189,26 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     return stmt.get(saleId) ?? null;
   }
 
-  function eligible(scope: TenantScope, now: string): EligibleSale[] {
+  function eligible(scope: DrainScope, now: string): EligibleSale[] {
+    // RT-221: no current pairing → nothing is eligible.
+    if (scope.terminalId === null) return [];
     // Start from the outbox so first-drain (no state row) is included. A sale is
     // due when it has no state row, OR it is still pending and its next_retry_at
     // is null/<= now. synced / dead_letter are terminal → excluded. FIFO.
+    // RT-221: only the current terminal's rows — an earlier pairing's are held.
     const stmt = db.prepare(
       `SELECT o.sale_id AS sale_id, o.tenant_id AS tenant_id, o.branch_id AS branch_id,
               o.enqueued_at AS enqueued_at
        FROM sale_sync_outbox o
        LEFT JOIN sale_sync_state s ON s.sale_id = o.sale_id
-       WHERE o.tenant_id = ? AND o.branch_id = ?
+       WHERE o.tenant_id = ? AND o.branch_id = ? AND o.terminal_id = ?
          AND (
            s.sale_id IS NULL
            OR (s.sync_status = 'pending' AND (s.next_retry_at IS NULL OR s.next_retry_at <= ?))
          )
        ORDER BY o.enqueued_at ASC`,
     ) as PrepareAll<EligibleSale>;
-    return stmt.all(scope.tenantId, scope.branchId, now);
+    return stmt.all(scope.tenantId, scope.branchId, scope.terminalId, now);
   }
 
   /** UPSERT the terminal/transition state for a sale, tenant-scoped. */
@@ -259,15 +291,19 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     });
   }
 
-  function readSyncStatus(scope: TenantScope): SaleSyncStatusCounts {
-    // pending = outbox rows that are not yet terminal (no state row, or state pending).
-    const pendingStmt = db.prepare(
-      `SELECT COUNT(*) AS n
+  function readSyncStatus(scope: DrainScope): SaleSyncStatusCounts {
+    // Unsent = outbox rows that are not yet terminal (no state row, or state
+    // pending). RT-221 splits them by terminal: `pending` = the current
+    // terminal's; `held` = every other terminal's (all of them when there is no
+    // current terminal — `IS` / `IS NOT` treat a NULL binding as a value).
+    const unsentStmt = db.prepare(
+      `SELECT COALESCE(SUM(CASE WHEN o.terminal_id IS ? THEN 1 ELSE 0 END), 0) AS pending,
+              COALESCE(SUM(CASE WHEN o.terminal_id IS NOT ? THEN 1 ELSE 0 END), 0) AS held
        FROM sale_sync_outbox o
        LEFT JOIN sale_sync_state s ON s.sale_id = o.sale_id
        WHERE o.tenant_id = ? AND o.branch_id = ?
          AND (s.sale_id IS NULL OR s.sync_status = 'pending')`,
-    ) as PrepareGet<{ n: number }>;
+    ) as PrepareGet<{ pending: number; held: number }>;
     const deadStmt = db.prepare(
       `SELECT COUNT(*) AS n,
               COALESCE(SUM(CASE WHEN last_error_category = ? THEN 1 ELSE 0 END), 0) AS d
@@ -278,11 +314,17 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       `SELECT MAX(synced_at) AS t FROM sale_sync_state
        WHERE tenant_id = ? AND branch_id = ? AND sync_status = 'synced'`,
     ) as PrepareGet<{ t: string | null }>;
-    const pending = pendingStmt.get(scope.tenantId, scope.branchId)?.n ?? 0;
+    const unsent = unsentStmt.get(
+      scope.terminalId,
+      scope.terminalId,
+      scope.tenantId,
+      scope.branchId,
+    );
     const dead = deadStmt.get(PAYLOAD_DIVERGENCE_REASON, scope.tenantId, scope.branchId);
     const lastSuccessAt = lastStmt.get(scope.tenantId, scope.branchId)?.t ?? null;
     return {
-      pending,
+      pending: unsent?.pending ?? 0,
+      heldPreviousPairing: unsent?.held ?? 0,
       deadLetter: dead?.n ?? 0,
       payloadDivergence: dead?.d ?? 0,
       lastSuccessAt,
