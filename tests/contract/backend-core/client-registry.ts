@@ -19,6 +19,7 @@
  * here — and once registered, it is checked against the pinned contract.
  */
 import { createBackendClient } from '../../../src/main/operator/backend-client.js';
+import { createCashierAdmissionClient } from '../../../src/main/operator/cashier-admission-client.js';
 import { createNetwork } from '../../../src/main/pairing/network.js';
 import { createReadDownClient } from '../../../src/main/catalogue/read-down/read-down-client.js';
 import { createSaleSyncClient } from '../../../src/main/sales-sync/create-sale-sync-client.js';
@@ -117,13 +118,25 @@ const saleSyncClient = (fetch: FetchLike): ReturnType<typeof createSaleSyncClien
   });
 const pairingNetwork = (fetch: FetchLike): ReturnType<typeof createNetwork> =>
   createNetwork({ baseUrl: BASE_URL, fetch });
+const cashierAdmissionClient = (
+  fetch: FetchLike,
+): ReturnType<typeof createCashierAdmissionClient> =>
+  createCashierAdmissionClient({
+    baseUrl: BASE_URL,
+    fetch,
+    getDeviceToken: () => Promise.resolve(SENTINEL.device),
+  });
 
 const BACKEND_CLIENT = 'src/main/operator/backend-client.ts';
+const CASHIER_ADMISSION_CLIENT = 'src/main/operator/cashier-admission-client.ts';
+const CASHIER_ADMISSION_WIRING =
+  'index.ts createCashierAdmissionClient: `getDeviceToken` reads DEVICE_TOKEN_KEY (paired only)';
 const VOUCHER_DIR = 'src/main/payments/voucher-authority-client';
 
 export const CLIENT_MODULES: readonly ClientModule[] = [
   { module: BACKEND_CLIENT, fetchCallSites: 2, surface: backendClient },
   { module: 'src/main/pairing/network.ts', fetchCallSites: 1, surface: pairingNetwork },
+  { module: CASHIER_ADMISSION_CLIENT, fetchCallSites: 1, surface: cashierAdmissionClient },
   {
     module: 'src/main/catalogue/read-down/read-down-client.ts',
     fetchCallSites: 1,
@@ -180,7 +193,7 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
     module: BACKEND_CLIENT,
     method: 'get',
     pathTemplate: '/api/pos/v1/operators/roster',
-    wiring: 'none — the method takes no credential (roster-handler.ts, pin-management.ts)',
+    wiring: 'none — the method takes no credential (pin-management.ts)',
     invoke: (fetch) => backendClient(fetch).listRoster(UUID),
   },
   {
@@ -196,20 +209,42 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
       ),
   },
   {
-    id: 'backendClient.getActiveSession',
-    module: BACKEND_CLIENT,
-    method: 'get',
-    pathTemplate: '/api/pos/v1/operators/active-session',
-    wiring: 'none — the method takes no credential (check-active-session.ts)',
-    invoke: (fetch) => backendClient(fetch).getActiveSession('op-1', UUID),
-  },
-  {
     id: 'backendClient.getStuckShifts',
     module: BACKEND_CLIENT,
     method: 'get',
     pathTemplate: '/api/pos/v1/shifts/stuck',
     wiring: 'stuck-shifts-handler.ts: operatorJwtHolder',
     invoke: (fetch) => backendClient(fetch).getStuckShifts(UUID, SENTINEL['operator-jwt']),
+  },
+  {
+    id: 'cashierAdmissionClient.admit',
+    module: CASHIER_ADMISSION_CLIENT,
+    method: 'post',
+    pathTemplate: '/api/pos/v1/cashier-admissions',
+    wiring: CASHIER_ADMISSION_WIRING,
+    invoke: (fetch) =>
+      cashierAdmissionClient(fetch).admit({
+        mode: 'online',
+        user_id: UUID,
+        takeover: false,
+        idempotency_key: 'pos-cashier-adm-contract-conformance',
+      }),
+  },
+  {
+    id: 'cashierAdmissionClient.end',
+    module: CASHIER_ADMISSION_CLIENT,
+    method: 'post',
+    pathTemplate: '/api/pos/v1/cashier-admissions/{admission_id}/end',
+    wiring: CASHIER_ADMISSION_WIRING,
+    invoke: (fetch) => cashierAdmissionClient(fetch).end(UUID),
+  },
+  {
+    id: 'cashierAdmissionClient.listRoster',
+    module: CASHIER_ADMISSION_CLIENT,
+    method: 'get',
+    pathTemplate: '/api/pos/v1/cashier-admissions/roster',
+    wiring: CASHIER_ADMISSION_WIRING,
+    invoke: (fetch) => cashierAdmissionClient(fetch).listRoster(),
   },
   {
     id: 'pairingNetwork.pair',
