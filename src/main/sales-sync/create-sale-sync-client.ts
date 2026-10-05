@@ -186,9 +186,10 @@ export interface CreateSaleSyncClientDeps {
   getDeviceToken?: () => Promise<string | null>;
   /**
    * RT-224 step 2 (Codex P2 on #547): the CURRENT pairing's `terminal_id`, read
-   * synchronously (`PairingStore.getCurrentTerminalId`). Checked after the device
-   * token is read and immediately before the request, with no await in between:
-   * a sale is sent only under the terminal it was made on. A re-pair completing
+   * synchronously (`PairingStore.getCurrentTerminalId`). Read before and between
+   * two device-token reads, and again immediately before the request with no
+   * await in between: a sale is sent only under the terminal it was made on,
+   * with that pairing's token. A re-pair completing
    * during the token read (a new token, a different terminal) → not sent,
    * `no_connection` (the sale stays pending, held under its old pairing by
    * RT-221; never dead-lettered). Not wired → fail closed (never sent).
@@ -563,18 +564,35 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
   // Codex P2 (#547): a terminal mismatch was reported and no matching send since.
   let terminalChangeReported = false;
 
-  /** The current pairing is still the sale's terminal (fail closed when unknown). */
-  function onSaleTerminal(payload: CaptureSalePayload): boolean {
-    const current = deps.currentTerminalId?.() ?? null;
-    if (current !== null && current === payload.terminalId) {
-      terminalChangeReported = false;
-      return true;
-    }
-    if (!terminalChangeReported) {
-      terminalChangeReported = true;
-      deps.onDeviceTerminalChanged?.();
-    }
-    return false;
+  function reportTerminalChanged(): void {
+    if (terminalChangeReported) return;
+    terminalChangeReported = true;
+    deps.onDeviceTerminalChanged?.();
+  }
+
+  /** The current pairing is the sale's terminal right now (fail closed when unknown). */
+  function onTerminal(terminalId: string): boolean {
+    return (deps.currentTerminalId?.() ?? null) === terminalId;
+  }
+
+  /**
+   * Codex P2 (#547, 988a238): the device token of ONE pairing — the sale's.
+   * `PairingStore.persist` writes the new token and then, after one await, the
+   * new terminal row, so a single token read can straddle a re-pair. Read the
+   * terminal (T1), the token (K), the terminal (T2), the token again (K2): the
+   * token is returned only if T1 and T2 are the sale's terminal and K === K2.
+   * The caller re-checks the terminal (T3) synchronously right before the
+   * request. `changed` = the pairing moved during the reads: not sent.
+   */
+  async function tokenOfSaleTerminal(
+    terminalId: string,
+  ): Promise<{ kind: 'token'; token: string } | { kind: 'none' } | { kind: 'changed' }> {
+    if (!onTerminal(terminalId)) return { kind: 'changed' };
+    const token = await readDeviceToken();
+    if (token === null) return { kind: 'none' };
+    if (!onTerminal(terminalId)) return { kind: 'changed' };
+    const again = await readDeviceToken();
+    return again === token ? { kind: 'token', token } : { kind: 'changed' };
   }
 
   return {
@@ -604,17 +622,21 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
       payload: CaptureSalePayload,
       operatorUserId: string,
     ): Promise<SaleSyncResult> {
-      const deviceToken = await readDeviceToken();
-      if (deviceToken === null) return { kind: 'no_connection' };
+      const read = await tokenOfSaleTerminal(payload.terminalId);
+      if (read.kind === 'none') return { kind: 'no_connection' };
       let body: CaptureSaleWireBody;
       try {
         body = toCashierWireBody(payload, currencyCode, operatorUserId);
       } catch {
         return { kind: 'permanent' };
       }
-      // Codex P2 (#547): no await between this check and the request below.
-      if (!onSaleTerminal(payload)) return { kind: 'no_connection' };
-      return send(deviceToken, body, payload.externalId, classifyDeviceStatus);
+      // Codex P2 (#547): T3 — no await between this check and the request below.
+      if (read.kind === 'changed' || !onTerminal(payload.terminalId)) {
+        reportTerminalChanged();
+        return { kind: 'no_connection' };
+      }
+      terminalChangeReported = false;
+      return send(read.token, body, payload.externalId, classifyDeviceStatus);
     },
   };
 }
