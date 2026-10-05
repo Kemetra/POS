@@ -8,7 +8,11 @@ import {
   type RouteObject,
 } from 'react-router-dom';
 
-import { PairingRecoveryListener, PairingRoute } from './routes/pairing/PairingRecoveryListener';
+import {
+  PairingRecoveryListener,
+  PairingRoute,
+  usePairingPushRelay,
+} from './routes/pairing/PairingRecoveryListener';
 import { PairedScreen } from './routes/paired/PairedScreen';
 import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
@@ -88,6 +92,10 @@ type BootStatus =
 
 export function AppRouter(props: AppRouterProps): JSX.Element {
   const [boot, setBoot] = useState<BootStatus>({ phase: 'loading' });
+  // RT-215 / Codex P2 4186254473: the one pairing-push subscription. Its
+  // effect is declared BEFORE the boot read's, so it is registered first and
+  // no push is lost while the read is pending.
+  const relay = usePairingPushRelay(props.pairing);
 
   useEffect(() => {
     // Box the cancellation flag so eslint's flow analysis doesn't
@@ -273,7 +281,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // RT-215 — one pathless layout over every route: it listens for the
   // `pairing:status-changed` push and moves a revoked terminal to /pairing.
   const routes: RouteObject[] = [
-    { element: <PairingRecoveryListener pairing={props.pairing} />, children: appRoutes },
+    { element: <PairingRecoveryListener relay={relay} />, children: appRoutes },
   ];
 
   // Tests use a memory router so window.location.pathname remains

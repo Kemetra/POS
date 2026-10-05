@@ -134,3 +134,91 @@ describe('RT-215 — device revoked routing', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(RECOVERY_COPY);
   });
 });
+
+describe('Codex P2 4186254473 — a push sent before the listener subscribed is not lost', () => {
+  /** A bridge whose boot read is held until released; pushes go to every subscriber. */
+  function heldBootBridge() {
+    const subs = new Set<(e: PairingStatusChangedEvent) => void>();
+    let releaseBoot: (s: PairingStatus) => void = () => undefined;
+    const bootRead = new Promise<PairingStatus>((r) => {
+      releaseBoot = r;
+    });
+    const getStatus = vi.fn(() => bootRead);
+    const bridge: PairingBridgeAPI = {
+      getStatus,
+      submit: vi.fn(() => Promise.reject(new Error('unused'))),
+      onStatusChanged: (cb) => {
+        subs.add(cb);
+        return () => {
+          subs.delete(cb);
+        };
+      },
+    };
+    return {
+      bridge,
+      getStatus,
+      subscribers: () => subs.size,
+      push(event: PairingStatusChangedEvent) {
+        act(() => {
+          for (const cb of subs) cb(event);
+        });
+      },
+      async boot(status: PairingStatus) {
+        await act(async () => {
+          releaseBoot(status);
+          await bootRead;
+        });
+      },
+    };
+  }
+
+  it('the router subscribes BEFORE the boot status read', () => {
+    const b = heldBootBridge();
+    render(<AppRouter pairing={b.bridge} />);
+    expect(b.subscribers()).toBe(1); // registered while the boot read is pending
+    expect(b.getStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('a push emitted while the boot read is still pending ends on the recovery route', async () => {
+    const b = heldBootBridge();
+    render(<AppRouter pairing={b.bridge} />);
+    b.push({ kind: 'invalid', reason: 'device_revoked' }); // before the listener exists
+    await b.boot(PAIRED); // the boot read was taken before the revocation
+    await waitFor(() => expect(screen.getByTestId('route-pairing')).toBeInTheDocument());
+    expect(screen.getByTestId('route-pairing')).toHaveAttribute(
+      'data-invalid-reason',
+      'device_revoked',
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(RECOVERY_COPY);
+  });
+
+  it('a later paired push cancels an earlier missed revocation', async () => {
+    const b = heldBootBridge();
+    render(<AppRouter pairing={b.bridge} />);
+    b.push({ kind: 'invalid', reason: 'device_revoked' });
+    b.push({ kind: 'paired' });
+    await b.boot(PAIRED);
+    await waitFor(() => expect(screen.getByTestId('route-paired')).toBeInTheDocument());
+  });
+
+  it('idempotent: a push the listener already handled is not replayed', async () => {
+    const b = heldBootBridge();
+    render(<AppRouter pairing={b.bridge} />);
+    await b.boot(PAIRED);
+    await waitFor(() => expect(screen.getByTestId('route-paired')).toBeInTheDocument());
+    b.push({ kind: 'invalid', reason: 'device_revoked' }); // the listener handles it
+    await waitFor(() => expect(screen.getByTestId('route-pairing')).toBeInTheDocument());
+    expect(window.location.pathname).toBe('/pairing');
+    expect(screen.getByTestId('route-pairing')).toHaveAttribute(
+      'data-invalid-reason',
+      'device_revoked',
+    );
+  });
+
+  it('unsubscribes the early recorder on unmount', () => {
+    const b = heldBootBridge();
+    const { unmount } = render(<AppRouter pairing={b.bridge} />);
+    unmount();
+    expect(b.subscribers()).toBe(0);
+  });
+});

@@ -279,29 +279,51 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
  * device-revoked just before. The pairing result (or an inner rejection) is
  * returned unchanged whatever the flow does.
  */
+export interface DeviceRevocationRecoveryDeps {
+  getStatus: () => Promise<PairingStatus>;
+  onPaired: DeviceRevocationFlow['onPaired'];
+  /**
+   * Review F3 — is an operator session alive? A pairing is refused while one
+   * is (a latched session first ends at its safe point), so a renderer reload
+   * in the middle of a tender cannot re-pair under it. Defaults to none.
+   */
+  hasSession?: () => boolean;
+}
+
+/** A local refusal, or the status the pairing starts from (null when unreadable). */
+type SubmitGate = { refused: PairingSubmitResult } | { before: PairingStatus | null };
+
+/**
+ * The local gate before a code is sent: no pairing while an operator session
+ * is alive (review F3), and none while the terminal is paired — pairing
+ * recovers from unpaired / invalid / revoked only (rev546b S-1). An unreadable
+ * status does not block recovery (the backend decides).
+ */
+async function gateSubmit(deps: DeviceRevocationRecoveryDeps): Promise<SubmitGate> {
+  if (deps.hasSession?.() === true) return { refused: { outcome: 'session_active' } };
+  const before = await deps.getStatus().catch(() => null);
+  if (before?.kind === 'paired') return { refused: { outcome: 'terminal_already_paired' } };
+  return { before };
+}
+
+/** Was the terminal device-revoked before this pairing? */
+function wasDeviceRevoked(status: PairingStatus | null): boolean {
+  return status?.kind === 'invalid' && status.reason === 'device_revoked';
+}
+
 export function withDeviceRevocationRecovery(
   inner: PairingService,
-  deps: {
-    getStatus: () => Promise<PairingStatus>;
-    onPaired: DeviceRevocationFlow['onPaired'];
-    /**
-     * Review F3 — is an operator session alive? A pairing is refused while one
-     * is (a latched session first ends at its safe point), so a renderer reload
-     * in the middle of a tender cannot re-pair under it. Defaults to none.
-     */
-    hasSession?: () => boolean;
-  },
+  deps: DeviceRevocationRecoveryDeps,
 ): PairingService {
   return {
     async submit(pairing_code: string): Promise<PairingSubmitResult> {
-      if (deps.hasSession?.() === true) return { outcome: 'session_active' };
-      const before = await deps.getStatus().catch(() => null);
-      // rev546b S-1: pairing recovers from unpaired / invalid / revoked only.
-      if (before?.kind === 'paired') return { outcome: 'terminal_already_paired' };
+      const gate = await gateSubmit(deps);
+      if ('refused' in gate) return gate.refused;
       const result = await inner.submit(pairing_code);
       if (result.outcome === 'success') {
-        const previouslyRevoked = before?.kind === 'invalid' && before.reason === 'device_revoked';
-        await deps.onPaired({ previouslyRevoked }).catch(() => undefined);
+        await deps
+          .onPaired({ previouslyRevoked: wasDeviceRevoked(gate.before) })
+          .catch(() => undefined);
       }
       return result;
     },
