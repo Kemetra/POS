@@ -118,6 +118,13 @@ type Resolution =
   | { route: SaleRoute }
   | { route: SaleRoute; unresolved: SellingUserUnresolvedReason };
 
+/** Codex P2 (bf5960d): append in place — O(1) per item, never a re-copy. */
+function appendTo<T>(map: Map<string, T[]>, key: string, item: T): void {
+  const list = map.get(key);
+  if (list === undefined) map.set(key, [item]);
+  else list.push(item);
+}
+
 /** HOLD when any row carries the key (a cashier sale), else the envelope. */
 function fallback(rows: readonly SettledRow[], reason: SellingUserUnresolvedReason): Resolution {
   return { route: rows.some((r) => r.has_user === 1) ? HOLD : ENVELOPE, unresolved: reason };
@@ -178,7 +185,11 @@ export function createSellingUserIdResolver(
   function report(saleId: string, reason: SellingUserUnresolvedReason): void {
     if (reported.has(saleId)) return;
     reported.add(saleId);
-    deps.onUnresolved?.({ saleId, reason });
+    try {
+      deps.onUnresolved?.({ saleId, reason });
+    } catch {
+      // Codex P2 (bf5960d): a failing log sink must not change a sale's route.
+    }
   }
 
   function reportLookupFailure(): void {
@@ -203,7 +214,7 @@ export function createSellingUserIdResolver(
     const byKey = new Map<string, SettledRow[]>();
     for (const row of rows) {
       const key = JSON.stringify([row.handoff, row.attempt]);
-      byKey.set(key, [...(byKey.get(key) ?? []), row]);
+      appendTo(byKey, key, row);
     }
     return byKey;
   }
@@ -213,7 +224,7 @@ export function createSellingUserIdResolver(
     const groups = new Map<string, SaleRow[]>();
     for (const sale of unseen) {
       const key = JSON.stringify([sale.tenant_id, sale.branch_id]);
-      groups.set(key, [...(groups.get(key) ?? []), sale]);
+      appendTo(groups, key, sale);
     }
     for (const group of groups.values()) {
       const byKey = settledRows(group, terminalId);

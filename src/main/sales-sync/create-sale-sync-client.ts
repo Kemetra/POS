@@ -567,7 +567,11 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
   function reportTerminalChanged(): void {
     if (terminalChangeReported) return;
     terminalChangeReported = true;
-    deps.onDeviceTerminalChanged?.();
+    try {
+      deps.onDeviceTerminalChanged?.();
+    } catch {
+      // Codex P2 (bf5960d): a failing warning hook must not make the client reject.
+    }
   }
 
   /** The current pairing is the sale's terminal right now (fail closed when unknown). */

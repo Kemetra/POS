@@ -337,7 +337,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       // given a fabricated method. The typed reason goes to `onDeadLetter`.
       stateRepo.markDeadLetter({ saleId, tenantId, branchId, now: now() });
       deps.sellingUsers?.forget(saleId);
-      deps.onDeadLetter?.(saleId, err.message);
+      notify(() => deps.onDeadLetter?.(saleId, err.message));
       return null;
     }
     const result =
@@ -350,6 +350,25 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     return result;
   }
 
+  /** The sale is synced or dead-lettered (it will not be drained again). */
+  function leftQueue(saleId: string): boolean {
+    const status = stateRepo.read(saleId)?.sync_status;
+    return status === 'synced' || status === 'dead_letter';
+  }
+
+  /**
+   * Codex P2 (bf5960d): a notification hook is a side channel (a log line). A
+   * throwing hook must never abort the tick; the transition it reports is
+   * already persisted.
+   */
+  function notify(call: () => void): void {
+    try {
+      call();
+    } catch {
+      // A failing log sink must not stop the drain.
+    }
+  }
+
   /** RT-224 step 2: report a device-path 401 once per episode. */
   function noteDeviceAnswer(result: SaleSyncResult): void {
     if (result.kind === 'no_connection') return; // no answer from the server
@@ -359,7 +378,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     }
     if (deviceUnauthorizedReported) return;
     deviceUnauthorizedReported = true;
-    deps.onDeviceUnauthorized?.();
+    notify(() => deps.onDeviceUnauthorized?.());
   }
 
   /** Persist one POST outcome on `sale_sync_state` and fire its notification. */
@@ -382,7 +401,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
           serverSaleRef: result.saleRef,
         });
         if (synced.saleRefMismatch) {
-          deps.onSaleRefMismatch?.({ externalId });
+          notify(() => deps.onSaleRefMismatch?.({ externalId }));
         }
         return;
       }
@@ -396,11 +415,11 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
           now: stamp,
           reason: PAYLOAD_DIVERGENCE_REASON,
         });
-        deps.onPayloadDivergence?.({ externalId, errorCode: result.errorCode });
+        notify(() => deps.onPayloadDivergence?.({ externalId, errorCode: result.errorCode }));
         return;
       case 'permanent':
         stateRepo.markDeadLetter({ saleId, tenantId, branchId, now: stamp });
-        deps.onDeadLetter?.(saleId);
+        notify(() => deps.onDeadLetter?.(saleId));
         return;
       case 'refused':
         // RT-224 step 2: the server refused THIS sale's cashier claim (device-path
@@ -412,7 +431,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
           now: stamp,
           reason: CASHIER_CLAIM_REFUSED_REASON,
         });
-        deps.onDeadLetter?.(saleId, CASHIER_CLAIM_REFUSED_REASON);
+        notify(() => deps.onDeadLetter?.(saleId, CASHIER_CLAIM_REFUSED_REASON));
         return;
       case 'device_unauthorized':
       case 'transient':
@@ -462,7 +481,9 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   // rev547 F1: the number of due sales routed to the envelope at the last tick.
   // While no envelope is held they are blocked even when the device path flows,
   // so they keep the pause visible.
-  let envelopeSalesDue = 0;
+  // Codex P2 (bf5960d): the ids, not a start-of-tick number — a sale leaves the
+  // set as soon as it leaves the queue (synced or dead-lettered).
+  const envelopeDue = new Set<string>();
 
   /**
    * Paused when the drain holds no credential at all, or holds no envelope while
@@ -474,7 +495,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   }
 
   async function pausedReason(): Promise<SaleSyncPausedReason | null> {
-    return reasonFor(await heldCredentials(), envelopeSalesDue);
+    return reasonFor(await heldCredentials(), envelopeDue.size);
   }
 
   // RT-224: the last reported pause state. `null` = nothing reported yet, so the
@@ -488,7 +509,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
    * e.g. a transient SQLite error).
    */
   async function pendingCount(held: HeldCredentials): Promise<number | null> {
-    if (held.device) return envelopeSalesDue;
+    if (held.device) return envelopeDue.size;
     try {
       const terminalId = await resolveTerminalId();
       return stateRepo.readSyncStatus({ tenantId, branchId, terminalId }).pending;
@@ -530,7 +551,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
    */
   async function credentialGate(): Promise<HeldCredentials | null> {
     const held = await heldCredentials();
-    const isPaused = reasonFor(held, envelopeSalesDue) !== null;
+    const isPaused = reasonFor(held, envelopeDue.size) !== null;
     if (isPaused !== (reportedPaused ?? false) && (await reportTransition(isPaused, held))) {
       reportedPaused = isPaused;
     }
@@ -576,7 +597,10 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       const routes = routesFor(sales, terminalId);
       const routeOf = (sale: SaleRow): SaleRoute => routes.get(sale.sale_id) ?? HOLD_ROUTE;
       // rev547 F1: how many due sales need the envelope (the pause's subset).
-      envelopeSalesDue = sales.filter((sale) => routeOf(sale).kind === 'envelope').length;
+      envelopeDue.clear();
+      for (const sale of sales) {
+        if (routeOf(sale).kind === 'envelope') envelopeDue.add(sale.sale_id);
+      }
       // RT-224 step 2: after a device-path 401, no more device-path sends this tick.
       let deviceRejected = false;
       // Report the (envelope-subset) pause state now, even for an empty queue.
@@ -592,6 +616,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
           device: held.device && !deviceRejected,
         });
         if (result?.kind === 'device_unauthorized') deviceRejected = true;
+        if (leftQueue(sale.sale_id)) envelopeDue.delete(sale.sale_id);
       }
     } finally {
       inFlight = false;

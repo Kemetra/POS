@@ -26,7 +26,6 @@ import { createSaleSyncEngine, type SaleSyncEngineDeps } from '../sale-sync-engi
 import { createSellingUserIdResolver } from '../selling-user-id.js';
 import { createSaleSyncDeviceTokenReader } from '../sale-sync-device-token.js';
 import { bindSalesRepository } from '../../sales/repositories/sales.repository.js';
-import type { DatabaseHandle } from '../../db/client.js';
 
 beforeAll(async () => {
   await initSalesSyncSql();
@@ -124,7 +123,7 @@ describe('resolver hooks', () => {
     const handle = handleFor(db);
     seedSale(db, { sale_id: 'sale-1' });
     const resolver = createSellingUserIdResolver({
-      db: { ...handle, prepare: boom } as DatabaseHandle,
+      db: { ...handle, prepare: boom },
       onLookupFailed: boom,
     });
     const sale = nn(bindSalesRepository(handle).readById('sale-1'));
