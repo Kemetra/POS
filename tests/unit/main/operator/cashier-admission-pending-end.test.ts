@@ -37,7 +37,7 @@ function deferredEnd(fake: ReturnType<typeof fakeCashierAdmission>): {
     () =>
       new Promise((resolve, reject) => {
         land = (r) => {
-          resolve((r ?? { kind: 'ended' }) as { kind: 'ended' });
+          resolve(r ?? { kind: 'ended' });
         };
         fail = () => {
           reject(new Error('end failed'));

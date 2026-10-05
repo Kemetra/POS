@@ -125,7 +125,7 @@ describe('contract fixtures', () => {
   });
 
   it('RT-219: admitted requires admission_generation in the pinned contract', () => {
-    const { admission_generation: _omitted, ...withoutGeneration } = ADMITTED;
+    const withoutGeneration = { ...ADMITTED, admission_generation: undefined };
     expect(contractErrors('PosCashierAdmissionAdmitted', withoutGeneration)).not.toEqual([]);
   });
 });
