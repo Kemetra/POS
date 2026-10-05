@@ -181,6 +181,13 @@ export interface SaleSyncEngineDeps {
    * device-path answer that is not a 401). Receives nothing — no token, no ids.
    */
   onDeviceUnauthorized?: () => void;
+  /**
+   * Codex P2 (beb7b72): an injected dependency (a store, a reader, a clock, the
+   * client, the resolver) threw. Only what it touched is skipped — the sale stays
+   * queued, the other sales go on, the tick resolves. Called once per episode
+   * (re-armed by a tick without a failure). Receives nothing.
+   */
+  onDependencyFailure?: () => void;
   /** One ISO-8601 UTC stamp source (determinism in tests). */
   now: () => string;
   backoff: BackoffPolicy;
@@ -458,8 +465,13 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   // D7 (X-Device-Attestation retired) the envelope is the ONLY sale-wire credential,
   // so an absent envelope makes a device-token-alone POST structurally impossible.
   function envelopePresent(): boolean {
-    const token = getOperatorToken();
-    return token !== null && token.length > 0;
+    try {
+      const token = getOperatorToken();
+      return token !== null && token.length > 0;
+    } catch {
+      dependencyFailed();
+      return false;
+    }
   }
 
   /** RT-224 step 2: the device credential, read live; not wired → not held. */
@@ -470,6 +482,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     try {
       return await deps.hasDeviceCredential();
     } catch {
+      dependencyFailed();
       return false;
     }
   }
@@ -571,6 +584,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     try {
       return resolver.resolve(sales, terminalId);
     } catch {
+      dependencyFailed();
       return new Map(sales.map((sale) => [sale.sale_id, HOLD_ROUTE]));
     }
   }
@@ -579,8 +593,47 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   function dueSales(terminalId: string): SaleRow[] {
     return stateRepo
       .eligible({ tenantId, branchId, terminalId }, now())
-      .map((due) => salesRepo.readById(due.sale_id))
+      .map((due) => readSale(due.sale_id))
       .filter((sale): sale is SaleRow => sale !== null);
+  }
+
+  /** One durable Sale; a failing read skips that sale only (it stays queued). */
+  function readSale(saleId: string): SaleRow | null {
+    try {
+      return salesRepo.readById(saleId);
+    } catch {
+      dependencyFailed();
+      return null;
+    }
+  }
+
+  /** The current pairing's terminal; a failing read is "no pairing" (stop). */
+  async function currentTerminal(): Promise<string | null> {
+    try {
+      return await resolveTerminalId();
+    } catch {
+      dependencyFailed();
+      return null;
+    }
+  }
+
+  /**
+   * One sale, isolated: a throwing dependency (store, clock, client, resolver)
+   * skips this sale only — it stays queued — and the drain goes on.
+   */
+  async function drainSafely(
+    sale: SaleRow,
+    route: SaleRoute,
+    held: HeldCredentials,
+  ): Promise<SaleSyncResult | null> {
+    try {
+      const result = await drainOne(sale, route, held);
+      settleAfterSend(sale.sale_id);
+      return result;
+    } catch {
+      dependencyFailed();
+      return null;
+    }
   }
 
   /** rev547 F1: the due sales that need the envelope (the pause's subset). */
@@ -613,13 +666,12 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       const held = await credentialGate();
       if (held === null) return;
       // RT-221: a re-pair mid-drain must not send the rest under the new identity.
-      if ((await resolveTerminalId()) !== terminalId) return;
-      const result = await drainOne(sale, routeOf(sale), {
+      if ((await currentTerminal()) !== terminalId) return;
+      const result = await drainSafely(sale, routeOf(sale), {
         envelope: held.envelope,
         device: held.device && !deviceRejected,
       });
       deviceRejected ||= result?.kind === 'device_unauthorized';
-      settleAfterSend(sale.sale_id);
     }
   }
 
@@ -634,7 +686,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
         return;
       }
       // RT-221: drain only the current pairing's rows; no pairing → nothing.
-      const terminalId = await resolveTerminalId();
+      const terminalId = await currentTerminal();
       if (terminalId === null) return;
       const sales = dueSales(terminalId);
       // RT-224 step 2 (Codex P2): every due sale's route in one lookup.
@@ -644,9 +696,31 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       // Report the (envelope-subset) pause state now, even for an empty queue.
       if ((await credentialGate()) === null) return;
       await drainAll(sales, terminalId, routeOf);
+    } catch {
+      // Codex P2 (beb7b72): a tick-level dependency (the queue read, the clock)
+      // threw — nothing more can be drained this tick; the tick still resolves.
+      dependencyFailed();
     } finally {
-      inFlight = false;
+      endTick();
     }
+  }
+
+  // Codex P2 (beb7b72): failure reporting, once per episode.
+  let failedThisTick = false;
+  let failureReported = false;
+
+  function dependencyFailed(): void {
+    failedThisTick = true;
+    if (failureReported) return;
+    failureReported = true;
+    notify(() => deps.onDependencyFailure?.());
+  }
+
+  /** A tick without a failure re-arms the report. */
+  function endTick(): void {
+    if (!failedThisTick) failureReported = false;
+    failedThisTick = false;
+    inFlight = false;
   }
 
   function runTickOnce(): TickAdmission {

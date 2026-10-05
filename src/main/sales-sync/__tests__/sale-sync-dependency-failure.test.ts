@@ -64,7 +64,8 @@ async function runWith(faults: Faults) {
   const clientDeps: CreateSaleSyncClientDeps = {
     baseUrl: 'https://example.invalid',
     fetch: (_input, init) => {
-      const body = JSON.parse(String(init?.body)) as { externalId: string };
+      const raw = typeof init?.body === 'string' ? init.body : '{}';
+      const body = JSON.parse(raw) as { externalId: string };
       posted.push(body.externalId);
       return Promise.resolve(new Response('{}', { status: 201 }));
     },
@@ -116,7 +117,9 @@ async function runWith(faults: Faults) {
 
 /** Wrap one method of a repo so it throws. */
 function throwing<T extends object>(target: T, method: keyof T): T {
-  return { ...target, [method]: boom } as T;
+  const copy: T = { ...target };
+  Object.assign(copy, { [method]: boom });
+  return copy;
 }
 
 describe('RT-224 (Codex P2 on beb7b72) — a throwing dependency never breaks the drain', () => {

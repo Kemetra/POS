@@ -481,6 +481,24 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
   const nowMs = deps.nowMs ?? Date.now;
   const root = baseUrl.replace(/\/$/, '');
 
+  /** Codex P2 (beb7b72): a failing envelope read is "no envelope" (no POST). */
+  function readOperatorToken(): string | null {
+    try {
+      return getOperatorToken();
+    } catch {
+      return null;
+    }
+  }
+
+  /** RT-194 Retry-After; a failing clock leaves the normal backoff in charge. */
+  function retryAfterResult(response: Response): SaleSyncResult {
+    try {
+      return withRetryAfter(response, nowMs());
+    } catch {
+      return { kind: 'transient' };
+    }
+  }
+
   /**
    * One POST of an already-built wire body under ONE bearer credential; the
    * outcome is derived from the status by `classify`. Shared by both paths so
@@ -521,7 +539,7 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
     if (result.kind === 'divergent') {
       return { kind: 'divergent', errorCode: await readConflictCode(response) };
     }
-    if (RETRY_AFTER_STATUSES.has(response.status)) return withRetryAfter(response, nowMs());
+    if (RETRY_AFTER_STATUSES.has(response.status)) return retryAfterResult(response);
     if (result.kind !== 'ok') return result;
 
     let bodyText: string;
@@ -576,7 +594,13 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
 
   /** The current pairing is the sale's terminal right now (fail closed when unknown). */
   function onTerminal(terminalId: string): boolean {
-    return (deps.currentTerminalId?.() ?? null) === terminalId;
+    // Codex P2 (beb7b72): a failing pairing read is "pairing unavailable" —
+    // never a rejection; the sale stays queued.
+    try {
+      return (deps.currentTerminalId?.() ?? null) === terminalId;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -601,7 +625,7 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
 
   return {
     async postSale(payload: CaptureSalePayload): Promise<SaleSyncResult> {
-      const token = getOperatorToken();
+      const token = readOperatorToken();
       if (token === null || token.length === 0) {
         // No operator envelope: do not POST unauthenticated. The engine's
         // envelope-present gate (M-1) should have paused already; map to

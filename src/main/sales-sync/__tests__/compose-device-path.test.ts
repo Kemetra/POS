@@ -127,6 +127,13 @@ describe('rev547 F2 — composeSaleSyncDevicePath', () => {
     db.close();
   });
 
+  it('a dependency failure is logged as the closed-set line, with no data', () => {
+    const { db, devicePath, log } = setup();
+    devicePath.engine.onDependencyFailure();
+    expect(log.lines).toEqual([{ obj: {}, msg: 'sale_sync:dependency_failure' }]);
+    db.close();
+  });
+
   it('a failing lookup is logged once, closed-set', () => {
     const { db, handle, log } = setup();
     seedSale(db, { sale_id: 'sale-1' });
