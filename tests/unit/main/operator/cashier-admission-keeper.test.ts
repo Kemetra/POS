@@ -1579,6 +1579,86 @@ describe('RT-219 review F1 — an orphan answer for the LIVE admission triggers 
     await advance(HALF_TTL_MS);
     expect(h.fake.admitCalls).toHaveLength(calls);
   });
+
+  /** Hold the live session's first heartbeat L in flight, land H, then answer L with `answer`. */
+  async function orphanLandsWhileLiveHeartbeatFails(
+    h: Harness,
+    srv: ReturnType<typeof server>,
+    answer: CashierAdmissionResult,
+  ): Promise<number> {
+    const { landH, signInAt } = await slowHeartbeatThenReSignIn(h, srv);
+    let answerL: () => void = () => undefined;
+    h.fake.setAdmit(
+      () =>
+        new Promise<CashierAdmissionResult>((resolve) => {
+          answerL = () => {
+            resolve(answer);
+          };
+        }),
+    );
+    await advance(HALF_TTL_MS);
+    expect(h.fake.admitCalls).toHaveLength(signInAt + 1); // L in flight
+    await landH(); // the server renews Y with H: gen-0003
+    h.fake.setAdmit(() => srv.admit());
+    answerL();
+    await advance(0);
+    return signInAt + 1;
+  }
+
+  it.each([{ kind: 'no_connection' }, { kind: 'unavailable' }] as const)(
+    'Codex P2 4181547527: the in-flight heartbeat answers %o: the retry is still an early verification',
+    async (failed) => {
+      const h = harness();
+      const srv = server();
+      const calls = await orphanLandsWhileLiveHeartbeatFails(h, srv, failed);
+      await advance(EARLY_VERIFY_MS - 1);
+      expect(h.fake.admitCalls).toHaveLength(calls);
+      await advance(1);
+      expect(h.fake.admitCalls).toHaveLength(calls + 1); // not the 60 s backoff
+      expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+      await signOut(h);
+      expect(srv.state.live).toBe(false);
+    },
+  );
+
+  it('Codex P2 4181547527: a rate_limited in-flight heartbeat keeps its backoff (no hammering)', async () => {
+    const h = harness();
+    const srv = server();
+    const calls = await orphanLandsWhileLiveHeartbeatFails(h, srv, { kind: 'rate_limited' });
+    await advance(FAILED_TICK_RETRY_MS - 1);
+    expect(h.fake.admitCalls).toHaveLength(calls);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(calls + 1);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+  });
+
+  it.each([{ kind: 'no_connection' }, { kind: 'rejected' }] as const)(
+    'Codex P2 4181547527: while the verification keeps answering %o, only ONE call is early; then the normal cadence',
+    async (failed) => {
+      const h = harness();
+      const srv = server();
+      const calls = await orphanLandsWhileLiveHeartbeatFails(h, srv, failed);
+      h.fake.setAdmit(failed);
+      await advance(EARLY_VERIFY_MS);
+      expect(h.fake.admitCalls).toHaveLength(calls + 1); // the early verification
+      await advance(EARLY_VERIFY_MS * 2);
+      expect(h.fake.admitCalls).toHaveLength(calls + 1); // no 5 s loop
+    },
+  );
+
+  it('Codex P2 4181547527: the flag survives a failure and clears only on a fresh admitted', async () => {
+    const h = harness();
+    const srv = server();
+    const calls = await orphanLandsWhileLiveHeartbeatFails(h, srv, { kind: 'no_connection' });
+    await advance(EARLY_VERIFY_MS); // the early retry: admitted, sent after the orphan answer
+    expect(h.fake.admitCalls).toHaveLength(calls + 1);
+    expect(h.sessions.getCurrent()?.admission_generation).toBe(srv.generation());
+    // Fresh: back to TTL/2, no further early call.
+    await advance(HALF_TTL_MS - 1);
+    expect(h.fake.admitCalls).toHaveLength(calls + 1);
+    await advance(1);
+    expect(h.fake.admitCalls).toHaveLength(calls + 2);
+  });
 });
 
 describe('RT-219 review F2 — a cashier superseded by ANOTHER cashier is ended with its own latest generation', () => {
