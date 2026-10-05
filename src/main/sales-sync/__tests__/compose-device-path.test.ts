@@ -159,13 +159,13 @@ describe('RT-224 (Codex P2 on 0020877) — a re-pair during the token read never
     seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
     let terminal = 'term-1';
     let release!: (token: string) => void;
-    let tokenReadStarted = false;
+    const read = { started: false };
     const log = memoryLogger();
     const devicePath = composeSaleSyncDevicePath({
       db: handle,
       isPaired: () => Promise.resolve(true),
       readToken: () => {
-        tokenReadStarted = true;
+        read.started = true;
         return new Promise<string>((resolve) => {
           release = resolve;
         });
@@ -199,8 +199,8 @@ describe('RT-224 (Codex P2 on 0020877) — a re-pair during the token read never
       backoff: { baseMs: 1000, maxMs: 300_000 },
     });
     const admission = engine.runTickOnce();
-    for (let i = 0; i < 50 && !tokenReadStarted; i += 1) await new Promise((r) => setImmediate(r));
-    expect(tokenReadStarted).toBe(true);
+    for (let i = 0; i < 50 && !read.started; i += 1) await new Promise((r) => setImmediate(r));
+    expect(read.started).toBe(true);
     terminal = 'term-NEW'; // the same-branch re-pair completes while the read is pending
     release('new-device-token');
     if (admission.kind === 'started') await admission.completed;

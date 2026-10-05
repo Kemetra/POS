@@ -184,6 +184,18 @@ export interface CreateSaleSyncClientDeps {
    * `no_connection` (the sale stays queued). NEVER logged, NEVER in the body.
    */
   getDeviceToken?: () => Promise<string | null>;
+  /**
+   * RT-224 step 2 (Codex P2 on #547): the CURRENT pairing's `terminal_id`, read
+   * synchronously (`PairingStore.getCurrentTerminalId`). Checked after the device
+   * token is read and immediately before the request, with no await in between:
+   * a sale is sent only under the terminal it was made on. A re-pair completing
+   * during the token read (a new token, a different terminal) → not sent,
+   * `no_connection` (the sale stays pending, held under its old pairing by
+   * RT-221; never dead-lettered). Not wired → fail closed (never sent).
+   */
+  currentTerminalId?: () => string | null;
+  /** Called once per mismatch episode (re-armed by a matching send). No arguments. */
+  onDeviceTerminalChanged?: () => void;
   /** ISO-4217 currency for the store (v1 single-currency). Defaults to EGP. */
   currencyCode?: string;
   /**
@@ -534,6 +546,37 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
     return { kind: 'ok', saleRef: parsed.saleRef };
   }
 
+  /**
+   * RT-224 step 2: the device token, read fresh per POST; null when there is none
+   * (unpaired, not wired, empty). Codex P2: a failing read is "no token", never a
+   * rejection.
+   */
+  async function readDeviceToken(): Promise<string | null> {
+    try {
+      const token = deps.getDeviceToken === undefined ? null : await deps.getDeviceToken();
+      return token === null || token.length === 0 ? null : token;
+    } catch {
+      return null;
+    }
+  }
+
+  // Codex P2 (#547): a terminal mismatch was reported and no matching send since.
+  let terminalChangeReported = false;
+
+  /** The current pairing is still the sale's terminal (fail closed when unknown). */
+  function onSaleTerminal(payload: CaptureSalePayload): boolean {
+    const current = deps.currentTerminalId?.() ?? null;
+    if (current !== null && current === payload.terminalId) {
+      terminalChangeReported = false;
+      return true;
+    }
+    if (!terminalChangeReported) {
+      terminalChangeReported = true;
+      deps.onDeviceTerminalChanged?.();
+    }
+    return false;
+  }
+
   return {
     async postSale(payload: CaptureSalePayload): Promise<SaleSyncResult> {
       const token = getOperatorToken();
@@ -561,24 +604,16 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
       payload: CaptureSalePayload,
       operatorUserId: string,
     ): Promise<SaleSyncResult> {
-      // RT-224 step 2: the device token, read fresh per POST. None (unpaired, not
-      // wired, or empty) → no request; the sale stays pending.
-      // Codex P2 (#547): a failing read is "no token" — never a rejection.
-      let deviceToken: string | null;
-      try {
-        deviceToken = deps.getDeviceToken === undefined ? null : await deps.getDeviceToken();
-      } catch {
-        deviceToken = null;
-      }
-      if (deviceToken === null || deviceToken.length === 0) {
-        return { kind: 'no_connection' };
-      }
+      const deviceToken = await readDeviceToken();
+      if (deviceToken === null) return { kind: 'no_connection' };
       let body: CaptureSaleWireBody;
       try {
         body = toCashierWireBody(payload, currencyCode, operatorUserId);
       } catch {
         return { kind: 'permanent' };
       }
+      // Codex P2 (#547): no await between this check and the request below.
+      if (!onSaleTerminal(payload)) return { kind: 'no_connection' };
       return send(deviceToken, body, payload.externalId, classifyDeviceStatus);
     },
   };
