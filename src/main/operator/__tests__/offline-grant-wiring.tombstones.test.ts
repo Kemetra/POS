@@ -385,6 +385,23 @@ describe('held terminal-wide operations merge by strength (Codex P2 4184105427)'
     w.stop();
   });
 
+  it('Codex P1 4184710216: merged purge holds keep the MAX prior epoch, and the retry passes it', () => {
+    const { w, broken } = rig();
+    const big = Math.floor(T0_MS / 1000) + 100_000; // above anything the clock mark holds
+    broken.add('invalidateAll');
+    broken.add('purgeAll');
+    w.onPairingChange('unpair', big);
+    w.onPairingChange('repair', big - 50_000); // a lower prior epoch never lowers the hold
+    w.onPairingChange('repair', null);
+    expect(w.reservePairingEpoch(EPOCH)).toBeGreaterThan(big); // reserved above it while held
+    broken.clear();
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    expect(store.nextPairingEpoch(EPOCH)).toBeGreaterThan(big); // the retried purge kept it
+    w.stop();
+  });
+
   it('a failed retry keeps the strongest hold for the next tick', () => {
     const { w, broken } = rig();
     holdOp(w, broken, 'purge');

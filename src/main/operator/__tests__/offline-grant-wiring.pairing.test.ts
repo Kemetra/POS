@@ -275,6 +275,45 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     expect(wiring.evaluate(USER, T0).admissible).toBe(true);
   });
 
+  it("Codex P1 4184710216: unpair's purge fails, clear succeeds, a same-second re-pair before the tick: an old sealed grant is refused", async () => {
+    await pairing.persist(pairInput());
+    admit();
+    const first = await currentEpoch();
+    const oldBody = grantBlob(g.raw);
+    // An empty grant table and no clock mark: the store holds no evidence.
+    g.raw.run('DELETE FROM cashier_offline_grants');
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    const b = breakable();
+    const w = makeWiring({ store: b.store });
+    w.setScope(scope({ pairing_epoch: first }));
+    const p = withOfflineGrantPairing(inner, w);
+    b.broken.add('purgeAll');
+    await p.clear(); // the purge fails and is held; clear itself succeeds
+    b.broken.clear();
+    await p.persist(pairInput()); // the same paired_at second, before any tick
+    const s2 = await p.getStatus();
+    expect(s2.kind === 'paired' && s2.paired_at).toBeGreaterThan(first);
+    writeBack(oldBody);
+    expect(w.evaluate(USER, T0).admissible).toBe(false);
+    w.stop();
+  });
+
+  it('Codex P1 4184710216: while the purge is still held, the re-pair reservation stays above the cleared epoch', async () => {
+    await pairing.persist(pairInput());
+    const first = await currentEpoch();
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    const b = breakable();
+    const w = makeWiring({ store: b.store });
+    w.setScope(scope({ pairing_epoch: first }));
+    const p = withOfflineGrantPairing(inner, w);
+    b.broken.add('purgeAll');
+    await p.clear();
+    await p.persist(pairInput()); // the purge fails again: still held
+    const s2 = await p.getStatus();
+    expect(s2.kind === 'paired' && s2.paired_at).toBeGreaterThan(first);
+    w.stop();
+  });
+
   it('passes every other method through to the pairing store', async () => {
     await pairing.persist(pairInput());
     expect(pairing.getCurrentTerminalId()).toBe(TERMINAL);
