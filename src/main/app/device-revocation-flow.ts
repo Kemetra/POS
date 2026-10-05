@@ -54,6 +54,9 @@ import type { DeviceRevocationStore, RevokedTerminalScope } from '../pairing/sto
  * and `{ kind: 'paired' }` is pushed; if the paired-only workers already ran in
  * this process, the app then relaunches (review F2). The re-pair itself (`persist`, INSERT OR
  * REPLACE) already cleared `device_revoked_at`.
+ *
+ * {@link DeviceRevocationFlow.onRecheckCleared} (RT-215 10897-A) runs after a
+ * user-initiated "Check again" was answered 2xx (`app/revocation-recheck.ts`).
  */
 
 export interface DeviceRevocationFlowDeps {
@@ -94,6 +97,15 @@ export interface DeviceRevocationFlow {
   onConfirmed(source: DeviceRevokedSource): void;
   /** A pairing succeeded; `previouslyRevoked` = the status before it was device_revoked. */
   onPaired(input: { previouslyRevoked: boolean }): Promise<void>;
+  /**
+   * RT-215 10897-A — a user-initiated "Check again" was answered 2xx and the
+   * pairing store already cleared the revocation (`clearDeviceRevoked`). The
+   * SAME pairing continues: the detector is reset, the clear is audited
+   * (`{ source: 'recheck' }`) and `{ kind: 'paired' }` is pushed. No PIN purge
+   * and no relaunch: the paired-only workers keep a scope that is still right
+   * (review F2 relaunches only when the pairing changed).
+   */
+  onRecheckCleared(scope: RevokedTerminalScope): void;
 }
 
 type Step =
@@ -207,6 +219,12 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
     if (previouslyRevoked) audit('pairing.device_revoked_cleared', scope, { source: 're_pair' });
   }
 
+  function pushPaired(): void {
+    step('push', () => {
+      deps.pushStatus({ kind: 'paired' });
+    });
+  }
+
   /**
    * Review F2: the paired-only workers keep the scope they started with
    * (RT-202). After a re-pair in a process where they already ran, the
@@ -265,10 +283,15 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
       const status = await readStatus();
       const scope = pairedScope(status);
       if (scope !== null) recoverOnto(scope, previouslyRevoked);
-      step('push', () => {
-        deps.pushStatus({ kind: 'paired' });
-      });
+      pushPaired();
       relaunchIfWorkersRan(scope);
+    },
+
+    onRecheckCleared(scope) {
+      routePending = false;
+      step('detector', deps.resetDetector);
+      audit('pairing.device_revoked_cleared', scope, { source: 'recheck' });
+      pushPaired();
     },
   };
 }
@@ -363,7 +386,8 @@ export function createRosterConfirmationProbe(
  *    (`notifyGrantSeam`); a repeated invalidation finds no standing grant and
  *    audits nothing.
  *  - `onConfirmed`: invalidate every grant AND clear the grant scope, so
- *    nothing is admissible or written until a re-pair sets a new scope.
+ *    nothing is admissible or written until a re-pair sets a new scope (or a
+ *    "Check again" answered 2xx re-binds it, RT-215 10897-A).
  */
 export function deviceRevocationGrantHooks(grants: {
   seam: Pick<OfflineGrantSeam, 'onCashierAdmissionInvalidated'>;

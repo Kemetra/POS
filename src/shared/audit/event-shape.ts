@@ -72,7 +72,7 @@ export const AUDIT_ACTION_CATEGORIES = [
   'sale.return.slip_print_failed',
   'sale.return.slip_reprinted',
   // RT-215 (RT-138 P-1) — the device credential was confirmed revoked, and a
-  // later re-pair cleared it. System-attributed (no operator acts): the
+  // later re-pair (or, RT-215 10897-A, a "Check again" answered 2xx) cleared it. System-attributed (no operator acts): the
   // actor is SYSTEM_DEVICE_ACTOR_ID below. Payload `{ source }` only — never a
   // token or device secret. Main-only (the renderer cannot emit them).
   // Open-set at the SQL layer (0004: no CHECK); recorded in migration 0042's

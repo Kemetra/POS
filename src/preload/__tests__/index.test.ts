@@ -117,6 +117,20 @@ describe('preload bridge', () => {
     expect(result).toEqual(expected);
   });
 
+  /** RT-215 10897-A: pairing.recheckRevocation() triggers pairing:recheck, no argument. */
+  it('pairing.recheckRevocation() invokes ipcRenderer with PAIRING_IPC_CHANNELS.RECHECK only', async () => {
+    ipcRendererInvoke.mockResolvedValueOnce({ outcome: 'still_revoked' });
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    const result = await api.pairing.recheckRevocation?.();
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(PAIRING_IPC_CHANNELS.RECHECK);
+    expect(result).toEqual({ outcome: 'still_revoked' });
+  });
+
   it('pairing.submit() forwards each catch-all outcome (network_error, unknown_error) unchanged', async () => {
     for (const outcome of ['network_error', 'unknown_error'] as const) {
       vi.clearAllMocks();

@@ -167,6 +167,10 @@ function makeSqlJsAdapter(db: SqlJsDatabase): PairingStoreDb {
         [atEpochSeconds],
       );
     },
+    // RT-215 10897-A — mirrors production `bindPairingStoreDb.clearDeviceRevoked`.
+    clearDeviceRevoked() {
+      db.run('UPDATE terminal_assignment SET device_revoked_at = NULL WHERE id = 1');
+    },
     transaction(fn) {
       db.run('BEGIN');
       try {
