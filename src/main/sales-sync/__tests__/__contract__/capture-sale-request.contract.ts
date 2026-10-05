@@ -1,13 +1,17 @@
 // VENDORED CONTRACT TYPE — DO NOT EDIT BY HAND.
 //
 // Source of truth: Backend-Core (ex Data-Pulse-2) `packages/contracts/openapi/pos-sales/sales.yaml`
-//   Backend-Core main: a8e9ab0 (RT-77)
-//   sales.yaml @ ref : b2debb4255f07ea3d6a8b582ae32c3adbe263d1a  (RT-76 `tenders` / `SaleTender`)
+//   version          : 1.5.0-draft
+//   Backend-Core main: 7dab3ebd0dc383c14a0fe20fc9d6d7875d296476 (RT-224 Option B, #709)
+//   sales.yaml blob  : 40779b4fc5942f721230eb37ef65cc673a723795
+//                      (= contracts/backend-core/openapi/pos-sales/sales.yaml, PIN)
 //   generated with   : openapi-typescript 7.13.0  (already a POS devDep)
-//   refreshed        : 2026-09-30 (RT-79) — `npx openapi-typescript <sales.yaml>`; the
+//   refreshed        : 2026-10-05 (RT-224 step 2) — `npx openapi-typescript
+//                      contracts/backend-core/openapi/pos-sales/sales.yaml`; the
 //                      `CaptureSaleRequest` / `CaptureSaleLine` / `SaleTender` members below
 //                      match the generated `components["schemas"]` field-for-field
-//                      (names, optionality, enum, money alias).
+//                      (names, optionality, enum, money alias). 1.5.0-draft adds only the
+//                      optional `operatorUserId` (device scheme).
 //
 // This is the `CaptureSaleRequest` / `CaptureSaleLine` slice of the binding DP-2
 // contract, generated from the SHARED `sales.yaml` that BOTH sides realize (the
@@ -52,6 +56,12 @@ export interface ContractCaptureSaleRequest {
    * Absent = a tender-unknown sale (RT-10 D8). Accepted from RT-77.
    */
   tenders?: ContractSaleTender[];
+  /**
+   * Format: uuid. OPTIONAL (RT-224, 1.5.0-draft): the `users.id` of the cashier who
+   * made the sale. REQUIRED with the `device` scheme and MUST be absent with
+   * `operatorAuthorization` (its presence selects the device path).
+   */
+  operatorUserId?: string;
 }
 
 /** The binding `SaleTender` (`additionalProperties: false`). */

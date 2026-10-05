@@ -30,7 +30,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { toWireBody } from '../create-sale-sync-client.js';
+import { toCashierWireBody, toWireBody } from '../create-sale-sync-client.js';
 import type { CaptureSalePayload } from '../capture-payload.js';
 import { nn } from './__helpers__/sales-sync-fixture.js';
 import type {
@@ -70,6 +70,18 @@ void _toContract;
 void _fromContract;
 void _lineToContract;
 void _lineFromContract;
+
+// RT-224 step 2 (sales.yaml 1.5.0-draft): the device-path body is the same body
+// plus the contract's `operatorUserId`, which it always carries. Same two
+// directions; `operatorUserId` is required on the POS side and optional in the
+// contract, so the reverse direction makes it required to compare like for like.
+type CashierWireBody = ReturnType<typeof toCashierWireBody>;
+type CashierContractShape = Omit<CashierWireBody, 'sourceSystem'> & { sourceSystem: string };
+const _cashierToContract: ContractCaptureSaleRequest = null as unknown as CashierWireBody;
+const _cashierFromContract: CashierContractShape = null as unknown as ContractCaptureSaleRequest &
+  Required<Pick<ContractCaptureSaleRequest, 'operatorUserId'>>;
+void _cashierToContract;
+void _cashierFromContract;
 
 /** A representative internal payload (integer minor units, as `buildCapturePayload` emits). */
 const PAYLOAD: CaptureSalePayload = {
