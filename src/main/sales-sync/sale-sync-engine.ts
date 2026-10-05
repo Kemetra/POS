@@ -581,12 +581,10 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   ): ReadonlyMap<string, SaleRoute> {
     const resolver = deps.sellingUsers;
     if (resolver === undefined) return new Map(sales.map((sale) => [sale.sale_id, ENVELOPE_ROUTE]));
-    try {
-      return resolver.resolve(sales, terminalId);
-    } catch {
-      dependencyFailed();
-      return new Map(sales.map((sale) => [sale.sale_id, HOLD_ROUTE]));
-    }
+    // rev547 F6 / Codex P2: a resolver that throws ends the tick through the
+    // tick-level catch — nothing is sent (never the envelope), the failure is
+    // reported, and the next tick retries.
+    return resolver.resolve(sales, terminalId);
   }
 
   /** The current terminal's due sales with their durable Sale (defensive skip). */
@@ -601,16 +599,6 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   function readSale(saleId: string): SaleRow | null {
     try {
       return salesRepo.readById(saleId);
-    } catch {
-      dependencyFailed();
-      return null;
-    }
-  }
-
-  /** The current pairing's terminal; a failing read is "no pairing" (stop). */
-  async function currentTerminal(): Promise<string | null> {
-    try {
-      return await resolveTerminalId();
     } catch {
       dependencyFailed();
       return null;
@@ -666,7 +654,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       const held = await credentialGate();
       if (held === null) return;
       // RT-221: a re-pair mid-drain must not send the rest under the new identity.
-      if ((await currentTerminal()) !== terminalId) return;
+      if ((await resolveTerminalId()) !== terminalId) return;
       const result = await drainSafely(sale, routeOf(sale), {
         envelope: held.envelope,
         device: held.device && !deviceRejected,
@@ -686,7 +674,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
         return;
       }
       // RT-221: drain only the current pairing's rows; no pairing → nothing.
-      const terminalId = await currentTerminal();
+      const terminalId = await resolveTerminalId();
       if (terminalId === null) return;
       const sales = dueSales(terminalId);
       // RT-224 step 2 (Codex P2): every due sale's route in one lookup.
@@ -697,8 +685,9 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       if ((await credentialGate()) === null) return;
       await drainAll(sales, terminalId, routeOf);
     } catch {
-      // Codex P2 (beb7b72): a tick-level dependency (the queue read, the clock)
-      // threw — nothing more can be drained this tick; the tick still resolves.
+      // Codex P2 (beb7b72): a tick-level dependency (the pairing read, the queue
+      // read, the clock, the route resolver) threw — nothing more can be drained
+      // this tick; the tick still resolves and the next tick retries.
       dependencyFailed();
     } finally {
       endTick();

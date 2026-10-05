@@ -141,6 +141,8 @@ function engineWith(
   hooks: Partial<SaleSyncEngineDeps>,
   prepare?: (db: ReturnType<typeof freshSalesSyncDb>) => void,
 ) {
+  // A failing log hook is not a dependency failure: nothing may be reported.
+  const dependencyFailures: unknown[][] = [];
   const db = freshSalesSyncDb();
   for (const [i, id] of ['sale-1', 'sale-2'].entries()) {
     seedSale(db, { sale_id: id });
@@ -163,9 +165,10 @@ function engineWith(
     sellingUsers: createSellingUserIdResolver({ db: handle }),
     now: () => '2026-06-07T10:05:00.000Z',
     backoff: { baseMs: 1000, maxMs: 300_000 },
+    onDependencyFailure: (...args: unknown[]) => dependencyFailures.push(args),
     ...hooks,
   });
-  return { db, engine, client, stateRepo };
+  return { db, engine, client, stateRepo, dependencyFailures };
 }
 
 describe('engine hooks', () => {
@@ -211,7 +214,21 @@ describe('engine hooks', () => {
         'pos-pulse:handoff-sale-2',
       );
       expect(nn(h.stateRepo.read('sale-2')).sync_status).toBe('synced');
+      expect(h.dependencyFailures).toEqual([]);
       h.db.close();
     },
   );
+});
+
+describe('the dependency-failure hook itself', () => {
+  it('onDependencyFailure throwing: the tick still resolves', async () => {
+    const h = engineWith(
+      { kind: 'ok', saleRef: null },
+      { onDependencyFailure: boom, resolveTerminalId: boom },
+    );
+    const admission = h.engine.runTickOnce();
+    if (admission.kind === 'started') await expect(admission.completed).resolves.toBeUndefined();
+    expect(h.client.cashierCalls).toHaveLength(0);
+    h.db.close();
+  });
 });

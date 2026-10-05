@@ -249,6 +249,20 @@ describe('RT-224 (Codex P2 on beb7b72) — a throwing dependency never breaks th
       'queued',
       true,
     ],
+    [
+      'salesRepo.readById (one sale only)',
+      {
+        engine: (d) => ({
+          salesRepo: {
+            readById: (id: string) => (id === 'sale-c' ? boom() : d.salesRepo.readById(id)),
+          },
+        }),
+      },
+      [ENVELOPE_SALE],
+      'queued',
+      'synced',
+      true,
+    ],
   ])(
     '%s throws: the tick resolves, nothing is dead-lettered, the other path still sends',
     async (_dep, faults, posted, cashier, envelope, reported) => {
