@@ -119,14 +119,31 @@ export interface CashierAdmissionKeeperDeps {
   logger?: Pick<Logger, 'info' | 'warn'>;
 }
 
+/**
+ * Codex P2 4179771036 — when the server admission lapses at the latest: the
+ * SEND time (monotonic ms) of the request that got the latest `admitted`, plus
+ * its TTL.
+ */
+export interface AdmissionDeadline {
+  requested_at_ms: number;
+  ttl_ms: number;
+}
+
+/** An admission to end, and the user whose re-admission must wait for it. */
+interface AdmissionToEnd {
+  admission_id: string;
+  user_id: string | undefined;
+}
+
 interface Armed {
   session_id: string;
   user_id: string;
   operator_id: string;
   admission_id: string;
   ttl_seconds: number;
-  /** Monotonic ms at which the server admission lapses at the latest (P2 4179771036). */
-  deadline_ms: number;
+  deadline: AdmissionDeadline;
+  /** When the in-flight (or last) heartbeat was sent; heartbeats never overlap. */
+  last_sent_at_ms: number;
   timer: ReturnType<typeof setTimeout> | null;
   latched: boolean;
   /** Consecutive failed ticks (backoff). */
@@ -149,18 +166,19 @@ function isOnlineAdmitted(
 /**
  * The heartbeat state for a session, or null when it holds no online admission.
  * The first deadline runs from when the sign-in/takeover admission was SENT;
- * without that stamp, from now (`nowMs`).
+ * without that stamp, from now (`clock`).
  */
-function armedFor(record: OperatorSessionRecord, nowMs: number): Armed | null {
+function armedFor(record: OperatorSessionRecord, clock: () => number): Armed | null {
   if (!isOnlineAdmitted(record)) return null;
-  const sentAt = record.admission_requested_at_ms ?? nowMs;
+  const sentAt = record.admission_requested_at_ms ?? clock();
   return {
     session_id: record.id,
     user_id: record.user_id,
     operator_id: record.operator_id,
     admission_id: record.admission_id,
     ttl_seconds: record.admission_ttl_seconds,
-    deadline_ms: sentAt + record.admission_ttl_seconds * 1000,
+    deadline: { requested_at_ms: sentAt, ttl_ms: record.admission_ttl_seconds * 1000 },
+    last_sent_at_ms: sentAt,
     timer: null,
     latched: false,
     failures: 0,
@@ -191,8 +209,8 @@ function backoffCapMs(armed: Armed): number {
  * `capMs` applies until a renewal sets a new deadline (offline authority is
  * P1/P3).
  */
-export function nextCallDelayMs(capMs: number, deadlineMs: number, nowMs: number): number {
-  const leftMs = deadlineMs - nowMs;
+export function nextCallDelayMs(capMs: number, deadline: AdmissionDeadline, nowMs: number): number {
+  const leftMs = deadline.requested_at_ms + deadline.ttl_ms - nowMs;
   if (leftMs <= MIN_RETRY_MS) return capMs; // lapsed
   return Math.min(capMs, Math.max(MIN_RETRY_MS, Math.floor(leftMs / 2)));
 }
@@ -237,10 +255,10 @@ export class CashierAdmissionKeeper {
       // admission unless the new session holds the same one (F4).
       this.disarm();
       if (previous.admission_id !== record.admission_id) {
-        this.endAdmission(previous.admission_id, previous.user_id);
+        this.endAdmission(previous);
       }
     }
-    const armed = armedFor(record, this.nowMs());
+    const armed = armedFor(record, () => this.nowMs());
     if (armed === null) return;
     this.armed = armed;
     this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
@@ -251,10 +269,12 @@ export class CashierAdmissionKeeper {
     const armed = this.armed;
     if (armed !== null && armed.session_id === record.id) {
       this.disarm();
-      this.endAdmission(armed.admission_id, armed.user_id);
+      this.endAdmission(armed);
       return;
     }
-    if (record.admission_id !== undefined) this.endAdmission(record.admission_id, record.user_id);
+    if (record.admission_id !== undefined) {
+      this.endAdmission({ admission_id: record.admission_id, user_id: record.user_id });
+    }
   }
 
   private schedule(armed: Armed, ms: number, run: () => void): void {
@@ -265,15 +285,11 @@ export class CashierAdmissionKeeper {
     }, ms);
   }
 
-  private scheduleHeartbeat(armed: Armed, ms: number): void {
-    this.schedule(armed, ms, () => {
-      void this.heartbeat(armed);
-    });
-  }
-
   /** The ONE way to schedule the next admission call: `capMs`, bounded by the deadline. */
   private scheduleNext(armed: Armed, capMs: number): void {
-    this.scheduleHeartbeat(armed, nextCallDelayMs(capMs, armed.deadline_ms, this.nowMs()));
+    this.schedule(armed, nextCallDelayMs(capMs, armed.deadline, this.nowMs()), () => {
+      void this.heartbeat(armed);
+    });
   }
 
   private nowMs(): number {
@@ -297,16 +313,16 @@ export class CashierAdmissionKeeper {
   private async heartbeat(armed: Armed): Promise<void> {
     if (!this.stillCurrent(armed) || armed.latched) return;
     // Stamped before the request goes out: a renewal's deadline runs from here.
-    const sentAtMs = this.nowMs();
+    armed.last_sent_at_ms = this.nowMs();
     const result = await this.requestHeartbeat(armed);
     // RT-198 latch + session identity: re-checked after the await.
     if (this.stopped) return;
     if (!this.stillCurrent(armed)) {
-      this.releaseOrphan(result, armed.user_id);
+      this.releaseOrphan(result, armed);
       return;
     }
     this.log(result.kind);
-    this.handleOutcome(armed, result, sentAtMs);
+    this.handleOutcome(armed, result);
   }
 
   private async requestHeartbeat(armed: Armed): Promise<CashierAdmissionResult> {
@@ -327,17 +343,17 @@ export class CashierAdmissionKeeper {
    * admission behind. End it, unless the live session holds that same id
    * (same-device re-admission returns the same `admission_id`).
    */
-  private releaseOrphan(result: CashierAdmissionResult, user_id: string): void {
+  private releaseOrphan(result: CashierAdmissionResult, orphanOf: Armed): void {
     if (result.kind !== 'admitted') return;
     if (this.armed?.admission_id === result.admission_id) return;
-    this.endAdmission(result.admission_id, user_id);
+    this.endAdmission({ admission_id: result.admission_id, user_id: orphanOf.user_id });
   }
 
-  private handleOutcome(armed: Armed, result: CashierAdmissionResult, sentAtMs: number): void {
+  private handleOutcome(armed: Armed, result: CashierAdmissionResult): void {
     if (result.kind !== 'device_unauthorized') armed.device401s = 0;
     switch (result.kind) {
       case 'admitted':
-        this.onAdmitted(armed, result, sentAtMs);
+        this.onAdmitted(armed, result);
         return;
       case 'active_elsewhere':
         this.latch(armed, 'superseded_by_takeover');
@@ -354,7 +370,7 @@ export class CashierAdmissionKeeper {
     }
   }
 
-  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted, sentAtMs: number): void {
+  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted): void {
     armed.failures = 0;
     notifyGrantSeam(this.deps.admission, result, armed);
     if (result.admission_id !== armed.admission_id) {
@@ -365,12 +381,15 @@ export class CashierAdmissionKeeper {
       armed.admission_id = result.admission_id;
     }
     armed.ttl_seconds = result.admission_ttl_seconds;
-    armed.deadline_ms = sentAtMs + result.admission_ttl_seconds * 1000;
+    armed.deadline = {
+      requested_at_ms: armed.last_sent_at_ms,
+      ttl_ms: result.admission_ttl_seconds * 1000,
+    };
     this.deps.sessionManager.renewAdmission(armed.session_id, {
       admission_id: result.admission_id,
       admission_ttl_seconds: result.admission_ttl_seconds,
       offline_grace_seconds: result.offline_grace_seconds,
-      admission_requested_at_ms: sentAtMs,
+      admission_requested_at_ms: armed.last_sent_at_ms,
     });
     this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
   }
@@ -436,10 +455,12 @@ export class CashierAdmissionKeeper {
    * Best-effort, fire-and-forget; never blocks sign-out. Tracked per user so a
    * re-admission of the same user waits for it (review of 024f07c, item 3).
    */
-  private endAdmission(admissionId: string, user_id: string | undefined): void {
-    void endAdmissionTracked(this.deps.admission, admissionId, user_id).then((res) => {
-      this.logEnd(res.kind);
-    });
+  private endAdmission(ending: AdmissionToEnd): void {
+    void endAdmissionTracked(this.deps.admission, ending.admission_id, ending.user_id).then(
+      (res) => {
+        this.logEnd(res.kind);
+      },
+    );
   }
 
   private logEnd(outcome: string): void {

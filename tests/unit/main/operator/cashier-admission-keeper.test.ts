@@ -159,7 +159,7 @@ describe('nextCallDelayMs (Codex P2 4179771036)', () => {
   it('while time is left, every delay lands strictly before the deadline and never below MIN_RETRY_MS', () => {
     for (const cap of [500, 30_000, 60_000, 300_000]) {
       for (let left = MIN_RETRY_MS + 1; left <= 700_000; left += 997) {
-        const d = nextCallDelayMs(cap, 1_000_000 + left, 1_000_000);
+        const d = nextCallDelayMs(cap, { requested_at_ms: 1_000_000, ttl_ms: left }, 1_000_000);
         expect(d).toBeLessThan(left);
         expect(d).toBeGreaterThanOrEqual(MIN_RETRY_MS);
         expect(d).toBeLessThanOrEqual(cap);
@@ -168,9 +168,10 @@ describe('nextCallDelayMs (Codex P2 4179771036)', () => {
   });
 
   it('lapsed (MIN_RETRY_MS or less left, or past the deadline): the plain cadence', () => {
-    expect(nextCallDelayMs(300_000, 1_000, 1_000 - MIN_RETRY_MS)).toBe(300_000);
-    expect(nextCallDelayMs(300_000, 1_000, 1_000)).toBe(300_000);
-    expect(nextCallDelayMs(60_000, 1_000, 50_000)).toBe(60_000);
+    const deadline = { requested_at_ms: 0, ttl_ms: 1_000 };
+    expect(nextCallDelayMs(300_000, deadline, 1_000 - MIN_RETRY_MS)).toBe(300_000);
+    expect(nextCallDelayMs(300_000, deadline, 1_000)).toBe(300_000);
+    expect(nextCallDelayMs(60_000, deadline, 50_000)).toBe(60_000);
   });
 });
 
