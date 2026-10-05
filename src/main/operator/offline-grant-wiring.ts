@@ -64,6 +64,13 @@ import type {
 /** OD7: how often the clock high-water mark is raised. */
 export const OFFLINE_GRANT_CLOCK_TICK_MS = 60_000;
 
+/**
+ * Codex P2 4183175501 — invalidation audit events whose insert failed, held
+ * for the tick to retry. Bounded: past this, the oldest is dropped with a
+ * category-only warning (never silently).
+ */
+export const OFFLINE_GRANT_AUDIT_RETRY_MAX = 256;
+
 const INVALIDATED_CATEGORY = 'operator.offline_grant.invalidated';
 
 export interface OfflineGrantWiringDeps {
@@ -173,6 +180,42 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     }
   }
 
+  /**
+   * Codex P2 4183175501 — the invalidation has already committed when its audit
+   * is written, so a failed insert is NOT rolled back with it: the invalidation
+   * is the safety property, and coupling it to the audit write would let an
+   * audit failure keep a grant admissible. The event (same id, same time) is
+   * queued and the tick retries it; the emitter is idempotent by event id. The
+   * queue is in memory: a restart loses it, the same accepted class as the
+   * tombstones.
+   */
+  const auditRetry: AuditEvent[] = [];
+
+  function emitOrQueue(event: AuditEvent): void {
+    try {
+      deps.audit.emit(event);
+    } catch {
+      log('warn', { event: 'operator.offline_grant.audit_failed', op: 'queued' });
+      auditRetry.push(event);
+      if (auditRetry.length <= OFFLINE_GRANT_AUDIT_RETRY_MAX) return;
+      auditRetry.shift();
+      log('warn', { event: 'operator.offline_grant.audit_dropped', count: 1 });
+    }
+  }
+
+  function retryAudits(): void {
+    const pending = auditRetry.splice(0, auditRetry.length);
+    for (const [i, event] of pending.entries()) {
+      try {
+        deps.audit.emit(event);
+      } catch {
+        // Still failing: keep this one and the rest, in order, for the next tick.
+        auditRetry.unshift(...pending.slice(i));
+        return;
+      }
+    }
+  }
+
   function audit(
     at: OfflineGrantScope,
     grants: readonly InvalidatedGrant[],
@@ -180,7 +223,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   ): void {
     for (const grant of grants) {
       try {
-        deps.audit.emit({
+        emitOrQueue({
           event_id: deps.uuid(),
           tenant_id: at.tenant_id,
           branch_id: at.branch_id,
@@ -337,6 +380,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     try {
       deps.store.observeClock(deps.now());
       retryHeld();
+      retryAudits();
     } catch {
       log('warn', { event: 'operator.offline_grant.tick_failed' });
     }
@@ -485,7 +529,13 @@ export function withOfflineGrantPairing<S extends PairingStore>(inner: S, grants
     },
     async clear(): Promise<void> {
       grants.onPairingChange('unpair', await priorEpoch());
-      await inner.clear();
+      try {
+        await inner.clear();
+      } catch (err) {
+        // Codex P2 4183175505: still paired; the purge stands (fail closed).
+        await rebindFromStatus();
+        throw err;
+      }
     },
   };
 }

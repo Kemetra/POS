@@ -37,6 +37,7 @@ import {
   type OfflineGrantStore,
 } from '../offline-grant-store.js';
 import {
+  OFFLINE_GRANT_AUDIT_RETRY_MAX,
   OFFLINE_GRANT_CLOCK_TICK_MS,
   createOfflineGrantWiring,
   scopeFromPairingStatus,
@@ -673,6 +674,27 @@ describe('a failed audit insert is retried, never lost (Codex P2 4183175501)', (
     w.stop();
   });
 
+  it('a retry reuses the event id, so an insert that landed before the throw is not duplicated', () => {
+    const landed: AuditEvent[] = [];
+    let threw = false;
+    const w = makeWiring({
+      emit: (e) => {
+        if (!landed.some((x) => x.event_id === e.event_id)) landed.push(e); // insertIgnore
+        if (!threw) {
+          threw = true;
+          throw new Error('post-insert failure');
+        }
+      },
+    });
+    w.setScope(scope());
+    w.seam.onCashierAdmitted(current(w));
+    w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
+    w.start();
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(landed).toHaveLength(1);
+    w.stop();
+  });
+
   it('keeps retrying across several failed ticks, one event per grant', () => {
     const flaky = flakyEmitter(5);
     const w = makeWiring({ emit: flaky.emit });
@@ -689,13 +711,33 @@ describe('a failed audit insert is retried, never lost (Codex P2 4183175501)', (
     w.stop();
   });
 
+  it('the queue is bounded: past the cap the oldest is dropped with a category-only warning', () => {
+    const flaky = flakyEmitter(Number.MAX_SAFE_INTEGER);
+    const w = makeWiring({ emit: flaky.emit });
+    w.setScope(scope());
+    for (let i = 0; i <= OFFLINE_GRANT_AUDIT_RETRY_MAX; i += 1) {
+      w.seam.onCashierAdmitted(
+        current(w, { user_id: `user-${String(i)}`, operator_id: `op-${String(i)}` }),
+      );
+    }
+    logCalls = [];
+    w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
+    const dropped = logCalls.filter(
+      (c) => (c[1] as Record<string, unknown>)['event'] === 'operator.offline_grant.audit_dropped',
+    );
+    expect(dropped).toEqual([
+      ['warn', { event: 'operator.offline_grant.audit_dropped', count: 1 }, expect.any(String)],
+    ]);
+    w.stop();
+  });
+
   it('nothing is retried after stop()', () => {
     const flaky = flakyEmitter(1);
     const w = makeWiring({ emit: flaky.emit });
     w.setScope(scope());
+    w.start(); // its immediate tick runs before the failure
     w.seam.onCashierAdmitted(current(w));
     w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
-    w.start();
     w.stop();
     vi.advanceTimersByTime(10 * OFFLINE_GRANT_CLOCK_TICK_MS);
     expect(flaky.landed).toEqual([]);
