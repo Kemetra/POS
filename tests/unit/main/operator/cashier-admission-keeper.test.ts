@@ -23,6 +23,7 @@ import { SignOutHandler } from '../../../../src/main/operator/sign-out-handler.j
 import type { BackendClient } from '../../../../src/main/operator/backend-client.js';
 import {
   ADMISSION_REQUEST_TIMEOUT_MS,
+  createCashierAdmissionClient,
   type CashierAdmissionResult,
 } from '../../../../src/main/operator/cashier-admission-client.js';
 import {
@@ -855,6 +856,66 @@ describe('end and timer lifecycle', () => {
       await advance(EARLY_VERIFY_MS);
       expect(h.ends).toEqual([undefined, 'superseded_by_takeover']);
     });
+
+    /**
+     * RT-220 — sign the cashier out with the production client's `end` answered
+     * `status` over HTTP, then sign the same user in again.
+     */
+    async function signOutAnsweredThenInAgain(h: Harness, status: number): Promise<void> {
+      const client = createCashierAdmissionClient({
+        baseUrl: 'https://api.example.test',
+        fetch: () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ error: { code: 'x', message: 'generic' } }), { status }),
+          ),
+        getDeviceToken: () => Promise.resolve('device-token-test'),
+      });
+      h.fake.setEnd(() => client.end(FAKE_ADMISSION_ID) as Promise<{ kind: 'ended' }>);
+      h.sessions.end();
+      h.fake.setAdmit({
+        ...ADMITTED,
+        admission_id: FAKE_ADMISSION_ID,
+        admission_ttl_seconds: TTL_S,
+      });
+      await admitCashierOnline(h.fake.deps, {
+        user_id: FAKE_USER_ID,
+        operator_id: 'user_clerk_1',
+        takeover: false,
+        idempotency_key: 'test-idempotency-key-9999',
+      });
+      expect(h.fake.endCalls).toEqual([FAKE_ADMISSION_ID]);
+      signInCashier(h.sessions);
+    }
+
+    it.each([500, 502, 503, 504])(
+      'RT-220: the end is answered HTTP %i, which a gateway can send after the server applied it: a verification heartbeat follows early',
+      async (status) => {
+        const h = harness();
+        signInCashier(h.sessions);
+        await signOutAnsweredThenInAgain(h, status);
+        expect(h.fake.admitCalls).toHaveLength(1); // the sign-in admit
+        await advance(EARLY_VERIFY_MS - 1);
+        expect(h.fake.admitCalls).toHaveLength(1);
+        await advance(1);
+        expect(h.fake.admitCalls).toHaveLength(2); // not TTL/2 (300 s) later
+      },
+    );
+
+    it.each([400, 401, 404, 409])(
+      'RT-220: the end is answered HTTP %i, a definite answer: no early heartbeat, the normal cadence',
+      async (status) => {
+        const h = harness();
+        signInCashier(h.sessions);
+        await signOutAnsweredThenInAgain(h, status);
+        await advance(EARLY_VERIFY_MS);
+        expect(h.fake.admitCalls).toHaveLength(1); // the sign-in admit only
+        await advance(HALF_TTL_MS - EARLY_VERIFY_MS);
+        expect(h.fake.admitCalls).toHaveLength(2);
+        // As before RT-220: an `end` answered 401 never runs the device-revoked cascade.
+        expect(h.fake.deviceRevoked).not.toHaveBeenCalled();
+        expect(h.ends).toEqual([undefined]);
+      },
+    );
 
     it('an end with a known outcome: no early heartbeat, the normal cadence', async () => {
       const h = harness();

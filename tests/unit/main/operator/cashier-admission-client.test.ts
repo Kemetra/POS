@@ -202,8 +202,17 @@ describe('end', () => {
 
   it.each([
     [401, 'device_unauthorized'],
-    [400, 'failed'],
-    [500, 'failed'],
+    // RT-220: any other 4xx is a definite refusal of the request.
+    [400, 'rejected'],
+    [404, 'rejected'],
+    [408, 'rejected'],
+    [409, 'rejected'],
+    [429, 'rejected'],
+    // RT-220: a 5xx says nothing about whether the server applied the `end`.
+    [500, 'unavailable'],
+    [502, 'unavailable'],
+    [503, 'unavailable'],
+    [504, 'unavailable'],
   ])('HTTP %i → %s', async (status, kind) => {
     const { client } = makeClient(() => jsonResponse(status, errorBody('x')));
     await expect(client.end(ADMISSION_ID)).resolves.toEqual({ kind });

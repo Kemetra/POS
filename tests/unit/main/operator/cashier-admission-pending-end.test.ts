@@ -107,7 +107,7 @@ describe('a re-admission waits for the same user’s pending end', () => {
 
   it.each([
     { kind: 'ended' },
-    { kind: 'failed' },
+    { kind: 'rejected' },
     { kind: 'device_unauthorized' },
     { kind: 'no_token' },
   ] as const)('an end answered %o has a known outcome: no early verification', async (answer) => {
@@ -115,6 +115,16 @@ describe('a re-admission waits for the same user’s pending end', () => {
     fake.setEnd(() => Promise.resolve(answer as unknown as { kind: 'ended' }));
     await endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID);
     expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(false);
+  });
+
+  it('RT-220: an end answered 5xx (`unavailable`) has an unknown outcome: a gateway may answer after the server applied it', async () => {
+    const fake = fakeCashierAdmission(ADMITTED);
+    fake.setEnd(() => Promise.resolve({ kind: 'unavailable' } as unknown as { kind: 'ended' }));
+    await expect(
+      endAdmissionTracked(fake.deps, ADMITTED.admission_id, FAKE_USER_ID),
+    ).resolves.toEqual({ kind: 'unavailable' });
+    expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(true);
+    expect(takeUncertainEnd(fake.deps, FAKE_USER_ID)).toBe(false); // consumed once
   });
 
   it('Codex P1 4180025698: the wait outlasts the end request’s own timeout, so a slow end cannot land after the admit', () => {
