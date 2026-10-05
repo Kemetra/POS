@@ -83,6 +83,7 @@ import {
   SALE_SYNC_BACKOFF_POLICY,
 } from './sales-sync/sale-sync-engine.js';
 import { createSaleSyncStatusReader } from './sales-sync/sale-sync-status-reader.js';
+import { createSellingUserIdReader } from './sales-sync/selling-user-id.js';
 import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
 import {
   createPairedWorkers,
@@ -1545,6 +1546,33 @@ singleInstanceReady
         // (D7): X-Device-Attestation is retired from the sale wire (#559), so the
         // client takes no getDeviceAttestation dep. The device token keeps its proper
         // roles (read-down Bearer + sign-in attestation body) elsewhere — untouched.
+        // RT-224 step 2 (Option B, Backend-Core #709) — device-path sale capture.
+        // A sale whose own `payment.settled` payload carries the cashier's
+        // `selling_user_id` is sent with the DEVICE bearer + that id
+        // (`operatorUserId`); any other sale keeps the envelope path. The device
+        // token is read in-process per POST, only while paired; never logged,
+        // never bridged. RT-215 (POS #546): once it merges, this reader becomes its
+        // `createSendableDeviceTokenReader` (whichever PR merges second switches).
+        // A device-path 401 is logged once per episode and the sale stays queued:
+        // revocation is RT-215's detector's call, not the drain's.
+        const readSaleSyncDeviceToken = async (): Promise<string | null> => {
+          const status = await pairingStore.getStatus();
+          if (status.kind !== 'paired') return null;
+          return (await secretStore.get(DEVICE_TOKEN_KEY)) ?? null;
+        };
+        const saleSyncDevicePath = {
+          hasDeviceCredential: async (): Promise<boolean> =>
+            ((await readSaleSyncDeviceToken()) ?? '').length > 0,
+          sellingUserIdOf: createSellingUserIdReader({
+            db,
+            onUnresolved: ({ saleId, reason }) => {
+              mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:selling_user_unresolved');
+            },
+          }),
+          onDeviceUnauthorized: () => {
+            mainLogger.warn('sale_sync:device_unauthorized');
+          },
+        };
         const saleSyncClient = createSaleSyncClient({
           baseUrl: resolveApiBaseUrl(),
           fetch: globalThis.fetch.bind(globalThis),
@@ -1552,6 +1580,7 @@ singleInstanceReady
             operatorSessionManager,
             operatorEnvelopeHolder,
           ),
+          getDeviceToken: readSaleSyncDeviceToken,
           // RT-15 S1: a 200/201 without a usable saleRef — the sale is captured but
           // the till cannot return it. Logs the opaque externalId + a closed-set
           // reason only (never the body or the rejected value; P7).
@@ -1594,6 +1623,7 @@ singleInstanceReady
             operatorSessionManager,
             operatorEnvelopeHolder,
           ),
+          ...saleSyncDevicePath,
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.
           backoff: { ...SALE_SYNC_BACKOFF_POLICY },
@@ -1614,8 +1644,8 @@ singleInstanceReady
               'sale_sync:payload_divergence',
             );
           },
-          // RT-224: the drain pauses while the session holds no sale credential
-          // (every cashier session today). Log it once per transition — the
+          // RT-224: the drain pauses while it holds no sale credential at all (no
+          // envelope AND no device credential, e.g. unpaired). Log it once per transition — the
           // closed-set `sale_sync:paused_no_operator_credential` and its resume
           // line — with { reason, pending } only (P7).
           onPauseTransition: (event) => {

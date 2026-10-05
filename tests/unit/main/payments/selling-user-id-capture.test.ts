@@ -79,7 +79,7 @@ function confirmWith(
 ) {
   const auditEmitter = makeAuditEmitterDouble();
   const handler = createPaymentsConfirmHandler({
-    getCurrentSession: makeSessionSource(session).getCurrentSession,
+    getCurrentSession: () => makeSessionSource(session).getCurrentSession(),
     attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow({ acting_operator_id: actingOperator })]),
     linesRepo: makeLinesRepoDouble([
       makeLineRow({ tender_line_id: 'tl-1', amount_applied_minor: 1500 }),
@@ -95,9 +95,9 @@ function confirmWith(
 function settledInput(
   auditEmitter: ReturnType<typeof makeAuditEmitterDouble>,
 ): Record<string, unknown> {
-  const call = auditEmitter.emitPaymentSettled.mock.calls[0];
-  if (call === undefined) throw new Error('payment.settled was not emitted');
-  return call[0] as unknown as Record<string, unknown>;
+  const settled = auditEmitter.captured.find((e) => e.action_category === 'payment.settled');
+  if (settled === undefined) throw new Error('payment.settled was not emitted');
+  return settled.payload;
 }
 
 describe('RT-224 — payments.confirm writes selling_user_id only for the admitted cashier who started the attempt', () => {

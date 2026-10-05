@@ -35,6 +35,17 @@
  * uses its normal backoff when the field is absent. A 425 is never `permanent`:
  * the same Idempotency-Key is still being processed, so the retry replays the
  * eventual 201/200 instead of losing the sale.
+ *
+ * RT-224 step 2 (Option B, Backend-Core #709): `postSaleAsCashier` sends the sale
+ * with the DEVICE bearer and the sale's own cashier `operatorUserId` (the
+ * `users.id` captured at confirm time), never the envelope. Two outcomes exist
+ * only on that path:
+ *   • `refused` (403 `refused`) — the device is authenticated but the server
+ *     refused this sale's cashier claim (no covering admission window, a capped
+ *     date, an ineligible cashier). A per-sale terminal outcome: never a device
+ *     revocation, never a pause of the queue.
+ *   • `device_unauthorized` (401) — the device credential itself was not
+ *     accepted. The sale stays queued; revocation is decided elsewhere (RT-215).
  */
 
 import type { CaptureSalePayload } from './capture-payload.js';
@@ -47,34 +58,62 @@ export type SaleSyncResult =
   | { kind: 'divergent'; errorCode: CaptureConflictCode }
   | { kind: 'transient'; retryAfterMs?: number }
   | { kind: 'permanent' }
-  | { kind: 'no_connection' };
+  | { kind: 'no_connection' }
+  | { kind: 'refused' }
+  | { kind: 'device_unauthorized' };
 
 export interface SaleSyncClient {
-  /** POST a sale to DP2 captureSale. Resolves to a typed outcome; never rejects. */
+  /**
+   * POST a sale to DP2 captureSale with the operator ENVELOPE
+   * (`operatorAuthorization`); the body never carries `operatorUserId`.
+   * Resolves to a typed outcome; never rejects.
+   */
   postSale(payload: CaptureSalePayload): Promise<SaleSyncResult>;
+  /**
+   * RT-224 step 2: POST a sale with the DEVICE bearer plus `operatorUserId` — the
+   * `users.id` of the cashier who made THIS sale. Resolves; never rejects.
+   */
+  postSaleAsCashier(payload: CaptureSalePayload, operatorUserId: string): Promise<SaleSyncResult>;
 }
 
-/** A test fake: yields scripted results in order, then repeats the last; records calls. */
+/** One recorded device-path call of the fake. */
+export interface FakeCashierCall {
+  payload: CaptureSalePayload;
+  operatorUserId: string;
+}
+
+/**
+ * A test fake: yields scripted results in order (both methods share one
+ * script), then repeats the last; records envelope calls in `calls` and
+ * device-path calls in `cashierCalls`.
+ */
 export interface FakeSaleSyncClient extends SaleSyncClient {
   readonly calls: CaptureSalePayload[];
+  readonly cashierCalls: FakeCashierCall[];
 }
 
 export function createFakeSaleSyncClient(
   script: SaleSyncResult[] = [{ kind: 'ok', saleRef: null }],
 ): FakeSaleSyncClient {
   const calls: CaptureSalePayload[] = [];
+  const cashierCalls: FakeCashierCall[] = [];
   const queue = [...script];
   let last: SaleSyncResult = script[script.length - 1] ?? { kind: 'ok', saleRef: null };
+  const nextResult = (): Promise<SaleSyncResult> => {
+    const next = queue.shift();
+    if (next !== undefined) last = next;
+    return Promise.resolve(last);
+  };
   return {
     calls,
+    cashierCalls,
     postSale(payload: CaptureSalePayload): Promise<SaleSyncResult> {
       calls.push(payload);
-      const next = queue.shift();
-      if (next !== undefined) {
-        last = next;
-        return Promise.resolve(next);
-      }
-      return Promise.resolve(last);
+      return nextResult();
+    },
+    postSaleAsCashier(payload: CaptureSalePayload, operatorUserId: string) {
+      cashierCalls.push({ payload, operatorUserId });
+      return nextResult();
     },
   };
 }

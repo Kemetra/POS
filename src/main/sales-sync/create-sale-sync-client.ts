@@ -67,6 +67,18 @@
  * write); the backend dedups on `(tenant, sourceSystem, externalId)` so retries
  * collapse to one record.
  *
+ * RT-224 step 2 — device path (Option B, Backend-Core #709, `sales.yaml`
+ * 1.5.0-draft): `postSaleAsCashier(payload, operatorUserId)` sends the SAME wire
+ * body plus `operatorUserId` (the `users.id` of the cashier who made the sale)
+ * with `Authorization: Bearer <device token>` (the `device` scheme). The device
+ * token is read fresh per POST through `getDeviceToken`; it is attached to the
+ * request only — never logged, never in the body. `postSale` (the envelope) is
+ * unchanged and never carries `operatorUserId`: an envelope request with it is
+ * refused by the server. Device-path statuses map like the envelope path except
+ * 401 → `device_unauthorized` (the device credential) and 403 → `refused` (the
+ * server refused this sale's cashier claim; the status alone decides, the body
+ * is not read).
+ *
  * Wire-shape boundary: the internal `CaptureSalePayload` carries INTEGER MINOR
  * UNITS (`totalMinor`, `unitPriceMinor`, `lineAmountMinor`) and a numeric
  * `quantity`; the binding DP2 `CaptureSaleRequest` (deployed ref 6975f67,
@@ -166,6 +178,12 @@ export interface CreateSaleSyncClientDeps {
    * via the `operatorAuthorization` scheme. NEVER logged, NEVER in the body (P7/P8).
    */
   getOperatorToken: () => string | null;
+  /**
+   * RT-224 step 2: in-process read of the paired terminal's DEVICE token for the
+   * `device` scheme of `postSaleAsCashier`; null/empty (or not wired) → no POST,
+   * `no_connection` (the sale stays queued). NEVER logged, NEVER in the body.
+   */
+  getDeviceToken?: () => Promise<string | null>;
   /** ISO-4217 currency for the store (v1 single-currency). Defaults to EGP. */
   currencyCode?: string;
   /**
@@ -353,6 +371,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * RT-224 step 2: the device-path wire body — the envelope body plus
+ * `operatorUserId`. Pure; throws like `toWireBody` on an invalid amount.
+ */
+export function toCashierWireBody(
+  payload: CaptureSalePayload,
+  currencyCode: string,
+  operatorUserId: string,
+): CaptureSaleWireBody & { operatorUserId: string } {
+  return { ...toWireBody(payload, currencyCode), operatorUserId };
+}
+
+/**
  * RT-190 — label a capture 409 body from a closed set. Reads ONLY
  * `error.code`; returns `idempotency_key_conflict` when it is exactly that, and
  * `unrecognized` for anything else (unparseable JSON, a missing envelope, another
@@ -419,12 +449,90 @@ export function classifyStatus(status: number): SaleSyncResult {
   return { kind: 'transient' };
 }
 
+/**
+ * RT-224 step 2: the device path's status mapping. 401 is the device credential
+ * (`device_unauthorized`, the sale stays queued) and 403 is the server's generic
+ * `refused` for this sale's cashier claim — a per-sale outcome, never a device
+ * revocation. Every other status maps exactly as on the envelope path.
+ */
+export function classifyDeviceStatus(status: number): SaleSyncResult {
+  if (status === 401) return { kind: 'device_unauthorized' };
+  if (status === 403) return { kind: 'refused' };
+  return classifyStatus(status);
+}
+
 export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncClient {
   const { fetch: fetchImpl, baseUrl, getOperatorToken } = deps;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const currencyCode = deps.currencyCode ?? DEFAULT_CURRENCY_CODE;
   const nowMs = deps.nowMs ?? Date.now;
   const root = baseUrl.replace(/\/$/, '');
+
+  /**
+   * One POST of an already-built wire body under ONE bearer credential; the
+   * outcome is derived from the status by `classify`. Shared by both paths so
+   * there is a single request site.
+   */
+  async function send(
+    credential: string,
+    body: CaptureSaleWireBody,
+    externalId: string,
+    classify: (status: number) => SaleSyncResult,
+  ): Promise<SaleSyncResult> {
+    let response: Response;
+    try {
+      response = await fetchImpl(`${root}${SALES_PATH}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // 016 (D5): `operatorAuthorization` = opaque bearer envelope; RT-224:
+          // `device` = the paired terminal's device token. Exactly one per
+          // request. 016 (D7): X-Device-Attestation is RETIRED from the sale wire.
+          Authorization: `Bearer ${credential}`,
+          'Idempotency-Key': externalId,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch {
+      // Transport fault (DNS / TLS / refused / timeout) — retryable.
+      return { kind: 'no_connection' };
+    }
+
+    // The outcome is derived from the status only. RT-15 S1: for 200/201 the
+    // body is read for `saleRef` and nothing else; RT-190: for 409 it is read
+    // for the closed-set conflict code and nothing else. The raw body is never
+    // surfaced or logged (P7). Other statuses' bodies are not read. RT-194: for
+    // 425/429 only the `Retry-After` header is read.
+    const result = classify(response.status);
+    if (result.kind === 'divergent') {
+      return { kind: 'divergent', errorCode: await readConflictCode(response) };
+    }
+    if (RETRY_AFTER_STATUSES.has(response.status)) return withRetryAfter(response, nowMs());
+    if (result.kind !== 'ok') return result;
+
+    let bodyText: string;
+    try {
+      bodyText = await response.text();
+    } catch {
+      // The body stream failed after the status arrived (the timeout hit
+      // mid-body, or the connection reset). The answer was lost in transit, not
+      // malformed: retry. The retry reuses the same Idempotency-Key/externalId,
+      // so Backend-Core replays the capture (201/200, same saleRef) instead of
+      // recording a second sale; marking it synced now would lose the saleRef.
+      return { kind: 'transient' };
+    }
+    const parsed = parseSaleRef(bodyText);
+    if (parsed.saleRef === null) {
+      try {
+        deps.onSaleRefUnavailable?.({ externalId, reason: parsed.reason });
+      } catch {
+        // A failing warning hook must not turn a captured sale into a rejection
+        // (`postSale` never rejects); the outcome below is unaffected.
+      }
+    }
+    return { kind: 'ok', saleRef: parsed.saleRef };
+  }
 
   return {
     async postSale(payload: CaptureSalePayload): Promise<SaleSyncResult> {
@@ -446,61 +554,26 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
       } catch {
         return { kind: 'permanent' };
       }
+      return send(token, body, payload.externalId, classifyStatus);
+    },
 
-      let response: Response;
-      try {
-        response = await fetchImpl(`${root}${SALES_PATH}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // 016 (D5): `operatorAuthorization` = opaque bearer envelope. 016 (D7):
-            // X-Device-Attestation is RETIRED from the sale wire (#559) — the
-            // device token reverts to device-scope (read-down Bearer + sign-in
-            // attestation body); it no longer co-travels on the sale POST.
-            Authorization: `Bearer ${token}`,
-            'Idempotency-Key': payload.externalId,
-          },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-      } catch {
-        // Transport fault (DNS / TLS / refused / timeout) — retryable.
+    async postSaleAsCashier(
+      payload: CaptureSalePayload,
+      operatorUserId: string,
+    ): Promise<SaleSyncResult> {
+      // RT-224 step 2: the device token, read fresh per POST. None (unpaired, not
+      // wired, or empty) → no request; the sale stays pending.
+      const deviceToken = deps.getDeviceToken === undefined ? null : await deps.getDeviceToken();
+      if (deviceToken === null || deviceToken.length === 0) {
         return { kind: 'no_connection' };
       }
-
-      // The outcome is derived from the status only. RT-15 S1: for 200/201 the
-      // body is read for `saleRef` and nothing else; RT-190: for 409 it is read
-      // for the closed-set conflict code and nothing else. The raw body is never
-      // surfaced or logged (P7). Other statuses' bodies are not read. RT-194: for
-      // 425/429 only the `Retry-After` header is read.
-      const result = classifyStatus(response.status);
-      if (result.kind === 'divergent') {
-        return { kind: 'divergent', errorCode: await readConflictCode(response) };
-      }
-      if (RETRY_AFTER_STATUSES.has(response.status)) return withRetryAfter(response, nowMs());
-      if (result.kind !== 'ok') return result;
-
-      let bodyText: string;
+      let body: CaptureSaleWireBody;
       try {
-        bodyText = await response.text();
+        body = toCashierWireBody(payload, currencyCode, operatorUserId);
       } catch {
-        // The body stream failed after the status arrived (the timeout hit
-        // mid-body, or the connection reset). The answer was lost in transit, not
-        // malformed: retry. The retry reuses the same Idempotency-Key/externalId,
-        // so Backend-Core replays the capture (201/200, same saleRef) instead of
-        // recording a second sale; marking it synced now would lose the saleRef.
-        return { kind: 'transient' };
+        return { kind: 'permanent' };
       }
-      const parsed = parseSaleRef(bodyText);
-      if (parsed.saleRef === null) {
-        try {
-          deps.onSaleRefUnavailable?.({ externalId: payload.externalId, reason: parsed.reason });
-        } catch {
-          // A failing warning hook must not turn a captured sale into a rejection
-          // (`postSale` never rejects); the outcome below is unaffected.
-        }
-      }
-      return { kind: 'ok', saleRef: parsed.saleRef };
+      return send(deviceToken, body, payload.externalId, classifyDeviceStatus);
     },
   };
 }

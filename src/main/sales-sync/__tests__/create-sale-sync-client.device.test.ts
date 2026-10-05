@@ -80,8 +80,13 @@ function client(
 
 const header = (c: Captured, name: string): string | null =>
   (c.init.headers as Record<string, string> | undefined)?.[name] ?? null;
+/** The client always sends a JSON string body. */
+const rawBody = (c: Captured): string => {
+  if (typeof c.init.body !== 'string') throw new Error('expected a string body');
+  return c.init.body;
+};
 const body = (c: Captured): Record<string, unknown> =>
-  JSON.parse(String(c.init.body)) as Record<string, unknown>;
+  JSON.parse(rawBody(c)) as Record<string, unknown>;
 
 describe('RT-224 step 2 — postSaleAsCashier request', () => {
   it('POSTs /api/pos/v1/sales with the device bearer, the idempotency key and operatorUserId', async () => {
@@ -100,7 +105,7 @@ describe('RT-224 step 2 — postSaleAsCashier request', () => {
   it('never puts the device token or the envelope in the body', async () => {
     const { fetchImpl, captured } = fetchAnswering(201, '{}');
     await client(fetchImpl).postSaleAsCashier(PAYLOAD, USER);
-    const raw = String((captured[0] as Captured).init.body);
+    const raw = rawBody(captured[0] as Captured);
     expect(raw).not.toContain(DEVICE_TOKEN);
     expect(raw).not.toContain(ENVELOPE);
   });
