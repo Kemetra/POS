@@ -167,7 +167,10 @@ import {
   deviceAuthConfirmDelayMs,
   withDeviceAuthObservation,
 } from './pairing/device-auth-detector.js';
-import { createSendableDeviceTokenReader } from './pairing/device-token.js';
+import {
+  createSendableDeviceTokenRead,
+  createSendableDeviceTokenReader,
+} from './pairing/device-token.js';
 import {
   createDeviceRevocationFlow,
   createRosterConfirmationProbe,
@@ -1692,12 +1695,18 @@ singleInstanceReady
         // RT-224 step 2 (Option B, Backend-Core #709) — device-path sale capture: a
         // sale with its cashier's `selling_user_id` goes out with the device bearer
         // + that id; any other sale keeps the envelope path. Wiring and its tests:
-        // `sales-sync/compose-device-path.ts` (RT-215 #546 integration noted there).
+        // `sales-sync/compose-device-path.ts`. RT-215 × RT-224: the token is the
+        // sendable read (null unless paired, null once revoked), and the device
+        // path gets its own fetch, tagged for the 2×401 detector.
         const saleSyncDevicePath = composeSaleSyncDevicePath({
           db,
-          isPaired: async () => (await pairingStore.getStatus()).kind === 'paired',
-          readToken: () => secretStore.get(DEVICE_TOKEN_KEY),
+          readToken: createSendableDeviceTokenRead({
+            pairingStore,
+            secretStore,
+            deviceTokenKey: DEVICE_TOKEN_KEY,
+          }),
           currentTerminalId: () => pairingStore.getCurrentTerminalId(),
+          deviceAuth: { fetch: globalThis.fetch.bind(globalThis), detector: deviceAuthDetector },
           logger: mainLogger,
         });
         const saleSyncClient = createSaleSyncClient({

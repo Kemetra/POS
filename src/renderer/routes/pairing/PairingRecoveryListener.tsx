@@ -58,9 +58,14 @@ export interface PairingPushRelay {
 export function createPairingPushRelay(): PairingPushRelay {
   let handler: ((event: PairingStatusChangedEvent) => void) | null = null;
   let missed: PairingStatusChangedEvent | null = null;
+  const detach = (next: (event: PairingStatusChangedEvent) => void): void => {
+    if (handler === next) handler = null;
+  };
   return {
     deliver(event) {
       if (handler !== null) {
+        // A live push supersedes any missed one still awaiting its deferred replay.
+        missed = null;
         handler(event);
         return;
       }
@@ -69,10 +74,21 @@ export function createPairingPushRelay(): PairingPushRelay {
     attach(next) {
       handler = next;
       const pending = missed;
-      missed = null;
-      if (pending !== null) next(pending);
+      // Deferred replay: React.StrictMode (dev) mounts, unmounts and re-mounts the
+      // listener synchronously. Replaying inside attach() would hand the missed push
+      // to the first, discarded mount's navigate and clear it, so the surviving mount
+      // would never see it. Replaying on a microtask delivers it exactly once, to
+      // whichever handler is attached by then, unless a live push superseded it.
+      if (pending !== null) {
+        queueMicrotask(() => {
+          if (handler === next && missed === pending) {
+            missed = null;
+            next(pending);
+          }
+        });
+      }
       return () => {
-        if (handler === next) handler = null;
+        detach(next);
       };
     },
   };

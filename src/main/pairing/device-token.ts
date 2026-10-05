@@ -30,16 +30,32 @@ export interface SendableDeviceTokenReaderDeps {
 export function createSendableDeviceTokenReader(
   deps: SendableDeviceTokenReaderDeps,
 ): () => Promise<string | null> {
+  const read = createSendableDeviceTokenRead(deps);
   return async (): Promise<string | null> => {
     try {
-      const status = await deps.pairingStore.getStatus();
-      if (status.kind !== 'paired') return null;
-      const token = await deps.secretStore.get(deps.deviceTokenKey);
-      // Nothing awaits between this check and handing the token out.
-      if (deps.pairingStore.isDeviceRevoked?.() === true) return null;
-      return token !== null && token.length > 0 ? token : null;
+      return await read();
     } catch {
       return null;
     }
+  };
+}
+
+/**
+ * RT-215 × RT-224 — the same sendable read, for a caller with its own
+ * never-reject wrapper and failure log (the sale-sync device path, #547's
+ * `createSaleSyncDeviceTokenReader`): a failing status or token read REJECTS
+ * instead of reading as null. Every other rule is identical: null unless
+ * `paired`, and null when the revocation latched during the reads.
+ */
+export function createSendableDeviceTokenRead(
+  deps: SendableDeviceTokenReaderDeps,
+): () => Promise<string | null> {
+  return async (): Promise<string | null> => {
+    const status = await deps.pairingStore.getStatus();
+    if (status.kind !== 'paired') return null;
+    const token = await deps.secretStore.get(deps.deviceTokenKey);
+    // Nothing awaits between this check and handing the token out.
+    if (deps.pairingStore.isDeviceRevoked?.() === true) return null;
+    return token !== null && token.length > 0 ? token : null;
   };
 }

@@ -17,11 +17,21 @@
  * user id or an envelope (P7). A device-path 401 is logged and the sale stays
  * queued; revoking the device is RT-215's detector's call.
  *
- * RT-215 (POS #546): once it merges, `isPaired` / `readToken` become its
- * `createSendableDeviceTokenReader`, and the device-path capture fetch is tagged
- * with its detector (see the PR's Coordination section).
+ * RT-215 × RT-224 (#546 × #547): production passes RT-215's
+ * `createSendableDeviceTokenRead` as `readToken` (null unless paired, null once
+ * the device is revoked — re-checked after its last await), and `deviceAuth`, so
+ * the device-path capture gets its own fetch tagged for the 2×401 detector
+ * (`withDeviceCallObservation`, `sale_sync`). The capture route is shared with
+ * the envelope path, so the tag is the fetch, not the URL: every device-path 401
+ * fires the detector's `onUnauthorized` (offline grants invalidated) and may
+ * start a confirmation; an envelope 401 never does. The sale itself stays queued
+ * on a 401 and is dead-lettered (`cashier_claim_refused`) on a 403, as before.
  */
 import type { DatabaseHandle } from '../db/client.js';
+import {
+  withDeviceCallObservation,
+  type DeviceAuthDetector,
+} from '../pairing/device-auth-detector.js';
 import { createSaleSyncDeviceTokenReader } from './sale-sync-device-token.js';
 import type { SaleSyncEngineDeps } from './sale-sync-engine.js';
 import type { CreateSaleSyncClientDeps } from './create-sale-sync-client.js';
@@ -37,10 +47,18 @@ export const DEPENDENCY_FAILURE_LOG = 'sale_sync:dependency_failure';
 
 export interface SaleSyncDevicePathDeps {
   db: DatabaseHandle;
-  /** Whether the terminal is paired right now. */
-  isPaired: () => Promise<boolean>;
-  /** The stored device token (may reject on a secret-store failure). */
+  /** Whether the terminal is paired right now. Omitted when `readToken` gates on it. */
+  isPaired?: () => Promise<boolean>;
+  /** The device token to send (may reject on a secret-store failure). */
   readToken: () => Promise<string | null | undefined>;
+  /**
+   * RT-215: the device-path capture's fetch and the 2×401 detector it reports
+   * to. Omitted → the client uses its one fetch, unobserved (tests).
+   */
+  deviceAuth?: {
+    fetch: NonNullable<CreateSaleSyncClientDeps['deviceFetch']>;
+    detector: Pick<DeviceAuthDetector, 'observe'>;
+  };
   /** The current pairing's `terminal_id`, synchronously (`getCurrentTerminalId`). */
   currentTerminalId: () => string | null;
   logger: { warn(obj: Record<string, unknown>, msg: string): void };
@@ -53,7 +71,8 @@ export interface SaleSyncDevicePath {
       CreateSaleSyncClientDeps,
       'getDeviceToken' | 'currentTerminalId' | 'onDeviceTerminalChanged'
     >
-  >;
+  > &
+    Pick<CreateSaleSyncClientDeps, 'deviceFetch'>;
   /** Spread into `createSaleSyncEngine`. */
   engine: Required<
     Pick<
@@ -66,7 +85,7 @@ export interface SaleSyncDevicePath {
 export function composeSaleSyncDevicePath(deps: SaleSyncDevicePathDeps): SaleSyncDevicePath {
   const { logger } = deps;
   const readDeviceToken = createSaleSyncDeviceTokenReader({
-    isPaired: deps.isPaired,
+    ...(deps.isPaired === undefined ? {} : { isPaired: deps.isPaired }),
     readToken: deps.readToken,
     onReadFailure: () => {
       logger.warn({}, DEVICE_TOKEN_UNREADABLE_LOG);
@@ -79,6 +98,7 @@ export function composeSaleSyncDevicePath(deps: SaleSyncDevicePathDeps): SaleSyn
       onDeviceTerminalChanged: () => {
         logger.warn({}, DEVICE_TERMINAL_CHANGED_LOG);
       },
+      ...deviceFetchFor(deps.deviceAuth),
     },
     engine: {
       hasDeviceCredential: async () => (await readDeviceToken()) !== null,
@@ -98,5 +118,15 @@ export function composeSaleSyncDevicePath(deps: SaleSyncDevicePathDeps): SaleSyn
         logger.warn({}, DEPENDENCY_FAILURE_LOG);
       },
     },
+  };
+}
+
+/** RT-215: the device-path capture fetch, tagged `sale_sync` for the detector. */
+function deviceFetchFor(
+  deviceAuth: SaleSyncDevicePathDeps['deviceAuth'],
+): Pick<CreateSaleSyncClientDeps, 'deviceFetch'> {
+  if (deviceAuth === undefined) return {};
+  return {
+    deviceFetch: withDeviceCallObservation(deviceAuth.fetch, deviceAuth.detector, 'sale_sync'),
   };
 }

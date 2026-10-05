@@ -20,10 +20,11 @@ import { ADMISSIONS_PATH } from '../operator/cashier-admission-client.js';
  *     Other device-bearer 401s while the confirmation is pending (a sign-in,
  *     a takeover, a heartbeat, a read-down) neither confirm early nor restart
  *     the wait.
- *  2. Only device-bearer routes count: the three cashier-admissions routes
- *     and the catalogue read-down. Operator-credential 401s (sale sync,
- *     returns, vouchers) are ignored — they mean the operator's envelope or
- *     JWT was refused, not the device.
+ *  2. Only device-bearer routes count: the three cashier-admissions routes,
+ *     the catalogue read-down and (RT-224) the device-path sale capture.
+ *     Operator-credential 401s (the envelope sale sync, returns, vouchers)
+ *     are ignored — they mean the operator's envelope or JWT was refused, not
+ *     the device.
  *
  * Every device-bearer call reaches this detector through ONE seam: the fetch
  * each device-bearer client is built with is wrapped by
@@ -50,10 +51,17 @@ export const DEVICE_401_CONFIRM_MS = 30_000;
 export const DEVICE_401_MIN_CONFIRM_MS = 5_000;
 
 /**
+ * The route families matched by URL. `sale_sync` (RT-224's device-path sale
+ * capture) is not: its route is shared with the operator-envelope path, so it
+ * is tagged at its own device-only fetch ({@link withDeviceCallObservation}).
+ */
+export type UrlMatchedDeviceSource = Exclude<DeviceRevokedSource, 'sale_sync'>;
+
+/**
  * The device-bearer route of each family (decision 2). The paths are the
  * clients' own constants, so the detector cannot drift from them.
  */
-const DEVICE_BEARER_ROUTE: Readonly<Record<DeviceRevokedSource, string>> = {
+const DEVICE_BEARER_ROUTE: Readonly<Record<UrlMatchedDeviceSource, string>> = {
   // posCreateCashierAdmission, posEndCashierAdmission, posListCashierAdmissionRoster
   cashier_admissions: ADMISSIONS_PATH,
   // the 010 catalogue read-down (AD-7: `Authorization: Bearer <device_token>`)
@@ -83,7 +91,7 @@ function parseUrl(url: string): URL | null {
 export function isDeviceBearerRoute(
   url: string,
   baseUrl: string,
-  source: DeviceRevokedSource,
+  source: UrlMatchedDeviceSource,
 ): boolean {
   const target = parseUrl(url);
   const route = parseUrl(`${baseUrl.replace(/\/$/, '')}${DEVICE_BEARER_ROUTE[source]}`);
@@ -276,7 +284,7 @@ function urlOf(input: RequestInfo | URL): string {
 /** Review F5 — which client an observed fetch belongs to. */
 export interface DeviceAuthObservationTag {
   /** The client's route family. */
-  source: DeviceRevokedSource;
+  source: UrlMatchedDeviceSource;
   /** The client's own base URL; routes are matched relative to it. */
   baseUrl: string;
 }
@@ -293,12 +301,45 @@ export function withDeviceAuthObservation(
   detector: Pick<DeviceAuthDetector, 'observe'>,
   tag: DeviceAuthObservationTag,
 ): FetchLike {
+  return observedFetch(fetchImpl, (input, status) => {
+    if (isDeviceBearerRoute(urlOf(input), tag.baseUrl, tag.source)) {
+      detector.observe(tag.source, status);
+    }
+  });
+}
+
+/**
+ * RT-215 × RT-224 — the fetch of a client path that sends ONLY the device
+ * bearer, on a route it shares with an operator-credential path: the sale
+ * capture (`POST /api/pos/v1/sales`) carries the envelope too, and an envelope
+ * 401 is not a device signal. The URL cannot tell the two apart, so the tag is
+ * the fetch itself: EVERY answer of this fetch is reported as `source` (a 401
+ * fires `onUnauthorized`, a 2xx resets a count, anything else is ignored). The
+ * URL table above is not widened. Same containment as
+ * {@link withDeviceAuthObservation}.
+ */
+export function withDeviceCallObservation(
+  fetchImpl: FetchLike,
+  detector: Pick<DeviceAuthDetector, 'observe'>,
+  source: Exclude<DeviceRevokedSource, UrlMatchedDeviceSource>,
+): FetchLike {
+  return observedFetch(fetchImpl, (_input, status) => {
+    detector.observe(source, status);
+  });
+}
+
+/**
+ * The response is returned untouched; a transport failure is rethrown
+ * unreported (it is not an answer); a failing observer never breaks the call.
+ */
+function observedFetch(
+  fetchImpl: FetchLike,
+  report: (input: RequestInfo | URL, status: number) => void,
+): FetchLike {
   return async (input, init) => {
     const response = await fetchImpl(input, init);
     try {
-      if (isDeviceBearerRoute(urlOf(input), tag.baseUrl, tag.source)) {
-        detector.observe(tag.source, response.status);
-      }
+      report(input, response.status);
     } catch {
       // Observation is best-effort.
     }

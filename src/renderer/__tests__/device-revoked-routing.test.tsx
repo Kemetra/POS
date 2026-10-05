@@ -1,8 +1,10 @@
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import { AppRouter } from '../router';
+import { createPairingPushRelay } from '../routes/pairing/PairingRecoveryListener';
 import type { PairingBridgeAPI } from '../../shared/bridge-api';
 import type { PairingStatus, PairingStatusChangedEvent } from '../../shared/pairing-types';
 
@@ -215,10 +217,80 @@ describe('Codex P2 4186254473 — a push sent before the listener subscribed is 
     );
   });
 
+  it('rev546c: under React.StrictMode (dev double effects) a missed push still ends on recovery', async () => {
+    const b = heldBootBridge();
+    render(
+      <StrictMode>
+        <AppRouter pairing={b.bridge} />
+      </StrictMode>,
+    );
+    b.push({ kind: 'invalid', reason: 'device_revoked' }); // before the listener exists
+    await b.boot(PAIRED);
+    await waitFor(() => expect(screen.getByTestId('route-pairing')).toBeInTheDocument());
+    expect(screen.getByTestId('route-pairing')).toHaveAttribute(
+      'data-invalid-reason',
+      'device_revoked',
+    );
+  });
+
+  it('a push handled live after attach drops an older missed one (never replayed twice)', async () => {
+    const b = heldBootBridge();
+    render(<AppRouter pairing={b.bridge} />);
+    b.push({ kind: 'invalid', reason: 'decrypt_failed' }); // missed
+    await b.boot(PAIRED);
+    // The live push arrives right after attach; the missed one must not win afterwards.
+    b.push({ kind: 'invalid', reason: 'device_revoked' });
+    await waitFor(() =>
+      expect(screen.getByTestId('route-pairing')).toHaveAttribute(
+        'data-invalid-reason',
+        'device_revoked',
+      ),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('route-pairing')).toHaveAttribute(
+      'data-invalid-reason',
+      'device_revoked',
+    );
+  });
+
   it('unsubscribes the early recorder on unmount', () => {
     const b = heldBootBridge();
     const { unmount } = render(<AppRouter pairing={b.bridge} />);
     unmount();
     expect(b.subscribers()).toBe(0);
+  });
+});
+
+describe('createPairingPushRelay — deferred replay of a missed push (rev546c)', () => {
+  const REVOKED: PairingStatusChangedEvent = { kind: 'invalid', reason: 'device_revoked' };
+  const DECRYPT: PairingStatusChangedEvent = { kind: 'invalid', reason: 'decrypt_failed' };
+  const flush = (): Promise<void> => Promise.resolve();
+
+  it('replays to the handler that survives an attach / detach / re-attach, exactly once', async () => {
+    const relay = createPairingPushRelay();
+    relay.deliver(REVOKED);
+    const first = vi.fn();
+    const second = vi.fn();
+    relay.attach(first)();
+    relay.attach(second);
+    await flush();
+    expect(first).not.toHaveBeenCalled();
+    expect(second.mock.calls).toEqual([[REVOKED]]);
+    const third = vi.fn();
+    relay.attach(third);
+    await flush();
+    expect(third).not.toHaveBeenCalled();
+  });
+
+  it('a live push delivered before the deferred replay supersedes the missed one', async () => {
+    const relay = createPairingPushRelay();
+    relay.deliver(DECRYPT);
+    const handler = vi.fn();
+    relay.attach(handler);
+    relay.deliver(REVOKED);
+    await flush();
+    expect(handler.mock.calls).toEqual([[REVOKED]]);
   });
 });

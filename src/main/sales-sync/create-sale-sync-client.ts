@@ -170,6 +170,12 @@ export interface CreateSaleSyncClientDeps {
   /** `fetch` implementation. Production binds the global; tests inject. */
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   /**
+   * RT-215 × RT-224: the fetch for the DEVICE path only (`postSaleAsCashier`),
+   * tagged for the 2×401 detector (`withDeviceCallObservation`). The envelope
+   * path never uses it. Omitted → `fetch`.
+   */
+  deviceFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  /**
    * In-process read of the operator session credential — the opaque `pos_operator`
    * ENVELOPE (016 D5, #559), held in the jwt-holder seam. The engine already pauses
    * the drain when this is null/empty (the M-1 envelope-present gate); defensively, a
@@ -475,7 +481,9 @@ export function classifyDeviceStatus(status: number): SaleSyncResult {
 }
 
 export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncClient {
-  const { fetch: fetchImpl, baseUrl, getOperatorToken } = deps;
+  const { fetch: envelopeFetch, baseUrl, getOperatorToken } = deps;
+  // RT-215 × RT-224: the device path's own (detector-tagged) fetch; never the envelope's.
+  const deviceFetch = deps.deviceFetch ?? envelopeFetch;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const currencyCode = deps.currencyCode ?? DEFAULT_CURRENCY_CODE;
   const nowMs = deps.nowMs ?? Date.now;
@@ -509,6 +517,7 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
     body: CaptureSaleWireBody,
     externalId: string,
     classify: (status: number) => SaleSyncResult,
+    fetchImpl: CreateSaleSyncClientDeps['fetch'],
   ): Promise<SaleSyncResult> {
     let response: Response;
     try {
@@ -643,7 +652,7 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
       } catch {
         return { kind: 'permanent' };
       }
-      return send(token, body, payload.externalId, classifyStatus);
+      return send(token, body, payload.externalId, classifyStatus, envelopeFetch);
     },
 
     async postSaleAsCashier(
@@ -664,7 +673,7 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
         return { kind: 'no_connection' };
       }
       terminalChangeReported = false;
-      return send(read.token, body, payload.externalId, classifyDeviceStatus);
+      return send(read.token, body, payload.externalId, classifyDeviceStatus, deviceFetch);
     },
   };
 }
