@@ -255,18 +255,26 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
 
   // ── tick ──
 
-  function retryHeld(): void {
-    const held = terminalTombstone;
-    if (held !== null) {
-      const applied = held.op === 'purge' ? purge() : invalidateEveryone(held.reason);
-      if (applied) {
-        terminalTombstone = null;
-        userTombstones.clear();
-      }
-    }
+  /** Re-apply a held terminal-wide operation; true when the store applied it. */
+  function applyTerminalHold(held: TerminalTombstone): boolean {
+    return held.op === 'purge' ? purge() : invalidateEveryone(held.reason);
+  }
+
+  function retryTerminalHold(): void {
+    if (terminalTombstone === null || !applyTerminalHold(terminalTombstone)) return;
+    terminalTombstone = null;
+    userTombstones.clear();
+  }
+
+  function retryUserHolds(): void {
     for (const [user_id, reason] of [...userTombstones]) {
       if (invalidateUser(user_id, reason)) userTombstones.delete(user_id);
     }
+  }
+
+  function retryHeld(): void {
+    retryTerminalHold();
+    retryUserHolds();
   }
 
   function tick(): void {
