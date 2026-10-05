@@ -11,14 +11,16 @@
  * `onReadFailure` fires once per failure episode (re-armed by a read that
  * completes) and receives nothing: no token, no error text (P7).
  *
- * RT-215 (POS #546): once it merges, `readToken`/`isPaired` become its
- * `createSendableDeviceTokenReader` (null unless paired); keep this never-reject
- * wrapper around it.
+ * RT-215 × RT-224: production reads through RT-215's
+ * `createSendableDeviceTokenRead` (null unless paired, null once revoked —
+ * re-checked synchronously after its last await), which already gates on the
+ * pairing, so `isPaired` is optional. This wrapper keeps the never-reject
+ * contract and the failure log around it.
  */
 export interface SaleSyncDeviceTokenReaderDeps {
-  /** Whether the terminal is paired right now. */
-  isPaired: () => Promise<boolean>;
-  /** The stored device token (may reject on a secret-store failure). */
+  /** Whether the terminal is paired right now. Omitted when `readToken` gates on it. */
+  isPaired?: () => Promise<boolean>;
+  /** The device token to send (may reject on a secret-store failure). */
   readToken: () => Promise<string | null | undefined>;
   /** Called once per failure episode, with no arguments. */
   onReadFailure?: () => void;
@@ -41,7 +43,8 @@ export function createSaleSyncDeviceTokenReader(
 
   return async () => {
     try {
-      const token = (await deps.isPaired()) ? ((await deps.readToken()) ?? null) : null;
+      const paired = deps.isPaired === undefined || (await deps.isPaired());
+      const token = paired ? ((await deps.readToken()) ?? null) : null;
       failing = false;
       return token !== null && token.length > 0 ? token : null;
     } catch {

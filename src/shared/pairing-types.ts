@@ -24,7 +24,7 @@ export type PairingInvalidReason = (typeof PAIRING_INVALID_REASONS)[number];
  * device revocation (decision 2: only the cashier-admissions routes and the
  * catalogue read-down count). Carried as the audit payload `{ source }`.
  */
-export type DeviceRevokedSource = 'cashier_admissions' | 'read_down';
+export type DeviceRevokedSource = 'cashier_admissions' | 'read_down' | 'sale_sync';
 
 /** What the terminal currently knows about its identity. */
 export type PairingStatus =

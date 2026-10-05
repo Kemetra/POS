@@ -27,6 +27,11 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
     expect(count(/secretStore\.get\(\s*DEVICE_TOKEN_KEY\s*\)/g)).toBe(0);
     expect(source).toMatch(/createSendableDeviceTokenReader\(\{\s*pairingStore,/);
     expect(count(/getDeviceToken: readSendableDeviceToken/g)).toBe(3); // probe, admissions, read-down
+    // RT-215 × RT-224: the sale-sync device path reads through the sendable read
+    // (null unless paired and not revoked), behind #547's never-reject reader.
+    expect(source).toMatch(
+      /composeSaleSyncDevicePath\(\{\s*db,\s*readToken: createSendableDeviceTokenRead\(\{\s*pairingStore,\s*secretStore,\s*deviceTokenKey: DEVICE_TOKEN_KEY,\s*\}\),/,
+    );
     expect(source).toMatch(/\(await readSendableDeviceToken\(\)\) \?\? ''/); // sign-in attestation
   });
 
@@ -35,6 +40,11 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
       /const admissionsFetch = withDeviceAuthObservation\(\s*globalThis\.fetch\.bind\(globalThis\),\s*deviceAuthDetector,\s*\{ source: 'cashier_admissions', baseUrl: apiBaseUrl \},\s*\)/,
     );
     expect(count(/withDeviceAuthObservation\(/g)).toBe(2);
+    // RT-215 × RT-224: the sale-sync DEVICE path is tagged at its own fetch (the
+    // capture route is shared with the envelope path; the URL table is not widened).
+    expect(source).toMatch(
+      /deviceAuth: \{ fetch: globalThis\.fetch\.bind\(globalThis\), detector: deviceAuthDetector \},/,
+    );
     expect(count(/fetch: admissionsFetch/g)).toBe(1);
     expect(source).toMatch(
       /createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: admissionsFetch,/,

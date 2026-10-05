@@ -5,7 +5,9 @@ import {
   createDeviceAuthDetector,
   deviceAuthConfirmDelayMs,
   withDeviceAuthObservation,
+  withDeviceCallObservation,
   type DeviceAuthDetector,
+  type UrlMatchedDeviceSource,
   type DeviceAuthOutcome,
 } from '../device-auth-detector.js';
 import type { DeviceRevokedSource } from '../../../shared/pairing-types.js';
@@ -332,7 +334,7 @@ describe('device-401 detector — debounce (decision 1)', () => {
 
 describe('device-401 detector — which 401s count (decision 2, review F5)', () => {
   /** The observed fetch for one client: its route family and its own base URL. */
-  function observed(baseUrl: string, source: DeviceRevokedSource) {
+  function observed(baseUrl: string, source: UrlMatchedDeviceSource) {
     const h = harness();
     const fetchImpl = vi.fn(() => Promise.resolve(new Response(null, { status: 401 })));
     const wrapped = withDeviceAuthObservation(fetchImpl, h.detector, { source, baseUrl });
@@ -356,7 +358,7 @@ describe('device-401 detector — which 401s count (decision 2, review F5)', () 
     expect(h.probe).not.toHaveBeenCalled();
   });
 
-  it.each<[string, DeviceRevokedSource, string]>([
+  it.each<[string, UrlMatchedDeviceSource, string]>([
     ['', 'cashier_admissions', ADMIT],
     ['', 'cashier_admissions', ROSTER],
     ['', 'cashier_admissions', END],
@@ -465,5 +467,75 @@ describe('withDeviceAuthObservation (the fetch the device-bearer clients use)', 
       tag,
     );
     await expect(wrapped(ADMIT)).resolves.toBe(response);
+  });
+});
+
+describe('withDeviceCallObservation (RT-215 × RT-224: a device-only fetch on a shared route)', () => {
+  const SALES = `${BASE}/api/pos/v1/sales`;
+
+  it('reports EVERY answer of this fetch as sale_sync, whatever the URL (the tag is the fetch itself)', async () => {
+    const observedCalls: [string, number][] = [];
+    const statuses = [401, 201, 403];
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(
+        new Response(null, { status: statuses[fetchImpl.mock.calls.length - 1] ?? 500 }),
+      ),
+    );
+    const wrapped = withDeviceCallObservation(
+      fetchImpl,
+      { observe: (source, status) => observedCalls.push([source, status]) },
+      'sale_sync',
+    );
+    const init = { method: 'POST' };
+    expect((await wrapped(SALES, init)).status).toBe(401);
+    await wrapped(new URL(`${BASE}/elsewhere`));
+    await wrapped(new Request(SALES, { method: 'POST' }));
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, SALES, init);
+    expect(observedCalls).toEqual([
+      ['sale_sync', 401],
+      ['sale_sync', 201],
+      ['sale_sync', 403],
+    ]);
+  });
+
+  it('a transport failure is rethrown unreported; a throwing observer never breaks the call', async () => {
+    const observe = vi.fn(() => {
+      throw new Error('observer failed');
+    });
+    const offline = withDeviceCallObservation(
+      () => Promise.reject(new TypeError('offline')),
+      { observe },
+      'sale_sync',
+    );
+    await expect(offline(SALES)).rejects.toThrow('offline');
+    expect(observe).not.toHaveBeenCalled();
+    const response = new Response(null, { status: 200 });
+    const answered = withDeviceCallObservation(
+      () => Promise.resolve(response),
+      { observe },
+      'sale_sync',
+    );
+    await expect(answered(SALES)).resolves.toBe(response);
+    expect(observe).toHaveBeenCalledTimes(1);
+  });
+
+  it('a device-path 401 through the real detector fires onUnauthorized(sale_sync) and starts a count', async () => {
+    const unauthorized: string[] = [];
+    const detector = createDeviceAuthDetector({
+      probe: () => new Promise(() => undefined),
+      confirmDelayMs: () => DEVICE_401_CONFIRM_MS,
+      onConfirmed: () => undefined,
+      onUnauthorized: (source) => unauthorized.push(source),
+    });
+    const wrapped = withDeviceCallObservation(
+      () => Promise.resolve(new Response(null, { status: 401 })),
+      detector,
+      'sale_sync',
+    );
+    await wrapped(SALES);
+    await wrapped(SALES);
+    expect(unauthorized).toEqual(['sale_sync', 'sale_sync']);
+    expect(detector.state).toBe('suspect');
+    detector.stop();
   });
 });
