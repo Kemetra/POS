@@ -29,6 +29,13 @@ export interface CashierAdmittedEvent {
   server_time: string;
   /** Local receipt time (D4: expiry is computed from it, not `server_time`). */
   received_at: string;
+  /**
+   * Codex P1 4181552524 — the pairing the request was SENT under
+   * ({@link OfflineGrantSeam.pairingGeneration} read before the request). A
+   * result that comes back after a re-pair must not become a grant of the new
+   * pairing. Absent when the seam does not track pairings.
+   */
+  pairing_generation?: number | undefined;
 }
 
 /**
@@ -50,6 +57,8 @@ export interface OfflineGrantSeam {
   onCashierAdmitted(event: CashierAdmittedEvent): void;
   /** A 403 or `active_elsewhere` for the user, or a device 401: invalidate at once. */
   onCashierAdmissionInvalidated(event: CashierAdmissionInvalidation): void;
+  /** The current pairing, read when an admission request is SENT (Codex P1 4181552524). */
+  pairingGeneration?(): number;
 }
 
 export const NOOP_OFFLINE_GRANT_SEAM: OfflineGrantSeam = Object.freeze({
@@ -104,10 +113,26 @@ export function nextIdempotencyKey(deps: CashierAdmissionDeps): string {
  * 401 invalidates every grant. Nothing else (5xx, 429, 409, 400, transport,
  * `no_token`) touches the seam. Never throws.
  */
+/** Who an outcome is for, and the pairing its request was sent under. */
+export interface AdmissionSubject {
+  user_id: string;
+  operator_id: string;
+  pairing_generation?: number | undefined;
+}
+
+/** The seam's current pairing, read just before a request is sent. Never throws. */
+export function capturePairingGeneration(deps: CashierAdmissionDeps): number | undefined {
+  try {
+    return deps.grantSeam?.pairingGeneration?.();
+  } catch {
+    return undefined;
+  }
+}
+
 export function notifyGrantSeam(
   deps: CashierAdmissionDeps,
   result: CashierAdmissionResult,
-  who: { user_id: string; operator_id: string },
+  who: AdmissionSubject,
 ): void {
   const seam = deps.grantSeam ?? NOOP_OFFLINE_GRANT_SEAM;
   try {
@@ -120,6 +145,7 @@ export function notifyGrantSeam(
         offline_grace_seconds: result.offline_grace_seconds,
         server_time: result.server_time,
         received_at: (deps.now ?? (() => new Date()))().toISOString(),
+        pairing_generation: who.pairing_generation,
       });
     } else if (result.kind === 'refused' || result.kind === 'active_elsewhere') {
       seam.onCashierAdmissionInvalidated({ reason: result.kind, user_id: who.user_id });
@@ -140,7 +166,7 @@ export function notifyGrantSeam(
 export function reportAdmissionOutcome(
   deps: CashierAdmissionDeps,
   result: CashierAdmissionResult,
-  who: { user_id: string; operator_id: string },
+  who: AdmissionSubject,
 ): void {
   notifyGrantSeam(deps, result, who);
   if (result.kind !== 'device_unauthorized') return;
@@ -278,13 +304,14 @@ export async function admitCashierOnline(
   // Stamped BEFORE the request goes out: the server's TTL runs from no
   // earlier than this, so a deadline from it is conservative under latency.
   const requested_at_ms = monotonicNowMs(deps);
+  const pairing_generation = capturePairingGeneration(deps);
   const result = await deps.client.admit({
     mode: 'online',
     user_id: req.user_id,
     takeover: req.takeover,
     idempotency_key: req.idempotency_key,
   });
-  reportAdmissionOutcome(deps, result, req);
+  reportAdmissionOutcome(deps, result, { ...req, pairing_generation });
   return result.kind === 'admitted' ? { ...result, requested_at_ms } : result;
 }
 

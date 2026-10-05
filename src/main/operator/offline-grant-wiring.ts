@@ -86,8 +86,13 @@ export interface OfflineGrantWiring {
   evaluate(user_id: string, nowWall: Date): OfflineGrantEvaluation;
   /** Use one offline admission (P3). Tombstones first. Never throws. */
   consumeOfflineUse(user_id: string, nowWall: Date): OfflineGrantEvaluation;
-  /** OD4: the pairing is about to change; invalidate (audited) and purge every grant. */
-  onPairingChange(reason: PairingChangeReason): void;
+  /**
+   * OD4: the pairing is about to change; invalidate (audited) and purge every
+   * grant. The purge keeps the evidence of every purged epoch, and of
+   * `prior_epoch` (the pairing being replaced), in the clock mark, so the next
+   * epoch is above them (Codex P1 4181552529).
+   */
+  onPairingChange(reason: PairingChangeReason, prior_epoch?: number | null): void;
   /** F4: the epoch for the new pairing (see `OfflineGrantStore.nextPairingEpoch`). */
   reservePairingEpoch(candidate: number): number;
   /** OD7: raise the mark now, then every 60 s. A no-op once stopped. */
@@ -130,6 +135,13 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   let timer: ReturnType<typeof setInterval> | undefined;
   const userTombstones = new Map<string, OfflineGrantInvalidationReason>();
   let terminalTombstone: TerminalTombstone | null = null;
+  /**
+   * Codex P1 4181552524 — bumped on every pairing change. An admission request
+   * records it when SENT; its `admitted` result writes a grant only while it is
+   * still current, so a result obtained under pairing A never becomes a grant
+   * of pairing B.
+   */
+  let pairingGeneration = 0;
 
   function log(level: 'info' | 'warn', fields: Record<string, string | number>): void {
     try {
@@ -193,9 +205,9 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     }
   }
 
-  function purge(): boolean {
+  function purge(prior_epoch?: number): boolean {
     try {
-      deps.store.purgeAll();
+      deps.store.purgeAll(prior_epoch);
       return true;
     } catch {
       return false;
@@ -207,6 +219,12 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
   function onAdmitted(event: CashierAdmittedEvent): void {
     const at = scope;
     if (stopped || at === null) return;
+    if (event.pairing_generation !== pairingGeneration) {
+      // Sent under another pairing (or unknown): no grant for this one. The
+      // result is dropped, not held: the next heartbeat refreshes it.
+      log('info', { event: 'operator.offline_grant.stale_result' });
+      return;
+    }
     try {
       const result = deps.store.upsertFromAdmitted(at, event);
       // A fresh server admission: the store now holds this user's true state.
@@ -250,6 +268,9 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
         return;
       }
       onUserInvalidated(event.user_id, SEAM_REASON[event.reason]);
+    },
+    pairingGeneration() {
+      return pairingGeneration;
     },
   };
 
@@ -319,6 +340,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
 
     setScope(next) {
       scope = next;
+      pairingGeneration += 1;
     },
 
     evaluate(user_id, nowWall) {
@@ -329,9 +351,10 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       return judged(user_id, (at) => deps.store.consumeOfflineUse(at, user_id, nowWall));
     },
 
-    onPairingChange(reason) {
+    onPairingChange(reason, prior_epoch) {
       const before = scope;
       scope = null;
+      pairingGeneration += 1;
       if (before !== null) {
         try {
           audit(before, deps.store.invalidateAll(before, reason).invalidated, reason);
@@ -339,7 +362,10 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
           log('warn', { event: 'operator.offline_grant.storage_failed', op: 'pairing_change' });
         }
       }
-      if (purge()) {
+      const epochs = [prior_epoch, before?.pairing_epoch].filter(
+        (e): e is number => typeof e === 'number',
+      );
+      if (purge(epochs.length > 0 ? Math.max(...epochs) : undefined)) {
         terminalTombstone = null;
         userTombstones.clear();
         return;
@@ -391,11 +417,25 @@ export function withOfflineGrantPairing(inner: PairingStore, grants: PairingHook
     }
   }
 
+  /** The epoch of the pairing being replaced, from the pairing store itself. */
+  async function priorEpoch(): Promise<number | null> {
+    try {
+      return scopeFromPairingStatus(await inner.getStatus())?.pairing_epoch ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   return {
     ...inner,
     async persist(input: PersistInput): Promise<void> {
-      grants.onPairingChange('repair');
-      const paired_at = grants.reservePairingEpoch(input.paired_at);
+      const prior = await priorEpoch();
+      grants.onPairingChange('repair', prior);
+      // Codex P1 4181552529: above the replaced pairing's epoch even when the
+      // clock mark could not keep it (deleted, unreadable).
+      const paired_at = grants.reservePairingEpoch(
+        prior === null ? input.paired_at : Math.max(input.paired_at, prior + 1),
+      );
       try {
         await inner.persist({ ...input, paired_at });
       } catch (err) {
@@ -410,7 +450,7 @@ export function withOfflineGrantPairing(inner: PairingStore, grants: PairingHook
       });
     },
     async clear(): Promise<void> {
-      grants.onPairingChange('unpair');
+      grants.onPairingChange('unpair', await priorEpoch());
       await inner.clear();
     },
   };

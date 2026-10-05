@@ -717,6 +717,31 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     expect(wiring.evaluate(USER, T0).admissible).toBe(false);
   });
 
+  it('a deleted mark and a failed purge: the re-pair epoch is still above the replaced pairing', async () => {
+    await pairing.persist(pairInput());
+    const first = await currentEpoch();
+    admit();
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    const b = breakable();
+    b.broken.add('purgeAll');
+    const w = makeWiring({ store: b.store });
+    w.setScope(scope({ pairing_epoch: first }));
+    const p = withOfflineGrantPairing(inner, w);
+    await p.persist(pairInput());
+    const s2 = await p.getStatus();
+    expect(s2.kind === 'paired' && s2.paired_at).toBeGreaterThan(first);
+    w.stop();
+  });
+
+  it('no grant, a deleted mark, unpair and a same-second re-pair: the epoch still moves', async () => {
+    await pairing.persist(pairInput());
+    const first = await currentEpoch();
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    await pairing.clear();
+    await pairing.persist(pairInput());
+    expect(await currentEpoch()).toBeGreaterThan(first);
+  });
+
   it('F4 without a clear: a re-pair over the old pairing in the same second', async () => {
     await pairing.persist(pairInput());
     admit();

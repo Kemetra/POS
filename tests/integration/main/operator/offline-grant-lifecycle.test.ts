@@ -418,14 +418,19 @@ describe('RT-113 P1.2 — the offline grant over the real cashier paths', () => 
   it('Codex P1 4181552524: a sign-in answered after a re-pair writes no grant for the new pairing', async () => {
     const w = wire();
     let answer: (r: Response) => void = () => undefined;
+    let markSent: () => void = () => undefined;
+    const sent = new Promise<void>((resolve) => {
+      markSent = resolve;
+    });
     w.answers.push(
       () =>
         new Promise<Response>((resolve) => {
           answer = resolve;
+          markSent();
         }),
     );
     const pending = signIn(w);
-    await vi.advanceTimersByTimeAsync(0);
+    await sent; // the request is on the wire (after the local PIN check)
     // The terminal is paired again while the request is in flight.
     w.grants.onPairingChange('repair');
     const NEW_SCOPE = { ...SCOPE, terminal_id: 'term-2', pairing_epoch: SCOPE.pairing_epoch + 1 };

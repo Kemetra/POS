@@ -5,6 +5,7 @@ import type {
   CashierAdmissionResult,
 } from './cashier-admission-client.js';
 import {
+  capturePairingGeneration,
   endAdmissionTracked,
   monotonicNowMs,
   takeUncertainEnd,
@@ -159,6 +160,8 @@ interface Armed {
   failures: number;
   /** Consecutive device 401s (debounce). */
   device401s: number;
+  /** Codex P1 4181552524: the pairing the in-flight (or last) heartbeat was sent under. */
+  pairing_generation?: number | undefined;
 }
 
 /** True when the record holds a live online cashier admission to keep alive. */
@@ -334,6 +337,7 @@ export class CashierAdmissionKeeper {
     if (!this.stillCurrent(armed) || armed.latched) return;
     // Stamped before the request goes out: a renewal's deadline runs from here.
     armed.last_sent_at_ms = this.nowMs();
+    armed.pairing_generation = capturePairingGeneration(this.deps.admission);
     const result = await this.requestHeartbeat(armed);
     // RT-198 latch + session identity: re-checked after the await.
     if (this.stopped) return;

@@ -165,8 +165,14 @@ export interface OfflineGrantStore {
   ): InvalidateResult;
   /** Invalidate every grant of the scope's tenant, branch and terminal. */
   invalidateAll(scope: OfflineGrantScope, reason: OfflineGrantInvalidationReason): InvalidateResult;
-  /** OD4: delete every grant on this device (pairing persisted or cleared). */
-  purgeAll(): { removed: number };
+  /**
+   * OD4: delete every grant on this device (pairing persisted or cleared).
+   * Codex P1 4181552529: the purge first raises (or, when missing or
+   * unreadable, re-seals) the clock mark above every purged grant's epoch and
+   * clock floor and above `prior_epoch`, so deleting the grants never erases
+   * the evidence {@link nextPairingEpoch} needs.
+   */
+  purgeAll(prior_epoch?: number): { removed: number };
   /** Is there proof for an offline admission now? Read-only but for the clock mark. */
   evaluate(scope: OfflineGrantScope, user_id: string, nowWall: Date): OfflineGrantEvaluation;
   /** Use one offline admission: evaluate, then increment and re-seal (P3 calls it). */
@@ -371,6 +377,7 @@ const CAS_GRANT = `UPDATE cashier_offline_grants SET sealed_body = ?, sealed_at 
 const DELETE_GRANT = `DELETE FROM cashier_offline_grants
   WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND user_id = ?`;
 const DELETE_ALL_GRANTS = 'DELETE FROM cashier_offline_grants';
+const SELECT_ALL_BODIES = 'SELECT sealed_body FROM cashier_offline_grants';
 const SELECT_ANY_GRANT = 'SELECT 1 AS present FROM cashier_offline_grants LIMIT 1';
 const SELECT_HWM = 'SELECT sealed_body FROM cashier_offline_clock_hwm WHERE id = 1';
 const UPSERT_HWM = `INSERT INTO cashier_offline_clock_hwm (id, sealed_body, sealed_at) VALUES (1, ?, ?)
@@ -516,6 +523,17 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
 
   // ── grant rows ──
 
+  /** A sealed grant body, opened and shape-checked; null when it is no readable grant. */
+  function openGrantBody(sealed: unknown): GrantBody | null {
+    const blob = asBlob(sealed);
+    if (blob === null) return null;
+    try {
+      return parseBody(safeStorage.decryptString(blob), GRANT_SHAPE);
+    } catch {
+      return null;
+    }
+  }
+
   function readGrant(scope: OfflineGrantScope, user_id: string): GrantRead {
     const row = stmt(SELECT_GRANT).get(
       scope.tenant_id,
@@ -609,6 +627,29 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     }
     writeHwm(now_ms);
     return { hwm_ms: now_ms, raised: true };
+  }
+
+  /** The latest time any grant row (readable ones) or the prior pairing vouches for. */
+  function purgeEvidenceMs(prior_epoch: number | undefined): number {
+    let floor = isCount(prior_epoch) ? prior_epoch * 1000 : 0;
+    for (const row of stmt(SELECT_ALL_BODIES).all() as { sealed_body: unknown }[]) {
+      const body = openGrantBody(row.sealed_body);
+      if (body !== null) floor = Math.max(floor, body.pairing_epoch * 1000, clockFloor(body));
+    }
+    return floor;
+  }
+
+  /** Codex P1 4181552529: a purge never lowers, and never erases, the evidence in the mark. */
+  function keepPurgeEvidence(prior_epoch: number | undefined): void {
+    const evidence = purgeEvidenceMs(prior_epoch);
+    const current = readHwm();
+    if (current.kind === 'ok' && current.hwm_ms !== null) {
+      if (current.hwm_ms < evidence) writeHwm(evidence);
+      return;
+    }
+    if (current.kind === 'ok' && evidence === 0) return; // a first run: nothing to keep
+    // Missing (with evidence) or unreadable: re-seal, never below now.
+    writeHwm(Math.max(evidence, deps.now().getTime()));
   }
 
   // ── evaluation ──
@@ -773,10 +814,13 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
       return invalidateUsers(scope, users, reason, 'invalidate_all');
     },
 
-    purgeAll() {
+    purgeAll(prior_epoch) {
       let removed: number;
       try {
-        removed = stmt(DELETE_ALL_GRANTS).run().changes;
+        removed = tx(() => {
+          keepPurgeEvidence(prior_epoch);
+          return stmt(DELETE_ALL_GRANTS).run().changes;
+        });
       } catch {
         log('warn', { event: 'operator.offline_grant.storage_failed', op: 'purge' });
         throw new OfflineGrantStoreError('storage');
