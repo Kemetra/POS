@@ -50,8 +50,8 @@ import type {
  * sale IPC call (`recheckSafePoint`, wired at the `sale-boundary-guard.ts`
  * choke point), on every lock-state change, and every
  * {@link SAFE_POINT_RECHECK_MS} as a backstop. Nothing is
- * reversed or discarded. A 403 or confirmed 401 invalidates the P1 grant at
- * once (D4).
+ * reversed or discarded. A 403, `active_elsewhere` (OD6) or the FIRST device
+ * 401 (OD5) invalidates the P1 grant at once (D4).
  *
  * The deadline (Codex P2 4179771036): the server admission lapses at most TTL
  * after the request that got the latest `admitted` was SENT (monotonic clock;
@@ -376,6 +376,7 @@ export class CashierAdmissionKeeper {
         this.onAdmitted(armed, result);
         return;
       case 'active_elsewhere':
+        notifyGrantSeam(this.deps.admission, result, armed);
         this.latch(armed, 'superseded_by_takeover');
         return;
       case 'refused':
@@ -422,11 +423,13 @@ export class CashierAdmissionKeeper {
    */
   private onDeviceUnauthorized(armed: Armed, result: CashierAdmissionResult): void {
     armed.device401s += 1;
+    // RT-113 OD5: the FIRST 401 already invalidates every offline grant (fail
+    // closed); only the session waits for the confirming 401.
+    if (armed.device401s === 1) notifyGrantSeam(this.deps.admission, result, armed);
     if (armed.device401s < 2) {
       this.scheduleNext(armed, deviceConfirmCapMs(armed));
       return;
     }
-    notifyGrantSeam(this.deps.admission, result, armed);
     this.latch(armed, 'terminal_session_terminated');
   }
 

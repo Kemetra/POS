@@ -31,19 +31,24 @@ export interface CashierAdmittedEvent {
   received_at: string;
 }
 
-/** D4: a 403 for that user, or a device 401, invalidates offline grants. */
+/**
+ * D4: a 403 for that user, or a device 401, invalidates offline grants; OD6:
+ * so does `active_elsewhere` (the cashier is admitted on another till).
+ */
 export type CashierAdmissionInvalidation =
   | { reason: 'refused'; user_id: string }
+  | { reason: 'active_elsewhere'; user_id: string }
   | { reason: 'device_unauthorized' };
 
 /**
- * P1 SEAM — the offline grant store (RT113-P1) plugs in here. P2 ships only
- * the no-op below: no grant is written, refreshed or invalidated yet.
+ * P1 SEAM — the offline grant store plugs in here. RT113-P1.2 wires the sealed
+ * store (`offline-grant-wiring.ts`); the no-op below remains the default for
+ * callers that do not pass one.
  */
 export interface OfflineGrantSeam {
   /** Every `admitted` (sign-in, takeover, heartbeat): write or refresh the grant. */
   onCashierAdmitted(event: CashierAdmittedEvent): void;
-  /** A 403 for the user or a device 401: invalidate before any further admission. */
+  /** A 403 or `active_elsewhere` for the user, or a device 401: invalidate at once. */
   onCashierAdmissionInvalidated(event: CashierAdmissionInvalidation): void;
 }
 
@@ -95,8 +100,9 @@ export function nextIdempotencyKey(deps: CashierAdmissionDeps): string {
 
 /**
  * The P1 grant seam for one outcome: `admitted` writes or refreshes the grant;
- * a 403 invalidates that user's grant; a device 401 invalidates every grant.
- * Nothing else (including `no_token`) touches the seam. Never throws.
+ * a 403 or `active_elsewhere` (OD6) invalidates that user's grant; a device
+ * 401 invalidates every grant. Nothing else (5xx, 429, 409, 400, transport,
+ * `no_token`) touches the seam. Never throws.
  */
 export function notifyGrantSeam(
   deps: CashierAdmissionDeps,
@@ -115,8 +121,8 @@ export function notifyGrantSeam(
         server_time: result.server_time,
         received_at: (deps.now ?? (() => new Date()))().toISOString(),
       });
-    } else if (result.kind === 'refused') {
-      seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: who.user_id });
+    } else if (result.kind === 'refused' || result.kind === 'active_elsewhere') {
+      seam.onCashierAdmissionInvalidated({ reason: result.kind, user_id: who.user_id });
     } else if (result.kind === 'device_unauthorized') {
       seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
     }

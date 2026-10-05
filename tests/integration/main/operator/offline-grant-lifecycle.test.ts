@@ -443,7 +443,9 @@ describe('RT-113 P1.2 — the offline grant over the real cashier paths', () => 
     expect(admissibleNow(w)).toBe(false);
     w.answers.push(() => errorJson(403));
     await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
-    expect(w.sessions.getCurrent()?.authority_latch).toBe('account_disabled_mid_session');
+    // The heartbeat ran its course (the session ended at the safe point).
+    expect(w.sessions.getCurrent()).toBeNull();
+    expect(w.sessions.getLastEndCause()).toBe('account_disabled_mid_session');
     expect(admissibleNow(w)).toBe(false);
     w.keeper.stop();
   });

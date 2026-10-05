@@ -1,0 +1,409 @@
+import type { Logger } from 'pino';
+
+import type { AuditEvent } from '../../shared/audit/event-shape.js';
+import type { PairingStatus } from '../../shared/pairing-types.js';
+import type { PairingStore, PersistInput } from '../pairing/store.js';
+
+import type {
+  CashierAdmissionInvalidation,
+  CashierAdmittedEvent,
+  OfflineGrantSeam,
+} from './cashier-admission.js';
+import type {
+  InvalidatedGrant,
+  OfflineGrantEvaluation,
+  OfflineGrantInvalidationReason,
+  OfflineGrantRefusalCategory,
+  OfflineGrantScope,
+  OfflineGrantStore,
+} from './offline-grant-store.js';
+
+/**
+ * RT-113 P1.2 — the sealed offline grant store wired into the app (Jira
+ * RT-113: plan 10871 §"PR P1.2"; OD4–OD7, OD10 confirmed in 10874; F2–F4 and
+ * the `refused` → `forbidden` mapping carried in 10893).
+ *
+ * The cashier-admission grant seam:
+ *  - `admitted` (sign-in, takeover, heartbeat) writes or refreshes the grant
+ *    for the CURRENT pairing scope (tenant, branch, terminal, pairing epoch);
+ *  - a 403 (`refused`) invalidates that user, reason `forbidden`;
+ *  - `active_elsewhere` invalidates that user, reason `superseded` (OD6);
+ *  - a device 401 invalidates EVERY grant, reason `device_unauthorized`, on the
+ *    first 401 (OD5; the session keeps its own 2×401 debounce);
+ *  - 5xx, 429, 409, 400, transport and `no_token` never reach the seam.
+ *
+ * Fail closed (10871): when the store throws on an invalidation, or on a
+ * write that should replace a grant, the user (or, for a 401 or a failed
+ * pairing purge, the whole terminal) is held in an in-memory TOMBSTONE that
+ * {@link OfflineGrantWiring.evaluate} consults before the store. The clock
+ * tick retries the held operation; it is lifted when the store applies it, or
+ * (per user) when a fresh `admitted` for that user is recorded. Nothing here
+ * ever throws into sign-in, takeover or the heartbeat.
+ *
+ * Audit (OD10): one `operator.offline_grant.invalidated` per grant actually
+ * invalidated, attributed to that grant's operator, payload `{reason}` only.
+ *
+ * Pairing (OD4, F4): {@link withOfflineGrantPairing} purges every grant
+ * whenever the pairing is persisted or cleared, and gives every re-pair an
+ * epoch strictly above any epoch a grant on this device can hold, so an old
+ * sealed body written back after a same-second re-pair is no proof.
+ *
+ * Clock (OD7): the high-water mark is raised at start and every 60 s; the
+ * tick stops through the RT-198 latch (`stop()`): nothing runs afterwards.
+ *
+ * No session is created here. `evaluate` and `consumeOfflineUse` are the P3
+ * entry points; nothing calls them yet. A grant carries the server's last
+ * `admission_id` but no `admission_generation` (RT-219), so P3 must never arm
+ * an offline-admitted session as online-admitted: it must not heartbeat or
+ * `end` a server admission, only reconcile later (P4).
+ *
+ * Privacy: log lines carry an event name and a closed reason, op or count.
+ * No grant field and no identifier reaches a log line.
+ */
+
+/** OD7: how often the clock high-water mark is raised. */
+export const OFFLINE_GRANT_CLOCK_TICK_MS = 60_000;
+
+const INVALIDATED_CATEGORY = 'operator.offline_grant.invalidated';
+
+export interface OfflineGrantWiringDeps {
+  store: OfflineGrantStore;
+  audit: { emit(event: AuditEvent): void };
+  uuid: () => string;
+  now: () => Date;
+  logger?: Pick<Logger, 'info' | 'warn'>;
+}
+
+/** Why the pairing changed (OD4). */
+export type PairingChangeReason = Extract<OfflineGrantInvalidationReason, 'repair' | 'unpair'>;
+
+export interface OfflineGrantWiring {
+  /** Plugs into `CashierAdmissionDeps.grantSeam`. Never throws. */
+  readonly seam: OfflineGrantSeam;
+  /** The current pairing scope, or null when the terminal is not paired. */
+  setScope(scope: OfflineGrantScope | null): void;
+  /** Is there proof for an offline admission (P3)? Tombstones first. Never throws. */
+  evaluate(user_id: string, nowWall: Date): OfflineGrantEvaluation;
+  /** Use one offline admission (P3). Tombstones first. Never throws. */
+  consumeOfflineUse(user_id: string, nowWall: Date): OfflineGrantEvaluation;
+  /** OD4: the pairing is about to change; invalidate (audited) and purge every grant. */
+  onPairingChange(reason: PairingChangeReason): void;
+  /** F4: the epoch for the new pairing (see `OfflineGrantStore.nextPairingEpoch`). */
+  reservePairingEpoch(candidate: number): number;
+  /** OD7: raise the mark now, then every 60 s. A no-op once stopped. */
+  start(): void;
+  /** RT-198 stop latch: clears the tick; the seam and the tick do nothing afterwards. */
+  stop(): void;
+}
+
+/** The grant scope of a pairing status; null unless paired. */
+export function scopeFromPairingStatus(status: PairingStatus): OfflineGrantScope | null {
+  if (status.kind !== 'paired') return null;
+  return {
+    tenant_id: status.tenant_id,
+    branch_id: status.branch_id,
+    terminal_id: status.terminal_id,
+    pairing_epoch: status.paired_at,
+  };
+}
+
+/** A held operation the store has not applied yet. */
+type TerminalTombstone =
+  | { op: 'invalidate_all'; reason: OfflineGrantInvalidationReason }
+  | { op: 'purge' };
+
+const SEAM_REASON: Readonly<
+  Record<
+    Exclude<CashierAdmissionInvalidation['reason'], 'device_unauthorized'>,
+    OfflineGrantInvalidationReason
+  >
+> = {
+  // 10893: the seam's `refused` (a 403) is the store's `forbidden`.
+  refused: 'forbidden',
+  // OD6.
+  active_elsewhere: 'superseded',
+};
+
+export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineGrantWiring {
+  let scope: OfflineGrantScope | null = null;
+  let stopped = false;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const userTombstones = new Map<string, OfflineGrantInvalidationReason>();
+  let terminalTombstone: TerminalTombstone | null = null;
+
+  function log(level: 'info' | 'warn', fields: Record<string, string | number>): void {
+    try {
+      deps.logger?.[level](fields, String(fields['event']).replace(/\./g, ' '));
+    } catch {
+      // Logging is best-effort.
+    }
+  }
+
+  function audit(
+    at: OfflineGrantScope,
+    grants: readonly InvalidatedGrant[],
+    reason: OfflineGrantInvalidationReason,
+  ): void {
+    for (const grant of grants) {
+      try {
+        deps.audit.emit({
+          event_id: deps.uuid(),
+          tenant_id: at.tenant_id,
+          branch_id: at.branch_id,
+          originating_terminal_id: at.terminal_id,
+          acting_operator_id: grant.operator_id,
+          session_id: null,
+          shift_id: null,
+          action_category: INVALIDATED_CATEGORY,
+          created_at: deps.now().toISOString(),
+          approving_supervisor_id: null,
+          payload: { reason },
+        });
+      } catch {
+        log('warn', { event: 'operator.offline_grant.audit_failed', reason });
+      }
+    }
+  }
+
+  function hold(op: string): void {
+    log('warn', { event: 'operator.offline_grant.tombstoned', op });
+  }
+
+  // ── store operations: each returns true when the store applied it ──
+
+  function invalidateUser(user_id: string, reason: OfflineGrantInvalidationReason): boolean {
+    const at = scope;
+    if (at === null) return false;
+    try {
+      audit(at, deps.store.invalidate(at, user_id, reason).invalidated, reason);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function invalidateEveryone(reason: OfflineGrantInvalidationReason): boolean {
+    const at = scope;
+    if (at === null) return false;
+    try {
+      audit(at, deps.store.invalidateAll(at, reason).invalidated, reason);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function purge(): boolean {
+    try {
+      deps.store.purgeAll();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── seam ──
+
+  function onAdmitted(event: CashierAdmittedEvent): void {
+    const at = scope;
+    if (stopped || at === null) return;
+    try {
+      const result = deps.store.upsertFromAdmitted(at, event);
+      // A fresh server admission: the store now holds this user's true state.
+      userTombstones.delete(event.user_id);
+      if (result.kind === 'grace_disabled') audit(at, result.invalidated, 'grace_disabled');
+      if (result.kind === 'rejected') audit(at, result.invalidated, 'refresh_failed');
+    } catch {
+      // The store deleted the old grant if it could; if not, it must not stand.
+      userTombstones.set(event.user_id, 'refresh_failed');
+      hold('upsert');
+    }
+  }
+
+  function onUserInvalidated(user_id: string, reason: OfflineGrantInvalidationReason): void {
+    if (invalidateUser(user_id, reason)) {
+      userTombstones.delete(user_id);
+      return;
+    }
+    userTombstones.set(user_id, reason);
+    hold('invalidate');
+  }
+
+  function onDeviceUnauthorized(): void {
+    if (invalidateEveryone('device_unauthorized')) {
+      // Every grant of the scope is now invalidated in the store.
+      userTombstones.clear();
+      return;
+    }
+    terminalTombstone = { op: 'invalidate_all', reason: 'device_unauthorized' };
+    hold('invalidate_all');
+  }
+
+  const seam: OfflineGrantSeam = {
+    onCashierAdmitted(event) {
+      onAdmitted(event);
+    },
+    onCashierAdmissionInvalidated(event) {
+      if (stopped) return;
+      if (event.reason === 'device_unauthorized') {
+        onDeviceUnauthorized();
+        return;
+      }
+      onUserInvalidated(event.user_id, SEAM_REASON[event.reason]);
+    },
+  };
+
+  // ── tick ──
+
+  function retryHeld(): void {
+    const held = terminalTombstone;
+    if (held !== null) {
+      const applied = held.op === 'purge' ? purge() : invalidateEveryone(held.reason);
+      if (applied) {
+        terminalTombstone = null;
+        userTombstones.clear();
+      }
+    }
+    for (const [user_id, reason] of [...userTombstones]) {
+      if (invalidateUser(user_id, reason)) userTombstones.delete(user_id);
+    }
+  }
+
+  function tick(): void {
+    if (stopped) return;
+    try {
+      deps.store.observeClock(deps.now());
+      retryHeld();
+    } catch {
+      log('warn', { event: 'operator.offline_grant.tick_failed' });
+    }
+  }
+
+  // ── evaluation ──
+
+  function tombstoneRefusal(user_id: string): OfflineGrantEvaluation | null {
+    if (terminalTombstone === null && !userTombstones.has(user_id)) return null;
+    log('info', { event: 'operator.offline_grant.refused', category: 'grant_invalidated' });
+    return { admissible: false, category: 'grant_invalidated' };
+  }
+
+  function refused(category: OfflineGrantRefusalCategory): OfflineGrantEvaluation {
+    return { admissible: false, category };
+  }
+
+  function judged(
+    user_id: string,
+    read: (at: OfflineGrantScope) => OfflineGrantEvaluation,
+  ): OfflineGrantEvaluation {
+    const blocked = tombstoneRefusal(user_id);
+    if (blocked !== null) return blocked;
+    const at = scope;
+    if (at === null) return refused('scope_mismatch');
+    try {
+      return read(at);
+    } catch {
+      return refused('storage');
+    }
+  }
+
+  return {
+    seam,
+
+    setScope(next) {
+      scope = next;
+    },
+
+    evaluate(user_id, nowWall) {
+      return judged(user_id, (at) => deps.store.evaluate(at, user_id, nowWall));
+    },
+
+    consumeOfflineUse(user_id, nowWall) {
+      return judged(user_id, (at) => deps.store.consumeOfflineUse(at, user_id, nowWall));
+    },
+
+    onPairingChange(reason) {
+      const before = scope;
+      scope = null;
+      if (before !== null) {
+        try {
+          audit(before, deps.store.invalidateAll(before, reason).invalidated, reason);
+        } catch {
+          log('warn', { event: 'operator.offline_grant.storage_failed', op: 'pairing_change' });
+        }
+      }
+      if (purge()) {
+        terminalTombstone = null;
+        userTombstones.clear();
+        return;
+      }
+      terminalTombstone = { op: 'purge' };
+      hold('purge');
+    },
+
+    reservePairingEpoch(candidate) {
+      try {
+        return deps.store.nextPairingEpoch(candidate);
+      } catch {
+        return candidate;
+      }
+    },
+
+    start() {
+      if (stopped || timer !== undefined) return;
+      tick();
+      timer = setInterval(tick, OFFLINE_GRANT_CLOCK_TICK_MS);
+    },
+
+    stop() {
+      stopped = true;
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+    },
+  };
+}
+
+type PairingHooks = Pick<
+  OfflineGrantWiring,
+  'onPairingChange' | 'reservePairingEpoch' | 'setScope'
+>;
+
+/**
+ * OD4 + F4 — wrap the pairing store OUTSIDE `src/main/pairing/` (the RT-202
+ * `withPairedNotification` precedent): every `persist` and `clear` first
+ * purges the offline grants, and every `persist` gets a new epoch
+ * (`paired_at` is raised past the clock mark when it would repeat). The grant
+ * scope then follows the pairing. Every other method passes through.
+ */
+export function withOfflineGrantPairing(inner: PairingStore, grants: PairingHooks): PairingStore {
+  async function rebindFromStatus(): Promise<void> {
+    try {
+      grants.setScope(scopeFromPairingStatus(await inner.getStatus()));
+    } catch {
+      grants.setScope(null);
+    }
+  }
+
+  return {
+    ...inner,
+    async persist(input: PersistInput): Promise<void> {
+      grants.onPairingChange('repair');
+      const paired_at = grants.reservePairingEpoch(input.paired_at);
+      try {
+        await inner.persist({ ...input, paired_at });
+      } catch (err) {
+        await rebindFromStatus();
+        throw err;
+      }
+      grants.setScope({
+        tenant_id: input.tenant_id,
+        branch_id: input.branch_id,
+        terminal_id: input.terminal_id,
+        pairing_epoch: paired_at,
+      });
+    },
+    async clear(): Promise<void> {
+      grants.onPairingChange('unpair');
+      await inner.clear();
+    },
+  };
+}

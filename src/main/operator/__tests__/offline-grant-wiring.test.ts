@@ -362,6 +362,13 @@ describe('fail closed: a throwing store leaves a tombstone that evaluate consult
     expect(wiring.evaluate(USER_2, T0).admissible).toBe(true);
   });
 
+  it('a device 401 with no pairing scope is held terminal-wide', () => {
+    wiring.setScope(null);
+    invalidate({ reason: 'device_unauthorized' });
+    wiring.setScope(scope());
+    expect(wiring.evaluate(USER_2, T0)).toEqual(refusal('grant_invalidated'));
+  });
+
   it('an invalidation with no pairing scope is held as a tombstone', () => {
     wiring.setScope(null);
     invalidate({ reason: 'refused', user_id: USER });
@@ -652,7 +659,8 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     expect(wiring.evaluate(USER, T0)).toEqual(refusal('scope_mismatch'));
   });
 
-  it('a failed purge refuses every user until it is retried', async () => {
+  it('a failed purge refuses every user until the tick retries it', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     await pairing.persist(pairInput());
     admit();
     const b = breakable();
@@ -660,7 +668,16 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     const w = makeWiring({ store: b.store });
     const p = withOfflineGrantPairing(inner, w);
     await p.persist(pairInput());
+    w.start();
     expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    w.seam.onCashierAdmitted(admitted());
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    b.broken.clear();
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    // The retried purge lifts the tombstone (and, fail closed, takes the fresh grant too).
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    w.seam.onCashierAdmitted(admitted());
+    expect(w.evaluate(USER, T0).admissible).toBe(true);
     w.stop();
   });
 

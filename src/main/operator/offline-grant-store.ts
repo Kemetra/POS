@@ -1,5 +1,9 @@
 import type { Logger } from 'pino';
 
+import {
+  OFFLINE_GRANT_INVALIDATION_REASONS,
+  type OfflineGrantInvalidationReason,
+} from '../../shared/audit/payload-schemas.js';
 import type { DatabaseHandle } from '../db/client.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
 
@@ -12,8 +16,9 @@ import type { CashierAdmittedEvent } from './cashier-admission.js';
  * A grant is the local proof that Backend-Core admitted a cashier ONLINE on
  * this terminal. P3 will let that cashier sign in offline, within bounds, on
  * the strength of it. This module only stores, bounds and checks grants. It is
- * pure (injected seal, DB handle and clock) and is NOT wired into anything:
- * P1.2 plugs it into the cashier-admission grant seam and the pairing changes.
+ * pure (injected seal, DB handle and clock). P1.2 wires it into the
+ * cashier-admission grant seam, the pairing changes and the clock tick
+ * (`offline-grant-wiring.ts`).
  *
  * Storage (migration 0041): one `cashier_offline_grants` row per
  * (tenant, branch, terminal, user_id). Everything that decides admissibility
@@ -27,11 +32,15 @@ import type { CashierAdmittedEvent } from './cashier-admission.js';
  *    `issued_at_local` is the local receipt time of the admission;
  *  - count: at most 8 offline uses per grant; the 9th is refused;
  *  - clock: refused when `now < high-water mark − 5 min`. The mark only rises.
- *    The grant's own issue and last-use times floor the clock too, so deleting
- *    the mark row does not reopen a rolled-back clock below them.
+ *    The grant's own issue and last-use times floor the clock too, so an older
+ *    mark written back does not reopen a rolled-back clock below them. F2
+ *    (P1.2): a mark that is MISSING while any grant row exists is `storage`.
+ *  - epoch: every new pairing gets an epoch above the mark (F4), so a grant
+ *    from an earlier pairing never matches, even when `paired_at` repeats.
  *
  * Failure is never proof (D10): any read, unseal or parse failure refuses.
- * `evaluate`, `consumeOfflineUse` and `observeClock` never throw. The writes
+ * `evaluate`, `consumeOfflineUse`, `observeClock` and `nextPairingEpoch` never
+ * throw, not even on a throwing logger (F3). The writes
  * (`upsertFromAdmitted`, `invalidate`, `invalidateAll`, `purgeAll`) throw an
  * {@link OfflineGrantStoreError} carrying a category only. When a write that
  * should end or replace a grant fails, the store first deletes that grant, so
@@ -58,25 +67,8 @@ export const OFFLINE_GRANT_MAX_USES = 8;
 /** D4/OD7: how far the wall clock may sit behind the high-water mark. */
 export const OFFLINE_CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
 
-/** Why a grant was invalidated (10763 D4, OD6, OD8). Closed set. */
-export const OFFLINE_GRANT_INVALIDATION_REASONS = [
-  /** Backend-Core answered 403 for this user. */
-  'forbidden',
-  /** Backend-Core answered 401 for the device (RT-138 L6). */
-  'device_unauthorized',
-  /** OD6: the cashier was admitted on another till (`active_elsewhere`). */
-  'superseded',
-  /** The terminal was paired again. */
-  'repair',
-  /** The terminal was unpaired. */
-  'unpair',
-  /** OD8: Backend-Core answered `offline_grace_seconds = 0`. */
-  'grace_disabled',
-  /** An `admitted` event could not be recorded, so the old grant must not stand. */
-  'refresh_failed',
-] as const;
-
-export type OfflineGrantInvalidationReason = (typeof OFFLINE_GRANT_INVALIDATION_REASONS)[number];
+/** Why a grant was invalidated (10763 D4, OD6, OD8). Closed set, shared with the audit payload. */
+export { OFFLINE_GRANT_INVALIDATION_REASONS, type OfflineGrantInvalidationReason };
 
 /** Why there is no proof. Closed set; logged and audited as-is, never a field. */
 export const OFFLINE_GRANT_REFUSAL_CATEGORIES = [
@@ -185,6 +177,15 @@ export interface OfflineGrantStore {
   ): OfflineGrantEvaluation;
   /** OD7: raise the clock high-water mark to `nowWall`; never lowers it. */
   observeClock(nowWall: Date): ClockObservation;
+  /**
+   * F4 (10893): the epoch for a NEW pairing. `paired_at` has 1 s granularity,
+   * so two pairings can share it; the epoch returned is strictly above every
+   * epoch a grant on this device can hold. The mark is raised to it, so the
+   * next call is above it again. Never throws: on a storage failure, or an
+   * unreadable mark, it returns `candidate` (offline then stays refused until
+   * an online write repairs the mark).
+   */
+  nextPairingEpoch(candidate: number): number;
 }
 
 // ── Sealed body ──────────────────────────────────────────────────────────────
@@ -370,6 +371,7 @@ const CAS_GRANT = `UPDATE cashier_offline_grants SET sealed_body = ?, sealed_at 
 const DELETE_GRANT = `DELETE FROM cashier_offline_grants
   WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND user_id = ?`;
 const DELETE_ALL_GRANTS = 'DELETE FROM cashier_offline_grants';
+const SELECT_ANY_GRANT = 'SELECT 1 AS present FROM cashier_offline_grants LIMIT 1';
 const SELECT_HWM = 'SELECT sealed_body FROM cashier_offline_clock_hwm WHERE id = 1';
 const UPSERT_HWM = `INSERT INTO cashier_offline_clock_hwm (id, sealed_body, sealed_at) VALUES (1, ?, ?)
   ON CONFLICT (id) DO UPDATE SET sealed_body = excluded.sealed_body, sealed_at = excluded.sealed_at`;
@@ -498,8 +500,13 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     return deps.now().toISOString();
   }
 
+  /** F3 (10893): a throwing logger never escapes, and never aborts a write. */
   function log(level: 'info' | 'warn', fields: Record<string, string | number>): void {
-    deps.logger?.[level](fields, String(fields['event']).replace(/\./g, ' '));
+    try {
+      deps.logger?.[level](fields, String(fields['event']).replace(/\./g, ' '));
+    } catch {
+      // Logging is best-effort.
+    }
   }
 
   function seal(text: string): Buffer {
@@ -567,13 +574,31 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     stmt(UPSERT_HWM).run(seal(JSON.stringify(body)), stamp());
   }
 
+  function anyGrantRow(): boolean {
+    return stmt(SELECT_ANY_GRANT).get() !== undefined;
+  }
+
   /**
-   * Raise the mark to `now_ms` (never lower). An unreadable mark is left as it
-   * is, unless `repair` (an online admission): then it is re-sealed at `now_ms`.
-   * Returns the mark after the call, or null when it is unreadable.
+   * F2 (10893): a mark that is missing while a grant row exists was deleted,
+   * not never written. It is as good as unreadable: a deleted mark plus a clock
+   * rollback must not extend a grant. With no grant at all it is a first run.
+   */
+  function readHwmChecked(): HwmRead {
+    const current = readHwm();
+    if (current.kind === 'ok' && current.hwm_ms === null && anyGrantRow()) {
+      return { kind: 'unreadable' };
+    }
+    return current;
+  }
+
+  /**
+   * Raise the mark to `now_ms` (never lower). An unreadable (or F2: deleted)
+   * mark is left as it is, unless `repair` (an online admission): then it is
+   * re-sealed at `now_ms`. Returns the mark after the call, or null when it is
+   * unreadable.
    */
   function raiseHwm(now_ms: number, repair: boolean): { hwm_ms: number; raised: boolean } | null {
-    const current = readHwm();
+    const current = readHwmChecked();
     if (current.kind === 'unreadable') {
       if (!repair) return null;
       writeHwm(now_ms);
@@ -707,7 +732,7 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
       try {
         deleteGrant(scope, body.user_id);
       } catch {
-        // P1.2 holds an in-memory tombstone for this case.
+        // The wiring holds an in-memory tombstone for this case (P1.2).
       }
       throw new OfflineGrantStoreError('storage');
     }
@@ -802,6 +827,25 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
       if (!outcome.admissible) return refused(outcome.category);
       log('info', { event: 'operator.offline_grant.consumed' });
       return { admissible: true, grant: grantView(outcome.body) };
+    },
+
+    nextPairingEpoch(candidate) {
+      try {
+        return tx(() => {
+          const current = readHwmChecked();
+          const above =
+            current.kind === 'ok' && current.hwm_ms !== null
+              ? Math.floor(current.hwm_ms / 1000) + 1
+              : 0;
+          const epoch = Math.max(candidate, above);
+          // An unreadable mark stays as it is (raiseHwm leaves it; no repair here).
+          raiseHwm(epoch * 1000, false);
+          return epoch;
+        });
+      } catch {
+        log('warn', { event: 'operator.offline_grant.storage_failed', op: 'pairing_epoch' });
+        return candidate;
+      }
     },
 
     observeClock(nowWall) {

@@ -349,6 +349,8 @@ secrets. The log lives under `%APPDATA%\pos-pulse\logs` for the account that
 launched it. Attach the line (not a screenshot of the environment dialog) to the
 incident.
 
+**Recovery from a forward clock jump (RT-113 offline sign-in):** after a clock that ran ahead is corrected, offline cashier admission stays refused until real time passes the highest time the POS saw (5 min tolerance); fix the time source (NTP) and keep trading online. Never set the clock forward again or edit the database.
+
 ## 8. Lab and dev launches — not pilot provisioning
 
 These exist for development and lab evidence. **None of them is a supported way to
