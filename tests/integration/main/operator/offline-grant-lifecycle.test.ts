@@ -481,7 +481,12 @@ describe('RT-113 P1.2 — the offline grant over the real cashier paths', () => 
           markSent();
         }),
     );
-    return { sent, answer: (r) => answer(r) };
+    return {
+      sent,
+      answer: (r) => {
+        answer(r);
+      },
+    };
   }
 
   it('rev545 probe A: signed out while a heartbeat is in flight, its 403 still invalidates the grant', async () => {

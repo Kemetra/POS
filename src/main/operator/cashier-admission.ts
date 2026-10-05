@@ -36,6 +36,12 @@ export interface CashierAdmittedEvent {
    * pairing. Absent when the seam does not track pairings.
    */
   pairing_generation?: number | undefined;
+  /**
+   * rev545 F-2 — the seam's invalidation sequence when the request was SENT
+   * ({@link OfflineGrantSeam.invalidationSeq}). A late `admitted` must not
+   * resurrect a grant invalidated after its request went out.
+   */
+  invalidation_seq?: number | undefined;
 }
 
 /**
@@ -59,6 +65,8 @@ export interface OfflineGrantSeam {
   onCashierAdmissionInvalidated(event: CashierAdmissionInvalidation): void;
   /** The current pairing, read when an admission request is SENT (Codex P1 4181552524). */
   pairingGeneration?(): number;
+  /** rev545 F-2: the invalidation sequence, read when an admission request is SENT. */
+  invalidationSeq?(): number;
 }
 
 export const NOOP_OFFLINE_GRANT_SEAM: OfflineGrantSeam = Object.freeze({
@@ -107,19 +115,28 @@ export function nextIdempotencyKey(deps: CashierAdmissionDeps): string {
   return (deps.newIdempotencyKey ?? newAdmissionIdempotencyKey)();
 }
 
-/** Who an outcome is for, and the pairing its request was sent under. */
-export interface AdmissionSubject {
-  user_id: string;
-  operator_id: string;
+/** What the grant seam recorded when a request was SENT (Codex P1 4181552524, rev545 F-2). */
+export interface AdmissionSendMark {
   pairing_generation?: number | undefined;
+  invalidation_seq?: number | undefined;
 }
 
-/** The seam's current pairing, read just before a request is sent. Never throws. */
-export function capturePairingGeneration(deps: CashierAdmissionDeps): number | undefined {
+/** Who an outcome is for, and the send mark of its request. */
+export interface AdmissionSubject extends AdmissionSendMark {
+  user_id: string;
+  operator_id: string;
+}
+
+/** The seam's send mark, read just before a request is sent. Never throws. */
+export function captureSendMark(deps: CashierAdmissionDeps): AdmissionSendMark {
   try {
-    return deps.grantSeam?.pairingGeneration?.();
+    const seam = deps.grantSeam;
+    return {
+      pairing_generation: seam?.pairingGeneration?.(),
+      invalidation_seq: seam?.invalidationSeq?.(),
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -146,6 +163,7 @@ export function notifyGrantSeam(
         server_time: result.server_time,
         received_at: (deps.now ?? (() => new Date()))().toISOString(),
         pairing_generation: who.pairing_generation,
+        invalidation_seq: who.invalidation_seq,
       });
     } else if (result.kind === 'refused' || result.kind === 'active_elsewhere') {
       seam.onCashierAdmissionInvalidated({ reason: result.kind, user_id: who.user_id });
@@ -309,14 +327,14 @@ export async function admitCashierOnline(
   // Stamped BEFORE the request goes out: the server's TTL runs from no
   // earlier than this, so a deadline from it is conservative under latency.
   const requested_at_ms = monotonicNowMs(deps);
-  const pairing_generation = capturePairingGeneration(deps);
+  const sent = captureSendMark(deps);
   const result = await deps.client.admit({
     mode: 'online',
     user_id: req.user_id,
     takeover: req.takeover,
     idempotency_key: req.idempotency_key,
   });
-  reportAdmissionOutcome(deps, result, { ...req, pairing_generation });
+  reportAdmissionOutcome(deps, result, { ...req, ...sent });
   return result.kind === 'admitted' ? { ...result, requested_at_ms } : result;
 }
 

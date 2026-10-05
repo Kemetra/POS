@@ -5,7 +5,7 @@ import type {
   CashierAdmissionResult,
 } from './cashier-admission-client.js';
 import {
-  capturePairingGeneration,
+  captureSendMark,
   endAdmissionTracked,
   monotonicNowMs,
   takeUncertainEnd,
@@ -185,7 +185,16 @@ interface Armed {
   device401s: number;
   /** Codex P1 4181552524: the pairing the in-flight (or last) heartbeat was sent under. */
   pairing_generation?: number | undefined;
+  /** rev545 F-2: the grant seam's invalidation sequence when that heartbeat was sent. */
+  invalidation_seq?: number | undefined;
 }
+
+/** Outcomes that invalidate offline grants (D4, OD5, OD6), even for an orphaned heartbeat. */
+const INVALIDATING_KINDS: ReadonlySet<CashierAdmissionResult['kind']> = new Set([
+  'refused',
+  'active_elsewhere',
+  'device_unauthorized',
+]);
 
 /** True when the record holds a live online cashier admission to keep alive. */
 function isOnlineAdmitted(
@@ -417,7 +426,9 @@ export class CashierAdmissionKeeper {
     if (!this.stillCurrent(armed) || armed.latched) return;
     // Stamped before the request goes out: a renewal's deadline runs from here.
     armed.last_sent_at_ms = this.nowMs();
-    armed.pairing_generation = capturePairingGeneration(this.deps.admission);
+    const mark = captureSendMark(this.deps.admission);
+    armed.pairing_generation = mark.pairing_generation;
+    armed.invalidation_seq = mark.invalidation_seq;
     const seq = ++armed.sent_seq;
     const result = await this.requestHeartbeat(armed);
     // RT-198 latch + session identity: re-checked after the await.
@@ -456,6 +467,9 @@ export class CashierAdmissionKeeper {
    * the orphan request renewed the LIVE admission, so verify it early.
    */
   private releaseOrphan(result: CashierAdmissionResult, orphanOf: Armed): void {
+    // rev545 F-1: a 403, `active_elsewhere` or device 401 for a session that is
+    // gone still invalidates the offline grant (fail closed; D4, OD5).
+    if (INVALIDATING_KINDS.has(result.kind)) notifyGrantSeam(this.deps.admission, result, orphanOf);
     if (result.kind !== 'admitted') return;
     const live = this.armed;
     if (live?.admission_id === result.admission_id) {

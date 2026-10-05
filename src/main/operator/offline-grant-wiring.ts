@@ -142,6 +142,28 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
    * of pairing B.
    */
   let pairingGeneration = 0;
+  /**
+   * rev545 F-2 — a clock bumped on every invalidation event, with the clock
+   * value of each user's (and the terminal-wide) latest one. An `admitted` whose
+   * request was sent before an invalidation for that user is dropped, so a late
+   * answer never resurrects a grant that was just invalidated.
+   */
+  let invalidationSeq = 0;
+  const userInvalidatedAt = new Map<string, number>();
+  let terminalInvalidatedAt = 0;
+
+  function noteInvalidation(event: CashierAdmissionInvalidation): void {
+    invalidationSeq += 1;
+    if (event.reason === 'device_unauthorized') terminalInvalidatedAt = invalidationSeq;
+    else userInvalidatedAt.set(event.user_id, invalidationSeq);
+  }
+
+  /** True when the request was sent before an invalidation for this user (or unknown). */
+  function invalidatedSinceSent(event: CashierAdmittedEvent): boolean {
+    if (event.invalidation_seq === undefined) return true;
+    const last = Math.max(userInvalidatedAt.get(event.user_id) ?? 0, terminalInvalidatedAt);
+    return last > event.invalidation_seq;
+  }
 
   function log(level: 'info' | 'warn', fields: Record<string, string | number>): void {
     try {
@@ -225,6 +247,10 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       log('info', { event: 'operator.offline_grant.stale_result' });
       return;
     }
+    if (invalidatedSinceSent(event)) {
+      log('info', { event: 'operator.offline_grant.superseded_result' });
+      return;
+    }
     try {
       const result = deps.store.upsertFromAdmitted(at, event);
       // A fresh server admission: the store now holds this user's true state.
@@ -267,6 +293,7 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
       // (fail closed) and the next `admitted` restores it; dropping it could
       // drop a real refusal.
       if (stopped) return;
+      noteInvalidation(event);
       if (event.reason === 'device_unauthorized') {
         onDeviceUnauthorized();
         return;
@@ -275,6 +302,9 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     },
     pairingGeneration() {
       return pairingGeneration;
+    },
+    invalidationSeq() {
+      return invalidationSeq;
     },
   };
 
@@ -412,7 +442,7 @@ type PairingHooks = Pick<
  * (`paired_at` is raised past the clock mark when it would repeat). The grant
  * scope then follows the pairing. Every other method passes through.
  */
-export function withOfflineGrantPairing(inner: PairingStore, grants: PairingHooks): PairingStore {
+export function withOfflineGrantPairing<S extends PairingStore>(inner: S, grants: PairingHooks): S {
   async function rebindFromStatus(): Promise<void> {
     try {
       grants.setScope(scopeFromPairingStatus(await inner.getStatus()));
