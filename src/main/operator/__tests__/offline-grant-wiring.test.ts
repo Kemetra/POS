@@ -1082,6 +1082,127 @@ describe('every invalidation path keeps the four invariants (Codex P1 4183852355
   });
 });
 
+// ── Held terminal-wide operations merge by strength (Codex P2 4184105427) ──
+//
+// purge > invalidate_all: a pending operation is never replaced by a weaker
+// one, and a retry lifts the hold only once the strongest held op applied.
+
+type HeldOp = 'invalidate_all' | 'purge';
+
+describe('held terminal-wide operations merge by strength (Codex P2 4184105427)', () => {
+  function rig(): { w: OfflineGrantWiring; broken: Set<keyof OfflineGrantStore> } {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const broken = new Set<keyof OfflineGrantStore>();
+    const proxy = new Proxy(store, {
+      get(target, prop: keyof OfflineGrantStore) {
+        if (broken.has(prop)) {
+          return () => {
+            throw new Error('store down');
+          };
+        }
+        return target[prop];
+      },
+    });
+    const w = makeWiring({ store: proxy });
+    w.setScope(scope());
+    w.seam.onCashierAdmitted(current(w));
+    w.seam.onCashierAdmitted(current(w, { user_id: USER_2, operator_id: OPERATOR_2 }));
+    w.start();
+    return { w, broken };
+  }
+
+  /** Make `op` fail and stay held. */
+  function holdOp(w: OfflineGrantWiring, broken: Set<keyof OfflineGrantStore>, op: HeldOp): void {
+    broken.add('invalidateAll');
+    broken.add('purgeAll');
+    if (op === 'purge') {
+      w.onPairingChange('repair');
+      w.setScope(scope());
+    } else {
+      w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
+    }
+    broken.clear();
+  }
+
+  it.each([
+    ['invalidate_all', 'invalidate_all', 'invalidate_all'],
+    ['invalidate_all', 'purge', 'purge'],
+    ['purge', 'invalidate_all', 'purge'],
+    ['purge', 'purge', 'purge'],
+  ] as const)('held %s + incoming %s → %s applied by the tick', (held, incoming, merged) => {
+    const { w, broken } = rig();
+    holdOp(w, broken, held);
+    holdOp(w, broken, incoming);
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    if (merged === 'purge') {
+      expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    } else {
+      expect(rows(g.raw, 'cashier_offline_grants')).toHaveLength(2);
+      expect(store.evaluate(scope(), USER, T0)).toEqual(refusal('grant_invalidated'));
+    }
+    w.stop();
+  });
+
+  it('per-user tombstones held alongside a pending purge: both stay until the purge applies', () => {
+    const { w, broken } = rig();
+    holdOp(w, broken, 'purge');
+    broken.add('invalidate');
+    w.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER });
+    broken.clear();
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    expect(w.evaluate(USER_2, T0)).toEqual(refusal('grant_invalidated'));
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    w.stop();
+  });
+
+  it("Codex's scenario: purge pending, then a 401, then the pairing completes, then the tick: every scope purged and audited", () => {
+    const { w, broken } = rig();
+    store.upsertFromAdmitted(
+      scope({ terminal_id: 'terminal-old' }),
+      admitted({ operator_id: 'op-old' }),
+    );
+    // A re-pair whose purge fails: the purge is held, the scope is null.
+    broken.add('invalidateAll');
+    broken.add('purgeAll');
+    w.onPairingChange('repair');
+    // A delayed heartbeat 401 lands while the scope is null (and the store is still down).
+    w.seam.onCashierAdmissionInvalidated({ reason: 'device_unauthorized' });
+    broken.clear();
+    // The pairing completes.
+    w.setScope(scope({ terminal_id: 'terminal-new', pairing_epoch: EPOCH + 1 }));
+    audits = [];
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    expect(
+      audits.map((a) => [a.payload['reason'], a.acting_operator_id, a.originating_terminal_id]),
+    ).toEqual(
+      expect.arrayContaining([
+        ['repair', OPERATOR, TERMINAL],
+        ['repair', OPERATOR_2, TERMINAL],
+        ['repair', 'op-old', 'terminal-old'],
+      ]),
+    );
+    expect(audits).toHaveLength(3);
+    w.stop();
+  });
+
+  it('a failed retry keeps the strongest hold for the next tick', () => {
+    const { w, broken } = rig();
+    holdOp(w, broken, 'purge');
+    holdOp(w, broken, 'invalidate_all');
+    broken.add('purgeAll');
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(rows(g.raw, 'cashier_offline_grants')).toHaveLength(2);
+    expect(w.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    broken.clear();
+    vi.advanceTimersByTime(OFFLINE_GRANT_CLOCK_TICK_MS);
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
+    w.stop();
+  });
+});
+
 describe('scopeFromPairingStatus', () => {
   it('takes the scope and epoch from a paired status, null otherwise', () => {
     expect(
