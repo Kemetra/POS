@@ -39,6 +39,12 @@ export interface CashierAdmissionFields {
   admission_ttl_seconds: number;
   offline_grace_seconds: number;
   /**
+   * RT-219 — the opaque `admission_generation` of the LATEST `admitted` for
+   * `admission_id` (sign-in, takeover or ANY heartbeat, even one that keeps the
+   * same id). The `end` echoes it. Never parsed, ordered or logged.
+   */
+  admission_generation: string;
+  /**
    * Codex P2 4179771036 — when the request that got the latest `admitted` was
    * SENT, on the monotonic clock (`performance.now()`). The admission lapses
    * at this + TTL on the server at the latest; the keeper retries before it.
@@ -74,6 +80,8 @@ export interface OperatorSessionRecord {
   admission_id?: string;
   admission_ttl_seconds?: number;
   offline_grace_seconds?: number;
+  /** See {@link CashierAdmissionFields.admission_generation}. Main-only (RT-219). */
+  admission_generation?: string;
   /** See {@link CashierAdmissionFields.admission_requested_at_ms}. Main-only. */
   admission_requested_at_ms?: number;
   /**
@@ -156,6 +164,7 @@ export class SessionManager {
       record.admission_id = a.admission_id;
       record.admission_ttl_seconds = a.admission_ttl_seconds;
       record.offline_grace_seconds = a.offline_grace_seconds;
+      record.admission_generation = a.admission_generation;
       if (a.admission_requested_at_ms !== undefined) {
         record.admission_requested_at_ms = a.admission_requested_at_ms;
       }
@@ -183,6 +192,7 @@ export class SessionManager {
     this.current.admission_id = admission.admission_id;
     this.current.admission_ttl_seconds = admission.admission_ttl_seconds;
     this.current.offline_grace_seconds = admission.offline_grace_seconds;
+    this.current.admission_generation = admission.admission_generation;
     if (admission.admission_requested_at_ms !== undefined) {
       this.current.admission_requested_at_ms = admission.admission_requested_at_ms;
     }

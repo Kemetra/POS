@@ -70,7 +70,14 @@ import type {
  * these is ALSO capped by the deadline. A late `admitted` for a session that
  * is gone ends that admission unless the live session holds it (review F7).
  *
- * Logs carry the outcome kind only: no admission id, user id, key or name.
+ * RT-219 (contract 1.1.0-draft): every `end` echoes the `admission_generation`
+ * of the LATEST `admitted` for that admission. Sign-in and takeover set it, and
+ * EVERY heartbeat `admitted` replaces it, even when the id is unchanged. A late
+ * `end` is then a server-side no-op once the admission has been renewed after
+ * it. An orphan release echoes the generation of the orphan response itself.
+ *
+ * Logs carry the outcome kind only: no admission id, user id, key, name or
+ * generation.
  */
 
 /** How often a latched session re-checks for its next safe point (backstop). */
@@ -141,6 +148,8 @@ export interface AdmissionDeadline {
 /** An admission to end, and the user whose re-admission must wait for it. */
 interface AdmissionToEnd {
   admission_id: string;
+  /** RT-219: from the latest `admitted` for `admission_id`; echoed on `end`. */
+  admission_generation: string;
   user_id: string | undefined;
 }
 
@@ -149,6 +158,8 @@ interface Armed {
   user_id: string;
   operator_id: string;
   admission_id: string;
+  /** RT-219: replaced by every `admitted`; the `end` echoes it. */
+  admission_generation: string;
   ttl_seconds: number;
   deadline: AdmissionDeadline;
   /** When the in-flight (or last) heartbeat was sent; heartbeats never overlap. */
@@ -165,10 +176,18 @@ interface Armed {
 function isOnlineAdmitted(
   record: OperatorSessionRecord,
 ): record is OperatorSessionRecord &
-  Required<Pick<OperatorSessionRecord, 'user_id' | 'admission_id' | 'admission_ttl_seconds'>> {
-  const fieldsPresent = [record.admission_id, record.user_id, record.admission_ttl_seconds].every(
-    (f) => f !== undefined,
-  );
+  Required<
+    Pick<
+      OperatorSessionRecord,
+      'user_id' | 'admission_id' | 'admission_generation' | 'admission_ttl_seconds'
+    >
+  > {
+  const fieldsPresent = [
+    record.admission_id,
+    record.admission_generation,
+    record.user_id,
+    record.admission_ttl_seconds,
+  ].every((f) => f !== undefined);
   return record.authority === 'online_confirmed' && fieldsPresent;
 }
 
@@ -185,6 +204,7 @@ function armedFor(record: OperatorSessionRecord, clock: () => number): Armed | n
     user_id: record.user_id,
     operator_id: record.operator_id,
     admission_id: record.admission_id,
+    admission_generation: record.admission_generation,
     ttl_seconds: record.admission_ttl_seconds,
     deadline: { requested_at_ms: sentAt, ttl_ms: record.admission_ttl_seconds * 1000 },
     last_sent_at_ms: sentAt,
@@ -292,8 +312,12 @@ export class CashierAdmissionKeeper {
       this.endAdmission(armed);
       return;
     }
-    if (record.admission_id !== undefined) {
-      this.endAdmission({ admission_id: record.admission_id, user_id: record.user_id });
+    if (record.admission_id !== undefined && record.admission_generation !== undefined) {
+      this.endAdmission({
+        admission_id: record.admission_id,
+        admission_generation: record.admission_generation,
+        user_id: record.user_id,
+      });
     }
   }
 
@@ -362,11 +386,19 @@ export class CashierAdmissionKeeper {
    * Review F7: an `admitted` for a session that is gone leaves a live server
    * admission behind. End it, unless the live session holds that same id
    * (same-device re-admission returns the same `admission_id`).
+   *
+   * RT-219 (closes RT-219 10869 item 2): the `end` echoes THIS response's
+   * generation. If a re-sign-in renews the admission before the `end` lands,
+   * the server ignores it instead of ending the renewed admission.
    */
   private releaseOrphan(result: CashierAdmissionResult, orphanOf: Armed): void {
     if (result.kind !== 'admitted') return;
     if (this.armed?.admission_id === result.admission_id) return;
-    this.endAdmission({ admission_id: result.admission_id, user_id: orphanOf.user_id });
+    this.endAdmission({
+      admission_id: result.admission_id,
+      admission_generation: result.admission_generation,
+      user_id: orphanOf.user_id,
+    });
   }
 
   private handleOutcome(armed: Armed, result: CashierAdmissionResult): void {
@@ -400,6 +432,8 @@ export class CashierAdmissionKeeper {
       );
       armed.admission_id = result.admission_id;
     }
+    // RT-219: every renewal changes the generation, even with the same id.
+    armed.admission_generation = result.admission_generation;
     armed.ttl_seconds = result.admission_ttl_seconds;
     armed.deadline = {
       requested_at_ms: armed.last_sent_at_ms,
@@ -409,6 +443,7 @@ export class CashierAdmissionKeeper {
       admission_id: result.admission_id,
       admission_ttl_seconds: result.admission_ttl_seconds,
       offline_grace_seconds: result.offline_grace_seconds,
+      admission_generation: result.admission_generation,
       admission_requested_at_ms: armed.last_sent_at_ms,
     });
     this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
@@ -476,11 +511,14 @@ export class CashierAdmissionKeeper {
    * re-admission of the same user waits for it (review of 024f07c, item 3).
    */
   private endAdmission(ending: AdmissionToEnd): void {
-    void endAdmissionTracked(this.deps.admission, ending.admission_id, ending.user_id).then(
-      (res) => {
-        this.logEnd(res.kind);
-      },
-    );
+    void endAdmissionTracked(
+      this.deps.admission,
+      ending.admission_id,
+      ending.admission_generation,
+      ending.user_id,
+    ).then((res) => {
+      this.logEnd(res.kind);
+    });
   }
 
   private logEnd(outcome: string): void {

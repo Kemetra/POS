@@ -215,14 +215,19 @@ export function takeUncertainEnd(deps: CashierAdmissionDeps, user_id: string): b
  * it is in flight it is remembered for `user_id`, so a re-admission of that
  * user on this device waits for it ({@link awaitPendingEnd}) instead of being
  * renewed by the server and then killed by this late `end`.
+ *
+ * RT-219: `admission_generation` is echoed, so the server ignores this `end`
+ * if the admission was renewed after it. The wait above and the RT-220 early
+ * verification stay as backstops.
  */
 export function endAdmissionTracked(
   deps: CashierAdmissionDeps,
   admission_id: string,
+  admission_generation: string,
   user_id: string | undefined,
 ): Promise<TrackedEndResult> {
   const ending: Promise<TrackedEndResult> = deps.client
-    .end(admission_id)
+    .end(admission_id, admission_generation)
     .catch((): TrackedEndResult => ({ kind: 'threw' }));
   if (user_id === undefined) return ending;
   let byUser = pendingEnds.get(deps);
