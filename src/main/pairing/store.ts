@@ -234,6 +234,33 @@ export interface CreatePairingStoreOptions {
   now?: () => Date;
 }
 
+type TokenState = { kind: 'present' } | { kind: 'absent' } | { kind: 'decrypt_failed' };
+
+/**
+ * The status of an UNREVOKED row and the token half (the revoked check runs
+ * first, before and after the token read — see `getStatus`).
+ */
+function statusFrom(tokenState: TokenState, row: StoredAssignmentRow | null): PairingStatus {
+  // decrypt_failed dominates the rest: the operator's first concern is
+  // "the SecretStore is unhealthy on this machine". The orphan
+  // direction beneath does not matter for the recovery flow.
+  if (tokenState.kind === 'decrypt_failed') return { kind: 'invalid', reason: 'decrypt_failed' };
+  const tokenPresent = tokenState.kind === 'present';
+  if (row === null)
+    return tokenPresent ? { kind: 'invalid', reason: 'missing_token' } : { kind: 'unpaired' };
+  if (!tokenPresent) return { kind: 'invalid', reason: 'orphaned_row' };
+  return {
+    kind: 'paired',
+    tenant_id: row.tenant_id,
+    branch_id: row.branch_id,
+    terminal_id: row.terminal_id,
+    terminal_label: row.terminal_label,
+    paired_at: row.paired_at,
+  };
+}
+
+const DEVICE_REVOKED_STATUS: PairingStatus = { kind: 'invalid', reason: 'device_revoked' };
+
 export function createPairingStore(
   options: CreatePairingStoreOptions,
 ): PairingStore & DeviceRevocationStore {
@@ -250,6 +277,12 @@ export function createPairingStore(
 
   function rowRevoked(row: StoredAssignmentRow): boolean {
     return revokedInMemory || typeof row.device_revoked_at === 'number';
+  }
+
+  /** SYNC: is the CURRENT row revoked (in-memory latch or durable marker)? */
+  function isRevokedNow(): boolean {
+    const row = db.readAssignment();
+    return row !== null && rowRevoked(row);
   }
 
   /**
@@ -280,40 +313,18 @@ export function createPairingStore(
 
   return {
     async getStatus(): Promise<PairingStatus> {
-      const row = db.readAssignment();
       // RT-215 (review F7): the pairing row is the source of truth for
       // revocation, and it is reported FIRST — whatever state the token half
       // is in, even an undecryptable one, the terminal must re-pair.
-      if (row !== null && rowRevoked(row)) {
-        return { kind: 'invalid', reason: 'device_revoked' };
-      }
+      if (isRevokedNow()) return DEVICE_REVOKED_STATUS;
 
       const tokenState = await readTokenState();
 
-      // decrypt_failed dominates the rest: the operator's first concern is
-      // "the SecretStore is unhealthy on this machine". The orphan
-      // direction beneath does not matter for the recovery flow.
-      if (tokenState.kind === 'decrypt_failed') {
-        return { kind: 'invalid', reason: 'decrypt_failed' };
-      }
-
-      const tokenPresent = tokenState.kind === 'present';
-      const rowPresent = row !== null;
-
-      if (!tokenPresent && !rowPresent) return { kind: 'unpaired' };
-      if (tokenPresent && rowPresent) {
-        return {
-          kind: 'paired',
-          tenant_id: row.tenant_id,
-          branch_id: row.branch_id,
-          terminal_id: row.terminal_id,
-          terminal_label: row.terminal_label,
-          paired_at: row.paired_at,
-        };
-      }
-      // tokenPresent XOR rowPresent — orphan in one direction.
-      if (rowPresent) return { kind: 'invalid', reason: 'orphaned_row' };
-      return { kind: 'invalid', reason: 'missing_token' };
+      // Codex P1 4186568808: the revocation may have been latched while the
+      // token read was pending. Re-read the row after the await and check
+      // again, so `paired` is never reported for a revoked device.
+      if (isRevokedNow()) return DEVICE_REVOKED_STATUS;
+      return statusFrom(tokenState, db.readAssignment());
     },
 
     getStoredPairingEpoch(): number | null {
@@ -384,8 +395,7 @@ export function createPairingStore(
     },
 
     isDeviceRevoked(): boolean {
-      const row = db.readAssignment();
-      return row !== null && rowRevoked(row);
+      return isRevokedNow();
     },
 
     getPairingEpoch(): string | null {

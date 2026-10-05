@@ -360,3 +360,100 @@ describe('PairingStore — pairing epoch + isDeviceRevoked (RT-215, Codex P1)', 
     expect(s.getPairingEpoch()).toBeNull();
   });
 });
+
+// ── Codex P1 4186568808: revoked DURING an await ────────────────────────────
+
+describe('Codex P1 4186568808 — a revocation latched during an await wins', () => {
+  /** A SecretStore whose `get` is held until released; `called` resolves once it is reached. */
+  function heldSecrets(inner: SecretStore) {
+    let release: () => void = () => undefined;
+    let reached: () => void = () => undefined;
+    const called = new Promise<void>((r) => {
+      reached = r;
+    });
+    const held: SecretStore = {
+      ...inner,
+      get: (k) =>
+        new Promise((resolve, reject) => {
+          release = () => {
+            inner.get(k).then(resolve, reject);
+          };
+          reached();
+        }),
+    };
+    return {
+      held,
+      called,
+      release: () => {
+        release();
+      },
+    };
+  }
+
+  function storeOver(secretStore: SecretStore) {
+    return createPairingStore({
+      secretStore,
+      db: bindPairingStoreDb(handle),
+      deviceTokenKey: KEY,
+      now: () => NOW,
+    });
+  }
+
+  it('getStatus: revoked while the token read is pending → device_revoked, not paired', async () => {
+    await store().persist(pairing('term-1'));
+    const h = heldSecrets(secrets);
+    const s = storeOver(h.held);
+    const pending = s.getStatus();
+    await h.called;
+    s.markDeviceRevoked(); // the detector confirms while the read is pending
+    h.release();
+    await expect(pending).resolves.toEqual(DEVICE_REVOKED);
+  });
+
+  it('sendable reader: revoked while ITS token read is pending → null (the token is never handed out)', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    const h = heldSecrets(secrets);
+    const read = createSendableDeviceTokenReader({
+      pairingStore: s, // its status read is not held: it reports paired
+      secretStore: h.held,
+      deviceTokenKey: KEY,
+    });
+    const pending = read();
+    await h.called;
+    s.markDeviceRevoked();
+    h.release();
+    await expect(pending).resolves.toBeNull();
+  });
+
+  it('sendable reader: revoked during the status read → null', async () => {
+    await store().persist(pairing('term-1'));
+    const h = heldSecrets(secrets);
+    const s = storeOver(h.held);
+    const read = createSendableDeviceTokenReader({
+      pairingStore: s,
+      secretStore: secrets,
+      deviceTokenKey: KEY,
+    });
+    const pending = read();
+    await h.called;
+    s.markDeviceRevoked();
+    h.release();
+    await expect(pending).resolves.toBeNull();
+  });
+
+  it('control: no revocation during the reads → the token is handed out', async () => {
+    const s = store();
+    await s.persist(pairing('term-1'));
+    const h = heldSecrets(secrets);
+    const read = createSendableDeviceTokenReader({
+      pairingStore: s,
+      secretStore: h.held,
+      deviceTokenKey: KEY,
+    });
+    const pending = read();
+    await h.called;
+    h.release();
+    await expect(pending).resolves.toBe(TOKEN);
+  });
+});

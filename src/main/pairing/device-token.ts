@@ -1,6 +1,6 @@
 import type { SecretKey, SecretStore } from '../../shared/secret-store.js';
 
-import type { PairingStore } from './store.js';
+import type { DeviceRevocationStore, PairingStore } from './store.js';
 
 /**
  * RT-215 — the ONE reader of the device token for SENDING it to Backend-Core.
@@ -16,7 +16,13 @@ import type { PairingStore } from './store.js';
  * returned to an in-process caller only and is never logged here.
  */
 export interface SendableDeviceTokenReaderDeps {
-  pairingStore: Pick<PairingStore, 'getStatus'>;
+  /**
+   * `isDeviceRevoked` (the real store has it) is re-checked SYNCHRONOUSLY
+   * after the last await, right before the token is handed out (Codex P1
+   * 4186568808): a revocation latched while a read was pending wins.
+   */
+  pairingStore: Pick<PairingStore, 'getStatus'> &
+    Partial<Pick<DeviceRevocationStore, 'isDeviceRevoked'>>;
   secretStore: Pick<SecretStore, 'get'>;
   deviceTokenKey: SecretKey;
 }
@@ -29,6 +35,8 @@ export function createSendableDeviceTokenReader(
       const status = await deps.pairingStore.getStatus();
       if (status.kind !== 'paired') return null;
       const token = await deps.secretStore.get(deps.deviceTokenKey);
+      // Nothing awaits between this check and handing the token out.
+      if (deps.pairingStore.isDeviceRevoked?.() === true) return null;
       return token !== null && token.length > 0 ? token : null;
     } catch {
       return null;
