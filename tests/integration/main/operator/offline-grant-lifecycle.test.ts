@@ -297,6 +297,7 @@ function seedOtherCashier(w: Wired): void {
     server_time: '2026-10-04T10:00:00.000Z',
     received_at: new Date().toISOString(),
     pairing_generation: w.grants.seam.pairingGeneration?.(),
+    invalidation_seq: w.grants.seam.invalidationSeq?.(),
   });
 }
 
@@ -463,6 +464,67 @@ describe('RT-113 P1.2 — the offline grant over the real cashier paths', () => 
     answer(json(200, ADMITTED_BODY));
     await vi.advanceTimersByTimeAsync(0);
     expect(grantRows()).toBe(0);
+    w.keeper.stop();
+  });
+
+  /** Push a deferred answer for the next admission request; resolves once sent. */
+  function deferNext(w: Wired): { sent: Promise<void>; answer: (r: Response) => void } {
+    let answer: (r: Response) => void = () => undefined;
+    let markSent: () => void = () => undefined;
+    const sent = new Promise<void>((resolve) => {
+      markSent = resolve;
+    });
+    w.answers.push(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+          markSent();
+        }),
+    );
+    return { sent, answer: (r) => answer(r) };
+  }
+
+  it('rev545 probe A: signed out while a heartbeat is in flight, its 403 still invalidates the grant', async () => {
+    const w = wire();
+    await signIn(w);
+    const hb = deferNext(w);
+    await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
+    await hb.sent;
+    await w.invoke(OPERATOR_IPC_CHANNELS.SIGN_OUT);
+    hb.answer(errorJson(403));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(admissibleNow(w)).toBe(false);
+    expect(w.audits.map((a) => a.payload)).toEqual([{ reason: 'forbidden' }]);
+    w.keeper.stop();
+  });
+
+  it('rev545 probe B: signed out while a heartbeat is in flight, its 401 invalidates every grant', async () => {
+    const w = wire();
+    await signIn(w);
+    seedOtherCashier(w);
+    const hb = deferNext(w);
+    await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
+    await hb.sent;
+    await w.invoke(OPERATOR_IPC_CHANNELS.SIGN_OUT);
+    hb.answer(errorJson(401));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(admissibleNow(w)).toBe(false);
+    expect(admissibleNow(w, OTHER_USER_ID)).toBe(false);
+    w.keeper.stop();
+  });
+
+  it("rev545 probe C: a 403 sign-in for U lands while U's heartbeat is in flight; the late admitted does not resurrect the grant", async () => {
+    const w = wire();
+    await signIn(w);
+    const hb = deferNext(w);
+    await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
+    await hb.sent;
+    w.answers.push(() => errorJson(403));
+    await signIn(w);
+    expect(admissibleNow(w)).toBe(false);
+    hb.answer(json(200, ADMITTED_BODY));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(admissibleNow(w)).toBe(false);
     w.keeper.stop();
   });
 

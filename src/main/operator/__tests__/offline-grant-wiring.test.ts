@@ -142,7 +142,11 @@ function current(
   w: OfflineGrantWiring,
   over: Partial<CashierAdmittedEvent> = {},
 ): CashierAdmittedEvent {
-  return admitted({ pairing_generation: w.seam.pairingGeneration?.(), ...over });
+  return admitted({
+    pairing_generation: w.seam.pairingGeneration?.(),
+    invalidation_seq: w.seam.invalidationSeq?.(),
+    ...over,
+  });
 }
 
 function admit(over: Partial<CashierAdmittedEvent> = {}): void {
@@ -286,8 +290,66 @@ describe('an admission result is bound to the pairing that sent it (Codex P1 418
 
   it('a result for the current pairing is written', () => {
     const sentUnder = wiring.seam.pairingGeneration?.();
-    wiring.seam.onCashierAdmitted(admitted({ pairing_generation: sentUnder }));
+    wiring.seam.onCashierAdmitted(
+      admitted({
+        pairing_generation: sentUnder,
+        invalidation_seq: wiring.seam.invalidationSeq?.(),
+      }),
+    );
     expect(wiring.evaluate(USER, T0).admissible).toBe(true);
+  });
+});
+
+describe('a late admitted never resurrects a grant invalidated after its request was sent (rev545 F-2)', () => {
+  /** What a request records when it is SENT. */
+  function sent(): Partial<CashierAdmittedEvent> {
+    return {
+      pairing_generation: wiring.seam.pairingGeneration?.(),
+      invalidation_seq: wiring.seam.invalidationSeq?.(),
+    };
+  }
+
+  it('probe F: a 403 for U after the request was sent drops its late admitted', () => {
+    admit();
+    const inFlight = sent();
+    invalidate({ reason: 'refused', user_id: USER });
+    wiring.seam.onCashierAdmitted(admitted(inFlight));
+    expect(wiring.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+    expect(body()['invalidated']).toMatchObject({ reason: 'forbidden' });
+    expect(JSON.stringify(logCalls)).toContain('operator.offline_grant.superseded_result');
+  });
+
+  it.each([
+    { reason: 'active_elsewhere', user_id: USER },
+    { reason: 'device_unauthorized' },
+  ] as const)('%o after the request was sent drops its late admitted too', (inv) => {
+    admit();
+    const inFlight = sent();
+    invalidate(inv);
+    wiring.seam.onCashierAdmitted(admitted(inFlight));
+    expect(wiring.evaluate(USER, T0)).toEqual(refusal('grant_invalidated'));
+  });
+
+  it("another user's invalidation does not drop U's admitted", () => {
+    admit({ user_id: USER_2, operator_id: OPERATOR_2 });
+    const inFlight = sent();
+    invalidate({ reason: 'refused', user_id: USER_2 });
+    wiring.seam.onCashierAdmitted(admitted(inFlight));
+    expect(wiring.evaluate(USER, T0).admissible).toBe(true);
+  });
+
+  it('a request sent after the invalidation is written (the next admitted restores)', () => {
+    admit();
+    invalidate({ reason: 'refused', user_id: USER });
+    wiring.seam.onCashierAdmitted(admitted(sent()));
+    expect(wiring.evaluate(USER, T0).admissible).toBe(true);
+  });
+
+  it('an admitted that does not say when it was sent is dropped (fail closed)', () => {
+    wiring.seam.onCashierAdmitted(
+      admitted({ pairing_generation: wiring.seam.pairingGeneration?.() }),
+    );
+    expect(rows(g.raw, 'cashier_offline_grants')).toEqual([]);
   });
 });
 
@@ -732,6 +794,38 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     const oldBody = grantBlob(g.raw);
     g.raw.run('DELETE FROM cashier_offline_clock_hwm');
     await pairing.persist(pairInput());
+    g.raw.run(
+      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
+       VALUES (?, ?, ?, ?, ?, 'x')`,
+      [TENANT, BRANCH, TERMINAL, USER, oldBody],
+    );
+    expect(wiring.evaluate(USER, T0).admissible).toBe(false);
+  });
+
+  it('rev545 F-5: scope lost while paired (re-read threw), mark deleted, clear and a same-second re-pair: an old body is refused', async () => {
+    await pairing.persist(pairInput());
+    admit();
+    const oldBody = grantBlob(g.raw);
+    // A re-pair whose persist fails, and whose status re-read throws: the
+    // grants are purged and the wiring no longer knows the (still paired) scope.
+    let statusThrows = false;
+    const flaky: PairingStore = {
+      ...inner,
+      getStatus: () => (statusThrows ? Promise.reject(new Error('dpapi')) : inner.getStatus()),
+      persist: () => {
+        statusThrows = true;
+        return Promise.reject(new Error('disk full'));
+      },
+    };
+    await expect(withOfflineGrantPairing(flaky, wiring).persist(pairInput())).rejects.toThrow(
+      'disk full',
+    );
+    statusThrows = false;
+    expect(wiring.evaluate(USER, T0)).toEqual(refusal('scope_mismatch'));
+    expect((await inner.getStatus()).kind).toBe('paired');
+    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    await pairing.clear();
+    await pairing.persist(pairInput()); // the same paired_at second
     g.raw.run(
       `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
        VALUES (?, ?, ?, ?, ?, 'x')`,
