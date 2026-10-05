@@ -140,6 +140,8 @@ interface Wired {
   grants: OfflineGrantWiring;
   audits: AuditEvent[];
   logLines: string[];
+  /** The idempotency key of every admission request, in order. */
+  keys: string[];
 }
 
 let g: GrantDb;
@@ -147,9 +149,14 @@ let store: OfflineGrantStore;
 
 function wire(grantStore: OfflineGrantStore = store): Wired {
   const answers: (() => Response | Promise<Response>)[] = [];
+  const keys: string[] = [];
   const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const path = urlOf(input).slice(BASE.length);
     if (init?.method === 'POST' && path === ADMISSIONS) {
+      const sentBody = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as {
+        idempotency_key: string;
+      };
+      keys.push(sentBody.idempotency_key);
       return Promise.resolve((answers.shift() ?? (() => json(200, ADMITTED_BODY)))());
     }
     if (path.endsWith('/end')) return Promise.resolve(json(200, { kind: 'ended' }));
@@ -266,7 +273,7 @@ function wire(grantStore: OfflineGrantStore = store): Wired {
     if (fn === undefined) throw new Error(`no handler for ${channel}`);
     return await fn({} as IpcMainInvokeEvent, ...args);
   };
-  return { invoke, answers, sessions, keeper, grants, audits, logLines };
+  return { invoke, answers, sessions, keeper, grants, audits, logLines, keys };
 }
 
 function signIn(w: Wired): Promise<unknown> {
@@ -349,6 +356,77 @@ describe('RT-113 P1.2 — the offline grant over the real cashier paths', () => 
     })) as { kind: string };
     expect(confirmed.kind).toBe('signed_in');
     expect(admissibleNow(w)).toBe(true);
+    w.keeper.stop();
+  });
+
+  // ── Codex P1 4185012967: the send mark travels with the idempotency key ──
+  //
+  // A request whose response was lost is retried. If the retry REUSES the key
+  // (takeover), Backend-Core may replay the original `admitted`: it must carry
+  // the mark of the FIRST send, so an invalidation in between still drops it.
+  // A retry with a NEW key (sign-in, heartbeat) is a new request: its own mark.
+
+  /** The response of the next admission request is lost (the request may have committed). */
+  function loseNextResponse(w: Wired): void {
+    w.answers.push(() => Promise.reject(new TypeError('network: response lost')));
+  }
+
+  function invalidateUserNow(w: Wired): void {
+    w.grants.seam.onCashierAdmissionInvalidated({ reason: 'refused', user_id: USER_ID });
+  }
+
+  const RETRY_PATHS: {
+    path: string;
+    sameKey: boolean;
+    run: (w: Wired) => Promise<void>;
+  }[] = [
+    {
+      path: "takeover retry, the SAME key (Codex's scenario: Backend-Core replays the original admitted)",
+      sameKey: true,
+      run: async (w) => {
+        w.answers.push(() => json(200, { kind: 'active_elsewhere' }));
+        const res = (await signIn(w)) as { pending_takeover_id: string };
+        const confirm = (): Promise<unknown> =>
+          w.invoke(OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM, {
+            pending_takeover_id: res.pending_takeover_id,
+          });
+        loseNextResponse(w);
+        expect(await confirm()).toEqual({ kind: 'refused', category: 'no_connection' });
+        invalidateUserNow(w);
+        expect(await confirm()).toMatchObject({ kind: 'signed_in' }); // the replay
+      },
+    },
+    {
+      path: 'sign-in retry, a NEW key',
+      sameKey: false,
+      run: async (w) => {
+        loseNextResponse(w);
+        expect(await signIn(w)).toEqual({ kind: 'refused', category: 'no_connection' });
+        invalidateUserNow(w);
+        expect(await signIn(w)).toMatchObject({ kind: 'signed_in' });
+      },
+    },
+    {
+      path: 'heartbeat retry, a NEW key',
+      sameKey: false,
+      run: async (w) => {
+        await signIn(w);
+        loseNextResponse(w);
+        await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
+        invalidateUserNow(w);
+        await vi.advanceTimersByTimeAsync(60_000); // the failed-tick retry
+      },
+    },
+  ];
+
+  it.each(RETRY_PATHS)('$path', async ({ sameKey, run }) => {
+    const w = wire();
+    await run(w);
+    const [retry, previous] = [w.keys.at(-1), w.keys.at(-2)];
+    expect(retry === previous).toBe(sameKey);
+    // Same key: the replay predates the invalidation → no grant. New key: a
+    // genuine admission after it → the grant is written.
+    expect(admissibleNow(w)).toBe(!sameKey);
     w.keeper.stop();
   });
 
