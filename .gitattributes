@@ -23,3 +23,9 @@ specs/022-pos-ui-v4-rescue/design-handoff/*.md text eol=lf
 # CRLF on a Windows checkout. Scope stays narrow - this directory only.
 docs/design/vnext/visual-acceptance/**/*.html text eol=lf
 docs/design/vnext/visual-acceptance/**/*.json text eol=lf
+
+# RT-217: the vendored Backend-Core contracts are checked against their
+# Backend-Core git blob SHAs (contracts/backend-core/PIN). Pin LF so a Windows
+# checkout (autocrlf=true) reads the same bytes. Scope stays narrow - this
+# directory only.
+contracts/backend-core/** text eol=lf

@@ -1,0 +1,490 @@
+openapi: 3.1.0
+info:
+  title: Data-Pulse-2 Catalog — POS Read-Down Sync API
+  version: "1.0.0-draft"
+  description: >
+    Spec 010 POS Catalogue Read-Down Sync contract surface. The platform-side,
+    READ-ONLY publication of the Resolved Sellable Store Catalogue (003 §6.4) to
+    device-authenticated POS terminals as snapshot + delta, scoped to
+    `(tenant_id, store_id)` (wire term `branch_id`). It is the OPPOSITE direction
+    of 005 (capture-UP) and MUST NOT be conflated with it. The platform stays the
+    catalogue authority (§IX); there is NO write surface — GET only.
+
+    Two operations, both POS-facing (`/api/pos/v1/catalog/...`), authenticated via
+    the role-named `device` security scheme — an opaque, device-scoped bearer
+    token (spec 030 / 028 DOC-4; this surface was previously mislabelled under the
+    provider-named `clerkJwt` key — see the `device` scheme description). The
+    authenticated device
+    principal's resolved tenant + store binding (spec 002) supplies `tenant_id`
+    and `store_id`; a supplied `branch_id` is validated against the token scope
+    and a mismatch is refused non-disclosingly (FR-002/003/004). Body/query scope
+    is never trusted as authority.
+
+      1. `posGetCatalogSnapshot` — the full Resolved Sellable Store Catalogue
+         (Tenant Catalog ⊕ Store Override, sellable-filtered) at a server-issued
+         opaque cursor; cursor-paginated via `next_page_token` with all pages
+         reflecting one consistent cursor point (FR-010..013, FR-050..053).
+      2. `posGetCatalogDeltas` — ordered, idempotent, gap-detectable `upsert` /
+         `remove_from_sellable` changes after a supplied opaque `since` cursor,
+         with an advanced cursor; a stale/unservable cursor returns
+         `snapshot_required` (FR-020..024, FR-042).
+
+    Sellable filter (Decisions #2/#3, R5): snapshot + `upsert` deltas emit ONLY
+    sellable rows — active AND priced AND currency present AND representable in
+    the currency minor unit. A product leaving the sellable stream (retire OR
+    became-unpriced / non-representable) emits a `remove_from_sellable` delta
+    (FR-042); omitted unpriced products are surfaced to an observability signal +
+    reconciliation backlog (R6), NEVER on the POS sellable stream and NEVER to a
+    cashier. This feature builds NO admin screen.
+
+    Payload (data-model §1, R-1/Option B — real-schema-backed fields only): each
+    sellable row carries `product_id`, `sku`, `name` (single
+    `tenant_products.name`; no ar/en split), `aliases[]`, `price { amount,
+    currency_code }`, `tax_category`, `active`, and the per-row `row_cursor`. The
+    pharmacy-domain fields (`name_ar`/`name_en`, `controlled_substance`,
+    `prescription_required`, `unit_pack_label`) are NOT in the v1 payload — they
+    have no backing 003 column (re-adding any is a future spec that first adds the
+    column). Money: every monetary field is an exact-decimal string
+    (`numeric(19,4)` at rest) paired with an ISO-4217 `currency_code`
+    (gate A.1/A.6) — NEVER a float. Response bodies are explicit `toBody()` wire
+    projections — the resolved catalog DB shape is NEVER returned directly
+    (Constitution §IV).
+
+    Cursor: server-issued, opaque, monotonic, scope-bound (R2). The snapshot
+    returns the current cursor; the delta advances it. A cursor older than the
+    retained change-log horizon → `snapshot_required` re-baseline directive
+    (FR-023). A cursor presented under a foreign scope → non-disclosing refusal
+    (FR-024). Idempotent replay: re-requesting the same `since` cursor yields the
+    same logical change set (§XI / FR-021); there is NO write-conflict policy —
+    the entity is platform-authoritative and POS-read-only (R3). The per-row
+    token is canonically `row_cursor`; the response-level continuation token is
+    `next_page_token`. Both are opaque — clients MUST NOT decode them.
+
+    Failure vocabulary: a single canonical `Error` envelope matching
+    `auth.openapi.yaml` / `outbox.openapi.yaml`. The closed `error.code` set on
+    this surface is `validation_error`, `store_context_required` (unresolved
+    store context, 400), `snapshot_required` (stale/unservable cursor, 409),
+    `not_found` (non-disclosing 404-class for cross-tenant / cross-store / scope
+    mismatch — no exists/not-exists leak, §II/§XII), the standard device-auth
+    failures (401), and `system_failure` (500).
+
+    This contract is consumed by
+    `apps/api/test/catalog/read-down/contract/read-down.contract.spec.ts`, which
+    loads it with an explicit `dir` because the production `loadOpenApiContracts`
+    helper is non-recursive (`apps/api/src/openapi/loader.ts` — `readdirSync` with
+    no recursive flag), exactly as `catalog/unknown-items.yaml` is loaded.
+
+servers:
+  - url: https://api.example.com
+
+tags:
+  - name: catalog-read-down
+    description: >
+      POS catalogue read-down sync (snapshot + delta). Spec 010 — the read-only
+      publication of the Resolved Sellable Store Catalogue to POS terminals.
+
+paths:
+  /api/pos/v1/catalog/snapshot:
+    get:
+      summary: Get the full resolved sellable store catalogue at a server cursor.
+      operationId: posGetCatalogSnapshot
+      tags: [catalog-read-down]
+      security:
+        - device: []
+      description: >
+        Return the full Resolved Sellable Store Catalogue (Tenant ⊕ Store
+        Override, sellable-filtered) for the authenticated device principal's
+        `(tenant_id, store_id)` at a server-issued opaque cursor. Cursor-paginated
+        via `next_page_token`; every page reflects the SAME consistent cursor
+        point (FR-012). Unpriced / missing-currency / non-representable products
+        are absent (R5) and recorded to the unpriced-issue signal + backlog (R6).
+        The resolved row is an explicit `toBody()` projection — never a raw DB
+        entity (§IV). Scope is taken from the device principal ONLY; a supplied
+        `branch_id` mismatching the token scope is refused non-disclosingly
+        (FR-002/003/004); an unresolved store context returns
+        `store_context_required` (FR-005).
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/PageToken"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: >
+            A page of the resolved sellable catalogue at a consistent server
+            cursor. The final page carries the snapshot `cursor`; subsequent
+            pages are fetched via `next_page_token`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSnapshotPage"
+        "400":
+          $ref: "#/components/responses/ValidationFailure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/SystemFailure"
+
+  /api/pos/v1/catalog/deltas:
+    get:
+      summary: Get ordered sellable-stream changes after a cursor.
+      operationId: posGetCatalogDeltas
+      tags: [catalog-read-down]
+      security:
+        - device: []
+      description: >
+        Return ordered, idempotent, gap-detectable `upsert` /
+        `remove_from_sellable` changes after the supplied opaque `since` cursor,
+        for the device principal's `(tenant_id, store_id)`, with an advanced
+        cursor reaching the current resolved state. The stream unions the store's
+        own events with tenant-wide events server-side (R9) — the per-tenant
+        sequence is sparse per store and that is correct; completeness is
+        server-guaranteed, NOT consumer-verified by contiguity (FR-022).
+        Re-requesting the same `since` cursor yields the same logical change set
+        (idempotent replay, FR-021). A cursor older than the retained change-log
+        horizon → `snapshot_required` (FR-023). A cursor presented under a foreign
+        scope → non-disclosing refusal (FR-024).
+      parameters:
+        - $ref: "#/components/parameters/Since"
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/PageToken"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: >
+            Ordered sellable-stream changes after `since`, with the advanced
+            cursor. Cursor-paginated via `next_page_token`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogDeltaPage"
+        "400":
+          $ref: "#/components/responses/ValidationFailure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/SnapshotRequired"
+        "500":
+          $ref: "#/components/responses/SystemFailure"
+
+components:
+  securitySchemes:
+    # `device` is the role-named POS device-credential scheme (spec 030 /
+    # 028 DOC-1 / DOC-4). It replaces the previously-misleading provider-named
+    # `clerkJwt` key on this surface: the read-down terminal authenticates by
+    # its DEVICE PAIRING TOKEN alone — an opaque token, NOT a JWT — so
+    # `bearerFormat: JWT` is intentionally OMITTED. The credential is
+    # device-scoped and never proves sale ownership alone (028 §6 CM-2). The
+    # rename is doc<->runtime-honest: the runtime already verifies exactly this
+    # device token; only the contract name/description change.
+    device:
+      type: http
+      scheme: bearer
+      description: >
+        Opaque, device-scoped bearer token (spec 030 / 028 §6 CM-2). The POS
+        terminal presents its `devices` PAIRING TOKEN as
+        `Authorization: Bearer <device_token>` — an opaque token (NOT a JWT),
+        with NO operator credential and NO `X-Terminal-Token` header. The token
+        is hashed and matched against an active (non-revoked) `devices` row; the
+        device row supplies the authoritative `(tenant_id, store_id)` scope.
+        Body/query scope is never trusted (FR-002). Verified at the API edge;
+        fail-closed (any missing / malformed / unknown / revoked token, or a
+        non-device credential, returns a generic 401 — non-disclosing, FR-001).
+        Device-scoped only — it never proves sale ownership alone; an operator
+        identity JWT or dashboard session does NOT authenticate this surface.
+        The token is not propagated past the verifier.
+
+  parameters:
+    BranchId:
+      name: branch_id
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: >
+        Branch (store) id to scope the read. When provided, the server validates
+        it against the device token's resolved branch scope; a mismatch is refused
+        non-disclosingly (FR-002/003/004). When omitted, the server uses the
+        device token's branch scope directly. POS callers SHOULD always pass this
+        to catch stale-token / branch drift early. `branch_id` is POS vocabulary
+        mapped internally to `store_id`.
+    Since:
+      name: since
+      in: query
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      description: >
+        The opaque `cursor` returned by a prior snapshot or delta page (both
+        page schemas expose the advanced server cursor as `cursor`). Treated as
+        opaque — clients MUST NOT decode or construct it. Scope-bound: a cursor
+        presented under a foreign scope is refused non-disclosingly (FR-024); a
+        cursor older than the retained horizon returns `snapshot_required`
+        (FR-023).
+    PageToken:
+      name: page_token
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+      description: >
+        Opaque continuation token returned in the previous page's
+        `next_page_token`. Treated as opaque — clients MUST NOT decode or
+        construct it. All pages of one snapshot/delta read reflect the SAME
+        consistent cursor point (FR-012).
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 500
+      description: >
+        Maximum rows per page. The server MAY return fewer. Bounds memory on both
+        ends at the ~50k-product scale (R8).
+
+  schemas:
+    # -----------------------------------------------------------------------
+    # Money — exact-decimal string + ISO-4217 currency (gate A.1/A.6, no float)
+    # Verbatim from pos-sales/sales.yaml (shared discipline; no new primitive).
+    # -----------------------------------------------------------------------
+    DecimalAmount:
+      type: string
+      pattern: '^-?[0-9]{1,15}(\.[0-9]{1,4})?$'
+      description: >
+        Exact-decimal monetary amount as a string (gate A.6 — never a float).
+        Up to 4 fractional digits, stored as `numeric(19,4)`. Always paired
+        with a `currency_code`.
+    CurrencyCode:
+      type: string
+      pattern: '^[A-Z]{3}$'
+      description: ISO-4217 alphabetic currency code (FR-005). Preserved as received.
+
+    # -----------------------------------------------------------------------
+    # Money object — { amount, currency_code } (data-model §1)
+    # -----------------------------------------------------------------------
+    Money:
+      type: object
+      additionalProperties: false
+      required: [amount, currency_code]
+      description: >
+        Resolved sellable price at the currency's natural minor precision. Always
+        present for a sellable row (R5).
+      properties:
+        amount:
+          $ref: "#/components/schemas/DecimalAmount"
+        currency_code:
+          $ref: "#/components/schemas/CurrencyCode"
+
+    # -----------------------------------------------------------------------
+    # Resolved sellable row — explicit toBody() projection (§IV), NOT a DB entity
+    # -----------------------------------------------------------------------
+    SellableCatalogRow:
+      type: object
+      additionalProperties: false
+      required:
+        [product_id, sku, name, aliases, price, tax_category, active, row_cursor]
+      description: >
+        One resolved sellable catalogue row (Tenant ⊕ Store Override, 003 §6.4),
+        real-schema-backed fields only (R-1/Option B). No raw DB columns, no
+        soft-delete internals, no credential fields (§IV).
+      properties:
+        product_id:
+          type: string
+          format: uuid
+          description: Stable product identity — the consumer's resolver key.
+        sku:
+          type: string
+          description: Exact-lookup key (product_aliases identifier_type = 'sku').
+        name:
+          type: string
+          minLength: 1
+          description: Single display name (DP2 catalog is language-neutral; no ar/en split).
+        aliases:
+          type: array
+          items:
+            type: string
+          description: >
+            Raw alias terms (non-sku barcode/plu/supplier_code/external_pos_id).
+            The consumer folds them; the platform does not.
+        price:
+          $ref: "#/components/schemas/Money"
+        tax_category:
+          type: string
+          description: Resolved tax category (tenant ⊕ override).
+        active:
+          type: boolean
+          description: >
+            Always true for a sellable row (the field is explicit for consumer
+            clarity).
+        row_cursor:
+          type: string
+          description: >
+            Opaque per-row change cursor (≤ the response cursor). Clients MUST
+            treat as opaque. The canonical per-row token name (locks I2/R-5).
+
+    # -----------------------------------------------------------------------
+    # Snapshot page — cursor-paginated, one consistent cursor point
+    # -----------------------------------------------------------------------
+    CatalogSnapshotPage:
+      type: object
+      additionalProperties: false
+      required: [items, cursor, next_page_token]
+      description: >
+        A page of the resolved sellable catalogue. `cursor` is the snapshot's
+        server-issued opaque cursor (the same value across every page of one
+        snapshot — FR-012); `next_page_token` advances pagination within that
+        consistent point.
+      properties:
+        items:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/SellableCatalogRow"
+        cursor:
+          type: string
+          minLength: 1
+          description: >
+            The snapshot's opaque server cursor — pass as `since` to the delta
+            endpoint to advance from here. Opaque; do not decode.
+        next_page_token:
+          type: [string, "null"]
+          description: >
+            Opaque continuation token for the next page; null on the last page.
+            All pages reflect the SAME `cursor` point. Opaque; do not decode.
+
+    # -----------------------------------------------------------------------
+    # Delta op + page
+    # -----------------------------------------------------------------------
+    CatalogDeltaOp:
+      type: object
+      additionalProperties: false
+      required: [op, product_id, row_cursor]
+      description: >
+        One ordered change. `row` is present for `upsert` and omitted for
+        `remove_from_sellable` (the consumer drops the product by `product_id`).
+      properties:
+        op:
+          type: string
+          enum: [upsert, remove_from_sellable]
+        product_id:
+          type: string
+          format: uuid
+        row:
+          $ref: "#/components/schemas/SellableCatalogRow"
+        row_cursor:
+          type: string
+          description: >
+            Opaque advanced cursor after this op (the canonical per-row token).
+            Clients MUST treat as opaque.
+
+    CatalogDeltaPage:
+      type: object
+      additionalProperties: false
+      required: [ops, cursor, next_page_token]
+      description: >
+        A page of ordered sellable-stream changes after the supplied `since`
+        cursor, with the advanced server cursor.
+      properties:
+        ops:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/CatalogDeltaOp"
+        cursor:
+          type: string
+          minLength: 1
+          description: >
+            The advanced opaque server cursor — pass as `since` next time. Opaque;
+            do not decode.
+        next_page_token:
+          type: [string, "null"]
+          description: >
+            Opaque continuation token for the next page; null on the last page.
+            Opaque; do not decode.
+
+    # -----------------------------------------------------------------------
+    # Canonical Error envelope (mirrors auth.openapi.yaml / outbox.openapi.yaml)
+    # -----------------------------------------------------------------------
+    Error:
+      type: object
+      required: [error]
+      description: >
+        Canonical error envelope, identical to the shared shape in
+        `auth.openapi.yaml` / `outbox.openapi.yaml` (used verbatim — no extra
+        fields, no `details`). Cross-tenant / out-of-scope / cross-store refusals
+        are non-disclosing (§II/§XII) — they never enumerate the underlying cause.
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: >
+                Stable machine-readable error code. Closed set on this surface:
+                validation_error | store_context_required | snapshot_required |
+                not_found | system_failure (plus the generic 401 refusal).
+            message:
+              type: string
+              description: Human-readable summary. No sensitive data, no cause enumeration.
+            request_id:
+              type: string
+              format: uuid
+              description: Server-side correlation id; the actual cause is recorded server-side.
+
+  responses:
+    ValidationFailure:
+      description: >
+        `validation_error` — malformed query, bad/opaque cursor format, or a
+        bad parameter. OR `store_context_required` — the device principal has no
+        resolved store context (FR-005). Deterministic; no record created (this is
+        a read surface).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: >
+        Generic refusal (401). The body does not distinguish a missing / invalid /
+        revoked device token, a missing tenant/store binding, or a manager
+        Clerk-JWT without a device principal (FR-001). Non-disclosing.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: >
+        `not_found` — non-disclosing 404-class for a cross-tenant / cross-store /
+        scope-mismatch read or a foreign-scope cursor (FR-002/003/004/024).
+        Identical for cross-tenant, out-of-scope, and genuinely-absent scope, with
+        NO existence leak via any response or error shape (§II/§XII, SI).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    SnapshotRequired:
+      description: >
+        `snapshot_required` (409) — the supplied `since` cursor is older than the
+        retained change-log horizon (or otherwise unservable). The consumer MUST
+        re-baseline via `posGetCatalogSnapshot` (FR-023). Deterministic.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    SystemFailure:
+      description: >
+        `system_failure` (500) — an unexpected server error. The cause is recorded
+        server-side keyed by `request_id` and is never returned.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
