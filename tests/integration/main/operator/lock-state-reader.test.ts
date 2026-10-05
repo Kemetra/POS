@@ -467,6 +467,7 @@ describe('RT-113 P2 createSafePointProbe', () => {
           admission_id: FAKE_ADMISSION_ID,
           admission_ttl_seconds: 600,
           offline_grace_seconds: 86_400,
+          admission_generation: 'gen-test-0001',
         },
       });
       handedOffWithLiveTender(record.id);
@@ -511,6 +512,7 @@ describe('Codex P1 4179918798 — end to end: a latched session does not strand 
           admission_id: FAKE_ADMISSION_ID,
           admission_ttl_seconds: 600,
           offline_grace_seconds: 86_400,
+          admission_generation: 'gen-test-0001',
         },
       });
       insertCart({

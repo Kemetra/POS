@@ -126,6 +126,17 @@ function recordRequest(input: RequestInfo | URL, init: RequestInit | undefined):
   };
 }
 
+/** A contract-valid `admitted` (1.1.0-draft: with the RT-219 `admission_generation`). */
+const ADMITTED_BODY = {
+  kind: 'admitted',
+  admission_id: ADMISSION_ID,
+  offline_grace_seconds: 86_400,
+  admission_ttl_seconds: TTL_S,
+  server_time: '2026-10-04T10:00:00.000Z',
+  display_name: 'Mona',
+  admission_generation: 'gen-default-0000',
+};
+
 /** Like Backend-Core main: anything but the device-bearer cashier-admissions routes is 401. */
 function deviceAuthorized(req: Req, path: string): boolean {
   return req.headers['authorization'] === `Bearer ${DEVICE_TOKEN}` && path.startsWith(ADMISSIONS);
@@ -140,14 +151,7 @@ function stubBackendCore(): {
 } {
   const requests: Req[] = [];
   const admitQueue: unknown[] = [];
-  const admitted = {
-    kind: 'admitted',
-    admission_id: ADMISSION_ID,
-    offline_grace_seconds: 86_400,
-    admission_ttl_seconds: TTL_S,
-    server_time: '2026-10-04T10:00:00.000Z',
-    display_name: 'Mona',
-  };
+  const admitted = ADMITTED_BODY;
   const routes: Route[] = [
     {
       method: 'GET',
@@ -327,14 +331,18 @@ describe('RT-113 P2 cashier path over IPC against a stub Backend-Core', () => {
     expect(signIn.kind).toBe('takeover_required');
 
     // 3. Take over here: takeover:true admits this device.
+    w.admitQueue.push({ ...ADMITTED_BODY, admission_generation: 'gen-takeover-0001' });
     const confirmed = (await w.invoke(OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM, {
       pending_takeover_id: signIn.pending_takeover_id,
     })) as { kind: string };
     expect(confirmed.kind).toBe('signed_in');
     expect(w.sessions.getCurrent()?.authority).toBe('online_confirmed');
+    expect(w.sessions.getCurrent()?.admission_generation).toBe('gen-takeover-0001');
 
-    // 4. One heartbeat at TTL/2.
+    // 4. One heartbeat at TTL/2: same admission, NEW generation (RT-219).
+    w.admitQueue.push({ ...ADMITTED_BODY, admission_generation: 'gen-heartbeat-0002' });
     await vi.advanceTimersByTimeAsync((TTL_S * 1000) / 2);
+    expect(w.sessions.getCurrent()?.admission_generation).toBe('gen-heartbeat-0002');
 
     // 5. Sign-out ends the admission (best-effort, fire-and-forget).
     await expect(w.invoke(OPERATOR_IPC_CHANNELS.SIGN_OUT)).resolves.toEqual({
@@ -360,9 +368,23 @@ describe('RT-113 P2 cashier path over IPC against a stub Backend-Core', () => {
       expect(Object.keys(r.headers).filter((h) => h !== 'content-type')).toEqual(['authorization']);
     }
 
+    // RT-219: the `end` echoes the post-heartbeat generation, as JSON, per contract.
+    const endRequest = w.requests.find((r) => r.url.endsWith('/end'));
+    expect(endRequest?.headers['content-type']).toBe('application/json');
+    const endBody = JSON.parse(endRequest?.body as string) as unknown;
+    expect(endBody).toEqual({ admission_generation: 'gen-heartbeat-0002' });
+    expect(contractErrors('PosCashierAdmissionEndRequest', endBody)).toEqual([]);
+
+    // RT-219: no generation crosses IPC or reaches a log line.
+    const ipcAnswers = JSON.stringify([roster, signIn, confirmed]);
+    for (const generation of ['gen-takeover-0001', 'gen-heartbeat-0002']) {
+      expect(ipcAnswers).not.toContain(generation);
+      expect(w.logLines.join('\n')).not.toContain(generation);
+    }
+
     // Every admission body is valid per contract: online, takeover, heartbeat.
     const bodies = w.requests
-      .filter((r) => r.body !== undefined)
+      .filter((r) => r.url === `${BASE}${ADMISSIONS}`)
       .map((r) => JSON.parse(r.body as string) as Record<string, unknown>);
     expect(bodies.map((b) => b['takeover'])).toEqual([false, true, false]);
     for (const b of bodies) {

@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import type {
   CashierAdmissionAdmitted,
   CashierAdmissionClient,
+  CashierAdmissionEndResult,
   CashierAdmissionOnlineRequest,
   CashierAdmissionResult,
   CashierRosterResult,
@@ -17,6 +18,8 @@ import type {
 
 export const FAKE_USER_ID = '0192f6a0-1b2c-7d3e-8f40-123456789abc';
 export const FAKE_ADMISSION_ID = '0192f6a0-aaaa-7bbb-8ccc-000000000001';
+/** RT-219 — the opaque `admission_generation` of {@link ADMITTED}. */
+export const FAKE_GENERATION = 'gen-signin-0001';
 
 export const ADMITTED: CashierAdmissionAdmitted = {
   kind: 'admitted',
@@ -25,7 +28,19 @@ export const ADMITTED: CashierAdmissionAdmitted = {
   admission_ttl_seconds: 43_200,
   server_time: '2026-10-04T10:00:00.000Z',
   display_name: 'Server Name',
+  admission_generation: FAKE_GENERATION,
 };
+
+/** RT-219 — one `end` as sent: the admission and the generation it echoed. */
+export interface FakeEndRequest {
+  admission_id: string;
+  admission_generation: string;
+}
+
+type EndImpl = (
+  admission_id: string,
+  admission_generation: string,
+) => Promise<CashierAdmissionEndResult>;
 
 type AdmitImpl =
   | CashierAdmissionResult
@@ -37,12 +52,14 @@ export interface FakeAdmission {
   client: CashierAdmissionClient;
   admitCalls: CashierAdmissionOnlineRequest[];
   endCalls: string[];
+  /** RT-219 — every `end` with the generation it echoed, in call order. */
+  endRequests: FakeEndRequest[];
   admitted: CashierAdmittedEvent[];
   invalidated: CashierAdmissionInvalidation[];
   deps: CashierAdmissionDeps;
   /** Replace the admit behaviour for the next calls. */
   setAdmit(impl: AdmitImpl): void;
-  setEnd(impl: () => Promise<{ kind: 'ended' }>): void;
+  setEnd(impl: EndImpl): void;
 }
 
 export function fakeCashierAdmission(
@@ -50,10 +67,11 @@ export function fakeCashierAdmission(
   roster: CashierRosterResult = { kind: 'roster', cashiers: [] },
 ): FakeAdmission {
   let admitImpl = admit;
-  let endImpl: () => Promise<{ kind: 'ended' }> = () => Promise.resolve({ kind: 'ended' });
+  let endImpl: EndImpl = () => Promise.resolve({ kind: 'ended' });
   let keyCounter = 0;
   const admitCalls: CashierAdmissionOnlineRequest[] = [];
   const endCalls: string[] = [];
+  const endRequests: FakeEndRequest[] = [];
   const admitted: CashierAdmittedEvent[] = [];
   const invalidated: CashierAdmissionInvalidation[] = [];
   const client: CashierAdmissionClient = {
@@ -61,9 +79,10 @@ export function fakeCashierAdmission(
       admitCalls.push(req);
       return Promise.resolve(typeof admitImpl === 'function' ? admitImpl(req) : admitImpl);
     }),
-    end: vi.fn((id: string) => {
+    end: vi.fn((id: string, generation: string) => {
       endCalls.push(id);
-      return endImpl();
+      endRequests.push({ admission_id: id, admission_generation: generation });
+      return endImpl(id, generation);
     }),
     listRoster: vi.fn(() => Promise.resolve(roster)),
   };
@@ -79,6 +98,7 @@ export function fakeCashierAdmission(
     client,
     admitCalls,
     endCalls,
+    endRequests,
     admitted,
     invalidated,
     deps,

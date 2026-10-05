@@ -68,6 +68,8 @@ const NEW_TOKEN = 'device-token-NEW-SENTINEL-77c1';
 const USER_ID = '0192f6a0-1b2c-7d3e-8f40-123456789abc';
 const ADMISSION_ID = '0192f6a0-aaaa-7bbb-8ccc-000000000001';
 const TTL_S = 600;
+/** RT-219 (#544): every `admitted` carries an opaque generation the session holds. */
+const GENERATION = 'gen-signin-0001';
 
 interface SentRequest {
   path: string;
@@ -92,6 +94,7 @@ const ADMITTED_BODY = {
   admission_ttl_seconds: TTL_S,
   server_time: '2026-10-05T09:00:00.000Z',
   display_name: 'Mona',
+  admission_generation: GENERATION,
 };
 
 /**
@@ -375,6 +378,7 @@ function signInCashier(w: Wired): ReturnType<SessionManager['create']> {
     cashier_admission: {
       user_id: USER_ID,
       admission_id: ADMISSION_ID,
+      admission_generation: GENERATION,
       admission_ttl_seconds: TTL_S,
       offline_grace_seconds: 86_400,
     },
@@ -507,7 +511,7 @@ describe('RT-215 device revocation — end to end', () => {
     w.backend.deviceStatus.value = 200;
     await signInAttempt(w);
     await w.admission.client.listRoster();
-    await w.admission.client.end(ADMISSION_ID);
+    await w.admission.client.end(ADMISSION_ID, GENERATION);
     await w.readDown.fetchSnapshot();
     await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS * 3);
 

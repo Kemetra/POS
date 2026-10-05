@@ -76,7 +76,14 @@ import type {
  * these is ALSO capped by the deadline. A late `admitted` for a session that
  * is gone ends that admission unless the live session holds it (review F7).
  *
- * Logs carry the outcome kind only: no admission id, user id, key or name.
+ * RT-219 (contract 1.1.0-draft): every `end` echoes the `admission_generation`
+ * of the LATEST `admitted` for that admission. Sign-in and takeover set it, and
+ * EVERY heartbeat `admitted` replaces it, even when the id is unchanged. A late
+ * `end` is then a server-side no-op once the admission has been renewed after
+ * it. An orphan release echoes the generation of the orphan response itself.
+ *
+ * Logs carry the outcome kind only: no admission id, user id, key, name or
+ * generation.
  */
 
 /** How often a latched session re-checks for its next safe point (backstop). */
@@ -150,6 +157,8 @@ export interface AdmissionDeadline {
 /** An admission to end, and the user whose re-admission must wait for it. */
 interface AdmissionToEnd {
   admission_id: string;
+  /** RT-219: from the latest `admitted` for `admission_id`; echoed on `end`. */
+  admission_generation: string;
   user_id: string | undefined;
 }
 
@@ -163,10 +172,24 @@ interface Armed extends Tracked {
   user_id: string;
   operator_id: string;
   admission_id: string;
+  /** RT-219: replaced by every `admitted`; the `end` echoes it. */
+  admission_generation: string;
   ttl_seconds: number;
   deadline: AdmissionDeadline;
   /** When the in-flight (or last) heartbeat was sent; heartbeats never overlap. */
   last_sent_at_ms: number;
+  /** When the scheduled admission call fires (monotonic ms); null when none is scheduled. */
+  next_call_at_ms: number | null;
+  /** Heartbeats sent by this session so far (the latest one's sequence number). */
+  sent_seq: number;
+  /**
+   * RT-219 review F1 / Codex P2 4181547527: an orphan answer renewed this
+   * admission, so the generation held may be stale. Set until an `admitted`
+   * for a heartbeat sent AFTER that answer (`sent_seq > stale_upto_seq`)
+   * refreshes it; a non-admitted outcome keeps it. `early_scheduled`: the one
+   * early verification call has been scheduled (no 5 s retry loop).
+   */
+  reverify: { stale_upto_seq: number; early_scheduled: boolean } | null;
   latched: boolean;
   /** Consecutive failed ticks (backoff). */
   failures: number;
@@ -176,10 +199,18 @@ interface Armed extends Tracked {
 function isOnlineAdmitted(
   record: OperatorSessionRecord,
 ): record is OperatorSessionRecord &
-  Required<Pick<OperatorSessionRecord, 'user_id' | 'admission_id' | 'admission_ttl_seconds'>> {
-  const fieldsPresent = [record.admission_id, record.user_id, record.admission_ttl_seconds].every(
-    (f) => f !== undefined,
-  );
+  Required<
+    Pick<
+      OperatorSessionRecord,
+      'user_id' | 'admission_id' | 'admission_generation' | 'admission_ttl_seconds'
+    >
+  > {
+  const fieldsPresent = [
+    record.admission_id,
+    record.admission_generation,
+    record.user_id,
+    record.admission_ttl_seconds,
+  ].every((f) => f !== undefined);
   return record.authority === 'online_confirmed' && fieldsPresent;
 }
 
@@ -196,9 +227,13 @@ function armedFor(record: OperatorSessionRecord, clock: () => number): Armed | n
     user_id: record.user_id,
     operator_id: record.operator_id,
     admission_id: record.admission_id,
+    admission_generation: record.admission_generation,
     ttl_seconds: record.admission_ttl_seconds,
     deadline: { requested_at_ms: sentAt, ttl_ms: record.admission_ttl_seconds * 1000 },
     last_sent_at_ms: sentAt,
+    next_call_at_ms: null,
+    sent_seq: 0,
+    reverify: null,
     timer: null,
     latched: false,
     failures: 0,
@@ -322,10 +357,9 @@ export class CashierAdmissionKeeper {
    * unknown outcome (Codex P1 4180025698). Either way, bounded by the deadline.
    */
   private firstHeartbeatCapMs(armed: Armed): number {
-    const interval = heartbeatIntervalMs(armed.ttl_seconds);
     return takeUncertainEnd(this.deps.admission, armed.user_id)
-      ? Math.min(interval, EARLY_VERIFY_MS)
-      : interval;
+      ? this.earlyVerifyCapMs(armed)
+      : heartbeatIntervalMs(armed.ttl_seconds);
   }
 
   private onSessionEnded(record: OperatorSessionRecord): void {
@@ -337,24 +371,72 @@ export class CashierAdmissionKeeper {
       this.endAdmission(armed);
       return;
     }
-    if (record.admission_id !== undefined) {
-      this.endAdmission({ admission_id: record.admission_id, user_id: record.user_id });
+    if (record.admission_id !== undefined && record.admission_generation !== undefined) {
+      this.endAdmission({
+        admission_id: record.admission_id,
+        admission_generation: record.admission_generation,
+        user_id: record.user_id,
+      });
     }
   }
 
-  private schedule(target: Tracked, ms: number, run: () => void): void {
+  private schedule(target: Tracked | Armed, ms: number, run: () => void): void {
     if (target.timer !== null) clearTimeout(target.timer);
+    // RT-219: only scheduleNext schedules an admission call (RT-215: a
+    // latch-only target has no admission call at all).
+    if ('next_call_at_ms' in target) target.next_call_at_ms = null;
     target.timer = setTimeout(() => {
       target.timer = null;
+      if ('next_call_at_ms' in target) target.next_call_at_ms = null;
       run();
     }, ms);
   }
 
   /** The ONE way to schedule the next admission call: `capMs`, bounded by the deadline. */
   private scheduleNext(armed: Armed, capMs: number): void {
-    this.schedule(armed, nextCallDelayMs(capMs, armed.deadline, this.nowMs()), () => {
+    const delay = nextCallDelayMs(capMs, armed.deadline, this.nowMs());
+    this.schedule(armed, delay, () => {
       void this.heartbeat(armed);
     });
+    armed.next_call_at_ms = this.nowMs() + delay;
+  }
+
+  /** The early-verification cap: {@link EARLY_VERIFY_MS}, never above TTL/2. */
+  private earlyVerifyCapMs(armed: Armed): number {
+    return Math.min(heartbeatIntervalMs(armed.ttl_seconds), EARLY_VERIFY_MS);
+  }
+
+  /**
+   * RT-219 review F1: the live admission was renewed by a request this session
+   * did not send, so the generation it holds may be stale and its `end` a
+   * server-side no-op. Verify early: the next heartbeat returns the current
+   * generation. The orphan's generation is never adopted (answers can arrive
+   * out of order, so it may be the older one). A heartbeat in flight defers
+   * the verification to its answer; a call already due sooner is not
+   * postponed. A latched session has no call scheduled and never heartbeats
+   * again, so nothing is sent for it.
+   */
+  private reverifySoon(live: Armed): void {
+    // Every heartbeat sent so far may hold a stale answer.
+    live.reverify = { stale_upto_seq: live.sent_seq, early_scheduled: false };
+    if (live.next_call_at_ms === null) return; // in flight: its outcome schedules the early call
+    live.reverify.early_scheduled = true; // the scheduled call is the verification
+    const earlyAt =
+      this.nowMs() + nextCallDelayMs(this.earlyVerifyCapMs(live), live.deadline, this.nowMs());
+    if (live.next_call_at_ms <= earlyAt) return;
+    this.scheduleNext(live, this.earlyVerifyCapMs(live));
+  }
+
+  /**
+   * The cap for the next call after an outcome: `normalCapMs`, or, once per
+   * stale period (review F1 / Codex P2 4181547527), the early verification,
+   * never below `floorMs` (a `rate_limited` backoff is honoured, no hammering).
+   */
+  private nextCapMs(armed: Armed, normalCapMs: number, floorMs = 0): number {
+    const r = armed.reverify;
+    if (r === null || r.early_scheduled) return normalCapMs;
+    r.early_scheduled = true;
+    return Math.min(normalCapMs, Math.max(this.earlyVerifyCapMs(armed), floorMs));
   }
 
   private nowMs(): number {
@@ -384,6 +466,7 @@ export class CashierAdmissionKeeper {
     if (!this.stillCurrent(armed) || armed.latched) return;
     // Stamped before the request goes out: a renewal's deadline runs from here.
     armed.last_sent_at_ms = this.nowMs();
+    const seq = ++armed.sent_seq;
     const result = await this.requestHeartbeat(armed);
     // RT-198 latch + session identity: re-checked after the await.
     if (this.stopped) return;
@@ -392,7 +475,7 @@ export class CashierAdmissionKeeper {
       return;
     }
     this.log(result.kind);
-    this.handleOutcome(armed, result);
+    this.handleOutcome(armed, result, seq);
   }
 
   private async requestHeartbeat(armed: Armed): Promise<CashierAdmissionResult> {
@@ -412,17 +495,32 @@ export class CashierAdmissionKeeper {
    * Review F7: an `admitted` for a session that is gone leaves a live server
    * admission behind. End it, unless the live session holds that same id
    * (same-device re-admission returns the same `admission_id`).
+   *
+   * RT-219 (closes RT-219 10869 item 2): the `end` echoes THIS response's
+   * generation. If a re-sign-in renews the admission before the `end` lands,
+   * the server ignores it instead of ending the renewed admission.
+   *
+   * RT-219 review F1: an orphan answer for the id the live session holds means
+   * the orphan request renewed the LIVE admission, so verify it early.
    */
   private releaseOrphan(result: CashierAdmissionResult, orphanOf: Armed): void {
     if (result.kind !== 'admitted') return;
-    if (this.armed?.admission_id === result.admission_id) return;
-    this.endAdmission({ admission_id: result.admission_id, user_id: orphanOf.user_id });
+    const live = this.armed;
+    if (live?.admission_id === result.admission_id) {
+      this.reverifySoon(live);
+      return;
+    }
+    this.endAdmission({
+      admission_id: result.admission_id,
+      admission_generation: result.admission_generation,
+      user_id: orphanOf.user_id,
+    });
   }
 
-  private handleOutcome(armed: Armed, result: CashierAdmissionResult): void {
+  private handleOutcome(armed: Armed, result: CashierAdmissionResult, seq: number): void {
     switch (result.kind) {
       case 'admitted':
-        this.onAdmitted(armed, result);
+        this.onAdmitted(armed, result, seq);
         return;
       case 'active_elsewhere':
         this.latch(armed, 'superseded_by_takeover');
@@ -439,7 +537,7 @@ export class CashierAdmissionKeeper {
     }
   }
 
-  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted): void {
+  private onAdmitted(armed: Armed, result: CashierAdmissionAdmitted, seq: number): void {
     armed.failures = 0;
     notifyGrantSeam(this.deps.admission, result, armed);
     if (result.admission_id !== armed.admission_id) {
@@ -449,6 +547,8 @@ export class CashierAdmissionKeeper {
       );
       armed.admission_id = result.admission_id;
     }
+    // RT-219: every renewal changes the generation, even with the same id.
+    armed.admission_generation = result.admission_generation;
     armed.ttl_seconds = result.admission_ttl_seconds;
     armed.deadline = {
       requested_at_ms: armed.last_sent_at_ms,
@@ -458,9 +558,13 @@ export class CashierAdmissionKeeper {
       admission_id: result.admission_id,
       admission_ttl_seconds: result.admission_ttl_seconds,
       offline_grace_seconds: result.offline_grace_seconds,
+      admission_generation: result.admission_generation,
       admission_requested_at_ms: armed.last_sent_at_ms,
     });
-    this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
+    // Review F1: an answer to a heartbeat sent after the orphan answer is
+    // current; one sent before it may be older, so verify early once.
+    if (armed.reverify !== null && seq > armed.reverify.stale_upto_seq) armed.reverify = null;
+    this.scheduleNext(armed, this.nextCapMs(armed, heartbeatIntervalMs(armed.ttl_seconds)));
   }
 
   /**
@@ -483,11 +587,13 @@ export class CashierAdmissionKeeper {
   private onNotAnswered(armed: Armed, result: CashierAdmissionResult): void {
     if (!BACKOFF_KINDS.has(result.kind)) {
       armed.failures = 0;
-      this.scheduleNext(armed, heartbeatIntervalMs(armed.ttl_seconds));
+      this.scheduleNext(armed, this.nextCapMs(armed, heartbeatIntervalMs(armed.ttl_seconds)));
       return;
     }
     armed.failures += 1;
-    this.scheduleNext(armed, backoffCapMs(armed));
+    // A `rate_limited` answer's backoff is a floor for the early verification.
+    const floor = result.kind === 'rate_limited' ? backoffCapMs(armed) : 0;
+    this.scheduleNext(armed, this.nextCapMs(armed, backoffCapMs(armed), floor));
   }
 
   /** Lose authority: no new sale, no more heartbeats; end at the first safe point. */
@@ -522,11 +628,14 @@ export class CashierAdmissionKeeper {
    * re-admission of the same user waits for it (review of 024f07c, item 3).
    */
   private endAdmission(ending: AdmissionToEnd): void {
-    void endAdmissionTracked(this.deps.admission, ending.admission_id, ending.user_id).then(
-      (res) => {
-        this.logEnd(res.kind);
-      },
-    );
+    void endAdmissionTracked(
+      this.deps.admission,
+      ending.admission_id,
+      ending.admission_generation,
+      ending.user_id,
+    ).then((res) => {
+      this.logEnd(res.kind);
+    });
   }
 
   private logEnd(outcome: string): void {

@@ -289,6 +289,7 @@ function signInOnlineCashier(sessions: SessionManager, ttlS: number): void {
       admission_id: FAKE_ADMISSION_ID,
       admission_ttl_seconds: ttlS,
       offline_grace_seconds: 86_400,
+      admission_generation: 'gen-test-0001',
     },
   });
 }
