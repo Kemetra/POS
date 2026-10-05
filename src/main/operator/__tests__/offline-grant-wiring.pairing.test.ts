@@ -54,6 +54,34 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     return s.paired_at;
   }
 
+  /** Write an old sealed body back into U's row (F1-style replay). */
+  function writeBack(oldBody: Buffer): void {
+    g.raw.run(
+      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
+       VALUES (?, ?, ?, ?, ?, 'x')`,
+      [TENANT, BRANCH, TERMINAL, USER, oldBody],
+    );
+  }
+
+  /**
+   * F4 / Codex P1 4181552529: pair, grant U, keep U's sealed body; optionally
+   * delete the clock mark and unpair; re-pair in the SAME paired_at second;
+   * write the old body back.
+   */
+  async function replayAfterSameSecondRepair(opts: {
+    deleteMark: boolean;
+    unpair: boolean;
+  }): Promise<void> {
+    await pairing.persist(pairInput());
+    admit();
+    expect(wiring.evaluate(USER, T0).admissible).toBe(true); // precondition: a real grant
+    const oldBody = grantBlob(g.raw);
+    if (opts.deleteMark) g.raw.run('DELETE FROM cashier_offline_clock_hwm');
+    if (opts.unpair) await pairing.clear();
+    await pairing.persist(pairInput()); // the same paired_at second
+    writeBack(oldBody);
+  }
+
   beforeEach(() => {
     inner = createPairingStore({
       secretStore: memorySecretStore(),
@@ -115,49 +143,19 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
   });
 
   it('F4: purge, re-pair with the same paired_at, and an old body written back is not admissible', async () => {
-    await pairing.persist(pairInput());
-    admit();
-    expect(wiring.evaluate(USER, T0).admissible).toBe(true);
-    const oldBody = grantBlob(g.raw);
-
-    await pairing.clear();
-    await pairing.persist(pairInput()); // the same paired_at second
-    g.raw.run(
-      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
-       VALUES (?, ?, ?, ?, ?, 'x')`,
-      [TENANT, BRANCH, TERMINAL, USER, oldBody],
-    );
+    await replayAfterSameSecondRepair({ deleteMark: false, unpair: true });
     expect(wiring.evaluate(USER, T0)).toEqual(refusal('scope_mismatch'));
     expect(wiring.consumeOfflineUse(USER, T0)).toEqual(refusal('scope_mismatch'));
   });
 
   it('Codex P1 4181552529: a deleted mark, then unpair and a same-second re-pair: an old body written back is no proof', async () => {
-    await pairing.persist(pairInput());
-    admit();
-    const oldBody = grantBlob(g.raw);
-    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
-    await pairing.clear();
-    await pairing.persist(pairInput()); // the same paired_at second
-    g.raw.run(
-      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
-       VALUES (?, ?, ?, ?, ?, 'x')`,
-      [TENANT, BRANCH, TERMINAL, USER, oldBody],
-    );
+    await replayAfterSameSecondRepair({ deleteMark: true, unpair: true });
     expect(wiring.evaluate(USER, T0).admissible).toBe(false);
     expect(wiring.consumeOfflineUse(USER, T0).admissible).toBe(false);
   });
 
   it('Codex P1 4181552529: a deleted mark, then a same-second re-pair over the old pairing', async () => {
-    await pairing.persist(pairInput());
-    admit();
-    const oldBody = grantBlob(g.raw);
-    g.raw.run('DELETE FROM cashier_offline_clock_hwm');
-    await pairing.persist(pairInput());
-    g.raw.run(
-      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
-       VALUES (?, ?, ?, ?, ?, 'x')`,
-      [TENANT, BRANCH, TERMINAL, USER, oldBody],
-    );
+    await replayAfterSameSecondRepair({ deleteMark: true, unpair: false });
     expect(wiring.evaluate(USER, T0).admissible).toBe(false);
   });
 
@@ -185,11 +183,7 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
     g.raw.run('DELETE FROM cashier_offline_clock_hwm');
     await pairing.clear();
     await pairing.persist(pairInput()); // the same paired_at second
-    g.raw.run(
-      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
-       VALUES (?, ?, ?, ?, ?, 'x')`,
-      [TENANT, BRANCH, TERMINAL, USER, oldBody],
-    );
+    writeBack(oldBody);
     expect(wiring.evaluate(USER, T0).admissible).toBe(false);
   });
 
@@ -219,15 +213,7 @@ describe('withOfflineGrantPairing — purge on every pairing change (OD4) and a 
   });
 
   it('F4 without a clear: a re-pair over the old pairing in the same second', async () => {
-    await pairing.persist(pairInput());
-    admit();
-    const oldBody = grantBlob(g.raw);
-    await pairing.persist(pairInput());
-    g.raw.run(
-      `INSERT INTO cashier_offline_grants (tenant_id, branch_id, terminal_id, user_id, sealed_body, sealed_at)
-       VALUES (?, ?, ?, ?, ?, 'x')`,
-      [TENANT, BRANCH, TERMINAL, USER, oldBody],
-    );
+    await replayAfterSameSecondRepair({ deleteMark: false, unpair: false });
     expect(wiring.evaluate(USER, T0)).toEqual(refusal('scope_mismatch'));
   });
 
