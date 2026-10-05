@@ -241,7 +241,7 @@ describe('RT-224 (Codex P2) — a failed report is not lost', () => {
     h.db.close();
   });
 
-  it('a resume hook that throws once still lets that tick drain; the resume is reported once, next tick', async () => {
+  it('a resume hook that throws once still lets that tick drain; the resume is retried and reported once', async () => {
     const h = harness(null, ['sale-1', 'sale-2']);
     let failResume = 1;
     const engine = createSaleSyncEngine({
@@ -259,13 +259,14 @@ describe('RT-224 (Codex P2) — a failed report is not lost', () => {
     await tick(engine);
     // Sending is possible again, so the queue drains even though the report failed.
     expect(h.client.calls).toHaveLength(2);
+    // The retry happens at the next credential check — the one before the first
+    // POST of that same tick — so the count is taken before anything was sent.
+    expect(h.events).toEqual([
+      { transition: 'paused', reason: 'no_operator_credential', pending: 2 },
+      { transition: 'resumed', reason: 'no_operator_credential', pending: 2 },
+    ]);
     await ticks(engine, 6);
     expect(h.events.map((e) => e.transition)).toEqual(['paused', 'resumed']);
-    expect(h.events[1]).toEqual({
-      transition: 'resumed',
-      reason: 'no_operator_credential',
-      pending: 0,
-    });
     h.db.close();
   });
 });

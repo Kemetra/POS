@@ -80,12 +80,14 @@ export type SaleSyncPausedReason = (typeof SALE_SYNC_PAUSED_REASONS)[number];
 
 /**
  * RT-224: one pause-state transition. `pending` is the current terminal's unsent
- * count at the transition. Nothing else — no token, no ids, no PII (P7).
+ * count at the transition, or null when that count could not be read (the
+ * transition is still reported — the reason matters more than the count).
+ * Nothing else — no token, no ids, no PII (P7).
  */
 export interface SaleSyncPauseTransition {
   transition: 'paused' | 'resumed';
   reason: SaleSyncPausedReason;
-  pending: number;
+  pending: number | null;
 }
 
 /** RT-224: the closed-set log messages for a pause transition. */
@@ -163,7 +165,8 @@ export interface SaleSyncEngineDeps {
    * RT-224: called ONCE when the drain enters the paused state (no sale
    * credential) and once when it resumes — never on every tick. The first tick
    * reports a pause if it starts paused; a drain that starts with a credential
-   * reports nothing until it is first paused.
+   * reports nothing until it is first paused. If the hook throws, the transition
+   * counts as unreported and is retried on the next tick; the tick itself goes on.
    */
   onPauseTransition?: (event: SaleSyncPauseTransition) => void;
 }
@@ -317,31 +320,51 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   // first tick reports a pause but never a resume.
   let reportedPaused: boolean | null = null;
 
-  /** The current terminal's unsent count, for the transition report only. */
-  async function pendingCount(): Promise<number> {
-    const terminalId = await resolveTerminalId();
-    return stateRepo.readSyncStatus({ tenantId, branchId, terminalId }).pending;
+  /**
+   * The current terminal's unsent count, for the transition report only; null
+   * when it cannot be read (e.g. a transient SQLite error).
+   */
+  async function pendingCount(): Promise<number | null> {
+    try {
+      const terminalId = await resolveTerminalId();
+      return stateRepo.readSyncStatus({ tenantId, branchId, terminalId }).pending;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * RT-224: deliver one transition. Returns true once it has been delivered (or
+   * there is no hook). A throwing hook returns false, so the caller leaves the
+   * transition unreported and the next tick retries it.
+   */
+  async function reportTransition(isPaused: boolean): Promise<boolean> {
+    const onPauseTransition = deps.onPauseTransition;
+    if (onPauseTransition === undefined) return true;
+    const event: SaleSyncPauseTransition = {
+      transition: isPaused ? 'paused' : 'resumed',
+      reason: 'no_operator_credential',
+      pending: await pendingCount(),
+    };
+    try {
+      onPauseTransition(event);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
    * RT-224: check the credential and report a transition when the pause state
    * changes. Returns true when the drain may send. Reports at most once per
-   * transition, so a paused engine is silent across ticks.
+   * transition, so a paused engine is silent across ticks. The reported state is
+   * committed only AFTER the report is delivered, so a failed report is retried
+   * on the next tick instead of being lost (Codex P2).
    */
   async function credentialGate(): Promise<boolean> {
-    const paused = pausedReason();
-    const isPaused = paused !== null;
-    if (isPaused === (reportedPaused ?? false)) {
+    const isPaused = pausedReason() !== null;
+    if (isPaused !== (reportedPaused ?? false) && (await reportTransition(isPaused))) {
       reportedPaused = isPaused;
-      return !isPaused;
-    }
-    reportedPaused = isPaused;
-    if (deps.onPauseTransition !== undefined) {
-      deps.onPauseTransition({
-        transition: isPaused ? 'paused' : 'resumed',
-        reason: 'no_operator_credential',
-        pending: await pendingCount(),
-      });
     }
     return !isPaused;
   }
