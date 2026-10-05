@@ -424,6 +424,24 @@ describe('RT-113 P2 createSafePointProbe', () => {
     });
   });
 
+  it('live tender alone keeps the session alive, even when its cart no longer counts as an open sale', () => {
+    // Defence in depth: the live-tender check stands on its own. A started
+    // attempt still holding tender on a cart that reads cancelled must never
+    // let the session end (cancel normally refuses while tender is live).
+    const sm = signedIn();
+    const sid = sm.getCurrent()?.id ?? '';
+    insertCart({ cart_id: 'cart-1', session_id: sid, state: 'cancelled', subtotal: 2550 });
+    insertStartedAttempt({ id: 'pa-1', session_id: sid, cart_id: 'cart-1' });
+    insertTender({
+      id: 'tl-1',
+      attempt: 'pa-1',
+      type: 'external_card_terminal',
+      amount: 2550,
+      state: 'reversal_pending',
+    });
+    expect(probe(sm)()).toBe(false);
+  });
+
   it("another session's live tender does not count", () => {
     const sm = signedIn();
     handedOffWithLiveTender('some-other-session');
