@@ -229,29 +229,31 @@ export function createSellingUserIdResolver(
     }
   }
 
+  /** rev547 F6: a failing lookup holds this batch (not memoized); the next call retries. */
+  function lookUpSafely(unseen: readonly SaleRow[], terminalId: string): void {
+    try {
+      lookUp(unseen, terminalId);
+    } catch {
+      reportLookupFailure();
+    }
+  }
+
+  /** RT-221: only a sale of the drain's own terminal can be attributed here. */
+  function routeOf(sale: SaleRow, terminalId: string): SaleRoute {
+    if (sale.terminal_id !== terminalId) {
+      report(sale.sale_id, 'terminal_mismatch');
+      return HOLD;
+    }
+    return known.get(sale.sale_id) ?? HOLD;
+  }
+
   return {
     resolve(sales, terminalId) {
-      const routes = new Map<string, SaleRoute>();
-      const unseen: SaleRow[] = [];
-      for (const sale of sales) {
-        if (sale.terminal_id !== terminalId) {
-          // RT-221: only a sale of the drain's own terminal can be attributed here.
-          report(sale.sale_id, 'terminal_mismatch');
-          routes.set(sale.sale_id, HOLD);
-        } else if (!known.has(sale.sale_id)) {
-          unseen.push(sale);
-        }
-      }
-      try {
-        lookUp(unseen, terminalId);
-      } catch {
-        // rev547 F6: hold this batch (not memoized); the next call retries.
-        reportLookupFailure();
-      }
-      for (const sale of sales) {
-        if (!routes.has(sale.sale_id)) routes.set(sale.sale_id, known.get(sale.sale_id) ?? HOLD);
-      }
-      return routes;
+      const unseen = sales.filter(
+        (sale) => sale.terminal_id === terminalId && !known.has(sale.sale_id),
+      );
+      lookUpSafely(unseen, terminalId);
+      return new Map(sales.map((sale) => [sale.sale_id, routeOf(sale, terminalId)]));
     },
     forget(saleId) {
       known.delete(saleId);

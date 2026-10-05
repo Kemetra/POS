@@ -33,7 +33,7 @@ import {
   nn,
   seedSale,
 } from './__helpers__/sales-sync-fixture.js';
-import { seedSettled } from './__helpers__/settled-audit-fixture.js';
+import { seedSettled, type SeedSettledInput } from './__helpers__/settled-audit-fixture.js';
 import type { Database as SqlJsDatabase } from 'sql.js';
 
 import type { DatabaseHandle } from '../../db/client.js';
@@ -125,15 +125,6 @@ describe('RT-224 — each sale is routed from its own payment.settled payload', 
     db.close();
   });
 
-  it('a row of another attempt only is not this sale’s → envelope + no_settled_event', () => {
-    const { db, read, sale, unresolved } = setup();
-    seedSale(db, { sale_id: 'sale-1' });
-    seedSettled(db, { sale_id: 'sale-1', payment_attempt_id: 'pa-OTHER', selling_user_id: USER_A });
-    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
-    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'no_settled_event' }]);
-    db.close();
-  });
-
   it('a sale of another terminal than the drain’s → held + terminal_mismatch', () => {
     const { db, read, sale, unresolved } = setup();
     seedSale(db, { sale_id: 'sale-1', terminal_id: 'term-OLD' });
@@ -143,54 +134,54 @@ describe('RT-224 — each sale is routed from its own payment.settled payload', 
     db.close();
   });
 
-  it('0 matching rows → envelope + no_settled_event', () => {
+  it.each<{
+    name: string;
+    rows: SeedSettledInput[];
+    route: SaleRoute;
+    reason: SellingUserUnresolved['reason'];
+  }>([
+    {
+      name: 'a row of another attempt only is not this sale’s → envelope',
+      rows: [{ payment_attempt_id: 'pa-OTHER', selling_user_id: USER_A }],
+      route: ENVELOPE,
+      reason: 'no_settled_event',
+    },
+    {
+      name: 'only another sale’s row → envelope',
+      rows: [{ sale_id: 'sale-OTHER', selling_user_id: USER_B }],
+      route: ENVELOPE,
+      reason: 'no_settled_event',
+    },
+    {
+      name: 'several own rows, one carrying the key → HELD (never sent under a manager)',
+      rows: [{ selling_user_id: USER_A }, {}],
+      route: HOLD,
+      reason: 'multiple_settled_events',
+    },
+    {
+      name: 'several own rows, none carrying the key → envelope',
+      rows: [{}, {}],
+      route: ENVELOPE,
+      reason: 'multiple_settled_events',
+    },
+    {
+      name: 'another operator’s row carrying the key → HELD',
+      rows: [{ attribution_operator_id: 'op-OTHER', selling_user_id: USER_A }],
+      route: HOLD,
+      reason: 'settled_event_mismatch',
+    },
+    {
+      name: 'another operator’s row without the key → envelope',
+      rows: [{ attribution_operator_id: 'op-OTHER' }],
+      route: ENVELOPE,
+      reason: 'settled_event_mismatch',
+    },
+  ])('$name ($reason)', ({ rows, route, reason }) => {
     const { db, read, sale, unresolved } = setup();
     seedSale(db, { sale_id: 'sale-1' });
-    seedSettled(db, { sale_id: 'sale-OTHER', selling_user_id: USER_B });
-    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
-    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'no_settled_event' }]);
-    db.close();
-  });
-
-  it('more than 1 own row, one carrying selling_user_id → HELD (a cashier sale is never sent under a manager)', () => {
-    const { db, read, sale, unresolved } = setup();
-    seedSale(db, { sale_id: 'sale-1' });
-    seedSettled(db, { sale_id: 'sale-1', selling_user_id: USER_A });
-    seedSettled(db, { sale_id: 'sale-1' });
-    expect(read(sale('sale-1'), TERMINAL)).toEqual(HOLD);
-    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'multiple_settled_events' }]);
-    db.close();
-  });
-
-  it('more than 1 own row, none carrying the key → envelope + multiple_settled_events', () => {
-    const { db, read, sale, unresolved } = setup();
-    seedSale(db, { sale_id: 'sale-1' });
-    seedSettled(db, { sale_id: 'sale-1' });
-    seedSettled(db, { sale_id: 'sale-1' });
-    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
-    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'multiple_settled_events' }]);
-    db.close();
-  });
-
-  it('a row of another operator carrying the key → HELD + settled_event_mismatch', () => {
-    const { db, read, sale, unresolved } = setup();
-    seedSale(db, { sale_id: 'sale-1' });
-    seedSettled(db, {
-      sale_id: 'sale-1',
-      attribution_operator_id: 'op-OTHER',
-      selling_user_id: USER_A,
-    });
-    expect(read(sale('sale-1'), TERMINAL)).toEqual(HOLD);
-    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'settled_event_mismatch' }]);
-    db.close();
-  });
-
-  it('a row of another operator without the key → envelope + settled_event_mismatch', () => {
-    const { db, read, sale, unresolved } = setup();
-    seedSale(db, { sale_id: 'sale-1' });
-    seedSettled(db, { sale_id: 'sale-1', attribution_operator_id: 'op-OTHER' });
-    expect(read(sale('sale-1'), TERMINAL)).toEqual(ENVELOPE);
-    expect(unresolved).toEqual([{ saleId: 'sale-1', reason: 'settled_event_mismatch' }]);
+    for (const row of rows) seedSettled(db, { sale_id: 'sale-1', ...row });
+    expect(read(sale('sale-1'), TERMINAL)).toEqual(route);
+    expect(unresolved).toEqual([{ saleId: 'sale-1', reason }]);
     db.close();
   });
 
