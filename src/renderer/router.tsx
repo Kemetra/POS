@@ -30,6 +30,8 @@ import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
 import { V5AppLayout } from './v5/frame/V5AppLayout';
 import { V5SaleRoute } from './v5/sale/V5SaleRoute';
+import { V5ShiftRoute } from './v5/shift/V5ShiftRoute';
+import { V5ShiftManagerRoute } from './v5/shift/V5ShiftManagerRoute';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -193,6 +195,27 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
           children: [
             { path: 'cart', element: <V5SaleRoute /> },
             { path: 'checkout', element: <CheckoutRoute /> },
+            // RT-17 slice 4 part 3 — the shift cash-up screens. Each leaves for
+            // /app (before any call) while POS_PULSE_FEATURE_SHIFT_CASHUP is
+            // off; main registers no shift handler then either.
+            // The cashier screen records device-path facts (cashier only); a
+            // manager or admin is turned away before any call.
+            {
+              path: 'shift',
+              element: (
+                <OperatorRouteGuard allow={['cashier']}>
+                  <V5ShiftRoute />
+                </OperatorRouteGuard>
+              ),
+            },
+            {
+              path: 'shift/manager',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  <V5ShiftManagerRoute />
+                </OperatorRouteGuard>
+              ),
+            },
           ],
         },
         {

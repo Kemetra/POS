@@ -7,6 +7,7 @@ import { PrinterFailureBanner } from '../../ui/receipts/PrinterFailureBanner';
 import { useBannerState } from '../../ui/receipts/useBannerState';
 import { DrawerFailureBanner } from '../../ui/receipts/DrawerFailureBanner';
 import { useDrawerBannerState } from '../../ui/receipts/useDrawerBannerState';
+import { ShiftNotice } from '../shift/ShiftNotice';
 
 type RecoveryAction = 'reprint' | 'manualOverride';
 
@@ -47,6 +48,10 @@ function useRecoveryAction(action: RecoveryAction): (saleId: string) => void {
  * failure. Each banner unmounts when there is nothing to report; with no
  * sales bridge the polling hooks resolve to null.
  *
+ * RT-17 slice 4 part 3: the shift notice (the cashier's "shift required"
+ * banner, or the way to the shift screens) — nothing while the shift flag is
+ * off.
+ *
  * The legacy connection pill is deliberately NOT carried: it has no live data
  * source yet, and an always-"Online" indicator would be a fabricated state.
  */
@@ -74,6 +79,7 @@ export function V5OperationalNotices(): JSX.Element {
         now={new Date().toISOString()}
         onManualOverride={manualOverride}
       />
+      <ShiftNotice />
     </>
   );
 }

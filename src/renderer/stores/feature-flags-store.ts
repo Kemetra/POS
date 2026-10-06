@@ -30,6 +30,13 @@ export interface FeatureFlagsState {
    * Fail-closed default: false (AC1). Main gates every `returns.*` call too.
    */
   returns: boolean;
+  /**
+   * RT-17 slice 4: shows the shift cash-up screens (open, pay-in / pay-out,
+   * blind-count close, manager PIN, status). Fail-closed default: false — with
+   * it off no shift screen renders and no `shiftCashup.*` call is made. Main
+   * registers no shift handler and refuses every call on its own read too.
+   */
+  shiftCashup: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
@@ -42,6 +49,7 @@ export interface FeatureFlagsStore extends FeatureFlagsState {
     productSearch?: boolean;
     voucherTender?: boolean;
     returns?: boolean;
+    shiftCashup?: boolean;
   }): void;
   reset(): void;
 }
@@ -53,6 +61,7 @@ const INITIAL: FeatureFlagsState = {
   productSearch: false,
   voucherTender: false,
   returns: false,
+  shiftCashup: false,
   hydrated: false,
 };
 
@@ -66,6 +75,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
       productSearch: flags.productSearch === true,
       voucherTender: flags.voucherTender === true,
       returns: flags.returns === true,
+      shiftCashup: flags.shiftCashup === true,
       hydrated: true,
     });
   },

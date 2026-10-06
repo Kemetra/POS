@@ -64,3 +64,22 @@ describe('feature-flags-store — returns (RT-15 S3, AC1 default off)', () => {
     expect(useFeatureFlagsStore.getState().returns).toBe(false);
   });
 });
+
+describe('feature-flags-store — shiftCashup (RT-17 slice 4, default off)', () => {
+  it('defaults shiftCashup to false (fail-closed)', () => {
+    expect(useFeatureFlagsStore.getState().shiftCashup).toBe(false);
+  });
+
+  it('hydrates shiftCashup only from an explicit true', () => {
+    useFeatureFlagsStore.getState().hydrate({ cart: true });
+    expect(useFeatureFlagsStore.getState().shiftCashup).toBe(false);
+    useFeatureFlagsStore.getState().hydrate({ shiftCashup: true });
+    expect(useFeatureFlagsStore.getState().shiftCashup).toBe(true);
+  });
+
+  it('reset restores shiftCashup to false', () => {
+    useFeatureFlagsStore.getState().hydrate({ shiftCashup: true });
+    useFeatureFlagsStore.getState().reset();
+    expect(useFeatureFlagsStore.getState().shiftCashup).toBe(false);
+  });
+});
