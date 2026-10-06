@@ -7,6 +7,11 @@ import { SHIFT_COPY } from '../../v5/shift/shift-copy';
 import '../../v5/shift/shift.css';
 
 const MANAGER_PATH = '/app/shift/manager';
+const MANAGER_ROLES: ReadonlySet<string> = new Set(['manager', 'admin']);
+
+function isManagerRole(role: string | null): boolean {
+  return role !== null && MANAGER_ROLES.has(role);
+}
 
 /**
  * RT-17 D3 (comments 10957 / 10958) — the legacy manager dashboard's way into
@@ -20,7 +25,7 @@ export function ShiftManagerLink(): JSX.Element | null {
   const role = useOperatorSessionStore((s) =>
     s.state.kind === 'signedIn' ? s.state.session.role : null,
   );
-  if (!enabled || (role !== 'manager' && role !== 'admin')) return null;
+  if (!enabled || !isManagerRole(role)) return null;
   return (
     <p className="v5-shift-notice" data-testid="dashboard-shift-link">
       <Link to={MANAGER_PATH}>{SHIFT_COPY.managerLink}</Link>
