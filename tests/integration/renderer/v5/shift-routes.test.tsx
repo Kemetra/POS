@@ -82,6 +82,18 @@ describe('/app/shift and /app/shift/manager through the AppRouter', () => {
     ).toBeInTheDocument();
   });
 
+  it.each(['manager', 'admin'] as const)(
+    'guards the cashier shift screen from a %s, before any call',
+    async (role) => {
+      signIn(role, true);
+      renderAt('/app/shift');
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/sign-in');
+      });
+      expect(bridge.status).not.toHaveBeenCalled();
+    },
+  );
+
   it('guards the manager screen from a cashier', async () => {
     signIn('cashier', true);
     renderAt('/app/shift/manager');

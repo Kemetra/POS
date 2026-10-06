@@ -65,6 +65,19 @@ describe('V5ShiftRoute — gating', () => {
     expect(screen.queryByRole('heading', { name: SHIFT_COPY.title })).not.toBeInTheDocument();
   });
 
+  it.each(['manager', 'admin'] as const)(
+    'turns a %s away before any call (the device path is cashier-only)',
+    async (role) => {
+      signIn(role);
+      enableShiftFlag();
+      const bridge = fakeShiftBridge();
+      renderRoute(bridge);
+      expect(await screen.findByTestId('where')).toHaveTextContent('/app');
+      expect(screen.queryByRole('heading', { name: SHIFT_COPY.title })).not.toBeInTheDocument();
+      for (const member of Object.values(bridge)) expect(member).not.toHaveBeenCalled();
+    },
+  );
+
   it('renders nothing while signed out', () => {
     enableShiftFlag();
     const bridge = fakeShiftBridge();
@@ -265,6 +278,56 @@ describe('V5ShiftRoute — pay-in / pay-out', () => {
     expect(bridge.payIn).not.toHaveBeenCalled();
   });
 
+  describe('while the movement is being recorded', () => {
+    async function pendingMovement() {
+      const bridge = openBridge();
+      let answer: () => void = () => undefined;
+      bridge.payIn.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            answer = () => {
+              resolve({ kind: 'recorded', movementId: 'm-1', shiftId: 'shift-1' });
+            };
+          }),
+      );
+      const { dialog } = await openDialog('payIn', bridge);
+      type(SHIFT_COPY.amountLabel, '25');
+      press(SHIFT_COPY.record, dialog);
+      await waitFor(() => {
+        expect(bridge.payIn).toHaveBeenCalledTimes(1);
+      });
+      return {
+        bridge,
+        dialog,
+        answer: () => {
+          answer();
+        },
+      };
+    }
+
+    it('cannot be cancelled', async () => {
+      const { dialog } = await pendingMovement();
+      const cancel = within(dialog).getByRole('button', { name: SHIFT_COPY.cancel });
+      expect(cancel).toBeDisabled();
+      fireEvent.click(cancel);
+      expect(screen.getByRole('dialog', { name: SHIFT_COPY.payIn })).toBeInTheDocument();
+    });
+
+    it('cannot be dismissed with Escape', async () => {
+      const { dialog } = await pendingMovement();
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      expect(screen.getByRole('dialog', { name: SHIFT_COPY.payIn })).toBeInTheDocument();
+    });
+
+    it('closes once the answer arrives, after exactly one call', async () => {
+      const { bridge, answer } = await pendingMovement();
+      answer();
+      expect(await screen.findByText(SHIFT_COPY.recordedIn)).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(bridge.payIn).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('caps the note at the contract bound', async () => {
     const { dialog } = await openDialog('payIn');
     expect(within(dialog).getByLabelText(SHIFT_COPY.noteLabel)).toHaveAttribute('maxlength', '200');
@@ -427,6 +490,38 @@ describe('V5ShiftRoute — manager approval of a non-zero variance', () => {
     press(SHIFT_COPY.cancel, dialog);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(bridge.close).toHaveBeenCalledTimes(1);
+  });
+
+  describe('while the approved close is pending', () => {
+    async function pendingApproval() {
+      const { bridge, dialog } = await reachApproval();
+      bridge.close.mockImplementationOnce(() => new Promise(() => undefined));
+      approveAs(dialog, 0, '246813');
+      await waitFor(() => {
+        expect(bridge.close).toHaveBeenCalledTimes(2);
+      });
+      return { bridge, dialog };
+    }
+
+    it('cannot be cancelled', async () => {
+      const { dialog } = await pendingApproval();
+      const cancel = within(dialog).getByRole('button', { name: SHIFT_COPY.cancel });
+      expect(cancel).toBeDisabled();
+      fireEvent.click(cancel);
+      expect(screen.getByRole('dialog', { name: SHIFT_COPY.approvalTitle })).toBeInTheDocument();
+    });
+
+    it('cannot be dismissed with Escape, so the close cannot be sent again', async () => {
+      const { bridge, dialog } = await pendingApproval();
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      expect(screen.getByRole('dialog', { name: SHIFT_COPY.approvalTitle })).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('shift-close-panel')).getByRole('button', {
+          name: SHIFT_COPY.closeCommit,
+        }),
+      ).toBeDisabled();
+      expect(bridge.close).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('says so when no manager is enrolled on this terminal', async () => {
