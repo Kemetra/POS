@@ -35,8 +35,12 @@ describe('main/index.ts wires the sale-sync shutdown latch', () => {
     );
   });
 
-  it('bounds the drain by the sale-sync client request timeout (15 s)', () => {
-    expect(source).toMatch(/const SALE_SYNC_DRAIN_TIMEOUT_MS = 15_000;/);
+  it('bounds the drain by the exported SALE_SYNC_DRAIN_TIMEOUT_MS (the client timeout plus a margin)', () => {
+    expect(source).not.toMatch(/const SALE_SYNC_DRAIN_TIMEOUT_MS\b/);
+    expect(source).not.toMatch(/drainTimeoutMs: \d/);
+    expect(source).toMatch(
+      /import \{[^}]*\bSALE_SYNC_DRAIN_TIMEOUT_MS\b[^}]*\} from '\.\/sales-sync\/schedule-sale-sync\.js';/,
+    );
     expect(source).toMatch(/drainTimeoutMs: SALE_SYNC_DRAIN_TIMEOUT_MS,/);
   });
 

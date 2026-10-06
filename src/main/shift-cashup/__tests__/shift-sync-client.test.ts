@@ -25,6 +25,7 @@ import { createShiftCashupRepo, type QueuedShiftFact } from '../shift-cashup-rep
 import {
   createShiftSyncClient,
   SHIFT_SYNC_DEVICE_SOURCE,
+  SHIFT_SYNC_REQUEST_TIMEOUT_MS,
   shiftFactPath,
   type CreateShiftSyncClientDeps,
   type ShiftSyncClient,
@@ -382,5 +383,19 @@ describe('createShiftSyncClient — RT-215 device-401 observation', () => {
       },
     });
     await expect(sendFact(client, MOVEMENT_FACT)).resolves.toEqual({ kind: 'ok' });
+  });
+});
+
+describe('createShiftSyncClient — request timeout (RT-17 follow-up, drain bound)', () => {
+  it('bounds a request by SHIFT_SYNC_REQUEST_TIMEOUT_MS (15 s) unless a timeout is injected', async () => {
+    expect(SHIFT_SYNC_REQUEST_TIMEOUT_MS).toBe(15_000);
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      const { client } = harness();
+      await sendFact(client, OPEN_FACT);
+      expect(timeout).toHaveBeenCalledWith(SHIFT_SYNC_REQUEST_TIMEOUT_MS);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });

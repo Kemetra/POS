@@ -31,6 +31,7 @@ import {
   SALE_SYNC_BACKOFF_POLICY,
   type BackoffPolicy,
 } from '../sales-sync/sale-sync-engine.js';
+import { settledWithin } from '../sales-sync/settled-within.js';
 import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
 import type { ReturnsDispatcher } from './returns-dispatch.js';
 import type { JournalEntry, ReturnsRepository } from './returns-repository.js';
@@ -120,14 +121,7 @@ class PassTracker {
   /** Settles when the pass in flight (if any) has finished, or after `timeoutMs`. */
   drain(timeoutMs: number): Promise<void> {
     if (this.running === null) return Promise.resolve();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const bound = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, timeoutMs);
-    });
-    const settled = this.running.pass.then(ignore, ignore);
-    return Promise.race([settled, bound]).finally(() => {
-      clearTimeout(timer);
-    });
+    return settledWithin(this.running.pass, timeoutMs);
   }
 
   /** Track `work` as the one pass in flight until it settles. */

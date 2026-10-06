@@ -24,6 +24,7 @@ import {
   handleFor,
   initSalesSyncSql,
 } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
+import { DRAIN_MARGIN_MS } from '../../sales-sync/settled-within.js';
 import {
   SHIFT_SYNC_DRAIN_TIMEOUT_MS,
   SHIFT_SYNC_INTERVAL_MS,
@@ -33,6 +34,7 @@ import {
   type StartShiftSyncDeps,
 } from '../compose-shift-cashup.js';
 import { createShiftCashupRepo, type ShiftCashupRepo } from '../shift-cashup-repo.js';
+import { SHIFT_SYNC_REQUEST_TIMEOUT_MS } from '../shift-sync-client.js';
 import { cashierSession, storedBody } from './__helpers__/shift-cashup-service-fixture.js';
 import { NOW, OPEN, PAY_IN, SCOPE, stateOf } from './__helpers__/shift-sync-fixture.js';
 
@@ -207,8 +209,8 @@ describe('startShiftSync — scheduling, sources and RT-215', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('the stop waits for a send in flight at most the client request timeout', async () => {
-    expect(SHIFT_SYNC_DRAIN_TIMEOUT_MS).toBe(15_000);
+  it('the stop waits for a send in flight at most the client request timeout plus the margin', async () => {
+    expect(SHIFT_SYNC_DRAIN_TIMEOUT_MS).toBe(SHIFT_SYNC_REQUEST_TIMEOUT_MS + DRAIN_MARGIN_MS);
     fetch.mockImplementation(() => new Promise<Response>(() => undefined));
     repo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
     start();
@@ -258,5 +260,16 @@ describe('startShiftSync — scheduling, sources and RT-215', () => {
     start({ resolveTerminalId: () => Promise.reject(new Error('boom')) });
     await vi.advanceTimersByTimeAsync(SHIFT_SYNC_INTERVAL_MS);
     expect(warn).toHaveBeenCalledWith({}, 'shift_sync:dependency_failure');
+  });
+});
+
+describe('SHIFT_SYNC_DRAIN_TIMEOUT_MS — the drain outlasts the client request timeout', () => {
+  it('is never below the client request timeout', () => {
+    expect(SHIFT_SYNC_DRAIN_TIMEOUT_MS).toBeGreaterThanOrEqual(SHIFT_SYNC_REQUEST_TIMEOUT_MS);
+    expect(SHIFT_SYNC_DRAIN_TIMEOUT_MS - SHIFT_SYNC_REQUEST_TIMEOUT_MS).toBe(DRAIN_MARGIN_MS);
+  });
+
+  it('leaves the timeout itself at 15 s (only the drain bound is derived)', () => {
+    expect(SHIFT_SYNC_REQUEST_TIMEOUT_MS).toBe(15_000);
   });
 });

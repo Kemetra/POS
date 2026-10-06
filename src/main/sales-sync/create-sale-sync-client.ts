@@ -104,7 +104,11 @@ import type {
 } from './sale-sync-client-types.js';
 
 const SALES_PATH = '/api/pos/v1/sales';
-const DEFAULT_TIMEOUT_MS = 15_000;
+/**
+ * The request timeout (`AbortSignal.timeout`): also what the sale-sync stop's
+ * drain bound is derived from (`SALE_SYNC_DRAIN_TIMEOUT_MS`).
+ */
+export const SALE_SYNC_REQUEST_TIMEOUT_MS = 15_000;
 /** The capture currency when none is configured (v1 single-currency EGP); RT-15 returns reuse it. */
 export const DEFAULT_CURRENCY_CODE = 'EGP';
 
@@ -505,7 +509,7 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
   const { fetch: envelopeFetch, baseUrl, getOperatorToken } = deps;
   // RT-215 × RT-224: the device path's own (detector-tagged) fetch; never the envelope's.
   const deviceFetch = deps.deviceFetch ?? envelopeFetch;
-  const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = deps.timeoutMs ?? SALE_SYNC_REQUEST_TIMEOUT_MS;
   const currencyCode = deps.currencyCode ?? DEFAULT_CURRENCY_CODE;
   const nowMs = deps.nowMs ?? Date.now;
   const root = baseUrl.replace(/\/$/, '');
