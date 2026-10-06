@@ -12,7 +12,7 @@
 > [10](10-direction-comparison.md); references `VN-B1-*`): a command bar holding the scan target
 > and search instead of the product rail, a full-width cart, the money column, and slim
 > navigation. The rows' states, RT-24 mappings and treatments are unchanged, but wherever a row
-> says "rail", read "command bar". The direct-add treatment in VN-09 still waits on RT-24 §C.1.
+> says "rail", read "command bar". The direct-add treatment in VN-09 is confirmed by owner decision D-C1 (2026-10-07; see [15](15-vnext-freeze-package.md) §3).
 > **Key hints are excluded from "unchanged":** any key a row names (for example VN-08's `F8`)
 > is RT-24's proposed, unconfirmed key map. Show it only once VN-S5 binds that key
 > ([`docs/DESIGN.md`](../../DESIGN.md), Keyboard hints).

@@ -197,7 +197,7 @@ follow-up questions:
 
 This **confirms RT-24 §C.1** (direct add) and **extends it to search picks**, which the VNext
 references had kept confirm-first. It must be mirrored in the Confluence Decisions page and on
-RT-24 / RT-159. That has not been posted yet; it waits for the owner's OK.
+RT-24 / RT-159. **Posted with the owner's OK on 2026-10-07:** Confluence Decisions page (v25), RT-24 comment 11100 and RT-159 comment 11099. Direct add ships together with its undo, so the direct-add part of W1-B also depends on D-U1 ([15](15-vnext-freeze-package.md) §7).
 
 Knock-ons, recorded as inputs to [15](15-vnext-freeze-package.md) §7:
 - F-08 retires for scans.

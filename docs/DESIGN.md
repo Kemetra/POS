@@ -208,8 +208,9 @@ components:
 > - **Approved, not yet shipped** items are tagged with the bounded slice that lands them, e.g.
 >   *(VN-S2)*. Do not describe them as shipped and do not implement them outside that slice's
 >   Jira issue ([`09-implementation-slices.md`](design/vnext/09-implementation-slices.md)).
-> - **Still open** (do not resolve them by design): the RT-24 §C confirmations — direct add vs
->   confirm-first, lazy cart, same-device suspend/resume, key map; OD-3's validation against real
+> - **Still open** (do not resolve them by design): the RT-24 §C confirmations — lazy cart,
+>   same-device suspend/resume, key map (direct add vs confirm-first is resolved by owner decision
+>   D-C1, 2026-10-07: direct add, see `design/vnext/15-vnext-freeze-package.md` §3); OD-3's validation against real
 >   Egyptian pharmacy receipts; and the real-app capacity capture that must confirm Direction B
 >   before VN-S12 ships.
 > - Superseded: the v3.5 navy / Inter / dark-default system and `docs/design/pos-v3.5/`

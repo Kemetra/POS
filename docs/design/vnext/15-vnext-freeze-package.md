@@ -123,8 +123,8 @@ Manager → Cashiers (M-states, manager surface; RT-235 behaviour ✅, VNext pre
 | M2 | Cashier with **no PIN on this terminal** | «تعيين أول رقم سري» | unlock, reset | badge «بدون رقم سري» | needs D-M1 (a status read exists? see §6 G-3) |
 | M3 | Cashier with a PIN | — | «تعيين أول رقم سري» | badge «جاهز» | — |
 | M4 | Cashier locked out | «فك القفل» | — | badge «مقفل» | — |
-| M5 | Setting PIN (entry + confirm) | «حفظ» | — | two fields, digits only, 6–8 | mismatch refused inline |
-| M6 | Refused (session expired, N-01) | «تسجيل الدخول مرة أخرى» | save | M-A1 copy | per D-A1 |
+| M5 | Setting PIN (entry + confirm) | «حفظ» | — | two fields, digits only, **4–6** (the cashier PIN rule: `PIN_RE` in `pin-management.ts`; 6–8 is the separate manager-PIN rule) | mismatch refused inline |
+| M6 | Refused (session expired, N-01) | «تسجيل الدخول مرة أخرى» | save | M-A3 copy | per D-A1 |
 
 ### 2.1 Lock-screen conflict, resolved explicitly
 
@@ -397,7 +397,7 @@ Every implementation slice:
 | Slice | Scope | Workflow owner | Work Mode | Depends on | Refs | Evidence |
 |---|---|---|---|---|---|---|
 | **W1-A** Foundation + frame | VN-S2 (role tokens, forced-colors, RouteLoading, ErrorScreen, Arabic ScreenTooSmall) + `Banner`/`Dialog`/`ConfirmDialog` primitives + cashier lands on Sale + OD-6 placeholders hidden for the cashier role (drawer-banner placement waits for D-B1) | W2 cashier flow | Implementation | owner acceptance of 15 | VN-S2 rows of 09; I2-Consistency | before/after captures identical except intended |
-| **W1-B** Sale Direction B + direct add | VN-S12 (command bar, cart-first, money column, slim nav) + **D-C1 direct add** for scan and search pick + `ScanStatus` + newest row in view + ↑/↓ row focus | W2 | Implementation | W1-A, A2 | I2-Sale, I2-LongCart | ≥6 rows at 1024 with a banner; scan-without-click adds; KLM before/after |
+| **W1-B** Sale Direction B + direct add | VN-S12 (command bar, cart-first, money column, slim nav) + **D-C1 direct add** for scan and search pick + `ScanStatus` + newest row in view + ↑/↓ row focus | W2 | Implementation | W1-A, A2; **the direct-add and undo part also depends on D-U1** (the layout part may proceed without it, keeping confirm-first until D-U1 closes) | I2-Sale, I2-LongCart | ≥6 rows at 1024 with a banner; scan-without-click adds; KLM before/after |
 | **W1-C** Checkout + completion clean-room | VN-S4 on the frozen states (S7–S10, S12–S14) with `PaymentLedger`, `ProofList`, the M-P/M-C copy | W2 | Implementation | W1-A, A1, A3 | I2-Checkout*, I2-PayUnknown, I3-Receipt | every payment state in the harness; packaged sale |
 | **W1-D** Sign-in / Ready / pairing recompose | VN-S8 minus lock; the PIN pad in view; Arabic copy M-F1 | W2 | Implementation | W1-A, **G-1 reference** | new G-1 reference | 1024/1280; roster unreachable state |
 

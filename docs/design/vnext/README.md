@@ -172,9 +172,11 @@ The table below is the decision request as originally proposed, kept for its rat
 The approval did not close these. They stay open until separately evidenced or approved, and the
 slices that depend on them must not assume an answer:
 
-- **RT-24 §C confirmations:** item 1 (direct add vs confirm-first), item 2 (lazy cart), item 4
-  (same-device suspend/resume) and item 5 (key map). These gate VN-S3/VN-S12 (scan
-  acknowledgement), VN-S5 (keys) and VN-S11 (suspend/resume). See [08](08-rt24-invariants.md).
+- **RT-24 §C confirmations:** item 2 (lazy cart), item 4 (same-device suspend/resume) and item 5
+  (key map). These gate VN-S5 (keys) and VN-S11 (suspend/resume). **Item 1 (direct add vs
+  confirm-first) is resolved by owner decision D-C1 (2026-10-07):** direct add for scans and
+  search picks, with undo pending D-U1 (see [14 §5](14-rt159-packaged-reaudit.md) and
+  [15](15-vnext-freeze-package.md) §3, §7). See [08](08-rt24-invariants.md).
   The keycaps drawn in the approved references are part of this open key map, not bound
   shortcuts ([references](references/README.md)).
 - **OD-3 receipt validation:** the numeral and grouping policy must be checked against real
