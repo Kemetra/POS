@@ -25,6 +25,9 @@ import { createReadDownClient } from '../../../src/main/catalogue/read-down/read
 import { createSaleSyncClient } from '../../../src/main/sales-sync/create-sale-sync-client.js';
 import type { CaptureSalePayload } from '../../../src/main/sales-sync/capture-payload.js';
 import { createReturnsClient } from '../../../src/main/returns/returns-client.js';
+import type { QueuedShiftFact } from '../../../src/main/shift-cashup/shift-cashup-repo.js';
+import type { ShiftFactKind } from '../../../src/main/shift-cashup/shift-wire.js';
+import { createShiftSyncClient } from '../../../src/main/shift-cashup/shift-sync-client.js';
 import { validateVoucher } from '../../../src/main/payments/voucher-authority-client/validate.js';
 import { redeemVoucher } from '../../../src/main/payments/voucher-authority-client/redeem.js';
 import { reverseVoucher } from '../../../src/main/payments/voucher-authority-client/reverse.js';
@@ -75,6 +78,24 @@ const CAPTURE_PAYLOAD: CaptureSalePayload = {
   ],
 };
 
+const SHIFT_TERMINAL = 'term-1';
+
+/** A queued device-path shift fact (RT-17); the client sends its stored bytes as they are. */
+function shiftFact(factKind: ShiftFactKind): { terminalId: string; fact: QueuedShiftFact } {
+  return {
+    terminalId: SHIFT_TERMINAL,
+    fact: {
+      seq: 1,
+      factKind,
+      shiftId: UUID,
+      authPath: 'device',
+      idempotencyKey: `pos-pulse-shift-${factKind}:${UUID}`,
+      requestBody: '{}',
+      attemptCount: 0,
+    },
+  };
+}
+
 export interface ClientCall {
   /** `<client>.<method>` — must equal the client's own method / function name. */
   readonly id: string;
@@ -118,6 +139,14 @@ const saleSyncClient = (fetch: FetchLike): ReturnType<typeof createSaleSyncClien
     getDeviceToken: () => Promise.resolve(SENTINEL.device),
     currentTerminalId: () => CAPTURE_PAYLOAD.terminalId,
   });
+const shiftSyncClient = (fetch: FetchLike): ReturnType<typeof createShiftSyncClient> =>
+  createShiftSyncClient({
+    baseUrl: BASE_URL,
+    fetch,
+    detector: { observe: () => undefined },
+    getDeviceToken: () => Promise.resolve(SENTINEL.device),
+    currentTerminalId: () => SHIFT_TERMINAL,
+  });
 const pairingNetwork = (fetch: FetchLike): ReturnType<typeof createNetwork> =>
   createNetwork({ baseUrl: BASE_URL, fetch });
 const cashierAdmissionClient = (
@@ -134,6 +163,9 @@ const CASHIER_ADMISSION_CLIENT = 'src/main/operator/cashier-admission-client.ts'
 const CASHIER_ADMISSION_WIRING =
   'index.ts createCashierAdmissionClient: `getDeviceToken` = createSendableDeviceTokenReader (paired only; never once revoked, RT-215)';
 const VOUCHER_DIR = 'src/main/payments/voucher-authority-client';
+const SHIFT_SYNC_CLIENT = 'src/main/shift-cashup/shift-sync-client.ts';
+const SHIFT_SYNC_WIRING =
+  'not wired yet (RT-17 slice 3 part 3): `getDeviceToken` = createSendableDeviceTokenReader (paired only; never once revoked, RT-215)';
 
 export const CLIENT_MODULES: readonly ClientModule[] = [
   { module: BACKEND_CLIENT, fetchCallSites: 2, surface: backendClient },
@@ -150,6 +182,7 @@ export const CLIENT_MODULES: readonly ClientModule[] = [
     surface: saleSyncClient,
   },
   { module: 'src/main/returns/returns-client.ts', fetchCallSites: 1, surface: returnsClient },
+  { module: SHIFT_SYNC_CLIENT, fetchCallSites: 1, surface: shiftSyncClient },
   { module: `${VOUCHER_DIR}/validate.ts`, fetchCallSites: 1 },
   { module: `${VOUCHER_DIR}/redeem.ts`, fetchCallSites: 1 },
   { module: `${VOUCHER_DIR}/reverse.ts`, fetchCallSites: 1 },
@@ -325,6 +358,32 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
         },
         SENTINEL['operator-envelope'],
       ),
+  },
+  // RT-17 slice 3 part 2: the shift outbox drain, device bearer + the stored
+  // `operatorUserId` claim (never the envelope; envelope repair rows are not sent).
+  {
+    id: 'shiftSyncClient.openShift',
+    module: SHIFT_SYNC_CLIENT,
+    method: 'post',
+    pathTemplate: '/api/pos/v1/shifts',
+    wiring: SHIFT_SYNC_WIRING,
+    invoke: (fetch) => shiftSyncClient(fetch).openShift(shiftFact('open')),
+  },
+  {
+    id: 'shiftSyncClient.recordCashMovement',
+    module: SHIFT_SYNC_CLIENT,
+    method: 'post',
+    pathTemplate: '/api/pos/v1/shifts/{shift_id}/cash-movements',
+    wiring: SHIFT_SYNC_WIRING,
+    invoke: (fetch) => shiftSyncClient(fetch).recordCashMovement(shiftFact('movement')),
+  },
+  {
+    id: 'shiftSyncClient.closeShift',
+    module: SHIFT_SYNC_CLIENT,
+    method: 'post',
+    pathTemplate: '/api/pos/v1/shifts/{shift_id}/close',
+    wiring: SHIFT_SYNC_WIRING,
+    invoke: (fetch) => shiftSyncClient(fetch).closeShift(shiftFact('close')),
   },
   {
     id: 'validateVoucher',
