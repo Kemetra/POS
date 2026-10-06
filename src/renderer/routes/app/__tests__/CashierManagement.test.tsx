@@ -408,6 +408,39 @@ describe('CashierManagement (T078)', () => {
       expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
     });
 
+    it('RT-235 review: while provisioning is in flight Cancel, Escape and every row action are blocked, so a stale response cannot overwrite a newer action', async () => {
+      const user = userEvent.setup();
+      let settle: (value: unknown) => void = () => undefined;
+      const bridge = makeBridge({
+        provisionCashierPin: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              settle = resolve;
+            }),
+        ),
+      });
+      const pinInput = await openSetFirstPin(user, bridge);
+      await user.type(pinInput, '4729');
+      await user.click(screen.getByRole('button', { name: /save pin/i }));
+
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
+      for (const name of [/set first pin/i, /reset pin/i, /unlock/i]) {
+        for (const btn of screen.getAllByRole('button', { name })) {
+          // The open dialog's own label is not a button; every row action is.
+          expect(btn).toBeDisabled();
+        }
+      }
+      await user.keyboard('{Escape}');
+      expect(screen.getByRole('dialog', { name: /set first pin/i })).toBeInTheDocument();
+
+      settle({ kind: 'pin_provisioned', audit_event_id: 'evt-3' });
+      await waitFor(() =>
+        expect(screen.getByTestId('action-success')).toHaveTextContent(/first pin set/i),
+      );
+      // Idle again: the row actions work.
+      expect(screen.getAllByRole('button', { name: /reset pin/i })[0]).toBeEnabled();
+    });
+
     it('Escape and Cancel close the dialog without calling the bridge', async () => {
       const user = userEvent.setup();
       const bridge = makeBridge();

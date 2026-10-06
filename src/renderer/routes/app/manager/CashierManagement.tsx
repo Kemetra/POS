@@ -53,8 +53,10 @@ export function CashierManagement({ operator }: Props): JSX.Element {
   const [rosterError, setRosterError] = useState(false);
   const [action, setAction] = useState<ActionState>({ kind: 'idle' });
   // Provisioning is create-only: a second in-flight Save would race the first and
-  // could replace its success with `state_invalid`. The ref blocks re-entry
-  // synchronously; the state disables the button.
+  // could replace its success with `state_invalid`, and any other action taken
+  // meanwhile would be overwritten when the response lands. While a call is in
+  // flight the ref blocks re-entry and Escape synchronously; the state disables
+  // Save, Cancel and every row action.
   const provisioningRef = useRef(false);
   const [provisioning, setProvisioning] = useState(false);
 
@@ -73,7 +75,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
   useEffect(() => {
     if (action.kind !== 'resetPin' && action.kind !== 'setFirstPin') return;
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !provisioningRef.current) {
         setAction({ kind: 'idle' });
       }
     };
@@ -164,6 +166,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
                 <button
                   type="button"
                   className="btn btn--secondary btn--md"
+                  disabled={provisioning}
                   onClick={() => {
                     setAction({ kind: 'setFirstPin', cashier: c, pin: '' });
                   }}
@@ -173,6 +176,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
                 <button
                   type="button"
                   className="btn btn--secondary btn--md"
+                  disabled={provisioning}
                   onClick={() => {
                     setAction({ kind: 'resetPin', cashier: c, pin: '' });
                   }}
@@ -182,6 +186,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
                 <button
                   type="button"
                   className="btn btn--secondary btn--md"
+                  disabled={provisioning}
                   onClick={() => {
                     void handleUnlock(c);
                   }}
@@ -249,6 +254,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             <button
               type="button"
               className="btn btn--ghost btn--md"
+              disabled={provisioning}
               onClick={() => {
                 setAction({ kind: 'idle' });
               }}
