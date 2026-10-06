@@ -151,7 +151,7 @@ owner review.
    the scan owner and **never activates the focused control**. This fixes F-01.
 3. **Fields that must never receive a scan:** money fields (cash amount, opening float, counted
    cash, pay-in / pay-out), PIN fields, the card reference. A burst there is rejected with the
-   inline notice M-S5 and the field keeps its previous value. This fixes the F-02 UI side; the
+   field-specific inline notice M-S5 and the field keeps its previous value. This fixes the F-02 UI side; the
    main-process plausibility bound is decision D-F2.
 4. **The search field** owns typing. A burst into the search field is treated as a scan (resolved
    barcode → direct add) and the field is cleared. This removes the F-07 failure where the barcode
@@ -160,9 +160,12 @@ owner review.
    is **not** dropped silently: it is refused with notice M-S6 and nothing is added. With D-C1 the
    add-confirm dialog no longer exists, so this applies only to the remaining dialogs (void,
    sign-out, manager approval, cancel after card).
-6. **After every action, focus returns to the scan owner**: add, undo, delete, quantity change,
-   dialog close, Back from Checkout and «بيع جديد». The exceptions are search, when the cashier is
-   typing, and an open entry field.
+6. **Focus returns to the scan owner after scan/add transitions**: an add (scan or search pick),
+   undo of an add, dialog close, Back from Checkout and «بيع جديد». **Keyboard row-edit actions keep
+   row context**: `+`/`−` and the note keep focus on the same row, and `Delete` (with undo) moves
+   focus to the neighbouring row, or to the scan owner when the cart becomes empty. This is safe
+   because wedge bursts are routed to the scan owner whatever has focus (rule 2). The other
+   exceptions are search while the cashier is typing, and an open entry field.
 7. **Direct add (D-C1).** A resolved scan or a picked search result adds immediately (or adds +1
    to an existing line). The acknowledgement is: the row flashes (150 ms, none under
    reduced-motion), the row scrolls into view, and the last-scan line reads «أُضيف: <name>». There
@@ -195,10 +198,11 @@ owner review.
 
 ### 3.4 Pointer and touch
 
-Pointer and touch may do everything the keyboard does, at 44 px or more. **A click never leaves
-focus on a row control after the action:** focus returns to the scan owner (rule 6). **Action
+Pointer and touch may do everything the keyboard does, at 44 px or more. **A pointer click on a row
+control returns focus to the scan owner after the action** (a pointer user does not need row
+focus, and the keyboard rule in rule 6 is unchanged). **Action
 slots are stable:** a commit never moves into a position a destructive or cancel action held in
-the previous state of the same region (fixes N-02; see §4 rule A3).
+the previous state of the same region (fixes N-02; see §4 addition A2).
 
 ### 3.5 Shortcuts in wave 1
 
@@ -283,7 +287,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-S2 | Item added (direct add) | «أُضيف: ‹الاسم›» · undo «تراجع» ⏳ D-U1 | neutral |
 | M-S3 | Unknown barcode | «الباركود ‹code› غير موجود في الكتالوج. امسح مرة أخرى أو ابحث بالاسم.» | warning |
 | M-S4 | Item unavailable | «‹الاسم› غير متاح للبيع حاليًا.» | warning |
-| M-S5 | Scan into a money / PIN field | «لا يُقبل المسح في هذا الحقل. أدخل المبلغ بالأرقام.» | warning |
+| M-S5 | Scan into a money field / PIN field / card reference | «لا يُقبل المسح في حقل المبلغ. أدخل المبلغ بالأرقام.» / «لا يُقبل المسح في حقل الرقم السري. أدخل الرقم السري بالأرقام.» / «لا يُقبل المسح في حقل المرجع. اكتب المرجع من إيصال جهاز البطاقات.» | warning |
 | M-S6 | Scan while a dialog is open | «أغلق النافذة أولاً ثم امسح الصنف.» | warning |
 | M-S7 | Scan on a completed sale | «هذا البيع مكتمل. اضغط «بيع جديد» ثم امسح الصنف.» | info |
 | M-S8 | Line deleted | «حُذف ‹الاسم›.» · «تراجع» ⏳ D-U1 | neutral |
