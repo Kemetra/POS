@@ -166,6 +166,22 @@ describe('capture-sale-request contract conformance (H-1, AD-SALE-CAPTURE-1)', (
     expect(Number.isNaN(Date.parse(wire.occurredAt))).toBe(false);
   });
 
+  it('RT-225 (1.6.0-draft): the device body with admissionCheckAt is a contract request', () => {
+    const settled = new Date('2026-06-19T09:00:00.000Z').toISOString();
+    const wire: ContractCaptureSaleRequest = toCashierWireBody(
+      { ...PAYLOAD, admissionCheckAt: settled },
+      'EGP',
+      '0190a3c4-0000-7000-8000-00000000000a',
+    );
+    expect(wire.admissionCheckAt).toBe(settled);
+    expect(wire.operatorUserId).toBe('0190a3c4-0000-7000-8000-00000000000a');
+    // Same RFC 3339 grammar as occurredAt, and never after it.
+    expect(wire.admissionCheckAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/,
+    );
+    expect(Date.parse(settled)).toBeLessThanOrEqual(Date.parse(wire.occurredAt));
+  });
+
   it('value-grammar: money fields are exact-decimal strings (DecimalAmount), never floats', () => {
     const wire = toWireBody(PAYLOAD, 'EGP');
     const decimal = /^-?[0-9]{1,15}(\.[0-9]{1,4})?$/; // DP-2 DecimalAmount grammar
