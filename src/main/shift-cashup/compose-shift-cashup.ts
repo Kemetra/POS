@@ -82,6 +82,7 @@ export interface ComposeShiftCashupServiceDeps extends Pick<
   | 'pairingEpoch'
   | 'managerPins'
   | 'now'
+  | 'varianceApprovalThresholdMinor'
 > {
   db: DatabaseHandle;
   /** The terminal's capture currency; defaults to the sale-sync capture's. */
@@ -102,6 +103,9 @@ export function composeShiftCashupService(deps: ComposeShiftCashupServiceDeps): 
     sources: createShiftCashupSources(deps.db),
     status: createShiftCashupStatusReader(deps.db),
     currencyCode: deps.currencyCode ?? DEFAULT_CURRENCY_CODE,
+    ...(deps.varianceApprovalThresholdMinor === undefined
+      ? {}
+      : { varianceApprovalThresholdMinor: deps.varianceApprovalThresholdMinor }),
     now: deps.now,
     newId: deps.newId ?? (() => uuidv7()),
   });

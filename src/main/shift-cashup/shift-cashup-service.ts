@@ -47,9 +47,11 @@
  *                       (the close's expected cash must not be negative).
  *   closeShift          a normal close (device path): the POS computes the
  *                       cash-up over its window (see above) and the counted
- *                       cash gives the variance. A non-zero variance needs an
- *                       approval (10920: manager PIN for any variance,
- *                       threshold 0), else `variance_approval_required`; the
+ *                       cash gives the variance. By default no variance needs a
+ *                       manager (RT-17 2026-10-07, superseding 10920); when the
+ *                       policy `varianceApprovalThresholdMinor` is set, a
+ *                       variance above it needs an approval (a manager PIN),
+ *                       else `variance_approval_required`; the
  *                       approving manager's users.id is recorded as
  *                       `varianceApprovedByUserId` only for a non-zero
  *                       variance (the contract: the manager who approved a
@@ -279,6 +281,11 @@ export interface ShiftCashupServiceDeps {
   status: ShiftCashupStatusReader;
   /** The terminal's capture currency (the sale-sync capture's own source). */
   currencyCode: string;
+  /**
+   * RT-17 2026-10-07: a close with `|variance|` above this many minor units
+   * needs a verified manager. `null` or absent: never (the default policy).
+   */
+  varianceApprovalThresholdMinor?: number | null;
   /** Canonical ISO-8601 UTC instants. */
   now: () => string;
   /** A new lower-case UUID (v7) for a shift or a movement. */
@@ -314,6 +321,8 @@ interface CloseParts {
   cashup: Cashup;
   countedCashMinor: number;
   approverUserId: string | undefined;
+  /** The policy: see `ShiftCashupServiceDeps.varianceApprovalThresholdMinor`. */
+  thresholdMinor: number | null | undefined;
 }
 
 function scopeOf(session: ShiftCashupSession): ShiftScope {
@@ -340,13 +349,40 @@ function shiftNotOpen(): never {
   throw new ShiftCashupStateError('shift_not_open');
 }
 
-/** 10920: any non-zero variance needs an approver, recorded for it alone. */
-function approverOf(input: { varianceMinor: number; approverUserId: string | undefined }): {
+/**
+ * RT-17 owner decision 2026-10-07 (supersedes 10920's "any variance needs a
+ * manager"): the cashier closes their own shift whatever the variance, because
+ * the shortage is recorded against the closer anyway. The mechanism stays
+ * behind `ShiftCashupServiceDeps.varianceApprovalThresholdMinor`: `null` (the
+ * default) never asks; a number asks above that many minor units of the capture
+ * currency. Backend-Core records the approver but never requires it, so this is
+ * a POS policy only.
+ */
+function needsApproval(input: {
+  varianceMinor: number;
+  thresholdMinor: number | null | undefined;
+}): boolean {
+  const { thresholdMinor } = input;
+  if (thresholdMinor === null || thresholdMinor === undefined) return false;
+  return Math.abs(input.varianceMinor) > thresholdMinor;
+}
+
+/**
+ * An approver is required only when the policy asks for one, and is recorded
+ * for a non-zero variance whenever one was given.
+ */
+function approverOf(input: {
+  varianceMinor: number;
+  approverUserId: string | undefined;
+  thresholdMinor: number | null | undefined;
+}): {
   varianceApprovedByUserId?: string;
 } {
   if (input.varianceMinor === 0) return {};
-  const approver = input.approverUserId ?? refuse('variance_approval_required');
-  return { varianceApprovedByUserId: approver };
+  const approver =
+    input.approverUserId ??
+    (needsApproval(input) ? refuse('variance_approval_required') : undefined);
+  return approver === undefined ? {} : { varianceApprovedByUserId: approver };
 }
 
 const VERDICT_REFUSALS = {
@@ -439,7 +475,11 @@ function closeFactOf(parts: CloseParts): ShiftCloseFact {
     ...cashup,
     countedCashMinor: parts.countedCashMinor,
     varianceMinor,
-    ...approverOf({ varianceMinor, approverUserId: parts.approverUserId }),
+    ...approverOf({
+      varianceMinor,
+      approverUserId: parts.approverUserId,
+      thresholdMinor: parts.thresholdMinor,
+    }),
   };
 }
 
@@ -675,6 +715,7 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
           cashup,
           countedCashMinor,
           approverUserId: approver?.userId,
+          thresholdMinor: deps.varianceApprovalThresholdMinor,
         }),
       );
       repo.recordClose({ scope, fact, now: closedAt });
@@ -686,7 +727,14 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
       const epoch = currentEpoch();
       const { countedCashMinor } = input;
       const plan = planClose({ scope, countedCashMinor });
-      if (plan.varianceMinor === 0) return null;
+      if (
+        !needsApproval({
+          varianceMinor: plan.varianceMinor,
+          thresholdMinor: deps.varianceApprovalThresholdMinor,
+        })
+      ) {
+        return null;
+      }
       const verdict = await deps.managerPins.verify({
         scope,
         managerRef: input.managerRef,

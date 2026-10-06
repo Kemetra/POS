@@ -86,7 +86,16 @@ export interface ServiceHarness {
 /** The service over `db`, flag ON, a cashier signed in on `SCOPE`, clock at `OPENED_AT`. */
 export function serviceHarness(
   db: SqlJsDatabase,
-  options: { currencyCode?: string } = {},
+  options: {
+    currencyCode?: string;
+    /**
+     * The variance above which a close needs a manager (see the service).
+     * The fixture defaults to 0 (any variance), the original policy, so the
+     * approval-mechanism tests keep testing it; pass `null` for the
+     * production default (never required).
+     */
+    varianceApprovalThresholdMinor?: number | null;
+  } = {},
 ): ServiceHarness {
   const state: ServiceHarness['state'] = {
     enabled: true,
@@ -106,6 +115,10 @@ export function serviceHarness(
   const service = composeShiftCashupService({
     db: handleFor(db),
     ...(options.currencyCode === undefined ? {} : { currencyCode: options.currencyCode }),
+    varianceApprovalThresholdMinor:
+      options.varianceApprovalThresholdMinor === undefined
+        ? 0
+        : options.varianceApprovalThresholdMinor,
     isEnabled: () => state.enabled,
     getSession: () => state.session,
     isSessionLocked: () => state.locked,
