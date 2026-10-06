@@ -100,7 +100,12 @@ import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
 import { registerReturnsHandlers } from './ipc/returns.js';
 import { composeReturns, scheduleReturnsResolver } from './returns/compose-returns.js';
-import { registerShiftSync, startShiftSync } from './shift-cashup/compose-shift-cashup.js';
+import {
+  pairedShiftScope,
+  registerShiftSync,
+  startShiftSync,
+} from './shift-cashup/compose-shift-cashup.js';
+import { registerShiftCashupIpc } from './ipc/shift-cashup.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
 import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
@@ -1958,8 +1963,7 @@ singleInstanceReady
     // the engine is a paired-only worker like sale sync: the same device token
     // reader (null unless paired, null once revoked), the same live current-
     // terminal resolver (RT-221) and the RT-215 detector on every answer, one
-    // tick every 5 s, stopped with the other workers before the DB closes. The
-    // cash-up service itself has no consumer until slice 4 (UI + its IPC).
+    // tick every 5 s, stopped with the other workers before the DB closes.
     registerShiftSync({
       enabled: parseFeatureFlags(process.env).shiftCashup,
       pairedWorkers: pairedWorkersLatch,
@@ -1978,6 +1982,28 @@ singleInstanceReady
           resolveTerminalId: createCurrentTerminalResolver(() => pairingStore.getStatus()),
           logger: mainLogger,
         }),
+    });
+
+    // ── RT-17 slice 4 part 1 — shift cash-up IPC (flag-gated, default off) ──
+    //
+    // Registered only with POS_PULSE_FEATURE_SHIFT_CASHUP on, on the
+    // lock-guarded ipcMain (no shift channel is on the lock allowlist). The
+    // service re-reads the flag and requires the live operator session on the
+    // paired terminal on every call; a fact needs an admitted cashier.
+    registerShiftCashupIpc({
+      enabled: parseFeatureFlags(process.env).shiftCashup,
+      ipcMain: guardedIpcMain,
+      db,
+      isEnabled: () => parseFeatureFlags(process.env).shiftCashup,
+      getSession: () =>
+        resolveSessionScope(
+          operatorSessionManager.getCurrent(),
+          pairingStore.getCurrentTerminalId(),
+        ),
+      isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
+      pairedScope: async () => pairedShiftScope(await pairingStore.getStatus()),
+      now: () => new Date().toISOString(),
+      logger: mainLogger,
     });
 
     createWindow();

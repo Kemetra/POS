@@ -12,6 +12,7 @@ import type { Role } from './operator/role.js';
 import type { OperatorRefusal } from './audit/event-shape.js';
 import type { ForcedCloseReason } from './audit/payload-schemas.js';
 import type { ReturnsBridgeAPI } from './returns/types.js';
+import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
 
 export type {
   ReturnJournalView,
@@ -721,6 +722,15 @@ export interface PreloadBridgeAPI {
    * same staged-wiring reason as the namespaces above (the renderer flow is S3).
    */
   returns?: ReturnsBridgeAPI;
+
+  /**
+   * RT-17 slice 4: the shift cash-up (`shiftCashup.*`). Registered in main only
+   * with `POS_PULSE_FEATURE_SHIFT_CASHUP` on (default off); gated there on the
+   * flag and an unlocked operator session; refused while the session is
+   * locked. Nothing that reveals the expected cash crosses it (blind count).
+   * Optional for the same staged-wiring reason as the namespaces above.
+   */
+  shiftCashup?: ShiftCashupBridgeAPI;
 }
 
 /**

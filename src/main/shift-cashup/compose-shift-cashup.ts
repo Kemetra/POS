@@ -4,10 +4,10 @@
  *
  *   • `composeShiftCashupService` — the main-process service (open, movement,
  *     close, status) over the part 1 repository, the cash-up sources and the
- *     status reader. NOT instantiated by `index.ts` in this part: there is no
- *     consumer until slice 4 adds the UI and its (flag-gated) IPC. The service
- *     gates every call on the flag itself, so wiring it later cannot expose it
- *     with the flag off.
+ *     status reader. RT-17 slice 4: `index.ts` composes it only with the flag
+ *     on, for the `shiftCashup:*` IPC (`registerShiftCashupIpc`); the service
+ *     still gates every call on the flag itself.
+ *   • `pairedShiftScope` — the status scope from the pairing status.
  *   • `registerShiftSync` — the flag gate of the shift sync engine. With
  *     `POS_PULSE_FEATURE_SHIFT_CASHUP` off (default) it registers nothing: the
  *     engine is never built, never scheduled, never sends. With it on, the
@@ -34,10 +34,11 @@
  */
 import type { PairedTerminal, PairedWorkers } from '../app/paired-workers.js';
 import type { WorkerRegistry } from '../app/bootstrap-workers.js';
+import type { PairingStatus } from '../../shared/pairing-types.js';
 import type { DatabaseHandle } from '../db/client.js';
 import { uuidv7 } from '../returns/uuidv7.js';
 import { DEFAULT_CURRENCY_CODE } from '../sales-sync/create-sale-sync-client.js';
-import { createShiftCashupRepo } from './shift-cashup-repo.js';
+import { createShiftCashupRepo, type ShiftScope } from './shift-cashup-repo.js';
 import {
   createShiftCashupService,
   type ShiftCashupService,
@@ -91,6 +92,12 @@ export function composeShiftCashupService(deps: ComposeShiftCashupServiceDeps): 
     now: deps.now,
     newId: deps.newId ?? (() => uuidv7()),
   });
+}
+
+/** The paired terminal's scope, or null while unpaired or needing a re-pair. */
+export function pairedShiftScope(status: PairingStatus): ShiftScope | null {
+  if (status.kind !== 'paired') return null;
+  return { tenantId: status.tenant_id, branchId: status.branch_id, terminalId: status.terminal_id };
 }
 
 export interface ShiftSyncLogger {

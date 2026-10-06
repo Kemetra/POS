@@ -42,6 +42,7 @@ import {
   cashLine,
   cashierSession,
   factCounts,
+  managerSession,
   msAfter,
   msBefore,
   seedRefund,
@@ -148,7 +149,7 @@ describe('admission (device path: an unlocked cashier with a users.id)', () => {
     [
       'a session without a users.id (manager / admin)',
       (s) => {
-        s.session = { tenant_id: 'tenant-1', branch_id: 'branch-1', terminal_id: 'term-1' };
+        s.session = managerSession();
       },
       'no_cashier_identity',
     ],

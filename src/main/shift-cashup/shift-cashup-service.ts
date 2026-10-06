@@ -55,7 +55,19 @@
  *                       approved a non-zero variance). The approver id is the
  *                       main-side caller's to verify (slice 4's manager PIN);
  *                       it never comes from the renderer unverified.
- *   readStatus          read-only (see `shift-cashup-status.ts`).
+ *   readStatus          read-only (see `shift-cashup-status.ts`). RT-17 slice
+ *                       4: gated on the flag AND an unlocked operator session
+ *                       (any role: steps 1–3 only), re-checked after its
+ *                       one await (the pairing read) together with the paired
+ *                       scope (review round 1), and it adds the open shift's
+ *                       probe refusals (below). The recording calls are
+ *                       synchronous: nothing is awaited between their
+ *                       admission and their write, so they need no re-check.
+ *
+ * RT-17 slice 4 — probing the blind count (10941 item 3): a pay-out refused
+ * above the expected drawer cash, and a close refused for a non-zero variance
+ * without an approver, are tallied per shift in memory
+ * (`shift-probe-tally.ts`) and shown in the status (`probeRefusals`).
  *
  * Refusals of the shift state (`ShiftCashupStateError`) and of a fact's values
  * (`ShiftFactInvalidError`, `ShiftCashupSourceError`) come through unchanged.
@@ -72,6 +84,11 @@ import {
 } from './shift-cashup-repo.js';
 import type { ShiftCashupSources } from './shift-cashup-sources.js';
 import type { ShiftCashupStatus, ShiftCashupStatusReader } from './shift-cashup-status.js';
+import {
+  createShiftProbeTally,
+  type ShiftProbeKind,
+  type ShiftProbeRefusals,
+} from './shift-probe-tally.js';
 import type { CashMovementKind, CashMovementReasonCode, ShiftCloseFact } from './shift-wire.js';
 
 export type ShiftCashupRefusalReason =
@@ -98,7 +115,7 @@ export class ShiftCashupRefusedError extends Error {
 /** The session scope the service needs (`resolveSessionScope`'s result). */
 export type ShiftCashupSession = Pick<
   OperatorSessionForPayments,
-  'tenant_id' | 'branch_id' | 'terminal_id' | 'user_id'
+  'operator_session_id' | 'tenant_id' | 'branch_id' | 'terminal_id' | 'user_id'
 >;
 
 export interface OpenShiftInput {
@@ -140,11 +157,16 @@ export interface ClosedShift {
   saleCount: number;
 }
 
+/** The status with the open shift's probe refusals (RT-17 slice 4). */
+export interface ShiftCashupServiceStatus extends ShiftCashupStatus {
+  probeRefusals: ShiftProbeRefusals;
+}
+
 export interface ShiftCashupService {
   openShift(input: OpenShiftInput): OpenedShift;
   recordCashMovement(input: CashMovementInput): RecordedCashMovement;
   closeShift(input: CloseShiftInput): ClosedShift;
-  readStatus(): Promise<ShiftCashupStatus>;
+  readStatus(): Promise<ShiftCashupServiceStatus>;
 }
 
 export interface ShiftCashupServiceDeps {
@@ -166,6 +188,13 @@ export interface ShiftCashupServiceDeps {
   newId: () => string;
 }
 
+/** A refusal that answers a probe of the blind count, on `shiftId`. */
+interface Probe {
+  shiftId: string;
+  kind: ShiftProbeKind;
+  reason: ShiftCashupRefusalReason;
+}
+
 interface Actor {
   scope: ShiftScope;
   userId: string;
@@ -178,6 +207,22 @@ interface CloseParts {
   closingUserId: string;
   cashup: Cashup;
   input: CloseShiftInput;
+}
+
+function scopeOf(session: ShiftCashupSession): ShiftScope {
+  return {
+    tenantId: session.tenant_id,
+    branchId: session.branch_id,
+    terminalId: session.terminal_id,
+  };
+}
+
+/** True when `scope` is the session's own (tenant, branch, terminal). */
+function isScopeOf(input: { scope: ShiftScope | null; session: ShiftCashupSession }): boolean {
+  const { scope } = input;
+  if (scope === null) return false;
+  const own = scopeOf(input.session);
+  return (['tenantId', 'branchId', 'terminalId'] as const).every((key) => scope[key] === own[key]);
 }
 
 function refuse(reason: ShiftCashupRefusalReason): never {
@@ -245,23 +290,39 @@ function closedShiftOf(fact: ShiftCloseFact): ClosedShift {
 
 export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCashupService {
   const { repo } = deps;
+  const tally = createShiftProbeTally();
 
-  function requireEnabled(): void {
+  /** Steps 1–3: the flag, then an unlocked session on the paired terminal. */
+  function requireSession(): ShiftCashupSession {
     if (!deps.isEnabled()) refuse('feature_disabled');
+    const session = deps.getSession() ?? refuse('no_session');
+    if (deps.isSessionLocked()) refuse('session_locked');
+    return session;
   }
 
   /** The admitted cashier (module header, steps 1–4). */
   function admit(): Actor {
-    requireEnabled();
-    const session = deps.getSession() ?? refuse('no_session');
-    if (deps.isSessionLocked()) refuse('session_locked');
+    const session = requireSession();
     const userId = session.user_id ?? refuse('no_cashier_identity');
-    const scope = {
-      tenantId: session.tenant_id,
-      branchId: session.branch_id,
-      terminalId: session.terminal_id,
-    };
-    return { scope, userId };
+    return { scope: scopeOf(session), userId };
+  }
+
+  /**
+   * Review round 1: the status read awaits the pairing (secret-store backed),
+   * so the admission is re-checked right after it — the flag, the same
+   * operator session (its id), still unlocked, and the paired scope still the
+   * session's own. A sign-out, a lock or a replaced session refuse as at
+   * admission; a revoked or re-paired device (no paired scope, or another
+   * one) refuses `no_session`, as an unpaired terminal has no session.
+   */
+  function recheckAfterRead(input: {
+    admitted: ShiftCashupSession;
+    scope: ShiftScope | null;
+  }): ShiftScope {
+    const live = requireSession();
+    if (live.operator_session_id !== input.admitted.operator_session_id) refuse('no_session');
+    if (!isScopeOf({ scope: input.scope, session: live })) refuse('no_session');
+    return scopeOf(live);
   }
 
   /** The cash-up of the open shift from its open (after the last close) up to `until`. */
@@ -286,6 +347,18 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     return open;
   }
 
+  /** Runs `run`; a refusal of `probe.reason` is tallied for its shift (slice 4 probe). */
+  function tallied<T>(probe: Probe, run: () => T): T {
+    try {
+      return run();
+    } catch (error) {
+      if (error instanceof ShiftCashupRefusedError && error.reason === probe.reason) {
+        tally.record(probe);
+      }
+      throw error;
+    }
+  }
+
   /**
    * Carried item (a): a pay-out never takes the expected drawer cash below
    * zero — and is held while drawer cash is in flight (P2-2), since the
@@ -300,7 +373,9 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     if (input.movement.kind !== 'pay_out') return;
     requireDrawerSettled({ sources: deps.sources, scope: input.scope });
     const { expectedCashMinor } = cashupOf({ ...input, until: input.now });
-    if (input.movement.amountMinor > expectedCashMinor) refuse('pay_out_exceeds_drawer_cash');
+    if (input.movement.amountMinor <= expectedCashMinor) return;
+    tally.record({ shiftId: input.open.shiftId, kind: 'payOut' });
+    refuse('pay_out_exceeds_drawer_cash');
   }
 
   return {
@@ -351,15 +426,24 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
       const open = openShiftAt({ scope, now: closedAt });
       requireDrawerSettled({ sources: deps.sources, scope });
       const cashup = cashupOf({ scope, open, until: closedAt });
-      const fact = closeFactOf({ open, closedAt, closingUserId: userId, cashup, input });
+      const probe = {
+        shiftId: open.shiftId,
+        kind: 'varianceClose',
+        reason: 'variance_approval_required',
+      } as const;
+      const fact = tallied(probe, () =>
+        closeFactOf({ open, closedAt, closingUserId: userId, cashup, input }),
+      );
       repo.recordClose({ scope, fact, now: closedAt });
       return closedShiftOf(fact);
     },
 
     async readStatus() {
-      requireEnabled();
-      const scope = await deps.pairedScope();
-      return deps.status.read({ scope, now: deps.now() });
+      const admitted = requireSession();
+      const paired = await deps.pairedScope();
+      const scope = recheckAfterRead({ admitted, scope: paired });
+      const status = deps.status.read({ scope, now: deps.now() });
+      return { ...status, probeRefusals: tally.countsFor(status.openShift?.shiftId ?? null) };
     },
   };
 }

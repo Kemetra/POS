@@ -13,8 +13,9 @@ import { describe, expect, it } from 'vitest';
  *  - It uses the sale-sync sources: the sendable device token (null unless
  *    paired, null once revoked), the current pairing's terminal, the live
  *    terminal resolver and the RT-215 detector.
- *  - No shift cash-up IPC is registered in this part (slice 4 owns the UI and
- *    its bridge).
+ *  - RT-17 slice 4 part 1: the shift cash-up IPC is registered only with the
+ *    flag on (`registerShiftCashupIpc`, unit-tested in `ipc/shift-cashup`),
+ *    on the lock-guarded ipcMain, over the live operator session.
  */
 
 const source = readFileSync(resolve(__dirname, '../index.ts'), 'utf-8');
@@ -38,8 +39,17 @@ describe('main/index.ts wires the RT-17 shift sync engine', () => {
     );
   });
 
-  it('registers no shift cash-up IPC in this part', () => {
-    expect(source).not.toMatch(/registerShift\w*Handlers/);
-    expect(source).not.toMatch(/composeShiftCashupService/);
+  it('registers the shift cash-up IPC once, only with the flag on, on the lock-guarded ipcMain', () => {
+    expect(count(/registerShiftCashupIpc\(/g)).toBe(1);
+    expect(source).not.toMatch(/registerShiftCashupHandlers\(/);
+    expect(source).toMatch(
+      /registerShiftCashupIpc\(\{\s*enabled: parseFeatureFlags\(process\.env\)\.shiftCashup,\s*ipcMain: guardedIpcMain,\s*db,\s*isEnabled: \(\) => parseFeatureFlags\(process\.env\)\.shiftCashup,/,
+    );
+  });
+
+  it('gates every shift call on the live operator session on the paired terminal', () => {
+    expect(source).toMatch(
+      /registerShiftCashupIpc\(\{[^}]*getSession: \(\) =>\s*resolveSessionScope\(\s*operatorSessionManager\.getCurrent\(\),\s*pairingStore\.getCurrentTerminalId\(\),\s*\),\s*isSessionLocked: \(\) => operatorSessionManager\.getCurrent\(\)\?\.lock_state === 'locked',\s*pairedScope: async \(\) => pairedShiftScope\(await pairingStore\.getStatus\(\)\),/,
+    );
   });
 });
