@@ -104,9 +104,11 @@
  *                       re-check.
  *
  * F1 (10944) — a pay-in is refused (`aggregate_out_of_range`) when it would
- * take the shift's pay-in total or its expected cash past the safe-integer
- * range (checked in `bigint` before anything is written), so a pay-in valid on
- * its own can never make the shift impossible to close. An opening float is
+ * take the shift's pay-in total or its expected cash past the currency's
+ * maximum shift amount (the safe-integer range, held to the contract's 15
+ * integer digits: `shift-amount-bound.ts`; checked in `bigint` before anything
+ * is written), so a pay-in valid on its own can never make the shift impossible
+ * to close. An opening float is
  * the whole aggregate at the open, already a checked safe integer.
  *
  * RT-17 slice 4 — probing the blind count (10941 item 3): a pay-out refused
@@ -126,6 +128,7 @@ import type {
   ManagerPinVerdict,
 } from '../operator/manager-pin-store.js';
 import type { OperatorSessionForPayments } from '../payments/require-operator-session.js';
+import { maxShiftAmountMinor } from './shift-amount-bound.js';
 import { computeCashup, type Cashup } from './shift-cashup-calculator.js';
 import {
   ShiftCashupStateError,
@@ -396,9 +399,15 @@ function requireSameClose(input: {
   if (!same) refuse('approval_stale');
 }
 
-/** F1: a shift aggregate must stay a safe integer (checked in `bigint`). */
-function requireSafeAggregate(total: bigint): void {
-  if (total > BigInt(Number.MAX_SAFE_INTEGER)) refuse('aggregate_out_of_range');
+/**
+ * F1: a shift aggregate must stay within the currency's maximum shift amount
+ * (`maxShiftAmountMinor`: a safe integer, held to 15 integer digits), checked in
+ * `bigint`.
+ */
+function requireSafeAggregate(input: { total: bigint; currencyCode: string }): void {
+  if (input.total > BigInt(maxShiftAmountMinor(input.currencyCode))) {
+    refuse('aggregate_out_of_range');
+  }
 }
 
 /**
@@ -574,9 +583,10 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
   }): void {
     if (input.movement.kind !== 'pay_in') return;
     const amount = BigInt(input.movement.amountMinor);
-    requireSafeAggregate(BigInt(input.open.payInTotalMinor) + amount);
+    const { currencyCode } = input.open;
+    requireSafeAggregate({ total: BigInt(input.open.payInTotalMinor) + amount, currencyCode });
     const { expectedCashMinor } = cashupOf({ ...input, until: input.now });
-    requireSafeAggregate(BigInt(expectedCashMinor) + amount);
+    requireSafeAggregate({ total: BigInt(expectedCashMinor) + amount, currencyCode });
   }
 
   /**

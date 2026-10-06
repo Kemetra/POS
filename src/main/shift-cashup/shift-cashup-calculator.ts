@@ -24,13 +24,15 @@
  * rather than guessed: an unreadable tender summary, a refund amount that is
  * not a safe non-negative integer, or a refund in another currency than the
  * shift's (Backend-Core would refuse it 422 `currency_mismatch`). Totals are
- * summed in `bigint` and must come back as safe integers.
+ * summed in `bigint` and must stay within the currency's maximum shift amount
+ * (`maxShiftAmountMinor`: safe integers, held to 15 integer digits).
  *
  * The expected cash may come out negative (refunds above the drawer's cash);
  * the close builder refuses such a close (`invalid_amount`), and the pay-out
  * guard then refuses every pay-out. Integer minor units only, never a float.
  */
 import type { SalesTenderType } from '../../shared/sales/types.js';
+import { maxShiftAmountMinor } from './shift-amount-bound.js';
 
 export type ShiftCashupSourceReason =
   | 'unreadable_sale_tenders'
@@ -158,13 +160,17 @@ function refundAmount(refund: CashupRefund, currencyCode: string): bigint {
   return BigInt(refund.amountMinor);
 }
 
-/** A bigint total as a number; any total beyond ±(2^53 − 1) converts to an unsafe one. */
-function safe(total: bigint): number {
-  const value = Number(total);
-  if (!Number.isSafeInteger(value)) {
+/**
+ * A bigint total as a number; any total beyond ±`max` (the currency's
+ * `maxShiftAmountMinor`: the safe-integer range, held to 15 integer digits)
+ * is refused. The bound is checked on the exact bigint, before converting.
+ */
+function within(max: number, total: bigint): number {
+  const bound = BigInt(max);
+  if (total > bound || total < -bound) {
     throw new ShiftCashupSourceError('total_out_of_range');
   }
-  return value;
+  return Number(total);
 }
 
 /** The cash-up of one window. Pure; see the module header. */
@@ -180,10 +186,11 @@ export function computeCashup(input: CashupInput): Cashup {
     cashRefunds +
     BigInt(input.payInTotalMinor) -
     BigInt(input.payOutTotalMinor);
+  const max = maxShiftAmountMinor(input.currencyCode);
   return {
-    cashSalesTotalMinor: safe(cashSales),
-    cashRefundsTotalMinor: safe(cashRefunds),
-    expectedCashMinor: safe(expected),
+    cashSalesTotalMinor: within(max, cashSales),
+    cashRefundsTotalMinor: within(max, cashRefunds),
+    expectedCashMinor: within(max, expected),
     saleCount: input.sales.length,
     cashRefundReturnRefs: input.refunds.map((refund) => refund.returnRef),
   };
