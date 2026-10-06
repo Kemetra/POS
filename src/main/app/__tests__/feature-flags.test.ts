@@ -56,6 +56,7 @@ describe('parseFeatureFlags', () => {
       productSearch: 'POS_PULSE_FEATURE_PRODUCT_SEARCH',
       voucherTender: 'POS_PULSE_FEATURE_VOUCHER_TENDER',
       returns: 'POS_PULSE_FEATURE_RETURNS',
+      shiftCashup: 'POS_PULSE_FEATURE_SHIFT_CASHUP',
     });
   });
 
@@ -67,13 +68,22 @@ describe('parseFeatureFlags', () => {
       productSearch: false,
       voucherTender: false,
       returns: false,
+      shiftCashup: false,
     });
   });
 
-  it('always returns all six keys as booleans', () => {
+  it('always returns all seven keys as booleans', () => {
     const flags = parseFeatureFlags({ POS_PULSE_FEATURE_CART: 'nonsense' });
     expect(Object.keys(flags).sort()).toEqual(
-      ['cart', 'payments', 'productSearch', 'returns', 'saleFinalization', 'voucherTender'].sort(),
+      [
+        'cart',
+        'payments',
+        'productSearch',
+        'returns',
+        'saleFinalization',
+        'shiftCashup',
+        'voucherTender',
+      ].sort(),
     );
     for (const value of Object.values(flags)) {
       expect(typeof value).toBe('boolean');
@@ -105,6 +115,7 @@ describe('parseFeatureFlags', () => {
       productSearch: true,
       voucherTender: false,
       returns: false,
+      shiftCashup: false,
     });
   });
 
@@ -114,6 +125,12 @@ describe('parseFeatureFlags', () => {
     expect(parseFeatureFlags({ POS_PULSE_FEATURE_RETURNS: 'on' }).returns).toBe(true);
   });
 
+  it('RT-17: shiftCashup is off by default and on only via POS_PULSE_FEATURE_SHIFT_CASHUP', () => {
+    expect(parseFeatureFlags({}).shiftCashup).toBe(false);
+    expect(parseFeatureFlags({ POS_PULSE_FEATURE_SHIFT_CASHUP: 'off' }).shiftCashup).toBe(false);
+    expect(parseFeatureFlags({ POS_PULSE_FEATURE_SHIFT_CASHUP: 'on' }).shiftCashup).toBe(true);
+  });
+
   it('ignores unrelated env vars', () => {
     expect(
       parseFeatureFlags({ POS_PULSE_FEATURE_SALE_TENDERS_SINCE: '1', CART: '1', PAYMENTS: '1' }),
@@ -121,7 +138,7 @@ describe('parseFeatureFlags', () => {
   });
 });
 
-/** Every one of the 64 combinations of the six boolean flags. */
+/** Every one of the 128 combinations of the seven boolean flags. */
 function allFlagCombinations(): FeatureFlags[] {
   const keys = Object.keys(FEATURE_FLAG_ENV) as (keyof FeatureFlags)[];
   const out: FeatureFlags[] = [];
@@ -143,6 +160,7 @@ const PILOT_PROFILE: FeatureFlags = {
   productSearch: true,
   voucherTender: false,
   returns: false,
+  shiftCashup: false,
 };
 
 describe('assessCashierProfile (D-1: fail closed on the money combination)', () => {
@@ -167,11 +185,11 @@ describe('assessCashierProfile (D-1: fail closed on the money combination)', () 
     expect(assessCashierProfile(flags)).toEqual(expected);
   });
 
-  it('rejects exactly the 16 of 64 combinations with payments on and finalization off', () => {
+  it('rejects exactly the 32 of 128 combinations with payments on and finalization off', () => {
     const combos = allFlagCombinations();
-    expect(combos).toHaveLength(64);
+    expect(combos).toHaveLength(128);
     const rejected = combos.filter((flags) => !assessCashierProfile(flags).ok);
-    expect(rejected).toHaveLength(16);
+    expect(rejected).toHaveLength(32);
     for (const flags of combos) {
       const expectedOk = !(flags.payments && !flags.saleFinalization);
       expect(assessCashierProfile(flags).ok).toBe(expectedOk);

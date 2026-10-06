@@ -26,7 +26,8 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
   it('never reads the device token for sending except through the sendable reader', () => {
     expect(count(/secretStore\.get\(\s*DEVICE_TOKEN_KEY\s*\)/g)).toBe(0);
     expect(source).toMatch(/createSendableDeviceTokenReader\(\{\s*pairingStore,/);
-    expect(count(/getDeviceToken: readSendableDeviceToken/g)).toBe(3); // probe, admissions, read-down
+    // probe, admissions, read-down, RT-17 shift sync
+    expect(count(/getDeviceToken: readSendableDeviceToken/g)).toBe(4);
     // RT-215 × RT-224: the sale-sync device path reads through the sendable read
     // (null unless paired and not revoked), behind #547's never-reject reader.
     expect(source).toMatch(
