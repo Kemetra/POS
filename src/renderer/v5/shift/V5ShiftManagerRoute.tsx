@@ -58,6 +58,11 @@ function ShiftStatusPanel({ bridge }: { bridge: ShiftCashupBridgeAPI }): JSX.Ele
   return (
     <div className="v5-shift-panel">
       <h2>{SHIFT_COPY.statusHeading}</h2>
+      {hasStranded(state.status) ? (
+        <div className="v5-shift-banner" role="alert" data-testid="shift-stranded-warning">
+          <p>{SHIFT_COPY.strandedWarning}</p>
+        </div>
+      ) : null}
       <OpenShiftFacts status={state.status} />
       <Counts heading={SHIFT_COPY.queueHeading} rows={queueRows(state.status)} />
       <Counts heading={SHIFT_COPY.strandedHeading} rows={strandedRows(state.status)} />
@@ -68,6 +73,11 @@ function ShiftStatusPanel({ bridge }: { bridge: ShiftCashupBridgeAPI }): JSX.Ele
       </button>
     </div>
   );
+}
+
+/** Records outside this pairing exist: unsent facts or a shift left open. */
+function hasStranded({ stranded }: ShiftStatusView): boolean {
+  return stranded.unsyncedFacts > 0 || stranded.openShifts > 0;
 }
 
 function OpenShiftFacts({ status }: { status: ShiftStatusView }): JSX.Element {

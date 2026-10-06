@@ -44,7 +44,11 @@ import {
 } from './returns-wire.js';
 
 const SALES_PATH = '/api/pos/v1/sales';
-const DEFAULT_TIMEOUT_MS = 15_000;
+/**
+ * The request timeout of every returns exchange. Exported so the resolver's
+ * drain bound (`RETURNS_DRAIN_TIMEOUT_MS`) is derived from it.
+ */
+export const RETURNS_REQUEST_TIMEOUT_MS = 15_000;
 
 export type ReadSaleOutcome =
   | { readonly kind: 'ok'; readonly sale: WireSale }
@@ -147,7 +151,7 @@ function toReadOutcome(answer: HttpAnswer): ReadSaleOutcome {
 
 export function createReturnsClient(deps: CreateReturnsClientDeps): ReturnsClient {
   const root = deps.baseUrl.replace(/\/$/, '');
-  const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = deps.timeoutMs ?? RETURNS_REQUEST_TIMEOUT_MS;
 
   /** One HTTP exchange; null on no credential or any transport/body fault. */
   async function exchange(request: {

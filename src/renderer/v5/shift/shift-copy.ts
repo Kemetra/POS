@@ -146,6 +146,10 @@ const STATUS_COPY = {
   probePayOut: 'سحب غير مقبول',
   probeVariance: 'إغلاق بفرق دون موافقة',
   probeApprover: 'موافقة مدير غير مقبولة',
+  // D3 (RT-17 10957/10958): shown when records outside this pairing exist. No
+  // id, no amount and no count: it says what is true and what to do.
+  strandedWarning:
+    'تنبيه: على هذا الجهاز سجلات وردية من إقران سابق تعذّر إرسالها. قبل إلغاء ترخيص أي جهاز أو إعادة تعيينه، يجب إغلاق الوردية المفتوحة وتفريغ طابور المزامنة.',
 } as const;
 
 /** Every UI line of the shift screens, composed from the per-area records. */

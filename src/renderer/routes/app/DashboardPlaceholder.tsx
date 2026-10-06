@@ -24,6 +24,7 @@ import { Suspense, lazy, type JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
 import { DashboardSkeleton } from './DashboardSkeleton';
+import { ShiftManagerLink } from './ShiftManagerLink';
 
 const DashboardDemo = lazy(() => import('./DashboardDemo'));
 
@@ -45,6 +46,7 @@ function readQueryParam(name: string): string {
 function HonestDashboard(): JSX.Element {
   return (
     <Workspace title="Dashboard">
+      <ShiftManagerLink />
       <DashboardSkeleton />
     </Workspace>
   );
