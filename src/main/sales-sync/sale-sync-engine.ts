@@ -57,6 +57,15 @@
  *          episode (re-armed by any device-path answer that is not a 401).
  *          Revoking the device is NOT the drain's call (RT-215's detector owns it).
  *
+ * Shutdown (RT-198, as the shift sync engine and the returns resolver): once
+ * `isStopped()` is true a tick reads and writes nothing more. It is checked before
+ * the tick's first read and again when every await resumes, so a send in flight at
+ * stop settles WITHOUT `markSynced` / `recordTransient` / `markDeadLetter` (or any
+ * other store call) — the DB closes right after the synchronous worker stop. The
+ * sale stays `pending` with its stored bytes and key; the next start re-sends it
+ * (an idempotent replay if the server recorded it). `drain(timeoutMs)` resolves
+ * once the tick in flight has settled, or after `timeoutMs`, whichever is first.
+ *
  * Logs (caller's concern) carry only sale_id / externalId / status / category /
  * attempt / closed-set codes — never PII, card data, or the token (P7/P12).
  */
@@ -225,6 +234,8 @@ export interface SaleSyncEngineDeps {
    * counts as unreported and is retried on the next tick; the tick itself goes on.
    */
   onPauseTransition?: (event: SaleSyncPauseTransition) => void;
+  /** RT-198: true once the worker is stopping (app shutdown); default never. */
+  isStopped?: () => boolean;
 }
 
 export type TickAdmission =
@@ -239,6 +250,8 @@ export interface SaleSyncEngine {
    * (not from the last tick); null when an envelope or a device credential is held.
    */
   pausedReason(): Promise<SaleSyncPausedReason | null>;
+  /** Settles when the tick in flight has settled, or after `timeoutMs` (RT-198). */
+  drain(timeoutMs: number): Promise<void>;
 }
 
 /** Exponential backoff: baseMs * 2^(attempt-1), capped at maxMs. `attempt` is 1-based. */
@@ -287,6 +300,21 @@ function addMs(iso: string, ms: number): string {
   return new Date(Date.parse(iso) + ms).toISOString();
 }
 
+/** `work` settled (either way) or `timeoutMs` passed, whichever is first. */
+function settledWithin(work: Promise<unknown>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const bound = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  const settled = work.then(
+    () => undefined,
+    () => undefined,
+  );
+  return Promise.race([settled, bound]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
 export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   const {
     client,
@@ -299,7 +327,9 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     now,
     backoff,
   } = deps;
-  let inFlight = false;
+  const isStopped = deps.isStopped ?? (() => false);
+  // The tick in flight (single-flight admission, and what `drain` waits for).
+  let inFlight: Promise<void> | null = null;
   // RT-224 step 2: a device-path 401 was reported and no device-path answer
   // other than a 401 has come back since (one report per episode).
   let deviceUnauthorizedReported = false;
@@ -351,6 +381,9 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
       credential.kind === 'device'
         ? await client.postSaleAsCashier(payload, credential.operatorUserId)
         : await client.postSale(payload);
+    // Stopped while the request was in flight: touch nothing local (RT-198). The
+    // sale stays pending and is re-sent, same bytes and key, on the next start.
+    if (isStopped()) return null;
     recordOutcome(saleId, payload.externalId, result, now());
     if (leavesQueue(result)) deps.sellingUsers?.forget(saleId);
     if (credential.kind === 'device') noteDeviceAnswer(result);
@@ -525,6 +558,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     if (held.device) return envelopeDue.size;
     try {
       const terminalId = await resolveTerminalId();
+      if (isStopped()) return null;
       return stateRepo.readSyncStatus({ tenantId, branchId, terminalId }).pending;
     } catch {
       return null;
@@ -539,10 +573,13 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   async function reportTransition(isPaused: boolean, held: HeldCredentials): Promise<boolean> {
     const onPauseTransition = deps.onPauseTransition;
     if (onPauseTransition === undefined) return true;
+    const pending = await pendingCount(held);
+    // Stopped while counting: report nothing (RT-198); the next start re-reports.
+    if (isStopped()) return false;
     const event: SaleSyncPauseTransition = {
       transition: isPaused ? 'paused' : 'resumed',
       reason: 'no_operator_credential',
-      pending: await pendingCount(held),
+      pending,
     };
     try {
       onPauseTransition(event);
@@ -564,6 +601,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
    */
   async function credentialGate(): Promise<HeldCredentials | null> {
     const held = await heldCredentials();
+    if (isStopped()) return null;
     const isPaused = reasonFor(held, envelopeDue.size) !== null;
     if (isPaused !== (reportedPaused ?? false) && (await reportTransition(isPaused, held))) {
       reportedPaused = isPaused;
@@ -616,6 +654,7 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   ): Promise<SaleSyncResult | null> {
     try {
       const result = await drainOne(sale, route, held);
+      if (isStopped()) return null;
       settleAfterSend(sale.sale_id);
       return result;
     } catch {
@@ -650,11 +689,12 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     // RT-224 step 2: after a device-path 401, no more device-path sends this tick.
     let deviceRejected = false;
     for (const sale of sales) {
+      if (isStopped()) return;
       // Re-check before each POST so a mid-drain credential loss pauses cleanly.
       const held = await credentialGate();
       if (held === null) return;
       // RT-221: a re-pair mid-drain must not send the rest under the new identity.
-      if ((await resolveTerminalId()) !== terminalId) return;
+      if ((await resolveTerminalId()) !== terminalId || isStopped()) return;
       const result = await drainSafely(sale, routeOf(sale), {
         envelope: held.envelope,
         device: held.device && !deviceRejected,
@@ -663,19 +703,27 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     }
   }
 
+  /**
+   * Whether the tick may go on: not stopped, and holding a credential. Credential
+   * gate (FR-3): neither an envelope (null or '') nor a device credential → pause
+   * the whole drain. (The envelope-subset pause, rev547 F1, is judged later once
+   * this tick's routes are known.)
+   */
+  async function admitTick(): Promise<boolean> {
+    if (isStopped()) return false;
+    const atStart = await heldCredentials();
+    if (isStopped()) return false;
+    if (atStart.envelope || atStart.device) return true;
+    await credentialGate();
+    return false;
+  }
+
   async function runTick(): Promise<void> {
     try {
-      // Credential gate (FR-3): neither an envelope (null or '') nor a device
-      // credential → pause the whole drain. (The envelope-subset pause, rev547 F1,
-      // is judged below once this tick's routes are known.)
-      const atStart = await heldCredentials();
-      if (!atStart.envelope && !atStart.device) {
-        await credentialGate();
-        return;
-      }
+      if (!(await admitTick())) return;
       // RT-221: drain only the current pairing's rows; no pairing → nothing.
       const terminalId = await resolveTerminalId();
-      if (terminalId === null) return;
+      if (terminalId === null || isStopped()) return;
       const sales = dueSales(terminalId);
       // RT-224 step 2 (Codex P2): every due sale's route in one lookup.
       const routes = routesFor(sales, terminalId);
@@ -709,14 +757,20 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
   function endTick(): void {
     if (!failedThisTick) failureReported = false;
     failedThisTick = false;
-    inFlight = false;
+    inFlight = null;
   }
 
   function runTickOnce(): TickAdmission {
-    if (inFlight) return { kind: 'already_running' };
-    inFlight = true;
-    return { kind: 'started', completed: runTick() };
+    if (inFlight !== null) return { kind: 'already_running' };
+    // `runTick` always awaits before its `finally`, so `inFlight` is set first.
+    const completed = runTick();
+    inFlight = completed;
+    return { kind: 'started', completed };
   }
 
-  return { runTickOnce, pausedReason };
+  function drain(timeoutMs: number): Promise<void> {
+    return inFlight === null ? Promise.resolve() : settledWithin(inFlight, timeoutMs);
+  }
+
+  return { runTickOnce, pausedReason, drain };
 }
