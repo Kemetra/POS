@@ -44,7 +44,7 @@ resized only between scenarios.
 |---|---|---|---|
 | 0 | First-run pairing → catalogue | R-pkg | The read-down ran right after in-session pairing: 28 products and 27 barcodes were in place at 22:42:10Z with no restart. **RT-202 fixed on packaged `main`.** |
 | 1 | Barcode-heavy sale | R-pkg | 23 distinct lines added through the scan field. Each item needs **2 cashier actions**: click the scan field, then Enter on the confirm dialog ([K02](references/audit-rt159-pkg/K02-scan-confirm-dialog-1280.png)). A second scan without a click lands in the **search** box ([K03](references/audit-rt159-pkg/K03-second-scan-lands-in-search-1280.png)). |
-| 1b | Same, real scanner | R-hw | The owner's Honeywell read the on-screen EAN-13 barcodes. Three lines were added ([K30](references/audit-rt159-pkg/K30-real-scanner-owner-run-1280.png)). Whether focus behaved as in R-pkg is **pending the owner's account** of steps 2–3 (§6). |
+| 1b | Same, real scanner | R-hw | The owner's Honeywell read the on-screen EAN-13 barcodes. Three lines were added ([K30](references/audit-rt159-pkg/K30-real-scanner-owner-run-1280.png)). The owner reports that **the add-confirm dialog appeared on the scans**, and that the quantity 2 on «زنك» came from **scanning zinc twice** (a merge, not a scan landing on `+`). The `+`-then-scan step was not done, so F-01 was not exercised with real hardware (§6). |
 | 2 | Search-heavy sale | R-pkg | Typing «باراسي» returns 3 results with the first highlighted. The keyboard path is `Tab` `Tab` `Enter` → confirm dialog → `Enter`, which adds the item, and a repeat of the same SKU merges into its quantity ([K07](references/audit-rt159-pkg/K07-search-results-1280.png)). |
 | 3 | 20+ line cart | R-pkg | 23 lines. **About 6.5 rows are visible at 1280 and about 6 at 1024** ([K05](references/audit-rt159-pkg/K05-long-cart-23-lines-1280.png), [K06](references/audit-rt159-pkg/K06-long-cart-23-lines-1024.png)). The newest line is **not** scrolled into view. With the drawer banner and the shift banner showing, the cart drops to **about 3.5 rows at 1280** ([K14](references/audit-rt159-pkg/K14-offline-sale-no-signal-banner-shift-1280.png)). |
 | 4 | Quantity / remove | R-dev | There is no typed quantity. `حذف` (delete) acts immediately with no undo, and focus moves to `<body>`. A scan with focus on `+` or `حذف` changes the quantity or deletes the line. |
@@ -212,10 +212,12 @@ Knock-ons, recorded as inputs to [15](15-vnext-freeze-package.md) §7:
 - **Real users: none.** No usability sessions were run. The script in doc 12 §11 is still ready.
   Representative users remain an open gap and are not replaced by opinion.
 - **Real scanner: partial.** The owner's run (R-hw) shows that the scanner reads the synthetic
-  EAN-13 sheet from a monitor and that three lines were added. *Pending:* the owner's account of
-  whether the second scan without a click added the item and whether the quantity +1 on «زنك»
-  came from a click or from the scan landing on `+`. Until then, F-01 and F-07 stay confirmed only
-  under emulated wedge input (R-pkg / R-dev).
+  EAN-13 sheet from a monitor and that three lines were added. The owner reports that the add-confirm
+  dialog appeared on the scans (the friction D-C1 removes) and that «زنك» reached quantity 2 by
+  being scanned twice (a same-SKU merge). The `+`-then-scan step was not performed, and whether the
+  second scan without a click went through the scan field or the search field was not observed.
+  **F-01 and F-07 therefore stay confirmed only under emulated wedge input (R-pkg / R-dev)**, and
+  the A2 slice must re-check them with the real scanner on the bench.
 - **Not re-run in this pass:**
   - inactivity lock (RT-117 evidence stands);
   - card UNKNOWN (there is no path);
