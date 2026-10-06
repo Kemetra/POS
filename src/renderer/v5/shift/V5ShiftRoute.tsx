@@ -2,7 +2,11 @@ import { useId, useState, type JSX } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { Role } from '../../../shared/operator/role';
-import type { ShiftCashupBridgeAPI, ShiftOpenShiftView } from '../../../shared/shift-cashup/types';
+import type {
+  ShiftCashupBridgeAPI,
+  ShiftCashupRefusal,
+  ShiftOpenShiftView,
+} from '../../../shared/shift-cashup/types';
 import { CashMovementDialog, type MovementKind } from './CashMovementDialog';
 import { CloseShiftPanel, type ShiftClosed } from './CloseShiftPanel';
 import { callShift, useShiftStatus, useSingleFlight } from './shift-bridge';
@@ -56,14 +60,7 @@ function CashierShift({ bridge }: { bridge: ShiftCashupBridgeAPI }): JSX.Element
     return <p className="v5-shift-message">{SHIFT_COPY.loading}</p>;
   }
   if (state.kind === 'refused') {
-    return (
-      <div className="v5-shift-panel">
-        <p className="v5-shift-message">{shiftRefusalMessage(state.reason)}</p>
-        <button type="button" className="v5-shift-btn" onClick={reload}>
-          {SHIFT_COPY.retry}
-        </button>
-      </div>
-    );
+    return <StatusUnavailable outcome={outcome} reason={state.reason} onRetry={reload} />;
   }
   const open = state.status.openShift;
   return (
@@ -88,6 +85,31 @@ function CashierShift({ bridge }: { bridge: ShiftCashupBridgeAPI }): JSX.Element
           }}
         />
       )}
+    </>
+  );
+}
+
+/**
+ * The status read was refused or failed. A committed outcome stays on screen
+ * (an approved close's variance is only in its answer); the failed refresh is
+ * then a generic line beside it, never the refusal or any error text.
+ */
+function StatusUnavailable(props: {
+  outcome: Outcome | null;
+  reason: ShiftCashupRefusal;
+  onRetry: () => void;
+}): JSX.Element {
+  const { outcome } = props;
+  const message = outcome === null ? shiftRefusalMessage(props.reason) : SHIFT_COPY.refreshFailed;
+  return (
+    <>
+      {outcome !== null && <ShiftOutcome outcome={outcome} />}
+      <div className="v5-shift-panel">
+        <p className="v5-shift-message">{message}</p>
+        <button type="button" className="v5-shift-btn" onClick={props.onRetry}>
+          {SHIFT_COPY.retry}
+        </button>
+      </div>
     </>
   );
 }

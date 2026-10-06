@@ -49,6 +49,7 @@ const GENERAL_COPY = {
   loading: 'جارٍ تحميل حالة الوردية…',
   retry: 'إعادة المحاولة',
   refresh: 'تحديث',
+  refreshFailed: 'تعذّر تحديث حالة الوردية. ما سُجّل أعلاه محفوظ.',
   cancel: 'إلغاء',
   invalidAmount: 'أدخل مبلغًا صحيحًا بخانتين عشريتين على الأكثر.',
 } as const;
