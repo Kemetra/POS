@@ -118,8 +118,8 @@ export interface PinManagementHandlerDeps {
   auditEmitter: AuditEmitter;
   /**
    * 019 — roster source for the provision path. `provisionCashierPin` resolves
-   * the request's provider-neutral `target_user_id` to the cashier's roster
-   * entry (to read the legacy clerk `id` and confirm a `user_id` exists). The
+   * the request's `target_cashier_id` (the roster `id`) to the cashier's
+   * roster entry (to read the provider-neutral `user_id` the row is keyed on). The
    * neutral↔clerk mapping is resolved main-side and NEVER crosses the bridge.
    */
   backend: BackendClient;
@@ -262,7 +262,8 @@ export class PinManagementHandler {
    *   1. role-gate (manager/admin) — FIRST executable call (AD-1).
    *   2. validate event_id + PIN shape — generic refusal, value never echoed.
    *   3. resolve scope from pairing state (never the renderer — Constitution VII).
-   *   4. fetch the branch roster; find the entry whose `user_id` === target_user_id.
+   *   4. fetch the branch roster; find the entry whose `id` === target_cashier_id (RT-235),
+   *      then read its provider-neutral `user_id`.
    *      The roster is the only source of the neutral↔clerk mapping needed for
    *      both the legacy create-only check and the NOT-NULL clerk PK column.
    *        • no entry carries that user_id → `not_ready` (FR-11; covers the
@@ -300,8 +301,8 @@ export class PinManagementHandler {
     if (
       typeof req.event_id !== 'string' ||
       req.event_id.length === 0 ||
-      typeof req.target_user_id !== 'string' ||
-      req.target_user_id.length === 0 ||
+      typeof req.target_cashier_id !== 'string' ||
+      req.target_cashier_id.length === 0 ||
       typeof req.initial_pin !== 'string' ||
       !isValidPin(req.initial_pin)
     ) {
@@ -316,7 +317,7 @@ export class PinManagementHandler {
     }
 
     const { tenant_id, branch_id, terminal_id } = pairingStatus;
-    const { target_user_id } = req;
+    const { target_cashier_id } = req;
 
     // RT-214: the roster route needs the manager's operator-identity JWT. With
     // none held for this session, refuse before any request goes out.
@@ -340,11 +341,15 @@ export class PinManagementHandler {
     // FR-11: the cashier must carry a provider-neutral user_id. Absent → not_ready,
     // no row, no fallback to a clerk-keyed row. Also covers the pre-DP-2 state
     // where NO entry has a user_id (every attempt is truthfully not_ready).
-    const entry = roster.cashiers.find((c) => c.user_id === target_user_id);
-    if (entry === undefined) {
+    // RT-235: the renderer names the cashier by the roster `id` it holds; the
+    // neutral `user_id` is read from that entry here and never crosses the bridge.
+    // An empty `user_id` is not a delivered key: sign-in rejects such a row.
+    const entry = roster.cashiers.find((c) => c.id === target_cashier_id);
+    if (entry === undefined || entry.user_id === undefined || entry.user_id === '') {
       this.log('info', 'provision_cashier_pin.refused', 'not_ready');
       return REFUSE_NOT_READY;
     }
+    const target_user_id = entry.user_id;
     const cashierClerkId = entry.id;
 
     // Create-only guard (FR-5): refuse if ANY row already exists for this
