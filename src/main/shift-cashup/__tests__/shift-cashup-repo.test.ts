@@ -86,6 +86,10 @@ const CLOSE: ShiftCloseFact = {
   cashRefundReturnRefs: [],
 };
 
+interface SeqRef {
+  seq: number;
+}
+
 let db: SqlJsDatabase;
 let repo: ShiftCashupRepo;
 
@@ -102,11 +106,11 @@ afterEach(() => {
   db.close();
 });
 
-function count(table: string): number {
-  return Number(db.exec(`SELECT COUNT(*) FROM ${table}`)[0]?.values[0]?.[0] ?? -1);
+function count(of: { table: string }): number {
+  return Number(db.exec(`SELECT COUNT(*) FROM ${of.table}`)[0]?.values[0]?.[0] ?? -1);
 }
 
-function outboxRow(seq: number): Record<string, unknown> {
+function outboxRow({ seq }: SeqRef): Record<string, unknown> {
   const res = db.exec(
     `SELECT o.*, s.sync_status, s.attempt_count FROM shift_sync_outbox o
      JOIN shift_sync_state s ON s.seq = o.seq WHERE o.seq = ${String(seq)}`,
@@ -115,7 +119,7 @@ function outboxRow(seq: number): Record<string, unknown> {
   return Object.fromEntries(res.columns.map((c, i) => [c, res.values[0]?.[i]]));
 }
 
-function stateOf(seq: number): Record<string, unknown> {
+function stateOf({ seq }: SeqRef): Record<string, unknown> {
   const res = db.exec(`SELECT * FROM shift_sync_state WHERE seq = ${String(seq)}`)[0];
   if (res === undefined) throw new Error(`no state row ${String(seq)}`);
   return Object.fromEntries(res.columns.map((c, i) => [c, res.values[0]?.[i]]));
@@ -143,7 +147,7 @@ describe('recording facts', () => {
   it('records an open with its exact bytes, key and a pending state row, atomically', () => {
     const recorded = repo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
     expect(recorded).toEqual({ seq: 1, idempotencyKey: `pos-pulse-shift-open:${S1}` });
-    expect(outboxRow(1)).toMatchObject({
+    expect(outboxRow({ seq: 1 })).toMatchObject({
       fact_kind: 'open',
       shift_id: S1,
       movement_id: null,
@@ -164,7 +168,7 @@ describe('recording facts', () => {
       sync_status: 'pending',
       attempt_count: 0,
     });
-    expect(count('shift_cashup_opens')).toBe(1);
+    expect(count({ table: 'shift_cashup_opens' })).toBe(1);
   });
 
   it('stores lower-case ids for an upper-case fact', () => {
@@ -175,7 +179,7 @@ describe('recording facts', () => {
     });
     repo.recordMovement({ scope: SCOPE, fact: { ...PAY_IN, shiftId: S1.toUpperCase() }, now: NOW });
     expect(repo.findOpenShift(SCOPE)).toMatchObject({ shiftId: S1, openingUserId: USER });
-    expect(outboxRow(2)).toMatchObject({ shift_id: S1, movement_id: M1 });
+    expect(outboxRow({ seq: 2 })).toMatchObject({ shift_id: S1, movement_id: M1 });
   });
 
   it('refuses a second open on the terminal and writes nothing', () => {
@@ -185,28 +189,34 @@ describe('recording facts', () => {
         repo.recordOpen({ scope: SCOPE, fact: { ...OPEN, shiftId: S2 }, now: NOW }),
       ),
     ).toBe('shift_already_open');
-    expect([count('shift_cashup_opens'), count('shift_sync_outbox')]).toEqual([1, 1]);
+    expect([count({ table: 'shift_cashup_opens' }), count({ table: 'shift_sync_outbox' })]).toEqual(
+      [1, 1],
+    );
   });
 
   it('refuses an invalid fact before writing anything', () => {
     expect(() =>
       repo.recordOpen({ scope: SCOPE, fact: { ...OPEN, openingFloatMinor: 1.5 }, now: NOW }),
     ).toThrow(ShiftFactInvalidError);
-    expect([count('shift_cashup_opens'), count('shift_sync_outbox')]).toEqual([0, 0]);
+    expect([count({ table: 'shift_cashup_opens' }), count({ table: 'shift_sync_outbox' })]).toEqual(
+      [0, 0],
+    );
   });
 
   it('renders a movement in the shift currency', () => {
     repo.recordOpen({ scope: SCOPE, fact: { ...OPEN, currencyCode: 'JPY' }, now: NOW });
     repo.recordMovement({ scope: SCOPE, fact: { ...PAY_IN, amountMinor: 500 }, now: NOW });
-    expect(JSON.parse(String(outboxRow(2)['request_body']))).toMatchObject({ amount: '500' });
-    expect(outboxRow(2)['idempotency_key']).toBe(`pos-pulse-shift-movement:${M1}`);
+    expect(JSON.parse(String(outboxRow({ seq: 2 })['request_body']))).toMatchObject({
+      amount: '500',
+    });
+    expect(outboxRow({ seq: 2 })['idempotency_key']).toBe(`pos-pulse-shift-movement:${M1}`);
   });
 
-  it.each<[string, () => void]>([
-    ['no shift', () => undefined],
-    [
-      'a closed shift',
-      () => {
+  it.each<{ name: string; arrange: () => void }>([
+    { name: 'no shift', arrange: () => undefined },
+    {
+      name: 'a closed shift',
+      arrange: () => {
         repo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
         repo.recordClose({
           scope: SCOPE,
@@ -220,30 +230,30 @@ describe('recording facts', () => {
           now: NOW,
         });
       },
-    ],
-    [
-      "another terminal's shift",
-      () => {
+    },
+    {
+      name: "another terminal's shift",
+      arrange: () => {
         repo.recordOpen({ scope: OTHER_TERMINAL, fact: OPEN, now: NOW });
       },
-    ],
-  ])('refuses a movement on %s', (_name, arrange) => {
+    },
+  ])('refuses a movement on $name', ({ arrange }) => {
     arrange();
-    const before = count('shift_sync_outbox');
+    const before = count({ table: 'shift_sync_outbox' });
     expect(stateErrorOf(() => repo.recordMovement({ scope: SCOPE, fact: PAY_IN, now: NOW }))).toBe(
       'shift_not_open',
     );
-    expect(count('shift_sync_outbox')).toBe(before);
+    expect(count({ table: 'shift_sync_outbox' })).toBe(before);
   });
 
   it('records a close and its outbox row; the terminal then has no open shift', () => {
     recordWholeShift();
-    expect(outboxRow(4)).toMatchObject({
+    expect(outboxRow({ seq: 4 })).toMatchObject({
       fact_kind: 'close',
       idempotency_key: `pos-pulse-shift-close:${S1}`,
       auth_path: 'device',
     });
-    expect(JSON.parse(String(outboxRow(4)['request_body']))).toMatchObject({
+    expect(JSON.parse(String(outboxRow({ seq: 4 })['request_body']))).toMatchObject({
       expectedCash: '580.00',
       variance: '-5.00',
       operatorUserId: USER,
@@ -260,7 +270,10 @@ describe('recording facts', () => {
     expect(() => repo.recordClose({ scope: SCOPE, fact: CLOSE, now: NOW })).toThrow(
       /movement totals/,
     );
-    expect([count('shift_cashup_closes'), count('shift_sync_outbox')]).toEqual([0, 2]);
+    expect([
+      count({ table: 'shift_cashup_closes' }),
+      count({ table: 'shift_sync_outbox' }),
+    ]).toEqual([0, 2]);
     expect(repo.findOpenShift(SCOPE)).not.toBeNull();
   });
 });
@@ -324,7 +337,7 @@ describe('the drain read: one fact at a time, in causal order', () => {
         shiftId: S1,
         authPath: 'device',
         idempotencyKey: `pos-pulse-shift-open:${S1}`,
-        requestBody: String(outboxRow(1)['request_body']),
+        requestBody: String(outboxRow({ seq: 1 })['request_body']),
         attemptCount: 0,
       },
     });
@@ -376,7 +389,7 @@ describe('sync transitions', () => {
       nextRetryAt: '2026-10-05T08:00:03.000Z',
       category: 'transient',
     });
-    expect(stateOf(1)).toMatchObject({
+    expect(stateOf({ seq: 1 })).toMatchObject({
       sync_status: 'pending',
       attempt_count: 1,
       next_retry_at: '2026-10-05T08:00:03.000Z',
@@ -387,7 +400,7 @@ describe('sync transitions', () => {
 
   it('markDeadLetter counts the attempt and keeps the reason', () => {
     repo.markDeadLetter({ seq: 1, now: NOW, reason: 'shift_payload_conflict' });
-    expect(stateOf(1)).toMatchObject({
+    expect(stateOf({ seq: 1 })).toMatchObject({
       sync_status: 'dead_letter',
       attempt_count: 1,
       dead_letter_reason: 'shift_payload_conflict',
@@ -397,7 +410,7 @@ describe('sync transitions', () => {
 
   it('markSynced counts the attempt and stamps synced_at', () => {
     repo.markSynced({ seq: 1, now: NOW });
-    expect(stateOf(1)).toMatchObject({
+    expect(stateOf({ seq: 1 })).toMatchObject({
       sync_status: 'synced',
       attempt_count: 1,
       synced_at: NOW,
@@ -406,18 +419,22 @@ describe('sync transitions', () => {
     });
   });
 
-  it.each<[string, (r: ShiftCashupRepo) => boolean]>([
-    ['markSynced', (r) => r.markSynced({ seq: 1, now: NOW })],
-    ['markDeadLetter', (r) => r.markDeadLetter({ seq: 1, now: NOW, reason: 'shift_closed' })],
-    [
-      'recordRetry',
-      (r) => r.recordRetry({ seq: 1, now: NOW, nextRetryAt: NOW, category: 'transient' }),
-    ],
-  ])('%s changes nothing on a row that is no longer pending', (_name, transition) => {
+  it.each<{ name: string; transition: (r: ShiftCashupRepo) => boolean }>([
+    { name: 'markSynced', transition: (r) => r.markSynced({ seq: 1, now: NOW }) },
+    {
+      name: 'markDeadLetter',
+      transition: (r) => r.markDeadLetter({ seq: 1, now: NOW, reason: 'shift_closed' }),
+    },
+    {
+      name: 'recordRetry',
+      transition: (r) =>
+        r.recordRetry({ seq: 1, now: NOW, nextRetryAt: NOW, category: 'transient' }),
+    },
+  ])('$name changes nothing on a row that is no longer pending', ({ transition }) => {
     repo.markSynced({ seq: 1, now: NOW });
-    const before = stateOf(1);
+    const before = stateOf({ seq: 1 });
     expect(transition(repo)).toBe(false);
-    expect(stateOf(1)).toEqual(before);
+    expect(stateOf({ seq: 1 })).toEqual(before);
   });
 
   it('a transition on an unknown seq applies nothing', () => {

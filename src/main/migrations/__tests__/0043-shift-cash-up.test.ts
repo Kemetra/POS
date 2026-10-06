@@ -193,8 +193,8 @@ function enqueue(row: Partial<OutboxRow> = {}): void {
   );
 }
 
-function count(table: string): number {
-  return Number(db.exec(`SELECT COUNT(*) FROM ${table}`)[0]?.values[0]?.[0] ?? -1);
+function count(of: { table: string }): number {
+  return Number(db.exec(`SELECT COUNT(*) FROM ${of.table}`)[0]?.values[0]?.[0] ?? -1);
 }
 
 function state(): Record<string, unknown> {
@@ -208,17 +208,20 @@ describe('0043 — the facts', () => {
     open();
     move();
     close({ pay_out_total_minor: 12_000, expected_cash_minor: 48_000, variance_minor: 11_500 });
-    expect([count('shift_cashup_opens'), count('shift_cashup_movements')]).toEqual([1, 1]);
-    expect(count('shift_cashup_closes')).toBe(1);
+    expect([
+      count({ table: 'shift_cashup_opens' }),
+      count({ table: 'shift_cashup_movements' }),
+    ]).toEqual([1, 1]);
+    expect(count({ table: 'shift_cashup_closes' })).toBe(1);
   });
 
-  it.each<[string, Partial<OpenRow>]>([
-    ['an upper-case shift id', { shift_id: S1.toUpperCase() }],
-    ['a non-UUID shift id', { shift_id: 'shift-1' }],
-    ['an upper-case opening user', { opening_user_id: USER.toUpperCase() }],
-    ['a REAL float', { opening_float_minor: 1.5 }],
-    ['a negative float', { opening_float_minor: -1 }],
-  ])('refuses an open with %s', (_name, row) => {
+  it.each<{ name: string; row: Partial<OpenRow> }>([
+    { name: 'an upper-case shift id', row: { shift_id: S1.toUpperCase() } },
+    { name: 'a non-UUID shift id', row: { shift_id: 'shift-1' } },
+    { name: 'an upper-case opening user', row: { opening_user_id: USER.toUpperCase() } },
+    { name: 'a REAL float', row: { opening_float_minor: 1.5 } },
+    { name: 'a negative float', row: { opening_float_minor: -1 } },
+  ])('refuses an open with $name', ({ row }) => {
     expect(() => {
       open(row);
     }).toThrow(/CHECK constraint failed/);
@@ -232,17 +235,21 @@ describe('0043 — the facts', () => {
     open({ shift_id: S2, terminal_id: 'term-2' });
     close();
     open({ shift_id: '0192f5a2-3b4c-7d8e-9f01-000000000003' });
-    expect(count('shift_cashup_opens')).toBe(3);
+    expect(count({ table: 'shift_cashup_opens' })).toBe(3);
   });
 
-  it.each<[string, Partial<MovementRow>, RegExp]>([
-    ['a zero amount', { amount_minor: 0 }, /CHECK constraint failed/],
-    ['a REAL amount', { amount_minor: 2.5 }, /CHECK constraint failed/],
-    ['an unknown kind', { kind: 'refund' }, /CHECK constraint failed/],
-    ['an empty note', { note: '' }, /CHECK constraint failed/],
-    ['a 201-character note', { note: 'x'.repeat(201) }, /CHECK constraint failed/],
-    ['an unknown shift', { shift_id: S2 }, /FOREIGN KEY constraint failed/],
-  ])('refuses a movement with %s', (_name, row, error) => {
+  it.each<{ name: string; row: Partial<MovementRow>; error: RegExp }>([
+    { name: 'a zero amount', row: { amount_minor: 0 }, error: /CHECK constraint failed/ },
+    { name: 'a REAL amount', row: { amount_minor: 2.5 }, error: /CHECK constraint failed/ },
+    { name: 'an unknown kind', row: { kind: 'refund' }, error: /CHECK constraint failed/ },
+    { name: 'an empty note', row: { note: '' }, error: /CHECK constraint failed/ },
+    {
+      name: 'a 201-character note',
+      row: { note: 'x'.repeat(201) },
+      error: /CHECK constraint failed/,
+    },
+    { name: 'an unknown shift', row: { shift_id: S2 }, error: /FOREIGN KEY constraint failed/ },
+  ])('refuses a movement with $name', ({ row, error }) => {
     open();
     expect(() => {
       move(row);
@@ -257,24 +264,32 @@ describe('0043 — the facts', () => {
     }).toThrow(/the shift is closed/);
   });
 
-  it.each<[string, Partial<CloseRow>, RegExp]>([
-    ['a wrong expected cash', { expected_cash_minor: 60_001, variance_minor: -501 }, /CHECK/],
-    ['a wrong variance', { variance_minor: -499 }, /CHECK/],
-    ['a negative counted cash', { counted_cash_minor: -1, variance_minor: -60_001 }, /CHECK/],
-    ['a forced close without a reason', { close_kind: 'forced' }, /CHECK/],
-    ['a normal close with a reason', { forced_reason: 'why' }, /CHECK/],
-    ['a refs value that is not an array', { refs_json: '{}' }, /CHECK/],
-    [
-      'a float other than the open',
-      { opening_float_minor: 40_000, expected_cash_minor: 50_000, variance_minor: 9_500 },
-      /float or movement totals/,
-    ],
-    [
-      'a pay-out total with no movement',
-      { pay_out_total_minor: 100, expected_cash_minor: 59_900, variance_minor: -400 },
-      /float or movement totals/,
-    ],
-  ])('refuses a close with %s', (_name, row, error) => {
+  it.each<{ name: string; row: Partial<CloseRow>; error: RegExp }>([
+    {
+      name: 'a wrong expected cash',
+      row: { expected_cash_minor: 60_001, variance_minor: -501 },
+      error: /CHECK/,
+    },
+    { name: 'a wrong variance', row: { variance_minor: -499 }, error: /CHECK/ },
+    {
+      name: 'a negative counted cash',
+      row: { counted_cash_minor: -1, variance_minor: -60_001 },
+      error: /CHECK/,
+    },
+    { name: 'a forced close without a reason', row: { close_kind: 'forced' }, error: /CHECK/ },
+    { name: 'a normal close with a reason', row: { forced_reason: 'why' }, error: /CHECK/ },
+    { name: 'a refs value that is not an array', row: { refs_json: '{}' }, error: /CHECK/ },
+    {
+      name: 'a float other than the open',
+      row: { opening_float_minor: 40_000, expected_cash_minor: 50_000, variance_minor: 9_500 },
+      error: /float or movement totals/,
+    },
+    {
+      name: 'a pay-out total with no movement',
+      row: { pay_out_total_minor: 100, expected_cash_minor: 59_900, variance_minor: -400 },
+      error: /float or movement totals/,
+    },
+  ])('refuses a close with $name', ({ row, error }) => {
     open();
     expect(() => {
       close(row);
@@ -284,7 +299,7 @@ describe('0043 — the facts', () => {
   it('accepts a forced close with a reason', () => {
     open();
     close({ close_kind: 'forced', forced_reason: 'Cashier left' });
-    expect(count('shift_cashup_closes')).toBe(1);
+    expect(count({ table: 'shift_cashup_closes' })).toBe(1);
   });
 
   it('closes a shift once', () => {
@@ -296,13 +311,13 @@ describe('0043 — the facts', () => {
   });
 
   it.each([
-    ['shift_cashup_opens', 'UPDATE shift_cashup_opens SET opened_at = opened_at'],
-    ['shift_cashup_opens', 'DELETE FROM shift_cashup_opens'],
-    ['shift_cashup_movements', 'UPDATE shift_cashup_movements SET note = NULL'],
-    ['shift_cashup_movements', 'DELETE FROM shift_cashup_movements'],
-    ['shift_cashup_closes', 'UPDATE shift_cashup_closes SET sale_count = 4'],
-    ['shift_cashup_closes', 'DELETE FROM shift_cashup_closes'],
-  ])('%s is append-only (%s)', (table, sql) => {
+    { table: 'shift_cashup_opens', sql: 'UPDATE shift_cashup_opens SET opened_at = opened_at' },
+    { table: 'shift_cashup_opens', sql: 'DELETE FROM shift_cashup_opens' },
+    { table: 'shift_cashup_movements', sql: 'UPDATE shift_cashup_movements SET note = NULL' },
+    { table: 'shift_cashup_movements', sql: 'DELETE FROM shift_cashup_movements' },
+    { table: 'shift_cashup_closes', sql: 'UPDATE shift_cashup_closes SET sale_count = 4' },
+    { table: 'shift_cashup_closes', sql: 'DELETE FROM shift_cashup_closes' },
+  ])('$table is append-only ($sql)', ({ table, sql }) => {
     open();
     move();
     close({ pay_out_total_minor: 12_000, expected_cash_minor: 48_000, variance_minor: 11_500 });
@@ -319,24 +334,36 @@ describe('0043 — the outbox and its state', () => {
     expect(state()).toMatchObject({ seq: 1, sync_status: 'pending', attempt_count: 0 });
   });
 
-  it.each<[string, Partial<OutboxRow>, RegExp]>([
-    ['an envelope body carrying operatorUserId', { auth_path: 'envelope' }, /CHECK/],
-    [
-      'a device body without operatorUserId',
-      { request_body: JSON.stringify({ shiftId: S1 }) },
-      /CHECK/,
-    ],
-    [
-      'an open body for another shift',
-      { request_body: JSON.stringify({ shiftId: S2, operatorUserId: USER }) },
-      /CHECK/,
-    ],
-    ['a short idempotency key', { idempotency_key: 'short' }, /CHECK/],
-    ['an idempotency key with a space', { idempotency_key: 'pos-pulse shift open 1' }, /CHECK/],
-    ['a body that is not JSON', { request_body: 'nope' }, /CHECK/],
-    ['an unknown fact kind', { fact_kind: 'reopen' }, /CHECK/],
-    ['another terminal than the shift', { terminal_id: 'term-2' }, /no such fact/],
-  ])('refuses %s', (_name, row, error) => {
+  it.each<{ name: string; row: Partial<OutboxRow>; error: RegExp }>([
+    {
+      name: 'an envelope body carrying operatorUserId',
+      row: { auth_path: 'envelope' },
+      error: /CHECK/,
+    },
+    {
+      name: 'a device body without operatorUserId',
+      row: { request_body: JSON.stringify({ shiftId: S1 }) },
+      error: /CHECK/,
+    },
+    {
+      name: 'an open body for another shift',
+      row: { request_body: JSON.stringify({ shiftId: S2, operatorUserId: USER }) },
+      error: /CHECK/,
+    },
+    { name: 'a short idempotency key', row: { idempotency_key: 'short' }, error: /CHECK/ },
+    {
+      name: 'an idempotency key with a space',
+      row: { idempotency_key: 'pos-pulse shift open 1' },
+      error: /CHECK/,
+    },
+    { name: 'a body that is not JSON', row: { request_body: 'nope' }, error: /CHECK/ },
+    { name: 'an unknown fact kind', row: { fact_kind: 'reopen' }, error: /CHECK/ },
+    {
+      name: 'another terminal than the shift',
+      row: { terminal_id: 'term-2' },
+      error: /no such fact/,
+    },
+  ])('refuses $name', ({ row, error }) => {
     open();
     expect(() => {
       enqueue(row);
@@ -381,9 +408,9 @@ describe('0043 — the outbox and its state', () => {
   });
 
   it.each([
-    'UPDATE shift_sync_outbox SET request_body = request_body',
-    'DELETE FROM shift_sync_outbox',
-  ])('the outbox is immutable (%s)', (sql) => {
+    { sql: 'UPDATE shift_sync_outbox SET request_body = request_body' },
+    { sql: 'DELETE FROM shift_sync_outbox' },
+  ])('the outbox is immutable ($sql)', ({ sql }) => {
     open();
     enqueue();
     expect(() => {
@@ -392,30 +419,37 @@ describe('0043 — the outbox and its state', () => {
   });
 
   it.each([
-    ['synced', "sync_status = 'synced', synced_at = 't1'"],
-    ['dead_letter', "sync_status = 'dead_letter', dead_letter_reason = 'shift_not_found'"],
-    [
-      'pending, retried',
-      "attempt_count = 1, next_retry_at = 't1', last_error_category = 'transient'",
-    ],
-  ])('allows pending → %s', (_name, set) => {
+    { name: 'synced', set: "sync_status = 'synced', synced_at = 't1'" },
+    {
+      name: 'dead_letter',
+      set: "sync_status = 'dead_letter', dead_letter_reason = 'shift_not_found'",
+    },
+    {
+      name: 'pending, retried',
+      set: "attempt_count = 1, next_retry_at = 't1', last_error_category = 'transient'",
+    },
+  ])('allows pending → $name', ({ set }) => {
     open();
     enqueue();
     db.run(`UPDATE shift_sync_state SET ${set}`);
-    expect(count('shift_sync_state')).toBe(1);
+    expect(count({ table: 'shift_sync_state' })).toBe(1);
   });
 
-  it.each<[string, string, RegExp]>([
-    ['synced without synced_at', "sync_status = 'synced'", /CHECK/],
-    ['a dead letter without a reason', "sync_status = 'dead_letter'", /CHECK/],
-    [
-      'a reason that is not a code',
-      "sync_status = 'dead_letter', dead_letter_reason = 'Shift Gone!'",
-      /CHECK/,
-    ],
-    ['a decreasing attempt count', 'attempt_count = -1', /CHECK|illegal transition/],
-    ['a changed created_at', "created_at = 't9'", /illegal transition/],
-  ])('refuses %s', (_name, set, error) => {
+  it.each<{ name: string; set: string; error: RegExp }>([
+    { name: 'synced without synced_at', set: "sync_status = 'synced'", error: /CHECK/ },
+    { name: 'a dead letter without a reason', set: "sync_status = 'dead_letter'", error: /CHECK/ },
+    {
+      name: 'a reason that is not a code',
+      set: "sync_status = 'dead_letter', dead_letter_reason = 'Shift Gone!'",
+      error: /CHECK/,
+    },
+    {
+      name: 'a decreasing attempt count',
+      set: 'attempt_count = -1',
+      error: /CHECK|illegal transition/,
+    },
+    { name: 'a changed created_at', set: "created_at = 't9'", error: /illegal transition/ },
+  ])('refuses $name', ({ set, error }) => {
     open();
     enqueue();
     expect(() => {
@@ -474,7 +508,7 @@ describe('0043 — the runner', () => {
     expect(applied).toEqual([MIGRATION]);
     open();
     enqueue();
-    expect(count('shift_sync_state')).toBe(1);
+    expect(count({ table: 'shift_sync_state' })).toBe(1);
   });
 
   it('leaves the 004-era shifts table untouched', () => {

@@ -15,6 +15,7 @@ import {
   buildCloseShiftRequest,
   buildOpenShiftRequest,
   ShiftFactInvalidError,
+  type ShiftFactInvalidReason,
   type CashMovementFact,
   type ShiftCloseFact,
   type ShiftOpenFact,
@@ -63,6 +64,13 @@ const CLOSE: ShiftCloseFact = {
   varianceApprovedByUserId: MANAGER,
 };
 
+/** One refused fact: the change to a valid fixture and the expected reason. */
+interface Refusal<F> {
+  name: string;
+  change: Partial<F>;
+  reason: ShiftFactInvalidReason;
+}
+
 function invalidReason(build: () => unknown): string {
   try {
     build();
@@ -107,30 +115,50 @@ describe('buildOpenShiftRequest', () => {
   });
 
   it.each([
-    ['JPY', 500, '500'],
-    ['KWD', 500, '0.500'],
-    ['EGP', 0, '0.00'],
-  ])('renders the float in the %s minor unit', (currencyCode, openingFloatMinor, wire) => {
-    const built = buildOpenShiftRequest({ ...OPEN, currencyCode, openingFloatMinor });
+    { currencyCode: 'JPY', openingFloatMinor: 500, wire: '500' },
+    { currencyCode: 'KWD', openingFloatMinor: 500, wire: '0.500' },
+    { currencyCode: 'EGP', openingFloatMinor: 0, wire: '0.00' },
+  ])('renders the float in the $currencyCode minor unit', ({ wire, ...change }) => {
+    const built = buildOpenShiftRequest({ ...OPEN, ...change });
     expect(JSON.parse(built.request.body)).toMatchObject({ openingFloat: wire });
   });
 
-  it.each<[string, Partial<ShiftOpenFact>, string]>([
-    ['a non-UUID shift id', { shiftId: 'shift-1' }, 'invalid_id'],
-    ['a non-UUID opening user', { openingUserId: '' }, 'invalid_id'],
-    ['a non-canonical instant', { openedAt: '2026-10-05T08:00:00Z' }, 'invalid_timestamp'],
-    ['an impossible date', { openedAt: '2026-02-31T08:00:00.000Z' }, 'invalid_timestamp'],
-    ['a currency with no known minor unit', { currencyCode: 'XYZ' }, 'unsupported_currency'],
-    ['a lower-case currency', { currencyCode: 'egp' }, 'unsupported_currency'],
-    ['a negative float', { openingFloatMinor: -1 }, 'invalid_amount'],
-    ['a fractional float', { openingFloatMinor: 1.5 }, 'invalid_amount'],
-    ['an unsafe float', { openingFloatMinor: Number.MAX_SAFE_INTEGER + 1 }, 'invalid_amount'],
-    [
-      'a float beyond 15 integer digits',
-      { currencyCode: 'JPY', openingFloatMinor: 10 ** 15 },
-      'invalid_amount',
-    ],
-  ])('refuses %s', (_name, change, reason) => {
+  it.each<Refusal<ShiftOpenFact>>([
+    { name: 'a non-UUID shift id', change: { shiftId: 'shift-1' }, reason: 'invalid_id' },
+    { name: 'a non-UUID opening user', change: { openingUserId: '' }, reason: 'invalid_id' },
+    {
+      name: 'a non-canonical instant',
+      change: { openedAt: '2026-10-05T08:00:00Z' },
+      reason: 'invalid_timestamp',
+    },
+    {
+      name: 'an impossible date',
+      change: { openedAt: '2026-02-31T08:00:00.000Z' },
+      reason: 'invalid_timestamp',
+    },
+    {
+      name: 'a currency with no known minor unit',
+      change: { currencyCode: 'XYZ' },
+      reason: 'unsupported_currency',
+    },
+    {
+      name: 'a lower-case currency',
+      change: { currencyCode: 'egp' },
+      reason: 'unsupported_currency',
+    },
+    { name: 'a negative float', change: { openingFloatMinor: -1 }, reason: 'invalid_amount' },
+    { name: 'a fractional float', change: { openingFloatMinor: 1.5 }, reason: 'invalid_amount' },
+    {
+      name: 'an unsafe float',
+      change: { openingFloatMinor: Number.MAX_SAFE_INTEGER + 1 },
+      reason: 'invalid_amount',
+    },
+    {
+      name: 'a float beyond 15 integer digits',
+      change: { currencyCode: 'JPY', openingFloatMinor: 10 ** 15 },
+      reason: 'invalid_amount',
+    },
+  ])('refuses $name', ({ change, reason }) => {
     expect(invalidReason(() => buildOpenShiftRequest({ ...OPEN, ...change }))).toBe(reason);
   });
 
@@ -184,19 +212,31 @@ describe('buildCashMovementRequest', () => {
     expect(built.request.idempotencyKey).toBe(`pos-pulse-shift-movement:${MOVE}`);
   });
 
-  it.each<[string, Partial<CashMovementFact>, string]>([
-    ['a zero amount', { amountMinor: 0 }, 'invalid_amount'],
-    ['an unknown kind', { kind: 'refund' as CashMovementFact['kind'] }, 'invalid_kind'],
-    [
-      'an unknown reason code',
-      { reasonCode: 'tip' as CashMovementFact['reasonCode'] },
-      'invalid_reason_code',
-    ],
-    ['an empty note', { note: '' }, 'invalid_note'],
-    ['a note over 200 characters', { note: 'x'.repeat(201) }, 'invalid_note'],
-    ['a non-UUID shift id', { shiftId: 'nope' }, 'invalid_id'],
-    ['a non-canonical occurredAt', { occurredAt: 'yesterday' }, 'invalid_timestamp'],
-  ])('refuses %s', (_name, change, reason) => {
+  it.each<Refusal<CashMovementFact>>([
+    { name: 'a zero amount', change: { amountMinor: 0 }, reason: 'invalid_amount' },
+    {
+      name: 'an unknown kind',
+      change: { kind: 'refund' as CashMovementFact['kind'] },
+      reason: 'invalid_kind',
+    },
+    {
+      name: 'an unknown reason code',
+      change: { reasonCode: 'tip' as CashMovementFact['reasonCode'] },
+      reason: 'invalid_reason_code',
+    },
+    { name: 'an empty note', change: { note: '' }, reason: 'invalid_note' },
+    {
+      name: 'a note over 200 characters',
+      change: { note: 'x'.repeat(201) },
+      reason: 'invalid_note',
+    },
+    { name: 'a non-UUID shift id', change: { shiftId: 'nope' }, reason: 'invalid_id' },
+    {
+      name: 'a non-canonical occurredAt',
+      change: { occurredAt: 'yesterday' },
+      reason: 'invalid_timestamp',
+    },
+  ])('refuses $name', ({ change, reason }) => {
     expect(
       invalidReason(() =>
         buildCashMovementRequest({ fact: { ...MOVEMENT, ...change }, currencyCode: 'EGP' }),
@@ -257,40 +297,52 @@ describe('buildCloseShiftRequest', () => {
     expect(JSON.parse(built.request.body)).toMatchObject({ variance: '5.00' });
   });
 
-  it.each<[string, Partial<ShiftCloseFact>, string]>([
-    [
-      'a wrong expected cash',
-      { expectedCashMinor: 275_501, varianceMinor: -501 },
-      'cashup_inconsistent',
-    ],
-    ['a wrong variance', { varianceMinor: -499 }, 'cashup_inconsistent'],
-    [
-      'a negative expected cash',
-      {
+  it.each<Refusal<ShiftCloseFact>>([
+    {
+      name: 'a wrong expected cash',
+      change: { expectedCashMinor: 275_501, varianceMinor: -501 },
+      reason: 'cashup_inconsistent',
+    },
+    { name: 'a wrong variance', change: { varianceMinor: -499 }, reason: 'cashup_inconsistent' },
+    {
+      name: 'a negative expected cash',
+      change: {
         cashRefundsTotalMinor: 400_000,
         expectedCashMinor: -117_000,
         countedCashMinor: 0,
         varianceMinor: 117_000,
       },
-      'invalid_amount',
-    ],
-    [
-      'a negative counted cash',
-      { countedCashMinor: -1, varianceMinor: -275_501 },
-      'invalid_amount',
-    ],
-    ['an unsafe variance', { varianceMinor: 0.5 }, 'invalid_amount'],
-    ['a negative sale count', { saleCount: -1 }, 'invalid_sale_count'],
-    ['a sale count past int32', { saleCount: 2_147_483_648 }, 'invalid_sale_count'],
-    ['a fractional sale count', { saleCount: 1.5 }, 'invalid_sale_count'],
-    [
-      'a duplicate refund ref',
-      { cashRefundReturnRefs: [REF, REF.toUpperCase()] },
-      'invalid_refund_refs',
-    ],
-    ['a non-UUID refund ref', { cashRefundReturnRefs: ['r-1'] }, 'invalid_id'],
-    ['a non-UUID approver', { varianceApprovedByUserId: 'boss' }, 'invalid_id'],
-  ])('refuses %s', (_name, change, reason) => {
+      reason: 'invalid_amount',
+    },
+    {
+      name: 'a negative counted cash',
+      change: { countedCashMinor: -1, varianceMinor: -275_501 },
+      reason: 'invalid_amount',
+    },
+    { name: 'an unsafe variance', change: { varianceMinor: 0.5 }, reason: 'invalid_amount' },
+    { name: 'a negative sale count', change: { saleCount: -1 }, reason: 'invalid_sale_count' },
+    {
+      name: 'a sale count past int32',
+      change: { saleCount: 2_147_483_648 },
+      reason: 'invalid_sale_count',
+    },
+    { name: 'a fractional sale count', change: { saleCount: 1.5 }, reason: 'invalid_sale_count' },
+    {
+      name: 'a duplicate refund ref',
+      change: { cashRefundReturnRefs: [REF, REF.toUpperCase()] },
+      reason: 'invalid_refund_refs',
+    },
+    {
+      name: 'a non-UUID refund ref',
+      change: { cashRefundReturnRefs: ['r-1'] },
+      reason: 'invalid_id',
+    },
+    {
+      name: 'a non-UUID approver',
+      change: { varianceApprovedByUserId: 'boss' },
+      reason: 'invalid_id',
+    },
+  ])('refuses $name', ({ change, reason }) => {
     expect(
       invalidReason(() =>
         buildCloseShiftRequest({ fact: { ...CLOSE, ...change }, currencyCode: 'EGP' }),

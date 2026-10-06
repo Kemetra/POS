@@ -40,13 +40,7 @@ const SCHEMAS = at(at(ROOT, 'components'), 'schemas');
 
 /** A flow list `[a, b]` or a block list `- a` as strings. */
 function listOf(node: YamlNode): string[] {
-  if (node.value.startsWith('[')) {
-    return node.value
-      .slice(1, -1)
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-  }
+  if (node.value.startsWith('[')) return node.value.match(/[^\s,[\]]+/g) ?? [];
   return node.children.filter((c) => c.item).map((c) => c.value);
 }
 
@@ -66,7 +60,13 @@ function constraintsOf(prop: YamlNode): YamlNode[] {
 const UUID_LOWER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
-function checkScalar(constraint: YamlNode, value: unknown): void {
+/** A schema node and the value sent for it. */
+interface Sent {
+  node: YamlNode;
+  value: unknown;
+}
+
+function checkScalar({ node: constraint, value }: Sent): void {
   const pattern = child(constraint, 'pattern');
   if (pattern !== undefined) expect(String(value)).toMatch(new RegExp(pattern.value));
   const format = child(constraint, 'format')?.value;
@@ -76,26 +76,27 @@ function checkScalar(constraint: YamlNode, value: unknown): void {
   if (enumNode !== undefined) expect(listOf(enumNode)).toContain(value);
 }
 
-function checkValue(prop: YamlNode, value: unknown): void {
+function checkValue({ node: prop, value }: Sent): void {
   for (const constraint of constraintsOf(prop)) {
     const items = child(constraint, 'items');
     if (items !== undefined && Array.isArray(value)) {
-      for (const item of value) checkScalar(items, item);
+      for (const item of value) checkScalar({ node: items, value: item });
     } else {
-      checkScalar(constraint, value);
+      checkScalar({ node: constraint, value });
     }
   }
 }
 
-function conformsTo(schemaName: string, body: string): void {
-  const schema = at(SCHEMAS, schemaName);
+function conformsTo(request: { schema: string; body: string }): void {
+  const { body } = request;
+  const schema = at(SCHEMAS, request.schema);
   expect(at(schema, 'additionalProperties').value).toBe('false');
   const properties = at(schema, 'properties');
   const sent = JSON.parse(body) as Record<string, unknown>;
   const declared = properties.children.map((c) => c.key);
   expect(declared).toEqual(expect.arrayContaining(Object.keys(sent)));
   expect(Object.keys(sent)).toEqual(expect.arrayContaining(listOf(at(schema, 'required'))));
-  for (const [key, value] of Object.entries(sent)) checkValue(at(properties, key), value);
+  for (const [key, value] of Object.entries(sent)) checkValue({ node: at(properties, key), value });
 }
 
 const SHIFT = '0192F5A2-3B4C-7D8E-9F01-23456789AB01';
@@ -114,7 +115,7 @@ describe('stored shift bodies conform to the pinned pos-shifts contract', () => 
       currencyCode: 'EGP',
       openingFloatMinor: 50_000,
     });
-    conformsTo('OpenShiftRequest', request.body);
+    conformsTo({ schema: 'OpenShiftRequest', body: request.body });
   });
 
   it('recordCashMovement body → RecordCashMovementRequest', () => {
@@ -131,7 +132,7 @@ describe('stored shift bodies conform to the pinned pos-shifts contract', () => 
       },
       currencyCode: 'EGP',
     });
-    conformsTo('RecordCashMovementRequest', request.body);
+    conformsTo({ schema: 'RecordCashMovementRequest', body: request.body });
   });
 
   it('closeShift body → CloseShiftRequest', () => {
@@ -154,7 +155,7 @@ describe('stored shift bodies conform to the pinned pos-shifts contract', () => 
       },
       currencyCode: 'EGP',
     });
-    conformsTo('CloseShiftRequest', request.body);
+    conformsTo({ schema: 'CloseShiftRequest', body: request.body });
   });
 
   it('the Idempotency-Key matches the contract header grammar', () => {
