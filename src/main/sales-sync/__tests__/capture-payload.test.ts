@@ -14,7 +14,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ADMISSION_CHECK_MAX_GAP_MS,
+  ADMISSION_CHECK_MIN_GAP_MS,
   buildCapturePayload,
+  deriveAdmissionCheckAt,
   parseTendersSince,
   TenderNotSendableError,
 } from '../capture-payload.js';
@@ -274,5 +277,88 @@ describe('RT-79 — parseTendersSince (POS_PULSE_FEATURE_SALE_TENDERS_SINCE)', (
 
   it('a valid ISO instant -> its canonical UTC ISO string', () => {
     expect(parseTendersSince(' 2026-06-01T02:00:00+02:00 ')).toBe('2026-06-01T00:00:00.000Z');
+  });
+});
+
+// ── RT-225 — admissionCheckAt (sales.yaml 1.6.0-draft; owner decision 10916) ─────
+
+const SETTLED = '2026-06-07T10:00:00.000Z';
+const SETTLED_MS = Date.parse(SETTLED);
+/** A sale settled at SETTLED and finalized `gapMs` later (e.g. by boot recovery). */
+function finalizedAfter(gapMs: number, over: Partial<SaleRow> = {}): SaleRow {
+  return saleRow({
+    settled_at: SETTLED,
+    finalized_at: new Date(SETTLED_MS + gapMs).toISOString(),
+    ...over,
+  });
+}
+
+describe('RT-225 — admissionCheckAt = settled_at, only when 5 s < gap <= 7 days', () => {
+  it('pins the owner-approved bounds: more than 5 s, at most 7 days', () => {
+    expect(ADMISSION_CHECK_MIN_GAP_MS).toBe(5_000);
+    expect(ADMISSION_CHECK_MAX_GAP_MS).toBe(7 * 24 * 60 * 60 * 1_000);
+  });
+
+  it('a sale finalized late (boot recovery) carries its settled time', () => {
+    const sale = finalizedAfter(2 * 60 * 60 * 1_000);
+    expect(deriveAdmissionCheckAt(sale)).toBe(SETTLED);
+    const p = buildCapturePayload(sale);
+    expect(p.admissionCheckAt).toBe(SETTLED);
+    // occurredAt stays the sale fact (finalized_at), unchanged.
+    expect(p.occurredAt).toBe(sale.finalized_at);
+  });
+
+  it.each([
+    ['no gap (an ordinary sale)', 0],
+    ['a 1 ms gap', 1],
+    ['exactly 5 s', 5_000],
+  ])('%s: no admissionCheckAt, the payload is byte-identical to before', (_n, gapMs) => {
+    const sale = finalizedAfter(gapMs);
+    expect(deriveAdmissionCheckAt(sale)).toBeNull();
+    const p = buildCapturePayload(sale);
+    expect('admissionCheckAt' in p).toBe(false);
+  });
+
+  it('just over 5 s: sent', () => {
+    expect(deriveAdmissionCheckAt(finalizedAfter(5_001))).toBe(SETTLED);
+  });
+
+  it('exactly 7 days: sent (the server cap is inclusive)', () => {
+    expect(deriveAdmissionCheckAt(finalizedAfter(ADMISSION_CHECK_MAX_GAP_MS))).toBe(SETTLED);
+  });
+
+  it('over 7 days: omitted (the server would answer 400)', () => {
+    expect(deriveAdmissionCheckAt(finalizedAfter(ADMISSION_CHECK_MAX_GAP_MS + 1))).toBeNull();
+    expect('admissionCheckAt' in buildCapturePayload(finalizedAfter(8 * 86_400_000))).toBe(false);
+  });
+
+  it('settled AFTER finalized (clock step back): omitted, never a value later than occurredAt', () => {
+    expect(deriveAdmissionCheckAt(finalizedAfter(-60_000))).toBeNull();
+  });
+
+  it.each([
+    ['an unparseable settled_at', { settled_at: 'not-a-date' }],
+    ['a zone-less settled_at', { settled_at: '2026-06-07T10:00:00' }],
+    ['an unparseable finalized_at', { finalized_at: 'garbage' }],
+    ['a calendar-invalid settled_at', { settled_at: '2026-02-30T10:00:00.000Z' }],
+  ])('%s: omitted (fail safe — the sale keeps today’s body)', (_n, over) => {
+    const sale = finalizedAfter(60 * 60 * 1_000, over);
+    expect(deriveAdmissionCheckAt(sale)).toBeNull();
+  });
+
+  it('is decided from the stored sale alone: every rebuild (every retry) is identical', () => {
+    const sale = finalizedAfter(10 * 60 * 1_000);
+    expect(buildCapturePayload(sale)).toEqual(buildCapturePayload(sale));
+    expect(JSON.stringify(buildCapturePayload(sale))).toBe(
+      JSON.stringify(buildCapturePayload({ ...sale })),
+    );
+  });
+
+  it('sends settled_at verbatim (an explicit-offset instant is not rewritten)', () => {
+    const sale = saleRow({
+      settled_at: '2026-06-07T12:00:00.000+02:00',
+      finalized_at: '2026-06-07T10:30:00.000Z',
+    });
+    expect(deriveAdmissionCheckAt(sale)).toBe('2026-06-07T12:00:00.000+02:00');
   });
 });

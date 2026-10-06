@@ -392,13 +392,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * RT-224 step 2: the device-path wire body — the envelope body plus
  * `operatorUserId`. Pure; throws like `toWireBody` on an invalid amount.
+ *
+ * RT-225 (`sales.yaml` 1.6.0-draft): plus `admissionCheckAt` when the payload
+ * carries one (the sale's settled time, `deriveAdmissionCheckAt`). It exists
+ * only on this path: the server refuses it without `operatorUserId`, so
+ * `toWireBody` (the envelope body) never emits it.
  */
 export function toCashierWireBody(
   payload: CaptureSalePayload,
   currencyCode: string,
   operatorUserId: string,
-): CaptureSaleWireBody & { operatorUserId: string } {
-  return { ...toWireBody(payload, currencyCode), operatorUserId };
+): CaptureSaleWireBody & { operatorUserId: string; admissionCheckAt?: string } {
+  const admissionCheckAt = payload.admissionCheckAt;
+  return {
+    ...toWireBody(payload, currencyCode),
+    operatorUserId,
+    ...(admissionCheckAt === undefined ? {} : { admissionCheckAt }),
+  };
 }
 
 /**

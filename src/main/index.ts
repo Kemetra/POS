@@ -78,6 +78,11 @@ import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.rep
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
 import {
+  CASHIER_CLAIM_REFUSED_RESET_ENV,
+  isCashierClaimRefusedResetRequested,
+  resetCashierClaimRefusedOnStart,
+} from './sales-sync/cashier-claim-refused-reset.js';
+import {
   createSaleSyncEngine,
   logSaleSyncPauseTransition,
   SALE_SYNC_BACKOFF_POLICY,
@@ -1788,6 +1793,24 @@ singleInstanceReady
         const resolveSaleSyncTerminalId = createCurrentTerminalResolver(() =>
           pairingStore.getStatus(),
         );
+        // RT-225 step 3 — support-only repair: with
+        // POS_PULSE_SUPPORT_RESET_CASHIER_CLAIM_REFUSED=1, this terminal's sales
+        // dead-lettered as `cashier_claim_refused` go back to pending before the
+        // drain's first tick, so they are re-sent (with `admissionCheckAt` where it
+        // applies). Unset = nothing. Logs a count only (P7); never throws.
+        resetCashierClaimRefusedOnStart({
+          requested: isCashierClaimRefusedResetRequested(
+            process.env[CASHIER_CLAIM_REFUSED_RESET_ENV],
+          ),
+          stateRepo: saleSyncStateRepo,
+          scope: {
+            tenantId: pairingStatus.tenant_id,
+            branchId: pairingStatus.branch_id,
+            terminalId: pairingStore.getCurrentTerminalId(),
+          },
+          now: new Date().toISOString(),
+          logger: mainLogger,
+        });
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
           tendersSince,

@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { createSaleSyncClient, toWireBody } from '../create-sale-sync-client.js';
+import { createSaleSyncClient, toCashierWireBody, toWireBody } from '../create-sale-sync-client.js';
 import type { CaptureSalePayload } from '../capture-payload.js';
 
 const BASE = 'https://example.invalid';
@@ -412,5 +412,44 @@ describe('RT-224 step 2 — device-path status mapping', () => {
     expect(await client(fetchImpl).postSaleAsCashier(PAYLOAD, USER)).toEqual({
       kind: 'no_connection',
     });
+  });
+});
+
+describe('RT-225 — admissionCheckAt on the wire (sales.yaml 1.6.0-draft)', () => {
+  const SETTLED = '2026-06-09T08:00:00.000Z';
+  const LATE: CaptureSalePayload = { ...PAYLOAD, admissionCheckAt: SETTLED };
+
+  it('the device path sends it beside operatorUserId', async () => {
+    const { fetchImpl, captured } = fetchAnswering(201, '{}');
+    await client(fetchImpl).postSaleAsCashier(LATE, USER);
+    expect(body(captured[0] as Captured)).toEqual({
+      ...toWireBody(PAYLOAD, 'EGP'),
+      operatorUserId: USER,
+      admissionCheckAt: SETTLED,
+    });
+  });
+
+  it('the envelope path NEVER sends it (the server refuses it without operatorUserId)', async () => {
+    const { fetchImpl, captured } = fetchAnswering(201, '{}');
+    await client(fetchImpl).postSale(LATE);
+    const sent = body(captured[0] as Captured);
+    expect('admissionCheckAt' in sent).toBe(false);
+    expect(sent).toEqual(toWireBody(PAYLOAD, 'EGP'));
+  });
+
+  it('absent from the payload: the device body has no admissionCheckAt key at all', () => {
+    expect('admissionCheckAt' in toCashierWireBody(PAYLOAD, 'EGP', USER)).toBe(false);
+    expect(toCashierWireBody(LATE, 'EGP', USER).admissionCheckAt).toBe(SETTLED);
+    expect('admissionCheckAt' in toWireBody(LATE, 'EGP')).toBe(false);
+  });
+
+  it('a retry under the same Idempotency-Key sends a byte-identical body', async () => {
+    const { fetchImpl, captured } = fetchAnswering(503);
+    const c = client(fetchImpl);
+    await c.postSaleAsCashier(LATE, USER);
+    await c.postSaleAsCashier(LATE, USER);
+    const [first, second] = captured as [Captured, Captured];
+    expect(header(second, 'Idempotency-Key')).toBe(header(first, 'Idempotency-Key'));
+    expect(rawBody(second)).toBe(rawBody(first));
   });
 });

@@ -48,6 +48,14 @@
  * never eligible, never deleted or mutated (the outbox is append-only anyway),
  * and counted in `heldPreviousPairing`. A null `terminalId` (unpaired / invalid
  * terminal) makes nothing eligible. Recovering held rows is a support flow.
+ *
+ * RT-225 step 3: `resetCashierClaimRefused` is the support-only repair for
+ * `cashier_claim_refused` dead-letters (sales refused before `admissionCheckAt`
+ * existed): it puts the CURRENT terminal's ones back to `pending`, due now, so
+ * the drain re-sends them. No other dead-letter reason, no other terminal
+ * (RT-221 held rows stay held) and no other tenant/branch is touched; the sale
+ * and the outbox are never written. `attempt_count` and `created_at` are kept
+ * (history); the reason is cleared, and a new refusal records it again.
  */
 
 import type { DatabaseHandle } from '../db/client.js';
@@ -176,6 +184,12 @@ export interface SaleSyncStateRepo {
    * Read helper for the return flow (S2); no IPC exposes it in S1.
    */
   findServerSaleRefBySaleId(scope: TenantScope, saleId: string): string | null;
+  /**
+   * RT-225 step 3 (support-only): the current terminal's `cashier_claim_refused`
+   * dead-letters → `pending`, due now. Returns how many were reset; 0 when
+   * `scope.terminalId` is null.
+   */
+  resetCashierClaimRefused(scope: DrainScope, now: string): number;
 }
 
 interface PrepareGet<Row> {
@@ -364,6 +378,33 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     return stmt.get(saleId, scope.tenantId, scope.branchId)?.server_sale_ref ?? null;
   }
 
+  function resetCashierClaimRefused(scope: DrainScope, now: string): number {
+    // RT-221: no current pairing → nothing is reset (an earlier pairing's sales
+    // are held, never replayed under a new device identity).
+    if (scope.terminalId === null) return 0;
+    const stmt = db.prepare(
+      `UPDATE sale_sync_state
+         SET sync_status = 'pending', next_retry_at = NULL, last_error_category = NULL,
+             updated_at = ?
+       WHERE tenant_id = ? AND branch_id = ?
+         AND sync_status = 'dead_letter' AND last_error_category = ?
+         AND sale_id IN (
+           SELECT sale_id FROM sale_sync_outbox
+           WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ?
+         )`,
+    ) as PrepareRun;
+    const result = stmt.run(
+      now,
+      scope.tenantId,
+      scope.branchId,
+      CASHIER_CLAIM_REFUSED_REASON,
+      scope.tenantId,
+      scope.branchId,
+      scope.terminalId,
+    ) as { changes?: unknown };
+    return typeof result.changes === 'number' ? result.changes : 0;
+  }
+
   return {
     read,
     eligible,
@@ -372,5 +413,6 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     markDeadLetter,
     recordTransient,
     findServerSaleRefBySaleId,
+    resetCashierClaimRefused,
   };
 }
