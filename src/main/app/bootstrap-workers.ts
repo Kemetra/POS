@@ -44,6 +44,9 @@ const STOP_ORDER = [
   'finalize listener',
   'read-down driver',
   'sale-sync interval',
+  // RT-17 slice 3 — the shift sync interval (the shift outbox drain, flag-gated).
+  // Stopped right after the sale-sync interval, like it, before the DB closes.
+  'shift-sync interval',
   // RT-15 S2 — the return resolver (startup + interval re-send of unresolved
   // returns). Stopped after the sale-sync interval, before the DB handle closes.
   'returns resolver',

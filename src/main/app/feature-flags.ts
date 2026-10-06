@@ -23,7 +23,7 @@ import type { AppConfig } from '../../shared/app-config.js';
  * `POS_PULSE_DEV_*` bypasses (each owns its own packaged-build guard).
  */
 
-/** All six feature flags, always present. Same shape as `AppConfig['features']`. */
+/** All seven feature flags, always present. Same shape as `AppConfig['features']`. */
 export type FeatureFlags = Required<NonNullable<AppConfig['features']>>;
 
 /** Flag → env-var name. The names are the contract for ops scripts. */
@@ -34,6 +34,7 @@ export const FEATURE_FLAG_ENV: Readonly<Record<keyof FeatureFlags, string>> = Ob
   productSearch: 'POS_PULSE_FEATURE_PRODUCT_SEARCH',
   voucherTender: 'POS_PULSE_FEATURE_VOUCHER_TENDER',
   returns: 'POS_PULSE_FEATURE_RETURNS',
+  shiftCashup: 'POS_PULSE_FEATURE_SHIFT_CASHUP',
 });
 
 const TRUTHY_VALUES: ReadonlySet<string> = new Set(['1', 'true', 'yes', 'on']);
@@ -52,6 +53,7 @@ export function parseFeatureFlags(env: Readonly<Record<string, string | undefine
     productSearch: isTruthyFlag(env[FEATURE_FLAG_ENV.productSearch]),
     voucherTender: isTruthyFlag(env[FEATURE_FLAG_ENV.voucherTender]),
     returns: isTruthyFlag(env[FEATURE_FLAG_ENV.returns]),
+    shiftCashup: isTruthyFlag(env[FEATURE_FLAG_ENV.shiftCashup]),
   };
 }
 

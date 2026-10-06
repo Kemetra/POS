@@ -58,7 +58,8 @@ type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 export const SHIFT_SYNC_DEVICE_SOURCE = 'sale_sync' as const;
 
 const SHIFTS_PATH = '/api/pos/v1/shifts';
-const DEFAULT_TIMEOUT_MS = 15_000;
+/** The default request timeout (also the bound of a stopping worker's drain). */
+export const SHIFT_SYNC_REQUEST_TIMEOUT_MS = 15_000;
 
 /** One fact to send, with the terminal it was recorded on (the drain's scope). */
 export interface ShiftSyncSend {
@@ -179,7 +180,7 @@ type TokenRead =
 
 export function createShiftSyncClient(deps: CreateShiftSyncClientDeps): ShiftSyncClient {
   const root = deps.baseUrl.replace(/\/$/, '');
-  const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = deps.timeoutMs ?? SHIFT_SYNC_REQUEST_TIMEOUT_MS;
   const nowMs = deps.nowMs ?? Date.now;
   // RT-215: every answer of this device-only fetch counts for the detector.
   const fetchImpl = withDeviceCallObservation(deps.fetch, deps.detector, SHIFT_SYNC_DEVICE_SOURCE);

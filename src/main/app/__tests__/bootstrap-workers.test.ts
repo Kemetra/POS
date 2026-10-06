@@ -201,6 +201,21 @@ describe('RT-15 S2 — worker registry: the returns resolver', () => {
   });
 });
 
+describe('RT-17 — worker registry: the shift-sync interval', () => {
+  it('stops the shift-sync interval after the sale-sync interval, before the returns resolver', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('returns resolver', () => order.push('returns resolver'));
+    registry.register('shift-sync interval', () => order.push('shift-sync interval'));
+    registry.register('sale-sync interval', () => order.push('sale-sync interval'));
+
+    registry.stopAll();
+
+    expect(order).toEqual(['sale-sync interval', 'shift-sync interval', 'returns resolver']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});
+
 describe('RT-113 P2 — worker registry: the cashier admission heartbeat', () => {
   it('stops the cashier admission heartbeat last, still before the DB closes', () => {
     const order: string[] = [];

@@ -87,5 +87,15 @@ export interface AppConfig {
      * its own gate (`POS_RETURNS_ENABLED`, 404 while off).
      */
     returns?: boolean;
+    /**
+     * RT-17 slice 3 — enables the main-process shift cash-up service (open,
+     * pay-in / pay-out, close) and starts the shift sync engine.
+     *
+     * Defaults to `false` (owner approval, Jira RT-17 comment 10920). Flip via
+     * `POS_PULSE_FEATURE_SHIFT_CASHUP` in main. Fail-closed: with it off every
+     * service call is refused `feature_disabled` and the engine is never
+     * started. Stays off until the slice 4 UI and verification are done.
+     */
+    shiftCashup?: boolean;
   };
 }
