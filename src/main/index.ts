@@ -1048,8 +1048,8 @@ singleInstanceReady
       sessionManager: operatorSessionManager,
       pairingStore,
       auditEmitter,
-      // 019 — roster source for the provision path; resolves the neutral
-      // target_user_id → the cashier's roster entry (clerk id + user_id presence).
+      // 019 — roster source for the provision path; resolves the
+      // target_cashier_id (roster id) → the cashier's roster entry (neutral user_id).
       backend: operatorBackend,
       // RT-214 — the roster is operator-identity + manager gated: present the
       // signed-in manager's JWT from the same holder sign-out/stuck-shifts use.

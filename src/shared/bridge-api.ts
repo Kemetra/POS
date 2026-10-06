@@ -280,7 +280,10 @@ export interface ResetCashierPinResponse {
  * 019-cashier-pin-provisioning — manager/admin FIRST-PIN provisioning for a
  * cashier on this terminal. Distinct from reset (which changes an existing
  * PIN): provisioning CREATES the row where none exists, born keyed on the
- * provider-neutral `user_id` (028 §16), never the Clerk subject. Create-only:
+ * provider-neutral `user_id` (028 §16), never the Clerk subject. The renderer
+ * names the cashier by the roster `id` it already holds (RT-235); main resolves
+ * the neutral `user_id` from the manager roster and it never crosses the
+ * bridge (Constitution VII). Create-only:
  * refuses (`state_invalid`) if any row already exists (incl. a legacy
  * clerk-keyed one). Refuses `not_ready` when the roster carries no `user_id`
  * yet (FR-11) — never falls back to a provider-coupled key. Validated
@@ -290,10 +293,12 @@ export interface ProvisionCashierPinRequest {
   /** Client-generated UUID v4 (P5 idempotency key). */
   event_id: string;
   /**
-   * The cashier to provision, by PROVIDER-NEUTRAL `user_id` (028 §16 =
-   * DP-2 `users.id`), as delivered on the roster entry — NOT the Clerk subject.
+   * The cashier to provision, by the roster `id` the renderer already holds
+   * (the provider subject / session `operator_id`, as in reset and unlock).
+   * Main maps it to the PROVIDER-NEUTRAL `user_id` (028 §16 = DP-2 `users.id`)
+   * delivered on the manager roster entry; that key never crosses the bridge.
    */
-  target_user_id: string;
+  target_cashier_id: string;
   /** Plaintext 4–6 digit PIN — consumed by the main-process verifier, never persisted or logged. */
   initial_pin: string;
 }

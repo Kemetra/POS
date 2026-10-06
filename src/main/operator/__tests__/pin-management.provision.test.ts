@@ -304,7 +304,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -331,7 +331,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '135790',
     });
 
@@ -373,7 +373,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
     const eventId = randomUUID();
     await handler.provisionCashierPin({
       event_id: eventId,
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -400,7 +400,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -427,7 +427,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -457,7 +457,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -482,7 +482,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -492,14 +492,31 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
     db.close();
   });
 
-  it('T017 not_ready: target_user_id not present on any roster entry → not_ready, no row', async () => {
+  it('T017 not_ready: target_cashier_id not present on any roster entry → not_ready, no row', async () => {
     const db = freshDb();
     const captured: CapturedEvent[] = [];
     const handler = makeHandler({ db, session: makeSession({ role: 'manager' }), captured });
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: 'not-a-rostered-neutral-id',
+      target_cashier_id: 'not-a-rostered-cashier',
+      initial_pin: '4729',
+    });
+
+    expect(result).toEqual({ kind: 'refused', category: 'not_ready' });
+    expect(rowCount(db)).toBe(0);
+    db.close();
+  });
+
+  it('RT-235 the neutral user_id is resolved main-side: a request naming the user_id (not the roster id) is not_ready, no row', async () => {
+    const db = freshDb();
+    const captured: CapturedEvent[] = [];
+    const handler = makeHandler({ db, session: makeSession({ role: 'manager' }), captured });
+
+    // The renderer only ever holds the roster `id`; a raw user_id must never be accepted as the key.
+    const result = await handler.provisionCashierPin({
+      event_id: randomUUID(),
+      target_cashier_id: CASHIER_USER_ID,
       initial_pin: '4729',
     });
 
@@ -515,7 +532,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: 'abc', // not digits
     });
 
@@ -536,7 +553,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -557,7 +574,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -577,7 +594,7 @@ describe('RT-214 — provisionCashierPin authenticates the manager roster call',
   ): ReturnType<PinManagementHandler['provisionCashierPin']> {
     return handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: PIN,
     });
   }

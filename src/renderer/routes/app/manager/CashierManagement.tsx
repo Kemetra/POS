@@ -3,6 +3,7 @@ import { type JSX, useEffect, useState } from 'react';
 import type {
   OperatorBridgeAPI,
   BranchRosterCashier,
+  ProvisionCashierPinRequest,
   ResetCashierPinRequest,
   UnlockCashierRequest,
 } from '../../../../shared/bridge-api.js';
@@ -20,17 +21,32 @@ import { Workspace } from '../../../shell/regions/Workspace.js';
  *   - PIN is collected in type="password" input, consumed once, never stored.
  *   - Error messages are generic; refusal categories never reach the DOM.
  *   - unlockCashier request carries no PIN field.
+ *
+ * RT-235 — first-PIN provisioning (019): a cashier with no PIN record on this
+ * terminal cannot sign in, and Reset PIN refuses when no record exists. "Set
+ * first PIN" is the manager/admin entry point to `provisionCashierPin`. The
+ * request names the cashier by the roster `id` only; the provider-neutral
+ * `user_id` stays main-side. Two refusals get a truthful message (a PIN
+ * already exists / the cashier is not ready, 019 FR-5 / FR-11); the refusal
+ * category itself never reaches the DOM.
  */
 
 interface Props {
-  operator: Pick<OperatorBridgeAPI, 'listBranchRoster' | 'resetCashierPin' | 'unlockCashier'>;
+  operator: Pick<
+    OperatorBridgeAPI,
+    'listBranchRoster' | 'resetCashierPin' | 'provisionCashierPin' | 'unlockCashier'
+  >;
 }
 
 type ActionState =
   | { kind: 'idle' }
   | { kind: 'resetPin'; cashier: BranchRosterCashier; pin: string }
+  | { kind: 'setFirstPin'; cashier: BranchRosterCashier; pin: string }
   | { kind: 'success'; message: string }
-  | { kind: 'error' };
+  | { kind: 'error'; message?: string };
+
+const PIN_ALREADY_SET_MESSAGE = 'This cashier already has a PIN. Use Reset PIN to change it.';
+const CASHIER_NOT_READY_MESSAGE = "This cashier can't be activated yet.";
 
 export function CashierManagement({ operator }: Props): JSX.Element {
   const [cashiers, setCashiers] = useState<BranchRosterCashier[] | null>(null);
@@ -47,10 +63,10 @@ export function CashierManagement({ operator }: Props): JSX.Element {
     });
   }, [operator]);
 
-  // Escape closes the Reset-PIN dialog (WCAG 2.1.1), mirroring its Cancel
-  // button (setAction idle). Only active while that dialog is open.
+  // Escape closes the Reset-PIN / Set-first-PIN dialog (WCAG 2.1.1), mirroring
+  // its Cancel button (setAction idle). Only active while a dialog is open.
   useEffect(() => {
-    if (action.kind !== 'resetPin') return;
+    if (action.kind !== 'resetPin' && action.kind !== 'setFirstPin') return;
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         setAction({ kind: 'idle' });
@@ -91,8 +107,27 @@ export function CashierManagement({ operator }: Props): JSX.Element {
     }
   }
 
+  async function handleSetFirstPinConfirm(): Promise<void> {
+    if (action.kind !== 'setFirstPin') return;
+    const req: ProvisionCashierPinRequest = {
+      event_id: crypto.randomUUID(),
+      target_cashier_id: action.cashier.id,
+      initial_pin: action.pin,
+    };
+    const res = await operator.provisionCashierPin(req);
+    if (res.kind === 'pin_provisioned') {
+      setAction({ kind: 'success', message: 'First PIN set.' });
+    } else if (res.category === 'state_invalid') {
+      setAction({ kind: 'error', message: PIN_ALREADY_SET_MESSAGE });
+    } else if (res.category === 'not_ready') {
+      setAction({ kind: 'error', message: CASHIER_NOT_READY_MESSAGE });
+    } else {
+      setAction({ kind: 'error' });
+    }
+  }
+
   function handlePinChange(e: React.ChangeEvent<HTMLInputElement>): void {
-    if (action.kind === 'resetPin') {
+    if (action.kind === 'resetPin' || action.kind === 'setFirstPin') {
       setAction({ ...action, pin: e.target.value });
     }
   }
@@ -113,6 +148,15 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             {cashiers.map((c) => (
               <li key={c.id}>
                 <span>{c.display_name}</span>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--md"
+                  onClick={() => {
+                    setAction({ kind: 'setFirstPin', cashier: c, pin: '' });
+                  }}
+                >
+                  Set first PIN
+                </button>
                 <button
                   type="button"
                   className="btn btn--secondary btn--md"
@@ -168,6 +212,38 @@ export function CashierManagement({ operator }: Props): JSX.Element {
           </div>
         )}
 
+        {action.kind === 'setFirstPin' && (
+          <div role="dialog" aria-label="Set first PIN">
+            <label htmlFor="initial-pin-input">Initial PIN</label>
+            <input
+              id="initial-pin-input"
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={action.pin}
+              onChange={handlePinChange}
+            />
+            <button
+              type="button"
+              className="btn btn--primary btn--md"
+              onClick={() => {
+                void handleSetFirstPinConfirm();
+              }}
+            >
+              Save PIN
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--md"
+              onClick={() => {
+                setAction({ kind: 'idle' });
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
         {action.kind === 'success' && (
           <p data-testid="action-success" role="status">
             {action.message}
@@ -176,7 +252,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
 
         {action.kind === 'error' && (
           <p data-testid="action-error" role="alert">
-            Action could not be completed. Please try again.
+            {action.message ?? 'Action could not be completed. Please try again.'}
           </p>
         )}
       </div>

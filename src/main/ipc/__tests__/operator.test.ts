@@ -657,7 +657,7 @@ function registerWithPinManagement(
 
 const VALID_PROVISION_REQUEST = {
   event_id: 'evt-uuid-019',
-  target_user_id: 'neutral-user-uuid-1',
+  target_cashier_id: 'roster-operator-id-1',
   initial_pin: '4729',
 };
 
@@ -685,8 +685,8 @@ describe('operator:provision-cashier-pin — boundary input validation + delegat
       {},
       { ...VALID_PROVISION_REQUEST, event_id: '' },
       { ...VALID_PROVISION_REQUEST, event_id: 42 },
-      { ...VALID_PROVISION_REQUEST, target_user_id: '' },
-      { ...VALID_PROVISION_REQUEST, target_user_id: null },
+      { ...VALID_PROVISION_REQUEST, target_cashier_id: '' },
+      { ...VALID_PROVISION_REQUEST, target_cashier_id: null },
       { ...VALID_PROVISION_REQUEST, initial_pin: '' },
       { ...VALID_PROVISION_REQUEST, initial_pin: 1234 },
     ]) {

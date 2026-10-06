@@ -24,6 +24,7 @@ import { Suspense, lazy, type JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
 import { DashboardSkeleton } from './DashboardSkeleton';
+import { CashierManagementLink } from './CashierManagementLink';
 import { ShiftManagerLink } from './ShiftManagerLink';
 
 const DashboardDemo = lazy(() => import('./DashboardDemo'));
@@ -47,6 +48,7 @@ function HonestDashboard(): JSX.Element {
   return (
     <Workspace title="Dashboard">
       <ShiftManagerLink />
+      <CashierManagementLink />
       <DashboardSkeleton />
     </Workspace>
   );

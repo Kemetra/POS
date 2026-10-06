@@ -179,10 +179,10 @@ function asResetCashierPinRequest(value: unknown): ResetCashierPinRequest | null
 function asProvisionCashierPinRequest(value: unknown): ProvisionCashierPinRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
-  if (!hasNonEmptyStringFields(v, ['event_id', 'target_user_id', 'initial_pin'])) return null;
+  if (!hasNonEmptyStringFields(v, ['event_id', 'target_cashier_id', 'initial_pin'])) return null;
   return {
     event_id: v['event_id'] as string,
-    target_user_id: v['target_user_id'] as string,
+    target_cashier_id: v['target_cashier_id'] as string,
     initial_pin: v['initial_pin'] as string,
   };
 }
