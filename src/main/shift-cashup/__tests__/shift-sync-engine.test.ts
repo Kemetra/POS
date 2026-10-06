@@ -10,6 +10,10 @@
  *   • Outcomes: ok → synced; transient / no_connection / device_unauthorized →
  *     a retry with bounded backoff, at least `Retry-After`; rejected → dead
  *     letter with its closed-set reason. A device 401 never dead-letters.
+ *   • Stop latch (RT-198, review of part 3): once stopped, a tick reads and
+ *     writes nothing more — a send in flight settles without any local write
+ *     (the DB closes right after) — and `drain` waits for the tick in flight,
+ *     bounded by a timeout.
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -391,5 +395,102 @@ describe('createShiftSyncEngine — failure containment', () => {
     };
     const engine = engineWith(fakeClient([answer]), { [hook]: boom });
     await expect(tick(engine)).resolves.toMatchObject({ stop: { kind: stop } });
+  });
+});
+
+describe('createShiftSyncEngine — stop latch (RT-198)', () => {
+  /** A client whose open send waits for `release`; `sent` once it is on the wire. */
+  function gatedClient() {
+    const client = fakeClient();
+    const gate: { sent: boolean; release: (result: ShiftSyncResult) => void } = {
+      sent: false,
+      release: () => undefined,
+    };
+    client.openShift = () => {
+      gate.sent = true;
+      return new Promise<ShiftSyncResult>((resolve) => {
+        gate.release = resolve;
+      });
+    };
+    return { client, gate };
+  }
+
+  function stoppable(client: ShiftSyncClient) {
+    const latch = { stopped: false };
+    return { latch, engine: engineWith(client, { isStopped: () => latch.stopped }) };
+  }
+
+  it('a send in flight at stop settles without any local write', async () => {
+    recordWholeShift({ repo });
+    const { client, gate } = gatedClient();
+    const { latch, engine } = stoppable(client);
+    const report = tick(engine);
+    await vi.waitFor(() => {
+      expect(gate.sent).toBe(true);
+    });
+    latch.stopped = true;
+    gate.release(OK);
+    await expect(report).resolves.toEqual({ sent: 0, stop: { kind: 'stopped' } });
+    expect(stateOf({ db, seq: 1 })).toMatchObject({ sync_status: 'pending', attempt_count: 0 });
+  });
+
+  it('a tick after stop reads and sends nothing', async () => {
+    recordWholeShift({ repo });
+    const resolveTerminalId = vi.fn(() => SCOPE.terminalId);
+    const client = fakeClient();
+    const engine = engineWith(client, { isStopped: () => true, resolveTerminalId });
+    await expect(tick(engine)).resolves.toEqual({ sent: 0, stop: { kind: 'stopped' } });
+    expect(resolveTerminalId).not.toHaveBeenCalled();
+    expect(client.calls).toEqual([]);
+  });
+
+  describe('drain', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function watch(promise: Promise<void>): { done: boolean } {
+      const state = { done: false };
+      void promise.then(() => {
+        state.done = true;
+      });
+      return state;
+    }
+
+    it('resolves at once with no tick in flight', async () => {
+      const drained = watch(engineWith(fakeClient()).drain(1_000));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(drained.done).toBe(true);
+    });
+
+    it('waits for the tick in flight to settle', async () => {
+      recordWholeShift({ repo });
+      const { client, gate } = gatedClient();
+      const { latch, engine } = stoppable(client);
+      void tick(engine);
+      await vi.advanceTimersByTimeAsync(0);
+      latch.stopped = true;
+      const drained = watch(engine.drain(1_000));
+      await vi.advanceTimersByTimeAsync(10);
+      expect(drained.done).toBe(false);
+      gate.release(OK);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(drained.done).toBe(true);
+    });
+
+    it('gives up waiting at its timeout', async () => {
+      recordWholeShift({ repo });
+      const { client } = gatedClient();
+      const engine = engineWith(client);
+      void tick(engine);
+      const drained = watch(engine.drain(1_000));
+      await vi.advanceTimersByTimeAsync(999);
+      expect(drained.done).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(drained.done).toBe(true);
+    });
   });
 });

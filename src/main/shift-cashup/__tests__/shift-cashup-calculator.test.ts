@@ -5,7 +5,8 @@
  *              − Σ completed drawer refund payouts + pay-ins − pay-outs
  *
  * Net cash is each applied cash line's amount less its change; card and
- * voucher lines are not drawer cash. A sale with no tender lines (RT-10 D8)
+ * voucher lines are not drawer cash. Any other tender type (missing,
+ * misspelled, unknown) is unreadable: it is never counted as zero cash. A sale with no tender lines (RT-10 D8)
  * still counts as a sale. A source the calculator cannot read faithfully is
  * refused, never guessed.
  */
@@ -119,6 +120,14 @@ describe('computeCashup — unreadable sources are refused, never guessed', () =
     ['change above the amount', JSON.stringify([cashLine(100, 101)])],
     ['a negative change', JSON.stringify([cashLine(100, -1)])],
     ['an unsafe cash amount', JSON.stringify([cashLine(2 ** 53)])],
+    ['a line with no tender type', JSON.stringify([{ amount_applied_minor: 100 }])],
+    ['a misspelled tender type', JSON.stringify([{ ...cashLine(100), tender_type: 'Cash' }])],
+    ['an unknown tender type', JSON.stringify([{ ...cardLine(100), tender_type: 'gift_card' }])],
+    ['a non-string tender type', JSON.stringify([{ ...cashLine(100), tender_type: 1 }])],
+    [
+      'an inherited key as tender type',
+      JSON.stringify([{ ...cashLine(1), tender_type: 'toString' }]),
+    ],
   ])('refuses %s', (_name, json) => {
     expect(() => computeCashup(input({ sales: [{ tenderLinesSummaryJson: json }] }))).toThrow(
       expect.objectContaining({ reason: 'unreadable_sale_tenders' }) as Error,

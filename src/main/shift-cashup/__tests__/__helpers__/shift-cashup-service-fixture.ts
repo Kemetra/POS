@@ -2,8 +2,9 @@
  * RT-17 slice 3 part 3 — shared fixture for the shift cash-up service, status
  * and calculator tests: a service composed over the real repository on the
  * full migration stack (sql.js), with a mutable flag, session and clock, and
- * seeders for the cash-up's sources (finalized sales, completed refund
- * payouts) on any terminal.
+ * seeders for the cash-up's sources (finalized sales, refund payouts) and for
+ * drawer activity still in flight (settled payments not finalized yet) on any
+ * terminal.
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
 
@@ -163,6 +164,33 @@ export function seedRefund(db: SqlJsDatabase, input: SeedRefundInput): void {
     input.paidAt,
     input.returnId,
   ]);
+}
+
+/**
+ * A `payment.settled` audit on `scope`'s terminal, as 006 writes it, for the
+ * sale `saleId` would finalize (`seedSale`'s default `handoff-<saleId>`): a
+ * settlement the finalize listener has not turned into a sale until that sale
+ * is seeded.
+ */
+export function seedSettlement(
+  db: SqlJsDatabase,
+  input: { saleId: string; scope?: ShiftScope },
+): void {
+  const scope = input.scope ?? SCOPE;
+  const handoff = `handoff-${input.saleId}`;
+  db.run(
+    `INSERT INTO audit_events (event_id, tenant_id, branch_id, originating_terminal_id,
+       acting_operator_id, session_id, action_category, created_at, payload)
+     VALUES (?, ?, ?, ?, 'op-1', 'sess-1', 'payment.settled', ?, ?)`,
+    [
+      `evt-${handoff}`,
+      scope.tenantId,
+      scope.branchId,
+      scope.terminalId,
+      OPENED_AT,
+      JSON.stringify({ handoff_action_id: handoff }),
+    ],
+  );
 }
 
 /** How many rows of each cash-up table exist. */

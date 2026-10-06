@@ -20,6 +20,20 @@
  * cash-up and the fact it guards are computed and recorded in one turn of the
  * main thread, so no sale or payout lands in between.
  *
+ * Review P2-1 — the clock never runs a shift backwards: a movement or a close
+ * whose `now` is before the open shift's `openedAt`, or an open whose `now`
+ * is before the terminal's last local close, is refused (`clock_regressed`)
+ * rather than recorded out of order. (The cash-up window itself also starts
+ * after that last close; see `shift-cashup-sources.ts`.)
+ *
+ * Review P2-2 — drawer activity in flight: while the terminal has a refund
+ * payout started but not completed, or a settled payment the finalize
+ * listener has not turned into a sale yet, the drawer holds (or lacks) cash
+ * the cash-up cannot read. The close is refused (`drawer_activity_pending`),
+ * and so is every pay-out: its guard compares against that same under-read
+ * expected cash. A pay-in only adds cash and is not held. The status shows
+ * both counts (`pendingDrawerActivity`).
+ *
  *   openShift           the float, in the terminal's capture currency.
  *   recordCashMovement  a pay-in or pay-out on the open shift. Carried item
  *                       (a): a pay-out above the expected drawer cash right
@@ -27,13 +41,15 @@
  *                       mistyped pay-out cannot make the shift un-closable
  *                       (the close's expected cash must not be negative).
  *   closeShift          a normal close (device path): the POS computes the
- *                       cash-up over [openedAt, closedAt] (both ends
- *                       included) and the counted cash gives the variance.
- *                       A non-zero variance needs `varianceApprovedByUserId`
- *                       (10920: manager PIN for any variance, threshold 0),
- *                       else `variance_approval_required`. The approver id is
- *                       the main-side caller's to verify (slice 4's manager
- *                       PIN); it never comes from the renderer unverified.
+ *                       cash-up over its window (see above) and the counted
+ *                       cash gives the variance. A non-zero variance needs
+ *                       `varianceApprovedByUserId` (10920: manager PIN for
+ *                       any variance, threshold 0), else
+ *                       `variance_approval_required`; it is recorded only for
+ *                       a non-zero variance (the contract: the manager who
+ *                       approved a non-zero variance). The approver id is the
+ *                       main-side caller's to verify (slice 4's manager PIN);
+ *                       it never comes from the renderer unverified.
  *   readStatus          read-only (see `shift-cashup-status.ts`).
  *
  * Refusals of the shift state (`ShiftCashupStateError`) and of a fact's values
@@ -59,7 +75,9 @@ export type ShiftCashupRefusalReason =
   | 'session_locked'
   | 'no_cashier_identity'
   | 'pay_out_exceeds_drawer_cash'
-  | 'variance_approval_required';
+  | 'variance_approval_required'
+  | 'clock_regressed'
+  | 'drawer_activity_pending';
 
 /** A call the service refuses before recording anything. */
 export class ShiftCashupRefusedError extends Error {
@@ -165,13 +183,25 @@ function shiftNotOpen(): never {
   throw new ShiftCashupStateError('shift_not_open');
 }
 
-/** 10920: any non-zero variance needs an approver. */
+/** 10920: any non-zero variance needs an approver, recorded for it alone. */
 function approverOf(input: { varianceMinor: number; close: CloseShiftInput }): {
   varianceApprovedByUserId?: string;
 } {
-  const approver = input.close.varianceApprovedByUserId;
-  if (approver !== undefined) return { varianceApprovedByUserId: approver };
-  return input.varianceMinor === 0 ? {} : refuse('variance_approval_required');
+  if (input.varianceMinor === 0) return {};
+  const approver = input.close.varianceApprovedByUserId ?? refuse('variance_approval_required');
+  return { varianceApprovedByUserId: approver };
+}
+
+/** Review P2-1: `now` must not lie before `floor` (an instant), else `clock_regressed`. */
+function requireNotBefore(input: { now: string; floor: string | null }): void {
+  if (input.floor === null) return;
+  if (Date.parse(input.now) < Date.parse(input.floor)) refuse('clock_regressed');
+}
+
+/** Review P2-2: no drawer cash in flight on the terminal, else `drawer_activity_pending`. */
+function requireDrawerSettled(input: { sources: ShiftCashupSources; scope: ShiftScope }): void {
+  const pending = input.sources.pendingDrawerActivity(input.scope);
+  if (pending.refundPayouts + pending.unfinalizedSales > 0) refuse('drawer_activity_pending');
 }
 
 function closeFactOf(parts: CloseParts): ShiftCloseFact {
@@ -225,10 +255,11 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     return { scope, userId };
   }
 
-  /** The cash-up of the open shift from its open up to `until`. */
+  /** The cash-up of the open shift from its open (after the last close) up to `until`. */
   function cashupOf(input: { scope: ShiftScope; open: OpenShiftView; until: string }): Cashup {
     const { scope, open } = input;
-    const query = { scope, window: { from: open.openedAt, to: input.until } };
+    const after = deps.sources.lastClosedAt(scope);
+    const query = { scope, window: { from: open.openedAt, after, to: input.until } };
     return computeCashup({
       currencyCode: open.currencyCode,
       openingFloatMinor: open.openingFloatMinor,
@@ -239,7 +270,18 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     });
   }
 
-  /** Carried item (a): a pay-out never takes the expected drawer cash below zero. */
+  /** The terminal's open shift at `now`, never before its open (P2-1). */
+  function openShiftAt(input: { scope: ShiftScope; now: string }): OpenShiftView {
+    const open = repo.findOpenShift(input.scope) ?? shiftNotOpen();
+    requireNotBefore({ now: input.now, floor: open.openedAt });
+    return open;
+  }
+
+  /**
+   * Carried item (a): a pay-out never takes the expected drawer cash below
+   * zero — and is held while drawer cash is in flight (P2-2), since the
+   * expected cash is then under-read.
+   */
   function guardPayOut(input: {
     scope: ShiftScope;
     open: OpenShiftView;
@@ -247,6 +289,7 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     now: string;
   }): void {
     if (input.movement.kind !== 'pay_out') return;
+    requireDrawerSettled({ sources: deps.sources, scope: input.scope });
     const { expectedCashMinor } = cashupOf({ ...input, until: input.now });
     if (input.movement.amountMinor > expectedCashMinor) refuse('pay_out_exceeds_drawer_cash');
   }
@@ -254,7 +297,9 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
   return {
     openShift(input) {
       const { scope, userId } = admit();
-      const opened = { shiftId: deps.newId(), openedAt: deps.now() };
+      const now = deps.now();
+      requireNotBefore({ now, floor: deps.sources.lastClosedAt(scope) });
+      const opened = { shiftId: deps.newId(), openedAt: now };
       repo.recordOpen({
         scope,
         fact: {
@@ -270,8 +315,8 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
 
     recordCashMovement(input) {
       const { scope, userId } = admit();
-      const open = repo.findOpenShift(scope) ?? shiftNotOpen();
       const now = deps.now();
+      const open = openShiftAt({ scope, now });
       guardPayOut({ scope, open, movement: input, now });
       const moved = { movementId: deps.newId(), shiftId: open.shiftId };
       repo.recordMovement({
@@ -292,8 +337,9 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
 
     closeShift(input) {
       const { scope, userId } = admit();
-      const open = repo.findOpenShift(scope) ?? shiftNotOpen();
       const closedAt = deps.now();
+      const open = openShiftAt({ scope, now: closedAt });
+      requireDrawerSettled({ sources: deps.sources, scope });
       const cashup = cashupOf({ scope, open, until: closedAt });
       const fact = closeFactOf({ open, closedAt, closingUserId: userId, cashup, input });
       repo.recordClose({ scope, fact, now: closedAt });

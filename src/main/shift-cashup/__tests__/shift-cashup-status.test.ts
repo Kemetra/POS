@@ -8,7 +8,10 @@
  *     and `envelopePending` (a manager-envelope repair waiting for its client);
  *   • carried item (b): what is stranded outside the current pairing's scope —
  *     unsynced facts and open shifts of another terminal (a re-pair), or of
- *     every terminal while unpaired. The drain never sends them (RT-221).
+ *     every terminal while unpaired. The drain never sends them (RT-221);
+ *   • review P2-2: the current terminal's drawer activity in flight, which
+ *     holds the close — refund payouts started but not completed, and settled
+ *     payments not finalized into a sale yet.
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -27,6 +30,8 @@ import type { ShiftCashupStatus } from '../shift-cashup-status.js';
 import {
   OPENED_AT,
   msAfter,
+  seedRefund,
+  seedSettlement,
   serviceHarness,
   type ServiceHarness,
 } from './__helpers__/shift-cashup-service-fixture.js';
@@ -59,6 +64,9 @@ afterEach(() => {
 
 const EMPTY_QUEUE = { pending: 0, waiting: 0, blocked: 0, envelopePending: 0 };
 const NOT_STRANDED = { unsyncedFacts: 0, openShifts: 0 };
+const NO_DRAWER_ACTIVITY = { refundPayouts: 0, unfinalizedSales: 0 };
+const REF_A = '0192f5a2-3b4c-7d8e-9f01-0000000000a1';
+const REF_B = '0192f5a2-3b4c-7d8e-9f01-0000000000b2';
 
 function status(): Promise<ShiftCashupStatus> {
   return harness.service.readStatus();
@@ -74,6 +82,19 @@ describe('readStatus — the current terminal', () => {
       openShift: null,
       queue: EMPTY_QUEUE,
       stranded: NOT_STRANDED,
+      pendingDrawerActivity: NO_DRAWER_ACTIVITY,
+    });
+  });
+
+  it('counts the drawer activity in flight on the current terminal only (review P2-2)', async () => {
+    seedRefund(db, { returnId: 'r-1', returnRef: REF_A, amountMinor: 1, paidAt: null });
+    seedRefund(db, { returnId: 'r-2', returnRef: REF_B, amountMinor: 1, paidAt: OPENED_AT });
+    seedSettlement(db, { saleId: 's-1' });
+    seedSettlement(db, { saleId: 's-2' });
+    seedSettlement(db, { saleId: 's-x', scope: OTHER_TERMINAL });
+    expect((await status()).pendingDrawerActivity).toEqual({
+      refundPayouts: 1,
+      unfinalizedSales: 2,
     });
   });
 
@@ -162,10 +183,12 @@ describe('readStatus — stranded outside the current pairing (carried item b)',
   it('counts everything as stranded while unpaired', async () => {
     openOn(SCOPE);
     harness.state.pairedScope = null;
+    seedSettlement(db, { saleId: 's-1' });
     await expect(status()).resolves.toEqual({
       openShift: null,
       queue: EMPTY_QUEUE,
       stranded: { unsyncedFacts: 1, openShifts: 1 },
+      pendingDrawerActivity: NO_DRAWER_ACTIVITY,
     });
   });
 

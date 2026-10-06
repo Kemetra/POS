@@ -28,6 +28,15 @@
  * with no further change (`dependency_failure`); so does a transition that
  * did not apply. Hooks are side channels: a throwing hook never stops a tick.
  *
+ * Shutdown (RT-198, as the returns domain): once `isStopped()` is true a tick
+ * reads and writes nothing more (`stopped`). It is checked before the tick's
+ * first read and again when every await resumes, so a send in flight at stop
+ * settles WITHOUT any local write — the DB closes right after the
+ * synchronous worker stop. The row stays `pending` with its stored bytes and
+ * key; the next start re-sends them (an idempotent replay if the server
+ * recorded it). `drain(timeoutMs)` resolves once the tick in flight has
+ * settled, or after `timeoutMs`, whichever comes first.
+ *
  * Not wired yet: no composition root, no IPC, no feature flag (RT-17 slice 3
  * part 3). Hooks receive closed-set values only — never a body, a token or PII.
  */
@@ -73,6 +82,8 @@ export interface ShiftSyncEngineDeps {
   onDeviceUnauthorized?: () => void;
   /** A dependency threw, once per episode (re-armed by a tick without a failure). */
   onDependencyFailure?: () => void;
+  /** RT-198: true once the worker is stopping (app shutdown); default never. */
+  isStopped?: () => boolean;
 }
 
 /** Why a tick stopped. */
@@ -81,6 +92,7 @@ export type ShiftDrainStop =
   | { kind: 'envelope_pending'; seq: number }
   | { kind: 'held'; reason: ShiftSyncNotSentReason }
   | { kind: 'unpaired' }
+  | { kind: 'stopped' }
   | { kind: 'dependency_failure' };
 
 export interface ShiftDrainReport {
@@ -95,6 +107,8 @@ export type ShiftTickAdmission =
 
 export interface ShiftSyncEngine {
   runTickOnce(): ShiftTickAdmission;
+  /** Settles when the tick in flight has settled, or after `timeoutMs` (RT-198). */
+  drain(timeoutMs: number): Promise<void>;
 }
 
 type RetryResult = Extract<
@@ -113,6 +127,22 @@ const SEND: Readonly<
 
 const DEPENDENCY_FAILURE: ShiftDrainStop = Object.freeze({ kind: 'dependency_failure' });
 const UNPAIRED: ShiftDrainStop = Object.freeze({ kind: 'unpaired' });
+const STOPPED: ShiftDrainStop = Object.freeze({ kind: 'stopped' });
+
+/** `work` settled (either way) or `timeoutMs` passed, whichever is first. */
+function settledWithin(work: Promise<unknown>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const bound = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  const settled = work.then(
+    () => undefined,
+    () => undefined,
+  );
+  return Promise.race([settled, bound]).finally(() => {
+    clearTimeout(timer);
+  });
+}
 
 /** The delay before the next attempt: the backoff, or `Retry-After` when longer. */
 function retryDelayMs(input: {
@@ -158,7 +188,8 @@ export function createShiftSyncEngine(deps: ShiftSyncEngineDeps): ShiftSyncEngin
   const policy = deps.backoff ?? SALE_SYNC_BACKOFF_POLICY;
   const deviceUnauthorized = episode(deps.onDeviceUnauthorized);
   const dependencyFailure = episode(deps.onDependencyFailure);
-  let inFlight = false;
+  const isStopped = deps.isStopped ?? (() => false);
+  let inFlight: Promise<ShiftDrainReport> | null = null;
 
   function retry(input: { fact: QueuedShiftFact; result: RetryResult; now: string }): boolean {
     const { fact, result, now } = input;
@@ -206,6 +237,8 @@ export function createShiftSyncEngine(deps: ShiftSyncEngineDeps): ShiftSyncEngin
     const { terminalId, fact } = input;
     if (fact.authPath !== 'device') return { kind: 'envelope_pending', seq: fact.seq };
     const result = await SEND[fact.factKind](deps.client, { terminalId, fact });
+    // Stopped while the request was in flight: touch nothing local (RT-198).
+    if (isStopped()) return STOPPED;
     if (result.kind === 'not_sent') return { kind: 'held', reason: result.reason };
     input.progress.sent += 1;
     noteAnswer(result);
@@ -214,8 +247,10 @@ export function createShiftSyncEngine(deps: ShiftSyncEngineDeps): ShiftSyncEngin
   }
 
   /** Drain the current terminal's facts until a stop. */
-  async function drain(progress: { sent: number }): Promise<ShiftDrainStop> {
+  async function drainFacts(progress: { sent: number }): Promise<ShiftDrainStop> {
+    if (isStopped()) return STOPPED;
     const terminalId = await deps.resolveTerminalId();
+    if (isStopped()) return STOPPED;
     if (terminalId === null) return UNPAIRED;
     const scope = { tenantId: deps.tenantId, branchId: deps.branchId, terminalId };
     for (;;) {
@@ -229,22 +264,25 @@ export function createShiftSyncEngine(deps: ShiftSyncEngineDeps): ShiftSyncEngin
   async function runTick(): Promise<ShiftDrainReport> {
     const progress = { sent: 0 };
     try {
-      const stop = await drain(progress);
+      const stop = await drainFacts(progress);
       dependencyFailure.rearm();
       return { sent: progress.sent, stop };
     } catch {
       dependencyFailure.report();
       return { sent: progress.sent, stop: DEPENDENCY_FAILURE };
     } finally {
-      inFlight = false;
+      inFlight = null;
     }
   }
 
   return {
     runTickOnce(): ShiftTickAdmission {
-      if (inFlight) return { kind: 'already_running' };
-      inFlight = true;
-      return { kind: 'started', completed: runTick() };
+      if (inFlight !== null) return { kind: 'already_running' };
+      inFlight = runTick();
+      return { kind: 'started', completed: inFlight };
+    },
+    drain(timeoutMs) {
+      return inFlight === null ? Promise.resolve() : settledWithin(inFlight, timeoutMs);
     },
   };
 }

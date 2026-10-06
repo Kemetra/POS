@@ -9,7 +9,10 @@
  *   • `startShiftSync`: the same cadence as sale sync (one tick every 5 s,
  *     first tick after one interval), the device token and current terminal
  *     sources, and the RT-215 detector on every answer. Its stop clears the
- *     interval: no tick after shutdown.
+ *     interval and latches the engine (RT-198): no tick after shutdown, and a
+ *     send in flight at shutdown writes nothing locally when it settles (the
+ *     DB closes right after). The stop returns the engine's drain, bounded by
+ *     the client's request timeout.
  *   • Engine hooks become closed-set log lines (never a token, a body or PII).
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
@@ -22,6 +25,7 @@ import {
   initSalesSyncSql,
 } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
 import {
+  SHIFT_SYNC_DRAIN_TIMEOUT_MS,
   SHIFT_SYNC_INTERVAL_MS,
   composeShiftCashupService,
   registerShiftSync,
@@ -41,11 +45,11 @@ const TERMINAL: PairedTerminal = {
 };
 
 describe('registerShiftSync — the feature flag gate', () => {
-  function registry() {
+  function registry(stop: () => Promise<void> = () => Promise.resolve()) {
     return {
       pairedWorkers: { register: vi.fn() },
-      workers: { register: vi.fn() },
-      start: vi.fn(() => vi.fn()),
+      workers: { register: vi.fn<(name: string, stop: () => void) => void>() },
+      start: vi.fn(() => stop),
     };
   }
 
@@ -58,7 +62,8 @@ describe('registerShiftSync — the feature flag gate', () => {
   });
 
   it('with the flag ON, starts the engine once paired and registers its stop', () => {
-    const deps = registry();
+    const stop = vi.fn(() => Promise.resolve());
+    const deps = registry(stop);
     registerShiftSync({ enabled: true, ...deps });
     expect(deps.pairedWorkers.register).toHaveBeenCalledWith(
       'shift-sync engine',
@@ -69,8 +74,10 @@ describe('registerShiftSync — the feature flag gate', () => {
     const starter = deps.pairedWorkers.register.mock.calls[0]?.[1] as (t: PairedTerminal) => void;
     starter(TERMINAL);
     expect(deps.start).toHaveBeenCalledWith(TERMINAL);
-    const stop = deps.start.mock.results[0]?.value as unknown;
-    expect(deps.workers.register).toHaveBeenCalledWith('shift-sync interval', stop);
+    expect(deps.workers.register).toHaveBeenCalledWith('shift-sync interval', expect.any(Function));
+    expect(stop).not.toHaveBeenCalled();
+    deps.workers.register.mock.calls[0]?.[1]();
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -104,7 +111,7 @@ describe('startShiftSync — scheduling, sources and RT-215', () => {
   let fetch: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>;
   let observe: Mock<(source: string, status: number) => void>;
   let warn: Mock<(payload: Record<string, unknown>, message: string) => void>;
-  let stop: (() => void) | undefined;
+  let stop: (() => Promise<void>) | undefined;
 
   beforeAll(async () => {
     await initSalesSyncSql();
@@ -121,7 +128,7 @@ describe('startShiftSync — scheduling, sources and RT-215', () => {
   });
 
   afterEach(() => {
-    stop?.();
+    void stop?.();
     vi.useRealTimers();
     db.close();
   });
@@ -172,10 +179,46 @@ describe('startShiftSync — scheduling, sources and RT-215', () => {
 
   it('never ticks again once stopped', async () => {
     start();
-    stop?.();
+    void stop?.();
     repo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
     await vi.advanceTimersByTimeAsync(SHIFT_SYNC_INTERVAL_MS * 3);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('a send in flight at stop writes nothing locally when it settles (RT-198)', async () => {
+    let answer: (response: Response) => void = () => undefined;
+    fetch.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    repo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
+    start();
+    await vi.advanceTimersByTimeAsync(SHIFT_SYNC_INTERVAL_MS);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const drained = stop?.();
+    answer(new Response('{}', { status: 201 }));
+    // The drain settles once the tick in flight has settled.
+    await expect(drained).resolves.toBeUndefined();
+    expect(stateOf({ db, seq: 1 })).toMatchObject({ sync_status: 'pending', attempt_count: 0 });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('the stop waits for a send in flight at most the client request timeout', async () => {
+    expect(SHIFT_SYNC_DRAIN_TIMEOUT_MS).toBe(15_000);
+    fetch.mockImplementation(() => new Promise<Response>(() => undefined));
+    repo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
+    start();
+    await vi.advanceTimersByTimeAsync(SHIFT_SYNC_INTERVAL_MS);
+    let drained = false;
+    void stop?.().then(() => {
+      drained = true;
+    });
+    await vi.advanceTimersByTimeAsync(SHIFT_SYNC_DRAIN_TIMEOUT_MS - 1);
+    expect(drained).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(drained).toBe(true);
   });
 
   it('drains only the paired tenant / branch', async () => {

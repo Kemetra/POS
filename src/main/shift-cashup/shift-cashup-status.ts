@@ -18,12 +18,19 @@
  *     earlier pairing after a re-pair, or every one while unpaired. The drain
  *     never sends them (RT-221: no replay under a new device identity); the
  *     count makes them visible for a support action.
+ *   • `pendingDrawerActivity` — review P2-2: the current pairing's drawer
+ *     cash still in flight (refund payouts started, not completed; settled
+ *     payments not finalized into a sale yet; see `shift-cashup-sources.ts`).
+ *     While either is non-zero the service refuses the close and every
+ *     pay-out (`drawer_activity_pending`); slice 4 shows why. Zero while
+ *     unpaired.
  *
  * Instants are compared as instants, never as strings. Counts only: no body,
  * id or user id leaves this module.
  */
 import type { DatabaseHandle } from '../db/client.js';
 import { createShiftCashupRepo, type OpenShiftView, type ShiftScope } from './shift-cashup-repo.js';
+import { createShiftCashupSources, type PendingDrawerActivity } from './shift-cashup-sources.js';
 
 export interface ShiftQueueCounts {
   pending: number;
@@ -41,6 +48,7 @@ export interface ShiftCashupStatus {
   openShift: OpenShiftView | null;
   queue: ShiftQueueCounts;
   stranded: ShiftStrandedCounts;
+  pendingDrawerActivity: PendingDrawerActivity;
 }
 
 export interface ShiftStatusQuery {
@@ -88,6 +96,11 @@ const FOREIGN_OPEN_SHIFTS_SQL = `
   WHERE NOT EXISTS (SELECT 1 FROM shift_cashup_closes c WHERE c.shift_id = o.shift_id)
     AND NOT ${inScope('o')}`;
 
+const NO_DRAWER_ACTIVITY: PendingDrawerActivity = Object.freeze({
+  refundPayouts: 0,
+  unfinalizedSales: 0,
+});
+
 type QueueBucket = keyof ShiftQueueCounts;
 
 function bucketOf(row: UnsettledRow, nowMs: number): QueueBucket {
@@ -106,6 +119,7 @@ function countQueue(rows: readonly UnsettledRow[], now: string): ShiftQueueCount
 
 export function createShiftCashupStatusReader(db: DatabaseHandle): ShiftCashupStatusReader {
   const repo = createShiftCashupRepo(db);
+  const sources = createShiftCashupSources(db);
 
   function scopeParams(scope: ShiftScope | null): (string | null)[] {
     return [scope?.tenantId ?? null, scope?.branchId ?? null, scope?.terminalId ?? null];
@@ -126,6 +140,8 @@ export function createShiftCashupStatusReader(db: DatabaseHandle): ShiftCashupSt
           unsyncedFacts: rows.filter((row) => row.inScope !== 1).length,
           openShifts: foreignOpen.n,
         },
+        pendingDrawerActivity:
+          scope === null ? NO_DRAWER_ACTIVITY : sources.pendingDrawerActivity(scope),
       };
     },
   };

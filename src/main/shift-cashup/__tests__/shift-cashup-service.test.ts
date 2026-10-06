@@ -13,33 +13,46 @@
  *   • Carried item (a): a pay-out above the expected drawer cash is refused, so
  *     a mistyped pay-out cannot leave the shift un-closable.
  *   • A non-zero variance needs an approver (10920: manager PIN for any
- *     variance); the approver id is supplied by the main-side caller.
+ *     variance); the approver id is supplied by the main-side caller, and is
+ *     recorded only for a non-zero variance.
+ *   • Shift windows never overlap (review P2-1): a window starts after the
+ *     terminal's previous local close (its instant excluded), a return ref a
+ *     previous close claimed is never claimed again, and a clock behind the
+ *     open shift (or, for an open, behind the last close) is refused.
+ *   • Drawer activity in flight (review P2-2): a refund payout started but not
+ *     completed, or a settled payment not finalized into a sale yet, holds the
+ *     close and every pay-out (the drawer cash would be under-read).
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   freshSalesSyncDb,
+  handleFor,
   initSalesSyncSql,
 } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
+import { createShiftCashupRepo, type ShiftScope } from '../shift-cashup-repo.js';
 import type { ShiftCashupService } from '../shift-cashup-service.js';
 import {
   CLOSED_AT,
   MANAGER,
   OPENED_AT,
   cashLine,
+  cashierSession,
   factCounts,
   msAfter,
   msBefore,
   seedRefund,
+  seedSettlement,
   seedShiftSale,
   serviceHarness,
   storedBody,
   type ServiceHarness,
 } from './__helpers__/shift-cashup-service-fixture.js';
-import { OTHER_TERMINAL, USER } from './__helpers__/shift-sync-fixture.js';
+import { OPEN, OTHER_TERMINAL, SCOPE, USER } from './__helpers__/shift-sync-fixture.js';
 
 const REF = '0192f5a2-3b4c-7d8e-9f01-0000000000c1';
+const LATER = '2026-10-05T20:00:00.000Z';
 const FLOAT = 50_000;
 const NO_FACTS = {
   shift_cashup_opens: 0,
@@ -294,12 +307,11 @@ describe('closeShift — the cash-up', () => {
     expect([closed.cashSalesTotalMinor, closed.saleCount]).toEqual(counted ? [1_000, 1] : [0, 0]);
   });
 
-  it.each<[string, string | null, boolean]>([
+  it.each<[string, string, boolean]>([
     ['at the open instant', OPENED_AT, true],
     ['1 ms before the open', msBefore(OPENED_AT), false],
     ['at the close instant', CLOSED_AT, true],
     ['1 ms after the close', msAfter(CLOSED_AT), false],
-    ['not completed (payout started only)', null, false],
   ])('counts a refund paid out %s', (_name, paidAt, counted) => {
     openShift();
     seedRefund(db, { returnId: 'r-edge', returnRef: REF, amountMinor: 1_000, paidAt });
@@ -347,5 +359,130 @@ describe('closeShift — the cash-up', () => {
     openShift();
     service.closeShift({ countedCashMinor: FLOAT });
     expect(() => service.openShift({ openingFloatMinor: 0 })).not.toThrow();
+  });
+
+  it('records no approver for a zero variance (the approver of a non-zero one only)', () => {
+    openShift();
+    service.closeShift({ countedCashMinor: FLOAT, varianceApprovedByUserId: MANAGER });
+    expect(storedBody(db, 2)).not.toHaveProperty('varianceApprovedByUserId');
+  });
+});
+
+/** Close the open shift at the clock, reopen at that same instant, then move the clock on. */
+function closeAndReopen(countedCashMinor: number): void {
+  service.closeShift({ countedCashMinor });
+  service.openShift({ openingFloatMinor: 0 });
+  harness.state.clock = LATER;
+}
+
+describe('shift windows never overlap (review P2-1)', () => {
+  it('leaves a sale at the previous close instant to that close (same-ms reopen)', () => {
+    openShift();
+    seedShiftSale(db, { saleId: 's-edge', finalizedAt: CLOSED_AT, lines: [cashLine(1_000)] });
+    closeAndReopen(FLOAT + 1_000);
+    expect(service.closeShift({ countedCashMinor: 0 })).toMatchObject({
+      cashSalesTotalMinor: 0,
+      saleCount: 0,
+    });
+  });
+
+  it('starts the window after the previous close even when the open is earlier (clock step-back)', () => {
+    openShift();
+    const stepped = msBefore(CLOSED_AT);
+    seedShiftSale(db, { saleId: 's-1', finalizedAt: stepped, lines: [cashLine(1_000)] });
+    service.closeShift({ countedCashMinor: FLOAT + 1_000 });
+    // An open recorded under a clock behind the previous close.
+    const shiftId = '0192f5a2-3b4c-7d8e-9f01-00000000beef';
+    const fact = { ...OPEN, shiftId, openedAt: msBefore(stepped), openingFloatMinor: 0 };
+    createShiftCashupRepo(handleFor(db)).recordOpen({ scope: SCOPE, fact, now: CLOSED_AT });
+    harness.state.clock = LATER;
+    expect(service.closeShift({ countedCashMinor: 0 })).toMatchObject({ shiftId, saleCount: 0 });
+  });
+
+  it('never claims a return ref a previous close already claimed', () => {
+    openShift();
+    seedRefund(db, { returnId: 'r-1', returnRef: REF, amountMinor: 1_000, paidAt: OPENED_AT });
+    closeAndReopen(FLOAT - 1_000);
+    // The same server ref (any case) on another journal row, paid in this window.
+    const returnRef = REF.toUpperCase();
+    seedRefund(db, { returnId: 'r-2', returnRef, amountMinor: 1_000, paidAt: LATER });
+    const closed = service.closeShift({ countedCashMinor: 0 });
+    expect(closed.cashRefundsTotalMinor).toBe(0);
+    expect(storedBody(db, 4)['cashRefundReturnRefs']).toEqual([]);
+  });
+
+  it('refuses an open behind the terminal’s last close (clock_regressed), writing nothing', () => {
+    openShift();
+    service.closeShift({ countedCashMinor: FLOAT });
+    harness.state.clock = msBefore(CLOSED_AT);
+    const before = factCounts(db);
+    expect(openAgain).toThrow(refusal('clock_regressed'));
+    expect(factCounts(db)).toEqual(before);
+  });
+
+  it('opens on another terminal regardless of this terminal’s last close', () => {
+    openShift();
+    service.closeShift({ countedCashMinor: FLOAT });
+    harness.state.clock = msBefore(CLOSED_AT);
+    harness.state.session = cashierSession(OTHER_TERMINAL);
+    expect(openAgain).not.toThrow();
+  });
+
+  it.each(CALLS.slice(1))('refuses %s behind the open shift (clock_regressed)', (_name, call) => {
+    openShift();
+    harness.state.clock = msBefore(OPENED_AT);
+    const before = factCounts(db);
+    expect(() => call(service)).toThrow(refusal('clock_regressed'));
+    expect(factCounts(db)).toEqual(before);
+  });
+});
+
+describe('drawer activity in flight holds the close and every pay-out (review P2-2)', () => {
+  const IN_FLIGHT: ReadonlyArray<[string, (scope?: ShiftScope) => void]> = [
+    [
+      'a refund payout started, not completed',
+      (scope = SCOPE) => {
+        seedRefund(db, { returnId: 'r-1', returnRef: REF, amountMinor: 1, paidAt: null, scope });
+      },
+    ],
+    [
+      'a settled payment not finalized into a sale yet',
+      (scope = SCOPE) => {
+        seedSettlement(db, { saleId: 's-1', scope });
+      },
+    ],
+  ];
+
+  it.each(IN_FLIGHT)('refuses the close and a pay-out while %s', (_name, arrange) => {
+    openShift();
+    arrange();
+    const before = factCounts(db);
+    expect(() => service.closeShift({ countedCashMinor: FLOAT })).toThrow(
+      refusal('drawer_activity_pending'),
+    );
+    expect(() => {
+      payOut(1);
+    }).toThrow(refusal('drawer_activity_pending'));
+    expect(factCounts(db)).toEqual(before);
+  });
+
+  it.each(IN_FLIGHT)('still records a pay-in while %s', (_name, arrange) => {
+    openShift();
+    arrange();
+    service.recordCashMovement({ kind: 'pay_in', amountMinor: 1, reasonCode: 'other' });
+    expect(factCounts(db)['shift_cashup_movements']).toBe(1);
+  });
+
+  it.each(IN_FLIGHT)('ignores another terminal with %s', (_name, arrange) => {
+    openShift();
+    arrange(OTHER_TERMINAL);
+    expect(() => service.closeShift({ countedCashMinor: FLOAT })).not.toThrow();
+  });
+
+  it('closes once the settled payment is finalized into its sale', () => {
+    openShift();
+    seedSettlement(db, { saleId: 's-1' });
+    seedShiftSale(db, { saleId: 's-1', finalizedAt: OPENED_AT, lines: [cashLine(1_000)] });
+    expect(service.closeShift({ countedCashMinor: FLOAT + 1_000 }).saleCount).toBe(1);
   });
 });

@@ -11,9 +11,11 @@
  *   • a sale's frozen `tender_lines_summary_json` (008: the APPLIED tender
  *     lines only). Its net cash is every `cash` line's `amount_applied_minor`
  *     less its `change_due_minor` (RT-160 D-3: cash is net of change, as the
- *     sale capture sends it). Card and voucher lines are not drawer cash. A
- *     sale with no tender lines (tender-unknown, RT-10 D8) adds no cash but is
- *     still a sale of the window (`saleCount`).
+ *     sale capture sends it). Card and voucher lines (the closed set of
+ *     `SALES_TENDER_TYPES`) are not drawer cash. A line of any other tender
+ *     type — missing, misspelled, unknown — is unreadable: it is never read as
+ *     zero cash. A sale with no tender lines (tender-unknown, RT-10 D8) adds
+ *     no cash but is still a sale of the window (`saleCount`).
  *   • a refund: the server-confirmed `return_total_minor` the RT-15 payout paid
  *     from this drawer, and its server return reference (`return_ref`), which
  *     the close reports in `cashRefundReturnRefs`.
@@ -28,6 +30,7 @@
  * the close builder refuses such a close (`invalid_amount`), and the pay-out
  * guard then refuses every pay-out. Integer minor units only, never a float.
  */
+import type { SalesTenderType } from '../../shared/sales/types.js';
 
 export type ShiftCashupSourceReason =
   | 'unreadable_sale_tenders'
@@ -88,12 +91,37 @@ function isSafeNonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
-function isTenderLine(value: unknown): value is TenderLine {
-  return typeof value === 'object' && value !== null;
-}
-
 function unreadable(): never {
   throw new ShiftCashupSourceError('unreadable_sale_tenders');
+}
+
+function tenderLineOf(value: unknown): TenderLine {
+  return typeof value === 'object' && value !== null ? value : unreadable();
+}
+
+/** A tender line's amount: a safe non-negative integer, else unreadable. */
+function amountOf(value: unknown): number {
+  return isSafeNonNegative(value) ? value : unreadable();
+}
+
+/** A cash line's drawer cash: the amount handed over less the change given back. */
+function netCash(line: TenderLine): bigint {
+  const applied = amountOf(line.amount_applied_minor);
+  const change = amountOf(line.change_due_minor ?? 0);
+  return change > applied ? unreadable() : BigInt(applied) - BigInt(change);
+}
+
+const NOT_DRAWER_CASH = (): bigint => 0n;
+
+/** The drawer cash of a line, by tender type: only the closed set of 008 is readable. */
+const DRAWER_CASH: Readonly<Record<SalesTenderType, (line: TenderLine) => bigint>> = {
+  cash: netCash,
+  external_card_terminal: NOT_DRAWER_CASH,
+  internal_voucher: NOT_DRAWER_CASH,
+};
+
+function isKnownTenderType(value: unknown): value is SalesTenderType {
+  return typeof value === 'string' && Object.hasOwn(DRAWER_CASH, value);
 }
 
 function parseLines(json: string): unknown[] {
@@ -106,16 +134,11 @@ function parseLines(json: string): unknown[] {
   return Array.isArray(parsed) ? parsed : unreadable();
 }
 
-/** The net drawer cash of one tender line (0 for a non-cash line). */
-function netCashOf(line: unknown): bigint {
-  if (!isTenderLine(line)) unreadable();
-  if (line.tender_type !== 'cash') return 0n;
-  const applied = line.amount_applied_minor;
-  const change = line.change_due_minor ?? 0;
-  if (!isSafeNonNegative(applied) || !isSafeNonNegative(change) || change > applied) {
-    unreadable();
-  }
-  return BigInt(applied) - BigInt(change);
+/** The net drawer cash of one tender line (0 for a card or voucher line). */
+function netCashOf(value: unknown): bigint {
+  const line = tenderLineOf(value);
+  const type = line.tender_type;
+  return isKnownTenderType(type) ? DRAWER_CASH[type](line) : unreadable();
 }
 
 function saleCash(sale: CashupSale): bigint {
