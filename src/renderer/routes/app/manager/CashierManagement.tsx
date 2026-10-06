@@ -52,13 +52,27 @@ export function CashierManagement({ operator }: Props): JSX.Element {
   const [cashiers, setCashiers] = useState<BranchRosterCashier[] | null>(null);
   const [rosterError, setRosterError] = useState(false);
   const [action, setAction] = useState<ActionState>({ kind: 'idle' });
-  // Provisioning is create-only: a second in-flight Save would race the first and
-  // could replace its success with `state_invalid`, and any other action taken
-  // meanwhile would be overwritten when the response lands. While a call is in
-  // flight the ref blocks re-entry and Escape synchronously; the state disables
-  // Save, Cancel and every row action.
-  const provisioningRef = useRef(false);
-  const [provisioning, setProvisioning] = useState(false);
+  // One pending guard shared by Unlock, Reset PIN and Set first PIN. Each handler
+  // ends with an unconditional `setAction`, so a response that lands after the
+  // manager started another action would overwrite it; and first-PIN
+  // provisioning is create-only, so a second in-flight Save would race the first
+  // and replace its success with `state_invalid`. While any call is in flight the
+  // ref blocks re-entry and Escape synchronously, and the state disables every
+  // row action plus the open dialog's buttons.
+  const pendingRef = useRef(false);
+  const [pending, setPending] = useState(false);
+
+  async function runExclusive<T>(call: () => Promise<T>): Promise<T | undefined> {
+    if (pendingRef.current) return undefined;
+    pendingRef.current = true;
+    setPending(true);
+    try {
+      return await call();
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  }
 
   useEffect(() => {
     void operator.listBranchRoster().then((res) => {
@@ -75,7 +89,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
   useEffect(() => {
     if (action.kind !== 'resetPin' && action.kind !== 'setFirstPin') return;
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !provisioningRef.current) {
+      if (e.key === 'Escape' && !pendingRef.current) {
         setAction({ kind: 'idle' });
       }
     };
@@ -90,7 +104,8 @@ export function CashierManagement({ operator }: Props): JSX.Element {
       event_id: crypto.randomUUID(),
       target_cashier_id: cashier.id,
     };
-    const res = await operator.unlockCashier(req);
+    const res = await runExclusive(() => operator.unlockCashier(req));
+    if (res === undefined) return;
     const isSuccessOrNoOp = res.kind === 'unlocked' || res.category === 'state_invalid';
     if (isSuccessOrNoOp) {
       setAction({ kind: 'success', message: 'Cashier unlocked.' });
@@ -106,7 +121,8 @@ export function CashierManagement({ operator }: Props): JSX.Element {
       target_cashier_id: action.cashier.id,
       new_pin: action.pin,
     };
-    const res = await operator.resetCashierPin(req);
+    const res = await runExclusive(() => operator.resetCashierPin(req));
+    if (res === undefined) return;
     if (res.kind === 'pin_reset') {
       setAction({ kind: 'success', message: 'PIN reset.' });
     } else {
@@ -115,21 +131,14 @@ export function CashierManagement({ operator }: Props): JSX.Element {
   }
 
   async function handleSetFirstPinConfirm(): Promise<void> {
-    if (action.kind !== 'setFirstPin' || provisioningRef.current) return;
-    provisioningRef.current = true;
-    setProvisioning(true);
+    if (action.kind !== 'setFirstPin') return;
     const req: ProvisionCashierPinRequest = {
       event_id: crypto.randomUUID(),
       target_cashier_id: action.cashier.id,
       initial_pin: action.pin,
     };
-    let res: Awaited<ReturnType<typeof operator.provisionCashierPin>>;
-    try {
-      res = await operator.provisionCashierPin(req);
-    } finally {
-      provisioningRef.current = false;
-      setProvisioning(false);
-    }
+    const res = await runExclusive(() => operator.provisionCashierPin(req));
+    if (res === undefined) return;
     if (res.kind === 'pin_provisioned') {
       setAction({ kind: 'success', message: 'First PIN set.' });
     } else if (res.category === 'state_invalid') {
@@ -166,7 +175,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
                 <button
                   type="button"
                   className="btn btn--secondary btn--md"
-                  disabled={provisioning}
+                  disabled={pending}
                   onClick={() => {
                     setAction({ kind: 'setFirstPin', cashier: c, pin: '' });
                   }}
@@ -176,7 +185,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
                 <button
                   type="button"
                   className="btn btn--secondary btn--md"
-                  disabled={provisioning}
+                  disabled={pending}
                   onClick={() => {
                     setAction({ kind: 'resetPin', cashier: c, pin: '' });
                   }}
@@ -186,7 +195,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
                 <button
                   type="button"
                   className="btn btn--secondary btn--md"
-                  disabled={provisioning}
+                  disabled={pending}
                   onClick={() => {
                     void handleUnlock(c);
                   }}
@@ -212,6 +221,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             <button
               type="button"
               className="btn btn--primary btn--md"
+              disabled={pending}
               onClick={() => {
                 void handleResetPinConfirm();
               }}
@@ -221,6 +231,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             <button
               type="button"
               className="btn btn--ghost btn--md"
+              disabled={pending}
               onClick={() => {
                 setAction({ kind: 'idle' });
               }}
@@ -244,7 +255,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             <button
               type="button"
               className="btn btn--primary btn--md"
-              disabled={provisioning}
+              disabled={pending}
               onClick={() => {
                 void handleSetFirstPinConfirm();
               }}
@@ -254,7 +265,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             <button
               type="button"
               className="btn btn--ghost btn--md"
-              disabled={provisioning}
+              disabled={pending}
               onClick={() => {
                 setAction({ kind: 'idle' });
               }}

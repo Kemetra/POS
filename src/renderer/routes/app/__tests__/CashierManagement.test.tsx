@@ -441,6 +441,65 @@ describe('CashierManagement (T078)', () => {
       expect(screen.getAllByRole('button', { name: /reset pin/i })[0]).toBeEnabled();
     });
 
+    it('RT-235 review: an in-flight Unlock or Reset PIN blocks Set first PIN (one shared pending guard across all three actions)', async () => {
+      const user = userEvent.setup();
+      let settleUnlock: (value: unknown) => void = () => undefined;
+      const bridge = makeBridge({
+        unlockCashier: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              settleUnlock = resolve;
+            }),
+        ),
+      });
+      renderAt(MANAGER_SESSION, bridge);
+      await waitFor(() => {
+        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
+      });
+
+      await clickFirst(user, /unlock/i);
+
+      for (const name of [/set first pin/i, /reset pin/i, /unlock/i]) {
+        for (const btn of screen.getAllByRole('button', { name })) {
+          expect(btn).toBeDisabled();
+        }
+      }
+
+      settleUnlock({ kind: 'unlocked', audit_event_id: 'evt-2' });
+      await waitFor(() => expect(screen.getByTestId('action-success')).toBeInTheDocument());
+      for (const btn of screen.getAllByRole('button', { name: /set first pin/i })) {
+        expect(btn).toBeEnabled();
+      }
+    });
+
+    it('RT-235 review: an in-flight Reset PIN confirm blocks the other actions', async () => {
+      const user = userEvent.setup();
+      let settleReset: (value: unknown) => void = () => undefined;
+      const bridge = makeBridge({
+        resetCashierPin: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              settleReset = resolve;
+            }),
+        ),
+      });
+      renderAt(MANAGER_SESSION, bridge);
+      await waitFor(() => {
+        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
+      });
+      await clickFirst(user, /reset pin/i);
+      await user.type(await screen.findByLabelText(/new pin/i), '1234');
+      await user.click(screen.getByRole('button', { name: /confirm reset/i }));
+
+      for (const btn of screen.getAllByRole('button', { name: /set first pin|unlock/i })) {
+        expect(btn).toBeDisabled();
+      }
+      settleReset({ kind: 'pin_reset', audit_event_id: 'evt-1' });
+      await waitFor(() =>
+        expect(screen.getByTestId('action-success')).toHaveTextContent(/pin reset/i),
+      );
+    });
+
     it('Escape and Cancel close the dialog without calling the bridge', async () => {
       const user = userEvent.setup();
       const bridge = makeBridge();
