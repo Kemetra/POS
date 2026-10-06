@@ -84,7 +84,10 @@ export interface ServiceHarness {
 }
 
 /** The service over `db`, flag ON, a cashier signed in on `SCOPE`, clock at `OPENED_AT`. */
-export function serviceHarness(db: SqlJsDatabase): ServiceHarness {
+export function serviceHarness(
+  db: SqlJsDatabase,
+  options: { currencyCode?: string } = {},
+): ServiceHarness {
   const state: ServiceHarness['state'] = {
     enabled: true,
     session: cashierSession(),
@@ -102,6 +105,7 @@ export function serviceHarness(db: SqlJsDatabase): ServiceHarness {
   let ids = 0;
   const service = composeShiftCashupService({
     db: handleFor(db),
+    ...(options.currencyCode === undefined ? {} : { currencyCode: options.currencyCode }),
     isEnabled: () => state.enabled,
     getSession: () => state.session,
     isSessionLocked: () => state.locked,

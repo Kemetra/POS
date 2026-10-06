@@ -157,3 +157,60 @@ describe('computeCashup — unreadable sources are refused, never guessed', () =
     expect(error.message).toBe('shift cash-up source refused: invalid_refund');
   });
 });
+
+describe('computeCashup — totals stay inside the currency maximum (JPY bound, 10948)', () => {
+  const JPY_MAX = 999_999_999_999_999;
+  const jpy = (overrides: Partial<CashupInput> = {}): CashupInput =>
+    input({ currencyCode: 'JPY', openingFloatMinor: 0, ...overrides });
+  const outOfRange = expect.objectContaining({ reason: 'total_out_of_range' }) as Error;
+
+  it('accepts an expected cash of exactly 15 digits of yen', () => {
+    expect(computeCashup(jpy({ openingFloatMinor: JPY_MAX })).expectedCashMinor).toBe(JPY_MAX);
+  });
+
+  it('refuses an expected cash of 16 digits of yen, although it is a safe integer', () => {
+    expect(() => computeCashup(jpy({ openingFloatMinor: JPY_MAX + 1 }))).toThrow(outOfRange);
+  });
+
+  it('refuses a cash sales total past 15 digits of yen', () => {
+    expect(() => computeCashup(jpy({ sales: [sale([cashLine(JPY_MAX + 1)])] }))).toThrow(
+      outOfRange,
+    );
+    expect(computeCashup(jpy({ sales: [sale([cashLine(JPY_MAX)])] })).cashSalesTotalMinor).toBe(
+      JPY_MAX,
+    );
+  });
+
+  it('refuses a cash refunds total past 15 digits of yen', () => {
+    const refunds = [refund({ currencyCode: 'JPY', amountMinor: JPY_MAX + 1 })];
+    expect(() => computeCashup(jpy({ openingFloatMinor: JPY_MAX, refunds }))).toThrow(outOfRange);
+    const atMax = [refund({ currencyCode: 'JPY', amountMinor: JPY_MAX })];
+    expect(computeCashup(jpy({ openingFloatMinor: JPY_MAX, refunds: atMax }))).toMatchObject({
+      cashRefundsTotalMinor: JPY_MAX,
+      expectedCashMinor: 0,
+    });
+  });
+
+  it('refuses a negative expected cash beyond the maximum as well', () => {
+    const refunds = [refund({ currencyCode: 'JPY', amountMinor: JPY_MAX })];
+    expect(() => computeCashup(jpy({ refunds, payOutTotalMinor: 1 }))).toThrow(outOfRange);
+    expect(computeCashup(jpy({ refunds })).expectedCashMinor).toBe(-JPY_MAX);
+  });
+
+  it('keeps an exact result when a partial sum passes the maximum but the total does not', () => {
+    const result = computeCashup(
+      jpy({ openingFloatMinor: JPY_MAX, payInTotalMinor: JPY_MAX, payOutTotalMinor: JPY_MAX }),
+    );
+    expect(result.expectedCashMinor).toBe(JPY_MAX);
+  });
+
+  it.each(['EGP', 'USD', 'KWD', 'BHD'] as const)(
+    '%s keeps the full safe-integer range',
+    (currencyCode) => {
+      const big = Number.MAX_SAFE_INTEGER;
+      expect(computeCashup(input({ currencyCode, openingFloatMinor: big })).expectedCashMinor).toBe(
+        big,
+      );
+    },
+  );
+});

@@ -29,7 +29,9 @@ import {
 } from '../sale-sync-client-types.js';
 import { bindSalesRepository } from '../../sales/repositories/sales.repository.js';
 import { createSaleSyncEngine, type SaleSyncEngine } from '../sale-sync-engine.js';
-import { scheduleSaleSync } from '../schedule-sale-sync.js';
+import { SALE_SYNC_REQUEST_TIMEOUT_MS } from '../create-sale-sync-client.js';
+import { DRAIN_MARGIN_MS } from '../settled-within.js';
+import { SALE_SYNC_DRAIN_TIMEOUT_MS, scheduleSaleSync } from '../schedule-sale-sync.js';
 
 beforeAll(async () => {
   await initSalesSyncSql();
@@ -197,5 +199,24 @@ describe('scheduleSaleSync', () => {
     await vi.advanceTimersByTimeAsync(INTERVAL_MS);
     expect(runTickOnce).toHaveBeenCalledTimes(2);
     expect(error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SALE_SYNC_DRAIN_TIMEOUT_MS — the drain outlasts the client request timeout', () => {
+  it('is the client request timeout plus the shared margin', () => {
+    expect(SALE_SYNC_DRAIN_TIMEOUT_MS).toBe(SALE_SYNC_REQUEST_TIMEOUT_MS + DRAIN_MARGIN_MS);
+  });
+
+  it('is never below the client request timeout (a send in flight is aborted before the drain gives up)', () => {
+    expect(SALE_SYNC_DRAIN_TIMEOUT_MS).toBeGreaterThanOrEqual(SALE_SYNC_REQUEST_TIMEOUT_MS);
+    expect(DRAIN_MARGIN_MS).toBeGreaterThan(0);
+  });
+
+  it('leaves the timeout itself at 15 s (only the drain bound is derived)', () => {
+    expect(SALE_SYNC_REQUEST_TIMEOUT_MS).toBe(15_000);
+  });
+
+  it('is small: the margin is at most 5 s, so a stop is never held long', () => {
+    expect(DRAIN_MARGIN_MS).toBeLessThanOrEqual(5_000);
   });
 });

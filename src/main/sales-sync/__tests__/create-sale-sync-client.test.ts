@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  SALE_SYNC_REQUEST_TIMEOUT_MS,
   createSaleSyncClient,
   toWireBody,
   classifyStatus,
@@ -533,5 +534,24 @@ describe('RT-224 step 2 — device-path helpers', () => {
     const corrupt: CaptureSalePayload = { ...PAYLOAD, totalMinor: 10.5 };
     expect(await client.postSaleAsCashier(corrupt, USER_ID)).toEqual({ kind: 'permanent' });
     expect(captured).toHaveLength(0);
+  });
+});
+
+describe('createSaleSyncClient — request timeout (RT-17 follow-up, drain bound)', () => {
+  it('bounds a request by SALE_SYNC_REQUEST_TIMEOUT_MS (15 s) unless a timeout is injected', async () => {
+    expect(SALE_SYNC_REQUEST_TIMEOUT_MS).toBe(15_000);
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      const { fetchImpl } = captureFetch(200);
+      const client = createSaleSyncClient({
+        baseUrl: BASE,
+        fetch: fetchImpl,
+        getOperatorToken: () => TOKEN,
+      });
+      await client.postSale(PAYLOAD);
+      expect(timeout).toHaveBeenCalledWith(SALE_SYNC_REQUEST_TIMEOUT_MS);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });
