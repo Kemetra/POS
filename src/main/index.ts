@@ -97,6 +97,7 @@ import {
 } from './app/paired-workers.js';
 import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
+import { scheduleSaleSync } from './sales-sync/schedule-sale-sync.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
 import { registerReturnsHandlers } from './ipc/returns.js';
 import { composeReturns, scheduleReturnsResolver } from './returns/compose-returns.js';
@@ -1821,6 +1822,9 @@ singleInstanceReady
           now: new Date().toISOString(),
           logger: mainLogger,
         });
+        // RT-198: the shutdown latch, read by the engine (`isStopped`) and set by the
+        // worker stop below, synchronously, before the DB handle closes.
+        let saleSyncStopped = false;
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
           tendersSince,
@@ -1861,6 +1865,7 @@ singleInstanceReady
           onPauseTransition: (event) => {
             logSaleSyncPauseTransition(mainLogger, event);
           },
+          isStopped: () => saleSyncStopped,
         });
 
         // Read-only status surface for the renderer (counts + last-success + the
@@ -1877,18 +1882,24 @@ singleInstanceReady
         });
 
         // Background drain on an interval. Single-flight in the engine coalesces
-        // overlapping ticks; the interval is cleared on quit (closeDbHandle).
+        // overlapping ticks; the interval is cleared and the engine latched stopped
+        // on quit (closeDbHandle), so a send in flight writes nothing locally.
         const SALE_SYNC_INTERVAL_MS = 5_000;
-        const saleSyncInterval = setInterval(() => {
-          const admission = saleSyncEngine.runTickOnce();
-          if (admission.kind === 'started') {
-            admission.completed.catch((err: unknown) => {
-              mainLogger.error({ err }, 'sale_sync:tick_unexpected');
-            });
-          }
-        }, SALE_SYNC_INTERVAL_MS);
+        // = the sale-sync client's request timeout.
+        const SALE_SYNC_DRAIN_TIMEOUT_MS = 15_000;
+        const stopSaleSync = scheduleSaleSync({
+          engine: saleSyncEngine,
+          latchStopped: () => {
+            saleSyncStopped = true;
+          },
+          intervalMs: SALE_SYNC_INTERVAL_MS,
+          drainTimeoutMs: SALE_SYNC_DRAIN_TIMEOUT_MS,
+          logger: mainLogger,
+        });
+        // Synchronous like every worker stop: the latch makes the DB close safe
+        // right after; the drain promise is not awaited here.
         workerRegistry.register('sale-sync interval', () => {
-          clearInterval(saleSyncInterval);
+          void stopSaleSync();
         });
         mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'sale_sync_engine:started');
       });

@@ -65,9 +65,9 @@ function watchedRepo(
 
 /** A client whose send waits for `release`; `sent` once a request is on the wire. */
 function gatedClient() {
-  const gate = {
+  const gate: { sent: number; release: (result: SaleSyncResult) => void } = {
     sent: 0,
-    release: (_result: SaleSyncResult): void => undefined,
+    release: () => undefined,
   };
   const client: SaleSyncClient = {
     postSale: () => {
@@ -135,12 +135,18 @@ async function runTick(deps: SaleSyncEngineDeps): Promise<void> {
   if (admission.kind === 'started') await admission.completed;
 }
 
+/** The sale has no sync state (never answered) and is still due to be drained. */
+function expectStillDue(h: Harness, saleId: string): void {
+  expect(h.repo.read(saleId)).toBeNull();
+  const due = h.repo.eligible(
+    { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: TERMINAL_ID },
+    '2026-06-07T10:05:00.000Z',
+  );
+  expect(due.map((row) => row.sale_id)).toContain(saleId);
+}
+
 function expectUntouched(h: Harness, saleId = 'sale-1'): void {
-  expect(nn(h.repo.read(saleId))).toMatchObject({
-    sync_status: 'pending',
-    attempt_count: 0,
-    synced_at: null,
-  });
+  expectStillDue(h, saleId);
   expect(h.latch.touchedAfterStop).toEqual([]);
   expect(h.hooks.onDeadLetter).not.toHaveBeenCalled();
   expect(h.hooks.onPayloadDivergence).not.toHaveBeenCalled();
@@ -252,6 +258,7 @@ describe('createSaleSyncEngine — stop latch (RT-198)', () => {
   it('stop between two sales: the second is neither read nor sent', async () => {
     const h = harness({}, ['sale-1', 'sale-2']);
     const client = createFakeSaleSyncClient([OK]);
+    const resolveTerminalId = vi.fn(() => TERMINAL_ID);
     // The credential reads of the tick: start (1), report gate (2), then one per
     // sale. Stop lands in the second sale's gate (4th read).
     let reads = 0;
@@ -260,10 +267,30 @@ describe('createSaleSyncEngine — stop latch (RT-198)', () => {
       if (reads === 4) h.latch.stopped = true;
       return 'tok-1';
     };
-    await runTick({ ...h.deps, client, getOperatorToken });
+    await runTick({ ...h.deps, client, getOperatorToken, resolveTerminalId });
     expect(client.calls).toHaveLength(1);
     expect(nn(h.repo.read('sale-1')).sync_status).toBe('synced');
-    expect(nn(h.repo.read('sale-2')).sync_status).toBe('pending');
+    expectStillDue(h, 'sale-2');
+    // Tick start and the first sale's POST only: nothing is re-resolved after stop.
+    expect(resolveTerminalId).toHaveBeenCalledTimes(2);
+    expect(h.latch.touchedAfterStop).toEqual([]);
+  });
+
+  it('stop between two sales, after the first is persisted: no credential is read again', async () => {
+    const h = harness({}, ['sale-1', 'sale-2']);
+    const client = createFakeSaleSyncClient([{ kind: 'permanent' }, OK]);
+    const hasDeviceCredential = vi.fn(() => false);
+    // The first sale dead-letters; its notification hook is where the stop lands,
+    // after the sale is persisted and before the next sale's credential check.
+    const onDeadLetter = (): void => {
+      h.latch.stopped = true;
+    };
+    await runTick({ ...h.deps, client, hasDeviceCredential, onDeadLetter });
+    expect(client.calls).toHaveLength(1);
+    expect(nn(h.repo.read('sale-1')).sync_status).toBe('dead_letter');
+    expectStillDue(h, 'sale-2');
+    // Tick start and the first sale's gate (and the report gate) only.
+    expect(hasDeviceCredential).toHaveBeenCalledTimes(3);
     expect(h.latch.touchedAfterStop).toEqual([]);
   });
 
@@ -279,7 +306,7 @@ describe('createSaleSyncEngine — stop latch (RT-198)', () => {
     };
     await runTick({ ...h.deps, client, resolveTerminalId });
     expect(client.calls).toHaveLength(1);
-    expect(nn(h.repo.read('sale-2')).sync_status).toBe('pending');
+    expectStillDue(h, 'sale-2');
     expect(h.latch.touchedAfterStop).toEqual([]);
   });
 
@@ -313,8 +340,10 @@ describe('createSaleSyncEngine — stop latch (RT-198)', () => {
   });
 
   it('without an isStopped dep a tick runs and persists as before', async () => {
-    const h = harness({ isStopped: undefined });
-    await runTick(h.deps);
+    const h = harness();
+    const deps: SaleSyncEngineDeps = { ...h.deps };
+    delete deps.isStopped;
+    await runTick(deps);
     expect(nn(h.repo.read('sale-1')).sync_status).toBe('synced');
   });
 });

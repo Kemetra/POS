@@ -11,7 +11,7 @@
  * DB right after safe.
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import {
   freshSalesSyncDb,
@@ -42,7 +42,7 @@ const OK: SaleSyncResult = { kind: 'ok', saleRef: null };
 describe('scheduleSaleSync', () => {
   let db: SqlJsDatabase;
   let repo: SaleSyncStateRepo;
-  let error: ReturnType<typeof vi.fn>;
+  let error: Mock<(obj: Record<string, unknown>, msg: string) => void>;
   let stopped: boolean;
   let stop: (() => Promise<void>) | undefined;
 
@@ -50,7 +50,7 @@ describe('scheduleSaleSync', () => {
     vi.useFakeTimers();
     db = freshSalesSyncDb();
     repo = createSaleSyncStateRepo(handleFor(db));
-    error = vi.fn();
+    error = vi.fn<(obj: Record<string, unknown>, msg: string) => void>();
     stopped = false;
     stop = undefined;
     seedSale(db, { sale_id: 'sale-1' });
@@ -80,7 +80,10 @@ describe('scheduleSaleSync', () => {
     });
   }
 
-  function schedule(engine: SaleSyncEngine, latchStopped?: () => void): void {
+  function schedule(
+    engine: Pick<SaleSyncEngine, 'runTickOnce' | 'drain'>,
+    latchStopped?: () => void,
+  ): void {
     stop = scheduleSaleSync({
       engine,
       latchStopped:
@@ -96,7 +99,10 @@ describe('scheduleSaleSync', () => {
 
   /** A client whose send waits for `release`; `sent` once it is on the wire. */
   function gatedClient() {
-    const gate = { sent: 0, release: (_result: SaleSyncResult): void => undefined };
+    const gate: { sent: number; release: (result: SaleSyncResult) => void } = {
+      sent: 0,
+      release: () => undefined,
+    };
     const client: SaleSyncClient = {
       postSale: () => {
         gate.sent += 1;
@@ -127,6 +133,16 @@ describe('scheduleSaleSync', () => {
     expect(client.calls).toEqual([]);
   });
 
+  it('stops the interval itself: the engine is not even asked for a tick after the stop', async () => {
+    const runTickOnce = vi.fn<SaleSyncEngine['runTickOnce']>(() => ({ kind: 'already_running' }));
+    schedule({ runTickOnce, drain: () => Promise.resolve() });
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+    expect(runTickOnce).toHaveBeenCalledTimes(1);
+    void stop?.();
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3);
+    expect(runTickOnce).toHaveBeenCalledTimes(1);
+  });
+
   it('latches the engine stopped, synchronously, when stopped', () => {
     const latchStopped = vi.fn();
     schedule(engineFor(createFakeSaleSyncClient([OK])), latchStopped);
@@ -144,12 +160,8 @@ describe('scheduleSaleSync', () => {
     gate.release({ kind: 'ok', saleRef: '0190f5a2-7b3c-7d4e-8f90-a1b2c3d4e5f6' });
     // The drain settles once the tick in flight has settled.
     await expect(drained).resolves.toBeUndefined();
-    expect(nn(repo.read('sale-1'))).toMatchObject({
-      sync_status: 'pending',
-      attempt_count: 0,
-      synced_at: null,
-      server_sale_ref: null,
-    });
+    // No answer was recorded: the sale has no sync state and is still due.
+    expect(repo.read('sale-1')).toBeNull();
     expect(error).not.toHaveBeenCalled();
   });
 
@@ -177,7 +189,7 @@ describe('scheduleSaleSync', () => {
     const boom = new Error('boom');
     const runTickOnce = vi
       .fn<SaleSyncEngine['runTickOnce']>()
-      .mockReturnValueOnce({ kind: 'started', completed: Promise.reject(boom) })
+      .mockImplementationOnce(() => ({ kind: 'started', completed: Promise.reject(boom) }))
       .mockReturnValue({ kind: 'already_running' });
     schedule({ runTickOnce, drain: () => Promise.resolve() });
     await vi.advanceTimersByTimeAsync(INTERVAL_MS);
