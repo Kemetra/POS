@@ -94,6 +94,7 @@ start the POS.
 | `VITE_API_BASE_URL` | **Required.** The pilot Backend-Core base URL. Unset falls back to the non-routable `https://example.invalid`, so pairing, read-down and sync fail closed. | Not a secret, but environment endpoints are **not** published in the repo, Jira or screenshots. |
 | `CLERK_PUBLISHABLE_KEY` | **Required** for manager/admin sign-in. Unset or malformed means sign-in refuses. | Not a secret (a publishable key). Still kept out of the repo. |
 | `SENTRY_DSN` | Optional. Unset means crash reporting is inert. | Treat as sensitive: never printed, pasted or screenshotted. |
+| `POS_PULSE_FEATURE_SHIFT_CASHUP` | **Off (unset) on every pilot terminal until the owner accepts the RT-17 evidence.** Then `1` turns on the shift cash-up: open a shift with a float, record pay-ins and pay-outs, close with a blind count. It needs Backend-Core `481eb26` or later with migration `0036_shift_cash_up` and both domain-grant scripts applied first (the Backend-Core deploy runbook, `deploy/README.md`). See §7 for the rule when a terminal is revoked, re-paired or moved. | Not a secret. |
 | `POS_PULSE_FEATURE_SALE_TENDERS_SINCE` | Set **only** as the RT-79 tender rollout instructs: a future ISO instant with an explicit zone. Unparseable means tenders are off, with a warning. | Not a secret. |
 | `POS_PULSE_RECEIPT_WEBSITE` | Optional receipt footer text. | Not a secret. |
 | `POS_PULSE_SUPPORT_RESET_CASHIER_CLAIM_REFUSED` | **Support only, normally unset.** `1` re-queues, once per start, this terminal's sales dead-lettered as `cashier_claim_refused` (RT-225). See §7. Any other value does nothing. | Not a secret. |
@@ -341,6 +342,8 @@ Never do these:
   `drawer_events`, `sale_sync_outbox`). They are durable financial records; fix
   forward (T525 (b)).
 - Hand-edit a User-scope variable to "quickly" re-enable a terminal.
+
+**Before you revoke, re-pair or move a terminal (RT-17 shift cash-up):** close the open shift first, then wait until **Pending** (قيد الانتظار, "waiting to send") on the manager's shift status screen reaches **0** and nothing is stuck. Shift facts (open, pay-in, pay-out, close) that were made under the old pairing stay on the terminal and are never sent after it is revoked or re-paired, so the shift would stay open in Backend-Core. Cashiers close their own shift: a count variance of any size is recorded against the closing cashier and does not need a manager (RT-17 decision 2026-10-07; a per-tenant limit is RT-236). If a terminal was revoked with a shift still open and the revocation was a mistake, restore the device in Backend-Core and press *Check again*: the same pairing resumes and the queue drains. After a real re-pair the old shift's facts cannot be sent.
 
 **Recovery from a bad profile found by the readiness check:** do not open the
 till. Correct the Machine values (§5), reboot, and run §6 again from the top. If
