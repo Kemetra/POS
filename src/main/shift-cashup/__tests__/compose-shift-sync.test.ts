@@ -94,6 +94,8 @@ describe('composeShiftCashupService — defaults', () => {
       getSession: () => cashierSession(),
       isSessionLocked: () => false,
       pairedScope: () => Promise.resolve(SCOPE),
+      pairingEpoch: () => 'epoch-1',
+      managerPins: { verify: () => Promise.resolve({ kind: 'invalid' }), list: () => [] },
       now: () => NOW,
     });
     const { shiftId } = service.openShift({ openingFloatMinor: 0 });

@@ -66,7 +66,7 @@ afterEach(() => {
 const EMPTY_QUEUE = { pending: 0, waiting: 0, blocked: 0, envelopePending: 0 };
 const NOT_STRANDED = { unsyncedFacts: 0, openShifts: 0 };
 const NO_DRAWER_ACTIVITY = { refundPayouts: 0, unfinalizedSales: 0 };
-const NO_PROBES = { payOut: 0, varianceClose: 0 };
+const NO_PROBES = { payOut: 0, varianceClose: 0, approverFailure: 0 };
 const REF_A = '0192f5a2-3b4c-7d8e-9f01-0000000000a1';
 const REF_B = '0192f5a2-3b4c-7d8e-9f01-0000000000b2';
 

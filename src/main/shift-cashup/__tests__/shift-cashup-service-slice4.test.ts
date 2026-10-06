@@ -35,7 +35,7 @@ import {
 import { OTHER_TERMINAL } from './__helpers__/shift-sync-fixture.js';
 
 const FLOAT = 50_000;
-const NO_PROBES = { payOut: 0, varianceClose: 0 };
+const NO_PROBES = { payOut: 0, varianceClose: 0, approverFailure: 0 };
 
 let db: SqlJsDatabase;
 let harness: ServiceHarness;
@@ -122,11 +122,20 @@ describe('readStatus re-checks the admitted session after the pairing read (revi
       'no_session',
     ],
     ['the flag turned off', (s) => (s.enabled = false), 'feature_disabled'],
+    // F2 (10944): the re-check re-reads the RT-215 pairing epoch, so a re-pair
+    // that keeps the same tenant, branch and terminal id is caught too.
+    ['a re-pair of the same terminal (new epoch)', (s) => (s.epoch = 'epoch-2'), 'no_session'],
+    ['a revocation latched (no epoch)', (s) => (s.epoch = null), 'no_session'],
   ])('refuses when %s lands during the read', async (_name, race, reason) => {
     harness.state.duringPairedScopeRead = () => {
       race(harness.state);
     };
     await expect(harness.service.readStatus()).rejects.toThrow(refusal(reason));
+  });
+
+  it('refuses on a revoked or unpaired terminal (no epoch), with no race', async () => {
+    harness.state.epoch = null;
+    await expect(harness.service.readStatus()).rejects.toThrow(refusal('no_session'));
   });
 
   it('refuses a session whose terminal is not the paired one, with no race', async () => {
@@ -166,14 +175,14 @@ describe('probe refusals (10941 item 3)', () => {
     expect(payOut(FLOAT + 1)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
     expect(payOut(FLOAT + 2)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
     payOut(FLOAT)();
-    await expect(probes()).resolves.toEqual({ payOut: 2, varianceClose: 0 });
+    await expect(probes()).resolves.toEqual({ payOut: 2, varianceClose: 0, approverFailure: 0 });
   });
 
   it('counts each close refused for a non-zero variance without an approver', async () => {
     openShift();
     expect(closeWith(FLOAT - 1)).toThrow(refusal('variance_approval_required'));
     expect(closeWith(FLOAT + 1)).toThrow(refusal('variance_approval_required'));
-    await expect(probes()).resolves.toEqual({ payOut: 0, varianceClose: 2 });
+    await expect(probes()).resolves.toEqual({ payOut: 0, varianceClose: 2, approverFailure: 0 });
   });
 
   it('counts no other refusal (drawer activity in flight, no open shift)', async () => {

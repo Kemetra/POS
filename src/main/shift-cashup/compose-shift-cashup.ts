@@ -70,7 +70,13 @@ export const SHIFT_SYNC_DEPENDENCY_FAILURE_LOG = 'shift_sync:dependency_failure'
 
 export interface ComposeShiftCashupServiceDeps extends Pick<
   ShiftCashupServiceDeps,
-  'isEnabled' | 'getSession' | 'isSessionLocked' | 'pairedScope' | 'now'
+  | 'isEnabled'
+  | 'getSession'
+  | 'isSessionLocked'
+  | 'pairedScope'
+  | 'pairingEpoch'
+  | 'managerPins'
+  | 'now'
 > {
   db: DatabaseHandle;
   /** The terminal's capture currency; defaults to the sale-sync capture's. */
@@ -85,6 +91,8 @@ export function composeShiftCashupService(deps: ComposeShiftCashupServiceDeps): 
     getSession: deps.getSession,
     isSessionLocked: deps.isSessionLocked,
     pairedScope: deps.pairedScope,
+    pairingEpoch: deps.pairingEpoch,
+    managerPins: deps.managerPins,
     repo: createShiftCashupRepo(deps.db),
     sources: createShiftCashupSources(deps.db),
     status: createShiftCashupStatusReader(deps.db),

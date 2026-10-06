@@ -9,19 +9,19 @@
  *     refused amount is still an upper bound, so repeated tries could narrow
  *     the expected cash down;
  *   • `varianceClose` — a close refused for a non-zero variance without an
- *     approver: it says the count was not exactly the expected cash.
+ *     approver: it says the count was not exactly the expected cash;
+ *   • `approverFailure` — RT-17 slice 4 part 2, review round 1 P2-4: a failed
+ *     manager approval of a variance close (wrong PIN, locked, expired, or the
+ *     closer's own record), so repeated guessing is visible to a manager.
  *
  * The tally counts them for the CURRENT shift only (another shift starts again
  * at zero) so a manager sees the count in the status. It is in memory by
  * design (no new persistence in this part): it is zero again after a restart.
  */
 
-export type ShiftProbeKind = 'payOut' | 'varianceClose';
+export type ShiftProbeKind = 'payOut' | 'varianceClose' | 'approverFailure';
 
-export interface ShiftProbeRefusals {
-  payOut: number;
-  varianceClose: number;
-}
+export type ShiftProbeRefusals = Record<ShiftProbeKind, number>;
 
 export interface ShiftProbeTally {
   record(probe: { shiftId: string; kind: ShiftProbeKind }): void;
@@ -30,7 +30,7 @@ export interface ShiftProbeTally {
 }
 
 function noProbes(): ShiftProbeRefusals {
-  return { payOut: 0, varianceClose: 0 };
+  return { payOut: 0, varianceClose: 0, approverFailure: 0 };
 }
 
 export function createShiftProbeTally(): ShiftProbeTally {

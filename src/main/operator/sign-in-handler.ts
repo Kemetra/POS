@@ -223,6 +223,8 @@ export class SignInHandler {
       branch_id: backend.operator.branch_id,
       backend_session_id: backend.operator_session.id,
       started_at: backend.operator_session.issued_at,
+      // RT-17 slice 4 part 2: kept main-side for the manager PIN enrolment.
+      manager_user_id: backend.operator.user_id,
     });
     // 016 (review HIGH) — two credential seams, contract-correct:
     //

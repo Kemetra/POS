@@ -278,6 +278,8 @@ export class TakeoverHandler {
       branch_id: backendResult.operator.branch_id,
       backend_session_id: backendResult.operator_session.id,
       started_at: backendResult.operator_session.issued_at,
+      // RT-17 slice 4 part 2: kept main-side for the manager PIN enrolment.
+      manager_user_id: backendResult.operator.user_id,
     });
 
     // 016 (review HIGH) — two credential seams, contract-correct. A takeover

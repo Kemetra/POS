@@ -130,6 +130,11 @@ describe('TakeoverHandler — credential seam (016 review HIGH)', () => {
     // envelopeHolder gets the takeover-confirm success envelope (sale-sync auth).
     expect(envelopeHolder.get('be-sess-2')).toBe(ENVELOPE);
     expect(envelopeHolder.get('be-sess-2')).not.toBe(PROTO_JWT);
+
+    // RT-17 slice 4 part 2: the new manager's users.id is kept main-side.
+    expect(sessionManager.getCurrent()?.manager_user_id).toBe(
+      '44444444-4444-7444-8444-444444444444',
+    );
   });
 
   it('normalizes an absent envelope to "" in envelopeHolder; jwtHolder keeps the JWT', async () => {
