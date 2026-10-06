@@ -204,6 +204,27 @@ describe('I2: an on-demand resolve during a background tick (review P2-2)', () =
     expect(h.repo.read(waiting)?.state).toBe('unknown');
     await expect(h.resolver.drain(1_000)).resolves.toBeUndefined();
   });
+
+  it('drain waits for the pass in flight (RT-17 follow-up: the shared bounded wait)', async () => {
+    const { post } = await tickStalledWithOneRowBackingOff();
+    const ticking = h.resolver.tick();
+    const chained = h.resolver.resolveOnce(MANAGER_ACTOR);
+    await waitForPosts(1); // the tick's POST of Y, held
+
+    h.stop();
+    let drained = false;
+    const draining = h.resolver.drain(10_000).then(() => {
+      drained = true;
+    });
+    await new Promise<void>((done) => {
+      setTimeout(done, 50);
+    });
+    expect(drained).toBe(false); // the bound is 10 s: the held POST keeps the drain waiting
+    post.release();
+    await Promise.all([ticking, chained]);
+    await draining;
+    expect(drained).toBe(true);
+  });
 });
 
 /** A return journaled but never sent (the send was deferred): `pending`, attempt_count 0. */

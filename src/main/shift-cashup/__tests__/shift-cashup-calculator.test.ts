@@ -176,6 +176,10 @@ describe('computeCashup — totals stay inside the currency maximum (JPY bound, 
     expect(() => computeCashup(jpy({ sales: [sale([cashLine(JPY_MAX + 1)])] }))).toThrow(
       outOfRange,
     );
+    // The expected cash is back in range (a pay-out), the sales total alone is not.
+    expect(() =>
+      computeCashup(jpy({ sales: [sale([cashLine(JPY_MAX + 1)])], payOutTotalMinor: 1 })),
+    ).toThrow(outOfRange);
     expect(computeCashup(jpy({ sales: [sale([cashLine(JPY_MAX)])] })).cashSalesTotalMinor).toBe(
       JPY_MAX,
     );
