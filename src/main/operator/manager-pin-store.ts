@@ -16,7 +16,10 @@
  *     days) after the manager's last online manager / admin sign-in on this
  *     terminal (`last_online_at`: set at enrolment, refreshed by
  *     `touchOnline`). An expired record answers `expired` before any check,
- *     and is not listed.
+ *     and is not listed. Review round 2 (Codex P2 4194169617): a last
+ *     sign-in in the future — the clock corrected backwards since — is
+ *     expired too, never longer-lived (as the enrolment step-up, elapsed must
+ *     be ≥ 0). The next online sign-in at the corrected time makes it valid.
  *   • `list` gives the scope's valid records as { managerRef, displayName }:
  *     the approver picker. No users.id leaves this module except the one
  *     `verify` returns to main.
@@ -174,9 +177,13 @@ function scopeParams(scope: ManagerPinScope): [string, string, string] {
   return [scope.tenantId, scope.branchId, scope.terminalId];
 }
 
-/** True while `now` is at most the validity after the last online sign-in. */
+/**
+ * True while `now` is at or after the last online sign-in, and at most the
+ * validity after it (round 2: a sign-in in the future is not current).
+ */
 function isCurrent(row: StoredRow, now: string): boolean {
-  return Date.parse(now) - Date.parse(row.last_online_at) <= MANAGER_ONLINE_VALIDITY_MS;
+  const elapsed = Date.parse(now) - Date.parse(row.last_online_at);
+  return elapsed >= 0 && elapsed <= MANAGER_ONLINE_VALIDITY_MS;
 }
 
 function verdictOf(row: StoredRow, result: PinVerifyResult | null): ManagerPinVerdict {

@@ -42,8 +42,10 @@
 --     guarded on the secret it checked, so it never lands on a newer one.
 --   • last_online_at — review round 1 P2-1: the manager's last online
 --     manager / admin sign-in on this terminal (set at enrolment, refreshed on
---     each such sign-in). A record is valid for 30 days after it; an expired
---     record never approves (the constant lives in `manager-pin-store.ts`).
+--     each such sign-in). A record is valid for 30 days after it, and never
+--     while it lies in the future (review round 2: a clock corrected
+--     backwards); an expired record never approves (the constant lives in
+--     `manager-pin-store.ts`).
 --
 -- No FK, like `cashier_pin_records`: a record must not block a pairing change.
 -- A record's key and handle can never be re-pointed at another manager or
