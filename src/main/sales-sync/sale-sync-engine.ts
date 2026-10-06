@@ -83,6 +83,7 @@ import {
 } from './sale-sync-state-repo.js';
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
 import type { SaleRoute, SellingUserIdResolver } from './selling-user-id.js';
+import { settledWithin } from './settled-within.js';
 import {
   buildCapturePayload,
   TenderNotSendableError,
@@ -298,21 +299,6 @@ function transientCategory(
 
 function addMs(iso: string, ms: number): string {
   return new Date(Date.parse(iso) + ms).toISOString();
-}
-
-/** `work` settled (either way) or `timeoutMs` passed, whichever is first. */
-function settledWithin(work: Promise<unknown>, timeoutMs: number): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const bound = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, timeoutMs);
-  });
-  const settled = work.then(
-    () => undefined,
-    () => undefined,
-  );
-  return Promise.race([settled, bound]).finally(() => {
-    clearTimeout(timer);
-  });
 }
 
 export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {

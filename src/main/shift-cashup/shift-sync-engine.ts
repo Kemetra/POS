@@ -45,6 +45,7 @@ import {
   SALE_SYNC_BACKOFF_POLICY,
   type BackoffPolicy,
 } from '../sales-sync/sale-sync-engine.js';
+import { settledWithin } from '../sales-sync/settled-within.js';
 import type {
   NextShiftFact,
   QueuedShiftFact,
@@ -128,21 +129,6 @@ const SEND: Readonly<
 const DEPENDENCY_FAILURE: ShiftDrainStop = Object.freeze({ kind: 'dependency_failure' });
 const UNPAIRED: ShiftDrainStop = Object.freeze({ kind: 'unpaired' });
 const STOPPED: ShiftDrainStop = Object.freeze({ kind: 'stopped' });
-
-/** `work` settled (either way) or `timeoutMs` passed, whichever is first. */
-function settledWithin(work: Promise<unknown>, timeoutMs: number): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const bound = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, timeoutMs);
-  });
-  const settled = work.then(
-    () => undefined,
-    () => undefined,
-  );
-  return Promise.race([settled, bound]).finally(() => {
-    clearTimeout(timer);
-  });
-}
 
 /** The delay before the next attempt: the backoff, or `Retry-After` when longer. */
 function retryDelayMs(input: {
