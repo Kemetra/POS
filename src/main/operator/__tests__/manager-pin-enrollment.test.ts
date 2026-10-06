@@ -15,7 +15,7 @@
  *     checked again after them — the same session, still unlocked, the flag
  *     still on, and the same pairing (its RT-215 epoch) — before the write.
  */
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { Database as SqlJsDatabase } from 'sql.js';
 
 import {
@@ -53,6 +53,13 @@ function manager(over: Partial<ManagerIdentity> = {}): ManagerIdentity {
   };
 }
 
+/** A manager session whose sign-in carried no users.id. */
+function managerWithoutId(): ManagerIdentity {
+  const identity = manager();
+  delete identity.userId;
+  return identity;
+}
+
 interface State {
   enabled: boolean;
   manager: ManagerIdentity | null;
@@ -67,7 +74,7 @@ let raw: SqlJsDatabase;
 let store: ManagerPinStore;
 let state: State;
 let enrollment: ManagerPinEnrollment;
-let seal: ReturnType<typeof vi.fn>;
+let seal: Mock<ManagerPinStore['seal']>;
 
 beforeAll(async () => {
   await initGrantSql();
@@ -85,7 +92,7 @@ beforeEach(() => {
     duringPairedScopeRead: () => undefined,
     duringSeal: () => undefined,
   };
-  seal = vi.fn(async (pin: string) => {
+  seal = vi.fn<ManagerPinStore['seal']>(async (pin) => {
     const sealed = await store.seal(pin);
     state.duringSeal();
     return sealed;
@@ -100,7 +107,12 @@ beforeEach(() => {
       return state.pairedScope;
     },
     pairingEpoch: () => state.epoch,
-    store: { seal, save: (input) => store.save(input) },
+    store: {
+      seal,
+      save: (input) => {
+        store.save(input);
+      },
+    },
     now: () => NOW,
   });
 });
@@ -158,7 +170,7 @@ describe('admission, before anything is hashed or written', () => {
     ['a cashier session', (s) => (s.manager = manager({ role: 'cashier' })), 'not_manager'],
     [
       'a manager session with no users.id',
-      (s) => (s.manager = manager({ userId: undefined })),
+      (s) => (s.manager = managerWithoutId()),
       'no_manager_identity',
     ],
     ['an unpaired or revoked terminal (no epoch)', (s) => (s.epoch = null), 'no_session'],
@@ -190,9 +202,7 @@ describe('admission, before anything is hashed or written', () => {
     state.locked = true;
     await expect(enrollment.enroll({ managerPin: PIN })).rejects.toThrow(refusal('no_session'));
     state.manager = manager({ role: 'cashier' });
-    await expect(enrollment.enroll({ managerPin: PIN })).rejects.toThrow(
-      refusal('session_locked'),
-    );
+    await expect(enrollment.enroll({ managerPin: PIN })).rejects.toThrow(refusal('session_locked'));
   });
 
   it.each(['12345', '123456789', 'abcdef', ' 123456', '123456 ', '١٢٣٤٥٦', ''])(
@@ -211,7 +221,7 @@ describe('admission, before anything is hashed or written', () => {
   it('never puts the PIN in a refusal', async () => {
     state.locked = true;
     const error = await enrollment.enroll({ managerPin: PIN }).catch((e: unknown) => e);
-    expect(String((error as Error).message)).not.toContain(PIN);
+    expect((error as Error).message).not.toContain(PIN);
   });
 });
 

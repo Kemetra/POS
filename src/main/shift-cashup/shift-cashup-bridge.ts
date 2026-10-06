@@ -10,17 +10,24 @@
  *     drawer cash answers the generic `pay_out_not_accepted` — no amount, no
  *     bound. The service tallies it (and a close refused for a non-zero
  *     variance) per shift for the status.
- *   • Zero-variance close only: the close passes the count alone, never an
- *     approver, so the service refuses any non-zero variance
- *     (`variance_approval_unavailable`). The verified-manager approver lands
- *     after the owner decision on RT-17 (comment 10942); nothing here invents
- *     one.
+ *   • Part 2 (option A, 10943): a close may carry a manager PIN. The bridge
+ *     has the service verify it first (`verifyApprover`: local manager PIN
+ *     records, lockout, re-checked session and pairing) and passes only the
+ *     resulting approval to the close; no approver id ever comes from the
+ *     renderer. Without a PIN a non-zero variance is refused
+ *     `variance_approval_required`. The refusals `approver_invalid`,
+ *     `approver_locked` and `approver_is_closer` say nothing about which
+ *     managers exist.
+ *   • `enrollManagerPin`: a signed-in manager sets their own PIN
+ *     (`manager-pin-enrollment.ts`); the bridge passes the PIN alone.
+ *   • A PIN is never logged or echoed: refusals log closed-set reasons, and an
+ *     unexpected failure its error name only.
  *   • Nothing that reveals the expected cash, and no `users.id`, crosses the
  *     bridge: the close answers its id and time only, and the status is an
  *     explicit allowlist (no `openingUserId`).
  *
- * Admission (flag, session, lock, cashier identity) is the service's: every
- * call goes through it.
+ * Admission (flag, session, lock, cashier or manager identity) is the
+ * service's and the enrolment's: every call goes through it.
  */
 import type {
   ShiftCashupBridgeAPI,
@@ -30,6 +37,11 @@ import type {
   ShiftOpenShiftView,
   ShiftStatusView,
 } from '../../shared/shift-cashup/types.js';
+import {
+  ManagerPinRefusedError,
+  type ManagerPinEnrollment,
+  type ManagerPinRefusalReason,
+} from '../operator/manager-pin-enrollment.js';
 import { ShiftCashupSourceError } from './shift-cashup-calculator.js';
 import { ShiftCashupStateError, type OpenShiftView } from './shift-cashup-repo.js';
 import {
@@ -53,6 +65,7 @@ export interface ShiftCashupBridgeLogger {
 
 export interface ShiftCashupBridgeDeps {
   service: ShiftCashupService;
+  enrollment: ManagerPinEnrollment;
   logger: ShiftCashupBridgeLogger;
 }
 
@@ -63,9 +76,23 @@ const SERVICE_REFUSALS: Readonly<Record<ShiftCashupRefusalReason, ShiftCashupRef
   session_locked: 'session_locked',
   no_cashier_identity: 'no_cashier_identity',
   pay_out_exceeds_drawer_cash: 'pay_out_not_accepted',
-  variance_approval_required: 'variance_approval_unavailable',
+  variance_approval_required: 'variance_approval_required',
   clock_regressed: 'clock_regressed',
   drawer_activity_pending: 'drawer_activity_pending',
+  approver_invalid: 'approver_invalid',
+  approver_locked: 'approver_locked',
+  approver_is_closer: 'approver_is_closer',
+  aggregate_out_of_range: 'invalid_input',
+};
+
+/** The enrolment's refusals as the renderer sees them. */
+const ENROLMENT_REFUSALS: Readonly<Record<ManagerPinRefusalReason, ShiftCashupRefusal>> = {
+  feature_disabled: 'feature_disabled',
+  no_session: 'no_session',
+  session_locked: 'session_locked',
+  not_manager: 'not_manager',
+  no_manager_identity: 'not_manager',
+  invalid_pin: 'invalid_input',
 };
 
 /** A known refusal: the precise (logged) reason and the renderer's. */
@@ -90,6 +117,9 @@ function classify(error: unknown): Classified | null {
   }
   if (error instanceof ShiftCashupSourceError) {
     return { internal: error.reason, refusal: 'cashup_unavailable' };
+  }
+  if (error instanceof ManagerPinRefusedError) {
+    return { internal: error.reason, refusal: ENROLMENT_REFUSALS[error.reason] };
   }
   return null;
 }
@@ -128,7 +158,7 @@ function movementOf(kind: CashMovementKind, req: ShiftMovementRequest): CashMove
 }
 
 export function createShiftCashupBridge(deps: ShiftCashupBridgeDeps): ShiftCashupBridgeAPI {
-  const { service, logger } = deps;
+  const { service, enrollment, logger } = deps;
 
   function refusedFor(op: ShiftCashupOp, error: unknown): ShiftCashupRefused {
     const known = classify(error);
@@ -167,9 +197,13 @@ export function createShiftCashupBridge(deps: ShiftCashupBridgeDeps): ShiftCashu
     payIn: (req) => move('payIn', 'pay_in', req),
     payOut: (req) => move('payOut', 'pay_out', req),
     close: (req) =>
-      attempt('close', () => {
-        // The count alone: never an approver (zero-variance close only, 10942).
-        const closed = service.closeShift({ countedCashMinor: req.countedCashMinor });
+      attempt('close', async () => {
+        // The approval comes from the service's own verification of the PIN,
+        // never from the request (part 2, 10943).
+        const pin = req.approver?.managerPin;
+        const approver =
+          pin === undefined ? {} : { approver: await service.verifyApprover({ managerPin: pin }) };
+        const closed = service.closeShift({ countedCashMinor: req.countedCashMinor, ...approver });
         return { kind: 'closed' as const, shiftId: closed.shiftId, closedAt: closed.closedAt };
       }),
     status: () =>
@@ -177,5 +211,10 @@ export function createShiftCashupBridge(deps: ShiftCashupBridgeDeps): ShiftCashu
         kind: 'status' as const,
         status: statusView(await service.readStatus()),
       })),
+    enrollManagerPin: (req) =>
+      attempt('enrollManagerPin', async () => {
+        await enrollment.enroll({ managerPin: req.managerPin });
+        return { kind: 'enrolled' as const };
+      }),
   };
 }

@@ -192,6 +192,8 @@ import {
 } from './app/device-revocation-flow.js';
 import { createRevocationRecheck } from './app/revocation-recheck.js';
 import { purgeOtherTerminalPinRecords } from './operator/pin-records-purge.js';
+import { purgeOtherTerminalManagerPinRecords } from './operator/manager-pin-store.js';
+import { managerIdentityOf } from './operator/manager-pin-enrollment.js';
 import { PAIRING_PUSH_CHANNELS, type PairingRecheckResult } from '../shared/pairing-types.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
 import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
@@ -969,7 +971,9 @@ singleInstanceReady
       resetDetector: () => {
         deviceAuthDetector.reset();
       },
-      purgeOtherTerminalPins: (terminalId) => purgeOtherTerminalPinRecords(db, terminalId),
+      purgeOtherTerminalPins: (terminalId) =>
+        purgeOtherTerminalPinRecords(db, terminalId) +
+        purgeOtherTerminalManagerPinRecords(db, terminalId),
       pushStatus: (event) => {
         for (const win of BrowserWindow.getAllWindows()) {
           win.webContents.send(PAIRING_PUSH_CHANNELS.STATUS_CHANGED, event);
@@ -1990,6 +1994,10 @@ singleInstanceReady
     // lock-guarded ipcMain (no shift channel is on the lock allowlist). The
     // service re-reads the flag and requires the live operator session on the
     // paired terminal on every call; a fact needs an admitted cashier.
+    // Part 2 (RT-17 10943): a variance close takes a manager PIN, verified
+    // against the local manager PIN records (sealed with safeStorage); a
+    // manager signed in online enrols theirs. Re-checks after an await read
+    // the RT-215 pairing epoch (F2, 10944).
     registerShiftCashupIpc({
       enabled: parseFeatureFlags(process.env).shiftCashup,
       ipcMain: guardedIpcMain,
@@ -2002,6 +2010,9 @@ singleInstanceReady
         ),
       isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
       pairedScope: async () => pairedShiftScope(await pairingStore.getStatus()),
+      pairingEpoch: () => pairingStore.getPairingEpoch(),
+      getManager: () => managerIdentityOf(operatorSessionManager.getCurrent()),
+      safeStorage,
       now: () => new Date().toISOString(),
       logger: mainLogger,
     });

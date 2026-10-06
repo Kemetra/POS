@@ -76,6 +76,14 @@ export interface OperatorSessionRecord {
    * never in the bridge view (Constitution VII).
    */
   user_id?: string;
+  /**
+   * RT-17 slice 4 part 2 — a manager / admin session's provider-neutral
+   * `users.id`, captured from its online sign-in response (lower-cased), for
+   * the local manager PIN enrolment (option A, 10943). Distinct from `user_id`
+   * (the admitted cashier identity, which records shift facts). Main-only:
+   * never in the bridge view (Constitution VII).
+   */
+  manager_user_id?: string;
   authority?: SessionAuthority;
   admission_id?: string;
   admission_ttl_seconds?: number;
@@ -101,6 +109,11 @@ export interface CreateSessionInput {
   started_at?: string;
   /** RT-113 P2 — the cashier's live online admission (sign-in or takeover). */
   cashier_admission?: CashierAdmissionFields & { user_id: string };
+  /**
+   * RT-17 slice 4 part 2 — the `users.id` of the online sign-in response.
+   * Kept only on a manager / admin session (see `manager_user_id`).
+   */
+  manager_user_id?: string;
 }
 
 type SessionEndCallback = (
@@ -157,6 +170,10 @@ export class SessionManager {
       lock_state: 'active',
       locked_at: null,
     };
+    const managerUserId = input.manager_user_id ?? '';
+    if (input.role !== 'cashier' && managerUserId.length > 0) {
+      record.manager_user_id = managerUserId.toLowerCase();
+    }
     if (input.cashier_admission !== undefined) {
       const a = input.cashier_admission;
       record.user_id = a.user_id;

@@ -10,10 +10,12 @@
  *     `pay_out_not_accepted` (no amount, no bound — 10941 item 3);
  *   • the close answers its id and time only.
  *
- * Part 1 accepts a zero-variance close only: the close request has no
- * approver field, and a non-zero variance is refused
- * `variance_approval_unavailable` until the verified-manager approver lands
- * (owner decision pending, RT-17 comment 10942).
+ * Part 2 (option A, owner approval in RT-17 comment 10943): a non-zero
+ * variance closes only with a manager PIN, verified main-side against the
+ * terminal's local manager PIN records; the verified manager (never the
+ * closing cashier) becomes the approver. The PIN crosses the bridge once,
+ * inward, and is never echoed; no manager identity ever comes back. A manager
+ * enrols their PIN with `enrollManagerPin`.
  */
 
 /** The pay-in / pay-out reasons of `pos-shifts` 1.1.0-draft. */
@@ -27,6 +29,12 @@ export type ShiftMovementReasonCode = (typeof SHIFT_MOVEMENT_REASON_CODES)[numbe
 
 /** A movement note: 1–200 characters, no PII (the contract's bound). */
 export const SHIFT_NOTE_MAX_LENGTH = 200;
+
+/**
+ * A manager PIN: 6–8 ASCII digits. Longer than the cashier's 4–6, because the
+ * approver is found by the PIN alone among the terminal's managers.
+ */
+export const MANAGER_PIN_PATTERN = /^\d{6,8}$/;
 
 /** Why a `shiftCashup.*` call was refused (closed set; nothing was recorded). */
 export const SHIFT_CASHUP_REFUSALS = [
@@ -44,9 +52,16 @@ export const SHIFT_CASHUP_REFUSALS = [
   // Generic on purpose: never says why, so it reveals no bound on the
   // hidden expected cash (10941 item 3).
   'pay_out_not_accepted',
-  // A non-zero variance needs a verified manager approver, not available yet
-  // (10942).
-  'variance_approval_unavailable',
+  // A non-zero variance needs a manager PIN (10920: any variance).
+  'variance_approval_required',
+  // The manager PIN was not accepted. Says nothing about which managers exist.
+  'approver_invalid',
+  // The terminal's manager PINs are locked out after repeated wrong PINs.
+  'approver_locked',
+  // The approver must not be the closing cashier (10941 "must" 1).
+  'approver_is_closer',
+  // Enrolling a manager PIN needs a manager / admin session signed in online.
+  'not_manager',
   // The till cannot compute the cash-up from its own records.
   'cashup_unavailable',
   'unavailable',
@@ -76,9 +91,15 @@ export type ShiftMovementResponse =
   | { kind: 'recorded'; movementId: string; shiftId: string }
   | ShiftCashupRefused;
 
-/** The blind count. No approver can be sent (see the module header). */
+/** The approver of a non-zero variance: a manager PIN only (no identity). */
+export interface ShiftCloseApprover {
+  managerPin: string;
+}
+
+/** The blind count, with a manager PIN when the count may not match. */
 export interface ShiftCloseRequest {
   countedCashMinor: number;
+  approver?: ShiftCloseApprover;
 }
 
 export type ShiftCloseResponse =
@@ -111,10 +132,18 @@ export interface ShiftStatusView {
 
 export type ShiftStatusResponse = { kind: 'status'; status: ShiftStatusView } | ShiftCashupRefused;
 
+/** A signed-in manager's own PIN; the identity and scope are main's. */
+export interface ShiftManagerPinEnrollRequest {
+  managerPin: string;
+}
+
+export type ShiftManagerPinEnrollResponse = { kind: 'enrolled' } | ShiftCashupRefused;
+
 export interface ShiftCashupBridgeAPI {
   open(req: ShiftOpenRequest): Promise<ShiftOpenResponse>;
   payIn(req: ShiftMovementRequest): Promise<ShiftMovementResponse>;
   payOut(req: ShiftMovementRequest): Promise<ShiftMovementResponse>;
   close(req: ShiftCloseRequest): Promise<ShiftCloseResponse>;
   status(): Promise<ShiftStatusResponse>;
+  enrollManagerPin(req: ShiftManagerPinEnrollRequest): Promise<ShiftManagerPinEnrollResponse>;
 }

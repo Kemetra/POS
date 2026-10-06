@@ -33,11 +33,7 @@ describe('preload shiftCashup bridge', () => {
       SHIFT_CASHUP_IPC_CHANNELS.CLOSE,
       { countedCashMinor: 1, approver: { managerPin: '246810' } },
     ],
-    [
-      'enrollManagerPin',
-      SHIFT_CASHUP_IPC_CHANNELS.ENROLL_MANAGER_PIN,
-      { managerPin: '246810' },
-    ],
+    ['enrollManagerPin', SHIFT_CASHUP_IPC_CHANNELS.ENROLL_MANAGER_PIN, { managerPin: '246810' }],
   ] as const)('%s invokes its channel with the request', async (member, channel, arg) => {
     const { shiftCashup } = await import('../shift-cashup');
     const call = shiftCashup[member] as (a: unknown) => Promise<unknown>;

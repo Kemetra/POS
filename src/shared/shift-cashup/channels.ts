@@ -14,6 +14,8 @@ export const SHIFT_CASHUP_IPC_CHANNELS = {
   PAY_OUT: 'shiftCashup:payOut',
   CLOSE: 'shiftCashup:close',
   STATUS: 'shiftCashup:status',
+  // RT-17 slice 4 part 2: a signed-in manager sets their local PIN.
+  ENROLL_MANAGER_PIN: 'shiftCashup:enrollManagerPin',
 } as const;
 
 export type ShiftCashupIpcChannel =

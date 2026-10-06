@@ -214,7 +214,11 @@ describe('lockout (the cashier PIN rule: 5 failures → 5 minutes)', () => {
     const until = FUTURE();
     setLockout(MANAGER_A, until);
     await store.verify({ scope: SCOPE, pin: WRONG });
-    expect(rows()[0]).toEqual({ user_id: MANAGER_A, failed_attempt_count: 5, lockout_until: until });
+    expect(rows()[0]).toEqual({
+      user_id: MANAGER_A,
+      failed_attempt_count: 5,
+      lockout_until: until,
+    });
   });
 
   it('verifies again once the lockout has expired, and clears it', async () => {

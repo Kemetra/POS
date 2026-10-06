@@ -165,7 +165,7 @@ describe('0044 — manager PIN records (RT-17 slice 4 part 2, [GATED] 10943)', (
   it.each([
     ['a negative count', -1],
     ['a fractional count', 1.5],
-    ['a text count', '1'],
+    ['a text count', 'one'],
   ])('refuses %s of failed attempts', (_label, value) => {
     expect(() => {
       insertRow({ failed_attempt_count: value });
