@@ -15,7 +15,12 @@ import { bindSalesRepository } from '../sales/repositories/sales.repository.js';
 import { DEFAULT_CURRENCY_CODE } from '../sales-sync/create-sale-sync-client.js';
 import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import { createReturnsAudit, type ReturnsAuditSink } from './returns-audit.js';
-import { createReturnsClient, type CreateReturnsClientDeps } from './returns-client.js';
+import { DRAIN_MARGIN_MS } from '../sales-sync/settled-within.js';
+import {
+  createReturnsClient,
+  RETURNS_REQUEST_TIMEOUT_MS,
+  type CreateReturnsClientDeps,
+} from './returns-client.js';
 import { createReturnsDispatcher } from './returns-dispatch.js';
 import { createReturnsPayoutService } from './returns-payout.js';
 import {
@@ -159,12 +164,19 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   return { service, resolver, stop };
 }
 
+/**
+ * The longest the stop waits for a pass in flight: the returns client's request
+ * timeout plus the drain margin, so the drain never gives up before the client
+ * has aborted the request it is waiting on.
+ */
+export const RETURNS_DRAIN_TIMEOUT_MS = RETURNS_REQUEST_TIMEOUT_MS + DRAIN_MARGIN_MS;
+
 export interface ScheduleResolverInput {
   readonly resolver: Pick<ReturnsResolver, 'tick' | 'drain'>;
   /** Latches the domain stopped (`ComposedReturns.stop`). */
   readonly stopDomain: () => void;
   readonly intervalMs: number;
-  /** Upper bound on waiting for an in-flight pass (the client timeout). */
+  /** Upper bound on waiting for an in-flight pass (`RETURNS_DRAIN_TIMEOUT_MS`). */
   readonly drainTimeoutMs: number;
   readonly logger: Pick<ReturnsLogger, 'error'>;
 }

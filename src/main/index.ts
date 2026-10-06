@@ -100,7 +100,11 @@ import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { SALE_SYNC_DRAIN_TIMEOUT_MS, scheduleSaleSync } from './sales-sync/schedule-sale-sync.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
 import { registerReturnsHandlers } from './ipc/returns.js';
-import { composeReturns, scheduleReturnsResolver } from './returns/compose-returns.js';
+import {
+  composeReturns,
+  RETURNS_DRAIN_TIMEOUT_MS,
+  scheduleReturnsResolver,
+} from './returns/compose-returns.js';
 import {
   pairedShiftScope,
   registerShiftSync,
@@ -1952,8 +1956,6 @@ singleInstanceReady
       // and an eligible (unlocked manager/admin) operator live, so in-process
       // pairing needs no restart; until then every tick is a no-op.
       const RETURNS_RESOLVER_INTERVAL_MS = 30_000;
-      // = the returns client's request timeout.
-      const RETURNS_DRAIN_TIMEOUT_MS = 15_000;
       const stopReturnsResolver = scheduleReturnsResolver({
         resolver: returnsDomain.resolver,
         stopDomain: returnsDomain.stop,

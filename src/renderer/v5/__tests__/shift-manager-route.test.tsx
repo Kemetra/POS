@@ -137,6 +137,72 @@ describe('ShiftStatusPanel — what a manager sees', () => {
   });
 });
 
+describe('ShiftStatusPanel — the stranded warning (D3, option 1)', () => {
+  const warning = () => screen.queryByTestId('shift-stranded-warning');
+
+  async function show(stranded: { unsyncedFacts: number; openShifts: number }) {
+    signIn('manager');
+    enableShiftFlag();
+    renderManager(fakeShiftBridge(statusView({ stranded })));
+    await screen.findByText(SHIFT_COPY.statusHeading);
+  }
+
+  it.each<[string, { unsyncedFacts: number; openShifts: number }]>([
+    ['stranded facts only', { unsyncedFacts: 2, openShifts: 0 }],
+    ['stranded open shifts only', { unsyncedFacts: 0, openShifts: 1 }],
+    ['both', { unsyncedFacts: 5, openShifts: 1 }],
+  ])('is shown for %s', async (_label, stranded) => {
+    await show(stranded);
+    expect(warning()).toBeInTheDocument();
+    expect(warning()).toHaveAttribute('role', 'alert');
+    expect(warning()).toHaveTextContent(SHIFT_COPY.strandedWarning);
+  });
+
+  it('is hidden when both counts are 0', async () => {
+    await show({ unsyncedFacts: 0, openShifts: 0 });
+    expect(warning()).not.toBeInTheDocument();
+    expect(screen.queryByText(SHIFT_COPY.strandedWarning)).not.toBeInTheDocument();
+  });
+
+  it('is not rendered with the flag off (and no status is read)', async () => {
+    signIn('manager');
+    enableShiftFlag(false);
+    const bridge = fakeShiftBridge(statusView({ stranded: { unsyncedFacts: 5, openShifts: 1 } }));
+    renderManager(bridge);
+    expect(await screen.findByTestId('where')).toHaveTextContent('/app');
+    expect(warning()).not.toBeInTheDocument();
+    expect(bridge.status).not.toHaveBeenCalled();
+  });
+
+  it('is not shown while the status is refused', async () => {
+    signIn('manager');
+    enableShiftFlag();
+    const bridge = fakeShiftBridge();
+    bridge.status.mockResolvedValueOnce({ kind: 'refused', reason: 'no_session' });
+    renderManager(bridge);
+    await screen.findByText(shiftRefusalMessage('no_session'));
+    expect(warning()).not.toBeInTheDocument();
+  });
+
+  it('carries no id and no amount, and says what to do before a revoke or reassignment', async () => {
+    await show({ unsyncedFacts: 12345, openShifts: 678 });
+    const text = warning()?.textContent ?? '';
+    expect(text).toBe(SHIFT_COPY.strandedWarning);
+    expect(text).not.toMatch(/[0-9\u0660-\u0669]/);
+    expect(text).toMatch(/إقران سابق/);
+    expect(text).toMatch(/إلغاء ترخيص/);
+    expect(text).toMatch(/إعادة تعيينه/);
+    expect(text).toMatch(/إغلاق الوردية المفتوحة/);
+    expect(text).toMatch(/طابور المزامنة/);
+  });
+
+  it('keeps the counts rows beside the warning', async () => {
+    await show({ unsyncedFacts: 5, openShifts: 1 });
+    expect(row(SHIFT_COPY.strandedFacts)).toHaveTextContent('5');
+    expect(row(SHIFT_COPY.strandedShifts)).toHaveTextContent('1');
+  });
+});
+
 describe('ManagerPinEnrollment — a manager sets their own PIN', () => {
   async function form(bridge = fakeShiftBridge()) {
     signIn('manager');
