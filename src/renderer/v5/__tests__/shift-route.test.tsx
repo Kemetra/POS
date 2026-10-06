@@ -554,3 +554,102 @@ describe('V5ShiftRoute — manager approval of a non-zero variance', () => {
     );
   });
 });
+
+describe('V5ShiftRoute — a committed outcome survives a failed refresh', () => {
+  type FailRefresh = (bridge: FakeShiftBridge) => void;
+  const refused: FailRefresh = (bridge) => {
+    bridge.status.mockResolvedValueOnce({ kind: 'refused', reason: 'session_locked' });
+  };
+  const rejected: FailRefresh = (bridge) => {
+    bridge.status.mockRejectedValueOnce(new Error('ipc: secret detail'));
+  };
+
+  function expectRefreshFailed(): void {
+    expect(screen.getByText(SHIFT_COPY.refreshFailed)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: SHIFT_COPY.retry })).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('secret');
+  }
+
+  it.each([
+    ['refused', refused],
+    ['rejected', rejected],
+  ])('keeps the approved variance when the refresh is %s', async (_name, fail) => {
+    const bridge = openBridge();
+    bridge.status.mockResolvedValueOnce(OPEN);
+    fail(bridge);
+    bridge.close
+      .mockResolvedValueOnce({ kind: 'refused', reason: 'variance_approval_required' })
+      .mockResolvedValueOnce({
+        kind: 'closed',
+        shiftId: 'shift-1',
+        closedAt: '2026-10-06T16:00:00.000Z',
+        varianceMinor: -750,
+      });
+    signIn('cashier');
+    enableShiftFlag();
+    renderRoute(bridge);
+    await screen.findByLabelText(SHIFT_COPY.countLabel);
+    type(SHIFT_COPY.countLabel, '520');
+    press(SHIFT_COPY.closeCommit, screen.getByTestId('shift-close-panel'));
+    const dialog = await screen.findByRole('dialog', { name: SHIFT_COPY.approvalTitle });
+    fireEvent.click(await within(dialog).findByRole('radio', { name: MANAGERS[0].displayName }));
+    fireEvent.change(within(dialog).getByLabelText(SHIFT_COPY.pinLabel), {
+      target: { value: '246813' },
+    });
+    press(SHIFT_COPY.approveCommit, dialog);
+    expect(await screen.findByTestId('shift-variance')).toHaveTextContent('-7.50 EGP');
+    await waitFor(() => {
+      expect(bridge.status).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText(SHIFT_COPY.refreshFailed)).toBeInTheDocument();
+    expect(screen.getByTestId('shift-variance')).toHaveTextContent('-7.50 EGP');
+    expectRefreshFailed();
+  });
+
+  it.each([
+    ['refused', refused],
+    ['rejected', rejected],
+  ])('keeps the opened outcome when the refresh is %s', async (_name, fail) => {
+    const bridge = fakeShiftBridge();
+    bridge.status.mockResolvedValueOnce({ kind: 'status', status: statusView() });
+    fail(bridge);
+    signIn('cashier');
+    enableShiftFlag();
+    renderRoute(bridge);
+    await screen.findByLabelText(SHIFT_COPY.floatLabel);
+    type(SHIFT_COPY.floatLabel, '500');
+    press(SHIFT_COPY.openCommit);
+    expect(await screen.findByText(SHIFT_COPY.refreshFailed)).toBeInTheDocument();
+    expect(screen.getByText(SHIFT_COPY.opened)).toBeInTheDocument();
+    expectRefreshFailed();
+  });
+
+  it.each([
+    ['refused', refused],
+    ['rejected', rejected],
+  ])('keeps the recorded movement when the refresh is %s', async (_name, fail) => {
+    const bridge = openBridge();
+    bridge.status.mockResolvedValueOnce(OPEN);
+    fail(bridge);
+    signIn('cashier');
+    enableShiftFlag();
+    renderRoute(bridge);
+    press(SHIFT_COPY.payOut, await screen.findByTestId('shift-actions'));
+    const dialog = screen.getByRole('dialog', { name: SHIFT_COPY.payOut });
+    type(SHIFT_COPY.amountLabel, '10');
+    press(SHIFT_COPY.record, dialog);
+    expect(await screen.findByText(SHIFT_COPY.refreshFailed)).toBeInTheDocument();
+    expect(screen.getByText(SHIFT_COPY.recordedOut)).toBeInTheDocument();
+    expectRefreshFailed();
+  });
+
+  it('shows the refusal itself, not the refresh line, when nothing was committed yet', async () => {
+    const bridge = fakeShiftBridge();
+    refused(bridge);
+    signIn('cashier');
+    enableShiftFlag();
+    renderRoute(bridge);
+    expect(await screen.findByText(shiftRefusalMessage('session_locked'))).toBeInTheDocument();
+    expect(screen.queryByText(SHIFT_COPY.refreshFailed)).not.toBeInTheDocument();
+  });
+});
