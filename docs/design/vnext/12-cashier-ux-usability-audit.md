@@ -1,6 +1,8 @@
 # 12 — Cashier UX / usability audit (RT-159)
 
 > **Status: PRELIMINARY / current-`main` UX evidence — not final RT-159 acceptance.**
+> **Re-run on `main@7b68398` (packaged):** see [14](14-rt159-packaged-reaudit.md) for the
+> current status of every finding below, and [15](15-vnext-freeze-package.md) for the freeze package.
 > **RT-159 remains open** pending the post-RT-117 packaged/lab audit and the evidence gaps in
 > [§12](#12-evidence-gaps-and-what-was-not-done). Docs only: no production code, dependency, IPC, DB,
 > API, payment, sync or ERP change. It consumes RT-24 (behaviour authority), RT-25, RT-104
