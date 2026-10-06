@@ -35,10 +35,12 @@ import {
   MANAGER_PIN,
   MANAGER_REF,
   OPENED_AT,
+  cardLine,
   cashLine,
   cashierSession,
   factCounts,
   managerSession,
+  seedRefund,
   seedSettlement,
   seedShiftSale,
   serviceHarness,
@@ -49,6 +51,7 @@ import { SCOPE, USER } from './__helpers__/shift-sync-fixture.js';
 
 const FLOAT = 50_000;
 const MAX = Number.MAX_SAFE_INTEGER;
+const F3_REF = '0192f5a2-3b4c-7d8e-9f01-f3f3f3f3f3f3';
 
 let db: SqlJsDatabase;
 let harness: ServiceHarness;
@@ -312,6 +315,49 @@ describe('closeShift accepts only its own approval, once, for the same close', (
   it('still refuses a non-zero variance without an approval', () => {
     openShift();
     expect(closeWith(FLOAT + 1)).toThrow(refusal('variance_approval_required'));
+  });
+});
+
+describe('F3 — the approval is bound to the cash-up it was given for (10948)', () => {
+  type Activity = () => void;
+  const equalSaleAndRefund: Activity = () => {
+    seedShiftSale(db, { saleId: 's-f3', finalizedAt: CLOSED_AT, lines: [cashLine(40)] });
+    seedRefund(db, { returnId: 'r-f3', returnRef: F3_REF, amountMinor: 40, paidAt: CLOSED_AT });
+  };
+  const equalPayInAndPayOut: Activity = () => {
+    for (const kind of ['pay_in', 'pay_out'] as const) {
+      harness.service.recordCashMovement({ kind, amountMinor: 25, reasonCode: 'other' });
+    }
+  };
+  const cardOnlySale: Activity = () => {
+    seedShiftSale(db, { saleId: 's-card', finalizedAt: CLOSED_AT, lines: [cardLine(900)] });
+  };
+
+  it.each<[string, Activity]>([
+    ['an equal-value cash sale and refund', equalSaleAndRefund],
+    ['an equal pay-in and pay-out', equalPayInAndPayOut],
+    ['a card-only sale (no drawer cash)', cardOnlySale],
+  ])('refuses as stale when %s lands during the PIN check', async (_name, activity) => {
+    openShift();
+    harness.state.duringVerify = activity;
+    const approver = await approval(FLOAT + 1);
+    expect(closeWith(FLOAT + 1, approver)).toThrow(refusal('approval_stale'));
+    expect(factCounts(db).shift_cashup_closes).toBe(0);
+  });
+
+  it('refuses as stale when the activity lands between the approval and the close', async () => {
+    openShift();
+    const approver = await approval(FLOAT + 1);
+    equalSaleAndRefund();
+    expect(closeWith(FLOAT + 1, approver)).toThrow(refusal('approval_stale'));
+  });
+
+  it('still closes with the approval when nothing moved in the drawer', async () => {
+    openShift();
+    equalSaleAndRefund();
+    const approver = await approval(FLOAT + 1);
+    const closed = harness.service.closeShift({ countedCashMinor: FLOAT + 1, approver });
+    expect(closed).toMatchObject({ varianceMinor: 1, saleCount: 1, cashRefundsTotalMinor: 40 });
   });
 });
 
