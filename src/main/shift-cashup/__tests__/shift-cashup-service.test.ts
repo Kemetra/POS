@@ -166,7 +166,9 @@ describe('openShift', () => {
 
 describe('recordCashMovement', () => {
   it('refuses a movement with no open shift', () => {
-    expect(() => payOut(1)).toThrow(stateError('shift_not_open'));
+    expect(() => {
+      payOut(1);
+    }).toThrow(stateError('shift_not_open'));
   });
 
   it('records a pay-in on the open shift, attributed to the cashier', () => {
@@ -201,12 +203,16 @@ describe('pay-out guard (carried item a)', () => {
   it('allows a pay-out of exactly the expected drawer cash, then refuses one more minor unit', () => {
     payOut(54_000);
     const before = factCounts(db);
-    expect(() => payOut(1)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
+    expect(() => {
+      payOut(1);
+    }).toThrow(refusal('pay_out_exceeds_drawer_cash'));
     expect(factCounts(db)).toEqual(before);
   });
 
   it('refuses a pay-out above the expected drawer cash, writing nothing', () => {
-    expect(() => payOut(54_001)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
+    expect(() => {
+      payOut(54_001);
+    }).toThrow(refusal('pay_out_exceeds_drawer_cash'));
     expect(factCounts(db)['shift_cashup_movements']).toBe(0);
   });
 
@@ -214,7 +220,9 @@ describe('pay-out guard (carried item a)', () => {
     service.recordCashMovement({ kind: 'pay_in', amountMinor: 1_000, reasonCode: 'other' });
     payOut(30_000);
     payOut(25_000);
-    expect(() => payOut(1)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
+    expect(() => {
+      payOut(1);
+    }).toThrow(refusal('pay_out_exceeds_drawer_cash'));
   });
 
   it('never guards a pay-in', () => {
@@ -225,7 +233,9 @@ describe('pay-out guard (carried item a)', () => {
 
   it('counts only what is in the drawer now (a sale finalized later is not)', () => {
     seedShiftSale(db, { saleId: 's-late', finalizedAt: msAfter(CLOSED_AT), lines: [cashLine(9)] });
-    expect(() => payOut(54_001)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
+    expect(() => {
+      payOut(54_001);
+    }).toThrow(refusal('pay_out_exceeds_drawer_cash'));
   });
 });
 

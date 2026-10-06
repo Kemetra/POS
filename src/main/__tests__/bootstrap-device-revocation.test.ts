@@ -123,7 +123,7 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
       /createRevocationRecheck\(\{\s*probe: createRosterConfirmationProbe\(\s*createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: globalThis\.fetch\.bind\(globalThis\),\s*getDeviceToken: createRevocationRecheckTokenRead\(\{\s*pairingStore,\s*secretStore,\s*deviceTokenKey: DEVICE_TOKEN_KEY,\s*\}\),/,
     );
     // The default send paths are unchanged (the counts above still hold).
-    expect(count(/getDeviceToken: readSendableDeviceToken/g)).toBe(3);
+    expect(count(/getDeviceToken: readSendableDeviceToken/g)).toBe(4);
     expect(count(/withDeviceAuthObservation\(/g)).toBe(2);
   });
 

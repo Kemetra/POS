@@ -13,7 +13,7 @@
  *   • Engine hooks become closed-set log lines (never a token, a body or PII).
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { PairedTerminal } from '../../app/paired-workers.js';
 import {
@@ -23,11 +23,13 @@ import {
 } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
 import {
   SHIFT_SYNC_INTERVAL_MS,
+  composeShiftCashupService,
   registerShiftSync,
   startShiftSync,
   type StartShiftSyncDeps,
 } from '../compose-shift-cashup.js';
 import { createShiftCashupRepo, type ShiftCashupRepo } from '../shift-cashup-repo.js';
+import { cashierSession, storedBody } from './__helpers__/shift-cashup-service-fixture.js';
 import { NOW, OPEN, PAY_IN, SCOPE, stateOf } from './__helpers__/shift-sync-fixture.js';
 
 const TOKEN = 'device-token-secret';
@@ -72,12 +74,36 @@ describe('registerShiftSync — the feature flag gate', () => {
   });
 });
 
+describe('composeShiftCashupService — defaults', () => {
+  beforeAll(async () => {
+    await initSalesSyncSql();
+  });
+
+  it('opens with a fresh UUIDv7 shift id in the capture currency (EGP)', () => {
+    const db = freshSalesSyncDb();
+    const service = composeShiftCashupService({
+      db: handleFor(db),
+      isEnabled: () => true,
+      getSession: () => cashierSession(),
+      isSessionLocked: () => false,
+      pairedScope: () => Promise.resolve(SCOPE),
+      now: () => NOW,
+    });
+    const { shiftId } = service.openShift({ openingFloatMinor: 0 });
+    expect(shiftId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(storedBody(db, 1)['currencyCode']).toBe('EGP');
+    db.close();
+  });
+});
+
 describe('startShiftSync — scheduling, sources and RT-215', () => {
   let db: SqlJsDatabase;
   let repo: ShiftCashupRepo;
-  let fetch: ReturnType<typeof vi.fn>;
-  let observe: ReturnType<typeof vi.fn>;
-  let warn: ReturnType<typeof vi.fn>;
+  let fetch: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>;
+  let observe: Mock<(source: string, status: number) => void>;
+  let warn: Mock<(payload: Record<string, unknown>, message: string) => void>;
   let stop: (() => void) | undefined;
 
   beforeAll(async () => {
@@ -89,8 +115,8 @@ describe('startShiftSync — scheduling, sources and RT-215', () => {
     db = freshSalesSyncDb();
     repo = createShiftCashupRepo(handleFor(db));
     fetch = vi.fn(() => Promise.resolve(new Response('{}', { status: 201 })));
-    observe = vi.fn();
-    warn = vi.fn();
+    observe = vi.fn<(source: string, status: number) => void>();
+    warn = vi.fn<(payload: Record<string, unknown>, message: string) => void>();
     stop = undefined;
   });
 

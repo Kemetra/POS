@@ -100,6 +100,7 @@ import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
 import { registerReturnsHandlers } from './ipc/returns.js';
 import { composeReturns, scheduleReturnsResolver } from './returns/compose-returns.js';
+import { registerShiftSync, startShiftSync } from './shift-cashup/compose-shift-cashup.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
 import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
@@ -1949,6 +1950,35 @@ singleInstanceReady
         void stopReturnsResolver();
       });
     }
+
+    // ── RT-17 slice 3 — shift cash-up sync (flag-gated, default off) ──
+    //
+    // With POS_PULSE_FEATURE_SHIFT_CASHUP off (default, owner approval 10920)
+    // nothing is registered: the shift sync engine never starts. With it on,
+    // the engine is a paired-only worker like sale sync: the same device token
+    // reader (null unless paired, null once revoked), the same live current-
+    // terminal resolver (RT-221) and the RT-215 detector on every answer, one
+    // tick every 5 s, stopped with the other workers before the DB closes. The
+    // cash-up service itself has no consumer until slice 4 (UI + its IPC).
+    registerShiftSync({
+      enabled: parseFeatureFlags(process.env).shiftCashup,
+      pairedWorkers: pairedWorkersLatch,
+      workers: workerRegistry,
+      start: (terminal) =>
+        startShiftSync({
+          db,
+          terminal,
+          client: {
+            baseUrl: resolveApiBaseUrl(),
+            fetch: globalThis.fetch.bind(globalThis),
+            detector: deviceAuthDetector,
+            getDeviceToken: readSendableDeviceToken,
+            currentTerminalId: () => pairingStore.getCurrentTerminalId(),
+          },
+          resolveTerminalId: createCurrentTerminalResolver(() => pairingStore.getStatus()),
+          logger: mainLogger,
+        }),
+    });
 
     createWindow();
     mainLogger.info('app:ready');
