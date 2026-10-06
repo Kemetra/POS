@@ -508,6 +508,33 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
     db.close();
   });
 
+  it('RT-235 review: a roster entry whose user_id is the empty string is not_ready, no row (sign-in rejects an empty neutral id)', async () => {
+    const db = freshDb();
+    const captured: CapturedEvent[] = [];
+    const handler = makeHandler({
+      db,
+      session: makeSession({ role: 'manager' }),
+      captured,
+      roster: {
+        kind: 'roster',
+        cashiers: [
+          { id: CASHIER_CLERK_ID, user_id: '', display_name: 'Cashier A', role: 'cashier' },
+        ],
+      },
+    });
+
+    const result = await handler.provisionCashierPin({
+      event_id: randomUUID(),
+      target_cashier_id: CASHIER_CLERK_ID,
+      initial_pin: '4729',
+    });
+
+    expect(result).toEqual({ kind: 'refused', category: 'not_ready' });
+    expect(rowCount(db)).toBe(0);
+    expect(captured).toHaveLength(0);
+    db.close();
+  });
+
   it('RT-235 the neutral user_id is resolved main-side: a request naming the user_id (not the roster id) is not_ready, no row', async () => {
     const db = freshDb();
     const captured: CapturedEvent[] = [];

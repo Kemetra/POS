@@ -380,6 +380,34 @@ describe('CashierManagement (T078)', () => {
       expect(document.body.innerHTML).not.toContain('no_connection');
     });
 
+    it('RT-235 review: a second Save while the first call is in flight is ignored (one request, success not overwritten)', async () => {
+      const user = userEvent.setup();
+      let settle: (value: unknown) => void = () => undefined;
+      const bridge = makeBridge({
+        provisionCashierPin: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              settle = resolve;
+            }),
+        ),
+      });
+      const pinInput = await openSetFirstPin(user, bridge);
+      await user.type(pinInput, '4729');
+      const save = screen.getByRole('button', { name: /save pin/i });
+
+      await user.click(save);
+      await user.click(save);
+
+      expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
+      expect(save).toBeDisabled();
+
+      settle({ kind: 'pin_provisioned', audit_event_id: 'evt-3' });
+      await waitFor(() =>
+        expect(screen.getByTestId('action-success')).toHaveTextContent(/first pin set/i),
+      );
+      expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
+    });
+
     it('Escape and Cancel close the dialog without calling the bridge', async () => {
       const user = userEvent.setup();
       const bridge = makeBridge();

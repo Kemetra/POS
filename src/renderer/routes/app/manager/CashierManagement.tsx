@@ -1,4 +1,4 @@
-import { type JSX, useEffect, useState } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 
 import type {
   OperatorBridgeAPI,
@@ -52,6 +52,11 @@ export function CashierManagement({ operator }: Props): JSX.Element {
   const [cashiers, setCashiers] = useState<BranchRosterCashier[] | null>(null);
   const [rosterError, setRosterError] = useState(false);
   const [action, setAction] = useState<ActionState>({ kind: 'idle' });
+  // Provisioning is create-only: a second in-flight Save would race the first and
+  // could replace its success with `state_invalid`. The ref blocks re-entry
+  // synchronously; the state disables the button.
+  const provisioningRef = useRef(false);
+  const [provisioning, setProvisioning] = useState(false);
 
   useEffect(() => {
     void operator.listBranchRoster().then((res) => {
@@ -108,13 +113,21 @@ export function CashierManagement({ operator }: Props): JSX.Element {
   }
 
   async function handleSetFirstPinConfirm(): Promise<void> {
-    if (action.kind !== 'setFirstPin') return;
+    if (action.kind !== 'setFirstPin' || provisioningRef.current) return;
+    provisioningRef.current = true;
+    setProvisioning(true);
     const req: ProvisionCashierPinRequest = {
       event_id: crypto.randomUUID(),
       target_cashier_id: action.cashier.id,
       initial_pin: action.pin,
     };
-    const res = await operator.provisionCashierPin(req);
+    let res: Awaited<ReturnType<typeof operator.provisionCashierPin>>;
+    try {
+      res = await operator.provisionCashierPin(req);
+    } finally {
+      provisioningRef.current = false;
+      setProvisioning(false);
+    }
     if (res.kind === 'pin_provisioned') {
       setAction({ kind: 'success', message: 'First PIN set.' });
     } else if (res.category === 'state_invalid') {
@@ -226,6 +239,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             <button
               type="button"
               className="btn btn--primary btn--md"
+              disabled={provisioning}
               onClick={() => {
                 void handleSetFirstPinConfirm();
               }}

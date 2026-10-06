@@ -343,8 +343,9 @@ export class PinManagementHandler {
     // where NO entry has a user_id (every attempt is truthfully not_ready).
     // RT-235: the renderer names the cashier by the roster `id` it holds; the
     // neutral `user_id` is read from that entry here and never crosses the bridge.
+    // An empty `user_id` is not a delivered key: sign-in rejects such a row.
     const entry = roster.cashiers.find((c) => c.id === target_cashier_id);
-    if (entry === undefined || entry.user_id === undefined) {
+    if (entry === undefined || entry.user_id === undefined || entry.user_id === '') {
       this.log('info', 'provision_cashier_pin.refused', 'not_ready');
       return REFUSE_NOT_READY;
     }
