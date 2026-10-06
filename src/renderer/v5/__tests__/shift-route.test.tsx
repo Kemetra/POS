@@ -337,12 +337,14 @@ describe('V5ShiftRoute — manager approval of a non-zero variance', () => {
     type(SHIFT_COPY.countLabel, '520');
     press(SHIFT_COPY.closeCommit, panel);
     const dialog = await screen.findByRole('dialog', { name: SHIFT_COPY.approvalTitle });
-    await within(dialog).findByRole('radio', { name: MANAGERS[1]?.displayName });
+    await within(dialog).findByRole('radio', { name: MANAGERS[1].displayName });
     return { bridge, dialog };
   }
 
-  function approveAs(dialog: HTMLElement, managerIndex: number, pin: string): void {
-    fireEvent.click(within(dialog).getByRole('radio', { name: MANAGERS[managerIndex]?.displayName }));
+  function approveAs(dialog: HTMLElement, managerIndex: 0 | 1, pin: string): void {
+    fireEvent.click(
+      within(dialog).getByRole('radio', { name: MANAGERS[managerIndex].displayName }),
+    );
     fireEvent.change(within(dialog).getByLabelText(SHIFT_COPY.pinLabel), {
       target: { value: pin },
     });
@@ -356,7 +358,7 @@ describe('V5ShiftRoute — manager approval of a non-zero variance', () => {
     expect(pin).toHaveAttribute('type', 'password');
     expect(pin).toHaveAttribute('autocomplete', 'off');
     expect(dialog.textContent).not.toMatch(MONEY_TEXT);
-    expect(dialog.textContent).not.toContain(MANAGERS[0]?.managerRef);
+    expect(dialog.textContent).not.toContain(MANAGERS[0].managerRef);
   });
 
   it('retries the close with the chosen manager and PIN, then shows the approved variance', async () => {
@@ -371,7 +373,7 @@ describe('V5ShiftRoute — manager approval of a non-zero variance', () => {
     await waitFor(() => {
       expect(bridge.close).toHaveBeenLastCalledWith({
         countedCashMinor: 52_000,
-        approver: { managerRef: MANAGERS[1]?.managerRef, managerPin: '246813' },
+        approver: { managerRef: MANAGERS[1].managerRef, managerPin: '246813' },
       });
     });
     expect(await screen.findByTestId('shift-variance')).toHaveTextContent('-7.50 EGP');
@@ -387,7 +389,7 @@ describe('V5ShiftRoute — manager approval of a non-zero variance', () => {
       target: { value: '246813' },
     });
     expect(commit).toBeDisabled();
-    fireEvent.click(within(dialog).getByRole('radio', { name: MANAGERS[0]?.displayName }));
+    fireEvent.click(within(dialog).getByRole('radio', { name: MANAGERS[0].displayName }));
     expect(commit).toBeEnabled();
     fireEvent.change(within(dialog).getByLabelText(SHIFT_COPY.pinLabel), {
       target: { value: '12345' },

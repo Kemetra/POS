@@ -9,10 +9,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { vi, type Mock } from 'vitest';
 
 import type { Role } from '../../../../shared/operator/role';
-import type {
-  ShiftCashupBridgeAPI,
-  ShiftStatusView,
-} from '../../../../shared/shift-cashup/types';
+import type { ShiftCashupBridgeAPI, ShiftStatusView } from '../../../../shared/shift-cashup/types';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
 
@@ -45,7 +42,7 @@ export function statusView(overrides: Partial<ShiftStatusView> = {}): ShiftStatu
 export const MANAGERS = [
   { managerRef: '7f3c1e2a-0b4d-4c5e-8f60-0000000000aa', displayName: 'منى المديرة' },
   { managerRef: '7f3c1e2a-0b4d-4c5e-8f60-0000000000bb', displayName: 'كريم المدير' },
-];
+] as const;
 
 /** A bridge with no open shift, two enrolled managers and accepting answers. */
 export function fakeShiftBridge(status: ShiftStatusView = statusView()): FakeShiftBridge {
@@ -69,7 +66,7 @@ export function fakeShiftBridge(status: ShiftStatusView = statusView()): FakeShi
       Promise.resolve({ kind: 'enrolled' }),
     ),
     listEnrolledManagers: vi.fn<ShiftCashupBridgeAPI['listEnrolledManagers']>(() =>
-      Promise.resolve({ kind: 'managers', managers: MANAGERS }),
+      Promise.resolve({ kind: 'managers', managers: [...MANAGERS] }),
     ),
   };
 }
@@ -100,7 +97,11 @@ function WhereAmI(): ReactNode {
 }
 
 /** Renders `element` at `path` with a location probe on every other path. */
-export function renderAt(input: { path: string; pattern: string; element: ReactNode }): RenderResult {
+export function renderAt(input: {
+  path: string;
+  pattern: string;
+  element: ReactNode;
+}): RenderResult {
   return render(
     <MemoryRouter initialEntries={[input.path]}>
       <Routes>

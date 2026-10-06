@@ -74,15 +74,19 @@
  *                       (`approver_is_closer`, 10941 "must" 1); each such
  *                       failure is tallied for the shift (`approverFailure`).
  *                       It returns an opaque approval bound to the session,
- *                       the pairing epoch, the shift, the counted cash and
- *                       the variance (P2-3).
+ *                       the pairing epoch, the shift, the counted cash, the
+ *                       variance (P2-3) and — F3, 10948 — the revision of the
+ *                       cash-up it was computed from (float, pay-in/out
+ *                       totals, cash sales, refunds, sale count, refund refs).
  *                       `closeShift` of this service accepts it once (spent
  *                       even when the close is then refused), in the same
  *                       session and pairing epoch (else `approver_invalid` /
- *                       `no_session`), and only for the same shift, count and
- *                       variance (else `approval_stale`: a sale or refund
- *                       landed since). An approver id can therefore never
- *                       reach a close unverified, nor approve another close.
+ *                       `no_session`), and only for the same shift, count,
+ *                       variance and cash-up (else `approval_stale`: a sale,
+ *                       refund or movement landed since, even one that leaves
+ *                       the variance unchanged). An approver id can therefore
+ *                       never reach a close unverified, nor approve another
+ *                       close.
  *   listApprovers       the current scope's managers with a valid record —
  *                       `{ managerRef, displayName }`, never a users.id —
  *                       gated on the flag, an unlocked session of any role and
@@ -206,6 +210,13 @@ export interface VerifiedApprover {
   readonly shiftId: string;
   readonly countedCashMinor: number;
   readonly varianceMinor: number;
+  /**
+   * F3 (10948): the revision of the cash-up the manager approved — the float,
+   * the pay-in / pay-out totals and every computed component (cash sales,
+   * refunds, sale count, claimed refund refs). Drawer activity that leaves
+   * the variance unchanged (an equal-value sale and refund) still moves it.
+   */
+  readonly cashupRevision: string;
 }
 
 export interface VerifyApproverInput {
@@ -352,7 +363,25 @@ function approverIdOf(input: {
   return { userId: verdict.userId };
 }
 
-/** P2-3: the approval was given for this very close. */
+/**
+ * F3 (10948): every input of the close's cash-up, in a fixed order — so any
+ * drawer activity since the approval changes it, even when the expected cash
+ * (and so the variance) comes out the same.
+ */
+function cashupRevisionOf(plan: Pick<ClosePlan, 'open' | 'cashup'>): string {
+  const { open, cashup } = plan;
+  return JSON.stringify([
+    open.openingFloatMinor,
+    open.payInTotalMinor,
+    open.payOutTotalMinor,
+    cashup.cashSalesTotalMinor,
+    cashup.cashRefundsTotalMinor,
+    cashup.saleCount,
+    [...cashup.cashRefundReturnRefs].sort(),
+  ]);
+}
+
+/** P2-3 + F3: the approval was given for this very close, on this very cash-up. */
 function requireSameClose(input: {
   approver: VerifiedApprover;
   plan: ClosePlan;
@@ -362,7 +391,8 @@ function requireSameClose(input: {
   const same =
     approver.shiftId === plan.open.shiftId &&
     approver.countedCashMinor === input.countedCashMinor &&
-    approver.varianceMinor === plan.varianceMinor;
+    approver.varianceMinor === plan.varianceMinor &&
+    approver.cashupRevision === cashupRevisionOf(plan);
   if (!same) refuse('approval_stale');
 }
 
@@ -666,6 +696,7 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
         shiftId: plan.open.shiftId,
         countedCashMinor,
         varianceMinor: plan.varianceMinor,
+        cashupRevision: cashupRevisionOf(plan),
       });
       issued.add(approver);
       return approver;

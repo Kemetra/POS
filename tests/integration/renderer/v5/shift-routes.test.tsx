@@ -59,11 +59,7 @@ function signIn(role: Role, shiftCashup: boolean): void {
 
 function renderAt(path: string): void {
   render(
-    <AppRouter
-      pairing={pairedBridge()}
-      operator={{} as OperatorBridgeAPI}
-      initialEntry={path}
-    />,
+    <AppRouter pairing={pairedBridge()} operator={{} as OperatorBridgeAPI} initialEntry={path} />,
   );
 }
 

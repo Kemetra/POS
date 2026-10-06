@@ -196,7 +196,11 @@ describe('ManagerPinEnrollment — a manager sets their own PIN', () => {
   it.each([
     ['a mismatched confirmation', { pin: '582047', confirm: '582048' }, SHIFT_COPY.pinMismatch],
     ['a short PIN', { pin: '58204', confirm: '58204' }, SHIFT_COPY.pinShape],
-    ['a malformed current PIN', { pin: '582047', confirm: '582047', current: '12' }, SHIFT_COPY.pinShape],
+    [
+      'a malformed current PIN',
+      { pin: '582047', confirm: '582047', current: '12' },
+      SHIFT_COPY.pinShape,
+    ],
   ])('refuses %s without a call', async (_name, values, message) => {
     const { bridge, region } = await form();
     fill(region, values);
