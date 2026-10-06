@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCashMovementRequest,
   buildCloseShiftRequest,
+  buildEnvelopeRepairRequest,
   buildOpenShiftRequest,
   ShiftFactInvalidError,
   type ShiftFactInvalidReason,
@@ -365,9 +366,98 @@ describe('buildCloseShiftRequest', () => {
     ).toBe('invalid_refund_refs');
   });
 
+  describe('the arithmetic is exact past 2^53 in the intermediates (bigint)', () => {
+    /** Codex's example: float + sales overflows 2^53 before the subtractions bring it back. */
+    const HUGE: Partial<ShiftCloseFact> = {
+      openingFloatMinor: 9_007_199_254_740_987,
+      cashSalesTotalMinor: 9_007_199_254_740_337,
+      cashRefundsTotalMinor: 9_007_199_254_740_119,
+      payInTotalMinor: 0,
+      payOutTotalMinor: 9_007_199_254_740_445,
+      countedCashMinor: 760,
+      varianceMinor: 0,
+    };
+
+    it('accepts the exact expected cash (760)', () => {
+      const built = buildCloseShiftRequest({
+        fact: { ...CLOSE, ...HUGE, expectedCashMinor: 760 },
+        currencyCode: 'EGP',
+      });
+      expect(JSON.parse(built.request.body)).toMatchObject({
+        openingFloat: '90071992547409.87',
+        expectedCash: '7.60',
+        variance: '0.00',
+      });
+    });
+
+    it('refuses the float-rounded expected cash (759)', () => {
+      expect(
+        invalidReason(() =>
+          buildCloseShiftRequest({
+            fact: { ...CLOSE, ...HUGE, expectedCashMinor: 759, countedCashMinor: 759 },
+            currencyCode: 'EGP',
+          }),
+        ),
+      ).toBe('cashup_inconsistent');
+    });
+  });
+
   it('builds the same bytes from the same fact (deterministic)', () => {
     const a = buildCloseShiftRequest({ fact: CLOSE, currencyCode: 'EGP' });
     const b = buildCloseShiftRequest({ fact: { ...CLOSE }, currencyCode: 'EGP' });
     expect(a.request).toEqual(b.request);
+  });
+});
+
+describe('buildEnvelopeRepairRequest', () => {
+  const NOTE = 'Quote " backslash \\ and \u2028 — كاش';
+
+  it.each([
+    {
+      name: 'an open',
+      factKind: 'open' as const,
+      factId: SHIFT,
+      device: buildOpenShiftRequest(OPEN).request,
+    },
+    {
+      name: 'a movement with an awkward note',
+      factKind: 'movement' as const,
+      factId: MOVE,
+      device: buildCashMovementRequest({ fact: { ...MOVEMENT, note: NOTE }, currencyCode: 'EGP' })
+        .request,
+    },
+    {
+      name: 'a close',
+      factKind: 'close' as const,
+      factId: SHIFT,
+      device: buildCloseShiftRequest({ fact: CLOSE, currencyCode: 'EGP' }).request,
+    },
+  ])('drops only operatorUserId from the stored device body of $name', (row) => {
+    const repair = buildEnvelopeRepairRequest({
+      factKind: row.factKind,
+      factId: row.factId,
+      supersededSeq: 7,
+      deviceBody: row.device.body,
+    });
+    const { operatorUserId, ...rest } = JSON.parse(row.device.body) as Record<string, unknown>;
+    expect(operatorUserId).toBe(USER);
+    expect(repair.body).toBe(JSON.stringify(rest));
+    expect(repair.body).not.toContain('operatorUserId');
+    expect(repair.idempotencyKey).toBe(`${row.device.idempotencyKey}:repair-7`);
+  });
+
+  it('gives each repair of the same fact its own key', () => {
+    const device = buildOpenShiftRequest(OPEN).request;
+    const keys = [3, 9].map(
+      (supersededSeq) =>
+        buildEnvelopeRepairRequest({
+          factKind: 'open',
+          factId: SHIFT,
+          supersededSeq,
+          deviceBody: device.body,
+        }).idempotencyKey,
+    );
+    expect(new Set(keys).size).toBe(2);
+    for (const key of keys) expect(key).toMatch(/^[\x21-\x7E]{16,128}$/);
   });
 });

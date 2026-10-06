@@ -26,6 +26,13 @@
  *   • the close arithmetic is checked as Backend-Core checks it on ingest:
  *     expected = float + cash sales − cash refunds + pay-in − pay-out,
  *     variance = counted − expected, and expected / counted are never negative.
+ *     Each amount is a safe integer, but a partial sum may not be, so the
+ *     check runs in `bigint` (exact, as SQLite's 64-bit integers are).
+ *
+ * A dead-lettered fact is repaired on the manager-envelope path
+ * (`buildEnvelopeRepairRequest`): the SAME stored body less `operatorUserId`
+ * (the claim is not part of the natural-key payload hash, so the server sees
+ * the same fact) under a new Idempotency-Key of its own.
  *
  * A refused fact throws `ShiftFactInvalidError` naming the field and a closed
  * reason — never the value (P7).
@@ -153,7 +160,7 @@ const NOTE_MAX = 200;
 const SALE_COUNT_MAX = 2_147_483_647;
 const REFUND_REFS_MAX = 1_000;
 
-interface Field<T> {
+export interface Field<T> {
   readonly field: string;
   readonly value: T;
 }
@@ -183,7 +190,8 @@ function lowerUuid(id: Field<string>): string {
   return lower;
 }
 
-function isoInstant(at: Field<string>): string {
+/** A canonical `Date#toISOString()` instant, else `invalid_timestamp` naming the field. */
+export function isoInstant(at: Field<string>): string {
   const ms = Date.parse(at.value);
   if (!Number.isFinite(ms) || new Date(ms).toISOString() !== at.value) {
     refuse({ reason: 'invalid_timestamp', field: at.field });
@@ -324,25 +332,34 @@ function closeAmounts(input: InShiftCurrency<ShiftCloseFact>): Record<string, st
   );
 }
 
-/** Backend-Core's ingest invariant (422 `shift_cashup_inconsistent` otherwise). */
+/**
+ * Backend-Core's ingest invariant (422 `shift_cashup_inconsistent` otherwise),
+ * in `bigint`: every amount is already a checked safe integer, but
+ * float + sales alone can pass 2^53, where `number` arithmetic rounds.
+ */
 function checkArithmetic(fact: ShiftCloseFact): void {
   const expected =
-    fact.openingFloatMinor +
-    fact.cashSalesTotalMinor -
-    fact.cashRefundsTotalMinor +
-    fact.payInTotalMinor -
-    fact.payOutTotalMinor;
-  if (expected !== fact.expectedCashMinor) {
+    BigInt(fact.openingFloatMinor) +
+    BigInt(fact.cashSalesTotalMinor) -
+    BigInt(fact.cashRefundsTotalMinor) +
+    BigInt(fact.payInTotalMinor) -
+    BigInt(fact.payOutTotalMinor);
+  if (expected !== BigInt(fact.expectedCashMinor)) {
     refuse({ reason: 'cashup_inconsistent', field: 'expectedCashMinor' });
   }
-  if (fact.countedCashMinor - fact.expectedCashMinor !== fact.varianceMinor) {
+  const variance = BigInt(fact.countedCashMinor) - BigInt(fact.expectedCashMinor);
+  if (variance !== BigInt(fact.varianceMinor)) {
     refuse({ reason: 'cashup_inconsistent', field: 'varianceMinor' });
   }
 }
 
+function isIntInRange(value: number, range: { min: number; max: number }): boolean {
+  return Number.isInteger(value) && value >= range.min && value <= range.max;
+}
+
 function saleCountOf(fact: ShiftCloseFact): number {
   const count = fact.saleCount;
-  if (!Number.isInteger(count) || count < 0 || count > SALE_COUNT_MAX) {
+  if (!isIntInRange(count, { min: 0, max: SALE_COUNT_MAX })) {
     refuse({ reason: 'invalid_sale_count', field: 'saleCount' });
   }
   return count;
@@ -394,4 +411,34 @@ export function buildCloseShiftRequest(
     operatorUserId: fact.closingUserId,
   };
   return { fact, request: request({ kind: 'close', id: fact.shiftId }, body) };
+}
+
+/** The dead-lettered row a repair replaces: its fact and its stored device body. */
+export interface EnvelopeRepairSource {
+  factKind: ShiftFactKind;
+  /** The fact's natural key: the shift id (open, close) or the movement id. */
+  factId: string;
+  /** The seq of the dead-lettered row; it makes this repair's key unique. */
+  supersededSeq: number;
+  /** The stored body of the dead-lettered row, byte for byte. */
+  deviceBody: string;
+}
+
+/**
+ * The manager-envelope repair of a dead-lettered fact (RT-17 10919 decision 4):
+ * the stored body less `operatorUserId` (an envelope request that carries it
+ * is a 401; the claim is not part of the payload hash, so this is the same
+ * fact) and a new Idempotency-Key, `<the fact's key>:repair-<superseded seq>`.
+ * Exactly-once rests on the natural-key dedupe, not the key: a fact the server
+ * already holds replays `200`.
+ */
+export function buildEnvelopeRepairRequest(source: EnvelopeRepairSource): ShiftWireRequest {
+  const stored = JSON.parse(source.deviceBody) as Record<string, unknown>;
+  const body = Object.fromEntries(
+    Object.entries(stored).filter(([key]) => key !== 'operatorUserId'),
+  );
+  return {
+    idempotencyKey: `${IDEMPOTENCY_KEY_PREFIX[source.factKind]}${source.factId}:repair-${String(source.supersededSeq)}`,
+    body: JSON.stringify(body),
+  };
 }

@@ -11,11 +11,13 @@
  *   • a movement or a close only on the terminal's open shift
  *     (`shift_not_open`), rendered in that shift's currency;
  *   • a close's float and pay-in / pay-out totals equal the open's float and
- *     the shift's recorded movements (the trigger refuses otherwise).
+ *     the shift's recorded movements (`ShiftFactInvalidError`
+ *     `cashup_inconsistent` naming the field; the trigger is the backstop).
  *
  * The drain reads ONE fact at a time (`nextFact`): the head of the terminal's
- * unsynced facts in causal order (`seq`: open → movements → close, and one
- * shift's close before the next shift's open). Backend-Core allows one open
+ * unsettled facts in causal order (open → movements → close, and one shift's
+ * close before the next shift's open: the fact's original `seq`, which a
+ * repair row inherits as `origin_seq`). Backend-Core allows one open
  * shift per device and resolves a movement or a close only on a shift it has
  * recorded, so a fact sent before its predecessors would be refused (404
  * `shift_not_found`, 409 `shift_already_open`) or, worse, recorded out of order.
@@ -24,11 +26,18 @@
  *   • `blocked` — the head is dead-lettered; nothing behind it is offered until
  *     the head is repaired (RT-17 10919 decision 4: repaired on the
  *     manager-envelope path, RT-113 P3/P4). Facts stay queued, never lost.
+ * `recordEnvelopeRepair` records that repair: in one transaction, a new
+ * `envelope` outbox row with the dead letter's body less `operatorUserId`
+ * and its own key, in the dead letter's causal position; the 0043 trigger
+ * marks the dead letter `superseded` in the same statement. Nothing calls it
+ * yet (the envelope drain is a later part of RT-17 slice 3).
  * Only the CURRENT pairing's terminal is drained (RT-221); a null terminal
  * drains nothing.
  *
  * The sync transitions apply only to a `pending` row and report whether they
- * did. Every send is an attempt, success included.
+ * did. Every send is an attempt, success included. Every instant given to the
+ * repository is a canonical `toISOString()` instant (`invalid_timestamp`
+ * otherwise), and retry instants are compared as instants.
  *
  * No secret, no PII: ids, amounts, timestamps, the optional "no PII" movement
  * note and closed-set codes only.
@@ -37,7 +46,10 @@ import type { DatabaseHandle } from '../db/client.js';
 import {
   buildCashMovementRequest,
   buildCloseShiftRequest,
+  buildEnvelopeRepairRequest,
   buildOpenShiftRequest,
+  isoInstant,
+  ShiftFactInvalidError,
   type CashMovementFact,
   type ShiftCloseFact,
   type ShiftFactKind,
@@ -71,7 +83,7 @@ export interface RecordedShiftFact {
   idempotencyKey: string;
 }
 
-export type ShiftCashupStateReason = 'shift_already_open' | 'shift_not_open';
+export type ShiftCashupStateReason = 'shift_already_open' | 'shift_not_open' | 'not_dead_lettered';
 
 /** A fact the terminal's shift state does not allow. */
 export class ShiftCashupStateError extends Error {
@@ -159,6 +171,8 @@ export interface ShiftCashupRepo {
   markSynced(input: ShiftSyncTransition): boolean;
   recordRetry(input: ShiftSyncRetry): boolean;
   markDeadLetter(input: ShiftSyncDeadLetter): boolean;
+  /** Supersede the dead-lettered row `seq` with its manager-envelope repair. */
+  recordEnvelopeRepair(input: ShiftSyncTransition): RecordedShiftFact;
 }
 
 interface PrepareGet<Row> {
@@ -181,11 +195,38 @@ interface HeadRow {
   dead_letter_reason: string | null;
 }
 
+interface FactRef {
+  factKind: ShiftFactKind;
+  shiftId: string;
+  movementId: string | null;
+}
+
+/** A repair's place: the dead letter it replaces and the fact's causal position. */
+interface RepairLineage {
+  supersedesSeq: number;
+  originSeq: number;
+}
+
 interface EnqueueInput {
   scope: ShiftScope;
-  ref: { factKind: ShiftFactKind; shiftId: string; movementId: string | null };
+  ref: FactRef;
   request: ShiftWireRequest;
   now: string;
+  /** Absent for a fact's original (device-path) row. */
+  repairOf?: RepairLineage;
+}
+
+interface RepairTargetRow {
+  seq: number;
+  origin_seq: number | null;
+  fact_kind: ShiftFactKind;
+  shift_id: string;
+  movement_id: string | null;
+  tenant_id: string;
+  branch_id: string;
+  terminal_id: string;
+  request_body: string;
+  sync_status: string;
 }
 
 const IDLE: NextShiftFact = Object.freeze({ kind: 'idle' });
@@ -201,14 +242,88 @@ const OPEN_SHIFT_SQL = `
   WHERE o.tenant_id = ? AND o.branch_id = ? AND o.terminal_id = ?
     AND NOT EXISTS (SELECT 1 FROM shift_cashup_closes c WHERE c.shift_id = o.shift_id)`;
 
-const HEAD_SQL = `
+/**
+ * The head: the terminal's first unsettled fact in causal order. `CROSS JOIN`
+ * keeps the state table outermost so the lookup walks the partial index of
+ * unsettled rows (0043 `idx_shift_sync_state_unsettled`), never the synced or
+ * superseded history; a repair row sorts at its fact's original position.
+ */
+export const SHIFT_SYNC_HEAD_SQL = `
   SELECT o.seq, o.fact_kind, o.shift_id, o.auth_path, o.idempotency_key, o.request_body,
          s.sync_status, s.attempt_count, s.next_retry_at, s.dead_letter_reason
-  FROM shift_sync_outbox o JOIN shift_sync_state s ON s.seq = o.seq
-  WHERE o.tenant_id = ? AND o.branch_id = ? AND o.terminal_id = ?
-    AND s.sync_status <> 'synced'
-  ORDER BY o.seq ASC
+  FROM shift_sync_state s CROSS JOIN shift_sync_outbox o ON o.seq = s.seq
+  WHERE s.sync_status IN ('pending', 'dead_letter')
+    AND o.tenant_id = ? AND o.branch_id = ? AND o.terminal_id = ?
+  ORDER BY COALESCE(o.origin_seq, o.seq) ASC
   LIMIT 1`;
+
+const ENQUEUE_SQL = `
+  INSERT INTO shift_sync_outbox (fact_kind, shift_id, movement_id, tenant_id, branch_id,
+    terminal_id, auth_path, idempotency_key, request_body, enqueued_at, supersedes_seq,
+    origin_seq)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+const REPAIR_TARGET_SQL = `
+  SELECT o.seq, o.origin_seq, o.fact_kind, o.shift_id, o.movement_id, o.tenant_id, o.branch_id,
+         o.terminal_id, o.request_body, s.sync_status
+  FROM shift_sync_outbox o JOIN shift_sync_state s ON s.seq = o.seq
+  WHERE o.seq = ?`;
+
+/**
+ * The guarded sync transitions: each moves a `pending` row only, counts the
+ * attempt and stamps it. The SET fragments are fixed here, never caller input;
+ * each fragment's own parameters come first, then `now, now, seq`.
+ */
+function pendingTransitionSql(set: string): string {
+  return `UPDATE shift_sync_state
+    SET ${set}, attempt_count = attempt_count + 1, last_attempt_at = ?, updated_at = ?
+    WHERE seq = ? AND sync_status = 'pending'`;
+}
+
+const TRANSITION_SQL = {
+  synced: pendingTransitionSql(
+    "sync_status = 'synced', synced_at = ?, next_retry_at = NULL, last_error_category = NULL",
+  ),
+  retry: pendingTransitionSql('next_retry_at = ?, last_error_category = ?'),
+  deadLetter: pendingTransitionSql(
+    "sync_status = 'dead_letter', dead_letter_reason = ?, next_retry_at = NULL",
+  ),
+} as const;
+
+type TransitionKind = keyof typeof TRANSITION_SQL;
+
+/** The close carries the open's float and the shift's movement totals. */
+const CARRIED_TOTALS = ['openingFloatMinor', 'payInTotalMinor', 'payOutTotalMinor'] as const;
+
+function checkCarriedTotals(input: { open: OpenShiftView; fact: ShiftCloseFact }): void {
+  for (const field of CARRIED_TOTALS) {
+    const recorded = input.open[field];
+    if (!Number.isSafeInteger(recorded) || recorded !== input.fact[field]) {
+      throw new ShiftFactInvalidError({ reason: 'cashup_inconsistent', field });
+    }
+  }
+}
+
+/** The envelope repair row of a dead letter: same fact and scope, the fact's causal position. */
+function repairEnqueueInput(input: { target: RepairTargetRow; now: string }): EnqueueInput {
+  const { target } = input;
+  return {
+    scope: {
+      tenantId: target.tenant_id,
+      branchId: target.branch_id,
+      terminalId: target.terminal_id,
+    },
+    ref: { factKind: target.fact_kind, shiftId: target.shift_id, movementId: target.movement_id },
+    request: buildEnvelopeRepairRequest({
+      factKind: target.fact_kind,
+      factId: target.movement_id ?? target.shift_id,
+      supersededSeq: target.seq,
+      deviceBody: target.request_body,
+    }),
+    now: input.now,
+    repairOf: { supersedesSeq: target.seq, originSeq: target.origin_seq ?? target.seq },
+  };
+}
 
 function queued(head: HeadRow): QueuedShiftFact {
   return {
@@ -222,12 +337,12 @@ function queued(head: HeadRow): QueuedShiftFact {
   };
 }
 
-/** The drain's view of the head fact at `now`. */
+/** The drain's view of the head fact at `now` (a canonical instant). */
 function classifyHead(head: HeadRow, now: string): NextShiftFact {
   if (head.sync_status === 'dead_letter') {
     return { kind: 'blocked', seq: head.seq, reason: head.dead_letter_reason ?? 'rejected' };
   }
-  if (head.next_retry_at !== null && head.next_retry_at > now) {
+  if (head.next_retry_at !== null && Date.parse(head.next_retry_at) > Date.parse(now)) {
     return { kind: 'waiting', seq: head.seq, nextRetryAt: head.next_retry_at };
   }
   return { kind: 'due', fact: queued(head) };
@@ -252,20 +367,21 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
   }
 
   function enqueue(input: EnqueueInput): RecordedShiftFact {
-    const { scope, ref, request } = input;
+    const { scope, ref, request, repairOf } = input;
     run(
-      `INSERT INTO shift_sync_outbox (fact_kind, shift_id, movement_id, tenant_id, branch_id,
-         terminal_id, auth_path, idempotency_key, request_body, enqueued_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'device', ?, ?, ?)`,
+      ENQUEUE_SQL,
       ref.factKind,
       ref.shiftId,
       ref.movementId,
       scope.tenantId,
       scope.branchId,
       scope.terminalId,
+      repairOf === undefined ? 'device' : 'envelope',
       request.idempotencyKey,
       request.body,
       input.now,
+      repairOf?.supersedesSeq ?? null,
+      repairOf?.originSeq ?? null,
     );
     const row = (
       db.prepare('SELECT seq FROM shift_sync_outbox WHERE idempotency_key = ?') as PrepareGet<{
@@ -370,6 +486,7 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
         fact: input.fact,
         currencyCode: open.currencyCode,
       });
+      checkCarriedTotals({ open, fact });
       insertClose({ fact, now });
       return enqueue({
         scope,
@@ -382,56 +499,53 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
 
   function nextFact(input: { scope: ShiftDrainScope; now: string }): NextShiftFact {
     const { scope } = input;
+    const now = isoInstant({ field: 'now', value: input.now });
     if (scope.terminalId === null) return IDLE;
-    const head = (db.prepare(HEAD_SQL) as PrepareGet<HeadRow>).get(
+    const head = (db.prepare(SHIFT_SYNC_HEAD_SQL) as PrepareGet<HeadRow>).get(
       scope.tenantId,
       scope.branchId,
       scope.terminalId,
     );
-    return head === undefined ? IDLE : classifyHead(head, input.now);
+    return head === undefined ? IDLE : classifyHead(head, now);
+  }
+
+  /** Apply one guarded transition to a pending row; false if it was not pending. */
+  function transition(input: {
+    kind: TransitionKind;
+    params: readonly unknown[];
+    at: ShiftSyncTransition;
+  }): boolean {
+    const now = isoInstant({ field: 'now', value: input.at.now });
+    return run(TRANSITION_SQL[input.kind], ...input.params, now, now, input.at.seq) > 0;
   }
 
   function markSynced(input: ShiftSyncTransition): boolean {
-    const changes = run(
-      `UPDATE shift_sync_state
-       SET sync_status = 'synced', attempt_count = attempt_count + 1, synced_at = ?,
-           next_retry_at = NULL, last_error_category = NULL, last_attempt_at = ?, updated_at = ?
-       WHERE seq = ? AND sync_status = 'pending'`,
-      input.now,
-      input.now,
-      input.now,
-      input.seq,
-    );
-    return changes > 0;
+    return transition({ kind: 'synced', params: [input.now], at: input });
   }
 
   function recordRetry(input: ShiftSyncRetry): boolean {
-    const changes = run(
-      `UPDATE shift_sync_state
-       SET attempt_count = attempt_count + 1, next_retry_at = ?, last_error_category = ?,
-           last_attempt_at = ?, updated_at = ?
-       WHERE seq = ? AND sync_status = 'pending'`,
-      input.nextRetryAt,
-      input.category,
-      input.now,
-      input.now,
-      input.seq,
-    );
-    return changes > 0;
+    const nextRetryAt = isoInstant({ field: 'nextRetryAt', value: input.nextRetryAt });
+    return transition({ kind: 'retry', params: [nextRetryAt, input.category], at: input });
   }
 
   function markDeadLetter(input: ShiftSyncDeadLetter): boolean {
-    const changes = run(
-      `UPDATE shift_sync_state
-       SET sync_status = 'dead_letter', dead_letter_reason = ?, attempt_count = attempt_count + 1,
-           next_retry_at = NULL, last_attempt_at = ?, updated_at = ?
-       WHERE seq = ? AND sync_status = 'pending'`,
-      input.reason,
-      input.now,
-      input.now,
-      input.seq,
-    );
-    return changes > 0;
+    return transition({ kind: 'deadLetter', params: [input.reason], at: input });
+  }
+
+  /** The dead-lettered row `seq`, else `not_dead_lettered`. */
+  function requireDeadLetter(seq: number): RepairTargetRow {
+    const target = (db.prepare(REPAIR_TARGET_SQL) as PrepareGet<RepairTargetRow>).get(seq);
+    if (target?.sync_status !== 'dead_letter') {
+      throw new ShiftCashupStateError('not_dead_lettered');
+    }
+    return target;
+  }
+
+  function recordEnvelopeRepair(input: ShiftSyncTransition): RecordedShiftFact {
+    const now = isoInstant({ field: 'now', value: input.now });
+    return db.transaction(() =>
+      enqueue(repairEnqueueInput({ target: requireDeadLetter(input.seq), now })),
+    )();
   }
 
   return {
@@ -443,5 +557,6 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
     markSynced,
     recordRetry,
     markDeadLetter,
+    recordEnvelopeRepair,
   };
 }

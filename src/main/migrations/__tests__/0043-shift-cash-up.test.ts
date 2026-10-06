@@ -11,7 +11,11 @@
  *     scope, with `operatorUserId` exactly on the device path and never a
  *     device-path forced close; each outbox row gets a pending state row;
  *   • the state machine: `synced` is terminal, a dead letter carries its
- *     reason and only goes back to pending, attempts never decrease;
+ *     reason and goes back to pending or is superseded, attempts never
+ *     decrease;
+ *   • the repair: a dead letter is superseded by an envelope row of the same
+ *     fact and payload that takes its causal position; one active
+ *     (non-superseded) row per fact; `superseded` is terminal;
  *   • through the real runner it applies exactly once.
  */
 import { readFileSync } from 'node:fs';
@@ -193,6 +197,50 @@ function enqueue(row: Partial<OutboxRow> = {}): void {
   );
 }
 
+interface RepairRow {
+  supersedes_seq: number | null;
+  origin_seq: number | null;
+  auth_path: string;
+  idempotency_key: string;
+  request_body: string;
+}
+
+const REPAIR_ROW: RepairRow = {
+  supersedes_seq: 1,
+  origin_seq: 1,
+  auth_path: 'envelope',
+  idempotency_key: `pos-pulse-shift-open:${S1}:repair-1`,
+  request_body: JSON.stringify({ shiftId: S1 }),
+};
+
+const T1 = '2026-10-05T09:00:00.000Z';
+
+/** An outbox row for the open of S1 that supersedes another (default: seq 1). */
+function repair(row: Partial<RepairRow> = {}): void {
+  const r = { ...REPAIR_ROW, ...row };
+  db.run(
+    `INSERT INTO shift_sync_outbox (fact_kind, shift_id, movement_id, tenant_id, branch_id,
+       terminal_id, auth_path, idempotency_key, request_body, enqueued_at, supersedes_seq,
+       origin_seq)
+     VALUES ('open', ?, NULL, 't', 'b', 'term-1', ?, ?, ?, ?, ?, ?)`,
+    [S1, r.auth_path, r.idempotency_key, r.request_body, T1, r.supersedes_seq, r.origin_seq],
+  );
+}
+
+function deadLetter(of: { seq: number }): void {
+  db.run(
+    `UPDATE shift_sync_state SET sync_status = 'dead_letter', dead_letter_reason = 'refused'
+     WHERE seq = ?`,
+    [of.seq],
+  );
+}
+
+function stateOf(of: { seq: number }): Record<string, unknown> {
+  const res = db.exec(`SELECT * FROM shift_sync_state WHERE seq = ${String(of.seq)}`)[0];
+  if (res === undefined) throw new Error(`no state row ${String(of.seq)}`);
+  return Object.fromEntries(res.columns.map((c, i) => [c, res.values[0]?.[i]]));
+}
+
 function count(of: { table: string }): number {
   return Number(db.exec(`SELECT COUNT(*) FROM ${of.table}`)[0]?.values[0]?.[0] ?? -1);
 }
@@ -356,6 +404,19 @@ describe('0043 — the outbox and its state', () => {
       row: { idempotency_key: 'pos-pulse shift open 1' },
       error: /CHECK/,
     },
+    {
+      name: 'a device body whose operatorUserId is JSON null',
+      row: { request_body: JSON.stringify({ shiftId: S1, operatorUserId: null }) },
+      error: /CHECK/,
+    },
+    {
+      name: 'an envelope body whose operatorUserId is JSON null',
+      row: {
+        auth_path: 'envelope',
+        request_body: JSON.stringify({ shiftId: S1, operatorUserId: null }),
+      },
+      error: /CHECK/,
+    },
     { name: 'a body that is not JSON', row: { request_body: 'nope' }, error: /CHECK/ },
     { name: 'an unknown fact kind', row: { fact_kind: 'reopen' }, error: /CHECK/ },
     {
@@ -484,6 +545,167 @@ describe('0043 — the outbox and its state', () => {
         "INSERT INTO shift_sync_state (seq, sync_status, synced_at, created_at, updated_at) VALUES (2, 'synced', 't', 't', 't')",
       );
     }).toThrow(/starts pending/);
+  });
+});
+
+describe('0043 — repairing a dead letter (supersede)', () => {
+  beforeEach(() => {
+    open();
+    enqueue();
+  });
+
+  it('an envelope row supersedes a dead letter in the same statement', () => {
+    deadLetter({ seq: 1 });
+    repair();
+    expect(stateOf({ seq: 1 })).toMatchObject({
+      sync_status: 'superseded',
+      superseded_by_seq: 2,
+      resolved_at: T1,
+      updated_at: T1,
+      dead_letter_reason: 'refused',
+    });
+    expect(stateOf({ seq: 2 })).toMatchObject({ sync_status: 'pending', attempt_count: 0 });
+  });
+
+  it.each<{ name: string; deadLetterFirst: boolean; row: Partial<RepairRow>; error: RegExp }>([
+    {
+      name: 'a row that is not dead-lettered',
+      deadLetterFirst: false,
+      row: {},
+      error: /a repair supersedes/,
+    },
+    {
+      name: 'a different payload',
+      deadLetterFirst: true,
+      row: { request_body: JSON.stringify({ shiftId: S1, extra: true }) },
+      error: /a repair supersedes/,
+    },
+    {
+      name: 'another causal position',
+      deadLetterFirst: true,
+      row: { origin_seq: 2 },
+      error: /a repair supersedes|FOREIGN KEY/,
+    },
+    {
+      name: 'a lineage without a causal position',
+      deadLetterFirst: true,
+      row: { origin_seq: null },
+      error: /a repair supersedes|CHECK/,
+    },
+    {
+      name: 'a device-path repair',
+      deadLetterFirst: true,
+      row: {
+        auth_path: 'device',
+        request_body: JSON.stringify({ shiftId: S1, operatorUserId: USER }),
+      },
+      error: /a repair supersedes|CHECK/,
+    },
+    {
+      name: 'an envelope repair carrying operatorUserId',
+      deadLetterFirst: true,
+      row: { request_body: JSON.stringify({ shiftId: S1, operatorUserId: USER }) },
+      error: /a repair supersedes|CHECK/,
+    },
+    {
+      name: 'an unknown row',
+      deadLetterFirst: false,
+      row: { supersedes_seq: 9, origin_seq: 9 },
+      error: /a repair supersedes/,
+    },
+  ])('refuses a repair of $name', ({ deadLetterFirst, row, error }) => {
+    if (deadLetterFirst) deadLetter({ seq: 1 });
+    expect(() => {
+      repair(row);
+    }).toThrow(error);
+    expect(count({ table: 'shift_sync_outbox' })).toBe(1);
+  });
+
+  it('supersedes a row once; a repair of the repair keeps the causal position', () => {
+    deadLetter({ seq: 1 });
+    repair();
+    expect(() => {
+      repair({ idempotency_key: `pos-pulse-shift-open:${S1}:repair-1b` });
+    }).toThrow(/a repair supersedes|UNIQUE/);
+    deadLetter({ seq: 2 });
+    expect(() => {
+      repair({
+        supersedes_seq: 2,
+        origin_seq: 2,
+        idempotency_key: `pos-pulse-shift-open:${S1}:repair-2`,
+      });
+    }).toThrow(/a repair supersedes/);
+    repair({
+      supersedes_seq: 2,
+      origin_seq: 1,
+      idempotency_key: `pos-pulse-shift-open:${S1}:repair-2`,
+    });
+    const active = db.exec(
+      `SELECT o.seq FROM shift_sync_outbox o JOIN shift_sync_state s ON s.seq = o.seq
+       WHERE o.fact_kind = 'open' AND o.shift_id = '${S1}' AND s.sync_status <> 'superseded'`,
+    )[0]?.values;
+    expect(active).toEqual([[3]]);
+  });
+
+  it.each<{ name: string; set: string; deadLetterFirst: boolean }>([
+    {
+      name: 'pending → superseded',
+      set: "sync_status = 'superseded', superseded_by_seq = 1, resolved_at = 't', dead_letter_reason = 'x'",
+      deadLetterFirst: false,
+    },
+    {
+      name: 'dead_letter → superseded with no successor',
+      set: "sync_status = 'superseded', superseded_by_seq = 1, resolved_at = 't'",
+      deadLetterFirst: true,
+    },
+  ])('refuses $name', ({ set, deadLetterFirst }) => {
+    if (deadLetterFirst) deadLetter({ seq: 1 });
+    expect(() => {
+      db.run(`UPDATE shift_sync_state SET ${set} WHERE seq = 1`);
+    }).toThrow(/illegal transition/);
+  });
+
+  it.each<{ name: string; set: string; error: RegExp }>([
+    {
+      name: 'superseded without a successor',
+      set: "sync_status = 'superseded', resolved_at = 't'",
+      error: /CHECK|illegal transition/,
+    },
+    {
+      name: 'superseded without resolved_at',
+      set: "sync_status = 'superseded', superseded_by_seq = 1",
+      error: /CHECK|illegal transition/,
+    },
+    {
+      name: 'a resolved_at on a live row',
+      set: "resolved_at = 't'",
+      error: /CHECK/,
+    },
+  ])('refuses $name', ({ set, error }) => {
+    expect(() => {
+      db.run(`UPDATE shift_sync_state SET ${set} WHERE seq = 1`);
+    }).toThrow(error);
+  });
+
+  it('keeps superseded terminal', () => {
+    deadLetter({ seq: 1 });
+    repair();
+    expect(() => {
+      db.run(
+        `UPDATE shift_sync_state SET sync_status = 'pending', superseded_by_seq = NULL,
+           resolved_at = NULL, dead_letter_reason = NULL WHERE seq = 1`,
+      );
+    }).toThrow(/illegal transition/);
+    expect(() => {
+      db.run("UPDATE shift_sync_state SET updated_at = 'later' WHERE seq = 1");
+    }).toThrow(/illegal transition/);
+  });
+
+  it('indexes the unsettled state rows only (the drain head lookup)', () => {
+    const sql = db.exec(
+      "SELECT sql FROM sqlite_master WHERE name = 'idx_shift_sync_state_unsettled'",
+    )[0]?.values[0]?.[0];
+    expect(String(sql)).toMatch(/WHERE sync_status IN \('pending', 'dead_letter'\)/);
   });
 });
 

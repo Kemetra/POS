@@ -23,6 +23,7 @@ import { buildTree, child, type YamlNode } from './yaml-tree.js';
 import {
   buildCashMovementRequest,
   buildCloseShiftRequest,
+  buildEnvelopeRepairRequest,
   buildOpenShiftRequest,
 } from '../../../src/main/shift-cashup/shift-wire.js';
 
@@ -156,6 +157,25 @@ describe('stored shift bodies conform to the pinned pos-shifts contract', () => 
       currencyCode: 'EGP',
     });
     conformsTo({ schema: 'CloseShiftRequest', body: request.body });
+  });
+
+  it('an envelope repair body → OpenShiftRequest, without operatorUserId', () => {
+    const { fact, request } = buildOpenShiftRequest({
+      shiftId: SHIFT,
+      openedAt: '2026-10-05T08:00:00.000Z',
+      openingUserId: USER,
+      currencyCode: 'EGP',
+      openingFloatMinor: 50_000,
+    });
+    const repair = buildEnvelopeRepairRequest({
+      factKind: 'open',
+      factId: fact.shiftId,
+      supersededSeq: 12_345,
+      deviceBody: request.body,
+    });
+    conformsTo({ schema: 'OpenShiftRequest', body: repair.body });
+    expect(JSON.parse(repair.body)).not.toHaveProperty('operatorUserId');
+    expect(repair.idempotencyKey).toMatch(/^[\x21-\x7E]{16,128}$/);
   });
 
   it('the Idempotency-Key matches the contract header grammar', () => {

@@ -31,19 +31,46 @@
 --
 -- ## The outbox (immutable) and its sync state (mutable)
 --
--- `shift_sync_outbox` holds one row per fact, in causal order (`seq`). The row
--- carries the exact request body and the Idempotency-Key, decided ONCE when the
--- fact is recorded, in the same transaction (RT-17 10931/10934: every retry
--- sends exactly the stored bytes). The row can never be updated or deleted, so
--- a retry can never send different bytes. `auth_path` is the credential the
--- body was built for: `device` bodies carry `operatorUserId`, `envelope`
--- bodies never do (the contract's rule, checked below), and a forced close is
--- never a `device` row (forced close is manager-envelope only).
+-- `shift_sync_outbox` holds one ORIGINAL row per fact, in causal order
+-- (`seq`). The row carries the exact request body and the Idempotency-Key,
+-- decided ONCE when the fact is recorded, in the same transaction (RT-17
+-- 10931/10934: every retry sends exactly the stored bytes). The row can never
+-- be updated or deleted, so a retry can never send different bytes.
+-- `auth_path` is the credential the body was built for: `device` bodies carry
+-- `operatorUserId` as a JSON string, `envelope` bodies do not carry it at all
+-- (the contract's rule, checked below), and a forced close is never a
+-- `device` row (forced close is manager-envelope only).
 --
 -- `shift_sync_state` is the companion bookkeeping row (the 0024 / 0034 split):
 -- created automatically with its outbox row as `pending`, then moved by the
 -- drain. `synced` is terminal. `dead_letter` keeps its reason; it may go back
--- to `pending` (a support repair), never to `synced` directly.
+-- to `pending` (a re-send of the same bytes), never to `synced` directly, or
+-- be `superseded` by a repair.
+--
+-- ## Repairing a dead letter (RT-17 10919 decision 4, RT-113 P3/P4)
+--
+-- A device-path fact the server refuses (e.g. 403 `refused`: made offline
+-- outside every admission window) is dead-lettered, and it blocks every later
+-- fact of the terminal. Re-sending its bytes would fail the same way, so it is
+-- repaired on the manager-envelope path by a NEW outbox row (`supersedes_seq`
+-- = the dead letter's seq) that:
+--   • is an `envelope` row whose body is the dead letter's body without
+--     `operatorUserId` (same fact, same payload: the natural-key payload hash
+--     excludes the claim, so a fact the server already holds replays `200`);
+--   • has its OWN Idempotency-Key: exactly-once rests on the natural-key
+--     dedupe, not on the key, and the device key may already be stored by the
+--     server's interceptor against a body that carried `operatorUserId`;
+--   • takes the CAUSAL POSITION of the fact (`origin_seq` = the fact's
+--     original row seq, carried through a repair of a repair), so the drain,
+--     which orders by `COALESCE(origin_seq, seq)`, sends it before every later
+--     fact.
+-- Inserting it moves the dead letter to `superseded` (with `resolved_at` and
+-- `superseded_by_seq`) in the same statement, by trigger. `superseded` is
+-- terminal. One ACTIVE (non-superseded) row per fact holds by construction:
+-- one original row per fact (unique index), a row is superseded at most once
+-- (UNIQUE `supersedes_seq`), and only a dead-lettered row of the same fact can
+-- be superseded, so a fact's rows form one chain whose last row is the only
+-- one not superseded.
 --
 -- No secret and no PII: user ids, amounts, timestamps, the optional movement
 -- note (documented "no PII" by the contract) and closed-set codes only.
@@ -275,13 +302,23 @@ CREATE TABLE IF NOT EXISTS shift_sync_outbox (
     json_valid(request_body) AND json_type(request_body) = 'object'
   ),
   enqueued_at      TEXT     NOT NULL,
+  -- Repair lineage; both NULL on a fact's original row. `supersedes_seq` is
+  -- the dead letter this row replaces (each row is replaced at most once);
+  -- `origin_seq` is the fact's original row: the causal position it drains in.
+  supersedes_seq   INTEGER  UNIQUE,
+  origin_seq       INTEGER,
 
+  CHECK ((supersedes_seq IS NULL) = (origin_seq IS NULL)),
+  -- A repair goes on the manager-envelope path.
+  CHECK (supersedes_seq IS NULL OR auth_path = 'envelope'),
   CHECK ((fact_kind = 'movement') = (movement_id IS NOT NULL)),
   -- The body is the fact's own: its natural key matches the row.
   CHECK (fact_kind <> 'open' OR json_extract(request_body, '$.shiftId') = shift_id),
   CHECK (fact_kind <> 'movement' OR json_extract(request_body, '$.movementId') = movement_id),
-  -- `operatorUserId` on the device path only (an envelope request with it is a 401).
-  CHECK ((auth_path = 'device') = (json_type(request_body, '$.operatorUserId') IS NOT NULL)),
+  -- `operatorUserId` as a string on the device path; absent on the envelope
+  -- path (an envelope request that carries it, even as null, is a 401).
+  CHECK (auth_path <> 'device' OR json_type(request_body, '$.operatorUserId') IS 'text'),
+  CHECK (auth_path <> 'envelope' OR json_type(request_body, '$.operatorUserId') IS NULL),
   -- Forced close is manager-envelope only (a device-path forced close is a 403).
   CHECK (NOT (
     fact_kind = 'close' AND auth_path = 'device'
@@ -289,14 +326,18 @@ CREATE TABLE IF NOT EXISTS shift_sync_outbox (
   )),
 
   FOREIGN KEY (shift_id) REFERENCES shift_cashup_opens(shift_id),
-  FOREIGN KEY (movement_id) REFERENCES shift_cashup_movements(movement_id)
+  FOREIGN KEY (movement_id) REFERENCES shift_cashup_movements(movement_id),
+  FOREIGN KEY (supersedes_seq) REFERENCES shift_sync_outbox(seq),
+  FOREIGN KEY (origin_seq) REFERENCES shift_sync_outbox(seq)
 );
 
--- One outbox row per fact.
+-- One ORIGINAL outbox row per fact (repairs chain from it; see the header).
 CREATE UNIQUE INDEX IF NOT EXISTS ux_shift_sync_outbox_shift_fact
-  ON shift_sync_outbox (fact_kind, shift_id) WHERE fact_kind IN ('open', 'close');
+  ON shift_sync_outbox (fact_kind, shift_id)
+  WHERE fact_kind IN ('open', 'close') AND supersedes_seq IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_shift_sync_outbox_movement
-  ON shift_sync_outbox (movement_id) WHERE movement_id IS NOT NULL;
+  ON shift_sync_outbox (movement_id)
+  WHERE movement_id IS NOT NULL AND supersedes_seq IS NULL;
 
 -- The drain's scan path: this terminal's facts in causal order.
 CREATE INDEX IF NOT EXISTS idx_shift_sync_outbox_scope_seq
@@ -321,6 +362,27 @@ BEGIN
   SELECT RAISE(ABORT, 'shift_sync_outbox: no such fact in this scope (RT-17)');
 END;
 
+-- A repair replaces a DEAD-LETTERED row of the same fact, in the same scope,
+-- with the same payload less `operatorUserId`, and keeps the fact's causal
+-- position.
+CREATE TRIGGER IF NOT EXISTS trg_shift_sync_outbox_repair_target
+BEFORE INSERT ON shift_sync_outbox
+WHEN NEW.supersedes_seq IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM shift_sync_outbox t JOIN shift_sync_state s ON s.seq = t.seq
+    WHERE t.seq = NEW.supersedes_seq
+      AND s.sync_status = 'dead_letter'
+      AND t.fact_kind = NEW.fact_kind AND t.shift_id = NEW.shift_id
+      AND t.movement_id IS NEW.movement_id
+      AND t.tenant_id = NEW.tenant_id AND t.branch_id = NEW.branch_id
+      AND t.terminal_id = NEW.terminal_id
+      AND NEW.origin_seq IS COALESCE(t.origin_seq, t.seq)
+      AND json_valid(NEW.request_body)
+      AND json(NEW.request_body) = json_remove(t.request_body, '$.operatorUserId')
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'shift_sync_outbox: a repair supersedes a dead-lettered row of the same fact and payload (RT-17)');
+END;
+
 CREATE TRIGGER IF NOT EXISTS trg_shift_sync_outbox_no_update
 BEFORE UPDATE ON shift_sync_outbox
 BEGIN
@@ -337,7 +399,9 @@ END;
 
 CREATE TABLE IF NOT EXISTS shift_sync_state (
   seq                  INTEGER  NOT NULL PRIMARY KEY,
-  sync_status          TEXT     NOT NULL CHECK (sync_status IN ('pending', 'synced', 'dead_letter')),
+  sync_status          TEXT     NOT NULL CHECK (
+    sync_status IN ('pending', 'synced', 'dead_letter', 'superseded')
+  ),
   attempt_count        INTEGER  NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
   next_retry_at        TEXT,
   last_error_category  TEXT     CHECK (
@@ -352,14 +416,26 @@ CREATE TABLE IF NOT EXISTS shift_sync_state (
   ),
   last_attempt_at      TEXT,
   synced_at            TEXT,
+  -- The repair row that replaced this dead letter, and when.
+  superseded_by_seq    INTEGER  UNIQUE,
+  resolved_at          TEXT,
   created_at           TEXT     NOT NULL,
   updated_at           TEXT     NOT NULL,
 
-  CHECK ((sync_status = 'dead_letter') = (dead_letter_reason IS NOT NULL)),
+  -- A superseded row keeps the reason it was dead-lettered for.
+  CHECK ((sync_status IN ('dead_letter', 'superseded')) = (dead_letter_reason IS NOT NULL)),
   CHECK ((sync_status = 'synced') = (synced_at IS NOT NULL)),
+  CHECK ((sync_status = 'superseded') = (superseded_by_seq IS NOT NULL)),
+  CHECK ((sync_status = 'superseded') = (resolved_at IS NOT NULL)),
 
-  FOREIGN KEY (seq) REFERENCES shift_sync_outbox(seq)
+  FOREIGN KEY (seq) REFERENCES shift_sync_outbox(seq),
+  FOREIGN KEY (superseded_by_seq) REFERENCES shift_sync_outbox(seq)
 );
+
+-- The drain's head lookup reads only the unsettled rows, never the synced or
+-- superseded history.
+CREATE INDEX IF NOT EXISTS idx_shift_sync_state_unsettled
+  ON shift_sync_state (seq) WHERE sync_status IN ('pending', 'dead_letter');
 
 -- Every outbox row gets its state row, pending, in the same statement.
 CREATE TRIGGER IF NOT EXISTS trg_shift_sync_outbox_state
@@ -367,6 +443,17 @@ AFTER INSERT ON shift_sync_outbox
 BEGIN
   INSERT INTO shift_sync_state (seq, sync_status, attempt_count, created_at, updated_at)
   VALUES (NEW.seq, 'pending', 0, NEW.enqueued_at, NEW.enqueued_at);
+END;
+
+-- Inserting a repair supersedes its dead letter in the same statement.
+CREATE TRIGGER IF NOT EXISTS trg_shift_sync_outbox_supersede
+AFTER INSERT ON shift_sync_outbox
+WHEN NEW.supersedes_seq IS NOT NULL
+BEGIN
+  UPDATE shift_sync_state
+  SET sync_status = 'superseded', superseded_by_seq = NEW.seq,
+      resolved_at = NEW.enqueued_at, updated_at = NEW.enqueued_at
+  WHERE seq = NEW.supersedes_seq;
 END;
 
 -- A state row starts pending and unattempted.
@@ -377,15 +464,25 @@ BEGIN
   SELECT RAISE(ABORT, 'shift_sync_state: a state row starts pending (RT-17)');
 END;
 
--- The row's identity never changes; `synced` is terminal; a dead letter only
--- goes back to pending (a support repair); the attempt count never decreases.
+-- The row's identity never changes; `synced` and `superseded` are terminal; a
+-- dead letter goes back to pending (a re-send of the same bytes) or is
+-- superseded, and only by the repair row that names it; the attempt count
+-- never decreases.
 CREATE TRIGGER IF NOT EXISTS trg_shift_sync_state_transition
 BEFORE UPDATE ON shift_sync_state
 WHEN NEW.seq IS NOT OLD.seq
   OR NEW.created_at IS NOT OLD.created_at
   OR NEW.attempt_count < OLD.attempt_count
-  OR OLD.sync_status = 'synced'
-  OR (OLD.sync_status = 'dead_letter' AND NEW.sync_status NOT IN ('dead_letter', 'pending'))
+  OR OLD.sync_status IN ('synced', 'superseded')
+  OR (OLD.sync_status = 'dead_letter'
+    AND NEW.sync_status NOT IN ('dead_letter', 'pending', 'superseded'))
+  OR (NEW.sync_status = 'superseded' AND (
+    OLD.sync_status <> 'dead_letter'
+    OR NOT EXISTS (
+      SELECT 1 FROM shift_sync_outbox
+      WHERE seq = NEW.superseded_by_seq AND supersedes_seq = OLD.seq
+    )
+  ))
 BEGIN
   SELECT RAISE(ABORT, 'shift_sync_state: illegal transition (RT-17)');
 END;
