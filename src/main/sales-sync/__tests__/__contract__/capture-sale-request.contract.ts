@@ -1,17 +1,18 @@
 // VENDORED CONTRACT TYPE — DO NOT EDIT BY HAND.
 //
 // Source of truth: Backend-Core (ex Data-Pulse-2) `packages/contracts/openapi/pos-sales/sales.yaml`
-//   version          : 1.5.0-draft
-//   Backend-Core main: 7dab3ebd0dc383c14a0fe20fc9d6d7875d296476 (RT-224 Option B, #709)
-//   sales.yaml blob  : 40779b4fc5942f721230eb37ef65cc673a723795
+//   version          : 1.6.0-draft
+//   Backend-Core main: 352b86ad3862452eb7300bf9e13d81dd771266bf (RT-225, #710)
+//   sales.yaml blob  : acb4e5b0c894fd03b232e99daf236501cf491867
 //                      (= contracts/backend-core/openapi/pos-sales/sales.yaml, PIN)
 //   generated with   : openapi-typescript 7.13.0  (already a POS devDep)
-//   refreshed        : 2026-10-05 (RT-224 step 2) — `npx openapi-typescript
+//   refreshed        : 2026-10-06 (RT-225 step 2) — `npx openapi-typescript
 //                      contracts/backend-core/openapi/pos-sales/sales.yaml`; the
 //                      `CaptureSaleRequest` / `CaptureSaleLine` / `SaleTender` members below
 //                      match the generated `components["schemas"]` field-for-field
-//                      (names, optionality, enum, money alias). 1.5.0-draft adds only the
-//                      optional `operatorUserId` (device scheme).
+//                      (names, optionality, enum, money alias). 1.5.0-draft added the
+//                      optional `operatorUserId` (device scheme); 1.6.0-draft adds only the
+//                      optional `admissionCheckAt` (device scheme only).
 //
 // This is the `CaptureSaleRequest` / `CaptureSaleLine` slice of the binding DP-2
 // contract, generated from the SHARED `sales.yaml` that BOTH sides realize (the
@@ -62,6 +63,13 @@ export interface ContractCaptureSaleRequest {
    * `operatorAuthorization` (its presence selects the device path).
    */
   operatorUserId?: string;
+  /**
+   * Format: date-time. OPTIONAL (RT-225, 1.6.0-draft): the sale's settled time, used
+   * ONLY for the cashier admission-window check in place of `occurredAt`. Allowed
+   * only with `operatorUserId`; must be <= `occurredAt` and at most 7 days before it
+   * (else 400). Not part of `payload_hash`, but part of the idempotency fingerprint.
+   */
+  admissionCheckAt?: string;
 }
 
 /** The binding `SaleTender` (`additionalProperties: false`). */

@@ -96,6 +96,7 @@ start the POS.
 | `SENTRY_DSN` | Optional. Unset means crash reporting is inert. | Treat as sensitive: never printed, pasted or screenshotted. |
 | `POS_PULSE_FEATURE_SALE_TENDERS_SINCE` | Set **only** as the RT-79 tender rollout instructs: a future ISO instant with an explicit zone. Unparseable means tenders are off, with a warning. | Not a secret. |
 | `POS_PULSE_RECEIPT_WEBSITE` | Optional receipt footer text. | Not a secret. |
+| `POS_PULSE_SUPPORT_RESET_CASHIER_CLAIM_REFUSED` | **Support only, normally unset.** `1` re-queues, once per start, this terminal's sales dead-lettered as `cashier_claim_refused` (RT-225). See §7. Any other value does nothing. | Not a secret. |
 
 ### 3.3 Must be **unset** on a pilot terminal
 
@@ -348,6 +349,8 @@ the POS showed the refusal dialog in production, the main log holds one
 secrets. The log lives under `%APPDATA%\pos-pulse\logs` for the account that
 launched it. Attach the line (not a screenshot of the environment dialog) to the
 incident.
+
+**Recovery of cashier sales refused as `cashier_claim_refused` (RT-225):** a cashier sale whose cashier claim Backend-Core refused (device-path 403) is dead-lettered and never retried on its own. The sale stays intact on the terminal. Before RT-225 this hit sales finalized late by boot recovery. A POS build with RT-225 sends those with `admissionCheckAt` (the settled time), and it needs Backend-Core #710 or later deployed first. To re-send the existing ones: in **admin** PowerShell set `POS_PULSE_SUPPORT_RESET_CASHIER_CLAIM_REFUSED` to `1` (Machine), restart the POS, and check the main log for one `sale_sync:cashier_claim_refused_reset` line with the count. Then remove the variable (`[NullString]::Value`, §5) and restart again. A sale refused again is dead-lettered again. A sale made in offline grace after the admission expired can still be refused; that case stays with RT-113.
 
 **Recovery from a forward clock jump (RT-113 offline sign-in):** after a clock that ran ahead is corrected, offline cashier admission stays refused until real time passes the highest time the POS saw (5 min tolerance); fix the time source (NTP) and keep trading online. Never set the clock forward again or edit the database.
 
