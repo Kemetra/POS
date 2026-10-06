@@ -22,13 +22,17 @@ import {
 import {
   CLOSED_AT,
   OPENED_AT,
+  CASHIER_SESSION_ID,
   cashLine,
+  cashierSession,
+  managerSession,
   msAfter,
   seedSettlement,
   seedShiftSale,
   serviceHarness,
   type ServiceHarness,
 } from './__helpers__/shift-cashup-service-fixture.js';
+import { OTHER_TERMINAL } from './__helpers__/shift-sync-fixture.js';
 
 const FLOAT = 50_000;
 const NO_PROBES = { payOut: 0, varianceClose: 0 };
@@ -93,8 +97,62 @@ describe('readStatus admission: the flag AND the session', () => {
   });
 
   it('serves a session without a users.id (a manager reads the status too)', async () => {
-    harness.state.session = { tenant_id: 'tenant-1', branch_id: 'branch-1', terminal_id: 'term-1' };
+    harness.state.session = managerSession();
     await expect(harness.service.readStatus()).resolves.toMatchObject({ openShift: null });
+  });
+});
+
+describe('readStatus re-checks the admitted session after the pairing read (review round 1)', () => {
+  type Race = (state: ServiceHarness['state']) => void;
+
+  it.each<[string, Race, string]>([
+    ['a sign-out', (s) => (s.session = null), 'no_session'],
+    ['a lock', (s) => (s.locked = true), 'session_locked'],
+    [
+      'a new session of the same cashier',
+      (s) => (s.session = { ...cashierSession(), operator_session_id: 'sess-cashier-2' }),
+      'no_session',
+    ],
+    ['another operator signing in', (s) => (s.session = managerSession()), 'no_session'],
+    ['a device revocation (no paired scope)', (s) => (s.pairedScope = null), 'no_session'],
+    ['a re-pair to another terminal', (s) => (s.pairedScope = { ...OTHER_TERMINAL }), 'no_session'],
+    [
+      'a re-pair of the session to another terminal',
+      (s) => (s.session = cashierSession(OTHER_TERMINAL)),
+      'no_session',
+    ],
+    ['the flag turned off', (s) => (s.enabled = false), 'feature_disabled'],
+  ])('refuses when %s lands during the read', async (_name, race, reason) => {
+    harness.state.duringPairedScopeRead = () => {
+      race(harness.state);
+    };
+    await expect(harness.service.readStatus()).rejects.toThrow(refusal(reason));
+  });
+
+  it('refuses a session whose terminal is not the paired one, with no race', async () => {
+    harness.state.pairedScope = null;
+    await expect(harness.service.readStatus()).rejects.toThrow(refusal('no_session'));
+  });
+
+  it('serves the same session when nothing changed during the read', async () => {
+    harness.state.duringPairedScopeRead = () => {
+      harness.state.session = { ...cashierSession(), operator_session_id: CASHIER_SESSION_ID };
+    };
+    await expect(harness.service.readStatus()).resolves.toMatchObject({ openShift: null });
+  });
+
+  it('the recording calls take no await between admission and the write (synchronous)', () => {
+    const opened: unknown = harness.service.openShift({ openingFloatMinor: FLOAT });
+    expect(opened).not.toBeInstanceOf(Promise);
+    harness.state.clock = CLOSED_AT;
+    const moved: unknown = harness.service.recordCashMovement({
+      kind: 'pay_in',
+      amountMinor: 1,
+      reasonCode: 'other',
+    });
+    expect(moved).not.toBeInstanceOf(Promise);
+    const closed: unknown = harness.service.closeShift({ countedCashMinor: FLOAT + 1 });
+    expect(closed).not.toBeInstanceOf(Promise);
   });
 });
 

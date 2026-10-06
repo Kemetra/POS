@@ -90,13 +90,21 @@ export function readOpenRequest(value: unknown): ShiftOpenRequest | null {
   return isMinorFrom(openingFloatMinor, 0) ? { openingFloatMinor } : null;
 }
 
+/** A positive amount and a known reason, with `note` (already read), or null. */
+function movementWith(
+  value: Record<string, unknown>,
+  note: { note?: string },
+): ShiftMovementRequest | null {
+  const { amountMinor, reasonCode } = value;
+  if (!isMinorFrom(amountMinor, 1)) return null;
+  return isReasonCode(reasonCode) ? { amountMinor, reasonCode, ...note } : null;
+}
+
 /** `{ amountMinor, reasonCode, note? }` exactly, or null. */
 export function readMovementRequest(value: unknown): ShiftMovementRequest | null {
   if (!isClosedShape(value, MOVEMENT_KEYS)) return null;
-  const { amountMinor, reasonCode } = value;
   const note = readNote(value['note']);
-  if (note === null || !isMinorFrom(amountMinor, 1) || !isReasonCode(reasonCode)) return null;
-  return { amountMinor, reasonCode, ...note };
+  return note === null ? null : movementWith(value, note);
 }
 
 /** `{ countedCashMinor }` exactly, or null. */

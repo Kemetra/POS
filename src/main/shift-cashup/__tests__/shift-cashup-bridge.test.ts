@@ -34,13 +34,14 @@ import {
   OPENED_AT,
   cashLine,
   factCounts,
+  managerSession,
   seedSettlement,
   seedShiftSale,
   serviceHarness,
   storedBody,
   type ServiceHarness,
 } from './__helpers__/shift-cashup-service-fixture.js';
-import { SCOPE, USER } from './__helpers__/shift-sync-fixture.js';
+import { USER } from './__helpers__/shift-sync-fixture.js';
 
 const FLOAT = 50_000;
 const ANY_ID = expect.any(String) as string;
@@ -184,11 +185,6 @@ describe('refusal mapping', () => {
     close: () => bridge.close({ countedCashMinor: FLOAT }),
     status: () => bridge.status(),
   };
-  const MANAGER_SESSION = {
-    tenant_id: SCOPE.tenantId,
-    branch_id: SCOPE.branchId,
-    terminal_id: SCOPE.terminalId,
-  };
   const unreadableTender = () => {
     seedShiftSale(db, { saleId: 's-1', finalizedAt: OPENED_AT, lines: [{ tender_type: 'x' }] });
   };
@@ -197,7 +193,7 @@ describe('refusal mapping', () => {
     ['the flag off', set({ enabled: false }), 'payIn', 'feature_disabled'],
     ['no session', set({ session: null }), 'open', 'no_session'],
     ['a locked session', set({ locked: true }), 'close', 'session_locked'],
-    ['no users.id', set({ session: MANAGER_SESSION }), 'open', 'no_cashier_identity'],
+    ['no users.id', set({ session: managerSession() }), 'open', 'no_cashier_identity'],
     ['an open shift', openThen(none), 'open', 'shift_already_open'],
     ['no open shift', none, 'payIn', 'shift_not_open'],
     [

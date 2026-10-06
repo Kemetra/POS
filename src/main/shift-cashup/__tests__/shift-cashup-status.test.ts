@@ -27,6 +27,7 @@ import {
   type ShiftScope,
 } from '../shift-cashup-repo.js';
 import type { ShiftCashupServiceStatus } from '../shift-cashup-service.js';
+import { createShiftCashupStatusReader } from '../shift-cashup-status.js';
 import {
   OPENED_AT,
   msAfter,
@@ -182,16 +183,17 @@ describe('readStatus — stranded outside the current pairing (carried item b)',
     expect((await status()).stranded).toEqual({ unsyncedFacts: 3, openShifts: 0 });
   });
 
-  it('counts everything as stranded while unpaired', async () => {
+  it('counts everything as stranded while unpaired', () => {
     openOn(SCOPE);
-    harness.state.pairedScope = null;
     seedSettlement(db, { saleId: 's-1' });
-    await expect(status()).resolves.toEqual({
+    // The reader itself: the service refuses a status with no paired scope
+    // (no session on an unpaired terminal; review round 1).
+    const reader = createShiftCashupStatusReader(handleFor(db));
+    expect(reader.read({ scope: null, now: NOW })).toEqual({
       openShift: null,
       queue: EMPTY_QUEUE,
       stranded: { unsyncedFacts: 1, openShifts: 1 },
       pendingDrawerActivity: NO_DRAWER_ACTIVITY,
-      probeRefusals: NO_PROBES,
     });
   });
 

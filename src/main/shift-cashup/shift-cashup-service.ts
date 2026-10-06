@@ -57,8 +57,12 @@
  *                       it never comes from the renderer unverified.
  *   readStatus          read-only (see `shift-cashup-status.ts`). RT-17 slice
  *                       4: gated on the flag AND an unlocked operator session
- *                       (any role: steps 1–3 only), and it adds the open
- *                       shift's probe refusals (below).
+ *                       (any role: steps 1–3 only), re-checked after its
+ *                       one await (the pairing read) together with the paired
+ *                       scope (review round 1), and it adds the open shift's
+ *                       probe refusals (below). The recording calls are
+ *                       synchronous: nothing is awaited between their
+ *                       admission and their write, so they need no re-check.
  *
  * RT-17 slice 4 — probing the blind count (10941 item 3): a pay-out refused
  * above the expected drawer cash, and a close refused for a non-zero variance
@@ -111,7 +115,7 @@ export class ShiftCashupRefusedError extends Error {
 /** The session scope the service needs (`resolveSessionScope`'s result). */
 export type ShiftCashupSession = Pick<
   OperatorSessionForPayments,
-  'tenant_id' | 'branch_id' | 'terminal_id' | 'user_id'
+  'operator_session_id' | 'tenant_id' | 'branch_id' | 'terminal_id' | 'user_id'
 >;
 
 export interface OpenShiftInput {
@@ -205,6 +209,22 @@ interface CloseParts {
   input: CloseShiftInput;
 }
 
+function scopeOf(session: ShiftCashupSession): ShiftScope {
+  return {
+    tenantId: session.tenant_id,
+    branchId: session.branch_id,
+    terminalId: session.terminal_id,
+  };
+}
+
+/** True when `scope` is the session's own (tenant, branch, terminal). */
+function isScopeOf(input: { scope: ShiftScope | null; session: ShiftCashupSession }): boolean {
+  const { scope } = input;
+  if (scope === null) return false;
+  const own = scopeOf(input.session);
+  return (['tenantId', 'branchId', 'terminalId'] as const).every((key) => scope[key] === own[key]);
+}
+
 function refuse(reason: ShiftCashupRefusalReason): never {
   throw new ShiftCashupRefusedError(reason);
 }
@@ -284,12 +304,25 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
   function admit(): Actor {
     const session = requireSession();
     const userId = session.user_id ?? refuse('no_cashier_identity');
-    const scope = {
-      tenantId: session.tenant_id,
-      branchId: session.branch_id,
-      terminalId: session.terminal_id,
-    };
-    return { scope, userId };
+    return { scope: scopeOf(session), userId };
+  }
+
+  /**
+   * Review round 1: the status read awaits the pairing (secret-store backed),
+   * so the admission is re-checked right after it — the flag, the same
+   * operator session (its id), still unlocked, and the paired scope still the
+   * session's own. A sign-out, a lock or a replaced session refuse as at
+   * admission; a revoked or re-paired device (no paired scope, or another
+   * one) refuses `no_session`, as an unpaired terminal has no session.
+   */
+  function recheckAfterRead(input: {
+    admitted: ShiftCashupSession;
+    scope: ShiftScope | null;
+  }): ShiftScope {
+    const live = requireSession();
+    if (live.operator_session_id !== input.admitted.operator_session_id) refuse('no_session');
+    if (!isScopeOf({ scope: input.scope, session: live })) refuse('no_session');
+    return scopeOf(live);
   }
 
   /** The cash-up of the open shift from its open (after the last close) up to `until`. */
@@ -406,8 +439,9 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     },
 
     async readStatus() {
-      requireSession();
-      const scope = await deps.pairedScope();
+      const admitted = requireSession();
+      const paired = await deps.pairedScope();
+      const scope = recheckAfterRead({ admitted, scope: paired });
       const status = deps.status.read({ scope, now: deps.now() });
       return { ...status, probeRefusals: tally.countsFor(status.openShift?.shiftId ?? null) };
     },

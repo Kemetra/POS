@@ -29,12 +29,26 @@ export function msAfter(iso: string): string {
   return new Date(Date.parse(iso) + 1).toISOString();
 }
 
+export const CASHIER_SESSION_ID = 'sess-cashier-1';
+
+/** An admitted cashier's session (it has a `users.id`). */
 export function cashierSession(scope: ShiftScope = SCOPE): ShiftCashupSession {
   return {
+    operator_session_id: CASHIER_SESSION_ID,
     tenant_id: scope.tenantId,
     branch_id: scope.branchId,
     terminal_id: scope.terminalId,
     user_id: USER,
+  };
+}
+
+/** A manager / admin session on `SCOPE` (no `users.id`). */
+export function managerSession(): ShiftCashupSession {
+  return {
+    operator_session_id: 'sess-manager-1',
+    tenant_id: SCOPE.tenantId,
+    branch_id: SCOPE.branchId,
+    terminal_id: SCOPE.terminalId,
   };
 }
 
@@ -47,6 +61,8 @@ export interface ServiceHarness {
     locked: boolean;
     pairedScope: ShiftScope | null;
     clock: string;
+    /** Runs while the (async) pairing read is in flight: a race in the middle of it. */
+    duringPairedScopeRead: () => void;
   };
 }
 
@@ -58,6 +74,7 @@ export function serviceHarness(db: SqlJsDatabase): ServiceHarness {
     locked: false,
     pairedScope: SCOPE,
     clock: OPENED_AT,
+    duringPairedScopeRead: () => undefined,
   };
   let ids = 0;
   const service = composeShiftCashupService({
@@ -65,7 +82,11 @@ export function serviceHarness(db: SqlJsDatabase): ServiceHarness {
     isEnabled: () => state.enabled,
     getSession: () => state.session,
     isSessionLocked: () => state.locked,
-    pairedScope: () => Promise.resolve(state.pairedScope),
+    pairedScope: async () => {
+      await Promise.resolve();
+      state.duringPairedScopeRead();
+      return state.pairedScope;
+    },
     now: () => state.clock,
     newId: () => {
       ids += 1;
