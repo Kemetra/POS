@@ -59,6 +59,17 @@ describe('ShiftNotice — hidden entirely while the flag is off', () => {
     expect(renderNotice(null).container).toBeEmptyDOMElement();
     expect(bridge.status).not.toHaveBeenCalled();
   });
+
+  it.each(['cashier', 'manager'] as const)(
+    'renders nothing for a %s without a shift bridge, even after the reads settle',
+    async (role) => {
+      enableShiftFlag();
+      signIn(role);
+      const { container } = renderNotice(null);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(container).toBeEmptyDOMElement();
+    },
+  );
 });
 
 describe('ShiftNotice — the cashier’s "shift required" gate', () => {

@@ -60,6 +60,16 @@ export function useShiftStatus(bridge: ShiftCashupBridgeAPI): {
 }
 
 /**
+ * A dialog's dismissal (Cancel, Escape), ignored while its call is pending: a
+ * dismissed dialog could be reopened and the same write sent again.
+ */
+export function dismissUnlessBusy(busy: boolean, onDismiss: () => void): () => void {
+  return () => {
+    if (!busy) onDismiss();
+  };
+}
+
+/**
  * One call at a time: the ref closes the gap before React re-renders the
  * disabled control, so a double press in one frame is dropped.
  */

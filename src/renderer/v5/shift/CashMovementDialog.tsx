@@ -8,7 +8,7 @@ import {
   type ShiftMovementRequest,
 } from '../../../shared/shift-cashup/types';
 import { SaleDialog } from '../sale/SaleDialog';
-import { callShift, useSingleFlight } from './shift-bridge';
+import { callShift, dismissUnlessBusy, useSingleFlight } from './shift-bridge';
 import { MOVEMENT_REASON_LABELS, SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { parseShiftAmount } from './shift-format';
 import { ShiftAlert } from './ShiftScreen';
@@ -50,6 +50,7 @@ export function CashMovementDialog(props: Props): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const { busy, run } = useSingleFlight();
   const title = SHIFT_COPY[props.kind];
+  const dismiss = dismissUnlessBusy(busy, props.onDismiss);
 
   const submit = (): void => {
     const request = movementOf({ amount, reasonCode, note });
@@ -69,7 +70,7 @@ export function CashMovementDialog(props: Props): JSX.Element {
   };
 
   return (
-    <SaleDialog label={title} onDismiss={props.onDismiss} initialFocusRef={amountRef}>
+    <SaleDialog label={title} onDismiss={dismiss} initialFocusRef={amountRef}>
       <h2 className="v5-live-dialog-title">{title}</h2>
       <div className="v5-shift-fields">
         <label htmlFor={ids.amount}>{SHIFT_COPY.amountLabel}</label>
@@ -111,7 +112,7 @@ export function CashMovementDialog(props: Props): JSX.Element {
       </div>
       <ShiftAlert message={error} />
       <div>
-        <button type="button" className="v5-live-btn" onClick={props.onDismiss}>
+        <button type="button" className="v5-live-btn" disabled={busy} onClick={dismiss}>
           {SHIFT_COPY.cancel}
         </button>
         <button

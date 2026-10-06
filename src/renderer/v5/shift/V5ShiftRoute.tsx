@@ -1,6 +1,7 @@
 import { useId, useState, type JSX } from 'react';
 import { Link } from 'react-router-dom';
 
+import type { Role } from '../../../shared/operator/role';
 import type { ShiftCashupBridgeAPI, ShiftOpenShiftView } from '../../../shared/shift-cashup/types';
 import { CashMovementDialog, type MovementKind } from './CashMovementDialog';
 import { CloseShiftPanel, type ShiftClosed } from './CloseShiftPanel';
@@ -14,15 +15,25 @@ interface Props {
   readonly bridge?: ShiftCashupBridgeAPI | null;
 }
 
+/** The device path records cashier facts only (`no_cashier_identity` otherwise). */
+const CASHIER_ROLES: ReadonlyArray<Role> = ['cashier'];
+
 /**
  * RT-17 slice 4 part 3 — `/app/shift`: the cashier's shift. With no open
  * shift, the opening float; with one, its summary (float and movement totals
  * only — never the expected cash), pay-in / pay-out and the blind-count close.
- * Every refusal shows its closed-set user message.
+ * Every refusal shows its closed-set user message. Cashier only: the router
+ * guards the route and this screen leaves for `/app` for any other role,
+ * before any call.
  */
 export function V5ShiftRoute({ bridge }: Props): JSX.Element | null {
   return (
-    <ShiftScreen title={SHIFT_COPY.title} titleId="v5-shift-title" bridge={bridge}>
+    <ShiftScreen
+      title={SHIFT_COPY.title}
+      titleId="v5-shift-title"
+      bridge={bridge}
+      allow={CASHIER_ROLES}
+    >
       {(api) => <CashierShift bridge={api} />}
     </ShiftScreen>
   );

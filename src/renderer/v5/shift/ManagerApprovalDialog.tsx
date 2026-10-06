@@ -7,7 +7,7 @@ import {
   type ShiftEnrolledManager,
 } from '../../../shared/shift-cashup/types';
 import { SaleDialog } from '../sale/SaleDialog';
-import { callShift, useSingleFlight } from './shift-bridge';
+import { callShift, dismissUnlessBusy, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { normalizeDigits } from './shift-format';
 import { ShiftAlert } from './ShiftScreen';
@@ -66,6 +66,7 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const { busy, run } = useSingleFlight();
+  const dismiss = dismissUnlessBusy(busy, props.onDismiss);
   const ready = selected !== null && MANAGER_PIN_PATTERN.test(normalizeDigits(pin));
 
   const submit = (): void => {
@@ -84,11 +85,7 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
   };
 
   return (
-    <SaleDialog
-      label={SHIFT_COPY.approvalTitle}
-      onDismiss={props.onDismiss}
-      initialFocusRef={cancelRef}
-    >
+    <SaleDialog label={SHIFT_COPY.approvalTitle} onDismiss={dismiss} initialFocusRef={cancelRef}>
       <h2 className="v5-live-dialog-title">{SHIFT_COPY.approvalTitle}</h2>
       <p>{SHIFT_COPY.approvalBody}</p>
       <ManagerChoice
@@ -114,7 +111,13 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
       </div>
       <ShiftAlert message={error} />
       <div>
-        <button ref={cancelRef} type="button" className="v5-live-btn" onClick={props.onDismiss}>
+        <button
+          ref={cancelRef}
+          type="button"
+          className="v5-live-btn"
+          disabled={busy}
+          onClick={dismiss}
+        >
           {SHIFT_COPY.cancel}
         </button>
         <button

@@ -34,9 +34,18 @@ export function ShiftNotice({ bridge }: Props): JSX.Element | null {
   const role = useOperatorSessionStore((s) =>
     s.state.kind === 'signedIn' ? s.state.session.role : null,
   );
-  const api = resolveShiftBridge(bridge);
-  if (!enabled || role === null || api === null) return null;
-  return <RoutedShiftNotice bridge={api} role={role} />;
+  const context = { enabled, role, api: resolveShiftBridge(bridge) };
+  if (!isNoticeShown(context)) return null;
+  return <RoutedShiftNotice bridge={context.api} role={context.role} />;
+}
+
+/** The flag is on, an operator is signed in and the bridge exists. */
+function isNoticeShown(input: {
+  enabled: boolean;
+  role: Role | null;
+  api: ShiftCashupBridgeAPI | null;
+}): input is { enabled: true; role: Role; api: ShiftCashupBridgeAPI } {
+  return input.enabled && input.role !== null && input.api !== null;
 }
 
 /** Flag on, signed in: the notice for this screen (none on the shift screens). */
