@@ -146,7 +146,12 @@ owner review.
    always visible: «جاهز للمسح» / «المسح متوقف — البحث مفتوح» / «المسح متوقف — نافذة مفتوحة» /
    «المسح غير متاح».
 2. **A wedge burst is a scan, wherever focus is.** Definition (default, to be tuned on the pilot
-   scanner, R-hw): 6 or more characters, inter-key gap ≤ 35 ms, terminated by Enter. A burst that
+   scanner, R-hw): **timing, not length.** Characters arriving with inter-key gaps ≤ 35 ms and
+   ending in Enter are a burst. There is **no fixed minimum length**: the catalogue allows short
+   codes (the catalogue bridge has no minimum, and its tests use codes like `DUP`, `0000`,
+   `AB-12`), so a burst of 2 or more characters qualifies. If the bench shows timing alone is
+   unreliable, the robust option is to program a scanner prefix and suffix (decision D-K1 bench
+   test). A burst that
    arrives while focus is on any **button, row control, note field or the page body** is routed to
    the scan owner and **never activates the focused control**. This fixes F-01.
 3. **Fields that must never receive a scan:** money fields (cash amount, opening float, counted
@@ -331,7 +336,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-W3 | Blind count hint | «عُدّ النقد في الدرج وأدخله. لا يظهر المبلغ المتوقع قبل تسجيل العدّ.» (shipped) | neutral |
 | **Session and lock** | | | |
 | M-L1 | Locked | «الطرفية مقفلة. أدخل الرقم السري للمتابعة.» | neutral |
-| M-L2 | Sign-out with an open cart | «البيع الحالي لن يظهر بعد تسجيل الخروج حتى يُبنى استئنافه (RT-116 S4). هل تريد تسجيل الخروج؟» ⏳ RT-116 S4. Once it ships: «سيُحفظ البيع الحالي على هذا الجهاز…» · «البقاء مسجّلاً» (default) / «تسجيل الخروج» | warning |
+| M-L2 | Sign-out with an open cart | Until held-cart re-attach ships (RT-116 S4): «البيع الحالي لن يظهر بعد تسجيل الخروج. هل تريد تسجيل الخروج؟». After it ships: «سيُحفظ البيع الحالي على هذا الجهاز. هل تريد تسجيل الخروج؟» · «البقاء مسجّلاً» (default) / «تسجيل الخروج» | warning |
 | **Manager → Cashiers** | | | |
 | M-K1 | Roster unreachable | «تعذّر تحميل قائمة الكاشير. تحقق من الاتصال ثم أعد المحاولة.» | warning |
 | M-K2 | First PIN set | «تم تعيين الرقم السري لـ ‹الاسم›.» | success |
@@ -361,7 +366,7 @@ its states at **1024×768 and 1280×800**, light and `forced-colors`, and compar
 | Completion / receipt failure | I3-Receipt-1280 | I3-Receipt-1024 | ✅ with deltas | «أُرسل الإيصال للطابعة» rather than «طُبع» for OS-print (N-09); show «الباقي للعميل»; sale number only per D-N1; drawer warning placement per D-B1 |
 
 **Gaps (no reference exists; new acceptance references needed before those slices):**
-- **G-1** Sign-in and PIN (VN-03/04), the F-14 recompose.
+- **G-1** Sign-in and PIN (VN-03/04), the F-14 recompose, **plus the Ready (M-F1) and pairing (VN-02) screens**. All four need accepted references at 1024 and 1280 before W1-D.
 - **G-2** Shift open / close / status (RT-17 shipped V5 screens, which are the de-facto
   reference: K28/K29).
 - **G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون
@@ -403,7 +408,7 @@ Every implementation slice:
 | **W1-A** Foundation + frame | VN-S2 (role tokens, forced-colors, RouteLoading, ErrorScreen, Arabic ScreenTooSmall) + `Banner`/`Dialog`/`ConfirmDialog` primitives + cashier lands on Sale + OD-6 placeholders hidden for the cashier role (drawer-banner placement waits for D-B1) | W2 cashier flow | Implementation | owner acceptance of 15 | VN-S2 rows of 09; I2-Consistency | before/after captures identical except intended |
 | **W1-B** Sale Direction B + direct add | VN-S12 (command bar, cart-first, money column, slim nav) + **D-C1 direct add** for scan and search pick + `ScanStatus` + newest row in view + ↑/↓ row focus | W2 | Implementation | W1-A, A2; **the direct-add and undo part also depends on D-U1** (the layout part may proceed without it, keeping confirm-first until D-U1 closes) | I2-Sale, I2-LongCart | ≥6 rows at 1024 with a banner; scan-without-click adds; KLM before/after |
 | **W1-C** Checkout + completion clean-room | VN-S4 on the frozen states (S7–S10, S12–S14) with `PaymentLedger`, `ProofList`, the M-P/M-C copy | W2 | Implementation | W1-A, A1, A3 | I2-Checkout*, I2-PayUnknown, I3-Receipt | every payment state in the harness; packaged sale |
-| **W1-D** Sign-in / Ready / pairing recompose | VN-S8 minus lock; the PIN pad in view; Arabic copy M-F1 | W2 | Implementation | W1-A, **G-1 reference** | new G-1 reference | 1024/1280; roster unreachable state |
+| **W1-D** Sign-in / Ready / pairing recompose | VN-S8 minus lock; the PIN pad in view; Arabic copy M-F1 | W2 | Implementation | W1-A, **G-1 references for sign-in, PIN, Ready and pairing** | new G-1 references (all four surfaces) | 1024/1280; roster unreachable state |
 
 ### Lane C — decisions and contracts (Planning first; these return to Planning)
 
