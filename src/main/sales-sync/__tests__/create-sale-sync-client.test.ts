@@ -7,6 +7,7 @@ import {
   classifyDeviceStatus,
   toCashierWireBody,
   exponentFor,
+  knownExponentFor,
   minorUnitsToDecimalString,
 } from '../create-sale-sync-client.js';
 import type { CaptureSalePayload } from '../capture-payload.js';
@@ -100,6 +101,19 @@ describe('exponentFor — ISO-4217 minor-unit exponent (shared with RT-15 return
     ['XYZ', 2],
   ])('%s → %s (unknown currencies default to 2)', (currency, exponent) => {
     expect(exponentFor(currency)).toBe(exponent);
+  });
+});
+
+describe('knownExponentFor — fail-closed lookup (RT-17 shift cash-up)', () => {
+  it.each<[string, number | undefined]>([
+    ['EGP', 2],
+    ['JPY', 0],
+    ['KWD', 3],
+    ['XYZ', undefined],
+    ['egp', undefined],
+    ['constructor', undefined],
+  ])('%s → %s (no default for an unknown currency)', (currency, exponent) => {
+    expect(knownExponentFor(currency)).toBe(exponent);
   });
 });
 
