@@ -13,7 +13,7 @@
  *   • Carried item (a): a pay-out above the expected drawer cash is refused, so
  *     a mistyped pay-out cannot leave the shift un-closable.
  *   • A non-zero variance needs an approver (10920: manager PIN for any
- *     variance); the approver id is supplied by the main-side caller, and is
+ *     variance); the approver is verified by the service (slice 4 part 2), and is
  *     recorded only for a non-zero variance.
  *   • Shift windows never overlap (review P2-1): a window starts after the
  *     terminal's previous local close (its instant excluded), a return ref a
@@ -38,6 +38,7 @@ import type { ShiftCashupService } from '../shift-cashup-service.js';
 import {
   CLOSED_AT,
   MANAGER,
+  MANAGER_PIN,
   OPENED_AT,
   cashLine,
   cashierSession,
@@ -345,12 +346,10 @@ describe('closeShift — the cash-up', () => {
     expect(factCounts(db)).toEqual(before);
   });
 
-  it('records a non-zero variance with its approver', () => {
+  it('records a non-zero variance with its verified approver', async () => {
     openShift();
-    const closed = service.closeShift({
-      countedCashMinor: FLOAT + 250,
-      varianceApprovedByUserId: MANAGER,
-    });
+    const approver = await service.verifyApprover({ managerPin: MANAGER_PIN });
+    const closed = service.closeShift({ countedCashMinor: FLOAT + 250, approver });
     expect(closed.varianceMinor).toBe(250);
     expect(storedBody(db, 2)).toMatchObject({
       variance: '2.50',
@@ -365,9 +364,10 @@ describe('closeShift — the cash-up', () => {
     expect(() => service.openShift({ openingFloatMinor: 0 })).not.toThrow();
   });
 
-  it('records no approver for a zero variance (the approver of a non-zero one only)', () => {
+  it('records no approver for a zero variance (the approver of a non-zero one only)', async () => {
     openShift();
-    service.closeShift({ countedCashMinor: FLOAT, varianceApprovedByUserId: MANAGER });
+    const approver = await service.verifyApprover({ managerPin: MANAGER_PIN });
+    service.closeShift({ countedCashMinor: FLOAT, approver });
     expect(storedBody(db, 2)).not.toHaveProperty('varianceApprovedByUserId');
   });
 });

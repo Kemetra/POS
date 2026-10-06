@@ -6,9 +6,11 @@
  *     envelope; the precise reason is logged main-side only;
  *   • probing (10941 item 3): a pay-out above the expected drawer cash is
  *     answered with the generic `pay_out_not_accepted` (no amount, no bound),
- *     and a non-zero variance with `variance_approval_unavailable`;
- *   • zero-variance close only: the bridge never passes an approver to the
- *     service (the verified-manager approver waits for 10942);
+ *     and a non-zero variance without an approver with
+ *     `variance_approval_required`;
+ *   • part 2: a non-zero variance closes with a manager PIN, verified main-side
+ *     (the PIN is never logged or echoed); a manager enrols a PIN through
+ *     `enrollManagerPin`;
  *   • nothing that reveals the expected cash, and no `users.id`, reaches the
  *     renderer: the close answers its id and time only, and the status is an
  *     explicit allowlist.
@@ -31,6 +33,7 @@ import type { ShiftCashupService } from '../shift-cashup-service.js';
 import {
   CLOSED_AT,
   MANAGER,
+  MANAGER_PIN,
   OPENED_AT,
   cashLine,
   factCounts,
@@ -41,7 +44,11 @@ import {
   storedBody,
   type ServiceHarness,
 } from './__helpers__/shift-cashup-service-fixture.js';
-import { USER } from './__helpers__/shift-sync-fixture.js';
+import { SCOPE, USER } from './__helpers__/shift-sync-fixture.js';
+import {
+  ManagerPinRefusedError,
+  type ManagerPinRefusalReason,
+} from '../../operator/manager-pin-enrollment.js';
 
 const FLOAT = 50_000;
 const ANY_ID = expect.any(String) as string;
@@ -51,6 +58,7 @@ let harness: ServiceHarness;
 type LogFn = (payload: Record<string, unknown>, message: string) => void;
 let logger: { info: Mock<LogFn>; warn: Mock<LogFn> };
 let bridge: ShiftCashupBridgeAPI;
+let enroll: Mock<(input: { managerPin: string }) => Promise<void>>;
 
 beforeAll(async () => {
   await initSalesSyncSql();
@@ -60,7 +68,8 @@ beforeEach(() => {
   db = freshSalesSyncDb();
   harness = serviceHarness(db);
   logger = { info: vi.fn<LogFn>(), warn: vi.fn<LogFn>() };
-  bridge = createShiftCashupBridge({ service: harness.service, logger });
+  enroll = vi.fn(() => Promise.resolve());
+  bridge = createShiftCashupBridge({ service: harness.service, enrollment: { enroll }, logger });
 });
 
 afterEach(() => {
@@ -117,14 +126,14 @@ describe('recorded facts', () => {
   });
 });
 
-describe('zero-variance close only (the approver waits for 10942)', () => {
+describe('a non-zero variance closes with a verified manager PIN (part 2, 10943)', () => {
   it.each([FLOAT - 1, FLOAT + 1])(
-    'refuses a count of %i as variance_approval_unavailable, writing nothing',
+    'refuses a count of %i without an approver as variance_approval_required, writing nothing',
     async (countedCashMinor) => {
       await openShift();
       const before = factCounts(db);
       await expect(bridge.close({ countedCashMinor })).resolves.toEqual(
-        refused('variance_approval_unavailable'),
+        refused('variance_approval_required'),
       );
       expect(factCounts(db)).toEqual(before);
       expect(logger.info).toHaveBeenCalledWith(
@@ -134,10 +143,104 @@ describe('zero-variance close only (the approver waits for 10942)', () => {
     },
   );
 
-  it('never passes an approver to the service, even if one is smuggled in', async () => {
+  it('closes with the verified manager as the approver, answering its id and time only', async () => {
+    const shiftId = await openShift();
+    const answer = await bridge.close({
+      countedCashMinor: FLOAT + 40,
+      approver: { managerPin: MANAGER_PIN },
+    });
+    expect(answer).toStrictEqual({ kind: 'closed', shiftId, closedAt: CLOSED_AT });
+    expect(harness.state.verifyCalls).toEqual([{ scope: SCOPE, pin: MANAGER_PIN }]);
+    expect(storedBody(db, 2)).toMatchObject({ varianceApprovedByUserId: MANAGER });
+    expect(JSON.stringify(answer)).not.toContain(MANAGER);
+  });
+
+  it('checks no PIN when no approver is sent', async () => {
+    await openShift();
+    await bridge.close({ countedCashMinor: FLOAT });
+    expect(harness.state.verifyCalls).toEqual([]);
+  });
+
+  it.each<[string, () => void, string]>([
+    ['a wrong PIN', () => (harness.state.verdict = { kind: 'invalid' }), 'approver_invalid'],
+    ['a locked PIN store', () => (harness.state.verdict = { kind: 'locked' }), 'approver_locked'],
+    [
+      'the closing cashier’s own PIN',
+      () => (harness.state.verdict = { kind: 'verified', userId: USER }),
+      'approver_is_closer',
+    ],
+  ])('answers %s as %s, writing nothing', async (_name, arrange, reason) => {
+    await openShift();
+    arrange();
+    const before = factCounts(db);
+    await expect(
+      bridge.close({ countedCashMinor: FLOAT + 1, approver: { managerPin: MANAGER_PIN } }),
+    ).resolves.toEqual(refused(reason));
+    expect(factCounts(db)).toEqual(before);
+  });
+
+  it('never passes anything but the PIN as the approver, even if an id is smuggled in', async () => {
     await openShift();
     const smuggled = { countedCashMinor: FLOAT + 1, varianceApprovedByUserId: MANAGER };
-    await expect(bridge.close(smuggled)).resolves.toEqual(refused('variance_approval_unavailable'));
+    await expect(bridge.close(smuggled)).resolves.toEqual(refused('variance_approval_required'));
+  });
+
+  it('never logs the PIN', async () => {
+    await openShift();
+    harness.state.verdict = { kind: 'invalid' };
+    await bridge.close({ countedCashMinor: FLOAT + 1, approver: { managerPin: MANAGER_PIN } });
+    const logged = JSON.stringify([logger.info.mock.calls, logger.warn.mock.calls]);
+    expect(logged).not.toContain(MANAGER_PIN);
+    expect(logger.info).toHaveBeenCalledWith(
+      { op: 'close', reason: 'approver_invalid' },
+      SHIFT_CASHUP_REFUSED_LOG,
+    );
+  });
+});
+
+describe('enrollManagerPin', () => {
+  it('enrols with the PIN alone and answers enrolled', async () => {
+    await expect(bridge.enrollManagerPin({ managerPin: MANAGER_PIN })).resolves.toStrictEqual({
+      kind: 'enrolled',
+    });
+    expect(enroll).toHaveBeenCalledWith({ managerPin: MANAGER_PIN });
+  });
+
+  it('passes nothing smuggled in beside the PIN', async () => {
+    const smuggled = { managerPin: MANAGER_PIN, userId: MANAGER };
+    await bridge.enrollManagerPin(smuggled);
+    expect(enroll).toHaveBeenCalledWith({ managerPin: MANAGER_PIN });
+  });
+
+  it.each<[ManagerPinRefusalReason, string]>([
+    ['feature_disabled', 'feature_disabled'],
+    ['no_session', 'no_session'],
+    ['session_locked', 'session_locked'],
+    ['not_manager', 'not_manager'],
+    ['no_manager_identity', 'not_manager'],
+    ['invalid_pin', 'invalid_input'],
+  ])('answers the refusal %s as %s (logged precisely, never the PIN)', async (reason, answer) => {
+    enroll.mockRejectedValueOnce(new ManagerPinRefusedError(reason));
+    await expect(bridge.enrollManagerPin({ managerPin: MANAGER_PIN })).resolves.toEqual(
+      refused(answer),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      { op: 'enrollManagerPin', reason },
+      SHIFT_CASHUP_REFUSED_LOG,
+    );
+    expect(JSON.stringify(logger.info.mock.calls)).not.toContain(MANAGER_PIN);
+  });
+
+  it('answers an unexpected failure as unavailable, logging its name only', async () => {
+    enroll.mockRejectedValueOnce(new RangeError(`pin ${MANAGER_PIN}`));
+    await expect(bridge.enrollManagerPin({ managerPin: MANAGER_PIN })).resolves.toEqual(
+      refused('unavailable'),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      { op: 'enrollManagerPin', error: 'RangeError' },
+      SHIFT_CASHUP_FAILED_LOG,
+    );
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain(MANAGER_PIN);
   });
 });
 
@@ -233,7 +336,7 @@ describe('refusal mapping', () => {
         throw thrown;
       },
     } as unknown as ShiftCashupService;
-    return createShiftCashupBridge({ service, logger });
+    return createShiftCashupBridge({ service, enrollment: { enroll }, logger });
   }
 
   it.each<[string, unknown, string]>([

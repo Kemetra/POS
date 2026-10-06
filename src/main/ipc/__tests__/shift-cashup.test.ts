@@ -3,7 +3,8 @@
  * input, so each payload is validated against a closed shape before the
  * bridge runs; the five channels are default-denied while the session is
  * locked; and nothing is registered with `POS_PULSE_FEATURE_SHIFT_CASHUP` off.
- * The close takes a count only: no approver can be sent (10942 pending).
+ * Part 2 (10943): the close takes a count and, optionally, an approver that is
+ * a manager PIN only (6–8 digits); `enrollManagerPin` takes a PIN only.
  */
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -27,10 +28,11 @@ import {
   SessionLockedError,
 } from '../session-lock-guard.js';
 import { registerShiftCashupHandlers, registerShiftCashupIpc } from '../shift-cashup.js';
+import { aeadSafeStorage } from '../../operator/__tests__/__helpers__/offline-grant-fixture.js';
 
 type Listener = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
-const { OPEN, PAY_IN, PAY_OUT, CLOSE, STATUS } = SHIFT_CASHUP_IPC_CHANNELS;
+const { OPEN, PAY_IN, PAY_OUT, CLOSE, STATUS, ENROLL_MANAGER_PIN } = SHIFT_CASHUP_IPC_CHANNELS;
 const CHANNELS = Object.values(SHIFT_CASHUP_IPC_CHANNELS);
 const INVALID = { kind: 'refused', reason: 'invalid_input' };
 
@@ -56,6 +58,7 @@ function setup(locked = false) {
     payOut: vi.fn(() => Promise.resolve({ kind: 'recorded' })),
     close: vi.fn(() => Promise.resolve({ kind: 'closed' })),
     status: vi.fn(() => Promise.resolve({ kind: 'status' })),
+    enrollManagerPin: vi.fn(() => Promise.resolve({ kind: 'enrolled' })),
   };
   registerShiftCashupHandlers(
     createSessionLockGuardedIpcMain(fake.ipcMain, () => locked),
@@ -68,7 +71,7 @@ const NOTE_MAX = 'n'.repeat(SHIFT_NOTE_MAX_LENGTH);
 const MOVEMENT = { amountMinor: 1, reasonCode: 'bank_drop' };
 
 describe('shiftCashup IPC registration', () => {
-  it('registers exactly the five channels, none on the lock allowlist', () => {
+  it('registers exactly the six channels, none on the lock allowlist', () => {
     const { handlers } = setup();
     expect([...handlers.keys()].sort()).toEqual([...CHANNELS].sort());
     for (const channel of CHANNELS) expect(LOCKED_ALLOWED_CHANNELS.has(channel)).toBe(false);
@@ -96,6 +99,10 @@ describe('valid payloads reach the bridge unchanged', () => {
     [PAY_OUT, 'payOut', { amountMinor: 1, reasonCode: 'other', note: 'مصروف نثري' }],
     [CLOSE, 'close', { countedCashMinor: 0 }],
     [CLOSE, 'close', { countedCashMinor: 54_000 }],
+    [CLOSE, 'close', { countedCashMinor: 54_001, approver: { managerPin: '246810' } }],
+    [CLOSE, 'close', { countedCashMinor: 1, approver: { managerPin: '12345678' } }],
+    [ENROLL_MANAGER_PIN, 'enrollManagerPin', { managerPin: '246810' }],
+    [ENROLL_MANAGER_PIN, 'enrollManagerPin', { managerPin: '00000000' }],
   ])('%s → %s(%j)', async (channel, member, payload) => {
     const { invoke, bridge } = setup();
     await invoke(channel, payload);
@@ -148,6 +155,21 @@ describe('anything outside the closed shapes is invalid_input, before the bridge
     ...BAD_MINOR.map((v): [string, unknown] => [CLOSE, { countedCashMinor: v }]),
     [CLOSE, { countedCashMinor: 1, varianceApprovedByUserId: 'u-2' }],
     [CLOSE, { countedCashMinor: 1, closeKind: 'forced' }],
+    [CLOSE, { countedCashMinor: 1, approver: null }],
+    [CLOSE, { countedCashMinor: 1, approver: '246810' }],
+    [CLOSE, { countedCashMinor: 1, approver: {} }],
+    [CLOSE, { countedCashMinor: 1, approver: { managerPin: 246810 } }],
+    [CLOSE, { countedCashMinor: 1, approver: { managerPin: '12345' } }],
+    [CLOSE, { countedCashMinor: 1, approver: { managerPin: '123456789' } }],
+    [CLOSE, { countedCashMinor: 1, approver: { managerPin: '12345a' } }],
+    [CLOSE, { countedCashMinor: 1, approver: { managerPin: '246810', userId: 'u-2' } }],
+    [CLOSE, { countedCashMinor: -1, approver: { managerPin: '246810' } }],
+    ...NOT_RECORDS.map((p): [string, unknown] => [ENROLL_MANAGER_PIN, p]),
+    [ENROLL_MANAGER_PIN, {}],
+    [ENROLL_MANAGER_PIN, { managerPin: 246810 }],
+    [ENROLL_MANAGER_PIN, { managerPin: '1234' }],
+    [ENROLL_MANAGER_PIN, { managerPin: '246810\n' }],
+    [ENROLL_MANAGER_PIN, { managerPin: '246810', userId: 'u-2' }],
     [STATUS, { scope: 'all' }],
     [STATUS, 'x'],
     [STATUS, null],
@@ -181,6 +203,9 @@ describe('registerShiftCashupIpc — the flag gate', () => {
       getSession: () => null,
       isSessionLocked: () => false,
       pairedScope: () => Promise.resolve(null),
+      pairingEpoch: () => null,
+      getManager: () => null,
+      safeStorage: aeadSafeStorage(),
       now: () => '2026-10-05T08:00:00.000Z',
       logger: { info: vi.fn(), warn: vi.fn() },
     });
@@ -192,9 +217,16 @@ describe('registerShiftCashupIpc — the flag gate', () => {
     expect(raw.handle).not.toHaveBeenCalled();
   });
 
-  it('registers the five channels over the composed service with the flag on', async () => {
+  it('registers the six channels over the composed service with the flag on', async () => {
     const { handlers, invoke } = register(true);
     expect([...handlers.keys()].sort()).toEqual([...CHANNELS].sort());
     await expect(invoke(STATUS)).resolves.toEqual({ kind: 'refused', reason: 'no_session' });
+    await expect(
+      invoke(CLOSE, { countedCashMinor: 1, approver: { managerPin: '246810' } }),
+    ).resolves.toEqual({ kind: 'refused', reason: 'no_session' });
+    await expect(invoke(ENROLL_MANAGER_PIN, { managerPin: '246810' })).resolves.toEqual({
+      kind: 'refused',
+      reason: 'no_session',
+    });
   });
 });

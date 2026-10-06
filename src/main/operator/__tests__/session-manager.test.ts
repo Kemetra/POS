@@ -305,3 +305,44 @@ describe('SessionManager — RT-113 P2 authority latch (Codex P1 #1 / review F1-
     expect(cashier(m).authority_latch).toBeUndefined();
   });
 });
+
+describe('SessionManager — RT-17 slice 4 part 2: the manager’s users.id (manager PIN enrolment)', () => {
+  const MANAGER_USER = '0190f5a2-3b4c-7d8e-9f01-23456789abce';
+
+  function signIn(m: SessionManager, role: 'manager' | 'admin' | 'cashier', id?: string) {
+    return m.create({
+      operator_id: 'clerk-op',
+      display_name: 'Op',
+      role,
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: 'be-1',
+      ...(id === undefined ? {} : { manager_user_id: id }),
+    });
+  }
+
+  it.each(['manager', 'admin'] as const)(
+    'keeps a %s session’s users.id from the sign-in, lower-cased',
+    (role) => {
+      const record = signIn(makeManager(), role, MANAGER_USER.toUpperCase());
+      expect(record.manager_user_id).toBe(MANAGER_USER);
+      // It is not the cashier identity: the shift facts stay cashier-only.
+      expect(record.user_id).toBeUndefined();
+    },
+  );
+
+  it('never keeps one on a cashier session', () => {
+    expect(signIn(makeManager(), 'cashier', MANAGER_USER).manager_user_id).toBeUndefined();
+  });
+
+  it('keeps none when the sign-in carried none (or an empty one)', () => {
+    expect(signIn(makeManager(), 'manager').manager_user_id).toBeUndefined();
+    expect(signIn(makeManager(), 'manager', '').manager_user_id).toBeUndefined();
+  });
+
+  it('never puts it in the renderer’s bridge view (main-only)', () => {
+    const m = makeManager();
+    signIn(m, 'manager', MANAGER_USER);
+    expect(JSON.stringify(m.getCurrentBridgeView())).not.toContain(MANAGER_USER);
+  });
+});

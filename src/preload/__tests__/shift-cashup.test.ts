@@ -28,6 +28,16 @@ describe('preload shiftCashup bridge', () => {
     ['payIn', SHIFT_CASHUP_IPC_CHANNELS.PAY_IN, movement],
     ['payOut', SHIFT_CASHUP_IPC_CHANNELS.PAY_OUT, movement],
     ['close', SHIFT_CASHUP_IPC_CHANNELS.CLOSE, { countedCashMinor: 0 }],
+    [
+      'close',
+      SHIFT_CASHUP_IPC_CHANNELS.CLOSE,
+      { countedCashMinor: 1, approver: { managerPin: '246810' } },
+    ],
+    [
+      'enrollManagerPin',
+      SHIFT_CASHUP_IPC_CHANNELS.ENROLL_MANAGER_PIN,
+      { managerPin: '246810' },
+    ],
   ] as const)('%s invokes its channel with the request', async (member, channel, arg) => {
     const { shiftCashup } = await import('../shift-cashup');
     const call = shiftCashup[member] as (a: unknown) => Promise<unknown>;
@@ -49,6 +59,7 @@ describe('preload shiftCashup bridge', () => {
     };
     expect(Object.keys(api.shiftCashup ?? {}).sort()).toEqual([
       'close',
+      'enrollManagerPin',
       'open',
       'payIn',
       'payOut',

@@ -12,6 +12,7 @@ import {
   handleFor,
   seedSale,
 } from '../../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
+import type { ManagerPinVerdict } from '../../../operator/manager-pin-store.js';
 import { composeShiftCashupService, type ShiftCashupSession } from '../../compose-shift-cashup.js';
 import type { ShiftCashupService } from '../../shift-cashup-service.js';
 import type { ShiftScope } from '../../shift-cashup-repo.js';
@@ -20,6 +21,8 @@ import { SCOPE, USER } from './shift-sync-fixture.js';
 export const OPENED_AT = '2026-10-05T08:00:00.000Z';
 export const CLOSED_AT = '2026-10-05T16:00:00.000Z';
 export const MANAGER = '0190f5a2-3b4c-7d8e-9f01-23456789abce';
+/** A well-formed manager PIN (the fake verifier answers `state.verdict` for any PIN). */
+export const MANAGER_PIN = '246810';
 
 /** One millisecond before / after an instant. */
 export function msBefore(iso: string): string {
@@ -63,6 +66,14 @@ export interface ServiceHarness {
     clock: string;
     /** Runs while the (async) pairing read is in flight: a race in the middle of it. */
     duringPairedScopeRead: () => void;
+    /** The RT-215 pairing epoch (null while unpaired or revoked). */
+    epoch: string | null;
+    /** What the manager PIN verifier answers. */
+    verdict: ManagerPinVerdict;
+    /** Runs while the (async) manager PIN verification is in flight. */
+    duringVerify: () => void;
+    /** Every verification asked of the manager PIN store. */
+    verifyCalls: Array<{ scope: ShiftScope; pin: string }>;
   };
 }
 
@@ -75,6 +86,10 @@ export function serviceHarness(db: SqlJsDatabase): ServiceHarness {
     pairedScope: SCOPE,
     clock: OPENED_AT,
     duringPairedScopeRead: () => undefined,
+    epoch: 'epoch-1',
+    verdict: { kind: 'verified', userId: MANAGER },
+    duringVerify: () => undefined,
+    verifyCalls: [],
   };
   let ids = 0;
   const service = composeShiftCashupService({
@@ -86,6 +101,15 @@ export function serviceHarness(db: SqlJsDatabase): ServiceHarness {
       await Promise.resolve();
       state.duringPairedScopeRead();
       return state.pairedScope;
+    },
+    pairingEpoch: () => state.epoch,
+    managerPins: {
+      verify: async (input) => {
+        state.verifyCalls.push(input);
+        await Promise.resolve();
+        state.duringVerify();
+        return state.verdict;
+      },
     },
     now: () => state.clock,
     newId: () => {

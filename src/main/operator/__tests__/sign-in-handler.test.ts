@@ -117,6 +117,12 @@ describe('SignInHandler — manager/admin path', () => {
       expect(res.session).not.toHaveProperty('backend_session_id');
     }
     expect(sessionManager.getCurrent()?.operator_id).toBe('clerk-user-1');
+    // RT-17 slice 4 part 2: the manager's users.id is kept main-side, for the
+    // local manager PIN enrolment, and never reaches the renderer.
+    expect(sessionManager.getCurrent()?.manager_user_id).toBe(
+      '33333333-3333-7333-8333-333333333333',
+    );
+    expect(JSON.stringify(res)).not.toContain('33333333-3333-7333-8333-333333333333');
   });
 
   it('splits the credential seam: JWT in jwtHolder (operator-identity routes) AND envelope in envelopeHolder (sale-sync) — 016 review HIGH', async () => {

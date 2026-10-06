@@ -16,6 +16,10 @@ import { describe, expect, it } from 'vitest';
  *  - RT-17 slice 4 part 1: the shift cash-up IPC is registered only with the
  *    flag on (`registerShiftCashupIpc`, unit-tested in `ipc/shift-cashup`),
  *    on the lock-guarded ipcMain, over the live operator session.
+ *  - Part 2: the same registration carries the RT-215 pairing epoch (the
+ *    revocation-aware re-check, F2), the live manager identity for the
+ *    manager PIN enrolment, and safeStorage for the PIN seal; a re-pair purges
+ *    the other terminals' manager PIN records with the cashier ones.
  */
 
 const source = readFileSync(resolve(__dirname, '../index.ts'), 'utf-8');
@@ -50,6 +54,18 @@ describe('main/index.ts wires the RT-17 shift sync engine', () => {
   it('gates every shift call on the live operator session on the paired terminal', () => {
     expect(source).toMatch(
       /registerShiftCashupIpc\(\{[^}]*getSession: \(\) =>\s*resolveSessionScope\(\s*operatorSessionManager\.getCurrent\(\),\s*pairingStore\.getCurrentTerminalId\(\),\s*\),\s*isSessionLocked: \(\) => operatorSessionManager\.getCurrent\(\)\?\.lock_state === 'locked',\s*pairedScope: async \(\) => pairedShiftScope\(await pairingStore\.getStatus\(\)\),/,
+    );
+  });
+
+  it('wires the pairing epoch, the manager identity and the PIN seal (part 2)', () => {
+    expect(source).toMatch(
+      /registerShiftCashupIpc\(\{[^}]*pairedScope: async \(\) => pairedShiftScope\(await pairingStore\.getStatus\(\)\),\s*pairingEpoch: \(\) => pairingStore\.getPairingEpoch\(\),\s*getManager: \(\) => managerIdentityOf\(operatorSessionManager\.getCurrent\(\)\),\s*safeStorage,/,
+    );
+  });
+
+  it('purges the other terminals’ manager PIN records on a re-pair, with the cashier ones', () => {
+    expect(source).toMatch(
+      /purgeOtherTerminalPins: \(terminalId\) =>\s*purgeOtherTerminalPinRecords\(db, terminalId\) \+\s*purgeOtherTerminalManagerPinRecords\(db, terminalId\),/,
     );
   });
 });

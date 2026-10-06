@@ -122,11 +122,20 @@ describe('readStatus re-checks the admitted session after the pairing read (revi
       'no_session',
     ],
     ['the flag turned off', (s) => (s.enabled = false), 'feature_disabled'],
+    // F2 (10944): the re-check re-reads the RT-215 pairing epoch, so a re-pair
+    // that keeps the same tenant, branch and terminal id is caught too.
+    ['a re-pair of the same terminal (new epoch)', (s) => (s.epoch = 'epoch-2'), 'no_session'],
+    ['a revocation latched (no epoch)', (s) => (s.epoch = null), 'no_session'],
   ])('refuses when %s lands during the read', async (_name, race, reason) => {
     harness.state.duringPairedScopeRead = () => {
       race(harness.state);
     };
     await expect(harness.service.readStatus()).rejects.toThrow(refusal(reason));
+  });
+
+  it('refuses on a revoked or unpaired terminal (no epoch), with no race', async () => {
+    harness.state.epoch = null;
+    await expect(harness.service.readStatus()).rejects.toThrow(refusal('no_session'));
   });
 
   it('refuses a session whose terminal is not the paired one, with no race', async () => {
