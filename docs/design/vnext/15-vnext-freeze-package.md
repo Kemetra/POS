@@ -149,7 +149,7 @@ owner review.
    scanner, R-hw): **timing, not length.** Characters arriving with inter-key gaps ≤ 35 ms and
    ending in Enter are a burst. There is **no fixed minimum length**: the catalogue allows short
    codes (the catalogue bridge has no minimum, and its tests use codes like `DUP`, `0000`,
-   `AB-12`), so a burst of 2 or more characters qualifies. If the bench shows timing alone is
+   `AB-12`), so a burst of **1 or more** characters qualifies, provided the gap from the last character to Enter is also ≤ 35 ms (catalogue aliases have no length constraint: `ipc/catalogue.ts`, migration `0030`). If the bench shows timing alone is
    unreliable, the robust option is to program a scanner prefix and suffix (decision D-K1 bench
    test). A burst that
    arrives while focus is on any **button, row control, note field or the page body** is routed to
@@ -166,7 +166,8 @@ owner review.
    add-confirm dialog no longer exists, so this applies only to the remaining dialogs (void,
    sign-out, manager approval, cancel after card).
 6. **Focus returns to the scan owner after scan/add transitions**: an add (scan or search pick),
-   undo of an add, dialog close, Back from Checkout and «بيع جديد». **Keyboard row-edit actions keep
+   undo of an add, Back from Checkout and «بيع جديد». **A dialog close returns focus to its invoker**
+   (DESIGN.md Dialog rule; S17 returns to the exact prior state), not to the scan owner. **Keyboard row-edit actions keep
    row context**: `+`/`−` and the note keep focus on the same row, and `Delete` (with undo) moves
    focus to the neighbouring row, or to the scan owner when the cart becomes empty. This is safe
    because wedge bursts are routed to the scan owner whatever has focus (rule 2). The other
@@ -415,7 +416,7 @@ Every implementation slice:
 | ID | Decision / contract | Blocks | Recommendation |
 |---|---|---|---|
 | **D-K1** | RT-24 §C.5 key map (F-keys) | VN-S5 keys, keycaps | Keep wave 1 keyless (§3.5); conflict-test on the bench with the pilot scanner suffix |
-| **D-U1** | Undo of the last add / delete: restore contract + audit event | A1 `UndoNotice`, M-S8 | Cart-bridge "restore line" with `cart.line_restored` audit; until then delete stays immediate (today) |
+| **D-U1** | Undo of the last add / delete: restore contract + audit event | A1 `UndoNotice`, M-S8 | Define all three inverses, each audited: **undo of a new line** removes that line; **undo of a merged +1** decrements that line by exactly one, never below its quantity before the add; **undo of a delete** restores the line (cart-bridge "restore line", `cart.line_restored`). Undo is offered only for the last action and only while the cart is editable. Until D-U1 closes, delete stays immediate (today) and the direct-add part of W1-B waits |
 | **D-F2** | Main-process plausibility bound on cash received | F-02 main side | Bound by currency maximum (RT-17 already has a shift-amount bound) |
 | **D-S1** | Shift is advisory by design (RT-17 comment 10919). Confirm on the bench whether a settled pre-shift cash sale is counted in the next shift's expected cash | S20, N-06 | Bench check under RT-17; only if it is not counted, raise a contract item |
 | **D-B1** | Drawer-failure presentation: today a persistent bilingual banner (about 178 px) on every screen, across sessions and restarts (N-08) | W1-A banner work, M-C4 | Show it inside cash completion and in the status indicator; clear it after an acknowledgement or the next successful drawer event. This changes 008's presentation and needs an owner decision |
