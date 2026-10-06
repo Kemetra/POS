@@ -38,6 +38,7 @@ import type { PairingStatus } from '../../shared/pairing-types.js';
 import type { DatabaseHandle } from '../db/client.js';
 import { uuidv7 } from '../returns/uuidv7.js';
 import { DEFAULT_CURRENCY_CODE } from '../sales-sync/create-sale-sync-client.js';
+import { DRAIN_MARGIN_MS } from '../sales-sync/settled-within.js';
 import { createShiftCashupRepo, type ShiftScope } from './shift-cashup-repo.js';
 import {
   createShiftCashupService,
@@ -58,8 +59,12 @@ export type { ShiftCashupSession } from './shift-cashup-service.js';
 /** The shift sync tick: the sale-sync cadence (`SALE_SYNC_INTERVAL_MS` in `index.ts`). */
 export const SHIFT_SYNC_INTERVAL_MS = 5_000;
 
-/** The longest a stop waits for a send in flight: the shift sync client's request timeout. */
-export const SHIFT_SYNC_DRAIN_TIMEOUT_MS = SHIFT_SYNC_REQUEST_TIMEOUT_MS;
+/**
+ * The longest a stop waits for a send in flight: the shift sync client's
+ * request timeout plus the drain margin, so the drain never gives up before
+ * the client has aborted that send.
+ */
+export const SHIFT_SYNC_DRAIN_TIMEOUT_MS = SHIFT_SYNC_REQUEST_TIMEOUT_MS + DRAIN_MARGIN_MS;
 
 /** Stops the shift sync worker (see the module header); settles with its drain. */
 export type ShiftSyncStop = () => Promise<void>;

@@ -97,7 +97,7 @@ import {
 } from './app/paired-workers.js';
 import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
-import { scheduleSaleSync } from './sales-sync/schedule-sale-sync.js';
+import { SALE_SYNC_DRAIN_TIMEOUT_MS, scheduleSaleSync } from './sales-sync/schedule-sale-sync.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
 import { registerReturnsHandlers } from './ipc/returns.js';
 import { composeReturns, scheduleReturnsResolver } from './returns/compose-returns.js';
@@ -1885,8 +1885,6 @@ singleInstanceReady
         // overlapping ticks; the interval is cleared and the engine latched stopped
         // on quit (closeDbHandle), so a send in flight writes nothing locally.
         const SALE_SYNC_INTERVAL_MS = 5_000;
-        // = the sale-sync client's request timeout.
-        const SALE_SYNC_DRAIN_TIMEOUT_MS = 15_000;
         const stopSaleSync = scheduleSaleSync({
           engine: saleSyncEngine,
           latchStopped: () => {
