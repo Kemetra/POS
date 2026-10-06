@@ -129,7 +129,18 @@ const CURRENCY_MINOR_UNIT_EXPONENT: Readonly<Record<string, number>> = {
 const DEFAULT_MINOR_UNIT_EXPONENT = 2;
 
 export function exponentFor(currencyCode: string): number {
-  return CURRENCY_MINOR_UNIT_EXPONENT[currencyCode] ?? DEFAULT_MINOR_UNIT_EXPONENT;
+  return knownExponentFor(currencyCode) ?? DEFAULT_MINOR_UNIT_EXPONENT;
+}
+
+/**
+ * RT-17: the minor-unit exponent of a currency in the table above, or
+ * `undefined` for any other code — for callers that must fail closed instead of
+ * assuming 2 (the shift cash-up: an unknown currency is a 400 on Backend-Core).
+ */
+export function knownExponentFor(currencyCode: string): number | undefined {
+  return Object.hasOwn(CURRENCY_MINOR_UNIT_EXPONENT, currencyCode)
+    ? CURRENCY_MINOR_UNIT_EXPONENT[currencyCode]
+    : undefined;
 }
 
 /**

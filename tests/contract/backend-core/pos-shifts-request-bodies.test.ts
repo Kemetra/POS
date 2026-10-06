@@ -19,18 +19,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildTree,
-  child,
-  type YamlNode,
-} from '../../../../tests/contract/backend-core/yaml-tree.js';
+import { buildTree, child, type YamlNode } from './yaml-tree.js';
 import {
   buildCashMovementRequest,
   buildCloseShiftRequest,
   buildOpenShiftRequest,
-} from '../shift-wire.js';
+} from '../../../src/main/shift-cashup/shift-wire.js';
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const CONTRACT = path.join(REPO_ROOT, 'contracts/backend-core/openapi/pos-shifts.openapi.yaml');
 const ROOT = buildTree({ name: 'pos-shifts', text: readFileSync(CONTRACT, 'utf-8') });
 

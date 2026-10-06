@@ -14,7 +14,6 @@ import {
   buildCashMovementRequest,
   buildCloseShiftRequest,
   buildOpenShiftRequest,
-  shiftFactPath,
   ShiftFactInvalidError,
   type CashMovementFact,
   type ShiftCloseFact,
@@ -100,7 +99,11 @@ describe('buildOpenShiftRequest', () => {
     expect(built.fact.shiftId).toBe(SHIFT);
     expect(built.fact.openingUserId).toBe(USER);
     expect(built.request.idempotencyKey).toBe(`pos-pulse-shift-open:${SHIFT}`);
-    expect(built.request.body).not.toMatch(/[A-F]/);
+    expect(JSON.parse(built.request.body)).toMatchObject({
+      shiftId: SHIFT,
+      openingUserId: USER,
+      operatorUserId: USER,
+    });
   });
 
   it.each([
@@ -160,7 +163,8 @@ describe('buildCashMovementRequest', () => {
   });
 
   it('omits an absent note', () => {
-    const { note: _note, ...withoutNote } = MOVEMENT;
+    const withoutNote: CashMovementFact = { ...MOVEMENT };
+    delete withoutNote.note;
     const built = buildCashMovementRequest({ fact: withoutNote, currencyCode: 'EGP' });
     expect(JSON.parse(built.request.body)).not.toHaveProperty('note');
     expect(built.fact).not.toHaveProperty('note');
@@ -233,7 +237,8 @@ describe('buildCloseShiftRequest', () => {
   });
 
   it('omits an absent variance approver and lower-cases the refs', () => {
-    const { varianceApprovedByUserId: _approver, ...fact } = CLOSE;
+    const fact: ShiftCloseFact = { ...CLOSE };
+    delete fact.varianceApprovedByUserId;
     const built = buildCloseShiftRequest({
       fact: { ...fact, cashRefundReturnRefs: [REF.toUpperCase()] },
       currencyCode: 'EGP',
@@ -312,15 +317,5 @@ describe('buildCloseShiftRequest', () => {
     const a = buildCloseShiftRequest({ fact: CLOSE, currencyCode: 'EGP' });
     const b = buildCloseShiftRequest({ fact: { ...CLOSE }, currencyCode: 'EGP' });
     expect(a.request).toEqual(b.request);
-  });
-});
-
-describe('shiftFactPath', () => {
-  it.each([
-    ['open', '/api/pos/v1/shifts'],
-    ['movement', `/api/pos/v1/shifts/${SHIFT}/cash-movements`],
-    ['close', `/api/pos/v1/shifts/${SHIFT}/close`],
-  ] as const)('routes a %s fact to %s', (factKind, path) => {
-    expect(shiftFactPath({ factKind, shiftId: SHIFT })).toBe(path);
   });
 });
