@@ -22,17 +22,22 @@
  *
  * Review P2-1 — the clock never runs a shift backwards: a movement or a close
  * whose `now` is before the open shift's `openedAt`, or an open whose `now`
- * is before the terminal's last local close, is refused (`clock_regressed`)
- * rather than recorded out of order. (The cash-up window itself also starts
- * after that last close; see `shift-cashup-sources.ts`.)
+ * is not strictly after the terminal's last local close, is refused
+ * (`clock_regressed`) rather than recorded out of order. The cash-up window
+ * starts after that last close, its instant excluded (see
+ * `shift-cashup-sources.ts`), so an open in the close's own millisecond
+ * would leave activity later in that millisecond to neither shift (Codex
+ * round 2): the next open is at least 1 ms after the close.
  *
  * Review P2-2 — drawer activity in flight: while the terminal has a refund
  * payout started but not completed, or a settled payment the finalize
  * listener has not turned into a sale yet, the drawer holds (or lacks) cash
  * the cash-up cannot read. The close is refused (`drawer_activity_pending`),
  * and so is every pay-out: its guard compares against that same under-read
- * expected cash. A pay-in only adds cash and is not held. The status shows
- * both counts (`pendingDrawerActivity`).
+ * expected cash. So is an open (Codex round 2): activity started before the
+ * open and completed after it would land in the new shift's window although
+ * the opening float already reflects it. A pay-in only adds cash and is not
+ * held. The status shows both counts (`pendingDrawerActivity`).
  *
  *   openShift           the float, in the terminal's capture currency.
  *   recordCashMovement  a pay-in or pay-out on the open shift. Carried item
@@ -192,10 +197,14 @@ function approverOf(input: { varianceMinor: number; close: CloseShiftInput }): {
   return { varianceApprovedByUserId: approver };
 }
 
-/** Review P2-1: `now` must not lie before `floor` (an instant), else `clock_regressed`. */
-function requireNotBefore(input: { now: string; floor: string | null }): void {
+/**
+ * Review P2-1: `now` must lie at least `gapMs` after `floor` (an instant),
+ * else `clock_regressed`. 0 = not before (a fact on the open shift); 1 =
+ * strictly after, in whole-millisecond instants (an open after a close).
+ */
+function requireClockFrom(input: { now: string; floor: string | null; gapMs: 0 | 1 }): void {
   if (input.floor === null) return;
-  if (Date.parse(input.now) < Date.parse(input.floor)) refuse('clock_regressed');
+  if (Date.parse(input.now) - Date.parse(input.floor) < input.gapMs) refuse('clock_regressed');
 }
 
 /** Review P2-2: no drawer cash in flight on the terminal, else `drawer_activity_pending`. */
@@ -273,7 +282,7 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
   /** The terminal's open shift at `now`, never before its open (P2-1). */
   function openShiftAt(input: { scope: ShiftScope; now: string }): OpenShiftView {
     const open = repo.findOpenShift(input.scope) ?? shiftNotOpen();
-    requireNotBefore({ now: input.now, floor: open.openedAt });
+    requireClockFrom({ now: input.now, floor: open.openedAt, gapMs: 0 });
     return open;
   }
 
@@ -298,7 +307,8 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     openShift(input) {
       const { scope, userId } = admit();
       const now = deps.now();
-      requireNotBefore({ now, floor: deps.sources.lastClosedAt(scope) });
+      requireClockFrom({ now, floor: deps.sources.lastClosedAt(scope), gapMs: 1 });
+      requireDrawerSettled({ sources: deps.sources, scope });
       const opened = { shiftId: deps.newId(), openedAt: now };
       repo.recordOpen({
         scope,

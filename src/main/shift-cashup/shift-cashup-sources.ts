@@ -73,6 +73,10 @@ interface PrepareAll<Row> {
 interface PrepareGet<Row> {
   get(...params: unknown[]): Row | undefined;
 }
+/** A `COUNT(*)` always yields its one row. */
+interface PrepareCount {
+  get(...params: unknown[]): { n: number };
+}
 
 /**
  * `column` in the window; params `from, to, after`. A null `after` is no
@@ -122,7 +126,7 @@ function scopeParams(scope: ShiftScope): string[] {
 
 export function createShiftCashupSources(db: DatabaseHandle): ShiftCashupSources {
   function count(sql: string, params: readonly unknown[]): number {
-    return (db.prepare(sql) as PrepareGet<{ n: number }>).get(...params)?.n ?? 0;
+    return (db.prepare(sql) as PrepareCount).get(...params).n;
   }
 
   function lastClosedAt(scope: ShiftScope): string | null {

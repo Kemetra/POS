@@ -18,10 +18,12 @@
  *   • Shift windows never overlap (review P2-1): a window starts after the
  *     terminal's previous local close (its instant excluded), a return ref a
  *     previous close claimed is never claimed again, and a clock behind the
- *     open shift (or, for an open, behind the last close) is refused.
+ *     open shift — or, for an open, not strictly after the last close (Codex
+ *     round 2) — is refused.
  *   • Drawer activity in flight (review P2-2): a refund payout started but not
  *     completed, or a settled payment not finalized into a sale yet, holds the
- *     close and every pay-out (the drawer cash would be under-read).
+ *     open (Codex round 2), the close and every pay-out (the drawer cash would
+ *     be under-read, or counted again after the open).
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -355,9 +357,10 @@ describe('closeShift — the cash-up', () => {
     });
   });
 
-  it('lets a new shift open once the previous one is closed', () => {
+  it('lets a new shift open once the previous one is closed (1 ms after its close)', () => {
     openShift();
     service.closeShift({ countedCashMinor: FLOAT });
+    harness.state.clock = msAfter(CLOSED_AT);
     expect(() => service.openShift({ openingFloatMinor: 0 })).not.toThrow();
   });
 
@@ -368,21 +371,27 @@ describe('closeShift — the cash-up', () => {
   });
 });
 
-/** Close the open shift at the clock, reopen at that same instant, then move the clock on. */
+/** Close the open shift at the clock, reopen 1 ms later (the earliest allowed), then move on. */
 function closeAndReopen(countedCashMinor: number): void {
   service.closeShift({ countedCashMinor });
+  harness.state.clock = msAfter(harness.state.clock);
   service.openShift({ openingFloatMinor: 0 });
   harness.state.clock = LATER;
 }
 
 describe('shift windows never overlap (review P2-1)', () => {
-  it('leaves a sale at the previous close instant to that close (same-ms reopen)', () => {
+  it('counts a sale at the close instant in that close, one 1 ms later in the next shift', () => {
     openShift();
     seedShiftSale(db, { saleId: 's-edge', finalizedAt: CLOSED_AT, lines: [cashLine(1_000)] });
+    seedShiftSale(db, {
+      saleId: 's-next',
+      finalizedAt: msAfter(CLOSED_AT),
+      lines: [cashLine(500)],
+    });
     closeAndReopen(FLOAT + 1_000);
-    expect(service.closeShift({ countedCashMinor: 0 })).toMatchObject({
-      cashSalesTotalMinor: 0,
-      saleCount: 0,
+    expect(service.closeShift({ countedCashMinor: 500 })).toMatchObject({
+      cashSalesTotalMinor: 500,
+      saleCount: 1,
     });
   });
 
@@ -411,10 +420,13 @@ describe('shift windows never overlap (review P2-1)', () => {
     expect(storedBody(db, 4)['cashRefundReturnRefs']).toEqual([]);
   });
 
-  it('refuses an open behind the terminal’s last close (clock_regressed), writing nothing', () => {
+  it.each([
+    ['behind the terminal’s last close', msBefore(CLOSED_AT)],
+    ['at the terminal’s last close instant (Codex round 2)', CLOSED_AT],
+  ])('refuses an open %s (clock_regressed)', (_name, at) => {
     openShift();
     service.closeShift({ countedCashMinor: FLOAT });
-    harness.state.clock = msBefore(CLOSED_AT);
+    harness.state.clock = at;
     const before = factCounts(db);
     expect(openAgain).toThrow(refusal('clock_regressed'));
     expect(factCounts(db)).toEqual(before);
@@ -437,7 +449,7 @@ describe('shift windows never overlap (review P2-1)', () => {
   });
 });
 
-describe('drawer activity in flight holds the close and every pay-out (review P2-2)', () => {
+describe('drawer activity in flight holds the open, the close and every pay-out (review P2-2)', () => {
   const IN_FLIGHT: ReadonlyArray<[string, (scope?: ShiftScope) => void]> = [
     [
       'a refund payout started, not completed',
@@ -452,6 +464,12 @@ describe('drawer activity in flight holds the close and every pay-out (review P2
       },
     ],
   ];
+
+  it.each(IN_FLIGHT)('refuses opening a shift while %s (Codex round 2)', (_name, arrange) => {
+    arrange();
+    expect(openAgain).toThrow(refusal('drawer_activity_pending'));
+    expect(factCounts(db)).toEqual(NO_FACTS);
+  });
 
   it.each(IN_FLIGHT)('refuses the close and a pay-out while %s', (_name, arrange) => {
     openShift();

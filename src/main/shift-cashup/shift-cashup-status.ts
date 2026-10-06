@@ -21,9 +21,9 @@
  *   • `pendingDrawerActivity` — review P2-2: the current pairing's drawer
  *     cash still in flight (refund payouts started, not completed; settled
  *     payments not finalized into a sale yet; see `shift-cashup-sources.ts`).
- *     While either is non-zero the service refuses the close and every
- *     pay-out (`drawer_activity_pending`); slice 4 shows why. Zero while
- *     unpaired.
+ *     While either is non-zero the service refuses an open, the close and
+ *     every pay-out (`drawer_activity_pending`); slice 4 shows why. Zero
+ *     while unpaired.
  *
  * Instants are compared as instants, never as strings. Counts only: no body,
  * id or user id leaves this module.
