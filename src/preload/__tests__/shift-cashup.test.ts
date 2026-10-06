@@ -31,14 +31,29 @@ describe('preload shiftCashup bridge', () => {
     [
       'close',
       SHIFT_CASHUP_IPC_CHANNELS.CLOSE,
-      { countedCashMinor: 1, approver: { managerPin: '246810' } },
+      {
+        countedCashMinor: 1,
+        approver: { managerRef: '7f3c1e2a-0b4d-4c5e-8f60-0000000000aa', managerPin: '246810' },
+      },
     ],
-    ['enrollManagerPin', SHIFT_CASHUP_IPC_CHANNELS.ENROLL_MANAGER_PIN, { managerPin: '246810' }],
+    [
+      'enrollManagerPin',
+      SHIFT_CASHUP_IPC_CHANNELS.ENROLL_MANAGER_PIN,
+      { managerPin: '246810', currentPin: '13572468' },
+    ],
   ] as const)('%s invokes its channel with the request', async (member, channel, arg) => {
     const { shiftCashup } = await import('../shift-cashup');
     const call = shiftCashup[member] as (a: unknown) => Promise<unknown>;
     await expect(call(arg)).resolves.toEqual({ kind: 'ok' });
     expect(ipcRendererInvoke).toHaveBeenCalledWith(channel, arg);
+  });
+
+  it('listEnrolledManagers invokes its channel with no payload', async () => {
+    const { shiftCashup } = await import('../shift-cashup');
+    await shiftCashup.listEnrolledManagers();
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(
+      SHIFT_CASHUP_IPC_CHANNELS.LIST_ENROLLED_MANAGERS,
+    );
   });
 
   it('status invokes its channel with no payload', async () => {
@@ -56,6 +71,7 @@ describe('preload shiftCashup bridge', () => {
     expect(Object.keys(api.shiftCashup ?? {}).sort()).toEqual([
       'close',
       'enrollManagerPin',
+      'listEnrolledManagers',
       'open',
       'payIn',
       'payOut',

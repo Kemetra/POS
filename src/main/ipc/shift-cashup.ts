@@ -5,9 +5,12 @@
  * `registerShiftCashupIpc` is the flag gate: with
  * `POS_PULSE_FEATURE_SHIFT_CASHUP` off (default) it registers nothing. With
  * it on, it composes the service, the manager PIN store and enrolment, and
- * their bridge, and registers the six handlers on the lock-guarded `ipcMain`. None of the channels is on the
- * locked-session allowlist, so each is refused while the session is locked;
- * the service re-reads the flag and checks the session on every call.
+ * their bridge, registers the seven handlers on the lock-guarded `ipcMain`,
+ * and subscribes the manager record refresh to session starts (review round 1
+ * P2-1: an online manager / admin sign-in renews that manager's record on
+ * this terminal). None of the channels is on the locked-session allowlist, so
+ * each is refused while the session is locked; the service re-reads the flag
+ * and checks the session on every call.
  *
  * The renderer is untrusted input. Each request is validated here before the
  * bridge runs, and anything outside the closed shape is `invalid_input`:
@@ -18,11 +21,13 @@
  *     optional note of 1–200 characters with no control character (an
  *     undefined note is no note);
  *   • `close`: exactly `{ countedCashMinor, approver? }` — a safe integer
- *     ≥ 0 and, optionally, `approver: { managerPin }` exactly, a PIN of 6–8
- *     ASCII digits (part 2, owner approval 10943). No approver id, close kind
- *     or anything else;
- *   • `status`: no payload (undefined or `{}`);
- *   • `enrollManagerPin`: exactly `{ managerPin }`, 6–8 ASCII digits.
+ *     ≥ 0 and, optionally, `approver: { managerRef, managerPin }` exactly: an
+ *     opaque lower-case UUID handle (from `listEnrolledManagers`, never a
+ *     users.id) and a PIN of 6–8 ASCII digits (part 2, owner approval 10943;
+ *     review round 1). No approver id, close kind or anything else;
+ *   • `status` / `listEnrolledManagers`: no payload (undefined or `{}`);
+ *   • `enrollManagerPin`: exactly `{ managerPin, currentPin? }`, each 6–8
+ *     ASCII digits (an undefined current PIN is none).
  *
  * No operator, user id, scope, currency, id, time or key can be smuggled in:
  * main derives them all.
@@ -32,6 +37,7 @@ import type { IpcMain } from 'electron';
 import { SHIFT_CASHUP_IPC_CHANNELS } from '../../shared/shift-cashup/channels.js';
 import {
   MANAGER_PIN_PATTERN,
+  MANAGER_REF_PATTERN,
   SHIFT_MOVEMENT_REASON_CODES,
   SHIFT_NOTE_MAX_LENGTH,
   type ShiftCashupBridgeAPI,
@@ -51,10 +57,13 @@ import {
   type ShiftCashupBridgeLogger,
 } from '../shift-cashup/shift-cashup-bridge.js';
 import {
+  createManagerOnlineRefresh,
   createManagerPinEnrollment,
+  type ManagerOnlineRefreshDeps,
   type ManagerPinEnrollmentDeps,
 } from '../operator/manager-pin-enrollment.js';
 import { createManagerPinStore } from '../operator/manager-pin-store.js';
+import type { OperatorSessionRecord } from '../operator/session-manager.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
 
 const INVALID = { kind: 'refused', reason: 'invalid_input' } as const;
@@ -63,7 +72,8 @@ const PRINTABLE = /^[^\p{Cc}]+$/u;
 const OPEN_KEYS = ['openingFloatMinor'] as const;
 const MOVEMENT_KEYS = ['amountMinor', 'reasonCode', 'note'] as const;
 const CLOSE_KEYS = ['countedCashMinor', 'approver'] as const;
-const PIN_KEYS = ['managerPin'] as const;
+const APPROVER_KEYS = ['managerRef', 'managerPin'] as const;
+const ENROL_KEYS = ['managerPin', 'currentPin'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return false;
@@ -119,19 +129,25 @@ export function readMovementRequest(value: unknown): ShiftMovementRequest | null
   return note === null ? null : movementWith(value, note);
 }
 
-/** `{ managerPin }` exactly, a 6–8 digit PIN, or null. */
-function readManagerPin(value: unknown): ShiftCloseApprover | null {
-  if (!isClosedShape(value, PIN_KEYS)) return null;
-  const { managerPin } = value;
-  return typeof managerPin === 'string' && MANAGER_PIN_PATTERN.test(managerPin)
-    ? { managerPin }
-    : null;
+function isManagerPin(value: unknown): value is string {
+  return typeof value === 'string' && MANAGER_PIN_PATTERN.test(value);
+}
+
+function isManagerRef(value: unknown): value is string {
+  return typeof value === 'string' && MANAGER_REF_PATTERN.test(value);
+}
+
+/** `{ managerRef, managerPin }` exactly, or null. */
+function readCloseApprover(value: unknown): ShiftCloseApprover | null {
+  if (!isClosedShape(value, APPROVER_KEYS)) return null;
+  const { managerRef, managerPin } = value;
+  return isManagerRef(managerRef) && isManagerPin(managerPin) ? { managerRef, managerPin } : null;
 }
 
 /** `{ approver }` when a valid one was given, `{}` when none, null when invalid. */
 function readApprover(value: unknown): { approver?: ShiftCloseApprover } | null {
   if (value === undefined) return {};
-  const approver = readManagerPin(value);
+  const approver = readCloseApprover(value);
   return approver === null ? null : { approver };
 }
 
@@ -144,12 +160,16 @@ export function readCloseRequest(value: unknown): ShiftCloseRequest | null {
   return { countedCashMinor, ...approver };
 }
 
-/** `{ managerPin }` exactly, or null. */
+/** `{ managerPin, currentPin? }` exactly, or null. */
 export function readEnrollRequest(value: unknown): ShiftManagerPinEnrollRequest | null {
-  return readManagerPin(value);
+  if (!isClosedShape(value, ENROL_KEYS)) return null;
+  const { managerPin, currentPin } = value;
+  if (!isManagerPin(managerPin)) return null;
+  if (currentPin === undefined) return { managerPin };
+  return isManagerPin(currentPin) ? { managerPin, currentPin } : null;
 }
 
-/** `status` accepts no payload (undefined or `{}`). */
+/** `status` and `listEnrolledManagers` accept no payload (undefined or `{}`). */
 function isEmptyPayload(value: unknown): boolean {
   return value === undefined || isClosedShape(value, []);
 }
@@ -168,7 +188,8 @@ export interface ShiftCashupIpcDeps {
 
 export function registerShiftCashupHandlers(ipcMain: IpcMain, deps: ShiftCashupIpcDeps): void {
   const { bridge } = deps;
-  const { OPEN, PAY_IN, PAY_OUT, CLOSE, STATUS, ENROLL_MANAGER_PIN } = SHIFT_CASHUP_IPC_CHANNELS;
+  const { OPEN, PAY_IN, PAY_OUT, CLOSE, STATUS, ENROLL_MANAGER_PIN, LIST_ENROLLED_MANAGERS } =
+    SHIFT_CASHUP_IPC_CHANNELS;
   ipcMain.handle(
     OPEN,
     validated(readOpenRequest, (req) => bridge.open(req)),
@@ -192,18 +213,24 @@ export function registerShiftCashupHandlers(ipcMain: IpcMain, deps: ShiftCashupI
     ENROLL_MANAGER_PIN,
     validated(readEnrollRequest, (req) => bridge.enrollManagerPin(req)),
   );
+  ipcMain.handle(LIST_ENROLLED_MANAGERS, (_event, request: unknown) =>
+    isEmptyPayload(request) ? bridge.listEnrolledManagers() : INVALID,
+  );
 }
 
 export interface RegisterShiftCashupIpcDeps
   extends
     Omit<ComposeShiftCashupServiceDeps, 'managerPins'>,
-    Pick<ManagerPinEnrollmentDeps, 'getManager'> {
+    Pick<ManagerPinEnrollmentDeps, 'getManager'>,
+    Pick<ManagerOnlineRefreshDeps, 'currentTerminalId'> {
   /** `POS_PULSE_FEATURE_SHIFT_CASHUP` at boot. */
   enabled: boolean;
   /** The lock-guarded `ipcMain`. */
   ipcMain: IpcMain;
   /** Seals the manager PIN hashes at rest (DPAPI on Windows). */
   safeStorage: SafeStorageLike;
+  /** `OperatorSessionManager.onStarted`: called with each new session. */
+  onSessionStarted: (listener: (record: OperatorSessionRecord) => void) => void;
   logger: ShiftCashupBridgeLogger;
 }
 
@@ -215,4 +242,7 @@ export function registerShiftCashupIpc(deps: RegisterShiftCashupIpcDeps): void {
   const enrollment = createManagerPinEnrollment({ ...deps, store: managerPins });
   const bridge = createShiftCashupBridge({ service, enrollment, logger: deps.logger });
   registerShiftCashupHandlers(deps.ipcMain, { bridge });
+  deps.onSessionStarted(
+    createManagerOnlineRefresh({ store: managerPins, currentTerminalId: deps.currentTerminalId }),
+  );
 }

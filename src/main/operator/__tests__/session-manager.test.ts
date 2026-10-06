@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SessionManager } from '../session-manager.js';
 
@@ -324,20 +324,27 @@ describe('SessionManager — RT-17 slice 4 part 2: the manager’s users.id (man
   it.each(['manager', 'admin'] as const)(
     'keeps a %s session’s users.id from the sign-in, lower-cased',
     (role) => {
+      vi.useFakeTimers({ now: new Date('2026-10-06T08:00:00.000Z') });
       const record = signIn(makeManager(), role, MANAGER_USER.toUpperCase());
+      vi.useRealTimers();
       expect(record.manager_user_id).toBe(MANAGER_USER);
+      // Round 1 P2-1/P2-2: the local time of that online sign-in (main-only).
+      expect(record.manager_signed_in_at).toBe('2026-10-06T08:00:00.000Z');
       // It is not the cashier identity: the shift facts stay cashier-only.
       expect(record.user_id).toBeUndefined();
     },
   );
 
   it('never keeps one on a cashier session', () => {
-    expect(signIn(makeManager(), 'cashier', MANAGER_USER).manager_user_id).toBeUndefined();
+    const record = signIn(makeManager(), 'cashier', MANAGER_USER);
+    expect(record.manager_user_id).toBeUndefined();
+    expect(record.manager_signed_in_at).toBeUndefined();
   });
 
   it('keeps none when the sign-in carried none (or an empty one)', () => {
     expect(signIn(makeManager(), 'manager').manager_user_id).toBeUndefined();
     expect(signIn(makeManager(), 'manager', '').manager_user_id).toBeUndefined();
+    expect(signIn(makeManager(), 'manager', '').manager_signed_in_at).toBeUndefined();
   });
 
   it('never puts it in the renderer’s bridge view (main-only)', () => {

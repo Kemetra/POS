@@ -9,7 +9,7 @@ import { createShiftProbeTally } from '../shift-probe-tally.js';
 
 const S1 = 'shift-1';
 const S2 = 'shift-2';
-const NONE = { payOut: 0, varianceClose: 0 };
+const NONE = { payOut: 0, varianceClose: 0, approverFailure: 0 };
 
 describe('shift probe tally', () => {
   it('starts at zero for any shift, and for no shift', () => {
@@ -23,7 +23,8 @@ describe('shift probe tally', () => {
     tally.record({ shiftId: S1, kind: 'payOut' });
     tally.record({ shiftId: S1, kind: 'payOut' });
     tally.record({ shiftId: S1, kind: 'varianceClose' });
-    expect(tally.countsFor(S1)).toEqual({ payOut: 2, varianceClose: 1 });
+    tally.record({ shiftId: S1, kind: 'approverFailure' });
+    expect(tally.countsFor(S1)).toEqual({ payOut: 2, varianceClose: 1, approverFailure: 1 });
     expect(tally.countsFor(S2)).toEqual(NONE);
     expect(tally.countsFor(null)).toEqual(NONE);
   });
@@ -32,7 +33,7 @@ describe('shift probe tally', () => {
     const tally = createShiftProbeTally();
     tally.record({ shiftId: S1, kind: 'payOut' });
     tally.record({ shiftId: S2, kind: 'varianceClose' });
-    expect(tally.countsFor(S2)).toEqual({ payOut: 0, varianceClose: 1 });
+    expect(tally.countsFor(S2)).toEqual({ payOut: 0, varianceClose: 1, approverFailure: 0 });
     expect(tally.countsFor(S1)).toEqual(NONE);
   });
 

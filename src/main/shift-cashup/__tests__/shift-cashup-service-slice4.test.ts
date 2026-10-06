@@ -35,7 +35,7 @@ import {
 import { OTHER_TERMINAL } from './__helpers__/shift-sync-fixture.js';
 
 const FLOAT = 50_000;
-const NO_PROBES = { payOut: 0, varianceClose: 0 };
+const NO_PROBES = { payOut: 0, varianceClose: 0, approverFailure: 0 };
 
 let db: SqlJsDatabase;
 let harness: ServiceHarness;
@@ -175,14 +175,14 @@ describe('probe refusals (10941 item 3)', () => {
     expect(payOut(FLOAT + 1)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
     expect(payOut(FLOAT + 2)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
     payOut(FLOAT)();
-    await expect(probes()).resolves.toEqual({ payOut: 2, varianceClose: 0 });
+    await expect(probes()).resolves.toEqual({ payOut: 2, varianceClose: 0, approverFailure: 0 });
   });
 
   it('counts each close refused for a non-zero variance without an approver', async () => {
     openShift();
     expect(closeWith(FLOAT - 1)).toThrow(refusal('variance_approval_required'));
     expect(closeWith(FLOAT + 1)).toThrow(refusal('variance_approval_required'));
-    await expect(probes()).resolves.toEqual({ payOut: 0, varianceClose: 2 });
+    await expect(probes()).resolves.toEqual({ payOut: 0, varianceClose: 2, approverFailure: 0 });
   });
 
   it('counts no other refusal (drawer activity in flight, no open shift)', async () => {

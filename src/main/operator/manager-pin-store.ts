@@ -2,39 +2,49 @@
  * RT-17 slice 4 part 2 — the local manager PIN store (option A, Jira RT-17
  * comment 10943; [GATED] migration 0044).
  *
- *   • `seal` + `save` enrol or replace a manager's PIN in a scope (tenant,
- *     branch, terminal — the cashier PIN records' scope). The secret is the
- *     cashier PIN's: an Argon2id PHC string (`hashPin`) sealed with
- *     safeStorage (`sealPinMaterial`). A replace clears the lockout.
- *   • `verify` finds the approver by the PIN alone among the scope's records:
- *     the close payload carries no manager identifier, so nothing a caller
- *     sends or receives tells which managers are enrolled. Each record is
- *     checked with the cashier verifier (`verifyPinWithWindow`, lockout
- *     included):
- *       - exactly one match → `verified` with that record's `users.id`, and
- *         its failure count is cleared;
- *       - no match → `invalid`, and the attempt is a failure on every record
- *         it was checked against (5 failures → 5 minutes, as for a cashier).
- *         A cashier guessing therefore locks the scope's managers out, never
- *         gets more guesses than one manager would allow;
- *       - two or more matches (two managers chose the same PIN) → `invalid`,
- *         nothing counted: the approver would be ambiguous, so it fails
- *         closed rather than picking one;
- *       - every record under lockout (none checked) → `locked`.
- *     A record whose seal does not open is skipped, never counted.
- *   • Attempts are serialised: a verification reads and writes the failure
- *     counts as one step, so concurrent wrong PINs cannot share a count.
+ * The secret is the cashier PIN's: an Argon2id PHC string (`hashPin`) sealed
+ * with safeStorage (`sealPinMaterial`), checked by the cashier verifier
+ * (`verifyPinWithWindow`: 5 failures → 5 minutes).
+ *
+ * Review round 1 (Codex P1 4193622781, review P2-1/P2-2/P2-5, nits 6/7/9):
+ *   • Keyed, never by PIN alone: each record has an opaque handle
+ *     (`manager_ref`, a random UUID, never the users.id). `verify` checks the
+ *     PIN against that ONE record in the scope, with its own lockout — one
+ *     Argon2 per attempt. An unknown handle is `invalid` (nothing counted).
+ *     Two managers may share a PIN; neither can approve as the other.
+ *   • Expiry (P2-1): a record is valid for `MANAGER_ONLINE_VALIDITY_MS` (30
+ *     days) after the manager's last online manager / admin sign-in on this
+ *     terminal (`last_online_at`: set at enrolment, refreshed by
+ *     `touchOnline`). An expired record answers `expired` before any check,
+ *     and is not listed.
+ *   • `list` gives the scope's valid records as { managerRef, displayName }:
+ *     the approver picker. No users.id leaves this module except the one
+ *     `verify` returns to main.
+ *   • `enrol` (P2-2): creates the manager's record, or replaces its PIN only
+ *     after verifying the current one (with lockout): `current_pin_required`,
+ *     `current_pin_invalid`, `current_pin_locked`. The caller's `guard` runs
+ *     right before the write (a throw writes nothing). A replacement keeps the
+ *     handle and clears the lockout.
+ *   • Serialised (nit 9): every `verify` and `enrol` runs one at a time, so
+ *     concurrent attempts cannot share a failure count and an enrolment never
+ *     interleaves with an attempt. An attempt's lockout write is also guarded
+ *     on the secret it checked (nit 7), so it never lands on a newer one.
  *
  * No logger: the PIN and the hashes cannot reach a log from this module
  * (PR-1). Nothing here is ever sent to the renderer.
  */
+import { randomUUID } from 'node:crypto';
+
 import type { DatabaseHandle } from '../db/client.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
-import { hashPin, type PinRow } from './pin-credential.js';
+import { hashPin, type PinRow, type PinVerifyResult } from './pin-credential.js';
 import { verifyPinWithWindow } from './pin-lockout.js';
 import { sealPinMaterial, unsealPinMaterial, type SealedPinMaterial } from './pin-seal.js';
 
 export type { SealedPinMaterial };
+
+/** A record is valid this long after the manager's last online sign-in here. */
+export const MANAGER_ONLINE_VALIDITY_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Where a manager PIN is enrolled and verified: the paired terminal. */
 export interface ManagerPinScope {
@@ -46,24 +56,52 @@ export interface ManagerPinScope {
 export type ManagerPinVerdict =
   | { kind: 'verified'; userId: string }
   | { kind: 'invalid' }
-  | { kind: 'locked' };
+  | { kind: 'locked' }
+  | { kind: 'expired' };
 
-export interface SaveManagerPinInput {
+/** An approver the picker may offer: the opaque handle and the name only. */
+export interface EnrolledManager {
+  managerRef: string;
+  displayName: string;
+}
+
+export interface EnrolManagerPinInput {
   scope: ManagerPinScope;
   /** The manager's `users.id` (stored lower-cased). */
   userId: string;
+  displayName: string;
   sealed: SealedPinMaterial;
+  /** The current PIN; required to replace an existing record's PIN. */
+  currentPin?: string;
   /** ISO-8601 instant of the enrolment. */
+  now: string;
+  /** The manager's online sign-in instant (the record's `last_online_at`). */
+  onlineAt: string;
+  /** Runs synchronously right before the write; a throw writes nothing. */
+  guard: () => void;
+}
+
+export type EnrolManagerPinOutcome =
+  | { kind: 'enrolled' }
+  | { kind: 'current_pin_required' }
+  | { kind: 'current_pin_invalid' }
+  | { kind: 'current_pin_locked' };
+
+export interface VerifyManagerPinInput {
+  scope: ManagerPinScope;
+  managerRef: string;
+  pin: string;
   now: string;
 }
 
 export interface ManagerPinStore {
-  /** Hash (Argon2id) and seal a PIN for `save`. The PIN is not kept. */
+  /** Hash (Argon2id) and seal a PIN for `enrol`. The PIN is not kept. */
   seal(pin: string): Promise<SealedPinMaterial>;
-  /** Enrol or replace the manager's PIN in the scope; clears its lockout. */
-  save(input: SaveManagerPinInput): void;
-  /** The manager whose PIN this is, in the scope (see the module header). */
-  verify(input: { scope: ManagerPinScope; pin: string }): Promise<ManagerPinVerdict>;
+  enrol(input: EnrolManagerPinInput): Promise<EnrolManagerPinOutcome>;
+  verify(input: VerifyManagerPinInput): Promise<ManagerPinVerdict>;
+  list(input: { scope: ManagerPinScope; now: string }): EnrolledManager[];
+  /** An online manager / admin sign-in on this terminal at `at`. */
+  touchOnline(input: { scope: ManagerPinScope; userId: string; at: string }): void;
 }
 
 export interface ManagerPinStoreDeps {
@@ -73,51 +111,89 @@ export interface ManagerPinStoreDeps {
 
 interface StoredRow {
   user_id: string;
+  manager_ref: string;
+  display_name: string;
   pin_hash: Uint8Array;
   pin_salt: Uint8Array;
   failed_attempt_count: number;
   lockout_until: string | null;
+  last_online_at: string;
 }
 
 type Run = { run(...params: unknown[]): { changes: number } };
+type Get = { get(...params: unknown[]): StoredRow | undefined };
 type All = { all(...params: unknown[]): StoredRow[] };
 
-/** One record's attempt: its users.id and what the cashier verifier said. */
-interface Checked {
-  userId: string;
-  result: Awaited<ReturnType<typeof verifyPinWithWindow>>;
+/** One record's attempt: the scope, the record as read, and the PIN tried. */
+interface Attempt {
+  scope: ManagerPinScope;
+  row: StoredRow;
+  pin: string;
 }
+
+const COLUMNS = `user_id, manager_ref, display_name, pin_hash, pin_salt,
+                 failed_attempt_count, lockout_until, last_online_at`;
+const IN_SCOPE = 'tenant_id = ? AND branch_id = ? AND terminal_id = ?';
+
+const SELECT_BY_REF = `SELECT ${COLUMNS} FROM manager_pin_records
+                        WHERE ${IN_SCOPE} AND manager_ref = ?`;
+const SELECT_BY_USER = `SELECT ${COLUMNS} FROM manager_pin_records
+                         WHERE ${IN_SCOPE} AND user_id = ?`;
+const SELECT_SCOPE = `SELECT ${COLUMNS} FROM manager_pin_records
+                       WHERE ${IN_SCOPE} ORDER BY display_name, manager_ref`;
 
 const UPSERT = `
   INSERT INTO manager_pin_records
-    (tenant_id, branch_id, terminal_id, user_id, pin_hash, pin_salt,
-     failed_attempt_count, lockout_until, enrolled_at)
-  VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?)
+    (tenant_id, branch_id, terminal_id, user_id, manager_ref, display_name, pin_hash, pin_salt,
+     failed_attempt_count, lockout_until, enrolled_at, last_online_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)
   ON CONFLICT (tenant_id, branch_id, terminal_id, user_id) DO UPDATE SET
+    display_name = excluded.display_name,
     pin_hash = excluded.pin_hash,
     pin_salt = excluded.pin_salt,
     failed_attempt_count = 0,
     lockout_until = NULL,
-    enrolled_at = excluded.enrolled_at`;
+    enrolled_at = excluded.enrolled_at,
+    last_online_at = excluded.last_online_at`;
 
-const SELECT_SCOPE = `
-  SELECT user_id, pin_hash, pin_salt, failed_attempt_count, lockout_until
-    FROM manager_pin_records
-   WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ?
-   ORDER BY user_id`;
-
+/** Nit 7: only on the secret the attempt checked. */
 const SET_LOCKOUT = `
   UPDATE manager_pin_records
      SET failed_attempt_count = ?, lockout_until = ?
-   WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND user_id = ?`;
+   WHERE ${IN_SCOPE} AND user_id = ? AND pin_hash = ?`;
+
+const TOUCH_ONLINE = `UPDATE manager_pin_records SET last_online_at = ?
+                       WHERE ${IN_SCOPE} AND user_id = ?`;
+
+const CURRENT_PIN_REFUSAL = {
+  locked_out: { kind: 'current_pin_locked' },
+  no_match: { kind: 'current_pin_invalid' },
+} as const;
 
 function scopeParams(scope: ManagerPinScope): [string, string, string] {
   return [scope.tenantId, scope.branchId, scope.terminalId];
 }
 
+/** True while `now` is at most the validity after the last online sign-in. */
+function isCurrent(row: StoredRow, now: string): boolean {
+  return Date.parse(now) - Date.parse(row.last_online_at) <= MANAGER_ONLINE_VALIDITY_MS;
+}
+
+function verdictOf(row: StoredRow, result: PinVerifyResult | null): ManagerPinVerdict {
+  if (result?.kind === 'match') return { kind: 'verified', userId: row.user_id };
+  return result?.kind === 'locked_out' ? { kind: 'locked' } : { kind: 'invalid' };
+}
+
 export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStore {
   const { db, safeStorage } = deps;
   let queue: Promise<unknown> = Promise.resolve();
+
+  /** Runs `task` after every earlier `verify` / `enrol` has settled. */
+  function serialised<T>(task: () => Promise<T>): Promise<T> {
+    const run = queue.then(task);
+    queue = run.catch(() => undefined);
+    return run;
+  }
 
   /** The record's unsealed PIN row, or null when its seal does not open. */
   function unsealed(row: StoredRow): PinRow | null {
@@ -136,48 +212,73 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
     }
   }
 
-  function setLockout(input: {
-    scope: ManagerPinScope;
-    userId: string;
-    failed: number;
-    until: string | null;
-  }): void {
+  function setLockout(input: Attempt & { failed: number; until: string | null }): void {
     (db.prepare(SET_LOCKOUT) as Run).run(
       input.failed,
       input.until,
       ...scopeParams(input.scope),
-      input.userId,
+      input.row.user_id,
+      input.row.pin_hash,
     );
   }
 
-  /** Each openable record of the scope, checked against the PIN in turn. */
-  async function checkAll(scope: ManagerPinScope, pin: string): Promise<Checked[]> {
-    const rows = (db.prepare(SELECT_SCOPE) as All).all(...scopeParams(scope));
-    const checked: Checked[] = [];
-    for (const row of rows) {
-      const pinRow = unsealed(row);
-      if (pinRow === null) continue;
-      checked.push({ userId: row.user_id, result: await verifyPinWithWindow(pin, pinRow) });
+  /**
+   * One record's attempt with the cashier verifier; the lockout state is
+   * persisted (on the checked secret only). Null when the seal does not open.
+   */
+  async function attempt(input: Attempt): Promise<PinVerifyResult | null> {
+    const pinRow = unsealed(input.row);
+    if (pinRow === null) return null;
+    const result = await verifyPinWithWindow(input.pin, pinRow);
+    if (result.kind === 'match') setLockout({ ...input, failed: 0, until: null });
+    if (result.kind === 'no_match') {
+      setLockout({ ...input, failed: result.newFailedCount, until: result.newLockoutUntil });
     }
-    return checked;
+    return result;
   }
 
-  /** One attempt (serialised by `verify`): see the module header. */
-  async function attempt(scope: ManagerPinScope, pin: string): Promise<ManagerPinVerdict> {
-    const checked = await checkAll(scope, pin);
-    const matches = checked.filter((c) => c.result.kind === 'match');
-    if (matches.length > 1) return { kind: 'invalid' };
-    const [match] = matches;
-    if (match !== undefined) {
-      setLockout({ scope, userId: match.userId, failed: 0, until: null });
-      return { kind: 'verified', userId: match.userId };
-    }
-    for (const { userId, result } of checked) {
-      if (result.kind !== 'no_match') continue;
-      setLockout({ scope, userId, failed: result.newFailedCount, until: result.newLockoutUntil });
-    }
-    const allLocked = checked.length > 0 && checked.every((c) => c.result.kind === 'locked_out');
-    return allLocked ? { kind: 'locked' } : { kind: 'invalid' };
+  async function verifyOne(input: VerifyManagerPinInput): Promise<ManagerPinVerdict> {
+    const { scope } = input;
+    const row = (db.prepare(SELECT_BY_REF) as Get).get(...scopeParams(scope), input.managerRef);
+    if (row === undefined) return { kind: 'invalid' };
+    if (!isCurrent(row, input.now)) return { kind: 'expired' };
+    return verdictOf(row, await attempt({ scope, row, pin: input.pin }));
+  }
+
+  /** P2-2: a replacement needs the record's current PIN. Null when it may go ahead. */
+  async function replacementRefusal(input: {
+    scope: ManagerPinScope;
+    row: StoredRow;
+    currentPin: string | undefined;
+  }): Promise<EnrolManagerPinOutcome | null> {
+    const { currentPin } = input;
+    if (currentPin === undefined) return { kind: 'current_pin_required' };
+    const result = await attempt({ scope: input.scope, row: input.row, pin: currentPin });
+    if (result === null) return { kind: 'current_pin_invalid' };
+    return result.kind === 'match' ? null : CURRENT_PIN_REFUSAL[result.kind];
+  }
+
+  async function enrolOne(input: EnrolManagerPinInput): Promise<EnrolManagerPinOutcome> {
+    const { scope } = input;
+    const userId = input.userId.toLowerCase();
+    const existing = (db.prepare(SELECT_BY_USER) as Get).get(...scopeParams(scope), userId);
+    const refusal =
+      existing === undefined
+        ? null
+        : await replacementRefusal({ scope, row: existing, currentPin: input.currentPin });
+    if (refusal !== null) return refusal;
+    input.guard();
+    (db.prepare(UPSERT) as Run).run(
+      ...scopeParams(scope),
+      userId,
+      randomUUID(),
+      input.displayName,
+      input.sealed.pin_hash,
+      input.sealed.pin_salt,
+      input.now,
+      input.onlineAt,
+    );
+    return { kind: 'enrolled' };
   }
 
   return {
@@ -185,20 +286,27 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       return sealPinMaterial(await hashPin(pin), safeStorage);
     },
 
-    save(input) {
-      (db.prepare(UPSERT) as Run).run(
-        ...scopeParams(input.scope),
-        input.userId.toLowerCase(),
-        input.sealed.pin_hash,
-        input.sealed.pin_salt,
-        input.now,
-      );
+    enrol(input) {
+      return serialised(() => enrolOne(input));
     },
 
     verify(input) {
-      const run = queue.then(() => attempt(input.scope, input.pin));
-      queue = run.catch(() => undefined);
-      return run;
+      return serialised(() => verifyOne(input));
+    },
+
+    list(input) {
+      const rows = (db.prepare(SELECT_SCOPE) as All).all(...scopeParams(input.scope));
+      return rows
+        .filter((row) => isCurrent(row, input.now))
+        .map((row) => ({ managerRef: row.manager_ref, displayName: row.display_name }));
+    },
+
+    touchOnline(input) {
+      (db.prepare(TOUCH_ONLINE) as Run).run(
+        input.at,
+        ...scopeParams(input.scope),
+        input.userId.toLowerCase(),
+      );
     },
   };
 }

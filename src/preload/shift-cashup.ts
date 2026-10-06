@@ -5,6 +5,7 @@ import type {
   ShiftCashupBridgeAPI,
   ShiftCloseRequest,
   ShiftCloseResponse,
+  ShiftEnrolledManagersResponse,
   ShiftManagerPinEnrollRequest,
   ShiftManagerPinEnrollResponse,
   ShiftMovementRequest,
@@ -23,7 +24,8 @@ import type {
  * The handlers exist only with `POS_PULSE_FEATURE_SHIFT_CASHUP` on (the
  * renderer reads the flag from `app.config` before offering the flow).
  * Nothing that reveals the expected cash comes back. Part 2: the close may
- * carry a manager PIN, and a manager enrols theirs; a PIN only goes in.
+ * name a listed manager and carry their PIN, and a manager enrols theirs; a
+ * PIN only goes in.
  */
 export const shiftCashup: ShiftCashupBridgeAPI = {
   open: (req: ShiftOpenRequest) =>
@@ -41,4 +43,8 @@ export const shiftCashup: ShiftCashupBridgeAPI = {
       SHIFT_CASHUP_IPC_CHANNELS.ENROLL_MANAGER_PIN,
       req,
     ) as Promise<ShiftManagerPinEnrollResponse>,
+  listEnrolledManagers: () =>
+    ipcRenderer.invoke(
+      SHIFT_CASHUP_IPC_CHANNELS.LIST_ENROLLED_MANAGERS,
+    ) as Promise<ShiftEnrolledManagersResponse>,
 };

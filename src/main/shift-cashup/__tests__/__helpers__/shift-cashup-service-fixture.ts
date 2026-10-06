@@ -23,6 +23,8 @@ export const CLOSED_AT = '2026-10-05T16:00:00.000Z';
 export const MANAGER = '0190f5a2-3b4c-7d8e-9f01-23456789abce';
 /** A well-formed manager PIN (the fake verifier answers `state.verdict` for any PIN). */
 export const MANAGER_PIN = '246810';
+/** An enrolled manager's opaque handle (review round 1: never the users.id). */
+export const MANAGER_REF = '7f3c1e2a-0b4d-4c5e-8f60-0000000000aa';
 
 /** One millisecond before / after an instant. */
 export function msBefore(iso: string): string {
@@ -73,7 +75,11 @@ export interface ServiceHarness {
     /** Runs while the (async) manager PIN verification is in flight. */
     duringVerify: () => void;
     /** Every verification asked of the manager PIN store. */
-    verifyCalls: Array<{ scope: ShiftScope; pin: string }>;
+    verifyCalls: Array<{ scope: ShiftScope; managerRef: string; pin: string; now: string }>;
+    /** What the store lists as the scope's approvers. */
+    approvers: Array<{ managerRef: string; displayName: string }>;
+    /** Every list asked of the manager PIN store. */
+    listCalls: Array<{ scope: ShiftScope; now: string }>;
   };
 }
 
@@ -90,6 +96,8 @@ export function serviceHarness(db: SqlJsDatabase): ServiceHarness {
     verdict: { kind: 'verified', userId: MANAGER },
     duringVerify: () => undefined,
     verifyCalls: [],
+    approvers: [{ managerRef: MANAGER_REF, displayName: 'Mona Manager' }],
+    listCalls: [],
   };
   let ids = 0;
   const service = composeShiftCashupService({
@@ -109,6 +117,10 @@ export function serviceHarness(db: SqlJsDatabase): ServiceHarness {
         await Promise.resolve();
         state.duringVerify();
         return state.verdict;
+      },
+      list: (input) => {
+        state.listCalls.push(input);
+        return state.approvers;
       },
     },
     now: () => state.clock,

@@ -54,20 +54,39 @@
  *                       `varianceApprovedByUserId` only for a non-zero
  *                       variance (the contract: the manager who approved a
  *                       non-zero variance).
- *   verifyApprover      RT-17 slice 4 part 2 (option A, 10943): admits the
- *                       closing cashier as above, verifies a manager PIN in
- *                       the session's scope against the local manager PIN
- *                       records (`manager-pin-store.ts`: a wrong PIN is
- *                       `approver_invalid`, a scope under lockout
- *                       `approver_locked`), then — the verification being
- *                       awaited — checks again the flag, the same session,
- *                       the lock and the same RT-215 pairing epoch. It
- *                       returns an opaque approval that only `closeShift` of
- *                       this service accepts: once, in the same session and
- *                       pairing epoch (else `approver_invalid` / `no_session`),
- *                       and never when the manager is the closing cashier
- *                       (`approver_is_closer`, 10941 "must" 1). An approver
- *                       id can therefore never reach a close unverified.
+ *   verifyApprover      RT-17 slice 4 part 2 (option A, 10943; review round
+ *                       1). No oracle (P2-4): it first runs the close's whole
+ *                       synchronous pre-check — admission as above, a usable
+ *                       pairing, the open shift at now (clock), the drawer
+ *                       settled, the cash-up — and computes the variance of
+ *                       the counted cash. A zero variance needs no approver:
+ *                       null, and no PIN is checked. Otherwise it verifies the
+ *                       PIN of ONE manager, named by the opaque `managerRef`
+ *                       of `listApprovers` (Codex P1), against the local
+ *                       records (`manager-pin-store.ts`), at the close's
+ *                       instant. After that await it checks again the flag,
+ *                       the same session, the lock and the same RT-215
+ *                       pairing epoch, then refuses a wrong PIN or unknown
+ *                       manager (`approver_invalid`), a record under lockout
+ *                       (`approver_locked`), a record whose manager has not
+ *                       signed in online on this terminal for 30 days
+ *                       (`approver_expired`) and the closing cashier
+ *                       (`approver_is_closer`, 10941 "must" 1); each such
+ *                       failure is tallied for the shift (`approverFailure`).
+ *                       It returns an opaque approval bound to the session,
+ *                       the pairing epoch, the shift, the counted cash and
+ *                       the variance (P2-3).
+ *                       `closeShift` of this service accepts it once (spent
+ *                       even when the close is then refused), in the same
+ *                       session and pairing epoch (else `approver_invalid` /
+ *                       `no_session`), and only for the same shift, count and
+ *                       variance (else `approval_stale`: a sale or refund
+ *                       landed since). An approver id can therefore never
+ *                       reach a close unverified, nor approve another close.
+ *   listApprovers       the current scope's managers with a valid record —
+ *                       `{ managerRef, displayName }`, never a users.id —
+ *                       gated on the flag, an unlocked session of any role and
+ *                       a usable pairing.
  *   readStatus          read-only (see `shift-cashup-status.ts`). RT-17 slice
  *                       4: gated on the flag AND an unlocked operator session
  *                       (any role: steps 1–3 only), re-checked after its
@@ -89,14 +108,19 @@
  * RT-17 slice 4 — probing the blind count (10941 item 3): a pay-out refused
  * above the expected drawer cash, and a close refused for a non-zero variance
  * without an approver, are tallied per shift in memory
- * (`shift-probe-tally.ts`) and shown in the status (`probeRefusals`).
+ * (`shift-probe-tally.ts`) and shown in the status (`probeRefusals`); so is
+ * every failed approver attempt (review round 1 P2-4, `approverFailure`).
  *
  * Refusals of the shift state (`ShiftCashupStateError`) and of a fact's values
  * (`ShiftFactInvalidError`, `ShiftCashupSourceError`) come through unchanged.
  * No audit event is written (part 1, decision 4). Errors name a closed reason,
  * never a value (P7).
  */
-import type { ManagerPinStore } from '../operator/manager-pin-store.js';
+import type {
+  EnrolledManager,
+  ManagerPinStore,
+  ManagerPinVerdict,
+} from '../operator/manager-pin-store.js';
 import type { OperatorSessionForPayments } from '../payments/require-operator-session.js';
 import { computeCashup, type Cashup } from './shift-cashup-calculator.js';
 import {
@@ -126,6 +150,8 @@ export type ShiftCashupRefusalReason =
   | 'approver_invalid'
   | 'approver_locked'
   | 'approver_is_closer'
+  | 'approver_expired'
+  | 'approval_stale'
   | 'aggregate_out_of_range';
 
 /** A call the service refuses before recording anything. */
@@ -169,13 +195,25 @@ export interface RecordedCashMovement {
 
 /**
  * A verified manager approval (`verifyApprover`): opaque, single-use, bound to
- * the session and the pairing it was verified under. Only one this service
- * issued is accepted.
+ * the session and the pairing it was verified under, and to the close it was
+ * given for (shift, counted cash, variance). Only one this service issued is
+ * accepted.
  */
 export interface VerifiedApprover {
   readonly userId: string;
   readonly operatorSessionId: string;
   readonly pairingEpoch: string;
+  readonly shiftId: string;
+  readonly countedCashMinor: number;
+  readonly varianceMinor: number;
+}
+
+export interface VerifyApproverInput {
+  /** The blind count the close will submit. */
+  countedCashMinor: number;
+  /** The opaque handle of one manager (`listApprovers`). */
+  managerRef: string;
+  managerPin: string;
 }
 
 export interface CloseShiftInput {
@@ -204,7 +242,9 @@ export interface ShiftCashupService {
   openShift(input: OpenShiftInput): OpenedShift;
   recordCashMovement(input: CashMovementInput): RecordedCashMovement;
   closeShift(input: CloseShiftInput): ClosedShift;
-  verifyApprover(input: { managerPin: string }): Promise<VerifiedApprover>;
+  /** Null when the count needs no approver (a zero variance). */
+  verifyApprover(input: VerifyApproverInput): Promise<VerifiedApprover | null>;
+  listApprovers(): EnrolledManager[];
   readStatus(): Promise<ShiftCashupServiceStatus>;
 }
 
@@ -219,7 +259,7 @@ export interface ShiftCashupServiceDeps {
   /** `PairingStore.getPairingEpoch` (RT-215) — null while unpaired or revoked. */
   pairingEpoch: () => string | null;
   /** The local manager PIN records (option A). */
-  managerPins: Pick<ManagerPinStore, 'verify'>;
+  managerPins: Pick<ManagerPinStore, 'verify' | 'list'>;
   repo: Pick<ShiftCashupRepo, 'recordOpen' | 'recordMovement' | 'recordClose' | 'findOpenShift'>;
   sources: ShiftCashupSources;
   status: ShiftCashupStatusReader;
@@ -242,6 +282,14 @@ interface Actor {
   session: ShiftCashupSession;
   scope: ShiftScope;
   userId: string;
+}
+
+/** The close's synchronous pre-check, done: the shift, its cash-up, the variance. */
+interface ClosePlan {
+  open: OpenShiftView;
+  closedAt: string;
+  cashup: Cashup;
+  varianceMinor: number;
 }
 
 /** What a close records: the open shift, the computed cash-up and the count. */
@@ -285,6 +333,37 @@ function approverOf(input: { varianceMinor: number; approverUserId: string | und
   if (input.varianceMinor === 0) return {};
   const approver = input.approverUserId ?? refuse('variance_approval_required');
   return { varianceApprovedByUserId: approver };
+}
+
+const VERDICT_REFUSALS = {
+  invalid: 'approver_invalid',
+  locked: 'approver_locked',
+  expired: 'approver_expired',
+} as const;
+
+/** The verified manager's users.id, or the refusal of the verdict. */
+function approverIdOf(input: {
+  verdict: ManagerPinVerdict;
+  closerUserId: string;
+}): { userId: string } | { refusal: ShiftCashupRefusalReason } {
+  const { verdict } = input;
+  if (verdict.kind !== 'verified') return { refusal: VERDICT_REFUSALS[verdict.kind] };
+  if (verdict.userId === input.closerUserId.toLowerCase()) return { refusal: 'approver_is_closer' };
+  return { userId: verdict.userId };
+}
+
+/** P2-3: the approval was given for this very close. */
+function requireSameClose(input: {
+  approver: VerifiedApprover;
+  plan: ClosePlan;
+  countedCashMinor: number;
+}): void {
+  const { approver, plan } = input;
+  const same =
+    approver.shiftId === plan.open.shiftId &&
+    approver.countedCashMinor === input.countedCashMinor &&
+    approver.varianceMinor === plan.varianceMinor;
+  if (!same) refuse('approval_stale');
 }
 
 /** F1: a shift aggregate must stay a safe integer (checked in `bigint`). */
@@ -376,16 +455,15 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
   }
 
   /**
-   * The approving manager's users.id, from an approval this service issued
-   * (used up here), for this session and pairing, and not the closer's.
+   * An approval this service issued (used up here), for this session and
+   * pairing. The closer was refused at its verification, in this session.
    */
-  function acceptApprover(input: { approver: VerifiedApprover; actor: Actor }): string {
+  function acceptApprover(input: { approver: VerifiedApprover; actor: Actor }): VerifiedApprover {
     const { approver, actor } = input;
     if (!issued.delete(approver)) refuse('approver_invalid');
     if (approver.operatorSessionId !== actor.session.operator_session_id) refuse('no_session');
     if (deps.pairingEpoch() !== approver.pairingEpoch) refuse('no_session');
-    if (approver.userId === actor.userId.toLowerCase()) refuse('approver_is_closer');
-    return approver.userId;
+    return approver;
   }
 
   /**
@@ -426,6 +504,20 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     const open = repo.findOpenShift(input.scope) ?? shiftNotOpen();
     requireClockFrom({ now: input.now, floor: open.openedAt, gapMs: 0 });
     return open;
+  }
+
+  /**
+   * The close's synchronous pre-check at now: the open shift (never before its
+   * open), no drawer cash in flight, the cash-up, and the count's variance.
+   */
+  function planClose(input: { scope: ShiftScope; countedCashMinor: number }): ClosePlan {
+    const { scope } = input;
+    const closedAt = deps.now();
+    const open = openShiftAt({ scope, now: closedAt });
+    requireDrawerSettled({ sources: deps.sources, scope });
+    const cashup = cashupOf({ scope, open, until: closedAt });
+    const varianceMinor = input.countedCashMinor - cashup.expectedCashMinor;
+    return { open, closedAt, cashup, varianceMinor };
   }
 
   /** Runs `run`; a refusal of `probe.reason` is tallied for its shift (slice 4 probe). */
@@ -522,14 +614,14 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     closeShift(input) {
       const actor = admit();
       const { scope, userId } = actor;
-      const approverUserId =
+      const { countedCashMinor } = input;
+      const approver =
         input.approver === undefined
           ? undefined
           : acceptApprover({ approver: input.approver, actor });
-      const closedAt = deps.now();
-      const open = openShiftAt({ scope, now: closedAt });
-      requireDrawerSettled({ sources: deps.sources, scope });
-      const cashup = cashupOf({ scope, open, until: closedAt });
+      const plan = planClose({ scope, countedCashMinor });
+      if (approver !== undefined) requireSameClose({ approver, plan, countedCashMinor });
+      const { open, closedAt, cashup } = plan;
       const probe = {
         shiftId: open.shiftId,
         kind: 'varianceClose',
@@ -541,8 +633,8 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
           closedAt,
           closingUserId: userId,
           cashup,
-          countedCashMinor: input.countedCashMinor,
-          approverUserId,
+          countedCashMinor,
+          approverUserId: approver?.userId,
         }),
       );
       repo.recordClose({ scope, fact, now: closedAt });
@@ -550,19 +642,39 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     },
 
     async verifyApprover(input) {
-      const { session: admitted, scope } = admit();
+      const { session: admitted, scope, userId: closerUserId } = admit();
       const epoch = currentEpoch();
-      const verdict = await deps.managerPins.verify({ scope, pin: input.managerPin });
+      const { countedCashMinor } = input;
+      const plan = planClose({ scope, countedCashMinor });
+      if (plan.varianceMinor === 0) return null;
+      const verdict = await deps.managerPins.verify({
+        scope,
+        managerRef: input.managerRef,
+        pin: input.managerPin,
+        now: plan.closedAt,
+      });
       const live = recheckSession({ admitted, epoch });
-      if (verdict.kind === 'invalid') refuse('approver_invalid');
-      if (verdict.kind === 'locked') refuse('approver_locked');
+      const checked = approverIdOf({ verdict, closerUserId });
+      if ('refusal' in checked) {
+        tally.record({ shiftId: plan.open.shiftId, kind: 'approverFailure' });
+        refuse(checked.refusal);
+      }
       const approver: VerifiedApprover = Object.freeze({
-        userId: verdict.userId,
+        userId: checked.userId,
         operatorSessionId: live.operator_session_id,
         pairingEpoch: epoch,
+        shiftId: plan.open.shiftId,
+        countedCashMinor,
+        varianceMinor: plan.varianceMinor,
       });
       issued.add(approver);
       return approver;
+    },
+
+    listApprovers() {
+      const session = requireSession();
+      currentEpoch();
+      return deps.managerPins.list({ scope: scopeOf(session), now: deps.now() });
     },
 
     async readStatus() {

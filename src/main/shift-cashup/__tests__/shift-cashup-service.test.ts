@@ -39,6 +39,7 @@ import {
   CLOSED_AT,
   MANAGER,
   MANAGER_PIN,
+  MANAGER_REF,
   OPENED_AT,
   cashLine,
   cashierSession,
@@ -348,7 +349,12 @@ describe('closeShift — the cash-up', () => {
 
   it('records a non-zero variance with its verified approver', async () => {
     openShift();
-    const approver = await service.verifyApprover({ managerPin: MANAGER_PIN });
+    const approver = await service.verifyApprover({
+      countedCashMinor: FLOAT + 250,
+      managerRef: MANAGER_REF,
+      managerPin: MANAGER_PIN,
+    });
+    if (approver === null) throw new Error('fixture: an approval was expected');
     const closed = service.closeShift({ countedCashMinor: FLOAT + 250, approver });
     expect(closed.varianceMinor).toBe(250);
     expect(storedBody(db, 2)).toMatchObject({
@@ -364,10 +370,16 @@ describe('closeShift — the cash-up', () => {
     expect(() => service.openShift({ openingFloatMinor: 0 })).not.toThrow();
   });
 
-  it('records no approver for a zero variance (the approver of a non-zero one only)', async () => {
+  it('needs no approver for a zero variance, and records none', async () => {
     openShift();
-    const approver = await service.verifyApprover({ managerPin: MANAGER_PIN });
-    service.closeShift({ countedCashMinor: FLOAT, approver });
+    const approver = await service.verifyApprover({
+      countedCashMinor: FLOAT,
+      managerRef: MANAGER_REF,
+      managerPin: MANAGER_PIN,
+    });
+    expect(approver).toBeNull();
+    expect(harness.state.verifyCalls).toEqual([]);
+    service.closeShift({ countedCashMinor: FLOAT });
     expect(storedBody(db, 2)).not.toHaveProperty('varianceApprovedByUserId');
   });
 });

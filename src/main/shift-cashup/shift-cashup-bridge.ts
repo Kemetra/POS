@@ -10,27 +10,40 @@
  *     drawer cash answers the generic `pay_out_not_accepted` — no amount, no
  *     bound. The service tallies it (and a close refused for a non-zero
  *     variance) per shift for the status.
- *   • Part 2 (option A, 10943): a close may carry a manager PIN. The bridge
- *     has the service verify it first (`verifyApprover`: local manager PIN
- *     records, lockout, re-checked session and pairing) and passes only the
- *     resulting approval to the close; no approver id ever comes from the
- *     renderer. Without a PIN a non-zero variance is refused
- *     `variance_approval_required`. The refusals `approver_invalid`,
- *     `approver_locked` and `approver_is_closer` say nothing about which
- *     managers exist.
+ *   • Part 2 (option A, 10943; review round 1): a close may carry an
+ *     approver — the opaque `managerRef` of one listed manager and that
+ *     manager's PIN. The bridge has the service check it first
+ *     (`verifyApprover`: the close's whole pre-check, then — only for a
+ *     non-zero variance — that one manager's record, lockout and expiry,
+ *     re-checked session and pairing) and passes only the resulting approval
+ *     to the close; no approver id ever comes from the renderer. Without an
+ *     approver a non-zero variance is refused `variance_approval_required`.
+ *     The refusals `approver_invalid` (also for an expired record, logged
+ *     `approver_expired`), `approver_locked` and `approver_is_closer` say
+ *     nothing about which managers exist; `approval_stale` means the drawer
+ *     moved during the check (count again).
+ *   • The count stays blind (P2-3): the close answers its id and time, and
+ *     the variance (`varianceMinor`) ONLY after an approved close of a
+ *     non-zero variance — the manager has just approved it. A close that
+ *     needed no approver answers no variance.
+ *   • `listEnrolledManagers`: the paired scope's managers with a valid
+ *     record, as `{ managerRef, displayName }` copied field by field.
  *   • `enrollManagerPin`: a signed-in manager sets their own PIN
- *     (`manager-pin-enrollment.ts`); the bridge passes the PIN alone.
+ *     (`manager-pin-enrollment.ts`); the bridge passes the new PIN, and the
+ *     current one for a replacement, alone.
  *   • A PIN is never logged or echoed: refusals log closed-set reasons, and an
  *     unexpected failure its error name only.
- *   • Nothing that reveals the expected cash, and no `users.id`, crosses the
- *     bridge: the close answers its id and time only, and the status is an
- *     explicit allowlist (no `openingUserId`).
+ *   • Nothing that reveals the expected cash before the close, and no
+ *     `users.id`, crosses the bridge: the status is an explicit allowlist (no
+ *     `openingUserId`).
  *
  * Admission (flag, session, lock, cashier or manager identity) is the
  * service's and the enrolment's: every call goes through it.
  */
 import type {
   ShiftCashupBridgeAPI,
+  ShiftCloseRequest,
+  ShiftCloseResponse,
   ShiftCashupRefusal,
   ShiftCashupRefused,
   ShiftMovementRequest,
@@ -82,6 +95,8 @@ const SERVICE_REFUSALS: Readonly<Record<ShiftCashupRefusalReason, ShiftCashupRef
   approver_invalid: 'approver_invalid',
   approver_locked: 'approver_locked',
   approver_is_closer: 'approver_is_closer',
+  approver_expired: 'approver_invalid',
+  approval_stale: 'approval_stale',
   aggregate_out_of_range: 'invalid_input',
 };
 
@@ -93,6 +108,11 @@ const ENROLMENT_REFUSALS: Readonly<Record<ManagerPinRefusalReason, ShiftCashupRe
   not_manager: 'not_manager',
   no_manager_identity: 'not_manager',
   invalid_pin: 'invalid_input',
+  reauth_required: 'reauth_required',
+  pin_too_weak: 'pin_too_weak',
+  current_pin_required: 'current_pin_required',
+  current_pin_invalid: 'current_pin_invalid',
+  current_pin_locked: 'current_pin_locked',
 };
 
 /** A known refusal: the precise (logged) reason and the renderer's. */
@@ -181,6 +201,28 @@ export function createShiftCashupBridge(deps: ShiftCashupBridgeDeps): ShiftCashu
     }
   }
 
+  /**
+   * The approval comes from the service's own check of the handle and PIN,
+   * never from the request (part 2, 10943); null when the count needs none.
+   */
+  async function close(req: ShiftCloseRequest): Promise<ShiftCloseResponse> {
+    const { countedCashMinor } = req;
+    const approver =
+      req.approver === undefined
+        ? null
+        : await service.verifyApprover({
+            countedCashMinor,
+            managerRef: req.approver.managerRef,
+            managerPin: req.approver.managerPin,
+          });
+    const closed = service.closeShift({
+      countedCashMinor,
+      ...(approver === null ? {} : { approver }),
+    });
+    const answer = { kind: 'closed' as const, shiftId: closed.shiftId, closedAt: closed.closedAt };
+    return approver === null ? answer : { ...answer, varianceMinor: closed.varianceMinor };
+  }
+
   function move(op: 'payIn' | 'payOut', kind: CashMovementKind, req: ShiftMovementRequest) {
     return attempt(op, () => {
       const moved = service.recordCashMovement(movementOf(kind, req));
@@ -196,16 +238,7 @@ export function createShiftCashupBridge(deps: ShiftCashupBridgeDeps): ShiftCashu
       }),
     payIn: (req) => move('payIn', 'pay_in', req),
     payOut: (req) => move('payOut', 'pay_out', req),
-    close: (req) =>
-      attempt('close', async () => {
-        // The approval comes from the service's own verification of the PIN,
-        // never from the request (part 2, 10943).
-        const pin = req.approver?.managerPin;
-        const approver =
-          pin === undefined ? {} : { approver: await service.verifyApprover({ managerPin: pin }) };
-        const closed = service.closeShift({ countedCashMinor: req.countedCashMinor, ...approver });
-        return { kind: 'closed' as const, shiftId: closed.shiftId, closedAt: closed.closedAt };
-      }),
+    close: (req) => attempt('close', () => close(req)),
     status: () =>
       attempt('status', async () => ({
         kind: 'status' as const,
@@ -213,8 +246,20 @@ export function createShiftCashupBridge(deps: ShiftCashupBridgeDeps): ShiftCashu
       })),
     enrollManagerPin: (req) =>
       attempt('enrollManagerPin', async () => {
-        await enrollment.enroll({ managerPin: req.managerPin });
+        const { managerPin, currentPin } = req;
+        await enrollment.enroll({
+          managerPin,
+          ...(currentPin === undefined ? {} : { currentPin }),
+        });
         return { kind: 'enrolled' as const };
       }),
+    listEnrolledManagers: () =>
+      attempt('listEnrolledManagers', () => ({
+        kind: 'managers' as const,
+        managers: service.listApprovers().map((m) => ({
+          managerRef: m.managerRef,
+          displayName: m.displayName,
+        })),
+      })),
   };
 }

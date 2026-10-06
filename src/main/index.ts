@@ -2012,6 +2012,10 @@ singleInstanceReady
       pairedScope: async () => pairedShiftScope(await pairingStore.getStatus()),
       pairingEpoch: () => pairingStore.getPairingEpoch(),
       getManager: () => managerIdentityOf(operatorSessionManager.getCurrent()),
+      onSessionStarted: (listener) => {
+        operatorSessionManager.onStarted(listener);
+      },
+      currentTerminalId: () => pairingStore.getCurrentTerminalId(),
       safeStorage,
       now: () => new Date().toISOString(),
       logger: mainLogger,

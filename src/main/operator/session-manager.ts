@@ -84,6 +84,14 @@ export interface OperatorSessionRecord {
    * never in the bridge view (Constitution VII).
    */
   manager_user_id?: string;
+  /**
+   * RT-17 slice 4 part 2, review round 1 — the LOCAL time (ISO-8601) of the
+   * online sign-in that captured `manager_user_id`. The local clock, not the
+   * server's `started_at`, so the enrolment step-up window (2 minutes) and the
+   * manager PIN record's `last_online_at` are not skewed by the server clock.
+   * Main-only.
+   */
+  manager_signed_in_at?: string;
   authority?: SessionAuthority;
   admission_id?: string;
   admission_ttl_seconds?: number;
@@ -126,6 +134,18 @@ type SessionStartCallback = (record: OperatorSessionRecord) => void;
 
 /** RT-117 — fired after the current session locks or unlocks. */
 type LockStateCallback = (record: OperatorSessionRecord) => void;
+
+/**
+ * A manager / admin session keeps the `users.id` its online sign-in captured,
+ * lower-cased, and the local time of that sign-in; any other session neither.
+ */
+function managerFieldsOf(
+  input: CreateSessionInput,
+): Pick<OperatorSessionRecord, 'manager_user_id' | 'manager_signed_in_at'> {
+  const userId = input.manager_user_id ?? '';
+  if (input.role === 'cashier' || userId.length === 0) return {};
+  return { manager_user_id: userId.toLowerCase(), manager_signed_in_at: new Date().toISOString() };
+}
 
 export class SessionManager {
   private current: OperatorSessionRecord | null = null;
@@ -170,10 +190,7 @@ export class SessionManager {
       lock_state: 'active',
       locked_at: null,
     };
-    const managerUserId = input.manager_user_id ?? '';
-    if (input.role !== 'cashier' && managerUserId.length > 0) {
-      record.manager_user_id = managerUserId.toLowerCase();
-    }
+    Object.assign(record, managerFieldsOf(input));
     if (input.cashier_admission !== undefined) {
       const a = input.cashier_admission;
       record.user_id = a.user_id;

@@ -18,7 +18,8 @@ import { describe, expect, it } from 'vitest';
  *    on the lock-guarded ipcMain, over the live operator session.
  *  - Part 2: the same registration carries the RT-215 pairing epoch (the
  *    revocation-aware re-check, F2), the live manager identity for the
- *    manager PIN enrolment, and safeStorage for the PIN seal; a re-pair purges
+ *    manager PIN enrolment, the session-start hook that refreshes a manager's
+ *    last online sign-in (round 1 P2-1), and safeStorage for the PIN seal; a re-pair purges
  *    the other terminals' manager PIN records with the cashier ones.
  */
 
@@ -59,7 +60,7 @@ describe('main/index.ts wires the RT-17 shift sync engine', () => {
 
   it('wires the pairing epoch, the manager identity and the PIN seal (part 2)', () => {
     expect(source).toMatch(
-      /registerShiftCashupIpc\(\{[^}]*pairedScope: async \(\) => pairedShiftScope\(await pairingStore\.getStatus\(\)\),\s*pairingEpoch: \(\) => pairingStore\.getPairingEpoch\(\),\s*getManager: \(\) => managerIdentityOf\(operatorSessionManager\.getCurrent\(\)\),\s*safeStorage,/,
+      /registerShiftCashupIpc\(\{[^}]*pairedScope: async \(\) => pairedShiftScope\(await pairingStore\.getStatus\(\)\),\s*pairingEpoch: \(\) => pairingStore\.getPairingEpoch\(\),\s*getManager: \(\) => managerIdentityOf\(operatorSessionManager\.getCurrent\(\)\),\s*onSessionStarted: \(listener\) => \{\s*operatorSessionManager\.onStarted\(listener\);\s*\},\s*currentTerminalId: \(\) => pairingStore\.getCurrentTerminalId\(\),\s*safeStorage,/,
     );
   });
 

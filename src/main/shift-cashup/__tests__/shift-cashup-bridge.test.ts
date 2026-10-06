@@ -34,6 +34,7 @@ import {
   CLOSED_AT,
   MANAGER,
   MANAGER_PIN,
+  MANAGER_REF,
   OPENED_AT,
   cashLine,
   factCounts,
@@ -58,7 +59,7 @@ let harness: ServiceHarness;
 type LogFn = (payload: Record<string, unknown>, message: string) => void;
 let logger: { info: Mock<LogFn>; warn: Mock<LogFn> };
 let bridge: ShiftCashupBridgeAPI;
-let enroll: Mock<(input: { managerPin: string }) => Promise<void>>;
+let enroll: Mock<(input: { managerPin: string; currentPin?: string }) => Promise<void>>;
 
 beforeAll(async () => {
   await initSalesSyncSql();
@@ -127,6 +128,8 @@ describe('recorded facts', () => {
 });
 
 describe('a non-zero variance closes with a verified manager PIN (part 2, 10943)', () => {
+  const APPROVER = { managerRef: MANAGER_REF, managerPin: MANAGER_PIN };
+
   it.each([FLOAT - 1, FLOAT + 1])(
     'refuses a count of %i without an approver as variance_approval_required, writing nothing',
     async (countedCashMinor) => {
@@ -143,43 +146,90 @@ describe('a non-zero variance closes with a verified manager PIN (part 2, 10943)
     },
   );
 
-  it('closes with the verified manager as the approver, answering its id and time only', async () => {
+  it('closes with the verified manager, and shows the variance only after the approved close', async () => {
     const shiftId = await openShift();
-    const answer = await bridge.close({
-      countedCashMinor: FLOAT + 40,
-      approver: { managerPin: MANAGER_PIN },
+    const answer = await bridge.close({ countedCashMinor: FLOAT + 40, approver: APPROVER });
+    expect(answer).toStrictEqual({
+      kind: 'closed',
+      shiftId,
+      closedAt: CLOSED_AT,
+      varianceMinor: 40,
     });
-    expect(answer).toStrictEqual({ kind: 'closed', shiftId, closedAt: CLOSED_AT });
-    expect(harness.state.verifyCalls).toEqual([{ scope: SCOPE, pin: MANAGER_PIN }]);
+    expect(harness.state.verifyCalls).toEqual([
+      { scope: SCOPE, managerRef: MANAGER_REF, pin: MANAGER_PIN, now: CLOSED_AT },
+    ]);
     expect(storedBody(db, 2)).toMatchObject({ varianceApprovedByUserId: MANAGER });
     expect(JSON.stringify(answer)).not.toContain(MANAGER);
   });
 
-  it('checks no PIN when no approver is sent', async () => {
-    await openShift();
-    await bridge.close({ countedCashMinor: FLOAT });
+  it('checks no PIN, and shows no variance, when the count matches', async () => {
+    const shiftId = await openShift();
+    await expect(
+      bridge.close({ countedCashMinor: FLOAT, approver: APPROVER }),
+    ).resolves.toStrictEqual({ kind: 'closed', shiftId, closedAt: CLOSED_AT });
     expect(harness.state.verifyCalls).toEqual([]);
   });
 
-  it.each<[string, () => void, string]>([
-    ['a wrong PIN', () => (harness.state.verdict = { kind: 'invalid' }), 'approver_invalid'],
-    ['a locked PIN store', () => (harness.state.verdict = { kind: 'locked' }), 'approver_locked'],
+  it('checks no PIN when the close is refused before it (P2-4: no oracle)', async () => {
+    await expect(
+      bridge.close({ countedCashMinor: FLOAT + 1, approver: APPROVER }),
+    ).resolves.toEqual(refused('shift_not_open'));
+    expect(harness.state.verifyCalls).toEqual([]);
+  });
+
+  it.each<[string, () => void, string, string]>([
     [
-      'the closing cashier’s own PIN',
+      'a wrong PIN',
+      () => (harness.state.verdict = { kind: 'invalid' }),
+      'approver_invalid',
+      'approver_invalid',
+    ],
+    [
+      'a locked record',
+      () => (harness.state.verdict = { kind: 'locked' }),
+      'approver_locked',
+      'approver_locked',
+    ],
+    [
+      'an expired record',
+      () => (harness.state.verdict = { kind: 'expired' }),
+      'approver_invalid',
+      'approver_expired',
+    ],
+    [
+      'the closing cashier’s own record',
       () => (harness.state.verdict = { kind: 'verified', userId: USER }),
       'approver_is_closer',
+      'approver_is_closer',
     ],
-  ])('answers %s as %s, writing nothing', async (_name, arrange, reason) => {
+  ])('answers %s as %s (logged %s), writing nothing', async (_name, arrange, answer, logged) => {
     await openShift();
     arrange();
     const before = factCounts(db);
     await expect(
-      bridge.close({ countedCashMinor: FLOAT + 1, approver: { managerPin: MANAGER_PIN } }),
-    ).resolves.toEqual(refused(reason));
+      bridge.close({ countedCashMinor: FLOAT + 1, approver: APPROVER }),
+    ).resolves.toEqual(refused(answer));
     expect(factCounts(db)).toEqual(before);
+    expect(logger.info).toHaveBeenCalledWith(
+      { op: 'close', reason: logged },
+      SHIFT_CASHUP_REFUSED_LOG,
+    );
+    await expect(bridge.status()).resolves.toMatchObject({
+      status: { probeRefusals: { approverFailure: 1 } },
+    });
   });
 
-  it('never passes anything but the PIN as the approver, even if an id is smuggled in', async () => {
+  it('answers a stale approval as approval_stale', async () => {
+    await openShift();
+    harness.state.duringVerify = () => {
+      seedShiftSale(db, { saleId: 's-1', finalizedAt: CLOSED_AT, lines: [cashLine(7)] });
+    };
+    await expect(
+      bridge.close({ countedCashMinor: FLOAT + 1, approver: APPROVER }),
+    ).resolves.toEqual(refused('approval_stale'));
+  });
+
+  it('never passes anything but the handle and the PIN, even if an id is smuggled in', async () => {
     await openShift();
     const smuggled = { countedCashMinor: FLOAT + 1, varianceApprovedByUserId: MANAGER };
     await expect(bridge.close(smuggled)).resolves.toEqual(refused('variance_approval_required'));
@@ -188,13 +238,32 @@ describe('a non-zero variance closes with a verified manager PIN (part 2, 10943)
   it('never logs the PIN', async () => {
     await openShift();
     harness.state.verdict = { kind: 'invalid' };
-    await bridge.close({ countedCashMinor: FLOAT + 1, approver: { managerPin: MANAGER_PIN } });
+    await bridge.close({ countedCashMinor: FLOAT + 1, approver: APPROVER });
     const logged = JSON.stringify([logger.info.mock.calls, logger.warn.mock.calls]);
     expect(logged).not.toContain(MANAGER_PIN);
-    expect(logger.info).toHaveBeenCalledWith(
-      { op: 'close', reason: 'approver_invalid' },
-      SHIFT_CASHUP_REFUSED_LOG,
-    );
+    expect(logged).not.toContain(MANAGER_REF);
+  });
+});
+
+describe('listEnrolledManagers', () => {
+  it('answers the scope’s approvers as handles and names only', async () => {
+    await expect(bridge.listEnrolledManagers()).resolves.toStrictEqual({
+      kind: 'managers',
+      managers: [{ managerRef: MANAGER_REF, displayName: 'Mona Manager' }],
+    });
+  });
+
+  it('copies each entry field by field (nothing else crosses)', async () => {
+    harness.state.approvers = [
+      { managerRef: MANAGER_REF, displayName: 'Mona', userId: MANAGER } as never,
+    ];
+    const answer = await bridge.listEnrolledManagers();
+    expect(JSON.stringify(answer)).not.toContain(MANAGER);
+  });
+
+  it('is refused without a session', async () => {
+    harness.state.session = null;
+    await expect(bridge.listEnrolledManagers()).resolves.toEqual(refused('no_session'));
   });
 });
 
@@ -206,7 +275,12 @@ describe('enrollManagerPin', () => {
     expect(enroll).toHaveBeenCalledWith({ managerPin: MANAGER_PIN });
   });
 
-  it('passes nothing smuggled in beside the PIN', async () => {
+  it('passes the current PIN for a replacement', async () => {
+    await bridge.enrollManagerPin({ managerPin: MANAGER_PIN, currentPin: '864201' });
+    expect(enroll).toHaveBeenCalledWith({ managerPin: MANAGER_PIN, currentPin: '864201' });
+  });
+
+  it('passes nothing smuggled in beside the PINs', async () => {
     const smuggled = { managerPin: MANAGER_PIN, userId: MANAGER };
     await bridge.enrollManagerPin(smuggled);
     expect(enroll).toHaveBeenCalledWith({ managerPin: MANAGER_PIN });
@@ -219,6 +293,11 @@ describe('enrollManagerPin', () => {
     ['not_manager', 'not_manager'],
     ['no_manager_identity', 'not_manager'],
     ['invalid_pin', 'invalid_input'],
+    ['pin_too_weak', 'pin_too_weak'],
+    ['reauth_required', 'reauth_required'],
+    ['current_pin_required', 'current_pin_required'],
+    ['current_pin_invalid', 'current_pin_invalid'],
+    ['current_pin_locked', 'current_pin_locked'],
   ])('answers the refusal %s as %s (logged precisely, never the PIN)', async (reason, answer) => {
     enroll.mockRejectedValueOnce(new ManagerPinRefusedError(reason));
     await expect(bridge.enrollManagerPin({ managerPin: MANAGER_PIN })).resolves.toEqual(
@@ -263,7 +342,7 @@ describe('pay-out probing (10941 item 3)', () => {
     const status = await bridge.status();
     expect(status).toMatchObject({
       kind: 'status',
-      status: { probeRefusals: { payOut: 2, varianceClose: 1 } },
+      status: { probeRefusals: { payOut: 2, varianceClose: 1, approverFailure: 0 } },
     });
   });
 });
@@ -378,7 +457,7 @@ describe('status: nothing that reveals the expected cash, no users.id', () => {
         queue: { pending: 2, waiting: 0, blocked: 0, envelopePending: 0 },
         stranded: { unsyncedFacts: 0, openShifts: 0 },
         pendingDrawerActivity: { refundPayouts: 0, unfinalizedSales: 0 },
-        probeRefusals: { payOut: 0, varianceClose: 0 },
+        probeRefusals: { payOut: 0, varianceClose: 0, approverFailure: 0 },
       },
     });
     const text = JSON.stringify(status);
