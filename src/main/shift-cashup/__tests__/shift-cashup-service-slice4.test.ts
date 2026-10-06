@@ -1,0 +1,166 @@
+/**
+ * RT-17 slice 4 part 1 — what the service adds for its IPC (10941 "Slice 4
+ * must" items 2 and 3):
+ *
+ *   • `readStatus` is gated on the flag AND an unlocked operator session on
+ *     the paired terminal (any role: a manager reads it too), in that order;
+ *   • the refusals that answer a probe of the blind count are tallied per
+ *     shift, in memory, and shown in the status (`probeRefusals`): a pay-out
+ *     refused above the expected drawer cash, and a close refused for a
+ *     non-zero variance without an approver. Other refusals are not probes
+ *     and are not counted. The tally starts at zero for the next shift.
+ */
+import type { Database as SqlJsDatabase } from 'sql.js';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import type { PairingStatus } from '../../../shared/pairing-types.js';
+import { pairedShiftScope } from '../compose-shift-cashup.js';
+import {
+  freshSalesSyncDb,
+  initSalesSyncSql,
+} from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
+import {
+  CLOSED_AT,
+  OPENED_AT,
+  cashLine,
+  msAfter,
+  seedSettlement,
+  seedShiftSale,
+  serviceHarness,
+  type ServiceHarness,
+} from './__helpers__/shift-cashup-service-fixture.js';
+
+const FLOAT = 50_000;
+const NO_PROBES = { payOut: 0, varianceClose: 0 };
+
+let db: SqlJsDatabase;
+let harness: ServiceHarness;
+
+beforeAll(async () => {
+  await initSalesSyncSql();
+});
+
+beforeEach(() => {
+  db = freshSalesSyncDb();
+  harness = serviceHarness(db);
+});
+
+afterEach(() => {
+  db.close();
+});
+
+function refusal(reason: string): Error {
+  return expect.objectContaining({ name: 'ShiftCashupRefusedError', reason }) as Error;
+}
+
+/** Open at `OPENED_AT` with `FLOAT` and move the clock to `CLOSED_AT`. */
+function openShift(): string {
+  const { shiftId } = harness.service.openShift({ openingFloatMinor: FLOAT });
+  harness.state.clock = CLOSED_AT;
+  return shiftId;
+}
+
+function payOut(amountMinor: number): () => unknown {
+  return () =>
+    harness.service.recordCashMovement({ kind: 'pay_out', amountMinor, reasonCode: 'bank_drop' });
+}
+
+function closeWith(countedCashMinor: number): () => unknown {
+  return () => harness.service.closeShift({ countedCashMinor });
+}
+
+async function probes(): Promise<unknown> {
+  return (await harness.service.readStatus()).probeRefusals;
+}
+
+describe('readStatus admission: the flag AND the session', () => {
+  it.each<[string, (state: ServiceHarness['state']) => void, string]>([
+    ['the flag off', (s) => (s.enabled = false), 'feature_disabled'],
+    ['no session (or unpaired)', (s) => (s.session = null), 'no_session'],
+    ['a locked session', (s) => (s.locked = true), 'session_locked'],
+  ])('refuses %s', async (_name, arrange, reason) => {
+    arrange(harness.state);
+    await expect(harness.service.readStatus()).rejects.toThrow(refusal(reason));
+  });
+
+  it('checks the flag before the session, and the session before the lock', async () => {
+    harness.state.enabled = false;
+    harness.state.session = null;
+    await expect(harness.service.readStatus()).rejects.toThrow(refusal('feature_disabled'));
+    harness.state.enabled = true;
+    harness.state.locked = true;
+    await expect(harness.service.readStatus()).rejects.toThrow(refusal('no_session'));
+  });
+
+  it('serves a session without a users.id (a manager reads the status too)', async () => {
+    harness.state.session = { tenant_id: 'tenant-1', branch_id: 'branch-1', terminal_id: 'term-1' };
+    await expect(harness.service.readStatus()).resolves.toMatchObject({ openShift: null });
+  });
+});
+
+describe('probe refusals (10941 item 3)', () => {
+  it('shows none with no shift', async () => {
+    await expect(probes()).resolves.toEqual(NO_PROBES);
+  });
+
+  it('counts each pay-out refused above the expected drawer cash, on the open shift', async () => {
+    openShift();
+    expect(payOut(FLOAT + 1)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
+    expect(payOut(FLOAT + 2)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
+    payOut(FLOAT)();
+    await expect(probes()).resolves.toEqual({ payOut: 2, varianceClose: 0 });
+  });
+
+  it('counts each close refused for a non-zero variance without an approver', async () => {
+    openShift();
+    expect(closeWith(FLOAT - 1)).toThrow(refusal('variance_approval_required'));
+    expect(closeWith(FLOAT + 1)).toThrow(refusal('variance_approval_required'));
+    await expect(probes()).resolves.toEqual({ payOut: 0, varianceClose: 2 });
+  });
+
+  it('counts no other refusal (drawer activity in flight, no open shift)', async () => {
+    expect(closeWith(FLOAT)).toThrow(expect.objectContaining({ reason: 'shift_not_open' }));
+    openShift();
+    seedSettlement(db, { saleId: 's-1' });
+    expect(payOut(FLOAT + 1)).toThrow(refusal('drawer_activity_pending'));
+    expect(closeWith(FLOAT - 1)).toThrow(refusal('drawer_activity_pending'));
+    await expect(probes()).resolves.toEqual(NO_PROBES);
+  });
+
+  it('starts at zero for the next shift', async () => {
+    openShift();
+    expect(payOut(FLOAT + 1)).toThrow(refusal('pay_out_exceeds_drawer_cash'));
+    seedShiftSale(db, { saleId: 's-1', finalizedAt: OPENED_AT, lines: [cashLine(1_000)] });
+    expect(closeWith(FLOAT)).toThrow(refusal('variance_approval_required'));
+    closeWith(FLOAT + 1_000)();
+    await expect(probes()).resolves.toEqual(NO_PROBES);
+    harness.state.clock = msAfter(CLOSED_AT);
+    harness.service.openShift({ openingFloatMinor: 0 });
+    await expect(probes()).resolves.toEqual(NO_PROBES);
+  });
+});
+
+describe('pairedShiftScope — the status scope from the pairing', () => {
+  it('is the paired terminal’s scope', () => {
+    const paired = {
+      kind: 'paired',
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'term-1',
+      terminal_label: 'Till 1',
+      paired_at: 1,
+    } as const;
+    expect(pairedShiftScope(paired)).toEqual({
+      tenantId: 'tenant-1',
+      branchId: 'branch-1',
+      terminalId: 'term-1',
+    });
+  });
+
+  it.each<PairingStatus>([{ kind: 'unpaired' }, { kind: 'invalid', reason: 'device_revoked' }])(
+    'is null when %j',
+    (status) => {
+      expect(pairedShiftScope(status)).toBeNull();
+    },
+  );
+});

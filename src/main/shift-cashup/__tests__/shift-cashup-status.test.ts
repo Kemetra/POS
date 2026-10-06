@@ -26,7 +26,7 @@ import {
   type ShiftCashupRepo,
   type ShiftScope,
 } from '../shift-cashup-repo.js';
-import type { ShiftCashupStatus } from '../shift-cashup-status.js';
+import type { ShiftCashupServiceStatus } from '../shift-cashup-service.js';
 import {
   OPENED_AT,
   msAfter,
@@ -65,10 +65,11 @@ afterEach(() => {
 const EMPTY_QUEUE = { pending: 0, waiting: 0, blocked: 0, envelopePending: 0 };
 const NOT_STRANDED = { unsyncedFacts: 0, openShifts: 0 };
 const NO_DRAWER_ACTIVITY = { refundPayouts: 0, unfinalizedSales: 0 };
+const NO_PROBES = { payOut: 0, varianceClose: 0 };
 const REF_A = '0192f5a2-3b4c-7d8e-9f01-0000000000a1';
 const REF_B = '0192f5a2-3b4c-7d8e-9f01-0000000000b2';
 
-function status(): Promise<ShiftCashupStatus> {
+function status(): Promise<ShiftCashupServiceStatus> {
   return harness.service.readStatus();
 }
 
@@ -83,6 +84,7 @@ describe('readStatus — the current terminal', () => {
       queue: EMPTY_QUEUE,
       stranded: NOT_STRANDED,
       pendingDrawerActivity: NO_DRAWER_ACTIVITY,
+      probeRefusals: NO_PROBES,
     });
   });
 
@@ -189,6 +191,7 @@ describe('readStatus — stranded outside the current pairing (carried item b)',
       queue: EMPTY_QUEUE,
       stranded: { unsyncedFacts: 1, openShifts: 1 },
       pendingDrawerActivity: NO_DRAWER_ACTIVITY,
+      probeRefusals: NO_PROBES,
     });
   });
 
