@@ -14,14 +14,19 @@
  *     explicit allowlist.
  */
 import type { Database as SqlJsDatabase } from 'sql.js';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { ShiftCashupBridgeAPI } from '../../../shared/shift-cashup/types.js';
 import {
   freshSalesSyncDb,
   initSalesSyncSql,
 } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
-import { createShiftCashupBridge, SHIFT_CASHUP_REFUSED_LOG } from '../shift-cashup-bridge.js';
+import {
+  createShiftCashupBridge,
+  SHIFT_CASHUP_FAILED_LOG,
+  SHIFT_CASHUP_REFUSED_LOG,
+} from '../shift-cashup-bridge.js';
+import { ShiftCashupStateError } from '../shift-cashup-repo.js';
 import type { ShiftCashupService } from '../shift-cashup-service.js';
 import {
   CLOSED_AT,
@@ -35,13 +40,15 @@ import {
   storedBody,
   type ServiceHarness,
 } from './__helpers__/shift-cashup-service-fixture.js';
-import { USER } from './__helpers__/shift-sync-fixture.js';
+import { SCOPE, USER } from './__helpers__/shift-sync-fixture.js';
 
 const FLOAT = 50_000;
+const ANY_ID = expect.any(String) as string;
 
 let db: SqlJsDatabase;
 let harness: ServiceHarness;
-let logger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
+type LogFn = (payload: Record<string, unknown>, message: string) => void;
+let logger: { info: Mock<LogFn>; warn: Mock<LogFn> };
 let bridge: ShiftCashupBridgeAPI;
 
 beforeAll(async () => {
@@ -51,7 +58,7 @@ beforeAll(async () => {
 beforeEach(() => {
   db = freshSalesSyncDb();
   harness = serviceHarness(db);
-  logger = { info: vi.fn(), warn: vi.fn() };
+  logger = { info: vi.fn<LogFn>(), warn: vi.fn<LogFn>() };
   bridge = createShiftCashupBridge({ service: harness.service, logger });
 });
 
@@ -71,13 +78,12 @@ async function openShift(): Promise<string> {
   return opened.shiftId;
 }
 
-const payOut = (amountMinor: number) =>
-  bridge.payOut({ amountMinor, reasonCode: 'bank_drop' });
+const payOut = (amountMinor: number) => bridge.payOut({ amountMinor, reasonCode: 'bank_drop' });
 
 describe('recorded facts', () => {
   it('opens a shift and answers its id and time only', async () => {
     const opened = await bridge.open({ openingFloatMinor: FLOAT });
-    expect(opened).toEqual({ kind: 'opened', shiftId: expect.any(String), openedAt: OPENED_AT });
+    expect(opened).toEqual({ kind: 'opened', shiftId: ANY_ID, openedAt: OPENED_AT });
   });
 
   it.each([
@@ -88,7 +94,7 @@ describe('recorded facts', () => {
     const req = { amountMinor: 100, reasonCode: 'other', note: 'till 2' } as const;
     await expect(bridge[member](req)).resolves.toEqual({
       kind: 'recorded',
-      movementId: expect.any(String),
+      movementId: ANY_ID,
       shiftId,
     });
     expect(storedBody(db, 2)).toMatchObject({ kind, amount: '1.00', note: 'till 2' });
@@ -130,9 +136,7 @@ describe('zero-variance close only (the approver waits for 10942)', () => {
   it('never passes an approver to the service, even if one is smuggled in', async () => {
     await openShift();
     const smuggled = { countedCashMinor: FLOAT + 1, varianceApprovedByUserId: MANAGER };
-    await expect(bridge.close(smuggled)).resolves.toEqual(
-      refused('variance_approval_unavailable'),
-    );
+    await expect(bridge.close(smuggled)).resolves.toEqual(refused('variance_approval_unavailable'));
   });
 });
 
@@ -161,9 +165,18 @@ describe('pay-out probing (10941 item 3)', () => {
 });
 
 describe('refusal mapping', () => {
-  type Arrange = (h: ServiceHarness) => Promise<unknown>;
-  const none: Arrange = () => Promise.resolve();
-  const open: Arrange = () => openShift();
+  type Arrange = () => unknown;
+  const none: Arrange = () => undefined;
+  const set =
+    (patch: Partial<ServiceHarness['state']>): Arrange =>
+    () =>
+      Object.assign(harness.state, patch);
+  const openThen =
+    (then: () => void): Arrange =>
+    async () => {
+      await openShift();
+      then();
+    };
   const call = {
     open: () => bridge.open({ openingFloatMinor: FLOAT }),
     payIn: () => bridge.payIn({ amountMinor: 1, reasonCode: 'other' }),
@@ -171,50 +184,42 @@ describe('refusal mapping', () => {
     close: () => bridge.close({ countedCashMinor: FLOAT }),
     status: () => bridge.status(),
   };
+  const MANAGER_SESSION = {
+    tenant_id: SCOPE.tenantId,
+    branch_id: SCOPE.branchId,
+    terminal_id: SCOPE.terminalId,
+  };
+  const unreadableTender = () => {
+    seedShiftSale(db, { saleId: 's-1', finalizedAt: OPENED_AT, lines: [{ tender_type: 'x' }] });
+  };
 
   it.each<[string, Arrange, keyof typeof call, string]>([
-    ['the flag off', (h) => Promise.resolve((h.state.enabled = false)), 'payIn', 'feature_disabled'],
-    ['no session', (h) => Promise.resolve((h.state.session = null)), 'open', 'no_session'],
-    ['a locked session', (h) => Promise.resolve((h.state.locked = true)), 'close', 'session_locked'],
-    [
-      'no users.id',
-      (h) => Promise.resolve((h.state.session = { ...h.state.session!, user_id: undefined })),
-      'open',
-      'no_cashier_identity',
-    ],
-    ['an open shift', open, 'open', 'shift_already_open'],
+    ['the flag off', set({ enabled: false }), 'payIn', 'feature_disabled'],
+    ['no session', set({ session: null }), 'open', 'no_session'],
+    ['a locked session', set({ locked: true }), 'close', 'session_locked'],
+    ['no users.id', set({ session: MANAGER_SESSION }), 'open', 'no_cashier_identity'],
+    ['an open shift', openThen(none), 'open', 'shift_already_open'],
     ['no open shift', none, 'payIn', 'shift_not_open'],
     [
       'a clock behind the open',
-      async (h) => {
-        await openShift();
-        h.state.clock = '2026-10-05T07:00:00.000Z';
-      },
+      openThen(() => (harness.state.clock = '2026-10-05T07:00:00.000Z')),
       'payIn',
       'clock_regressed',
     ],
     [
       'drawer activity in flight',
-      async () => {
-        await openShift();
+      openThen(() => {
         seedSettlement(db, { saleId: 's-1' });
-      },
+      }),
       'payOut',
       'drawer_activity_pending',
     ],
-    [
-      'an unreadable sale tender',
-      async () => {
-        await openShift();
-        seedShiftSale(db, { saleId: 's-1', finalizedAt: OPENED_AT, lines: [{ tender_type: 'x' }] });
-      },
-      'close',
-      'cashup_unavailable',
-    ],
-    ['the flag off (status)', (h) => Promise.resolve((h.state.enabled = false)), 'status', 'feature_disabled'],
-    ['no session (status)', (h) => Promise.resolve((h.state.session = null)), 'status', 'no_session'],
+    ['an unreadable sale tender', openThen(unreadableTender), 'close', 'cashup_unavailable'],
+    ['the flag off (status)', set({ enabled: false }), 'status', 'feature_disabled'],
+    ['no session (status)', set({ session: null }), 'status', 'no_session'],
+    ['a locked session (status)', set({ locked: true }), 'status', 'session_locked'],
   ])('with %s, %s is refused %s', async (_name, arrange, member, reason) => {
-    await arrange(harness);
+    await arrange();
     await expect(call[member]()).resolves.toEqual(refused(reason));
   });
 
@@ -226,21 +231,31 @@ describe('refusal mapping', () => {
     );
   });
 
-  it('answers an unexpected failure as unavailable and logs its name only', async () => {
-    const failing = {
+  function failingWith(thrown: unknown): ShiftCashupBridgeAPI {
+    const service = {
       openShift: () => {
-        throw new TypeError(`secret ${String(FLOAT)}`);
+        throw thrown;
       },
     } as unknown as ShiftCashupService;
-    const failingBridge = createShiftCashupBridge({ service: failing, logger });
-    await expect(failingBridge.open({ openingFloatMinor: 1 })).resolves.toEqual(
+    return createShiftCashupBridge({ service, logger });
+  }
+
+  it.each<[string, unknown, string]>([
+    ['an Error', new TypeError(`secret ${String(FLOAT)}`), 'TypeError'],
+    ['a non-Error', `secret ${String(FLOAT)}`, 'string'],
+  ])('answers %s as unavailable and logs its name only', async (_name, thrown, name) => {
+    await expect(failingWith(thrown).open({ openingFloatMinor: 1 })).resolves.toEqual(
       refused('unavailable'),
     );
-    expect(logger.warn).toHaveBeenCalledWith(
-      { op: 'open', error: 'TypeError' },
-      'shift_cashup:failed',
-    );
+    expect(logger.warn).toHaveBeenCalledWith({ op: 'open', error: name }, SHIFT_CASHUP_FAILED_LOG);
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('secret');
+  });
+
+  it('answers a repair-state error (not a renderer state) as unavailable', async () => {
+    const bridgeOverRepair = failingWith(new ShiftCashupStateError('not_dead_lettered'));
+    await expect(bridgeOverRepair.open({ openingFloatMinor: 1 })).resolves.toEqual(
+      refused('unavailable'),
+    );
   });
 });
 

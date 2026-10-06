@@ -13,6 +13,7 @@ import { SHIFT_CASHUP_IPC_CHANNELS } from '../../../shared/shift-cashup/channels
 import {
   SHIFT_MOVEMENT_REASON_CODES,
   SHIFT_NOTE_MAX_LENGTH,
+  type ShiftCashupBridgeAPI,
 } from '../../../shared/shift-cashup/types.js';
 import { CASH_MOVEMENT_REASON_CODES } from '../../shift-cashup/shift-wire.js';
 import {
@@ -56,9 +57,10 @@ function setup(locked = false) {
     close: vi.fn(() => Promise.resolve({ kind: 'closed' })),
     status: vi.fn(() => Promise.resolve({ kind: 'status' })),
   };
-  registerShiftCashupHandlers(createSessionLockGuardedIpcMain(fake.ipcMain, () => locked), {
-    bridge,
-  });
+  registerShiftCashupHandlers(
+    createSessionLockGuardedIpcMain(fake.ipcMain, () => locked),
+    { bridge: bridge as unknown as ShiftCashupBridgeAPI },
+  );
   return { ...fake, bridge };
 }
 

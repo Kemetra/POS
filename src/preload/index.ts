@@ -6,6 +6,7 @@ import { receipts } from './receipts.js';
 import { catalogue } from './catalogue.js';
 import { salesSync } from './sales-sync.js';
 import { returns } from './returns.js';
+import { shiftCashup } from './shift-cashup.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -176,6 +177,10 @@ const api: PreloadBridgeAPI = {
   // RT-15 S2 — returns.* (lookup / quote / submit / resolve / list). Gated in
   // main on the feature flag, session and manager/admin role.
   returns,
+  // RT-17 slice 4 — shiftCashup.* (open / pay-in / pay-out / close / status).
+  // Registered in main only with the shift cash-up flag on; gated there on the
+  // flag and the operator session.
+  shiftCashup,
 };
 
 contextBridge.exposeInMainWorld('api', api);
