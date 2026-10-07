@@ -4589,6 +4589,18 @@ body {
     font-variant-numeric: tabular-nums;
   }
 
+  /* RT-237 — the change to hand back (M-P5): neutral and large, mono digits. */
+  .payment-surface__settled-change {
+    margin: var(--space-3) 0 0;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+  }
+
+  .payment-surface__settled-change [dir='ltr'] {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
   .payment-surface__new-sale {
     min-block-size: var(--space-8);
     font-size: var(--font-size-lg);
