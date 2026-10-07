@@ -413,10 +413,9 @@ export function PaymentSurface({
   const [isReturning, setIsReturning] = useState<boolean>(false);
   const [tenderTouched, setTenderTouched] = useState<boolean>(false);
   const [tenderReversed, setTenderReversed] = useState<boolean>(false);
-  const [cardVoidRequired, setCardVoidRequired] = useState<boolean>(false);
-  // RT-256 — card lines main confirmed applying in this Checkout, kept even
-  // when the follow-up read fails and the projection does not show them.
-  const appliedCardLineIds = useRef<Set<string>>(new Set());
+  // RT-256 — card facts for this handoff live in the payment store, so they
+  // survive a Checkout remount and the attempt clear on cancel (Codex P1, #572).
+  const cardSafety = usePaymentStore((s) => s.cardSafety);
   // 022 US4a (T011) — the sale id is NO LONGER retained.
   //
   // It existed to mount ReceiptPreview and to discriminate T013a's two settled
@@ -459,8 +458,6 @@ export function PaymentSurface({
     setIsReturning(false);
     setTenderTouched(false);
     setTenderReversed(false);
-    setCardVoidRequired(false);
-    appliedCardLineIds.current = new Set();
     setAfterApply('idle');
     // Resume a same-handoff attempt across a remount (leaving checkout and
     // coming back): a `started` one is still held by main, so forgetting it
@@ -505,7 +502,8 @@ export function PaymentSurface({
     eligibility: backToSaleEligibility,
     projectedTenderLines: paymentSlice?.tender_lines.length,
     tenderTouched,
-    cardVoidRequired,
+    cardVoidRequired:
+      cardSafety !== null && cardSafety.voidRequired && cardSafety.handoffId === envelopeHandoffId,
     tenderReversed,
     busy: [isStarting, isConfirming, isCancelling, isReturning].some(Boolean),
     entryOpen: phase === 'entry',
@@ -749,8 +747,10 @@ export function PaymentSurface({
         const linesAtCancel = usePaymentStore.getState().paymentSlice?.tender_lines ?? [];
         setTenderReversed(cancelProvesReversal(response, linesAtCancel));
         // Sticky for this handoff: a later cash-only cancel does not void the card.
-        if (cancelTouchedCard(response, linesAtCancel, appliedCardLineIds.current)) {
-          setCardVoidRequired(true);
+        const store = usePaymentStore.getState();
+        const knownCardLines = new Set(store.cardSafety?.appliedCardLineIds ?? []);
+        if (cancelTouchedCard(response, linesAtCancel, knownCardLines)) {
+          store.markCardVoidRequired();
         }
         setSelectedTender(null);
         setPhase('tender_selection');
@@ -1103,7 +1103,7 @@ export function PaymentSurface({
                       paymentAttemptId={paymentAttemptId}
                       tenderApply={(req) => bridge.tender.apply(req)}
                       onApplied={(response) => {
-                        appliedCardLineIds.current.add(response.tender_line_id);
+                        usePaymentStore.getState().recordCardApplied(response.tender_line_id);
                         void handleLineApplied();
                       }}
                     />

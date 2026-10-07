@@ -268,6 +268,43 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
     expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
   });
 
+  it('survives leaving Checkout and coming back to the same sale (Codex P1)', async () => {
+    await cancelWithLines(
+      [{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }],
+      ['tl-card'],
+    );
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+    cleanup();
+    render(
+      <PaymentSurface
+        _testBridge={makeBridge({ reversed: [] })}
+        onBackToSale={() => Promise.resolve(true)}
+        backToSaleEligibility="blocked"
+        onNewSale={vi.fn()}
+      />,
+    );
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+  });
+
+  it('a different sale does not inherit the warning', async () => {
+    await cancelWithLines(
+      [{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }],
+      ['tl-card'],
+    );
+    cleanup();
+    usePaymentStore.getState().mount({ ...ENVELOPE, handoff_action_id: 'hid-002' });
+    render(
+      <PaymentSurface
+        _testBridge={makeBridge({ reversed: [] })}
+        onBackToSale={() => Promise.resolve(true)}
+        backToSaleEligibility="blocked"
+        onNewSale={vi.fn()}
+      />,
+    );
+    const reason = await screen.findByTestId('payment-surface-back-blocked');
+    expect(reason).not.toHaveTextContent(CARD_VOID);
+  });
+
   it('a cash-only cancel keeps the proven-reversal line (M-P2), not the card line', async () => {
     await cancelWithLines([{ id: 'tl-cash', type: 'cash', amount: 5000 }], ['tl-cash']);
     const reason = await screen.findByTestId('payment-surface-back-blocked');

@@ -36,6 +36,23 @@ export interface PaymentState {
    * for the same sale instead of forgetting it while main still holds it.
    */
   attemptHandoffId: string | null;
+  /**
+   * RT-256 — external-card facts for the mounted handoff that must outlive a
+   * Checkout remount and `clearAttempt` (a cancel clears the attempt):
+   *   - `appliedCardLineIds`: card lines main confirmed applying (kept even when
+   *     the follow-up read failed and the projection does not show them);
+   *   - `voidRequired`: a cancel reversed one of them locally, so the charge may
+   *     still stand on the terminal (M-P13).
+   * Renderer memory only: lost on restart, like the Undo token (RT-245).
+   * Cleared when a different handoff is mounted, or on reset.
+   */
+  cardSafety: CardSafety | null;
+}
+
+export interface CardSafety {
+  readonly handoffId: string;
+  readonly appliedCardLineIds: readonly string[];
+  readonly voidRequired: boolean;
 }
 
 export interface PaymentStore extends PaymentState {
@@ -52,19 +69,42 @@ export interface PaymentStore extends PaymentState {
   clearAttempt(): void;
   /** Clear both slices (e.g. on void or new cart). */
   reset(): void;
+  /** RT-256 — main confirmed a card line for the mounted handoff. */
+  recordCardApplied(tenderLineId: string): void;
+  /** RT-256 — a cancel reversed a card line of the mounted handoff (M-P13). */
+  markCardVoidRequired(): void;
 }
 
-const INITIAL: PaymentState = { envelope: null, paymentSlice: null, attemptHandoffId: null };
+/** The card-safety record for `handoffId`, starting fresh for a different handoff. */
+function cardSafetyFor(current: CardSafety | null, handoffId: string): CardSafety {
+  return current?.handoffId === handoffId
+    ? current
+    : { handoffId, appliedCardLineIds: [], voidRequired: false };
+}
+
+const INITIAL: PaymentState = {
+  envelope: null,
+  paymentSlice: null,
+  attemptHandoffId: null,
+  cardSafety: null,
+};
 
 export const usePaymentStore = create<PaymentStore>((set) => ({
   ...INITIAL,
   mount: (envelope) => {
     // A different sale's envelope never inherits the previous attempt.
-    set((s) =>
-      s.attemptHandoffId !== null && s.attemptHandoffId !== envelope.handoff_action_id
-        ? { envelope: freezeEnvelope(envelope), paymentSlice: null, attemptHandoffId: null }
-        : { envelope: freezeEnvelope(envelope) },
-    );
+    set((s) => {
+      const cardSafety =
+        s.cardSafety?.handoffId === envelope.handoff_action_id ? s.cardSafety : null;
+      return s.attemptHandoffId !== null && s.attemptHandoffId !== envelope.handoff_action_id
+        ? {
+            envelope: freezeEnvelope(envelope),
+            paymentSlice: null,
+            attemptHandoffId: null,
+            cardSafety,
+          }
+        : { envelope: freezeEnvelope(envelope), cardSafety };
+    });
   },
   applyAttemptSnapshot: (view) => {
     set((s) => ({ paymentSlice: view, attemptHandoffId: s.envelope?.handoff_action_id ?? null }));
@@ -74,5 +114,23 @@ export const usePaymentStore = create<PaymentStore>((set) => ({
   },
   reset: () => {
     set({ ...INITIAL });
+  },
+  recordCardApplied: (tenderLineId) => {
+    set((s) => {
+      const handoffId = s.envelope?.handoff_action_id;
+      if (handoffId === undefined) return {};
+      const record = cardSafetyFor(s.cardSafety, handoffId);
+      if (record.appliedCardLineIds.includes(tenderLineId)) return { cardSafety: record };
+      return {
+        cardSafety: { ...record, appliedCardLineIds: [...record.appliedCardLineIds, tenderLineId] },
+      };
+    });
+  },
+  markCardVoidRequired: () => {
+    set((s) => {
+      const handoffId = s.envelope?.handoff_action_id;
+      if (handoffId === undefined) return {};
+      return { cardSafety: { ...cardSafetyFor(s.cardSafety, handoffId), voidRequired: true } };
+    });
   },
 }));
