@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PaymentIntentEnvelope } from '../../../../shared/cart/handoff-envelope.js';
 import type { ReceiptsBridgeAPI } from '../../../../shared/bridge-api.js';
 import { TopBar } from '../../../shell/regions/TopBar.js';
+import { OperatorBadge } from '../../operator/OperatorBadge.js';
 import { DrawerFailureBanner } from '../../receipts/DrawerFailureBanner.js';
 import { PrinterFailureBanner } from '../../receipts/PrinterFailureBanner.js';
 import { ReprintAffordance } from '../../receipts/ReprintAffordance.js';
@@ -95,6 +96,34 @@ describe('RT-240 — Checkout surfaces are Arabic only', () => {
   it('card entry', () => {
     expect(sweep(<ExternalCardTerminalEntry remainingBalanceMinor={1500} />)).toEqual([]);
   });
+
+  it('a left-to-right field never mixes Arabic into its placeholder (bidi garbles it)', () => {
+    for (const ui of [
+      <ExternalCardTerminalEntry key="card" remainingBalanceMinor={1500} />,
+      <VoucherEntry
+        key="voucher"
+        remainingBalanceMinor={1500}
+        paymentAttemptId="pa-1"
+        tenderApply={vi.fn()}
+      />,
+      <CashEntry key="cash" remainingBalanceMinor={1500} onConfirm={vi.fn()} />,
+    ]) {
+      const { container, unmount } = render(ui);
+      for (const field of Array.from(container.querySelectorAll('input[dir="ltr"][placeholder]'))) {
+        expect(field.getAttribute('placeholder')).not.toMatch(/[؀-ۿ]/);
+      }
+      unmount();
+    }
+  });
+
+  it.each(['cashier', 'manager', 'admin'] as const)(
+    'the operator badge in the Checkout header names the role in Arabic (%s)',
+    (role) => {
+      // An Arabic display name, so any Latin word left is the badge's own copy.
+      const { container } = render(<OperatorBadge display_name="د. سارة" role={role} />);
+      expect(latinLeaks(container)).toEqual([]);
+    },
+  );
 
   it('card entry waiting line is catalog M-P6', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={1500} />);

@@ -214,7 +214,7 @@ export function ExternalCardTerminalEntry({
         inputMode="text"
         autoComplete="off"
         maxLength={6}
-        placeholder="مثال: T1A2B3"
+        placeholder="T1A2B3"
         dir="ltr"
         value={referenceInput}
         onChange={(e) => {
