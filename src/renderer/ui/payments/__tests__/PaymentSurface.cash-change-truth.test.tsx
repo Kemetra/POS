@@ -155,16 +155,44 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// RT-159 packaged evidence amounts + a quick-amount chip case.
-const CASES = [
-  // [label, due, typed received (or null for chip), chip received, expected change]
-  ['sale 1: typed 1000.00 against 992.25', 99_225, '1000.00', null, 775],
-  ['offline sale: typed 100.00 against 89.50', 8_950, '100.00', null, 1_050],
-  ['quick-amount chip: 100.00 chip against 62.30', 6_230, null, 10_000, 3_770],
-] as const;
+// RT-159 packaged evidence amounts + a quick-amount chip case. One object per
+// case keeps the `it.each` callback to a single argument.
+interface ChangeCase {
+  label: string;
+  due: number;
+  /** Typed received amount, or null when a quick-amount chip sets it. */
+  typed: string | null;
+  /** Chip received amount in minor units (used when `typed` is null). */
+  chip: number | null;
+  expectedChange: number;
+}
+
+const CASES: readonly ChangeCase[] = [
+  {
+    label: 'sale 1: typed 1000.00 against 992.25',
+    due: 99_225,
+    typed: '1000.00',
+    chip: null,
+    expectedChange: 775,
+  },
+  {
+    label: 'offline sale: typed 100.00 against 89.50',
+    due: 8_950,
+    typed: '100.00',
+    chip: null,
+    expectedChange: 1_050,
+  },
+  {
+    label: 'quick-amount chip: 100.00 chip against 62.30',
+    due: 6_230,
+    typed: null,
+    chip: 10_000,
+    expectedChange: 3_770,
+  },
+];
 
 describe('RT-237 — change after apply equals the main-process change_due_minor', () => {
-  it.each(CASES)('%s', async (_label, due, typed, chip, expectedChange) => {
+  it.each(CASES)('$label', async ({ due, typed, chip, expectedChange }) => {
     await openCash(due);
 
     if (typed !== null) {
