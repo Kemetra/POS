@@ -399,6 +399,18 @@ describe('RT-304 — replay after the original action has been superseded', () =
     },
   );
 
+  it('payments.cancel replays only the lines this cancel reversed, not one reversed earlier', async () => {
+    const s = build();
+    const attempt = await startAttempt(s);
+    const manual = await applyCash(s, attempt, 'k-a', 500);
+    const swept = await applyCash(s, attempt, 'k-b', 500);
+    await s.reverse({ tender_line_id: manual, idempotency_key: 'k-manual-rev' });
+    const req = { payment_attempt_id: attempt, idempotency_key: 'k-cancel' };
+    const first = await s.cancel(req);
+    expect(first).toMatchObject({ kind: 'ok', reversed_tender_line_ids: [swept] });
+    expect(await s.cancel(req)).toEqual(first);
+  });
+
   it('tender.apply replays once its line has been reversed', async () => {
     const s = build();
     const attempt = await startAttempt(s);
