@@ -3,7 +3,7 @@ import type { CartLineItem } from '../../sale/useSaleCartController';
 import { format, of } from '../../../shared/money';
 import { V5Icon } from '../foundation/V5Icon';
 import { SaleDialog } from './SaleDialog';
-import { focusScanOwner } from './scan-anchor';
+import { focusScanOwner } from '../../scan/scan-anchor';
 import type { RemovalControl } from './useRemovalFocus';
 
 // Legacy LineNotePopover parity: same length cap, unchanged-save and empty-clear guards.

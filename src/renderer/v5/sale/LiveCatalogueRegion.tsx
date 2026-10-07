@@ -9,7 +9,7 @@ import { useScanOwner } from '../../scan/ScanGuardHost';
 import { LiveProductRail } from './LiveProductRail';
 import { SaleDialog } from './SaleDialog';
 import { SaleProductFlags } from './SaleProductFlags';
-import { focusScanOwner } from './scan-anchor';
+import { focusScanOwner } from '../../scan/scan-anchor';
 
 interface Props {
   onLineAdded: (line: AddedLineResult) => void;

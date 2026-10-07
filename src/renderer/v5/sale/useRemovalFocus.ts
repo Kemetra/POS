@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { CartLineItem } from '../../sale/useSaleCartController';
-import { focusScanOwner } from './scan-anchor';
+import { focusScanOwner } from '../../scan/scan-anchor';
 
 /**
  * RT-239 (VNext A2, rule 6) — where focus goes when a row is removed from the

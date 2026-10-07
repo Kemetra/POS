@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type JSX, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 
 import type { LockStateView, OperatorBridgeAPI } from '../../shared/bridge-api';
 import { useOperatorSessionStore } from '../stores/operator-session-store';
+import { focusScanOwner } from '../scan/scan-anchor';
 import { LockScreen } from './LockScreen';
 
 /**
@@ -64,6 +65,15 @@ export function SessionLockGate({ operator, children }: SessionLockGateProps): J
   }, [operator, refresh]);
 
   const locked = lockView !== null;
+
+  // RT-239 rule 6: the Sale stays mounted under the lock, so its own mount focus
+  // never runs again. When the lock closes, the scan owner takes focus back
+  // (a no-op on any screen that has no scan anchor).
+  const wasLocked = useRef(false);
+  useEffect(() => {
+    if (wasLocked.current && !locked) focusScanOwner();
+    wasLocked.current = locked;
+  }, [locked]);
   return (
     <>
       <div

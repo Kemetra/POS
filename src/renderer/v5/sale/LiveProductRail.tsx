@@ -5,7 +5,7 @@ import { useDebouncedSearch } from '../../stores/useDebouncedSearch';
 import type { FreshnessState, RefreshFeedback } from '../../sale/useCatalogueFreshness';
 import { V5Icon } from '../foundation/V5Icon';
 import { LiveSearchResults } from './LiveSearchResults';
-import { SCAN_ANCHOR_ID } from './scan-anchor';
+import { SCAN_ANCHOR_ID } from '../../scan/scan-anchor';
 
 interface Props {
   state: CatalogueSearchState;
