@@ -80,30 +80,90 @@ function makeBridge(cancel: { reversed: readonly string[]; pending?: readonly st
   };
 }
 
-/** Opens the cash entry (phase `entry`, where Cancel lives), seeds the lines, then cancels. */
-async function cancelWithLines(
-  lines: readonly { id: string; type: TenderType; amount: number }[],
-  reversed: readonly string[],
-): Promise<void> {
+type Line = { id: string; type: TenderType; amount: number };
+type Bridge = ReturnType<typeof makeBridge>;
+
+const CARD_LINE: Line = { id: 'tl-card', type: 'external_card_terminal', amount: 5000 };
+const CASH_LINE: Line = { id: 'tl-cash', type: 'cash', amount: 5000 };
+
+function stub(
+  bridge: Bridge,
+  api: 'payments' | 'tender',
+  method: string,
+  impl: () => unknown,
+): void {
+  (bridge[api] as unknown as Record<string, unknown>)[method] = vi.fn(impl);
+}
+
+function renderSurface(bridge: Bridge, extra: { backToSaleEligibility?: 'blocked' } = {}): void {
   render(
     <PaymentSurface
-      _testBridge={makeBridge({ reversed })}
+      _testBridge={bridge}
       onBackToSale={() => Promise.resolve(true)}
       onNewSale={vi.fn()}
+      {...extra}
     />,
   );
+}
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+/** Opens the cash entry (phase `entry`, where Cancel lives). */
+async function openCash(): Promise<void> {
   await act(async () => {
     screen.getByTestId('tender-cash').click();
     await Promise.resolve();
   });
+}
+
+function seed(lines: readonly Line[]): void {
   act(() => {
     usePaymentStore.getState().applyAttemptSnapshot(attemptWith(lines));
   });
+}
+
+async function clickCancel(): Promise<void> {
+  fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+  await settle();
+}
+
+/** Records a card amount through the real card entry (the apply outcome is the bridge's). */
+async function applyCardViaUi(): Promise<void> {
   await act(async () => {
-    screen.getByTestId('payment-surface-cancel').click();
-    await Promise.resolve();
+    screen.getByTestId('tender-external-card').click();
     await Promise.resolve();
   });
+  fireEvent.change(await screen.findByTestId('external-card-amount-input'), {
+    target: { value: '50.00' },
+  });
+  fireEvent.click(screen.getByTestId('external-card-confirm'));
+  await settle();
+}
+
+async function confirmSettle(): Promise<void> {
+  const confirm = await screen.findByTestId('payment-surface-confirm');
+  await act(async () => {
+    confirm.click();
+    await Promise.resolve();
+  });
+  expect(await screen.findByTestId('payment-surface-settled')).toBeInTheDocument();
+}
+
+/** Seeds the lines on an open cash entry, then cancels with `reversed`. */
+async function cancelWithLines(lines: readonly Line[], reversed: readonly string[]): Promise<void> {
+  renderSurface(makeBridge({ reversed }));
+  await openCash();
+  seed(lines);
+  await clickCancel();
+}
+
+async function backReasonLine(): Promise<HTMLElement> {
+  return screen.findByTestId('payment-surface-back-blocked');
 }
 
 beforeEach(() => {
@@ -140,11 +200,8 @@ afterEach(() => {
 
 describe('RT-256 — card cancel requires a terminal void before another charge (M-P13)', () => {
   it('after a card line is reversed, says to void on the terminal and never «أكمل الدفع أو ألغِه»', async () => {
-    await cancelWithLines(
-      [{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }],
-      ['tl-card'],
-    );
-    const reason = await screen.findByTestId('payment-surface-back-blocked');
+    await cancelWithLines([CARD_LINE], ['tl-card']);
+    const reason = await backReasonLine();
     expect(reason).toHaveTextContent(CARD_VOID);
     expect(screen.getByTestId('payment-surface')).not.toHaveTextContent(COMPLETE_OR_CANCEL);
     // Catalog tone `danger` (Codex P2): not the muted Back explanation style.
@@ -160,307 +217,121 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
       ],
       ['tl-card', 'tl-cash'],
     );
-    const reason = await screen.findByTestId('payment-surface-back-blocked');
+    const reason = await backReasonLine();
     expect(reason).toHaveTextContent(CARD_VOID);
     expect(reason).not.toHaveTextContent(CASH_REVERSED);
   });
 
   it('stays on a later cash-only cancel in the same Checkout (the card may still stand)', async () => {
-    const cancel = vi.fn();
-    cancel
-      .mockResolvedValueOnce({
-        kind: 'ok',
-        cancelled_at: '2026-10-07T10:00:00.000Z',
-        reversed_tender_line_ids: ['tl-card'],
-        reversal_pending_tender_line_ids: [],
-      })
-      .mockResolvedValueOnce({
-        kind: 'ok',
-        cancelled_at: '2026-10-07T10:01:00.000Z',
-        reversed_tender_line_ids: ['tl-cash'],
-        reversal_pending_tender_line_ids: [],
-      });
-    const bridge = makeBridge({ reversed: [] });
-    (bridge.payments as unknown as { cancel: typeof cancel }).cancel = cancel;
-    render(
-      <PaymentSurface
-        _testBridge={bridge}
-        onBackToSale={() => Promise.resolve(true)}
-        onNewSale={vi.fn()}
-      />,
-    );
-    const cancelOnce = async (
-      lines: readonly { id: string; type: TenderType; amount: number }[],
-    ): Promise<void> => {
-      await act(async () => {
-        screen.getByTestId('tender-cash').click();
-        await Promise.resolve();
-      });
-      act(() => {
-        usePaymentStore.getState().applyAttemptSnapshot(attemptWith(lines));
-      });
-      await act(async () => {
-        screen.getByTestId('payment-surface-cancel').click();
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-    };
-    await cancelOnce([{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }]);
-    await cancelOnce([{ id: 'tl-cash', type: 'cash', amount: 5000 }]);
-    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+    const bridge = makeBridge({ reversed: ['tl-card'] });
+    renderSurface(bridge);
+    await openCash();
+    seed([CARD_LINE]);
+    await clickCancel();
+    (
+      bridge.payments as unknown as { cancel: ReturnType<typeof vi.fn> }
+    ).cancel.mockResolvedValueOnce({
+      kind: 'ok',
+      cancelled_at: '2026-10-07T10:01:00.000Z',
+      reversed_tender_line_ids: ['tl-cash'],
+      reversal_pending_tender_line_ids: [],
+    });
+    await openCash();
+    seed([CASH_LINE]);
+    await clickCancel();
+    expect(await backReasonLine()).toHaveTextContent(CARD_VOID);
   });
 
   it('wins over M-P1 when a new tender is recorded after the card cancel (Codex P1)', async () => {
-    await cancelWithLines(
-      [{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }],
-      ['tl-card'],
-    );
-    await act(async () => {
-      screen.getByTestId('tender-cash').click();
-      await Promise.resolve();
-    });
-    act(() => {
-      usePaymentStore
-        .getState()
-        .applyAttemptSnapshot(attemptWith([{ id: 'tl-cash', type: 'cash', amount: 1000 }]));
-    });
-    const reason = await screen.findByTestId('payment-surface-back-blocked');
+    await cancelWithLines([CARD_LINE], ['tl-card']);
+    await openCash();
+    seed([{ id: 'tl-cash', type: 'cash', amount: 1000 }]);
+    const reason = await backReasonLine();
     expect(reason).toHaveTextContent(CARD_VOID);
     expect(reason).not.toHaveTextContent(COMPLETE_OR_CANCEL);
   });
 
   it('a card applied in this Checkout is recognised even when the read after apply failed (Codex P1)', async () => {
     const bridge = makeBridge({ reversed: ['tl-card-1'] });
-    (bridge.payments as unknown as { read: ReturnType<typeof vi.fn> }).read = vi.fn(() =>
-      Promise.reject(new Error('ipc')),
-    );
-    (bridge.tender as unknown as { apply: ReturnType<typeof vi.fn> }).apply = vi.fn(() =>
+    stub(bridge, 'payments', 'read', () => Promise.reject(new Error('ipc')));
+    stub(bridge, 'tender', 'apply', () =>
       Promise.resolve({
-        kind: 'ok' as const,
+        kind: 'ok',
         tender_line_id: 'tl-card-1',
         applied_at: '2026-10-07T09:59:30.000Z',
       }),
     );
-    render(
-      <PaymentSurface
-        _testBridge={bridge}
-        onBackToSale={() => Promise.resolve(true)}
-        onNewSale={vi.fn()}
-      />,
-    );
-    await act(async () => {
-      screen.getByTestId('tender-external-card').click();
-      await Promise.resolve();
-    });
-    fireEvent.change(await screen.findByTestId('external-card-amount-input'), {
-      target: { value: '50.00' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('external-card-confirm'));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    renderSurface(bridge);
+    await applyCardViaUi();
     // The read failed: the projection still has no card line.
     await screen.findByTestId('payment-surface-reread');
     expect(usePaymentStore.getState().paymentSlice?.tender_lines ?? []).toEqual([]);
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+    await clickCancel();
+    expect(await backReasonLine()).toHaveTextContent(CARD_VOID);
   });
 
   it('survives leaving Checkout and coming back to the same sale (Codex P1)', async () => {
-    await cancelWithLines(
-      [{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }],
-      ['tl-card'],
-    );
-    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+    await cancelWithLines([CARD_LINE], ['tl-card']);
+    expect(await backReasonLine()).toHaveTextContent(CARD_VOID);
     cleanup();
-    render(
-      <PaymentSurface
-        _testBridge={makeBridge({ reversed: [] })}
-        onBackToSale={() => Promise.resolve(true)}
-        backToSaleEligibility="blocked"
-        onNewSale={vi.fn()}
-      />,
-    );
-    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+    renderSurface(makeBridge({ reversed: [] }), { backToSaleEligibility: 'blocked' });
+    expect(await backReasonLine()).toHaveTextContent(CARD_VOID);
   });
 
   it('a different sale does not inherit the warning', async () => {
-    await cancelWithLines(
-      [{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }],
-      ['tl-card'],
-    );
+    await cancelWithLines([CARD_LINE], ['tl-card']);
     cleanup();
     usePaymentStore.getState().mount({ ...ENVELOPE, handoff_action_id: 'hid-002' });
-    render(
-      <PaymentSurface
-        _testBridge={makeBridge({ reversed: [] })}
-        onBackToSale={() => Promise.resolve(true)}
-        backToSaleEligibility="blocked"
-        onNewSale={vi.fn()}
-      />,
-    );
-    const reason = await screen.findByTestId('payment-surface-back-blocked');
-    expect(reason).not.toHaveTextContent(CARD_VOID);
+    renderSurface(makeBridge({ reversed: [] }), { backToSaleEligibility: 'blocked' });
+    expect(await backReasonLine()).not.toHaveTextContent(CARD_VOID);
   });
 
-  it('warns after a card apply whose response was lost, then a cancel (Codex P1)', async () => {
-    const bridge = makeBridge({ reversed: ['tl-lost'] });
-    (bridge.tender as unknown as { apply: ReturnType<typeof vi.fn> }).apply = vi.fn(() =>
-      Promise.reject(new Error('response lost after commit')),
-    );
-    render(
-      <PaymentSurface
-        _testBridge={bridge}
-        onBackToSale={() => Promise.resolve(true)}
-        onNewSale={vi.fn()}
-      />,
-    );
-    await act(async () => {
-      screen.getByTestId('tender-external-card').click();
-      await Promise.resolve();
-    });
-    fireEvent.change(await screen.findByTestId('external-card-amount-input'), {
-      target: { value: '50.00' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('external-card-confirm'));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    // The renderer never learned the line id; main reverses a line it does not know.
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
-  });
-
-  it('warns after a card apply rejected before any line was saved, then a zero-line cancel (Codex P1)', async () => {
-    const bridge = makeBridge({ reversed: [] });
-    (bridge.tender as unknown as { apply: ReturnType<typeof vi.fn> }).apply = vi.fn(() =>
-      Promise.reject(new Error('rejected before persist')),
-    );
-    render(
-      <PaymentSurface
-        _testBridge={bridge}
-        onBackToSale={() => Promise.resolve(true)}
-        onNewSale={vi.fn()}
-      />,
-    );
-    await act(async () => {
-      screen.getByTestId('tender-external-card').click();
-      await Promise.resolve();
-    });
-    fireEvent.change(await screen.findByTestId('external-card-amount-input'), {
-      target: { value: '50.00' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('external-card-confirm'));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+  it.each([
+    ['whose response was lost, then a cancel of a line it never learned', ['tl-lost']],
+    ['rejected before any line was saved, then a zero-line cancel', []],
+  ] as const)('warns after a card apply %s (Codex P1)', async (_, reversed) => {
+    const bridge = makeBridge({ reversed });
+    stub(bridge, 'tender', 'apply', () => Promise.reject(new Error('outcome unknown')));
+    renderSurface(bridge);
+    await applyCardViaUi();
+    await clickCancel();
+    expect(await backReasonLine()).toHaveTextContent(CARD_VOID);
   });
 
   it('no card attempted: a cancel of a line the renderer does not know is not a card warning', async () => {
     await cancelWithLines([], ['tl-unknown']);
-    const reason = await screen.findByTestId('payment-surface-back-blocked');
-    expect(reason).not.toHaveTextContent(CARD_VOID);
+    expect(await backReasonLine()).not.toHaveTextContent(CARD_VOID);
   });
 
-  it('stays on Completion after another tender settles the sale (Codex P1)', async () => {
-    const bridge = makeBridge({ reversed: ['tl-card'] });
-    (bridge.payments as unknown as { confirm: ReturnType<typeof vi.fn> }).confirm = vi.fn(() =>
-      Promise.resolve({ kind: 'ok' as const, settled_at: '2026-10-07T10:02:00.000Z' }),
+  it.each([
+    ['stays on Completion after another tender settles the sale (Codex P1)', true],
+    ['Completion shows no card warning when no card was cancelled', false],
+  ] as const)('%s', async (_, cardCancelled) => {
+    const bridge = makeBridge({ reversed: cardCancelled ? ['tl-card'] : [] });
+    stub(bridge, 'payments', 'confirm', () =>
+      Promise.resolve({ kind: 'ok', settled_at: '2026-10-07T10:02:00.000Z' }),
     );
-    render(
-      <PaymentSurface
-        _testBridge={bridge}
-        onBackToSale={() => Promise.resolve(true)}
-        onNewSale={vi.fn()}
-      />,
-    );
-    await act(async () => {
-      screen.getByTestId('tender-cash').click();
-      await Promise.resolve();
-    });
-    act(() => {
-      usePaymentStore
-        .getState()
-        .applyAttemptSnapshot(
-          attemptWith([{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }]),
-        );
-    });
-    await act(async () => {
-      screen.getByTestId('payment-surface-cancel').click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    // A new cash attempt settles the sale.
-    await act(async () => {
-      screen.getByTestId('tender-cash').click();
-      await Promise.resolve();
-    });
-    act(() => {
-      usePaymentStore
-        .getState()
-        .applyAttemptSnapshot(attemptWith([{ id: 'tl-cash', type: 'cash', amount: 5000 }]));
-    });
-    const confirm = await screen.findByTestId('payment-surface-confirm');
-    await act(async () => {
-      confirm.click();
-      await Promise.resolve();
-    });
-    expect(await screen.findByTestId('payment-surface-settled')).toBeInTheDocument();
-    const warning = screen.getByTestId('payment-surface-settled-card-void');
-    expect(warning).toHaveTextContent(CARD_VOID);
-    expect(warning).toHaveAttribute('data-tone', 'danger');
-  });
-
-  it('Completion shows no card warning when no card was cancelled', async () => {
-    const bridge = makeBridge({ reversed: [] });
-    (bridge.payments as unknown as { confirm: ReturnType<typeof vi.fn> }).confirm = vi.fn(() =>
-      Promise.resolve({ kind: 'ok' as const, settled_at: '2026-10-07T10:02:00.000Z' }),
-    );
-    render(
-      <PaymentSurface
-        _testBridge={bridge}
-        onBackToSale={() => Promise.resolve(true)}
-        onNewSale={vi.fn()}
-      />,
-    );
-    await act(async () => {
-      screen.getByTestId('tender-cash').click();
-      await Promise.resolve();
-    });
-    act(() => {
-      usePaymentStore
-        .getState()
-        .applyAttemptSnapshot(attemptWith([{ id: 'tl-cash', type: 'cash', amount: 5000 }]));
-    });
-    const confirm = await screen.findByTestId('payment-surface-confirm');
-    await act(async () => {
-      confirm.click();
-      await Promise.resolve();
-    });
-    expect(await screen.findByTestId('payment-surface-settled')).toBeInTheDocument();
-    expect(screen.queryByTestId('payment-surface-settled-card-void')).not.toBeInTheDocument();
+    renderSurface(bridge);
+    if (cardCancelled) {
+      await openCash();
+      seed([CARD_LINE]);
+      await clickCancel();
+    }
+    await openCash();
+    seed([CASH_LINE]);
+    await confirmSettle();
+    const warning = screen.queryByTestId('payment-surface-settled-card-void');
+    if (cardCancelled) {
+      expect(warning).toHaveTextContent(CARD_VOID);
+      expect(warning).toHaveAttribute('data-tone', 'danger');
+    } else {
+      expect(warning).not.toBeInTheDocument();
+    }
   });
 
   it('a cash-only cancel keeps the proven-reversal line (M-P2), not the card line', async () => {
-    await cancelWithLines([{ id: 'tl-cash', type: 'cash', amount: 5000 }], ['tl-cash']);
-    const reason = await screen.findByTestId('payment-surface-back-blocked');
+    await cancelWithLines([CASH_LINE], ['tl-cash']);
+    const reason = await backReasonLine();
     expect(reason).toHaveTextContent(CASH_REVERSED);
     expect(reason).not.toHaveTextContent(CARD_VOID);
     expect(reason).not.toHaveClass('payment-surface__back-blocked--danger');
