@@ -1,4 +1,10 @@
-import { useEffect, useState, type JSX } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../stores/payment-store.js';
@@ -11,6 +17,7 @@ import { formatCheckoutMoney } from './format-checkout-money.js';
 import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
 import { CashEntry } from './CashEntry.js';
+import { CheckoutActionBar, FocusWhen, PrimarySlotContext } from './CheckoutActionBar.js';
 import { ExternalCardTerminalEntry } from './ExternalCardTerminalEntry.js';
 import { VoucherEntry } from './VoucherEntry.js';
 import type { BackToSaleEligibility } from '../../sale/useCheckoutBackToSale.js';
@@ -20,6 +27,7 @@ import type {
   SalesBridgeAPI,
   TenderBridgeAPI,
 } from '../../../shared/bridge-api.js';
+import type { PaymentAttemptRendererView } from '../../../shared/payments/types.js';
 
 /**
  * 006-payments-tender S1 + S3d T152 — PaymentSurface.
@@ -275,6 +283,24 @@ export function PaymentSurface({
 
   const [selectedTender, setSelectedTender] = useState<TenderKind | null>(null);
   const [phase, setPhase] = useState<Phase>('tender_selection');
+  // RT-238: the pinned primary slot the entry components render their apply-commit into.
+  const [primarySlot, setPrimarySlot] = useState<HTMLElement | null>(null);
+  // RT-238 / I-9: when focus is moved onto the settle commit, a held or doubled
+  // Enter from the apply that preceded it must not settle on its own.
+  const commitFocusedAtRef = useRef(0);
+  // RT-238 / Codex P1: after a successful apply the projection must be re-read
+  // before anything else is offered. Until it is, the apply is not offered again
+  // (a second press would record the whole amount a second time, as change).
+  const [afterApply, setAfterApply] = useState<'idle' | 'reading' | 'failed'>('idle');
+
+  // RT-238: the entry opens below the method tiles, inside the scrolling panes;
+  // bring it into view so the cashier never has to hunt for the amount field.
+  useEffect(() => {
+    if (phase !== 'entry') return;
+    const entry = document.querySelector('.payment-surface__entry');
+    // jsdom has no layout and no scrollIntoView; the real window always does.
+    if (entry !== null && 'scrollIntoView' in entry) entry.scrollIntoView({ block: 'nearest' });
+  }, [phase]);
   const [bridgeRefusalCopy, setBridgeRefusalCopy] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
@@ -326,6 +352,7 @@ export function PaymentSurface({
     setReversalPending(false);
     setIsReturning(false);
     setTenderTouched(false);
+    setAfterApply('idle');
     // Resume a same-handoff attempt across a remount (leaving checkout and
     // coming back): a `started` one is still held by main, so forgetting it
     // would re-enable sign-out and make the next tender re-run payments.start,
@@ -445,6 +472,7 @@ export function PaymentSurface({
       }
 
       setPhase('entry');
+      setAfterApply('idle');
 
       // Main now holds a started attempt: record it at once, so an open
       // payment is known (and V5 sign-out blocked) even if the read below is
@@ -475,44 +503,117 @@ export function PaymentSurface({
     }
   }
 
+  /** A read is idempotent: a transient IPC failure is retried before giving up. */
+  const READ_ATTEMPTS = 3;
+
+  async function readAttemptWithRetry(
+    attemptId: string,
+  ): Promise<PaymentAttemptRendererView | null> {
+    if (bridge === null) return null;
+    for (let attempt = 0; attempt < READ_ATTEMPTS; attempt += 1) {
+      try {
+        const readResponse = await bridge.payments.read({ payment_attempt_id: attemptId });
+        if (readResponse.kind === 'ok') return readResponse.payment_attempt;
+        return null;
+      } catch {
+        // Retry: the line itself was applied in main; only the read failed.
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The payment context a read was started for is still the current one. A
+   * cancel (or a new sale) can clear it while the read is in flight; main then
+   * answers with the now-terminal attempt, which must not be written back.
+   */
+  function isStillCurrent(attemptId: string, envelopeAtStart: unknown): boolean {
+    const store = usePaymentStore.getState();
+    return (
+      store.envelope === envelopeAtStart && store.paymentSlice?.payment_attempt_id === attemptId
+    );
+  }
+
   async function handleLineApplied(): Promise<void> {
     if (bridge === null || paymentAttemptId === null || envelope === null) {
       return;
     }
+    const attemptId = paymentAttemptId;
+    const envelopeAtStart = usePaymentStore.getState().envelope;
+    setAfterApply('reading');
+    const attempt = await readAttemptWithRetry(attemptId);
+    if (!isStillCurrent(attemptId, envelopeAtStart)) return;
+    if (attempt === null) {
+      // The apply succeeded in main but its state could not be read. Keep the
+      // apply out of reach and offer a retry instead.
+      setAfterApply('failed');
+      return;
+    }
+    usePaymentStore.getState().applyAttemptSnapshot(attempt);
+    setAfterApply('idle');
+    // Split-tender (T154): if the running sum is still below the subtotal,
+    // return to tender selection so the cashier may add another line. When
+    // the sum equals the subtotal, the surface stays put and the confirm
+    // button becomes visible. The settlement invariant itself is enforced
+    // on the main process at payments.confirm time.
+    // CR-11: guard every accumulator step with Number.isSafeInteger
+    // (Constitution §II). A malformed minor value silently produces a
+    // float-tainted running sum without this check.
+    let sumApplied = 0;
+    for (const line of attempt.tender_lines) {
+      if (line.state !== 'applied') continue;
+      if (!Number.isSafeInteger(line.amount_applied_minor)) continue;
+      sumApplied += line.amount_applied_minor;
+      if (!Number.isSafeInteger(sumApplied)) {
+        // Running sum overflowed — bail out without changing the phase.
+        return;
+      }
+    }
+    if (sumApplied < envelope.subtotal_minor) {
+      setSelectedTender(null);
+      setPhase('tender_selection');
+    }
+  }
+
+  /**
+   * RT-238: the settle commit is blocked while the projection says money is
+   * owed. If that projection is stale (a failed read after a successful apply),
+   * the cashier must not be stuck: a click on the blocked commit re-reads the
+   * attempt from main, and an up-to-date projection unblocks it.
+   */
+  async function rereadAttempt(): Promise<void> {
+    if (bridge === null || paymentAttemptId === null) return;
+    const attemptId = paymentAttemptId;
+    const envelopeAtStart = usePaymentStore.getState().envelope;
     try {
-      const readResponse = await bridge.payments.read({
-        payment_attempt_id: paymentAttemptId,
-      });
+      const readResponse = await bridge.payments.read({ payment_attempt_id: attemptId });
+      if (!isStillCurrent(attemptId, envelopeAtStart)) return;
       if (readResponse.kind === 'ok') {
         usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
-        // Split-tender (T154): if the running sum is still below the subtotal,
-        // return to tender selection so the cashier may add another line. When
-        // the sum equals the subtotal, the surface stays put and the confirm
-        // button becomes visible. The settlement invariant itself is enforced
-        // on the main process at payments.confirm time.
-        // CR-11: guard every accumulator step with Number.isSafeInteger
-        // (Constitution §II). A malformed minor value silently produces a
-        // float-tainted running sum without this check.
-        let sumApplied = 0;
-        for (const line of readResponse.payment_attempt.tender_lines) {
-          if (line.state !== 'applied') continue;
-          if (!Number.isSafeInteger(line.amount_applied_minor)) continue;
-          sumApplied += line.amount_applied_minor;
-          if (!Number.isSafeInteger(sumApplied)) {
-            // Running sum overflowed — bail out without changing the phase.
-            return;
-          }
-        }
-        if (sumApplied < envelope.subtotal_minor) {
-          setSelectedTender(null);
-          setPhase('tender_selection');
-        }
       }
     } catch {
-      // Read failure after a successful apply: keep the current phase so the
-      // cashier can retry; do NOT surface a refusal here because the line
-      // itself was successfully applied on the main process.
+      // Keep the current projection; the next click retries.
     }
+  }
+
+  /** A held or doubled Enter right after focus moved here is not a decision to settle. */
+  const COMMIT_ARM_MS = 400;
+
+  /**
+   * I-9 duplicate-submit: the Enter that applied the cash can repeat (key held)
+   * or be tapped twice, and focus has just moved onto the settle commit. Swallow
+   * an Enter that is a key repeat or arrives inside the arm window. Pointer and
+   * programmatic clicks are not affected.
+   */
+  function guardCommitKey(event: ReactKeyboardEvent<HTMLButtonElement>): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const tooSoon = Date.now() - commitFocusedAtRef.current < COMMIT_ARM_MS;
+    if (event.repeat || tooSoon) event.preventDefault();
+  }
+
+  function handleCommitClick(payable: boolean): void {
+    if (payable) void handleConfirm();
+    else void rereadAttempt();
   }
 
   async function handleCancel(): Promise<void> {
@@ -536,6 +637,8 @@ export function PaymentSurface({
         }
         setSelectedTender(null);
         setPhase('tender_selection');
+        // The attempt is gone, and with it any pending or failed post-apply read.
+        setAfterApply('idle');
         usePaymentStore.getState().clearAttempt();
       } else {
         setBridgeRefusalCopy('تعذّر إلغاء عملية الدفع. يرجى المحاولة مرة أخرى.');
@@ -636,6 +739,45 @@ export function PaymentSurface({
   if (!Number.isSafeInteger(appliedChangeDueMinor)) {
     appliedChangeDueMinor = 0;
   }
+
+  // RT-238: exactly one control owns the primary slot at a time. While an entry
+  // is open and money is still owed, that is the entry's own apply-commit; the
+  // settle commit cannot proceed yet, so it waits out of the slot.
+  const fullyTendered = hasAppliedLine && remainingBalanceMinor === 0;
+  // While a post-apply read is pending or failed, nobody gets an apply or a settle:
+  // the projection is not trustworthy until main has been read again.
+  const entryOwnsPrimary = phase === 'entry' && remainingBalanceMinor > 0 && afterApply === 'idle';
+  const showSettle = hasAppliedLine && !entryOwnsPrimary && afterApply === 'idle';
+
+  // Refusals and hints stay next to the commit, in the pinned bar. With no bridge
+  // (Slice-1 mode) there is no bar, so they render in the surface as before.
+  const notices = (
+    <>
+      {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids
+                  was non-empty in the most recent cancel response. Copy is fixed (no
+                  id interpolation) per FR-017 / token minimisation. */}
+      {reversalPending && (
+        <div
+          className="payment-surface__reversal-pending-hint"
+          data-testid="payment-surface-reversal-pending-hint"
+          role="status"
+          aria-live="polite"
+        >
+          هناك عمليات عكس قيد المعالجة وستتم قريباً.
+        </div>
+      )}
+      {bridgeRefusalCopy !== null && (
+        <div
+          className="payment-surface__bridge-refusal"
+          data-testid="payment-surface-bridge-refusal"
+          role="status"
+          aria-live="polite"
+        >
+          {bridgeRefusalCopy}
+        </div>
+      )}
+    </>
+  );
 
   if (phase === 'settled') {
     // 022 US4a — NFR-6 / P2, as REVISED by external review round 2.
@@ -759,23 +901,24 @@ export function PaymentSurface({
   }
 
   return (
-    <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
-      <header className="payment-surface__header">
-        <h1 className="payment-surface__title">الدفع</h1>
-        {/* RT-26 — Back to the same sale (Esc). Disabled, with the reason
+    <PrimarySlotContext.Provider value={{ node: primarySlot, entryOwnsPrimary }}>
+      <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
+        <header className="payment-surface__header">
+          <h1 className="payment-surface__title">الدفع</h1>
+          {/* RT-26 — Back to the same sale (Esc). Disabled, with the reason
             below, once tender exists; main refuses it in that case too. */}
-        <BackToSaleButton
-          back={back}
-          onBack={() => {
-            void handleBackToSale();
-          }}
-        />
-        <OperatorBadge display_name={display_name} role={role} />
-      </header>
+          <BackToSaleButton
+            back={back}
+            onBack={() => {
+              void handleBackToSale();
+            }}
+          />
+          <OperatorBadge display_name={display_name} role={role} />
+        </header>
 
-      <BackBlockedReason back={back} />
+        <BackBlockedReason back={back} />
 
-      {/*
+        {/*
         022 US3 T070 — three-column composition.
 
         DOM ORDER IS AMOUNT → METHODS → SUMMARY, and that is load-bearing, not
@@ -795,165 +938,188 @@ export function PaymentSurface({
         crossing. Same reasoning as the `.sale-layout` / `.tender-method-grid`
         narrow rules, which #450/#451 documented as NOT dead CSS.
       */}
-      <div className="payment-surface__body" data-testid="payment-surface-body">
-        <section className="payment-surface__amount" aria-label="المبلغ المستحق">
-          <span
-            className="payment-surface__amount-label"
-            data-testid="payment-surface-amount-label"
-          >
-            المبلغ المستحق
-          </span>
-          <span
-            className="payment-surface__amount-value"
-            data-testid="payment-surface-amount-due"
-            dir="ltr"
-          >
-            {formatCheckoutMoney(remainingBalanceMinor)}
-          </span>
-        </section>
+        <div className="payment-surface__body" data-testid="payment-surface-body">
+          <section className="payment-surface__amount" aria-label="المبلغ المستحق">
+            <span
+              className="payment-surface__amount-label"
+              data-testid="payment-surface-amount-label"
+            >
+              المبلغ المستحق
+            </span>
+            <span
+              className="payment-surface__amount-value"
+              data-testid="payment-surface-amount-due"
+              dir="ltr"
+            >
+              {formatCheckoutMoney(remainingBalanceMinor)}
+            </span>
+          </section>
 
-        <div className="payment-surface__methods">
-          <TenderSelection
-            envelope={envelope}
-            selectedTender={selectedTender}
-            voucherEnabled={voucherTenderFlag}
-            onTenderSelect={(tender) => {
-              void handleTenderSelect(tender);
-            }}
-          />
+          <div className="payment-surface__panes">
+            <div className="payment-surface__methods">
+              <TenderSelection
+                envelope={envelope}
+                selectedTender={selectedTender}
+                voucherEnabled={voucherTenderFlag}
+                onTenderSelect={(tender) => {
+                  void handleTenderSelect(tender);
+                }}
+              />
 
-          {/* S3d mode: entry component for the selected tender. */}
-          {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
-            <div className="payment-surface__entry" data-testid="payment-surface-entry">
-              {selectedTender === 'cash' && (
-                <CashEntry
-                  remainingBalanceMinor={remainingBalanceMinor}
-                  paymentAttemptId={paymentAttemptId}
-                  tenderApply={(req) => bridge.tender.apply(req)}
-                  appliedChangeDueMinor={appliedChangeDueMinor}
-                  onApplied={() => {
-                    void handleLineApplied();
-                  }}
-                />
-              )}
-              {selectedTender === 'external_card_terminal' && (
-                <ExternalCardTerminalEntry
-                  remainingBalanceMinor={remainingBalanceMinor}
-                  paymentAttemptId={paymentAttemptId}
-                  tenderApply={(req) => bridge.tender.apply(req)}
-                  onApplied={() => {
-                    void handleLineApplied();
-                  }}
-                />
-              )}
-              {selectedTender === 'internal_voucher' && voucherTenderFlag && (
-                <VoucherEntry
-                  remainingBalanceMinor={remainingBalanceMinor}
-                  paymentAttemptId={paymentAttemptId}
-                  tenderApply={(req) => bridge.tender.apply(req)}
-                  onApplied={() => {
-                    void handleLineApplied();
-                  }}
-                />
+              {/* S3d mode: entry component for the selected tender. */}
+              {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
+                <div className="payment-surface__entry" data-testid="payment-surface-entry">
+                  {selectedTender === 'cash' && (
+                    <CashEntry
+                      remainingBalanceMinor={remainingBalanceMinor}
+                      paymentAttemptId={paymentAttemptId}
+                      tenderApply={(req) => bridge.tender.apply(req)}
+                      appliedChangeDueMinor={appliedChangeDueMinor}
+                      onApplied={() => {
+                        void handleLineApplied();
+                      }}
+                    />
+                  )}
+                  {selectedTender === 'external_card_terminal' && (
+                    <ExternalCardTerminalEntry
+                      remainingBalanceMinor={remainingBalanceMinor}
+                      paymentAttemptId={paymentAttemptId}
+                      tenderApply={(req) => bridge.tender.apply(req)}
+                      onApplied={() => {
+                        void handleLineApplied();
+                      }}
+                    />
+                  )}
+                  {selectedTender === 'internal_voucher' && voucherTenderFlag && (
+                    <VoucherEntry
+                      remainingBalanceMinor={remainingBalanceMinor}
+                      paymentAttemptId={paymentAttemptId}
+                      tenderApply={(req) => bridge.tender.apply(req)}
+                      onApplied={() => {
+                        void handleLineApplied();
+                      }}
+                    />
+                  )}
+                </div>
               )}
             </div>
-          )}
+
+            <div className="payment-surface__summary">
+              <PaymentCartSummary envelope={envelope} />
+            </div>
+          </div>
         </div>
 
-        <div className="payment-surface__summary">
-          <PaymentCartSummary envelope={envelope} />
-        </div>
-      </div>
+        {/* Slice-1 mode: status banner only (no bridge wiring). */}
+        {bridge === null && selectedTender !== null && (
+          <div
+            className="payment-surface__tender-selected"
+            data-testid="payment-surface-tender-selected"
+            role="status"
+            aria-live="polite"
+          >
+            {selectedTender === 'cash'
+              ? 'تم اختيار النقد'
+              : selectedTender === 'external_card_terminal'
+                ? 'تم اختيار جهاز الشبكة'
+                : 'تم اختيار القسيمة'}
+          </div>
+        )}
 
-      {/* Slice-1 mode: status banner only (no bridge wiring). */}
-      {bridge === null && selectedTender !== null && (
-        <div
-          className="payment-surface__tender-selected"
-          data-testid="payment-surface-tender-selected"
-          role="status"
-          aria-live="polite"
-        >
-          {selectedTender === 'cash'
-            ? 'تم اختيار النقد'
-            : selectedTender === 'external_card_terminal'
-              ? 'تم اختيار جهاز الشبكة'
-              : 'تم اختيار القسيمة'}
-        </div>
-      )}
-
-      {/*
-        022 US3-B — footer action bar.
-
-        The two actions were previously loose siblings of the body grid, so they
-        stacked full-bleed under the columns. The reference pairs them on one
-        row at the foot of the surface, confirm leading. This is a PRESENTATION
-        wrapper only: both buttons keep their class, testid, disabled state and
-        handler exactly as before, and the confirm/cancel conditions are
-        unchanged — so `hasAppliedLine` still gates confirm and the entry phase
-        still gates cancel.
-
-        DOM order stays confirm → cancel: the primary action precedes the
-        escape hatch in traversal, and under RTL the row renders confirm at the
-        inline-start edge as the reference shows.
+        {/*
+        RT-238 — the pinned action bar (15 §4 A2). Cancel lives at inline-start,
+        the primary/commit at inline-end, and neither slot is ever filled by an
+        action of the opposite consequence. The bar is outside the scrolling
+        panes, so the commit cannot scroll out of view; refusals stay with it.
       */}
-      {bridge !== null && (hasAppliedLine || phase === 'entry') && (
-        <div className="payment-surface__actions" data-testid="payment-surface-actions">
-          {hasAppliedLine && (
-            <button
-              type="button"
-              className="payment-surface__confirm"
-              data-testid="payment-surface-confirm"
-              disabled={isConfirming}
-              aria-disabled={isConfirming ? 'true' : undefined}
-              onClick={() => {
-                void handleConfirm();
-              }}
-            >
-              تأكيد الدفع
-            </button>
-          )}
-
-          {phase === 'entry' && (
-            <button
-              type="button"
-              className="payment-surface__cancel"
-              data-testid="payment-surface-cancel"
-              disabled={isCancelling}
-              aria-disabled={isCancelling ? 'true' : undefined}
-              onClick={() => {
-                void handleCancel();
-              }}
-            >
-              إلغاء
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids
-          was non-empty in the most recent cancel response. Copy is fixed (no
-          id interpolation) per FR-017 / token minimisation. */}
-      {reversalPending && (
-        <div
-          className="payment-surface__reversal-pending-hint"
-          data-testid="payment-surface-reversal-pending-hint"
-          role="status"
-          aria-live="polite"
-        >
-          هناك عمليات عكس قيد المعالجة وستتم قريباً.
-        </div>
-      )}
-
-      {bridgeRefusalCopy !== null && (
-        <div
-          className="payment-surface__bridge-refusal"
-          data-testid="payment-surface-bridge-refusal"
-          role="status"
-          aria-live="polite"
-        >
-          {bridgeRefusalCopy}
-        </div>
-      )}
-    </section>
+        {bridge !== null && (
+          <CheckoutActionBar
+            endSlotRef={setPrimarySlot}
+            cancel={
+              phase === 'entry' ? (
+                <button
+                  type="button"
+                  className="payment-surface__cancel"
+                  data-testid="payment-surface-cancel"
+                  disabled={isCancelling}
+                  aria-disabled={isCancelling ? 'true' : undefined}
+                  onClick={() => {
+                    void handleCancel();
+                  }}
+                >
+                  إلغاء
+                </button>
+              ) : null
+            }
+            commit={
+              afterApply === 'failed' ? (
+                <button
+                  type="button"
+                  className="checkout-commit"
+                  data-testid="payment-surface-reread"
+                  onClick={() => {
+                    void handleLineApplied();
+                  }}
+                >
+                  إعادة المحاولة
+                </button>
+              ) : showSettle ? (
+                <button
+                  type="button"
+                  className="payment-surface__confirm checkout-commit"
+                  data-testid="payment-surface-confirm"
+                  disabled={isConfirming}
+                  aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
+                  aria-describedby={fullyTendered ? undefined : 'payment-commit-reason'}
+                  onKeyDown={guardCommitKey}
+                  onClick={() => {
+                    handleCommitClick(fullyTendered);
+                  }}
+                >
+                  تأكيد الدفع
+                </button>
+              ) : null
+            }
+            reason={
+              afterApply === 'failed' ? (
+                <p
+                  className="checkout-actions__reason"
+                  data-testid="payment-surface-reread-notice"
+                  role="status"
+                >
+                  تم تسجيل المبلغ، لكن تعذّر تحديث حالة الدفع. لا تكرر الدفع.
+                </p>
+              ) : showSettle && !fullyTendered ? (
+                <p
+                  id="payment-commit-reason"
+                  className="checkout-actions__reason"
+                  data-testid="payment-surface-commit-reason"
+                >
+                  المبلغ أقل من المستحق
+                </p>
+              ) : null
+            }
+            notices={notices}
+          />
+        )}
+        {/* The primary action changes under the cashier's hands; keep focus with them. */}
+        {bridge === null && notices}
+        <FocusWhen
+          active={fullyTendered}
+          find={() =>
+            document.querySelector<HTMLElement>('[data-testid="payment-surface-confirm"]')
+          }
+          onFocused={() => {
+            commitFocusedAtRef.current = Date.now();
+          }}
+        />
+        <FocusWhen
+          active={phase === 'tender_selection' && hasAppliedLine && !fullyTendered}
+          find={() =>
+            document.querySelector<HTMLElement>('.payment-surface__methods button:not([disabled])')
+          }
+        />
+      </section>
+    </PrimarySlotContext.Provider>
   );
 }

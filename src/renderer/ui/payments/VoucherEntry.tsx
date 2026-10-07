@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type JSX } from 'react';
 
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { PinnedPrimary } from './CheckoutActionBar.js';
 import { parseCurrencyToMinor } from './parse-currency-to-minor.js';
 
 /**
@@ -245,29 +246,30 @@ export function VoucherEntry({
       {/* Voucher hint: generic input guidance, no demo codes (SECURITY). */}
       <p className="voucher-hint">أدخل رمز القسيمة والمبلغ المطلوب تطبيقه، ثم اضغط «تطبيق».</p>
 
-      <button
-        type="button"
-        className="voucher-entry__confirm"
-        data-testid="voucher-entry-confirm"
-        style={{ minHeight: touchTarget.min }}
-        disabled={!canSubmit}
-        aria-disabled={!canSubmit ? 'true' : undefined}
-        onClick={handleSubmit}
-      >
-        تطبيق القسيمة (Apply voucher)
-      </button>
+      <PinnedPrimary>
+        <button
+          type="button"
+          className="voucher-entry__confirm checkout-commit"
+          data-testid="voucher-entry-confirm"
+          style={{ minHeight: touchTarget.commit }}
+          disabled={!canSubmit}
+          aria-disabled={!canSubmit ? 'true' : undefined}
+          onClick={handleSubmit}
+        >
+          تطبيق القسيمة (Apply voucher)
+        </button>
+        {isApplying && (
+          <div data-testid="voucher-entry-applying" aria-busy="true">
+            جارٍ التطبيق… (Applying…)
+          </div>
+        )}
 
-      {isApplying && (
-        <div data-testid="voucher-entry-applying" aria-busy="true">
-          جارٍ التطبيق… (Applying…)
-        </div>
-      )}
-
-      {bridgeRefusal && (
-        <div data-testid="voucher-entry-refused" role="alert">
-          {GENERIC_VOUCHER_REFUSAL_COPY}
-        </div>
-      )}
+        {bridgeRefusal && (
+          <div data-testid="voucher-entry-refused" role="alert">
+            {GENERIC_VOUCHER_REFUSAL_COPY}
+          </div>
+        )}
+      </PinnedPrimary>
     </section>
   );
 }

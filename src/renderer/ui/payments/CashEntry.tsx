@@ -8,6 +8,7 @@ import { quickAmounts } from '../../../shared/payments/quick-amounts.js';
 import { AmountPad } from './AmountPad.js';
 import { MoneyRoll } from './MoneyRoll.js';
 import { formatCheckoutMoney } from './format-checkout-money.js';
+import { PinnedPrimary } from './CheckoutActionBar.js';
 
 /**
  * 006-payments-tender Slice 2 + S3d T151 — <CashEntry>.
@@ -203,7 +204,6 @@ export function CashEntry({
             */}
             <AmountPad
               valueMinor={amountAppliedMinor}
-              totalMinor={isRemainingValid ? remainingBalanceMinor : 0}
               onChange={(next) => {
                 setRawInput(formatMinorToInput(next));
                 setBridgeRefusal(false);
@@ -292,31 +292,36 @@ export function CashEntry({
         </div>
       )}
 
-      {bridgeRefusal && (
-        <div
-          className="cash-entry__bridge-refusal"
-          data-testid="cash-entry-bridge-refusal"
-          role="status"
-          aria-live="polite"
-        >
-          تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
-        </div>
-      )}
-
       <div className="cash-entry__actions">
-        <button
-          type="button"
-          className="cash-entry__confirm"
-          data-testid="cash-entry-confirm"
-          style={{ minHeight: touchTarget.min }}
-          disabled={!canConfirm || isApplying}
-          aria-disabled={!canConfirm || isApplying ? 'true' : undefined}
-          onClick={() => {
-            void handleConfirm();
-          }}
-        >
-          تأكيد الدفع النقدي (Confirm cash payment)
-        </button>
+        {/* RT-238: while money is still owed this is the primary action and it
+            lives in the pinned slot; PaymentSurface decides who owns the slot. */}
+        <PinnedPrimary>
+          {/* The refusal travels with the apply, so it is never below the fold
+              while the button is pinned (Codex P2 on #569). */}
+          {bridgeRefusal && (
+            <div
+              className="cash-entry__bridge-refusal"
+              data-testid="cash-entry-bridge-refusal"
+              role="status"
+              aria-live="polite"
+            >
+              تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
+            </div>
+          )}
+          <button
+            type="button"
+            className="cash-entry__confirm checkout-commit"
+            data-testid="cash-entry-confirm"
+            style={{ minHeight: touchTarget.commit }}
+            disabled={!canConfirm || isApplying}
+            aria-disabled={!canConfirm || isApplying ? 'true' : undefined}
+            onClick={() => {
+              void handleConfirm();
+            }}
+          >
+            تأكيد الدفع النقدي (Confirm cash payment)
+          </button>
+        </PinnedPrimary>
         {onBack !== undefined && (
           <button
             type="button"
