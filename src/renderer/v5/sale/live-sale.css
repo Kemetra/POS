@@ -27,6 +27,47 @@
   line-height: var(--line-height-snug);
 }
 
+/* RT-239 — scan-owner status: text plus an icon, never colour alone. */
+.v5-live-scan-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  margin-inline-start: auto;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-live-scan-status[data-state='ready'] {
+  border-color: var(--color-success);
+  color: var(--color-success-emphasis);
+}
+
+.v5-live-scan-status[data-state='dialog'],
+.v5-live-scan-status[data-state='unavailable'] {
+  border-color: var(--color-warning);
+  color: var(--color-warning-emphasis);
+}
+
+.v5-live-scan-status-icon {
+  display: inline-grid;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+@media (forced-colors: active) {
+  .v5-live-scan-status,
+  .v5-live-scan-status[data-state] {
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+}
+
 /*
  * Inside the v5 frame the Sale is measured by the space it receives, not by
  * the viewport: at a 1280px window the nav leaves ~1070px, which needs the

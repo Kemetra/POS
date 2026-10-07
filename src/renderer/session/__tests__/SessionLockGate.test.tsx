@@ -282,6 +282,22 @@ describe('RT-117 SessionLockGate', () => {
     }
   });
 
+  it('RT-239 rule 6 — unlocking returns focus to the Sale scan owner, which stayed mounted', async () => {
+    const op = fakeOperator(ACTIVE);
+    render(
+      <SessionLockGate operator={op.api}>
+        <input id="v5-live-scan" aria-label="scan" />
+      </SessionLockGate>,
+    );
+    op.setView(LOCKED_CASHIER);
+    op.push({ state: 'locked' });
+    await screen.findByRole('dialog', { name: 'الجهاز مقفل' });
+    expect(screen.getByLabelText('scan')).not.toHaveFocus();
+    op.push({ state: 'active' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('scan')).toHaveFocus());
+  });
+
   it('clears the lock screen on an active or ended push', async () => {
     const op = fakeOperator(LOCKED_CASHIER);
     render(

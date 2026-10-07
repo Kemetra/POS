@@ -2,6 +2,7 @@ import { useState, type JSX } from 'react';
 import type { CartLineItem, DiscountPlaceholderSeed } from '../../sale/useSaleCartController';
 import { V5Icon } from '../foundation/V5Icon';
 import { CartLineRow, NoteDialog, VoidControl, money } from './LiveCartParts';
+import { useRemovalFocus } from './useRemovalFocus';
 
 interface Props {
   lines: readonly CartLineItem[];
@@ -95,6 +96,7 @@ export function LiveSaleCart(props: Props): JSX.Element {
 function CartLines(
   props: Props & { editable: boolean; onOpenNote: (line: CartLineItem) => void },
 ): JSX.Element {
+  const planRemoval = useRemovalFocus(props.lines);
   if (props.lines.length === 0)
     return <p className="v5-live-message">لا توجد أصناف في السلة بعد.</p>;
   return (
@@ -109,6 +111,7 @@ function CartLines(
           onDecrement={props.onDecrement}
           onRemove={props.onRemove}
           onOpenNote={props.onOpenNote}
+          onPlanRemoval={planRemoval}
         />
       ))}
     </ol>

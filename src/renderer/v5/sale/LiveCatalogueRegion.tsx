@@ -1,4 +1,4 @@
-import { useCallback, useRef, type JSX } from 'react';
+import { useCallback, useEffect, useRef, type JSX } from 'react';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
 import { format, of } from '../../../shared/money';
 import type { AddedLineResult } from '../../sale/useSaleCartController';
@@ -9,6 +9,7 @@ import { useScanOwner } from '../../scan/ScanGuardHost';
 import { LiveProductRail } from './LiveProductRail';
 import { SaleDialog } from './SaleDialog';
 import { SaleProductFlags } from './SaleProductFlags';
+import { focusScanOwner } from '../../scan/scan-anchor';
 
 interface Props {
   onLineAdded: (line: AddedLineResult) => void;
@@ -36,6 +37,10 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
     [runScan],
   );
   useScanOwner(receiveScan);
+  // Arriving on the Sale (sign-in, unlock, «بيع جديد», Back from Checkout): the scan owner has focus.
+  useEffect(() => {
+    focusScanOwner();
+  }, []);
   const { recover: clearSearch } = catalogue;
   const recover = useCallback((): void => {
     clearSearch();
@@ -62,7 +67,7 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
         cartId={catalogue.effectiveCartId}
         ensureCart={catalogue.ensureCart}
         onLineAdded={props.onLineAdded}
-        onResolved={focusSearch}
+        onResolved={focusScanOwner}
         {...(props.cartBridge ? { bridge: props.cartBridge } : {})}
       />
     </>

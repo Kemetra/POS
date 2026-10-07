@@ -1,8 +1,10 @@
-import { useRef, useState, type JSX } from 'react';
+import { useRef, useState, type JSX, type MouseEvent } from 'react';
 import type { CartLineItem } from '../../sale/useSaleCartController';
 import { format, of } from '../../../shared/money';
 import { V5Icon } from '../foundation/V5Icon';
 import { SaleDialog } from './SaleDialog';
+import { focusScanOwner } from '../../scan/scan-anchor';
+import type { RemovalControl } from './useRemovalFocus';
 
 // Legacy LineNotePopover parity: same length cap, unchanged-save and empty-clear guards.
 const NOTE_MAX_LENGTH = 200;
@@ -19,12 +21,25 @@ interface LineProps {
   onDecrement: (line: CartLineItem) => void;
   onRemove: (line: CartLineItem) => void;
   onOpenNote: (line: CartLineItem) => void;
+  /** Keyboard removal: tell the cart where focus should land once the row is gone. */
+  onPlanRemoval: (line: CartLineItem, control: RemovalControl) => void;
+}
+
+/**
+ * RT-239 rule 6. A pointer click on a row control returns focus to the scan
+ * owner (a pointer user needs no row focus). Keyboard activation keeps row
+ * context: `+` and `−` stay on the same button, and a removal (`حذف`, or `−` on a
+ * one-unit line) hands focus to the neighbouring row.
+ */
+function settleRowFocus(event: MouseEvent<HTMLButtonElement>, keyboardPlan?: () => void): void {
+  if (event.detail > 0) focusScanOwner();
+  else keyboardPlan?.();
 }
 
 export function CartLineRow(props: LineProps): JSX.Element {
   const { line } = props;
   return (
-    <li className="v5-sale-cart-line">
+    <li className="v5-sale-cart-line" data-line-id={line.lineId}>
       <span className="v5-sale-line-index" dir="ltr">
         {props.index + 1}
       </span>
@@ -43,7 +58,11 @@ export function CartLineRow(props: LineProps): JSX.Element {
             </button>
             <button
               type="button"
-              onClick={() => {
+              data-row-action="remove"
+              onClick={(event) => {
+                settleRowFocus(event, () => {
+                  props.onPlanRemoval(line, 'remove');
+                });
                 props.onRemove(line);
               }}
             >
@@ -66,14 +85,26 @@ export function CartLineRow(props: LineProps): JSX.Element {
 function QuantityControl(props: LineProps): JSX.Element {
   const { line } = props;
   // Legacy stepper parity: at one, a note-less line is removed; a noted line decrements.
-  function decrement(): void {
-    if (line.quantity <= 1 && line.note === null) props.onRemove(line);
-    else props.onDecrement(line);
+  function decrement(event: MouseEvent<HTMLButtonElement>): void {
+    if (line.quantity <= 1 && line.note === null) {
+      settleRowFocus(event, () => {
+        props.onPlanRemoval(line, 'decrement');
+      });
+      props.onRemove(line);
+    } else {
+      settleRowFocus(event);
+      props.onDecrement(line);
+    }
   }
   return (
     <div className="v5-sale-quantity" aria-label={`الكمية ${String(line.quantity)}`}>
       {props.editable && (
-        <button type="button" aria-label={`إنقاص كمية ${line.displayName}`} onClick={decrement}>
+        <button
+          type="button"
+          data-row-action="decrement"
+          aria-label={`إنقاص كمية ${line.displayName}`}
+          onClick={decrement}
+        >
           <V5Icon name="minus" />
         </button>
       )}
@@ -81,8 +112,10 @@ function QuantityControl(props: LineProps): JSX.Element {
       {props.editable && (
         <button
           type="button"
+          data-row-action="increment"
           aria-label={`زيادة كمية ${line.displayName}`}
-          onClick={() => {
+          onClick={(event) => {
+            settleRowFocus(event);
             props.onIncrement(line);
           }}
         >
