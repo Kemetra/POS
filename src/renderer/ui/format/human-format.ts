@@ -3,7 +3,8 @@
  *
  * Rules (UX/UI Constitution UX-12):
  *  - Western digits everywhere (`ar-EG-u-nu-latn`, never Arabic-Indic);
- *  - money as `1,250.00 EGP` (grouped thousands, two decimals, `EGP` after);
+ *  - money as `1,250.00 EGP` (grouped thousands, two decimals, `EGP` after;
+ *    a negative amount starts with the minus sign U+2212 `−`, DESIGN.md numerals);
  *  - 24-hour clock;
  *  - counts with Western digits.
  *
@@ -23,7 +24,7 @@ const LOCALE = 'ar-EG-u-nu-latn';
  */
 export function formatHumanMoney(minor: number): string {
   if (!Number.isSafeInteger(minor)) return DASH;
-  const sign = minor < 0 ? '-' : '';
+  const sign = minor < 0 ? '\u2212' : '';
   const abs = Math.abs(minor);
   const major = Math.trunc(abs / 100);
   const cents = abs - major * 100;

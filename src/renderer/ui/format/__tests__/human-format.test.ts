@@ -10,8 +10,8 @@ describe('formatHumanMoney (UX-12)', () => {
     [99999, '999.99 EGP'],
     [100000, '1,000.00 EGP'],
     [123456789, '1,234,567.89 EGP'],
-    [-125000, '-1,250.00 EGP'],
-    [-5, '-0.05 EGP'],
+    [-125000, '\u22121,250.00 EGP'],
+    [-5, '\u22120.05 EGP'],
   ])('renders %i minor units as %s', (minor, expected) => {
     expect(formatHumanMoney(minor)).toBe(expected);
   });

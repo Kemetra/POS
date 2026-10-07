@@ -96,7 +96,7 @@ describe('useSingleFlight — one call at a time', () => {
 
 describe('shift formatting', () => {
   it('formats EGP minor units, and a dash for anything it cannot show exactly', () => {
-    expect(formatShiftMoney(-750)).toBe('-7.50 EGP');
+    expect(formatShiftMoney(-750)).toBe('\u22127.50 EGP');
     expect(formatShiftMoney(100, 'USD')).toBe('—');
     expect(formatShiftMoney(1.5)).toBe('—');
   });
