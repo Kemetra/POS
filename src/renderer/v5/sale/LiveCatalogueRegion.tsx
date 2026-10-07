@@ -5,6 +5,7 @@ import type { AddedLineResult } from '../../sale/useSaleCartController';
 import { useSaleCatalogueController } from '../../sale/useSaleCatalogueController';
 import { useConfirmSaleAdd } from '../../sale/useConfirmSaleAdd';
 import { useCatalogueFreshness } from '../../sale/useCatalogueFreshness';
+import { useScanOwner } from '../../scan/ScanGuardHost';
 import { LiveProductRail } from './LiveProductRail';
 import { SaleDialog } from './SaleDialog';
 import { SaleProductFlags } from './SaleProductFlags';
@@ -26,6 +27,15 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
   const focusSearch = useCallback((): void => {
     searchRef.current?.focus();
   }, []);
+  // RT-239: a wedge burst is a scan wherever focus is; this screen receives it.
+  const { runScan } = catalogue;
+  const receiveScan = useCallback(
+    (code: string): void => {
+      void runScan(code);
+    },
+    [runScan],
+  );
+  useScanOwner(receiveScan);
   const { recover: clearSearch } = catalogue;
   const recover = useCallback((): void => {
     clearSearch();

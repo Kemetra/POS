@@ -214,6 +214,7 @@ export function VoucherEntry({
           <span className="tender-row__value">
             <input
               id="voucher-amount-input"
+              data-scan-refuse="amount"
               type="text"
               data-testid="voucher-entry-amount-input"
               value={rawAmountInput}

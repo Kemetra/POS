@@ -1,4 +1,7 @@
-import { useEffect, type JSX, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, type JSX, type KeyboardEvent } from 'react';
+
+import { useRefuseSurface } from '../../scan/ScanGuardHost';
+import type { RefuseSurface } from '../../scan/scan-guard';
 
 /**
  * 004-operator-session T074 — PinPad component (Surface 4).
@@ -46,6 +49,24 @@ export function PinPad(props: PinPadProps): JSX.Element {
   const { value, onChange, onSubmit, disabled = false } = props;
   const canSubmit = value.length >= PIN_MIN_LENGTH;
   const canAppend = value.length < PIN_MAX_LENGTH;
+
+  // RT-239: the pad takes digits from `window`, with no input element, so the
+  // scan guard cannot restore it by itself. A scan must never become a PIN:
+  // the guard puts back the value the pad had when the burst began.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const scanSurface = useMemo<RefuseSurface>(
+    () => ({
+      snapshot: () => valueRef.current,
+      restore: (previous) => {
+        onChangeRef.current(previous);
+      },
+    }),
+    [],
+  );
+  useRefuseSurface('pin', scanSurface);
 
   const handleDigit = (digit: string): void => {
     if (disabled || !canAppend) return;
