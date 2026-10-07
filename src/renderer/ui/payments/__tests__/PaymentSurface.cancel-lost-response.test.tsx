@@ -34,6 +34,8 @@ const CANCEL_FAILED = 'تعذّر إلغاء عملية الدفع. اضغط «�
 const CANCEL_UNKNOWN =
   'تعذّر التأكد من إلغاء عملية الدفع. لا تسجّل أي مبلغ. اضغط «إلغاء» مرة أخرى للتحقق.';
 const CANCEL_NOT_OPEN = 'لم تعد عملية الدفع هذه مفتوحة، فلا يمكن إلغاؤها.';
+const CANCEL_LIVE_TENDER =
+  'أوقف المدير عملية الدفع هذه وفيها مبالغ مسجّلة، فلا يمكن الدفع لهذا البيع الآن. اطلب من المدير مراجعتها.';
 const GENERIC_RETRY = 'يرجى المحاولة مرة أخرى';
 
 const ENVELOPE: PaymentIntentEnvelope = {
@@ -401,6 +403,44 @@ describe('RT-298 — an ambiguous cancel is reconciled from payments.read', () =
     expect(refusal).not.toHaveTextContent(GENERIC_RETRY);
     expect(usePaymentStore.getState().paymentSlice).toBeNull();
     expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+  });
+
+  it('a force-failed attempt that still holds live tender stays visible, closes payment, and asks for a manager (Codex P1)', async () => {
+    const { bridge, script } = makeBridge();
+    const live = [line('tl-card', 'external_card_terminal', 'applied', 1)];
+    await openWith(bridge, live);
+    script({
+      cancel: [() => Promise.resolve({ kind: 'refused', reason: 'attempt_terminal' })],
+      read: () =>
+        Promise.resolve({
+          kind: 'ok',
+          payment_attempt: {
+            ...attempt('force_failed', live),
+            force_failed_at: '2026-10-07T10:00:00.000Z',
+          },
+        }),
+    });
+
+    await clickCancel();
+    // Main refuses any new payments.start for this cart: never offer one.
+    expect(usePaymentStore.getState().paymentSlice?.state).toBe('force_failed');
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(
+      CANCEL_LIVE_TENDER,
+    );
+    expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+    // The card may still stand on the terminal.
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+
+    // Choosing a tender does not reopen an entry on the ended attempt.
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+    const start = (bridge.payments as unknown as { start: { mock: { calls: unknown[] } } }).start;
+    expect(start.mock.calls).toHaveLength(1);
   });
 
   it('a failed attempt with no card is dropped without the void warning', async () => {
