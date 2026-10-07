@@ -124,7 +124,7 @@ interface BackControlInput {
   /** A payments.cancel in this mount reversed tender. */
   readonly tenderTouched: boolean;
   /**
-   * That cancel PROVED the reversal (`cancelProvesReversal`): non-card lines
+   * That cancel PROVED the reversal (`cancelProvesReversal`): cash lines
    * came back reversed and none are still pending. Only this may say
    * «أُلغي المبلغ المسجَّل» (M-P2).
    */
@@ -161,11 +161,14 @@ const BACK_REASON_COPY: Readonly<Record<BackReason, string>> = {
 };
 
 /**
- * A cancel proves the money went back only when every reversed line is a known
- * non-card line and nothing is still pending. A card line is reversed locally
- * only: main cannot void the terminal (`manual_void_required`), so the customer
- * may still be charged.
+ * A cancel proves the money went back only when every reversed line is cash and
+ * nothing is still pending. Cancel reverses lines locally only: a card cannot
+ * be voided on the terminal (`manual_void_required`), and a voucher's authority
+ * reservation is not released (only tender.reverse calls vouchers.reverse). So
+ * cash is the one tender whose reversal the cancel response actually confirms.
  */
+const CANCEL_CONFIRMED_TENDERS: ReadonlySet<string> = new Set(['cash']);
+
 function cancelProvesReversal(
   response: {
     readonly reversed_tender_line_ids: readonly string[];
@@ -176,10 +179,7 @@ function cancelProvesReversal(
   const reversed = response.reversed_tender_line_ids;
   if (reversed.length === 0 || response.reversal_pending_tender_line_ids.length > 0) return false;
   const typeById = new Map(lines.map((l) => [l.tender_line_id, l.tender_type]));
-  return reversed.every((id) => {
-    const type = typeById.get(id);
-    return type !== undefined && type !== 'external_card_terminal';
-  });
+  return reversed.every((id) => CANCEL_CONFIRMED_TENDERS.has(typeById.get(id) ?? ''));
 }
 
 function backReason(input: BackControlInput, tenderBlocked: boolean): BackReason | null {
