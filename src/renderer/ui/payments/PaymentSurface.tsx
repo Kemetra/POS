@@ -493,6 +493,10 @@ export function PaymentSurface({
   // RT-238 / I-9: when focus is moved onto the settle commit, a held or doubled
   // Enter from the apply that preceded it must not settle on its own.
   const commitFocusedAtRef = useRef(0);
+  // RT-298 — this surface sent the cancel now in flight (its own outcome code
+  // updates the screen; see the hold-sync effect below).
+  const ownsCancelRef = useRef(false);
+  const lastHoldRef = useRef<CancelHold>('none');
   // RT-238 / Codex P1: after a successful apply the projection must be re-read
   // before anything else is offered. Until it is, the apply is not offered again
   // (a second press would record the whole amount a second time, as change).
@@ -596,6 +600,34 @@ export function PaymentSurface({
     setPhase(resumable ? resumePhase(kept, hold) : 'tender_selection');
     setBridgeRefusalCopy(resumable ? CANCEL_HOLD_COPY[hold] : null);
   }, [sessionState.kind, envelopeHandoffId]);
+
+  // RT-298 — a cancel sent before a Checkout remount answers in the old
+  // surface, which can only update the store. Follow that outcome here so the
+  // mounted surface never keeps a stale instruction or a dead Cancel (Codex P2,
+  // #576). This surface's own cancels update the screen themselves.
+  useEffect(() => {
+    const previous = lastHoldRef.current;
+    lastHoldRef.current = cancelHold;
+    if (previous === cancelHold || ownsCancelRef.current) return;
+    const slice = usePaymentStore.getState().paymentSlice;
+    if (slice === null) {
+      setSelectedTender(null);
+      setAfterApply('idle');
+      setPhase('tender_selection');
+      setBridgeRefusalCopy(null);
+      return;
+    }
+    if (slice.state === 'settled') {
+      setPhase('settled');
+      return;
+    }
+    const retryable = cancelHold === 'none' && slice.state === 'started';
+    setBridgeRefusalCopy(retryable ? CANCEL_FAILED_COPY : CANCEL_HOLD_COPY[cancelHold]);
+    if (cancelHold === 'live_tender') {
+      setSelectedTender(null);
+      setPhase('tender_selection');
+    }
+  }, [cancelHold]);
 
   // EXTERNAL REVIEW P1 (round 3) — "Stop polling until finalized sales can be
   // correlated". The recent-sale poll is REMOVED, not merely capped.
@@ -1002,6 +1034,7 @@ export function PaymentSurface({
     const handoffId = envelope.handoff_action_id;
     setBridgeRefusalCopy(null);
     setIsCancelling(true);
+    ownsCancelRef.current = true;
     const store = usePaymentStore.getState();
     const key = store.cancelKeyFor(attemptId);
     // Held from the moment it is sent: leaving and re-entering Checkout before
@@ -1022,6 +1055,15 @@ export function PaymentSurface({
         await reconcileAfterCancel(attemptId, handoffId);
       }
     } finally {
+      // Hand the hold back to the sync effect at the value this cancel left,
+      // so it never re-applies this surface's own outcome.
+      const after = usePaymentStore.getState();
+      lastHoldRef.current = holdFor(
+        after.cancelRecovery,
+        handoffId,
+        after.paymentSlice?.payment_attempt_id ?? null,
+      );
+      ownsCancelRef.current = false;
       setIsCancelling(false);
     }
   }

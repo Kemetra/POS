@@ -646,6 +646,38 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
     expect(usePaymentStore.getState().cancelRecovery).toBeNull();
     expect(usePaymentStore.getState().cardSafety?.voidRequired).toBe(true);
     expect(keys(cancel)).toHaveLength(1);
+    // The mounted surface follows that outcome (Codex P2): no stale instruction
+    // or dead Cancel, and the terminal-void line is shown.
+    expect(screen.queryByTestId('payment-surface-bridge-refusal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-cancel')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+  });
+
+  it('a late refusal on a still-open attempt reopens payment with the named retry', async () => {
+    const { bridge, script } = makeBridge();
+    await openWith(bridge, CASH_APPLIED);
+    let answer: (r: PaymentsCancelResponse) => void = () => undefined;
+    script({
+      cancel: [
+        () =>
+          new Promise<PaymentsCancelResponse>((resolve) => {
+            answer = resolve;
+          }),
+      ],
+      read: () =>
+        Promise.resolve({ kind: 'ok', payment_attempt: attempt('started', CASH_APPLIED) }),
+    });
+    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    await settle();
+
+    await remount(bridge);
+    await act(async () => {
+      answer({ kind: 'refused', reason: 'internal_error' });
+      await Promise.resolve();
+    });
+    await settle();
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(CANCEL_FAILED);
+    expect(screen.getByTestId('payment-surface-entry')).toBeInTheDocument();
   });
 });
 
