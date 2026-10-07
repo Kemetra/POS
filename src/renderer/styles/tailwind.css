@@ -48,7 +48,7 @@
   --color-info-soft: #e4f0f9;
   --color-info-on: #ffffff;
 
-  /* Neutral (legacy syncing intent in ConnectionIndicator) */
+  /* Neutral (legacy syncing intent) */
   --color-neutral: #5b6b7c;
   --color-neutral-emphasis: #3d4c5a;
   --color-neutral-on: #ffffff;
@@ -503,11 +503,6 @@ body {
     min-inline-size: 0;
   }
 
-  .top-bar > .connection-indicator {
-    flex-shrink: 0;
-    margin-inline-start: auto;
-  }
-
   .top-bar > .operator-slot {
     flex-shrink: 0;
   }
@@ -693,82 +688,6 @@ body {
   .operator-slot .btn {
     min-inline-size: 44px;
     min-block-size: 44px;
-  }
-
-  /* ── Connection Indicator ────────────────────────────────────────────── */
-  /*
-   * Component emits .connection-indicator + .connection-indicator--{intent}
-   * where intent ∈ {success, warning, danger, neutral}.
-   * data-connection-state carries the semantic name (online|degraded|offline|syncing).
-   */
-
-  .connection-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    block-size: 40px;
-    padding-inline: 14px;
-    border-radius: var(--radius-pill);
-    font-size: 0.8125rem; /* 13px */
-    font-weight: var(--font-weight-semibold);
-    line-height: 1;
-    border: 1px solid transparent;
-    transition:
-      background-color 150ms ease,
-      border-color 150ms ease;
-  }
-
-  /* Semantic dot */
-  .connection-indicator::before {
-    content: '';
-    display: block;
-    inline-size: 8px;
-    block-size: 8px;
-    border-radius: var(--radius-pill);
-    flex-shrink: 0;
-    background-color: currentColor;
-  }
-
-  /* Online: static dot with resting halo */
-  .connection-indicator--success,
-  .connection-indicator[data-connection-state='online'] {
-    background-color: var(--color-success-soft);
-    border-color: color-mix(in srgb, var(--color-success) 25%, transparent);
-    color: var(--color-success);
-  }
-
-  .connection-indicator--success::before,
-  .connection-indicator[data-connection-state='online']::before {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 13%, transparent);
-  }
-
-  /* Degraded */
-  .connection-indicator--warning,
-  .connection-indicator[data-connection-state='degraded'] {
-    background-color: var(--color-warning-soft);
-    border-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
-    color: var(--color-warning);
-  }
-
-  /* Offline */
-  .connection-indicator--danger,
-  .connection-indicator[data-connection-state='offline'] {
-    background-color: var(--color-danger-soft);
-    border-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
-    color: var(--color-danger);
-  }
-
-  /* Syncing — pulsing dot using info colour */
-  .connection-indicator--neutral,
-  .connection-indicator[data-connection-state='syncing'] {
-    background-color: var(--color-info-soft);
-    border-color: color-mix(in srgb, var(--color-info) 25%, transparent);
-    color: var(--color-info);
-  }
-
-  .connection-indicator--neutral::before,
-  .connection-indicator[data-connection-state='syncing']::before {
-    animation: pulse-dot 1.6s ease-in-out infinite;
   }
 
   /* ── Status Banner ───────────────────────────────────────────────────── */
@@ -2236,6 +2155,19 @@ body {
     color: var(--color-text-muted);
   }
 
+  /* RT-256 — M-P13 is a danger row: the card charge may still stand on the
+     terminal. Signal line on the inline-start edge; the border survives
+     forced-colors, so the meaning never rests on color alone. */
+  .payment-surface__back-blocked--danger {
+    padding-block: var(--space-2);
+    padding-inline: var(--space-3);
+    border-inline-start: 4px solid var(--color-danger);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-danger-soft);
+    color: var(--color-danger-emphasis);
+    font-weight: var(--font-weight-semibold);
+  }
+
   .payment-surface__body {
     display: grid;
     grid-template-columns: 400px minmax(0, 1fr) 392px;
@@ -3030,9 +2962,7 @@ body {
     }
 
     /* StatusBanner syncing pulse dot */
-    .status-banner[data-state='syncing']::before,
-    .connection-indicator--neutral::before,
-    .connection-indicator[data-connection-state='syncing']::before {
+    .status-banner[data-state='syncing']::before {
       animation: none;
     }
 

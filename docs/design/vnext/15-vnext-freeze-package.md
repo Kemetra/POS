@@ -312,11 +312,16 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-P10 | Finalizing | «جارٍ حفظ البيع…» | info |
 | M-P11 | Finalization failed | «تم تسجيل الدفع لكن لم يُحفظ البيع. لا تكرر الدفع. أعد محاولة الحفظ.» | danger |
 | M-P12 | Live tender after restart ⏳ RT-116 S5 | «يوجد دفع مفتوح بمبلغ ‹amount› من قبل إعادة التشغيل. أكمله أو ألغِه قبل بيع جديد.» | warning |
+| M-P13 | After a cancel that reversed a card line locally (RT-256; FR-008 `manual_void_required`). Shown instead of M-P1/M-P2 for the rest of that Checkout; never suggests completing or retrying the payment | «أُلغي الدفع هنا فقط. ألغِ العملية على جهاز البطاقات قبل أي خصم جديد.» | danger |
+| M-P14 | Card reference field label (shipped, RT-240) | «المرجع (اختياري، حتى 6 خانات)» | neutral |
+| M-P15 | Amount recorded but the follow-up read failed (shipped, RT-238) | «تم تسجيل المبلغ، لكن تعذّر تحديث حالة الدفع. لا تكرر الدفع.» | warning |
+| M-P16 | Amount field labels (shipped, RT-240) | «المبلغ المستلم (EGP)» / «المبلغ المخصوم (EGP)» / «المبلغ المطبّق (EGP)», with `EGP` in an LTR run | neutral |
 | **Completion and receipt** | | | |
 | M-C1 | Completed | «اكتمل البيع» · «رقم البيع ‹no›» ⏳ D-N1 · «الباقي للعميل ‹amount›» | success (proven only) |
 | M-C2 | Receipt sent (OS-print) | «أُرسل الإيصال للطابعة» | info |
 | M-C3 | Receipt failed | «تعذّرت طباعة الإيصال. البيع محفوظ. أعد الطباعة أو سلّم إيصالًا يدويًا.» | warning |
 | M-C4 | Drawer did not open ⏳ D-B1 (where and for how long it shows) | «لم يُفتح درج النقود. افتحه يدويًا.» | warning |
+| M-C5 | Drawer last-opened relative time (shipped, RT-240; plural grammar follows RT-258) | «الآن» / «منذ ‹n› ‹unit›» / «أمس» / «غير معروف» | neutral |
 | **Offline and sync** ⏳ RT-113 | | | |
 | M-O1 | Offline | «غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.» | warning |
 | M-O2 | Sync pending | «‹n› عمليات بانتظار الإرسال» | info |
