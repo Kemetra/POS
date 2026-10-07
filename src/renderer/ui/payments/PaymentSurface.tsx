@@ -200,11 +200,6 @@ function cancelProvesReversal(
  * the terminal. Card lines come from the projection AND from the card applies
  * seen in this Checkout: after a failed post-apply read the projection has no
  * card line yet, but the apply did happen in main (Codex P1 on #572).
- *
- * Conservative when a card apply was ATTEMPTED but its outcome never reached
- * the renderer (the response was lost after main committed): any touched line
- * whose type the renderer cannot prove is not a card counts as a card, so the
- * terminal-void warning errs on the side of a possible charge (Codex P1).
  */
 function cancelTouchedCard(
   response: {
@@ -212,19 +207,33 @@ function cancelTouchedCard(
     readonly reversal_pending_tender_line_ids: readonly string[];
   },
   lines: PaymentAttemptRendererView['tender_lines'],
-  card: { readonly appliedLineIds: ReadonlySet<string>; readonly attempted: boolean },
+  appliedCardLineIds: ReadonlySet<string>,
 ): boolean {
-  const cardIds = new Set(card.appliedLineIds);
-  const knownNonCard = new Set<string>();
+  const cardIds = new Set(appliedCardLineIds);
   for (const l of lines) {
     if (l.tender_type === 'external_card_terminal') cardIds.add(l.tender_line_id);
-    else knownNonCard.add(l.tender_line_id);
   }
   const touched = [
     ...response.reversed_tender_line_ids,
     ...response.reversal_pending_tender_line_ids,
   ];
-  return touched.some((id) => cardIds.has(id) || (card.attempted && !knownNonCard.has(id)));
+  return touched.some((id) => cardIds.has(id));
+}
+
+/**
+ * RT-256 — a successful cancel needs the terminal-void warning when it touched
+ * a card line, OR when a card apply was ATTEMPTED in this Checkout at all. The
+ * terminal is standalone: the customer is charged there before the POS records
+ * anything, so a card apply whose outcome never reached the renderer (lost
+ * response, or a rejection before main persisted a line, leaving the cancel
+ * with zero lines) may still stand as a charge (Codex P1 rounds on #572).
+ */
+function cancelNeedsTerminalVoid(
+  response: Parameters<typeof cancelTouchedCard>[0],
+  lines: PaymentAttemptRendererView['tender_lines'],
+  card: { readonly appliedLineIds: ReadonlySet<string>; readonly attempted: boolean },
+): boolean {
+  return card.attempted || cancelTouchedCard(response, lines, card.appliedLineIds);
 }
 
 function backReason(input: BackControlInput, tenderBlocked: boolean): BackReason | null {
@@ -768,7 +777,7 @@ export function PaymentSurface({
           appliedLineIds: new Set(store.cardSafety?.appliedCardLineIds ?? []),
           attempted: store.cardSafety?.cardApplyAttempted ?? false,
         };
-        if (cancelTouchedCard(response, linesAtCancel, card)) {
+        if (cancelNeedsTerminalVoid(response, linesAtCancel, card)) {
           store.markCardVoidRequired();
         }
         setSelectedTender(null);

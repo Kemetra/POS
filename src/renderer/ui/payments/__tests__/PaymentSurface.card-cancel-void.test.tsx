@@ -341,6 +341,38 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
     expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
   });
 
+  it('warns after a card apply rejected before any line was saved, then a zero-line cancel (Codex P1)', async () => {
+    const bridge = makeBridge({ reversed: [] });
+    (bridge.tender as unknown as { apply: ReturnType<typeof vi.fn> }).apply = vi.fn(() =>
+      Promise.reject(new Error('rejected before persist')),
+    );
+    render(
+      <PaymentSurface
+        _testBridge={bridge}
+        onBackToSale={() => Promise.resolve(true)}
+        onNewSale={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      screen.getByTestId('tender-external-card').click();
+      await Promise.resolve();
+    });
+    fireEvent.change(await screen.findByTestId('external-card-amount-input'), {
+      target: { value: '50.00' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('external-card-confirm'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+  });
+
   it('no card attempted: a cancel of a line the renderer does not know is not a card warning', async () => {
     await cancelWithLines([], ['tl-unknown']);
     const reason = await screen.findByTestId('payment-surface-back-blocked');
