@@ -522,12 +522,27 @@ export function PaymentSurface({
     return null;
   }
 
+  /**
+   * The payment context a read was started for is still the current one. A
+   * cancel (or a new sale) can clear it while the read is in flight; main then
+   * answers with the now-terminal attempt, which must not be written back.
+   */
+  function isStillCurrent(attemptId: string, envelopeAtStart: unknown): boolean {
+    const store = usePaymentStore.getState();
+    return (
+      store.envelope === envelopeAtStart && store.paymentSlice?.payment_attempt_id === attemptId
+    );
+  }
+
   async function handleLineApplied(): Promise<void> {
     if (bridge === null || paymentAttemptId === null || envelope === null) {
       return;
     }
+    const attemptId = paymentAttemptId;
+    const envelopeAtStart = usePaymentStore.getState().envelope;
     setAfterApply('reading');
-    const attempt = await readAttemptWithRetry(paymentAttemptId);
+    const attempt = await readAttemptWithRetry(attemptId);
+    if (!isStillCurrent(attemptId, envelopeAtStart)) return;
     if (attempt === null) {
       // The apply succeeded in main but its state could not be read. Keep the
       // apply out of reach and offer a retry instead.
@@ -568,8 +583,11 @@ export function PaymentSurface({
    */
   async function rereadAttempt(): Promise<void> {
     if (bridge === null || paymentAttemptId === null) return;
+    const attemptId = paymentAttemptId;
+    const envelopeAtStart = usePaymentStore.getState().envelope;
     try {
-      const readResponse = await bridge.payments.read({ payment_attempt_id: paymentAttemptId });
+      const readResponse = await bridge.payments.read({ payment_attempt_id: attemptId });
+      if (!isStillCurrent(attemptId, envelopeAtStart)) return;
       if (readResponse.kind === 'ok') {
         usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
       }

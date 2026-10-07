@@ -67,6 +67,7 @@ function makeBridge(): {
   confirm: ReturnType<typeof vi.fn>;
   read: ReturnType<typeof vi.fn>;
   apply: ReturnType<typeof vi.fn>;
+  start: ReturnType<typeof vi.fn>;
 } {
   let lines: PaymentAttemptRendererView['tender_lines'] = [];
   const snapshot = (): PaymentAttemptRendererView => ({
@@ -79,9 +80,10 @@ function makeBridge(): {
   const confirm = vi.fn(() =>
     Promise.resolve({ kind: 'ok' as const, settled_at: '2026-10-07T09:02:00.000Z' }),
   );
+  const start = vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt_id: 'pa-001' }));
   const read = vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt: snapshot() }));
   const payments = {
-    start: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt_id: 'pa-001' })),
+    start,
     read,
     confirm,
     cancel: vi.fn(() =>
@@ -113,7 +115,7 @@ function makeBridge(): {
     },
   );
   const tender = { apply } as unknown as TenderBridgeAPI;
-  return { payments, tender, confirm, read, apply };
+  return { payments, tender, confirm, read, apply, start };
 }
 
 beforeEach(() => {
@@ -412,6 +414,48 @@ describe('RT-238 — keyboard-only and axe on the touched surfaces', () => {
       await Promise.resolve();
     });
     expect(within(slot('end')).getByTestId('cash-entry-confirm')).toBeInTheDocument();
+  });
+
+  it('a read still in flight when the cancel succeeds is discarded (Codex P2)', async () => {
+    const bridge = await openCash();
+    // The post-apply read hangs until the test releases it.
+    let release: (value: unknown) => void = () => undefined;
+    bridge.read.mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    await typeAndApply('20.00');
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // Main answers the stale read with the now-cancelled attempt.
+    await act(async () => {
+      release({
+        kind: 'ok',
+        payment_attempt: {
+          payment_attempt_id: 'pa-001',
+          state: 'cancelled',
+          envelope_subtotal_minor: DUE,
+          started_at: '2026-10-07T09:00:30.000Z',
+          tender_lines: [],
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+
+    // A new tender starts a NEW attempt instead of reusing the cancelled one.
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(bridge.start).toHaveBeenCalledTimes(2);
   });
 
   it('a single failed read after an apply is retried on its own', async () => {
