@@ -106,7 +106,9 @@ interface BackControl {
   readonly tenderBlocked: boolean;
   /** Back / Esc may ask main now. */
   readonly enabled: boolean;
-  /** Show the "money recorded" reason line under the header. */
+  /** Why Back is not available, as a catalog line (RT-240), or null when it is. */
+  readonly reason: BackReason | null;
+  /** Show the reason line under the header. */
   readonly showReason: boolean;
   /** `aria-disabled` for the control (mirrors `disabled`). */
   readonly ariaDisabled: 'true' | undefined;
@@ -131,6 +133,28 @@ interface BackControlInput {
   readonly entryOpen: boolean;
 }
 
+/**
+ * RT-240 — Back's reason, from the message catalog (15 §5), chosen by state so
+ * it never claims more than is known (I-7):
+ *   recorded   — money is on this attempt now (M-P1);
+ *   reversed   — tender happened and was reversed, or main says Back is closed
+ *                with no money on the attempt (M-P2, N-13);
+ *   entry_open — an amount entry is open; Esc closes it first (M-P3).
+ */
+type BackReason = 'recorded' | 'reversed' | 'entry_open';
+
+const BACK_REASON_COPY: Readonly<Record<BackReason, string>> = {
+  recorded: 'لا يمكن الرجوع إلى البيع بعد تسجيل مبلغ. أكمل الدفع أو ألغِه.',
+  reversed: 'أُلغي المبلغ المسجَّل. اختر طريقة دفع أخرى أو ألغِ البيع.',
+  entry_open: 'اضغط Esc لإغلاق إدخال المبلغ أولاً.',
+};
+
+function backReason(input: BackControlInput, tenderBlocked: boolean): BackReason | null {
+  if ((input.projectedTenderLines ?? 0) > 0) return 'recorded';
+  if (tenderBlocked) return 'reversed';
+  return input.entryOpen ? 'entry_open' : null;
+}
+
 /** Any sign of tender for this handoff: projected lines, a reversing cancel, or main. */
 function isTenderBlocked(input: BackControlInput): boolean {
   if ((input.projectedTenderLines ?? 0) > 0 || input.tenderTouched) return true;
@@ -142,11 +166,13 @@ function deriveBackControl(input: BackControlInput): BackControl {
   const tenderBlocked = isTenderBlocked(input);
   const ready = input.eligibility === 'returnable' && !tenderBlocked;
   const enabled = offered && ready && !(input.busy || input.entryOpen);
+  const reason = offered ? backReason(input, tenderBlocked) : null;
   return {
     offered,
     tenderBlocked,
     enabled,
-    showReason: offered && tenderBlocked,
+    reason,
+    showReason: reason !== null,
     ariaDisabled: enabled ? undefined : 'true',
   };
 }
@@ -205,16 +231,16 @@ function BackToSaleButton(props: { back: BackControl; onBack: () => void }): JSX
   );
 }
 
-/** Why Back is disabled once tender exists (main refuses it in that case too). */
+/** Why Back is disabled: money recorded, money reversed, or an entry is open. */
 function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
-  if (!props.back.showReason) return null;
+  if (!props.back.showReason || props.back.reason === null) return null;
   return (
     <p
       className="payment-surface__back-blocked"
       data-testid="payment-surface-back-blocked"
       role="status"
     >
-      لا يمكن الرجوع إلى البيع بعد تسجيل أي مبلغ. أكمل الدفع أو ألغِه.
+      {BACK_REASON_COPY[props.back.reason]}
     </p>
   );
 }

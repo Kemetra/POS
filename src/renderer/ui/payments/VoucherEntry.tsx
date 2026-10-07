@@ -210,7 +210,7 @@ export function VoucherEntry({
         {/* Amount-to-apply row */}
         <div className="tender-row">
           <label className="tender-row__label voucher-entry__label" htmlFor="voucher-amount-input">
-            المبلغ المطبّق (Amount to apply, EGP)
+            المبلغ المطبّق (<span dir="ltr">EGP</span>)
           </label>
           <span className="tender-row__value">
             <input
@@ -256,11 +256,11 @@ export function VoucherEntry({
           aria-disabled={!canSubmit ? 'true' : undefined}
           onClick={handleSubmit}
         >
-          تطبيق القسيمة (Apply voucher)
+          تطبيق القسيمة
         </button>
         {isApplying && (
           <div data-testid="voucher-entry-applying" aria-busy="true">
-            جارٍ التطبيق… (Applying…)
+            جارٍ التطبيق…
           </div>
         )}
 

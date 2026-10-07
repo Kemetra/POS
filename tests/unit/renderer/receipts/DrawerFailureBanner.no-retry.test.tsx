@@ -28,18 +28,18 @@ afterEach(() => {
 describe('T331 — DrawerFailureBanner has no retry-kick affordance', () => {
   it('offers NO retry / retry-kick / re-open button', () => {
     render(<DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={() => {}} now={NOW} />);
-    expect(screen.queryByRole('button', { name: /retry|re-?open|kick|try again/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /إعادة المحاولة|إعادة فتح|جرّب/ })).toBeNull();
   });
 
   it('offers NO reprint button (reprint is a print affordance, not a drawer one)', () => {
     render(<DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={() => {}} now={NOW} />);
-    expect(screen.queryByRole('button', { name: /reprint/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /نسخة|إعادة طباعة/ })).toBeNull();
   });
 
   it('the ONLY affordance is manual override', () => {
     render(<DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={() => {}} now={NOW} />);
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(1);
-    expect(buttons[0]).toHaveAccessibleName(/manual/i);
+    expect(buttons[0]).toHaveAccessibleName('إيصال يدوي');
   });
 });

@@ -5,7 +5,7 @@
  * - POS Pulse wordmark present in left cluster
  * - Left cluster (.top-bar__left) and right cluster (.top-bar__right)
  * - IdentityStrip inside left cluster
- * - ConnectionIndicator + OperatorSlot in right cluster
+ * - OperatorSlot in right cluster; no connection pill (RT-240, I-7)
  * - StatusBanner outside <header> for non-online states
  * - No device token, no sensitive identifiers in rendered DOM
  * - axe baseline smoke across all connection states
@@ -50,12 +50,15 @@ describe('TopBar S3 restyle (T057)', () => {
     expect(strip).toBeInTheDocument();
   });
 
-  it('renders ConnectionIndicator inside right cluster', () => {
-    const { container } = renderTopBar();
-    const right = container.querySelector('.top-bar__right');
-    const conn = right?.querySelector('[data-connection-state]');
-    expect(conn).toBeInTheDocument();
-  });
+  // RT-240 (I-7): nothing measures the connection, so the bar claims nothing.
+  it.each(['online', 'degraded', 'offline', 'syncing'] as const)(
+    'renders no connection pill (state %s)',
+    (state) => {
+      const { container } = renderTopBar(state);
+      expect(container.querySelector('[data-connection-state]')).toBeNull();
+      expect(container.textContent).not.toMatch(/Online|Offline|Syncing|Degraded/);
+    },
+  );
 
   it('renders OperatorSlot inside right cluster', () => {
     const { container } = renderTopBar();
@@ -75,10 +78,9 @@ describe('TopBar S3 restyle (T057)', () => {
   });
 
   it('connection banner copy is Arabic-first (POS v3.5)', () => {
-    // degraded → amber "الاتصال بطيء — Connection slow"
-    expect(renderTopBar('degraded').container.textContent).toContain(
-      'الاتصال بطيء — Connection slow',
-    );
+    // degraded → amber «الاتصال بطيء» (Arabic only, RT-240)
+    expect(renderTopBar('degraded').container.textContent).toContain('الاتصال بطيء');
+    expect(renderTopBar('degraded').container.textContent).not.toContain('Connection slow');
     cleanup();
     // offline → red "غير متصل — البيع من قائمة الانتظار المحلية"
     expect(renderTopBar('offline').container.textContent).toContain(

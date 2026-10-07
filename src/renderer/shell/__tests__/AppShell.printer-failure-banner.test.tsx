@@ -59,7 +59,7 @@ describe('T291 — AppShell printer-failure banner integration', () => {
       }),
     };
     renderShell();
-    await waitFor(() => expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument());
   });
 
   it('does NOT render the banner when there is no print failure (both-null)', async () => {
@@ -69,13 +69,13 @@ describe('T291 — AppShell printer-failure banner integration', () => {
     renderShell();
     // The dashboard renders; the banner does not.
     await screen.findByTestId('dashboard-outlet');
-    expect(screen.queryByText(/Receipt print failed/i)).toBeNull();
+    expect(screen.queryByText('فشل طباعة الإيصال')).toBeNull();
   });
 
   it('does not crash when no sales bridge is available (banner stays unmounted)', () => {
     renderShell();
     expect(screen.getByTestId('dashboard-outlet')).toBeInTheDocument();
-    expect(screen.queryByText(/Receipt print failed/i)).toBeNull();
+    expect(screen.queryByText('فشل طباعة الإيصال')).toBeNull();
   });
 
   it('the Reprint + Manual entry-point callbacks are wired (clicking does not crash)', async () => {
@@ -92,11 +92,11 @@ describe('T291 — AppShell printer-failure banner integration', () => {
       }),
     };
     renderShell();
-    await waitFor(() => expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument());
-    await userEvent.click(screen.getByRole('button', { name: /reprint/i }));
-    await userEvent.click(screen.getByRole('button', { name: /manual/i }));
+    await waitFor(() => expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'نسخة' }));
+    await userEvent.click(screen.getByRole('button', { name: 'إيصال يدوي' }));
     // No throw; banner still present (entry-points are inert stubs).
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   it('mounts the drawer-failure banner and its Manual entry-point is wired', async () => {
@@ -116,7 +116,7 @@ describe('T291 — AppShell printer-failure banner integration', () => {
     // Scope the click to the drawer banner — its Manual receipt button is the
     // only one on screen (printer_failure is null), but scoping keeps the intent
     // explicit and survives a future printer+drawer coexistence fixture.
-    await userEvent.click(within(drawerBanner).getByRole('button', { name: /manual receipt/i }));
+    await userEvent.click(within(drawerBanner).getByRole('button', { name: 'إيصال يدوي' }));
     // No throw; the banner persists (the entry-point is an inert Slice-6 stub).
     expect(screen.getByTestId('drawer-failure-banner')).toBeInTheDocument();
   });

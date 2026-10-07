@@ -42,7 +42,7 @@ describe('T430 — ReprintAffordance gating', () => {
       />,
     );
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByRole('button', { name: /reprint/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'إعادة طباعة الإيصال' })).not.toBeInTheDocument();
   });
 
   it('renders the Reprint button when a successful print exists', () => {
@@ -52,6 +52,6 @@ describe('T430 — ReprintAffordance gating', () => {
         _testReceiptsBridge={okBridge()}
       />,
     );
-    expect(screen.getByRole('button', { name: /reprint/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' })).toBeInTheDocument();
   });
 });

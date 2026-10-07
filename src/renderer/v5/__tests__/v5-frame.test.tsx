@@ -218,7 +218,7 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
       expect(await screen.findByTestId('printer-failure-banner')).toBeInTheDocument();
       // Codex P2 (#462): recovery controls must reach the existing receipts
       // bridge, not a no-op; a double press while in flight fires once.
-      const reprintButton = screen.getByRole('button', { name: 'نسخة — Reprint' });
+      const reprintButton = screen.getByRole('button', { name: 'نسخة' });
       fireEvent.click(reprintButton);
       fireEvent.click(reprintButton);
       expect(reprint).toHaveBeenCalledOnce();
@@ -229,7 +229,7 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
 
       const manualButton = within(await screen.findByTestId('drawer-failure-banner')).getByRole(
         'button',
-        { name: 'إيصال يدوي — Manual receipt' },
+        { name: 'إيصال يدوي' },
       );
       fireEvent.click(manualButton);
       fireEvent.click(manualButton);
@@ -274,7 +274,7 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
       render(<V5OperationalNotices />);
       const button = within(await screen.findByTestId('drawer-failure-banner')).getByRole(
         'button',
-        { name: 'إيصال يدوي — Manual receipt' },
+        { name: 'إيصال يدوي' },
       );
       fireEvent.click(button);
       await waitFor(() => {
@@ -376,7 +376,7 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
 
   it.each([
     ['offline', 'غير متصل — البيع من قائمة الانتظار المحلية'],
-    ['degraded', 'الاتصال بطيء — Connection slow'],
+    ['degraded', 'الاتصال بطيء'],
     ['syncing', 'جارٍ المزامنة…'],
   ] as const)('shows a persistent %s connection banner (never a toast)', (state, message) => {
     signIn('cashier');

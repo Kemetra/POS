@@ -177,7 +177,7 @@ export function CashEntry({
             className="tender-row__label cash-entry__amount-label"
             htmlFor="cash-entry-amount-input"
           >
-            المبلغ المستلم (Amount received, EGP)
+            المبلغ المستلم (<span dir="ltr">EGP</span>)
           </label>
           <span className="tender-row__value" style={{ minWidth: 240, flex: 1 }}>
             <input
@@ -267,7 +267,7 @@ export function CashEntry({
             className="tender-row tender-row--totals cash-entry__change-due"
             data-testid="cash-entry-change-due"
           >
-            <span className="tender-row__label">الباقي للعميل (Change due)</span>
+            <span className="tender-row__label">الباقي للعميل</span>
             <span
               dir="ltr"
               className="tender-row__value cash-entry__change-due-value change-row__value--positive"
@@ -319,7 +319,7 @@ export function CashEntry({
               void handleConfirm();
             }}
           >
-            تأكيد الدفع النقدي (Confirm cash payment)
+            تأكيد الدفع النقدي
           </button>
         </PinnedPrimary>
         {onBack !== undefined && (

@@ -35,17 +35,17 @@ describe('T332 — DrawerFailureBanner accessibility', () => {
 
   it('does NOT steal focus on mount (manual-override button is not focused)', () => {
     render(<DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={() => {}} now={NOW} />);
-    expect(screen.getByRole('button', { name: /manual/i })).not.toHaveFocus();
+    expect(screen.getByRole('button', { name: 'إيصال يدوي' })).not.toHaveFocus();
   });
 
   it('the manual-override affordance carries the 44×44 size modifier (P14)', () => {
     render(<DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={() => {}} now={NOW} />);
-    expect(screen.getByRole('button', { name: /manual/i }).className).toMatch(/btn--md/);
+    expect(screen.getByRole('button', { name: 'إيصال يدوي' }).className).toMatch(/btn--md/);
   });
 
   it('is not a color-only signal — the icon + text label carry meaning (FR-068)', () => {
     render(<DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={() => {}} now={NOW} />);
-    expect(screen.getByText(/drawer (did not|didn.t) open|cash drawer/i)).toBeInTheDocument();
+    expect(screen.getByText('لم يفتح درج النقود')).toBeInTheDocument();
   });
 
   it('is axe-clean', async () => {

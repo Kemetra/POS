@@ -193,15 +193,9 @@ export function PrinterFailureBanner({
       <PrinterWarningIcon />
       <p id={messageId} className="printer-failure-banner__message">
         <span lang="ar">فشل طباعة الإيصال</span>
-        <span aria-hidden="true" className="printer-failure-banner__sep">
-          {' — '}
-        </span>
-        <span lang="en">Receipt print failed</span>
         <span className="printer-failure-banner__hint">
           {' · '}
           <span lang="ar">جرّب مرة أخرى أو حوّل للوضع اليدوي</span>
-          <span aria-hidden="true">{' — '}</span>
-          <span lang="en">Retry, or switch to manual receipt</span>
         </span>
       </p>
       <div className="v4-row printer-failure-banner__actions">
@@ -211,14 +205,11 @@ export function PrinterFailureBanner({
           onClick={handleRetry}
           disabled={mutationPhase !== 'idle'}
           aria-busy={mutationPhase === 'retrying' ? 'true' : undefined}
-          aria-label="إعادة المحاولة — Retry print"
         >
           {mutationPhase === 'retrying' && (
             <span className="btn__spinner" role="status" aria-hidden="true" />
           )}
           <span lang="ar">إعادة المحاولة</span>
-          <span aria-hidden="true">{' / '}</span>
-          <span lang="en">Retry</span>
         </button>
         <button
           type="button"
@@ -227,16 +218,9 @@ export function PrinterFailureBanner({
           onClick={() => {
             onReprint(printFailure.sale_id);
           }}
-          aria-label="نسخة — Reprint"
-          title={
-            reprintEnabled
-              ? undefined
-              : 'تتوفر النسخة بعد نجاح الطباعة الأولى — Reprint is available only after a successful print'
-          }
+          title={reprintEnabled ? undefined : 'تتوفر النسخة بعد نجاح الطباعة الأولى'}
         >
           <span lang="ar">نسخة</span>
-          <span aria-hidden="true">{' / '}</span>
-          <span lang="en">Reprint</span>
         </button>
         <button
           type="button"
@@ -244,14 +228,11 @@ export function PrinterFailureBanner({
           onClick={handleManualOverride}
           disabled={mutationPhase !== 'idle'}
           aria-busy={mutationPhase === 'manual_override' ? 'true' : undefined}
-          aria-label="إيصال يدوي — Manual receipt"
         >
           {mutationPhase === 'manual_override' && (
             <span className="btn__spinner" role="status" aria-hidden="true" />
           )}
           <span lang="ar">إيصال يدوي</span>
-          <span aria-hidden="true">{' / '}</span>
-          <span lang="en">Manual receipt</span>
         </button>
       </div>
     </div>

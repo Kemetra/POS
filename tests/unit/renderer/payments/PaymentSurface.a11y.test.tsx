@@ -85,16 +85,14 @@ describe('PaymentSurface — accessibility', () => {
     setup();
     render(<PaymentSurface />);
     const btn = screen.getByTestId('tender-cash');
-    const label = (btn.getAttribute('aria-label') ?? '').toLowerCase();
-    expect(label).toMatch(/cash/);
+    expect(btn).toHaveAttribute('aria-label', 'نقدي');
   });
 
   it('external card tender button has an accessible label', () => {
     setup();
     render(<PaymentSurface />);
     const btn = screen.getByTestId('tender-external-card');
-    const label = (btn.getAttribute('aria-label') ?? '').toLowerCase();
-    expect(label).toMatch(/card/);
+    expect(btn).toHaveAttribute('aria-label', 'بطاقة');
   });
 
   it('all enabled tender buttons meet 44px touch target', () => {

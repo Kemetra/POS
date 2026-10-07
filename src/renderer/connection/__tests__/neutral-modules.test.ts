@@ -21,7 +21,7 @@ describe('neutral connection and viewport modules', () => {
 
   it('owns the Arabic-first connection banner copy for every non-online state', () => {
     expect(neutralConnection.CONNECTION_BANNER_MESSAGES).toEqual({
-      degraded: 'الاتصال بطيء — Connection slow',
+      degraded: 'الاتصال بطيء',
       offline: 'غير متصل — البيع من قائمة الانتظار المحلية',
       syncing: 'جارٍ المزامنة…',
     });
