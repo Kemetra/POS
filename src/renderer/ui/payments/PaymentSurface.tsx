@@ -283,6 +283,8 @@ const CANCEL_LIVE_TENDER_COPY =
 /** RT-298 — the line a cancel hold shows; it comes back with the hold on a remount. */
 const CANCEL_HOLD_COPY: Readonly<Record<CancelHold, string | null>> = {
   none: null,
+  // Seen only after a remount: this view never learns how that cancel ended.
+  in_flight: CANCEL_UNKNOWN_COPY,
   unconfirmed: CANCEL_UNKNOWN_COPY,
   live_tender: CANCEL_LIVE_TENDER_COPY,
 };
@@ -296,7 +298,7 @@ function isResumable(kept: string | undefined, hold: CancelHold): boolean {
 /** The phase a resumed attempt comes back in: an unconfirmed cancel reopens on its Cancel. */
 function resumePhase(kept: string | undefined, hold: CancelHold): Phase {
   if (kept === 'settled') return 'settled';
-  return hold === 'unconfirmed' ? 'entry' : 'tender_selection';
+  return hold === 'unconfirmed' || hold === 'in_flight' ? 'entry' : 'tender_selection';
 }
 
 /** RT-298 — the hold recorded for this handoff's current attempt, if any. */
@@ -987,12 +989,14 @@ export function PaymentSurface({
     const envelopeAtStart = usePaymentStore.getState().envelope;
     setBridgeRefusalCopy(null);
     setIsCancelling(true);
+    const store = usePaymentStore.getState();
+    const key = store.cancelKeyFor(attemptId);
+    // Held from the moment it is sent: leaving and re-entering Checkout before
+    // main answers must not reopen payment actions (Codex P2, #576).
+    store.setCancelHold('in_flight');
     try {
       const response = await bridge.payments
-        .cancel({
-          payment_attempt_id: attemptId,
-          idempotency_key: usePaymentStore.getState().cancelKeyFor(attemptId),
-        })
+        .cancel({ payment_attempt_id: attemptId, idempotency_key: key })
         .catch(() => null);
       if (response?.kind === 'ok') {
         const linesAtCancel = usePaymentStore.getState().paymentSlice?.tender_lines ?? [];

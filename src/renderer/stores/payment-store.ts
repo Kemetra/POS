@@ -54,7 +54,8 @@ export interface PaymentState {
    * Checkout remount so a retry still replays the same idempotency key and a
    * hold still closes payment actions:
    *   - `key`: the cancel key, minted once per attempt;
-   *   - `hold`: `unconfirmed` (a cancel whose outcome main could not confirm) or
+   *   - `hold`: `in_flight` (a cancel was sent and has not answered yet),
+   *     `unconfirmed` (a cancel whose outcome main could not confirm) or
    *     `live_tender` (force-failed with live tender: main refuses any payment).
    * Renderer memory only. Cleared when a different handoff is mounted, on
    * reset, or once a cancel outcome is applied.
@@ -62,7 +63,7 @@ export interface PaymentState {
   cancelRecovery: CancelRecovery | null;
 }
 
-export type CancelHold = 'none' | 'unconfirmed' | 'live_tender';
+export type CancelHold = 'none' | 'in_flight' | 'unconfirmed' | 'live_tender';
 
 export interface CancelRecovery {
   readonly handoffId: string;

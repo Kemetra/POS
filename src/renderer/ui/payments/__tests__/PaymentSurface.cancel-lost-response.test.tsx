@@ -612,4 +612,65 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
     await remount(bridge);
     expect(screen.queryByTestId('payment-surface-bridge-refusal')).not.toBeInTheDocument();
   });
+
+  it('a cancel still in flight when Checkout is left comes back held (Codex P2)', async () => {
+    const { bridge, cancel, script } = makeBridge();
+    await openWith(bridge, CARD_APPLIED);
+    let answer: (r: PaymentsCancelResponse) => void = () => undefined;
+    script({
+      cancel: [
+        () =>
+          new Promise<PaymentsCancelResponse>((resolve) => {
+            answer = resolve;
+          }),
+        () => Promise.resolve(CANCEL_OK),
+      ],
+      read: undefined,
+    });
+    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    await settle();
+
+    await remount(bridge);
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(CANCEL_UNKNOWN);
+    expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface-cancel')).toBeInTheDocument();
+
+    // The original cancel lands after the remount; the store takes its outcome.
+    await act(async () => {
+      answer(CANCEL_OK);
+      await Promise.resolve();
+    });
+    await settle();
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    expect(usePaymentStore.getState().cancelRecovery).toBeNull();
+    expect(usePaymentStore.getState().cardSafety?.voidRequired).toBe(true);
+    expect(keys(cancel)).toHaveLength(1);
+  });
+});
+
+describe('RT-298 — the retry is refused as a payload mismatch (main today)', () => {
+  it('a refused same-key retry still resolves the hold from the read-back', async () => {
+    const { bridge, cancel, script } = makeBridge();
+    await openWith(bridge, CARD_APPLIED);
+    script({ cancel: [LOST], read: undefined });
+    await clickCancel();
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(CANCEL_UNKNOWN);
+
+    script({
+      cancel: [() => Promise.resolve({ kind: 'refused', reason: 'idempotency_payload_mismatch' })],
+      read: () =>
+        Promise.resolve({
+          kind: 'ok',
+          payment_attempt: attempt('cancelled', [
+            line('tl-card', 'external_card_terminal', 'reversed', 1),
+          ]),
+        }),
+    });
+    await clickCancel();
+    const [first, second] = keys(cancel);
+    expect(second).toBe(first);
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+    expect(usePaymentStore.getState().cancelRecovery).toBeNull();
+  });
 });
