@@ -27,6 +27,7 @@ import type {
   SalesBridgeAPI,
   TenderBridgeAPI,
 } from '../../../shared/bridge-api.js';
+import type { PaymentAttemptRendererView } from '../../../shared/payments/types.js';
 
 /**
  * 006-payments-tender S1 + S3d T152 — PaymentSurface.
@@ -287,6 +288,10 @@ export function PaymentSurface({
   // RT-238 / I-9: when focus is moved onto the settle commit, a held or doubled
   // Enter from the apply that preceded it must not settle on its own.
   const commitFocusedAtRef = useRef(0);
+  // RT-238 / Codex P1: after a successful apply the projection must be re-read
+  // before anything else is offered. Until it is, the apply is not offered again
+  // (a second press would record the whole amount a second time, as change).
+  const [afterApply, setAfterApply] = useState<'idle' | 'reading' | 'failed'>('idle');
 
   // RT-238: the entry opens below the method tiles, inside the scrolling panes;
   // bring it into view so the cashier never has to hunt for the amount field.
@@ -347,6 +352,7 @@ export function PaymentSurface({
     setReversalPending(false);
     setIsReturning(false);
     setTenderTouched(false);
+    setAfterApply('idle');
     // Resume a same-handoff attempt across a remount (leaving checkout and
     // coming back): a `started` one is still held by main, so forgetting it
     // would re-enable sign-out and make the next tender re-run payments.start,
@@ -496,43 +502,60 @@ export function PaymentSurface({
     }
   }
 
+  /** A read is idempotent: a transient IPC failure is retried before giving up. */
+  const READ_ATTEMPTS = 3;
+
+  async function readAttemptWithRetry(
+    attemptId: string,
+  ): Promise<PaymentAttemptRendererView | null> {
+    if (bridge === null) return null;
+    for (let attempt = 0; attempt < READ_ATTEMPTS; attempt += 1) {
+      try {
+        const readResponse = await bridge.payments.read({ payment_attempt_id: attemptId });
+        if (readResponse.kind === 'ok') return readResponse.payment_attempt;
+        return null;
+      } catch {
+        // Retry: the line itself was applied in main; only the read failed.
+      }
+    }
+    return null;
+  }
+
   async function handleLineApplied(): Promise<void> {
     if (bridge === null || paymentAttemptId === null || envelope === null) {
       return;
     }
-    try {
-      const readResponse = await bridge.payments.read({
-        payment_attempt_id: paymentAttemptId,
-      });
-      if (readResponse.kind === 'ok') {
-        usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
-        // Split-tender (T154): if the running sum is still below the subtotal,
-        // return to tender selection so the cashier may add another line. When
-        // the sum equals the subtotal, the surface stays put and the confirm
-        // button becomes visible. The settlement invariant itself is enforced
-        // on the main process at payments.confirm time.
-        // CR-11: guard every accumulator step with Number.isSafeInteger
-        // (Constitution §II). A malformed minor value silently produces a
-        // float-tainted running sum without this check.
-        let sumApplied = 0;
-        for (const line of readResponse.payment_attempt.tender_lines) {
-          if (line.state !== 'applied') continue;
-          if (!Number.isSafeInteger(line.amount_applied_minor)) continue;
-          sumApplied += line.amount_applied_minor;
-          if (!Number.isSafeInteger(sumApplied)) {
-            // Running sum overflowed — bail out without changing the phase.
-            return;
-          }
-        }
-        if (sumApplied < envelope.subtotal_minor) {
-          setSelectedTender(null);
-          setPhase('tender_selection');
-        }
+    setAfterApply('reading');
+    const attempt = await readAttemptWithRetry(paymentAttemptId);
+    if (attempt === null) {
+      // The apply succeeded in main but its state could not be read. Keep the
+      // apply out of reach and offer a retry instead.
+      setAfterApply('failed');
+      return;
+    }
+    usePaymentStore.getState().applyAttemptSnapshot(attempt);
+    setAfterApply('idle');
+    // Split-tender (T154): if the running sum is still below the subtotal,
+    // return to tender selection so the cashier may add another line. When
+    // the sum equals the subtotal, the surface stays put and the confirm
+    // button becomes visible. The settlement invariant itself is enforced
+    // on the main process at payments.confirm time.
+    // CR-11: guard every accumulator step with Number.isSafeInteger
+    // (Constitution §II). A malformed minor value silently produces a
+    // float-tainted running sum without this check.
+    let sumApplied = 0;
+    for (const line of attempt.tender_lines) {
+      if (line.state !== 'applied') continue;
+      if (!Number.isSafeInteger(line.amount_applied_minor)) continue;
+      sumApplied += line.amount_applied_minor;
+      if (!Number.isSafeInteger(sumApplied)) {
+        // Running sum overflowed — bail out without changing the phase.
+        return;
       }
-    } catch {
-      // Read failure after a successful apply: keep the current phase so the
-      // cashier can retry; do NOT surface a refusal here because the line
-      // itself was successfully applied on the main process.
+    }
+    if (sumApplied < envelope.subtotal_minor) {
+      setSelectedTender(null);
+      setPhase('tender_selection');
     }
   }
 
@@ -700,7 +723,10 @@ export function PaymentSurface({
   // is open and money is still owed, that is the entry's own apply-commit; the
   // settle commit cannot proceed yet, so it waits out of the slot.
   const fullyTendered = hasAppliedLine && remainingBalanceMinor === 0;
-  const entryOwnsPrimary = phase === 'entry' && remainingBalanceMinor > 0;
+  // While a post-apply read is pending or failed, nobody gets an apply or a settle:
+  // the projection is not trustworthy until main has been read again.
+  const entryOwnsPrimary = phase === 'entry' && remainingBalanceMinor > 0 && afterApply === 'idle';
+  const showSettle = hasAppliedLine && !entryOwnsPrimary && afterApply === 'idle';
 
   // Refusals and hints stay next to the commit, in the pinned bar. With no bridge
   // (Slice-1 mode) there is no bar, so they render in the surface as before.
@@ -1005,7 +1031,18 @@ export function PaymentSurface({
               ) : null
             }
             commit={
-              hasAppliedLine && !entryOwnsPrimary ? (
+              afterApply === 'failed' ? (
+                <button
+                  type="button"
+                  className="checkout-commit"
+                  data-testid="payment-surface-reread"
+                  onClick={() => {
+                    void handleLineApplied();
+                  }}
+                >
+                  إعادة المحاولة
+                </button>
+              ) : showSettle ? (
                 <button
                   type="button"
                   className="payment-surface__confirm checkout-commit"
@@ -1023,7 +1060,15 @@ export function PaymentSurface({
               ) : null
             }
             reason={
-              hasAppliedLine && !entryOwnsPrimary && !fullyTendered ? (
+              afterApply === 'failed' ? (
+                <p
+                  className="checkout-actions__reason"
+                  data-testid="payment-surface-reread-notice"
+                  role="status"
+                >
+                  تم تسجيل المبلغ، لكن تعذّر تحديث حالة الدفع. لا تكرر الدفع.
+                </p>
+              ) : showSettle && !fullyTendered ? (
                 <p
                   id="payment-commit-reason"
                   className="checkout-actions__reason"

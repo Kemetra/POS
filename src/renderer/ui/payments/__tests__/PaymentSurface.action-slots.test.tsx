@@ -66,6 +66,7 @@ function makeBridge(): {
   tender: TenderBridgeAPI;
   confirm: ReturnType<typeof vi.fn>;
   read: ReturnType<typeof vi.fn>;
+  apply: ReturnType<typeof vi.fn>;
 } {
   let lines: PaymentAttemptRendererView['tender_lines'] = [];
   const snapshot = (): PaymentAttemptRendererView => ({
@@ -85,29 +86,28 @@ function makeBridge(): {
     confirm,
     cancel: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
   } as unknown as PaymentsBridgeAPI;
-  const tender = {
-    apply: vi.fn(
-      (req: { tender_type: 'cash' | 'external_card_terminal'; amount_applied_minor: number }) => {
-        lines = [
-          ...lines,
-          {
-            tender_line_id: `tl-${String(lines.length + 1)}`,
-            tender_type: req.tender_type,
-            state: 'applied',
-            amount_applied_minor: req.amount_applied_minor,
-            applied_at: '2026-10-07T09:01:00.000Z',
-            apply_order: lines.length + 1,
-          },
-        ];
-        return Promise.resolve({
-          kind: 'ok' as const,
-          tender_line_id: `tl-${String(lines.length)}`,
+  const apply = vi.fn(
+    (req: { tender_type: 'cash' | 'external_card_terminal'; amount_applied_minor: number }) => {
+      lines = [
+        ...lines,
+        {
+          tender_line_id: `tl-${String(lines.length + 1)}`,
+          tender_type: req.tender_type,
+          state: 'applied',
+          amount_applied_minor: req.amount_applied_minor,
           applied_at: '2026-10-07T09:01:00.000Z',
-        });
-      },
-    ),
-  } as unknown as TenderBridgeAPI;
-  return { payments, tender, confirm, read };
+          apply_order: lines.length + 1,
+        },
+      ];
+      return Promise.resolve({
+        kind: 'ok' as const,
+        tender_line_id: `tl-${String(lines.length)}`,
+        applied_at: '2026-10-07T09:01:00.000Z',
+      });
+    },
+  );
+  const tender = { apply } as unknown as TenderBridgeAPI;
+  return { payments, tender, confirm, read, apply };
 }
 
 beforeEach(() => {
@@ -312,32 +312,66 @@ describe('RT-238 — keyboard-only and axe on the touched surfaces', () => {
     expect(screen.getByTestId('payment-surface-confirm')).toHaveFocus();
   });
 
-  it('a stale projection does not strand the cashier: a click on the blocked commit re-reads main', async () => {
+  it('after an apply succeeds, a failed read never re-offers the apply; it offers a retry (Codex P1, I-9)', async () => {
     const bridge = await openCash();
-    const { read } = bridge;
-    await typeAndApply('20.00'); // partial; back on the method tiles
+    // Every read after the apply fails (the automatic retries too).
+    bridge.read.mockRejectedValue(new Error('ipc'));
+    await typeAndApply('50.00');
     await act(async () => {
-      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
       await Promise.resolve();
     });
-    // The second apply succeeds in main, but the read after it fails.
-    read.mockRejectedValueOnce(new Error('ipc'));
-    await typeAndApply('30.00');
-    // Still in the entry with a stale «money owed» projection: close it.
-    const user = userEvent.setup();
-    await user.keyboard('{Escape}');
+    // The apply already happened in main: pressing it again would record the
+    // whole amount a second time, as change. It must not be on screen.
+    expect(screen.queryByTestId('cash-entry-confirm')).not.toBeInTheDocument();
+    const retry = await screen.findByTestId('payment-surface-reread');
+    expect(retry.closest('[data-slot]')).toHaveAttribute('data-slot', 'end');
+    expect(screen.getByTestId('payment-surface-reread-notice')).toHaveTextContent('لا تكرر الدفع');
+    expect(bridge.apply).toHaveBeenCalledTimes(1);
+
+    // Main is reachable again: the retry reads the real state and the settle commit takes over.
+    bridge.read.mockReset();
+    bridge.read.mockResolvedValue({
+      kind: 'ok',
+      payment_attempt: {
+        payment_attempt_id: 'pa-001',
+        state: 'started',
+        envelope_subtotal_minor: DUE,
+        started_at: '2026-10-07T09:00:30.000Z',
+        tender_lines: [
+          {
+            tender_line_id: 'tl-1',
+            tender_type: 'cash',
+            state: 'applied',
+            amount_applied_minor: DUE,
+            applied_at: '2026-10-07T09:01:00.000Z',
+            apply_order: 1,
+          },
+        ],
+      },
+    });
+    await act(async () => {
+      fireEvent.click(retry, { detail: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     const commit = await screen.findByTestId('payment-surface-confirm');
-    expect(commit).toHaveAttribute('aria-disabled', 'true');
-    // The click re-reads main; the fresh projection is fully tendered.
+    expect(commit).not.toHaveAttribute('aria-disabled');
+    expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+  });
+
+  it('a single failed read after an apply is retried on its own', async () => {
+    const bridge = await openCash();
+    bridge.read.mockRejectedValueOnce(new Error('ipc'));
+    await typeAndApply('50.00');
     await act(async () => {
-      fireEvent.click(commit, { detail: 1 });
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(bridge.confirm).not.toHaveBeenCalled();
     expect(await screen.findByTestId('payment-surface-confirm')).not.toHaveAttribute(
       'aria-disabled',
     );
+    expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
   });
 
   it('cash entry state: no axe violations', async () => {
