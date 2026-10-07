@@ -778,6 +778,19 @@ export function PaymentSurface({
     );
   }
 
+  /**
+   * RT-298 — the attempt a cancel was sent for is still this sale's current
+   * one. Keyed on ids, not the envelope object, so the answer of a cancel sent
+   * before a Checkout remount still lands on the same attempt.
+   */
+  function isCancelStillCurrent(attemptId: string, handoffId: string): boolean {
+    const store = usePaymentStore.getState();
+    return (
+      store.envelope?.handoff_action_id === handoffId &&
+      store.paymentSlice?.payment_attempt_id === attemptId
+    );
+  }
+
   async function handleLineApplied(): Promise<void> {
     if (bridge === null || paymentAttemptId === null || envelope === null) {
       return;
@@ -904,9 +917,9 @@ export function PaymentSurface({
    * response). Read the attempt before re-opening any payment action, and act
    * on main's durable state rather than on the lost answer.
    */
-  async function reconcileAfterCancel(attemptId: string, envelopeAtStart: unknown): Promise<void> {
+  async function reconcileAfterCancel(attemptId: string, handoffId: string): Promise<void> {
     const attempt = await readAttemptWithRetry(attemptId);
-    if (!isStillCurrent(attemptId, envelopeAtStart)) return;
+    if (!isCancelStillCurrent(attemptId, handoffId)) return;
     if (attempt === null) {
       usePaymentStore.getState().setCancelHold('unconfirmed');
       setBridgeRefusalCopy(CANCEL_UNKNOWN_COPY);
@@ -982,11 +995,11 @@ export function PaymentSurface({
   }
 
   async function handleCancel(): Promise<void> {
-    if (bridge === null || paymentAttemptId === null) {
+    if (bridge === null || paymentAttemptId === null || envelope === null) {
       return;
     }
     const attemptId = paymentAttemptId;
-    const envelopeAtStart = usePaymentStore.getState().envelope;
+    const handoffId = envelope.handoff_action_id;
     setBridgeRefusalCopy(null);
     setIsCancelling(true);
     const store = usePaymentStore.getState();
@@ -998,11 +1011,15 @@ export function PaymentSurface({
       const response = await bridge.payments
         .cancel({ payment_attempt_id: attemptId, idempotency_key: key })
         .catch(() => null);
+      // A late answer (a retry after a remount already settled this cancel,
+      // and another attempt may have begun) must not touch that newer attempt
+      // (Codex P1, #576).
+      if (!isCancelStillCurrent(attemptId, handoffId)) return;
       if (response?.kind === 'ok') {
         const linesAtCancel = usePaymentStore.getState().paymentSlice?.tender_lines ?? [];
         applyCancelOutcome(response, linesAtCancel);
       } else {
-        await reconcileAfterCancel(attemptId, envelopeAtStart);
+        await reconcileAfterCancel(attemptId, handoffId);
       }
     } finally {
       setIsCancelling(false);

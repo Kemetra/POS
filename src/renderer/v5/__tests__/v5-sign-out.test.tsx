@@ -152,6 +152,42 @@ describe('V5 sign-out', () => {
     expect(signOut).not.toHaveBeenCalled();
   });
 
+  it('stays disabled while a force-failed attempt with live tender is held (RT-298)', () => {
+    signIn();
+    const signOut = stubBridge(() => Promise.resolve({ kind: 'signed_out' }));
+    const store = usePaymentStore.getState();
+    store.mount({
+      envelope_version: 'v1',
+      handoff_action_id: 'h1',
+      cart_id: 'c1',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      terminal_id: 'term1',
+      operator_session_id: 's1',
+      owning_operator_id: 'o1',
+      lines: [],
+      discount_placeholders: [],
+      subtotal_minor: 1500,
+      created_at: '2026-09-26T09:00:00Z',
+    });
+    usePaymentStore.getState().applyAttemptSnapshot({
+      payment_attempt_id: 'a1',
+      state: 'force_failed',
+      envelope_subtotal_minor: 1500,
+      started_at: '2026-09-26T09:05:00Z',
+      force_failed_at: '2026-09-26T09:06:00Z',
+      tender_lines: [],
+    });
+    usePaymentStore.getState().cancelKeyFor('a1');
+    usePaymentStore.getState().setCancelHold('live_tender');
+    renderFrame();
+
+    const button = screen.getByRole('button', { name: SIGN_OUT });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription('اطلب من المدير مراجعة الدفع أولاً');
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
   it('is not offered when nobody is signed in', () => {
     renderFrame();
     expect(screen.queryByRole('button', { name: SIGN_OUT })).not.toBeInTheDocument();

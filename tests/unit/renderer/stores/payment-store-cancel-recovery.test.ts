@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.js';
+import { signOutBlock, usePaymentStore } from '../../../../src/renderer/stores/payment-store.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 
 /**
@@ -91,5 +91,45 @@ describe('payment store — RT-298 cancel recovery', () => {
     usePaymentStore.getState().cancelKeyFor('pa-2');
     usePaymentStore.getState().reset();
     expect(usePaymentStore.getState().cancelRecovery).toBeNull();
+  });
+});
+
+describe('payment store — RT-298 sign-out block', () => {
+  function snapshot(state: 'started' | 'force_failed' | 'cancelled'): void {
+    usePaymentStore.getState().applyAttemptSnapshot({
+      payment_attempt_id: 'pa-1',
+      state,
+      envelope_subtotal_minor: 1500,
+      started_at: '2026-10-07T12:00:00.000Z',
+      tender_lines: [],
+    });
+  }
+
+  it('is null with no attempt, and open while one is started', () => {
+    expect(signOutBlock(usePaymentStore.getState())).toBeNull();
+    usePaymentStore.getState().mount(envelope('h-1'));
+    snapshot('started');
+    expect(signOutBlock(usePaymentStore.getState())).toBe('open');
+  });
+
+  it('is held only for the attempt a live-tender hold names', () => {
+    usePaymentStore.getState().mount(envelope('h-1'));
+    snapshot('force_failed');
+    expect(signOutBlock(usePaymentStore.getState())).toBeNull();
+
+    usePaymentStore.getState().cancelKeyFor('pa-1');
+    usePaymentStore.getState().setCancelHold('live_tender');
+    expect(signOutBlock(usePaymentStore.getState())).toBe('held');
+
+    usePaymentStore.getState().setCancelHold('unconfirmed');
+    expect(signOutBlock(usePaymentStore.getState())).toBeNull();
+  });
+
+  it('a hold recorded for another attempt does not block', () => {
+    usePaymentStore.getState().mount(envelope('h-1'));
+    usePaymentStore.getState().cancelKeyFor('pa-other');
+    usePaymentStore.getState().setCancelHold('live_tender');
+    snapshot('cancelled');
+    expect(signOutBlock(usePaymentStore.getState())).toBeNull();
   });
 });

@@ -649,6 +649,43 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
   });
 });
 
+describe('RT-298 — a late cancel answer never touches a newer attempt (Codex P1, #576)', () => {
+  it('ignores the original ok once a retry already ended that attempt and a new one began', async () => {
+    const { bridge, script } = makeBridge();
+    await openWith(bridge, CARD_APPLIED);
+    let answer: (r: PaymentsCancelResponse) => void = () => undefined;
+    script({
+      cancel: [
+        () =>
+          new Promise<PaymentsCancelResponse>((resolve) => {
+            answer = resolve;
+          }),
+        () => Promise.resolve(CANCEL_OK),
+      ],
+      read: undefined,
+    });
+    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    await settle();
+
+    await remount(bridge);
+    await clickCancel();
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+
+    act(() => {
+      usePaymentStore.getState().applyAttemptSnapshot({
+        ...attempt('started', CASH_APPLIED),
+        payment_attempt_id: 'pa-002',
+      });
+    });
+    await act(async () => {
+      answer(CANCEL_OK);
+      await Promise.resolve();
+    });
+    await settle();
+    expect(usePaymentStore.getState().paymentSlice?.payment_attempt_id).toBe('pa-002');
+  });
+});
+
 describe('RT-298 — the retry is refused as a payload mismatch (main today)', () => {
   it('a refused same-key retry still resolves the hold from the read-back', async () => {
     const { bridge, cancel, script } = makeBridge();

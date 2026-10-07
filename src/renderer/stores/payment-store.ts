@@ -107,6 +107,21 @@ export interface PaymentStore extends PaymentState {
   clearCancelRecovery(): void;
 }
 
+/**
+ * Why sign-out must wait, if it must: `open` — main holds a started attempt;
+ * `held` — RT-298, the attempt is force-failed with live tender and only a
+ * manager can move on (signing out would drop the attempt and its guidance).
+ */
+export function signOutBlock(s: PaymentState): 'open' | 'held' | null {
+  const slice = s.paymentSlice;
+  if (slice === null) return null;
+  if (slice.state === 'started') return 'open';
+  const held =
+    s.cancelRecovery?.hold === 'live_tender' &&
+    s.cancelRecovery.attemptId === slice.payment_attempt_id;
+  return held ? 'held' : null;
+}
+
 /** The card-safety record for `handoffId`, starting fresh for a different handoff. */
 function cardSafetyFor(current: CardSafety | null, handoffId: string): CardSafety {
   return current?.handoffId === handoffId
