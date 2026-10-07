@@ -115,8 +115,58 @@ describe('T053 — SaleSyncStatus', () => {
       expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('attention');
     });
     const text = screen.getByTestId('sale-sync-status').textContent;
-    expect(text).toContain('3 عملية بحاجة إلى مراجعة');
-    expect(text).toContain('منها 2 تختلف عن المسجَّل على الخادم');
+    // RT-258: 3 → few («عمليات»), 2 → dual feminine («اثنتان … تختلفان»).
+    expect(text).toContain('3 عمليات بحاجة إلى مراجعة');
+    expect(text).toContain('منها اثنتان تختلفان عن المسجَّل على الخادم');
+  });
+
+  // RT-258 / UX-12: full-sentence template per Arabic plural category.
+  it.each([
+    [1, 'عملية واحدة بحاجة إلى مراجعة'],
+    [2, 'عمليتان بحاجة إلى مراجعة'],
+    [3, '3 عمليات بحاجة إلى مراجعة'],
+    [10, '10 عمليات بحاجة إلى مراجعة'],
+    [11, '11 عملية بحاجة إلى مراجعة'],
+    [100, '100 عملية بحاجة إلى مراجعة'],
+  ])('RT-258: %i dead-lettered sale(s) → %s', async (deadLetter, expected) => {
+    render(
+      <SaleSyncStatus
+        bridge={bridgeReturning({
+          pending: 0,
+          heldPreviousPairing: 0,
+          deadLetter,
+          payloadDivergence: 0,
+          lastSuccessAt: null,
+        })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('attention');
+    });
+    expect(screen.getByTestId('sale-sync-status').textContent).toContain(expected);
+  });
+
+  it.each([
+    [1, 'منها واحدة تختلف عن المسجَّل على الخادم'],
+    [2, 'منها اثنتان تختلفان عن المسجَّل على الخادم'],
+    [3, 'منها 3 تختلف عن المسجَّل على الخادم'],
+    [12, 'منها 12 تختلف عن المسجَّل على الخادم'],
+  ])('RT-258: %i payload divergence(s) → %s', async (payloadDivergence, expected) => {
+    render(
+      <SaleSyncStatus
+        bridge={bridgeReturning({
+          pending: 0,
+          heldPreviousPairing: 0,
+          deadLetter: 12,
+          payloadDivergence,
+          lastSuccessAt: null,
+        })}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('attention');
+    });
+    expect(screen.getByTestId('sale-sync-status').textContent).toContain(expected);
   });
 
   it('RT-190: no divergence wording when no dead-letter is a divergence', async () => {

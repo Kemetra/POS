@@ -48,6 +48,29 @@ describe('formatRelativeTime', () => {
     expect(formatRelativeTime('2026-05-14T12:00:00.000Z', NOW)).toBe('منذ 15 يومًا');
   });
 
+  // RT-258 / UX-12: the noun form follows the ICU `ar` plural category
+  // (3-10 few, 11-99 many, 100+ other), not a hand-rolled `n <= 10` rule.
+  it('picks the plural category per count: 3, 10, 11, 100, 101 (RT-258)', () => {
+    const minutesAgo = (m: number): string =>
+      formatRelativeTime(new Date(Date.parse(NOW) - m * 60_000).toISOString(), NOW);
+    const hoursAgo = (h: number): string =>
+      formatRelativeTime(new Date(Date.parse(NOW) - h * 3_600_000).toISOString(), NOW);
+    const daysAgo = (d: number): string =>
+      formatRelativeTime(new Date(Date.parse(NOW) - d * 86_400_000).toISOString(), NOW);
+
+    expect(minutesAgo(3)).toBe('منذ 3 دقائق');
+    expect(minutesAgo(10)).toBe('منذ 10 دقائق');
+    expect(minutesAgo(11)).toBe('منذ 11 دقيقة');
+    expect(hoursAgo(3)).toBe('منذ 3 ساعات');
+    expect(hoursAgo(10)).toBe('منذ 10 ساعات');
+    expect(hoursAgo(11)).toBe('منذ 11 ساعة');
+    expect(daysAgo(3)).toBe('منذ 3 أيام');
+    expect(daysAgo(10)).toBe('منذ 10 أيام');
+    expect(daysAgo(11)).toBe('منذ 11 يومًا');
+    expect(daysAgo(100)).toBe('منذ 100 يومًا');
+    expect(daysAgo(101)).toBe('منذ 101 يومًا');
+  });
+
   it('uses Latin digits only (FR-066), never Arabic-Indic numerals', () => {
     const out = formatRelativeTime('2026-05-29T11:45:00.000Z', NOW);
     expect(/[٠-٩]/.test(out)).toBe(false);
