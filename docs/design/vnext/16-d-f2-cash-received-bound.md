@@ -31,30 +31,33 @@ The shift's expected cash is **not** damaged: it uses net cash, received minus c
 **Rule.** For a `cash` line on `tender:apply`:
 
 ```
-amount_applied_minor ≤ max(maxCashReceivedMinor(currency), envelope_subtotal_minor)
+amount_applied_minor ≤ max(maxCashReceivedMinor(currency), remaining)
 ```
 
 - `maxCashReceivedMinor` is a per-currency operational maximum, as approved.
-- The `envelope_subtotal_minor` term answers the ticket's "large legitimate amounts" question. An exact cash payment of a sale larger than the cap is never refused: no remaining balance can exceed the sale's subtotal. The subtotal is a constant on the attempt row, so the check needs no tender-line read and has no race.
-- For a sale above the cap, any overpay is refused. The cashier enters the exact amount. Net cash in the drawer is the same either way.
+- `remaining` is the attempt's balance still owed **when this line is applied**: the subtotal less the net of the lines already applied. The FSM already computes it inside the apply transaction.
+- The `remaining` term answers the ticket's "large legitimate amounts" question: an exact cash payment of a balance larger than the cap is never refused.
+- It must be `remaining`, not the immutable subtotal (review on #571). Example: a 150,000 EGP sale with 149,999 EGP already on card. With the subtotal, cash of 150,000 would pass and record 149,999 of change. With `remaining` (1 EGP) the limit is the cap, and 150,000 is refused.
+- When the balance is above the cap, any overpay is refused. The cashier enters the exact amount. Net cash in the drawer is the same either way.
+- Below the cap, an overpay up to the cap is still accepted, for example 100,000 received on 1 EGP owed. The cap is a plausibility bound against scanned or typed digits, not a change policy. The change-bound alternative below is the stricter option.
 
 **Value: EGP 100,000.00 (`10_000_000` minor). Owner to confirm.**
 
 | Bound | Reasoning |
 |---|---|
 | Must be **below** what scanner digits produce | Digits read as major units: Egyptian EAN-13 (prefix 622) gives about 6.2×10¹² EGP; UPC-A gives at least about 10⁹ to 10¹¹ EGP; EAN-8 gives at least 10⁷ EGP. UPC-E (8 digits, leading 0) gives at least 10⁵ EGP unless it has three or more leading zeros. A cap of 10⁵ EGP refuses every EAN-13, UPC-A and EAN-8, and nearly every UPC-E. |
-| Must be **above** the largest real cash payment | A pharmacy counter basket is hundreds to a few thousand EGP, and a large chronic or bulk order is tens of thousands. 100,000 EGP leaves headroom. Exact payment of anything larger is still allowed by the `max(…, subtotal)` term. |
+| Must be **above** the largest real cash payment | A pharmacy counter basket is hundreds to a few thousand EGP, and a large chronic or bulk order is tens of thousands. 100,000 EGP leaves headroom. Exact payment of any larger balance is still allowed by the `max(…, remaining)` term. |
 
 No cap catches every possible barcode: a code with many leading zeros reads as a small number. RT-239's UI guard stays the first line of defence. D-F2 is the backstop that stops an absurd amount from being **recorded** whatever path it came from.
 
 **Where the value lives.**
 - A new `src/shared/payments/cash-bound.ts` with `maxCashReceivedMinor(currency)` and the rule above as a pure function, imported by both main and the renderer.
-- An unknown currency returns 0, so every cash amount above the subtotal is refused. This fails closed, like `maxShiftAmountMinor`. The product is EGP-only (`CurrencyCode = 'EGP'`).
+- An unknown currency returns 0, so every cash amount above the remaining balance is refused. This fails closed, like `maxShiftAmountMinor`. The product is EGP-only (`CurrencyCode = 'EGP'`).
 - It is a code constant, not tenant configuration: no configuration contract exists for it, and a per-tenant setting would be a new cross-repo contract.
 
 ### Alternative considered: bound the change, not the amount received
 
-The alternative rule is `amount − remaining ≤ maxChange`. It reads the overpay directly and needs `remaining`, so it must run inside the FSM transaction's cash branch. It is not recommended: it rewrites the approved recommendation and touches the FSM. Listed so the owner can choose it knowingly.
+The alternative rule is `amount − remaining ≤ maxChange`. It bounds the overpay directly and would also refuse the 100,000-on-1-EGP case above. It runs in the same place as the recommendation, the FSM cash branch. It is not recommended because it changes the approved rule from "cash received" to "change". Listed so the owner can choose it knowingly.
 
 ## 3. Placement and refusal contract
 
@@ -67,12 +70,17 @@ The alternative rule is `amount − remaining ≤ maxChange`. It reads the overp
 | `shiftCashup` open, pay-in, pay-out, close (`amountMinor`, `countedCashMinor`) | yes | Out of scope; RT-17 owns these bounds. **Observation for the owner:** RT-17's 15-digit bound has the same F-02 gap for a scanned pay-in or count. Raise it under RT-17 if wanted. |
 | `returns:payout` | no (main pays the server-confirmed total) | Not applicable |
 
-**Placement.** The check goes in `src/main/payments/handlers/tender-apply.ts`, after the attempt row is loaded (it needs `envelope_subtotal_minor`) and **before** the idempotency lookup and the FSM call. It is a boundary refusal, like `invalid_input`:
-- no tender line row, no outbox entry, no FSM transition;
-- the attempt is unchanged;
-- a retry with the same key is refused the same way, because nothing was persisted.
+**Placement.** The check goes in the FSM's cash branch (`tender-line-fsm.ts`), inside the apply transaction where `remaining` is computed, **before** any `lines.insert` or outbox write. It returns `{ kind: 'refused', reason: 'cash_amount_out_of_range' }` without persisting anything:
+- no tender line row, no outbox entry, no `tender.refused` audit (that event is written only for persisted `non_cash_overpayment_refused` rows);
+- the attempt is unchanged.
 
-Edge case: a pre-rollout line above the cap, replayed with its original key, would now be refused instead of replayed. No such production lines are expected; F-02 happened on a dev build.
+Unlike `non_cash_overpayment_refused`, which persists a refused row, this is an input error, so nothing is written.
+
+**Idempotency (review on #571).** The FSM runs **after** the handler's idempotency replay lookup, so the `tender.apply` replay contract (`specs/006-payments-tender/contracts/bridge-api.md`) holds:
+- a line persisted before rollout, replayed with its original key and payload, returns its original outcome;
+- a fresh over-cap request writes nothing, so a retry with its key is evaluated again and refused again.
+
+`tender-apply.ts` passes the FSM refusal through unchanged and logs the line below.
 
 **Refusal shape.**
 - `{ kind: 'refused', reason: 'cash_amount_out_of_range' }`, named after RT-17's `aggregate_out_of_range`.
@@ -94,15 +102,17 @@ Edge case: a pre-rollout line above the cap, replayed with its original key, wou
 
 **Shared (`cash-bound.ts`)**
 - `maxCashReceivedMinor('EGP') === 10_000_000`; an unknown currency gives 0.
-- The rule: `cap` accepted, `cap + 1` refused (subtotal below the cap); `subtotal` accepted and `subtotal + 1` refused (subtotal above the cap); 0 accepted.
+- The rule: `cap` accepted, `cap + 1` refused (remaining below the cap); `remaining` accepted and `remaining + 1` refused (remaining above the cap); 0 accepted.
 
 **Main (`tender-apply`)**
 - An F-02-shaped input is refused as `cash_amount_out_of_range`: the barcode `6221000000011` read as EGP is `622_100_000_001_100` minor; on a 636.00 EGP sale it would show F-02's 6,220,999,999,375.00 of change.
 - After that refusal: no line row, no outbox row, the attempt state is unchanged, and no `tender.refused` audit is written.
 - Boundary at the cap and cap + 1 through the real handler.
-- A sale above the cap paid in exact cash is accepted. One minor unit over is refused.
+- A balance above the cap paid in exact cash is accepted. One minor unit over is refused.
 - Card and voucher behaviour is unchanged (exact-only, `non_cash_overpayment_refused`).
-- A replay with the same idempotency key is refused again, and nothing is persisted.
+- A split sale: 150,000 EGP with 149,999 already on card; cash of 150,000 is refused, cash of 1 is accepted.
+- A refused request retried with the same idempotency key is refused again, and nothing is persisted.
+- A cash line above the cap persisted before rollout (seeded directly), replayed with its original key and payload, returns its original `ok` outcome.
 - The log line carries the attempt id and no amount.
 
 **Renderer**
@@ -117,12 +127,13 @@ Edge case: a pre-rollout line above the cap, replayed with its original key, wou
 
 - No migration, no Backend-Core API change. Sale capture carries no tender.
 - One additive IPC refusal value. Main and the renderer ship in the same app build.
-- **Risk:** a legitimate over-cap overpay on a sale above the cap is refused. Mitigation: the cashier enters the exact amount.
+- **Risk:** a legitimate overpay on a balance above the cap is refused. Mitigation: the cashier enters the exact amount.
+- **Change footprint:** one pre-insert check in the FSM cash branch, with no new state and no new transition.
 
 ## 7. Owner decisions
 
 1. Confirm the value of EGP 100,000.00, or give another.
-2. Confirm the `max(cap, subtotal)` rule, or prefer one of:
+2. Confirm the `max(cap, remaining)` rule, or prefer one of:
    - a strict cap, where a sale above the cap cannot be paid in cash alone;
    - the change-bound alternative (§2).
 3. Word the new catalog row for the refusal (§4).
