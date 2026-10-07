@@ -41,6 +41,8 @@ export interface PaymentState {
    * Checkout remount and `clearAttempt` (a cancel clears the attempt):
    *   - `appliedCardLineIds`: card lines main confirmed applying (kept even when
    *     the follow-up read failed and the projection does not show them);
+   *   - `cardApplyAttempted`: a card apply was sent for this handoff, whatever
+   *     its outcome (a lost response may still mean main committed it);
    *   - `voidRequired`: a cancel reversed one of them locally, so the charge may
    *     still stand on the terminal (M-P13).
    * Renderer memory only: lost on restart, like the Undo token (RT-245).
@@ -52,6 +54,7 @@ export interface PaymentState {
 export interface CardSafety {
   readonly handoffId: string;
   readonly appliedCardLineIds: readonly string[];
+  readonly cardApplyAttempted: boolean;
   readonly voidRequired: boolean;
 }
 
@@ -69,6 +72,8 @@ export interface PaymentStore extends PaymentState {
   clearAttempt(): void;
   /** Clear both slices (e.g. on void or new cart). */
   reset(): void;
+  /** RT-256 — a card apply was sent for the mounted handoff (outcome unknown yet). */
+  recordCardApplyAttempted(): void;
   /** RT-256 — main confirmed a card line for the mounted handoff. */
   recordCardApplied(tenderLineId: string): void;
   /** RT-256 — a cancel reversed a card line of the mounted handoff (M-P13). */
@@ -79,7 +84,7 @@ export interface PaymentStore extends PaymentState {
 function cardSafetyFor(current: CardSafety | null, handoffId: string): CardSafety {
   return current?.handoffId === handoffId
     ? current
-    : { handoffId, appliedCardLineIds: [], voidRequired: false };
+    : { handoffId, appliedCardLineIds: [], cardApplyAttempted: false, voidRequired: false };
 }
 
 const INITIAL: PaymentState = {
@@ -114,6 +119,15 @@ export const usePaymentStore = create<PaymentStore>((set) => ({
   },
   reset: () => {
     set({ ...INITIAL });
+  },
+  recordCardApplyAttempted: () => {
+    set((s) => {
+      const handoffId = s.envelope?.handoff_action_id;
+      if (handoffId === undefined) return {};
+      return {
+        cardSafety: { ...cardSafetyFor(s.cardSafety, handoffId), cardApplyAttempted: true },
+      };
+    });
   },
   recordCardApplied: (tenderLineId) => {
     set((s) => {

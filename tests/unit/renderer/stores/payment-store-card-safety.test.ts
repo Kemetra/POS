@@ -35,6 +35,7 @@ describe('payment store — RT-256 card safety', () => {
     const store = usePaymentStore.getState();
     expect(store.cardSafety).toBeNull();
     store.recordCardApplied('tl-1');
+    store.recordCardApplyAttempted();
     store.markCardVoidRequired();
     expect(usePaymentStore.getState().cardSafety).toBeNull();
   });
@@ -49,7 +50,20 @@ describe('payment store — RT-256 card safety', () => {
     expect(usePaymentStore.getState().cardSafety).toEqual({
       handoffId: 'h-1',
       appliedCardLineIds: ['tl-1', 'tl-2'],
+      cardApplyAttempted: false,
       voidRequired: true,
+    });
+  });
+
+  it('records that a card apply was attempted, whatever its outcome', () => {
+    const store = usePaymentStore.getState();
+    store.mount(envelope('h-1'));
+    store.recordCardApplyAttempted();
+    expect(usePaymentStore.getState().cardSafety).toEqual({
+      handoffId: 'h-1',
+      appliedCardLineIds: [],
+      cardApplyAttempted: true,
+      voidRequired: false,
     });
   });
 
@@ -78,12 +92,18 @@ describe('payment store — RT-256 card safety', () => {
   it('a stale record from another handoff is replaced, not extended', () => {
     usePaymentStore.setState({
       envelope: envelope('h-2'),
-      cardSafety: { handoffId: 'h-1', appliedCardLineIds: ['tl-old'], voidRequired: true },
+      cardSafety: {
+        handoffId: 'h-1',
+        appliedCardLineIds: ['tl-old'],
+        cardApplyAttempted: true,
+        voidRequired: true,
+      },
     });
     usePaymentStore.getState().recordCardApplied('tl-new');
     expect(usePaymentStore.getState().cardSafety).toEqual({
       handoffId: 'h-2',
       appliedCardLineIds: ['tl-new'],
+      cardApplyAttempted: false,
       voidRequired: false,
     });
   });

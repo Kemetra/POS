@@ -200,6 +200,11 @@ function cancelProvesReversal(
  * the terminal. Card lines come from the projection AND from the card applies
  * seen in this Checkout: after a failed post-apply read the projection has no
  * card line yet, but the apply did happen in main (Codex P1 on #572).
+ *
+ * Conservative when a card apply was ATTEMPTED but its outcome never reached
+ * the renderer (the response was lost after main committed): any touched line
+ * whose type the renderer cannot prove is not a card counts as a card, so the
+ * terminal-void warning errs on the side of a possible charge (Codex P1).
  */
 function cancelTouchedCard(
   response: {
@@ -207,17 +212,19 @@ function cancelTouchedCard(
     readonly reversal_pending_tender_line_ids: readonly string[];
   },
   lines: PaymentAttemptRendererView['tender_lines'],
-  appliedCardLineIds: ReadonlySet<string>,
+  card: { readonly appliedLineIds: ReadonlySet<string>; readonly attempted: boolean },
 ): boolean {
-  const cardIds = new Set(appliedCardLineIds);
+  const cardIds = new Set(card.appliedLineIds);
+  const knownNonCard = new Set<string>();
   for (const l of lines) {
     if (l.tender_type === 'external_card_terminal') cardIds.add(l.tender_line_id);
+    else knownNonCard.add(l.tender_line_id);
   }
   const touched = [
     ...response.reversed_tender_line_ids,
     ...response.reversal_pending_tender_line_ids,
   ];
-  return touched.some((id) => cardIds.has(id));
+  return touched.some((id) => cardIds.has(id) || (card.attempted && !knownNonCard.has(id)));
 }
 
 function backReason(input: BackControlInput, tenderBlocked: boolean): BackReason | null {
@@ -753,8 +760,11 @@ export function PaymentSurface({
         setTenderReversed(cancelProvesReversal(response, linesAtCancel));
         // Sticky for this handoff: a later cash-only cancel does not void the card.
         const store = usePaymentStore.getState();
-        const knownCardLines = new Set(store.cardSafety?.appliedCardLineIds ?? []);
-        if (cancelTouchedCard(response, linesAtCancel, knownCardLines)) {
+        const card = {
+          appliedLineIds: new Set(store.cardSafety?.appliedCardLineIds ?? []),
+          attempted: store.cardSafety?.cardApplyAttempted ?? false,
+        };
+        if (cancelTouchedCard(response, linesAtCancel, card)) {
           store.markCardVoidRequired();
         }
         setSelectedTender(null);
@@ -1106,7 +1116,12 @@ export function PaymentSurface({
                     <ExternalCardTerminalEntry
                       remainingBalanceMinor={remainingBalanceMinor}
                       paymentAttemptId={paymentAttemptId}
-                      tenderApply={(req) => bridge.tender.apply(req)}
+                      tenderApply={(req) => {
+                        // Recorded before the call: if main commits but the
+                        // response is lost, a later cancel still warns (RT-256).
+                        usePaymentStore.getState().recordCardApplyAttempted();
+                        return bridge.tender.apply(req);
+                      }}
                       onApplied={(response) => {
                         usePaymentStore.getState().recordCardApplied(response.tender_line_id);
                         void handleLineApplied();
