@@ -34,6 +34,13 @@ function useSignOutFlow(): SignOutFlow {
   const openerRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
+  // RT-298 — a payment that opens (or a live-tender hold) while the
+  // confirmation is up closes it: sign-out would reset the payment store.
+  const blocked = usePaymentStore((s) => signOutBlock(s) !== null);
+
+  useEffect(() => {
+    if (blocked && !busy) setConfirming(false);
+  }, [blocked, busy]);
 
   useEffect(() => {
     if (confirming) {
@@ -54,7 +61,7 @@ function useSignOutFlow(): SignOutFlow {
   };
 
   const confirm = async (): Promise<void> => {
-    if (busy) return;
+    if (busy || signOutBlock(usePaymentStore.getState()) !== null) return;
     setBusy(true);
     setError(null);
     try {

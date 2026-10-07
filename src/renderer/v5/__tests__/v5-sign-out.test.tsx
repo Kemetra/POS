@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom/vitest';
@@ -185,6 +185,29 @@ describe('V5 sign-out', () => {
     const button = screen.getByRole('button', { name: SIGN_OUT });
     expect(button).toBeDisabled();
     expect(button).toHaveAccessibleDescription('اطلب من المدير مراجعة الدفع أولاً');
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('an open confirmation closes once a payment blocks sign-out, and cannot sign out (RT-298)', async () => {
+    signIn();
+    const signOut = stubBridge(() => Promise.resolve({ kind: 'signed_out' }));
+    renderFrame();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: SIGN_OUT }));
+    expect(screen.getByRole('button', { name: CONFIRM })).toBeInTheDocument();
+
+    act(() => {
+      usePaymentStore.getState().applyAttemptSnapshot({
+        payment_attempt_id: 'a1',
+        state: 'started',
+        envelope_subtotal_minor: 1500,
+        started_at: '2026-09-26T09:05:00Z',
+        tender_lines: [],
+      });
+    });
+
+    expect(screen.queryByRole('button', { name: CONFIRM })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: SIGN_OUT })).toBeDisabled();
     expect(signOut).not.toHaveBeenCalled();
   });
 
