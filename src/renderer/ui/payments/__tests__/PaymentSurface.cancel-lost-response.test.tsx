@@ -270,6 +270,29 @@ describe('RT-298 — cancel retry replays the same idempotency key', () => {
     expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
   });
 
+  it('the post-apply read retry is closed while the cancel outcome is unknown (Codex P2)', async () => {
+    const { bridge, script } = makeBridge();
+    await openWith(bridge, []);
+    // A cash apply lands in main, but every read after it fails (RT-238 M-P15).
+    (bridge.tender as unknown as { apply: unknown }).apply = vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok' as const,
+        tender_line_id: 'tl-cash',
+        applied_at: '2026-10-07T09:59:30.000Z',
+      }),
+    );
+    script({ cancel: [LOST], read: undefined });
+    fireEvent.change(screen.getByTestId('cash-entry-amount-input'), { target: { value: '20.00' } });
+    fireEvent.click(screen.getByTestId('cash-entry-confirm'));
+    await settle();
+    expect(screen.getByTestId('payment-surface-reread')).toBeInTheDocument();
+
+    await clickCancel();
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(CANCEL_UNKNOWN);
+    expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface-cancel')).toBeInTheDocument();
+  });
+
   it('a refused cancel on a still-open attempt names the retry, and the retry reuses the key', async () => {
     const { bridge, cancel, script } = makeBridge();
     await openWith(bridge, CASH_APPLIED);

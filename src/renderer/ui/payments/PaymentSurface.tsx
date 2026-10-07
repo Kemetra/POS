@@ -1422,8 +1422,10 @@ export function PaymentSurface({
                 </button>
               ) : null
             }
+            // RT-298: while a cancel is open nothing here may move the attempt
+            // on, the post-apply read retry included (Codex P2, #576).
             commit={
-              afterApply === 'failed' ? (
+              cancelOpen ? null : afterApply === 'failed' ? (
                 <button
                   type="button"
                   className="checkout-commit"
@@ -1452,7 +1454,7 @@ export function PaymentSurface({
               ) : null
             }
             reason={
-              afterApply === 'failed' ? (
+              cancelOpen ? null : afterApply === 'failed' ? (
                 <p
                   className="checkout-actions__reason"
                   data-testid="payment-surface-reread-notice"
