@@ -162,6 +162,19 @@ async function openWith(
   });
 }
 
+/** Leaves Checkout and comes back to the same sale (the store keeps its state). */
+async function remount(bridge: ReturnType<typeof makeBridge>['bridge']): Promise<void> {
+  cleanup();
+  render(
+    <PaymentSurface
+      _testBridge={bridge}
+      onBackToSale={() => Promise.resolve(true)}
+      onNewSale={vi.fn()}
+    />,
+  );
+  await settle();
+}
+
 async function clickCancel(): Promise<void> {
   fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
   await settle();
@@ -507,5 +520,73 @@ describe('RT-298 — an ambiguous cancel is reconciled from payments.read', () =
     });
     await settle();
     expect(usePaymentStore.getState().cardSafety?.voidRequired ?? false).toBe(false);
+  });
+});
+
+describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)', () => {
+  it('an unconfirmed cancel comes back held, and the retry still replays the original key', async () => {
+    const { bridge, cancel, script } = makeBridge();
+    await openWith(bridge, CARD_APPLIED);
+    script({ cancel: [LOST, () => Promise.resolve(CANCEL_OK)], read: undefined });
+    await clickCancel();
+
+    await remount(bridge);
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(CANCEL_UNKNOWN);
+    expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+
+    await clickCancel();
+    const [first, second] = keys(cancel);
+    expect(second).toBe(first);
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+    expect(usePaymentStore.getState().cancelRecovery).toBeNull();
+  });
+
+  it('a force-failed attempt with live tender stays held after a remount', async () => {
+    const { bridge, script } = makeBridge();
+    const live = [line('tl-cash', 'cash', 'applied', 1)];
+    await openWith(bridge, live);
+    script({
+      cancel: [() => Promise.resolve({ kind: 'refused', reason: 'attempt_terminal' })],
+      read: () =>
+        Promise.resolve({
+          kind: 'ok',
+          payment_attempt: {
+            ...attempt('force_failed', live),
+            force_failed_at: '2026-10-07T10:00:00.000Z',
+          },
+        }),
+    });
+    await clickCancel();
+
+    await remount(bridge);
+    expect(usePaymentStore.getState().paymentSlice?.state).toBe('force_failed');
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(
+      CANCEL_LIVE_TENDER,
+    );
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    await settle();
+    const start = (bridge.payments as unknown as { start: { mock: { calls: unknown[] } } }).start;
+    expect(start.mock.calls).toHaveLength(1);
+    expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+  });
+
+  it('a recovery recorded for another attempt does not hold this one', async () => {
+    const { bridge, script } = makeBridge();
+    await openWith(bridge, CASH_APPLIED);
+    script({ cancel: [LOST], read: undefined });
+    await clickCancel();
+    act(() => {
+      usePaymentStore.getState().applyAttemptSnapshot({
+        ...attempt('started', CASH_APPLIED),
+        payment_attempt_id: 'pa-002',
+      });
+    });
+
+    await remount(bridge);
+    expect(screen.queryByTestId('payment-surface-bridge-refusal')).not.toBeInTheDocument();
   });
 });

@@ -49,6 +49,26 @@ export interface PaymentState {
    * Cleared when a different handoff is mounted, or on reset.
    */
   cardSafety: CardSafety | null;
+  /**
+   * RT-298 — cancel recovery for the mounted handoff's attempt, kept across a
+   * Checkout remount so a retry still replays the same idempotency key and a
+   * hold still closes payment actions:
+   *   - `key`: the cancel key, minted once per attempt;
+   *   - `hold`: `unconfirmed` (a cancel whose outcome main could not confirm) or
+   *     `live_tender` (force-failed with live tender: main refuses any payment).
+   * Renderer memory only. Cleared when a different handoff is mounted, on
+   * reset, or once a cancel outcome is applied.
+   */
+  cancelRecovery: CancelRecovery | null;
+}
+
+export type CancelHold = 'none' | 'unconfirmed' | 'live_tender';
+
+export interface CancelRecovery {
+  readonly handoffId: string;
+  readonly attemptId: string;
+  readonly key: string;
+  readonly hold: CancelHold;
 }
 
 export interface CardSafety {
@@ -78,6 +98,12 @@ export interface PaymentStore extends PaymentState {
   recordCardApplied(tenderLineId: string): void;
   /** RT-256 — a cancel reversed a card line of the mounted handoff (M-P13). */
   markCardVoidRequired(): void;
+  /** RT-298 — the cancel key for `attemptId`: minted once, then reused by every retry. */
+  cancelKeyFor(attemptId: string): string;
+  /** RT-298 — set the hold on the recorded cancel (no-op when none is recorded). */
+  setCancelHold(hold: CancelHold): void;
+  /** RT-298 — a cancel outcome was applied: forget the key and any hold. */
+  clearCancelRecovery(): void;
 }
 
 /** The card-safety record for `handoffId`, starting fresh for a different handoff. */
@@ -92,23 +118,27 @@ const INITIAL: PaymentState = {
   paymentSlice: null,
   attemptHandoffId: null,
   cardSafety: null,
+  cancelRecovery: null,
 };
 
-export const usePaymentStore = create<PaymentStore>((set) => ({
+export const usePaymentStore = create<PaymentStore>((set, get) => ({
   ...INITIAL,
   mount: (envelope) => {
     // A different sale's envelope never inherits the previous attempt.
     set((s) => {
-      const cardSafety =
-        s.cardSafety?.handoffId === envelope.handoff_action_id ? s.cardSafety : null;
+      const same = (handoffId: string | undefined): boolean =>
+        handoffId === envelope.handoff_action_id;
+      const cardSafety = same(s.cardSafety?.handoffId) ? s.cardSafety : null;
+      const cancelRecovery = same(s.cancelRecovery?.handoffId) ? s.cancelRecovery : null;
       return s.attemptHandoffId !== null && s.attemptHandoffId !== envelope.handoff_action_id
         ? {
             envelope: freezeEnvelope(envelope),
             paymentSlice: null,
             attemptHandoffId: null,
             cardSafety,
+            cancelRecovery,
           }
-        : { envelope: freezeEnvelope(envelope), cardSafety };
+        : { envelope: freezeEnvelope(envelope), cardSafety, cancelRecovery };
     });
   },
   applyAttemptSnapshot: (view) => {
@@ -146,5 +176,24 @@ export const usePaymentStore = create<PaymentStore>((set) => ({
       if (handoffId === undefined) return {};
       return { cardSafety: { ...cardSafetyFor(s.cardSafety, handoffId), voidRequired: true } };
     });
+  },
+  cancelKeyFor: (attemptId) => {
+    const s = get();
+    const handoffId = s.envelope?.handoff_action_id;
+    const held = s.cancelRecovery;
+    if (held?.handoffId === handoffId && held?.attemptId === attemptId) return held.key;
+    const key = crypto.randomUUID();
+    if (handoffId !== undefined) {
+      set({ cancelRecovery: { handoffId, attemptId, key, hold: 'none' } });
+    }
+    return key;
+  },
+  setCancelHold: (hold) => {
+    set((s) =>
+      s.cancelRecovery === null ? {} : { cancelRecovery: { ...s.cancelRecovery, hold } },
+    );
+  },
+  clearCancelRecovery: () => {
+    set({ cancelRecovery: null });
   },
 }));

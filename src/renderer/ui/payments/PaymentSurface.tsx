@@ -7,7 +7,11 @@ import {
 } from 'react';
 
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
-import { usePaymentStore } from '../../stores/payment-store.js';
+import {
+  usePaymentStore,
+  type CancelHold,
+  type CancelRecovery,
+} from '../../stores/payment-store.js';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store.js';
 import { OperatorBadge } from '../operator/OperatorBadge.js';
 import { useScanOwner } from '../../scan/ScanGuardHost.js';
@@ -276,8 +280,35 @@ const CANCEL_NOT_OPEN_COPY = 'لم تعد عملية الدفع هذه مفتو�
 const CANCEL_LIVE_TENDER_COPY =
   'أوقف المدير عملية الدفع هذه وفيها مبالغ مسجّلة، فلا يمكن الدفع لهذا البيع الآن. اطلب من المدير مراجعتها.';
 
-/** RT-298 — why payment actions are held closed after a cancel (see `cancelHold`). */
-type CancelHold = 'none' | 'unconfirmed' | 'live_tender';
+/** RT-298 — the line a cancel hold shows; it comes back with the hold on a remount. */
+const CANCEL_HOLD_COPY: Readonly<Record<CancelHold, string | null>> = {
+  none: null,
+  unconfirmed: CANCEL_UNKNOWN_COPY,
+  live_tender: CANCEL_LIVE_TENDER_COPY,
+};
+
+/** A kept attempt a remounted Checkout resumes instead of clearing. */
+function isResumable(kept: string | undefined, hold: CancelHold): boolean {
+  if (kept === 'started' || kept === 'settled') return true;
+  return kept === 'force_failed' && hold === 'live_tender';
+}
+
+/** The phase a resumed attempt comes back in: an unconfirmed cancel reopens on its Cancel. */
+function resumePhase(kept: string | undefined, hold: CancelHold): Phase {
+  if (kept === 'settled') return 'settled';
+  return hold === 'unconfirmed' ? 'entry' : 'tender_selection';
+}
+
+/** RT-298 — the hold recorded for this handoff's current attempt, if any. */
+function holdFor(
+  recovery: CancelRecovery | null,
+  handoffId: string | null,
+  attemptId: string | null,
+): CancelHold {
+  if (recovery === null) return 'none';
+  const current = recovery.handoffId === handoffId && recovery.attemptId === attemptId;
+  return current ? recovery.hold : 'none';
+}
 
 /** Tender main still counts as live on a force-failed attempt (cart-payment-eligibility). */
 const LIVE_TENDER_STATES: ReadonlySet<string> = new Set([
@@ -476,15 +507,9 @@ export function PaymentSurface({
   const [bridgeRefusalCopy, setBridgeRefusalCopy] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
-  // RT-298 — payment actions held closed after a cancel:
-  //   unconfirmed  — main could not confirm the outcome (response and read both
-  //                  lost); Cancel again resolves it.
-  //   live_tender  — the attempt was force-failed with live tender; main refuses
-  //                  any new payment for this cart, so only a manager can move on.
-  const [cancelHold, setCancelHold] = useState<CancelHold>('none');
-  // RT-298 — one cancel key per attempt, reused by every retry, so a retry after
-  // a lost response replays main's original result instead of being refused.
-  const cancelKeyRef = useRef<{ attemptId: string; key: string } | null>(null);
+  // RT-298 — the cancel key and any hold live in the payment store, so a
+  // Checkout remount keeps both (Codex P2, #576). See `cancelHold` below.
+  const cancelRecovery = usePaymentStore((s) => s.cancelRecovery);
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [reversalPending, setReversalPending] = useState<boolean>(false);
   // RT-26 — a Back is in flight, and whether this handoff ever had tender
@@ -528,12 +553,17 @@ export function PaymentSurface({
   // stale "tender selected" status banner could carry across a new payment
   // attempt.
   const envelopeHandoffId = envelope?.handoff_action_id ?? null;
+  // RT-298 — payment actions held closed after a cancel:
+  //   unconfirmed  — main could not confirm the outcome (response and read both
+  //                  lost); Cancel again resolves it, replaying the same key.
+  //   live_tender  — the attempt was force-failed with live tender; main refuses
+  //                  any new payment for this cart, so only a manager can move on.
+  const cancelHold = holdFor(cancelRecovery, envelopeHandoffId, paymentAttemptId);
   useEffect(() => {
     setSelectedTender(null);
     setBridgeRefusalCopy(null);
     setIsConfirming(false);
     setIsCancelling(false);
-    setCancelHold('none');
     setIsStarting(false);
     setReversalPending(false);
     setIsReturning(false);
@@ -544,16 +574,25 @@ export function PaymentSurface({
     // coming back): a `started` one is still held by main, so forgetting it
     // would re-enable sign-out and make the next tender re-run payments.start,
     // which main refuses; a `settled` one must come back as the settled
-    // screen, never as tender selection. Anything else (another handoff, no
-    // session, or a terminal attempt with nothing to resume) is cleared.
+    // screen, never as tender selection. A cancel hold comes back too (RT-298):
+    // an unconfirmed cancel reopens on its Cancel with its line, and a
+    // force-failed attempt with live tender stays held. Anything else (another
+    // handoff, no session, or a terminal attempt with nothing to resume) is
+    // cleared.
     const store = usePaymentStore.getState();
     const kept = store.paymentSlice?.state;
+    const hold = holdFor(
+      store.cancelRecovery,
+      envelopeHandoffId,
+      store.paymentSlice?.payment_attempt_id ?? null,
+    );
     const resumable =
       sessionState.kind === 'signedIn' &&
       store.attemptHandoffId === envelopeHandoffId &&
-      (kept === 'started' || kept === 'settled');
+      isResumable(kept, hold);
     if (!resumable) store.clearAttempt();
-    setPhase(resumable && kept === 'settled' ? 'settled' : 'tender_selection');
+    setPhase(resumable ? resumePhase(kept, hold) : 'tender_selection');
+    setBridgeRefusalCopy(resumable ? CANCEL_HOLD_COPY[hold] : null);
   }, [sessionState.kind, envelopeHandoffId]);
 
   // EXTERNAL REVIEW P1 (round 3) — "Stop polling until finalized sales can be
@@ -819,15 +858,6 @@ export function PaymentSurface({
     else void rereadAttempt();
   }
 
-  /** RT-298 — the attempt's cancel key: minted once, reused by every retry. */
-  function cancelKeyFor(attemptId: string): string {
-    const held = cancelKeyRef.current;
-    if (held?.attemptId === attemptId) return held.key;
-    const key = crypto.randomUUID();
-    cancelKeyRef.current = { attemptId, key };
-    return key;
-  }
-
   /** M-P13 when a card line was touched or a card apply was attempted. Sticky for this handoff. */
   function flagTerminalVoid(
     outcome: CancelOutcome,
@@ -858,8 +888,7 @@ export function PaymentSurface({
     }
     setTenderReversed(cancelProvesReversal(outcome, lines));
     flagTerminalVoid(outcome, lines);
-    setCancelHold('none');
-    cancelKeyRef.current = null;
+    usePaymentStore.getState().clearCancelRecovery();
     setSelectedTender(null);
     setPhase('tender_selection');
     // The attempt is gone, and with it any pending or failed post-apply read.
@@ -877,7 +906,7 @@ export function PaymentSurface({
     const attempt = await readAttemptWithRetry(attemptId);
     if (!isStillCurrent(attemptId, envelopeAtStart)) return;
     if (attempt === null) {
-      setCancelHold('unconfirmed');
+      usePaymentStore.getState().setCancelHold('unconfirmed');
       setBridgeRefusalCopy(CANCEL_UNKNOWN_COPY);
       return;
     }
@@ -885,7 +914,7 @@ export function PaymentSurface({
       applyCancelOutcome(cancelOutcomeFromRead(attempt), attempt.tender_lines);
       return;
     }
-    setCancelHold('none');
+    usePaymentStore.getState().setCancelHold('none');
     if (attempt.state === 'started') {
       usePaymentStore.getState().applyAttemptSnapshot(attempt);
       setBridgeRefusalCopy(CANCEL_FAILED_COPY);
@@ -926,7 +955,7 @@ export function PaymentSurface({
       attempt.tender_lines,
     );
     usePaymentStore.getState().applyAttemptSnapshot(attempt);
-    setCancelHold('live_tender');
+    usePaymentStore.getState().setCancelHold('live_tender');
     setBridgeRefusalCopy(CANCEL_LIVE_TENDER_COPY);
     setSelectedTender(null);
     setPhase('tender_selection');
@@ -943,7 +972,7 @@ export function PaymentSurface({
       { reversed_tender_line_ids: lineIds, reversal_pending_tender_line_ids: [] },
       attempt.tender_lines,
     );
-    cancelKeyRef.current = null;
+    usePaymentStore.getState().clearCancelRecovery();
     setSelectedTender(null);
     setPhase('tender_selection');
     setAfterApply('idle');
@@ -960,7 +989,10 @@ export function PaymentSurface({
     setIsCancelling(true);
     try {
       const response = await bridge.payments
-        .cancel({ payment_attempt_id: attemptId, idempotency_key: cancelKeyFor(attemptId) })
+        .cancel({
+          payment_attempt_id: attemptId,
+          idempotency_key: usePaymentStore.getState().cancelKeyFor(attemptId),
+        })
         .catch(() => null);
       if (response?.kind === 'ok') {
         const linesAtCancel = usePaymentStore.getState().paymentSlice?.tender_lines ?? [];
