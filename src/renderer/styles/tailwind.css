@@ -2295,6 +2295,9 @@ body {
     .payment-surface__body {
       display: flex;
       flex-direction: column;
+      /* The base grid rule's align-items: start would shrink the band and the
+         panes to their content width; they must span the row. */
+      align-items: stretch;
       overflow: hidden;
     }
     /* `>` raises specificity: the base rules for these two come later in the file. */
@@ -2746,7 +2749,7 @@ body {
   }
 
   .checkout-commit:focus-visible {
-    outline: 3px solid var(--color-focus-ring);
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
   }
 

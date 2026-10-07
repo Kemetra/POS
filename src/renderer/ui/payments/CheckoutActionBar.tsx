@@ -16,18 +16,32 @@ import { createPortal } from 'react-dom';
  * React events and state stay with the entry, only the DOM node lives here.
  */
 
-/** The DOM node of the end (primary) slot, once mounted. */
-export const PrimarySlotContext = createContext<HTMLElement | null>(null);
+/**
+ * The end (primary) slot and who owns it. `PaymentSurface` is the single place
+ * that decides ownership: an open entry owns the slot while money is still owed;
+ * otherwise the settle commit does.
+ */
+export interface PrimarySlot {
+  /** The end-slot DOM node, once mounted. Null outside a Checkout action bar. */
+  readonly node: HTMLElement | null;
+  readonly entryOwnsPrimary: boolean;
+}
+
+export const PrimarySlotContext = createContext<PrimarySlot>({
+  node: null,
+  entryOwnsPrimary: false,
+});
 
 /**
- * Render `children` in the pinned primary slot when `pinned` and a slot exists;
- * otherwise render them in place. Entries rendered on their own (unit tests, no
- * bar) therefore keep working unchanged.
+ * An entry's apply-commit. Inside the Checkout bar it is portaled into the end
+ * slot while the entry owns it, and NOT rendered once nothing is owed (it could
+ * only be a dead, disabled second commit beside «تأكيد الدفع»). Rendered on its
+ * own (no bar: unit tests, Slice-2 mode) it stays in place, unchanged.
  */
-export function PinnedPrimary(props: { pinned: boolean; children: ReactNode }): JSX.Element {
-  const slot = useContext(PrimarySlotContext);
-  if (props.pinned && slot !== null) return createPortal(props.children, slot);
-  return <>{props.children}</>;
+export function PinnedPrimary(props: { children: ReactNode }): JSX.Element | null {
+  const { node, entryOwnsPrimary } = useContext(PrimarySlotContext);
+  if (node === null) return <>{props.children}</>;
+  return entryOwnsPrimary ? createPortal(props.children, node) : null;
 }
 
 interface CheckoutActionBarProps {
@@ -70,12 +84,23 @@ export function CheckoutActionBar(props: CheckoutActionBarProps): JSX.Element {
  * the control that held focus is gone; without this focus would fall to <body>
  * and a keyboard-only cashier would lose their place.
  */
-export function FocusWhen(props: { active: boolean; find: () => HTMLElement | null }): null {
+export function FocusWhen(props: {
+  active: boolean;
+  find: () => HTMLElement | null;
+  /** Called after focus was moved, e.g. to arm a guard against a held key. */
+  onFocused?: () => void;
+}): null {
   const findRef = useRef(props.find);
   findRef.current = props.find;
+  const onFocusedRef = useRef(props.onFocused);
+  onFocusedRef.current = props.onFocused;
   const { active } = props;
   useEffect(() => {
-    if (active) findRef.current()?.focus();
+    if (!active) return;
+    const target = findRef.current();
+    if (target === null) return;
+    target.focus();
+    onFocusedRef.current?.();
   }, [active]);
   return null;
 }

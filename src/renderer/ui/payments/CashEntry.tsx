@@ -304,9 +304,9 @@ export function CashEntry({
       )}
 
       <div className="cash-entry__actions">
-        {/* RT-238: while money is still owed this is the primary action, and it
-            lives in the pinned slot so it never scrolls out of view. */}
-        <PinnedPrimary pinned={isBridged && isRemainingValid && remainingBalanceMinor > 0}>
+        {/* RT-238: while money is still owed this is the primary action and it
+            lives in the pinned slot; PaymentSurface decides who owns the slot. */}
+        <PinnedPrimary>
           <button
             type="button"
             className="cash-entry__confirm checkout-commit"

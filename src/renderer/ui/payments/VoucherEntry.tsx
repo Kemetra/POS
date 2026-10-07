@@ -246,7 +246,7 @@ export function VoucherEntry({
       {/* Voucher hint: generic input guidance, no demo codes (SECURITY). */}
       <p className="voucher-hint">أدخل رمز القسيمة والمبلغ المطلوب تطبيقه، ثم اضغط «تطبيق».</p>
 
-      <PinnedPrimary pinned={remainingBalanceMinor > 0}>
+      <PinnedPrimary>
         <button
           type="button"
           className="voucher-entry__confirm checkout-commit"

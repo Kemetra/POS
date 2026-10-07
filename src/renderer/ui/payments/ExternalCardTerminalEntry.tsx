@@ -248,8 +248,8 @@ export function ExternalCardTerminalEntry({
       )}
 
       <div className="external-card-terminal-entry__actions">
-        {/* RT-238: the primary action lives in the pinned slot while money is owed. */}
-        <PinnedPrimary pinned={remainingBalanceMinor > 0}>
+        {/* RT-238: the primary action lives in the pinned slot; PaymentSurface decides who owns it. */}
+        <PinnedPrimary>
           <button
             type="button"
             className="external-card-terminal-entry__confirm checkout-commit"

@@ -1,4 +1,10 @@
-import { useEffect, useState, type JSX } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../stores/payment-store.js';
@@ -278,6 +284,9 @@ export function PaymentSurface({
   const [phase, setPhase] = useState<Phase>('tender_selection');
   // RT-238: the pinned primary slot the entry components render their apply-commit into.
   const [primarySlot, setPrimarySlot] = useState<HTMLElement | null>(null);
+  // RT-238 / I-9: when focus is moved onto the settle commit, a held or doubled
+  // Enter from the apply that preceded it must not settle on its own.
+  const commitFocusedAtRef = useRef(0);
 
   // RT-238: the entry opens below the method tiles, inside the scrolling panes;
   // bring it into view so the cashier never has to hunt for the amount field.
@@ -527,6 +536,44 @@ export function PaymentSurface({
     }
   }
 
+  /**
+   * RT-238: the settle commit is blocked while the projection says money is
+   * owed. If that projection is stale (a failed read after a successful apply),
+   * the cashier must not be stuck: a click on the blocked commit re-reads the
+   * attempt from main, and an up-to-date projection unblocks it.
+   */
+  async function rereadAttempt(): Promise<void> {
+    if (bridge === null || paymentAttemptId === null) return;
+    try {
+      const readResponse = await bridge.payments.read({ payment_attempt_id: paymentAttemptId });
+      if (readResponse.kind === 'ok') {
+        usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
+      }
+    } catch {
+      // Keep the current projection; the next click retries.
+    }
+  }
+
+  /** A held or doubled Enter right after focus moved here is not a decision to settle. */
+  const COMMIT_ARM_MS = 400;
+
+  /**
+   * I-9 duplicate-submit: the Enter that applied the cash can repeat (key held)
+   * or be tapped twice, and focus has just moved onto the settle commit. Swallow
+   * an Enter that is a key repeat or arrives inside the arm window. Pointer and
+   * programmatic clicks are not affected.
+   */
+  function guardCommitKey(event: ReactKeyboardEvent<HTMLButtonElement>): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const tooSoon = Date.now() - commitFocusedAtRef.current < COMMIT_ARM_MS;
+    if (event.repeat || tooSoon) event.preventDefault();
+  }
+
+  function handleCommitClick(payable: boolean): void {
+    if (payable) void handleConfirm();
+    else void rereadAttempt();
+  }
+
   async function handleCancel(): Promise<void> {
     if (bridge === null || paymentAttemptId === null) {
       return;
@@ -655,6 +702,36 @@ export function PaymentSurface({
   const fullyTendered = hasAppliedLine && remainingBalanceMinor === 0;
   const entryOwnsPrimary = phase === 'entry' && remainingBalanceMinor > 0;
 
+  // Refusals and hints stay next to the commit, in the pinned bar. With no bridge
+  // (Slice-1 mode) there is no bar, so they render in the surface as before.
+  const notices = (
+    <>
+      {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids
+                  was non-empty in the most recent cancel response. Copy is fixed (no
+                  id interpolation) per FR-017 / token minimisation. */}
+      {reversalPending && (
+        <div
+          className="payment-surface__reversal-pending-hint"
+          data-testid="payment-surface-reversal-pending-hint"
+          role="status"
+          aria-live="polite"
+        >
+          هناك عمليات عكس قيد المعالجة وستتم قريباً.
+        </div>
+      )}
+      {bridgeRefusalCopy !== null && (
+        <div
+          className="payment-surface__bridge-refusal"
+          data-testid="payment-surface-bridge-refusal"
+          role="status"
+          aria-live="polite"
+        >
+          {bridgeRefusalCopy}
+        </div>
+      )}
+    </>
+  );
+
   if (phase === 'settled') {
     // 022 US4a — NFR-6 / P2, as REVISED by external review round 2.
     //
@@ -777,7 +854,7 @@ export function PaymentSurface({
   }
 
   return (
-    <PrimarySlotContext.Provider value={primarySlot}>
+    <PrimarySlotContext.Provider value={{ node: primarySlot, entryOwnsPrimary }}>
       <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
         <header className="payment-surface__header">
           <h1 className="payment-surface__title">الدفع</h1>
@@ -936,8 +1013,9 @@ export function PaymentSurface({
                   disabled={isConfirming}
                   aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
                   aria-describedby={fullyTendered ? undefined : 'payment-commit-reason'}
+                  onKeyDown={guardCommitKey}
                   onClick={() => {
-                    if (fullyTendered) void handleConfirm();
+                    handleCommitClick(fullyTendered);
                   }}
                 >
                   تأكيد الدفع
@@ -955,44 +1033,22 @@ export function PaymentSurface({
                 </p>
               ) : null
             }
-            notices={
-              <>
-                {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids
-                  was non-empty in the most recent cancel response. Copy is fixed (no
-                  id interpolation) per FR-017 / token minimisation. */}
-                {reversalPending && (
-                  <div
-                    className="payment-surface__reversal-pending-hint"
-                    data-testid="payment-surface-reversal-pending-hint"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    هناك عمليات عكس قيد المعالجة وستتم قريباً.
-                  </div>
-                )}
-                {bridgeRefusalCopy !== null && (
-                  <div
-                    className="payment-surface__bridge-refusal"
-                    data-testid="payment-surface-bridge-refusal"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {bridgeRefusalCopy}
-                  </div>
-                )}
-              </>
-            }
+            notices={notices}
           />
         )}
         {/* The primary action changes under the cashier's hands; keep focus with them. */}
+        {bridge === null && notices}
         <FocusWhen
           active={fullyTendered}
           find={() =>
             document.querySelector<HTMLElement>('[data-testid="payment-surface-confirm"]')
           }
+          onFocused={() => {
+            commitFocusedAtRef.current = Date.now();
+          }}
         />
         <FocusWhen
-          active={phase === 'tender_selection' && hasAppliedLine}
+          active={phase === 'tender_selection' && hasAppliedLine && !fullyTendered}
           find={() =>
             document.querySelector<HTMLElement>('.payment-surface__methods button:not([disabled])')
           }

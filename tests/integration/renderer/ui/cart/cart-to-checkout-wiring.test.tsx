@@ -279,6 +279,10 @@ describe('cart → checkout wiring (006 mount)', () => {
     cartApi.handoff = vi.fn().mockResolvedValue({ kind: 'ok', envelope });
 
     // The payments + tender + sales bridge for the bridged PaymentSurface path.
+    // Like main, the attempt has no tender line until `tender.apply` runs. (RT-238:
+    // an attempt already fully paid when the entry opens has no apply to press, so
+    // a fixture that returned the paid line up front made the apply step a no-op.)
+    let tenderApplied = false;
     api.payments = {
       start: vi.fn(() => Promise.resolve({ kind: 'ok', payment_attempt_id: 'pa-1' })),
       confirm: vi.fn(() => Promise.resolve({ kind: 'ok', settled_at: settledAt })),
@@ -292,29 +296,32 @@ describe('cart → checkout wiring (006 mount)', () => {
             state: 'started',
             envelope_subtotal_minor: envelope.subtotal_minor,
             started_at: '2026-06-11T09:05:30.000Z',
-            tender_lines: [
-              {
-                tender_line_id: 'tl-1',
-                tender_type: 'cash',
-                amount_applied_minor: envelope.subtotal_minor,
-                state: 'applied',
-                apply_order: 1,
-                applied_at: '2026-06-11T09:05:45.000Z',
-              },
-            ],
+            tender_lines: tenderApplied
+              ? [
+                  {
+                    tender_line_id: 'tl-1',
+                    tender_type: 'cash',
+                    amount_applied_minor: envelope.subtotal_minor,
+                    state: 'applied',
+                    apply_order: 1,
+                    applied_at: '2026-06-11T09:05:45.000Z',
+                  },
+                ]
+              : [],
           },
         }),
       ),
     };
     api.tender = {
-      apply: vi.fn(() =>
-        Promise.resolve({
+      apply: vi.fn(() => {
+        tenderApplied = true;
+        return Promise.resolve({
           kind: 'ok',
           tender_line_id: 'tl-1',
           amount_applied_minor: envelope.subtotal_minor,
           change_due_minor: 0,
-        }),
-      ),
+        });
+      }),
       reverse: vi.fn(),
       read: vi.fn(),
     };

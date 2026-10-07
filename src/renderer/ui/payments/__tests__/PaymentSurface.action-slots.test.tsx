@@ -65,6 +65,7 @@ function makeBridge(): {
   payments: PaymentsBridgeAPI;
   tender: TenderBridgeAPI;
   confirm: ReturnType<typeof vi.fn>;
+  read: ReturnType<typeof vi.fn>;
 } {
   let lines: PaymentAttemptRendererView['tender_lines'] = [];
   const snapshot = (): PaymentAttemptRendererView => ({
@@ -77,9 +78,10 @@ function makeBridge(): {
   const confirm = vi.fn(() =>
     Promise.resolve({ kind: 'ok' as const, settled_at: '2026-10-07T09:02:00.000Z' }),
   );
+  const read = vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt: snapshot() }));
   const payments = {
     start: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt_id: 'pa-001' })),
-    read: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt: snapshot() })),
+    read,
     confirm,
     cancel: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
   } as unknown as PaymentsBridgeAPI;
@@ -105,7 +107,7 @@ function makeBridge(): {
       },
     ),
   } as unknown as TenderBridgeAPI;
-  return { payments, tender, confirm };
+  return { payments, tender, confirm, read };
 }
 
 beforeEach(() => {
@@ -193,8 +195,9 @@ describe('RT-238 — fixed slots: cancel at inline-start, commit at inline-end (
     const cancelAfter = screen.getByTestId('payment-surface-cancel');
     expect(cancelAfter).toBe(cancelBefore);
     expect(cancelAfter.closest('[data-slot]')).toHaveAttribute('data-slot', 'start');
-    // The entry's own (now disabled) apply button is no longer in the pinned slot.
-    expect(within(slot('end')).queryByTestId('cash-entry-confirm')).not.toBeInTheDocument();
+    // The entry's apply has nothing left to do: it is not rendered at all, so the
+    // bar never shows a dead, disabled second commit beside «تأكيد الدفع».
+    expect(screen.queryByTestId('cash-entry-confirm')).not.toBeInTheDocument();
     expect(commit).toBeEnabled();
     expect(commit).not.toHaveAttribute('aria-disabled');
   });
@@ -241,7 +244,8 @@ describe('RT-238 — fixed slots: cancel at inline-start, commit at inline-end (
     await typeAndApply('50.00');
     bridge.confirm.mockResolvedValueOnce({ kind: 'refused' });
     await act(async () => {
-      fireEvent.click(await screen.findByTestId('payment-surface-confirm'));
+      // A pointer click (detail 1): the held-Enter guard only filters keyboard activations.
+      fireEvent.click(await screen.findByTestId('payment-surface-confirm'), { detail: 1 });
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -269,19 +273,71 @@ describe('RT-238 — one quick-amount group (I-9: chips SET the value)', () => {
 });
 
 describe('RT-238 — keyboard-only and axe on the touched surfaces', () => {
-  it('walks apply → settle with the keyboard: focus lands on the commit and Enter settles', async () => {
+  it('walks apply → settle with the keyboard: Tab reaches the pinned apply, focus lands on the commit', async () => {
     const bridge = await openCash();
     const user = userEvent.setup();
-    const input = screen.getByTestId('cash-entry-amount-input');
-    input.focus();
+    screen.getByTestId('cash-entry-amount-input').focus();
     await user.keyboard('50.00');
-    await user.tab(); // → the keypad and chips follow in the entry; keep going to the pinned bar
-    screen.getByTestId('cash-entry-confirm').focus();
+    // Tab forward until the pinned apply has focus: it must be reachable by keyboard.
+    const apply = screen.getByTestId('cash-entry-confirm');
+    for (let i = 0; i < 40 && document.activeElement !== apply; i += 1) await user.tab();
+    expect(apply).toHaveFocus();
     await user.keyboard('{Enter}');
     const commit = await screen.findByTestId('payment-surface-confirm');
     expect(commit).toHaveFocus();
+    // A deliberate Enter, after the guard window, settles.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 450));
+    });
     await user.keyboard('{Enter}');
     expect(bridge.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('a held or doubled Enter right after focus moves to the commit does not settle (I-9)', async () => {
+    const bridge = await openCash();
+    const user = userEvent.setup();
+    await typeAndApply('50.00');
+    expect(await screen.findByTestId('payment-surface-confirm')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(bridge.confirm).not.toHaveBeenCalled();
+  });
+
+  it('closing the entry with Esc keeps focus on the settle commit when fully tendered', async () => {
+    await openCash();
+    const user = userEvent.setup();
+    await typeAndApply('50.00');
+    const commit = await screen.findByTestId('payment-surface-confirm');
+    expect(commit).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.getByTestId('payment-surface-confirm')).toHaveFocus();
+  });
+
+  it('a stale projection does not strand the cashier: a click on the blocked commit re-reads main', async () => {
+    const bridge = await openCash();
+    const { read } = bridge;
+    await typeAndApply('20.00'); // partial; back on the method tiles
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    // The second apply succeeds in main, but the read after it fails.
+    read.mockRejectedValueOnce(new Error('ipc'));
+    await typeAndApply('30.00');
+    // Still in the entry with a stale «money owed» projection: close it.
+    const user = userEvent.setup();
+    await user.keyboard('{Escape}');
+    const commit = await screen.findByTestId('payment-surface-confirm');
+    expect(commit).toHaveAttribute('aria-disabled', 'true');
+    // The click re-reads main; the fresh projection is fully tendered.
+    await act(async () => {
+      fireEvent.click(commit, { detail: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(bridge.confirm).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('payment-surface-confirm')).not.toHaveAttribute(
+      'aria-disabled',
+    );
   });
 
   it('cash entry state: no axe violations', async () => {
