@@ -84,7 +84,13 @@ function makeBridge(): {
     start: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt_id: 'pa-001' })),
     read,
     confirm,
-    cancel: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+    cancel: vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok' as const,
+        reversed_tender_line_ids: [],
+        reversal_pending_tender_line_ids: [],
+      }),
+    ),
   } as unknown as PaymentsBridgeAPI;
   const apply = vi.fn(
     (req: { tender_type: 'cash' | 'external_card_terminal'; amount_applied_minor: number }) => {
@@ -358,6 +364,41 @@ describe('RT-238 — keyboard-only and axe on the touched surfaces', () => {
     const commit = await screen.findByTestId('payment-surface-confirm');
     expect(commit).not.toHaveAttribute('aria-disabled');
     expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+  });
+
+  it('cancelling after a failed read clears the retry, and the next attempt offers its apply (Codex P2)', async () => {
+    const bridge = await openCash();
+    bridge.read.mockRejectedValue(new Error('ipc'));
+    await typeAndApply('50.00');
+    await screen.findByTestId('payment-surface-reread');
+
+    // Main is reachable again; the cashier cancels instead of retrying.
+    bridge.read.mockReset();
+    bridge.read.mockResolvedValue({
+      kind: 'ok',
+      payment_attempt: {
+        payment_attempt_id: 'pa-001',
+        state: 'started',
+        envelope_subtotal_minor: DUE,
+        started_at: '2026-10-07T09:00:30.000Z',
+        tender_lines: [],
+      },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-reread-notice')).not.toBeInTheDocument();
+
+    // A new attempt: its apply is offered in the end slot again.
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(within(slot('end')).getByTestId('cash-entry-confirm')).toBeInTheDocument();
   });
 
   it('a single failed read after an apply is retried on its own', async () => {

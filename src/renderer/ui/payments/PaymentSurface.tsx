@@ -472,6 +472,7 @@ export function PaymentSurface({
       }
 
       setPhase('entry');
+      setAfterApply('idle');
 
       // Main now holds a started attempt: record it at once, so an open
       // payment is known (and V5 sign-out blocked) even if the read below is
@@ -618,6 +619,8 @@ export function PaymentSurface({
         }
         setSelectedTender(null);
         setPhase('tender_selection');
+        // The attempt is gone, and with it any pending or failed post-apply read.
+        setAfterApply('idle');
         usePaymentStore.getState().clearAttempt();
       } else {
         setBridgeRefusalCopy('تعذّر إلغاء عملية الدفع. يرجى المحاولة مرة أخرى.');
