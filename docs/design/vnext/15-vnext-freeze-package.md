@@ -316,6 +316,9 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-P14 | Card reference field label (shipped, RT-240) | «المرجع (اختياري، حتى 6 خانات)» | neutral |
 | M-P15 | Amount recorded but the follow-up read failed (shipped, RT-238) | «تم تسجيل المبلغ، لكن تعذّر تحديث حالة الدفع. لا تكرر الدفع.» | warning |
 | M-P16 | Amount field labels (shipped, RT-240) | «المبلغ المستلم (EGP)» / «المبلغ المخصوم (EGP)» / «المبلغ المطبّق (EGP)», with `EGP` in an LTR run | neutral |
+| M-P17 | Cancel refused and the read shows the payment still open (RT-298). Names the retry (UX-07) | «تعذّر إلغاء عملية الدفع. اضغط «إلغاء» للمحاولة مرة أخرى.» | neutral (payment refusal line) |
+| M-P18 | Cancel outcome unknown: the response and the read-back were both lost (RT-298). No payment action until Cancel again resolves it; the retry replays the same key | «تعذّر التأكد من إلغاء عملية الدفع. لا تسجّل أي مبلغ. اضغط «إلغاء» مرة أخرى للتحقق.» | neutral (payment refusal line) today; danger styling is W1-C scope |
+| M-P19 | Cancel refused because the payment already ended another way (settled, failed or force-failed; RT-298). Offers no retry | «لم تعد عملية الدفع هذه مفتوحة، فلا يمكن إلغاؤها.» | neutral (payment refusal line) |
 | **Completion and receipt** | | | |
 | M-C1 | Completed | «اكتمل البيع» · «رقم البيع ‹no›» ⏳ D-N1 · «الباقي للعميل ‹amount›» | success (proven only) |
 | M-C2 | Receipt sent (OS-print) | «أُرسل الإيصال للطابعة» | info |
