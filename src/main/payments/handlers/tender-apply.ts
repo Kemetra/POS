@@ -128,11 +128,14 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     }
 
     if (reservation.kind === 'replay') {
-      // Reconstruct from the persisted line — find by `last_action_id`
-      // matching the idempotency_key.
+      // Reconstruct from the persisted line, found by the outbox row's
+      // immutable `tender_line_id`. `last_action_id` / `state` move on when the
+      // line is later reversed, so keying on them made a retry of an apply
+      // that was since reversed answer `internal_error` (RT-304 review).
+      // `applied_at` is never cleared, so it still marks a line that applied.
       const lines = linesRepo.findByAttempt(req.payment_attempt_id);
-      const prior = lines.find((l) => l.last_action_id === req.idempotency_key);
-      if (prior !== undefined && prior.state === 'applied' && prior.applied_at !== null) {
+      const prior = lines.find((l) => l.tender_line_id === reservation.tender_line_id);
+      if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
         const response: TenderApplyResponse = {
           kind: 'ok',
           tender_line_id: prior.tender_line_id,

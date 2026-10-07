@@ -125,15 +125,8 @@ function isValidStartInput(req: PaymentsStartRequest): boolean {
 }
 
 export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): PaymentsStartHandler {
-  const {
-    getCurrentSession,
-    attemptsRepo,
-    paymentAttemptFsm,
-    idempotency,
-    uuid,
-    clock,
-    checkCartForPayment,
-  } = deps;
+  const { getCurrentSession, paymentAttemptFsm, idempotency, uuid, clock, checkCartForPayment } =
+    deps;
 
   return async function paymentsStart(req): Promise<PaymentsStartResponse> {
     // 1. Session gate (no attempt yet — no ownership/isolation check).
@@ -176,23 +169,16 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
     }
 
     if (reservation.kind === 'replay') {
-      // Reconstruct the original outcome by probing the partial-unique-index:
-      // a started attempt on this terminal whose `last_action_id` matches the
-      // idempotency_key is the row this replay refers to. The S3b idempotency
-      // contract: "the row is the source of truth".
-      const existing = attemptsRepo.findStartedByTerminal(session.terminal_id);
-      if (existing !== undefined && existing.last_action_id === req.idempotency_key) {
-        return await Promise.resolve({
-          kind: 'ok',
-          payment_attempt_id: existing.payment_attempt_id,
-        });
-      }
-      // The outbox row exists but no matching started row is queryable — this
-      // is a defence-in-depth path. The S3b idempotency module + FSM run
-      // both inside one transaction, so a missing started row alongside a
-      // committed outbox row is impossible in production. Refuse generically
-      // rather than fabricate a response.
-      return await Promise.resolve({ kind: 'refused', reason: 'internal_error' });
+      // The original attempt id is the outbox row's immutable
+      // `payment_attempt_id`. Probing the started row instead (partial unique
+      // index + `last_action_id`) only worked while the attempt was still
+      // `started`: once it is confirmed, cancelled or force-failed the row is
+      // no longer returned and its `last_action_id` has moved on, so a
+      // delayed retry answered `internal_error` (RT-304 review).
+      return await Promise.resolve({
+        kind: 'ok',
+        payment_attempt_id: reservation.payment_attempt_id,
+      });
     }
 
     // 3a. Cart authority — the renderer supplies the envelope fields, so main

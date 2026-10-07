@@ -121,13 +121,14 @@ export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): Tend
     }
 
     if (reservation.kind === 'replay') {
-      if (
-        (line.state === 'reversed' || line.state === 'reversal_pending') &&
-        line.reversed_at !== null
-      ) {
+      // A line whose authority reversal is still pending carries
+      // `reversal_pending_since`, not `reversed_at` (RT-304 review).
+      const replayAt =
+        line.state === 'reversal_pending' ? line.reversal_pending_since : line.reversed_at;
+      if ((line.state === 'reversed' || line.state === 'reversal_pending') && replayAt !== null) {
         return await Promise.resolve({
           kind: 'ok',
-          reversed_at: line.reversed_at,
+          reversed_at: replayAt,
           state: line.state,
         });
       }

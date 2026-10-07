@@ -179,30 +179,13 @@ describe('T100 — payments.start bridge handler', () => {
     const sessionSource = makeSessionSource(makeSession());
     const attemptsRepo = makeAttemptsRepoDouble();
     const fsm = makePaymentAttemptFsmDouble();
-    const idempotency = makeIdempotencyHelperDouble({ kind: 'replay' });
-    // The replay must produce the prior outcome from outbox-row state. The
-    // outbox stores `last_action_id` keyed to the same idempotency_key; the
-    // handler reads it back via the attempts repo. We seed one started row
-    // so the handler has somewhere to read from.
-    attemptsRepo.findStartedByTerminal.mockReturnValueOnce({
+    // The replay rebuilds the prior outcome from the outbox row's immutable
+    // `payment_attempt_id`, NOT from the started-row probe: that probe stops
+    // returning the attempt once it is confirmed / cancelled / force-failed.
+    // Nothing is seeded in the attempts repo, so only the outbox id can answer.
+    const idempotency = makeIdempotencyHelperDouble({
+      kind: 'replay',
       payment_attempt_id: 'pa-existing',
-      tenant_id: 'tenant-1',
-      branch_id: 'branch-1',
-      terminal_id: 'terminal-1',
-      acting_operator_id: 'op-clerk-user-abc',
-      operator_session_id: 'sess-1',
-      envelope_handoff_action_id: 'handoff-1',
-      envelope_cart_id: 'cart-1',
-      envelope_subtotal_minor: 1500,
-      state: 'started',
-      started_at: '2026-05-23T11:00:00.000Z',
-      settled_at: null,
-      cancelled_at: null,
-      failed_at: null,
-      force_failed_at: null,
-      failure_reason: null,
-      force_fail_attribution_operator_id: null,
-      last_action_id: 'idem-start-1',
     });
     const handler = createPaymentsStartHandler({
       getCurrentSession: sessionSource.getCurrentSession,

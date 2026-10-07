@@ -72,7 +72,18 @@ export type ReserveOutcome =
        */
       commit(): void;
     }
-  | { kind: 'replay' }
+  | {
+      kind: 'replay';
+      /**
+       * The ORIGINAL action's identifiers, read from its outbox row. Those
+       * columns are immutable, unlike the attempt / line rows, whose `state`
+       * and `last_action_id` move on once the attempt is confirmed, cancelled
+       * or a line is reversed. A replay must rebuild the original result from
+       * these, not from whatever the mutable rows say today.
+       */
+      payment_attempt_id: string;
+      tender_line_id: string | null;
+    }
   | { kind: 'mismatch' };
 
 export interface IdempotencyHelper {
@@ -93,7 +104,11 @@ export function createIdempotencyHelper(deps: IdempotencyHelperDependencies): Id
       const existing = outbox.findByActionId(input.action_id);
       if (existing !== undefined) {
         if (existing.action_payload_hash === hash && existing.action_kind === input.action_kind) {
-          return { kind: 'replay' };
+          return {
+            kind: 'replay',
+            payment_attempt_id: existing.payment_attempt_id,
+            tender_line_id: existing.tender_line_id,
+          };
         }
         return { kind: 'mismatch' };
       }

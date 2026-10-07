@@ -127,9 +127,11 @@ export function createVouchersValidateHandler(
     }
 
     if (reservation.kind === 'replay') {
+      // Found by the outbox row's immutable `tender_line_id`: `last_action_id`
+      // and `state` move on once the line is reversed (RT-304 review).
       const lines = linesRepo.findByAttempt(req.payment_attempt_id);
-      const prior = lines.find((l) => l.last_action_id === req.idempotency_key);
-      if (prior !== undefined && prior.state === 'applied' && prior.applied_at !== null) {
+      const prior = lines.find((l) => l.tender_line_id === reservation.tender_line_id);
+      if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
         return {
           kind: 'ok',
           tender_line_id: prior.tender_line_id,

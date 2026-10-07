@@ -10,6 +10,8 @@
  *   • same key + same request      → replay of the original result
  *   • same key + different request → `idempotency_payload_mismatch`
  *   • redacted fields (external_reference, voucher_code) never reach the hash
+ *   • a replay still answers after the original action's rows have moved on
+ *     (attempt cancelled, line reversed, voucher reversal pending)
  */
 
 import { describe, expect, it, beforeAll, beforeEach } from 'vitest';
@@ -31,16 +33,21 @@ import { createPaymentsForceFailHandler } from '../../../../src/main/payments/ha
 import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
 import { createVouchersValidateHandler } from '../../../../src/main/payments/handlers/vouchers-validate.js';
 import { createTenderReverseHandler } from '../../../../src/main/payments/handlers/tender-reverse.js';
+import { hashActionPayload } from '../../../../src/main/payments/action-payload.js';
 import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
 import { makeAuditEmitterDouble, makeSession } from './__fixtures__/bridge-handler-deps.js';
-import { hashActionPayload } from '../../../../src/main/payments/action-payload.js';
 import type { OperatorSessionForPayments } from '../../../../src/main/payments/require-operator-session.js';
 import type {
   ValidateVoucherInput,
   ValidateVoucherOutcome,
 } from '../../../../src/main/payments/voucher-authority-client/validate.js';
+import type {
+  ReverseVoucherInput,
+  ReverseVoucherOutcome,
+} from '../../../../src/main/payments/voucher-authority-client/reverse.js';
 
 type ValidateVoucherFn = (input: ValidateVoucherInput) => Promise<ValidateVoucherOutcome>;
+type ReverseVoucherFn = (input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>;
 
 const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
@@ -62,6 +69,13 @@ beforeEach(() => {
   for (const sql of MIGRATIONS) db.exec(sql);
 });
 
+// ── Stack ────────────────────────────────────────────────────────────────────
+
+interface StackOptions {
+  validateVoucher?: ValidateVoucherFn;
+  reverseVoucher?: ReverseVoucherFn;
+}
+
 /** V-A answers every validate with the same capped value. */
 function cappedVoucherAuthority(applied_amount_minor: number): ValidateVoucherFn {
   return () =>
@@ -73,10 +87,7 @@ function cappedVoucherAuthority(applied_amount_minor: number): ValidateVoucherFn
     });
 }
 
-function build(
-  initialSession: OperatorSessionForPayments = makeSession(),
-  validateVoucher?: ValidateVoucherFn,
-) {
+function build(options: StackOptions = {}) {
   const handle = makeSqlJsHandle(db);
   const attempts = bindPaymentAttemptsRepository(handle);
   const lines = bindPaymentTenderLinesRepository(handle);
@@ -85,93 +96,72 @@ function build(
   const paymentAttemptFsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
   const idempotency = createIdempotencyHelper({ outbox });
   const auditEmitter = makeAuditEmitterDouble();
-  let session = initialSession;
-  const getCurrentSession = (): OperatorSessionForPayments => session;
+  const { validateVoucher = cappedVoucherAuthority(0), reverseVoucher } = options;
+  let session: OperatorSessionForPayments = makeSession();
   let n = 0;
+  const shared = {
+    getCurrentSession: (): OperatorSessionForPayments => session,
+    attemptsRepo: attempts,
+    idempotency,
+    auditEmitter,
+    clock: (): Date => new Date('2026-10-08T10:00:00.000Z'),
+  };
   const uuid = (): string => `uuid-${String(++n)}`;
-  const clock = (): Date => new Date('2026-10-08T10:00:00.000Z');
 
   return {
     outbox,
     lines,
-    attempts,
     useSession(next: OperatorSessionForPayments): void {
       session = next;
     },
     start: createPaymentsStartHandler({
-      getCurrentSession,
-      attemptsRepo: attempts,
+      ...shared,
       paymentAttemptFsm,
-      idempotency,
-      auditEmitter,
       uuid,
-      clock,
       checkCartForPayment: () => ({ kind: 'ok' }),
       attemptHasLiveTender: () => false,
     }),
     apply: createTenderApplyHandler({
-      getCurrentSession,
-      attemptsRepo: attempts,
+      ...shared,
       linesRepo: lines,
       tenderLineFsm,
-      idempotency,
-      auditEmitter,
-      ...(validateVoucher !== undefined ? { validateVoucher } : {}),
+      validateVoucher,
       uuid,
-      clock,
     }),
     validate: createVouchersValidateHandler({
-      getCurrentSession,
-      attemptsRepo: attempts,
+      ...shared,
       linesRepo: lines,
       tenderLineFsm,
-      idempotency,
-      auditEmitter,
-      validateVoucher: validateVoucher ?? cappedVoucherAuthority(0),
+      validateVoucher,
       uuid,
-      clock,
     }),
     reverse: createTenderReverseHandler({
-      getCurrentSession,
-      attemptsRepo: attempts,
+      ...shared,
       linesRepo: lines,
       tenderLineFsm,
-      idempotency,
-      auditEmitter,
-      clock,
+      ...(reverseVoucher !== undefined ? { reverseVoucher } : {}),
     }),
-    confirm: createPaymentsConfirmHandler({
-      getCurrentSession,
-      attemptsRepo: attempts,
-      linesRepo: lines,
-      paymentAttemptFsm,
-      idempotency,
-      auditEmitter,
-      clock,
-    }),
-    cancel: createPaymentsCancelHandler({
-      getCurrentSession,
-      attemptsRepo: attempts,
-      linesRepo: lines,
-      paymentAttemptFsm,
-      idempotency,
-      auditEmitter,
-      clock,
-    }),
-    forceFail: createPaymentsForceFailHandler({
-      getCurrentSession,
-      attemptsRepo: attempts,
-      paymentAttemptFsm,
-      idempotency,
-      auditEmitter,
-      clock,
-    }),
+    confirm: createPaymentsConfirmHandler({ ...shared, linesRepo: lines, paymentAttemptFsm }),
+    cancel: createPaymentsCancelHandler({ ...shared, linesRepo: lines, paymentAttemptFsm }),
+    forceFail: createPaymentsForceFailHandler({ ...shared, paymentAttemptFsm }),
   };
 }
 
 type Stack = ReturnType<typeof build>;
 
-function startRequest(key: string, cart = 'cart-1', subtotal = 1500) {
+const MANAGER = makeSession({ role: 'manager', operator_id: 'op-manager' });
+
+/** Runs `fn` as another operator, then restores the cashier session. */
+async function as<T>(s: Stack, who: OperatorSessionForPayments, fn: () => Promise<T>): Promise<T> {
+  s.useSession(who);
+  try {
+    return await fn();
+  } finally {
+    s.useSession(makeSession());
+  }
+}
+
+function startRequest(key: string, cart: string, subtotal = 1500) {
   return {
     envelope_handoff_action_id: `handoff-${cart}`,
     envelope_cart_id: cart,
@@ -181,31 +171,222 @@ function startRequest(key: string, cart = 'cart-1', subtotal = 1500) {
   };
 }
 
-async function startAttempt(s: Stack, key = 'k-start', cart = 'cart-1'): Promise<string> {
-  const r = await s.start(startRequest(key, cart));
+async function startAttempt(s: Stack, cart = 'cart-1'): Promise<string> {
+  const r = await s.start(startRequest(`k-start-${cart}`, cart));
   if (r.kind !== 'ok') throw new Error(`start refused: ${r.reason}`);
   return r.payment_attempt_id;
 }
 
-describe('RT-304 — payments.start', () => {
-  it('replays the original attempt on a same-key retry', async () => {
-    const s = build();
-    const first = await s.start(startRequest('k-start'));
-    const retry = await s.start(startRequest('k-start'));
+async function applyCash(s: Stack, attempt: string, key: string, amount: number): Promise<string> {
+  const r = await s.apply({
+    payment_attempt_id: attempt,
+    tender_type: 'cash',
+    amount_applied_minor: amount,
+    idempotency_key: key,
+  });
+  if (r.kind !== 'ok') throw new Error(`apply refused: ${r.reason}`);
+  return r.tender_line_id;
+}
+
+/** A started attempt on a fresh cart, fully tendered so it can be confirmed. */
+async function tenderedAttempt(s: Stack, cart: string, amount = 1500): Promise<string> {
+  const attempt = await startAttempt(s, cart);
+  await applyCash(s, attempt, `k-apply-${cart}`, amount);
+  return attempt;
+}
+
+const MISMATCH = { kind: 'refused', reason: 'idempotency_payload_mismatch' };
+
+// ── Per action: replay and mismatch ─────────────────────────────────────────
+
+type Variant = 'same' | 'different' | 'redacted';
+type Act = (variant: Variant) => Promise<{ kind: string }>;
+
+interface Scenario {
+  name: string;
+  options?: StackOptions;
+  /** True when a retry differing only in a redacted field must still replay. */
+  redacted?: boolean;
+  /** Readies state and returns the action under test, parameterised by retry. */
+  arrange(s: Stack): Promise<Act>;
+}
+
+const SCENARIOS: readonly Scenario[] = [
+  {
+    name: 'payments.start',
+    arrange: (s) =>
+      Promise.resolve((v) => s.start(startRequest('k', 'cart-1', v === 'different' ? 9999 : 1500))),
+  },
+  {
+    name: 'tender.apply (cash)',
+    async arrange(s) {
+      const attempt = await startAttempt(s);
+      return (v) =>
+        s.apply({
+          payment_attempt_id: attempt,
+          tender_type: 'cash',
+          amount_applied_minor: v === 'different' ? 1100 : 1000,
+          idempotency_key: 'k',
+        });
+    },
+  },
+  {
+    name: 'tender.apply (card terminal)',
+    redacted: true,
+    async arrange(s) {
+      const attempt = await startAttempt(s);
+      return (v) =>
+        s.apply({
+          payment_attempt_id: attempt,
+          tender_type: 'external_card_terminal',
+          amount_applied_minor: v === 'different' ? 600 : 500,
+          external_reference: v === 'redacted' ? 'ZZ99ZZ' : 'AB12XY',
+          idempotency_key: 'k',
+        });
+    },
+  },
+  {
+    name: 'tender.apply (capped voucher)',
+    redacted: true,
+    options: { validateVoucher: cappedVoucherAuthority(800) },
+    async arrange(s) {
+      const attempt = await startAttempt(s);
+      return (v) =>
+        s.apply({
+          payment_attempt_id: attempt,
+          tender_type: 'internal_voucher',
+          amount_applied_minor: v === 'different' ? 900 : 1000,
+          voucher_code: v === 'redacted' ? 'V-TWO' : 'V-ONE',
+          idempotency_key: 'k',
+        });
+    },
+  },
+  {
+    name: 'vouchers.validate',
+    options: { validateVoucher: cappedVoucherAuthority(800) },
+    async arrange(s) {
+      const attempt = await startAttempt(s);
+      return (v) =>
+        s.validate({
+          payment_attempt_id: attempt,
+          voucher_code: 'V-CODE',
+          amount_applied_minor: v === 'different' ? 900 : 1000,
+          idempotency_key: 'k',
+        });
+    },
+  },
+  {
+    name: 'tender.reverse',
+    async arrange(s) {
+      const attempt = await startAttempt(s);
+      const first = await applyCash(s, attempt, 'k-a', 500);
+      const second = await applyCash(s, attempt, 'k-b', 500);
+      return (v) =>
+        s.reverse({ tender_line_id: v === 'different' ? second : first, idempotency_key: 'k' });
+    },
+  },
+  {
+    name: 'payments.confirm',
+    async arrange(s) {
+      const attempt = await tenderedAttempt(s, 'cart-a');
+      return async (v) =>
+        s.confirm({
+          payment_attempt_id: v === 'different' ? await tenderedAttempt(s, 'cart-b') : attempt,
+          idempotency_key: 'k',
+        });
+    },
+  },
+  {
+    name: 'payments.cancel',
+    async arrange(s) {
+      const attempt = await tenderedAttempt(s, 'cart-a', 700);
+      return async (v) =>
+        s.cancel({
+          payment_attempt_id: v === 'different' ? await startAttempt(s, 'cart-b') : attempt,
+          idempotency_key: 'k',
+        });
+    },
+  },
+  {
+    name: 'payments.force_fail',
+    async arrange(s) {
+      const attempt = await startAttempt(s, 'cart-a');
+      return async (v) => {
+        const target = v === 'different' ? await startAttempt(s, 'cart-b') : attempt;
+        return as(s, MANAGER, () =>
+          s.forceFail({ payment_attempt_id: target, idempotency_key: 'k' }),
+        );
+      };
+    },
+  },
+];
+
+describe.each(SCENARIOS)('RT-304 — $name', (scenario) => {
+  const arrange = async () => {
+    const s = build(scenario.options);
+    return { s, act: await scenario.arrange(s) };
+  };
+
+  it('replays the original result on a same-key retry', async () => {
+    const { act } = await arrange();
+    const first = await act('same');
+    const retry = await act('same');
     expect(first.kind).toBe('ok');
     expect(retry).toEqual(first);
   });
 
-  it('refuses a same-key retry with a different subtotal as a mismatch', async () => {
-    const s = build();
-    await s.start(startRequest('k-start'));
-    const retry = await s.start(startRequest('k-start', 'cart-1', 9999));
-    expect(retry).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
+  it('refuses a same-key retry with a different request as a mismatch', async () => {
+    const { act } = await arrange();
+    await act('same');
+    expect(await act('different')).toEqual(MISMATCH);
+  });
+
+  // Defined only where the action carries a redacted field, so the report has
+  // no skipped placeholders.
+  if (scenario.redacted === true) {
+    it('treats a retry differing only in a redacted field as identical', async () => {
+      const { act } = await arrange();
+      const first = await act('same');
+      expect(first.kind).toBe('ok');
+      expect(await act('redacted')).toEqual(first);
+    });
+  }
+});
+
+describe('RT-304 — redaction at the hash boundary', () => {
+  it('never hashes the voucher code: the stored hash is that of the payload without it', async () => {
+    const s = build({ validateVoucher: cappedVoucherAuthority(1000) });
+    const attempt = await startAttempt(s);
+    await s.apply({
+      payment_attempt_id: attempt,
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1000,
+      voucher_code: 'V-SECRET-CODE',
+      idempotency_key: 'k',
+    });
+    expect(s.outbox.findByActionId('k')?.action_payload_hash).toBe(
+      hashActionPayload('tender.apply', {
+        payment_attempt_id: attempt,
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1000,
+      }),
+    );
   });
 });
 
-describe('RT-304 — tender.apply', () => {
-  it('replays a cash line on a same-key retry', async () => {
+// ── A replay still answers after the original action's rows moved on ────────
+
+describe('RT-304 — replay after the original action has been superseded', () => {
+  it('payments.start replays once its attempt is no longer started', async () => {
+    const s = build();
+    const req = startRequest('k-start', 'cart-1');
+    const first = await s.start(req);
+    if (first.kind !== 'ok') throw new Error('start refused');
+    await s.cancel({ payment_attempt_id: first.payment_attempt_id, idempotency_key: 'k-cancel' });
+    expect(await s.start(req)).toEqual(first);
+  });
+
+  it('tender.apply replays once its line has been reversed', async () => {
     const s = build();
     const attempt = await startAttempt(s);
     const req = {
@@ -215,237 +396,33 @@ describe('RT-304 — tender.apply', () => {
       idempotency_key: 'k-apply',
     };
     const first = await s.apply(req);
-    const retry = await s.apply(req);
-    expect(first.kind).toBe('ok');
-    expect(retry).toEqual(first);
+    if (first.kind !== 'ok') throw new Error('apply refused');
+    await s.reverse({ tender_line_id: first.tender_line_id, idempotency_key: 'k-rev' });
+    expect(await s.apply(req)).toEqual(first);
   });
 
-  it('refuses a same-key retry with a different amount as a mismatch', async () => {
-    const s = build();
-    const attempt = await startAttempt(s);
-    const base = {
-      payment_attempt_id: attempt,
-      tender_type: 'cash' as const,
-      idempotency_key: 'k-apply',
-    };
-    await s.apply({ ...base, amount_applied_minor: 1000 });
-    const retry = await s.apply({ ...base, amount_applied_minor: 1100 });
-    expect(retry).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
-  });
-
-  it('treats retries that differ only in external_reference as identical (redacted)', async () => {
-    const s = build();
-    const attempt = await startAttempt(s);
-    const base = {
-      payment_attempt_id: attempt,
-      tender_type: 'external_card_terminal' as const,
-      amount_applied_minor: 500,
-      idempotency_key: 'k-card',
-    };
-    const first = await s.apply({ ...base, external_reference: 'AB12XY' });
-    const retry = await s.apply({ ...base, external_reference: 'ZZ99ZZ' });
-    expect(first.kind).toBe('ok');
-    expect(retry).toEqual(first);
-  });
-});
-
-describe('RT-304 — tender.apply (voucher)', () => {
-  const voucherRequest = (voucher_code: string, attempt: string) => ({
-    payment_attempt_id: attempt,
-    tender_type: 'internal_voucher' as const,
-    amount_applied_minor: 1000,
-    voucher_code,
-    idempotency_key: 'k-voucher',
-  });
-
-  it('replays a capped voucher line: the retry carries the request, not the authority cap', async () => {
-    const s = build(makeSession(), cappedVoucherAuthority(800));
-    const attempt = await startAttempt(s);
-    const first = await s.apply(voucherRequest('V-CODE', attempt));
-    const retry = await s.apply(voucherRequest('V-CODE', attempt));
-    expect(first.kind).toBe('ok');
-    expect(retry).toEqual(first);
-    expect(s.lines.findByAttempt(attempt)[0]?.amount_applied_minor).toBe(800);
-  });
-
-  it('treats retries that differ only in voucher_code as identical, and never hashes the code', async () => {
-    const s = build(makeSession(), cappedVoucherAuthority(1000));
-    const attempt = await startAttempt(s);
-    const first = await s.apply(voucherRequest('V-ONE', attempt));
-    const retry = await s.apply(voucherRequest('V-TWO', attempt));
-    expect(first.kind).toBe('ok');
-    expect(retry).toEqual(first);
-    expect(s.outbox.findByActionId('k-voucher')?.action_payload_hash).toBe(
-      hashActionPayload('tender.apply', {
-        payment_attempt_id: attempt,
-        tender_type: 'internal_voucher',
-        amount_applied_minor: 1000,
-      }),
-    );
-  });
-
-  it('refuses a same-key retry with a different requested amount as a mismatch', async () => {
-    const s = build(makeSession(), cappedVoucherAuthority(800));
-    const attempt = await startAttempt(s);
-    await s.apply(voucherRequest('V-CODE', attempt));
-    const retry = await s.apply({
-      ...voucherRequest('V-CODE', attempt),
-      amount_applied_minor: 900,
+  it('tender.reverse replays a voucher reversal that is still pending at the authority', async () => {
+    const s = build({
+      validateVoucher: cappedVoucherAuthority(1000),
+      reverseVoucher: () => Promise.resolve({ kind: 'authority_unreachable' }),
     });
-    expect(retry).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
-  });
-});
-
-describe('RT-304 — vouchers.validate', () => {
-  const validateRequest = (attempt: string, amount_applied_minor = 1000) => ({
-    payment_attempt_id: attempt,
-    voucher_code: 'V-CODE',
-    amount_applied_minor,
-    idempotency_key: 'k-validate',
-  });
-
-  it('replays a capped voucher line, reporting the persisted amount, on a same-key retry', async () => {
-    const s = build(makeSession(), cappedVoucherAuthority(800));
-    const attempt = await startAttempt(s);
-    const first = await s.validate(validateRequest(attempt));
-    const retry = await s.validate(validateRequest(attempt));
-    expect(first).toMatchObject({ kind: 'ok', applied_amount_minor: 800 });
-    expect(retry).toEqual(first);
-  });
-
-  it('refuses a same-key retry with a different requested amount as a mismatch', async () => {
-    const s = build(makeSession(), cappedVoucherAuthority(800));
-    const attempt = await startAttempt(s);
-    await s.validate(validateRequest(attempt));
-    const retry = await s.validate(validateRequest(attempt, 900));
-    expect(retry).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
-  });
-});
-
-describe('RT-304 — tender.reverse', () => {
-  it('replays a reversal on a same-key retry', async () => {
-    const s = build();
     const attempt = await startAttempt(s);
     const applied = await s.apply({
       payment_attempt_id: attempt,
-      tender_type: 'cash',
+      tender_type: 'internal_voucher',
       amount_applied_minor: 1000,
+      voucher_code: 'V-CODE',
       idempotency_key: 'k-apply',
     });
     if (applied.kind !== 'ok') throw new Error('apply refused');
+    s.lines.persistAuthorityRedemptionId({
+      tender_line_id: applied.tender_line_id,
+      voucher_authority_redemption_id: 'redemption-1',
+      last_action_id: 'k-apply',
+    });
     const req = { tender_line_id: applied.tender_line_id, idempotency_key: 'k-rev' };
     const first = await s.reverse(req);
-    const retry = await s.reverse(req);
-    expect(first.kind).toBe('ok');
-    expect(retry).toEqual(first);
-  });
-
-  it('refuses the same key reused for a different line as a mismatch', async () => {
-    const s = build();
-    const attempt = await startAttempt(s);
-    const apply = (key: string) =>
-      s.apply({
-        payment_attempt_id: attempt,
-        tender_type: 'cash',
-        amount_applied_minor: 500,
-        idempotency_key: key,
-      });
-    const a = await apply('k-a');
-    const b = await apply('k-b');
-    if (a.kind !== 'ok' || b.kind !== 'ok') throw new Error('apply refused');
-    await s.reverse({ tender_line_id: a.tender_line_id, idempotency_key: 'k-rev' });
-    const retry = await s.reverse({ tender_line_id: b.tender_line_id, idempotency_key: 'k-rev' });
-    expect(retry).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
-  });
-});
-
-describe('RT-304 — payments.confirm', () => {
-  it('replays the settlement on a same-key retry', async () => {
-    const s = build();
-    const attempt = await startAttempt(s);
-    await s.apply({
-      payment_attempt_id: attempt,
-      tender_type: 'cash',
-      amount_applied_minor: 1500,
-      idempotency_key: 'k-apply',
-    });
-    const req = { payment_attempt_id: attempt, idempotency_key: 'k-confirm' };
-    const first = await s.confirm(req);
-    const retry = await s.confirm(req);
-    expect(first.kind).toBe('ok');
-    expect(retry).toEqual(first);
-  });
-
-  it('refuses the same key reused for another attempt as a mismatch', async () => {
-    const s = build();
-    const a = await startAttempt(s, 'k-start-a', 'cart-a');
-    await s.apply({
-      payment_attempt_id: a,
-      tender_type: 'cash',
-      amount_applied_minor: 1500,
-      idempotency_key: 'k-apply-a',
-    });
-    await s.confirm({ payment_attempt_id: a, idempotency_key: 'k-confirm' });
-    const b = await startAttempt(s, 'k-start-b', 'cart-b');
-    await s.apply({
-      payment_attempt_id: b,
-      tender_type: 'cash',
-      amount_applied_minor: 1500,
-      idempotency_key: 'k-apply-b',
-    });
-    const retry = await s.confirm({ payment_attempt_id: b, idempotency_key: 'k-confirm' });
-    expect(retry).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
-  });
-});
-
-describe('RT-304 — payments.cancel', () => {
-  it('replays the cancellation (including its reversed lines) on a same-key retry', async () => {
-    const s = build();
-    const attempt = await startAttempt(s);
-    await s.apply({
-      payment_attempt_id: attempt,
-      tender_type: 'cash',
-      amount_applied_minor: 700,
-      idempotency_key: 'k-apply',
-    });
-    const req = { payment_attempt_id: attempt, idempotency_key: 'k-cancel' };
-    const first = await s.cancel(req);
-    const retry = await s.cancel(req);
-    expect(first.kind).toBe('ok');
-    expect(retry).toEqual(first);
-  });
-
-  it('refuses the same key reused for another attempt as a mismatch', async () => {
-    const s = build();
-    const a = await startAttempt(s, 'k-start-a', 'cart-a');
-    await s.cancel({ payment_attempt_id: a, idempotency_key: 'k-cancel' });
-    const b = await startAttempt(s, 'k-start-b', 'cart-b');
-    const retry = await s.cancel({ payment_attempt_id: b, idempotency_key: 'k-cancel' });
-    expect(retry).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
-  });
-});
-
-describe('RT-304 — payments.force_fail', () => {
-  it('replays the force-fail on a same-key retry', async () => {
-    const s = build();
-    const attempt = await startAttempt(s);
-    s.useSession(makeSession({ role: 'manager', operator_id: 'op-manager' }));
-    const req = { payment_attempt_id: attempt, idempotency_key: 'k-ff' };
-    const first = await s.forceFail(req);
-    const retry = await s.forceFail(req);
-    expect(first.kind).toBe('ok');
-    expect(retry).toEqual(first);
-  });
-
-  it('refuses the same key reused for another attempt as a mismatch', async () => {
-    const s = build();
-    const a = await startAttempt(s, 'k-start-a', 'cart-a');
-    s.useSession(makeSession({ role: 'manager', operator_id: 'op-manager' }));
-    await s.forceFail({ payment_attempt_id: a, idempotency_key: 'k-ff' });
-    s.useSession(makeSession());
-    const b = await startAttempt(s, 'k-start-b', 'cart-b');
-    s.useSession(makeSession({ role: 'manager', operator_id: 'op-manager' }));
-    const retry = await s.forceFail({ payment_attempt_id: b, idempotency_key: 'k-ff' });
-    expect(retry).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
+    expect(first).toMatchObject({ kind: 'ok', state: 'reversal_pending' });
+    expect(await s.reverse(req)).toEqual(first);
   });
 });
