@@ -292,26 +292,27 @@ export function CashEntry({
         </div>
       )}
 
-      {bridgeRefusal && (
-        <div
-          className="cash-entry__bridge-refusal"
-          data-testid="cash-entry-bridge-refusal"
-          role="status"
-          aria-live="polite"
-        >
-          تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
-        </div>
-      )}
-
       <div className="cash-entry__actions">
         {/* RT-238: while money is still owed this is the primary action and it
             lives in the pinned slot; PaymentSurface decides who owns the slot. */}
         <PinnedPrimary>
+          {/* The refusal travels with the apply, so it is never below the fold
+              while the button is pinned (Codex P2 on #569). */}
+          {bridgeRefusal && (
+            <div
+              className="cash-entry__bridge-refusal"
+              data-testid="cash-entry-bridge-refusal"
+              role="status"
+              aria-live="polite"
+            >
+              تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
+            </div>
+          )}
           <button
             type="button"
             className="cash-entry__confirm checkout-commit"
             data-testid="cash-entry-confirm"
-            style={{ minHeight: touchTarget.min }}
+            style={{ minHeight: touchTarget.commit }}
             disabled={!canConfirm || isApplying}
             aria-disabled={!canConfirm || isApplying ? 'true' : undefined}
             onClick={() => {

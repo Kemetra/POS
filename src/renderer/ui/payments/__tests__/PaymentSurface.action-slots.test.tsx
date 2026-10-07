@@ -233,6 +233,19 @@ describe('RT-238 — fixed slots: cancel at inline-start, commit at inline-end (
     expect(slot('start')).toBeEmptyDOMElement();
   });
 
+  it('an apply refusal is shown next to the pinned apply, in the bar (Codex P2)', async () => {
+    const bridge = await openCash();
+    bridge.apply.mockResolvedValueOnce({ kind: 'refused', reason: 'x' });
+    await typeAndApply('20.00');
+    const refusal = await screen.findByTestId('cash-entry-bridge-refusal');
+    expect(slot('end')).toContainElement(refusal);
+  });
+
+  it('the pinned apply has the same commit height as the settle commit (Codex P2)', async () => {
+    await openCash();
+    expect(screen.getByTestId('cash-entry-confirm').style.minHeight).toBe('56px');
+  });
+
   it('the card entry apply-commit is pinned in the end slot too', async () => {
     const bridge = makeBridge();
     render(<PaymentSurface _testBridge={bridge} />);

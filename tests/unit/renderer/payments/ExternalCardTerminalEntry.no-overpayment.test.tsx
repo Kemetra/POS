@@ -124,7 +124,9 @@ describe('<ExternalCardTerminalEntry> — no card data fields', () => {
 describe('<ExternalCardTerminalEntry> — accessibility floor', () => {
   it('confirm button meets 44px touch-target floor', () => {
     const { confirm } = setup();
-    expect(confirm.style.minHeight).toBe('44px');
+    // RT-238: a commit is the large control (56px), which keeps the 44px floor.
+    expect(Number.parseFloat(confirm.style.minHeight)).toBeGreaterThanOrEqual(44);
+    expect(confirm.style.minHeight).toBe('56px');
   });
 });
 

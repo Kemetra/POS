@@ -236,25 +236,24 @@ export function ExternalCardTerminalEntry({
         </div>
       )}
 
-      {bridgeRefusal && (
-        <div
-          className="external-card-terminal-entry__bridge-refusal"
-          data-testid="external-card-bridge-refusal"
-          role="status"
-          aria-live="polite"
-        >
-          تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
-        </div>
-      )}
-
       <div className="external-card-terminal-entry__actions">
         {/* RT-238: the primary action lives in the pinned slot; PaymentSurface decides who owns it. */}
         <PinnedPrimary>
+          {bridgeRefusal && (
+            <div
+              className="external-card-terminal-entry__bridge-refusal"
+              data-testid="external-card-bridge-refusal"
+              role="status"
+              aria-live="polite"
+            >
+              تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
+            </div>
+          )}
           <button
             type="button"
             className="external-card-terminal-entry__confirm checkout-commit"
             data-testid="external-card-confirm"
-            style={{ minHeight: touchTarget.min }}
+            style={{ minHeight: touchTarget.commit }}
             disabled={!canConfirm}
             aria-disabled={!canConfirm ? 'true' : undefined}
             onClick={() => {

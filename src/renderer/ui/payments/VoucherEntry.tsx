@@ -251,26 +251,25 @@ export function VoucherEntry({
           type="button"
           className="voucher-entry__confirm checkout-commit"
           data-testid="voucher-entry-confirm"
-          style={{ minHeight: touchTarget.min }}
+          style={{ minHeight: touchTarget.commit }}
           disabled={!canSubmit}
           aria-disabled={!canSubmit ? 'true' : undefined}
           onClick={handleSubmit}
         >
           تطبيق القسيمة (Apply voucher)
         </button>
+        {isApplying && (
+          <div data-testid="voucher-entry-applying" aria-busy="true">
+            جارٍ التطبيق… (Applying…)
+          </div>
+        )}
+
+        {bridgeRefusal && (
+          <div data-testid="voucher-entry-refused" role="alert">
+            {GENERIC_VOUCHER_REFUSAL_COPY}
+          </div>
+        )}
       </PinnedPrimary>
-
-      {isApplying && (
-        <div data-testid="voucher-entry-applying" aria-busy="true">
-          جارٍ التطبيق… (Applying…)
-        </div>
-      )}
-
-      {bridgeRefusal && (
-        <div data-testid="voucher-entry-refused" role="alert">
-          {GENERIC_VOUCHER_REFUSAL_COPY}
-        </div>
-      )}
     </section>
   );
 }
