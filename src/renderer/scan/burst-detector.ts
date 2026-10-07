@@ -40,9 +40,12 @@ export interface KeyFacts {
  */
 export function isScanChar(facts: KeyFacts): boolean {
   if (facts.repeat || facts.isComposing) return false;
-  if (facts.ctrlKey || facts.altKey || facts.metaKey) return false;
+  if (MODIFIERS.some((modifier) => facts[modifier])) return false;
   return facts.key.length === 1;
 }
+
+/** A chord (Ctrl+A, Alt+x, Cmd+c) is a shortcut, never part of a scanned code. */
+const MODIFIERS = ['ctrlKey', 'altKey', 'metaKey'] as const;
 
 export interface ExtendResult {
   readonly run: BurstRun;

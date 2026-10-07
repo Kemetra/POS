@@ -112,6 +112,8 @@ describe('a burst is a scan wherever focus is (F-01)', () => {
       </>,
     );
     burst(screen.getByRole('button', { name: 'x' }), '123');
+    // A polite status region, not an alert that steals focus.
+    expect(screen.getByRole('status')).toHaveTextContent(SCAN_UNAVAILABLE_MESSAGE);
     expect(screen.getByTestId('scan-notice')).toHaveTextContent(SCAN_UNAVAILABLE_MESSAGE);
   });
 });
@@ -268,16 +270,5 @@ describe('the notice', () => {
       vi.advanceTimersByTime(SCAN_NOTICE_MS);
     });
     expect(screen.queryByTestId('scan-notice')).not.toBeInTheDocument();
-  });
-
-  it('is a status region, not an alert that steals focus', () => {
-    render(
-      <>
-        <ScanGuardHost />
-        <button type="button">x</button>
-      </>,
-    );
-    burst(screen.getByRole('button', { name: 'x' }), '123');
-    expect(screen.getByRole('status')).toHaveTextContent(SCAN_UNAVAILABLE_MESSAGE);
   });
 });
