@@ -124,8 +124,9 @@ interface BackControlInput {
   /** A payments.cancel in this mount reversed tender. */
   readonly tenderTouched: boolean;
   /**
-   * That cancel PROVED the reversal: lines came back reversed and none are
-   * still pending. Only this may say «أُلغي المبلغ المسجَّل» (M-P2).
+   * That cancel PROVED the reversal (`cancelProvesReversal`): non-card lines
+   * came back reversed and none are still pending. Only this may say
+   * «أُلغي المبلغ المسجَّل» (M-P2).
    */
   readonly tenderReversed: boolean;
   /** start / confirm / cancel / back in flight. */
@@ -158,6 +159,28 @@ const BACK_REASON_COPY: Readonly<Record<BackReason, string>> = {
   blocked: BACK_REFUSED_COPY,
   entry_open: 'اضغط Esc لإغلاق إدخال المبلغ أولاً.',
 };
+
+/**
+ * A cancel proves the money went back only when every reversed line is a known
+ * non-card line and nothing is still pending. A card line is reversed locally
+ * only: main cannot void the terminal (`manual_void_required`), so the customer
+ * may still be charged.
+ */
+function cancelProvesReversal(
+  response: {
+    readonly reversed_tender_line_ids: readonly string[];
+    readonly reversal_pending_tender_line_ids: readonly string[];
+  },
+  lines: PaymentAttemptRendererView['tender_lines'],
+): boolean {
+  const reversed = response.reversed_tender_line_ids;
+  if (reversed.length === 0 || response.reversal_pending_tender_line_ids.length > 0) return false;
+  const typeById = new Map(lines.map((l) => [l.tender_line_id, l.tender_type]));
+  return reversed.every((id) => {
+    const type = typeById.get(id);
+    return type !== undefined && type !== 'external_card_terminal';
+  });
+}
 
 function backReason(input: BackControlInput, tenderBlocked: boolean): BackReason | null {
   if ((input.projectedTenderLines ?? 0) > 0) return 'recorded';
@@ -676,8 +699,10 @@ export function PaymentSurface({
           setTenderTouched(true);
         }
         setTenderReversed(
-          response.reversed_tender_line_ids.length > 0 &&
-            response.reversal_pending_tender_line_ids.length === 0,
+          cancelProvesReversal(
+            response,
+            usePaymentStore.getState().paymentSlice?.tender_lines ?? [],
+          ),
         );
         setSelectedTender(null);
         setPhase('tender_selection');
