@@ -3,6 +3,7 @@ import { useMemo, useState, type JSX } from 'react';
 import { validateExternalReference } from '../../../shared/payments/external-reference-format.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { PinnedPrimary } from './CheckoutActionBar.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
 import { formatCheckoutMoney } from './format-checkout-money.js';
 
@@ -247,19 +248,22 @@ export function ExternalCardTerminalEntry({
       )}
 
       <div className="external-card-terminal-entry__actions">
-        <button
-          type="button"
-          className="external-card-terminal-entry__confirm"
-          data-testid="external-card-confirm"
-          style={{ minHeight: touchTarget.min }}
-          disabled={!canConfirm}
-          aria-disabled={!canConfirm ? 'true' : undefined}
-          onClick={() => {
-            void handleConfirm();
-          }}
-        >
-          تأكيد معالجة جهاز البطاقات (Confirm terminal processed payment)
-        </button>
+        {/* RT-238: the primary action lives in the pinned slot while money is owed. */}
+        <PinnedPrimary pinned={remainingBalanceMinor > 0}>
+          <button
+            type="button"
+            className="external-card-terminal-entry__confirm checkout-commit"
+            data-testid="external-card-confirm"
+            style={{ minHeight: touchTarget.min }}
+            disabled={!canConfirm}
+            aria-disabled={!canConfirm ? 'true' : undefined}
+            onClick={() => {
+              void handleConfirm();
+            }}
+          >
+            تأكيد معالجة جهاز البطاقات (Confirm terminal processed payment)
+          </button>
+        </PinnedPrimary>
         {onBack !== undefined && (
           <button
             type="button"

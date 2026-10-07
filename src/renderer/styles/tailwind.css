@@ -2177,6 +2177,15 @@ body {
     flex-direction: column;
     gap: var(--space-4);
     padding: var(--space-4) var(--space-5) var(--space-5);
+    /*
+     * RT-238 (Never-Scrolled-Away): the surface fills the workspace and does not
+     * scroll itself. The header and the action bar are fixed; the panes between
+     * them scroll, so the amount due and the commit are always in view.
+     */
+    flex: 1 1 auto;
+    min-block-size: 0;
+    block-size: 100%;
+    overflow: hidden;
   }
 
   /*
@@ -2229,6 +2238,18 @@ body {
     grid-template-columns: 400px minmax(0, 1fr) 392px;
     gap: var(--space-4);
     align-items: start;
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow-y: auto;
+  }
+
+  /*
+   * RT-238: the methods and summary panes. In the three-column composition the
+   * wrapper is transparent (the two panes stay grid items of the body, exactly as
+   * before) and the amount panel is sticky at the top of the scrolling body.
+   */
+  .payment-surface__panes {
+    display: contents;
   }
 
   /*
@@ -2268,36 +2289,54 @@ body {
    * such gap. The 1024px floor is unchanged (RECONCILIATION §E).
    */
   @container payment-surface (max-width: 1216px) {
+    /* RT-238: the amount band sits above the panes and does not scroll; the
+       panes scroll beneath it. It used to drop BELOW the methods, which put the
+       amount due off screen on every cart with a few lines. */
     .payment-surface__body {
-      grid-template-columns: minmax(0, 1fr) 392px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    .payment-surface__amount {
-      grid-column: 1 / -1;
-      grid-row: 2;
+    /* `>` raises specificity: the base rules for these two come later in the file. */
+    .payment-surface__body > .payment-surface__amount {
+      position: static;
+      flex: none;
+      /* One line: the label and the figure share a row, so the pinned band costs
+         ~45px instead of ~66px of the working area. */
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-2) var(--space-4);
+    }
+    .payment-surface__body > .payment-surface__amount .payment-surface__amount-value {
+      font-size: var(--font-size-3xl);
+    }
+    .payment-surface__panes {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 392px;
+      gap: var(--space-4);
+      align-items: start;
+      flex: 1 1 auto;
+      min-block-size: 0;
+      overflow-y: auto;
     }
   }
 
   @container payment-surface (max-width: 768px) {
-    .payment-surface__body {
+    .payment-surface__panes {
       grid-template-columns: 1fr;
-    }
-    .payment-surface__amount {
-      grid-column: auto;
-      grid-row: auto;
     }
   }
 
   @media (max-width: 1023px) {
-    .payment-surface__body {
+    .payment-surface__panes {
       grid-template-columns: 1fr;
-    }
-    .payment-surface__amount {
-      grid-column: auto;
-      grid-row: auto;
     }
   }
 
   .payment-surface__amount {
+    position: sticky;
+    inset-block-start: 0;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
@@ -2579,12 +2618,54 @@ body {
    * The reference pairs a filled teal confirm with a quiet outlined cancel,
    * both on one row at the surface foot.
    */
-  .payment-surface__actions {
+  /*
+   * RT-238 — the pinned action bar (15 §4 A2 ActionSlots). It is a sibling of the
+   * scrolling panes, so it never scrolls away. inline-start = cancel,
+   * inline-end = primary/commit, and an empty slot stays empty: the end slot is
+   * pushed to the inline-end edge even when the start slot has nothing in it.
+   */
+  .checkout-actions {
+    flex: none;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: var(--space-3);
-    padding-block-start: var(--space-4);
+    padding-block-start: var(--space-3);
     border-block-start: 1px solid var(--color-border-soft);
+  }
+
+  .checkout-actions__row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .checkout-actions__slot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-inline-size: 0;
+  }
+
+  .checkout-actions__slot--start {
+    align-items: flex-start;
+  }
+
+  .checkout-actions__slot--end {
+    align-items: flex-end;
+    margin-inline-start: auto;
+  }
+
+  .checkout-actions__reason {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-warning-emphasis);
+  }
+
+  /* The entry's own button row is empty once its commit is pinned into the bar. */
+  .cash-entry__actions:empty,
+  .external-card-terminal-entry__actions:empty {
+    display: none;
   }
 
   .payment-surface__confirm,
@@ -2629,6 +2710,58 @@ body {
   .payment-surface__cancel:focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
+  }
+
+  /*
+   * RT-238 — commit chrome (RT-159 F-09: the entry confirms rendered as plain
+   * text). One filled primary per region (Commit-Teal rule). A commit that
+   * cannot proceed is sunken and dashed, never just dimmed. Under forced colours
+   * the fill is dropped by the browser, so the boundary carries the meaning.
+   */
+  .checkout-commit {
+    min-block-size: 56px;
+    padding: var(--space-3) var(--space-6);
+    border: 2px solid var(--color-primary);
+    border-radius: var(--radius-control);
+    background-color: var(--color-primary);
+    color: var(--color-primary-on);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    cursor: pointer;
+  }
+
+  .checkout-commit:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: var(--color-primary-emphasis);
+    border-color: var(--color-primary-emphasis);
+  }
+
+  .checkout-commit:disabled,
+  .checkout-commit[aria-disabled='true'] {
+    border: 2px dashed var(--color-border-strong);
+    background-color: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  .checkout-commit:focus-visible {
+    outline: 3px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (forced-colors: active) {
+    .checkout-commit {
+      border: 3px solid ButtonText;
+      background-color: ButtonFace;
+      color: ButtonText;
+    }
+
+    .checkout-commit:disabled,
+    .checkout-commit[aria-disabled='true'] {
+      border: 2px dashed GrayText;
+      color: GrayText;
+    }
   }
 
   .method-card__check {

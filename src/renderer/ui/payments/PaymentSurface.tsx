@@ -11,6 +11,7 @@ import { formatCheckoutMoney } from './format-checkout-money.js';
 import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
 import { CashEntry } from './CashEntry.js';
+import { CheckoutActionBar, FocusWhen, PrimarySlotContext } from './CheckoutActionBar.js';
 import { ExternalCardTerminalEntry } from './ExternalCardTerminalEntry.js';
 import { VoucherEntry } from './VoucherEntry.js';
 import type { BackToSaleEligibility } from '../../sale/useCheckoutBackToSale.js';
@@ -275,6 +276,17 @@ export function PaymentSurface({
 
   const [selectedTender, setSelectedTender] = useState<TenderKind | null>(null);
   const [phase, setPhase] = useState<Phase>('tender_selection');
+  // RT-238: the pinned primary slot the entry components render their apply-commit into.
+  const [primarySlot, setPrimarySlot] = useState<HTMLElement | null>(null);
+
+  // RT-238: the entry opens below the method tiles, inside the scrolling panes;
+  // bring it into view so the cashier never has to hunt for the amount field.
+  useEffect(() => {
+    if (phase !== 'entry') return;
+    const entry = document.querySelector('.payment-surface__entry');
+    // jsdom has no layout and no scrollIntoView; the real window always does.
+    if (entry !== null && 'scrollIntoView' in entry) entry.scrollIntoView({ block: 'nearest' });
+  }, [phase]);
   const [bridgeRefusalCopy, setBridgeRefusalCopy] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
@@ -637,6 +649,12 @@ export function PaymentSurface({
     appliedChangeDueMinor = 0;
   }
 
+  // RT-238: exactly one control owns the primary slot at a time. While an entry
+  // is open and money is still owed, that is the entry's own apply-commit; the
+  // settle commit cannot proceed yet, so it waits out of the slot.
+  const fullyTendered = hasAppliedLine && remainingBalanceMinor === 0;
+  const entryOwnsPrimary = phase === 'entry' && remainingBalanceMinor > 0;
+
   if (phase === 'settled') {
     // 022 US4a — NFR-6 / P2, as REVISED by external review round 2.
     //
@@ -759,23 +777,24 @@ export function PaymentSurface({
   }
 
   return (
-    <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
-      <header className="payment-surface__header">
-        <h1 className="payment-surface__title">الدفع</h1>
-        {/* RT-26 — Back to the same sale (Esc). Disabled, with the reason
+    <PrimarySlotContext.Provider value={primarySlot}>
+      <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
+        <header className="payment-surface__header">
+          <h1 className="payment-surface__title">الدفع</h1>
+          {/* RT-26 — Back to the same sale (Esc). Disabled, with the reason
             below, once tender exists; main refuses it in that case too. */}
-        <BackToSaleButton
-          back={back}
-          onBack={() => {
-            void handleBackToSale();
-          }}
-        />
-        <OperatorBadge display_name={display_name} role={role} />
-      </header>
+          <BackToSaleButton
+            back={back}
+            onBack={() => {
+              void handleBackToSale();
+            }}
+          />
+          <OperatorBadge display_name={display_name} role={role} />
+        </header>
 
-      <BackBlockedReason back={back} />
+        <BackBlockedReason back={back} />
 
-      {/*
+        {/*
         022 US3 T070 — three-column composition.
 
         DOM ORDER IS AMOUNT → METHODS → SUMMARY, and that is load-bearing, not
@@ -795,165 +814,190 @@ export function PaymentSurface({
         crossing. Same reasoning as the `.sale-layout` / `.tender-method-grid`
         narrow rules, which #450/#451 documented as NOT dead CSS.
       */}
-      <div className="payment-surface__body" data-testid="payment-surface-body">
-        <section className="payment-surface__amount" aria-label="المبلغ المستحق">
-          <span
-            className="payment-surface__amount-label"
-            data-testid="payment-surface-amount-label"
-          >
-            المبلغ المستحق
-          </span>
-          <span
-            className="payment-surface__amount-value"
-            data-testid="payment-surface-amount-due"
-            dir="ltr"
-          >
-            {formatCheckoutMoney(remainingBalanceMinor)}
-          </span>
-        </section>
+        <div className="payment-surface__body" data-testid="payment-surface-body">
+          <section className="payment-surface__amount" aria-label="المبلغ المستحق">
+            <span
+              className="payment-surface__amount-label"
+              data-testid="payment-surface-amount-label"
+            >
+              المبلغ المستحق
+            </span>
+            <span
+              className="payment-surface__amount-value"
+              data-testid="payment-surface-amount-due"
+              dir="ltr"
+            >
+              {formatCheckoutMoney(remainingBalanceMinor)}
+            </span>
+          </section>
 
-        <div className="payment-surface__methods">
-          <TenderSelection
-            envelope={envelope}
-            selectedTender={selectedTender}
-            voucherEnabled={voucherTenderFlag}
-            onTenderSelect={(tender) => {
-              void handleTenderSelect(tender);
-            }}
-          />
+          <div className="payment-surface__panes">
+            <div className="payment-surface__methods">
+              <TenderSelection
+                envelope={envelope}
+                selectedTender={selectedTender}
+                voucherEnabled={voucherTenderFlag}
+                onTenderSelect={(tender) => {
+                  void handleTenderSelect(tender);
+                }}
+              />
 
-          {/* S3d mode: entry component for the selected tender. */}
-          {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
-            <div className="payment-surface__entry" data-testid="payment-surface-entry">
-              {selectedTender === 'cash' && (
-                <CashEntry
-                  remainingBalanceMinor={remainingBalanceMinor}
-                  paymentAttemptId={paymentAttemptId}
-                  tenderApply={(req) => bridge.tender.apply(req)}
-                  appliedChangeDueMinor={appliedChangeDueMinor}
-                  onApplied={() => {
-                    void handleLineApplied();
-                  }}
-                />
-              )}
-              {selectedTender === 'external_card_terminal' && (
-                <ExternalCardTerminalEntry
-                  remainingBalanceMinor={remainingBalanceMinor}
-                  paymentAttemptId={paymentAttemptId}
-                  tenderApply={(req) => bridge.tender.apply(req)}
-                  onApplied={() => {
-                    void handleLineApplied();
-                  }}
-                />
-              )}
-              {selectedTender === 'internal_voucher' && voucherTenderFlag && (
-                <VoucherEntry
-                  remainingBalanceMinor={remainingBalanceMinor}
-                  paymentAttemptId={paymentAttemptId}
-                  tenderApply={(req) => bridge.tender.apply(req)}
-                  onApplied={() => {
-                    void handleLineApplied();
-                  }}
-                />
+              {/* S3d mode: entry component for the selected tender. */}
+              {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
+                <div className="payment-surface__entry" data-testid="payment-surface-entry">
+                  {selectedTender === 'cash' && (
+                    <CashEntry
+                      remainingBalanceMinor={remainingBalanceMinor}
+                      paymentAttemptId={paymentAttemptId}
+                      tenderApply={(req) => bridge.tender.apply(req)}
+                      appliedChangeDueMinor={appliedChangeDueMinor}
+                      onApplied={() => {
+                        void handleLineApplied();
+                      }}
+                    />
+                  )}
+                  {selectedTender === 'external_card_terminal' && (
+                    <ExternalCardTerminalEntry
+                      remainingBalanceMinor={remainingBalanceMinor}
+                      paymentAttemptId={paymentAttemptId}
+                      tenderApply={(req) => bridge.tender.apply(req)}
+                      onApplied={() => {
+                        void handleLineApplied();
+                      }}
+                    />
+                  )}
+                  {selectedTender === 'internal_voucher' && voucherTenderFlag && (
+                    <VoucherEntry
+                      remainingBalanceMinor={remainingBalanceMinor}
+                      paymentAttemptId={paymentAttemptId}
+                      tenderApply={(req) => bridge.tender.apply(req)}
+                      onApplied={() => {
+                        void handleLineApplied();
+                      }}
+                    />
+                  )}
+                </div>
               )}
             </div>
-          )}
+
+            <div className="payment-surface__summary">
+              <PaymentCartSummary envelope={envelope} />
+            </div>
+          </div>
         </div>
 
-        <div className="payment-surface__summary">
-          <PaymentCartSummary envelope={envelope} />
-        </div>
-      </div>
+        {/* Slice-1 mode: status banner only (no bridge wiring). */}
+        {bridge === null && selectedTender !== null && (
+          <div
+            className="payment-surface__tender-selected"
+            data-testid="payment-surface-tender-selected"
+            role="status"
+            aria-live="polite"
+          >
+            {selectedTender === 'cash'
+              ? 'تم اختيار النقد'
+              : selectedTender === 'external_card_terminal'
+                ? 'تم اختيار جهاز الشبكة'
+                : 'تم اختيار القسيمة'}
+          </div>
+        )}
 
-      {/* Slice-1 mode: status banner only (no bridge wiring). */}
-      {bridge === null && selectedTender !== null && (
-        <div
-          className="payment-surface__tender-selected"
-          data-testid="payment-surface-tender-selected"
-          role="status"
-          aria-live="polite"
-        >
-          {selectedTender === 'cash'
-            ? 'تم اختيار النقد'
-            : selectedTender === 'external_card_terminal'
-              ? 'تم اختيار جهاز الشبكة'
-              : 'تم اختيار القسيمة'}
-        </div>
-      )}
-
-      {/*
-        022 US3-B — footer action bar.
-
-        The two actions were previously loose siblings of the body grid, so they
-        stacked full-bleed under the columns. The reference pairs them on one
-        row at the foot of the surface, confirm leading. This is a PRESENTATION
-        wrapper only: both buttons keep their class, testid, disabled state and
-        handler exactly as before, and the confirm/cancel conditions are
-        unchanged — so `hasAppliedLine` still gates confirm and the entry phase
-        still gates cancel.
-
-        DOM order stays confirm → cancel: the primary action precedes the
-        escape hatch in traversal, and under RTL the row renders confirm at the
-        inline-start edge as the reference shows.
+        {/*
+        RT-238 — the pinned action bar (15 §4 A2). Cancel lives at inline-start,
+        the primary/commit at inline-end, and neither slot is ever filled by an
+        action of the opposite consequence. The bar is outside the scrolling
+        panes, so the commit cannot scroll out of view; refusals stay with it.
       */}
-      {bridge !== null && (hasAppliedLine || phase === 'entry') && (
-        <div className="payment-surface__actions" data-testid="payment-surface-actions">
-          {hasAppliedLine && (
-            <button
-              type="button"
-              className="payment-surface__confirm"
-              data-testid="payment-surface-confirm"
-              disabled={isConfirming}
-              aria-disabled={isConfirming ? 'true' : undefined}
-              onClick={() => {
-                void handleConfirm();
-              }}
-            >
-              تأكيد الدفع
-            </button>
-          )}
-
-          {phase === 'entry' && (
-            <button
-              type="button"
-              className="payment-surface__cancel"
-              data-testid="payment-surface-cancel"
-              disabled={isCancelling}
-              aria-disabled={isCancelling ? 'true' : undefined}
-              onClick={() => {
-                void handleCancel();
-              }}
-            >
-              إلغاء
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids
-          was non-empty in the most recent cancel response. Copy is fixed (no
-          id interpolation) per FR-017 / token minimisation. */}
-      {reversalPending && (
-        <div
-          className="payment-surface__reversal-pending-hint"
-          data-testid="payment-surface-reversal-pending-hint"
-          role="status"
-          aria-live="polite"
-        >
-          هناك عمليات عكس قيد المعالجة وستتم قريباً.
-        </div>
-      )}
-
-      {bridgeRefusalCopy !== null && (
-        <div
-          className="payment-surface__bridge-refusal"
-          data-testid="payment-surface-bridge-refusal"
-          role="status"
-          aria-live="polite"
-        >
-          {bridgeRefusalCopy}
-        </div>
-      )}
-    </section>
+        {bridge !== null && (
+          <CheckoutActionBar
+            endSlotRef={setPrimarySlot}
+            cancel={
+              phase === 'entry' ? (
+                <button
+                  type="button"
+                  className="payment-surface__cancel"
+                  data-testid="payment-surface-cancel"
+                  disabled={isCancelling}
+                  aria-disabled={isCancelling ? 'true' : undefined}
+                  onClick={() => {
+                    void handleCancel();
+                  }}
+                >
+                  إلغاء
+                </button>
+              ) : null
+            }
+            commit={
+              hasAppliedLine && !entryOwnsPrimary ? (
+                <button
+                  type="button"
+                  className="payment-surface__confirm checkout-commit"
+                  data-testid="payment-surface-confirm"
+                  disabled={isConfirming}
+                  aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
+                  aria-describedby={fullyTendered ? undefined : 'payment-commit-reason'}
+                  onClick={() => {
+                    if (fullyTendered) void handleConfirm();
+                  }}
+                >
+                  تأكيد الدفع
+                </button>
+              ) : null
+            }
+            reason={
+              hasAppliedLine && !entryOwnsPrimary && !fullyTendered ? (
+                <p
+                  id="payment-commit-reason"
+                  className="checkout-actions__reason"
+                  data-testid="payment-surface-commit-reason"
+                >
+                  المبلغ أقل من المستحق
+                </p>
+              ) : null
+            }
+            notices={
+              <>
+                {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids
+                  was non-empty in the most recent cancel response. Copy is fixed (no
+                  id interpolation) per FR-017 / token minimisation. */}
+                {reversalPending && (
+                  <div
+                    className="payment-surface__reversal-pending-hint"
+                    data-testid="payment-surface-reversal-pending-hint"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    هناك عمليات عكس قيد المعالجة وستتم قريباً.
+                  </div>
+                )}
+                {bridgeRefusalCopy !== null && (
+                  <div
+                    className="payment-surface__bridge-refusal"
+                    data-testid="payment-surface-bridge-refusal"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {bridgeRefusalCopy}
+                  </div>
+                )}
+              </>
+            }
+          />
+        )}
+        {/* The primary action changes under the cashier's hands; keep focus with them. */}
+        <FocusWhen
+          active={fullyTendered}
+          find={() =>
+            document.querySelector<HTMLElement>('[data-testid="payment-surface-confirm"]')
+          }
+        />
+        <FocusWhen
+          active={phase === 'tender_selection' && hasAppliedLine}
+          find={() =>
+            document.querySelector<HTMLElement>('.payment-surface__methods button:not([disabled])')
+          }
+        />
+      </section>
+    </PrimarySlotContext.Provider>
   );
 }

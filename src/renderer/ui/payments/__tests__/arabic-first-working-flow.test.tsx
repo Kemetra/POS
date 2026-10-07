@@ -268,7 +268,7 @@ describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () 
   });
 
   it('AmountPad carries no English-only operator-facing string', () => {
-    const { container } = render(<AmountPad valueMinor={0} onChange={vi.fn()} totalMinor={5000} />);
+    const { container } = render(<AmountPad valueMinor={0} onChange={vi.fn()} />);
     expectNoEnglishOnlyStrings(container, 'AmountPad');
   });
 
