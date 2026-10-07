@@ -653,6 +653,47 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
     expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
   });
 
+  it('follows the original outcome even while a retry from the remounted surface is pending (Codex P2)', async () => {
+    const { bridge, script } = makeBridge();
+    await openWith(bridge, CARD_APPLIED);
+    let first: (r: PaymentsCancelResponse) => void = () => undefined;
+    let second: (r: PaymentsCancelResponse) => void = () => undefined;
+    script({
+      cancel: [
+        () =>
+          new Promise<PaymentsCancelResponse>((resolve) => {
+            first = resolve;
+          }),
+        () =>
+          new Promise<PaymentsCancelResponse>((resolve) => {
+            second = resolve;
+          }),
+      ],
+      read: undefined,
+    });
+    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    await settle();
+    await remount(bridge);
+    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    await settle();
+
+    // The original request answers first and ends the attempt; then the retry.
+    await act(async () => {
+      first(CANCEL_OK);
+      await Promise.resolve();
+    });
+    await settle();
+    await act(async () => {
+      second(CANCEL_OK);
+      await Promise.resolve();
+    });
+    await settle();
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    expect(screen.queryByTestId('payment-surface-bridge-refusal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-cancel')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+  });
+
   it('a late refusal on a still-open attempt reopens payment with the named retry', async () => {
     const { bridge, script } = makeBridge();
     await openWith(bridge, CASH_APPLIED);
