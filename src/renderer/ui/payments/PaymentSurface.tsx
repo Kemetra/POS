@@ -610,6 +610,19 @@ export function PaymentSurface({
     ? Math.max(envelope.subtotal_minor - sumAppliedMinor, 0)
     : 0;
 
+  // RT-237 — the change to hand back is main's `change_due_minor` on the
+  // applied lines, never recomputed here. Shown after apply (CashEntry) and on
+  // completion; unsafe values are skipped like the amount accumulator above.
+  let appliedChangeDueMinor = 0;
+  for (const line of appliedLines) {
+    const change = line.change_due_minor;
+    if (change === undefined || !Number.isSafeInteger(change) || change <= 0) continue;
+    appliedChangeDueMinor += change;
+  }
+  if (!Number.isSafeInteger(appliedChangeDueMinor)) {
+    appliedChangeDueMinor = 0;
+  }
+
   if (phase === 'settled') {
     // 022 US4a — NFR-6 / P2, as REVISED by external review round 2.
     //
@@ -699,6 +712,17 @@ export function PaymentSurface({
             >
               {formatCheckoutMoney(envelope.subtotal_minor)}
             </p>
+            {/* RT-237 (M-P5 / M-C1) — the change to hand back, as main
+                computed it at apply time. Absent for exact cash and for
+                non-cash sales: no change line rather than a 0.00 one. */}
+            {appliedChangeDueMinor > 0 && (
+              <p
+                className="payment-surface__settled-change"
+                data-testid="payment-surface-settled-change"
+              >
+                الباقي للعميل <span dir="ltr">{formatCheckoutMoney(appliedChangeDueMinor)}</span>
+              </p>
+            )}
           </div>
         </div>
 
@@ -791,6 +815,7 @@ export function PaymentSurface({
                   remainingBalanceMinor={remainingBalanceMinor}
                   paymentAttemptId={paymentAttemptId}
                   tenderApply={(req) => bridge.tender.apply(req)}
+                  appliedChangeDueMinor={appliedChangeDueMinor}
                   onApplied={() => {
                     void handleLineApplied();
                   }}

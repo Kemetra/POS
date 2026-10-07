@@ -45,6 +45,14 @@ export interface CashEntryProps {
   tenderApply?: (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
   /** Fires with the `{ kind: 'ok', ... }` response on successful apply. */
   onApplied?: (response: Extract<TenderApplyResponse, { kind: 'ok' }>) => void;
+  /**
+   * RT-237 — the change main computed for the lines already applied, summed
+   * from the payment projection (`change_due_minor`). Once the attempt is fully
+   * tendered the remaining balance is 0, so re-deriving the change from the
+   * typed amount here would return the amount RECEIVED. From that point the
+   * row shows this value instead and never recomputes.
+   */
+  appliedChangeDueMinor?: number;
 }
 
 export function CashEntry({
@@ -54,6 +62,7 @@ export function CashEntry({
   paymentAttemptId,
   tenderApply,
   onApplied,
+  appliedChangeDueMinor = 0,
 }: CashEntryProps): JSX.Element {
   const [rawInput, setRawInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
@@ -85,11 +94,18 @@ export function CashEntry({
     ? isPositive && isRemainingValid && remainingBalanceMinor > 0
     : isSufficient;
 
+  // RT-237: bridged and fully tendered (remaining 0) means the cash line is
+  // already applied — the change is main's, read back from the projection.
+  // Recomputing here would be `received − 0`, i.e. the amount received.
+  const isFullyTendered = isBridged && isRemainingValid && remainingBalanceMinor === 0;
+
   // computeChangeDueMinor throws on under-tender; only compute it when the
   // cash amount actually covers the remaining balance.
-  const changeDueMinor = isSufficient
-    ? computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)
-    : null;
+  const changeDueMinor = isFullyTendered
+    ? appliedChangeDueMinor
+    : isSufficient
+      ? computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)
+      : null;
 
   async function handleConfirm(): Promise<void> {
     if (!canConfirm || amountAppliedMinor === null) {
