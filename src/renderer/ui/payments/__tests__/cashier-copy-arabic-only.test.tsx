@@ -25,32 +25,9 @@ import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
 import { TenderSelection } from '../TenderSelection.js';
 import { VoucherEntry } from '../VoucherEntry.js';
+import { latinLeaks } from './latin-leaks.js';
 
 afterEach(cleanup);
-
-const ALLOWED = new Set(['Esc', 'Enter']);
-
-/** Every Latin word a cashier would read or hear on this subtree. */
-function latinLeaks(root: HTMLElement): string[] {
-  const clone = root.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll('[dir="ltr"], kbd').forEach((el) => {
-    el.remove();
-  });
-  const sources = [clone.textContent];
-  for (const el of [root, ...Array.from(root.querySelectorAll('*'))]) {
-    if (el.closest('[dir="ltr"]') !== null && el.getAttribute('dir') !== 'ltr') continue;
-    const ltrField = el.getAttribute('dir') === 'ltr';
-    for (const attr of ltrField
-      ? ['aria-label', 'title']
-      : ['aria-label', 'title', 'placeholder']) {
-      const value = el.getAttribute(attr);
-      if (value !== null) sources.push(value);
-    }
-  }
-  return sources
-    .flatMap((text) => text.match(/[A-Za-z]+/g) ?? [])
-    .filter((word) => !ALLOWED.has(word));
-}
 
 function sweep(ui: JSX.Element): string[] {
   const { container } = render(ui);
