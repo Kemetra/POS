@@ -83,6 +83,8 @@ export type ReserveOutcome =
        */
       payment_attempt_id: string;
       tender_line_id: string | null;
+      /** When the original action was recorded (its own clock reading). */
+      created_at: string;
     }
   | { kind: 'mismatch' };
 
@@ -108,6 +110,7 @@ export function createIdempotencyHelper(deps: IdempotencyHelperDependencies): Id
             kind: 'replay',
             payment_attempt_id: existing.payment_attempt_id,
             tender_line_id: existing.tender_line_id,
+            created_at: existing.created_at,
           };
         }
         return { kind: 'mismatch' };

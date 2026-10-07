@@ -121,6 +121,23 @@ export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): Tend
     }
 
     if (reservation.kind === 'replay') {
+      // A voucher reversal answered `reversal_pending` and was later settled
+      // by the deferred resolver (a different action): the line now reads
+      // `reversed` and its `last_action_id` is the resolver's, but the original
+      // answer was the pending one, stamped at the outbox row's `created_at`
+      // (`markReversalPending` records `reversal_pending_since` there).
+      // A voucher line reversed by THIS key keeps this key as `last_action_id`.
+      if (
+        line.tender_type === 'internal_voucher' &&
+        line.state === 'reversed' &&
+        line.last_action_id !== req.idempotency_key
+      ) {
+        return await Promise.resolve({
+          kind: 'ok',
+          reversed_at: reservation.created_at,
+          state: 'reversal_pending',
+        });
+      }
       // A line whose authority reversal is still pending carries
       // `reversal_pending_since`, not `reversed_at` (RT-304 review).
       const replayAt =

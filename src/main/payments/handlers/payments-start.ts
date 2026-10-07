@@ -189,6 +189,12 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
       ) {
         return await Promise.resolve({ kind: 'refused', reason: 'tenant_isolation' });
       }
+      // A different operator session on the same terminal (a new sign-in)
+      // must not be handed the previous operator's attempt: every follow-up
+      // call on it would be refused `wrong_owner`.
+      if (original.operator_session_id !== session.operator_session_id) {
+        return await Promise.resolve({ kind: 'refused', reason: 'wrong_owner' });
+      }
       return await Promise.resolve({
         kind: 'ok',
         payment_attempt_id: original.payment_attempt_id,

@@ -317,7 +317,12 @@ export interface IdempotencyHelperDouble extends IdempotencyHelper {
  */
 export type IdempotencyDoubleOutcome =
   | ReserveOutcome
-  | { kind: 'replay'; payment_attempt_id?: string; tender_line_id?: string | null };
+  | {
+      kind: 'replay';
+      payment_attempt_id?: string;
+      tender_line_id?: string | null;
+      created_at?: string;
+    };
 
 export function makeIdempotencyHelperDouble(
   requested: IdempotencyDoubleOutcome | 'auto' = 'auto',
@@ -329,6 +334,7 @@ export function makeIdempotencyHelperDouble(
           kind: 'replay',
           payment_attempt_id: requested.payment_attempt_id ?? 'pa-1',
           tender_line_id: requested.tender_line_id ?? null,
+          created_at: requested.created_at ?? '2026-05-23T11:00:00.000Z',
         }
       : requested;
   const checkOrReserve = vi.fn<IdempotencyHelper['checkOrReserve']>(() => {

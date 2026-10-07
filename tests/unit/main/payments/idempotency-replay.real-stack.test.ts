@@ -111,6 +111,7 @@ function build(options: StackOptions = {}) {
   return {
     outbox,
     lines,
+    tenderLineFsm,
     useSession(next: OperatorSessionForPayments): void {
       session = next;
     },
@@ -384,13 +385,19 @@ describe('RT-304 — replay after the original action has been superseded', () =
     expect(await s.start(req)).toEqual(first);
   });
 
-  it('payments.start refuses a replay made from another terminal rather than leak the attempt id', async () => {
-    const s = build();
-    const req = startRequest('k-start', 'cart-1');
-    await s.start(req);
-    s.useSession(makeSession({ terminal_id: 'terminal-OTHER' }));
-    expect(await s.start(req)).toEqual({ kind: 'refused', reason: 'tenant_isolation' });
-  });
+  it.each([
+    ['terminal', { terminal_id: 'terminal-OTHER' }, 'tenant_isolation'],
+    ['operator session', { operator_session_id: 'sess-NEW-SIGN-IN' }, 'wrong_owner'],
+  ])(
+    'payments.start refuses a replay made from another %s rather than leak the attempt id',
+    async (_what, otherSession, reason) => {
+      const s = build();
+      const req = startRequest('k-start', 'cart-1');
+      await s.start(req);
+      s.useSession(makeSession(otherSession));
+      expect(await s.start(req)).toEqual({ kind: 'refused', reason });
+    },
+  );
 
   it('tender.apply replays once its line has been reversed', async () => {
     const s = build();
@@ -429,6 +436,18 @@ describe('RT-304 — replay after the original action has been superseded', () =
     const req = { tender_line_id: applied.tender_line_id, idempotency_key: 'k-rev' };
     const first = await s.reverse(req);
     expect(first).toMatchObject({ kind: 'ok', state: 'reversal_pending' });
+    expect(await s.reverse(req)).toEqual(first);
+
+    // The deferred resolver later settles the line under its OWN action id.
+    // The retry must still get the original pending answer and timestamp.
+    s.tenderLineFsm.confirmReversed({
+      tender_line_id: applied.tender_line_id,
+      payment_attempt_id: attempt,
+      reversed_at: '2026-10-08T11:30:00.000Z',
+      attribution_operator_id: 'op-resolver',
+      action_id: 'resolver-1',
+    });
+    expect(s.lines.findByLineId(applied.tender_line_id)?.state).toBe('reversed');
     expect(await s.reverse(req)).toEqual(first);
   });
 });
