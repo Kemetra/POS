@@ -225,6 +225,20 @@ describe('RT-298 — cancel retry replays the same idempotency key', () => {
     expect(usePaymentStore.getState().paymentSlice).toBeNull();
   });
 
+  it('Escape cannot close the panel away from the Cancel the unknown-outcome line names (Codex P2)', async () => {
+    const { bridge, script } = makeBridge();
+    await openWith(bridge, CARD_APPLIED);
+    script({ cancel: [LOST], read: undefined });
+
+    await clickCancel();
+    act(() => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+    await settle();
+    expect(screen.getByTestId('payment-surface-cancel')).toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(CANCEL_UNKNOWN);
+  });
+
   it('a refused cancel on a still-open attempt names the retry, and the retry reuses the key', async () => {
     const { bridge, cancel, script } = makeBridge();
     await openWith(bridge, CASH_APPLIED);

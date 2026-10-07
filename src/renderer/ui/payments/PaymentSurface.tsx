@@ -591,7 +591,11 @@ export function PaymentSurface({
 
   // Esc closes an open entry panel (only the panel: the attempt and any
   // recorded tender are untouched, and Back stays a separate, second action).
-  useEscapeKey(phase === 'entry', () => {
+  // RT-298: nothing new is recorded or settled while a cancel is in flight or
+  // its outcome is unconfirmed; main is read first. Esc must not close the
+  // panel either: Cancel lives there and is the named way out (Codex P2, #576).
+  const cancelOpen = isCancelling || cancelUnconfirmed;
+  useEscapeKey(phase === 'entry' && !cancelOpen, () => {
     setSelectedTender(null);
     setPhase('tender_selection');
   });
@@ -1013,9 +1017,6 @@ export function PaymentSurface({
   const fullyTendered = hasAppliedLine && remainingBalanceMinor === 0;
   // While a post-apply read is pending or failed, nobody gets an apply or a settle:
   // the projection is not trustworthy until main has been read again.
-  // RT-298: nothing new is recorded or settled while a cancel is in flight or
-  // its outcome is unconfirmed; main is read first.
-  const cancelOpen = isCancelling || cancelUnconfirmed;
   const entryOwnsPrimary = phase === 'entry' && remainingBalanceMinor > 0 && afterApply === 'idle';
   const showSettle = hasAppliedLine && !entryOwnsPrimary && afterApply === 'idle' && !cancelOpen;
 
