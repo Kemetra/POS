@@ -5,6 +5,7 @@ import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/br
 import { touchTarget } from '../tokens/touch.js';
 import { PinnedPrimary } from './CheckoutActionBar.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
+import { mapDigits, normalizeNumericInput } from '../forms/normalize-digits.js';
 import { formatCheckoutMoney } from './format-checkout-money.js';
 
 /**
@@ -153,7 +154,7 @@ export function ExternalCardTerminalEntry({
               autoComplete="off"
               value={amountInput}
               onChange={(e) => {
-                const next = e.target.value;
+                const next = normalizeNumericInput(e.target.value);
                 if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
                   setAmountInput(next);
                   setBridgeRefusal(false);
@@ -218,7 +219,7 @@ export function ExternalCardTerminalEntry({
         dir="ltr"
         value={referenceInput}
         onChange={(e) => {
-          setReferenceInput(e.target.value);
+          setReferenceInput(mapDigits(e.target.value));
           setBridgeRefusal(false);
         }}
       />

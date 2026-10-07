@@ -4,6 +4,7 @@ import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
+import { normalizeNumericInput } from '../forms/normalize-digits.js';
 import { quickAmounts } from '../../../shared/payments/quick-amounts.js';
 import { AmountPad } from './AmountPad.js';
 import { MoneyRoll } from './MoneyRoll.js';
@@ -189,7 +190,7 @@ export function CashEntry({
               autoComplete="off"
               value={rawInput}
               onChange={(e) => {
-                const next = e.target.value;
+                const next = normalizeNumericInput(e.target.value);
                 // Keystroke guard: digits + optional single decimal, ≤2 frac.
                 if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
                   setRawInput(next);
