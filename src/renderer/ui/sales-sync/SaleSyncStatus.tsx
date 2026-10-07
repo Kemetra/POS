@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 
 import type { SaleSyncStatusCounts } from '../../../main/sales-sync/sale-sync-state-repo.js';
 import type { PreloadBridgeAPI } from '../../../shared/bridge-api.js';
+import { formatHumanCount, formatHumanDateTime } from '../format/human-format';
 
 /**
  * 011-sale-sync-capture-up T054 — `SaleSyncStatus` read-only indicator.
@@ -77,22 +78,14 @@ function toState(counts: SaleSyncStatusCounts): {
   return { state: 'all-synced', lastSuccessAt: counts.lastSuccessAt };
 }
 
-/** Arabic-locale ABSOLUTE time (no relative clock — it would drift and lie). */
+/** Arabic ABSOLUTE time, Western digits, 24-hour (UX-12; no relative clock — it would drift and lie). */
 function formatAbsolute(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat('ar-EG', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
+  return formatHumanDateTime(iso, { withYear: true, month: 'long' }) ?? iso;
 }
 
-/** Arabic-Indic numerals (the cashier's locale) for a count. */
+/** Western digits (UX-12) for a count. */
 function arabicNumber(n: number): string {
-  return new Intl.NumberFormat('ar-EG').format(n);
+  return formatHumanCount(n);
 }
 
 const STATE_ICON: Record<Exclude<SyncState, 'loading'>, string> = {

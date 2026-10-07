@@ -6,6 +6,7 @@ import type { FreshnessState, RefreshFeedback } from '../../sale/useCatalogueFre
 import { V5Icon } from '../foundation/V5Icon';
 import { LiveSearchResults } from './LiveSearchResults';
 import { SCAN_ANCHOR_ID } from '../../scan/scan-anchor';
+import { formatHumanDateTime } from '../../ui/format/human-format';
 
 interface Props {
   state: CatalogueSearchState;
@@ -21,17 +22,9 @@ interface Props {
   searchRef: RefObject<HTMLInputElement | null>;
 }
 
-/** Absolute Arabic timestamp; an unparseable value is shown verbatim rather than throwing. */
+/** Absolute Arabic timestamp (Western digits, 24-hour); an unparseable value is shown verbatim rather than throwing. */
 function formatStamp(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat('ar-EG', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  return formatHumanDateTime(iso, { withYear: true, month: 'long' }) ?? iso;
 }
 
 const FRESHNESS_COPY: Record<FreshnessState, (stamp: string) => string> = {

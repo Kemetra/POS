@@ -439,7 +439,7 @@ describe('V5ShiftRoute — manager approval of a non-zero variance', () => {
         approver: { managerRef: MANAGERS[1].managerRef, managerPin: '246813' },
       });
     });
-    expect(await screen.findByTestId('shift-variance')).toHaveTextContent('-7.50 EGP');
+    expect(await screen.findByTestId('shift-variance')).toHaveTextContent('\u22127.50 EGP');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('246813');
   });
@@ -597,12 +597,12 @@ describe('V5ShiftRoute — a committed outcome survives a failed refresh', () =>
       target: { value: '246813' },
     });
     press(SHIFT_COPY.approveCommit, dialog);
-    expect(await screen.findByTestId('shift-variance')).toHaveTextContent('-7.50 EGP');
+    expect(await screen.findByTestId('shift-variance')).toHaveTextContent('\u22127.50 EGP');
     await waitFor(() => {
       expect(bridge.status).toHaveBeenCalledTimes(2);
     });
     expect(await screen.findByText(SHIFT_COPY.refreshFailed)).toBeInTheDocument();
-    expect(screen.getByTestId('shift-variance')).toHaveTextContent('-7.50 EGP');
+    expect(screen.getByTestId('shift-variance')).toHaveTextContent('\u22127.50 EGP');
     expectRefreshFailed();
   });
 

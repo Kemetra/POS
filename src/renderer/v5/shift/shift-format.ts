@@ -1,4 +1,4 @@
-import { format as formatMoney, of as moneyOf } from '../../../shared/money';
+import { formatHumanDateTime, formatHumanMoney } from '../../ui/format/human-format';
 import { normalizeDigits } from '../../ui/forms/normalize-digits';
 import { parseCurrencyToMinor } from '../../ui/payments/parse-currency-to-minor';
 
@@ -12,19 +12,11 @@ const DASH = '—';
 
 export function formatShiftMoney(minor: number, currencyCode = 'EGP'): string {
   if (currencyCode !== 'EGP' || !Number.isSafeInteger(minor)) return DASH;
-  return formatMoney(moneyOf(minor, 'EGP'));
+  return formatHumanMoney(minor);
 }
 
-const TIME_FORMAT = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
-  month: 'short',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
 export function formatShiftTime(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? DASH : TIME_FORMAT.format(date);
+  return formatHumanDateTime(iso) ?? DASH;
 }
 
 export { normalizeDigits };

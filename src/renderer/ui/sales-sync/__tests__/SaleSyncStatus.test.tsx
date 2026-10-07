@@ -78,7 +78,7 @@ describe('T053 — SaleSyncStatus', () => {
     await waitFor(() => {
       expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('pending');
     });
-    expect(screen.getByTestId('sale-sync-status').textContent).toContain('٣');
+    expect(screen.getByTestId('sale-sync-status').textContent).toContain('3');
   });
 
   it('shows the attention state when sales are dead-lettered (visible, not alarming)', async () => {
@@ -115,8 +115,8 @@ describe('T053 — SaleSyncStatus', () => {
       expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('attention');
     });
     const text = screen.getByTestId('sale-sync-status').textContent;
-    expect(text).toContain('٣ عملية بحاجة إلى مراجعة');
-    expect(text).toContain('منها ٢ تختلف عن المسجَّل على الخادم');
+    expect(text).toContain('3 عملية بحاجة إلى مراجعة');
+    expect(text).toContain('منها 2 تختلف عن المسجَّل على الخادم');
   });
 
   it('RT-190: no divergence wording when no dead-letter is a divergence', async () => {

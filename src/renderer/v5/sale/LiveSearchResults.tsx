@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX, type KeyboardEvent } from 'react';
 import type { CatalogueSearchState } from '../../stores/catalogueSearchStore';
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
-import { format, of } from '../../../shared/money';
+import { formatHumanMoney } from '../../ui/format/human-format';
 import { SaleProductFlags } from './SaleProductFlags';
 
 interface Props {
@@ -143,7 +143,7 @@ function ProductRow(props: {
       </div>
       <div className="v5-sale-product-tail">
         <span className="v5-sale-product-price" dir="ltr">
-          {format(of(product.price_minor, 'EGP'))}
+          {formatHumanMoney(product.price_minor)}
         </span>
         <button
           type="button"
