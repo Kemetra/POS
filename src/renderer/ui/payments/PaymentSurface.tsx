@@ -632,8 +632,9 @@ export function PaymentSurface({
     // Defence in depth behind the disabled tile: never start or select a
     // voucher payment while the pilot restriction is active.
     if (tender === 'internal_voucher' && !voucherTenderFlag) return;
-    // RT-298: main refuses every payment for this cart until a manager acts.
-    if (cancelHold === 'live_tender') return;
+    // RT-298: no tender while a cancel hold stands (outcome unknown, or main
+    // refuses every payment for this cart until a manager acts). Its line stays.
+    if (cancelHold !== 'none') return;
     setSelectedTender(tender);
     setBridgeRefusalCopy(null);
 

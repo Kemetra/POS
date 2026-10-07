@@ -241,6 +241,22 @@ describe('RT-298 — cancel retry replays the same idempotency key', () => {
     expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(CANCEL_UNKNOWN);
   });
 
+  it('a tender click while the outcome is unknown keeps the Cancel instruction (Codex P2)', async () => {
+    const { bridge, script } = makeBridge();
+    await openWith(bridge, CARD_APPLIED);
+    script({ cancel: [LOST], read: undefined });
+
+    await clickCancel();
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(CANCEL_UNKNOWN);
+    expect(screen.getByTestId('payment-surface-cancel')).toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+  });
+
   it('a refused cancel on a still-open attempt names the retry, and the retry reuses the key', async () => {
     const { bridge, cancel, script } = makeBridge();
     await openWith(bridge, CASH_APPLIED);
