@@ -458,32 +458,37 @@ describe('CheckoutRoute — RT-240 Back reasons use the catalog wording (M-P1 / 
   // terminal (`manual_void_required`), and a voucher's authority reservation is
   // never released by cancel (only tender.reverse calls vouchers.reverse). In
   // both cases the customer may still be charged.
-  it.each(['external_card_terminal', 'internal_voucher'] as const)(
-    'a cancel that reversed a %s line is neutral, never M-P2',
-    async (tenderType) => {
-      const user = userEvent.setup();
-      renderCheckout();
-      await enabledBack();
-      await user.click(screen.getByTestId('tender-cash'));
-      await screen.findByTestId('payment-surface-cancel');
-      const card = withAppliedCash();
-      act(() => {
-        usePaymentStore.getState().applyAttemptSnapshot({
-          ...card,
-          tender_lines: card.tender_lines.map((l) => ({
-            ...l,
-            tender_type: tenderType,
-          })),
-        });
+  // RT-256 — a card line gets M-P13 (void on the terminal before any new
+  // charge); a voucher line keeps the neutral line (vouchers are off for the
+  // pilot, RT-103). Neither may say M-P2.
+  const M_P13 = /^أُلغي الدفع هنا فقط\. ألغِ العملية على جهاز البطاقات قبل أي خصم جديد\.$/;
+  it.each([
+    ['external_card_terminal', M_P13],
+    ['internal_voucher', NEUTRAL],
+  ] as const)('a cancel that reversed a %s line never says M-P2', async (tenderType, expected) => {
+    const user = userEvent.setup();
+    renderCheckout();
+    await enabledBack();
+    await user.click(screen.getByTestId('tender-cash'));
+    await screen.findByTestId('payment-surface-cancel');
+    const card = withAppliedCash();
+    act(() => {
+      usePaymentStore.getState().applyAttemptSnapshot({
+        ...card,
+        tender_lines: card.tender_lines.map((l) => ({
+          ...l,
+          tender_type: tenderType,
+        })),
       });
-      returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
-      await user.click(screen.getByTestId('payment-surface-cancel'));
-      await waitFor(() => {
-        expect(usePaymentStore.getState().paymentSlice).toBeNull();
-      });
-      expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(NEUTRAL);
-    },
-  );
+    });
+    returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
+    await user.click(screen.getByTestId('payment-surface-cancel'));
+    await waitFor(() => {
+      expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    });
+    expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(expected);
+    expect(screen.getByTestId('payment-surface-back-blocked')).not.toHaveTextContent(M_P2);
+  });
 
   it.each([
     ['only pending', [], ['tl-1']],
