@@ -12,6 +12,7 @@
  * one line does not orphan the attempt-level audit row.
  */
 
+import { attemptActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { PaymentAttemptFsm } from '../fsm/payment-attempt-fsm.js';
@@ -81,7 +82,7 @@ export function createPaymentsCancelHandler(
       payment_attempt_id: req.payment_attempt_id,
       tender_line_id: null,
       action_kind: 'payment.cancel',
-      payload: { payment_attempt_id: req.payment_attempt_id },
+      payload: attemptActionPayload(req),
       acting_operator_id: row.acting_operator_id,
       created_at: clock().toISOString(),
     });

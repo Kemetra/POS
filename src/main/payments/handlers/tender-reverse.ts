@@ -16,6 +16,7 @@
  *   • FSM refused             → NO audit (the line wasn't transitioned)
  */
 
+import { tenderReverseActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { TenderLineFsm } from '../fsm/tender-line-fsm.js';
@@ -107,10 +108,10 @@ export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): Tend
       payment_attempt_id: line.payment_attempt_id,
       tender_line_id: req.tender_line_id,
       action_kind: 'tender.reverse',
-      payload: {
+      payload: tenderReverseActionPayload({
         tender_line_id: req.tender_line_id,
         payment_attempt_id: line.payment_attempt_id,
-      },
+      }),
       acting_operator_id: session.operator_id,
       created_at: now,
     });

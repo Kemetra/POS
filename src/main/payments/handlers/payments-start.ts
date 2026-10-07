@@ -31,6 +31,7 @@
  *     request payload (FR-013).
  */
 
+import { startActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { PaymentAttemptFsm } from '../fsm/payment-attempt-fsm.js';
@@ -160,12 +161,9 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
       payment_attempt_id,
       tender_line_id: null,
       action_kind: 'payment.attempt.start',
-      payload: {
-        envelope_handoff_action_id: req.envelope_handoff_action_id,
-        envelope_cart_id: req.envelope_cart_id,
-        envelope_subtotal_minor: req.envelope_subtotal_minor,
-        envelope_version: req.envelope_version,
-      },
+      // `envelope_version` is validated to the literal 'v1' above, so it adds
+      // nothing to the hash; the FSM hashes this same shape (RT-304).
+      payload: startActionPayload(req),
       acting_operator_id: session.operator_id,
       created_at: now,
     });
