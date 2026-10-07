@@ -43,7 +43,7 @@ import type { CheckCartForPayment } from '../cart-payment-eligibility.js';
 
 export interface PaymentsStartHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
-  attemptsRepo: Pick<PaymentAttemptsRepository, 'findStartedByTerminal'>;
+  attemptsRepo: Pick<PaymentAttemptsRepository, 'findStartedByTerminal' | 'findById'>;
   paymentAttemptFsm: Pick<PaymentAttemptFsm, 'start' | 'cancel'>;
   idempotency: IdempotencyHelper;
   /**
@@ -175,9 +175,23 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
       // `started`: once it is confirmed, cancelled or force-failed the row is
       // no longer returned and its `last_action_id` has moved on, so a
       // delayed retry answered `internal_error` (RT-304 review).
+      //
+      // The start hash covers only the envelope fields, so a retry made after
+      // the device / session moved to another terminal, branch or tenant would
+      // match. Unlike the other actions there is no attempt to run the
+      // isolation gate against up front, so check the original attempt's
+      // immutable scope tuple against the active session here.
+      const original = deps.attemptsRepo.findById(reservation.payment_attempt_id);
+      if (
+        original?.tenant_id !== session.tenant_id ||
+        original.branch_id !== session.branch_id ||
+        original.terminal_id !== session.terminal_id
+      ) {
+        return await Promise.resolve({ kind: 'refused', reason: 'tenant_isolation' });
+      }
       return await Promise.resolve({
         kind: 'ok',
-        payment_attempt_id: reservation.payment_attempt_id,
+        payment_attempt_id: original.payment_attempt_id,
       });
     }
 

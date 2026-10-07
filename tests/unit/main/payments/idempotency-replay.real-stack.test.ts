@@ -211,70 +211,84 @@ interface Scenario {
   arrange(s: Stack): Promise<Act>;
 }
 
+/** An action that runs against one freshly started attempt. */
+function onStartedAttempt(
+  name: string,
+  act: (s: Stack, attempt: string) => Act,
+  extra: Pick<Scenario, 'options' | 'redacted'> = {},
+): Scenario {
+  return { name, ...extra, arrange: async (s) => act(s, await startAttempt(s)) };
+}
+
+/**
+ * An attempt-level action: 'different' retargets the same key at another
+ * attempt that is otherwise in the same state.
+ */
+function onAttempt(
+  name: string,
+  attempts: { original: (s: Stack) => Promise<string>; other: (s: Stack) => Promise<string> },
+  run: (s: Stack, payment_attempt_id: string) => Promise<{ kind: string }>,
+): Scenario {
+  return {
+    name,
+    async arrange(s) {
+      const original = await attempts.original(s);
+      return async (v) => run(s, v === 'different' ? await attempts.other(s) : original);
+    },
+  };
+}
+
 const SCENARIOS: readonly Scenario[] = [
   {
     name: 'payments.start',
     arrange: (s) =>
       Promise.resolve((v) => s.start(startRequest('k', 'cart-1', v === 'different' ? 9999 : 1500))),
   },
-  {
-    name: 'tender.apply (cash)',
-    async arrange(s) {
-      const attempt = await startAttempt(s);
-      return (v) =>
-        s.apply({
-          payment_attempt_id: attempt,
-          tender_type: 'cash',
-          amount_applied_minor: v === 'different' ? 1100 : 1000,
-          idempotency_key: 'k',
-        });
-    },
-  },
-  {
-    name: 'tender.apply (card terminal)',
-    redacted: true,
-    async arrange(s) {
-      const attempt = await startAttempt(s);
-      return (v) =>
-        s.apply({
-          payment_attempt_id: attempt,
-          tender_type: 'external_card_terminal',
-          amount_applied_minor: v === 'different' ? 600 : 500,
-          external_reference: v === 'redacted' ? 'ZZ99ZZ' : 'AB12XY',
-          idempotency_key: 'k',
-        });
-    },
-  },
-  {
-    name: 'tender.apply (capped voucher)',
-    redacted: true,
-    options: { validateVoucher: cappedVoucherAuthority(800) },
-    async arrange(s) {
-      const attempt = await startAttempt(s);
-      return (v) =>
-        s.apply({
-          payment_attempt_id: attempt,
-          tender_type: 'internal_voucher',
-          amount_applied_minor: v === 'different' ? 900 : 1000,
-          voucher_code: v === 'redacted' ? 'V-TWO' : 'V-ONE',
-          idempotency_key: 'k',
-        });
-    },
-  },
-  {
-    name: 'vouchers.validate',
-    options: { validateVoucher: cappedVoucherAuthority(800) },
-    async arrange(s) {
-      const attempt = await startAttempt(s);
-      return (v) =>
-        s.validate({
-          payment_attempt_id: attempt,
-          voucher_code: 'V-CODE',
-          amount_applied_minor: v === 'different' ? 900 : 1000,
-          idempotency_key: 'k',
-        });
-    },
-  },
+  onStartedAttempt(
+    'tender.apply (cash)',
+    (s, attempt) => (v) =>
+      s.apply({
+        payment_attempt_id: attempt,
+        tender_type: 'cash',
+        amount_applied_minor: v === 'different' ? 1100 : 1000,
+        idempotency_key: 'k',
+      }),
+  ),
+  onStartedAttempt(
+    'tender.apply (card terminal)',
+    (s, attempt) => (v) =>
+      s.apply({
+        payment_attempt_id: attempt,
+        tender_type: 'external_card_terminal',
+        amount_applied_minor: v === 'different' ? 600 : 500,
+        external_reference: v === 'redacted' ? 'ZZ99ZZ' : 'AB12XY',
+        idempotency_key: 'k',
+      }),
+    { redacted: true },
+  ),
+  onStartedAttempt(
+    'tender.apply (capped voucher)',
+    (s, attempt) => (v) =>
+      s.apply({
+        payment_attempt_id: attempt,
+        tender_type: 'internal_voucher',
+        amount_applied_minor: v === 'different' ? 900 : 1000,
+        voucher_code: v === 'redacted' ? 'V-TWO' : 'V-ONE',
+        idempotency_key: 'k',
+      }),
+    { redacted: true, options: { validateVoucher: cappedVoucherAuthority(800) } },
+  ),
+  onStartedAttempt(
+    'vouchers.validate',
+    (s, attempt) => (v) =>
+      s.validate({
+        payment_attempt_id: attempt,
+        voucher_code: 'V-CODE',
+        amount_applied_minor: v === 'different' ? 900 : 1000,
+        idempotency_key: 'k',
+      }),
+    { options: { validateVoucher: cappedVoucherAuthority(800) } },
+  ),
   {
     name: 'tender.reverse',
     async arrange(s) {
@@ -285,40 +299,24 @@ const SCENARIOS: readonly Scenario[] = [
         s.reverse({ tender_line_id: v === 'different' ? second : first, idempotency_key: 'k' });
     },
   },
-  {
-    name: 'payments.confirm',
-    async arrange(s) {
-      const attempt = await tenderedAttempt(s, 'cart-a');
-      return async (v) =>
-        s.confirm({
-          payment_attempt_id: v === 'different' ? await tenderedAttempt(s, 'cart-b') : attempt,
-          idempotency_key: 'k',
-        });
+  onAttempt(
+    'payments.confirm',
+    { original: (s) => tenderedAttempt(s, 'cart-a'), other: (s) => tenderedAttempt(s, 'cart-b') },
+    (s, id) => s.confirm({ payment_attempt_id: id, idempotency_key: 'k' }),
+  ),
+  onAttempt(
+    'payments.cancel',
+    {
+      original: (s) => tenderedAttempt(s, 'cart-a', 700),
+      other: (s) => startAttempt(s, 'cart-b'),
     },
-  },
-  {
-    name: 'payments.cancel',
-    async arrange(s) {
-      const attempt = await tenderedAttempt(s, 'cart-a', 700);
-      return async (v) =>
-        s.cancel({
-          payment_attempt_id: v === 'different' ? await startAttempt(s, 'cart-b') : attempt,
-          idempotency_key: 'k',
-        });
-    },
-  },
-  {
-    name: 'payments.force_fail',
-    async arrange(s) {
-      const attempt = await startAttempt(s, 'cart-a');
-      return async (v) => {
-        const target = v === 'different' ? await startAttempt(s, 'cart-b') : attempt;
-        return as(s, MANAGER, () =>
-          s.forceFail({ payment_attempt_id: target, idempotency_key: 'k' }),
-        );
-      };
-    },
-  },
+    (s, id) => s.cancel({ payment_attempt_id: id, idempotency_key: 'k' }),
+  ),
+  onAttempt(
+    'payments.force_fail',
+    { original: (s) => startAttempt(s, 'cart-a'), other: (s) => startAttempt(s, 'cart-b') },
+    (s, id) => as(s, MANAGER, () => s.forceFail({ payment_attempt_id: id, idempotency_key: 'k' })),
+  ),
 ];
 
 describe.each(SCENARIOS)('RT-304 — $name', (scenario) => {
@@ -384,6 +382,14 @@ describe('RT-304 — replay after the original action has been superseded', () =
     if (first.kind !== 'ok') throw new Error('start refused');
     await s.cancel({ payment_attempt_id: first.payment_attempt_id, idempotency_key: 'k-cancel' });
     expect(await s.start(req)).toEqual(first);
+  });
+
+  it('payments.start refuses a replay made from another terminal rather than leak the attempt id', async () => {
+    const s = build();
+    const req = startRequest('k-start', 'cart-1');
+    await s.start(req);
+    s.useSession(makeSession({ terminal_id: 'terminal-OTHER' }));
+    expect(await s.start(req)).toEqual({ kind: 'refused', reason: 'tenant_isolation' });
   });
 
   it('tender.apply replays once its line has been reversed', async () => {
