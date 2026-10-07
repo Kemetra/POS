@@ -1,6 +1,6 @@
 import { useRef, useState, type JSX, type MouseEvent } from 'react';
 import type { CartLineItem } from '../../sale/useSaleCartController';
-import { format, of } from '../../../shared/money';
+import { formatHumanMoney } from '../../ui/format/human-format';
 import { V5Icon } from '../foundation/V5Icon';
 import { SaleDialog } from './SaleDialog';
 import { focusScanOwner } from '../../scan/scan-anchor';
@@ -10,7 +10,7 @@ import type { RemovalControl } from './useRemovalFocus';
 const NOTE_MAX_LENGTH = 200;
 
 export function money(minor: number): string {
-  return format(of(minor, 'EGP'));
+  return formatHumanMoney(minor);
 }
 
 interface LineProps {

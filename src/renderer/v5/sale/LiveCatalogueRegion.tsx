@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type JSX } from 'react';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
-import { format, of } from '../../../shared/money';
+import { formatHumanMoney } from '../../ui/format/human-format';
 import type { AddedLineResult } from '../../sale/useSaleCartController';
 import { useSaleCatalogueController } from '../../sale/useSaleCatalogueController';
 import { useConfirmSaleAdd } from '../../sale/useConfirmSaleAdd';
@@ -101,7 +101,7 @@ function ConfirmAddDialog(props: {
       )}
       <SaleProductFlags product={product} />
       <p dir="ltr" className="v5-live-dialog-price">
-        {format(of(product.price_minor, 'EGP'))}
+        {formatHumanMoney(product.price_minor)}
       </p>
       {confirm.error && (
         <p role="alert" className="v5-live-notice v5-live-notice--danger">
