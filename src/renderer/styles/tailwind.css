@@ -2155,6 +2155,19 @@ body {
     color: var(--color-text-muted);
   }
 
+  /* RT-256 — M-P13 is a danger row: the card charge may still stand on the
+     terminal. Signal line on the inline-start edge; the border survives
+     forced-colors, so the meaning never rests on color alone. */
+  .payment-surface__back-blocked--danger {
+    padding-block: var(--space-2);
+    padding-inline: var(--space-3);
+    border-inline-start: 4px solid var(--color-danger);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-danger-soft);
+    color: var(--color-danger-emphasis);
+    font-weight: var(--font-weight-semibold);
+  }
+
   .payment-surface__body {
     display: grid;
     grid-template-columns: 400px minmax(0, 1fr) 392px;

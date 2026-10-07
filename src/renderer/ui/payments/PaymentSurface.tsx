@@ -311,8 +311,13 @@ function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
   if (!props.back.showReason || props.back.reason === null) return null;
   return (
     <p
-      className="payment-surface__back-blocked"
+      className={
+        props.back.reason === 'card_void'
+          ? 'payment-surface__back-blocked payment-surface__back-blocked--danger'
+          : 'payment-surface__back-blocked'
+      }
       data-testid="payment-surface-back-blocked"
+      data-tone={props.back.reason === 'card_void' ? 'danger' : 'info'}
       role="status"
     >
       {BACK_REASON_COPY[props.back.reason]}

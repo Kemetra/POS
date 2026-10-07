@@ -147,6 +147,9 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
     const reason = await screen.findByTestId('payment-surface-back-blocked');
     expect(reason).toHaveTextContent(CARD_VOID);
     expect(screen.getByTestId('payment-surface')).not.toHaveTextContent(COMPLETE_OR_CANCEL);
+    // Catalog tone `danger` (Codex P2): not the muted Back explanation style.
+    expect(reason).toHaveClass('payment-surface__back-blocked--danger');
+    expect(reason).toHaveAttribute('data-tone', 'danger');
   });
 
   it('a mixed cash + card cancel still gets the terminal-void line (the card may stand)', async () => {
@@ -310,5 +313,7 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
     const reason = await screen.findByTestId('payment-surface-back-blocked');
     expect(reason).toHaveTextContent(CASH_REVERSED);
     expect(reason).not.toHaveTextContent(CARD_VOID);
+    expect(reason).not.toHaveClass('payment-surface__back-blocked--danger');
+    expect(reason).toHaveAttribute('data-tone', 'info');
   });
 });
