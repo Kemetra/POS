@@ -45,6 +45,8 @@
 | Operational workflow benchmark (RT-111, Planning, owner review complete, merged): offline / permission matrices, register-shift flow, device health, recovery center | [11-operational-workflow-benchmark.md](11-operational-workflow-benchmark.md) |
 | Cashier UX / usability audit (RT-159, Planning, **PRELIMINARY — RT-159 stays open pending the post-RT-117 packaged/lab audit**): first runtime audit of the built app — scanner ownership, inactivity, cash/card steps, 1024/1280 capacity, a11y, findings matrix, session script, bounded slices | [12-cashier-ux-usability-audit.md](12-cashier-ux-usability-audit.md); captures in [references/audit-rt159/](references/audit-rt159/) |
 | POS simplification & responsibility audit (RT-160, Planning, revision 3 on `main@7384217`, incl. the comment-10724 review corrections, **awaiting final owner review**): essential vs Electron-tax vs incidental complexity, responsibility/owner map (shift/cash-up: POS owns the offline lifecycle, Backend-Core the synced record; pilot-critical via RT-17), change-amplification case studies, reference-first review (ERPNext/Frappe, Odoo, RT-111 references), simplification vs hardening candidates, owner decisions D-1…D-3 recorded (fail-closed cashier profile; privileged-only central audit; keep net tender capture), platform recommendation (keep Electron) | [13-pos-simplification-responsibility-audit.md](13-pos-simplification-responsibility-audit.md) |
+| RT-159 packaged re-audit + Impeccable critique (Planning, `main@7b68398`, **evidence, not acceptance**): status of F-01…F-29, new findings N-01…N-15, critique 15/40, owner decision D-C1 (direct add) | [14-rt159-packaged-reaudit.md](14-rt159-packaged-reaudit.md); captures in [references/audit-rt159-pkg/](references/audit-rt159-pkg/) |
+| VNext implementation-readiness **freeze package** (RT-159, **owner-approved as written 2026-10-07**; Lane A priority A1 + A3): journey map, state matrix, input/focus/scanner contract, component/token contract, message catalog, visual reference per state, slice map (lanes A/B/C) | [15-vnext-freeze-package.md](15-vnext-freeze-package.md) |
 | vNext **Visual Acceptance Pack** (owner-approved; Direction B frozen; imported verbatim, docs only): Iterations 1–3 of the cart-first cashier workspace at 1280×800 and 1024×768, with a two-axis classification (Visual status × Behavior status) and journey map | [visual-acceptance/index.html](visual-acceptance/index.html) — see [Visual Acceptance Pack](#visual-acceptance-pack-owner-approved) |
 
 ## Visual Acceptance Pack (owner-approved)
@@ -170,9 +172,11 @@ The table below is the decision request as originally proposed, kept for its rat
 The approval did not close these. They stay open until separately evidenced or approved, and the
 slices that depend on them must not assume an answer:
 
-- **RT-24 §C confirmations:** item 1 (direct add vs confirm-first), item 2 (lazy cart), item 4
-  (same-device suspend/resume) and item 5 (key map). These gate VN-S3/VN-S12 (scan
-  acknowledgement), VN-S5 (keys) and VN-S11 (suspend/resume). See [08](08-rt24-invariants.md).
+- **RT-24 §C confirmations:** item 2 (lazy cart), item 4 (same-device suspend/resume) and item 5
+  (key map). These gate VN-S5 (keys) and VN-S11 (suspend/resume). **Item 1 (direct add vs
+  confirm-first) is resolved by owner decision D-C1 (2026-10-07):** direct add for scans and
+  search picks, with undo pending D-U1 (see [14 §5](14-rt159-packaged-reaudit.md) and
+  [15](15-vnext-freeze-package.md) §3, §7). See [08](08-rt24-invariants.md).
   The keycaps drawn in the approved references are part of this open key map, not bound
   shortcuts ([references](references/README.md)).
 - **OD-3 receipt validation:** the numeral and grouping policy must be checked against real
