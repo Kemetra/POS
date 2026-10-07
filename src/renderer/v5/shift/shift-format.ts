@@ -1,4 +1,5 @@
 import { format as formatMoney, of as moneyOf } from '../../../shared/money';
+import { normalizeDigits } from '../../ui/forms/normalize-digits';
 import { parseCurrencyToMinor } from '../../ui/payments/parse-currency-to-minor';
 
 /**
@@ -26,13 +27,7 @@ export function formatShiftTime(iso: string): string {
   return Number.isNaN(date.getTime()) ? DASH : TIME_FORMAT.format(date);
 }
 
-/** Arabic-Indic (U+0660..) and Persian (U+06F0..) digits → ASCII; trims. */
-export function normalizeDigits(raw: string): string {
-  return raw
-    .trim()
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
-}
+export { normalizeDigits };
 
 /** An entered amount in minor units (≥ 0, ≤ 2 decimals), or null. */
 export function parseShiftAmount(raw: string): number | null {

@@ -4,6 +4,7 @@ import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/br
 import { touchTarget } from '../tokens/touch.js';
 import { PinnedPrimary } from './CheckoutActionBar.js';
 import { parseCurrencyToMinor } from './parse-currency-to-minor.js';
+import { normalizeNumericInput } from '../forms/normalize-digits.js';
 
 /**
  * 006-payments-tender Slice 4 T290 — <VoucherEntry>.
@@ -220,7 +221,7 @@ export function VoucherEntry({
               data-testid="voucher-entry-amount-input"
               value={rawAmountInput}
               onChange={(e) => {
-                const next = e.target.value;
+                const next = normalizeNumericInput(e.target.value);
                 if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
                   setRawAmountInput(next);
                   if (bridgeRefusal) setBridgeRefusal(false);
