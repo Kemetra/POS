@@ -10,6 +10,8 @@ import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { usePaymentStore, type PaymentStore } from '../../stores/payment-store';
 import { LiveCatalogueRegion } from './LiveCatalogueRegion';
 import { LiveSaleCart } from './LiveSaleCart';
+import { ScanStatus } from './ScanStatus';
+import { focusScanOwner } from './scan-anchor';
 import './sale-screen.css';
 import './live-sale.css';
 
@@ -82,10 +84,11 @@ const SALE_TITLE_ID = 'v5-sale-title';
  * Screen title only. Branding and operator identity belong to the app frame
  * (the v5 frame), never to the screen.
  */
-function SaleTitle(): JSX.Element {
+function SaleTitle(props: { scanAvailable?: boolean }): JSX.Element {
   return (
     <div className="v5-live-titlebar">
       <h1 id={SALE_TITLE_ID}>مساحة البيع</h1>
+      {props.scanAvailable !== undefined && <ScanStatus available={props.scanAvailable} />}
     </div>
   );
 }
@@ -134,6 +137,8 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
     if (ok) {
       cart.startNewSale();
       setVoided(true);
+      // The «إلغاء البيع» control that opened the dialog is gone: hand focus to the scan owner.
+      focusScanOwner();
     }
     return ok;
   };
@@ -156,7 +161,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
 
   return (
     <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
-      <SaleTitle />
+      <SaleTitle scanAvailable={props.catalogueEnabled} />
       <div className="v5-sale-workstation" data-catalogue={String(props.catalogueEnabled)}>
         {props.catalogueEnabled && (
           <LiveCatalogueRegion
@@ -189,7 +194,10 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
             cart.continueToPayment(props.onPaymentContinue);
           }}
           onVoid={voidThenStartFresh}
-          onNewSale={cart.startNewSale}
+          onNewSale={() => {
+            cart.startNewSale();
+            focusScanOwner();
+          }}
         />
       </div>
     </section>

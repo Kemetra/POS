@@ -5,6 +5,7 @@ import { useDebouncedSearch } from '../../stores/useDebouncedSearch';
 import type { FreshnessState, RefreshFeedback } from '../../sale/useCatalogueFreshness';
 import { V5Icon } from '../foundation/V5Icon';
 import { LiveSearchResults } from './LiveSearchResults';
+import { SCAN_ANCHOR_ID } from './scan-anchor';
 
 interface Props {
   state: CatalogueSearchState;
@@ -130,7 +131,7 @@ function SearchFields(props: Props): JSX.Element {
         />
       </div>
       <p id="v5-live-search-note">اكتب حرفين للبحث، أو اضغط Enter للبحث فورًا.</p>
-      <label htmlFor="v5-live-scan" className="v5-live-scan-label">
+      <label htmlFor={SCAN_ANCHOR_ID} className="v5-live-scan-label">
         التقاط مسح الباركود
       </label>
       <div className="v5-live-scan-field">
@@ -138,7 +139,7 @@ function SearchFields(props: Props): JSX.Element {
           <V5Icon name="scan" />
         </span>
         <input
-          id="v5-live-scan"
+          id={SCAN_ANCHOR_ID}
           data-scan-target="search"
           type="text"
           inputMode="none"

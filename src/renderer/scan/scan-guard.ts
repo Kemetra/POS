@@ -159,6 +159,19 @@ export function createScanGuard(deps: ScanGuardDeps): ScanGuard {
     const next = extendRun(run, event.key, event.timeStamp);
     run = next.run;
     if (next.started) snapshot = takeSnapshot(deps.activeElement(), surfaces);
+    else if (continuesOnControl(event)) event.preventDefault();
+  }
+
+  /**
+   * A Space in the middle of a burst, with focus on a control that is not a text
+   * field: a focused button is activated by Space on keyup, long before the
+   * terminating Enter is seen, so a scanned code containing a space ("AB 12")
+   * would press it. Cancelling the keydown stops that activation. A person
+   * pressing Space alone is unaffected: only a Space that continues a run (the
+   * previous key under 35 ms ago) is cancelled.
+   */
+  function continuesOnControl(event: GuardKeyEvent): boolean {
+    return event.key === ' ' && asTextField(deps.activeElement()) === null;
   }
 
   function handleEnter(event: GuardKeyEvent): void {

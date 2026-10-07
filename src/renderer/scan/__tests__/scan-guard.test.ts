@@ -157,6 +157,54 @@ describe('code shapes (timing, not length)', () => {
   });
 });
 
+describe('a space inside a scanned code (Codex P1 on #567)', () => {
+  /** Keys with explicit timestamps, so the test controls every gap. */
+  function keys(guard: ScanGuard, seq: Array<[string, number]>): FakeEvent[] {
+    return seq.map(([key, at]) => {
+      const e = ev(key, at);
+      guard.handleKeyDown(e);
+      return e;
+    });
+  }
+
+  it('cancels the Space that continues a burst on a focused button, so keyup cannot press it', () => {
+    mount('<button id="del">حذف</button>');
+    focus('#del');
+    const [a, b, space, one, two, enter] = keys(guard, [
+      ['A', 1000],
+      ['B', 1005],
+      [' ', 1010],
+      ['1', 1015],
+      ['2', 1020],
+      ['Enter', 1025],
+    ]);
+    expect(space?.preventDefault).toHaveBeenCalled();
+    expect(a?.preventDefault).not.toHaveBeenCalled();
+    expect(b?.preventDefault).not.toHaveBeenCalled();
+    expect(one?.preventDefault).not.toHaveBeenCalled();
+    expect(two?.preventDefault).not.toHaveBeenCalled();
+    expect(enter?.preventDefault).toHaveBeenCalled();
+    expect(owner).toHaveBeenCalledWith('AB 12');
+  });
+
+  it('leaves a person pressing Space on a button alone', () => {
+    mount('<button id="del">حذف</button>');
+    focus('#del');
+    const [space] = keys(guard, [[' ', 1000]]);
+    expect(space?.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('leaves Space typed into a text field alone (the field is restored by the guard instead)', () => {
+    mount('<input id="f" type="search" data-scan-target="search" />');
+    focus('#f');
+    const [, space] = keys(guard, [
+      ['A', 1000],
+      [' ', 1005],
+    ]);
+    expect(space?.preventDefault).not.toHaveBeenCalled();
+  });
+});
+
 describe('money, PIN and card-reference fields reject bursts (M-S5)', () => {
   it('cash amount field: previous value restored, amount notice, nothing routed', () => {
     mount('<input id="amt" inputmode="numeric" value="" />');

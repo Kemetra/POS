@@ -269,7 +269,7 @@ describe('live v5 Sale adapter', () => {
     expect(screen.queryByText(/no_session/)).not.toBeInTheDocument();
   });
 
-  it('moves focus to Add when confirm opens; Escape cancels without a write and returns to search', async () => {
+  it('moves focus to Add when confirm opens; Escape cancels without a write and returns to the scan owner', async () => {
     signIn();
     const bridges = makeBridges();
     renderSale(bridges);
@@ -279,8 +279,10 @@ describe('live v5 Sale adapter', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: 'تأكيد إضافة الصنف' })).not.toBeInTheDocument();
     expect(bridges.fns.add).not.toHaveBeenCalled();
+    // RT-239 rule 6: the next scan is the next thing the cashier does, so focus
+    // returns to the scan owner, not the search box (RT-159 F-07).
     expect(document.activeElement).toBe(
-      screen.getByRole('searchbox', { name: 'البحث بالاسم أو الباركود' }),
+      screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
     );
   });
 
