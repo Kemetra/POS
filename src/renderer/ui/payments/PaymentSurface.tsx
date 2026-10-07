@@ -601,6 +601,39 @@ export function PaymentSurface({
     setBridgeRefusalCopy(resumable ? CANCEL_HOLD_COPY[hold] : null);
   }, [sessionState.kind, envelopeHandoffId]);
 
+  /**
+   * RT-298 — show what the store says about this sale's cancel when another
+   * surface (a cancel sent before a remount) moved it on. `forAttemptId`: a
+   * cancel of ours whose answer came after that; a different attempt now in
+   * the store is a new payment, so only our stale line is cleared.
+   */
+  function followStoreOutcome(forAttemptId?: string): void {
+    const store = usePaymentStore.getState();
+    const slice = store.paymentSlice;
+    if (slice === null) {
+      setSelectedTender(null);
+      setAfterApply('idle');
+      setPhase('tender_selection');
+      setBridgeRefusalCopy(null);
+      return;
+    }
+    if (forAttemptId !== undefined && slice.payment_attempt_id !== forAttemptId) {
+      setBridgeRefusalCopy(null);
+      return;
+    }
+    if (slice.state === 'settled') {
+      setPhase('settled');
+      return;
+    }
+    const hold = holdFor(store.cancelRecovery, envelopeHandoffId, slice.payment_attempt_id);
+    const retryable = hold === 'none' && slice.state === 'started';
+    setBridgeRefusalCopy(retryable ? CANCEL_FAILED_COPY : CANCEL_HOLD_COPY[hold]);
+    if (hold === 'live_tender') {
+      setSelectedTender(null);
+      setPhase('tender_selection');
+    }
+  }
+
   // RT-298 — a cancel sent before a Checkout remount answers in the old
   // surface, which can only update the store. Follow that outcome here so the
   // mounted surface never keeps a stale instruction or a dead Cancel (Codex P2,
@@ -609,24 +642,9 @@ export function PaymentSurface({
     const previous = lastHoldRef.current;
     lastHoldRef.current = cancelHold;
     if (previous === cancelHold || ownsCancelRef.current) return;
-    const slice = usePaymentStore.getState().paymentSlice;
-    if (slice === null) {
-      setSelectedTender(null);
-      setAfterApply('idle');
-      setPhase('tender_selection');
-      setBridgeRefusalCopy(null);
-      return;
-    }
-    if (slice.state === 'settled') {
-      setPhase('settled');
-      return;
-    }
-    const retryable = cancelHold === 'none' && slice.state === 'started';
-    setBridgeRefusalCopy(retryable ? CANCEL_FAILED_COPY : CANCEL_HOLD_COPY[cancelHold]);
-    if (cancelHold === 'live_tender') {
-      setSelectedTender(null);
-      setPhase('tender_selection');
-    }
+    followStoreOutcome();
+    // Only a hold change triggers this; followStoreOutcome reads the store itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cancelHold]);
 
   // EXTERNAL REVIEW P1 (round 3) — "Stop polling until finalized sales can be
@@ -951,7 +969,10 @@ export function PaymentSurface({
    */
   async function reconcileAfterCancel(attemptId: string, handoffId: string): Promise<void> {
     const attempt = await readAttemptWithRetry(attemptId);
-    if (!isCancelStillCurrent(attemptId, handoffId)) return;
+    if (!isCancelStillCurrent(attemptId, handoffId)) {
+      followStoreOutcome(attemptId);
+      return;
+    }
     if (attempt === null) {
       usePaymentStore.getState().setCancelHold('unconfirmed');
       setBridgeRefusalCopy(CANCEL_UNKNOWN_COPY);
@@ -1046,8 +1067,12 @@ export function PaymentSurface({
         .catch(() => null);
       // A late answer (a retry after a remount already settled this cancel,
       // and another attempt may have begun) must not touch that newer attempt
-      // (Codex P1, #576).
-      if (!isCancelStillCurrent(attemptId, handoffId)) return;
+      // (Codex P1, #576). Whatever settled it, this surface shows the store's
+      // outcome rather than keeping its own stale line (Codex P2, #576).
+      if (!isCancelStillCurrent(attemptId, handoffId)) {
+        followStoreOutcome(attemptId);
+        return;
+      }
       if (response?.kind === 'ok') {
         const linesAtCancel = usePaymentStore.getState().paymentSlice?.tender_lines ?? [];
         applyCancelOutcome(response, linesAtCancel);
