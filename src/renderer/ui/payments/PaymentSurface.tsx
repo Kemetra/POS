@@ -507,6 +507,11 @@ export function PaymentSurface({
   // cashier-quotable reference is worse than none. It returns with the
   // correlating identifier, alongside T013a and T017.
 
+  // RT-256 — M-P13 for this handoff: sticky for the rest of the Checkout,
+  // including Completion after another tender settles (Codex P1, #572).
+  const cardVoidRequired =
+    cardSafety !== null && cardSafety.voidRequired && cardSafety.handoffId === envelopeHandoffId;
+
   // RT-26 — Back is offered before any tender (see deriveBackControl).
   const back = deriveBackControl({
     wired: onBackToSale !== undefined,
@@ -514,8 +519,7 @@ export function PaymentSurface({
     eligibility: backToSaleEligibility,
     projectedTenderLines: paymentSlice?.tender_lines.length,
     tenderTouched,
-    cardVoidRequired:
-      cardSafety !== null && cardSafety.voidRequired && cardSafety.handoffId === envelopeHandoffId,
+    cardVoidRequired,
     tenderReversed,
     busy: [isStarting, isConfirming, isCancelling, isReturning].some(Boolean),
     entryOpen: phase === 'entry',
@@ -950,6 +954,16 @@ export function PaymentSurface({
             truthful states below; the wrapper's meaning is unchanged, so those
             tests keep passing unmodified. */}
         <SettledScanOwner />
+        {cardVoidRequired && (
+          <p
+            className="payment-surface__back-blocked payment-surface__back-blocked--danger"
+            data-testid="payment-surface-settled-card-void"
+            data-tone="danger"
+            role="status"
+          >
+            {BACK_REASON_COPY.card_void}
+          </p>
+        )}
         <div className="v4-panel payment-surface__settled" data-testid="payment-surface-settled">
           {/* EXTERNAL REVIEW P1 (round 2) — "Require correlation before
               declaring the current sale complete".

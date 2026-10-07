@@ -347,6 +347,85 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
     expect(reason).not.toHaveTextContent(CARD_VOID);
   });
 
+  it('stays on Completion after another tender settles the sale (Codex P1)', async () => {
+    const bridge = makeBridge({ reversed: ['tl-card'] });
+    (bridge.payments as unknown as { confirm: ReturnType<typeof vi.fn> }).confirm = vi.fn(() =>
+      Promise.resolve({ kind: 'ok' as const, settled_at: '2026-10-07T10:02:00.000Z' }),
+    );
+    render(
+      <PaymentSurface
+        _testBridge={bridge}
+        onBackToSale={() => Promise.resolve(true)}
+        onNewSale={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    act(() => {
+      usePaymentStore
+        .getState()
+        .applyAttemptSnapshot(
+          attemptWith([{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }]),
+        );
+    });
+    await act(async () => {
+      screen.getByTestId('payment-surface-cancel').click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // A new cash attempt settles the sale.
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    act(() => {
+      usePaymentStore
+        .getState()
+        .applyAttemptSnapshot(attemptWith([{ id: 'tl-cash', type: 'cash', amount: 5000 }]));
+    });
+    const confirm = await screen.findByTestId('payment-surface-confirm');
+    await act(async () => {
+      confirm.click();
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('payment-surface-settled')).toBeInTheDocument();
+    const warning = screen.getByTestId('payment-surface-settled-card-void');
+    expect(warning).toHaveTextContent(CARD_VOID);
+    expect(warning).toHaveAttribute('data-tone', 'danger');
+  });
+
+  it('Completion shows no card warning when no card was cancelled', async () => {
+    const bridge = makeBridge({ reversed: [] });
+    (bridge.payments as unknown as { confirm: ReturnType<typeof vi.fn> }).confirm = vi.fn(() =>
+      Promise.resolve({ kind: 'ok' as const, settled_at: '2026-10-07T10:02:00.000Z' }),
+    );
+    render(
+      <PaymentSurface
+        _testBridge={bridge}
+        onBackToSale={() => Promise.resolve(true)}
+        onNewSale={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    act(() => {
+      usePaymentStore
+        .getState()
+        .applyAttemptSnapshot(attemptWith([{ id: 'tl-cash', type: 'cash', amount: 5000 }]));
+    });
+    const confirm = await screen.findByTestId('payment-surface-confirm');
+    await act(async () => {
+      confirm.click();
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('payment-surface-settled')).toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-settled-card-void')).not.toBeInTheDocument();
+  });
+
   it('a cash-only cancel keeps the proven-reversal line (M-P2), not the card line', async () => {
     await cancelWithLines([{ id: 'tl-cash', type: 'cash', amount: 5000 }], ['tl-cash']);
     const reason = await screen.findByTestId('payment-surface-back-blocked');
