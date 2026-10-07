@@ -208,6 +208,7 @@ export function ExternalCardTerminalEntry({
           (FR-007 / Constitution §P6). */}
       <input
         id="external-card-reference-input"
+        data-scan-refuse="reference"
         data-testid="external-card-reference-input"
         className="external-card-terminal-entry__reference-input"
         type="text"

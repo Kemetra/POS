@@ -119,6 +119,7 @@ function SearchFields(props: Props): JSX.Element {
         <input
           ref={props.searchRef}
           id="v5-live-search"
+          data-scan-target="search"
           type="search"
           value={query}
           onChange={handleSearchChange}
@@ -138,6 +139,7 @@ function SearchFields(props: Props): JSX.Element {
         </span>
         <input
           id="v5-live-scan"
+          data-scan-target="search"
           type="text"
           inputMode="none"
           placeholder="امسح الباركود هنا"

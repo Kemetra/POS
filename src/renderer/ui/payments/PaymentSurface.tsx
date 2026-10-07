@@ -4,6 +4,9 @@ import { useOperatorSessionStore } from '../../stores/operator-session-store.js'
 import { usePaymentStore } from '../../stores/payment-store.js';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store.js';
 import { OperatorBadge } from '../operator/OperatorBadge.js';
+import { useScanOwner } from '../../scan/ScanGuardHost.js';
+import { SCAN_SALE_COMPLETE_MESSAGE } from '../../scan/scan-messages.js';
+import { useScanNoticeStore } from '../../scan/scan-notice-store.js';
 import { formatCheckoutMoney } from './format-checkout-money.js';
 import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
@@ -209,6 +212,17 @@ function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
 }
 
 type Phase = 'tender_selection' | 'entry' | 'settled';
+
+/** RT-239 (M-S7): a scan on a completed sale starts nothing; it says what to do. */
+function notifySaleComplete(): void {
+  useScanNoticeStore.getState().show(SCAN_SALE_COMPLETE_MESSAGE);
+}
+
+/** Mounted only while the settled screen is on, so it owns scans exactly then. */
+function SettledScanOwner(): null {
+  useScanOwner(notifySaleComplete);
+  return null;
+}
 
 interface ResolvedBridge {
   payments: PaymentsBridgeAPI;
@@ -661,6 +675,7 @@ export function PaymentSurface({
             integration walk). 022 US4a splits what is *inside* it into the two
             truthful states below; the wrapper's meaning is unchanged, so those
             tests keep passing unmodified. */}
+        <SettledScanOwner />
         <div className="v4-panel payment-surface__settled" data-testid="payment-surface-settled">
           {/* EXTERNAL REVIEW P1 (round 2) — "Require correlation before
               declaring the current sale complete".

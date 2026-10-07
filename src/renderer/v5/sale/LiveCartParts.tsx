@@ -160,6 +160,7 @@ export function NoteDialog(props: {
       <textarea
         ref={fieldRef}
         id="v5-live-note"
+        data-scan-target="note"
         maxLength={NOTE_MAX_LENGTH}
         value={text}
         onChange={(event) => {

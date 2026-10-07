@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import { AppRouter } from './router';
 import { SessionLockGate } from './session/SessionLockGate';
+import { ScanGuardHost } from './scan/ScanGuardHost';
 import type { PreloadBridgeAPI } from '../shared/bridge-api';
 
 /**
@@ -17,8 +18,12 @@ export default function App(): JSX.Element {
   // RT-117 — the inactivity lock screen sits above every route and keeps the
   // routed app mounted (inert) underneath, so a locked sale is preserved.
   return (
-    <SessionLockGate operator={bridge.operator}>
-      <AppRouter pairing={bridge.pairing} operator={bridge.operator} />
-    </SessionLockGate>
+    <>
+      {/* RT-239: one scan guard for the whole app, including sign-in and the lock screen. */}
+      <ScanGuardHost />
+      <SessionLockGate operator={bridge.operator}>
+        <AppRouter pairing={bridge.pairing} operator={bridge.operator} />
+      </SessionLockGate>
+    </>
   );
 }
