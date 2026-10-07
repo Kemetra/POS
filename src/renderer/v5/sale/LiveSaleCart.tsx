@@ -1,5 +1,6 @@
 import { useState, type JSX } from 'react';
 import type { CartLineItem, DiscountPlaceholderSeed } from '../../sale/useSaleCartController';
+import { formatHumanCount } from '../../ui/format/human-format';
 import { V5Icon } from '../foundation/V5Icon';
 import { CartLineRow, NoteDialog, VoidControl, money } from './LiveCartParts';
 import { useRemovalFocus } from './useRemovalFocus';
@@ -41,7 +42,7 @@ export function LiveSaleCart(props: Props): JSX.Element {
         <h2 id="v5-live-cart-title">سلة المشتريات</h2>
         <CartStateLabel {...props} />
         <span className="v5-sale-count">
-          {props.lines.length} أصناف · {props.itemCount} وحدات
+          {`الأصناف: ${formatHumanCount(props.lines.length)} · الوحدات: ${formatHumanCount(props.itemCount)}`}
         </span>
         {props.canVoid && <VoidControl onVoid={props.onVoid} />}
       </div>

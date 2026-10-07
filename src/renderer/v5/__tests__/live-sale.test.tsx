@@ -166,6 +166,16 @@ describe('live v5 Sale adapter', () => {
     expect(usePaymentStore.getState().envelope).toEqual(ENVELOPE);
   });
 
+  // RT-258 / UX-12: a noun-first dense counter, so no noun inflection to get wrong.
+  it('shows the cart counter noun-first with Western digits (RT-258)', async () => {
+    signIn();
+    const bridges = makeBridges();
+    renderSale(bridges, vi.fn());
+    const user = userEvent.setup();
+    await addOneLine(user);
+    expect(screen.getByText('الأصناف: 1 · الوحدات: 1')).toBeInTheDocument();
+  });
+
   it('does not call business bridges before session and feature gates', () => {
     const create = vi.fn();
     const cart = { create } as unknown as CartBridgeAPI;

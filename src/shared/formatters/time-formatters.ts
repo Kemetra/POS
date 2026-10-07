@@ -5,8 +5,9 @@
  * `<DrawerFailureBanner>` (§A1 brief sub-item (g)). Constraints:
  *
  *   • Arabic only (RT-240): the banner has no English half. Counts follow the
- *     Arabic number forms: one and two have their own words, 3-10 take the
- *     plural, 11 and above take the singular.
+ *     Arabic plural categories (`Intl.PluralRules('ar')`, via
+ *     `pluralAr`): one and two have their own words, 3-10 take the plural,
+ *     11 and above take the singular.
  *
  *   • Latin digits only (FR-066) — the output is built from JS number literals,
  *     which are always ASCII, so it is digit-safe regardless of locale.
@@ -17,15 +18,19 @@
  *   • A future `iso` (clock skew) clamps to «الآن», never "in N minutes".
  */
 
+import { pluralAr } from './arabic-plural.js';
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-/** The Arabic forms of one unit: one, two, 3-10, and 11 or more. */
+/** The Arabic noun forms of one unit, per plural category (RT-258 / UX-12). */
 interface UnitForms {
   readonly one: string;
   readonly two: string;
+  /** 3-10. */
   readonly few: string;
+  /** 11-99 (and 100+, which Arabic counts like 11-99 for these nouns). */
   readonly many: string;
 }
 
@@ -36,9 +41,13 @@ const DAYS: UnitForms = { one: 'يوم', two: 'يومين', few: 'أيام', man
 const UNKNOWN = 'غير معروف';
 
 function ago(n: number, unit: UnitForms): string {
-  if (n === 1) return `منذ ${unit.one}`;
-  if (n === 2) return `منذ ${unit.two}`;
-  return `منذ ${String(n)} ${n <= 10 ? unit.few : unit.many}`;
+  return pluralAr(n, {
+    one: `منذ ${unit.one}`,
+    two: `منذ ${unit.two}`,
+    few: `منذ {n} ${unit.few}`,
+    many: `منذ {n} ${unit.many}`,
+    other: `منذ {n} ${unit.many}`,
+  });
 }
 
 /**

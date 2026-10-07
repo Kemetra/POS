@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 
 import type { SaleSyncStatusCounts } from '../../../main/sales-sync/sale-sync-state-repo.js';
 import type { PreloadBridgeAPI } from '../../../shared/bridge-api.js';
+import { pluralAr, type ArabicPluralForms } from '../../../shared/formatters/arabic-plural.js';
 import { formatHumanCount, formatHumanDateTime } from '../format/human-format';
 
 /**
@@ -83,6 +84,26 @@ function formatAbsolute(iso: string): string {
   return formatHumanDateTime(iso, { withYear: true, month: 'long' }) ?? iso;
 }
 
+/** UX-12 / RT-258: one full sentence per Arabic plural category («عملية» = a sale). */
+const NEEDS_REVIEW: ArabicPluralForms = {
+  zero: 'لا عمليات بحاجة إلى مراجعة',
+  one: 'عملية واحدة بحاجة إلى مراجعة',
+  two: 'عمليتان بحاجة إلى مراجعة',
+  few: '{n} عمليات بحاجة إلى مراجعة',
+  many: '{n} عملية بحاجة إلى مراجعة',
+  other: '{n} عملية بحاجة إلى مراجعة',
+};
+
+/** «منها …»: the verb agrees with the count (dual → «تختلفان»; 3+ inanimate plural → «تختلف»). */
+const DIVERGENT: ArabicPluralForms = {
+  zero: 'لا شيء منها يختلف عن المسجَّل على الخادم',
+  one: 'منها واحدة تختلف عن المسجَّل على الخادم',
+  two: 'منها اثنتان تختلفان عن المسجَّل على الخادم',
+  few: 'منها {n} تختلف عن المسجَّل على الخادم',
+  many: 'منها {n} تختلف عن المسجَّل على الخادم',
+  other: 'منها {n} تختلف عن المسجَّل على الخادم',
+};
+
 /** Western digits (UX-12) for a count. */
 function arabicNumber(n: number): string {
   return formatHumanCount(n);
@@ -153,10 +174,10 @@ export function SaleSyncStatus({ bridge }: SaleSyncStatusProps): JSX.Element {
           </>
         )}
         {state === 'pending' && `في انتظار المزامنة: ${arabicNumber(pending)}`}
-        {state === 'attention' && `${arabicNumber(deadLetter)} عملية بحاجة إلى مراجعة`}
+        {state === 'attention' && pluralAr(deadLetter, NEEDS_REVIEW)}
         {state === 'attention' &&
           payloadDivergence > 0 &&
-          ` (منها ${arabicNumber(payloadDivergence)} تختلف عن المسجَّل على الخادم)`}
+          ` (${pluralAr(payloadDivergence, DIVERGENT)})`}
         {state === 'unavailable' && 'حالة المزامنة غير متاحة'}
       </span>
     </div>
