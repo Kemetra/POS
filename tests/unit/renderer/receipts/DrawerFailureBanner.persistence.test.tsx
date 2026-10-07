@@ -3,7 +3,7 @@
  *
  * Mounts whenever the latest drawer_events row for a recently-finalized sale is
  * outcome='failed'. Non-modal, does NOT auto-dismiss, carries the relative
- * `last_successful_open_at` timestamp ("last opened: 2 hours ago") via the
+ * `last_successful_open_at` timestamp («آخر فتح: منذ ساعتين», RT-240) via the
  * shared `formatRelativeTime` formatter, and offers ONLY a manual-override
  * affordance (≥ 44×44). Visually distinct from the printer-failure banner
  * (NFR-008 — different icon + class so a cashier never confuses them).
@@ -32,9 +32,9 @@ afterEach(() => {
 });
 
 describe('T330 — DrawerFailureBanner mounts on drawer failure', () => {
-  it('renders a bilingual drawer-failed message when a drawer failure is present', () => {
+  it('renders the Arabic drawer-failed message when a drawer failure is present', () => {
     render(<DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={() => {}} now={NOW} />);
-    expect(screen.getByText(/drawer (did not|didn.t) open|cash drawer/i)).toBeInTheDocument();
+    expect(screen.getByText('لم يفتح درج النقود')).toBeInTheDocument();
   });
 
   it('renders nothing when there is no drawer failure (unmounted, not hidden)', () => {
@@ -44,9 +44,9 @@ describe('T330 — DrawerFailureBanner mounts on drawer failure', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows the relative last_successful_open_at timestamp ("2 hours ago")', () => {
+  it('shows the relative last_successful_open_at timestamp («منذ ساعتين»)', () => {
     render(<DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={() => {}} now={NOW} />);
-    expect(screen.getByText(/2 hours ago/i)).toBeInTheDocument();
+    expect(screen.getByText('منذ ساعتين')).toBeInTheDocument();
   });
 
   it('handles a null last_successful_open_at without crashing (no prior open on record)', () => {
@@ -57,9 +57,10 @@ describe('T330 — DrawerFailureBanner mounts on drawer failure', () => {
         now={NOW}
       />,
     );
-    // Still mounts the banner; the timestamp area degrades to the 'unknown'
-    // fallback rather than throwing.
-    expect(screen.getByText(/drawer (did not|didn.t) open|cash drawer/i)).toBeInTheDocument();
+    // Still mounts the banner; the timestamp area degrades to «غير معروف»
+    // rather than throwing.
+    expect(screen.getByText('لم يفتح درج النقود')).toBeInTheDocument();
+    expect(screen.getByText('غير معروف')).toBeInTheDocument();
   });
 
   it('exposes a Manual receipt affordance ≥ 44×44, wired to onManualOverride', async () => {
@@ -68,7 +69,7 @@ describe('T330 — DrawerFailureBanner mounts on drawer failure', () => {
     render(
       <DrawerFailureBanner drawerFailure={FAILURE} onManualOverride={onManualOverride} now={NOW} />,
     );
-    const btn = screen.getByRole('button', { name: /manual/i });
+    const btn = screen.getByRole('button', { name: 'إيصال يدوي' });
     expect(btn.className).toMatch(/btn--md/);
     await userEvent.click(btn);
     expect(onManualOverride).toHaveBeenCalledWith('sale-1');

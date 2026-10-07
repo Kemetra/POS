@@ -95,13 +95,11 @@ export function ReprintAffordance({
           void handleReprint();
         }}
       >
-        {phase === 'reprinting'
-          ? 'جارٍ إعادة الطباعة / Reprinting…'
-          : 'إعادة طباعة الإيصال / Reprint receipt'}
+        {phase === 'reprinting' ? 'جارٍ إعادة الطباعة…' : 'إعادة طباعة الإيصال'}
       </button>
       {feedback?.kind === 'refused' ? (
         <p role="status" className="receipt-reprint__failure">
-          تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى. / Reprint failed. Please try again.
+          تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.
         </p>
       ) : null}
     </div>

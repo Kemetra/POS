@@ -1758,8 +1758,9 @@ body {
     color: color-mix(in srgb, var(--color-warning-emphasis) 60%, transparent);
   }
 
+  /* RT-240 (axe color-contrast): full warning ink, as on the drawer banner. */
   .printer-failure-banner__hint {
-    color: color-mix(in srgb, var(--color-warning-emphasis) 80%, transparent);
+    color: var(--color-warning-emphasis);
   }
 
   .printer-failure-banner__actions {
@@ -1824,12 +1825,14 @@ body {
     color: color-mix(in srgb, var(--color-warning-emphasis) 60%, transparent);
   }
 
+  /* RT-240 (axe color-contrast): the secondary lines keep the full warning ink;
+     a faded mix fell to 3.5:1 on the warning tint. Hierarchy comes from size. */
   .drawer-failure-banner__hint {
-    color: color-mix(in srgb, var(--color-warning-emphasis) 80%, transparent);
+    color: var(--color-warning-emphasis);
   }
 
   .drawer-failure-banner__last-open {
-    color: color-mix(in srgb, var(--color-warning-emphasis) 70%, transparent);
+    color: var(--color-warning-emphasis);
     font-size: var(--font-size-sm);
   }
 

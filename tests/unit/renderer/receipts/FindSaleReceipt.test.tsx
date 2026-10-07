@@ -96,7 +96,7 @@ describe('T451 — FindSaleReceipt surface', () => {
     });
     await waitFor(() => expect(screen.getByText('TERM-01-2026-05-27-000001')).toBeInTheDocument());
     // The reprint affordance is present because latest_print_event succeeded.
-    expect(screen.getByRole('button', { name: /reprint/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' })).toBeInTheDocument();
   });
 
   it('hides the reprint affordance when the latest print did not succeed', async () => {
@@ -119,7 +119,7 @@ describe('T451 — FindSaleReceipt surface', () => {
     await userEvent.click(screen.getByRole('button', { name: /find/i }));
 
     await waitFor(() => expect(screen.getByText('TERM-01-2026-05-27-000001')).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /reprint/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'إعادة طباعة الإيصال' })).not.toBeInTheDocument();
   });
 
   it('shows a not-found message on refusal', async () => {
@@ -130,7 +130,7 @@ describe('T451 — FindSaleReceipt surface', () => {
     await userEvent.click(screen.getByRole('button', { name: /find/i }));
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/not found/i));
-    expect(screen.queryByRole('button', { name: /reprint/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'إعادة طباعة الإيصال' })).not.toBeInTheDocument();
   });
 
   it('does not call findByNumber with an empty query', async () => {

@@ -74,21 +74,13 @@ export function DrawerFailureBanner({
       <DrawerWarningIcon />
       <p id={messageId} className="drawer-failure-banner__message">
         <span lang="ar">لم يفتح درج النقود</span>
-        <span aria-hidden="true" className="drawer-failure-banner__sep">
-          {' — '}
-        </span>
-        <span lang="en">Cash drawer did not open</span>
         <span className="drawer-failure-banner__hint">
           {' · '}
           <span lang="ar">افتح الدرج يدويًا، أو حوّل للإيصال اليدوي</span>
-          <span aria-hidden="true">{' — '}</span>
-          <span lang="en">Open the drawer manually, or switch to a manual receipt</span>
         </span>
         <span className="drawer-failure-banner__last-open">
           {' · '}
           <span lang="ar">آخر فتح: </span>
-          <span aria-hidden="true">{' — '}</span>
-          <span lang="en">last opened: </span>
           <span className="drawer-failure-banner__last-open-value">{lastOpened}</span>
         </span>
       </p>
@@ -99,11 +91,8 @@ export function DrawerFailureBanner({
           onClick={() => {
             onManualOverride(drawerFailure.sale_id);
           }}
-          aria-label="إيصال يدوي — Manual receipt"
         >
           <span lang="ar">إيصال يدوي</span>
-          <span aria-hidden="true">{' / '}</span>
-          <span lang="en">Manual receipt</span>
         </button>
       </div>
     </div>

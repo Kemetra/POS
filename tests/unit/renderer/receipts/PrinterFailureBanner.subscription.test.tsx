@@ -80,7 +80,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     });
     // The injected printFailure still drives the render even though the live
     // subscription is inert.
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   it('does not call subscribe when there is no failure (banner unmounted)', () => {
@@ -144,7 +144,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
     );
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   it('swallows a subscribe REJECTION (IPC throw, not a refused response) — no crash', async () => {
@@ -165,7 +165,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     });
     await Promise.resolve();
     // The subscribe .catch arm held — the banner still renders.
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   it('swallows an unsubscribe REJECTION on unmount cleanup — no crash', async () => {

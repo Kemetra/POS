@@ -1,24 +1,44 @@
 /**
  * Relative-time formatting for receipt/banner surfaces (008 Slice 4).
  *
- * `formatRelativeTime` renders a "last opened: 2 hours ago"-style string for the
+ * `formatRelativeTime` renders the «منذ ساعتين» part of «آخر فتح: …» for the
  * `<DrawerFailureBanner>` (§A1 brief sub-item (g)). Constraints:
+ *
+ *   • Arabic only (RT-240): the banner has no English half. Counts follow the
+ *     Arabic number forms: one and two have their own words, 3-10 take the
+ *     plural, 11 and above take the singular.
  *
  *   • Latin digits only (FR-066) — the output is built from JS number literals,
  *     which are always ASCII, so it is digit-safe regardless of locale.
  *   • `now` is injected (never `Date.now()`) — the renderer passes a stable
  *     reference and the function stays pure/deterministic under test.
- *   • Null / unparseable input returns a safe `'unknown'` fallback, never throws
+ *   • Null / unparseable input returns a safe «غير معروف» fallback, never throws
  *     (the banner must render even with a missing/corrupt timestamp).
- *   • A future `iso` (clock skew) clamps to `'just now'`, never "in N minutes".
+ *   • A future `iso` (clock skew) clamps to «الآن», never "in N minutes".
  */
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-function pluralize(n: number, unit: string): string {
-  return `${String(n)} ${unit}${n === 1 ? '' : 's'} ago`;
+/** The Arabic forms of one unit: one, two, 3-10, and 11 or more. */
+interface UnitForms {
+  readonly one: string;
+  readonly two: string;
+  readonly few: string;
+  readonly many: string;
+}
+
+const MINUTES: UnitForms = { one: 'دقيقة', two: 'دقيقتين', few: 'دقائق', many: 'دقيقة' };
+const HOURS: UnitForms = { one: 'ساعة', two: 'ساعتين', few: 'ساعات', many: 'ساعة' };
+const DAYS: UnitForms = { one: 'يوم', two: 'يومين', few: 'أيام', many: 'يومًا' };
+
+const UNKNOWN = 'غير معروف';
+
+function ago(n: number, unit: UnitForms): string {
+  if (n === 1) return `منذ ${unit.one}`;
+  if (n === 2) return `منذ ${unit.two}`;
+  return `منذ ${String(n)} ${n <= 10 ? unit.few : unit.many}`;
 }
 
 /**
@@ -27,22 +47,17 @@ function pluralize(n: number, unit: string): string {
  * @param now  The reference "now" as an ISO-8601 string (injected for purity).
  */
 export function formatRelativeTime(iso: string | null, now: string): string {
-  if (iso === null || iso === '') return 'unknown';
+  if (iso === null || iso === '') return UNKNOWN;
   const then = Date.parse(iso);
   const ref = Date.parse(now);
-  if (Number.isNaN(then) || Number.isNaN(ref)) return 'unknown';
+  if (Number.isNaN(then) || Number.isNaN(ref)) return UNKNOWN;
 
-  // Clock skew / future timestamp → clamp to "just now".
+  // Clock skew / future timestamp → clamp to «الآن».
   const deltaMs = ref - then;
-  if (deltaMs < MINUTE_MS) return 'just now';
+  if (deltaMs < MINUTE_MS) return 'الآن';
 
-  if (deltaMs < HOUR_MS) {
-    return pluralize(Math.floor(deltaMs / MINUTE_MS), 'minute');
-  }
-  if (deltaMs < DAY_MS) {
-    return pluralize(Math.floor(deltaMs / HOUR_MS), 'hour');
-  }
+  if (deltaMs < HOUR_MS) return ago(Math.floor(deltaMs / MINUTE_MS), MINUTES);
+  if (deltaMs < DAY_MS) return ago(Math.floor(deltaMs / HOUR_MS), HOURS);
   const days = Math.floor(deltaMs / DAY_MS);
-  if (days === 1) return 'yesterday';
-  return pluralize(days, 'day');
+  return days === 1 ? 'أمس' : ago(days, DAYS);
 }

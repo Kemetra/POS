@@ -405,3 +405,124 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
     expect(screen.getByTestId('location-probe')).toHaveTextContent('/app/checkout');
   });
 });
+
+describe('CheckoutRoute — RT-240 Back reasons use the catalog wording (M-P1 / M-P2 / M-P3)', () => {
+  it('M-P1 when money is recorded on this attempt', async () => {
+    renderCheckout();
+    await screen.findByTestId('payment-surface-back');
+    act(() => {
+      usePaymentStore.getState().applyAttemptSnapshot(withAppliedCash());
+    });
+    expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(
+      /^لا يمكن الرجوع إلى البيع بعد تسجيل مبلغ\. أكمل الدفع أو ألغِه\.$/,
+    );
+  });
+
+  it('M-P2 after a cancel reversed the recorded amount (N-13: not the stale «money recorded»)', async () => {
+    const user = userEvent.setup();
+    renderCheckout();
+    await enabledBack();
+    await user.click(screen.getByTestId('tender-cash'));
+    await screen.findByTestId('payment-surface-cancel');
+    act(() => {
+      usePaymentStore.getState().applyAttemptSnapshot(withAppliedCash());
+    });
+    returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
+    await user.click(screen.getByTestId('payment-surface-cancel'));
+    await waitFor(() => {
+      expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    });
+    expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(
+      /^أُلغي المبلغ المسجَّل\. اختر طريقة دفع أخرى أو ألغِ البيع\.$/,
+    );
+  });
+
+  // I-7: main's durable `blocked` is opaque (settled, force-failed, unresolved
+  // or refused tender, mismatched attempt). It proves no reversal, so the
+  // reason must not say the amount was cancelled: that could invite a second
+  // charge. Neutral wording only.
+  const NEUTRAL = /^تعذّر الرجوع إلى البيع\. أكمل الدفع أو ألغِه\.$/;
+  const M_P2 = /أُلغي المبلغ المسجَّل/;
+
+  it('an opaque block from main is neutral, never M-P2', async () => {
+    returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
+    renderCheckout();
+    await screen.findByTestId('payment-surface-back');
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(NEUTRAL);
+    });
+    expect(screen.getByTestId('payment-surface-back-blocked')).not.toHaveTextContent(M_P2);
+  });
+
+  // Cancel reverses lines locally only. A card cannot be voided on the
+  // terminal (`manual_void_required`), and a voucher's authority reservation is
+  // never released by cancel (only tender.reverse calls vouchers.reverse). In
+  // both cases the customer may still be charged.
+  it.each(['external_card_terminal', 'internal_voucher'] as const)(
+    'a cancel that reversed a %s line is neutral, never M-P2',
+    async (tenderType) => {
+      const user = userEvent.setup();
+      renderCheckout();
+      await enabledBack();
+      await user.click(screen.getByTestId('tender-cash'));
+      await screen.findByTestId('payment-surface-cancel');
+      const card = withAppliedCash();
+      act(() => {
+        usePaymentStore.getState().applyAttemptSnapshot({
+          ...card,
+          tender_lines: card.tender_lines.map((l) => ({
+            ...l,
+            tender_type: tenderType,
+          })),
+        });
+      });
+      returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
+      await user.click(screen.getByTestId('payment-surface-cancel'));
+      await waitFor(() => {
+        expect(usePaymentStore.getState().paymentSlice).toBeNull();
+      });
+      expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(NEUTRAL);
+    },
+  );
+
+  it.each([
+    ['only pending', [], ['tl-1']],
+    ['partly reversed, partly pending', ['tl-1'], ['tl-2']],
+  ])(
+    'a cancel that leaves a reversal pending (%s) is neutral, never M-P2',
+    async (_, reversed, pending) => {
+      paymentsCancel.mockResolvedValue({
+        kind: 'ok',
+        cancelled_at: '2026-06-11T12:00:05.000Z',
+        reversed_tender_line_ids: reversed,
+        reversal_pending_tender_line_ids: pending,
+      });
+      const user = userEvent.setup();
+      renderCheckout();
+      await enabledBack();
+      await user.click(screen.getByTestId('tender-cash'));
+      await screen.findByTestId('payment-surface-cancel');
+      act(() => {
+        usePaymentStore.getState().applyAttemptSnapshot(withAppliedCash());
+      });
+      returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
+      await user.click(screen.getByTestId('payment-surface-cancel'));
+      await waitFor(() => {
+        expect(usePaymentStore.getState().paymentSlice).toBeNull();
+      });
+      expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(NEUTRAL);
+    },
+  );
+
+  it('M-P3 while an amount entry is open (Back waits for Esc)', async () => {
+    const user = userEvent.setup();
+    renderCheckout();
+    await enabledBack();
+    await user.click(screen.getByTestId('tender-cash'));
+    await screen.findByTestId('cash-entry');
+    expect(screen.getByTestId('payment-surface-back')).toBeDisabled();
+    expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(
+      /^اضغط Esc لإغلاق إدخال المبلغ أولاً\.$/,
+    );
+  });
+});

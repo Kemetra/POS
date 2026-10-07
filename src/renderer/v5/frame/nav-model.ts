@@ -1,4 +1,4 @@
-import type { Role } from '../../../shared/operator/role';
+import { roleDisplayNameAr, type Role } from '../../../shared/operator/role';
 import {
   shellNavEntries,
   type ShellNavEntryId,
@@ -45,12 +45,6 @@ export function visibleNavEntries(role: Role | undefined): ReadonlyArray<V5NavEn
   );
 }
 
-const ROLE_LABEL_AR: Readonly<Record<Role, string>> = {
-  cashier: 'كاشير',
-  manager: 'مدير',
-  admin: 'مسؤول النظام',
-};
-
 export function roleLabelAr(role: Role): string {
-  return ROLE_LABEL_AR[role];
+  return roleDisplayNameAr(role);
 }

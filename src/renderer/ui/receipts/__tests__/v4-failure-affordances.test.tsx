@@ -30,8 +30,8 @@ describe('022 US4 — operational failure affordances', () => {
     const banner = screen.getByTestId('printer-failure-banner');
     expect(banner).toHaveClass('v4-row');
     expect(banner).toHaveTextContent('فشل طباعة الإيصال');
-    expect(within(banner).getByRole('button', { name: /reprint/i })).toBeDisabled();
-    fireEvent.click(within(banner).getByRole('button', { name: /retry print/i }));
+    expect(within(banner).getByRole('button', { name: 'نسخة' })).toBeDisabled();
+    fireEvent.click(within(banner).getByRole('button', { name: 'إعادة المحاولة' }));
     await waitFor(() => {
       expect(retryPrint).toHaveBeenCalledWith({ sale_id: 'sale-1', idempotency_key: 'key-1' });
     });
@@ -52,7 +52,7 @@ describe('022 US4 — operational failure affordances', () => {
     const banner = screen.getByTestId('drawer-failure-banner');
     expect(banner).toHaveClass('v4-row');
     expect(banner).toHaveTextContent('لم يفتح درج النقود');
-    fireEvent.click(within(banner).getByRole('button', { name: /manual receipt/i }));
+    fireEvent.click(within(banner).getByRole('button', { name: 'إيصال يدوي' }));
     expect(onManualOverride).toHaveBeenCalledWith('sale-2');
     expect(banner).toBeInTheDocument();
   });

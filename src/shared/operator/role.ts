@@ -29,3 +29,14 @@ export const ROLE_DISPLAY_NAME: Readonly<Record<Role, string>> = Object.freeze({
 export function roleDisplayName(role: Role): string {
   return ROLE_DISPLAY_NAME[role];
 }
+
+/** The role as the cashier screens say it (RT-240: Arabic only). */
+export const ROLE_DISPLAY_NAME_AR: Readonly<Record<Role, string>> = Object.freeze({
+  cashier: 'كاشير',
+  manager: 'مدير',
+  admin: 'مسؤول النظام',
+});
+
+export function roleDisplayNameAr(role: Role): string {
+  return ROLE_DISPLAY_NAME_AR[role];
+}

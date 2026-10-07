@@ -132,9 +132,7 @@ export function ExternalCardTerminalEntry({
         {/* Instruction row */}
         <div className="tender-row">
           <span className="tender-row__label">جهاز الدفع</span>
-          <span className="tender-row__body">
-            أكمل العملية على جهاز البطاقات ثم أكّد. (Complete on the card terminal, then confirm.)
-          </span>
+          <span className="tender-row__body">أكمل العملية على جهاز البطاقات، ثم سجّل النتيجة.</span>
         </div>
 
         {/* Amount input row */}
@@ -143,7 +141,7 @@ export function ExternalCardTerminalEntry({
             className="tender-row__label external-card-terminal-entry__amount-label"
             htmlFor="external-card-amount-input"
           >
-            المبلغ المخصوم (Amount applied, EGP)
+            المبلغ المخصوم (<span dir="ltr">EGP</span>)
           </label>
           <span className="tender-row__value">
             <input
@@ -202,7 +200,7 @@ export function ExternalCardTerminalEntry({
         className="external-card-terminal-entry__reference-label"
         htmlFor="external-card-reference-input"
       >
-        المرجع (Reference, optional, 6 chars max)
+        المرجع (اختياري، حتى 6 خانات)
       </label>
       {/* SECURITY: the reference field accepts up to 6 chars ^[A-Z0-9]{0,6}$.
           This pattern makes a PAN literally unrepresentable in this field
@@ -216,7 +214,7 @@ export function ExternalCardTerminalEntry({
         inputMode="text"
         autoComplete="off"
         maxLength={6}
-        placeholder="مثال: T1A2B3"
+        placeholder="T1A2B3"
         dir="ltr"
         value={referenceInput}
         onChange={(e) => {
@@ -260,7 +258,7 @@ export function ExternalCardTerminalEntry({
               void handleConfirm();
             }}
           >
-            تأكيد معالجة جهاز البطاقات (Confirm terminal processed payment)
+            تأكيد معالجة جهاز البطاقات
           </button>
         </PinnedPrimary>
         {onBack !== undefined && (
