@@ -130,10 +130,11 @@ interface BackControlInput {
    */
   readonly tenderReversed: boolean;
   /**
-   * RT-256 — that cancel reversed (or left pending) an external-card line.
-   * Cancel cannot void the charge on the standalone terminal
-   * (`manual_void_required`), so the cashier must void there before any new
-   * charge (M-P13). Wins over every other post-cancel reason.
+   * RT-256 — a cancel in this Checkout reversed (or left pending) an
+   * external-card line. Cancel cannot void the charge on the standalone
+   * terminal (`manual_void_required`), so the cashier must void there before
+   * any new charge (M-P13). Wins over every other reason, M-P1 included, for
+   * the rest of this Checkout.
    */
   readonly cardVoidRequired: boolean;
   /** start / confirm / cancel / back in flight. */
@@ -194,17 +195,24 @@ function cancelProvesReversal(
   return reversed.every((id) => CANCEL_CONFIRMED_TENDERS.has(typeById.get(id) ?? ''));
 }
 
-/** RT-256 — the cancel touched an external-card line, which main cannot void on the terminal. */
+/**
+ * RT-256 — the cancel touched an external-card line, which main cannot void on
+ * the terminal. Card lines come from the projection AND from the card applies
+ * seen in this Checkout: after a failed post-apply read the projection has no
+ * card line yet, but the apply did happen in main (Codex P1 on #572).
+ */
 function cancelTouchedCard(
   response: {
     readonly reversed_tender_line_ids: readonly string[];
     readonly reversal_pending_tender_line_ids: readonly string[];
   },
   lines: PaymentAttemptRendererView['tender_lines'],
+  appliedCardLineIds: ReadonlySet<string>,
 ): boolean {
-  const cardIds = new Set(
-    lines.filter((l) => l.tender_type === 'external_card_terminal').map((l) => l.tender_line_id),
-  );
+  const cardIds = new Set(appliedCardLineIds);
+  for (const l of lines) {
+    if (l.tender_type === 'external_card_terminal') cardIds.add(l.tender_line_id);
+  }
   const touched = [
     ...response.reversed_tender_line_ids,
     ...response.reversal_pending_tender_line_ids,
@@ -213,8 +221,10 @@ function cancelTouchedCard(
 }
 
 function backReason(input: BackControlInput, tenderBlocked: boolean): BackReason | null {
-  if ((input.projectedTenderLines ?? 0) > 0) return 'recorded';
+  // M-P13 first: a new recorded tender must not replace the terminal-void
+  // warning with «أكمل الدفع أو ألغِه» (Codex P1 on #572).
   if (input.cardVoidRequired) return 'card_void';
+  if ((input.projectedTenderLines ?? 0) > 0) return 'recorded';
   if (input.tenderReversed) return 'reversed';
   if (tenderBlocked) return 'blocked';
   return input.entryOpen ? 'entry_open' : null;
@@ -404,6 +414,9 @@ export function PaymentSurface({
   const [tenderTouched, setTenderTouched] = useState<boolean>(false);
   const [tenderReversed, setTenderReversed] = useState<boolean>(false);
   const [cardVoidRequired, setCardVoidRequired] = useState<boolean>(false);
+  // RT-256 — card lines main confirmed applying in this Checkout, kept even
+  // when the follow-up read fails and the projection does not show them.
+  const appliedCardLineIds = useRef<Set<string>>(new Set());
   // 022 US4a (T011) — the sale id is NO LONGER retained.
   //
   // It existed to mount ReceiptPreview and to discriminate T013a's two settled
@@ -447,6 +460,7 @@ export function PaymentSurface({
     setTenderTouched(false);
     setTenderReversed(false);
     setCardVoidRequired(false);
+    appliedCardLineIds.current = new Set();
     setAfterApply('idle');
     // Resume a same-handoff attempt across a remount (leaving checkout and
     // coming back): a `started` one is still held by main, so forgetting it
@@ -735,7 +749,9 @@ export function PaymentSurface({
         const linesAtCancel = usePaymentStore.getState().paymentSlice?.tender_lines ?? [];
         setTenderReversed(cancelProvesReversal(response, linesAtCancel));
         // Sticky for this handoff: a later cash-only cancel does not void the card.
-        if (cancelTouchedCard(response, linesAtCancel)) setCardVoidRequired(true);
+        if (cancelTouchedCard(response, linesAtCancel, appliedCardLineIds.current)) {
+          setCardVoidRequired(true);
+        }
         setSelectedTender(null);
         setPhase('tender_selection');
         // The attempt is gone, and with it any pending or failed post-apply read.
@@ -1086,7 +1102,8 @@ export function PaymentSurface({
                       remainingBalanceMinor={remainingBalanceMinor}
                       paymentAttemptId={paymentAttemptId}
                       tenderApply={(req) => bridge.tender.apply(req)}
-                      onApplied={() => {
+                      onApplied={(response) => {
+                        appliedCardLineIds.current.add(response.tender_line_id);
                         void handleLineApplied();
                       }}
                     />

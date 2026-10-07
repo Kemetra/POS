@@ -7,7 +7,7 @@
  * neutral line «… أكمل الدفع أو ألغِه.» invited a second charge while the first
  * one may still stand (VNext Constitution Rebaseline, M-P1 amendment).
  */
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -204,6 +204,67 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
     };
     await cancelOnce([{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }]);
     await cancelOnce([{ id: 'tl-cash', type: 'cash', amount: 5000 }]);
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+  });
+
+  it('wins over M-P1 when a new tender is recorded after the card cancel (Codex P1)', async () => {
+    await cancelWithLines(
+      [{ id: 'tl-card', type: 'external_card_terminal', amount: 5000 }],
+      ['tl-card'],
+    );
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    act(() => {
+      usePaymentStore
+        .getState()
+        .applyAttemptSnapshot(attemptWith([{ id: 'tl-cash', type: 'cash', amount: 1000 }]));
+    });
+    const reason = await screen.findByTestId('payment-surface-back-blocked');
+    expect(reason).toHaveTextContent(CARD_VOID);
+    expect(reason).not.toHaveTextContent(COMPLETE_OR_CANCEL);
+  });
+
+  it('a card applied in this Checkout is recognised even when the read after apply failed (Codex P1)', async () => {
+    const bridge = makeBridge({ reversed: ['tl-card-1'] });
+    (bridge.payments as unknown as { read: ReturnType<typeof vi.fn> }).read = vi.fn(() =>
+      Promise.reject(new Error('ipc')),
+    );
+    (bridge.tender as unknown as { apply: ReturnType<typeof vi.fn> }).apply = vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok' as const,
+        tender_line_id: 'tl-card-1',
+        applied_at: '2026-10-07T09:59:30.000Z',
+      }),
+    );
+    render(
+      <PaymentSurface
+        _testBridge={bridge}
+        onBackToSale={() => Promise.resolve(true)}
+        onNewSale={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      screen.getByTestId('tender-external-card').click();
+      await Promise.resolve();
+    });
+    fireEvent.change(await screen.findByTestId('external-card-amount-input'), {
+      target: { value: '50.00' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('external-card-confirm'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // The read failed: the projection still has no card line.
+    await screen.findByTestId('payment-surface-reread');
+    expect(usePaymentStore.getState().paymentSlice?.tender_lines ?? []).toEqual([]);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
   });
 
