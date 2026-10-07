@@ -18,10 +18,11 @@ import { fileURLToPath } from 'url';
 
 import { bindPaymentAttemptsRepository } from '../../../../src/main/payments/repositories/payment-attempts.repository.js';
 import { bindPaymentTenderLinesRepository } from '../../../../src/main/payments/repositories/payment-tender-lines.repository.js';
+import { bindPaymentActionOutboxRepository } from '../../../../src/main/payments/repositories/payment-action-outbox.repository.js';
 import {
-  bindPaymentActionOutboxRepository,
-  computeActionPayloadHash,
-} from '../../../../src/main/payments/repositories/payment-action-outbox.repository.js';
+  hashActionPayload,
+  tenderApplyActionPayload,
+} from '../../../../src/main/payments/action-payload.js';
 import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
 import { createTenderLineFsm } from '../../../../src/main/payments/fsm/tender-line-fsm.js';
 
@@ -306,14 +307,15 @@ describe('T085 — TenderLine FSM apply (internal_voucher Wave 4)', () => {
   });
 });
 
-describe('CR-1 — voucher outbox hash reflects PERSISTED amount, not caller estimate', () => {
-  it('applied voucher branch: outbox hash matches re-hash of persisted outcome.applied_amount_minor', () => {
-    // V-A authority caps the voucher value at 800 even though the caller's
-    // pre-call estimate was 1000. The persisted line row carries 800; the
-    // outbox `action_payload_hash` MUST be the hash of the same 800, NOT
-    // the hash of the caller's 1000 — otherwise an idempotent retry of
-    // the same key would compute a different hash and refuse with
-    // `idempotency_payload_mismatch`.
+describe('RT-304 — voucher outbox hash covers the REQUESTED amount, not the authority-capped one', () => {
+  it('applied voucher branch: outbox hash is the hash of the requested amount while the line persists the capped one', () => {
+    // V-A authority caps the voucher value at 800 although the caller
+    // requested 1000. The persisted line row carries 800, but a same-key
+    // retry carries the request (1000), so the outbox `action_payload_hash`
+    // MUST be the hash of the 1000 — hashing the persisted 800 would make
+    // every retry of a capped voucher refuse with
+    // `idempotency_payload_mismatch`. (Supersedes CR-1, which hashed the
+    // persisted amount.)
     const { fsm, attempts, outbox, lines } = buildFsm();
     seedStartedAttempt(attempts, outbox, 1500);
     fsm.apply({
@@ -335,27 +337,49 @@ describe('CR-1 — voucher outbox hash reflects PERSISTED amount, not caller est
     expect(persistedLine?.amount_applied_minor).toBe(800);
     const outboxRow = outbox.findByActionId('apply-tl-1');
     expect(outboxRow).toBeDefined();
-    // Re-compute the hash against the PERSISTED amount — must match.
-    const expectedHash = computeActionPayloadHash({
-      tender_line_id: 'tl-1',
-      payment_attempt_id: 'pa-1',
-      tender_type: 'internal_voucher',
-      amount_applied_minor: 800,
-      action_kind: 'tender.apply',
-    });
-    expect(outboxRow?.action_payload_hash).toBe(expectedHash);
-    // Sanity — hashing the caller's 1000 would NOT match.
-    const wrongHash = computeActionPayloadHash({
+    const hashFor = (amount_applied_minor: number): string =>
+      hashActionPayload(
+        'tender.apply',
+        tenderApplyActionPayload({
+          payment_attempt_id: 'pa-1',
+          tender_type: 'internal_voucher',
+          amount_applied_minor,
+        }),
+      );
+    // The REQUESTED amount is what is hashed …
+    expect(outboxRow?.action_payload_hash).toBe(hashFor(1000));
+    // … and NOT the authority-capped amount the line persists.
+    expect(outboxRow?.action_payload_hash).not.toBe(hashFor(800));
+  });
+
+  it('voucher code never reaches the hash: the stored hash equals the hash of the payload without it', () => {
+    const { fsm, attempts, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    fsm.apply({
       tender_line_id: 'tl-1',
       payment_attempt_id: 'pa-1',
       tender_type: 'internal_voucher',
       amount_applied_minor: 1000,
-      action_kind: 'tender.apply',
+      voucher_code: 'V-SECRET-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-SECRET',
+        applied_amount_minor: 1000,
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
     });
-    expect(outboxRow?.action_payload_hash).not.toBe(wrongHash);
+    expect(outbox.findByActionId('apply-tl-1')?.action_payload_hash).toBe(
+      hashActionPayload('tender.apply', {
+        payment_attempt_id: 'pa-1',
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1000,
+      }),
+    );
   });
 
-  it('overpayment-refused voucher branch: outbox hash matches persisted outcome.applied_amount_minor', () => {
+  it('overpayment-refused voucher branch: outbox hash still covers the requested amount', () => {
     const { fsm, attempts, outbox, lines } = buildFsm();
     seedStartedAttempt(attempts, outbox, 1500);
     fsm.apply({
@@ -377,13 +401,14 @@ describe('CR-1 — voucher outbox hash reflects PERSISTED amount, not caller est
     expect(persistedLine?.amount_applied_minor).toBe(5000);
     expect(persistedLine?.refusal_reason).toBe('non_cash_overpayment_refused');
     const outboxRow = outbox.findByActionId('apply-tl-1');
-    const expectedHash = computeActionPayloadHash({
-      tender_line_id: 'tl-1',
-      payment_attempt_id: 'pa-1',
-      tender_type: 'internal_voucher',
-      amount_applied_minor: 5000,
-      action_kind: 'tender.apply',
-    });
+    const expectedHash = hashActionPayload(
+      'tender.apply',
+      tenderApplyActionPayload({
+        payment_attempt_id: 'pa-1',
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1500, // the request, not the authority's 5000
+      }),
+    );
     expect(outboxRow?.action_payload_hash).toBe(expectedHash);
   });
 });
