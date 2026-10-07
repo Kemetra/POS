@@ -437,6 +437,52 @@ describe('CheckoutRoute — RT-240 Back reasons use the catalog wording (M-P1 / 
     );
   });
 
+  // I-7: main's durable `blocked` is opaque (settled, force-failed, unresolved
+  // or refused tender, mismatched attempt). It proves no reversal, so the
+  // reason must not say the amount was cancelled: that could invite a second
+  // charge. Neutral wording only.
+  const NEUTRAL = /^تعذّر الرجوع إلى البيع\. أكمل الدفع أو ألغِه\.$/;
+  const M_P2 = /أُلغي المبلغ المسجَّل/;
+
+  it('an opaque block from main is neutral, never M-P2', async () => {
+    returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
+    renderCheckout();
+    await screen.findByTestId('payment-surface-back');
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(NEUTRAL);
+    });
+    expect(screen.getByTestId('payment-surface-back-blocked')).not.toHaveTextContent(M_P2);
+  });
+
+  it.each([
+    ['only pending', [], ['tl-1']],
+    ['partly reversed, partly pending', ['tl-1'], ['tl-2']],
+  ])(
+    'a cancel that leaves a reversal pending (%s) is neutral, never M-P2',
+    async (_, reversed, pending) => {
+      paymentsCancel.mockResolvedValue({
+        kind: 'ok',
+        cancelled_at: '2026-06-11T12:00:05.000Z',
+        reversed_tender_line_ids: reversed,
+        reversal_pending_tender_line_ids: pending,
+      });
+      const user = userEvent.setup();
+      renderCheckout();
+      await enabledBack();
+      await user.click(screen.getByTestId('tender-cash'));
+      await screen.findByTestId('payment-surface-cancel');
+      act(() => {
+        usePaymentStore.getState().applyAttemptSnapshot(withAppliedCash());
+      });
+      returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
+      await user.click(screen.getByTestId('payment-surface-cancel'));
+      await waitFor(() => {
+        expect(usePaymentStore.getState().paymentSlice).toBeNull();
+      });
+      expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(NEUTRAL);
+    },
+  );
+
   it('M-P3 while an amount entry is open (Back waits for Esc)', async () => {
     const user = userEvent.setup();
     renderCheckout();

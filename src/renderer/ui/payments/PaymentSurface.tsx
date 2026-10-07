@@ -123,6 +123,11 @@ interface BackControlInput {
   readonly projectedTenderLines: number | undefined;
   /** A payments.cancel in this mount reversed tender. */
   readonly tenderTouched: boolean;
+  /**
+   * That cancel PROVED the reversal: lines came back reversed and none are
+   * still pending. Only this may say «أُلغي المبلغ المسجَّل» (M-P2).
+   */
+  readonly tenderReversed: boolean;
   /** start / confirm / cancel / back in flight. */
   readonly busy: boolean;
   /**
@@ -137,21 +142,27 @@ interface BackControlInput {
  * RT-240 — Back's reason, from the message catalog (15 §5), chosen by state so
  * it never claims more than is known (I-7):
  *   recorded   — money is on this attempt now (M-P1);
- *   reversed   — tender happened and was reversed, or main says Back is closed
- *                with no money on the attempt (M-P2, N-13);
+ *   reversed   — a cancel in this mount proved the reversal (M-P2, N-13);
+ *   blocked    — Back is closed but nothing proves why: main's durable
+ *                `blocked` (settled, force-failed, unresolved or refused
+ *                tender, mismatched attempt) or a reversal still pending.
+ *                Neutral wording: saying the amount was cancelled could
+ *                invite a second charge;
  *   entry_open — an amount entry is open; Esc closes it first (M-P3).
  */
-type BackReason = 'recorded' | 'reversed' | 'entry_open';
+type BackReason = 'recorded' | 'reversed' | 'blocked' | 'entry_open';
 
 const BACK_REASON_COPY: Readonly<Record<BackReason, string>> = {
   recorded: 'لا يمكن الرجوع إلى البيع بعد تسجيل مبلغ. أكمل الدفع أو ألغِه.',
   reversed: 'أُلغي المبلغ المسجَّل. اختر طريقة دفع أخرى أو ألغِ البيع.',
+  blocked: BACK_REFUSED_COPY,
   entry_open: 'اضغط Esc لإغلاق إدخال المبلغ أولاً.',
 };
 
 function backReason(input: BackControlInput, tenderBlocked: boolean): BackReason | null {
   if ((input.projectedTenderLines ?? 0) > 0) return 'recorded';
-  if (tenderBlocked) return 'reversed';
+  if (input.tenderReversed) return 'reversed';
+  if (tenderBlocked) return 'blocked';
   return input.entryOpen ? 'entry_open' : null;
 }
 
@@ -337,6 +348,7 @@ export function PaymentSurface({
   // still refuses Back for that cart, so the control stays disabled).
   const [isReturning, setIsReturning] = useState<boolean>(false);
   const [tenderTouched, setTenderTouched] = useState<boolean>(false);
+  const [tenderReversed, setTenderReversed] = useState<boolean>(false);
   // 022 US4a (T011) — the sale id is NO LONGER retained.
   //
   // It existed to mount ReceiptPreview and to discriminate T013a's two settled
@@ -378,6 +390,7 @@ export function PaymentSurface({
     setReversalPending(false);
     setIsReturning(false);
     setTenderTouched(false);
+    setTenderReversed(false);
     setAfterApply('idle');
     // Resume a same-handoff attempt across a remount (leaving checkout and
     // coming back): a `started` one is still held by main, so forgetting it
@@ -422,6 +435,7 @@ export function PaymentSurface({
     eligibility: backToSaleEligibility,
     projectedTenderLines: paymentSlice?.tender_lines.length,
     tenderTouched,
+    tenderReversed,
     busy: [isStarting, isConfirming, isCancelling, isReturning].some(Boolean),
     entryOpen: phase === 'entry',
   });
@@ -661,6 +675,10 @@ export function PaymentSurface({
         ) {
           setTenderTouched(true);
         }
+        setTenderReversed(
+          response.reversed_tender_line_ids.length > 0 &&
+            response.reversal_pending_tender_line_ids.length === 0,
+        );
         setSelectedTender(null);
         setPhase('tender_selection');
         // The attempt is gone, and with it any pending or failed post-apply read.
