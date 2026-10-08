@@ -313,6 +313,17 @@ function holdFor(
   return current ? recovery.hold : 'none';
 }
 
+/**
+ * RT-305 — a cancel this surface sent. `waiting` on main; `answered` once its
+ * read-back is in and this surface applies it (the hold-sync effect may run
+ * before the handback in `finally`); `followed` once the store moved the attempt
+ * on first (another surface's cancel answered), after which nothing is applied.
+ */
+interface OwnCancel {
+  readonly attemptId: string;
+  status: 'waiting' | 'answered' | 'followed';
+}
+
 /** Tender main still counts as live on a force-failed attempt (cart-payment-eligibility). */
 const LIVE_TENDER_STATES: ReadonlySet<string> = new Set([
   'applying',
@@ -494,9 +505,9 @@ export function PaymentSurface({
   // RT-238 / I-9: when focus is moved onto the settle commit, a held or doubled
   // Enter from the apply that preceded it must not settle on its own.
   const commitFocusedAtRef = useRef(0);
-  // RT-298 — this surface sent the cancel now in flight (its own outcome code
-  // updates the screen; see the hold-sync effect below).
-  const ownsCancelRef = useRef(false);
+  // RT-298 — the cancel this surface sent and has not finished (its own outcome
+  // code updates the screen; see the hold-sync effect below).
+  const ownCancelRef = useRef<OwnCancel | null>(null);
   const lastHoldRef = useRef<CancelHold>('none');
   // RT-238 / Codex P1: after a successful apply the projection must be re-read
   // before anything else is offered. Until it is, the apply is not offered again
@@ -638,13 +649,29 @@ export function PaymentSurface({
   // RT-298 — a cancel sent before a Checkout remount answers in the old
   // surface, which can only update the store. Follow that outcome here so the
   // mounted surface never keeps a stale instruction or a dead Cancel (Codex P2,
-  // #576). This surface's own cancels update the screen themselves.
+  // #576). This surface's own cancels update the screen themselves, unless the
+  // store moves their attempt on, or ends it, while they are still in flight
+  // (RT-305; Codex P1 on #581): a retry sent after a remount may be slow or
+  // lose its answer, so the screen follows the store now and releases Cancel.
   useEffect(() => {
     const previous = lastHoldRef.current;
     lastHoldRef.current = cancelHold;
-    if (previous === cancelHold || ownsCancelRef.current) return;
+    const own = ownCancelRef.current;
+    if (own !== null) {
+      const slice = usePaymentStore.getState().paymentSlice;
+      const stillOpen = slice?.payment_attempt_id === own.attemptId && slice.state === 'started';
+      if (own.status !== 'waiting' || stillOpen) return;
+      own.status = 'followed';
+      ownCancelRef.current = null;
+      setIsCancelling(false);
+      followStoreOutcome(own.attemptId);
+      return;
+    }
+    if (previous === cancelHold) return;
     followStoreOutcome();
-    // Only a hold change triggers this; followStoreOutcome reads the store itself.
+    // Only a hold change triggers this (moving the attempt on, or ending it,
+    // always changes the hold of a cancel in flight); followStoreOutcome reads
+    // the store itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cancelHold]);
 
@@ -968,8 +995,15 @@ export function PaymentSurface({
    * response). Read the attempt before re-opening any payment action, and act
    * on main's durable state rather than on the lost answer.
    */
-  async function reconcileAfterCancel(attemptId: string, handoffId: string): Promise<void> {
+  async function reconcileAfterCancel(
+    attemptId: string,
+    handoffId: string,
+    own: OwnCancel,
+  ): Promise<void> {
     const attempt = await readAttemptWithRetry(attemptId);
+    // RT-305 — the screen already followed the store; this read changes nothing.
+    if (own.status === 'followed') return;
+    own.status = 'answered';
     if (!isCancelStillCurrent(attemptId, handoffId)) {
       followStoreOutcome(attemptId);
       return;
@@ -1056,7 +1090,8 @@ export function PaymentSurface({
     const handoffId = envelope.handoff_action_id;
     setBridgeRefusalCopy(null);
     setIsCancelling(true);
-    ownsCancelRef.current = true;
+    const own: OwnCancel = { attemptId, status: 'waiting' };
+    ownCancelRef.current = own;
     const store = usePaymentStore.getState();
     const key = store.cancelKeyFor(attemptId);
     // Held from the moment it is sent: leaving and re-entering Checkout before
@@ -1066,6 +1101,9 @@ export function PaymentSurface({
       const response = await bridge.payments
         .cancel({ payment_attempt_id: attemptId, idempotency_key: key })
         .catch(() => null);
+      // RT-305 — the screen already followed the store's outcome for this
+      // attempt; a late answer must not apply one of its own.
+      if (own.status === 'followed') return;
       // A late answer (a retry after a remount already settled this cancel,
       // and another attempt may have begun) must not touch that newer attempt
       // (Codex P1, #576). Whatever settled it, this surface shows the store's
@@ -1078,19 +1116,22 @@ export function PaymentSurface({
         const linesAtCancel = usePaymentStore.getState().paymentSlice?.tender_lines ?? [];
         applyCancelOutcome(response, linesAtCancel);
       } else {
-        await reconcileAfterCancel(attemptId, handoffId);
+        await reconcileAfterCancel(attemptId, handoffId, own);
       }
     } finally {
       // Hand the hold back to the sync effect at the value this cancel left,
-      // so it never re-applies this surface's own outcome.
-      const after = usePaymentStore.getState();
-      lastHoldRef.current = holdFor(
-        after.cancelRecovery,
-        handoffId,
-        after.paymentSlice?.payment_attempt_id ?? null,
-      );
-      ownsCancelRef.current = false;
-      setIsCancelling(false);
+      // so it never re-applies this surface's own outcome. A followed cancel
+      // (RT-305) already handed the screen over, and a newer cancel may own it.
+      if (ownCancelRef.current === own) {
+        const after = usePaymentStore.getState();
+        lastHoldRef.current = holdFor(
+          after.cancelRecovery,
+          handoffId,
+          after.paymentSlice?.payment_attempt_id ?? null,
+        );
+        ownCancelRef.current = null;
+        setIsCancelling(false);
+      }
     }
   }
 
