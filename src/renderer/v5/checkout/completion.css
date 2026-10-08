@@ -1,0 +1,155 @@
+/*
+ * RT-243 W1-C — Checkout completion (freeze 15 S14). Tokens only (DESIGN.md):
+ * a white panel with a hairline and no shadow, one teal commit, status colour
+ * only on the proof glyphs and notices, logical properties only. Money keeps
+ * the shipped mono tabular treatment (owner decision 2026-10-07, RT-262).
+ */
+
+.v5-completion {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow: auto;
+  background: var(--color-background);
+}
+
+.v5-completion__titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  background: var(--color-surface);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.v5-completion__titlebar h1 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+.v5-completion__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  inline-size: min(100% - 2 * var(--space-4), 40rem);
+  margin-inline: auto;
+  padding-block: var(--space-5);
+}
+
+.v5-completion__panel {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.v5-proof-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-proof-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+.v5-proof-line[data-tone='success'] {
+  --tone-ink: var(--color-success);
+}
+
+.v5-proof-line[data-tone='info'] {
+  --tone-ink: var(--color-info);
+}
+
+.v5-proof-line[data-tone='warning'] {
+  --tone-ink: var(--color-warning);
+}
+
+.v5-proof-line[data-tone='danger'] {
+  --tone-ink: var(--color-danger);
+}
+
+.v5-proof-line__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.v5-proof-line__value {
+  flex: none;
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+}
+
+/* M-P5 — the change to hand back is the cashier's next act: neutral and large. */
+.v5-proof-line[data-emphasis='true'] {
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--color-border);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-proof-line[data-emphasis='true'] .v5-proof-line__value {
+  font-size: var(--font-size-3xl);
+}
+
+.v5-completion__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.v5-completion-btn {
+  min-block-size: 56px;
+  min-inline-size: 12rem;
+  padding-inline: var(--space-5);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.v5-completion-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-completion-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .v5-completion__panel {
+    border-color: CanvasText;
+  }
+
+  .v5-proof-line .v5-tone-icon {
+    color: CanvasText;
+  }
+
+  .v5-completion-btn--primary {
+    border: 3px solid ButtonText;
+  }
+
+  .v5-completion-btn:focus-visible {
+    outline-color: Highlight;
+  }
+}
