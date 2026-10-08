@@ -235,6 +235,23 @@ describe('RT-243 F1 — recorded tender survives a Checkout remount', () => {
     },
   );
 
+  it('many split lines stay bounded: one row per method with its total, in first-apply order (Codex P2, #583)', async () => {
+    const bridge = makeBridge();
+    await openWith(bridge, [
+      line('tl-1', 'cash', 100, 1),
+      line('tl-2', 'external_card_terminal', 200, 2),
+      line('tl-3', 'cash', 150, 3),
+      line('tl-4', 'cash', 50, 4),
+      line('tl-5', 'external_card_terminal', 300, 5),
+      line('tl-6', 'cash', 500, 6, { change_due_minor: 0 }),
+    ]);
+    await remount(bridge);
+    // At most one row per tender method (three methods exist), so the pinned
+    // band cannot grow with the number of splits.
+    expect(ledgerRows()).toEqual(['نقدي8.00 EGP', 'بطاقة5.00 EGP']);
+    expect(screen.getByTestId('payment-surface-amount-due')).toHaveTextContent('0.00 EGP');
+  });
+
   it('the same holds when Esc closes the entry, with no remount', async () => {
     const bridge = makeBridge();
     await openWith(bridge, [line('tl-1', 'cash', 1300, 1)]);
