@@ -321,6 +321,11 @@ describe('RT-306 — sealDeviceToken / openDeviceToken', () => {
     expect(openDeviceToken('aB3_-x')).toEqual({ kind: 'legacy', token: 'aB3_-x' });
   });
 
+  it('reads an envelope of an unknown version as malformed, even when well formed', () => {
+    const v2 = JSON.stringify({ v: 2, token: 'tok', binding });
+    expect(openDeviceToken(v2)).toEqual({ kind: 'malformed' });
+  });
+
   it('reads an envelope it cannot trust as malformed', () => {
     expect(openDeviceToken('{"v":1,"token":"t","binding":{"tenant_id":"t"}}')).toEqual({
       kind: 'malformed',

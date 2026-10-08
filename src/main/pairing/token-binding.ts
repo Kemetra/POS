@@ -53,33 +53,50 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function isBinding(value: unknown): value is PairingBinding {
-  if (typeof value !== 'object' || value === null) return false;
-  const b = value as Record<string, unknown>;
   return (
-    isNonEmptyString(b['tenant_id']) &&
-    isNonEmptyString(b['branch_id']) &&
-    isNonEmptyString(b['terminal_id']) &&
-    typeof b['paired_at'] === 'number' &&
-    Number.isSafeInteger(b['paired_at'])
+    isRecord(value) &&
+    isNonEmptyString(value['tenant_id']) &&
+    isNonEmptyString(value['branch_id']) &&
+    isNonEmptyString(value['terminal_id']) &&
+    Number.isSafeInteger(value['paired_at'])
   );
+}
+
+interface SealedEnvelope {
+  v: typeof SEALED_VERSION;
+  token: string;
+  binding: PairingBinding;
+}
+
+function isSealedEnvelope(value: unknown): value is SealedEnvelope {
+  return (
+    isRecord(value) &&
+    value['v'] === SEALED_VERSION &&
+    isNonEmptyString(value['token']) &&
+    isBinding(value['binding'])
+  );
+}
+
+/** `undefined` for text that is not JSON. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Never throws. `sealed` is a non-empty value read from the SecretStore. */
 export function openDeviceToken(sealed: string): OpenedDeviceToken {
   if (!sealed.startsWith('{')) return { kind: 'legacy', token: sealed };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(sealed);
-  } catch {
-    return { kind: 'malformed' };
-  }
-  if (typeof parsed !== 'object' || parsed === null) return { kind: 'malformed' };
-  const p = parsed as Record<string, unknown>;
-  if (p['v'] !== SEALED_VERSION || !isNonEmptyString(p['token']) || !isBinding(p['binding'])) {
-    return { kind: 'malformed' };
-  }
-  return { kind: 'bound', token: p['token'], binding: bindingOf(p['binding']) };
+  const parsed = parseJson(sealed);
+  if (!isSealedEnvelope(parsed)) return { kind: 'malformed' };
+  return { kind: 'bound', token: parsed.token, binding: bindingOf(parsed.binding) };
 }
 
 export function sameBinding(a: PairingBinding, b: PairingBinding): boolean {
@@ -96,7 +113,7 @@ export function sameBinding(a: PairingBinding, b: PairingBinding): boolean {
  * or bound to another pairing. A legacy (unbound) token is returned as is.
  */
 export function tokenBoundTo(sealed: string | null, row: PairingBinding | null): string | null {
-  if (sealed === null || sealed.length === 0 || row === null) return null;
+  if (row === null || !isNonEmptyString(sealed)) return null;
   const opened = openDeviceToken(sealed);
   if (opened.kind === 'malformed') return null;
   if (opened.kind === 'bound' && !sameBinding(opened.binding, row)) return null;
