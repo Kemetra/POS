@@ -6,6 +6,9 @@
  * without letting the Enter that settled the payment fall through onto it.
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -61,7 +64,7 @@ describe('RT-243 completion — proof list shows only proven facts', () => {
     expect(amount).toHaveAttribute('dir', 'ltr');
     expect(amount).toHaveTextContent('992.25 EGP');
     // FR-16: the settled amount stays the dominant figure even with no change.
-    expect(payment).toHaveAttribute('data-emphasis', 'true');
+    expect(payment).toHaveAttribute('data-emphasis', 'hero');
 
     // Every other line is not a success: success is for proven facts only.
     const lines = within(screen.getByTestId(IDS.proofs)).getAllByRole('listitem');
@@ -109,7 +112,7 @@ describe('RT-243 completion — change to hand back (M-P5)', () => {
     const change = screen.getByTestId(IDS.change);
     expect(change).toHaveTextContent('الباقي للعميل');
     expect(change).toHaveAttribute('data-tone', 'neutral');
-    expect(change).toHaveAttribute('data-emphasis', 'true');
+    expect(change).toHaveAttribute('data-emphasis', 'strong');
     expect(within(change).getByText('1,250.00 EGP')).toHaveAttribute('dir', 'ltr');
   });
 
@@ -214,5 +217,28 @@ describe('RT-243 completion — accessibility', () => {
     expect(screen.getByRole('region', { name: 'الدفع' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'الدفع' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'حالة البيع' })).toBeInTheDocument();
+  });
+});
+
+describe('RT-243 completion — numeric hierarchy (FR-16 over M-P5)', () => {
+  const css = readFileSync(resolve(__dirname, '../completion.css'), 'utf8');
+
+  /** The font-size token a value rule uses, e.g. `4xl`. */
+  function valueSize(emphasis: string): string | undefined {
+    const rule = new RegExp(
+      `\\[data-emphasis='${emphasis}'\\] \\.v5-proof-line__value \\{[^}]*--font-size-(\\w+)`,
+    );
+    return rule.exec(css)?.[1];
+  }
+
+  it('sizes the settled amount above the change', () => {
+    renderPanel({ changeDueMinor: 775 });
+    expect(screen.getByTestId('completion-proof-payment')).toHaveAttribute('data-emphasis', 'hero');
+    expect(screen.getByTestId(IDS.change)).toHaveAttribute('data-emphasis', 'strong');
+    const order = ['md', 'lg', 'xl', '2xl', '3xl', '4xl'];
+    const hero = order.indexOf(valueSize('hero') ?? '');
+    const strong = order.indexOf(valueSize('strong') ?? '');
+    expect(strong).toBeGreaterThan(-1);
+    expect(hero).toBeGreaterThan(strong);
   });
 });

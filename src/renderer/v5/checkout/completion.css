@@ -95,17 +95,21 @@
 }
 
 /*
- * The settled amount (FR-16) and the change to hand back (M-P5) are the two
- * figures the cashier acts on: both large; the change stays neutral.
+ * The settled amount (FR-16) is the dominant figure; the change to hand back
+ * (M-P5) is large and neutral but one step below it.
  */
-.v5-proof-line[data-emphasis='true'] {
+.v5-proof-line[data-emphasis] {
   padding-block: var(--space-3);
   border-block: 1px solid var(--color-border);
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
 }
 
-.v5-proof-line[data-emphasis='true'] .v5-proof-line__value {
+.v5-proof-line[data-emphasis='hero'] .v5-proof-line__value {
+  font-size: var(--font-size-4xl);
+}
+
+.v5-proof-line[data-emphasis='strong'] .v5-proof-line__value {
   font-size: var(--font-size-3xl);
 }
 

@@ -98,7 +98,7 @@ export function CompletionPanel({
       label: 'تم استلام المبلغ',
       value: formatHumanMoney(paidMinor),
       // FR-16: the settled amount stays the dominant figure, change or not.
-      emphasis: true,
+      emphasis: 'hero',
       testId: 'completion-proof-payment',
       valueTestId: testIds.amount,
     },
@@ -109,7 +109,7 @@ export function CompletionPanel({
       tone: 'neutral',
       label: 'الباقي للعميل',
       value: formatHumanMoney(changeDueMinor),
-      emphasis: true,
+      emphasis: 'strong',
       testId: testIds.change,
     });
   }

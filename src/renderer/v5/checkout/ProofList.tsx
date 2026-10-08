@@ -20,8 +20,11 @@ export interface ProofItem {
   readonly label: string;
   /** A human amount or reference; rendered as an isolated LTR run. */
   readonly value?: string;
-  /** The item the cashier acts on next (M-P5, large). */
-  readonly emphasis?: boolean;
+  /**
+   * How large the value reads: `hero` for the settled amount (FR-16, the
+   * dominant figure), `strong` for a figure the cashier acts on (M-P5).
+   */
+  readonly emphasis?: 'hero' | 'strong';
   readonly testId?: string | undefined;
   readonly valueTestId?: string | undefined;
 }
@@ -39,7 +42,7 @@ export function ProofList({ items, label }: ProofListProps): JSX.Element {
           key={item.id}
           className="v5-proof-line"
           data-tone={item.tone}
-          data-emphasis={item.emphasis === true ? 'true' : undefined}
+          data-emphasis={item.emphasis}
           data-testid={item.testId}
         >
           {item.tone !== 'neutral' && <ToneIcon tone={item.tone} />}
