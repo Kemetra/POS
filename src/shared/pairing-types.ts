@@ -16,6 +16,7 @@ export const PAIRING_INVALID_REASONS = [
   'orphaned_row',
   'decrypt_failed',
   'device_revoked',
+  'inconsistent',
 ] as const;
 export type PairingInvalidReason = (typeof PAIRING_INVALID_REASONS)[number];
 
@@ -42,6 +43,10 @@ export type PairingStatus =
    * device token is kept sealed but never sent. Recovery is a normal pair
    * attempt with a new pairing code, or (RT-215 10897-A) a user-initiated
    * "Check again" that the server answers 2xx (`pairing:recheck`).
+   *
+   * RT-306: `inconsistent` — the sealed device token belongs to another
+   * pairing than the stored row (a crash in the middle of a re-pair), or cannot
+   * be read back. The token is never sent; recovery is a normal pair attempt.
    */
   | { kind: 'invalid'; reason: PairingInvalidReason }
   | {

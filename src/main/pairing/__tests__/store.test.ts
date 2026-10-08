@@ -15,6 +15,7 @@ import { createInMemorySecretStore } from '../../secrets/in-memory.js';
 import { makeSecretKey, type SecretKey, type SecretStore } from '../../../shared/secret-store.js';
 import type { DatabaseHandle } from '../../db/client.js';
 import type { PairingStatus } from '../../../shared/pairing-types.js';
+import { openDeviceToken } from '../token-binding.js';
 
 /**
  * 002-terminal-pairing T010 — pairingStore.getStatus() / persist() / clear().
@@ -353,7 +354,17 @@ describe('createPairingStore.persist()', () => {
       ...T094A_STUB_FIELDS,
     });
 
-    expect(await h.secretStore.get(DEVICE_TOKEN_KEY)).toBe('opaque-token-value');
+    // RT-306: the token is sealed together with the identity of its pairing.
+    expect(openDeviceToken((await h.secretStore.get(DEVICE_TOKEN_KEY)) ?? '')).toEqual({
+      kind: 'bound',
+      token: 'opaque-token-value',
+      binding: {
+        tenant_id: 'tenant-A',
+        branch_id: 'branch-B',
+        terminal_id: 'terminal-C',
+        paired_at: 1735689600,
+      },
+    });
     const row = h.storeDb.readAssignment();
     expect(row).toEqual({
       tenant_id: 'tenant-A',
@@ -422,7 +433,9 @@ describe('createPairingStore.persist()', () => {
       ...T094A_STUB_FIELDS,
     });
 
-    expect(await h.secretStore.get(DEVICE_TOKEN_KEY)).toBe('second');
+    expect(openDeviceToken((await h.secretStore.get(DEVICE_TOKEN_KEY)) ?? '')).toMatchObject({
+      token: 'second',
+    });
     expect(h.storeDb.readAssignment()).toEqual({
       tenant_id: 't2',
       branch_id: 'b2',

@@ -2,6 +2,15 @@ import type { DatabaseHandle } from '../db/client.js';
 import type { SecretKey, SecretStore } from '../../shared/secret-store.js';
 import type { PairingStatus } from '../../shared/pairing-types.js';
 
+import {
+  bindingOf,
+  openDeviceToken,
+  sameBinding,
+  sealDeviceToken,
+  type OpenedDeviceToken,
+  type PairingBinding,
+} from './token-binding.js';
+
 /**
  * 002-terminal-pairing T011 — pairingStore.
  *
@@ -20,6 +29,8 @@ import type { PairingStatus } from '../../shared/pairing-types.js';
  *   ok     | absent  | invalid    | missing_token   (token sits alone)
  *   any    | revoked | invalid    | device_revoked  (RT-215; checked FIRST, review F7)
  *   garbled| any     | invalid    | decrypt_failed  (DPAPI cannot decrypt)
+ *   other  | present | invalid    | inconsistent    (RT-306; token sealed for another
+ *          |         |            |                  pairing, or unreadable)
  *
  * Reason mapping rationale: `orphaned_row` describes the row's state
  * (it is orphaned); `missing_token` describes what is missing relative
@@ -231,6 +242,14 @@ export interface DeviceRevocationStore {
 
   /** See {@link PairingStore.getStoredPairingEpoch} (required on the real store). */
   getStoredPairingEpoch(): number | null;
+
+  /**
+   * RT-306 — SYNC identity of the STORED pairing row whatever its status,
+   * revoked included; null when no row exists. For the "Check again" token read
+   * only, which runs while revoked: it sends nothing unless the sealed token is
+   * bound to this row. Not a secret; never leaves the main process.
+   */
+  getStoredPairingBinding(): PairingBinding | null;
 }
 
 export interface PersistInput extends TerminalAssignmentRow {
@@ -251,7 +270,10 @@ export interface CreatePairingStoreOptions {
   now?: () => Date;
 }
 
-type TokenState = { kind: 'present' } | { kind: 'absent' } | { kind: 'decrypt_failed' };
+type TokenState =
+  | { kind: 'present'; opened: OpenedDeviceToken }
+  | { kind: 'absent' }
+  | { kind: 'decrypt_failed' };
 
 /**
  * The status of an UNREVOKED row and the token half (the revoked check runs
@@ -265,7 +287,12 @@ function statusFrom(tokenState: TokenState, row: StoredAssignmentRow | null): Pa
   const tokenPresent = tokenState.kind === 'present';
   if (row === null)
     return tokenPresent ? { kind: 'invalid', reason: 'missing_token' } : { kind: 'unpaired' };
-  if (!tokenPresent) return { kind: 'invalid', reason: 'orphaned_row' };
+  if (tokenState.kind !== 'present') return { kind: 'invalid', reason: 'orphaned_row' };
+  // RT-306: a token sealed for another pairing (a crash mid-re-pair) or one that
+  // cannot be read back is never reported paired, so it is never sent.
+  const { opened } = tokenState;
+  if (opened.kind === 'malformed') return INCONSISTENT_STATUS;
+  if (opened.kind === 'bound' && !sameBinding(opened.binding, row)) return INCONSISTENT_STATUS;
   return {
     kind: 'paired',
     tenant_id: row.tenant_id,
@@ -277,6 +304,7 @@ function statusFrom(tokenState: TokenState, row: StoredAssignmentRow | null): Pa
 }
 
 const DEVICE_REVOKED_STATUS: PairingStatus = { kind: 'invalid', reason: 'device_revoked' };
+const INCONSISTENT_STATUS: PairingStatus = { kind: 'invalid', reason: 'inconsistent' };
 
 export function createPairingStore(
   options: CreatePairingStoreOptions,
@@ -304,7 +332,8 @@ export function createPairingStore(
 
   /**
    * Read the token defensively. Returns:
-   *   - `{ kind: 'present', value: string }` if a non-empty value is held,
+   *   - `{ kind: 'present', opened }` if a non-empty value is held (RT-306:
+   *     opened, so its binding can be compared with the row),
    *   - `{ kind: 'absent' }` if no entry exists,
    *   - `{ kind: 'decrypt_failed' }` if get() rejects (DPAPI failure).
    *
@@ -312,13 +341,11 @@ export function createPairingStore(
    * installation; it MUST NOT throw out of getStatus() — the renderer
    * needs to land on /pairing with a banner instead of crashing the boot.
    */
-  async function readTokenState(): Promise<
-    { kind: 'present' } | { kind: 'absent' } | { kind: 'decrypt_failed' }
-  > {
+  async function readTokenState(): Promise<TokenState> {
     try {
       const value = await secretStore.get(deviceTokenKey);
       if (value === null || value.length === 0) return { kind: 'absent' };
-      return { kind: 'present' };
+      return { kind: 'present', opened: openDeviceToken(value) };
     } catch {
       // We do NOT include the underlying error message in the result.
       // The error MAY contain ciphertext bytes or path data; treating
@@ -348,6 +375,11 @@ export function createPairingStore(
       return db.readAssignment()?.paired_at ?? null;
     },
 
+    getStoredPairingBinding(): PairingBinding | null {
+      const row = db.readAssignment();
+      return row === null ? null : bindingOf(row);
+    },
+
     getCurrentTerminalId(): string | null {
       // Sync plaintext read — see the interface doc for why this does NOT
       // go through the async token path. No safeStorage, no await.
@@ -368,7 +400,12 @@ export function createPairingStore(
       // `invalid/missing_token`; the operator re-pairs and is back to
       // a consistent state. The reverse order would leave an orphaned
       // row instead — same recovery surface, different reason.
-      await secretStore.set(deviceTokenKey, input.device_token);
+      //
+      // RT-306: on a RE-pair the same crash leaves the new token beside the
+      // old row. The token is sealed with the identity of the pairing it was
+      // issued for, so getStatus() reports that as `invalid/inconsistent` and
+      // no reader hands it out.
+      await secretStore.set(deviceTokenKey, sealDeviceToken(input.device_token, input));
       try {
         // RT-215: a re-pair replaces the whole row (INSERT OR REPLACE), so
         // `device_revoked_at` returns to NULL with the new pairing.

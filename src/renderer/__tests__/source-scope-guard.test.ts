@@ -20,6 +20,8 @@ import {
   RT_215_DEVICE_REVOKED_EXEMPT_PREFIXES,
   RT_228_PAIRING_ERROR_ENVELOPE_BRANCH_PREFIX,
   RT_228_PAIRING_ERROR_ENVELOPE_EXEMPT_PREFIXES,
+  RT_306_PAIRING_TOKEN_BINDING_BRANCH_PREFIX,
+  RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES,
 } from './source-scope-guard.const';
 
 /**
@@ -172,7 +174,14 @@ describe('source-scope guard (T006)', () => {
                               RT_228_PAIRING_ERROR_ENVELOPE_EXEMPT_PREFIXES as readonly string[]
                             ).includes(p),
                         )
-                      : FORBIDDEN_PATH_PREFIXES;
+                      : currentBranch.startsWith(RT_306_PAIRING_TOKEN_BINDING_BRANCH_PREFIX)
+                        ? FORBIDDEN_PATH_PREFIXES.filter(
+                            (p) =>
+                              !(
+                                RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES as readonly string[]
+                              ).includes(p),
+                          )
+                        : FORBIDDEN_PATH_PREFIXES;
 
     const violations = changedFiles.filter((file) =>
       effectiveForbidden.some((prefix) => file === prefix || file.startsWith(prefix)),

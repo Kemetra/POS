@@ -1,6 +1,7 @@
 import type { SecretKey, SecretStore } from '../../shared/secret-store.js';
 
 import type { DeviceRevocationStore, PairingStore } from './store.js';
+import { tokenBoundTo } from './token-binding.js';
 
 /**
  * RT-215 — the ONE reader of the device token for SENDING it to Backend-Core.
@@ -12,6 +13,10 @@ import type { DeviceRevocationStore, PairingStore } from './store.js';
  * revocation the token stays sealed in the SecretStore (a re-pair overwrites
  * it) but is never sent again (RT-215 decision 3) — except by the ONE
  * user-initiated "Check again", through {@link createRevocationRecheckTokenRead}.
+ *
+ * RT-306: the sealed token is handed out only while it is bound to the
+ * pairing `getStatus()` reported (see `token-binding.ts`); a token sealed for
+ * another pairing, or an unreadable one, is null.
  *
  * Never throws: a failing status read or token read is null. The token is
  * returned to an in-process caller only and is never logged here.
@@ -54,10 +59,10 @@ export function createSendableDeviceTokenRead(
   return async (): Promise<string | null> => {
     const status = await deps.pairingStore.getStatus();
     if (status.kind !== 'paired') return null;
-    const token = await deps.secretStore.get(deps.deviceTokenKey);
+    const sealed = await deps.secretStore.get(deps.deviceTokenKey);
     // Nothing awaits between this check and handing the token out.
     if (deps.pairingStore.isDeviceRevoked?.() === true) return null;
-    return token !== null && token.length > 0 ? token : null;
+    return tokenBoundTo(sealed, status);
   };
 }
 
@@ -70,11 +75,11 @@ export function createSendableDeviceTokenRead(
  *
  * Returns the token ONLY while the pairing is device-revoked (re-checked after
  * the read, so a re-pair that lands meanwhile is not sent through here); null
- * otherwise, and for an absent, empty or unreadable token. Never throws; never
- * logs.
+ * otherwise, and for an absent, empty or unreadable token, or one sealed for
+ * another pairing (RT-306). Never throws; never logs.
  */
 export interface RevocationRecheckTokenReadDeps {
-  pairingStore: Pick<DeviceRevocationStore, 'isDeviceRevoked'>;
+  pairingStore: Pick<DeviceRevocationStore, 'isDeviceRevoked' | 'getStoredPairingBinding'>;
   secretStore: Pick<SecretStore, 'get'>;
   deviceTokenKey: SecretKey;
 }
@@ -84,14 +89,14 @@ export function createRevocationRecheckTokenRead(
 ): () => Promise<string | null> {
   return async (): Promise<string | null> => {
     if (!deps.pairingStore.isDeviceRevoked()) return null;
-    let token: string | null;
+    let sealed: string | null;
     try {
-      token = await deps.secretStore.get(deps.deviceTokenKey);
+      sealed = await deps.secretStore.get(deps.deviceTokenKey);
     } catch {
       return null;
     }
     // Nothing awaits between this check and handing the token out.
     if (!deps.pairingStore.isDeviceRevoked()) return null;
-    return token !== null && token.length > 0 ? token : null;
+    return tokenBoundTo(sealed, deps.pairingStore.getStoredPairingBinding());
   };
 }
