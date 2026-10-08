@@ -167,6 +167,25 @@ describe('Dialog — Tab trap with a radio group (one tab stop)', () => {
   });
 });
 
+describe('Dialog — initial focus fallback (harden)', () => {
+  it('a disabled safe control cannot take focus: focus lands on the panel, never outside the dialog', () => {
+    function Disabled(): JSX.Element {
+      const ref = useRef<HTMLButtonElement>(null);
+      return (
+        <DialogHost>
+          <Dialog label="نافذة" initialFocusRef={ref}>
+            <button ref={ref} type="button" disabled>
+              رجوع
+            </button>
+          </Dialog>
+        </DialogHost>
+      );
+    }
+    render(<Disabled />);
+    expect(screen.getByRole('dialog')).toHaveFocus();
+  });
+});
+
 describe('Dialog — Esc', () => {
   let windowKeys: ReturnType<typeof vi.fn<(key: string) => void>>;
   const onWindowKey = (event: KeyboardEvent): void => {

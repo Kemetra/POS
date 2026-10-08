@@ -1,8 +1,9 @@
 /*
- * RT-241 — the one v5 Dialog. Base values moved unchanged from the former
- * `.v5-live-dialog-backdrop` / `.v5-live-dialog` rules (live-sale.css); the
+ * RT-241 — the one v5 Dialog. Base values moved from the former
+ * `.v5-live-dialog-backdrop` / `.v5-live-dialog` rules (live-sale.css), with the
+ * DESIGN.md overlay radius and dialog-in motion added; the
  * content rules (title, actions, buttons) stay there under `.v5-live-dialog`.
- * No enter/exit animation: nothing to neutralise under reduced motion.
+ * Motion comes only from the role aliases, so reduced motion zeroes it.
  */
 
 /* The portal node and its anchor take no box, so they never become grid items. */
@@ -26,10 +27,21 @@
   inline-size: min(440px, calc(100% - var(--space-5)));
   padding: var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
+  /* DESIGN.md Elevation: overlays take the pane radius and the overlay shadow. */
+  border-radius: var(--radius-pane);
   background: var(--color-surface);
   color: var(--color-text);
   box-shadow: var(--shadow-overlay);
+  /* DESIGN.md Motion: 220 ms dialog in, ease-out, from an already-visible start.
+     The role alias drops to 0 ms under reduced motion (foundation.css). */
+  animation: v5-dialog-in var(--motion-dialog-in, 220ms) var(--motion-ease, ease-out) both;
+}
+
+@keyframes v5-dialog-in {
+  from {
+    opacity: 0.6;
+    transform: translateY(6px);
+  }
 }
 
 /* Contrast themes drop the overlay shadow: the panel edge must carry the layer. */

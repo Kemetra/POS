@@ -154,6 +154,9 @@ export function Dialog({
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     (initialFocusRef.current ?? panelRef.current)?.focus();
+    // A safe control that cannot take focus (disabled, hidden) must not leave
+    // focus outside the dialog: fall back to the panel itself.
+    if (panelRef.current?.contains(document.activeElement) !== true) panelRef.current?.focus();
     return () => {
       if (restoreFocus && opener?.isConnected === true) opener.focus();
     };

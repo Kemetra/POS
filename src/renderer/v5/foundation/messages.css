@@ -12,12 +12,16 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--tone-ink, var(--color-border));
-  border-inline-start-width: 4px;
   border-radius: var(--radius-control);
   background: var(--tone-soft, var(--color-surface));
   color: var(--color-text);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
+}
+
+/* A notice belongs to its region: it spans it rather than shrinking to its text. */
+.v5-notice {
+  align-self: stretch;
 }
 
 .v5-banner[data-tone='info'],
