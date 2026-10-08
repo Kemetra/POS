@@ -147,3 +147,83 @@ describe('operator-session-store FSM (T011)', () => {
     expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt');
   });
 });
+
+/**
+ * RT-113 P2 (Codex P2 4179701431, renderer side) — main can END a session on
+ * its own (the cashier admission heartbeat). An `ended` push that arrives while
+ * a sign-in or takeover confirm is in flight belongs to that attempt: its late
+ * `signed_in` must not route the renderer into a session main no longer holds.
+ * Each sign-in attempt has its own generation, so the mark never leaks into
+ * the next attempt.
+ */
+describe('sessionEndedByMain — an ended push during an in-flight sign-in', () => {
+  it('signedIn → signedOut (main ended the session itself)', () => {
+    const store = useOperatorSessionStore.getState();
+    store.beginSignIn();
+    store.resolveSignedIn(SAMPLE_SESSION);
+    store.sessionEndedByMain();
+    expect(useOperatorSessionStore.getState().state).toEqual({ kind: 'signedOut' });
+  });
+
+  it('ended during signingIn: the late signed_in for that attempt is discarded', () => {
+    const store = useOperatorSessionStore.getState();
+    store.beginSignIn();
+    store.sessionEndedByMain();
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signingIn');
+    store.resolveSignedIn(SAMPLE_SESSION, { closed_at: '2026-10-01T00:00:00.000Z' });
+    expect(useOperatorSessionStore.getState().state).toEqual({
+      kind: 'signedOut',
+      lastRefusal: 'state_invalid',
+    });
+  });
+
+  it('ended during a takeover confirm: the late signed_in is discarded', () => {
+    const store = useOperatorSessionStore.getState();
+    store.beginSignIn();
+    store.promptTakeover('pending-test-id');
+    store.sessionEndedByMain();
+    expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt');
+    store.resolveSignedIn(SAMPLE_SESSION);
+    expect(useOperatorSessionStore.getState().state).toEqual({
+      kind: 'signedOut',
+      lastRefusal: 'state_invalid',
+    });
+  });
+
+  it('the mark belongs to its attempt only: the next attempt signs in normally', () => {
+    const store = useOperatorSessionStore.getState();
+    store.beginSignIn();
+    store.sessionEndedByMain();
+    store.refuseSignIn('invalid_input');
+    store.beginSignIn();
+    store.resolveSignedIn(SAMPLE_SESSION);
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+  });
+
+  it('a refusal after an ended push still lands as that refusal', () => {
+    const store = useOperatorSessionStore.getState();
+    store.beginSignIn();
+    store.sessionEndedByMain();
+    store.refuseSignIn('state_invalid');
+    expect(useOperatorSessionStore.getState().state).toEqual({
+      kind: 'signedOut',
+      lastRefusal: 'state_invalid',
+    });
+  });
+
+  it('signedOut and signingOut: an ended push is a no-op', () => {
+    const store = useOperatorSessionStore.getState();
+    store.sessionEndedByMain();
+    expect(useOperatorSessionStore.getState().state).toEqual({ kind: 'signedOut' });
+    store.beginSignIn();
+    store.resolveSignedIn(SAMPLE_SESSION);
+    store.beginSignOut();
+    store.sessionEndedByMain();
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signingOut');
+    // A later attempt is unaffected.
+    store.resolveSignedOut();
+    store.beginSignIn();
+    store.resolveSignedIn(SAMPLE_SESSION);
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+  });
+});

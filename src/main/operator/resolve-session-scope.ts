@@ -37,5 +37,7 @@ export function resolveSessionScope(
     branch_id: session.branch_id,
     terminal_id: terminalId,
     display_name: session.display_name,
+    // RT-224 step 2: only an admitted cashier session has one (main-only).
+    ...(session.user_id === undefined ? {} : { user_id: session.user_id }),
   };
 }

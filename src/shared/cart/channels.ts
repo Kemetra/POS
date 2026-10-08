@@ -13,6 +13,17 @@ export const CART_IPC_CHANNELS = {
   SNAPSHOT: 'cart:snapshot',
   /** Audited cancel of a `frozen_handed_off` cart (`cart.void` refuses `frozen`). */
   CANCEL_POST_HANDOFF: 'cart:cancelPostHandoff',
+  /**
+   * RT-26 — Checkout Back/Esc: return a `frozen_handed_off` cart to `editing`
+   * while no money or external payment activity exists for it. Main-guarded.
+   */
+  RETURN_TO_SALE: 'cart:returnToSale',
+  /**
+   * RT-26 — read-only: would main allow a Back for this cart and handoff right
+   * now? Same proof as `cart:returnToSale`, never writes. Lets Checkout keep
+   * Back disabled after a remount when tender history exists.
+   */
+  RETURN_TO_SALE_ELIGIBILITY: 'cart:returnToSaleEligibility',
 } as const;
 
 export type CartIpcChannel = (typeof CART_IPC_CHANNELS)[keyof typeof CART_IPC_CHANNELS];

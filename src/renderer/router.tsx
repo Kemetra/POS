@@ -8,13 +8,17 @@ import {
   type RouteObject,
 } from 'react-router-dom';
 
-import { PairingScreen } from './routes/pairing/PairingScreen';
+import {
+  PairingRecoveryListener,
+  PairingRoute,
+  usePairingPushRelay,
+} from './routes/pairing/PairingRecoveryListener';
 import { PairedScreen } from './routes/paired/PairedScreen';
 import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
 import { AppIndexRedirect } from './routes/app/AppIndexRedirect';
 import { SalesWorkspace } from './routes/app/SalesWorkspace';
-import { ReturnsPlaceholder } from './routes/app/ReturnsPlaceholder';
+import { ReturnsRoute } from './returns/ReturnsRoute';
 import { AuditPlaceholder } from './routes/app/AuditPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { CatalogueDiagnostics } from './routes/app/CatalogueDiagnostics';
@@ -26,6 +30,11 @@ import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
 import { V5AppLayout } from './v5/frame/V5AppLayout';
 import { V5SaleRoute } from './v5/sale/V5SaleRoute';
+import { V5ShiftRoute } from './v5/shift/V5ShiftRoute';
+import { V5ShiftManagerRoute } from './v5/shift/V5ShiftManagerRoute';
+import { ErrorScreen } from './v5/foundation/ErrorScreen';
+import { RouteLoading } from './v5/foundation/RouteLoading';
+import { SupportedViewport } from './v5/foundation/SupportedViewport';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -88,6 +97,10 @@ type BootStatus =
 
 export function AppRouter(props: AppRouterProps): JSX.Element {
   const [boot, setBoot] = useState<BootStatus>({ phase: 'loading' });
+  // RT-215 / Codex P2 4186254473: the one pairing-push subscription. Its
+  // effect is declared BEFORE the boot read's, so it is registered first and
+  // no push is lost while the read is pending.
+  const relay = usePairingPushRelay(props.pairing);
 
   useEffect(() => {
     // Box the cancellation flag so eslint's flow analysis doesn't
@@ -121,7 +134,8 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   }, [props.pairing]);
 
   if (boot.phase === 'loading') {
-    return <main data-testid="route-loading" />;
+    // RT-241 (VN-S2): never blank while the start route is decided.
+    return <RouteLoading />;
   }
 
   // T034: routes are purely path-based after the initial decision.
@@ -129,12 +143,19 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // which self-fetches and shows the fresh assignment. PairedScreen
   // redirects back to /pairing on its own if the status it reads is
   // not 'paired' — so a stale boot state cannot strand the operator.
-  const pairingScreenElement =
-    boot.invalidReason !== undefined ? (
-      <PairingScreen pairing={props.pairing} invalidReason={boot.invalidReason} />
-    ) : (
-      <PairingScreen pairing={props.pairing} />
-    );
+  // RT-215: a reason pushed at runtime (device revoked) wins over the boot one.
+  // RT-241 (VN-S2): pairing, Ready and sign-in render outside the frame, so
+  // they carry their own supported-viewport guard (the route element only; the
+  // boot read above is unchanged).
+  const pairingScreenElement = (
+    <SupportedViewport>
+      {boot.invalidReason !== undefined ? (
+        <PairingRoute pairing={props.pairing} bootReason={boot.invalidReason} />
+      ) : (
+        <PairingRoute pairing={props.pairing} />
+      )}
+    </SupportedViewport>
+  );
   // T035 — /app/* parent route wired per contracts/shell-routes.ts.
   // Existing /pairing and /paired routes are unchanged.
   // Pairing-bypass guard (T007) stays green: unpaired/invalid terminals
@@ -152,7 +173,9 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // green).
   const signInElement =
     props.operator !== undefined ? (
-      <SignInRoute operator={props.operator} />
+      <SupportedViewport>
+        <SignInRoute operator={props.operator} />
+      </SupportedViewport>
     ) : (
       <Navigate to={boot.startPath} replace />
     );
@@ -170,10 +193,17 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       <Outlet />
     );
 
-  const routes: RouteObject[] = [
+  const appRoutes: RouteObject[] = [
     { path: '/', element: <Navigate to={boot.startPath} replace /> },
     { path: '/pairing', element: pairingScreenElement },
-    { path: '/paired', element: <PairedScreen pairing={props.pairing} /> },
+    {
+      path: '/paired',
+      element: (
+        <SupportedViewport>
+          <PairedScreen pairing={props.pairing} />
+        </SupportedViewport>
+      ),
+    },
     { path: '/sign-in', element: signInElement },
     {
       path: '/app',
@@ -184,6 +214,27 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
           children: [
             { path: 'cart', element: <V5SaleRoute /> },
             { path: 'checkout', element: <CheckoutRoute /> },
+            // RT-17 slice 4 part 3 — the shift cash-up screens. Each leaves for
+            // /app (before any call) while POS_PULSE_FEATURE_SHIFT_CASHUP is
+            // off; main registers no shift handler then either.
+            // The cashier screen records device-path facts (cashier only); a
+            // manager or admin is turned away before any call.
+            {
+              path: 'shift',
+              element: (
+                <OperatorRouteGuard allow={['cashier']}>
+                  <V5ShiftRoute />
+                </OperatorRouteGuard>
+              ),
+            },
+            {
+              path: 'shift/manager',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  <V5ShiftManagerRoute />
+                </OperatorRouteGuard>
+              ),
+            },
           ],
         },
         {
@@ -197,19 +248,19 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             { index: true, element: <AppIndexRedirect /> },
             { path: 'dashboard', element: <DashboardRoute /> },
             { path: 'sales', element: <SalesWorkspace /> },
-            // POS v3.5 Slice 1 — new nav entries route to thin "coming soon"
-            // placeholders. Returns is Phase-7 blocked; Audit is a later display
-            // slice. Both are navigation-only (no data, no IPC).
-            //
             // PR #434 FIX 1 — gate BOTH to manager/admin (owner decision). The
-            // role-visibility-matrix marks the Audit surface ⛔ cashier, and
-            // Returns is Phase-7 blocked; a signed-in cashier must NOT reach
-            // either. Same nested guard pattern as the `/app/manager/*` routes.
+            // role-visibility-matrix marks the Audit surface ⛔ cashier, and a
+            // signed-in cashier must NOT reach either. Same nested guard
+            // pattern as the `/app/manager/*` routes.
+            //
+            // RT-15 S3 — Returns is the manager/admin return flow (D-b; main
+            // re-checks flag, session and role on every `returns.*` call).
+            // Audit is still a later display slice (navigation-only placeholder).
             {
               path: 'returns',
               element: (
                 <OperatorRouteGuard allow={['manager', 'admin']}>
-                  <ReturnsPlaceholder />
+                  <ReturnsRoute />
                 </OperatorRouteGuard>
               ),
             },
@@ -267,6 +318,17 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
           ],
         },
       ],
+    },
+  ];
+  // RT-215 — one pathless layout over every route: it listens for the
+  // `pairing:status-changed` push and moves a revoked terminal to /pairing.
+  // RT-241 (VN-S2): its errorElement is the one route error boundary, so a
+  // render failure shows the Arabic ErrorScreen instead of the router default.
+  const routes: RouteObject[] = [
+    {
+      element: <PairingRecoveryListener relay={relay} />,
+      errorElement: <ErrorScreen />,
+      children: appRoutes,
     },
   ];
 

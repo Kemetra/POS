@@ -7,6 +7,7 @@ import type { DatabaseHandle } from '../db/client.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { OperatorSessionRecord } from '../operator/session-manager.js';
 import type { CartPaymentStatus } from '../payments/repositories/payment-attempts.repository.js';
+import type { ReleaseCheckoutPayment } from '../payments/checkout-return-guard.js';
 
 export interface CartHandlersDeps {
   dbHandle: DatabaseHandle;
@@ -21,7 +22,9 @@ export interface CartHandlersDeps {
   logger: Logger;
   auditEmitter: AuditEmitter;
   /**
-   * `app.isPackaged` from Electron.  Must be `true` in production builds.
+   * The shipped-app identity, `isShippedApp(...)` from `app/shipped-app.ts`:
+   * NOT raw `app.isPackaged`, which a renamed copy of the shipped exe reports
+   * as false (RT-165).  Must be `true` in production builds.
    * When `true`, the dev fixture resolver is unconditionally skipped even if
    * `POS_PULSE_DEV_ITEM_RESOLVER` is set in the environment.
    */
@@ -41,6 +44,15 @@ export interface CartHandlersDeps {
    * can never cancel a paid or paying sale, or reopen a paid sale as payable.
    */
   cartPaymentStatus: (cart_id: string) => CartPaymentStatus;
+  /**
+   * RT-26 — the payments guard for Checkout Back (`bindCheckoutReturnGuard`).
+   * Required so a dropped wiring can never leave `cart.returnToSale` able to
+   * unfreeze a cart without the payments record's proof (the handler fails
+   * closed without it).
+   */
+  releaseCheckoutPayment: ReleaseCheckoutPayment;
+  /** RT-26 — read-only twin of the guard (`bindCheckoutReturnAllowed`); required. */
+  checkoutReturnAllowed: (req: { cart_id: string; handoff_action_id: string }) => boolean;
 }
 
 /**
@@ -89,6 +101,8 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
     logger: deps.logger,
     auditEmitter: deps.auditEmitter,
     cartPaymentStatus: deps.cartPaymentStatus,
+    releaseCheckoutPayment: deps.releaseCheckoutPayment,
+    checkoutReturnAllowed: deps.checkoutReturnAllowed,
   };
 
   // Only attach `resolveItemRef` when one was resolved — omitting it lets

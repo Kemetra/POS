@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 
-import { CartState, isValidTransition } from '../../shared/cart/cart-state.js';
+import {
+  CHECKOUT_RETURN_TRANSITION,
+  CartState,
+  isValidTransition,
+} from '../../shared/cart/cart-state.js';
 
 interface ActiveCart {
   readonly cart_id: string;
@@ -32,6 +36,13 @@ export interface CartStore {
 
   /** Bridge confirmed cart.void → { kind: 'ok' }. Transitions any → cancelled. */
   applyCancelled(): void;
+
+  /**
+   * RT-26 — main confirmed `cart.returnToSale` → { kind: 'ok' } for THIS cart.
+   * Mirrors the guarded `frozen_handed_off → editing` edge only; any other
+   * cart or state is left untouched. Never called on renderer intent alone.
+   */
+  applyReturnedToSale(cart_id: string): void;
 
   /** Test-only: resets store to initial state. */
   reset(): void;
@@ -114,6 +125,14 @@ export const useCartStore = create<CartStore>((set) => ({
       const next = transition(s.activeCart, CartState.cancelled);
       if (next === null) return s;
       return { activeCart: next };
+    });
+  },
+
+  applyReturnedToSale: (cart_id: string) => {
+    set((s) => {
+      const cart = s.activeCart;
+      if (cart?.cart_id !== cart_id || cart.state !== CHECKOUT_RETURN_TRANSITION.from) return s;
+      return { activeCart: { ...cart, state: CHECKOUT_RETURN_TRANSITION.to } };
     });
   },
 

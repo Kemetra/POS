@@ -1,14 +1,17 @@
-import { useRef, useState, type JSX } from 'react';
+import { useRef, useState, type JSX, type MouseEvent } from 'react';
 import type { CartLineItem } from '../../sale/useSaleCartController';
-import { format, of } from '../../../shared/money';
+import { formatHumanMoney } from '../../ui/format/human-format';
 import { V5Icon } from '../foundation/V5Icon';
-import { SaleDialog } from './SaleDialog';
+import { ConfirmDialog } from '../foundation/ConfirmDialog';
+import { Dialog } from '../foundation/Dialog';
+import { focusScanOwner } from '../../scan/scan-anchor';
+import type { RemovalControl } from './useRemovalFocus';
 
 // Legacy LineNotePopover parity: same length cap, unchanged-save and empty-clear guards.
 const NOTE_MAX_LENGTH = 200;
 
 export function money(minor: number): string {
-  return format(of(minor, 'EGP'));
+  return formatHumanMoney(minor);
 }
 
 interface LineProps {
@@ -19,12 +22,25 @@ interface LineProps {
   onDecrement: (line: CartLineItem) => void;
   onRemove: (line: CartLineItem) => void;
   onOpenNote: (line: CartLineItem) => void;
+  /** Keyboard removal: tell the cart where focus should land once the row is gone. */
+  onPlanRemoval: (line: CartLineItem, control: RemovalControl) => void;
+}
+
+/**
+ * RT-239 rule 6. A pointer click on a row control returns focus to the scan
+ * owner (a pointer user needs no row focus). Keyboard activation keeps row
+ * context: `+` and `−` stay on the same button, and a removal (`حذف`, or `−` on a
+ * one-unit line) hands focus to the neighbouring row.
+ */
+function settleRowFocus(event: MouseEvent<HTMLButtonElement>, keyboardPlan?: () => void): void {
+  if (event.detail > 0) focusScanOwner();
+  else keyboardPlan?.();
 }
 
 export function CartLineRow(props: LineProps): JSX.Element {
   const { line } = props;
   return (
-    <li className="v5-sale-cart-line">
+    <li className="v5-sale-cart-line" data-line-id={line.lineId}>
       <span className="v5-sale-line-index" dir="ltr">
         {props.index + 1}
       </span>
@@ -43,7 +59,11 @@ export function CartLineRow(props: LineProps): JSX.Element {
             </button>
             <button
               type="button"
-              onClick={() => {
+              data-row-action="remove"
+              onClick={(event) => {
+                settleRowFocus(event, () => {
+                  props.onPlanRemoval(line, 'remove');
+                });
                 props.onRemove(line);
               }}
             >
@@ -66,14 +86,26 @@ export function CartLineRow(props: LineProps): JSX.Element {
 function QuantityControl(props: LineProps): JSX.Element {
   const { line } = props;
   // Legacy stepper parity: at one, a note-less line is removed; a noted line decrements.
-  function decrement(): void {
-    if (line.quantity <= 1 && line.note === null) props.onRemove(line);
-    else props.onDecrement(line);
+  function decrement(event: MouseEvent<HTMLButtonElement>): void {
+    if (line.quantity <= 1 && line.note === null) {
+      settleRowFocus(event, () => {
+        props.onPlanRemoval(line, 'decrement');
+      });
+      props.onRemove(line);
+    } else {
+      settleRowFocus(event);
+      props.onDecrement(line);
+    }
   }
   return (
     <div className="v5-sale-quantity" aria-label={`الكمية ${String(line.quantity)}`}>
       {props.editable && (
-        <button type="button" aria-label={`إنقاص كمية ${line.displayName}`} onClick={decrement}>
+        <button
+          type="button"
+          data-row-action="decrement"
+          aria-label={`إنقاص كمية ${line.displayName}`}
+          onClick={decrement}
+        >
           <V5Icon name="minus" />
         </button>
       )}
@@ -81,8 +113,10 @@ function QuantityControl(props: LineProps): JSX.Element {
       {props.editable && (
         <button
           type="button"
+          data-row-action="increment"
           aria-label={`زيادة كمية ${line.displayName}`}
-          onClick={() => {
+          onClick={(event) => {
+            settleRowFocus(event);
             props.onIncrement(line);
           }}
         >
@@ -96,7 +130,6 @@ function QuantityControl(props: LineProps): JSX.Element {
 /** Void entry point + its confirmation; a refused void keeps the dialog open (legacy parity). */
 export function VoidControl({ onVoid }: { onVoid: () => Promise<boolean> }): JSX.Element {
   const [open, setOpen] = useState(false);
-  const backRef = useRef<HTMLButtonElement>(null);
   const close = (): void => {
     setOpen(false);
   };
@@ -112,26 +145,20 @@ export function VoidControl({ onVoid }: { onVoid: () => Promise<boolean> }): JSX
         إلغاء البيع
       </button>
       {open && (
-        <SaleDialog label="تأكيد إلغاء البيع" onDismiss={close} initialFocusRef={backRef}>
-          <h3 className="v5-live-dialog-title">إلغاء البيع؟</h3>
-          <p>سيتم إلغاء السلة الحالية.</p>
-          <div>
-            <button ref={backRef} type="button" className="v5-live-btn" onClick={close}>
-              العودة
-            </button>
-            <button
-              type="button"
-              className="v5-live-btn v5-live-btn--danger"
-              onClick={() => {
-                void onVoid().then((ok) => {
-                  if (ok) close();
-                });
-              }}
-            >
-              تأكيد الإلغاء
-            </button>
-          </div>
-        </SaleDialog>
+        <ConfirmDialog
+          label="تأكيد إلغاء البيع"
+          title="إلغاء البيع؟"
+          body="سيتم إلغاء السلة الحالية."
+          cancelLabel="العودة"
+          confirmLabel="تأكيد الإلغاء"
+          tone="danger"
+          onCancel={close}
+          onConfirm={() => {
+            void onVoid().then((ok) => {
+              if (ok) close();
+            });
+          }}
+        />
       )}
     </>
   );
@@ -153,13 +180,14 @@ export function NoteDialog(props: {
     });
   }
   return (
-    <SaleDialog label="ملاحظة الصنف" onDismiss={props.onClose} initialFocusRef={fieldRef}>
+    <Dialog label="ملاحظة الصنف" onCancel={props.onClose} initialFocusRef={fieldRef}>
       <label htmlFor="v5-live-note" className="v5-live-dialog-title">
         ملاحظة الصنف
       </label>
       <textarea
         ref={fieldRef}
         id="v5-live-note"
+        data-scan-target="note"
         maxLength={NOTE_MAX_LENGTH}
         value={text}
         onChange={(event) => {
@@ -196,6 +224,6 @@ export function NoteDialog(props: {
           حفظ
         </button>
       </div>
-    </SaleDialog>
+    </Dialog>
   );
 }

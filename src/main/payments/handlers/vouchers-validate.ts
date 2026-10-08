@@ -22,6 +22,7 @@
  * identical between the two paths.
  */
 
+import { tenderApplyActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { TenderLineFsm } from '../fsm/tender-line-fsm.js';
@@ -109,14 +110,14 @@ export function createVouchersValidateHandler(
       payment_attempt_id: req.payment_attempt_id,
       tender_line_id,
       action_kind: 'tender.apply',
-      payload: {
+      // voucher_code is stripped at the hash boundary (action-payload.ts);
+      // the FSM hashes this same shape when it writes the outbox row.
+      payload: tenderApplyActionPayload({
         payment_attempt_id: req.payment_attempt_id,
         tender_type: 'internal_voucher',
         amount_applied_minor: req.amount_applied_minor,
-        // voucher_code is stripped by the helper before hashing
-        // (STRIP_KEYS in idempotency.ts).
         voucher_code: req.voucher_code,
-      },
+      }),
       acting_operator_id: session.operator_id,
       created_at: now,
     });
@@ -126,9 +127,11 @@ export function createVouchersValidateHandler(
     }
 
     if (reservation.kind === 'replay') {
+      // Found by the outbox row's immutable `tender_line_id`: `last_action_id`
+      // and `state` move on once the line is reversed (RT-304 review).
       const lines = linesRepo.findByAttempt(req.payment_attempt_id);
-      const prior = lines.find((l) => l.last_action_id === req.idempotency_key);
-      if (prior !== undefined && prior.state === 'applied' && prior.applied_at !== null) {
+      const prior = lines.find((l) => l.tender_line_id === reservation.tender_line_id);
+      if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
         return {
           kind: 'ok',
           tender_line_id: prior.tender_line_id,

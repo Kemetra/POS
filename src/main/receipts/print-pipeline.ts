@@ -71,20 +71,30 @@ export interface PrintPipeline {
    * testable).
    */
   render(payload: ReceiptPayload): Promise<PrintPipelineResult>;
+  /**
+   * RT-15 S4 — path-select and dispatch an already-rendered slip (the cash
+   * return slip, composed by the same band serialisers). Same adapters, same
+   * path selection as `render`; no persistence, no audit.
+   */
+  printRendered(rendered: RenderedReceipt): Promise<PrintPipelineResult>;
 }
 
 export function createPrintPipeline(deps: PrintPipelineDependencies): PrintPipeline {
   const { escposAdapter, osPrintAdapter } = deps;
 
+  async function printRendered(rendered: RenderedReceipt): Promise<PrintPipelineResult> {
+    // Call via `deps.` (not destructured) to preserve any `this` binding the
+    // caller's probe may rely on (unbound-method).
+    const useEscpos = await deps.probeEscposSupport();
+    const adapter = useEscpos ? escposAdapter : osPrintAdapter;
+    return adapter.print(rendered);
+  }
+
   return {
-    async render(payload: ReceiptPayload): Promise<PrintPipelineResult> {
+    render(payload: ReceiptPayload): Promise<PrintPipelineResult> {
       // Render ONCE — both paths transport the same template output (R-4 / AD-6).
-      const rendered = renderReceipt(payload);
-      // Call via `deps.` (not destructured) to preserve any `this` binding the
-      // caller's probe may rely on (unbound-method).
-      const useEscpos = await deps.probeEscposSupport();
-      const adapter = useEscpos ? escposAdapter : osPrintAdapter;
-      return adapter.print(rendered);
+      return printRendered(renderReceipt(payload));
     },
+    printRendered,
   };
 }

@@ -244,6 +244,29 @@ export async function createLogger(opts: CreateLoggerOptions): Promise<Logger> {
 }
 
 /**
+ * RT-164 — wait until the logger's stream has written everything pending,
+ * bounded by `timeoutMs`. Use before an immediate `app.exit()` that must not
+ * lose its last line: the production stream (pino-roll → SonicBoom,
+ * minLength 0) writes asynchronously, and `logger.flush(cb)` calls back at
+ * once in that mode. SonicBoom emits `'drain'` when the pending writes finish.
+ * Never rejects; resolves on drain or timeout, whichever comes first.
+ */
+export function waitForLogDrain(logger: Logger, timeoutMs: number): Promise<void> {
+  const stream = (logger as unknown as Record<symbol, unknown>)[pino.symbols.streamSym] as
+    | NodeJS.EventEmitter
+    | undefined;
+  return new Promise((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer);
+      stream?.removeListener('drain', done);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    stream?.once('drain', done);
+  });
+}
+
+/**
  * Default factory: the real `pino-roll`. Tests always inject a fake
  * factory (R9), so the body of this arrow is unreachable from unit
  * tests and is excluded from v8 coverage. Production correctness is

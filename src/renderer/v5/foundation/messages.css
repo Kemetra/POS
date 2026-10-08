@@ -1,0 +1,137 @@
+/*
+ * RT-241 — Banner, Notice, Toast. Global tokens only (the drawer notice can sit
+ * in Checkout's completion as well as the frame), status colours by role:
+ * success proven · warning degraded · danger blocking/UNKNOWN · info pending.
+ * Borders, not shadows, so every state survives forced colors.
+ */
+
+.v5-banner,
+.v5-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tone-ink, var(--color-border));
+  border-radius: var(--radius-control);
+  background: var(--tone-soft, var(--color-surface));
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.v5-banner[data-tone='info'],
+.v5-notice[data-tone='info'] {
+  --tone-ink: var(--color-info);
+  --tone-soft: var(--color-info-soft);
+}
+
+.v5-notice[data-tone='success'] {
+  --tone-ink: var(--color-success);
+  --tone-soft: var(--color-success-soft);
+}
+
+.v5-banner[data-tone='warning'],
+.v5-notice[data-tone='warning'] {
+  --tone-ink: var(--color-warning);
+  --tone-soft: var(--color-warning-soft);
+}
+
+.v5-banner[data-tone='danger'],
+.v5-notice[data-tone='danger'] {
+  --tone-ink: var(--color-danger);
+  --tone-soft: var(--color-danger-soft);
+}
+
+.v5-tone-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--tone-ink, currentColor);
+}
+
+.v5-banner__text,
+.v5-notice__text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  align-self: center;
+}
+
+.v5-banner__text p,
+.v5-notice__text p {
+  margin: 0;
+}
+
+.v5-banner__actions,
+.v5-notice__action {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+  align-self: center;
+}
+
+.v5-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-3) var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.v5-toast__close {
+  display: inline-grid;
+  place-items: center;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.v5-toast__close:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .v5-banner,
+  .v5-notice,
+  .v5-toast {
+    border-color: CanvasText;
+  }
+
+  .v5-tone-icon {
+    color: CanvasText;
+  }
+}
+
+.v5-banner__meta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* Actions inside a message: quiet, 44px, never louder than the screen's primary. */
+.v5-banner__actions button,
+.v5-notice__action button {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.v5-banner__actions button:focus-visible,
+.v5-notice__action button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}

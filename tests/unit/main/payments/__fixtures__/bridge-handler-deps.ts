@@ -309,10 +309,34 @@ export interface IdempotencyHelperDouble extends IdempotencyHelper {
   commitCalls: number;
 }
 
+/**
+ * `{ kind: 'replay' }` is shorthand for a replay of an action on `pa-1`; the
+ * real helper also returns the original outbox row's ids, which the start /
+ * apply / validate handlers rebuild their result from. Pass them explicitly
+ * when the test depends on a specific row.
+ */
+export type IdempotencyDoubleOutcome =
+  | ReserveOutcome
+  | {
+      kind: 'replay';
+      payment_attempt_id?: string;
+      tender_line_id?: string | null;
+      created_at?: string;
+    };
+
 export function makeIdempotencyHelperDouble(
-  outcome: ReserveOutcome | 'auto' = 'auto',
+  requested: IdempotencyDoubleOutcome | 'auto' = 'auto',
 ): IdempotencyHelperDouble {
   const state = { commitCalls: 0 };
+  const outcome: ReserveOutcome | 'auto' =
+    requested !== 'auto' && requested.kind === 'replay'
+      ? {
+          kind: 'replay',
+          payment_attempt_id: requested.payment_attempt_id ?? 'pa-1',
+          tender_line_id: requested.tender_line_id ?? null,
+          created_at: requested.created_at ?? '2026-05-23T11:00:00.000Z',
+        }
+      : requested;
   const checkOrReserve = vi.fn<IdempotencyHelper['checkOrReserve']>(() => {
     if (outcome === 'auto') {
       return {

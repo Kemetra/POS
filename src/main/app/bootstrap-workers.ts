@@ -40,7 +40,26 @@
  * the sale-durability path, then the read-down driver, then the sale-sync
  * interval — after which the DB handle is safe to close.
  */
-const STOP_ORDER = ['finalize listener', 'read-down driver', 'sale-sync interval'] as const;
+const STOP_ORDER = [
+  'finalize listener',
+  'read-down driver',
+  'sale-sync interval',
+  // RT-17 slice 3 — the shift sync interval (the shift outbox drain, flag-gated).
+  // Stopped right after the sale-sync interval, like it, before the DB closes.
+  'shift-sync interval',
+  // RT-15 S2 — the return resolver (startup + interval re-send of unresolved
+  // returns). Stopped after the sale-sync interval, before the DB handle closes.
+  'returns resolver',
+  // RT-113 P2 — the cashier admission heartbeat. Its stop is the shutdown latch:
+  // no heartbeat, `end` or session change runs afterwards. It writes nothing
+  // to the DB today; stopped last, still before the DB handle closes.
+  'cashier admission heartbeat',
+  // RT-113 P1.2 (OD7) — the offline grant clock tick (60 s): raises the clock
+  // high-water mark and retries any held grant invalidation. It writes the DB,
+  // so it stops before the handle closes; after the heartbeat, whose last
+  // outcome may still reach the grant seam.
+  'offline grant clock tick',
+] as const;
 
 export type WorkerName = (typeof STOP_ORDER)[number];
 

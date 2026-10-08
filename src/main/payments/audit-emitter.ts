@@ -64,6 +64,16 @@ export interface EmitPaymentSettledInput extends BaseAuditContext {
    * field; `sales.selling_operator_display_name` is NOT NULL (migration 0020).
    */
   selling_operator_display_name: string;
+  /**
+   * RT-224 step 2 — the `users.id` of the admitted cashier who made the sale,
+   * for Backend-Core's device-path `captureSale` (`operatorUserId`). Set only when
+   * the confirming session is that cashier (payments-confirm); omitted otherwise,
+   * and then the key is absent from the payload. An internal provider-neutral
+   * UUID, not PII (the `operator.cashier_pin.provisioned` payload already carries
+   * one as `target_cashier_id`). Read back per sale by
+   * `sales-sync/selling-user-id.ts`.
+   */
+  selling_user_id?: string;
   tender_lines: readonly EmitTenderLineBreakdown[];
 }
 
@@ -328,6 +338,9 @@ export function createPaymentAuditEmitter(
           settled_at: input.settled_at,
           attribution_operator_id: input.attribution_operator_id,
           selling_operator_display_name: input.selling_operator_display_name,
+          ...(input.selling_user_id === undefined
+            ? {}
+            : { selling_user_id: input.selling_user_id }),
           tender_lines: input.tender_lines.map(redactedLineBreakdown),
         },
       });

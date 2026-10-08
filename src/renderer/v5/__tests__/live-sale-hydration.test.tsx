@@ -162,6 +162,16 @@ function cartLines(): HTMLElement {
   return screen.getByRole('list', { name: 'أصناف السلة' });
 }
 
+describe('V5 scan status while the cart is hydrating', () => {
+  it('says scanning is unavailable until the existing cart is read', async () => {
+    signIn();
+    existingCart();
+    renderSale(bridges(() => new Promise<CartSnapshotResponse>(() => undefined)));
+    expect(await screen.findByText('جارٍ تحميل السلة الحالية…')).toBeInTheDocument();
+    expect(screen.getByTestId('scan-status')).toHaveTextContent('المسح غير متاح');
+  });
+});
+
 describe('V5 hydrates an existing active cart', () => {
   it('reads that exact cart and renders its persisted lines, without creating a cart', async () => {
     signIn();
@@ -291,6 +301,8 @@ describe('V5 active cart read failure', () => {
     const user = userEvent.setup();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('تعذّر تحميل السلة الحالية.');
+    // No scan owner is mounted while the cart cannot be read, and the status says so.
+    expect(screen.getByTestId('scan-status')).toHaveTextContent('المسح غير متاح');
     expect(screen.queryByText(/wrong_owner/)).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'حقل التقاط مسح الباركود' })).toBeNull();
@@ -346,7 +358,8 @@ describe('V5 active cart read failure', () => {
         }),
     );
     const view = renderSale(b);
-    expect(screen.getByRole('status')).toHaveTextContent('جارٍ تحميل السلة الحالية…');
+    // The scan status is a status region too, so find the loading message by its text.
+    expect(screen.getByText('جارٍ تحميل السلة الحالية…')).toHaveAttribute('role', 'status');
     view.unmount();
     await act(async () => {
       resolve({ kind: 'ok', snapshot: snapshot() });

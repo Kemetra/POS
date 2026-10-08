@@ -15,14 +15,16 @@ afterEach(() => {
 
 describe('OperatorBadge (T020)', () => {
   it.each([
-    ['cashier', 'Cashier'],
-    ['manager', 'Manager'],
-    ['admin', 'Admin'],
+    // RT-240: Arabic only, the same words as the v5 navigation.
+    ['cashier', 'كاشير'],
+    ['manager', 'مدير'],
+    ['admin', 'مسؤول النظام'],
   ] as const)('renders role=%s as business-name "%s"', (role, expected) => {
     render(<OperatorBadge display_name="Sample Name" role={role} />);
     const badge = screen.getByTestId('operator-badge');
     expect(badge).toHaveTextContent('Sample Name');
     expect(badge).toHaveTextContent(expected);
+    expect(badge.querySelector('[data-role]')?.textContent).not.toMatch(/[A-Za-z]/);
     expect(badge.querySelector('[data-role]')).toHaveAttribute('data-role', role);
   });
 

@@ -23,6 +23,14 @@ export const AUDIT_ACTION_CATEGORIES = [
   'shift.close',
   'shift.forced_close',
   'operator.session.takeover',
+  // RT-117 (RT-116 §7.3) — inactivity lock of the EXISTING session and its
+  // same-operator unlock. Neither ends the session.
+  'operator.session.locked',
+  'operator.session.unlocked',
+  // RT-113 P1.2 (OD10) — an offline grant was invalidated or purged. One event
+  // per grant, attributed to that grant's operator; payload `{reason}` only.
+  // Main-only (a renderer cannot forge it). Open-set at the SQL layer (0004).
+  'operator.offline_grant.invalidated',
   'cashier.pin.reset',
   'cashier.pin.unlock',
   // 019-cashier-pin-provisioning (R-2) — first-PIN create path; sibling to
@@ -33,6 +41,9 @@ export const AUDIT_ACTION_CATEGORIES = [
   'cart.cancel.post_handoff',
   'cart.discount.above_threshold',
   'cart.discarded_on_session_end',
+  // RT-26 — Checkout Back: a handed-off cart with no tender activity returns
+  // to `editing` (envelope invalidated). Open-set at the SQL layer (0004).
+  'cart.return_to_sale',
   // 008-sale-finalization-and-receipts §AD-9 (S1c T093) — 10 new categories.
   // Migration 0026 is a no-op SELECT 1; the closed-set enforcement lives here.
   'sale.finalized',
@@ -45,8 +56,44 @@ export const AUDIT_ACTION_CATEGORIES = [
   'sale.drawer.opened',
   'sale.drawer.suppressed',
   'sale.drawer.failed',
+  // RT-15 S2 — cashier returns (AC11). Open-set at the SQL layer (0004); the
+  // categories are recorded in migration 0039's header.
+  'sale.return.attempted',
+  'sale.return.refused',
+  'sale.return.confirmed',
+  'sale.return.payout_ready',
+  // RT-15 S4 — the cash payout, its drawer kick and the return slip. Open-set
+  // at the SQL layer (0004); recorded in migration 0040's header.
+  'sale.return.payout_started',
+  'sale.return.drawer_opened',
+  'sale.return.drawer_failed',
+  'sale.return.paid_out',
+  'sale.return.slip_printed',
+  'sale.return.slip_print_failed',
+  'sale.return.slip_reprinted',
+  // RT-215 (RT-138 P-1) — the device credential was confirmed revoked, and a
+  // later re-pair (or, RT-215 10897-A, a "Check again" answered 2xx) cleared it. System-attributed (no operator acts): the
+  // actor is SYSTEM_DEVICE_ACTOR_ID below. Payload `{ source }` only — never a
+  // token or device secret. Main-only (the renderer cannot emit them).
+  // Open-set at the SQL layer (0004: no CHECK); recorded in migration 0042's
+  // header.
+  'pairing.device_revoked',
+  'pairing.device_revoked_cleared',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
+
+/**
+ * RT-215 / Jira RT-215 comment 10879 (audit actor, branch 2) — the reserved
+ * `acting_operator_id` for audit events that no operator performs: the
+ * device-revoked pairing events. There was no existing system-actor
+ * convention, and `audit_events.acting_operator_id` is free TEXT NOT NULL with
+ * no FK (0004), so a named sentinel is used instead of a fake operator row.
+ *
+ * It cannot collide with a real operator id: those are provider subjects
+ * (Clerk `user_<base62>`) or `users.id` UUIDs, neither of which can contain a
+ * `:`. Used ONLY by the `pairing.device_revoked*` categories.
+ */
+export const SYSTEM_DEVICE_ACTOR_ID = 'system:device' as const;
 
 /**
  * The FR-025 mandatory five attributes plus the optional `session_id`,

@@ -168,11 +168,18 @@ the current pathname (NavRail does not own routing state).
 Rendered by AppShell when `useViewportTier()` returns `'too-small'`. A single full-viewport
 panel containing:
 
-- **Heading (frozen copy):** `Screen too small` — typography token `size.xl`, weight
-  `semibold`. Renders as `<h1>` (only heading on the page).
-- **Body (frozen copy):** `Use a display at least 1024px wide to run POS Pulse.` — typography
+- **Heading (frozen copy):** `الشاشة أصغر من 1024×768.` — typography token `size.xl`, weight
+  `semibold`. Renders as `<h1>` (only heading on the page). `1024×768` is an LTR run inside
+  `<bdi dir="ltr">`.
+- **Body (frozen copy):** `كبّر النافذة أو استخدم شاشة أكبر.` — typography
   token `size.md`, weight `regular`, colour `text-muted`. Renders as `<p>` directly under the
   heading.
+- The `<main>` carries `dir="rtl" lang="ar"` because the notice also renders outside the V5
+  frame (pairing and sign-in).
+
+> **Amended by RT-241 (VNext W1-A, 2026-10-08).** The copy is the Arabic message M-F2 from
+> `docs/design/vnext/15-vnext-freeze-package.md` §5. The 003 English strings
+> (`Screen too small` / `Use a display at least 1024px wide to run POS Pulse.`) are retired.
 - **No actions.** No "Continue" link, no "Try anyway" button, no dismiss control.
 
 The two copy strings above are the production strings shipped by 003. They are deliberately
@@ -200,8 +207,8 @@ ambiguity.
 
 **Tests this section drives.**
 
-- `ScreenTooSmall.test.tsx` — heading text === `"Screen too small"`; body text ===
-  `"Use a display at least 1024px wide to run POS Pulse."`; exactly one `<h1>`; exactly one
+- `ScreenTooSmall.test.tsx` — heading text === `"الشاشة أصغر من 1024×768."`; body text ===
+  `"كبّر النافذة أو استخدم شاشة أكبر."` (M-F2, RT-241); exactly one `<h1>`; exactly one
   `<main>`; zero actionable elements (no `<button>`, `<a>`, `<input>`, `[role="button"]`).
 - `NavRail.test.tsx` — at `< 1024 px` the NavRail is NOT in the DOM (queryByRole `'navigation'`
   is `null`); no `data-testid="hamburger"` exists at any width.

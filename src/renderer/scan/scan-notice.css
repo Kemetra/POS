@@ -1,0 +1,48 @@
+/* RT-239 — the refusal notice for a scan that was not accepted. Text plus an icon, never colour only. */
+.scan-notice {
+  position: fixed;
+  inset-block-start: var(--space-3);
+  inset-inline: 0;
+  margin-inline: auto;
+  inline-size: max-content;
+  max-inline-size: min(92vw, 40rem);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid var(--color-warning);
+  border-radius: var(--radius-control);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-emphasis);
+  font-size: var(--font-size-md, 1rem);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 18%);
+}
+
+.scan-notice__icon {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-warning);
+  color: var(--color-warning-on);
+  font-weight: var(--font-weight-bold);
+}
+
+@media (forced-colors: active) {
+  .scan-notice {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  /* Forced colours repaint backgrounds as Canvas, so draw the icon as a ring instead. */
+  .scan-notice__icon {
+    border: 2px solid CanvasText;
+    background: transparent;
+    color: CanvasText;
+  }
+}

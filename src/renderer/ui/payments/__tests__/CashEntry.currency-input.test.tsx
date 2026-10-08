@@ -62,9 +62,10 @@ describe('CashEntry — currency-amount input (EGP), not minor units', () => {
     expect(screen.getByTestId('cash-entry-confirm')).toBeDisabled();
   });
 
-  it('the amount label reads "Amount received, EGP" (Arabic-first v3.5 copy), not minor units', () => {
+  it('the amount label reads «المبلغ المستلم (EGP)» (Arabic only, RT-240), not minor units', () => {
     renderCash();
-    // v3.5 recompose: Arabic-first label — "المبلغ المستلم (Amount received, EGP)"
-    expect(screen.getByText('المبلغ المستلم (Amount received, EGP)')).toBeInTheDocument();
+    expect(screen.getByLabelText('المبلغ المستلم (EGP)')).toBe(
+      screen.getByTestId('cash-entry-amount-input'),
+    );
   });
 });

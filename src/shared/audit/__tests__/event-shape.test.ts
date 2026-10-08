@@ -5,6 +5,7 @@ import {
   FR025_MANDATORY_ATTRIBUTES,
   OperatorRefusalError,
   REFUSAL_CATEGORIES,
+  SYSTEM_DEVICE_ACTOR_ID,
   isOperatorRefusal,
   type AuditEvent,
 } from '../event-shape.js';
@@ -115,5 +116,29 @@ describe('audit/event-shape — OperatorRefusal envelope (NFR-003 / PR-2)', () =
     // Message MUST NOT echo any caller-supplied data; the only dynamic
     // bit is the closed-set category itself.
     expect(err.message).toBe('operator refusal: role_mismatch');
+  });
+});
+
+describe('RT-215 — SYSTEM_DEVICE_ACTOR_ID (Jira RT-215 comment 10879, branch 2)', () => {
+  /** Real operator ids: a provider subject (Clerk `user_<base62>`) or a `users.id` UUID. */
+  const CLERK_SUBJECT = /^user_[A-Za-z0-9]+$/;
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  it('is the reserved literal system:device', () => {
+    expect(SYSTEM_DEVICE_ACTOR_ID).toBe('system:device');
+  });
+
+  it('can never collide with a real operator id format', () => {
+    expect(SYSTEM_DEVICE_ACTOR_ID).not.toMatch(CLERK_SUBJECT);
+    expect(SYSTEM_DEVICE_ACTOR_ID).not.toMatch(UUID);
+    // Neither format admits a ':' at all.
+    expect(SYSTEM_DEVICE_ACTOR_ID).toContain(':');
+    expect('user_2abcDEF123').toMatch(CLERK_SUBJECT);
+    expect('0192f6a0-1b2c-7d3e-8f40-123456789abc').toMatch(UUID);
+  });
+
+  it('the two device-revoked categories are in the closed catalogue', () => {
+    expect(AUDIT_ACTION_CATEGORIES).toContain('pairing.device_revoked');
+    expect(AUDIT_ACTION_CATEGORIES).toContain('pairing.device_revoked_cleared');
   });
 });

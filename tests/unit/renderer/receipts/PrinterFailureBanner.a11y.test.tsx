@@ -52,7 +52,7 @@ describe('T263 — PrinterFailureBanner accessibility', () => {
       />,
     );
     // No affordance should have grabbed focus when the banner appeared.
-    const retry = screen.getByRole('button', { name: /retry/i });
+    const retry = screen.getByRole('button', { name: 'إعادة المحاولة' });
     expect(retry).not.toHaveFocus();
   });
 
@@ -65,7 +65,7 @@ describe('T263 — PrinterFailureBanner accessibility', () => {
       />,
     );
     // An accessible icon label or img-role marker accompanies the message.
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   it('is axe-clean', async () => {

@@ -158,14 +158,35 @@ describe('T102 — payments.cancel bridge handler', () => {
     // in the replay reconstruction path (Slice-4 voucher reversal_pending may
     // co-occur with Slice-3 reversed lines after S4 ships; testing the mixed
     // case here keeps the replay reconstruction honest).
+    // The sweep stamps every line it reverses with `<cancel key>:rev:<line id>`;
+    // only those belong in the replayed answer. `tl-manual` was reversed by a
+    // cashier before the cancel (its own action id) and must stay out.
+    const sweep = (id: string) => `idem-cancel-1:rev:${id}`;
     const linesRepo = makeLinesRepoDouble([
-      makeLineRow({ tender_line_id: 'tl-1', state: 'reversed', apply_order: 1 }),
-      makeLineRow({ tender_line_id: 'tl-2', state: 'reversed', apply_order: 2 }),
+      makeLineRow({
+        tender_line_id: 'tl-manual',
+        state: 'reversed',
+        apply_order: 0,
+        last_action_id: 'idem-manual-reverse',
+      }),
+      makeLineRow({
+        tender_line_id: 'tl-1',
+        state: 'reversed',
+        apply_order: 1,
+        last_action_id: sweep('tl-1'),
+      }),
+      makeLineRow({
+        tender_line_id: 'tl-2',
+        state: 'reversed',
+        apply_order: 2,
+        last_action_id: sweep('tl-2'),
+      }),
       makeLineRow({
         tender_line_id: 'tl-3',
         state: 'reversal_pending',
         apply_order: 3,
         reversal_pending_since: '2026-05-23T10:59:50.000Z',
+        last_action_id: sweep('tl-3'),
       }),
     ]);
     const fsm = makePaymentAttemptFsmDouble();

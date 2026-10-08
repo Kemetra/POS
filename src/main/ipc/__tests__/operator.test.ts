@@ -563,13 +563,15 @@ describe('operator:list-branch-roster — pre-sign-in access', () => {
     expect(res.kind).toBe('roster');
   });
 
-  it('passes branch_id from pairing state to rosterHandler (no session)', async () => {
+  it('calls rosterHandler when paired (no session); the device decides the store (RT-113 P2)', async () => {
     const { pairingStore, rosterHandler } = makePairedPairingStore('branch-999');
     const handlers = registerWithPairingStore(pairingStore, rosterHandler);
     const rosterChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER);
     await rosterChannel(FAKE_EVENT);
+    // The device-authenticated roster takes the store from the device row, so
+    // no branch parameter is passed (10763 D11).
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(rosterHandler.listRoster).toHaveBeenCalledWith('branch-999');
+    expect(rosterHandler.listRoster).toHaveBeenCalledWith();
   });
 
   it('refuses with invalid_input when terminal is unpaired', async () => {
@@ -655,7 +657,7 @@ function registerWithPinManagement(
 
 const VALID_PROVISION_REQUEST = {
   event_id: 'evt-uuid-019',
-  target_user_id: 'neutral-user-uuid-1',
+  target_cashier_id: 'roster-operator-id-1',
   initial_pin: '4729',
 };
 
@@ -683,8 +685,8 @@ describe('operator:provision-cashier-pin — boundary input validation + delegat
       {},
       { ...VALID_PROVISION_REQUEST, event_id: '' },
       { ...VALID_PROVISION_REQUEST, event_id: 42 },
-      { ...VALID_PROVISION_REQUEST, target_user_id: '' },
-      { ...VALID_PROVISION_REQUEST, target_user_id: null },
+      { ...VALID_PROVISION_REQUEST, target_cashier_id: '' },
+      { ...VALID_PROVISION_REQUEST, target_cashier_id: null },
       { ...VALID_PROVISION_REQUEST, initial_pin: '' },
       { ...VALID_PROVISION_REQUEST, initial_pin: 1234 },
     ]) {

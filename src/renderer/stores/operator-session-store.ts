@@ -47,6 +47,14 @@ export type OperatorSessionState =
 
 export interface OperatorSessionStore {
   state: OperatorSessionState;
+  /**
+   * RT-113 P2 (Codex P2 4179701431) — the generation of the current sign-in
+   * attempt; `beginSignIn` starts a new one. A takeover confirm belongs to the
+   * attempt that prompted it.
+   */
+  signInAttempt: number;
+  /** The attempt during which main pushed `ended`, if any (see `sessionEndedByMain`). */
+  endedAttempt: number | null;
   /** Begin a sign-in attempt; FSM moves signedOut → signingIn. */
   beginSignIn(): void;
   /** Sign-in resolved with a session; FSM moves signingIn → signedIn. */
@@ -70,6 +78,13 @@ export interface OperatorSessionStore {
   /** Cancel a takeover prompt; FSM moves takeoverPrompt → signedOut. */
   cancelTakeover(): void;
   /**
+   * RT-113 P2 — main ended the session on its own (`ended` push). signedIn →
+   * signedOut. During an in-flight sign-in or takeover confirm (signingIn /
+   * takeoverPrompt) the push is recorded against that attempt, so its late
+   * `signed_in` is discarded (Codex P2 4179701431). Otherwise a no-op.
+   */
+  sessionEndedByMain(): void;
+  /**
    * Boot-time hydration — seeds signedIn from signedOut without going through
    * the normal beginSignIn/resolveSignedIn sign-in flow. Only transitions from
    * signedOut; no-op from any other state so it cannot overwrite a live session.
@@ -81,17 +96,29 @@ export interface OperatorSessionStore {
 
 const INITIAL_STATE: OperatorSessionState = { kind: 'signedOut' };
 
+/** True while a sign-in attempt (or its takeover confirm) awaits main's answer. */
+function isSignInInFlight(state: OperatorSessionState): boolean {
+  return state.kind === 'signingIn' || state.kind === 'takeoverPrompt';
+}
+
 export const useOperatorSessionStore = create<OperatorSessionStore>((set) => ({
   state: INITIAL_STATE,
+  signInAttempt: 0,
+  endedAttempt: null,
   beginSignIn: () => {
     set((s) => {
       if (s.state.kind !== 'signedOut') return s;
-      return { state: { kind: 'signingIn' } };
+      return { state: { kind: 'signingIn' }, signInAttempt: s.signInAttempt + 1 };
     });
   },
   resolveSignedIn: (session, notice) => {
     set((s) => {
-      if (s.state.kind !== 'signingIn' && s.state.kind !== 'takeoverPrompt') return s;
+      if (!isSignInInFlight(s.state)) return s;
+      // Main ended this attempt's session before its answer arrived: the
+      // `signed_in` is stale; never route into a session main does not hold.
+      if (s.endedAttempt === s.signInAttempt) {
+        return { state: { kind: 'signedOut', lastRefusal: 'state_invalid' } };
+      }
       return {
         state: {
           kind: 'signedIn',
@@ -148,6 +175,13 @@ export const useOperatorSessionStore = create<OperatorSessionStore>((set) => ({
       return { state: { kind: 'signedOut' } };
     });
   },
+  sessionEndedByMain: () => {
+    set((s) => {
+      if (s.state.kind === 'signedIn') return { state: { kind: 'signedOut' } };
+      if (isSignInInFlight(s.state)) return { endedAttempt: s.signInAttempt };
+      return s;
+    });
+  },
   hydrateSignedIn: (session) => {
     set((s) => {
       if (s.state.kind !== 'signedOut') return s;
@@ -155,6 +189,6 @@ export const useOperatorSessionStore = create<OperatorSessionStore>((set) => ({
     });
   },
   reset: () => {
-    set({ state: INITIAL_STATE });
+    set({ state: INITIAL_STATE, signInAttempt: 0, endedAttempt: null });
   },
 }));

@@ -48,7 +48,7 @@ describe('T431 — ReprintAffordance invocation', () => {
         _testReceiptsBridge={bridge}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: /reprint/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
     expect(bridge.reprint).toHaveBeenCalledWith(expect.objectContaining({ sale_id: 'sale-1' }));
   });
 
@@ -62,7 +62,7 @@ describe('T431 — ReprintAffordance invocation', () => {
         _idempotencyKeyFactory={() => `key-${String(++n)}`}
       />,
     );
-    const button = screen.getByRole('button', { name: /reprint/i });
+    const button = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
     await userEvent.click(button);
     await waitFor(() => expect(button).toBeEnabled());
     await userEvent.click(button);
@@ -82,7 +82,7 @@ describe('T431 — ReprintAffordance invocation', () => {
         _testReceiptsBridge={bridge}
       />,
     );
-    const button = screen.getByRole('button', { name: /reprint/i });
+    const button = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
     button.focus();
     await userEvent.keyboard('{Enter}');
     expect(bridge.reprint).toHaveBeenCalledWith(expect.objectContaining({ sale_id: 'sale-1' }));
@@ -95,7 +95,7 @@ describe('T431 — ReprintAffordance invocation', () => {
         _testReceiptsBridge={okBridge()}
       />,
     );
-    const button = screen.getByRole('button', { name: /reprint/i });
+    const button = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
     // min-h / min-w utility classes encode the 44px floor (FR-068).
     expect(button.className).toMatch(/min-(h|w)-/);
   });
@@ -112,14 +112,14 @@ describe('T431 — ReprintAffordance invocation', () => {
         _testReceiptsBridge={rejecting}
       />,
     );
-    const button = screen.getByRole('button', { name: /reprint/i });
+    const button = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
     await userEvent.click(button);
     await waitFor(() => expect(button).toBeEnabled());
   });
 
   it('is a no-op (no crash) when no receipts bridge is available', async () => {
     render(<ReprintAffordance sale={{ sale_id: 'sale-1', has_successful_print: true }} />);
-    const button = screen.getByRole('button', { name: /reprint/i });
+    const button = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
     await userEvent.click(button);
     expect(button).toBeInTheDocument();
   });

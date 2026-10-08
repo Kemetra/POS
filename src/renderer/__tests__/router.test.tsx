@@ -124,6 +124,8 @@ describe('AppRouter — boot routing (T015)', () => {
     render(<AppRouter pairing={bridge} />);
 
     expect(screen.getByTestId('route-loading')).toBeInTheDocument();
+    // RT-241 (VN-S2): the loading surface is never blank.
+    expect(screen.getByRole('status')).toHaveTextContent('جارٍ التحميل…');
     expect(screen.queryByTestId('route-pairing')).not.toBeInTheDocument();
     expect(screen.queryByTestId('route-paired')).not.toBeInTheDocument();
 

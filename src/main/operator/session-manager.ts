@@ -16,6 +16,42 @@ import type { SessionEndCause } from '../../shared/operator/session-end-cause.js
  * tokens) comes from this manager.
  */
 
+/**
+ * RT-113 (10763 §3) — where a cashier session's authority comes from.
+ * P2 sets `online_confirmed` (a live Backend-Core cashier admission); P3 adds
+ * sessions admitted offline from the sealed grant (`offline_grant`).
+ */
+export type SessionAuthority = 'online_confirmed' | 'offline_grant';
+
+/**
+ * RT-113 P2 — why a session lost its authority and must end at its next safe
+ * point (Codex P1 #1 / review F1). While set, no new sale may start.
+ */
+export type AuthorityLatchCause = Extract<
+  SessionEndCause,
+  'superseded_by_takeover' | 'account_disabled_mid_session' | 'terminal_session_terminated'
+>;
+
+/** RT-113 P2 — the live cashier admission a session holds (main-only). */
+export interface CashierAdmissionFields {
+  admission_id: string;
+  /** TTL from the LATEST `admitted` response; the heartbeat runs at ≤ half of it. */
+  admission_ttl_seconds: number;
+  offline_grace_seconds: number;
+  /**
+   * RT-219 — the opaque `admission_generation` of the LATEST `admitted` for
+   * `admission_id` (sign-in, takeover or ANY heartbeat, even one that keeps the
+   * same id). The `end` echoes it. Never parsed, ordered or logged.
+   */
+  admission_generation: string;
+  /**
+   * Codex P2 4179771036 — when the request that got the latest `admitted` was
+   * SENT, on the monotonic clock (`performance.now()`). The admission lapses
+   * at this + TTL on the server at the latest; the keeper retries before it.
+   */
+  admission_requested_at_ms?: number;
+}
+
 export interface OperatorSessionRecord {
   id: string;
   operator_id: string;
@@ -28,6 +64,47 @@ export interface OperatorSessionRecord {
   backend_session_id: string;
   /** ISO timestamp of last genuine renderer-side activity (T028b). */
   last_activity_at: string;
+  /**
+   * RT-117 (RT-116 §2.1) — LOCKED is a state of THIS session, never an end.
+   * In memory only, like the session itself; a restart loses it.
+   */
+  lock_state: 'active' | 'locked';
+  /** ISO timestamp the session locked; null while active. */
+  locked_at: string | null;
+  /**
+   * RT-113 P2 (10763 §3) — set only on an admitted cashier session. Main-only:
+   * never in the bridge view (Constitution VII).
+   */
+  user_id?: string;
+  /**
+   * RT-17 slice 4 part 2 — a manager / admin session's provider-neutral
+   * `users.id`, captured from its online sign-in response (lower-cased), for
+   * the local manager PIN enrolment (option A, 10943). Distinct from `user_id`
+   * (the admitted cashier identity, which records shift facts). Main-only:
+   * never in the bridge view (Constitution VII).
+   */
+  manager_user_id?: string;
+  /**
+   * RT-17 slice 4 part 2, review round 1 — the LOCAL time (ISO-8601) of the
+   * online sign-in that captured `manager_user_id`. The local clock, not the
+   * server's `started_at`, so the enrolment step-up window (2 minutes) and the
+   * manager PIN record's `last_online_at` are not skewed by the server clock.
+   * Main-only.
+   */
+  manager_signed_in_at?: string;
+  authority?: SessionAuthority;
+  admission_id?: string;
+  admission_ttl_seconds?: number;
+  offline_grace_seconds?: number;
+  /** See {@link CashierAdmissionFields.admission_generation}. Main-only (RT-219). */
+  admission_generation?: string;
+  /** See {@link CashierAdmissionFields.admission_requested_at_ms}. Main-only. */
+  admission_requested_at_ms?: number;
+  /**
+   * RT-113 P2 — set when the session lost its authority; it ends at its next
+   * safe point. Main-only. The first cause wins.
+   */
+  authority_latch?: AuthorityLatchCause;
 }
 
 export interface CreateSessionInput {
@@ -38,6 +115,13 @@ export interface CreateSessionInput {
   branch_id: string;
   backend_session_id: string;
   started_at?: string;
+  /** RT-113 P2 — the cashier's live online admission (sign-in or takeover). */
+  cashier_admission?: CashierAdmissionFields & { user_id: string };
+  /**
+   * RT-17 slice 4 part 2 — the `users.id` of the online sign-in response.
+   * Kept only on a manager / admin session (see `manager_user_id`).
+   */
+  manager_user_id?: string;
 }
 
 type SessionEndCallback = (
@@ -48,11 +132,27 @@ type SessionEndCallback = (
 /** #380 — fired after a new session is created (any sign-in role). */
 type SessionStartCallback = (record: OperatorSessionRecord) => void;
 
+/** RT-117 — fired after the current session locks or unlocks. */
+type LockStateCallback = (record: OperatorSessionRecord) => void;
+
+/**
+ * A manager / admin session keeps the `users.id` its online sign-in captured,
+ * lower-cased, and the local time of that sign-in; any other session neither.
+ */
+function managerFieldsOf(
+  input: CreateSessionInput,
+): Pick<OperatorSessionRecord, 'manager_user_id' | 'manager_signed_in_at'> {
+  const userId = input.manager_user_id ?? '';
+  if (input.role === 'cashier' || userId.length === 0) return {};
+  return { manager_user_id: userId.toLowerCase(), manager_signed_in_at: new Date().toISOString() };
+}
+
 export class SessionManager {
   private current: OperatorSessionRecord | null = null;
   private lastEndCause: SessionEndCause | null = null;
   private readonly endCallbacks: SessionEndCallback[] = [];
   private readonly startCallbacks: SessionStartCallback[] = [];
+  private readonly lockCallbacks: LockStateCallback[] = [];
 
   getCurrent(): OperatorSessionRecord | null {
     return this.current;
@@ -87,7 +187,22 @@ export class SessionManager {
       backend_session_id: input.backend_session_id,
       started_at: now,
       last_activity_at: now,
+      lock_state: 'active',
+      locked_at: null,
     };
+    Object.assign(record, managerFieldsOf(input));
+    if (input.cashier_admission !== undefined) {
+      const a = input.cashier_admission;
+      record.user_id = a.user_id;
+      record.authority = 'online_confirmed';
+      record.admission_id = a.admission_id;
+      record.admission_ttl_seconds = a.admission_ttl_seconds;
+      record.offline_grace_seconds = a.offline_grace_seconds;
+      record.admission_generation = a.admission_generation;
+      if (a.admission_requested_at_ms !== undefined) {
+        record.admission_requested_at_ms = a.admission_requested_at_ms;
+      }
+    }
     this.current = record;
     // #380 — fire start subscribers (e.g. the orphan-attempt sweep). A
     // throwing subscriber must not break sign-in (mirrors end()).
@@ -99,6 +214,33 @@ export class SessionManager {
       }
     }
     return record;
+  }
+
+  /**
+   * RT-113 P2 — record a heartbeat's `admitted` on the CURRENT session, only
+   * when `session_id` still names it. Returns whether it was applied.
+   */
+  renewAdmission(session_id: string, admission: CashierAdmissionFields): boolean {
+    if (this.current?.id !== session_id) return false;
+    this.current.authority = 'online_confirmed';
+    this.current.admission_id = admission.admission_id;
+    this.current.admission_ttl_seconds = admission.admission_ttl_seconds;
+    this.current.offline_grace_seconds = admission.offline_grace_seconds;
+    this.current.admission_generation = admission.admission_generation;
+    if (admission.admission_requested_at_ms !== undefined) {
+      this.current.admission_requested_at_ms = admission.admission_requested_at_ms;
+    }
+    return true;
+  }
+
+  /**
+   * RT-113 P2 — latch the CURRENT session (only when `session_id` still names
+   * it): no new sale may start until it ends. Idempotent; the first cause wins.
+   */
+  latchAuthority(session_id: string, cause: AuthorityLatchCause): boolean {
+    if (this.current?.id !== session_id) return false;
+    this.current.authority_latch ??= cause;
+    return true;
   }
 
   /** Register a callback fired after each session ends. */
@@ -146,6 +288,51 @@ export class SessionManager {
 
   noteActivity(at: string): void {
     if (this.current === null) return;
+    // RT-117 — activity never unlocks and never extends a locked session.
+    if (this.current.lock_state === 'locked') return;
     this.current.last_activity_at = at;
+  }
+
+  isLocked(): boolean {
+    return this.current?.lock_state === 'locked';
+  }
+
+  /** Register a callback fired after the current session locks or unlocks. */
+  onLockStateChanged(cb: LockStateCallback): void {
+    this.lockCallbacks.push(cb);
+  }
+
+  /**
+   * RT-117 (RT-116 §2.2) — lock the CURRENT session in place. Same session id;
+   * onEnded is NOT fired, so the session-end sweep cannot run on a lock.
+   */
+  lock(at: string): void {
+    if (this.current === null || this.current.lock_state === 'locked') return;
+    this.current.lock_state = 'locked';
+    this.current.locked_at = at;
+    this.notifyLockState(this.current);
+  }
+
+  /**
+   * RT-117 — resume the SAME session after a verified same-operator unlock.
+   * onStarted is NOT fired (the session never ended). Callers verify the
+   * credential first; this method only flips the state.
+   */
+  unlock(at: string): void {
+    if (this.current === null || this.current.lock_state !== 'locked') return;
+    this.current.lock_state = 'active';
+    this.current.locked_at = null;
+    this.current.last_activity_at = at;
+    this.notifyLockState(this.current);
+  }
+
+  private notifyLockState(record: OperatorSessionRecord): void {
+    for (const cb of this.lockCallbacks) {
+      try {
+        cb(record);
+      } catch {
+        // subscribers must not break lock()/unlock()
+      }
+    }
   }
 }

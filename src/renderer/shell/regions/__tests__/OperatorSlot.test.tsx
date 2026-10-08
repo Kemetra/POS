@@ -79,7 +79,7 @@ describe('OperatorSlot (004 T031 — signed-in branch)', () => {
     render(<OperatorSlot />);
     const badge = screen.getByTestId('operator-badge');
     expect(badge).toHaveTextContent('Manager One');
-    expect(badge).toHaveTextContent('Manager');
+    expect(badge.querySelector('[data-role]')).toHaveTextContent('مدير');
     // The placeholder Sign-in button MUST NOT be rendered while signed in.
     expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
   });

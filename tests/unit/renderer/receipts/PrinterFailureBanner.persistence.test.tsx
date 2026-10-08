@@ -48,7 +48,7 @@ afterEach(() => {
 });
 
 describe('T260 — PrinterFailureBanner mounts on failure + carries 3 affordances', () => {
-  it('renders a bilingual print-failed message when a print failure is present', () => {
+  it('renders the Arabic print-failed message when a print failure is present', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
@@ -56,7 +56,7 @@ describe('T260 — PrinterFailureBanner mounts on failure + carries 3 affordance
         _testReceiptsBridge={okReceiptsBridge()}
       />,
     );
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   it('renders nothing when there is no print failure (unmounted, not hidden)', () => {
@@ -78,7 +78,7 @@ describe('T260 — PrinterFailureBanner mounts on failure + carries 3 affordance
         _testReceiptsBridge={okReceiptsBridge()}
       />,
     );
-    for (const name of [/retry/i, /reprint/i, /manual/i]) {
+    for (const name of ['إعادة المحاولة', 'نسخة', 'إيصال يدوي']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toBeInTheDocument();
       // The 44×44 floor is enforced via the shared `.btn--md` size modifier

@@ -62,7 +62,7 @@ function staleAttemptForCartA(): PaymentAttemptRow {
 function makeDeps(overrides: Partial<PaymentsStartHandlerDeps>): PaymentsStartHandlerDeps {
   return {
     getCurrentSession: () => SESSION,
-    attemptsRepo: { findStartedByTerminal: () => undefined },
+    attemptsRepo: { findById: () => undefined, findStartedByTerminal: () => undefined },
     // Default FSM mirrors production: it refuses if a started attempt exists on
     // the terminal. Tests that need a clean start inject a fake that succeeds.
     paymentAttemptFsm: {
@@ -113,7 +113,7 @@ describe('payments.start — stale started-attempt for a different cart must not
 
     const handler = createPaymentsStartHandler(
       makeDeps({
-        attemptsRepo: { findStartedByTerminal: () => stale },
+        attemptsRepo: { findById: () => undefined, findStartedByTerminal: () => stale },
         paymentAttemptFsm: { start: fsmStart, cancel: fsmCancel },
       }),
     );
@@ -138,7 +138,7 @@ describe('payments.start — stale started-attempt for a different cart must not
     let cancelled = false;
     const handler = createPaymentsStartHandler(
       makeDeps({
-        attemptsRepo: { findStartedByTerminal: () => stale },
+        attemptsRepo: { findById: () => undefined, findStartedByTerminal: () => stale },
         paymentAttemptFsm: {
           start: (input) =>
             !cancelled && stale.terminal_id === input.terminal_id
@@ -175,7 +175,7 @@ describe('payments.start — stale started-attempt for a different cart must not
     const cancelCalls: string[] = [];
     const handler = createPaymentsStartHandler(
       makeDeps({
-        attemptsRepo: { findStartedByTerminal: () => sameCart },
+        attemptsRepo: { findById: () => undefined, findStartedByTerminal: () => sameCart },
         paymentAttemptFsm: {
           // Same cart → FSM owns the duplicate/split-tender decision; the handler
           // must NOT discard it. Here the FSM refuses (duplicate start), which is
@@ -210,7 +210,7 @@ describe('payments.start — stale started-attempt for a different cart must not
     const cancelCalls: string[] = [];
     const handler = createPaymentsStartHandler(
       makeDeps({
-        attemptsRepo: { findStartedByTerminal: () => undefined },
+        attemptsRepo: { findById: () => undefined, findStartedByTerminal: () => undefined },
         paymentAttemptFsm: {
           start: (input) => ({ kind: 'ok', payment_attempt_id: input.payment_attempt_id }),
           cancel: (input) => {
@@ -246,7 +246,7 @@ describe('payments.start — stale started-attempt for a different cart must not
       const liveTenderAsked: string[] = [];
       const handler = createPaymentsStartHandler(
         makeDeps({
-          attemptsRepo: { findStartedByTerminal: () => stale },
+          attemptsRepo: { findById: () => undefined, findStartedByTerminal: () => stale },
           attemptHasLiveTender: (id) => {
             liveTenderAsked.push(id);
             return true;
@@ -289,7 +289,7 @@ describe('payments.start — stale started-attempt for a different cart must not
       let cancelled = false;
       const handler = createPaymentsStartHandler(
         makeDeps({
-          attemptsRepo: { findStartedByTerminal: () => stale },
+          attemptsRepo: { findById: () => undefined, findStartedByTerminal: () => stale },
           attemptHasLiveTender: () => false,
           paymentAttemptFsm: {
             start: (input) =>

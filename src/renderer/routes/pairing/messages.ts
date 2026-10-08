@@ -8,7 +8,7 @@ import type { PairingOutcome } from '../../../shared/pairing-types';
  * T074 (Phase Final) adds friendly, action-oriented copy for the two
  * remaining categories: `network_error` and `unknown_error`.
  *
- * All eight `PairingOutcome` values now map to a distinct string.
+ * All ten `PairingOutcome` values now map to a distinct string.
  * The `success` outcome maps to the generic fallback — the form
  * navigates before that string is ever rendered.
  *
@@ -70,6 +70,19 @@ export const NETWORK_ERROR_MESSAGE = 'No connection — check your network and t
 export const UNKNOWN_ERROR_MESSAGE = 'Pairing failed — please try again.';
 
 /**
+ * Message for `outcome: 'session_active'` (RT-215 review F3): pairing is
+ * refused while an operator session is alive; the code was not used.
+ */
+export const SESSION_ACTIVE_MESSAGE =
+  'Finish the current sale and sign out before pairing this terminal again.';
+
+/**
+ * Message for `outcome: 'terminal_already_paired'` (RT-215 rev546b S-1): the
+ * terminal is already paired; pairing is only a recovery step.
+ */
+export const TERMINAL_ALREADY_PAIRED_MESSAGE = 'This terminal is already paired.';
+
+/**
  * Client-side validation copy for an empty / whitespace-only submit.
  * Surfaces visibly via `role="status"` so the operator sees a reason
  * instead of a silent no-op (T045).
@@ -77,35 +90,44 @@ export const UNKNOWN_ERROR_MESSAGE = 'Pairing failed — please try again.';
 export const EMPTY_INPUT_MESSAGE = 'Enter a pairing code.';
 
 /**
+ * RT-215 10897-A — the "Check again" on a device-revoked terminal: the server
+ * still refuses the device credential (401). Recovery stays a new pairing code.
+ */
+export const RECHECK_STILL_REVOKED_MESSAGE =
+  'Still revoked — the server still refuses this terminal. Enter a new pairing code from the admin portal.';
+
+/** RT-215 10897-A — the "Check again" got no answer (network, server error): still revoked. */
+export const RECHECK_UNREACHABLE_MESSAGE = 'Couldn’t reach the server — try again.';
+
+/**
  * Resolve a `PairingOutcome` to its operator-facing message.
  *
- * Covers all eight `PairingOutcome` values:
+ * Covers all ten `PairingOutcome` values:
  *   - US3: invalid_code / expired_code / already_paired
  *   - US4: branch_mismatch
  *   - US5: rate_limited
  *   - T074: network_error / unknown_error
+ *   - RT-215: session_active / terminal_already_paired
  *   - success: generic fallback (form navigates before this is rendered)
  */
+/**
+ * Exhaustive by type: adding a `PairingOutcome` without a message fails the
+ * typecheck. `success` maps to the generic fallback — the form navigates on
+ * success and the message region unmounts, so it is never observed.
+ */
+const MESSAGE_FOR: Readonly<Record<PairingOutcome, string>> = {
+  invalid_code: INVALID_CODE_MESSAGE,
+  expired_code: EXPIRED_CODE_MESSAGE,
+  already_paired: ALREADY_PAIRED_MESSAGE,
+  branch_mismatch: BRANCH_MISMATCH_MESSAGE,
+  rate_limited: RATE_LIMITED_MESSAGE,
+  success: GENERIC_FAILURE_MESSAGE,
+  network_error: NETWORK_ERROR_MESSAGE,
+  unknown_error: UNKNOWN_ERROR_MESSAGE,
+  session_active: SESSION_ACTIVE_MESSAGE,
+  terminal_already_paired: TERMINAL_ALREADY_PAIRED_MESSAGE,
+};
+
 export function messageFor(outcome: PairingOutcome): string {
-  switch (outcome) {
-    case 'invalid_code':
-      return INVALID_CODE_MESSAGE;
-    case 'expired_code':
-      return EXPIRED_CODE_MESSAGE;
-    case 'already_paired':
-      return ALREADY_PAIRED_MESSAGE;
-    case 'branch_mismatch':
-      return BRANCH_MISMATCH_MESSAGE;
-    case 'rate_limited':
-      return RATE_LIMITED_MESSAGE;
-    case 'success':
-      // The form navigates on success and the message region unmounts;
-      // it is never observed. Returning the generic fallback keeps the
-      // function total without a misleading "success" copy.
-      return GENERIC_FAILURE_MESSAGE;
-    case 'network_error':
-      return NETWORK_ERROR_MESSAGE;
-    case 'unknown_error':
-      return UNKNOWN_ERROR_MESSAGE;
-  }
+  return MESSAGE_FOR[outcome];
 }

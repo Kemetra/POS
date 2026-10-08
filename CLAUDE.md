@@ -284,7 +284,10 @@ Then inspect:
 - linked Jira dependencies;
 - relevant ADR/spec/Confluence context;
 - repository-local `CLAUDE.md`;
-- relevant code/tests.
+- relevant code/tests;
+- for lab, bench, hardware or packaged-POS work: the Confluence page "Lab and Bench Runbook (rt9 lab, packaged POS, hardware)" (RETAIL space, page id 18874418). Read it before starting. It holds procedures only, never secrets or pairing-code values.
+
+At the end of every lab, bench, hardware or verification session, record in Confluence (the runbook page, or the relevant durable page such as Current State) what was done, the procedure that worked, the lessons learned and gotchas, and any failure with its first failing boundary. Jira keeps the work state and the evidence for the issue; Confluence keeps the procedures and lessons that the next session needs. Do not skip this because the Jira evidence comment is already posted.
 
 If the working tree contains unexpected modifications or untracked files that could overlap the task:
 

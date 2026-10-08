@@ -3,7 +3,7 @@
  * WORKING (pre-settlement) tender flow.
  *
  * Covers FR-19 / SC-4 for: PaymentCartSummary, TenderSelection, CashEntry,
- * AmountPad, VoucherEntry, ExternalCardTerminalEntry, MoneyRoll.
+ * AmountPad, VoucherEntry, ExternalCardTerminalEntry.
  *
  * WHY THIS TEST SCANS ATTRIBUTES, NOT JUST TEXT NODES
  * ---------------------------------------------------
@@ -59,7 +59,6 @@ import type { PaymentsBridgeAPI, TenderBridgeAPI } from '../../../../shared/brid
 import { AmountPad } from '../AmountPad.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
-import { MoneyRoll } from '../MoneyRoll.js';
 import { PaymentCartSummary } from '../PaymentCartSummary.js';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../../stores/payment-store.js';
@@ -268,7 +267,7 @@ describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () 
   });
 
   it('AmountPad carries no English-only operator-facing string', () => {
-    const { container } = render(<AmountPad valueMinor={0} onChange={vi.fn()} totalMinor={5000} />);
+    const { container } = render(<AmountPad valueMinor={0} onChange={vi.fn()} />);
     expectNoEnglishOnlyStrings(container, 'AmountPad');
   });
 
@@ -282,11 +281,6 @@ describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () 
   it('ExternalCardTerminalEntry carries no English-only operator-facing string', () => {
     const { container } = render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
     expectNoEnglishOnlyStrings(container, 'ExternalCardTerminalEntry');
-  });
-
-  it('MoneyRoll carries no English-only operator-facing string', () => {
-    const { container } = render(<MoneyRoll valueMinor={1500} />);
-    expectNoEnglishOnlyStrings(container, 'MoneyRoll');
   });
 
   /**
@@ -335,7 +329,8 @@ describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () 
     //
     // Scanning the container also sweeps `<OperatorBadge>`, whose role string
     // comes from the SHARED `roleDisplayName` (shared/operator/role.ts) and
-    // renders English ("Cashier"). That is a real FR-19 gap, but it belongs to
+    // rendered English ("Cashier") until RT-240 gave the badge Arabic role
+    // names. At the time it was a real FR-19 gap, but it belonged to
     // the shell's role-indicator region (003 FR-020) and is visible on every
     // screen — not to US3, which is scoped to the checkout surfaces and to copy
     // only. Translating shared vocabulary from here would widen this slice into

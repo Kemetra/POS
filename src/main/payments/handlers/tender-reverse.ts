@@ -16,6 +16,7 @@
  *   • FSM refused             → NO audit (the line wasn't transitioned)
  */
 
+import { tenderReverseActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { TenderLineFsm } from '../fsm/tender-line-fsm.js';
@@ -107,10 +108,10 @@ export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): Tend
       payment_attempt_id: line.payment_attempt_id,
       tender_line_id: req.tender_line_id,
       action_kind: 'tender.reverse',
-      payload: {
+      payload: tenderReverseActionPayload({
         tender_line_id: req.tender_line_id,
         payment_attempt_id: line.payment_attempt_id,
-      },
+      }),
       acting_operator_id: session.operator_id,
       created_at: now,
     });
@@ -120,13 +121,31 @@ export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): Tend
     }
 
     if (reservation.kind === 'replay') {
+      // A voucher reversal answered `reversal_pending` and was later settled
+      // by the deferred resolver (a different action): the line now reads
+      // `reversed` and its `last_action_id` is the resolver's, but the original
+      // answer was the pending one, stamped at the outbox row's `created_at`
+      // (`markReversalPending` records `reversal_pending_since` there).
+      // A voucher line reversed by THIS key keeps this key as `last_action_id`.
       if (
-        (line.state === 'reversed' || line.state === 'reversal_pending') &&
-        line.reversed_at !== null
+        line.tender_type === 'internal_voucher' &&
+        line.state === 'reversed' &&
+        line.last_action_id !== req.idempotency_key
       ) {
         return await Promise.resolve({
           kind: 'ok',
-          reversed_at: line.reversed_at,
+          reversed_at: reservation.created_at,
+          state: 'reversal_pending',
+        });
+      }
+      // A line whose authority reversal is still pending carries
+      // `reversal_pending_since`, not `reversed_at` (RT-304 review).
+      const replayAt =
+        line.state === 'reversal_pending' ? line.reversal_pending_since : line.reversed_at;
+      if ((line.state === 'reversed' || line.state === 'reversal_pending') && replayAt !== null) {
+        return await Promise.resolve({
+          kind: 'ok',
+          reversed_at: replayAt,
           state: line.state,
         });
       }

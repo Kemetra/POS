@@ -273,7 +273,7 @@ describe('PairingService.submit — TransportError catch-all (T023b)', () => {
 describe('PairingService.submit — unknown-envelope catch-all (T023c)', () => {
   it('reachable non-2xx with unrecognised body code resolves with outcome=unknown_error', async () => {
     const h = makeHarness({
-      pairResult: { ok: false, status: 400, body: { code: 'NOT_YET_RECOGNISED' } },
+      pairResult: { ok: false, status: 400, body: { error: { code: 'NOT_YET_RECOGNISED' } } },
     });
     const result = await h.service.submit('CODE');
 
@@ -290,7 +290,7 @@ describe('PairingService.submit — unknown-envelope catch-all (T023c)', () => {
 
   it('on unknown-envelope: emits exactly ONE log record with outcome=unknown_error', async () => {
     const h = makeHarness({
-      pairResult: { ok: false, status: 502, body: { code: 'WHATEVER' } },
+      pairResult: { ok: false, status: 502, body: { error: { code: 'WHATEVER' } } },
     });
     await h.service.submit('CODE');
 
@@ -304,7 +304,7 @@ describe('PairingService.submit — unknown-envelope catch-all (T023c)', () => {
   it('unknown-envelope path: NO log payload contains the submitted code', async () => {
     const code = 'ANOTHER-SECRET-CODE';
     const h = makeHarness({
-      pairResult: { ok: false, status: 503, body: { code: 'UNKNOWN' } },
+      pairResult: { ok: false, status: 503, body: { error: { code: 'UNKNOWN' } } },
     });
     await h.service.submit(code);
 
@@ -339,7 +339,11 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
   describe('INVALID_CODE -> outcome=invalid_code', () => {
     it('resolves with { outcome: "invalid_code" }', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE', message: 'x' } },
+        pairResult: {
+          ok: false,
+          status: 400,
+          body: { error: { code: 'INVALID_CODE', message: 'x' } },
+        },
       });
       const result = await h.service.submit('CODE');
       expect(result).toEqual({ outcome: 'invalid_code' });
@@ -347,7 +351,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
 
     it('does NOT call store.persist() (failure path = log only)', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+        pairResult: { ok: false, status: 400, body: { error: { code: 'INVALID_CODE' } } },
       });
       await h.service.submit('CODE');
       expect(h.store.persist).not.toHaveBeenCalled();
@@ -355,7 +359,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
 
     it('does NOT call store.clear() (prior state preserved per FR-8)', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+        pairResult: { ok: false, status: 400, body: { error: { code: 'INVALID_CODE' } } },
       });
       await h.service.submit('CODE');
       expect(h.store.clear).not.toHaveBeenCalled();
@@ -364,7 +368,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
     it('emits exactly ONE log record with outcome=invalid_code (no code/token in payload)', async () => {
       const code = 'SECRET-INVALID-CODE-9999';
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+        pairResult: { ok: false, status: 400, body: { error: { code: 'INVALID_CODE' } } },
       });
       await h.service.submit(code);
 
@@ -385,7 +389,11 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
   describe('EXPIRED_CODE -> outcome=expired_code', () => {
     it('resolves with { outcome: "expired_code" }', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE', message: 'x' } },
+        pairResult: {
+          ok: false,
+          status: 410,
+          body: { error: { code: 'EXPIRED_CODE', message: 'x' } },
+        },
       });
       const result = await h.service.submit('CODE');
       expect(result).toEqual({ outcome: 'expired_code' });
@@ -393,7 +401,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
 
     it('does NOT call store.persist()', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } },
+        pairResult: { ok: false, status: 410, body: { error: { code: 'EXPIRED_CODE' } } },
       });
       await h.service.submit('CODE');
       expect(h.store.persist).not.toHaveBeenCalled();
@@ -401,7 +409,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
 
     it('does NOT call store.clear()', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } },
+        pairResult: { ok: false, status: 410, body: { error: { code: 'EXPIRED_CODE' } } },
       });
       await h.service.submit('CODE');
       expect(h.store.clear).not.toHaveBeenCalled();
@@ -410,7 +418,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
     it('emits exactly ONE log record with outcome=expired_code (no code/token)', async () => {
       const code = 'SECRET-EXPIRED-CODE-1234';
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } },
+        pairResult: { ok: false, status: 410, body: { error: { code: 'EXPIRED_CODE' } } },
       });
       await h.service.submit(code);
 
@@ -429,7 +437,11 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
   describe('ALREADY_PAIRED -> outcome=already_paired', () => {
     it('resolves with { outcome: "already_paired" }', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED', message: 'x' } },
+        pairResult: {
+          ok: false,
+          status: 409,
+          body: { error: { code: 'ALREADY_PAIRED', message: 'x' } },
+        },
       });
       const result = await h.service.submit('CODE');
       expect(result).toEqual({ outcome: 'already_paired' });
@@ -437,7 +449,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
 
     it('does NOT call store.persist()', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+        pairResult: { ok: false, status: 409, body: { error: { code: 'ALREADY_PAIRED' } } },
       });
       await h.service.submit('CODE');
       expect(h.store.persist).not.toHaveBeenCalled();
@@ -445,7 +457,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
 
     it('does NOT call store.clear()', async () => {
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+        pairResult: { ok: false, status: 409, body: { error: { code: 'ALREADY_PAIRED' } } },
       });
       await h.service.submit('CODE');
       expect(h.store.clear).not.toHaveBeenCalled();
@@ -454,7 +466,7 @@ describe('PairingService.submit — recoverable failure outcomes (T040)', () => 
     it('emits exactly ONE log record with outcome=already_paired (no code/token)', async () => {
       const code = 'SECRET-ALREADY-PAIRED-2025';
       const h = makeHarnessWithPriorPair({
-        pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+        pairResult: { ok: false, status: 409, body: { error: { code: 'ALREADY_PAIRED' } } },
       });
       await h.service.submit(code);
 
@@ -550,7 +562,11 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
 
   it('resolves with { outcome: "branch_mismatch" }', async () => {
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH', message: 'x' } },
+      pairResult: {
+        ok: false,
+        status: 409,
+        body: { error: { code: 'BRANCH_MISMATCH', message: 'x' } },
+      },
     });
     const result = await h.service.submit('CODE');
     expect(result).toEqual({ outcome: 'branch_mismatch' });
@@ -558,7 +574,7 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
 
   it('does NOT call store.persist() (failure path = log only)', async () => {
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     await h.service.submit('CODE');
     expect(h.store.persist).not.toHaveBeenCalled();
@@ -566,7 +582,7 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
 
   it('does NOT call store.clear() (FR-14: prior token + row preserved)', async () => {
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     await h.service.submit('CODE');
     expect(h.store.clear).not.toHaveBeenCalled();
@@ -584,7 +600,7 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
     // service that DID clear state would have a meaningful "before"
     // to wipe.
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     await h.service.submit('CODE');
 
@@ -595,7 +611,7 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
   it('emits exactly ONE log record with outcome=branch_mismatch (no code/token in payload)', async () => {
     const code = 'SECRET-BRANCH-MISMATCH-CODE-7777';
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     await h.service.submit(code);
 
@@ -612,7 +628,7 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
 
   it('the BRANCH_MISMATCH log record carries NO terminal_id (success-only field)', async () => {
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     await h.service.submit('CODE');
     expect(h.logRecords[0]).not.toHaveProperty('terminal_id');
@@ -620,7 +636,7 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
 
   it('the BRANCH_MISMATCH log record carries NO retry_after_s or timed_out', async () => {
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     await h.service.submit('CODE');
     expect(h.logRecords[0]).not.toHaveProperty('retry_after_s');
@@ -629,7 +645,7 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
 
   it('NEVER rejects on BRANCH_MISMATCH (bridge contract)', async () => {
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     await expect(h.service.submit('CODE')).resolves.toBeDefined();
   });
@@ -640,7 +656,7 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
     // (status 409 is shared with ALREADY_PAIRED — body.code is what
     // splits them). Same FR-14 invariant applies.
     const h = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 422, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 422, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     const result = await h.service.submit('CODE');
     expect(result).toEqual({ outcome: 'branch_mismatch' });
@@ -653,13 +669,13 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
     // accidentally re-route the ALREADY_PAIRED outcome they share a
     // status with.
     const hAlready = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'ALREADY_PAIRED' } } },
     });
     const rAlready = await hAlready.service.submit('CODE');
     expect(rAlready).toEqual({ outcome: 'already_paired' });
 
     const hBranch = makeHarnessWithPriorPair({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     const rBranch = await hBranch.service.submit('CODE');
     expect(rBranch).toEqual({ outcome: 'branch_mismatch' });
@@ -697,7 +713,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED', message: 'slow down' },
+        body: { error: { code: 'RATE_LIMITED', message: 'slow down' } },
         retry_after_s: 7,
       },
     });
@@ -710,7 +726,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 30,
       },
     });
@@ -723,7 +739,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 30,
       },
     });
@@ -737,7 +753,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 42,
       },
     });
@@ -760,7 +776,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 5,
       },
     });
@@ -773,7 +789,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 5,
       },
     });
@@ -786,7 +802,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 1,
       },
     });
@@ -800,7 +816,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 300,
       },
     });
@@ -821,7 +837,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 500,
       },
     });
@@ -834,7 +850,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         retry_after_s: 30,
       },
     });
@@ -851,7 +867,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 429,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         // retry_after_s intentionally missing
       },
     });
@@ -874,7 +890,7 @@ describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
       pairResult: {
         ok: false,
         status: 503,
-        body: { code: 'RATE_LIMITED' },
+        body: { error: { code: 'RATE_LIMITED' } },
         // retry_after_s missing — network skipped attaching it on non-429
       },
     });
@@ -902,7 +918,7 @@ describe('PairingService.submit — contract invariants (T023a)', () => {
 
   it('NEVER rejects for any backend or network outcome (reachable failure)', async () => {
     const h = makeHarness({
-      pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+      pairResult: { ok: false, status: 400, body: { error: { code: 'INVALID_CODE' } } },
     });
     await expect(h.service.submit('CODE')).resolves.toBeDefined();
   });
@@ -987,7 +1003,7 @@ describe('PairingService.submit — T060 log-field schema (US6)', () => {
   /* ── invalid_code ── */
   it('invalid_code: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
     const h = makeHarness({
-      pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+      pairResult: { ok: false, status: 400, body: { error: { code: 'INVALID_CODE' } } },
     });
     await h.service.submit('PAIR-CODE');
 
@@ -1005,7 +1021,7 @@ describe('PairingService.submit — T060 log-field schema (US6)', () => {
   /* ── expired_code ── */
   it('expired_code: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
     const h = makeHarness({
-      pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } },
+      pairResult: { ok: false, status: 410, body: { error: { code: 'EXPIRED_CODE' } } },
     });
     await h.service.submit('PAIR-CODE');
 
@@ -1021,7 +1037,7 @@ describe('PairingService.submit — T060 log-field schema (US6)', () => {
   /* ── already_paired ── */
   it('already_paired: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
     const h = makeHarness({
-      pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'ALREADY_PAIRED' } } },
     });
     await h.service.submit('PAIR-CODE');
 
@@ -1037,7 +1053,7 @@ describe('PairingService.submit — T060 log-field schema (US6)', () => {
   /* ── branch_mismatch ── */
   it('branch_mismatch: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
     const h = makeHarness({
-      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+      pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } },
     });
     await h.service.submit('PAIR-CODE');
 
@@ -1053,7 +1069,12 @@ describe('PairingService.submit — T060 log-field schema (US6)', () => {
   /* ── rate_limited ── */
   it('rate_limited: emits exactly one record; carries retry_after_s; no terminal_id/timed_out', async () => {
     const h = makeHarness({
-      pairResult: { ok: false, status: 429, body: { code: 'RATE_LIMITED' }, retry_after_s: 42 },
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { error: { code: 'RATE_LIMITED' } },
+        retry_after_s: 42,
+      },
     });
     await h.service.submit('PAIR-CODE');
 
@@ -1116,11 +1137,18 @@ describe('PairingService.submit — T060 log-field schema (US6)', () => {
   it('all outcomes: exactly one log record per submit (no double-emit)', async () => {
     const scenarios: HarnessOpts[] = [
       {},
-      { pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } } },
-      { pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } } },
-      { pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } } },
-      { pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } } },
-      { pairResult: { ok: false, status: 429, body: { code: 'RATE_LIMITED' }, retry_after_s: 5 } },
+      { pairResult: { ok: false, status: 400, body: { error: { code: 'INVALID_CODE' } } } },
+      { pairResult: { ok: false, status: 410, body: { error: { code: 'EXPIRED_CODE' } } } },
+      { pairResult: { ok: false, status: 409, body: { error: { code: 'ALREADY_PAIRED' } } } },
+      { pairResult: { ok: false, status: 409, body: { error: { code: 'BRANCH_MISMATCH' } } } },
+      {
+        pairResult: {
+          ok: false,
+          status: 429,
+          body: { error: { code: 'RATE_LIMITED' } },
+          retry_after_s: 5,
+        },
+      },
       { pairRejection: new TransportError({ timed_out: false, reason: 'fetch_failed' }) },
       { pairRejection: new TransportError({ timed_out: true, reason: 'timeout' }) },
       { pairResult: { ok: false, status: 500, body: {} } },

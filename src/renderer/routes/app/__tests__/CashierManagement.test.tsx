@@ -54,6 +54,7 @@ const ADMIN_SESSION: OperatorSessionView = {
 type BridgeStub = {
   listBranchRoster: ReturnType<typeof vi.fn>;
   resetCashierPin: ReturnType<typeof vi.fn>;
+  provisionCashierPin: ReturnType<typeof vi.fn>;
   unlockCashier: ReturnType<typeof vi.fn>;
 };
 
@@ -67,6 +68,9 @@ function makeBridge(overrides: Partial<BridgeStub> = {}): BridgeStub {
       ],
     }),
     resetCashierPin: vi.fn().mockResolvedValue({ kind: 'pin_reset', audit_event_id: 'evt-1' }),
+    provisionCashierPin: vi
+      .fn()
+      .mockResolvedValue({ kind: 'pin_provisioned', audit_event_id: 'evt-3' }),
     unlockCashier: vi.fn().mockResolvedValue({ kind: 'unlocked', audit_event_id: 'evt-2' }),
     ...overrides,
   };
@@ -142,7 +146,7 @@ describe('CashierManagement (T078)', () => {
       });
       // Reset PIN + Unlock for two cashiers = 4 row buttons; each must use the
       // shared button class so it inherits the 44px floor (was bare <button>).
-      for (const name of [/reset pin/i, /unlock/i]) {
+      for (const name of [/set first pin/i, /reset pin/i, /unlock/i]) {
         for (const btn of screen.getAllByRole('button', { name })) {
           expect(btn).toHaveClass('btn');
           expect(btn).toHaveClass('btn--md');
@@ -270,6 +274,243 @@ describe('CashierManagement (T078)', () => {
 
       await waitFor(() => expect(screen.getByTestId('action-error')).toBeInTheDocument());
       expect(document.body.innerHTML).not.toContain('invalid_input');
+    });
+  });
+
+  describe('Set first PIN action (RT-235 — 019 provisionCashierPin bridge)', () => {
+    async function openSetFirstPin(
+      user: ReturnType<typeof userEvent.setup>,
+      bridge: BridgeStub,
+    ): Promise<HTMLElement> {
+      renderAt(MANAGER_SESSION, bridge);
+      await waitFor(() => {
+        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
+      });
+      await clickFirst(user, /set first pin/i);
+      return screen.findByLabelText(/initial pin/i);
+    }
+
+    it('offers a Set first PIN button for every rostered cashier', async () => {
+      renderAt(MANAGER_SESSION, makeBridge());
+      await waitFor(() => {
+        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
+      });
+      expect(screen.getAllByRole('button', { name: /set first pin/i })).toHaveLength(2);
+    });
+
+    it('calls provisionCashierPin with event_id, the roster id as target_cashier_id and initial_pin only', async () => {
+      const user = userEvent.setup();
+      const bridge = makeBridge();
+      const pinInput = await openSetFirstPin(user, bridge);
+      await user.type(pinInput, '4729');
+      await user.click(screen.getByRole('button', { name: /save pin/i }));
+
+      await waitFor(() => {
+        expect(bridge.provisionCashierPin).toHaveBeenCalledOnce();
+      });
+      const call =
+        (bridge.provisionCashierPin.mock.calls as Array<Array<Record<string, unknown>>>)[0]?.[0] ??
+        {};
+      expect(typeof call['event_id']).toBe('string');
+      expect((call['event_id'] as string).length).toBeGreaterThan(0);
+      expect(call['target_cashier_id']).toBe('cash-1');
+      expect(call['initial_pin']).toBe('4729');
+      expect(Object.keys(call).sort()).toEqual(['event_id', 'initial_pin', 'target_cashier_id']);
+    });
+
+    it('collects the PIN in a password field and never renders it, then closes the dialog on success', async () => {
+      const user = userEvent.setup();
+      const pinInput = await openSetFirstPin(user, makeBridge());
+      expect(pinInput).toHaveAttribute('type', 'password');
+      await user.type(pinInput, '4729');
+      await user.click(screen.getByRole('button', { name: /save pin/i }));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('action-success')).toHaveTextContent(/first pin set/i),
+      );
+      expect(screen.queryByRole('dialog', { name: /set first pin/i })).not.toBeInTheDocument();
+      expect(document.body.innerHTML).not.toContain('4729');
+      expect(document.body.innerHTML).not.toContain('cash-1');
+    });
+
+    it('state_invalid → tells the manager the cashier already has a PIN and to use Reset PIN (no category in DOM)', async () => {
+      const user = userEvent.setup();
+      const bridge = makeBridge({
+        provisionCashierPin: vi
+          .fn()
+          .mockResolvedValue({ kind: 'refused', category: 'state_invalid' }),
+      });
+      const pinInput = await openSetFirstPin(user, bridge);
+      await user.type(pinInput, '4729');
+      await user.click(screen.getByRole('button', { name: /save pin/i }));
+
+      const msg = await screen.findByTestId('action-error');
+      expect(msg).toHaveTextContent(/already has a pin/i);
+      expect(msg).toHaveTextContent(/reset pin/i);
+      expect(document.body.innerHTML).not.toContain('state_invalid');
+    });
+
+    it('not_ready → truthful "cannot be activated yet" state, not a generic failure (no category in DOM)', async () => {
+      const user = userEvent.setup();
+      const bridge = makeBridge({
+        provisionCashierPin: vi.fn().mockResolvedValue({ kind: 'refused', category: 'not_ready' }),
+      });
+      const pinInput = await openSetFirstPin(user, bridge);
+      await user.type(pinInput, '4729');
+      await user.click(screen.getByRole('button', { name: /save pin/i }));
+
+      const msg = await screen.findByTestId('action-error');
+      expect(msg).toHaveTextContent(/can.?t be activated yet/i);
+      expect(document.body.innerHTML).not.toContain('not_ready');
+    });
+
+    it('any other refusal → generic error (no category in DOM)', async () => {
+      const user = userEvent.setup();
+      const bridge = makeBridge({
+        provisionCashierPin: vi
+          .fn()
+          .mockResolvedValue({ kind: 'refused', category: 'no_connection' }),
+      });
+      const pinInput = await openSetFirstPin(user, bridge);
+      await user.type(pinInput, '4729');
+      await user.click(screen.getByRole('button', { name: /save pin/i }));
+
+      const msg = await screen.findByTestId('action-error');
+      expect(msg).toHaveTextContent(/could not be completed/i);
+      expect(document.body.innerHTML).not.toContain('no_connection');
+    });
+
+    it('RT-235 review: a second Save while the first call is in flight is ignored (one request, success not overwritten)', async () => {
+      const user = userEvent.setup();
+      let settle: (value: unknown) => void = () => undefined;
+      const bridge = makeBridge({
+        provisionCashierPin: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              settle = resolve;
+            }),
+        ),
+      });
+      const pinInput = await openSetFirstPin(user, bridge);
+      await user.type(pinInput, '4729');
+      const save = screen.getByRole('button', { name: /save pin/i });
+
+      await user.click(save);
+      await user.click(save);
+
+      expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
+      expect(save).toBeDisabled();
+
+      settle({ kind: 'pin_provisioned', audit_event_id: 'evt-3' });
+      await waitFor(() =>
+        expect(screen.getByTestId('action-success')).toHaveTextContent(/first pin set/i),
+      );
+      expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
+    });
+
+    it('RT-235 review: while provisioning is in flight Cancel, Escape and every row action are blocked, so a stale response cannot overwrite a newer action', async () => {
+      const user = userEvent.setup();
+      let settle: (value: unknown) => void = () => undefined;
+      const bridge = makeBridge({
+        provisionCashierPin: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              settle = resolve;
+            }),
+        ),
+      });
+      const pinInput = await openSetFirstPin(user, bridge);
+      await user.type(pinInput, '4729');
+      await user.click(screen.getByRole('button', { name: /save pin/i }));
+
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
+      for (const name of [/set first pin/i, /reset pin/i, /unlock/i]) {
+        for (const btn of screen.getAllByRole('button', { name })) {
+          // The open dialog's own label is not a button; every row action is.
+          expect(btn).toBeDisabled();
+        }
+      }
+      await user.keyboard('{Escape}');
+      expect(screen.getByRole('dialog', { name: /set first pin/i })).toBeInTheDocument();
+
+      settle({ kind: 'pin_provisioned', audit_event_id: 'evt-3' });
+      await waitFor(() =>
+        expect(screen.getByTestId('action-success')).toHaveTextContent(/first pin set/i),
+      );
+      // Idle again: the row actions work.
+      expect(screen.getAllByRole('button', { name: /reset pin/i })[0]).toBeEnabled();
+    });
+
+    it('RT-235 review: an in-flight Unlock or Reset PIN blocks Set first PIN (one shared pending guard across all three actions)', async () => {
+      const user = userEvent.setup();
+      let settleUnlock: (value: unknown) => void = () => undefined;
+      const bridge = makeBridge({
+        unlockCashier: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              settleUnlock = resolve;
+            }),
+        ),
+      });
+      renderAt(MANAGER_SESSION, bridge);
+      await waitFor(() => {
+        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
+      });
+
+      await clickFirst(user, /unlock/i);
+
+      for (const name of [/set first pin/i, /reset pin/i, /unlock/i]) {
+        for (const btn of screen.getAllByRole('button', { name })) {
+          expect(btn).toBeDisabled();
+        }
+      }
+
+      settleUnlock({ kind: 'unlocked', audit_event_id: 'evt-2' });
+      await waitFor(() => expect(screen.getByTestId('action-success')).toBeInTheDocument());
+      for (const btn of screen.getAllByRole('button', { name: /set first pin/i })) {
+        expect(btn).toBeEnabled();
+      }
+    });
+
+    it('RT-235 review: an in-flight Reset PIN confirm blocks the other actions', async () => {
+      const user = userEvent.setup();
+      let settleReset: (value: unknown) => void = () => undefined;
+      const bridge = makeBridge({
+        resetCashierPin: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              settleReset = resolve;
+            }),
+        ),
+      });
+      renderAt(MANAGER_SESSION, bridge);
+      await waitFor(() => {
+        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
+      });
+      await clickFirst(user, /reset pin/i);
+      await user.type(await screen.findByLabelText(/new pin/i), '1234');
+      await user.click(screen.getByRole('button', { name: /confirm reset/i }));
+
+      for (const btn of screen.getAllByRole('button', { name: /set first pin|unlock/i })) {
+        expect(btn).toBeDisabled();
+      }
+      settleReset({ kind: 'pin_reset', audit_event_id: 'evt-1' });
+      await waitFor(() =>
+        expect(screen.getByTestId('action-success')).toHaveTextContent(/pin reset/i),
+      );
+    });
+
+    it('Escape and Cancel close the dialog without calling the bridge', async () => {
+      const user = userEvent.setup();
+      const bridge = makeBridge();
+      await openSetFirstPin(user, bridge);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog', { name: /set first pin/i })).not.toBeInTheDocument();
+
+      await clickFirst(user, /set first pin/i);
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+      expect(screen.queryByRole('dialog', { name: /set first pin/i })).not.toBeInTheDocument();
+      expect(bridge.provisionCashierPin).not.toHaveBeenCalled();
     });
   });
 

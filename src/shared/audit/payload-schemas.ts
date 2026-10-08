@@ -18,6 +18,7 @@
 import type { SessionEndCause } from '../operator/session-end-cause.js';
 import type { ActionCategory } from './event-shape.js';
 import type { SaleFinalizationRefusalReason } from '../sales/types.js';
+import type { DeviceRevokedSource } from '../pairing-types.js';
 
 // ─── shift.open ────────────────────────────────────────────────────────────
 
@@ -75,6 +76,60 @@ export interface ShiftForcedClosePayload {
    * FR-027). The emitter validates forbidden field names.
    */
   annotation?: string;
+}
+
+// ─── operator.session.locked / unlocked (RT-117) ───────────────────────────
+
+/**
+ * `operator.session.locked` — the EXISTING session locked in place
+ * (RT-115 D1). The session is not ended; no money or cart is touched.
+ */
+export interface OperatorSessionLockedPayload {
+  /** Why it locked. `manual` is reserved (RT-115 left the shortcut undecided). */
+  lock_cause: 'inactivity';
+}
+
+/**
+ * `operator.session.unlocked` — same-operator unlock of the same session.
+ * No credential, PIN or identifier is recorded (P11).
+ */
+export interface OperatorSessionUnlockedPayload {
+  /** Milliseconds the session spent locked. */
+  locked_duration_ms: number;
+}
+
+// ─── operator.offline_grant.invalidated (RT-113 P1.2) ────────────────────────
+
+/**
+ * Why an offline grant was invalidated (RT-113 10763 D4, OD6, OD8). Closed
+ * set, shared by the grant store and this audit payload.
+ */
+export const OFFLINE_GRANT_INVALIDATION_REASONS = [
+  /** Backend-Core answered 403 for this user. */
+  'forbidden',
+  /** Backend-Core answered 401 for the device (RT-138 L6). */
+  'device_unauthorized',
+  /** OD6: the cashier was admitted on another till (`active_elsewhere`). */
+  'superseded',
+  /** The terminal was paired again. */
+  'repair',
+  /** The terminal was unpaired. */
+  'unpair',
+  /** OD8: Backend-Core answered `offline_grace_seconds = 0`. */
+  'grace_disabled',
+  /** An `admitted` event could not be recorded, so the old grant must not stand. */
+  'refresh_failed',
+] as const;
+
+export type OfflineGrantInvalidationReason = (typeof OFFLINE_GRANT_INVALIDATION_REASONS)[number];
+
+/**
+ * `operator.offline_grant.invalidated` — one event per grant (OD10), attributed
+ * to that grant's operator through `acting_operator_id`. The reason only: no
+ * grant field (user id, admission id, display name, times) is ever recorded.
+ */
+export interface OperatorOfflineGrantInvalidatedPayload {
+  reason: OfflineGrantInvalidationReason;
 }
 
 // ─── operator.session.takeover ─────────────────────────────────────────────
@@ -160,6 +215,20 @@ export interface CartCancelPostHandoffPayload {
   cart_id: string;
   /** UUID of the prior `cart.handoff_to_payment` outbox row this cancel reverses. */
   handoff_action_id: string;
+}
+
+/**
+ * `cart.return_to_sale` (RT-26) — Checkout Back: a `frozen_handed_off` cart
+ * with no tender activity returned to `editing`, its envelope invalidated.
+ * Cashier-initiated, no manager attribution. Ids only — no amounts, no lines.
+ */
+export interface CartReturnToSalePayload {
+  /** FK into carts table. */
+  cart_id: string;
+  /** The `cart.handoff_to_payment` action this Back left (now unusable). */
+  handoff_action_id: string;
+  /** The zero-funds started attempt cancelled with the Back, or null. */
+  cancelled_payment_attempt_id: string | null;
 }
 
 /**
@@ -259,6 +328,135 @@ export type SaleDrawerOpenedPayload = Readonly<Record<string, unknown>>;
 export type SaleDrawerSuppressedPayload = Readonly<Record<string, unknown>>;
 export type SaleDrawerFailedPayload = Readonly<Record<string, unknown>>;
 
+// ─── RT-15 S2 — cashier returns (AC11) ────────────────────────────────────
+//
+// Operator and terminal ride the envelope (`acting_operator_id`,
+// `originating_terminal_id`); the payloads carry the sale / return references
+// and minor-unit amounts only. No line names, no free text, no credential.
+
+/** `sale.return.attempted` — the return was journaled and is about to be sent. */
+export interface SaleReturnAttemptedPayload {
+  return_id: string;
+  sale_id: string;
+  sale_ref: string;
+  quoted_total_minor: number;
+  currency_code: string;
+  line_count: number;
+}
+
+/**
+ * `sale.return.refused` — a return was refused, before or after journaling.
+ * `return_id` / `sale_id` / `sale_ref` are null when the refusal came before
+ * the till knew them (e.g. a cashier refused at lookup).
+ */
+export interface SaleReturnRefusedPayload {
+  return_id: string | null;
+  sale_id: string | null;
+  sale_ref: string | null;
+  operation: 'lookup' | 'quote' | 'submit' | 'resolve' | 'list' | 'payout' | 'reprint';
+  reason: string;
+}
+
+/** `sale.return.confirmed` — Backend-Core answered 201/200 (a replay counts). */
+export interface SaleReturnConfirmedPayload {
+  return_id: string;
+  sale_id: string;
+  sale_ref: string;
+  return_ref: string;
+  return_total_minor: number;
+  currency_code: string;
+  replayed: boolean;
+}
+
+/** `sale.return.payout_ready` — the confirmed cash refund may be paid out (S4 kicks). */
+export interface SaleReturnPayoutReadyPayload {
+  return_id: string;
+  sale_ref: string;
+  return_ref: string;
+  payout_minor: number;
+  currency_code: string;
+  method: 'cash';
+}
+
+// ─── RT-15 S4 — the cash payout, drawer and return slip ────────────────────
+//
+// The acting operator (envelope) is the one who paid out. Amounts are the
+// server-confirmed refund in minor units. No slip text, no line names.
+
+/** `sale.return.payout_started` — the payout was claimed, before the drawer kick. */
+export interface SaleReturnPayoutStartedPayload {
+  return_id: string;
+  sale_ref: string;
+  return_ref: string;
+  payout_minor: number;
+  currency_code: string;
+}
+
+/** `sale.return.drawer_opened` — the drawer kick reported opened. */
+export interface SaleReturnDrawerOpenedPayload {
+  return_id: string;
+  return_ref: string;
+  kick_outcome: 'opened';
+}
+
+/**
+ * `sale.return.drawer_failed` — the drawer did not report opened; nothing was
+ * paid out. `kick_outcome` says what is known: `failed_before_send` (provably
+ * never reached the drawer) or `unknown` (timeout / fault: may have opened).
+ */
+export interface SaleReturnDrawerFailedPayload {
+  return_id: string;
+  return_ref: string;
+  failure_reason: string;
+  kick_outcome: 'failed_before_send' | 'unknown';
+}
+
+/** `sale.return.paid_out` — the cash refund was paid out (once per return). */
+export interface SaleReturnPaidOutPayload {
+  return_id: string;
+  sale_id: string;
+  sale_ref: string;
+  return_ref: string;
+  payout_minor: number;
+  currency_code: string;
+  method: 'drawer' | 'manual';
+  tender: 'cash';
+}
+
+/** `sale.return.slip_printed` / `slip_reprinted` — a return slip printed (copy on reprint). */
+export interface SaleReturnSlipPrintedPayload {
+  return_id: string;
+  return_ref: string;
+}
+
+/** `sale.return.slip_print_failed` — the slip did not print; the payout stands. */
+export interface SaleReturnSlipPrintFailedPayload {
+  return_id: string;
+  return_ref: string;
+  copy: boolean;
+  failure_reason: string;
+}
+
+// ─── pairing.device_revoked / pairing.device_revoked_cleared (RT-215) ──────
+
+/**
+ * `{ source }` ONLY (Jira RT-215 comment 10879): the device-bearer route
+ * family whose 401 started the confirmed revocation. No token, no device
+ * secret, no URL. The actor is `SYSTEM_DEVICE_ACTOR_ID`.
+ */
+export interface PairingDeviceRevokedPayload {
+  source: DeviceRevokedSource;
+}
+
+/**
+ * `{ source }` ONLY: the revocation was cleared by a successful re-pair
+ * (`re_pair`), or by a user-initiated "Check again" the server answered 2xx
+ * (`recheck`, RT-215 10897-A / 10906).
+ */
+export interface PairingDeviceRevokedClearedPayload {
+  source: 're_pair' | 'recheck';
+}
+
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────
 
 /**
@@ -275,6 +473,11 @@ export type AuditPayloadMap = {
   'shift.close': ShiftClosePayload;
   'shift.forced_close': ShiftForcedClosePayload;
   'operator.session.takeover': OperatorSessionTakeoverPayload;
+  // RT-117 (RT-116 §7.3)
+  'operator.session.locked': OperatorSessionLockedPayload;
+  'operator.session.unlocked': OperatorSessionUnlockedPayload;
+  // RT-113 P1.2 (OD10)
+  'operator.offline_grant.invalidated': OperatorOfflineGrantInvalidatedPayload;
   'cashier.pin.reset': CashierPinResetPayload;
   'cashier.pin.unlock': CashierPinUnlockPayload;
   'cashier.pin.provisioned': CashierPinProvisionedPayload;
@@ -283,6 +486,8 @@ export type AuditPayloadMap = {
   'cart.cancel.post_handoff': CartCancelPostHandoffPayload;
   'cart.discount.above_threshold': CartDiscountAboveThresholdPayload;
   'cart.discarded_on_session_end': CartDiscardedOnSessionEndPayload;
+  // RT-26
+  'cart.return_to_sale': CartReturnToSalePayload;
   // 008-sale-finalization-and-receipts (AD-9 / Slice 1c T093 — shaped;
   // S2/S3/S4 placeholders pending their emitting callers)
   'sale.finalized': SaleFinalizedPayload;
@@ -295,6 +500,22 @@ export type AuditPayloadMap = {
   'sale.drawer.opened': SaleDrawerOpenedPayload;
   'sale.drawer.suppressed': SaleDrawerSuppressedPayload;
   'sale.drawer.failed': SaleDrawerFailedPayload;
+  // RT-15 S2
+  'sale.return.attempted': SaleReturnAttemptedPayload;
+  'sale.return.refused': SaleReturnRefusedPayload;
+  'sale.return.confirmed': SaleReturnConfirmedPayload;
+  'sale.return.payout_ready': SaleReturnPayoutReadyPayload;
+  // RT-15 S4
+  'sale.return.payout_started': SaleReturnPayoutStartedPayload;
+  'sale.return.drawer_opened': SaleReturnDrawerOpenedPayload;
+  'sale.return.drawer_failed': SaleReturnDrawerFailedPayload;
+  'sale.return.paid_out': SaleReturnPaidOutPayload;
+  'sale.return.slip_printed': SaleReturnSlipPrintedPayload;
+  'sale.return.slip_print_failed': SaleReturnSlipPrintFailedPayload;
+  'sale.return.slip_reprinted': SaleReturnSlipPrintedPayload;
+  // RT-215
+  'pairing.device_revoked': PairingDeviceRevokedPayload;
+  'pairing.device_revoked_cleared': PairingDeviceRevokedClearedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

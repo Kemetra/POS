@@ -68,6 +68,22 @@ const TICK_INTERVAL_MAX_MS = 1000;
 
 const SCAN_LIMIT_PER_TICK = 32;
 
+// ─── The pending set (shared) ───────────────────────────────────────────────
+
+/**
+ * The `audit_events` filter of the AD-2 pending set: a `payment.settled`
+ * audit of the terminal bound to the one `?` that no Sale row has finalized
+ * yet. The steady-state scan below dispatches these; the RT-17 shift cash-up
+ * counts them (money taken, not yet a sale) and holds the close until the
+ * listener has finalized them. One definition, so both agree on "pending".
+ */
+export const UNFINALIZED_SETTLEMENT_FILTER = `action_category = 'payment.settled'
+        AND originating_terminal_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM sales
+           WHERE envelope_handoff_action_id = json_extract(audit_events.payload, '$.handoff_action_id')
+        )`;
+
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 export interface FinalizeListenerConfig {
@@ -153,12 +169,7 @@ export function createFinalizeListener(config: FinalizeListenerConfig): Finalize
   const scanStmt = db.prepare(
     `SELECT json_extract(payload, '$.handoff_action_id') AS handoff_action_id
        FROM audit_events
-      WHERE action_category = 'payment.settled'
-        AND originating_terminal_id = ?
-        AND NOT EXISTS (
-          SELECT 1 FROM sales
-           WHERE envelope_handoff_action_id = json_extract(audit_events.payload, '$.handoff_action_id')
-        )
+      WHERE ${UNFINALIZED_SETTLEMENT_FILTER}
       ORDER BY created_at ASC
       LIMIT ${String(SCAN_LIMIT_PER_TICK)}`,
   ) as PrepareAll<AuditEventScanRow>;
