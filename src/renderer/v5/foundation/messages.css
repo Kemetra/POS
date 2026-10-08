@@ -120,6 +120,7 @@
 .v5-banner__actions button,
 .v5-notice__action button {
   min-block-size: 44px;
+  min-inline-size: 44px;
   padding-inline: var(--space-3);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-control);

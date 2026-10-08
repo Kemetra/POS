@@ -56,6 +56,9 @@ describe('forced colors — V5 frame', () => {
     const body = ruleFor(frame, '.v5-frame__link--active');
     expect(body).toMatch(/background:\s*Highlight/);
     expect(body).toMatch(/color:\s*HighlightText/);
+    // Without it Chromium paints a Canvas backplate behind the text, hiding
+    // HighlightText on Highlight (seen as a black box in the R-dev capture).
+    expect(body).toMatch(/forced-color-adjust:\s*none/);
   });
 
   it('the brand tile keeps an edge when its fill is dropped', () => {
@@ -77,19 +80,23 @@ describe('forced colors — Sale', () => {
     },
   );
 
-  it('the highlighted result is a system selection, not a tint', () => {
+  it('the highlighted result carries a system Highlight edge, not a tint', () => {
+    // A thick Highlight outline, not a Highlight fill: forced-color-adjust is
+    // inherited, so a filled row would also un-force its «اختيار» button.
     const body = ruleFor(sale, ".v5-sale-product-row[aria-selected='true']");
-    expect(body).toMatch(/background:\s*Highlight/);
-    expect(body).toMatch(/color:\s*HighlightText/);
+    expect(body).toMatch(/outline:\s*3px solid Highlight/);
+    expect(body).not.toMatch(/forced-color-adjust/);
   });
 
-  it('the focused list ring survives (shadows are dropped): an outline instead', () => {
-    expect(
+  it('list focus keeps its own outline; nothing overrides the selected row Highlight edge', () => {
+    // The list's focus ring is an outline (survives forced colors); the inset
+    // box-shadow on the selected row is dropped, so the row keeps only its edge.
+    expect(() =>
       ruleFor(
         sale,
         ".v5-sale-product-list:focus-visible .v5-sale-product-row[aria-selected='true']",
       ),
-    ).toMatch(/outline:\s*2px solid CanvasText/);
+    ).toThrow();
   });
 
   it('a disabled button reads as disabled without its opacity fade', () => {

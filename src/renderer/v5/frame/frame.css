@@ -217,8 +217,10 @@
  * Highlight pair; a filled action keeps a 3px ButtonText edge.
  */
 @media (forced-colors: active) {
+  /* forced-color-adjust: none, or the text's Canvas backplate hides HighlightText. */
   .v5-frame__link--active,
   .v5-frame__link--active:hover {
+    forced-color-adjust: none;
     background: Highlight;
     color: HighlightText;
   }

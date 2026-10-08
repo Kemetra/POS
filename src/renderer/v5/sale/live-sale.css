@@ -79,14 +79,10 @@
     color: GrayText;
   }
 
+  /* An edge, not a fill: forced-color-adjust is inherited and would un-force the row's button. */
   .v5-sale-product-row[aria-selected='true'] {
-    background: Highlight;
-    color: HighlightText;
-  }
-
-  .v5-sale-product-list:focus-visible .v5-sale-product-row[aria-selected='true'] {
-    outline: 2px solid CanvasText;
-    outline-offset: -2px;
+    outline: 3px solid Highlight;
+    outline-offset: -3px;
   }
 }
 
