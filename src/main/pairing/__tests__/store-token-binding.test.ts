@@ -248,6 +248,44 @@ describe('RT-306 — every sendable read checks the binding itself', () => {
   });
 });
 
+describe('RT-306 — the binding is checked against the row AFTER the token read (Codex P1, #582)', () => {
+  it.each([
+    ['a completed re-pair', (s: ReturnType<typeof store>) => s.persist(NEW)],
+    ['a clear (pairing removed)', (s: ReturnType<typeof store>) => s.clear()],
+  ])('an old sealed value that resolves after %s is not handed out', async (_label, change) => {
+    const s = store();
+    await s.persist(OLD);
+    // The SecretStore captures the value when get() is called and resolves
+    // later, as an asynchronous backend may.
+    let release: () => void = () => undefined;
+    let reached: () => void = () => undefined;
+    const called = new Promise<void>((r) => {
+      reached = r;
+    });
+    const snapshotting: SecretStore = {
+      ...secrets,
+      get: (k) => {
+        const captured = secrets.get(k);
+        reached();
+        return new Promise((resolve, reject) => {
+          release = () => {
+            captured.then(resolve, reject);
+          };
+        });
+      },
+    };
+    const pending = createSendableDeviceTokenRead({
+      pairingStore: store(),
+      secretStore: snapshotting,
+      deviceTokenKey: KEY,
+    })();
+    await called; // status `paired` (OLD) read; the OLD sealed value captured
+    await change(s); // the pairing changes while that read is still out
+    release();
+    await expect(pending).resolves.toBeNull();
+  });
+});
+
 describe('RT-306 — normal pairing behaviour is unchanged', () => {
   it('a completed pairing is paired and sends the raw token (never the sealed envelope)', async () => {
     const s = store();

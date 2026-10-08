@@ -1,7 +1,7 @@
 import type { SecretKey, SecretStore } from '../../shared/secret-store.js';
 
 import type { DeviceRevocationStore, PairingStore } from './store.js';
-import { tokenBoundTo } from './token-binding.js';
+import { sameBinding, tokenBoundTo } from './token-binding.js';
 
 /**
  * RT-215 — the ONE reader of the device token for SENDING it to Backend-Core.
@@ -15,8 +15,10 @@ import { tokenBoundTo } from './token-binding.js';
  * user-initiated "Check again", through {@link createRevocationRecheckTokenRead}.
  *
  * RT-306: the sealed token is handed out only while it is bound to the
- * pairing `getStatus()` reported (see `token-binding.ts`); a token sealed for
- * another pairing, or an unreadable one, is null.
+ * pairing `getStatus()` reported AND that pairing is still the stored row after
+ * the token read (Codex P1 on #582: an asynchronous SecretStore can resolve an
+ * old sealed value after a re-pair has committed). A token sealed for another
+ * pairing, or an unreadable one, is null. See `token-binding.ts`.
  *
  * Never throws: a failing status read or token read is null. The token is
  * returned to an in-process caller only and is never logged here.
@@ -28,7 +30,7 @@ export interface SendableDeviceTokenReaderDeps {
    * 4186568808): a revocation latched while a read was pending wins.
    */
   pairingStore: Pick<PairingStore, 'getStatus'> &
-    Partial<Pick<DeviceRevocationStore, 'isDeviceRevoked'>>;
+    Partial<Pick<DeviceRevocationStore, 'isDeviceRevoked' | 'getStoredPairingBinding'>>;
   secretStore: Pick<SecretStore, 'get'>;
   deviceTokenKey: SecretKey;
 }
@@ -60,9 +62,16 @@ export function createSendableDeviceTokenRead(
     const status = await deps.pairingStore.getStatus();
     if (status.kind !== 'paired') return null;
     const sealed = await deps.secretStore.get(deps.deviceTokenKey);
-    // Nothing awaits between this check and handing the token out.
+    // Nothing awaits between these checks and handing the token out.
     if (deps.pairingStore.isDeviceRevoked?.() === true) return null;
-    return tokenBoundTo(sealed, status);
+    // The real store reports its row (null once cleared); a read-only fake
+    // without the method falls back to the status it reported.
+    const row =
+      deps.pairingStore.getStoredPairingBinding === undefined
+        ? status
+        : deps.pairingStore.getStoredPairingBinding();
+    if (row === null || !sameBinding(row, status)) return null;
+    return tokenBoundTo(sealed, row);
   };
 }
 
