@@ -4,7 +4,7 @@
 
 # POS Pulse
 
-**The Windows desktop POS terminal for the SmartDataPulse pharmacy platform.**
+**Retail Tower OS, the POS track: the Windows cashier terminal for pharmacy branches, built on an architecture and design with AI embedded from the inside.**
 
 <p align="center">
   <a href="docs/product.md"><img alt="Product: POS Pulse" src="https://img.shields.io/badge/product-POS%20Pulse-0f766e?style=flat-square"></a>
@@ -17,7 +17,7 @@
   <a href=".nvmrc"><img alt="Node.js >=20" src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=nodedotjs&logoColor=white"></a>
   <a href="package-lock.json"><img alt="npm lockfile" src="https://img.shields.io/badge/npm-lockfile-cb3837?style=flat-square&logo=npm&logoColor=white"></a>
   <a href="tsconfig.json"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white"></a>
-  <a href="package.json"><img alt="Electron 40" src="https://img.shields.io/badge/Electron-40-47848f?style=flat-square&logo=electron&logoColor=white"></a>
+  <a href="package.json"><img alt="Electron 44" src="https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white"></a>
   <a href="src/renderer"><img alt="React 19" src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=111827"></a>
   <a href="vite.config.ts"><img alt="Vite 8" src="https://img.shields.io/badge/Vite-8-646cff?style=flat-square&logo=vite&logoColor=white"></a>
   <a href="tailwind.config.ts"><img alt="Tailwind 4" src="https://img.shields.io/badge/Tailwind-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white"></a>
@@ -30,33 +30,89 @@
   <a href="migrations"><img alt="Local state: durable" src="https://img.shields.io/badge/local%20state-durable-16a34a?style=flat-square"></a>
   <a href="docs/hardware-matrix.md"><img alt="Hardware: MVP matrix" src="https://img.shields.io/badge/hardware-MVP%20matrix-f97316?style=flat-square"></a>
   <a href=".specify/memory/constitution.md"><img alt="Cards: no capture" src="https://img.shields.io/badge/cards-no%20capture-dc2626?style=flat-square"></a>
+  <a href="#-ai-embedded-by-design"><img alt="AI: embedded by design" src="https://img.shields.io/badge/AI-embedded%20by%20design-8b5cf6?style=flat-square"></a>
+  <a href="CLAUDE.md"><img alt="Work: Jira governed, GitHub main is truth" src="https://img.shields.io/badge/work-Jira%20governed-111827?style=flat-square"></a>
 </p>
 
 ![POS Pulse terminal hero](docs/assets/hero-pos-pulse.svg)
 
 </div>
 
+> **Retail Tower OS** is one product. **POS Pulse** (also written POS-Pulse) is this repository's own surface: the Windows cashier terminal, and the **POS track** of Retail Tower OS. This repo (`Kemetra/POS`) contains no backend, admin frontend, or ERPNext/Frappe code. The product and brand names `POS Pulse` and `SmartDataPulse` remain in use in code, packaging, and docs; the legacy names Data-Pulse-2 / DP2 refer to `Kemetra/Backend-Core`.
+
+---
+
+## 🧩 One project, four development tracks
+
+Retail Tower OS is **one product**. The four repositories below are its development divisions, split by responsibility so each track can be built, tested, and released independently. They are **not separate products**: there is one architecture, one set of contracts, and one AI-embedded design across all four.
+
+| Track | Repository | Responsibility |
+| --- | --- | --- |
+| Backend-Core | [`Kemetra/Backend-Core`](https://github.com/Kemetra/Backend-Core) | Contract and orchestration boundary: APIs, data, workers, tenant/store context, sync operations |
+| **POS** ◀ you are here | [`Kemetra/POS`](https://github.com/Kemetra/POS) | Windows cashier terminal: Electron app, offline state, receipts, POS ↔ Backend-Core sync |
+| Admin-Console | [`Kemetra/Admin-Console`](https://github.com/Kemetra/Admin-Console) | Admin/operator web frontend: tenant/store operations, catalog, inventory views, sync operations |
+| ERPNext-Connector | [`Kemetra/ERPNext-Connector`](https://github.com/Kemetra/ERPNext-Connector) | The only ERPNext/Frappe adapter: DocType mapping, posting |
+
+```text
+POS / Admin-Console -> Backend-Core -> ERPNext-Connector -> ERPNext / Frappe
+```
+
+[`Kemetra/Orchestrator`](https://github.com/Kemetra/Orchestrator) is the technical handbook (architecture, ADRs, runbooks). It is not a track and holds no application code.
+
+---
+
+## 🧠 AI-embedded by design
+
+Retail Tower OS is **AI-embedded**, not AI-integrated. AI is a **founding part of the architecture and the design** of the whole project, native from the inside. It is not a layer added on top, and it is not merely an integration with someone else's model. That holds for every track, this terminal included.
+
+- **Architecture.** Contracts, events, audit, tenant isolation, and the data model are built so that intelligent components can understand and act on them through the same boundaries as every other component.
+- **Design.** Product and UX design: workflows and surfaces are designed with intelligence as a native participant, while humans keep authority.
+
+| AI-integrated (what Retail Tower OS is **not**) | AI-embedded (what Retail Tower OS **is** designed to be) |
+| --- | --- |
+| AI is a feature bolted on top of a finished system | AI is a native layer of the system itself, in its architecture and its design |
+| Reaches data through side channels, screen scraping, or exports | Works on the same typed contracts, data model, and events as every other component |
+| Sits outside the security and audit model | Runs inside it: isolation, authorization, redaction, and audit apply to AI-driven actions like any other actor |
+| Can be removed without changing the architecture | Shapes the architecture: typed contracts, auditable outboxes, and structured, validated data are built to be understood and acted on by intelligent components |
+
+How each track carries it:
+
+- **Backend-Core:** contracts, events, and audit as the substrate.
+- **POS (this repo):** the cashier workflow and offline-first local state.
+- **Admin-Console:** operator surfaces.
+- **ERPNext-Connector:** ERP mapping and posting.
+
+What this means for this repository:
+
+- **Same bridge, same rules.** The renderer reaches the main process only through the typed preload bridge ([`src/shared/bridge-api.ts`](src/shared/bridge-api.ts)). AI-driven behavior gets no privileged IPC, no Node access in the renderer, and no side door around the Electron security boundary (`contextIsolation`, `sandbox`, sender-guarded IPC).
+- **Same contracts, same path.** Anything that needs the platform goes `POS -> Backend-Core` through its OpenAPI contracts. POS never calls ERPNext/Frappe directly, with or without AI in the loop.
+- **Local state is a first-class substrate.** Sales, the outbox, the catalogue read model, and audit events live in migration-backed SQLite with append-only guarantees. That structured, durable, attributable data is what intelligent components are meant to read and act on, within the same transactional and idempotency rules as the cashier.
+- **Designed with intelligence as a participant.** Cashier workflows and surfaces are designed so that assistance can appear inside them, with the cashier's confirmation and without the terminal ever showing a success it has not confirmed (constitution P2 and P9).
+- **No cardholder data, secrets, or PII.** Card capture stays out of scope, and logs and audit events stay redacted. Intelligent components inherit those rules; they are not an exception to them.
+- **Offline-aware.** The terminal keeps selling without a network, and AI-assisted behavior has to degrade honestly in the same way.
+- **Human-governed.** Cashier, manager, and admin keep authority. Role checks and approval gates (manager PIN, supervisor override) apply to AI-assisted actions exactly as they apply to a person.
+
+> AI-embedded describes the architectural and design direction of the project. It is not a claim that a particular AI capability ships today: the source on `main` of this repository contains no model or LLM integration. What is shipped is tracked in [Current implementation status](#current-implementation-status) and the per-feature specs under [`specs/`](specs).
+
 ---
 
 ## 🔗 Synchronization with Retail Tower OS
 
-POS-Pulse is the **edge** of the platform — it speaks only to `Data-Pulse-2`'s contracts, never
-to ERPNext. Catalogue flows **down** for offline lookup; finalized sales are captured locally in
-the outbox, destined for the backend.
+POS Pulse is the **edge** of the platform. For business data it speaks only to Backend-Core's contracts (`/api/pos/v1/*`), never to ERPNext. The one other outbound identity call is the operator sign-in credential exchange with the identity provider (see [`src/main/operator/clerk-client.ts`](src/main/operator/clerk-client.ts)). The resolved catalogue flows **down** into a local read model for offline lookup; finalized sales are captured locally in an outbox and drained **up** to the backend.
 
 <p align="center">
   <img src="docs/assets/architecture/pos-pulse-architecture.svg" alt="Animated POS-Pulse synchronization diagram" width="100%"/>
 </p>
 
-<p align="center"><sub>POS-Pulse synchronization — catalogue down, sales captured to the outbox.</sub></p>
+<p align="center"><sub>POS-Pulse synchronization: catalogue down, sales captured to the outbox and drained up. The diagram labels Backend-Core with its legacy name, Data-Pulse-2.</sub></p>
 
 ```text
-POS-Pulse ──▶ Data-Pulse-2 ──▶ ERPNext Connector ──▶ ERPNext / Frappe
+POS Pulse ──▶ Backend-Core ──▶ ERPNext-Connector ──▶ ERPNext / Frappe
 ```
 
-### Where POS-Pulse sits in Retail Tower OS
+### Where POS Pulse sits in Retail Tower OS
 
-The full five-repo ecosystem, with the control-plane band on top and POS-Pulse as the highlighted **edge node**.
+The full five-repo ecosystem, with the control-plane band on top and POS Pulse as the highlighted **edge node**.
 
 <p align="center">
   <img src="docs/assets/architecture/retail-tower-ecosystem.svg" alt="Retail Tower OS ecosystem diagram — five repositories with POS-Pulse highlighted as the edge node" width="100%"/>
@@ -65,7 +121,24 @@ The full five-repo ecosystem, with the control-plane band on top and POS-Pulse a
 <p align="center"><sub>POS-Pulse is the gold-badged node (★ THIS REPO). A live animated SVG that honors <code>prefers-reduced-motion</code>.</sub></p>
 
 Full detail: [docs/architecture/synchronization.md](docs/architecture/synchronization.md) ·
-Program control plane: [Retail-Tower-Orchestrator](https://github.com/ahmed-shaaban-94/Retail-Tower-Orchestrator).
+Program technical handbook: [Orchestrator](https://github.com/Kemetra/Orchestrator).
+
+### Integration surfaces
+
+Every call below goes to Backend-Core under `/api/pos/v1/*`. The device token identifies the terminal; the operator envelope or identity JWT identifies the signed-in operator (see [`docs/architecture/current.md`](docs/architecture/current.md) §6).
+
+| Purpose | Backend-Core endpoints used | Driver in `src/main` |
+| --- | --- | --- |
+| Terminal pairing | `terminals/pair` | `pairing/` |
+| Operator sign-in, sign-out, roster, takeover | `operators/sign-in` · `operators/sign-out` · `operators/roster` · `operators/takeover/confirm` | `operator/` |
+| Cashier admissions, stuck shifts | `cashier-admissions` (+ `/roster`, `/{id}/end`) · `shifts/stuck` | `operator/` |
+| Catalogue read-down | `catalog/snapshot` | `catalogue/read-down/` |
+| Sale capture-up | `sales` (POST, GET `{saleRef}`) | `sales-sync/` |
+| Returns | `sales/{saleRef}/returns` | `returns/` |
+| Shift cash-up | `shifts` | `shift-cashup/` |
+| Internal vouchers (flag-gated, outside the pilot) | `vouchers/validate` · `vouchers/redeem` · `vouchers/reverse` | `payments/voucher-authority-client/` |
+
+The OpenAPI contracts are owned by Backend-Core. This repo vendors a pinned subset in [`contracts/backend-core`](contracts/backend-core) (7 contract files, see its [`PIN`](contracts/backend-core/PIN)), and a conformance suite under [`tests/contract/backend-core`](tests/contract/backend-core) runs in CI. The generated client types in `src/shared/api-types.ts` come from [`scripts/openapi-snapshot.json`](scripts/openapi-snapshot.json).
 
 ---
 
@@ -89,18 +162,36 @@ Open [the structure flowchart](docs/assets/structure-flowchart.svg) directly for
 
 ## Current implementation status
 
-The active feature is [`specs/010-pos-catalog-read-down-consumption`](specs/010-pos-catalog-read-down-consumption) — planning is complete and implementation is blocked pending backend contract, migration-safety, and owner-approval gates. Everything through product search and barcode lookup is complete.
+> **Source of truth.** GitHub `main` is the technical truth for what is implemented; active work and priorities are tracked in Jira (project **RT**). The `Status:` headers inside `specs/*/spec.md` were written at spec time and often lag the code, so the table below is derived from what exists on `main` (source under `src/main`, migrations, routes, feature flags), not from those headers. [`specs/README.md`](specs/README.md) is a status index with the same caveat.
 
-| Area | Status | Evidence |
-| --- | --- | --- |
-| Secure Electron foundation | Complete | [`specs/001-foundation`](specs/001-foundation) |
-| Terminal pairing | Complete | [`specs/002-terminal-pairing`](specs/002-terminal-pairing) |
-| POS shell and operator sessions | Complete | [`specs/003-pos-ui-shell`](specs/003-pos-ui-shell) · [`specs/004-operator-session`](specs/004-operator-session) |
-| Sales cart and payments tender | Complete | [`specs/005-sales-cart`](specs/005-sales-cart) · [`specs/006-payments-tender`](specs/006-payments-tender) |
-| POS visual system | Complete | [`specs/007-pos-visual-system`](specs/007-pos-visual-system) |
-| Sale finalization and receipts | Complete (internal/dev MVP) | [`specs/008-sale-finalization-and-receipts`](specs/008-sale-finalization-and-receipts) |
-| Product search and barcode lookup | Complete | [`specs/009-product-search-and-barcode-lookup`](specs/009-product-search-and-barcode-lookup) |
-| Catalogue read-down consumption | Planned; blocked pending gates | [`specs/010-pos-catalog-read-down-consumption`](specs/010-pos-catalog-read-down-consumption) |
+The terminal is well past the foundation slices. As of the baseline below, `main` contains the full local cashier loop (pairing, operator sessions, cart, search and scan, tender, sale finalization, receipts via OS print), the two Backend-Core sync legs (catalogue read-down, sale capture-up), and flag-gated returns and shift cash-up.
+
+| Capability | State on `main` | Gate | Spec |
+| --- | --- | --- | --- |
+| Secure Electron foundation (sandbox, isolation, sender-guarded IPC, single-instance lock, hardened Electron fuses) | Implemented | n/a | [`001`](specs/001-foundation) · [architecture](docs/architecture/current.md) |
+| Terminal pairing, device-token binding, device revocation | Implemented | n/a | [`002`](specs/002-terminal-pairing) |
+| Operator sessions: sign-in, cashier PIN and offline grants, manager PIN, roster, takeover, session lock, stuck shifts | Implemented | n/a | [`004`](specs/004-operator-session) · [`016`](specs/016-operator-envelope-adoption) · [`017`](specs/017-offline-pin-reanchor) · [`019`](specs/019-cashier-pin-provisioning) |
+| POS shell and visual system; the V5 sale workspace and shift screens under `src/renderer/v5` | Implemented | n/a | [`003`](specs/003-pos-ui-shell) · [`007`](specs/007-pos-visual-system) · [`022`](specs/022-pos-ui-v4-rescue) · [`023`](specs/023-pos-ui-clean-room) · [`DESIGN.md`](docs/DESIGN.md) |
+| Sales cart | Implemented | `POS_PULSE_FEATURE_CART` | [`005`](specs/005-sales-cart) |
+| Product search and barcode lookup over the local read model | Implemented | `POS_PULSE_FEATURE_PRODUCT_SEARCH` | [`009`](specs/009-product-search-and-barcode-lookup) |
+| Catalogue read-down from Backend-Core (`catalog/snapshot`) into local SQLite | Implemented | n/a | [`010`](specs/010-pos-catalog-read-down-consumption) |
+| Payments tender: cash and external card terminal (recorded, never captured) | Implemented | `POS_PULSE_FEATURE_PAYMENTS` (requires sale finalization) | [`006`](specs/006-payments-tender) |
+| Internal voucher tender | Implemented; outside the pilot | `POS_PULSE_FEATURE_VOUCHER_TENDER` | tracked in Jira RT |
+| Sale finalization and receipts via OS print. Direct ESC/POS printing and cash-drawer kick are **not wired**: the ESC/POS path is a stub that is never selected, and the drawer transport always reports `no_drawer_configured` (a cash sale records a failed drawer row) | Implemented for OS print only; **sale-level tax is hardcoded to 0, so customer-facing fiscal use is blocked** | `POS_PULSE_FEATURE_SALE_FINALIZATION` | [`008`](specs/008-sale-finalization-and-receipts) |
+| Sale capture-up: outbox, drain engine, idempotent retry, dead-letter | Implemented and wired in the composition root; live end-to-end validation is tracked separately | n/a | [`011`](specs/011-sale-sync-capture-up) |
+| Returns (manager/admin, `/app/returns`) | Implemented | `POS_PULSE_FEATURE_RETURNS` | tracked in Jira RT |
+| Shift cash-up (open, pay-in/out, blind-count close, manager approval) and its sync | Implemented | `POS_PULSE_FEATURE_SHIFT_CASHUP` | tracked in Jira RT |
+| Dashboard, audit, inventory, and settings screens | Navigation placeholders only | n/a | n/a |
+| Local audit events | Implemented locally; the audit sync module exists but is not wired into the app | n/a | [`004`](specs/004-operator-session) |
+| Egyptian VAT and fiscal receipt | Not implemented | n/a | [`012`](specs/012-vat-fiscal-receipt) (seed only) |
+| Inventory awareness | Not implemented | n/a | [`013`](specs/013-inventory-awareness) (seed only) |
+| Credit and third-party tender, insurance co-pay | Not implemented | n/a | [`020`](specs/020-pos-credit-and-third-party-tender-flow) · [`0xx`](specs/0xx-insurance-copay) (spec only) |
+| Cashier flow state machine and smoke contract | Not implemented | n/a | [`018`](specs/018-pos-cashier-flow-state-machine-and-smoke-contract) (spec only) |
+| Any AI-driven feature | None on `main` | n/a | see [AI-embedded by design](#-ai-embedded-by-design) |
+
+All feature flags are fail-closed: each is read from its `POS_PULSE_FEATURE_*` environment variable and defaults to off ([`src/main/app/feature-flags.ts`](src/main/app/feature-flags.ts)). A route that shows a placeholder usually means its flag is off.
+
+**Baseline for this table:** `origin/main` at `6ea6ce0` (2026-10-08), 44 SQL migrations (`migrations/0001`–`0044`), 697 test files (`*.test.ts[x]`), 7 vendored Backend-Core contract files, 24 spec folders (`001`–`023` plus `0xx-insurance-copay`). Re-verify against `main` before relying on it. The pilot terminal profile and readiness check are in [`docs/runbook/pilot-terminal-provisioning.md`](docs/runbook/pilot-terminal-provisioning.md).
 
 ---
 
@@ -114,6 +205,9 @@ The active feature is [`specs/010-pos-catalog-read-down-consumption`](specs/010-
 | Local terminal state is migration-backed | [SQLite migrations](migrations) |
 | Hardware scope is intentionally narrow | [hardware matrix](docs/hardware-matrix.md) |
 | Backend/API source of truth is external | [API snapshot](scripts/openapi-snapshot.json) · [constitution](.specify/memory/constitution.md) |
+| POS calls match Backend-Core contracts | [vendored contracts](contracts/backend-core/PIN) · [conformance suite](tests/contract/backend-core) |
+| POS never talks to ERPNext | [current architecture](docs/architecture/current.md) · [synchronization](docs/architecture/synchronization.md) |
+| Work is issue-governed; `main` is the technical truth | [`CLAUDE.md`](CLAUDE.md) · [constitution](.specify/memory/constitution.md) |
 
 ---
 
@@ -170,7 +264,7 @@ The backend SaaS platform lives outside this repository. POS Pulse consumes its 
 
 ## Terminal architecture
 
-POS Pulse is an Electron 40 + React 19 + Vite 8 application. The app is split across the Electron main process, a typed preload bridge, the renderer, local SQLite, and generated API types from the SmartDataPulse platform contract.
+POS Pulse is an Electron 44 + React 19 + Vite 8 application. The app is split across the Electron main process, a typed preload bridge, the renderer, local SQLite, and generated API types from the Backend-Core platform contract. [`docs/architecture/current.md`](docs/architecture/current.md) is the canonical reference for the internal architecture.
 
 ![POS Pulse architecture](docs/assets/architecture-terminal.svg)
 
@@ -182,7 +276,7 @@ flowchart LR
   main["src/main<br/>Electron main process"]
   sqlite[("SQLite<br/>local terminal state")]
   secrets["safeStorage<br/>device secrets"]
-  api["SmartDataPulse API<br/>external SaaS backend"]
+  api["Backend-Core API<br/>/api/pos/v1/*, external repo"]
   hardware["Supported hardware<br/>scanner, printer, drawer"]
 
   cashier --> renderer
@@ -206,10 +300,10 @@ A sale travels through every process boundary — and never crosses one without 
 | :--: | --- | --- |
 | **1** | Renderer | Cashier scans an SKU; React cart state updates in minor-unit money. |
 | **2** | Preload | The typed `contextBridge` contract validates the call payload. |
-| **3** | Main | Zod + money invariants check the transaction before any state mutates. |
-| **4** | Main | A redacted audit event is composed — PII, card, and secret fields are stripped. |
-| **5** | SQLite | The transactional migration runner commits the sale and the audit event together. |
-| **6** | SaaS | Online? An idempotent, contract-backed sync hands the receipt off to the platform. |
+| **3** | Main | Money invariants (integer minor units) and the payment state machine check the transaction before any state mutates. |
+| **4** | Main | One atomic finalize transaction re-checks idempotency, allocates the sale number, and writes the sale and its pending outbox entry. |
+| **5** | Main | A redacted audit event is emitted in the same transaction. PII, card, and secret fields are stripped. Printing is dispatched after the commit, never inside it. |
+| **6** | Backend-Core | When online, the sale-sync engine drains the outbox with an idempotent, contract-backed `POST /api/pos/v1/sales`. Offline, the sale simply waits in the outbox. |
 
 ---
 
@@ -217,23 +311,24 @@ A sale travels through every process boundary — and never crosses one without 
 
 | Path | Purpose |
 | --- | --- |
-| `src/main` | Electron main process · SQLite access · pairing · audit · logging · operator lifecycle · secrets · IPC handlers · observability |
+| `src/main` | Electron main process · composition root (`index.ts`) · SQLite and migrations runner · pairing · operator sessions and PINs · cart · catalogue read-down · payments · sale finalization · receipts and drawer · sale sync · returns · shift cash-up · audit · logging · secrets · IPC handlers · observability |
 | `src/preload` | Typed preload bridge exposed through `contextBridge` |
-| `src/renderer` | React + Vite renderer · shell · routes · UI primitives · operator surfaces · design tokens |
-| `src/shared` | Shared types · money utilities · audit schemas · bridge contracts · pairing types · operator roles |
-| `migrations` | Versioned SQLite migration files applied by the local migration runner |
-| `tests` | Unit and integration coverage outside process-local source test folders |
-| `specs` | Spec Kit artifacts for foundation, pairing, POS shell, operator sessions, sales, payments, visual system, sale finalization, product search, catalogue read-down |
-| `docs` | Documentation index · hardware matrix · product · design system · runbooks · architecture · assets |
-| `scripts` | Codegen, dev-electron launcher, perf seeds, LOC badge automation |
-| `.specify` | Spec Kit infrastructure · constitution v1.3.0 · templates |
-| `.github` | CI workflows · PR template · `windows-latest` gates |
+| `src/renderer` | React + Vite renderer · shell and V5 frame · routes · sale, checkout, returns and shift surfaces · UI primitives · design tokens |
+| `src/shared` | Shared types · money utilities · generated API types · audit schemas · bridge contracts · pairing types · operator roles |
+| `migrations` | 44 versioned SQLite migration files (`0001`–`0044`) applied by the local migration runner |
+| `contracts/backend-core` | Pinned subset of Backend-Core's OpenAPI contracts, vendored for the conformance suite |
+| `tests` | Contract, integration and unit coverage outside process-local source test folders |
+| `specs` | Spec Kit artifacts, `001`–`023` plus `0xx-insurance-copay`: design records, not the authority for current behavior (see [`specs/README.md`](specs/README.md)) |
+| `docs` | Documentation index · current architecture · hardware matrix · product · design system and RT-104 VNext package · runbooks · assets |
+| `scripts` | OpenAPI codegen and verification · contract re-pin · dev-electron launcher · perf seed · LOC badge automation |
+| `.specify` | Spec Kit infrastructure · constitution v1.5.1 · templates |
+| `.github` | CI workflow (static, test, Windows package, docs fast path) · PR template · CODEOWNERS |
 
 ### What this repo owns
-Windows 10/11 x64 Electron POS terminal · secure process boundaries · typed preload bridge · local SQLite migrations and terminal state · pairing, operator session, audit, logging, renderer shell · POS UI primitives, routes, and design tokens · MVP hardware compatibility docs.
+The Windows 10/11 x64 Electron cashier terminal: cashier workflow · secure process boundaries and the typed preload bridge · local and offline state (SQLite, outbox) · receipt behavior · barcode and product search · payment interaction · POS ↔ Backend-Core synchronization · pairing, operator sessions, audit, logging · POS UI primitives and design tokens · MVP hardware compatibility docs.
 
 ### What this repo does **not** own
-SmartDataPulse SaaS backend · backend OpenAPI source-of-truth · dashboard/admin web app · broad hardware compatibility outside the MVP matrix · PCI card-terminal integration or direct card capture.
+Backend-Core (APIs, database, workers, and the OpenAPI source of truth: [`Kemetra/Backend-Core`](https://github.com/Kemetra/Backend-Core)) · the admin/operator frontend ([`Kemetra/Admin-Console`](https://github.com/Kemetra/Admin-Console)) · any ERPNext/Frappe call or mapping ([`Kemetra/ERPNext-Connector`](https://github.com/Kemetra/ERPNext-Connector) is the only ERPNext adapter; POS must never call ERPNext directly) · broad hardware compatibility outside the MVP matrix · PCI card-terminal integration or direct card capture.
 
 ---
 
@@ -241,35 +336,41 @@ SmartDataPulse SaaS backend · backend OpenAPI source-of-truth · dashboard/admi
 
 | Layer | Stack |
 | --- | --- |
-| Desktop runtime | Electron 40 · Windows 10/11 x64 target |
-| Renderer | React 19 · Vite 8 · Tailwind 4 |
+| Desktop runtime | Electron 44 · Windows 10/11 x64 target |
+| Renderer | React 19 · Vite 8 · Tailwind 4 · React Router 7 · Zustand · TanStack Query |
 | Language | TypeScript 5 strict mode |
 | Local data | `better-sqlite3` · SQL migrations |
-| Security | Electron sandbox · context isolation · typed preload bridge · `safeStorage` |
+| Security | Electron sandbox · context isolation · typed preload bridge · `safeStorage` · argon2 PIN hashing · Electron fuses |
+| Hardware | Keyboard-wedge scanner · receipt printing through the OS print path (direct ESC/POS via `node-thermal-printer` is a stub, not selected) · cash-drawer kick is designed but not wired (the transport reports `no_drawer_configured`) |
 | Observability | pino · Sentry Electron |
-| Testing | Vitest · Testing Library · happy-dom · axe-core |
+| Contracts | Pinned OpenAPI snapshot via `openapi-typescript` · vendored Backend-Core contracts · conformance suite |
+| Testing | Vitest · Testing Library · happy-dom · axe-core · sql.js |
 | Packaging | electron-builder unsigned Windows directory build |
 
 ---
 
 ## Getting started
 
-**Prerequisites.** Node.js 20+ · npm with the committed `package-lock.json` · Windows 10/11 x64 for the target runtime and package dry-run.
+**Prerequisites.** Node.js 20+ (`.nvmrc` pins 20; CI runs Node 24) · npm with the committed `package-lock.json` · Windows 10/11 x64 for the target runtime and the package dry-run.
 
 ```bash
-npm install            # install dependencies
+npm install            # install dependencies (postinstall rebuilds better-sqlite3 for Electron)
 npm run dev            # run Vite + Electron together
-npm run typecheck      # both tsconfigs
+npm run build          # build renderer, preload and main
+npm run typecheck      # renderer, main and preload tsconfigs
 npm run lint           # eslint + prettier --check
-npm test               # vitest
+npm test               # vitest run
 npm run package:dir    # electron-builder --win --dir (unsigned)
 ```
 
-**Codegen.** The codegen flow uses the pinned OpenAPI snapshot unless a later feature moves the project to a live contract source.
+**Runtime configuration.** Set `VITE_API_BASE_URL` to the Backend-Core host; unset, it deliberately fails closed. Cashier surfaces are controlled by the fail-closed `POS_PULSE_FEATURE_*` flags (see [Current implementation status](#current-implementation-status)). How a packaged pilot terminal receives its settings is in the [pilot terminal provisioning runbook](docs/runbook/pilot-terminal-provisioning.md).
+
+**Codegen and contracts.** Codegen uses the pinned OpenAPI snapshot; the vendored Backend-Core contracts are re-pinned explicitly.
 
 ```bash
-npm run codegen:api     # regenerate src/shared/api-types.ts
-npm run codegen:verify  # CI helper: regen → diff
+npm run codegen:api       # regenerate src/shared/api-types.ts
+npm run codegen:verify    # CI helper: regen → diff
+npm run contracts:repin   # re-vendor contracts/backend-core from Backend-Core
 ```
 
 ---
@@ -279,18 +380,18 @@ npm run codegen:verify  # CI helper: regen → diff
 | Audience | First reads |
 | --- | --- |
 | **Product & operations** | [Product brief](docs/product.md) · [Hardware matrix](docs/hardware-matrix.md) · [POS shell spec](specs/003-pos-ui-shell/spec.md) |
-| **Engineering** | [Foundation quickstart](specs/001-foundation/quickstart.md) · [Pairing quickstart](specs/002-terminal-pairing/quickstart.md) · [Operator session plan](specs/004-operator-session/plan.md) · [Live terminal map](docs/architecture/pos-pulse-live-map.html) |
+| **Engineering** | [Current architecture](docs/architecture/current.md) · [Spec status index](specs/README.md) · [Foundation quickstart](specs/001-foundation/quickstart.md) · [Pairing quickstart](specs/002-terminal-pairing/quickstart.md) · [Operator session plan](specs/004-operator-session/plan.md) · [Live terminal map](docs/architecture/pos-pulse-live-map.html) |
 | **Design** | [Design system](docs/DESIGN.md) · [Visual system spec](specs/007-pos-visual-system/spec.md) |
 | **Security** | [Constitution](.specify/memory/constitution.md) · [Operator security review](specs/004-operator-session/security-review/s1-review.md) |
-| **Integration** | [Pairing HTTP contract](specs/002-terminal-pairing/contracts/pairing-http.md) · [Operator bridge contract](specs/004-operator-session/contracts/bridge-api.md) · [API snapshot](scripts/openapi-snapshot.json) |
+| **Integration** | [Pairing HTTP contract](specs/002-terminal-pairing/contracts/pairing-http.md) · [Operator bridge contract](specs/004-operator-session/contracts/bridge-api.md) · [Synchronization](docs/architecture/synchronization.md) · [Pinned Backend-Core contracts](contracts/backend-core/PIN) · [API snapshot](scripts/openapi-snapshot.json) |
 
-Full navigation lives in [docs/README.md](docs/README.md). Operational playbooks live in [docs/runbook](docs/runbook) (payments, sale finalization, product search, sales cart, security review).
+Full navigation lives in [docs/README.md](docs/README.md). Operational playbooks live in [docs/runbook](docs/runbook) (payments, sale finalization, catalogue read-down, product search, sales cart, pilot terminal provisioning, security review).
 
 ---
 
 ## Development agreement
 
-POS Pulse follows the project constitution and Spec Kit workflow. Keep changes thin, test first, preserve secure Electron boundaries, avoid unsafe logging, and do not change dependency manifests, lockfiles, migrations, or security posture without explicit approval.
+POS Pulse follows the [constitution](.specify/memory/constitution.md) and the repo operating instructions in [`CLAUDE.md`](CLAUDE.md). The unit of work is a Jira issue (project RT); GitHub `main` is the technical truth. Start from `origin/main`, keep changes to the issue's scope, test first, preserve the secure Electron boundaries, avoid unsafe logging, and do not change dependency manifests, lockfiles, migrations, CI workflows, or security posture without explicit approval. The Spec Kit flow is used to author specs within an issue; the former Maestro and queue-dispatch workflow (`docs/maestro`) is historical reference only.
 
 <div align="center">
 <sub>Precise · accountable · unhurried.</sub>
