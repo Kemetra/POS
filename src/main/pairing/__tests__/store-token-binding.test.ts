@@ -20,7 +20,11 @@ import {
   type PairingStoreDb,
   type PersistInput,
 } from '../store.js';
-import { openDeviceToken, sealDeviceToken } from '../token-binding.js';
+import {
+  openDeviceToken,
+  sealDeviceToken,
+  SEALED_DEVICE_TOKEN_PREFIX as SEALED,
+} from '../token-binding.js';
 
 /**
  * RT-306 (RT-215 10901-(a), owner approval 10906) — the sealed device token is
@@ -193,13 +197,14 @@ describe('RT-306 — a crash mid-re-pair fails closed after restart', () => {
 
   it('an unreadable sealed value is inconsistent, never sent', async () => {
     await store().persist(OLD);
-    for (const sealed of [
+    for (const body of [
+      '',
       '{',
       '{"v":1}',
       '{"v":2,"token":"t","binding":{}}',
       '{"v":1,"token":""}',
     ]) {
-      await secrets.set(KEY, sealed);
+      await secrets.set(KEY, `${SEALED}${body}`);
       const s = store();
       expect(await s.getStatus()).toEqual(INCONSISTENT);
       expect(await sendableReaders(s).reader()).toBeNull();
@@ -294,6 +299,19 @@ describe('RT-306 — normal pairing behaviour is unchanged', () => {
     expect(await sendableReaders(s).recheck()).toBe(OLD_TOKEN);
   });
 
+  it('a pairing answer with an empty token fails the pairing and writes nothing (Codex P2, #582)', async () => {
+    // First pairing: nothing is stored.
+    await expect(store().persist(pairing('term-x', '', 1_760_000_000))).rejects.toThrow();
+    expect(await secrets.get(KEY)).toBeNull();
+    expect(await store().getStatus()).toEqual({ kind: 'unpaired' });
+    // Re-pair: the existing pairing is untouched and still sends its token.
+    await store().persist(OLD);
+    await expect(store().persist({ ...NEW, device_token: '' })).rejects.toThrow();
+    const s = store();
+    expect(await s.getStatus()).toMatchObject({ kind: 'paired', terminal_id: 'term-old' });
+    expect(await sendableReaders(s).reader()).toBe(OLD_TOKEN);
+  });
+
   it('the earlier orphan reasons keep their precedence', async () => {
     // token only (crash on the very first pairing): missing_token, as before.
     await crashMidRepair(OLD);
@@ -317,27 +335,36 @@ describe('RT-306 — sealDeviceToken / openDeviceToken', () => {
   });
 
   it('reads a value that is not a sealed envelope as a legacy raw token', () => {
-    // Backend-Core issues base64url tokens, which never start with `{`.
     expect(openDeviceToken('aB3_-x')).toEqual({ kind: 'legacy', token: 'aB3_-x' });
+    // The contract only promises an opaque token: one that looks like JSON is
+    // still a legacy token, not a broken envelope (Codex P2 on #582).
+    expect(openDeviceToken('{"looks":"like json"}')).toEqual({
+      kind: 'legacy',
+      token: '{"looks":"like json"}',
+    });
   });
 
   it('reads an envelope of an unknown version as malformed, even when well formed', () => {
-    const v2 = JSON.stringify({ v: 2, token: 'tok', binding });
+    const v2 = `${SEALED}${JSON.stringify({ v: 2, token: 'tok', binding })}`;
     expect(openDeviceToken(v2)).toEqual({ kind: 'malformed' });
   });
 
   it('reads an envelope it cannot trust as malformed', () => {
-    expect(openDeviceToken('{"v":1,"token":"t","binding":{"tenant_id":"t"}}')).toEqual({
+    expect(openDeviceToken(`${SEALED}{"v":1,"token":"t","binding":{"tenant_id":"t"}}`)).toEqual({
       kind: 'malformed',
     });
     expect(
       openDeviceToken(
-        '{"v":1,"token":"t","binding":{"tenant_id":"t","branch_id":"b","terminal_id":"x","paired_at":"5"}}',
+        `${SEALED}{"v":1,"token":"t","binding":{"tenant_id":"t","branch_id":"b","terminal_id":"x","paired_at":"5"}}`,
       ),
     ).toEqual({ kind: 'malformed' });
   });
 
   it('never puts the token into an error', () => {
-    expect(() => openDeviceToken('{"v":1,"token":"SECRET-T"')).not.toThrow();
+    expect(() => openDeviceToken(`${SEALED}{"v":1,"token":"SECRET-T"`)).not.toThrow();
+  });
+
+  it('refuses to seal an empty token, without echoing anything secret', () => {
+    expect(() => sealDeviceToken('', binding)).toThrow('device token must be a non-empty string');
   });
 });

@@ -12,10 +12,13 @@
  * pairing epoch, which strictly increases on every re-pair (RT-113 F4), so two
  * pairings never share a binding.
  *
- * Format: a JSON object `{ v: 1, token, binding }`. Backend-Core issues device
- * tokens as base64url, which never starts with `{`, so any other value is a
- * token sealed before RT-306 (`legacy`). It cannot be checked, and stays usable
- * until the next pairing replaces it, so an upgrade locks no terminal out.
+ * Format: {@link SEALED_DEVICE_TOKEN_PREFIX} followed by a JSON object
+ * `{ v: 1, token, binding }`. The pairing contract only promises an opaque
+ * device token, so the marker is a namespaced, versioned prefix rather than a
+ * character any token could start with (Codex P2 on #582). Any value without
+ * the prefix is a token sealed before RT-306 (`legacy`). It cannot be checked,
+ * and stays usable until the next pairing replaces it, so an upgrade locks no
+ * terminal out. A prefixed value that does not parse is `malformed`.
  *
  * Security: the sealed value holds the token. Nothing here logs, and an
  * unreadable value is reported as `malformed` without its content.
@@ -36,6 +39,9 @@ export type OpenedDeviceToken =
 
 const SEALED_VERSION = 1;
 
+/** Marks a sealed value; exported for tests that build malformed ones. */
+export const SEALED_DEVICE_TOKEN_PREFIX = 'rt-pos.sealed-device-token.v1:';
+
 export function bindingOf(row: PairingBinding): PairingBinding {
   return {
     tenant_id: row.tenant_id,
@@ -45,8 +51,15 @@ export function bindingOf(row: PairingBinding): PairingBinding {
   };
 }
 
+/**
+ * Throws on an empty or missing token, before anything is written, so pairing
+ * fails as it did when the SecretStore refused the raw empty value (Codex P2
+ * on #582). The error never carries the token.
+ */
 export function sealDeviceToken(token: string, binding: PairingBinding): string {
-  return JSON.stringify({ v: SEALED_VERSION, token, binding: bindingOf(binding) });
+  if (!isNonEmptyString(token)) throw new Error('device token must be a non-empty string');
+  const envelope = { v: SEALED_VERSION, token, binding: bindingOf(binding) };
+  return `${SEALED_DEVICE_TOKEN_PREFIX}${JSON.stringify(envelope)}`;
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -93,8 +106,8 @@ function parseJson(text: string): unknown {
 
 /** Never throws. `sealed` is a non-empty value read from the SecretStore. */
 export function openDeviceToken(sealed: string): OpenedDeviceToken {
-  if (!sealed.startsWith('{')) return { kind: 'legacy', token: sealed };
-  const parsed = parseJson(sealed);
+  if (!sealed.startsWith(SEALED_DEVICE_TOKEN_PREFIX)) return { kind: 'legacy', token: sealed };
+  const parsed = parseJson(sealed.slice(SEALED_DEVICE_TOKEN_PREFIX.length));
   if (!isSealedEnvelope(parsed)) return { kind: 'malformed' };
   return { kind: 'bound', token: parsed.token, binding: bindingOf(parsed.binding) };
 }
