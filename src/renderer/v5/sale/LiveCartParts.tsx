@@ -2,7 +2,8 @@ import { useRef, useState, type JSX, type MouseEvent } from 'react';
 import type { CartLineItem } from '../../sale/useSaleCartController';
 import { formatHumanMoney } from '../../ui/format/human-format';
 import { V5Icon } from '../foundation/V5Icon';
-import { SaleDialog } from './SaleDialog';
+import { ConfirmDialog } from '../foundation/ConfirmDialog';
+import { Dialog } from '../foundation/Dialog';
 import { focusScanOwner } from '../../scan/scan-anchor';
 import type { RemovalControl } from './useRemovalFocus';
 
@@ -129,7 +130,6 @@ function QuantityControl(props: LineProps): JSX.Element {
 /** Void entry point + its confirmation; a refused void keeps the dialog open (legacy parity). */
 export function VoidControl({ onVoid }: { onVoid: () => Promise<boolean> }): JSX.Element {
   const [open, setOpen] = useState(false);
-  const backRef = useRef<HTMLButtonElement>(null);
   const close = (): void => {
     setOpen(false);
   };
@@ -145,26 +145,20 @@ export function VoidControl({ onVoid }: { onVoid: () => Promise<boolean> }): JSX
         إلغاء البيع
       </button>
       {open && (
-        <SaleDialog label="تأكيد إلغاء البيع" onDismiss={close} initialFocusRef={backRef}>
-          <h3 className="v5-live-dialog-title">إلغاء البيع؟</h3>
-          <p>سيتم إلغاء السلة الحالية.</p>
-          <div>
-            <button ref={backRef} type="button" className="v5-live-btn" onClick={close}>
-              العودة
-            </button>
-            <button
-              type="button"
-              className="v5-live-btn v5-live-btn--danger"
-              onClick={() => {
-                void onVoid().then((ok) => {
-                  if (ok) close();
-                });
-              }}
-            >
-              تأكيد الإلغاء
-            </button>
-          </div>
-        </SaleDialog>
+        <ConfirmDialog
+          label="تأكيد إلغاء البيع"
+          title="إلغاء البيع؟"
+          body="سيتم إلغاء السلة الحالية."
+          cancelLabel="العودة"
+          confirmLabel="تأكيد الإلغاء"
+          tone="danger"
+          onCancel={close}
+          onConfirm={() => {
+            void onVoid().then((ok) => {
+              if (ok) close();
+            });
+          }}
+        />
       )}
     </>
   );
@@ -186,7 +180,7 @@ export function NoteDialog(props: {
     });
   }
   return (
-    <SaleDialog label="ملاحظة الصنف" onDismiss={props.onClose} initialFocusRef={fieldRef}>
+    <Dialog label="ملاحظة الصنف" onCancel={props.onClose} initialFocusRef={fieldRef}>
       <label htmlFor="v5-live-note" className="v5-live-dialog-title">
         ملاحظة الصنف
       </label>
@@ -230,6 +224,6 @@ export function NoteDialog(props: {
           حفظ
         </button>
       </div>
-    </SaleDialog>
+    </Dialog>
   );
 }

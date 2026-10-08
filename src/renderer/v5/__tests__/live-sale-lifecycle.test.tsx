@@ -14,6 +14,7 @@ import { useCatalogueSearchStore } from '../../stores/catalogueSearchStore';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { usePaymentStore } from '../../stores/payment-store';
+import { useDrawerNoticeStore } from '../../ui/receipts/drawer-notice-store';
 import { LiveSaleWorkspace } from '../sale/LiveSaleWorkspace';
 
 /**
@@ -221,6 +222,22 @@ describe('V5 reopens a sale whose payment already settled', () => {
     expect(screen.queryByRole('button', { name: 'بيع جديد' })).not.toBeInTheDocument();
     // The finished cart is never read back again.
     expect(b.fns.snapshot).toHaveBeenCalledOnce();
+  });
+
+  it('RT-241 (D-B1): New sale acknowledges the drawer notice', async () => {
+    signIn();
+    leftCheckoutAfterSettle();
+    const b = bridges(() => Promise.resolve({ kind: 'ok', snapshot: frozenSnapshot() }));
+    b.fns.create.mockReturnValue(new Promise(() => undefined));
+    renderSale(b);
+    const notice = useDrawerNoticeStore.getState();
+    notice.observe(null);
+    notice.observe({ sale_id: 'sale-now', last_successful_open_at: null });
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'بيع جديد' }));
+
+    expect(useDrawerNoticeStore.getState().active).toBeNull();
+    useDrawerNoticeStore.getState().reset();
   });
 
   it('New sale clears a pending catalogue confirmation left over from the finished sale', async () => {

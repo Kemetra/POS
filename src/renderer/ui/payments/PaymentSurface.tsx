@@ -32,6 +32,7 @@ import type {
   TenderBridgeAPI,
 } from '../../../shared/bridge-api.js';
 import type { PaymentAttemptRendererView } from '../../../shared/payments/types.js';
+import { DrawerNoticeInline } from '../receipts/DrawerNotice.js';
 
 /**
  * 006-payments-tender S1 + S3d T152 — PaymentSurface.
@@ -1334,6 +1335,13 @@ export function PaymentSurface({
               </p>
             )}
           </div>
+        </div>
+
+        {/* RT-241 (D-B1) — a drawer that did not open on this session's sale
+            shows here as well as in the status area. A slot only: Checkout's
+            completion recomposition belongs to RT-243 (W1-C). */}
+        <div className="payment-surface__drawer-notice">
+          <DrawerNoticeInline />
         </div>
 
         <button

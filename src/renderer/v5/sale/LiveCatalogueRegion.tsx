@@ -7,7 +7,7 @@ import { useConfirmSaleAdd } from '../../sale/useConfirmSaleAdd';
 import { useCatalogueFreshness } from '../../sale/useCatalogueFreshness';
 import { useScanOwner } from '../../scan/ScanGuardHost';
 import { LiveProductRail } from './LiveProductRail';
-import { SaleDialog } from './SaleDialog';
+import { Dialog } from '../foundation/Dialog';
 import { SaleProductFlags } from './SaleProductFlags';
 import { focusScanOwner } from '../../scan/scan-anchor';
 
@@ -86,9 +86,9 @@ function ConfirmAddDialog(props: {
   if (confirm.product === null) return null;
   const product = confirm.product;
   return (
-    <SaleDialog
+    <Dialog
       label="تأكيد إضافة الصنف"
-      onDismiss={confirm.cancel}
+      onCancel={confirm.cancel}
       initialFocusRef={addRef}
       restoreFocus={false}
     >
@@ -127,6 +127,6 @@ function ConfirmAddDialog(props: {
           إضافة إلى السلة
         </button>
       </div>
-    </SaleDialog>
+    </Dialog>
   );
 }

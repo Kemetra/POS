@@ -18,7 +18,8 @@ import type { PaymentIntentEnvelope } from '../../../../shared/cart/handoff-enve
 import type { ReceiptsBridgeAPI } from '../../../../shared/bridge-api.js';
 import { TopBar } from '../../../shell/regions/TopBar.js';
 import { OperatorBadge } from '../../operator/OperatorBadge.js';
-import { DrawerFailureBanner } from '../../receipts/DrawerFailureBanner.js';
+import { DrawerNoticeBanner, DrawerNoticeInline } from '../../receipts/DrawerNotice.js';
+import { useDrawerNoticeStore } from '../../receipts/drawer-notice-store.js';
 import { PrinterFailureBanner } from '../../receipts/PrinterFailureBanner.js';
 import { ReprintAffordance } from '../../receipts/ReprintAffordance.js';
 import { CashEntry } from '../CashEntry.js';
@@ -152,16 +153,23 @@ describe('RT-240 — payment banners are Arabic only', () => {
     ).toEqual([]);
   });
 
-  it('drawer failure banner', () => {
-    expect(
-      sweep(
-        <DrawerFailureBanner
-          drawerFailure={{ sale_id: 'sale-2', last_successful_open_at: null }}
-          onManualOverride={vi.fn()}
-          now="2026-10-07T00:00:00.000Z"
-        />,
-      ),
-    ).toEqual([]);
+  it('drawer notice, status area and completion (RT-241 D-B1)', () => {
+    const notice = useDrawerNoticeStore.getState();
+    notice.reset();
+    notice.observe(null);
+    notice.observe({ sale_id: 'sale-2', last_successful_open_at: null });
+    try {
+      expect(
+        sweep(
+          <>
+            <DrawerNoticeBanner onManualOverride={vi.fn()} now="2026-10-07T00:00:00.000Z" />
+            <DrawerNoticeInline />
+          </>,
+        ),
+      ).toEqual([]);
+    } finally {
+      notice.reset();
+    }
   });
 
   it('reprint affordance, idle, reprinting and refused', async () => {
