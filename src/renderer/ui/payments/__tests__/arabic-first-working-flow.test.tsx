@@ -3,7 +3,7 @@
  * WORKING (pre-settlement) tender flow.
  *
  * Covers FR-19 / SC-4 for: PaymentCartSummary, TenderSelection, CashEntry,
- * AmountPad, VoucherEntry, ExternalCardTerminalEntry, MoneyRoll.
+ * AmountPad, VoucherEntry, ExternalCardTerminalEntry.
  *
  * WHY THIS TEST SCANS ATTRIBUTES, NOT JUST TEXT NODES
  * ---------------------------------------------------
@@ -59,7 +59,6 @@ import type { PaymentsBridgeAPI, TenderBridgeAPI } from '../../../../shared/brid
 import { AmountPad } from '../AmountPad.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
-import { MoneyRoll } from '../MoneyRoll.js';
 import { PaymentCartSummary } from '../PaymentCartSummary.js';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../../stores/payment-store.js';
@@ -282,11 +281,6 @@ describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () 
   it('ExternalCardTerminalEntry carries no English-only operator-facing string', () => {
     const { container } = render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
     expectNoEnglishOnlyStrings(container, 'ExternalCardTerminalEntry');
-  });
-
-  it('MoneyRoll carries no English-only operator-facing string', () => {
-    const { container } = render(<MoneyRoll valueMinor={1500} />);
-    expectNoEnglishOnlyStrings(container, 'MoneyRoll');
   });
 
   /**

@@ -2175,6 +2175,14 @@ body {
     .payment-surface__body > .payment-surface__amount .payment-surface__amount-value {
       font-size: var(--font-size-3xl);
     }
+    /* RT-243 F1: recorded money wraps under the one-line due row, still pinned. */
+    .payment-surface__body > .payment-surface__amount {
+      flex-wrap: wrap;
+      row-gap: var(--space-2);
+    }
+    .payment-surface__body > .payment-surface__amount > .payment-ledger {
+      flex-basis: 100%;
+    }
     .payment-surface__panes {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 392px;
@@ -2227,6 +2235,52 @@ body {
     /* Left-aligned in its card per the handoff, even under RTL: the value is
        LTR money and reads from its own leading edge. */
     text-align: left;
+  }
+
+  /*
+   * RT-243 F1 — the money already recorded (method and amount per applied
+   * line, then main's change), apart from the amount still due above it. The
+   * separator is a border, so it survives forced-colors.
+   */
+  .payment-ledger {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding-block-start: var(--space-2);
+    border-block-start: 1px solid var(--color-border-soft);
+  }
+
+  .payment-ledger__label {
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-muted);
+  }
+
+  .payment-ledger__lines {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .payment-ledger__line,
+  .payment-ledger__change {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin: 0;
+    color: var(--color-text);
+  }
+
+  .payment-ledger__amount,
+  .payment-ledger__change > span {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .payment-ledger__change {
+    font-weight: var(--font-weight-bold);
   }
 
   /*
@@ -2704,12 +2758,6 @@ body {
 
   .amount-pad__key--del {
     color: var(--color-text-muted);
-  }
-
-  /* Animated change-due readout (MoneyRoll). */
-  .money-roll {
-    display: inline-block;
-    font-variant-numeric: tabular-nums;
   }
 
   /*
