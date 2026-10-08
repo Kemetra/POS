@@ -30,7 +30,7 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
-    "@sentry/electron": "^7.13.0",
+    "@sentry/electron": "^7.20.1",
     "@tanstack/react-query": "^5.100.8",
     "argon2": "0.44.0",
     "better-sqlite3": "^12.9.0",
@@ -40,7 +40,7 @@
     "pino-roll": "^4.0.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-router-dom": "^7.14.2",
+    "react-router-dom": "^7.18.4",
     "zustand": "^4.5.7"
   },
   "devDependencies": {
@@ -58,17 +58,17 @@
     "@vitest/coverage-v8": "^4.1.5",
     "autoprefixer": "^10.5.0",
     "axe-core": "^4.11.4",
-    "concurrently": "^9.2.1",
+    "concurrently": "^9.2.5",
     "cross-env": "^7.0.3",
     "electron": "^44.5.1",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.39.4",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
     "fast-check": "^4.8.0",
     "happy-dom": "^20.9.0",
     "openapi-typescript": "^7.13.0",
-    "postcss": "^8.5.13",
+    "postcss": "^8.5.28",
     "prettier": "^3.8.3",
     "sql.js": "^1.14.1",
     "tailwindcss": "^4.2.4",
