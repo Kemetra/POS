@@ -5,7 +5,7 @@ import {
   type PairingStatus,
   type PairingSubmitResult,
 } from '../../shared/pairing-types';
-import { OPERATOR_IPC_CHANNELS } from '../../shared/operator/channels';
+import { OPERATOR_IPC_CHANNELS, SESSION_LOCK_IPC_CHANNELS } from '../../shared/operator/channels';
 
 const exposeInMainWorld = vi.fn<(name: string, api: unknown) => void>();
 const ipcRendererInvoke = vi.fn<(channel: string, ...args: unknown[]) => Promise<unknown>>();
@@ -117,6 +117,20 @@ describe('preload bridge', () => {
     expect(result).toEqual(expected);
   });
 
+  /** RT-215 10897-A: pairing.recheckRevocation() triggers pairing:recheck, no argument. */
+  it('pairing.recheckRevocation() invokes ipcRenderer with PAIRING_IPC_CHANNELS.RECHECK only', async () => {
+    ipcRendererInvoke.mockResolvedValueOnce({ outcome: 'still_revoked' });
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    const result = await api.pairing.recheckRevocation?.();
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(PAIRING_IPC_CHANNELS.RECHECK);
+    expect(result).toEqual({ outcome: 'still_revoked' });
+  });
+
   it('pairing.submit() forwards each catch-all outcome (network_error, unknown_error) unchanged', async () => {
     for (const outcome of ['network_error', 'unknown_error'] as const) {
       vi.clearAllMocks();
@@ -157,6 +171,10 @@ describe('preload bridge', () => {
         'signIn',
         'signOut',
         'unlockCashier',
+        // RT-117 — inactivity lock
+        'unlockSession',
+        'getLockState',
+        'onSessionStateChanged',
       ].sort(),
     );
   });
@@ -176,5 +194,24 @@ describe('preload bridge', () => {
     expect(ipcRendererInvoke).toHaveBeenCalledWith(
       OPERATOR_IPC_CHANNELS.DISMISS_SHIFT_CLOSED_NOTICE,
     );
+  });
+
+  // RT-117 — the lock surface invokes its documented channels.
+  it('operator lock methods invoke the documented IPC channels', async () => {
+    ipcRendererInvoke.mockResolvedValue({ kind: 'refused', category: 'invalid_input' });
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    await api.operator.unlockSession({ method: 'pin', pin: '1234' });
+    await api.operator.getLockState();
+
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(SESSION_LOCK_IPC_CHANNELS.UNLOCK_SESSION, {
+      method: 'pin',
+      pin: '1234',
+    });
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(SESSION_LOCK_IPC_CHANNELS.GET_LOCK_STATE);
   });
 });

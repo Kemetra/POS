@@ -1,13 +1,15 @@
-import { useCallback, useRef, type JSX } from 'react';
+import { useCallback, useEffect, useRef, type JSX } from 'react';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
-import { format, of } from '../../../shared/money';
+import { formatHumanMoney } from '../../ui/format/human-format';
 import type { AddedLineResult } from '../../sale/useSaleCartController';
 import { useSaleCatalogueController } from '../../sale/useSaleCatalogueController';
 import { useConfirmSaleAdd } from '../../sale/useConfirmSaleAdd';
 import { useCatalogueFreshness } from '../../sale/useCatalogueFreshness';
+import { useScanOwner } from '../../scan/ScanGuardHost';
 import { LiveProductRail } from './LiveProductRail';
-import { SaleDialog } from './SaleDialog';
+import { Dialog } from '../foundation/Dialog';
 import { SaleProductFlags } from './SaleProductFlags';
+import { focusScanOwner } from '../../scan/scan-anchor';
 
 interface Props {
   onLineAdded: (line: AddedLineResult) => void;
@@ -25,6 +27,19 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
   const freshness = useCatalogueFreshness(props.catalogueBridge);
   const focusSearch = useCallback((): void => {
     searchRef.current?.focus();
+  }, []);
+  // RT-239: a wedge burst is a scan wherever focus is; this screen receives it.
+  const { runScan } = catalogue;
+  const receiveScan = useCallback(
+    (code: string): void => {
+      void runScan(code);
+    },
+    [runScan],
+  );
+  useScanOwner(receiveScan);
+  // Arriving on the Sale (sign-in, unlock, «بيع جديد», Back from Checkout): the scan owner has focus.
+  useEffect(() => {
+    focusScanOwner();
   }, []);
   const { recover: clearSearch } = catalogue;
   const recover = useCallback((): void => {
@@ -52,7 +67,7 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
         cartId={catalogue.effectiveCartId}
         ensureCart={catalogue.ensureCart}
         onLineAdded={props.onLineAdded}
-        onResolved={focusSearch}
+        onResolved={focusScanOwner}
         {...(props.cartBridge ? { bridge: props.cartBridge } : {})}
       />
     </>
@@ -71,9 +86,9 @@ function ConfirmAddDialog(props: {
   if (confirm.product === null) return null;
   const product = confirm.product;
   return (
-    <SaleDialog
+    <Dialog
       label="تأكيد إضافة الصنف"
-      onDismiss={confirm.cancel}
+      onCancel={confirm.cancel}
       initialFocusRef={addRef}
       restoreFocus={false}
     >
@@ -86,7 +101,7 @@ function ConfirmAddDialog(props: {
       )}
       <SaleProductFlags product={product} />
       <p dir="ltr" className="v5-live-dialog-price">
-        {format(of(product.price_minor, 'EGP'))}
+        {formatHumanMoney(product.price_minor)}
       </p>
       {confirm.error && (
         <p role="alert" className="v5-live-notice v5-live-notice--danger">
@@ -112,6 +127,6 @@ function ConfirmAddDialog(props: {
           إضافة إلى السلة
         </button>
       </div>
-    </SaleDialog>
+    </Dialog>
   );
 }

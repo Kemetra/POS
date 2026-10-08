@@ -198,13 +198,12 @@ describe('cart.void contract', () => {
     expect(req.cart_id).toBe('cart-uuid-1');
   });
 
-  it('CartVoidRequest accepts optional attribution_operator_id', () => {
+  it('CartVoidRequest carries no attribution (RT-184)', () => {
     const req: CartVoidRequest = {
       cart_id: 'cart-uuid-1',
-      attribution_operator_id: 'manager-op-id',
       idempotency_key: 'uuid-v4-11',
     };
-    expect(req.attribution_operator_id).toBe('manager-op-id');
+    expect(Object.keys(req).sort()).toEqual(['cart_id', 'idempotency_key']);
   });
 
   it('refused reason includes manager_attribution_required', () => {

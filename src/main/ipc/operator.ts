@@ -117,6 +117,20 @@ function asCashierRequest(value: unknown): CashierSignInRequest | null {
   };
 }
 
+/**
+ * RT-117 §A4 L1 — categories only main may emit. The lock audit records a
+ * main-side state change; a renderer must not be able to forge one. RT-113
+ * P1.2: so does the offline grant invalidation. RT-215: likewise the
+ * device-revoked pairing events (system-attributed).
+ */
+const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
+  'operator.session.locked',
+  'operator.session.unlocked',
+  'operator.offline_grant.invalidated',
+  'pairing.device_revoked',
+  'pairing.device_revoked_cleared',
+]);
+
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -165,10 +179,10 @@ function asResetCashierPinRequest(value: unknown): ResetCashierPinRequest | null
 function asProvisionCashierPinRequest(value: unknown): ProvisionCashierPinRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
-  if (!hasNonEmptyStringFields(v, ['event_id', 'target_user_id', 'initial_pin'])) return null;
+  if (!hasNonEmptyStringFields(v, ['event_id', 'target_cashier_id', 'initial_pin'])) return null;
   return {
     event_id: v['event_id'] as string,
-    target_user_id: v['target_user_id'] as string,
+    target_cashier_id: v['target_cashier_id'] as string,
     initial_pin: v['initial_pin'] as string,
   };
 }
@@ -294,7 +308,7 @@ function registerAuditHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): voi
       }
 
       const req = asEmitAuditEventRequest(request);
-      if (req === null) {
+      if (req === null || MAIN_ONLY_AUDIT_CATEGORIES.has(req.action_category)) {
         return refuseInvalid();
       }
 
@@ -376,13 +390,14 @@ function registerRosterHandler(ipcMain: IpcMain, deps: OperatorHandlerDeps): voi
     OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
     async (): Promise<ListBranchRosterResponse> => {
       // Pre-sign-in roster: sourced from pairing state, not an operator session.
-      // The /sign-in route fetches the roster before any operator has signed in;
-      // the paired terminal_id provides the branch scope.
+      // The /sign-in route fetches the roster before any operator has signed in.
+      // RT-113 P2: the device-authenticated roster takes the store from the
+      // paired device itself, so only the paired check remains here.
       const pairingStatus = await pairingStore.getStatus();
       if (pairingStatus.kind !== 'paired') {
         return refuseInvalid();
       }
-      return rosterHandler.listRoster(pairingStatus.branch_id);
+      return rosterHandler.listRoster();
     },
   );
 }

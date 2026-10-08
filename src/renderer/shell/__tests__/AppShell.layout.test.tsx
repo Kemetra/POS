@@ -8,7 +8,7 @@
  *   .top-bar        → block-size: 64px  (T049 / plan S3 definition of done)
  *   .nav-rail       → inline-size: 248px (≥1280px) / 84px (icon-only)
  *   .app-shell__content → flex: 1 (workspace fills remaining space)
- *   data-connection-state → four distinct values (one per ConnectionState)
+ *   no [data-connection-state]: the connection pill is gone (RT-240, I-7)
  *
  * This file covers T047's layout-assertion requirement. Per-region
  * interaction/variant tests live in the per-region test files (T057).
@@ -91,7 +91,9 @@ describe('AppShell layout — T047 (BEM class assertions)', () => {
   it('ScreenTooSmall is shown below 1024px', () => {
     mockMatchMedia(1023);
     renderShell();
-    expect(screen.getByRole('heading', { level: 1, name: 'Screen too small' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: /^الشاشة أصغر من 1024×768\s?\.$/ }),
+    ).toBeInTheDocument();
   });
 
   // Workspace fills remaining space: .app-shell__content has flex:1 in CSS
@@ -100,35 +102,11 @@ describe('AppShell layout — T047 (BEM class assertions)', () => {
     expect(container.querySelector('.app-shell__content')).toBeInTheDocument();
   });
 
-  // Four connection-state visuals are distinct — assert via data-connection-state
-  it.each(['online', 'degraded', 'offline', 'syncing'] as const)(
-    'connection state=%s produces distinct data-connection-state attribute',
-    () => {
-      const { container } = renderShell();
-      // Artificially verify the ConnectionIndicator renders with this state
-      // by checking the indicator exists; state is injected via the dev ?conn= toggle in prod.
-      // In tests, AppShell defaults to useConnectionState initial value ('online').
-      // We assert the indicator is present and carries data-connection-state.
-      const indicator = container.querySelector('[data-connection-state]');
-      expect(indicator).toBeInTheDocument();
-      expect(indicator).toHaveAttribute('data-connection-state');
-      // State tokens must come from the four-value set
-      const validStates = ['online', 'degraded', 'offline', 'syncing'];
-      const rendered = indicator?.getAttribute('data-connection-state') ?? '';
-      expect(validStates).toContain(rendered);
-      cleanup();
-    },
-  );
-
-  // All four connection-state intents are distinct values (tested via ConnectionIndicator directly)
-  it('four connection states have distinct data-intent values (verified in ConnectionIndicator tests)', () => {
-    // This test documents the assertion requirement per T047.
-    // The full four-state distinctness proof lives in ConnectionIndicator.test.tsx
-    // which asserts all four intents are distinct (success/warning/danger/neutral).
-    // Here we confirm the AppShell wires data-connection-state correctly:
+  // RT-240 (I-7): the shell shows no connection pill. Nothing measures the
+  // connection, so a green «Online» would claim an unproven state.
+  it('renders no connection pill', () => {
     const { container } = renderShell();
-    const indicator = container.querySelector('[data-connection-state]');
-    expect(indicator).toBeInTheDocument();
-    expect(indicator).toHaveAttribute('data-intent');
+    expect(container.querySelector('[data-connection-state]')).toBeNull();
+    expect(screen.queryByText('Online')).toBeNull();
   });
 });

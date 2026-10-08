@@ -18,6 +18,14 @@
  *     loads it) every retry of a given sale sends an identical body; a changed body
  *     under the same Idempotency-Key is a 409 payload-hash mismatch on the server.
  *   • Lines come from the frozen `lines_json` snapshot (LineSnapshot[]).
+ *   • RT-225 (`sales.yaml` 1.6.0-draft): `admissionCheckAt` = the sale's
+ *     `settled_at`, present only when `finalized_at` is more than 5 s and at most
+ *     7 days after it (`deriveAdmissionCheckAt`). It is decided from the stored
+ *     Sale alone — `settled_at` and `finalized_at` are written once, in the same
+ *     transaction that enqueues the sale, and the row is immutable — so the value
+ *     is fixed when the sale is first queued and every retry under the same
+ *     Idempotency-Key sends the same body (adding it on a retry would be a 409).
+ *     Only the device-path wire body carries it (`toCashierWireBody`).
  */
 
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
@@ -52,6 +60,11 @@ export interface CaptureSalePayload {
   lines: CaptureSaleLine[];
   /** RT-79: present only for a post-cutoff sale with sendable tender lines. */
   tenders?: CaptureSaleTender[];
+  /**
+   * RT-225: the sale's settled time, for the server's cashier admission-window
+   * check only (`deriveAdmissionCheckAt`). Sent on the device path only.
+   */
+  admissionCheckAt?: string;
 }
 
 export interface BuildCapturePayloadOptions {
@@ -136,11 +149,8 @@ function isCalendarValid(m: RegExpExecArray): boolean {
  * canonical UTC ISO string.
  */
 export function parseTendersSince(raw: string | undefined): string | null {
-  const value = raw?.trim() ?? '';
-  const match = ISO_INSTANT.exec(value);
-  if (match === null || !isCalendarValid(match)) return null;
-  const ms = Date.parse(value);
-  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+  const ms = instantMs(raw?.trim() ?? '');
+  return ms === null ? null : new Date(ms).toISOString();
 }
 
 function isSafeNonNegativeInt(n: unknown): n is number {
@@ -201,6 +211,38 @@ function tendersApply(sale: SaleRow, tendersSince: string | null | undefined): b
   return !Number.isNaN(finalized) && finalized >= Date.parse(tendersSince);
 }
 
+/** RT-225: `admissionCheckAt` is sent only when the finalize lag is MORE than this. */
+export const ADMISSION_CHECK_MIN_GAP_MS = 5_000;
+/** RT-225 (owner decision, 7-day cap): and only when it is AT MOST this (server: else 400). */
+export const ADMISSION_CHECK_MAX_GAP_MS = 7 * 24 * 60 * 60 * 1_000;
+
+/** An explicit-zone, calendar-valid RFC 3339 instant in ms; null otherwise. */
+function instantMs(value: string): number | null {
+  const match = ISO_INSTANT.exec(value);
+  if (match === null || !isCalendarValid(match)) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * RT-225 — the sale's `admissionCheckAt`: its `settled_at` (the moment the
+ * cashier settled it, under the admission live then) when the sale was finalized
+ * more than 5 s and at most 7 days later — typically by boot recovery, which
+ * stamps `finalized_at` at boot. Otherwise null: an ordinary sale keeps exactly
+ * today's body, and a value the server would refuse (later than `occurredAt`, or
+ * more than 7 days before it) is never sent. An unreadable instant is null too
+ * (fail safe). Pure: a function of the immutable Sale row only.
+ */
+export function deriveAdmissionCheckAt(sale: SaleRow): string | null {
+  const settled = instantMs(sale.settled_at);
+  const finalized = instantMs(sale.finalized_at);
+  if (settled === null || finalized === null) return null;
+  const gap = finalized - settled;
+  return gap > ADMISSION_CHECK_MIN_GAP_MS && gap <= ADMISSION_CHECK_MAX_GAP_MS
+    ? sale.settled_at
+    : null;
+}
+
 /**
  * Deterministic external id from the sale. The handoff action id is 008's
  * one-Sale-per-handoff idempotency anchor (unique index), so it is a stable,
@@ -225,6 +267,7 @@ export function buildCapturePayload(
   }));
 
   const tenders = tendersApply(sale, options.tendersSince) ? buildTenders(sale) : [];
+  const admissionCheckAt = deriveAdmissionCheckAt(sale);
 
   return {
     externalId: deriveExternalId(sale),
@@ -237,5 +280,6 @@ export function buildCapturePayload(
     totalMinor: sale.subtotal_minor,
     lines,
     ...(tenders.length > 0 ? { tenders } : {}),
+    ...(admissionCheckAt === null ? {} : { admissionCheckAt }),
   };
 }

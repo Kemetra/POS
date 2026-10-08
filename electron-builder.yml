@@ -5,6 +5,32 @@ directories:
 win:
   target:
     - target: dir
+# RT-164 — Electron fuses, flipped in the packaged binary at package time.
+# There is ONE packaged build and it is always hardened (owner decision D-2):
+# lab/automation that needs Node, an inspector or CDP uses the unpackaged
+# `electron .` build. `--remote-debugging-*` has no fuse; main refuses it
+# instead (src/main/app/launch-switch-guard.ts).
+electronFuses:
+  # ELECTRON_RUN_AS_NODE=1 would turn POS Pulse.exe into a plain Node runtime.
+  runAsNode: false
+  # NODE_OPTIONS code injection into main (Electron already restricts most
+  # options in packaged apps; this removes the env var entirely).
+  enableNodeOptionsEnvironmentVariable: false
+  # --inspect / --inspect-brk / --inspect-port: Node inspector on main.
+  enableNodeCliInspectArguments: false
+  # Load the app only from resources/app.asar, and validate that archive
+  # against the integrity hash electron-builder embeds in the exe.
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
+  # KEPT ON (Electron default), evaluated in RT-164: with it off, the packaged
+  # renderer (Vite ES-module scripts loaded from file://) fails to load and the
+  # window lands on chrome-error://. Turning it off first needs the renderer
+  # served from a custom privileged protocol, which is a separate change.
+  grantFileProtocolExtraPrivileges: true
+  # Left unchanged (default off): the POS keeps no secret in Chromium cookies
+  # (credentials live in the DPAPI-backed SecretStore), and turning this on is
+  # a one-way cookie-store migration.
+  # enableCookieEncryption
 files:
   - dist/**
   - package.json

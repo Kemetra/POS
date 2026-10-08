@@ -47,7 +47,11 @@ export const DEV_OPERATOR_FIXTURE_SESSION_INPUT = {
 } as const;
 
 export interface DevSkipOperatorSignInDeps {
-  /** `app.isPackaged` from Electron. Bypass runs ONLY when this is false. */
+  /**
+   * The shipped-app identity, `isShippedApp(...)` from `app/shipped-app.ts`:
+   * NOT raw `app.isPackaged`, which a renamed copy of the shipped exe reports
+   * as false (RT-165). Bypass runs ONLY when this is false.
+   */
   isPackaged: boolean;
   env: NodeJS.ProcessEnv;
   sessionManager: Pick<SessionManager, 'create' | 'getCurrent'>;

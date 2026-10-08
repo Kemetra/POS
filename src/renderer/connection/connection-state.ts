@@ -32,7 +32,7 @@ export function useConnectionState(): ConnectionStateSlice {
  * the same thing. Connection failure is a banner, never a toast (FR-25).
  */
 export const CONNECTION_BANNER_MESSAGES: Record<Exclude<ConnectionState, 'online'>, string> = {
-  degraded: 'الاتصال بطيء — Connection slow',
+  degraded: 'الاتصال بطيء',
   offline: 'غير متصل — البيع من قائمة الانتظار المحلية',
   syncing: 'جارٍ المزامنة…',
 };

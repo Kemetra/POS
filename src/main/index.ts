@@ -1,8 +1,17 @@
-import { app, BrowserWindow, ipcMain, safeStorage, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session } from 'electron';
 import * as Sentry from '@sentry/electron/main';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
+import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
+import { createSaleBoundaryIpcMain } from './ipc/sale-boundary-guard.js';
+import { registerSessionLockHandlers } from './ipc/session-lock.js';
+import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
+import { createLockStateReader, createSafePointProbe } from './operator/lock-state-reader.js';
+import { wireSessionStatePush } from './operator/session-state-push.js';
+import { wireSessionLockAudit } from './operator/session-lock-audit.js';
+import { createSaleSyncTokenReader } from './operator/sale-sync-token.js';
+import { SESSION_LOCK_IPC_CHANNELS } from '../shared/operator/channels.js';
 import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
 import { registerLogHandler } from './ipc/log.js';
@@ -36,6 +45,10 @@ import { createPaymentAttemptFsm } from './payments/fsm/payment-attempt-fsm.js';
 import { createTenderLineFsm } from './payments/fsm/tender-line-fsm.js';
 import { createIdempotencyHelper } from './payments/idempotency.js';
 import { createPaymentAuditEmitter, type PaymentAuditEvent } from './payments/audit-emitter.js';
+import {
+  bindCheckoutReturnAllowed,
+  bindCheckoutReturnGuard,
+} from './payments/checkout-return-guard.js';
 import { createPaymentsStartHandler } from './payments/handlers/payments-start.js';
 import { createPaymentsConfirmHandler } from './payments/handlers/payments-confirm.js';
 import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel.js';
@@ -64,10 +77,40 @@ import { bindDrawerEventsRepository } from './sales/repositories/drawer-events.r
 import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.repository.js';
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
-import { createSaleSyncEngine } from './sales-sync/sale-sync-engine.js';
+import {
+  CASHIER_CLAIM_REFUSED_RESET_ENV,
+  isCashierClaimRefusedResetRequested,
+  resetCashierClaimRefusedOnStart,
+} from './sales-sync/cashier-claim-refused-reset.js';
+import {
+  createSaleSyncEngine,
+  logSaleSyncPauseTransition,
+  SALE_SYNC_BACKOFF_POLICY,
+} from './sales-sync/sale-sync-engine.js';
+import { createSaleSyncStatusReader } from './sales-sync/sale-sync-status-reader.js';
+import { composeSaleSyncDevicePath } from './sales-sync/compose-device-path.js';
+import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
+import {
+  createPairedWorkers,
+  withPairedNotification,
+  type PairedWorkers,
+} from './app/paired-workers.js';
 import { parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
+import { SALE_SYNC_DRAIN_TIMEOUT_MS, scheduleSaleSync } from './sales-sync/schedule-sale-sync.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
+import { registerReturnsHandlers } from './ipc/returns.js';
+import {
+  composeReturns,
+  RETURNS_DRAIN_TIMEOUT_MS,
+  scheduleReturnsResolver,
+} from './returns/compose-returns.js';
+import {
+  pairedShiftScope,
+  registerShiftSync,
+  startShiftSync,
+} from './shift-cashup/compose-shift-cashup.js';
+import { registerShiftCashupIpc } from './ipc/shift-cashup.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
 import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
@@ -88,14 +131,23 @@ import {
 import { createPrintDispatcher } from './receipts/print-dispatcher.js';
 import { dispatchFirstPrintOnFinalize } from './receipts/dispatch-first-print-on-finalize.js';
 import { createDrawerKickDispatcher } from './drawer/drawer-kick.js';
+import type { DrawerKickTransport } from './drawer/drawer-kick-transport.js';
 import { randomUUID } from 'node:crypto';
 import { createWorkerRegistry } from './app/bootstrap-workers.js';
 import { createWindowFactory } from './app/bootstrap-window.js';
 import { createDatabaseHolder } from './app/bootstrap-db.js';
+import {
+  assessCashierProfile,
+  describeCashierProfileRefusal,
+  parseFeatureFlags,
+} from './app/feature-flags.js';
+import { assessLaunchSwitches } from './app/launch-switch-guard.js';
+import { isShippedApp } from './app/shipped-app.js';
+import { acquireSingleInstance, restoreAndFocus } from './app/single-instance.js';
 import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
-import { createLogger } from './logging/logger.js';
+import { createLogger, waitForLogDrain } from './logging/logger.js';
 import { initSentryMain } from './observability/sentry-main.js';
 import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
 import { applyDevSkipPairingIfRequested } from './pairing/dev-skip-pairing.js';
@@ -114,10 +166,40 @@ import { createBackendClient } from './operator/backend-client.js';
 import { SessionManager } from './operator/session-manager.js';
 import { CashierSignInHandler, SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
-import { CheckActiveSessionHandler } from './operator/check-active-session.js';
+import { createCashierAdmissionClient } from './operator/cashier-admission-client.js';
+import type { CashierAdmissionDeps } from './operator/cashier-admission.js';
+import { CashierAdmissionKeeper } from './operator/cashier-admission-keeper.js';
+import { createOfflineGrantStore } from './operator/offline-grant-store.js';
+import {
+  createOfflineGrantWiring,
+  scopeFromPairingStatus,
+  withOfflineGrantPairing,
+} from './operator/offline-grant-wiring.js';
 import { RosterHandler } from './operator/roster-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
-import { LifecycleCascade } from './operator/lifecycle-cascade.js';
+// RT-215 — device-revoked state + pairing recovery.
+import {
+  createDeviceAuthDetector,
+  deviceAuthConfirmDelayMs,
+  withDeviceAuthObservation,
+} from './pairing/device-auth-detector.js';
+import {
+  createRevocationRecheckTokenRead,
+  createSendableDeviceTokenRead,
+  createSendableDeviceTokenReader,
+} from './pairing/device-token.js';
+import {
+  createDeviceRevocationFlow,
+  createRosterConfirmationProbe,
+  deviceRevocationGrantHooks,
+  withDeviceRevocationRecovery,
+  type DeviceRevocationFlow,
+} from './app/device-revocation-flow.js';
+import { createRevocationRecheck } from './app/revocation-recheck.js';
+import { purgeOtherTerminalPinRecords } from './operator/pin-records-purge.js';
+import { purgeOtherTerminalManagerPinRecords } from './operator/manager-pin-store.js';
+import { managerIdentityOf } from './operator/manager-pin-enrollment.js';
+import { PAIRING_PUSH_CHANNELS, type PairingRecheckResult } from '../shared/pairing-types.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
 import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
 import { PinManagementHandler } from './operator/pin-management.js';
@@ -125,6 +207,30 @@ import { ForcedCloseHandler } from './operator/forced-close-handler.js';
 import { StuckShiftsHandler } from './operator/stuck-shifts-handler.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
+
+/**
+ * RT-203 — ONE POS process per terminal. Taken FIRST, before anything else in
+ * main is built.
+ *
+ * A second launch does not get the lock: it quits right here and never opens
+ * the database, runs migrations, starts a worker, registers IPC, builds the
+ * printer/drawer ports or creates a window. The whole boot below is chained on
+ * `singleInstanceReady`, which is `null` for that process.
+ *
+ * The process-local single-flight structures depend on this lock: sale sync,
+ * the catalogue read-down, the finalize listener, the payments deferred-reversal
+ * resolver, the returns resolver/dispatcher (and the returns payout), the drawer
+ * double-kick guard and printer access. See `app/single-instance.ts` and
+ * `docs/architecture/current.md` §3.
+ *
+ * On a second launch the running instance restores and focuses its cashier
+ * window: the tracked `mainWindow`, never "any window" (the hidden offscreen
+ * print window is a BrowserWindow too).
+ */
+let mainWindow: BrowserWindow | undefined;
+const singleInstanceReady = acquireSingleInstance(app, () => {
+  restoreAndFocus(mainWindow);
+});
 
 /**
  * 002-terminal-pairing US2: API base URL for the pair endpoint. Reads
@@ -195,6 +301,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = process.env['NODE_ENV'] === 'development';
 
 /**
+ * RT-165 — the trusted shipped-app identity. Every dev/production security
+ * decision below (dev bypasses, SecretStore refusal, migrations source) keys
+ * on this, never on `app.isPackaged` alone: a renamed copy of the shipped exe
+ * reports `isPackaged === false` but still runs the shipped `app.asar`.
+ */
+const shippedApp = isShippedApp({
+  isPackaged: app.isPackaged,
+  appPath: app.getAppPath(),
+});
+
+/** RT-164 — longest a refused launch waits for its log line to reach disk. */
+const LAUNCH_REFUSAL_LOG_DRAIN_MS = 2000;
+
+/**
  * The trusted renderer origin allow-list. Dev = the Vite server; prod = the
  * packaged renderer dir on disk (`pathToFileURL` → a normalized `file://` URL,
  * forward slashes on Windows). SINGLE SOURCE OF TRUTH (#370): consumed by BOTH
@@ -216,7 +336,7 @@ function resolveRendererOrigin(): string {
  * it stays the single source of truth (#370) shared with the IPC sender guard
  * wired in `whenReady`.
  */
-const createWindow = createWindowFactory({
+const buildMainWindow = createWindowFactory({
   isDev,
   BrowserWindow,
   session,
@@ -225,6 +345,11 @@ const createWindow = createWindowFactory({
   rendererFilePath: path.join(__dirname, '../renderer/index.html'),
   devServerUrl: 'http://localhost:5173',
 });
+
+/** Build the cashier window and track it as the RT-203 focus target. */
+const createWindow = (): void => {
+  mainWindow = buildMainWindow();
+};
 
 /**
  * Enumerate the system printers via a live window's webContents
@@ -258,9 +383,11 @@ async function getCurrentPrinters(): Promise<PrinterInfoLike[]> {
  *     so they sit at `<app.getAppPath()>/migrations` (inside `app.asar`; the
  *     builder-patched `fs` reads them transparently). Using cwd here crashes the
  *     packaged exe (cwd is wherever the user launched it, not the repo).
+ *   - RT-165: keyed on `shippedApp`, so a renamed shipped exe also reads the
+ *     bundled migrations, never `*.sql` from whatever directory it ran in.
  */
 function resolveMigrationsDir(): string {
-  return app.isPackaged
+  return shippedApp
     ? path.join(app.getAppPath(), 'migrations')
     : path.join(process.cwd(), 'migrations');
 }
@@ -294,9 +421,17 @@ const dbHolder = createDatabaseHolder({ logger: console });
  */
 const workerRegistry = createWorkerRegistry({ logger: console });
 
-app
-  .whenReady()
-  .then(async () => {
+/**
+ * RT-202 — once-latch for the paired-only workers (read-down driver, finalize
+ * listener, sale-sync engine). Built inside `whenReady` (it needs the main
+ * logger); held here so `closeDbHandle()` can refuse a late start — a pairing
+ * that completes while the app is quitting must not build a worker against a DB
+ * handle that is about to close.
+ */
+let pairedWorkers: PairedWorkers | undefined;
+
+singleInstanceReady
+  ?.then(async () => {
     // T062 — initialize loggers FIRST inside whenReady, before any
     // other subsystem. `app.getPath('logs')` is only available after
     // `whenReady` fires, so this is the earliest possible site.
@@ -317,6 +452,28 @@ app
     });
     mainLogger.info({ logsDir, appVersion }, 'app:logger-ready');
 
+    // RT-164 — a PACKAGED build refuses debugging switches (`--remote-debugging-*`
+    // has no Electron fuse; `--inspect*` is refused here as well as by the fuse).
+    // Checked as early as logging allows: before Sentry, the DB, any IPC
+    // handler or any window. Only switch NAMES are logged, never their values.
+    // pino-roll writes asynchronously and `flush()` does not wait for it, so the
+    // exit waits for the stream to drain (bounded) or the line is lost.
+    const launchSwitches = assessLaunchSwitches({
+      isPackaged: app.isPackaged,
+      appPath: app.getAppPath(),
+      argv: process.argv,
+      hasSwitch: (name) => app.commandLine.hasSwitch(name),
+    });
+    if (!launchSwitches.ok) {
+      mainLogger.error(
+        { reason: launchSwitches.reason, switches: launchSwitches.switches },
+        'app:debug_switch_refused',
+      );
+      await waitForLogDrain(mainLogger, LAUNCH_REFUSAL_LOG_DRAIN_MS);
+      app.exit(1);
+      return;
+    }
+
     // T068 — initialise Sentry AFTER the main logger is up but BEFORE
     // migrations / window creation. Sentry's `init` is wrapped in
     // try/catch inside `initSentryMain`; a thrown init logs one warn
@@ -330,6 +487,32 @@ app
       appVersion,
     });
 
+    // RT-162 (RT-160 FU-1 / owner decision D-1) — fail-closed cashier profile.
+    // PAYMENTS on with SALE_FINALIZATION off would settle money with no Sale
+    // row, receipt, outbox entry or Backend-Core capture, so it is refused HERE,
+    // in trusted main, before the DB opens, before any payment IPC is
+    // registered and before the window exists. The dialog is the ASYNC
+    // showMessageBox, not showErrorBox: the synchronous one blocks the event
+    // loop, and the packaged build showed the async pino write of this log line
+    // stalling behind it. We exit explicitly once the dialog closes: without a
+    // window, `window-all-closed` never fires and the process would linger.
+    const startupFeatureFlags = parseFeatureFlags(process.env);
+    const cashierProfile = assessCashierProfile(startupFeatureFlags);
+    if (!cashierProfile.ok) {
+      mainLogger.error(
+        { reason: cashierProfile.reason, features: startupFeatureFlags },
+        'app:cashier_profile_refused',
+      );
+      const refusal = describeCashierProfileRefusal(cashierProfile.reason);
+      const exitRefused = (): void => {
+        app.exit(1);
+      };
+      void dialog
+        .showMessageBox({ type: 'error', title: refusal.title, message: refusal.body })
+        .then(exitRefused, exitRefused);
+      return;
+    }
+
     // T040 + R9 — open ONE shared DB handle, run migrations, then keep
     // the handle alive for the SecretStore. Failure during migrations
     // rethrows into the .catch below, which calls app.exit(1).
@@ -342,13 +525,13 @@ app
     runMigrations({ db: bindMigrationsDb(db), files });
     mainLogger.info({ count: files.length }, 'db:migrations-applied');
 
-    // 009 T049b — dev-only catalogue fixture seed. Fail-closed: no-op in any
-    // packaged build (the env var is never consulted there) and unless
+    // 009 T049b — dev-only catalogue fixture seed. Fail-closed: no-op in the
+    // shipped app (the env var is never consulted there; RT-165) and unless
     // POS_PULSE_DEV_SEED_CATALOGUE is truthy. Lets the live T049a surface +
     // S5 review tasks exercise real rows. Meant to run alongside the
     // POS_PULSE_DEV_SKIP_* flags (same dev-tenant).
     applyDevSeedCatalogueIfRequested({
-      isPackaged: app.isPackaged,
+      isPackaged: shippedApp,
       env: process.env,
       db: db,
       logger: mainLogger,
@@ -361,27 +544,72 @@ app
     const secretStore = createSecretStore({
       handle: db,
       safeStorage,
-      isPackaged: app.isPackaged,
+      isPackaged: shippedApp,
     });
     // Note (Phase 5 R8): SecretStore still uses console.warn/error
     // placeholders. Swap to mainLogger is a deferred follow-up — out
     // of Phase 8 scope.
 
+    // RT-113 P1.2 — the sealed offline grant store, wired: the cashier-admission
+    // grant seam (below), the pairing purge + new epoch on every pairing change
+    // (the wrapper; `src/main/pairing/` is untouched), and the 60 s clock tick
+    // (OD7), stopped with the other workers before the DB closes (RT-198 latch).
+    const offlineGrants = createOfflineGrantWiring({
+      store: createOfflineGrantStore({
+        db,
+        safeStorage,
+        now: () => new Date(),
+        logger: mainLogger,
+      }),
+      audit: new AuditEmitter(bindAuditEventsStoreDb(db)),
+      uuid: () => randomUUID(),
+      now: () => new Date(),
+      logger: mainLogger,
+    });
+
     // 002-terminal-pairing T011/T013 — construct the pairing store on
     // the shared DB handle + SecretStore. The store is the only module
     // that touches both halves of pairing state.
-    const pairingStore = createPairingStore({
+    const pairingStore = withOfflineGrantPairing(
+      createPairingStore({
+        secretStore,
+        db: bindPairingStoreDb(db),
+        deviceTokenKey: DEVICE_TOKEN_KEY,
+      }),
+      offlineGrants,
+    );
+    offlineGrants.setScope(scopeFromPairingStatus(await pairingStore.getStatus()));
+    offlineGrants.start();
+    workerRegistry.register('offline grant clock tick', () => {
+      offlineGrants.stop();
+    });
+    // RT-215 — the ONE reader of the device token for sending: null unless the
+    // pairing is `paired`, so a revoked device never sends its (still sealed)
+    // token. The revocation flow is built further down (it needs the keeper);
+    // it is late-bound here, like `saleBoundaryProbe`.
+    const readSendableDeviceToken = createSendableDeviceTokenReader({
+      pairingStore,
       secretStore,
-      db: bindPairingStoreDb(db),
       deviceTokenKey: DEVICE_TOKEN_KEY,
     });
+    const deviceRevocation: Pick<DeviceRevocationFlow, 'onConfirmed' | 'onPaired'> & {
+      hasSession: () => boolean;
+      /** RT-215 10897-A — the "Check again" (`pairing:recheck`), bound below. */
+      recheck: () => Promise<PairingRecheckResult>;
+    } = {
+      onConfirmed: () => undefined,
+      onPaired: () => Promise.resolve(),
+      hasSession: () => false,
+      recheck: () => Promise.resolve({ outcome: 'unreachable' }),
+    };
 
     // 002-terminal-pairing dev bypass — seeds fixture pairing state so the
     // renderer routes past /pairing in unpackaged dev builds.
-    // SECURITY: isPackaged guard is inside applyDevSkipPairingIfRequested;
-    // this call is a no-op in every packaged build regardless of env vars.
+    // SECURITY: the shipped-app guard is inside applyDevSkipPairingIfRequested;
+    // this call is a no-op in the shipped app (renamed exe included, RT-165)
+    // regardless of env vars.
     await applyDevSkipPairingIfRequested({
-      isPackaged: app.isPackaged,
+      isPackaged: shippedApp,
       env: process.env,
       pairingStore,
       logger: mainLogger,
@@ -396,19 +624,75 @@ app
       fetch: globalThis.fetch.bind(globalThis),
       baseUrl: resolveApiBaseUrl(),
     });
-    const pairingService = createPairingService({
-      store: pairingStore,
-      network: pairingNetwork,
-      pairingLog: createPairingLog(mainLogger),
-      clock: () => new Date(),
-    });
+    // RT-202 — pairing happens in the renderer WITHOUT a process relaunch, so the
+    // paired-only workers cannot be bound only at boot. They register a starter
+    // with this latch (at the sites below); it fires at boot when already paired
+    // and, for a first-run terminal, right after the pairing is persisted.
+    const pairedWorkersLatch = createPairedWorkers({ logger: mainLogger });
+    pairedWorkers = pairedWorkersLatch;
+    // Re-read the scope from the pairing store (not from the submit result) so the
+    // workers bind the SAME terminal_id payments writes (#380 / F-007 lockstep).
+    const notifyPairedFromStore = async (): Promise<void> => {
+      try {
+        const status = await pairingStore.getStatus();
+        if (status.kind !== 'paired') return;
+        pairedWorkersLatch.notifyPaired({
+          tenant_id: status.tenant_id,
+          branch_id: status.branch_id,
+          terminal_id: status.terminal_id,
+        });
+      } catch (err) {
+        mainLogger.error(
+          { error: err instanceof Error ? err.message : String(err) },
+          'paired_workers:notify_failed',
+        );
+      }
+    };
+    // The ONLY pairing service handed to the IPC handler is the wrapped one, so a
+    // successful in-process pairing always notifies the latch. `src/main/pairing/`
+    // itself is unchanged.
+    // RT-215: every successful pairing also runs the recovery step (detector
+    // reset, other terminals' PIN records deleted, revocation-cleared audit).
+    const pairingService = withPairedNotification(
+      withDeviceRevocationRecovery(
+        createPairingService({
+          store: pairingStore,
+          network: pairingNetwork,
+          pairingLog: createPairingLog(mainLogger),
+          clock: () => new Date(),
+        }),
+        {
+          getStatus: () => pairingStore.getStatus(),
+          onPaired: (input) => deviceRevocation.onPaired(input),
+          // Review F3: no pairing while an operator session is alive.
+          hasSession: () => deviceRevocation.hasSession(),
+        },
+      ),
+      notifyPairedFromStore,
+    );
 
     // #370 (LOW hardening) — wrap ipcMain ONCE so every handler is sender-origin
     // guarded (defense-in-depth on the renderer→main trust boundary). Uses the
     // SAME `resolveRendererOrigin()` the `will-navigate` allow-list uses, so the
     // navigation check and the IPC check cannot drift. Every `register…` below
     // receives the guarded instance — zero registrar edits (they take IpcMain).
-    const guardedIpcMain = createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin());
+    // RT-117 (RT-116 §2.5) — wrap ONCE more so every handler is refused while
+    // the operator session is LOCKED unless its channel is on the allowlist.
+    // The session manager is built below; bind the probe to it there.
+    const sessionLockProbe: { isLocked: () => boolean } = { isLocked: () => false };
+    // RT-113 P2 — after EVERY cart/payments/tender call, re-check whether a
+    // session that lost its authority has reached its safe point (one choke
+    // point; bound to the keeper once it is built below).
+    const saleBoundaryProbe: { recheck: () => void } = { recheck: () => undefined };
+    const guardedIpcMain = createSaleBoundaryIpcMain(
+      createSessionLockGuardedIpcMain(
+        createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
+        () => sessionLockProbe.isLocked(),
+      ),
+      () => {
+        saleBoundaryProbe.recheck();
+      },
+    );
 
     // Register IPC handlers BEFORE the first window loads so the renderer's
     // first call cannot race the registration.
@@ -426,52 +710,12 @@ app
       if (typeof dsn === 'string' && dsn.trim().length > 0) {
         cfg.sentryDsn = dsn;
       }
-      // 005-sales-cart T001 — cart feature flag (default false).
-      // Truthy values: '1', 'true', 'yes', 'on' (case-insensitive).
-      // Anything else, or unset, leaves the flag disabled.
-      const cartRaw = process.env['POS_PULSE_FEATURE_CART'];
-      const cartEnabled =
-        typeof cartRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(cartRaw.trim().toLowerCase());
-      // 006-payments-tender S1 — payments feature flag (default false).
-      // The type + renderer-store binding shipped with 006; the env-var read was missed
-      // at the time. This backfill brings 006 in line with the cart pattern: same truthy-
-      // value contract; disabled-by-default is the fail-safe (PaymentSurface stays hidden
-      // and 005's cart-handoff slot falls back to its pre-006 behaviour).
-      const paymentsRaw = process.env['POS_PULSE_FEATURE_PAYMENTS'];
-      const paymentsEnabled =
-        typeof paymentsRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(paymentsRaw.trim().toLowerCase());
-      // 008-sale-finalization-and-receipts T002 — sale_finalization feature flag (default false).
-      // Same truthy-value contract as cart. Disabled-by-default is the fail-safe: 006 still
-      // settles payments but 008's finalize listener short-circuits — no receipt prints, no
-      // drawer kicks, no audit-event emits. See `docs/runbook/008-sale-finalization-and-receipts.md`
-      // (authored at Slice 6 T524 / T525) for the rollback path.
-      const saleFinalizationRaw = process.env['POS_PULSE_FEATURE_SALE_FINALIZATION'];
-      const saleFinalizationEnabled =
-        typeof saleFinalizationRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(saleFinalizationRaw.trim().toLowerCase());
-      // 009-product-search-and-barcode-lookup T049a — productSearch flag (default false).
-      // Same truthy-value contract as cart. Mounts the catalogue surface only when
-      // BOTH this and `cart` are on (the surface needs the Sale cart to receive lines).
-      const productSearchRaw = process.env['POS_PULSE_FEATURE_PRODUCT_SEARCH'];
-      const productSearchEnabled =
-        typeof productSearchRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(productSearchRaw.trim().toLowerCase());
-      // RT-103 — voucherTender flag (default false). Vouchers are excluded from the
-      // pilot (RT-10 D2): off keeps the voucher tile disabled at checkout. Same
-      // truthy-value contract as cart.
-      const voucherTenderRaw = process.env['POS_PULSE_FEATURE_VOUCHER_TENDER'];
-      const voucherTenderEnabled =
-        typeof voucherTenderRaw === 'string' &&
-        ['1', 'true', 'yes', 'on'].includes(voucherTenderRaw.trim().toLowerCase());
-      cfg.features = {
-        cart: cartEnabled,
-        payments: paymentsEnabled,
-        saleFinalization: saleFinalizationEnabled,
-        productSearch: productSearchEnabled,
-        voucherTender: voucherTenderEnabled,
-      };
+      // 005 cart / 006 payments / 008 saleFinalization / 009 productSearch /
+      // RT-103 voucherTender / RT-15 returns — all six flags default false (fail-closed).
+      // RT-162: parsing lives in `app/feature-flags.ts` (one truthy parser,
+      // unchanged semantics). Re-parsed per call, as before; the PAYMENTS-
+      // without-SALE_FINALIZATION profile never reaches here (refused at startup).
+      cfg.features = parseFeatureFlags(process.env);
       return cfg;
     };
     registerAppConfigHandler(guardedIpcMain, getAppConfig);
@@ -479,7 +723,12 @@ app
     // 002-terminal-pairing T013 + T025 — wire BOTH pairing channels.
     // T025 lands `pairing:submit`; the SUBMIT handler validates the
     // argument shape and forwards the service result unchanged.
-    registerPairingHandlers(guardedIpcMain, { store: pairingStore, service: pairingService });
+    // RT-215 10897-A: + `pairing:recheck` (the "Check again"; late-bound below).
+    registerPairingHandlers(guardedIpcMain, {
+      store: pairingStore,
+      service: pairingService,
+      recheck: () => deviceRevocation.recheck(),
+    });
 
     // 004-operator-session — wire `operator.*` IPC.
     //
@@ -491,15 +740,19 @@ app
     // that always refuses — the app still launches and `/sign-in` is
     // reachable, but submit fails with the generic refusal copy. CI
     // and production builds set the key; the stub is dev-only.
-    const operatorJwtHolder = createJwtHolder();
+    // RT-215 (Codex P1): neither holder accepts a credential while the device
+    // is revoked, so a sign-in that completes late cannot repopulate one.
+    const refuseWhileRevoked = { refuseWhile: () => pairingStore.isDeviceRevoked() };
+    const operatorJwtHolder = createJwtHolder(refuseWhileRevoked);
     // 016 (review HIGH) — the SECOND credential seam. DP-2 splits POS auth:
     //   • operatorJwtHolder holds the provider JWT (`operator-identity`) for
     //     sign-out + stuck-shifts + the takeover/confirm CALL (028 §6 CM-1).
     //   • operatorEnvelopeHolder holds the opaque pos_operator ENVELOPE (#559,
     //     `operatorAuthorization`) read ONLY by the sale-sync getOperatorToken
     //     closures. Keyed on backend_session_id, in-process only, never bridged.
-    const operatorEnvelopeHolder = createJwtHolder();
+    const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);
     const operatorSessionManager = new SessionManager();
+    sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
     const apiBaseUrl = resolveApiBaseUrl();
     const operatorBackend = createBackendClient({
       baseUrl: apiBaseUrl,
@@ -507,13 +760,11 @@ app
     });
     const operatorProtoStore = new ProtoSessionStore();
     const clerkExchanger = resolveClerkExchanger(mainLogger);
-    const deviceTokenAttestation = async (): Promise<string> => {
-      const status = await pairingStore.getStatus();
-      if (status.kind !== 'paired') return '';
-      const token = await secretStore.get(DEVICE_TOKEN_KEY);
-      return token ?? '';
-    };
+    const deviceTokenAttestation = async (): Promise<string> =>
+      (await readSendableDeviceToken()) ?? '';
     const operatorSignInHandler = new SignInHandler({
+      // RT-215 (Codex P1): a late success under a revoked/replaced pairing is dropped.
+      pairingEpoch: () => pairingStore.getPairingEpoch(),
       clerk: clerkExchanger,
       backend: operatorBackend,
       sessionManager: operatorSessionManager,
@@ -527,14 +778,64 @@ app
       deviceTokenAttestation,
       logger: mainLogger,
     });
-    const checkActiveSessionHandler = new CheckActiveSessionHandler({
-      backend: operatorBackend,
+    // RT-215 — the ONE device-401 detector. Every device-bearer client below
+    // (cashier admissions: sign-in, takeover, heartbeat, roster, end; the
+    // catalogue read-down) is built on its observed fetch. Revocation needs two
+    // consecutive device 401s, the second from a roster call min(30 s, TTL/2)
+    // later on an UNOBSERVED client; a device-bearer 2xx in between resets it.
+    // Operator-credential routes are ignored. (This replaces the RT-113 P2
+    // immediate cascade on a single 401.)
+    const deviceGrantHooks = deviceRevocationGrantHooks(offlineGrants);
+    const deviceAuthDetector = createDeviceAuthDetector({
+      probe: createRosterConfirmationProbe(
+        createCashierAdmissionClient({
+          baseUrl: apiBaseUrl,
+          fetch: globalThis.fetch.bind(globalThis),
+          getDeviceToken: readSendableDeviceToken,
+        }),
+      ),
+      confirmDelayMs: () =>
+        deviceAuthConfirmDelayMs(operatorSessionManager.getCurrent()?.admission_ttl_seconds),
+      onConfirmed: (source) => {
+        deviceRevocation.onConfirmed(source);
+      },
+      // Review F4 / OD5 (+ rev546b F-A): EVERY device 401 from any observed
+      // source invalidates every offline grant through the seam.
+      onUnauthorized: () => {
+        deviceGrantHooks.onUnauthorized();
+      },
+      logger: mainLogger,
     });
+    // Review F5: each device-bearer client gets its OWN observed fetch, tagged
+    // with its route family and base URL (a path-prefixed base still matches).
+    const admissionsFetch = withDeviceAuthObservation(
+      globalThis.fetch.bind(globalThis),
+      deviceAuthDetector,
+      { source: 'cashier_admissions', baseUrl: apiBaseUrl },
+    );
+
+    // RT-113 P2 (10763 D2/D11, owner decision 10844; fixes RT-182) — the
+    // cashier path's server authority: the device-authenticated Backend-Core
+    // cashier-admissions resource. Device token as the bearer, read in-process
+    // per call; never logged, never bridged. No Clerk-gated call remains on
+    // the cashier path.
+    const cashierAdmissionClient = createCashierAdmissionClient({
+      baseUrl: apiBaseUrl,
+      fetch: admissionsFetch,
+      getDeviceToken: readSendableDeviceToken,
+    });
+    const cashierAdmission: CashierAdmissionDeps = {
+      client: cashierAdmissionClient,
+      // RT-113 P1.2 — the sealed offline grant store (OD5/OD6, fail closed).
+      grantSeam: offlineGrants.seam,
+    };
     const operatorCashierSignInHandler = new CashierSignInHandler({
+      // RT-215 (Codex P1): a late success under a revoked/replaced pairing is dropped.
+      pairingEpoch: () => pairingStore.getPairingEpoch(),
       db: db,
       safeStorage,
       sessionManager: operatorSessionManager,
-      checkActiveSession: checkActiveSessionHandler,
+      admission: cashierAdmission,
       pairingStore,
       protoStore: operatorProtoStore,
       secretStore,
@@ -555,27 +856,15 @@ app
       logger: mainLogger,
     });
     const operatorRosterHandler = new RosterHandler({
-      backend: operatorBackend,
+      cashierAdmissions: cashierAdmissionClient,
       logger: mainLogger,
     });
     const operatorInactivityMonitor = new InactivityMonitor({
       sessionManager: operatorSessionManager,
-    });
-    operatorInactivityMonitor.start();
-
-    // T051b + T051d — lifecycle cascade for terminal-revocation (FR-014) and
-    // account-disabled-mid-session edge cases. The cascade holds the session-
-    // manager reference so the future US7 401-interceptor can call
-    // operatorLifecycleCascade.notifyTerminalRevoked() /
-    // operatorLifecycleCascade.notifyAccountDisabled() without importing any
-    // singleton. Exported as a module-level let so future interceptors can
-    // reach it; it is NOT exposed to the renderer bridge.
-    const operatorLifecycleCascade = new LifecycleCascade({
-      sessionManager: operatorSessionManager,
+      // RT-117 — a lock leaves a log line (RT-112: a timeout left none).
       logger: mainLogger,
     });
-    // Suppress "declared but never read" until the US7 interceptor wires it.
-    void operatorLifecycleCascade;
+    operatorInactivityMonitor.start();
 
     // T048 — construct the audit-events outbox chain on the shared DB handle.
     // Lazy statement preparation in bindAuditEventsStoreDb ensures migration
@@ -583,7 +872,161 @@ app
     const auditEventsStore = bindAuditEventsStoreDb(db);
     const auditEmitter = new AuditEmitter(auditEventsStore);
 
+    // RT-117 (RT-116 S1) — inactivity LOCK of the existing session.
+    //   • push: main tells the renderer the moment the session locks/unlocks/
+    //     ends (state only — no ids, names or credentials);
+    //   • audit: operator.session.locked / operator.session.unlocked;
+    //   • IPC: same-operator unlock + the lock-screen totals read (both on the
+    //     locked-session allowlist).
+    wireSessionStatePush({
+      sessionManager: operatorSessionManager,
+      send: (event) => {
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send(SESSION_LOCK_IPC_CHANNELS.SESSION_STATE, event);
+        }
+      },
+      logError: (err) => {
+        mainLogger.error({ err }, 'operator.session_state_push:failed');
+      },
+    });
+    wireSessionLockAudit({
+      sessionManager: operatorSessionManager,
+      auditEmitter,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      uuid: () => randomUUID(),
+      logError: (err) => {
+        mainLogger.error({ err }, 'operator.session_lock_audit:failed');
+      },
+    });
+    const getOperatorLockState = createLockStateReader({
+      db,
+      sessionManager: operatorSessionManager,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+    });
+    registerSessionLockHandlers(guardedIpcMain, {
+      unlockHandler: new SessionUnlockHandler({
+        sessionManager: operatorSessionManager,
+        verifyCashierPin: (operator_id, pin) =>
+          operatorCashierSignInHandler.verifyPin(operator_id, pin),
+        clerk: clerkExchanger,
+        logger: mainLogger,
+      }),
+      getLockState: getOperatorLockState,
+    });
+
+    // RT-113 P2 — keep the online cashier admission live (heartbeat at ≤ TTL/2
+    // with a fresh key) and end it on sign-out / session end (best-effort).
+    // Lost authority (taken over elsewhere, 403, two consecutive device 401s)
+    // latches the session (cart.create, and an add to an empty cart, refuse
+    // `authority_conflict`) and ends
+    // it at its first safe point: no open sale with lines (the RT-117 lock
+    // summary is null) and no live tender on ANY cart of the session
+    // (`createSafePointProbe`, review of 024f07c items 2 and 5).
+    // Re-checked after every sale IPC call (sale-boundary-guard), on lock
+    // changes and by a backstop poll. Stopped on quit with the other workers (RT-198
+    // latch: nothing runs after stop).
+    const isCashierAtSafePoint = createSafePointProbe({
+      db,
+      sessionManager: operatorSessionManager,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+    });
+    const cashierAdmissionKeeper = new CashierAdmissionKeeper({
+      sessionManager: operatorSessionManager,
+      admission: cashierAdmission,
+      isAtSafePoint: isCashierAtSafePoint,
+      logger: mainLogger,
+    });
+    saleBoundaryProbe.recheck = () => {
+      cashierAdmissionKeeper.recheckSafePoint();
+    };
+    workerRegistry.register('cashier admission heartbeat', () => {
+      cashierAdmissionKeeper.stop();
+      // RT-215: the device-401 detector's pending confirmation stops with it.
+      deviceAuthDetector.stop();
+    });
+
+    // RT-215 — what a CONFIRMED revocation does: record it on the pairing row
+    // (the token is then never sent), clear the credential holders, invalidate
+    // the offline grants through the existing seam, latch the session at once
+    // and end it at its safe point (the keeper), audit it (`system:device`,
+    // `{source}`), and push `pairing:status-changed` to route to recovery.
+    const deviceRevocationFlow = createDeviceRevocationFlow({
+      markDeviceRevoked: () => pairingStore.markDeviceRevoked(),
+      getStatus: () => pairingStore.getStatus(),
+      sessions: operatorSessionManager,
+      isDeviceRevoked: () => pairingStore.isDeviceRevoked(),
+      // Review F2: after a re-pair in a process whose paired-only workers ran.
+      workersAlreadyStarted: () => pairedWorkersLatch.hasStarted(),
+      relaunch: () => {
+        app.relaunch();
+        app.exit(0);
+      },
+      latchSession: () => {
+        cashierAdmissionKeeper.latchCurrentSession('terminal_session_terminated');
+      },
+      clearCredentials: () => {
+        operatorJwtHolder.clearAll();
+        operatorEnvelopeHolder.clearAll();
+      },
+      // RT-113 P1.2 seam (never the store): invalidate every grant AND
+      // clear the grant scope (review F4).
+      invalidateGrants: () => {
+        deviceGrantHooks.onConfirmed();
+      },
+      resetDetector: () => {
+        deviceAuthDetector.reset();
+      },
+      purgeOtherTerminalPins: (terminalId) =>
+        purgeOtherTerminalPinRecords(db, terminalId) +
+        purgeOtherTerminalManagerPinRecords(db, terminalId),
+      pushStatus: (event) => {
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send(PAIRING_PUSH_CHANNELS.STATUS_CHANGED, event);
+        }
+      },
+      audit: auditEmitter,
+      uuid: () => randomUUID(),
+      now: () => new Date(),
+      logger: mainLogger,
+    });
+    deviceRevocation.onConfirmed = (source) => {
+      deviceRevocationFlow.onConfirmed(source);
+    };
+    deviceRevocation.onPaired = (input) => deviceRevocationFlow.onPaired(input);
+    deviceRevocation.hasSession = () => operatorSessionManager.getCurrent() !== null;
+    // RT-215 10897-A (owner approval 10906) — the user-initiated "Check again"
+    // on /pairing while revoked: ONE roster call with the sealed token, read
+    // through the narrow recheck reader (the default send paths stay null) on
+    // an UNOBSERVED client (its answer is never a 2×401 detector count). A 2xx
+    // clears the revocation through the flow, then re-binds what the
+    // revocation unbound exactly as boot does: the offline grant scope, and the
+    // paired-only workers if they never started. Same pairing, so no relaunch.
+    deviceRevocation.recheck = createRevocationRecheck({
+      probe: createRosterConfirmationProbe(
+        createCashierAdmissionClient({
+          baseUrl: apiBaseUrl,
+          fetch: globalThis.fetch.bind(globalThis),
+          getDeviceToken: createRevocationRecheckTokenRead({
+            pairingStore,
+            secretStore,
+            deviceTokenKey: DEVICE_TOKEN_KEY,
+          }),
+        }),
+      ),
+      store: pairingStore,
+      onCleared: (scope) => {
+        deviceRevocationFlow.onRecheckCleared(scope);
+      },
+      rebindPaired: async () => {
+        offlineGrants.setScope(scopeFromPairingStatus(await pairingStore.getStatus()));
+        await notifyPairedFromStore();
+      },
+      logger: mainLogger,
+    });
+
     const operatorTakeoverHandler = new TakeoverHandler({
+      // RT-215 (Codex P1): a late success under a revoked/replaced pairing is dropped.
+      pairingEpoch: () => pairingStore.getPairingEpoch(),
       protoStore: operatorProtoStore,
       sessionManager: operatorSessionManager,
       backend: operatorBackend,
@@ -594,6 +1037,8 @@ app
       auditEmitter,
       pairingStore,
       deviceTokenAttestation,
+      // RT-113 P2 — the cashier takeover is an admission with takeover:true.
+      cashierAdmission,
       logger: mainLogger,
     });
 
@@ -603,19 +1048,23 @@ app
       sessionManager: operatorSessionManager,
       pairingStore,
       auditEmitter,
-      // 019 — roster source for the provision path; resolves the neutral
-      // target_user_id → the cashier's roster entry (clerk id + user_id presence).
+      // 019 — roster source for the provision path; resolves the
+      // target_cashier_id (roster id) → the cashier's roster entry (neutral user_id).
       backend: operatorBackend,
+      // RT-214 — the roster is operator-identity + manager gated: present the
+      // signed-in manager's JWT from the same holder sign-out/stuck-shifts use.
+      jwtHolder: operatorJwtHolder,
       logger: mainLogger,
     });
 
     // 004-operator-session dev bypass — seeds a fixture manager session so
     // the renderer routes past /sign-in in unpackaged dev builds.
-    // SECURITY: isPackaged guard is inside applyDevSkipOperatorSignInIfRequested;
-    // this call is a no-op in every packaged build regardless of env vars.
+    // SECURITY: the shipped-app guard is inside applyDevSkipOperatorSignInIfRequested;
+    // this call is a no-op in the shipped app (renamed exe included, RT-165)
+    // regardless of env vars.
     // Independent from POS_PULSE_DEV_SKIP_PAIRING; both may be set together.
     applyDevSkipOperatorSignInIfRequested({
-      isPackaged: app.isPackaged,
+      isPackaged: shippedApp,
       env: process.env,
       sessionManager: operatorSessionManager,
       logger: mainLogger,
@@ -659,114 +1108,6 @@ app
       // `string` return is total and never throws.
       getTenantId: () => operatorSessionManager.getCurrent()?.tenant_id ?? '',
     });
-
-    // 005-sales-cart S2 — register `cart:*` IPC with DB-backed CartStore.
-    const cartBridgeHandlers = createCartBridgeHandlers({
-      dbHandle: db,
-      getCurrentSession: () => operatorSessionManager.getCurrent(),
-      // #380 (F-007) — stamp cart rows with the real terminal_id, not branch_id.
-      getTerminalId: () => pairingStore.getCurrentTerminalId(),
-      logger: mainLogger,
-      auditEmitter,
-      isPackaged: app.isPackaged,
-      productionResolver: catalogueResolver,
-      // Post-handoff cancel and the snapshot "paid" flag read the payments record.
-      cartPaymentStatus: bindCartPaymentStatus(db),
-    });
-    registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
-
-    // 009 + 010 — wire the `catalogue.*` IPC surface. Registered unconditionally
-    // (same as cart): the handlers are session-gated and refuse with no session,
-    // and an unmounted renderer (productSearch flag off) never invokes them, so
-    // there is nothing to gate. 009 shipped the bridge factory + preload but
-    // never registered the channels with ipcMain, so the whole surface was inert
-    // until now; this makes 009's read handlers + 010's `freshness` reachable.
-    // 010 T021/T039 (#349 cleared) — the live read-down HTTP client + driver are
-    // now wired when the terminal is paired. The driver carries the device-principal
-    // scope (tenant/branch) from `pairingStore` (Constitution VIII — NOT the operator
-    // session), authenticates with the device token (`Authorization: Bearer`), and
-    // runs a background snapshot pull on an interval. When paired, `refresh` admits
-    // a real tick; when unpaired, the driver is omitted and `refresh` still refuses
-    // (never a fake "started"). The freshness reads below are independent of all this.
-    const catalogueRepo = createProductRepo(db);
-    const catalogueSyncStateRepo = createCatalogueSyncStateRepo(db);
-
-    const catalogueApiBaseUrl = resolveApiBaseUrl();
-    const cataloguePairingStatus = await pairingStore.getStatus();
-    let readDownDriver: ReturnType<typeof createReadDownDriver> | undefined;
-    if (cataloguePairingStatus.kind === 'paired') {
-      const readDownClient = createReadDownClient({
-        baseUrl: catalogueApiBaseUrl,
-        fetch: globalThis.fetch.bind(globalThis),
-        // Device token (the paired-terminal credential) read in-process; never
-        // logged, never bridged. Sole credential for the non-session-gated driver.
-        getDeviceToken: async () => {
-          const token = await secretStore.get(DEVICE_TOKEN_KEY);
-          return token ?? null;
-        },
-      });
-      readDownDriver = createReadDownDriver({
-        client: readDownClient,
-        writer: createReadDownWriter({ db: db, syncStateRepo: catalogueSyncStateRepo }),
-        tenantId: cataloguePairingStatus.tenant_id,
-        branchId: cataloguePairingStatus.branch_id,
-        now: () => new Date().toISOString(),
-        // Background pull cadence: hourly. Bounded [1s, 24h] by the driver.
-        tickIntervalMs: 60 * 60 * 1_000,
-      });
-    }
-
-    const catalogueBridge = createCatalogueBridge({
-      // Adapt the operator session to the catalogue projection: the gate needs
-      // `operator_session_id`, which the record carries as `id`.
-      getCurrentSession: () => {
-        const sess = operatorSessionManager.getCurrent();
-        if (sess === null) return null;
-        return {
-          role: sess.role,
-          operator_id: sess.operator_id,
-          operator_session_id: sess.id,
-          tenant_id: sess.tenant_id,
-          branch_id: sess.branch_id,
-        };
-      },
-      productRepo: catalogueRepo,
-      // 010 freshness source: the per-tenant sync-state row + a tenant-scoped
-      // live-product count (is_empty). Both reads are tenant-scoped (P17) and
-      // secret-free. NOT #349-blocked — neither touches the HTTP client.
-      freshness: {
-        readSyncState: (tenantId) => catalogueSyncStateRepo.read(tenantId),
-        countProducts: (tenantId) => catalogueRepo.countByTenant(tenantId),
-        // 010 diagnostics — tenant-scoped barcode-alias count for catalogue:counts.
-        countBarcodes: (tenantId) => catalogueRepo.countBarcodesByTenant(tenantId),
-      },
-      // 010 T039 — the live read-down driver (paired terminals only). Omitted
-      // when unpaired (exactOptionalPropertyTypes — spread the key only when
-      // present), so `refresh` still refuses cleanly. The bridge only ever calls
-      // `runTickOnce` (admit); start/stop are owned here at the root.
-      ...(readDownDriver !== undefined ? { readDownDriver } : {}),
-    });
-    registerCatalogueHandlers(guardedIpcMain, { bridge: catalogueBridge });
-
-    // Start the background snapshot pull (paired terminals only). The driver's
-    // setInterval is stopped on quit via `closeDbHandle()` so it never outlives
-    // the process or runs against a closed DB handle.
-    if (readDownDriver !== undefined) {
-      const driver = readDownDriver;
-      driver.start();
-      workerRegistry.register('read-down driver', () => {
-        driver.stop();
-      });
-      mainLogger.info(
-        {
-          tenant_id:
-            cataloguePairingStatus.kind === 'paired' ? cataloguePairingStatus.tenant_id : null,
-        },
-        'read_down_driver:started',
-      );
-    } else {
-      mainLogger.info('read_down_driver:skipped_unpaired');
-    }
 
     // 006-payments-tender Slice 3 (T142 + F-002/F-003/F-004) — wire the
     // payments.* + tender.* bridge surface. The 8 handler factories share
@@ -819,6 +1160,138 @@ app
     const paymentAuditEmitter = createPaymentAuditEmitter({
       sink: { write: forwardAuditEvent },
     });
+
+    // RT-26 — Checkout Back: the payments record decides whether a handed-off
+    // cart may return to the Sale (no tender, no settled / force-failed payment)
+    // and cancels a zero-funds started attempt inside the cart transaction.
+    const releaseCheckoutPayment = bindCheckoutReturnGuard({
+      db,
+      paymentAttemptFsm,
+      auditEmitter: paymentAuditEmitter,
+    });
+
+    // 005-sales-cart S2 — register `cart:*` IPC with DB-backed CartStore.
+    const cartBridgeHandlers = createCartBridgeHandlers({
+      dbHandle: db,
+      getCurrentSession: () => operatorSessionManager.getCurrent(),
+      // #380 (F-007) — stamp cart rows with the real terminal_id, not branch_id.
+      getTerminalId: () => pairingStore.getCurrentTerminalId(),
+      logger: mainLogger,
+      auditEmitter,
+      isPackaged: shippedApp,
+      productionResolver: catalogueResolver,
+      // Post-handoff cancel and the snapshot "paid" flag read the payments record.
+      cartPaymentStatus: bindCartPaymentStatus(db),
+      releaseCheckoutPayment,
+      // RT-26 — read-only twin for Checkout's Back eligibility (no writes).
+      checkoutReturnAllowed: bindCheckoutReturnAllowed(db),
+    });
+    registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
+
+    // 009 + 010 — wire the `catalogue.*` IPC surface. Registered unconditionally
+    // (same as cart): the handlers are session-gated and refuse with no session,
+    // and an unmounted renderer (productSearch flag off) never invokes them, so
+    // there is nothing to gate. 009 shipped the bridge factory + preload but
+    // never registered the channels with ipcMain, so the whole surface was inert
+    // until now; this makes 009's read handlers + 010's `freshness` reachable.
+    // 010 T021/T039 (#349 cleared) — the live read-down HTTP client + driver are
+    // now wired when the terminal is paired. The driver carries the device-principal
+    // scope (tenant/branch) from `pairingStore` (Constitution VIII — NOT the operator
+    // session), authenticates with the device token (`Authorization: Bearer`), and
+    // runs a background snapshot pull on an interval. When paired, `refresh` admits
+    // a real tick; when unpaired, the driver is omitted and `refresh` still refuses
+    // (never a fake "started"). The freshness reads below are independent of all this.
+    const catalogueRepo = createProductRepo(db);
+    const catalogueSyncStateRepo = createCatalogueSyncStateRepo(db);
+
+    const catalogueApiBaseUrl = resolveApiBaseUrl();
+    // Pairing state at boot. A terminal already paired notifies the latch NOW, so
+    // every paired-only starter registered below runs immediately in its original
+    // position (RT-202: unchanged paired-boot behaviour). An unpaired terminal
+    // leaves them held until the in-process pairing completes.
+    const bootPairing = await pairingStore.getStatus();
+    if (bootPairing.kind === 'paired') {
+      pairedWorkersLatch.notifyPaired({
+        tenant_id: bootPairing.tenant_id,
+        branch_id: bootPairing.branch_id,
+        terminal_id: bootPairing.terminal_id,
+      });
+    }
+    // Created by the paired-only starter below (boot or in-process pairing); the
+    // catalogue bridge resolves it lazily so `refresh` works after in-process
+    // pairing and still refuses while there is no driver.
+    let readDownDriver: ReturnType<typeof createReadDownDriver> | undefined;
+
+    const catalogueBridge = createCatalogueBridge({
+      // Adapt the operator session to the catalogue projection: the gate needs
+      // `operator_session_id`, which the record carries as `id`.
+      getCurrentSession: () => {
+        const sess = operatorSessionManager.getCurrent();
+        if (sess === null) return null;
+        return {
+          role: sess.role,
+          operator_id: sess.operator_id,
+          operator_session_id: sess.id,
+          tenant_id: sess.tenant_id,
+          branch_id: sess.branch_id,
+        };
+      },
+      productRepo: catalogueRepo,
+      // 010 freshness source: the per-tenant sync-state row + a tenant-scoped
+      // live-product count (is_empty). Both reads are tenant-scoped (P17) and
+      // secret-free. NOT #349-blocked — neither touches the HTTP client.
+      freshness: {
+        readSyncState: (tenantId) => catalogueSyncStateRepo.read(tenantId),
+        countProducts: (tenantId) => catalogueRepo.countByTenant(tenantId),
+        // 010 diagnostics — tenant-scoped barcode-alias count for catalogue:counts.
+        countBarcodes: (tenantId) => catalogueRepo.countBarcodesByTenant(tenantId),
+      },
+      // 010 T039 — the live read-down driver (paired terminals only), resolved at
+      // call time (RT-202): `undefined` while unpaired, so `refresh` still refuses
+      // cleanly. The bridge only ever calls `runTickOnce` (admit); start/stop are
+      // owned here at the root.
+      getReadDownDriver: () => readDownDriver,
+    });
+    registerCatalogueHandlers(guardedIpcMain, { bridge: catalogueBridge });
+
+    // Start the background snapshot pull (paired terminals only). `start()` also
+    // admits one immediate initial tick (RT-41) so a freshly paired/restarted
+    // terminal does not wait a full interval for its catalogue. The driver's
+    // setInterval is stopped on quit via `closeDbHandle()` so it never outlives
+    // the process or runs against a closed DB handle.
+    pairedWorkersLatch.register('read-down driver', (terminal) => {
+      const readDownClient = createReadDownClient({
+        baseUrl: catalogueApiBaseUrl,
+        // RT-215: observed by the device-401 detector (a read-down 401 counts).
+        fetch: withDeviceAuthObservation(globalThis.fetch.bind(globalThis), deviceAuthDetector, {
+          source: 'read_down',
+          baseUrl: catalogueApiBaseUrl,
+        }),
+        // Device token (the paired-terminal credential) read in-process; never
+        // logged, never bridged. Sole credential for the non-session-gated driver.
+        // RT-215: null once the device is revoked, so it is never sent again.
+        getDeviceToken: readSendableDeviceToken,
+      });
+      const driver = createReadDownDriver({
+        client: readDownClient,
+        writer: createReadDownWriter({ db: db, syncStateRepo: catalogueSyncStateRepo }),
+        tenantId: terminal.tenant_id,
+        branchId: terminal.branch_id,
+        now: () => new Date().toISOString(),
+        // Background pull cadence: hourly. Bounded [1s, 24h] by the driver.
+        tickIntervalMs: 60 * 60 * 1_000,
+      });
+      readDownDriver = driver;
+      driver.start();
+      workerRegistry.register('read-down driver', () => {
+        driver.stop();
+      });
+      mainLogger.info({ tenant_id: terminal.tenant_id }, 'read_down_driver:started');
+    });
+    if (bootPairing.kind !== 'paired') {
+      // Boot-time fact only: the starter above runs when the pairing completes.
+      mainLogger.info('read_down_driver:skipped_unpaired');
+    }
 
     const paymentsSessionAdapter = (): OperatorSessionForPayments | null =>
       // #380 (F-007 FIXED) — stamp the REAL terminal_id from the pairing store,
@@ -914,6 +1387,8 @@ app
       attemptsRepo: paymentsAttemptsRepo,
       discard: paymentsDiscardOnSessionEnd,
       resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      // RT-117 — never auto-reverse an attempt that holds live tender.
+      attemptHasLiveTender: bindAttemptHasLiveTender(db),
       logError: (err, ctx) => {
         mainLogger.error({ err, ...ctx }, 'stuck_attempt_sweep:failed');
       },
@@ -990,12 +1465,64 @@ app
       );
     });
 
+    // ── Shared receipt printer + drawer ports (RT-15 S4: hoisted out of the
+    // 008 branch below so the return payout reuses the same instances) ──────
+    //
+    // 008 §A3 print transports.
+    //
+    // OS-print path (T200): the REAL `webContents.print` transport is wired —
+    // an actual 008 receipt prints through the Windows OS print path on a
+    // physically attached printer (e.g. the BIXOLON SRP-330 II from the §A5
+    // bench). The slip is rendered to 80 mm continuous-roll width to match the
+    // recorded browser/HTML render-quality smoke. `getPrintersAsync` enumerates
+    // the system printers; an unconfigured `deviceName` targets the system
+    // default. (Mapping a SPECIFIC queue to the paired terminal is a follow-up:
+    // pairing/T094a carries USB vendor/product/com-port ids, NOT the Windows
+    // print-queue name.) Verified on the bench by T301; the pure parts are
+    // unit-tested in os-print-transport.test.ts.
+    //
+    // ESC/POS-direct path: still an honest STUB reporting `offline` — that path
+    // (node-thermal-printer ↔ printer status byte) remains unverified (a5
+    // findings) and is NOT selected. We route to OS-print via
+    // `probeEscposSupport: false`, the proven path.
+    const printPipeline = createPrintPipeline({
+      escposAdapter: createEscposAdapter({
+        transport: {
+          write: () => Promise.resolve(),
+          pollStatus: () => Promise.resolve('offline' as const),
+        },
+        statusTimeoutMs: 3000,
+      }),
+      osPrintAdapter: createOsPrintAdapter({
+        print: createOsPrintTransport({
+          createPrintWindow: createDefaultPrintWindow,
+          listPrinters: () => getCurrentPrinters(),
+          logger: mainLogger,
+        }),
+      }),
+      // Route to the OS-print path: it is the proven transport (the ESC/POS
+      // direct path is unverified). The cashier never sees which path ran
+      // unless the print fails (path is for audit only — T212).
+      probeEscposSupport: () => Promise.resolve(false),
+    });
+    // 008 Slice 4 drawer port, hoisted (RT-15 S4) so the sale drawer-kick
+    // dispatcher and the return payout share ONE drawer transport. The real
+    // DK1/DK2 transport is the §A3 hardware bring-up (T200), deferred: until
+    // then this honest STUB reports `no_drawer_configured` — a cash sale
+    // records a `failed` drawer row, and a return payout answers
+    // `drawer_failed` (nothing paid is recorded; the manager may then attest a
+    // manual payout). Never a faked "opened" (PRODUCT.md Principle 3).
+    const drawerKickTransport: DrawerKickTransport = {
+      kick: () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' }),
+    };
+
     // ── 008-sale-finalization-and-receipts Slice 1c.3 (T094c) ──────────────
     //
     // Wire the AD-2 finalize worker + read-only `sales.*` bridge behind the
     // `sale_finalization` feature flag (fail-closed default off). When the
-    // flag is off, 006 still settles payments but no Sale rows are written —
-    // the cashier falls back to manual receipts (see runbook T525).
+    // flag is off no Sale rows are written. RT-162 / D-1: that is only a valid
+    // profile with payments OFF too — PAYMENTS on + SALE_FINALIZATION off is
+    // refused at startup (see runbook 008 T525).
     //
     // The worker is terminal-scoped: it only fires for the paired terminal.
     // We read the scope from the pairing status; an unpaired terminal cannot
@@ -1046,43 +1573,6 @@ app
       const saleAuditEmitter = createSaleAuditEmitter({
         sink: { write: forwardAuditEvent },
       });
-      // 008 §A3 print transports.
-      //
-      // OS-print path (T200): the REAL `webContents.print` transport is wired —
-      // an actual 008 receipt prints through the Windows OS print path on a
-      // physically attached printer (e.g. the BIXOLON SRP-330 II from the §A5
-      // bench). The slip is rendered to 80 mm continuous-roll width to match the
-      // recorded browser/HTML render-quality smoke. `getPrintersAsync` enumerates
-      // the system printers; an unconfigured `deviceName` targets the system
-      // default. (Mapping a SPECIFIC queue to the paired terminal is a follow-up:
-      // pairing/T094a carries USB vendor/product/com-port ids, NOT the Windows
-      // print-queue name.) Verified on the bench by T301; the pure parts are
-      // unit-tested in os-print-transport.test.ts.
-      //
-      // ESC/POS-direct path: still an honest STUB reporting `offline` — that path
-      // (node-thermal-printer ↔ printer status byte) remains unverified (a5
-      // findings) and is NOT selected. We route to OS-print via
-      // `probeEscposSupport: false`, the proven path.
-      const printPipeline = createPrintPipeline({
-        escposAdapter: createEscposAdapter({
-          transport: {
-            write: () => Promise.resolve(),
-            pollStatus: () => Promise.resolve('offline' as const),
-          },
-          statusTimeoutMs: 3000,
-        }),
-        osPrintAdapter: createOsPrintAdapter({
-          print: createOsPrintTransport({
-            createPrintWindow: createDefaultPrintWindow,
-            listPrinters: () => getCurrentPrinters(),
-            logger: mainLogger,
-          }),
-        }),
-        // Route to the OS-print path: it is the proven transport (the ESC/POS
-        // direct path is unverified). The cashier never sees which path ran
-        // unless the print fails (path is for audit only — T212).
-        probeEscposSupport: () => Promise.resolve(false),
-      });
       // Shared clock for the print dispatcher + receipts bridge so a reprint's
       // rendered slip time (bridge) matches the print_events.printed_at the
       // dispatcher writes for the same logical event (one clock read per event).
@@ -1104,13 +1594,12 @@ app
       // honest STUB reports `no_drawer_configured`, so a cash sale records a
       // clean `failed` drawer row + raises the drawer-failure banner while the
       // Sale stays durable — no fake "opened" is recorded (PRODUCT.md
-      // Principle 3). T200 swaps this transport for the real one; nothing else
+      // Principle 3). T200 swaps the shared `drawerKickTransport` (hoisted above,
+      // also used by the RT-15 S4 return payout) for the real one; nothing else
       // changes.
       const drawerKickDispatcher = createDrawerKickDispatcher({
         drawerEventsRepo,
-        transport: {
-          kick: () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' }),
-        },
+        transport: drawerKickTransport,
         auditEmitter: saleAuditEmitter,
         now: () => new Date().toISOString(),
         newDrawerEventId: () => randomUUID(),
@@ -1139,12 +1628,12 @@ app
       registerReceiptsHandlers(guardedIpcMain, { receiptsBridge });
 
       // The AD-2 finalize WORKER, by contrast, IS terminal-scoped and only
-      // starts for an already-paired terminal — it needs the pairing row's
-      // scope to filter the scan. A terminal paired mid-process picks up the
-      // worker on the next launch; the startup recovery scan re-fires any
-      // settled-but-unfinalized rows then, so nothing is lost.
-      const pairingStatus = await pairingStore.getStatus();
-      if (pairingStatus.kind === 'paired') {
+      // starts for a paired terminal — it needs the pairing row's scope to
+      // filter the scan. RT-202: a terminal that pairs mid-process starts the
+      // worker (and the sale-sync engine) right after the pairing is persisted,
+      // through the same starter a paired boot runs immediately — never only on
+      // the next launch. The startup recovery scan below runs on either path.
+      pairedWorkersLatch.register('finalize listener + sale-sync engine', (pairingStatus) => {
         const outboxRepo = bindSaleSyncOutboxRepository(db);
         const allocator = bindSaleNumberAllocator(db);
         // saleAuditEmitter + printPipeline + printDispatcher are hoisted above
@@ -1264,12 +1753,36 @@ app
         // (D7): X-Device-Attestation is retired from the sale wire (#559), so the
         // client takes no getDeviceAttestation dep. The device token keeps its proper
         // roles (read-down Bearer + sign-in attestation body) elsewhere — untouched.
+        // RT-224 step 2 (Option B, Backend-Core #709) — device-path sale capture: a
+        // sale with its cashier's `selling_user_id` goes out with the device bearer
+        // + that id; any other sale keeps the envelope path. Wiring and its tests:
+        // `sales-sync/compose-device-path.ts`. RT-215 × RT-224: the token is the
+        // sendable read (null unless paired, null once revoked), and the device
+        // path gets its own fetch, tagged for the 2×401 detector.
+        const saleSyncDevicePath = composeSaleSyncDevicePath({
+          db,
+          readToken: createSendableDeviceTokenRead({
+            pairingStore,
+            secretStore,
+            deviceTokenKey: DEVICE_TOKEN_KEY,
+          }),
+          currentTerminalId: () => pairingStore.getCurrentTerminalId(),
+          deviceAuth: { fetch: globalThis.fetch.bind(globalThis), detector: deviceAuthDetector },
+          logger: mainLogger,
+        });
         const saleSyncClient = createSaleSyncClient({
           baseUrl: resolveApiBaseUrl(),
           fetch: globalThis.fetch.bind(globalThis),
-          getOperatorToken: () => {
-            const sess = operatorSessionManager.getCurrent();
-            return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
+          getOperatorToken: createSaleSyncTokenReader(
+            operatorSessionManager,
+            operatorEnvelopeHolder,
+          ),
+          ...saleSyncDevicePath.client,
+          // RT-15 S1: a 200/201 without a usable saleRef — the sale is captured but
+          // the till cannot return it. Logs the opaque externalId + a closed-set
+          // reason only (never the body or the rejected value; P7).
+          onSaleRefUnavailable: ({ externalId, reason }) => {
+            mainLogger.warn({ external_id: externalId, reason }, 'sale_sync:sale_ref_unavailable');
           },
         });
         // RT-79 rollout gate: unset = never send tenders (default). Only sales finalized
@@ -1287,6 +1800,35 @@ app
         ) {
           mainLogger.warn('sale_sync:tenders_since_unparseable_tenders_off');
         }
+        // RT-221: the drain (and the pending / held counts) is scoped to the
+        // CURRENT pairing's terminal_id, read live from the pairing status each
+        // tick. After a re-pair, the earlier pairing's queued sales are held —
+        // never replayed under the new device identity (RT-138 L6). Unpaired /
+        // invalid → nothing is eligible.
+        const resolveSaleSyncTerminalId = createCurrentTerminalResolver(() =>
+          pairingStore.getStatus(),
+        );
+        // RT-225 step 3 — support-only repair: with
+        // POS_PULSE_SUPPORT_RESET_CASHIER_CLAIM_REFUSED=1, this terminal's sales
+        // dead-lettered as `cashier_claim_refused` go back to pending before the
+        // drain's first tick, so they are re-sent (with `admissionCheckAt` where it
+        // applies). Unset = nothing. Logs a count only (P7); never throws.
+        resetCashierClaimRefusedOnStart({
+          requested: isCashierClaimRefusedResetRequested(
+            process.env[CASHIER_CLAIM_REFUSED_RESET_ENV],
+          ),
+          stateRepo: saleSyncStateRepo,
+          scope: {
+            tenantId: pairingStatus.tenant_id,
+            branchId: pairingStatus.branch_id,
+            terminalId: pairingStore.getCurrentTerminalId(),
+          },
+          now: new Date().toISOString(),
+          logger: mainLogger,
+        });
+        // RT-198: the shutdown latch, read by the engine (`isStopped`) and set by the
+        // worker stop below, synchronously, before the DB handle closes.
+        let saleSyncStopped = false;
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
           tendersSince,
@@ -1294,47 +1836,201 @@ app
           salesRepo,
           tenantId: pairingStatus.tenant_id,
           branchId: pairingStatus.branch_id,
-          getOperatorToken: () => {
-            const sess = operatorSessionManager.getCurrent();
-            return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
-          },
+          resolveTerminalId: resolveSaleSyncTerminalId,
+          getOperatorToken: createSaleSyncTokenReader(
+            operatorSessionManager,
+            operatorEnvelopeHolder,
+          ),
+          ...saleSyncDevicePath.engine,
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.
-          backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },
+          backoff: { ...SALE_SYNC_BACKOFF_POLICY },
           onDeadLetter: (saleId: string, reason?: string) => {
             mainLogger.warn({ sale_id: saleId, reason }, 'sale_sync:dead_letter');
           },
+          // RT-15 S1: a capture answer's saleRef differed from the stored one; the
+          // stored one is kept. Only the opaque externalId is logged (P7).
+          onSaleRefMismatch: ({ externalId }) => {
+            mainLogger.warn({ external_id: externalId }, 'sale_sync:sale_ref_mismatch');
+          },
+          // RT-190: a capture 409 — the server holds a different sale for this
+          // provenance. Dead-lettered (`payload_divergence`), never retried. Only
+          // the opaque externalId + the closed-set error code are logged (P7).
+          onPayloadDivergence: ({ externalId, errorCode }) => {
+            mainLogger.warn(
+              { external_id: externalId, error_code: errorCode },
+              'sale_sync:payload_divergence',
+            );
+          },
+          // RT-224: the drain is paused while it holds no sale credential at all, or
+          // no envelope while envelope-routed sales are due. Log it once per transition — the
+          // closed-set `sale_sync:paused_no_operator_credential` and its resume
+          // line — with { reason, pending } only (P7).
+          onPauseTransition: (event) => {
+            logSaleSyncPauseTransition(mainLogger, event);
+          },
+          isStopped: () => saleSyncStopped,
         });
 
-        // Read-only status surface for the renderer (counts + last-success only;
-        // no token/PII/raw body crosses the bridge). No write/trigger handler.
+        // Read-only status surface for the renderer (counts + last-success + the
+        // RT-224 closed-set paused reason; no token/PII/raw body crosses the
+        // bridge). No write/trigger handler.
         registerSalesSyncHandlers(guardedIpcMain, {
-          readStatus: () =>
-            saleSyncStateRepo.readSyncStatus({
-              tenantId: pairingStatus.tenant_id,
-              branchId: pairingStatus.branch_id,
-            }),
+          readStatus: createSaleSyncStatusReader({
+            stateRepo: saleSyncStateRepo,
+            tenantId: pairingStatus.tenant_id,
+            branchId: pairingStatus.branch_id,
+            resolveTerminalId: resolveSaleSyncTerminalId,
+            pausedReason: () => saleSyncEngine.pausedReason(),
+          }),
         });
 
         // Background drain on an interval. Single-flight in the engine coalesces
-        // overlapping ticks; the interval is cleared on quit (closeDbHandle).
+        // overlapping ticks; the interval is cleared and the engine latched stopped
+        // on quit (closeDbHandle), so a send in flight writes nothing locally.
         const SALE_SYNC_INTERVAL_MS = 5_000;
-        const saleSyncInterval = setInterval(() => {
-          const admission = saleSyncEngine.runTickOnce();
-          if (admission.kind === 'started') {
-            admission.completed.catch((err: unknown) => {
-              mainLogger.error({ err }, 'sale_sync:tick_unexpected');
-            });
-          }
-        }, SALE_SYNC_INTERVAL_MS);
+        const stopSaleSync = scheduleSaleSync({
+          engine: saleSyncEngine,
+          latchStopped: () => {
+            saleSyncStopped = true;
+          },
+          intervalMs: SALE_SYNC_INTERVAL_MS,
+          drainTimeoutMs: SALE_SYNC_DRAIN_TIMEOUT_MS,
+          logger: mainLogger,
+        });
+        // Synchronous like every worker stop: the latch makes the DB close safe
+        // right after; the drain promise is not awaited here.
         workerRegistry.register('sale-sync interval', () => {
-          clearInterval(saleSyncInterval);
+          void stopSaleSync();
         });
         mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'sale_sync_engine:started');
-      } else {
+      });
+      if (bootPairing.kind !== 'paired') {
+        // Boot-time fact only: the starter above runs when the pairing completes.
         mainLogger.info('finalize_listener:skipped_unpaired');
       }
     }
+
+    // ── RT-15 S2 — cashier returns (main-process domain; no renderer UI yet) ──
+    //
+    // The `returns:*` handlers are registered UNCONDITIONALLY (T094c lesson: the
+    // renderer gets a typed `feature_disabled` refusal, never "no handler"). The
+    // service re-reads `POS_PULSE_FEATURE_RETURNS` per call (default off, AC1),
+    // requires a manager/admin operator session (D-b), and talks only to
+    // Backend-Core `/api/pos/v1/sales/...` (AC7) with the operator envelope of
+    // the admitted authorization snapshot (RT-197 A5). The background resolver
+    // (startup + interval) re-sends `pending` / `unknown` returns with the
+    // identical request; it is scheduled with the flag on and resolves pairing +
+    // operator live on every tick.
+    const returnsDomain = composeReturns({
+      db,
+      http: {
+        baseUrl: resolveApiBaseUrl(),
+        fetch: globalThis.fetch.bind(globalThis),
+      },
+      // RT-197 A5: read only into the authorization snapshot (and at a
+      // recheck); every send carries the snapshot's envelope explicitly.
+      getOperatorEnvelope: createSaleSyncTokenReader(
+        operatorSessionManager,
+        operatorEnvelopeHolder,
+      ),
+      isEnabled: () => parseFeatureFlags(process.env).returns,
+      getSession: () =>
+        resolveSessionScope(
+          operatorSessionManager.getCurrent(),
+          pairingStore.getCurrentTerminalId(),
+        ),
+      isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
+      auditSink: auditEmitter,
+      logger: mainLogger,
+      now: () => new Date().toISOString(),
+      // RT-15 S4: the SAME drawer port and print pipeline as sales (no new
+      // hardware path): the payout kicks the drawer, the slip prints through
+      // the receipt pipeline's path selection.
+      drawer: drawerKickTransport,
+      printer: printPipeline,
+    });
+    registerReturnsHandlers(guardedIpcMain, { service: returnsDomain.service });
+    if (parseFeatureFlags(process.env).returns) {
+      // Scheduled regardless of pairing: each tick resolves the paired terminal
+      // and an eligible (unlocked manager/admin) operator live, so in-process
+      // pairing needs no restart; until then every tick is a no-op.
+      const RETURNS_RESOLVER_INTERVAL_MS = 30_000;
+      const stopReturnsResolver = scheduleReturnsResolver({
+        resolver: returnsDomain.resolver,
+        stopDomain: returnsDomain.stop,
+        intervalMs: RETURNS_RESOLVER_INTERVAL_MS,
+        drainTimeoutMs: RETURNS_DRAIN_TIMEOUT_MS,
+        logger: mainLogger,
+      });
+      // Synchronous like every worker stop: latches the domain stopped (no
+      // send starts; an in-flight send writes nothing when it settles), so the
+      // DB may close right after. The drain promise is not awaited here.
+      workerRegistry.register('returns resolver', () => {
+        void stopReturnsResolver();
+      });
+    }
+
+    // ── RT-17 slice 3 — shift cash-up sync (flag-gated, default off) ──
+    //
+    // With POS_PULSE_FEATURE_SHIFT_CASHUP off (default, owner approval 10920)
+    // nothing is registered: the shift sync engine never starts. With it on,
+    // the engine is a paired-only worker like sale sync: the same device token
+    // reader (null unless paired, null once revoked), the same live current-
+    // terminal resolver (RT-221) and the RT-215 detector on every answer, one
+    // tick every 5 s, stopped with the other workers before the DB closes.
+    registerShiftSync({
+      enabled: parseFeatureFlags(process.env).shiftCashup,
+      pairedWorkers: pairedWorkersLatch,
+      workers: workerRegistry,
+      start: (terminal) =>
+        startShiftSync({
+          db,
+          terminal,
+          client: {
+            baseUrl: resolveApiBaseUrl(),
+            fetch: globalThis.fetch.bind(globalThis),
+            detector: deviceAuthDetector,
+            getDeviceToken: readSendableDeviceToken,
+            currentTerminalId: () => pairingStore.getCurrentTerminalId(),
+          },
+          resolveTerminalId: createCurrentTerminalResolver(() => pairingStore.getStatus()),
+          logger: mainLogger,
+        }),
+    });
+
+    // ── RT-17 slice 4 part 1 — shift cash-up IPC (flag-gated, default off) ──
+    //
+    // Registered only with POS_PULSE_FEATURE_SHIFT_CASHUP on, on the
+    // lock-guarded ipcMain (no shift channel is on the lock allowlist). The
+    // service re-reads the flag and requires the live operator session on the
+    // paired terminal on every call; a fact needs an admitted cashier.
+    // Part 2 (RT-17 10943): a variance close takes a manager PIN, verified
+    // against the local manager PIN records (sealed with safeStorage); a
+    // manager signed in online enrols theirs. Re-checks after an await read
+    // the RT-215 pairing epoch (F2, 10944).
+    registerShiftCashupIpc({
+      enabled: parseFeatureFlags(process.env).shiftCashup,
+      ipcMain: guardedIpcMain,
+      db,
+      isEnabled: () => parseFeatureFlags(process.env).shiftCashup,
+      getSession: () =>
+        resolveSessionScope(
+          operatorSessionManager.getCurrent(),
+          pairingStore.getCurrentTerminalId(),
+        ),
+      isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
+      pairedScope: async () => pairedShiftScope(await pairingStore.getStatus()),
+      pairingEpoch: () => pairingStore.getPairingEpoch(),
+      getManager: () => managerIdentityOf(operatorSessionManager.getCurrent()),
+      onSessionStarted: (listener) => {
+        operatorSessionManager.onStarted(listener);
+      },
+      currentTerminalId: () => pairingStore.getCurrentTerminalId(),
+      safeStorage,
+      now: () => new Date().toISOString(),
+      logger: mainLogger,
+    });
 
     createWindow();
     mainLogger.info('app:ready');
@@ -1358,6 +2054,7 @@ function closeDbHandle(): void {
   // tick cannot run against a closed handle. Stop ordering, failure isolation,
   // and idempotency are owned by the worker registry; this function preserves
   // the sequencing (drain, then close).
+  pairedWorkers?.close();
   workerRegistry.stopAll();
   dbHolder.close();
 }

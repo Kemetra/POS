@@ -27,6 +27,65 @@
   line-height: var(--line-height-snug);
 }
 
+/* RT-239 — scan-owner status: text plus an icon, never colour alone. */
+.v5-live-scan-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  margin-inline-start: auto;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-live-scan-status[data-state='ready'] {
+  border-color: var(--color-success);
+  color: var(--color-success-emphasis);
+}
+
+.v5-live-scan-status[data-state='dialog'],
+.v5-live-scan-status[data-state='unavailable'] {
+  border-color: var(--color-warning);
+  color: var(--color-warning-emphasis);
+}
+
+.v5-live-scan-status-icon {
+  display: inline-grid;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+@media (forced-colors: active) {
+  .v5-live-scan-status,
+  .v5-live-scan-status[data-state] {
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+
+  /* RT-241 (VN-S2): filled actions keep an edge; selection is the system pair. */
+  .v5-live-btn--primary,
+  .v5-live-btn--danger,
+  .v5-live-sale .v5-sale-checkout {
+    border: 3px solid ButtonText;
+  }
+
+  .v5-live-btn:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
+  /* An edge, not a fill: forced-color-adjust is inherited and would un-force the row's button. */
+  .v5-sale-product-row[aria-selected='true'] {
+    outline: 3px solid Highlight;
+    outline-offset: -3px;
+  }
+}
+
 /*
  * Inside the v5 frame the Sale is measured by the space it receives, not by
  * the viewport: at a 1280px window the nav leaves ~1070px, which needs the
@@ -202,26 +261,7 @@
   cursor: pointer;
 }
 
-.v5-live-dialog-backdrop {
-  position: fixed;
-  z-index: 10;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: var(--color-overlay-scrim);
-}
-
-.v5-live-dialog {
-  display: grid;
-  gap: var(--space-3);
-  inline-size: min(440px, calc(100% - var(--space-5)));
-  padding: var(--space-5);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-  color: var(--color-text);
-  box-shadow: var(--shadow-overlay);
-}
+/* Dialog backdrop and panel base: foundation/dialog.css (RT-241, one Dialog). */
 
 .v5-live-dialog h2,
 .v5-live-dialog h3,

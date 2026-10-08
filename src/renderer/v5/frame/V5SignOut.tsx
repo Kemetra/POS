@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type JSX, type RefObject } from 'react';
 import type { PreloadBridgeAPI } from '../../../shared/bridge-api';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
-import { usePaymentStore } from '../../stores/payment-store';
+import { signOutBlock, usePaymentStore } from '../../stores/payment-store';
 
 const SIGN_OUT_ERROR = 'تعذّر تسجيل الخروج — حاول مرة أخرى';
 const PAYMENT_OPEN_HINT = 'أكمل الدفع أو ألغِه أولاً';
+// RT-298 — a force-failed attempt with live tender: only a manager can move on.
+const PAYMENT_HELD_HINT = 'اطلب من المدير مراجعة الدفع أولاً';
 const HINT_ID = 'v5-sign-out-hint';
 
 function signOutThroughMain(): Promise<unknown> {
@@ -32,6 +34,13 @@ function useSignOutFlow(): SignOutFlow {
   const openerRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
+  // RT-298 — a payment that opens (or a live-tender hold) while the
+  // confirmation is up closes it: sign-out would reset the payment store.
+  const blocked = usePaymentStore((s) => signOutBlock(s) !== null);
+
+  useEffect(() => {
+    if (blocked && !busy) setConfirming(false);
+  }, [blocked, busy]);
 
   useEffect(() => {
     if (confirming) {
@@ -52,7 +61,7 @@ function useSignOutFlow(): SignOutFlow {
   };
 
   const confirm = async (): Promise<void> => {
-    if (busy) return;
+    if (busy || signOutBlock(usePaymentStore.getState()) !== null) return;
     setBusy(true);
     setError(null);
     try {
@@ -81,7 +90,8 @@ function useSignOutFlow(): SignOutFlow {
 }
 
 function SignOutButton({ flow }: { flow: SignOutFlow }): JSX.Element {
-  const paymentOpen = usePaymentStore((s) => s.paymentSlice?.state === 'started');
+  const block = usePaymentStore(signOutBlock);
+  const paymentOpen = block !== null;
   return (
     <div className="v5-frame__sign-out">
       <button
@@ -95,7 +105,7 @@ function SignOutButton({ flow }: { flow: SignOutFlow }): JSX.Element {
       </button>
       {paymentOpen && (
         <span id={HINT_ID} className="v5-frame__sign-out-hint">
-          {PAYMENT_OPEN_HINT}
+          {block === 'held' ? PAYMENT_HELD_HINT : PAYMENT_OPEN_HINT}
         </span>
       )}
     </div>

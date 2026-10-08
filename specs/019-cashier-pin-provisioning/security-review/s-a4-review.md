@@ -22,12 +22,19 @@ baseline (specs/004-operator-session/security-review/s1-review.md).
 | Constitution version pinned | v1.5.1 |
 | Verdict | **CLEARED (caveated).** All 12 required controls observed in code; two residuals carried (R-NFR1-TXN, R-DP2-LIVE) — neither re-opens the bridge boundary. See §9. |
 
+> **RT-235 amendment (2026-10-06).** The request field changed from `target_user_id` to `target_cashier_id`
+> (the roster `id` the renderer already holds); main now resolves the neutral `user_id` from the manager
+> roster entry with that `id`, the opposite direction to the one this review originally walked. The affected
+> controls (INP-1, VII-1, ID-1, RES-1), threat T7 and the §6 exposure statement are corrected in place below
+> and re-walked in **§10**. This re-check was done by the implementing agent against the RT-235 diff, not by an
+> independent reviewer; it needs the owner's sign-off. The rest of this document is the 2026-06-13 walk.
+
 > This is the §A4 companion to 004's `security-review/s1-review.md` (the operator-bridge baseline 019
 > inherits) and 016's `security-review/s-d5d7-review.md` (the most recent operator-bridge re-check),
 > applied to 019's single new channel. Because `provisionCashierPin` mirrors the long-reviewed
 > `resetCashierPin` shape almost exactly, this review is mostly a **delta**: it confirms the new method
 > preserves every invariant the reset path already cleared, and scrutinizes the **one genuinely new thing**
-> — the roster lookup that resolves the provider-neutral `target_user_id` to the cashier's Clerk id.
+> — the roster lookup that resolves the provider-neutral `user_id` for the cashier named by the roster `id` (RT-235: originally the reverse lookup, `target_user_id` → Clerk id).
 
 ---
 
@@ -35,7 +42,7 @@ baseline (specs/004-operator-session/security-review/s1-review.md).
 
 | Source | What it pins |
 | :--- | :--- |
-| [contracts/provision-cashier-pin.md](../contracts/provision-cashier-pin.md) | The channel, its request `{event_id, target_user_id, initial_pin}`, the response union, the 4 refusal categories, and the 5 invariants verified before success. |
+| [contracts/provision-cashier-pin.md](../contracts/provision-cashier-pin.md) | The channel, its request `{event_id, target_cashier_id, initial_pin}` (RT-235; originally `target_user_id`), the response union, the 4 refusal categories, and the 5 invariants verified before success. |
 | [plan.md](../plan.md) §Constitution-check (P7/P8/VII/VIII) | P7 secret-free, P8 bridge boundary, VII trusted-enrichment, VIII born-neutral. |
 | [spec.md](../spec.md) FR-4 / FR-5 / FR-6 / FR-9 / FR-11 | Role-gate, create-only, PIN never off-device, scope from pairing, `not_ready` no-fallback. |
 | `src/main/operator/pin-management.ts` (`provisionCashierPin`) | The as-built handler — the code under review. |
@@ -50,7 +57,7 @@ baseline (specs/004-operator-session/security-review/s1-review.md).
 ### Covered by this gate
 
 - `operator.provisionCashierPin` — the manager/admin-invokable first-PIN create channel
-  (request `{event_id, target_user_id, initial_pin}` → `pin_provisioned` | `OperatorRefusal`).
+  (request `{event_id, target_cashier_id, initial_pin}` → `pin_provisioned` | `OperatorRefusal`).
 - Its IPC boundary validator `asProvisionCashierPinRequest` + the `PROVISION_CASHIER_PIN` handler
   (validate → delegate → catch) in `src/main/ipc/operator.ts`.
 - The preload/channel-constant surface registering the channel (`OPERATOR_IPC_CHANNELS.PROVISION_CASHIER_PIN`).
@@ -77,11 +84,11 @@ Each control is a PASS condition; the Evidence column cites the **as-built code*
 | AD-1 | **Role-gate is the FIRST executable check** | `requireRole(['manager','admin'], session)` runs before any validation, DB read, roster fetch, or write; a refusal short-circuits | `pin-management.ts` `provisionCashierPin` — first statement is `requireRole(...)` inside try/catch, mirroring `resetCashierPin`. Cashier → `role_mismatch`, no row (test `T015`). |
 | AD-2 | **Generic refusal** — one closed-set category per failure, no factor-distinguishing detail | response is `{kind:'refused', category}` with `category ∈ {role_mismatch, not_ready, state_invalid, invalid_input, no_connection}`; rejected values never echoed | contract Refusal table; handler returns the sentinels `REFUSE_*`; the IPC catch returns generic `invalid_input`. Tests assert each category + that the rejected PIN/value never appears. |
 | SEC-1 | **No secret crosses the bridge upward, is logged, or is returned** (P7/FR-6) | the plaintext `initial_pin` is consumed by `hashPin` and never persisted as plaintext, never logged, never in the response; no hash/salt in the response | `initial_pin` flows only into `hashPin()` → `sealPinMaterial()`; the response is `{kind:'pin_provisioned', audit_event_id}` only. Tests assert the PIN string + `pin_hash`/`pin_salt` appear in no log, audit payload, or response (`T014` secret-free audit). |
-| INP-1 | **Input validation at the boundary — minimal trust** | `asProvisionCashierPinRequest` rejects non-objects + missing/empty/wrong-type `event_id`/`target_user_id`/`initial_pin` → `null` → `invalid_input`; PIN shape (`^\d{4,6}$`) validated main-side | `ipc/operator.ts` `asProvisionCashierPinRequest` (string + non-empty guards); handler re-validates `isValidPin`. IPC tests cover non-object + each malformed field; handler test covers bad PIN shape (`T018`). |
-| VII-1 | **Scope is trusted-enrichment, never from the renderer** | `tenant_id`/`branch_id`/`terminal_id` come from `pairingStore.getStatus()`, never the request; unpaired → `invalid_input` | handler reads scope from `pairingStore.getStatus()`; the request carries NO scope fields (only `event_id`/`target_user_id`/`initial_pin`). Unpaired terminal → `invalid_input`, no row (test `T018` unpaired). |
+| INP-1 | **Input validation at the boundary — minimal trust** | `asProvisionCashierPinRequest` rejects non-objects + missing/empty/wrong-type `event_id`/`target_cashier_id`/`initial_pin` → `null` → `invalid_input`; PIN shape (`^\d{4,6}$`) validated main-side | `ipc/operator.ts` `asProvisionCashierPinRequest` (string + non-empty guards); handler re-validates `isValidPin`. IPC tests cover non-object + each malformed field; handler test covers bad PIN shape (`T018`). |
+| VII-1 | **Scope is trusted-enrichment, never from the renderer** | `tenant_id`/`branch_id`/`terminal_id` come from `pairingStore.getStatus()`, never the request; unpaired → `invalid_input` | handler reads scope from `pairingStore.getStatus()`; the request carries NO scope fields (only `event_id`/`target_cashier_id`/`initial_pin`). Unpaired terminal → `invalid_input`, no row (test `T018` unpaired). |
 | WR-1 | **Create-only — no overwrite / no duplicate** | an existing row (born-neutral OR legacy clerk-keyed) → `state_invalid`; the existing secret is never replaced; no second row | handler's existence guard `WHERE … AND (user_id = ? OR cashier_clerk_user_id = ?)` → `REFUSE_STATE_INVALID`. Tests assert the seeded hash is intact + row count stays 1 for both the neutral and legacy cases (`T016` ×2). |
-| ID-1 | **`not_ready` never falls back to a provider-coupled key** (FR-11) | a cashier with no roster `user_id` → `not_ready`, no row, no clerk-keyed fallback | handler resolves `roster.cashiers.find(c => c.user_id === target_user_id)`; `undefined` → `REFUSE_NOT_READY`. No code path writes a row when the neutral key is absent (tests `T017` ×2). |
-| RES-1 | **Roster resolution stays main-side; the neutral↔clerk mapping never crosses the bridge** | the handler resolves `target_user_id → clerk id` via `backend.listRoster` in-process; the renderer never receives the mapping | the resolution uses the injected `BackendClient` main-side; the renderer-facing `BranchRosterCashier` deliberately does NOT carry `user_id` (the widened field is on the main-only `BackendRosterCashier`). Minimum-disclosure (Constitution VII). |
+| ID-1 | **`not_ready` never falls back to a provider-coupled key** (FR-11) | a cashier with no roster `user_id` → `not_ready`, no row, no clerk-keyed fallback | handler resolves `roster.cashiers.find(c => c.id === target_cashier_id)`; no entry, an entry without `user_id`, or an empty `user_id` → `REFUSE_NOT_READY` (RT-235 + review). No code path writes a row when the neutral key is absent (tests `T017` ×2). |
+| RES-1 | **Roster resolution stays main-side; the neutral↔clerk mapping never crosses the bridge** | the handler resolves `target_cashier_id → neutral user_id` via `backend.listRoster` in-process (RT-235; originally the reverse direction); the renderer never receives the mapping | the resolution uses the injected `BackendClient` main-side; the renderer-facing `BranchRosterCashier` deliberately does NOT carry `user_id` (the widened field is on the main-only `BackendRosterCashier`). Minimum-disclosure (Constitution VII). |
 | IPC-1 | **Handler never throws across the bridge** | a DB/roster/seal fault degrades to a typed refusal, never an error string or stack to the renderer | `ipc/operator.ts` wraps `pinManagementHandler.provisionCashierPin(req)` in try/catch → generic `invalid_input`. IPC test asserts an inner throw yields `invalid_input` and the error message ("fire") does not cross. |
 | CONN-1 | **A roster fetch failure is truthful, not mislabeled** | `listRoster` `no_connection` → `no_connection` refusal (not silently `invalid_input` or an uncaught throw) | handler returns `REFUSE_NO_CONNECTION` on `roster.kind === 'no_connection'`; a non-roster non-connection result → `invalid_input`. Test asserts the `no_connection` path, no row. |
 | RED-1 | **Redaction — diagnostics log only status + category, never the PIN/hash/salt/credential** | the handler's `log()` emits `{event, category}` only; no PIN, no roster body, no token | handler `log('info', 'provision_cashier_pin.*', category?)` — logs an event tag + optional refusal category; never the request. Inherits 004's `forbidden-keys` redaction baseline (`s1-redaction-evidence.md`). |
@@ -104,7 +111,7 @@ device token) is trusted and reachable only through this one enumerable, typed c
 | T4 | **Provider-coupling smuggled back in** (defeats born-neutral, VIII) | `not_ready` silently falls back to keying on the Clerk subject | ID-1 — absent neutral key → `not_ready`, hard stop; no code path writes a clerk-keyed row from this handler. |
 | T5 | **Overwrite an existing PIN via the create path** (privilege/audit bypass) | call provision on an already-provisioned cashier to silently reset their secret without the reset audit trail | WR-1 — create-only guard across both key columns → `state_invalid`; the existing secret is never touched; directs to the audited reset path. |
 | T6 | **Error/stack disclosure** | a DB/seal/roster fault throws across the bridge, leaking a query echo or stack | IPC-1 — the IPC handler catches and degrades to generic `invalid_input`; the handler's own refusals are typed. |
-| T7 | **Neutral↔clerk identity mapping leaks to the renderer** | the renderer learns which Clerk subject a neutral `user_id` maps to | RES-1 — the mapping is resolved main-side via `BackendClient`; the renderer-facing roster type carries no `user_id`; neither the request nor the response carries the clerk id. |
+| T7 | **Neutral↔clerk identity mapping leaks to the renderer** | the renderer learns which neutral `user_id` a Clerk subject maps to | RES-1 — the mapping is resolved main-side via `BackendClient`; the renderer-facing roster type carries no `user_id`; the response carries neither id. RT-235: the request now carries the roster `id` (the Clerk subject), which the renderer already holds and already sends on reset/unlock, so nothing new is disclosed upward. |
 | T8 | **Connection-state confusion** | a roster outage is mislabeled as bad input, or throws, masking the real cause | CONN-1 — `no_connection` surfaces truthfully; no row; not conflated with `invalid_input`. |
 
 ---
@@ -120,8 +127,9 @@ Through `provisionCashierPin`, the renderer can observe **only**:
 
 **Not present** in any response: the plaintext PIN / its Argon2id hash / its salt / the device token / JWT /
 session token / the cashier's Clerk subject id / the branch roster body / any credential. The renderer
-supplies the neutral `target_user_id` (it already holds it, to choose a cashier) and the PIN (which it
-collected); it never receives the clerk-id mapping back. `contextIsolation: true` /
+supplies the roster `id` of the cashier it chose (it already holds it: reset and unlock send the same
+value) and the PIN (which it collected); it never receives the neutral `user_id` or the id-to-`user_id`
+mapping back (RT-235; this paragraph originally said the renderer held the neutral id). `contextIsolation: true` /
 `nodeIntegration: false` / `sandbox: true` unchanged.
 
 ---
@@ -170,7 +178,7 @@ role-gated-first, generic-refusal, scope-from-pairing (never the renderer), crea
 duplicate, incl. legacy rows), secret-free (PIN/hash/salt never cross the bridge, are never logged, never
 in the response or audit), redaction-covered, throw-safe at the IPC boundary, truthful on connection
 failure, and strictly local-create with no upward write path. The one genuinely new element — resolving the
-provider-neutral `target_user_id` to the cashier's Clerk id — is performed **main-side** and never leaks the
+neutral `user_id` for the cashier the renderer named by roster `id` (RT-235; originally the reverse) — is performed **main-side** and never leaks the
 mapping to the renderer (RES-1), preserving minimum-disclosure (Constitution VII) and advancing VIII
 (born-neutral). All 12 §4 controls are observed in the as-built diff with test evidence.
 
@@ -178,6 +186,30 @@ Two residuals are carried, **neither re-opening the bridge boundary**: R-NFR1-TX
 confirmation, matching the existing reset path) and R-DP2-LIVE (the held upstream field; security posture is
 identical in the `not_ready` state). Any future change that introduces an **upward write path** on this
 surface, accepts **scope from the renderer**, or **echoes a secret/clerk-id mapping** returns here.
+
+---
+
+## 10. RT-235 re-check (2026-10-06): `target_user_id` becomes `target_cashier_id`
+
+**What changed.** `ProvisionCashierPinRequest.target_user_id` is now `target_cashier_id`, the roster `id` (the
+provider subject, the session `operator_id`) that the renderer already holds and already sends for
+`resetCashierPin` and `unlockCashier`. `provisionCashierPin` looks up the manager-roster entry with that `id` and
+reads its neutral `user_id` main-side. Reason: the renderer-facing roster deliberately carries no `user_id`, so
+no UI could supply the old field and the channel had no caller (Jira RT-235).
+
+**Re-walk of the affected controls (against the RT-235 diff).**
+
+| Control | Result | Evidence |
+| :--- | :--- | :--- |
+| AD-1, AD-2, SEC-1, WR-1, IPC-1, CONN-1, RED-1, ATOM-1 | unchanged | handler order and bodies untouched apart from the lookup; the full provision suite passes |
+| INP-1 | PASS | `asProvisionCashierPinRequest` requires non-empty `event_id`, `target_cashier_id`, `initial_pin`; the IPC test covers `''` and `null` for the new field |
+| VII-1 | PASS | the request still carries no scope fields |
+| ID-1 | PASS, tightened | not on the roster, no `user_id`, or `user_id === ''` → `not_ready`, no row, no audit (tests, incl. the empty-id case from review); a raw neutral id supplied as the key is `not_ready` too |
+| RES-1 | PASS | `user_id` still never reaches the renderer; only the roster `id` goes up, and nothing new comes back |
+| New: stale-response and double-submit | PASS (UI, not a boundary control) | Save is single-flight; Cancel, Escape and row actions are blocked while a call is in flight |
+
+**Residual.** None new. R-NFR1-TXN and R-DP2-LIVE are unchanged. The re-check is the implementing agent's; the
+owner decides whether it stands as the §A4 verdict for the amended channel.
 
 ---
 

@@ -1,0 +1,1556 @@
+openapi: 3.1.0
+info:
+  title: Data-Pulse-2 POS Sales — Transaction Capture API
+  version: "1.6.0-draft"
+  description: >
+    Spec 008 Sales / Transaction Capture contract surface. Defines the first
+    sale fact the SaaS owns: an immutable `sales` header + frozen `sale_lines`
+    snapshot, plus append-only void and refund terminal events. Built ALONGSIDE
+    the shipped 005 POS ingestion seam — it reuses the `Idempotency-Key`
+    interceptor, the `sourceSystem + externalId` dedup key, tenant-context/RLS,
+    audit, and outbox. It does NOT re-invent ingestion. Tender (gate A.5) was
+    deferred until RT-10; from RT-76 a sale carries its tender facts (below).
+
+    Five operations, all POS-facing (`/api/pos/v1/...`), authenticated via the
+    `operatorAuthorization` scheme — the opaque DP-2-issued operator-authorization
+    ENVELOPE presented as `Authorization: Bearer <envelope>` (031 D1+D2). This
+    REPLACES the prior 008 Option-Y auth (a genuine Clerk JWT +
+    `X-Device-Attestation`): the envelope is minted + returned at operator
+    sign-in, and the backend re-evaluates the full operator predicate
+    (membership / device / store-access / role / expiry) LIVE per request (G-4).
+    The 028 DOC-3 deferral is now resolved — this is the role-named authorization
+    scheme the rename waited on (distinct from spec 030's identity-proof-only
+    `operator-identity`). The principal's
+    resolved tenant + store binding (spec 002) supplies `tenant_id` and
+    `store_id`; body-supplied tenant / store / actor fields are NEVER accepted
+    (Constitution §III, FR-061):
+
+      1. `captureSale`  — accept a completed sale (header + lines); create the
+         immutable `sales` + `sale_lines` snapshot; preserve POS totals
+         verbatim (FR-030); dedup on `(tenant, sourceSystem, externalId)`
+         (FR-050); retain provenance + SHA-256-canonical payload hash (gate C);
+         return a stable sale reference (FR-001..005, FR-040).
+      2. `recordVoid`   — create a void terminal event referencing a sale;
+         stamp `voidedAt` (server clock); never mutate the original; idempotent
+         re-delivery (FR-010/011/013/014).
+      3. `recordRefund` — DEPRECATED (RT-14 D1). Create a refund terminal
+         event referencing a sale; stamp `refundedAt`; preserve the
+         POS-reported refund amount verbatim; idempotent (FR-010/012/013/014).
+         No tender fields (gate A.5). Not for new use — see `recordReturn`.
+      4. `readSale`     — the minimal authorized read to resolve a sale for
+         void/return and duplicate-replay; object-level authz; cross-tenant /
+         out-of-scope ids are non-disclosing 404s (FR-014/063/100/102).
+      5. `recordReturn` — RT-72 (RT-14 D1–D5): a line-aware return naming
+         `lines[{lineRef, quantity}]`; the server computes all money and
+         records the refund tender as a fact. Live from RT-73 behind the
+         `POS_RETURNS_ENABLED` deployment gate.
+
+    RT-72 versioning (additive): `recordReturn` is new; `SaleLine` gains
+    `lineRef`, `returnedQuantity` and `returnableQuantity`, and `Sale` gains
+    `voided`, on both `readSale` and `captureSale`. The server emits the new
+    fields from RT-73, so they are OPTIONAL in this version; RT-73 makes
+    them required once it emits them (non-breaking for a response). Because
+    `Sale` / `SaleLine` are `additionalProperties: false`, a client that
+    validates responses strictly (the POS) must re-pin this version before
+    RT-73 deploys — optional fields make that safe to do now.
+
+    RT-73 (1.2.0-draft): the server now emits those fields, so they are
+    REQUIRED; `recordReturn` is live behind `POS_RETURNS_ENABLED`; and returns
+    are priced by the cumulative-difference rule (RT-14 D1 amended by option
+    (a), RT-73 comment 10406). A second void of a voided sale is now 409
+    `already_reversed` (RT-14 D2).
+
+    RT-76 versioning (additive; RT-10 D1/D2/D7/D8): `CaptureSaleRequest` gains
+    an OPTIONAL `tenders[{method, amount, reference?}]` (`SaleTender`) and
+    `captureSale` gains 422 `sale_tender_mismatch`; `Sale` gains an OPTIONAL
+    `tenders` on `readSale` and `captureSale`. The tender list is part of the
+    immutable sale fact and of its payload hash. It is NOT a payment ledger
+    (ADR-0005) and is unrelated to the 035 payer receivables. The terminal
+    device is resolved server-side from the operator envelope and is never a
+    request field (RT-10 D7). ROLLOUT ORDER: the server accepts `tenders` from
+    RT-77 — until then the strict capture DTO rejects the unknown field (400),
+    so the POS MUST NOT send it before RT-77 is deployed. `Sale.tenders` is
+    OPTIONAL until RT-77 emits it. Optional does not make an OLD strict client
+    accept the new field: because `Sale` is `additionalProperties: false`, a
+    client that validates responses strictly must re-pin this version BEFORE
+    RT-77 deploys (the same order as RT-72). The current POS capture client
+    classifies the response by status code only.
+    Settlement is Connector-first: a tender-bearing sale must never reach the
+    ERPNext posting feed without its tenders, so accepting `tenders` on capture
+    must wait for Connector settlement support, or such sales must be held off
+    the feed until it lands (see `erpnext-connector/posting-feed.yaml`,
+    ROLLOUT ORDER and INVARIANT).
+
+    RT-105 (1.3.0-draft; RT-87 decision D): from the RT-105 capture change,
+    `captureSale` enforces a sale-line price invariant and gains 422
+    `sale_line_pricing_invalid` (until then it keeps capturing such lines); the
+    422 response is renamed `CaptureUnprocessable` and carries both codes. The
+    request shape is unchanged — no field, pattern or `required` list moves. A
+    line whose `unitPrice` or `lineAmount` has more fractional digits than its
+    currency's minor unit, whose `lineAmount` is not exactly `unitPrice ×
+    quantity`, or whose `quantity` is not a whole number is rejected, because
+    such a line cannot be returned exactly: ERPNext posts a return at the
+    original rate × returned quantity, at the currency's precision. The POS
+    already sends conforming lines (integer quantity × unit price in minor
+    units), so it is unaffected; any other producer now gets 422 instead of an
+    unreturnable sale. Sales captured before RT-105 are not re-checked.
+
+    RT-105 completion (still 1.3.0-draft; request shape still unchanged): the
+    minor unit is the currency's ISO-4217 exponent (JPY 0, EGP 2, OMR 3, CLF
+    4), never an assumed 2; a currency with no ISO-4217 minor unit cannot meet
+    the invariant, so its lines are 422 `sale_line_pricing_invalid`. On
+    `recordReturn`, a line sold in a whole quantity can only be returned in
+    whole quantities (else 400 `validation_error`), so every return of a
+    conforming line prices to exactly `unitPrice × q`.
+
+    RT-181 (1.4.0-draft; RT-66 follow-up): the `Idempotency-Key` header on
+    `captureSale`, `recordVoid`, `recordRefund` and `recordReturn` now
+    declares the rule the `IdempotencyInterceptor` already enforces — 16 to
+    128 printable ASCII characters, no whitespace (`^[\x21-\x7E]{16,128}$`)
+    — instead of 1 to 255. The server is unchanged: a key outside the rule
+    was already rejected with 400 before the handler ran. The POS sends
+    `pos-pulse:<UUID>` (46 characters), so it is unaffected.
+
+    RT-224 (1.5.0-draft; Option B, [GATED] approval Jira RT-224 comment
+    10889): `captureSale` gains a second, alternative security requirement,
+    `device` — the paired terminal's device bearer — used together with a new
+    OPTIONAL body field `CaptureSaleRequest.operatorUserId`. The server checks
+    the claimed cashier against a `cashier_admissions` row of the same device
+    whose window covers the sale's `occurredAt`, re-checks the cashier's
+    membership and store access live, and records the cashier as the sale's
+    `created_by`. This lets a cashier's sales sync, including after sign-out
+    and at end of shift. The change is additive: an added alternative security
+    requirement, an optional field, and a new `403` response on
+    `captureSale` (the generic `refused`, returned only on the device path for
+    a refused cashier claim). The `operatorAuthorization` path, every other
+    operation, the other responses and the idempotency, rate-limit and
+    isolation rules are unchanged. A client that does not send
+    `operatorUserId` sees no difference. The window carries a 120 s
+    clock-skew tolerance and the device path caps back-dating at 7 days and
+    future dating at 120 s (adversarial review of PR #709: F1 403, F2
+    tolerance, F3 caps).
+
+    RT-225 (1.6.0-draft; [GATED] approval Jira RT-225, owner, 2026-10-05):
+    `CaptureSaleRequest` gains an OPTIONAL `admissionCheckAt` (date-time),
+    allowed only with `operatorUserId`. When present, the device path checks
+    the cashier admission window against `admissionCheckAt` (the sale's
+    settled time) instead of `occurredAt`, so a sale finalized after the
+    admission window (for example by boot recovery) still syncs.
+    `occurredAt` stays the sale fact: the stored `occurred_at`, the
+    `business_date`, the `payload_hash` and the posting feed are unchanged,
+    and the future-dating cap still applies to it. The change is additive:
+    one optional request field and new `400` causes for that field only. No
+    response, security requirement, operation or migration changes. A client
+    that does not send `admissionCheckAt` sees no difference.
+
+    Money: every monetary field is an exact-decimal string (`numeric(19,4)` at
+    rest) paired with an ISO-4217 `currency_code` (gate A.1/A.6). No float ever
+    appears on the wire. Timestamps are RFC 3339 / `date-time` in UTC (FR-021).
+
+    Response bodies are explicit `toBody()` wire projections — the `sales` /
+    `sale_lines` DB shape is NEVER returned directly (Constitution §IV). The
+    failure vocabulary encodes the FR-101 eight-category set (validation,
+    not-found, idempotency-token-mismatch, already-applied, conflict,
+    forbidden, system-failure) under a single canonical `Error` envelope that
+    matches `auth.openapi.yaml` / `outbox.openapi.yaml`.
+
+    Idempotency: `captureSale`, `recordVoid`, and `recordRefund` REQUIRE the
+    `Idempotency-Key` header, reusing the existing `IdempotencyInterceptor`
+    (FR-051) — no new primitive. Identical retry replays the stored response;
+    key-reuse with a different logical payload returns 409
+    `idempotency_key_conflict` (FR-051, 005 FR-021c).
+
+    This contract is consumed by
+    `apps/api/test/catalog/sales/contract/sales.contract.spec.ts`, which loads
+    it with an explicit `dir` because the production `loadOpenApiContracts`
+    helper is non-recursive (`apps/api/src/openapi/loader.ts` — `readdirSync`
+    with no recursive flag), exactly as `catalog/unknown-items.yaml` is loaded.
+
+servers:
+  - url: https://api.example.com
+
+tags:
+  - name: pos-sales
+    description: >
+      POS sale capture and terminal events (void / refund). Spec 008 —
+      the first immutable sale fact the SaaS owns.
+
+paths:
+  /api/pos/v1/sales:
+    post:
+      summary: Capture a completed POS sale as an immutable fact.
+      operationId: captureSale
+      x-idempotency: required
+      tags: [pos-sales]
+      security:
+        - operatorAuthorization: []
+        - device: []
+      description: >
+        Create the immutable `sales` header + frozen `sale_lines` snapshot from
+        a completed POS sale. The authenticated principal supplies `tenant_id`
+        and `store_id` (spec 002); body-supplied tenant / store / created_by /
+        received_at / business_date / processed_at / mismatch_flag are rejected
+        (FR-061). POS-reported totals are preserved verbatim (FR-030); the SaaS
+        computes a per-line / half-up comparison total for an ADVISORY mismatch
+        flag only — it never rewrites the POS total. Line snapshots
+        (`line_name` / `unit_price` / `tax_amount` / `unit`) are frozen at
+        capture and are unaffected by later catalog edits (FR-003). A line that
+        resolves to no tenant product is still snapshotted; no tenant product
+        is auto-created (FR-004).
+
+        Idempotency: the `Idempotency-Key` header is REQUIRED. Dedup is on
+        `(tenant, sourceSystem, externalId)` (FR-050) — replays return the same
+        stable sale reference deterministically (FR-100), with no double-apply.
+
+        Tender (RT-10 D1, from RT-77): the optional `tenders` list records how
+        the sale was paid. Each `amount` is NET of change (cash = tendered −
+        change), there is at most one entry per `method` (else 400), and the
+        amounts MUST sum to `posTotal` exactly (else 422
+        `sale_tender_mismatch`); nothing is recorded on either failure. The
+        tender list is hashed into the payload, so a replay that adds, drops or
+        changes tenders is a different payload (409). An absent list is a
+        tender-unknown sale (RT-10 D8): it is captured exactly as before, and
+        the server NEVER derives tender from `posTotal`.
+
+        Line pricing (RT-105): every line must satisfy the `CaptureSaleLine`
+        price invariant, else 422 `sale_line_pricing_invalid`; nothing is
+        recorded. The tender rule is checked first, so a body that breaks both
+        answers `sale_tender_mismatch`. The invariant applies to a first capture
+        only: a replay of a sale captured before RT-105 is never re-checked, and
+        still returns 200 with the stored projection.
+
+        Cashier attribution (RT-224): a sale may instead be sent with the
+        `device` scheme (the paired terminal's device bearer) plus the
+        cashier's `operatorUserId` in the body. The presence of `operatorUserId`
+        selects this path; without it the request is an
+        `operatorAuthorization` request exactly as before. On this path the
+        device row supplies the tenant, store and device, and the server
+        accepts the sale only if the device is active, a cashier admission of
+        that device and store for that user covers `occurredAt` (see
+        `operatorUserId`), and the cashier's membership, store access and
+        account are still live. A missing, invalid or revoked device
+        credential is the same generic 401 as an invalid envelope. A refused
+        cashier claim from an authenticated device (no covering admission,
+        an ineligible cashier, a sale outside the window or beyond the dating
+        caps, an unknown or foreign `operatorUserId`) is the generic 403
+        `refused`, with one body for every cause: it never reveals whether
+        the user or the admission exists, and it is never a sign that the
+        device was revoked. A malformed body from an authenticated device is
+        the usual 400. Idempotency,
+        provenance dedup, the 409 divergence rule and the per-device rate
+        limit apply unchanged; the idempotency key is scoped to the verified
+        cashier, as it is scoped to the operator on the envelope path.
+
+        Admission check time (RT-225): on this path the body may also carry
+        `admissionCheckAt`, which then replaces `occurredAt` in the
+        admission-window comparison only (see the field). Sent without
+        `operatorUserId`, it is a 400.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureSaleRequest"
+      responses:
+        "200":
+          description: >
+            Provenance replay — the same `(tenant, sourceSystem, externalId)`
+            was already captured, and no live replay entry exists for this
+            `Idempotency-Key` (a different key, or the same key after its 72h
+            replay window). Returns the identical `toBody` sale projection with
+            the `Idempotent-Replayed: true` header (mirrors `posCaptureItem`).
+            No second record is created. A retry with the SAME `Idempotency-Key`
+            is answered by the idempotency layer with the stored status instead
+            (the `201` below, RT-82 K4).
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "201":
+          description: >
+            Sale captured for the first time. Returns the `toBody` sale
+            projection with a stable reference. A retry with the same
+            `Idempotency-Key` replays this stored `201` byte-identically, with
+            `Idempotent-Replayed: true` (RT-82 K4); no second record is created.
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "400":
+          $ref: "#/components/responses/ValidationFailure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Refused"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/CaptureUnprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/SystemFailure"
+  /api/pos/v1/sales/{saleRef}:
+    get:
+      summary: Read a sale by its stable reference.
+      operationId: readSale
+      tags: [pos-sales]
+      security:
+        - operatorAuthorization: []
+      description: >
+        Resolve a single sale for void/return or duplicate-replay confirmation,
+        including each line's `lineRef` and remaining `returnableQuantity`.
+        Object-level authz: a sale outside the caller's resolved (tenant, store)
+        scope returns a non-disclosing 404 with no existence leak via any
+        response, error, or conflict shape (FR-063/102, SI-004).
+      parameters:
+        - $ref: "#/components/parameters/SaleRef"
+      responses:
+        "200":
+          description: The `toBody` sale projection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/SystemFailure"
+  /api/pos/v1/sales/{saleRef}/void:
+    post:
+      summary: Record a void as a separate terminal event.
+      operationId: recordVoid
+      x-idempotency: required
+      tags: [pos-sales]
+      security:
+        - operatorAuthorization: []
+      description: >
+        Create a void terminal event referencing the sale, stamping `voidedAt`
+        from the server clock. The original `sales` row and its `sale_lines`
+        are NEVER mutated (§X) — "voided" is derived from the presence of this
+        terminal event. Object-level authz + non-disclosing 404 for
+        cross-tenant / out-of-scope / unknown sales (FR-014, SI-004).
+
+        Idempotency: the `Idempotency-Key` header is REQUIRED and the event is
+        deduped on its own `(tenant, sourceSystem, externalId)` provenance — a
+        re-delivery of the SAME void (same provenance) is a deterministic replay
+        (200) with no duplicate record (FR-013).
+
+
+        Reversal exclusivity (RT-14 D2): a sale has AT MOST ONE void, and a
+        void excludes returns. A second, different void of an already-voided
+        sale, or a void of a sale that has any return, is 409
+        `already_reversed` (see `ReversalConflict`); nothing is recorded.
+      parameters:
+        - $ref: "#/components/parameters/SaleRef"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordVoidRequest"
+      responses:
+        "200":
+          description: >
+            Provenance replay — this void was already recorded with the same
+            provenance, and no live replay entry exists for this
+            `Idempotency-Key` (a different key, or the same key after its 72h
+            replay window). Returns the identical terminal-event projection with
+            `Idempotent-Replayed: true`; no duplicate record. A
+            same-`Idempotency-Key` retry returns the stored `201` instead (RT-82
+            K4).
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleTerminalEvent"
+        "201":
+          description: >
+            Void terminal event recorded for the first time. A retry with the
+            same `Idempotency-Key` on the same sale replays this stored `201`
+            with `Idempotent-Replayed: true` (RT-82 K4).
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleTerminalEvent"
+        "400":
+          $ref: "#/components/responses/ValidationFailure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ReversalConflict"
+        "422":
+          $ref: "#/components/responses/AlreadyApplied"
+        "500":
+          $ref: "#/components/responses/SystemFailure"
+  /api/pos/v1/sales/{saleRef}/refund:
+    post:
+      summary: Record a refund as a separate terminal event (deprecated).
+      operationId: recordRefund
+      deprecated: true
+      x-idempotency: required
+      tags: [pos-sales]
+      security:
+        - operatorAuthorization: []
+      description: >
+        DEPRECATED (RT-14 D1): not for new use — record a line-aware return
+        with `recordReturn` instead. Existing refund rows stay readable. The
+        amount-only refund never reaches the posting feed as an amount, so
+        since RT-71 the Connector rejects refund reversals instead of posting
+        a full-value credit note.
+
+
+        Create a refund terminal event referencing the sale, stamping
+        `refundedAt` from the server clock and preserving the POS-reported
+        refund amount verbatim (FR-012/030). The original sale is NEVER mutated.
+        No tender / payment data is accepted or persisted (gate A.5 — deferred
+        to 010); the refund records ONLY the POS-reported amount. Refund
+        workflow depth (partial / multi-step) is out of scope (FR-015).
+
+        Idempotency: the `Idempotency-Key` header is REQUIRED; a re-delivered
+        refund (same provenance) is not double-applied (FR-013).
+      parameters:
+        - $ref: "#/components/parameters/SaleRef"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordRefundRequest"
+      responses:
+        "200":
+          description: >
+            Provenance replay — this refund was already recorded with the same
+            provenance, and no live replay entry exists for this
+            `Idempotency-Key` (a different key, or the same key after its 72h
+            replay window). Returns the identical terminal-event projection with
+            `Idempotent-Replayed: true`; not double-applied. A
+            same-`Idempotency-Key` retry returns the stored `201` instead (RT-82
+            K4).
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleTerminalEvent"
+        "201":
+          description: >
+            Refund terminal event recorded for the first time. A retry with the
+            same `Idempotency-Key` on the same sale replays this stored `201`
+            with `Idempotent-Replayed: true` (RT-82 K4).
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleTerminalEvent"
+        "400":
+          $ref: "#/components/responses/ValidationFailure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/AlreadyApplied"
+        "500":
+          $ref: "#/components/responses/SystemFailure"
+  /api/pos/v1/sales/{saleRef}/returns:
+    post:
+      summary: Record a line-aware return against a sale.
+      operationId: recordReturn
+      x-idempotency: required
+      x-runtime-note: >
+        Live from RT-73 behind the `POS_RETURNS_ENABLED` deployment gate
+        (default off → 404 `not_found`, nothing recorded). Enable it only once
+        the Connector posts `reversalKind: return` (RT-16) AND settles returns
+        with their refund tenders (RT-78).
+      tags: [pos-sales]
+      security:
+        - operatorAuthorization: []
+      description: >
+        RT-14 D1. Return some or all of the quantity on one or more of a sale's
+        lines, and record how the refund was paid out. Replaces the amount-only
+        `recordRefund` for new use. The original sale and its lines are NEVER
+        mutated; the return is a separate append-only record.
+
+
+        DEPLOYMENT GATE (RT-73 AC4): the route is live but answers 404
+        `not_found` and records nothing unless the API runs with
+        `POS_RETURNS_ENABLED=true`. Enable it only once the Connector posts
+        `reversalKind: return` (RT-16) AND supports settlement (RT-78). Before
+        RT-16 a return would be dead-lettered as an unparseable work-item;
+        before RT-78 it would post as an outstanding credit note (terminal)
+        although cash was paid out (RT-76, `erpnext-connector/posting-feed.yaml`
+        INVARIANT).
+
+
+        Money (RT-14 D1, amended by option (a) — RT-73 comment 10406): the
+        client sends quantities only; the server prices every returned line
+        from the frozen sale line. For a line sold with `quantity` Q and
+        `lineAmount` A, of which c is already returned, a return of `quantity`
+        q is priced `lineAmount = round4(A × (c + q) / Q) − round4(A × c / Q)`,
+        and the line's snapshot `taxAmount` is split the same way (a null line
+        tax stays null). The amount depends only on cumulative quantities
+        (`readSale` exposes `returnedQuantity`), so a client can recompute it
+        exactly, and all returns on a line sum to A once it is fully returned.
+        `round4` is `round(numeric, 4)` in Postgres `numeric`, never a float.
+        A line captured under the RT-105 price invariant (`lineAmount =
+        unitPrice × quantity`, minor-unit precision, whole quantity) prices to exactly `unitPrice × q`
+        at every step, which ERPNext can post, because its returned quantities
+        are whole too: a line sold in a whole quantity accepts only a whole
+        return `quantity` (`"1.000000"` is whole), else 400 `validation_error`
+        (with a fractional q, round4 is not `unitPrice × q`: 0.01 × 0.333333
+        prices to 0.0033). A line captured before RT-105 may still price to
+        more fractional digits than its currency allows; one sold in a
+        fractional quantity still accepts fractional returns.
+        `returnTotal` = Σ returned `lineAmount`, the same basis as capture's
+        `posTotal` = Σ `lineAmount`; the tax share is carried inside it for
+        posting, not added on top.
+
+
+        Tender (D3): `refundTenders` records how the refund was paid out, as a
+        fact. The amounts MUST sum to the server-computed `returnTotal`, else
+        422 `return_tender_mismatch`. Cash only for the pilot; the `method`
+        enum stays cash-only under RT-10 D2. ERP settlement: the Connector pays
+        the return out with these refund tenders on the reversing invoice
+        (RT-10 D6).
+
+
+        Invariants (D2), enforced in the database under a row lock on the sale
+        as well as in the service: per line, cumulative returned ≤ sold
+        (409 `over_return`); a voided sale cannot be returned and a sale with
+        any return cannot be voided (409 `already_reversed`). Each `lineRef`
+        must be a line of THIS sale and appear at most once per request, and
+        each `quantity` must be > 0 and, on a line sold in a whole quantity,
+        whole (RT-105) — otherwise 400 `validation_error`. A replay is never
+        re-checked: a return recorded before the whole-quantity rule still
+        replays 200.
+        Online-only (D4) and same-terminal lookup (D5) are POS rules.
+
+
+        Idempotency: the `Idempotency-Key` header is REQUIRED and the return is
+        deduped on its own `(tenant, sourceSystem, externalId)` provenance. The
+        same provenance with the same payload replays (200); with a different
+        payload or against a different sale it is 409 `conflict`.
+
+
+        Posting: each return becomes a `reversal` work-item with
+        `reversalKind: return` on the ERPNext posting feed
+        (`erpnext-connector/posting-feed.yaml`). Backend-Core MUST NOT emit it
+        before the Connector supports it (RT-16) and supports settlement
+        (RT-78).
+      parameters:
+        - $ref: "#/components/parameters/SaleRef"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordReturnRequest"
+      responses:
+        "200":
+          description: >
+            Provenance replay — this return was already recorded with the same
+            provenance and payload, and no live replay entry exists for this
+            `Idempotency-Key` (a different key, or the same key after its 72h
+            replay window). Returns the identical return projection with
+            `Idempotent-Replayed: true`; no duplicate record. A
+            same-`Idempotency-Key` retry returns the stored `201` instead (RT-82
+            K4).
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleReturn"
+        "201":
+          description: >
+            Return recorded for the first time. A retry with the same
+            `Idempotency-Key` on the same sale replays this stored `201` with
+            `Idempotent-Replayed: true` (RT-82 K4).
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleReturn"
+        "400":
+          $ref: "#/components/responses/ValidationFailure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ReversalConflict"
+        "422":
+          $ref: "#/components/responses/ReturnTenderMismatch"
+        "500":
+          $ref: "#/components/responses/SystemFailure"
+
+components:
+  securitySchemes:
+    operatorAuthorization:
+      type: http
+      scheme: bearer
+      description: >
+        The operator-authorization ENVELOPE (031 D1+D2): an opaque, revocable,
+        DP-2-issued `pos_operator` bearer presented as
+        `Authorization: Bearer <envelope>`. Minted and returned to the POS
+        client at operator sign-in / takeover-confirm
+        (`PosOperatorSessionSummary.envelope`), it is the durable sale-sync
+        credential the backend resolves via the canonical operator-authorization
+        path. It carries NO Clerk/provider-specific claim and is verified by
+        DP-2 independent of the provider (the provider JWT is identity proof at
+        sign-in only).
+
+
+        AUTHORIZATION SEMANTICS: this is an *authorization* credential, NOT an
+        identity proof — it deliberately does NOT reuse spec 030's
+        `operator-identity` scheme (which is identity-proof-only, JWT). Beyond
+        the bearer, the backend re-evaluates the full operator predicate
+        (membership-active, device-active, store-access, role-eligibility,
+        non-expiry) LIVE on every sale request, so a mid-session revocation
+        stops further sales immediately (G-4). Every refusal — missing /
+        invalid / revoked / expired envelope or a failed live re-verification —
+        collapses to the same generic 401 (no factor disclosure).
+
+
+        Note: `bearerFormat` is intentionally omitted — the envelope is an
+        opaque token, not a JWT.
+    device:
+      type: http
+      scheme: bearer
+      description: >
+        RT-224: the paired terminal's opaque `devices` pairing token,
+        presented as `Authorization: Bearer <device_token>` (the same
+        role-named scheme as `catalog/read-down.yaml` and
+        `pos-cashier-admissions.openapi.yaml`; NOT a JWT, so `bearerFormat`
+        is omitted). Accepted on `captureSale` only, and only together with
+        `operatorUserId` in the body: the device token is device-scoped and
+        never proves a sale's author alone. The token is hashed and matched
+        against a non-revoked `devices` row of an active tenant; that row
+        supplies the authoritative `(tenant_id, store_id, device_id)`. The
+        server then requires a cashier admission of that device, store and
+        user whose window covers the sale's `occurredAt`, and re-checks the
+        cashier's membership and store access live. A missing, invalid or
+        revoked device token is the generic 401; a refused cashier claim from
+        a valid device is the generic 403 `refused` (both non-disclosing).
+
+  parameters:
+    # DeviceAttestation (X-Device-Attestation) was the 008 Option-Y device
+    # proof-of-possession header. 031 (D1+D2) retired it from the sale routes:
+    # the operator-authorization envelope is bound to its `auth_tokens` row
+    # which already carries `device_id`, recovered server-side — the client no
+    # longer presents an attestation header on capture/void/refund.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+        pattern: "^[\\x21-\\x7E]{16,128}$"
+      description: >
+        REQUIRED on every write. 16 to 128 printable ASCII characters with no
+        whitespace, as the interceptor enforces (RT-181); any other value is a
+        400. Reuses the existing `IdempotencyInterceptor`
+        (FR-051) — keyed on `(method, route template, resolved path parameters,
+        clientId = the authenticated operator's user id, key)`, per RT-82 K1.
+        The same key on a DIFFERENT `saleRef` is therefore a separate operation
+        and is never answered with another sale's stored response. An identical
+        retry on the same route and resource replays the stored response with
+        its stored status and `Idempotent-Replayed: true`; key-reuse with a
+        different logical payload returns 409 `idempotency_key_conflict`
+        (FR-051, 005 FR-021c). No new idempotency primitive is introduced.
+    SaleRef:
+      name: saleRef
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: >
+        Stable server-issued sale reference returned by `captureSale`. Resolves
+        only within the caller's (tenant, store) scope — out-of-scope refs are
+        non-disclosing 404s (FR-063/102).
+
+  headers:
+    IdempotentReplayed:
+      description: >
+        Present and `true` on every idempotent-replay response: a provenance
+        replay (`200`) and a same-`Idempotency-Key` replay, which carries the
+        stored status (normally `201`) per RT-82 K4. Clients MUST detect a
+        replay by this header, not by the status code (mirrors the
+        `posCaptureItem` convention). Absent on a first-time create.
+      schema:
+        type: boolean
+    RetryAfter:
+      description: >
+        Seconds the caller should wait before retrying, on a 429 (ADR 0009).
+        Clamped to [1, 300]. A POS client treats a 429 as TRANSIENT (retry after
+        this delay), NOT a permanent dead-letter (POS `classifyStatus`).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 300
+
+  schemas:
+    # -----------------------------------------------------------------------
+    # Money — exact-decimal string + ISO-4217 currency (gate A.1/A.6, no float)
+    # -----------------------------------------------------------------------
+    DecimalAmount:
+      type: string
+      pattern: '^-?[0-9]{1,15}(\.[0-9]{1,4})?$'
+      description: >
+        Exact-decimal monetary amount as a string (gate A.6 — never a float).
+        Up to 4 fractional digits, stored as `numeric(19,4)`. Always paired
+        with a `currency_code`.
+    NonNegativeDecimalAmount:
+      type: string
+      pattern: '^[0-9]{1,15}(\.[0-9]{1,4})?$'
+      description: >
+        Exact-decimal monetary amount as a string, constrained NON-NEGATIVE (no
+        leading `-`). Used for refund amounts — the DB enforces
+        `pos_refund_amount >= 0`, so the contract rejects negatives at the
+        boundary to match the DTO (RecordRefundRequestSchema) and avoid a 500
+        on a CHECK violation. Up to 4 fractional digits, stored as
+        `numeric(19,4)`.
+    CurrencyCode:
+      type: string
+      pattern: '^[A-Z]{3}$'
+      description: ISO-4217 alphabetic currency code (FR-005). Preserved as received.
+
+    # -----------------------------------------------------------------------
+    # Capture request — strict; tenant/store/actor are NEVER body-supplied
+    # -----------------------------------------------------------------------
+    CaptureSaleRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [sourceSystem, externalId, currencyCode, posTotal, occurredAt, lines]
+      description: >
+        A completed POS sale. `tenant_id` / `store_id` / `created_by` /
+        `received_at` / `business_date` / `processed_at` / `mismatch_flag` are
+        intentionally absent — they resolve server-side and are rejected if
+        present (FR-061). `additionalProperties: false` enforces the strict
+        mass-assignment boundary at the contract level (FR-062).
+
+        Auth (031 D1+D2): the operator-authorization envelope is presented in
+        `Authorization: Bearer <envelope>` (component `operatorAuthorization`),
+        NOT the body — the body is hashed into the sale `payload_hash` and the
+        idempotency fingerprint, so an auth credential must never ride in it.
+        The envelope resolves to the operator session whose bound
+        `(tenant_id, store_id, device_id, user_id)` supply the scope + actor; the
+        backend re-verifies membership / device / store-access / role LIVE per
+        request (G-4). The resolved `(tenant_id, store_id, actor)` come from the
+        session binding + membership — never from the body.
+
+        RT-224: with the `device` scheme the body carries `operatorUserId`, a
+        claim the server verifies (see the field); it is not a credential.
+
+        RT-225: `admissionCheckAt` is allowed ONLY together with
+        `operatorUserId`, must not be after `occurredAt`, and must be at most
+        7 days before it; otherwise the request is a 400. OpenAPI cannot
+        express these cross-field rules, so they are stated here and on the
+        field and enforced by the server.
+      properties:
+        sourceSystem:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Provenance + dedup key (FR-040/041). Not body-assignable authority.
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: >
+            POS-side sale identifier. Part of the `(tenant, sourceSystem,
+            externalId)` dedup key (FR-050). Cross-tenant collisions isolated.
+        currencyCode:
+          $ref: "#/components/schemas/CurrencyCode"
+        posTotal:
+          # B1-3: non-negative — mirrors the DB `sales_pos_total_non_negative`
+          # CHECK and the DTO; a negative total is a 400 at the boundary, not a 500.
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+        occurredAt:
+          type: string
+          format: date-time
+          description: >
+            Business-event time at the POS (gate B, NN). May lag `receivedAt`
+            arbitrarily for delayed offline sync (FR-020) — never rejected for
+            staleness.
+        sourceClockAt:
+          type: string
+          format: date-time
+          description: >
+            OPTIONAL POS-reported clock, preserved as provenance. NEVER consulted
+            for any security / TTL / expiry / rate-limit decision (FR-022).
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CaptureSaleLine"
+        tenders:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SaleTender"
+          description: >
+            OPTIONAL (RT-10 D1) — how the sale was paid. Net of change, at most
+            one entry per method, and summing to `posTotal` exactly (else 422
+            `sale_tender_mismatch`). Absent = a tender-unknown sale (RT-10 D8).
+            Accepted from RT-77; do not send before then (see the versioning
+            note).
+        operatorUserId:
+          type: string
+          format: uuid
+          description: >
+            RT-224 (Option B). The `users.id` of the cashier who made the sale:
+            the `user_id` of the cashier admission the terminal holds (NOT the
+            provider subject `operator_id`). Named `operatorUserId`, not
+            `cashier…`, so that no sale field name contains a tender word
+            (gate A.5). REQUIRED with the `device` scheme
+            and MUST be absent with `operatorAuthorization`: its presence
+            selects the device path, so an envelope request that carries it is
+            refused with the generic 401 (an envelope is not a device
+            credential).
+
+            It is a claim, never trusted on its own. The server accepts it only
+            if a `cashier_admissions` row exists for the device's tenant and
+            store, the same device and this user, whose window, widened by a
+            120 s clock-skew tolerance on both edges, covers `occurredAt`:
+            `created_at - 120 s <= occurredAt < LEAST(ended_at, expires_at) + 120 s`.
+            The bounds are server times and `occurredAt` is the till's; the
+            tolerance absorbs a till clock that drifts. The lower bound is
+            inclusive and the upper bound exclusive (without the tolerance it
+            matches the admission's own liveness: an admission is expired once
+            `expires_at <= now`, and ended from `ended_at` on). LEAST ignores a
+            NULL `ended_at`, and an admission ended lazily after it had expired
+            still stops at `expires_at`. An admission that has since ended or
+            expired still authorizes the sales that occurred inside its window,
+            so a queue drained after sign-out, at end of shift or after a
+            takeover still syncs, unless that window ended more than 7 days ago
+            (back-dating cap). A sale whose `occurredAt` is more than 120 s
+            after the server's current time is refused (future-dating cap). A
+            sale outside every such window, or under another device, store or
+            tenant, is refused. The cashier's membership must still be active,
+            the user not deleted, the role the cashier role, the store active
+            and accessible to the user (the RT-113 cashier eligibility rules,
+            re-checked live per request). Every such refusal is the generic
+            403 `refused`; only a bad device credential is a 401. Sales made
+            offline outside every server-side admission window (after the
+            admission's expiry, before a `reconcile_offline` admission, or
+            after a takeover on an offline till) are not covered yet (RT-113
+            P3/P4) and are refused; they can be sent on the
+            `operatorAuthorization` path.
+
+            On success the cashier is the sale's `created_by` and the audit
+            actor. The field is not part of the sale `payload_hash` (the hash
+            covers the sale facts only), so the same sale sent by two paths
+            hashes the same; it is part of the idempotency fingerprint like any
+            body field. A provenance replay returns the stored sale and never
+            re-attributes it.
+
+            RT-225: when the body also carries `admissionCheckAt`, the window
+            above is checked against `admissionCheckAt` when present, instead
+            of `occurredAt` (see that field).
+        admissionCheckAt:
+          type: string
+          format: date-time
+          description: >
+            RT-225 (OPTIONAL; [GATED] approval Jira RT-225). The till's
+            instant at which the cashier's admission held for this sale: the
+            sale's settled time. Send it when the sale's `occurredAt` can be
+            later than that, for example a sale finalized by boot recovery.
+
+            Allowed ONLY together with `operatorUserId` (the `device` path).
+            Rules, each a 400 `validation_error` (OpenAPI cannot express them):
+            sent without `operatorUserId`; `admissionCheckAt <= occurredAt` is
+            violated (compared at full precision); or
+            `occurredAt - admissionCheckAt <= 7 days` is violated.
+
+            When present it replaces `occurredAt` only in the admission-window
+            comparison:
+            `created_at - 120 s <= admissionCheckAt < LEAST(ended_at, expires_at) + 120 s`,
+            with the same device, store, user and live-eligibility rules as
+            `operatorUserId`. The future-dating cap applies to `occurredAt` and to `admissionCheckAt`
+            (neither may be more than 120 s after the server's current time);
+            the back-dating cap is unchanged (the covering window must have
+            ended no more than 7 days ago). Every refusal is the same generic
+            403 `refused`.
+
+            It is not a sale fact. It is not part of the sale `payload_hash`
+            and changes neither the stored `occurred_at` nor the
+            `business_date` (both derive from `occurredAt`), so the same sale
+            sent with or without it hashes the same and a provenance replay
+            does not diverge. Like any body field it is part of the idempotency fingerprint:
+            re-sending under the same `Idempotency-Key` with the field added or
+            changed is a 409 `idempotency_key_conflict`.
+    CaptureSaleLine:
+      type: object
+      additionalProperties: false
+      required: [lineName, unitPrice, currencyCode, quantity, lineAmount, unit]
+      description: >
+        A sold line. Snapshot fields are frozen at capture (FR-002/003).
+        `tenantProductRef` is optional lineage only — ad-hoc lines have none
+        (FR-004) and no tenant product is auto-created from a line.
+
+        Price invariant (RT-105, RT-87 decision D), compared numerically in
+        exact decimal (`"3.3300"` equals `"3.33"`): `unitPrice` and
+        `lineAmount` have no more significant fractional digits than the line
+        currency's ISO-4217 minor unit (JPY 0, EGP 2, OMR 3, CLF 4 — the
+        exponent of the line's `currencyCode`, never an assumed 2; a code with
+        no ISO-4217 minor unit, such as `XAU` or an unassigned code, cannot
+        meet it); `lineAmount = unitPrice × quantity` exactly; and `quantity`
+        is a whole number (`"2.000000"` is whole; fractional quantities, such
+        as weighed goods, are not accepted yet). A line that breaks any of them
+        is 422 `sale_line_pricing_invalid`.
+      properties:
+        lineName:
+          type: string
+          minLength: 1
+          maxLength: 500
+        unitPrice:
+          # B1-3: non-negative — mirrors `sale_lines_unit_price_non_negative`.
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+        currencyCode:
+          $ref: "#/components/schemas/CurrencyCode"
+        quantity:
+          type: string
+          pattern: '^[0-9]{1,13}(\.[0-9]{1,6})?$'
+          description: >
+            Line quantity as reported (exact-decimal string, no float).
+            Bound is numeric(19,6): at most 13 integer digits and 6 fractional digits.
+        lineAmount:
+          # B1-3: non-negative — mirrors `sale_lines_line_amount_non_negative`.
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+        taxAmount:
+          # B1-3: non-negative — mirrors `sale_lines_tax_amount_non_negative`.
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 50
+        tenantProductRef:
+          type: string
+          format: uuid
+          description: Optional lineage to a tenant product (FR-003). Never the live source of values.
+
+    # -----------------------------------------------------------------------
+    # Terminal-event requests (void / refund) — strict
+    # -----------------------------------------------------------------------
+    RecordVoidRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceSystem, externalId]
+      description: >
+        Void terminal event. `voidedAt` / tenant / store / actor resolve
+        server-side and are rejected if body-supplied (FR-061). Provenance is
+        the event's own dedup key (FR-013). Auth (031 D1+D2): the
+        operator-authorization envelope in `Authorization: Bearer <envelope>`
+        (`operatorAuthorization`); predicate re-verified live per request (G-4).
+      properties:
+        sourceSystem:
+          type: string
+          minLength: 1
+          maxLength: 100
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 200
+    RecordRefundRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceSystem, externalId, posRefundAmount, currencyCode]
+      description: >
+        Refund terminal event. Records ONLY the POS-reported refund amount —
+        no tender / payment data (gate A.5). `refundedAt` / tenant / store /
+        actor resolve server-side (FR-061). Auth (031 D1+D2): the
+        operator-authorization envelope in `Authorization: Bearer <envelope>`
+        (`operatorAuthorization`); predicate re-verified live per request (G-4).
+      properties:
+        sourceSystem:
+          type: string
+          minLength: 1
+          maxLength: 100
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        posRefundAmount:
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+        currencyCode:
+          $ref: "#/components/schemas/CurrencyCode"
+
+    # -----------------------------------------------------------------------
+    # Return request (RT-14 D1/D3) — strict; the server computes all money
+    # -----------------------------------------------------------------------
+    RecordReturnRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceSystem, externalId, lines, refundTenders]
+      description: >
+        A line-aware return (RT-14 D1). Names lines by `lineRef` and quantity
+        only — no amounts: the server prices each line from the frozen sale
+        line (see `recordReturn`). `returnedAt` / business date / tenant /
+        store / actor resolve server-side and are rejected if body-supplied
+        (FR-061). Auth: the operator-authorization envelope in
+        `Authorization: Bearer <envelope>` (`operatorAuthorization`),
+        re-verified live per request (G-4).
+      properties:
+        sourceSystem:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Provenance + dedup key of the return itself (FR-013).
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: POS-side return identifier; with `sourceSystem`, the return's dedup key.
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ReturnLineRequest"
+          description: The lines returned. Each `lineRef` at most once per request.
+        refundTenders:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/RefundTender"
+          description: >
+            How the refund was paid out (D3). The amounts MUST sum to the
+            server-computed `returnTotal`, else 422 `return_tender_mismatch`.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Optional free-text return reason. No PII.
+    ReturnLineRequest:
+      type: object
+      additionalProperties: false
+      required: [lineRef, quantity]
+      properties:
+        lineRef:
+          type: string
+          format: uuid
+          description: The sale line returned (`SaleLine.lineRef`). Must belong to this sale.
+        quantity:
+          type: string
+          pattern: '^[0-9]{1,13}(\.[0-9]{1,6})?$'
+          description: >
+            Quantity returned, exact-decimal string (no float), same bound as
+            the sale line's `quantity`. MUST be > 0 and ≤ the line's
+            `returnableQuantity` (else 400 / 409 `over_return`). MUST be a
+            whole number when the line was sold in a whole quantity (RT-105;
+            else 400 `validation_error`).
+    RefundTender:
+      type: object
+      additionalProperties: false
+      required: [method, amount]
+      description: >
+        One refund payout, recorded as a fact (RT-14 D3), in the sale's
+        currency. The Connector pays the return out with it on the reversing
+        invoice (RT-10 D6).
+      properties:
+        method:
+          type: string
+          enum: [cash]
+          description: >
+            Cash only (RT-14 D3). RT-10 D2 left refunds cash-only; a card
+            refund is not recorded here.
+        amount:
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+    SaleTender:
+      type: object
+      additionalProperties: false
+      required: [method, amount]
+      if:
+        properties:
+          method:
+            const: cash
+        required: [method]
+      then:
+        not:
+          required: [reference]
+      description: >
+        One way a sale was paid (RT-10 D1), in the sale's currency. Recorded as
+        part of the immutable sale fact; not a payment ledger (ADR-0005).
+      properties:
+        method:
+          type: string
+          enum: [cash, card_external]
+          description: >
+            RT-10 D2 pilot methods. `cash` — the till drawer. `card_external` —
+            a standalone card terminal (not integrated with the POS). Vouchers
+            are excluded from the pilot.
+        amount:
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+        reference:
+          type: string
+          pattern: '^[A-Z0-9]{1,6}$'
+          description: >
+            OPTIONAL, `card_external` only (else 400): the short reference the
+            card terminal printed, as keyed by the cashier. NEVER a card number
+            or any other card data.
+
+    # -----------------------------------------------------------------------
+    # Response projections (toBody) — NOT the DB row shape (§IV)
+    # -----------------------------------------------------------------------
+    Sale:
+      type: object
+      additionalProperties: false
+      required:
+        - saleRef
+        - storeId
+        - currencyCode
+        - posTotal
+        - occurredAt
+        - receivedAt
+        - businessDate
+        - sourceSystem
+        - externalId
+        - mismatchFlag
+        - syncStatus
+        - voided
+        - lines
+      description: >
+        Wire projection of a captured sale. Decoupled from the `sales` /
+        `sale_lines` DB schema (§IV). Carries no `tenant_id` (implicit in the
+        authenticated scope), no `payload_hash`, no `created_by`, and no
+        device. Tender facts ride `tenders` (RT-10 D1) only.
+      properties:
+        saleRef:
+          type: string
+          format: uuid
+          description: Stable server-issued reference (= `sales.id`).
+        storeId:
+          type: string
+          format: uuid
+        currencyCode:
+          $ref: "#/components/schemas/CurrencyCode"
+        posTotal:
+          $ref: "#/components/schemas/DecimalAmount"
+        occurredAt:
+          type: string
+          format: date-time
+        receivedAt:
+          type: string
+          format: date-time
+          description: Server clock at receipt (the security clock).
+        businessDate:
+          type: string
+          format: date
+          description: Derived from the store timezone (FR-023), not the client clock.
+        processedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Null until off-request processing sets it (FR-071).
+        sourceClockAt:
+          type: [string, "null"]
+          format: date-time
+        sourceSystem:
+          type: string
+        externalId:
+          type: string
+        mismatchFlag:
+          type: boolean
+          description: >
+            Advisory — true when the POS total differs from the SaaS per-line /
+            half-up comparison total (FR-031/032). The POS total is never
+            rewritten.
+        syncStatus:
+          type: string
+          enum: [captured, synced, failed-retryable, failed-needs-repair]
+          description: >
+            032 §7 — DP-2's server-authoritative sale-status, distinct from the
+            POS-local outbox UX state. Set to `captured` at capture; advanced to
+            `synced` by the off-request drain that sets `processedAt`; the
+            dead-letter classifier sets `failed-retryable` / `failed-needs-repair`.
+            POS never overrides it (the terminal observes, DP-2 decides).
+        voided:
+          type: boolean
+          description: >
+            True when a void terminal event exists for the sale (derived, §X —
+            the sale row is never mutated). A voided sale cannot be returned
+            (RT-14 D2).
+        tenders:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleTender"
+          description: >
+            The sale's tender facts as captured (RT-10 D1). Empty for a
+            tender-unknown sale (RT-10 D8). Emitted from RT-77; optional until
+            then.
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleLine"
+    SaleLine:
+      type: object
+      additionalProperties: false
+      required:
+        - lineRef
+        - lineName
+        - unitPrice
+        - currencyCode
+        - quantity
+        - lineAmount
+        - unit
+        - returnedQuantity
+        - returnableQuantity
+      description: >
+        Wire projection of a frozen sale-line snapshot, with the line's return
+        state (RT-72 / RT-73).
+      properties:
+        lineRef:
+          type: string
+          format: uuid
+          description: >
+            Stable line identity (= `sale_lines.id`). A return names the line
+            by it (RT-14 D1); store it at capture.
+        lineName:
+          type: string
+        unitPrice:
+          $ref: "#/components/schemas/DecimalAmount"
+        currencyCode:
+          $ref: "#/components/schemas/CurrencyCode"
+        quantity:
+          type: string
+        lineAmount:
+          $ref: "#/components/schemas/DecimalAmount"
+        taxAmount:
+          description: Single per-line snapshot tax amount (gate A.2); null when not reported.
+          anyOf:
+            - $ref: "#/components/schemas/DecimalAmount"
+            - type: "null"
+        unit:
+          type: string
+        tenantProductRef:
+          description: Optional lineage to a tenant product; null for ad-hoc lines (FR-004).
+          anyOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        returnedQuantity:
+          type: string
+          description: Cumulative quantity returned on this line across all returns ("0" when none).
+        returnableQuantity:
+          type: string
+          description: >
+            Quantity still returnable: `quantity` − `returnedQuantity`, and "0"
+            when the sale is voided.
+    SaleReturn:
+      type: object
+      additionalProperties: false
+      required:
+        - returnRef
+        - saleRef
+        - recordedAt
+        - businessDate
+        - sourceSystem
+        - externalId
+        - currencyCode
+        - returnTotal
+        - lines
+        - refundTenders
+        - reason
+      description: >
+        Wire projection of a recorded return (RT-14 D1). A separate append-only
+        record; the sale is unchanged. Carries no `tenant_id`, no
+        `payload_hash`, no `created_by`.
+      properties:
+        returnRef:
+          type: string
+          format: uuid
+          description: Stable reference to the return row.
+        saleRef:
+          type: string
+          format: uuid
+          description: The sale this return is against.
+        recordedAt:
+          type: string
+          format: date-time
+          description: Server-clock stamp of the return (never a client time).
+        businessDate:
+          type: string
+          format: date
+          description: >
+            The return's own business day: `recordedAt` in the store timezone,
+            persisted at insert so a later timezone change never rewrites it
+            (RT-63 P2). The sale's `businessDate` is unaffected.
+        sourceSystem:
+          type: string
+        externalId:
+          type: string
+        currencyCode:
+          $ref: "#/components/schemas/CurrencyCode"
+        returnTotal:
+          $ref: "#/components/schemas/DecimalAmount"
+          description: Σ returned `lineAmount` — the server-computed refund total.
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ReturnLine"
+        refundTenders:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/RefundTender"
+        reason:
+          type: [string, "null"]
+    ReturnLine:
+      type: object
+      additionalProperties: false
+      required:
+        [lineRef, quantity, lineAmount, taxAmount, returnedQuantity, returnableQuantity]
+      description: One returned line as priced by the server, with the line's remaining returnability.
+      properties:
+        lineRef:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+          description: Quantity returned by THIS return.
+        lineAmount:
+          $ref: "#/components/schemas/DecimalAmount"
+          description: Server-computed amount for this return's quantity (the cumulative-difference rule, see `recordReturn`).
+        taxAmount:
+          description: The tax share of `lineAmount`, split the same way; null when the sale line has no tax.
+          anyOf:
+            - $ref: "#/components/schemas/DecimalAmount"
+            - type: "null"
+        returnedQuantity:
+          type: string
+          description: Cumulative quantity returned on the line, including this return.
+        returnableQuantity:
+          type: string
+          description: Quantity still returnable on the line after this return.
+    SaleTerminalEvent:
+      type: object
+      additionalProperties: false
+      required: [eventRef, saleRef, kind, recordedAt]
+      description: >
+        Wire projection of a void or refund terminal event. The original sale
+        is unchanged; this is a separate append-only record. Terminal events
+        carry no POS business-event time — only the server-clock `recordedAt`
+        (the schema's `sale_voids`/`sale_refunds` tables have no `occurred_at`).
+      properties:
+        eventRef:
+          type: string
+          format: uuid
+          description: Stable reference to the terminal-event row.
+        saleRef:
+          type: string
+          format: uuid
+          description: The sale this event terminates.
+        kind:
+          type: string
+          enum: [void, refund]
+        recordedAt:
+          type: string
+          format: date-time
+          description: >
+            Server-clock terminal stamp — `voidedAt` for a void, `refundedAt`
+            for a refund (gate B).
+        posRefundAmount:
+          description: Present only for refunds; the POS-reported amount, preserved verbatim.
+          anyOf:
+            - $ref: "#/components/schemas/DecimalAmount"
+            - type: "null"
+        currencyCode:
+          description: Present only for refunds.
+          anyOf:
+            - $ref: "#/components/schemas/CurrencyCode"
+            - type: "null"
+
+    # -----------------------------------------------------------------------
+    # Canonical Error envelope (mirrors auth.openapi.yaml / outbox.openapi.yaml)
+    # -----------------------------------------------------------------------
+    Error:
+      type: object
+      required: [error]
+      description: >
+        Canonical error envelope, identical to the shared shape in
+        `auth.openapi.yaml` / `outbox.openapi.yaml` (used verbatim — no extra
+        fields, no `details`). The `error.code` values encode the FR-101
+        eight-category failure set (see the per-response descriptions).
+        Cross-tenant / out-of-scope refusals are non-disclosing (§II/§XII) —
+        they never enumerate the underlying cause.
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable error code (FR-101 taxonomy).
+            message:
+              type: string
+              description: Human-readable summary. No sensitive data, no cause enumeration.
+            request_id:
+              type: string
+              format: uuid
+              description: Server-side correlation id; the actual cause is recorded server-side.
+
+  responses:
+    ValidationFailure:
+      description: >
+        FR-101 `validation-failure` — malformed body, unknown key (strict
+        boundary, FR-062), bad money / currency, missing required field, or a
+        body-supplied server-owned field (FR-061). Deterministic; no record
+        created.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: >
+        Generic refusal (401). The body does not distinguish an invalid JWT,
+        an invalid device token, a missing tenant/store binding, or rate-limit
+        exhaustion. Combined `forbidden` semantics for in-scope-but-not-permitted
+        principals also surface here as a non-disclosing refusal (FR-101
+        `forbidden`), with one exception: on `captureSale`'s device path a
+        refused cashier claim from a valid device is the 403 `Refused`
+        response, so that a 401 there always means a bad device credential
+        (RT-224).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Refused:
+      description: >
+        Generic 403 `refused` (RT-224, `captureSale` device path only): the
+        device credential is valid, but the cashier claim (`operatorUserId`)
+        is not accepted for this sale. The body is the same for every cause:
+        no covering cashier admission, an ineligible cashier (membership,
+        user, role, store or store access), a sale outside the admission
+        window or beyond the dating caps, an unknown user or a user of
+        another tenant. It reveals neither existence nor cause; the cause is
+        logged server-side keyed by `request_id`. It concerns this sale only
+        and is never a sign that the device was revoked (that is a 401).
+        Mirrors the cashier-admissions API (`Refused`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: >
+        FR-101 `not-found` — the sale ref does not resolve within the caller's
+        (tenant, store) scope. Non-disclosing: identical for cross-tenant,
+        out-of-scope, and genuinely-absent ids, with no existence leak via any
+        response or error shape (FR-102, SI-004, §II/§XII).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: >
+        FR-101 `conflict` category (which subsumes the idempotency-token-mismatch
+        case). The single wire `error.code` is `idempotency_key_conflict` — the
+        same `Idempotency-Key` reused with a different logical payload (FR-051 /
+        005 FR-021c). Deterministic, no side effects. ("idempotency-token-mismatch"
+        is the FR-101 category label only, never a second `error.code`.)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    AlreadyApplied:
+      description: >
+        FR-101 `already-applied` — a re-delivered terminal event whose effect is
+        already recorded (e.g. a sale already voided). Deterministic, no
+        duplicate record (FR-013).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ReversalConflict:
+      description: >
+        409 on a reversal (void or return). `error.code` is one of:
+        `idempotency_key_conflict` — the same `Idempotency-Key` reused with a
+        different payload; `conflict` — the event's `(sourceSystem,
+        externalId)` provenance was already used with a different payload or
+        against a different sale; `already_reversed` (RT-14 D2) — void and
+        return exclude each other and a sale has at most one void: a return
+        against a voided sale, a void of a sale that has a return, or a second
+        void of an already-voided sale; `over_return` (returns only) — the cumulative
+        returned quantity on a line would exceed the quantity sold.
+        Deterministic; nothing is recorded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ReturnTenderMismatch:
+      description: >
+        422 `return_tender_mismatch` (RT-14 D3) — the `refundTenders` amounts
+        do not sum to the server-computed `returnTotal`. Deterministic; nothing
+        is recorded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    CaptureUnprocessable:
+      description: >
+        422 on `captureSale`. `error.code` is one of: `sale_tender_mismatch`
+        (RT-10 D1) — the capture's `tenders` amounts do not sum to `posTotal`
+        exactly; `sale_line_pricing_invalid` (RT-105) — a line breaks the
+        `CaptureSaleLine` price invariant. The tender rule is checked first.
+        Deterministic; nothing is recorded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    SystemFailure:
+      description: >
+        FR-101 `system-failure` — an unexpected server error. The cause is
+        recorded server-side keyed by `request_id` and is never returned.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: >
+        Per-device write rate limit exceeded (ADR 0009 / audit M-2). The bound
+        device has exceeded its hourly write budget; the limit is keyed PER DEVICE
+        (not per IP or per operator token). Non-disclosing `Error` body. The
+        `Retry-After` header carries the back-off in seconds. A POS client MUST
+        treat this as a TRANSIENT, retryable outcome (retry after `Retry-After`),
+        NOT a permanent dead-letter. The limiter FAILS OPEN on a rate-limiter
+        datastore outage (ADR 0009 D3), so a 429 means a real budget breach, never
+        a Redis outage.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

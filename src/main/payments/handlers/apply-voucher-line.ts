@@ -141,7 +141,11 @@ export async function applyVoucherLine(
     tender_line_id: input.tender_line_id,
     payment_attempt_id: input.attempt.payment_attempt_id,
     tender_type: 'internal_voucher',
-    amount_applied_minor: outcome.applied_amount_minor,
+    // The REQUESTED amount, as on the refused branch above: the FSM persists
+    // the authority's `voucher_outcome.applied_amount_minor` on the line, but
+    // hashes this field into the outbox row, and a same-key retry can only
+    // reproduce the request (RT-304).
+    amount_applied_minor: input.amount_applied_minor,
     voucher_code: input.voucher_code,
     voucher_outcome: {
       kind: 'validated',

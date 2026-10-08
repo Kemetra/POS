@@ -186,3 +186,64 @@ describe('021 S1 — worker registry: registration semantics', () => {
     expect(registry.hasRegistered()).toBe(false);
   });
 });
+
+describe('RT-15 S2 — worker registry: the returns resolver', () => {
+  it('stops the returns resolver after the sale-sync interval', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('returns resolver', () => order.push('returns resolver'));
+    registry.register('sale-sync interval', () => order.push('sale-sync interval'));
+
+    registry.stopAll();
+
+    expect(order).toEqual(['sale-sync interval', 'returns resolver']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});
+
+describe('RT-17 — worker registry: the shift-sync interval', () => {
+  it('stops the shift-sync interval after the sale-sync interval, before the returns resolver', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('returns resolver', () => order.push('returns resolver'));
+    registry.register('shift-sync interval', () => order.push('shift-sync interval'));
+    registry.register('sale-sync interval', () => order.push('sale-sync interval'));
+
+    registry.stopAll();
+
+    expect(order).toEqual(['sale-sync interval', 'shift-sync interval', 'returns resolver']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});
+
+describe('RT-113 P2 — worker registry: the cashier admission heartbeat', () => {
+  it('stops the cashier admission heartbeat last, still before the DB closes', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('cashier admission heartbeat', () =>
+      order.push('cashier admission heartbeat'),
+    );
+    registry.register('returns resolver', () => order.push('returns resolver'));
+
+    registry.stopAll();
+
+    expect(order).toEqual(['returns resolver', 'cashier admission heartbeat']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});
+
+describe('RT-113 P1.2 — worker registry: the offline grant clock tick', () => {
+  it('stops the offline grant clock tick after the heartbeat, still before the DB closes', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('offline grant clock tick', () => order.push('offline grant clock tick'));
+    registry.register('cashier admission heartbeat', () =>
+      order.push('cashier admission heartbeat'),
+    );
+
+    registry.stopAll();
+
+    expect(order).toEqual(['cashier admission heartbeat', 'offline grant clock tick']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRef } from 'react';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -8,12 +9,15 @@ import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config'
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import type { Role } from '../../../shared/operator/role';
 import { V5Frame } from '../frame/V5Frame';
+import { Dialog } from '../foundation/Dialog';
 import { V5_SALE_PATH, v5NavEntries } from '../frame/nav-model';
 import { V5OperationalNotices } from '../frame/V5OperationalNotices';
 import { useConnectionStateStore } from '../../connection/connection-state';
+import { useDrawerNoticeStore } from '../../ui/receipts/drawer-notice-store';
 
 afterEach(() => {
   cleanup();
+  useDrawerNoticeStore.getState().reset();
   useOperatorSessionStore.getState().reset();
   useConnectionStateStore.getState().setState('online');
   vi.unstubAllGlobals();
@@ -97,7 +101,23 @@ describe('V5Frame — the one application frame for v5 screens', () => {
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
     expect(within(nav).queryByRole('link', { name: 'المرتجعات' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'سجل المراجعة' })).not.toBeInTheDocument();
-    expect(within(nav).getAllByRole('link')).toHaveLength(5);
+  });
+
+  // RT-241 / OD-6: the Dashboard refuses the cashier role, and Sales, Inventory
+  // and Settings are placeholders (freeze 15 §1: manager/admin only), so the
+  // cashier nav holds the Sale alone. Settings carried the only theme toggle on
+  // a cashier path (OD-4). Navigation only: no route guard changes.
+  it('a cashier sees only the Sale (OD-6), and no theme toggle', () => {
+    signIn('cashier');
+    renderFrame();
+    const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['نقطة البيع']);
+    expect(within(nav).queryByRole('link', { name: 'الإعدادات' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /theme|السمة|المظهر/i })).not.toBeInTheDocument();
   });
 
   it('shows every entry to a manager; non-Sale entries keep their existing routes', () => {
@@ -213,12 +233,15 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
         forced_close_notice: { closed_at: '2026-09-24T08:00:00Z' },
       },
     });
+    // RT-241 (D-B1): this session already read a clean projection, so the
+    // drawer failure in the poll below is new and shows.
+    useDrawerNoticeStore.getState().observe(null);
     try {
       render(<V5OperationalNotices />);
       expect(await screen.findByTestId('printer-failure-banner')).toBeInTheDocument();
       // Codex P2 (#462): recovery controls must reach the existing receipts
       // bridge, not a no-op; a double press while in flight fires once.
-      const reprintButton = screen.getByRole('button', { name: 'نسخة — Reprint' });
+      const reprintButton = screen.getByRole('button', { name: 'نسخة' });
       fireEvent.click(reprintButton);
       fireEvent.click(reprintButton);
       expect(reprint).toHaveBeenCalledOnce();
@@ -227,10 +250,9 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
         idempotency_key: expect.any(String) as string,
       });
 
-      const manualButton = within(await screen.findByTestId('drawer-failure-banner')).getByRole(
-        'button',
-        { name: 'إيصال يدوي — Manual receipt' },
-      );
+      const manualButton = within(await screen.findByTestId('drawer-notice')).getByRole('button', {
+        name: 'إيصال يدوي',
+      });
       fireEvent.click(manualButton);
       fireEvent.click(manualButton);
       expect(manualOverride).toHaveBeenCalledOnce();
@@ -270,12 +292,12 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
       window as unknown as { api: { receipts: { manualOverride: ReturnType<typeof vi.fn> } } }
     ).api.receipts;
     signIn('cashier');
+    useDrawerNoticeStore.getState().observe(null);
     try {
       render(<V5OperationalNotices />);
-      const button = within(await screen.findByTestId('drawer-failure-banner')).getByRole(
-        'button',
-        { name: 'إيصال يدوي — Manual receipt' },
-      );
+      const button = within(await screen.findByTestId('drawer-notice')).getByRole('button', {
+        name: 'إيصال يدوي',
+      });
       fireEvent.click(button);
       await waitFor(() => {
         expect(receipts.manualOverride).toHaveBeenCalledTimes(1);
@@ -283,7 +305,7 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
       await new Promise((resolve) => setTimeout(resolve, 0));
       fireEvent.click(button);
       expect(receipts.manualOverride).toHaveBeenCalledTimes(2);
-      expect(screen.getByTestId('drawer-failure-banner')).toBeInTheDocument();
+      expect(screen.getByTestId('drawer-notice')).toBeInTheDocument();
     } finally {
       delete (window as unknown as { api?: unknown }).api;
     }
@@ -361,7 +383,9 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
     stubTooSmallViewport();
     renderFrame();
 
-    expect(screen.getByRole('heading', { name: 'Screen too small' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /^الشاشة أصغر من 1024×768\s?\.$/ }),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'مساحة البيع' })).not.toBeInTheDocument();
@@ -370,13 +394,15 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
   it('at a supported width renders the screen, not the too-small notice', () => {
     signIn('cashier');
     renderFrame();
-    expect(screen.queryByRole('heading', { name: 'Screen too small' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /^الشاشة أصغر من 1024×768\s?\.$/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
   });
 
   it.each([
     ['offline', 'غير متصل — البيع من قائمة الانتظار المحلية'],
-    ['degraded', 'الاتصال بطيء — Connection slow'],
+    ['degraded', 'الاتصال بطيء'],
     ['syncing', 'جارٍ المزامنة…'],
   ] as const)('shows a persistent %s connection banner (never a toast)', (state, message) => {
     signIn('cashier');
@@ -392,5 +418,74 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
     signIn('cashier');
     renderFrame();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('V5Frame — dialog host (RT-241)', () => {
+  it('a v5 dialog portals into the frame, outside the screen, so its backdrop covers the nav', () => {
+    signIn('cashier');
+    render(
+      <MemoryRouter initialEntries={[V5_SALE_PATH]}>
+        <V5Frame>
+          <Dialog label="نافذة" initialFocusRef={createRef<HTMLElement>()}>
+            <button type="button">رجوع</button>
+          </Dialog>
+        </V5Frame>
+      </MemoryRouter>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'نافذة' });
+    expect(screen.getByTestId('v5-frame')).toContainElement(dialog);
+    expect(screen.getByRole('main')).not.toContainElement(dialog);
+  });
+});
+
+/**
+ * RT-241 — D-B1: the drawer notice no longer persists across restart or
+ * sign-out (N-08). Main's projection still reports the old failure; the frame
+ * just does not show it for a sale from another session or run.
+ */
+describe('V5OperationalNotices — drawer notice lifetime (D-B1)', () => {
+  function failingDrawerApi(drawer: { sale_id: string } | null): ReturnType<typeof vi.fn> {
+    const subscribe = vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok',
+        banner_state: {
+          printer_failure: null,
+          drawer_failure: drawer === null ? null : { ...drawer, last_successful_open_at: null },
+        },
+      }),
+    );
+    (window as unknown as { api?: unknown }).api = {
+      sales: { subscribe, unsubscribe: vi.fn(() => Promise.resolve()) },
+      receipts: { reprint: vi.fn(), manualOverride: vi.fn() },
+    };
+    return subscribe;
+  }
+
+  afterEach(() => {
+    delete (window as unknown as { api?: unknown }).api;
+  });
+
+  it('after a restart, a failure from before it is not shown', async () => {
+    const subscribe = failingDrawerApi({ sale_id: 's-before-restart' });
+    signIn('cashier');
+    render(<V5OperationalNotices />);
+    await waitFor(() => {
+      expect(subscribe).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(useDrawerNoticeStore.getState().baseline).toBe('s-before-restart');
+    });
+    expect(screen.queryByTestId('drawer-notice')).not.toBeInTheDocument();
+  });
+
+  it('a failure in this session shows, and «تم» clears it', async () => {
+    failingDrawerApi({ sale_id: 's-now' });
+    signIn('cashier');
+    useDrawerNoticeStore.getState().observe(null);
+    render(<V5OperationalNotices />);
+    const notice = await screen.findByTestId('drawer-notice');
+    fireEvent.click(within(notice).getByRole('button', { name: 'تم' }));
+    expect(screen.queryByTestId('drawer-notice')).not.toBeInTheDocument();
   });
 });

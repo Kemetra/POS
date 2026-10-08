@@ -34,4 +34,19 @@ export const OPERATOR_IPC_CHANNELS = {
   DISMISS_SHIFT_CLOSED_NOTICE: 'operator:dismiss-shift-closed-notice',
 } as const;
 
+/**
+ * RT-117 (RT-116 §2.4, §7.2) — inactivity-lock channels. Kept apart from
+ * `OPERATOR_IPC_CHANNELS` because they have their own registrar
+ * (`ipc/session-lock.ts`) and SESSION_STATE is a main → renderer push, not an
+ * invoke handler.
+ */
+export const SESSION_LOCK_IPC_CHANNELS = {
+  /** Same-operator unlock of the CURRENT locked session. */
+  UNLOCK_SESSION: 'operator:unlock-session',
+  /** The only operator read served while locked: state + totals summary. */
+  GET_LOCK_STATE: 'operator:get-lock-state',
+  /** Main → renderer push of session state changes. */
+  SESSION_STATE: 'operator:session-state',
+} as const;
+
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

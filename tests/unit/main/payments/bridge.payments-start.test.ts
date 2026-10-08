@@ -40,6 +40,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPaymentsStartHandler } from '../../../../src/main/payments/handlers/payments-start.js';
 
 import {
+  makeAttemptRow,
   makeAttemptsRepoDouble,
   makeAuditEmitterDouble,
   makeIdempotencyHelperDouble,
@@ -177,32 +178,17 @@ describe('T100 — payments.start bridge handler', () => {
 
   it('returns the original outcome (no FSM call) when the idempotency helper says replay', async () => {
     const sessionSource = makeSessionSource(makeSession());
-    const attemptsRepo = makeAttemptsRepoDouble();
+    // The replay rebuilds the prior outcome from the outbox row's immutable
+    // `payment_attempt_id`, NOT from the started-row probe: that probe stops
+    // returning the attempt once it is confirmed / cancelled / force-failed,
+    // so the seeded attempt is already cancelled.
+    const attemptsRepo = makeAttemptsRepoDouble([
+      makeAttemptRow({ payment_attempt_id: 'pa-existing', state: 'cancelled' }),
+    ]);
     const fsm = makePaymentAttemptFsmDouble();
-    const idempotency = makeIdempotencyHelperDouble({ kind: 'replay' });
-    // The replay must produce the prior outcome from outbox-row state. The
-    // outbox stores `last_action_id` keyed to the same idempotency_key; the
-    // handler reads it back via the attempts repo. We seed one started row
-    // so the handler has somewhere to read from.
-    attemptsRepo.findStartedByTerminal.mockReturnValueOnce({
+    const idempotency = makeIdempotencyHelperDouble({
+      kind: 'replay',
       payment_attempt_id: 'pa-existing',
-      tenant_id: 'tenant-1',
-      branch_id: 'branch-1',
-      terminal_id: 'terminal-1',
-      acting_operator_id: 'op-clerk-user-abc',
-      operator_session_id: 'sess-1',
-      envelope_handoff_action_id: 'handoff-1',
-      envelope_cart_id: 'cart-1',
-      envelope_subtotal_minor: 1500,
-      state: 'started',
-      started_at: '2026-05-23T11:00:00.000Z',
-      settled_at: null,
-      cancelled_at: null,
-      failed_at: null,
-      force_failed_at: null,
-      failure_reason: null,
-      force_fail_attribution_operator_id: null,
-      last_action_id: 'idem-start-1',
     });
     const handler = createPaymentsStartHandler({
       getCurrentSession: sessionSource.getCurrentSession,
@@ -221,6 +207,38 @@ describe('T100 — payments.start bridge handler', () => {
     // Replay path MUST NOT call the FSM again.
     expect(fsm.start).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['tenant', { tenant_id: 'tenant-OTHER' }],
+    ['branch', { branch_id: 'branch-OTHER' }],
+    ['terminal', { terminal_id: 'terminal-OTHER' }],
+  ])(
+    'refuses tenant_isolation when the replayed attempt belongs to another %s',
+    async (_scope, otherScope) => {
+      const fsm = makePaymentAttemptFsmDouble();
+      const handler = createPaymentsStartHandler({
+        getCurrentSession: makeSessionSource(makeSession()).getCurrentSession,
+        attemptsRepo: makeAttemptsRepoDouble([
+          makeAttemptRow({ payment_attempt_id: 'pa-existing', ...otherScope }),
+        ]),
+        paymentAttemptFsm: fsm,
+        idempotency: makeIdempotencyHelperDouble({
+          kind: 'replay',
+          payment_attempt_id: 'pa-existing',
+        }),
+        auditEmitter: makeAuditEmitterDouble(),
+        uuid: () => 'pa-NEW',
+        clock: () => new Date('2026-05-23T11:00:00.000Z'),
+        checkCartForPayment: () => ({ kind: 'ok' }),
+        attemptHasLiveTender: () => false,
+      });
+      expect(await handler(validRequest())).toEqual({
+        kind: 'refused',
+        reason: 'tenant_isolation',
+      });
+      expect(fsm.start).not.toHaveBeenCalled();
+    },
+  );
 
   it('refuses idempotency_payload_mismatch when the helper signals payload divergence', async () => {
     const sessionSource = makeSessionSource(makeSession());

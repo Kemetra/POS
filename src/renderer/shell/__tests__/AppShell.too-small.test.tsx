@@ -45,14 +45,14 @@ function renderTooSmall() {
 describe('AppShell too-small (T047)', () => {
   it('renders ScreenTooSmall heading at <1024px', () => {
     renderTooSmall();
-    expect(screen.getByRole('heading', { level: 1, name: 'Screen too small' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: /^الشاشة أصغر من 1024×768\s?\.$/ }),
+    ).toBeInTheDocument();
   });
 
-  it('renders "Use a display at least 1024px wide" message', () => {
+  it('renders the M-F2 Arabic guidance', () => {
     renderTooSmall();
-    expect(
-      screen.getByText('Use a display at least 1024px wide to run POS Pulse.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('كبّر النافذة أو استخدم شاشة أكبر.')).toBeInTheDocument();
   });
 
   it('no <nav> in DOM at <1024px', () => {

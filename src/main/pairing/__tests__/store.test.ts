@@ -15,6 +15,7 @@ import { createInMemorySecretStore } from '../../secrets/in-memory.js';
 import { makeSecretKey, type SecretKey, type SecretStore } from '../../../shared/secret-store.js';
 import type { DatabaseHandle } from '../../db/client.js';
 import type { PairingStatus } from '../../../shared/pairing-types.js';
+import { openDeviceToken } from '../token-binding.js';
 
 /**
  * 002-terminal-pairing T010 — pairingStore.getStatus() / persist() / clear().
@@ -57,6 +58,12 @@ const MIGRATION_SQL = readFileSync(
 // are exercised below in §"008 T094a — six new fields …".
 const MIGRATION_0027_SQL = readFileSync(
   path.join(REPO_ROOT, 'migrations', '0027_extend_terminal_assignment.sql'),
+  'utf8',
+);
+
+// RT-215 — the durable device-revoked marker (`device_revoked_at`).
+const MIGRATION_0042_SQL = readFileSync(
+  path.join(REPO_ROOT, 'migrations', '0042_terminal_assignment_device_revoked.sql'),
   'utf8',
 );
 
@@ -153,6 +160,18 @@ function makeSqlJsAdapter(db: SqlJsDatabase): PairingStoreDb {
     deleteAssignment() {
       db.run('DELETE FROM terminal_assignment WHERE id = 1');
     },
+    // RT-215 — mirrors production `bindPairingStoreDb.markDeviceRevoked`
+    // (migration 0042 is applied by makeHarness).
+    markDeviceRevoked(atEpochSeconds) {
+      db.run(
+        'UPDATE terminal_assignment SET device_revoked_at = ? WHERE id = 1 AND device_revoked_at IS NULL',
+        [atEpochSeconds],
+      );
+    },
+    // RT-215 10897-A — mirrors production `bindPairingStoreDb.clearDeviceRevoked`.
+    clearDeviceRevoked() {
+      db.run('UPDATE terminal_assignment SET device_revoked_at = NULL WHERE id = 1');
+    },
     transaction(fn) {
       db.run('BEGIN');
       try {
@@ -188,6 +207,7 @@ async function makeHarness(opts: { secretStore?: SecretStore } = {}): Promise<Te
   // Apply 0027 right after 0003 so the table is in its post-extension
   // shape for every test.
   db.run(MIGRATION_0027_SQL);
+  db.run(MIGRATION_0042_SQL);
   const storeDb = makeSqlJsAdapter(db);
   const secretStore = opts.secretStore ?? createInMemorySecretStore();
   const store = createPairingStore({
@@ -334,7 +354,17 @@ describe('createPairingStore.persist()', () => {
       ...T094A_STUB_FIELDS,
     });
 
-    expect(await h.secretStore.get(DEVICE_TOKEN_KEY)).toBe('opaque-token-value');
+    // RT-306: the token is sealed together with the identity of its pairing.
+    expect(openDeviceToken((await h.secretStore.get(DEVICE_TOKEN_KEY)) ?? '')).toEqual({
+      kind: 'bound',
+      token: 'opaque-token-value',
+      binding: {
+        tenant_id: 'tenant-A',
+        branch_id: 'branch-B',
+        terminal_id: 'terminal-C',
+        paired_at: 1735689600,
+      },
+    });
     const row = h.storeDb.readAssignment();
     expect(row).toEqual({
       tenant_id: 'tenant-A',
@@ -403,7 +433,9 @@ describe('createPairingStore.persist()', () => {
       ...T094A_STUB_FIELDS,
     });
 
-    expect(await h.secretStore.get(DEVICE_TOKEN_KEY)).toBe('second');
+    expect(openDeviceToken((await h.secretStore.get(DEVICE_TOKEN_KEY)) ?? '')).toMatchObject({
+      token: 'second',
+    });
     expect(h.storeDb.readAssignment()).toEqual({
       tenant_id: 't2',
       branch_id: 'b2',

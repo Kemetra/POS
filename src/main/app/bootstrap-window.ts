@@ -76,10 +76,14 @@ export interface CreateWindowDeps {
  * Build the `createWindow` routine bound to the supplied Electron surface.
  *
  * Returns a zero-argument function so the composition root's call sites
- * (`whenReady`, and the macOS `activate` re-open path) stay unchanged.
+ * (`whenReady`, and the macOS `activate` re-open path) stay unchanged. It
+ * returns the window it built so the composition root can track the cashier
+ * window: a second launch restores and focuses THAT window (RT-203), never
+ * whatever `BrowserWindow.getAllWindows()` lists first (e.g. the hidden
+ * offscreen receipt-print window).
  */
-export function createWindowFactory(deps: CreateWindowDeps): () => void {
-  return function createWindow(): void {
+export function createWindowFactory(deps: CreateWindowDeps): () => BrowserWindowClass {
+  return function createWindow(): BrowserWindowClass {
     const win = new deps.BrowserWindow({
       width: 1280,
       height: 800,
@@ -121,5 +125,6 @@ export function createWindowFactory(deps: CreateWindowDeps): () => void {
     } else {
       void win.loadFile(deps.rendererFilePath);
     }
+    return win;
   };
 }

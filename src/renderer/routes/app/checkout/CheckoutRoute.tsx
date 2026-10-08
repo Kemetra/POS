@@ -4,9 +4,14 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
 import { usePaymentStore } from '../../../stores/payment-store';
 import { resetSaleStores } from '../../../sale/reset-sale-stores';
+import {
+  useBackToSaleEligibility,
+  useCheckoutBackToSale,
+} from '../../../sale/useCheckoutBackToSale';
 import { Workspace } from '../../../shell/regions/Workspace';
 import { PaymentSurface } from '../../../ui/payments/PaymentSurface';
 import { CheckoutPlaceholder } from './CheckoutPlaceholder';
+import { acknowledgeDrawerNotice } from '../../../ui/receipts/drawer-notice-store';
 
 /**
  * 006-payments-tender — `/app/checkout` route.
@@ -28,6 +33,10 @@ import { CheckoutPlaceholder } from './CheckoutPlaceholder';
  * the route owner supplies the post-sale reset+navigate. Resetting the payment
  * and cart stores then returning to /app/cart starts the next sale clean and
  * is what unsticks the cashier from the settled surface (the prior dead-end).
+ *
+ * RT-26: `onBackToSale` is Checkout Back / Esc. Main decides (`cart.returnToSale`);
+ * only on its `ok` does the route drop the old envelope and return to the SAME
+ * sale at /app/cart, where the cart is re-read from main as editable.
  */
 export function CheckoutRoute(): JSX.Element {
   const paymentsFlag = useFeatureFlagsStore((s) => s.payments);
@@ -40,8 +49,17 @@ export function CheckoutRoute(): JSX.Element {
     // durable in the main process; these stores are renderer-only working
     // state.) Then return to the cart to begin ringing the next sale.
     resetSaleStores();
+    // RT-241 (D-B1): «بيع جديد» acknowledges the drawer notice.
+    acknowledgeDrawerNotice();
     void navigate('/app/cart');
   }, [navigate]);
+
+  const handleReturnedToSale = useCallback((): void => {
+    void navigate('/app/cart');
+  }, [navigate]);
+  const backToSale = useCheckoutBackToSale({ onReturned: handleReturnedToSale });
+  // Main's durable answer per handoff; Back stays disabled until it is known.
+  const backEligibility = useBackToSaleEligibility();
 
   if (!paymentsFlag) {
     return <CheckoutPlaceholder />;
@@ -56,7 +74,11 @@ export function CheckoutRoute(): JSX.Element {
   // Arabic heading is the screen's one title (no English-only Workspace title).
   return (
     <Workspace>
-      <PaymentSurface onNewSale={handleNewSale} />
+      <PaymentSurface
+        onNewSale={handleNewSale}
+        onBackToSale={backToSale}
+        backToSaleEligibility={backEligibility}
+      />
     </Workspace>
   );
 }

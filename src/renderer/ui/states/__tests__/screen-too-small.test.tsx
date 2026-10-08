@@ -8,19 +8,27 @@ afterEach(cleanup);
 
 /**
  * T013 — ScreenTooSmall frozen-copy assertions.
- * (contracts/shell-regions.md §"ScreenTooSmall")
+ * (contracts/shell-regions.md §"ScreenTooSmall"; copy amended by RT-241 to M-F2)
  */
 describe('ScreenTooSmall (T013)', () => {
-  it('heading text === "Screen too small"', () => {
+  it('heading carries the M-F2 copy (RT-241)', () => {
     render(<ScreenTooSmall />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Screen too small');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('الشاشة أصغر من 1024×768.');
   });
 
-  it('body paragraph text === "Use a display at least 1024px wide to run POS Pulse."', () => {
+  it('body carries the M-F2 action', () => {
     render(<ScreenTooSmall />);
-    expect(
-      screen.getByText('Use a display at least 1024px wide to run POS Pulse.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('كبّر النافذة أو استخدم شاشة أكبر.')).toBeInTheDocument();
+  });
+
+  it('renders Arabic RTL, with the size as an isolated LTR run', () => {
+    render(<ScreenTooSmall />);
+    const main = screen.getByRole('main');
+    expect(main).toHaveAttribute('dir', 'rtl');
+    expect(main).toHaveAttribute('lang', 'ar');
+    const size = screen.getByText('1024×768');
+    expect(size.tagName).toBe('BDI');
+    expect(size).toHaveAttribute('dir', 'ltr');
   });
 
   it('exactly one <h1>', () => {

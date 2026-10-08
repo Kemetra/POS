@@ -393,7 +393,10 @@ describe('T220 — vouchers.validate bridge handler', () => {
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo,
       tenderLineFsm: makeTenderLineFsmDouble(),
-      idempotency: makeIdempotencyHelperDouble({ kind: 'replay' }),
+      idempotency: makeIdempotencyHelperDouble({
+        kind: 'replay',
+        tender_line_id: 'tl-VOUCHER-EXISTING',
+      }),
       auditEmitter: makeAuditEmitterDouble(),
       validateVoucher,
       uuid: () => 'tl-VOUCHER-1',
@@ -425,7 +428,10 @@ describe('T220 — vouchers.validate bridge handler', () => {
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo,
       tenderLineFsm: makeTenderLineFsmDouble(),
-      idempotency: makeIdempotencyHelperDouble({ kind: 'replay' }),
+      idempotency: makeIdempotencyHelperDouble({
+        kind: 'replay',
+        tender_line_id: 'tl-VOUCHER-REJECT',
+      }),
       auditEmitter: makeAuditEmitterDouble(),
       validateVoucher: makeValidateVoucherDouble(),
       uuid: () => 'tl-VOUCHER-1',

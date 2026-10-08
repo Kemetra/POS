@@ -1,0 +1,100 @@
+/*
+ * RT-241 — route-level states (RouteLoading, ErrorScreen). They render outside
+ * the V5 frame (before boot routing, or instead of a failed route), so they use
+ * the global tokens from styles/tailwind.css directly.
+ */
+
+.v5-route-state {
+  display: grid;
+  place-items: center;
+  min-block-size: 100vh;
+  padding: var(--space-5);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-sm);
+}
+
+.v5-route-state__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+}
+
+.v5-route-state__spinner {
+  inline-size: 16px;
+  block-size: 16px;
+  border: 2px solid var(--color-border-strong);
+  border-block-start-color: var(--color-primary);
+  border-radius: var(--radius-pill);
+  animation: v5-route-spin 800ms linear infinite;
+}
+
+@keyframes v5-route-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.v5-route-state__panel {
+  display: grid;
+  gap: var(--space-3);
+  inline-size: min(480px, 100%);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-route-state__panel p {
+  margin: 0;
+}
+
+.v5-route-state__title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-route-state__meta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.v5-route-state__action {
+  justify-self: start;
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-control);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.v5-route-state__action:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* The loading text still says what is happening; the spinner just stops. */
+@media (prefers-reduced-motion: reduce) {
+  .v5-route-state__spinner {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .v5-route-state__spinner {
+    border-color: CanvasText;
+  }
+
+  .v5-route-state__action {
+    border: 3px solid ButtonText;
+  }
+}

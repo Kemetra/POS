@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SessionManager } from '../session-manager.js';
 
@@ -150,5 +150,206 @@ describe('SessionManager', () => {
       expect(record).toBeDefined();
       expect(m.getCurrent()).not.toBeNull();
     });
+  });
+});
+
+describe('SessionManager — RT-113 P2 cashier admission fields (10763 §3)', () => {
+  const ADMISSION = {
+    user_id: '0192f6a0-1b2c-7d3e-8f40-123456789abc',
+    admission_id: '0192f6a0-aaaa-7bbb-8ccc-000000000001',
+    admission_ttl_seconds: 43_200,
+    offline_grace_seconds: 86_400,
+    admission_generation: 'gen-signin-0001',
+  };
+
+  function createCashier(m: SessionManager): ReturnType<SessionManager['create']> {
+    return m.create({
+      operator_id: 'user_clerk_1',
+      display_name: 'Cashier',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: '',
+      cashier_admission: ADMISSION,
+    });
+  }
+
+  it('an admitted cashier session carries user_id, admission and authority online_confirmed', () => {
+    const record = createCashier(makeManager());
+    expect(record).toMatchObject({
+      user_id: ADMISSION.user_id,
+      admission_id: ADMISSION.admission_id,
+      admission_ttl_seconds: 43_200,
+      offline_grace_seconds: 86_400,
+      admission_generation: 'gen-signin-0001',
+      authority: 'online_confirmed',
+    });
+  });
+
+  it('a session created without an admission carries no admission fields', () => {
+    const record = makeManager().create({
+      operator_id: 'op-1',
+      display_name: 'Manager',
+      role: 'manager',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: 'be-1',
+    });
+    expect(record.authority).toBeUndefined();
+    expect(record.admission_id).toBeUndefined();
+    expect(record.admission_generation).toBeUndefined();
+    expect(record.user_id).toBeUndefined();
+  });
+
+  it('the renderer bridge view never carries the admission fields (main-only, Constitution VII)', () => {
+    const m = makeManager();
+    createCashier(m);
+    const view = m.getCurrentBridgeView() as unknown as Record<string, unknown>;
+    for (const field of [
+      'user_id',
+      'admission_id',
+      'authority',
+      'admission_ttl_seconds',
+      'offline_grace_seconds',
+      'admission_generation',
+    ]) {
+      expect(view).not.toHaveProperty(field);
+    }
+    // RT-219: the generation is main-only; it never reaches the renderer.
+    expect(JSON.stringify(view)).not.toContain(ADMISSION.admission_generation);
+  });
+
+  it('renewAdmission updates the current session only when the id matches', () => {
+    const m = makeManager();
+    const record = createCashier(m);
+    expect(
+      m.renewAdmission('another-session', {
+        admission_id: 'x',
+        admission_ttl_seconds: 1,
+        offline_grace_seconds: 1,
+        admission_generation: 'gen-other',
+      }),
+    ).toBe(false);
+    expect(record.admission_id).toBe(ADMISSION.admission_id);
+    expect(record.admission_generation).toBe(ADMISSION.admission_generation);
+    expect(
+      m.renewAdmission(record.id, {
+        admission_id: 'new-id',
+        admission_ttl_seconds: 600,
+        offline_grace_seconds: 3_600,
+        admission_generation: 'gen-renewed-0002',
+      }),
+    ).toBe(true);
+    expect(m.getCurrent()).toMatchObject({
+      admission_id: 'new-id',
+      admission_ttl_seconds: 600,
+      offline_grace_seconds: 3_600,
+      admission_generation: 'gen-renewed-0002',
+      authority: 'online_confirmed',
+    });
+  });
+
+  it('RT-219: a renewal of the SAME admission_id still replaces the generation', () => {
+    const m = makeManager();
+    const record = createCashier(m);
+    m.renewAdmission(record.id, {
+      admission_id: ADMISSION.admission_id,
+      admission_ttl_seconds: 43_200,
+      offline_grace_seconds: 86_400,
+      admission_generation: 'gen-heartbeat-0002',
+    });
+    expect(m.getCurrent()?.admission_id).toBe(ADMISSION.admission_id);
+    expect(m.getCurrent()?.admission_generation).toBe('gen-heartbeat-0002');
+  });
+
+  it('renewAdmission is a no-op without a current session', () => {
+    expect(
+      makeManager().renewAdmission('s', {
+        admission_id: 'x',
+        admission_ttl_seconds: 1,
+        offline_grace_seconds: 1,
+        admission_generation: 'gen-x',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('SessionManager — RT-113 P2 authority latch (Codex P1 #1 / review F1-F2)', () => {
+  function cashier(m: SessionManager): ReturnType<SessionManager['create']> {
+    return m.create({
+      operator_id: 'user_clerk_1',
+      display_name: 'Cashier',
+      role: 'cashier',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: '',
+    });
+  }
+
+  it('latches the current session only, keeps the first cause, and is main-only', () => {
+    const m = makeManager();
+    const record = cashier(m);
+    expect(m.latchAuthority('other', 'superseded_by_takeover')).toBe(false);
+    expect(record.authority_latch).toBeUndefined();
+    expect(m.latchAuthority(record.id, 'account_disabled_mid_session')).toBe(true);
+    expect(m.latchAuthority(record.id, 'superseded_by_takeover')).toBe(true);
+    expect(m.getCurrent()?.authority_latch).toBe('account_disabled_mid_session');
+    expect(m.getCurrentBridgeView()).not.toHaveProperty('authority_latch');
+  });
+
+  it('a new session starts unlatched', () => {
+    const m = makeManager();
+    const first = cashier(m);
+    m.latchAuthority(first.id, 'superseded_by_takeover');
+    m.end('superseded_by_takeover');
+    expect(cashier(m).authority_latch).toBeUndefined();
+  });
+});
+
+describe('SessionManager — RT-17 slice 4 part 2: the manager’s users.id (manager PIN enrolment)', () => {
+  const MANAGER_USER = '0190f5a2-3b4c-7d8e-9f01-23456789abce';
+
+  function signIn(m: SessionManager, role: 'manager' | 'admin' | 'cashier', id?: string) {
+    return m.create({
+      operator_id: 'clerk-op',
+      display_name: 'Op',
+      role,
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: 'be-1',
+      ...(id === undefined ? {} : { manager_user_id: id }),
+    });
+  }
+
+  it.each(['manager', 'admin'] as const)(
+    'keeps a %s session’s users.id from the sign-in, lower-cased',
+    (role) => {
+      vi.useFakeTimers({ now: new Date('2026-10-06T08:00:00.000Z') });
+      const record = signIn(makeManager(), role, MANAGER_USER.toUpperCase());
+      vi.useRealTimers();
+      expect(record.manager_user_id).toBe(MANAGER_USER);
+      // Round 1 P2-1/P2-2: the local time of that online sign-in (main-only).
+      expect(record.manager_signed_in_at).toBe('2026-10-06T08:00:00.000Z');
+      // It is not the cashier identity: the shift facts stay cashier-only.
+      expect(record.user_id).toBeUndefined();
+    },
+  );
+
+  it('never keeps one on a cashier session', () => {
+    const record = signIn(makeManager(), 'cashier', MANAGER_USER);
+    expect(record.manager_user_id).toBeUndefined();
+    expect(record.manager_signed_in_at).toBeUndefined();
+  });
+
+  it('keeps none when the sign-in carried none (or an empty one)', () => {
+    expect(signIn(makeManager(), 'manager').manager_user_id).toBeUndefined();
+    expect(signIn(makeManager(), 'manager', '').manager_user_id).toBeUndefined();
+    expect(signIn(makeManager(), 'manager', '').manager_signed_in_at).toBeUndefined();
+  });
+
+  it('never puts it in the renderer’s bridge view (main-only)', () => {
+    const m = makeManager();
+    signIn(m, 'manager', MANAGER_USER);
+    expect(JSON.stringify(m.getCurrentBridgeView())).not.toContain(MANAGER_USER);
   });
 });

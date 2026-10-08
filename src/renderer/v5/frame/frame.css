@@ -210,3 +210,26 @@
     transition: none;
   }
 }
+
+/*
+ * RT-241 (VN-S2) — Windows contrast themes drop tints, fills and shadows, so a
+ * state carried only by one of them would vanish. Selection uses the system
+ * Highlight pair; a filled action keeps a 3px ButtonText edge.
+ */
+@media (forced-colors: active) {
+  /* forced-color-adjust: none, or the text's Canvas backplate hides HighlightText. */
+  .v5-frame__link--active,
+  .v5-frame__link--active:hover {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .v5-frame__brand-mark {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-frame__sign-out .v5-frame__sign-out-confirm {
+    border: 3px solid ButtonText;
+  }
+}
