@@ -11,6 +11,7 @@ import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.j
 import { useCartStore } from '../../../../src/renderer/stores/cart-store.js';
 import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
+import { useDrawerNoticeStore } from '../../../../src/renderer/ui/receipts/drawer-notice-store.js';
 
 /**
  * P0 cashier-flow blocker — CheckoutRoute "New sale" wiring (the load-bearing
@@ -54,6 +55,34 @@ const ENVELOPE: PaymentIntentEnvelope = {
 function LocationProbe(): JSX.Element {
   const loc = useLocation();
   return <div data-testid="location-probe">{loc.pathname}</div>;
+}
+
+/**
+ * The post-confirm re-read answers as main does for a settled attempt: the
+ * settle leaves every tender line `applied` (there is no settled line state).
+ */
+function readReturnsSettled(tenderType: string): void {
+  const api = (window as unknown as { api: { payments: { read: ReturnType<typeof vi.fn> } } }).api;
+  api.payments.read.mockResolvedValue({
+    kind: 'ok',
+    payment_attempt: {
+      payment_attempt_id: 'pa-1',
+      state: 'settled',
+      envelope_subtotal_minor: 2500,
+      started_at: '2026-06-11T12:00:01.000Z',
+      settled_at: '2026-06-11T12:00:09.000Z',
+      tender_lines: [
+        {
+          tender_line_id: 'tl-1',
+          tender_type: tenderType,
+          amount_applied_minor: 2500,
+          state: 'applied',
+          apply_order: 1,
+          applied_at: '2026-06-11T12:00:02.000Z',
+        },
+      ],
+    },
+  });
 }
 
 beforeEach(() => {
@@ -110,6 +139,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  useDrawerNoticeStore.getState().reset();
   useOperatorSessionStore.getState().reset();
   usePaymentStore.getState().reset();
   useCartStore.getState().reset();
@@ -161,4 +191,89 @@ describe('CheckoutRoute — New sale wiring', () => {
     expect(usePaymentStore.getState().envelope).toBeNull();
     expect(usePaymentStore.getState().paymentSlice).toBeNull();
   });
+
+  it('RT-241 (D-B1): the drawer notice shows inside cash completion, and «بيع جديد» acknowledges it', async () => {
+    const user = userEvent.setup();
+    readReturnsSettled('cash');
+    render(
+      <MemoryRouter initialEntries={['/app/checkout']}>
+        <Routes>
+          <Route path="/app/checkout" element={<CheckoutRoute />} />
+          <Route path="/app/cart" element={<div data-testid="cart-screen">Cart</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    usePaymentStore.getState().applyAttemptSnapshot({
+      payment_attempt_id: 'pa-1',
+      state: 'started',
+      envelope_subtotal_minor: 2500,
+      started_at: '2026-06-11T12:00:01.000Z',
+      tender_lines: [
+        {
+          tender_line_id: 'tl-1',
+          tender_type: 'cash',
+          amount_applied_minor: 2500,
+          state: 'applied',
+          apply_order: 1,
+          applied_at: '2026-06-11T12:00:02.000Z',
+        },
+      ],
+    });
+    await user.click(await screen.findByTestId('payment-surface-confirm'));
+    await screen.findByTestId('payment-surface-settled');
+
+    // The sale finalizes asynchronously; its drawer kick fails in this session.
+    const notice = useDrawerNoticeStore.getState();
+    notice.observe(null);
+    notice.observe({ sale_id: 'sale-now', last_successful_open_at: null });
+
+    expect(await screen.findByTestId('drawer-notice-inline')).toHaveTextContent(
+      'لم يُفتح درج النقود. افتحه يدويًا.',
+    );
+    await user.click(screen.getByTestId('payment-surface-new-sale'));
+    expect(useDrawerNoticeStore.getState().active).toBeNull();
+  });
+
+  it.each(['external_card_terminal', 'internal_voucher'])(
+    'RT-241 (D-B1, Codex P2 on #579): a %s completion does not carry an earlier cash sale’s drawer notice',
+    async (tenderType) => {
+      const user = userEvent.setup();
+      readReturnsSettled(tenderType);
+      // An earlier cash sale's drawer kick failed in this session.
+      const notice = useDrawerNoticeStore.getState();
+      notice.observe(null);
+      notice.observe({ sale_id: 'sale-earlier', last_successful_open_at: null });
+
+      render(
+        <MemoryRouter initialEntries={['/app/checkout']}>
+          <Routes>
+            <Route path="/app/checkout" element={<CheckoutRoute />} />
+            <Route path="/app/cart" element={<div data-testid="cart-screen">Cart</div>} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      usePaymentStore.getState().applyAttemptSnapshot({
+        payment_attempt_id: 'pa-1',
+        state: 'started',
+        envelope_subtotal_minor: 2500,
+        started_at: '2026-06-11T12:00:01.000Z',
+        tender_lines: [
+          {
+            tender_line_id: 'tl-1',
+            tender_type: tenderType,
+            amount_applied_minor: 2500,
+            state: 'applied',
+            apply_order: 1,
+            applied_at: '2026-06-11T12:00:02.000Z',
+          },
+        ],
+      });
+      await user.click(await screen.findByTestId('payment-surface-confirm'));
+      await screen.findByTestId('payment-surface-settled');
+
+      // The notice is still active for the status area; this completion has no cash.
+      expect(useDrawerNoticeStore.getState().active).not.toBeNull();
+      expect(screen.queryByTestId('drawer-notice-inline')).not.toBeInTheDocument();
+    },
+  );
 });

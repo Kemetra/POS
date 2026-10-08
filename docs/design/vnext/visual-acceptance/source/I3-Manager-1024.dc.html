@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>Manager approval required 1024</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Noto+Sans+Arabic:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+
+body{margin:0}
+.rt{font-family:"Dubai","Segoe UI",Tahoma,"Noto Sans Arabic",system-ui,sans-serif;color:#0f1d2e;background:#f7f9fa;box-sizing:border-box;overflow:hidden;position:relative;font-size:14px;line-height:1.45}
+.rt *,.rt *::before,.rt *::after{box-sizing:border-box}
+.rt h1,.rt h2,.rt h3,.rt p{margin:0}
+.num{font-family:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;letter-spacing:-.01em}
+.mut{color:#53647a}
+.row{display:flex;align-items:center}
+.grow{flex:1;min-width:0}
+.shell{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px;background:#fff;border-bottom:1px solid #d8dfe7;flex:none}
+.shell.s1024{height:44px;gap:10px;padding:0 10px}
+.mark{display:flex;align-items:center;gap:8px;font-weight:700;color:#0b5b55;font-size:14px;white-space:nowrap;direction:ltr}
+.mark i{display:block;width:22px;height:22px;border-radius:6px;background:#0f766e;position:relative}
+.mark i::after{content:"";position:absolute;top:5px;bottom:5px;left:9px;right:9px;background:#fff;border-radius:1px}
+.sep{width:1px;height:20px;background:#d8dfe7;flex:none}
+.ctx{display:flex;align-items:center;gap:6px;font-size:13px;color:#53647a;white-space:nowrap}
+.ctx b{color:#0f1d2e;font-weight:600}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;border:1px solid transparent;background:transparent;color:#53647a;cursor:pointer;padding:0;flex:none}
+.iconbtn:hover{background:#eef2f6;color:#0f1d2e}
+.iconbtn.rm{color:#7a889a}
+.iconbtn.rm:hover{background:#fbeceb;color:#b3261e}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:14px;font-size:12.5px;font-weight:600;border:1px solid;white-space:nowrap;flex:none}
+.c-ok{background:#e8f4ee;color:#15774d;border-color:#b9dcc9}
+.c-warn{background:#fdf3e4;color:#8a4b00;border-color:#e6c38f}
+.c-err{background:#fbeceb;color:#b3261e;border-color:#efc3bf}
+.c-info{background:#e8f1f9;color:#1b6ca8;border-color:#bcd5ea}
+.c-off{background:#0f1d2e;color:#fff;border-color:#0f1d2e}
+.c-neutral{background:#eef2f6;color:#3e4d60;border-color:#d8dfe7}
+.c-mgr{background:#0b5b55;color:#fff;border-color:#0b5b55}
+.c-lock{background:#fff;color:#0f1d2e;border-color:#0f1d2e}
+.hatch{background-image:repeating-linear-gradient(-45deg,rgba(163,90,0,.13) 0 6px,rgba(163,90,0,0) 6px 12px)}
+.main{display:flex;flex:1;min-height:0;position:relative}
+.work{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;padding:12px 16px}
+.s1024w .work{padding:10px 12px;gap:8px}
+.pane{width:360px;flex:none;background:#fff;border-inline-start:1px solid #d8dfe7;display:flex;flex-direction:column;padding:16px;gap:10px}
+.s1024w .pane{width:300px;padding:12px;gap:8px}
+.scan{display:flex;gap:8px;align-items:center;flex:none}
+.scanbox{flex:1;min-width:0;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px;background:#fff;border:2px solid #0f766e;border-radius:10px;box-shadow:0 0 0 3px rgba(15,118,110,.16)}
+.scanbox svg{color:#0f766e;flex:none}
+.scanbox input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:inherit;font-size:15px;color:#0f1d2e;height:40px;padding:0}
+.scanbox input::placeholder{color:#53647a}
+.scanbox.idle{border:1px solid #c9d2dc;box-shadow:none}
+.scanbox.idle svg{color:#53647a}
+.scanbox.err{border-color:#b3261e;box-shadow:0 0 0 3px rgba(179,38,30,.14)}
+.scanbox.err svg{color:#b3261e}
+.caret{width:2px;height:24px;background:#0f1d2e;flex:none}
+.focus{font-size:11.5px;font-weight:600;color:#0b5b55;background:#e6f4f1;border-radius:6px;padding:3px 8px;white-space:nowrap;flex:none}
+.focus.away{color:#3e4d60;background:#eef2f6}
+.txh{display:flex;align-items:center;gap:10px;font-size:13px;color:#53647a;height:24px;flex:none;white-space:nowrap}
+.txh .id{font-weight:600;color:#0f1d2e;font-size:14px}
+.txh svg{color:#53647a}
+.cart{flex:1;min-height:0;background:#fff;border:1px solid #d8dfe7;border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+.cg{display:grid;grid-template-columns:36px minmax(0,1fr) 150px 104px 116px 48px;align-items:center;column-gap:8px;padding:0 12px}
+.c1024 .cg{grid-template-columns:minmax(0,1fr) 140px 84px 100px 44px;padding:0 10px;column-gap:6px}
+.ch{height:34px;background:#f3f6fa;border-bottom:1px solid #d8dfe7;font-size:12px;font-weight:600;color:#53647a;flex:none}
+.cb{flex:1;min-height:0;overflow:hidden;position:relative}
+.cr{height:56px;border-bottom:1px solid #eef2f6}
+.c1024 .cr{height:48px}
+.ix{font-size:12px;color:#53647a;text-align:center}
+.nmw{display:flex;flex-direction:column;min-width:0}
+.nml{display:flex;align-items:center;gap:8px;min-width:0}
+.nm{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bc{font-size:12px;color:#53647a;line-height:1.3}
+.qcell{display:flex;justify-content:center}
+.qv{font-size:15px;font-weight:600}
+.mh{text-align:right}
+.mu{text-align:right;font-size:14px;color:#3e4d60}
+.mt{text-align:right;font-size:15.5px;font-weight:600}
+.cr.act{background:#e6f4f1;box-shadow:inset -4px 0 0 #0f766e}
+.cr.sel{box-shadow:inset 0 0 0 2px #1b6ca8;background:#f5f9fd}
+.cr.act.sel{box-shadow:inset 0 0 0 2px #1b6ca8,inset -6px 0 0 #0f766e}
+.cr.pend{background:#fdf3e4;box-shadow:inset 0 0 0 2px #a35a00}
+.cr.dim .nm,.cr.dim .num{color:#7a889a}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;font-size:11px;font-weight:700;background:#0f766e;color:#fff;flex:none;white-space:nowrap}
+.tag.sel{background:#1b6ca8}
+.tag.pend{background:#8a4b00}
+.step{display:inline-flex;align-items:center;height:44px;border:1px solid #c9d2dc;border-radius:10px;background:#fff;overflow:hidden}
+.step button{width:42px;height:42px;border:0;background:transparent;color:#0f1d2e;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.step button:hover{background:#eef2f6}
+.step .q{min-width:46px;text-align:center;font-size:16px;font-weight:600;border-left:1px solid #d8dfe7;border-right:1px solid #d8dfe7;height:42px;line-height:42px}
+.cf{height:36px;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid #d8dfe7;background:#f3f6fa;font-size:12.5px;color:#53647a;flex:none;white-space:nowrap}
+.sbar{position:absolute;left:3px;width:6px;border-radius:3px;background:#b7c2cf}
+.ph2{font-size:12px;font-weight:700;color:#53647a}
+.kv{display:flex;justify-content:space-between;align-items:center;font-size:14px;height:30px}
+.s1024w .kv{height:26px;font-size:13px}
+.kv .num{font-size:15px}
+.cur{font-size:14px;font-weight:600;color:#53647a}
+.totb{border-top:1px solid #d8dfe7;padding-top:10px}
+.tot-l{font-size:14px;font-weight:700}
+.tot-v{font-size:44px;font-weight:600;line-height:1.1}
+.s1024w .tot-v{font-size:36px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 14px;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;border:1px solid #c9d2dc;background:#fff;color:#0f1d2e;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#f3f6fa}
+.btn-p{height:56px;background:#0f766e;border-color:#0f766e;color:#fff;font-size:18px;font-weight:700;padding:0 18px}
+.btn-p:hover{background:#0b5b55}
+.btn-p .kbd{border-color:rgba(255,255,255,.6);color:#fff}
+.btn-ink{background:#0f1d2e;border-color:#0f1d2e;color:#fff}
+.btn-ink:hover{background:#22334a}
+.btn-ink .kbd{border-color:rgba(255,255,255,.6);color:#fff}
+.btn-d{color:#b3261e;border-color:#e6b4af}
+.btn-d:hover{background:#fbeceb}
+.btn-q{background:transparent;border-color:transparent;color:#0b5b55}
+.btn-q:hover{background:#e6f4f1}
+.btn.off,.btn.off:hover{background:#eef2f6;border-color:#d8dfe7;color:#6b7a8d;cursor:not-allowed}
+.btn.off .kbd{border-color:#c9d2dc;color:#6b7a8d}
+.w100{width:100%}
+.kbd{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;border:1px solid #c9d2dc;font-family:"IBM Plex Mono",Consolas,monospace;font-size:11px;font-weight:500;color:#53647a;direction:ltr;unicode-bidi:isolate}
+.gate{font-size:12px;color:#53647a;display:flex;align-items:center;gap:6px;justify-content:center}
+.hr{height:1px;background:#d8dfe7;flex:none}
+.ban{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 14px;border-radius:10px;border:1px solid;font-size:13.5px;flex:none}
+.ban b{font-weight:700}
+.ban.warn{background:#fdf3e4;border-color:#e6c38f;color:#5c3400}
+.ban.warn>svg{color:#a35a00}
+.ban.err{background:#fbeceb;border-color:#efc3bf;color:#6e1712}
+.ban.err>svg{color:#b3261e}
+.ban.info{background:#e8f1f9;border-color:#bcd5ea;color:#123f63}
+.ban.info>svg{color:#1b6ca8}
+.ban.ok{background:#e8f4ee;border-color:#b9dcc9;color:#0d4a30}
+.ban.ok>svg{color:#15774d}
+.ban.tl{background:#e6f4f1;border-color:#a9d5cc;color:#083f3b}
+.ban.tl>svg{color:#0f766e}
+.ban.off{background:#fff;border-color:#0f1d2e;color:#0f1d2e}
+.strip{display:flex;align-items:center;gap:12px;height:38px;padding:0 16px;font-size:13px;border-bottom:1px solid;flex:none;white-space:nowrap}
+.strip.off{background:#eef2f6;border-color:#c9d2dc;color:#0f1d2e}
+.strip.info{background:#e8f1f9;border-color:#bcd5ea;color:#123f63}
+.strip .btn{height:30px;font-size:12.5px;padding:0 10px}
+.prog{width:120px;height:6px;border-radius:3px;background:#bcd5ea;overflow:hidden;flex:none}
+.prog i{display:block;height:6px;background:#1b6ca8;border-radius:3px}
+.scrim{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(15,29,46,.34)}
+.dock{position:absolute;top:0;bottom:0;left:0;background:#fff;border-right:1px solid #c9d2dc;box-shadow:12px 0 32px rgba(15,29,46,.16);display:flex;flex-direction:column}
+.toast{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 16px;border-radius:10px;background:#0f1d2e;color:#fff;font-size:13.5px;box-shadow:0 8px 24px rgba(15,29,46,.22)}
+.toast svg{flex:none}
+.inval{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#8f1f18}
+.inval svg{color:#b3261e;flex:none}
+.inval.w{color:#6b3a00}
+.inval.w svg{color:#a35a00}
+.h1{font-size:22px;font-weight:700}
+.ledger{background:#fff;border:1px solid #d8dfe7;border-radius:14px;overflow:hidden;flex:none}
+.lrow{display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #eef2f6;min-height:80px}
+.lrow:last-child{border-bottom:0}
+.llab{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.llab .t{font-size:18px;font-weight:700}
+.llab .s{font-size:12.5px;color:#53647a}
+.vbox{width:360px;text-align:right;flex:none}
+.s1024w .vbox{width:290px}
+.lv{font-size:36px;font-weight:600;line-height:1.1}
+.s1024w .lv{font-size:30px}
+.lcur{width:36px;flex:none;font-size:14px;font-weight:600;color:#53647a}
+.recv{height:68px;border:2px solid #0f766e;border-radius:10px;box-shadow:0 0 0 3px rgba(15,118,110,.16);background:#fff;display:flex;align-items:center;justify-content:flex-end;padding:0 14px;gap:8px;direction:ltr}
+.s1024w .recv{height:60px}
+.recv .caret{height:34px}
+.lrow.eq{border-top:2px solid #0f1d2e}
+.lrow.big{min-height:104px}
+.lrow.big .lv{font-size:52px}
+.s1024w .lrow.big .lv{font-size:44px}
+.lrow.chg{background:#0f1d2e;color:#fff}
+.lrow.chg .s,.lrow.chg .lcur{color:#c5d0dc}
+.lrow.short{background:#fdf3e4;box-shadow:inset 0 0 0 2px #a35a00;color:#5c3400}
+.lrow.short .s,.lrow.short .lcur{color:#6b3a00}
+.lrow.nil{background:#f3f6fa;color:#6b7a8d}
+.lrow.nil .lv{font-size:28px;font-weight:500}
+.lrow.due{background:#fbeceb;color:#6e1712}
+.seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:none}
+.segb{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;border-radius:10px;border:1px solid #c9d2dc;background:#fff;font-family:inherit;font-size:16px;font-weight:600;color:#0f1d2e;cursor:pointer}
+.segb.on{border:2px solid #0f766e;background:#e6f4f1;color:#083f3b}
+.segb .ck{margin-inline-start:auto;display:inline-flex;width:22px;height:22px;border-radius:11px;background:#0f766e;color:#fff;align-items:center;justify-content:center}
+.segb .kbd{margin-inline-start:auto}
+.segb.on .kbd{margin-inline-start:0}
+.sum{width:380px;flex:none;background:#fff;border-inline-end:1px solid #d8dfe7;display:flex;flex-direction:column}
+.s1024w .sum{width:300px}
+.sumh{padding:14px 16px;border-bottom:1px solid #d8dfe7;display:flex;flex-direction:column;gap:4px}
+.sl{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-bottom:1px solid #eef2f6;font-size:13.5px}
+.sl .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl .q{color:#53647a;font-size:13px;width:36px;text-align:center}
+.sl .t{width:80px;text-align:right;font-weight:600}
+.area{flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:14px}
+.s1024w .area{padding:14px 16px;gap:10px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.flab{font-size:12.5px;font-weight:700;color:#3e4d60}
+.sel{display:flex;align-items:center;height:44px;padding:0 12px;border:1px solid #c9d2dc;border-radius:10px;background:#fff;font-size:14px;gap:8px}
+.pin{display:flex;align-items:center;gap:10px;height:52px;padding:0 14px;border:2px solid #0f766e;border-radius:10px;box-shadow:0 0 0 3px rgba(15,118,110,.16);background:#fff}
+.pin input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:inherit;font-size:15px;height:40px;padding:0}
+.dots{display:flex;gap:8px;direction:ltr}
+.dots i{width:10px;height:10px;border-radius:5px;background:#0f1d2e;display:block}
+.card14{background:#fff;border:1px solid #d8dfe7;border-radius:14px}
+
+.entry{display:flex;gap:8px;align-items:stretch;flex:none}
+.entrybox{flex:1;min-width:0;display:flex;align-items:center;gap:12px;height:56px;padding:0 14px;background:#fff;border:1.5px solid #0f766e;border-radius:10px}
+.entrybox>svg{color:#0f766e;flex:none}
+.ein{display:flex;flex-direction:column;flex:1;min-width:0}
+.elab{font-size:11.5px;font-weight:700;color:#0b5b55;line-height:1.25}
+.ein input{border:0;outline:0;background:transparent;font-family:inherit;font-size:15px;color:#0f1d2e;height:26px;padding:0;min-width:0}
+.ein input::placeholder{color:#53647a}
+.efb{display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;flex:none;max-width:330px;min-width:0;color:#15774d;border-inline-start:1px solid #d8dfe7;padding-inline-start:12px;height:32px}
+.efb .t{color:#3e4d60;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.more{position:absolute;top:0;left:0;right:0;height:28px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:#3e4d60;background:#f3f6fa;border-bottom:1px solid #d8dfe7;z-index:2}
+.fade{position:absolute;top:28px;left:0;right:0;height:14px;background:linear-gradient(rgba(15,29,46,.08),rgba(15,29,46,0));z-index:2}
+.rhead{padding:20px 24px;display:flex;gap:16px;align-items:flex-start;border-bottom:1px solid #e6c38f;background-color:#fdf3e4}
+.s1024w .rhead{padding:14px 16px;gap:12px}
+.dont{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:#fbeceb;border:1px solid #efc3bf;color:#6e1712}
+.dont svg{color:#b3261e;flex:none;margin-top:2px}
+.safe{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:#e6f4f1;border:1px solid #a9d5cc;color:#083f3b}
+.safe svg{color:#0f766e;flex:none;margin-top:2px}
+.cond{outline:2px dashed #7c3aed;outline-offset:4px;border-radius:10px;position:relative;margin-top:12px}
+.condtag{position:absolute;top:-19px;right:-4px;background:#7c3aed;color:#fff;font-family:"Segoe UI",system-ui,sans-serif;font-size:10px;font-weight:700;line-height:16px;padding:0 6px;border-radius:4px;direction:ltr;white-space:nowrap;z-index:3}
+
+
+</style>
+</helmet>
+<div class="rt s1024w" dir="rtl" style="width: 1024px; height: 768px; display: flex; flex-direction: column">
+<header class="shell s1024"><div class="mark"><i></i></div><div class="sep"></div><div class="ctx">الطرفية <b><span class="num ">03</span></b></div><div class="sep"></div><div class="ctx"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><b>سارة م.</b></div><div class="grow"></div><span class="chip c-mgr "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg>بانتظار موافقة المدير</span><div class="ctx"><b><span class="num ">14:34</span></b></div><button class="iconbtn" aria-label="قفل الطرفية"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></button></header><div class="main"><main class="work"><div class="entry"><div class="entrybox"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6v12M7 6v12M10.5 6v12M13 6v12M16.5 6v12M20 6v12"></path></svg><div class="ein"><span class="elab">إدخال الصنف</span><input aria-label="إدخال الصنف بالباركود أو الرمز" placeholder="امسح الباركود أو اكتب رمز الصنف"></div></div><button class="btn" style="height:56px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M20 20l-4.2-4.2"></path></svg>بحث</button></div><div class="txh"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"></path><path d="M9 8h6M9 12h6"></path></svg><span>عملية بيع</span><span class="id num">T03-000418</span><span>· بدأت <span class="num ">14:21</span></span><div class="grow"></div><span>الأصناف <span class="num ">9</span> · القطع <span class="num ">13</span></span></div><section class="cart c1024" aria-label="السلة"><div class="cg ch"><div>الصنف</div><div style="text-align:center">الكمية</div><div class="mh">السعر</div><div class="mh">الإجمالي</div><div></div></div><div class="cb"><div class="cr cg"><div class="nmw"><div class="nml"><span class="nm">باراسيتامول 500 مجم · 24 قرص</span></div></div><div class="qcell"><span class="qv num">2</span></div><div class="mu"><span class="num">32.50</span></div><div class="mt"><span class="num">65.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg"><div class="nmw"><div class="nml"><span class="nm">فيتامين C فوار 1000 مجم · 20 قرص</span></div></div><div class="qcell"><span class="qv num">1</span></div><div class="mu"><span class="num">89.00</span></div><div class="mt"><span class="num">89.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg"><div class="nmw"><div class="nml"><span class="nm">شراب للكحة للأطفال · 100 مل</span></div></div><div class="qcell"><span class="qv num">1</span></div><div class="mu"><span class="num">54.75</span></div><div class="mt"><span class="num">54.75</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg pend"><div class="nmw"><div class="nml"><span class="nm">كمامات طبية · 50 قطعة</span><span class="tag pend">بانتظار موافقة الحذف</span></div><div class="bc"><span class="num">6229876543210</span></div></div><div class="qcell"><span class="qv num">1</span></div><div class="mu"><span class="num">75.00</span></div><div class="mt"><span class="num">75.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg"><div class="nmw"><div class="nml"><span class="nm">مناديل مبللة · 80 منديل</span></div></div><div class="qcell"><span class="qv num">3</span></div><div class="mu"><span class="num">24.00</span></div><div class="mt"><span class="num">72.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg"><div class="nmw"><div class="nml"><span class="nm">واقي شمس SPF 50 · 50 مل</span></div></div><div class="qcell"><span class="qv num">1</span></div><div class="mu"><span class="num">145.00</span></div><div class="mt"><span class="num">145.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg"><div class="nmw"><div class="nml"><span class="nm">مطهر كحولي 70% · 250 مل</span></div></div><div class="qcell"><span class="qv num">1</span></div><div class="mu"><span class="num">45.00</span></div><div class="mt"><span class="num">45.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg"><div class="nmw"><div class="nml"><span class="nm">لاصق جروح متنوع · 40 قطعة</span></div></div><div class="qcell"><span class="qv num">2</span></div><div class="mu"><span class="num">39.90</span></div><div class="mt"><span class="num">79.80</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="cr cg act"><div class="nmw"><div class="nml"><span class="nm">معجون أسنان للحساسية · 75 مل</span><span class="tag">آخر مسح</span></div><div class="bc"><span class="num">6225550001234</span></div></div><div class="qcell"><div class="step"><button aria-label="زيادة الكمية"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button><span class="q num">1</span><button aria-label="إنقاص الكمية"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button></div></div><div class="mu"><span class="num">62.00</span></div><div class="mt"><span class="num">62.00</span></div><div class="qcell"><button class="iconbtn rm" aria-label="حذف السطر"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div></div><div class="cf"><span>الأسطر <span class="num ">1–9</span> من <span class="num ">9</span></span><span>· كل الأسطر ظاهرة</span><div class="grow"></div><span>آخر إضافة <span class="num ">14:32</span></span></div></section></main><aside class="pane" aria-label="ملخص العملية">
+<div class="ph2">ملخص العملية</div><div class="kv"><span>الأصناف · القطع</span><span><span class="num ">9</span> · <span class="num ">13</span></span></div><div class="kv"><span>المجموع الفرعي</span><span class="num ">687.55</span></div><div class="kv mut"><span>الخصومات</span><span class="num ">0.00</span></div>
+<div class="grow"></div>
+<div class="cond" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"><span class="condtag">BEHAVIOR PENDING — RT-158</span><button class="btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>تعليق</button><button class="btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6L4 8.5M4 4v4.5h4.5"></path></svg>المعلّقة</button></div>
+<div class="totb">
+<div class="tot-l">الإجمالي المستحق</div>
+<div class="row" style="justify-content:flex-end;gap:8px"><span class="num tot-v">687.55</span><span class="cur">ج.م</span></div>
+</div>
+<button class="btn btn-p w100" style="justify-content:space-between"><span>متابعة إلى الدفع</span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button>
+<div class="hr" style="margin:6px 0 2px"></div>
+<button class="btn btn-d w100"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>إلغاء البيع</button>
+</aside><div class="scrim" style="background:rgba(15,29,46,.22)"></div>
+<section class="dock" style="width:400px" aria-label="موافقة المدير">
+<div style="background:#0b5b55;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg><div class="grow"><div style="font-size:18px;font-weight:700">موافقة المدير مطلوبة</div><div style="font-size:12.5px;color:#cfe7e2">هذا الإجراء يحتاج تفويض مدير</div></div></div>
+<div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px;flex:1;min-height:0">
+<div><div class="flab">الإجراء المطلوب</div><div style="font-size:20px;font-weight:700">حذف صنف من السلة</div></div>
+<div class="card14" style="padding:10px 14px;display:flex;align-items:center;gap:12px;background:#fdf3e4;border-color:#e6c38f"><div class="grow" style="min-width:0"><div style="font-weight:700">كمامات طبية · 50 قطعة</div><div class="bc"><span class="num">6229876543210</span> · السطر <span class="num ">4</span></div></div><div style="text-align:right"><div class="mut" style="font-size:12px">الكمية <span class="num ">1</span></div><div class="num" style="font-weight:700;font-size:16px">75.00</div></div></div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+<div><div class="flab">العملية</div><div class="num" style="font-weight:600">T03-000418</div></div>
+<div><div class="flab">طلب بواسطة</div><div style="font-weight:600">سارة محمود · <span class="num ">14:34</span></div></div>
+<div><div class="flab">الإجمالي الحالي</div><div class="num" style="font-weight:600">687.55</div></div>
+<div><div class="flab">الإجمالي بعد الحذف</div><div class="num" style="font-weight:600">612.55</div></div>
+</div>
+<div class="field"><label>السبب</label><div class="sel"><span class="grow mut">اختر السبب</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></div></div>
+<div style="border-top:1px solid #d8dfe7;padding-top:14px" class="field"><label>تفويض المدير</label>
+<div class="pin" style="border:1px solid #c9d2dc;box-shadow:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#53647a"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l8-8M16 7l2 2"></path></svg><input type="password" aria-label="بيانات تفويض المدير" placeholder="بيانات تفويض المدير"></div></div>
+</div>
+<div style="padding:14px 18px;border-top:1px solid #d8dfe7;display:flex;gap:10px">
+<button class="btn btn-p off" disabled style="flex:1.5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg>اعتماد</button>
+<button class="btn" style="flex:1;height:56px">إلغاء والعودة</button>
+</div>
+</section></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1024,"height":768}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -34,8 +34,11 @@ export interface InactivityMonitorDeps {
   logger?: Logger;
 }
 
-const DEFAULT_THRESHOLD_MS = 15 * 60 * 1000;
-const DEFAULT_TICK_MS = 60 * 1000;
+/** RT-115 D4 — lock after 10 minutes since the last GENUINE input. */
+export const INACTIVITY_LOCK_MS = 10 * 60 * 1000;
+/** RT-116 §2.3 — lock no later than threshold + 15 s. */
+const DEFAULT_TICK_MS = 15 * 1000;
+const DEFAULT_THRESHOLD_MS = INACTIVITY_LOCK_MS;
 
 export class InactivityMonitor {
   private readonly thresholdMs: number;
@@ -82,11 +85,13 @@ export class InactivityMonitor {
     if (current === null) return;
     const last = Date.parse(current.last_activity_at);
     if (Number.isNaN(last)) return;
+    if (current.lock_state === 'locked') return;
     if (this.now() - last >= this.thresholdMs) {
-      this.deps.sessionManager.end();
+      // RT-117 (RT-115 D1) — LOCK the existing session; never end it.
+      this.deps.sessionManager.lock(new Date(this.now()).toISOString());
       this.deps.logger?.info(
-        { event: 'operator.session.inactivity_timeout' },
-        'session ended on inactivity timeout',
+        { event: 'operator.session.inactivity_locked' },
+        'session locked on inactivity',
       );
     }
   }

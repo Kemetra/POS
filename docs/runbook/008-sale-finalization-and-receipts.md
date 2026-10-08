@@ -206,29 +206,63 @@ drawer is newly dead or chronically absent.
 008 is gated behind the `saleFinalization` feature flag and writes **durable
 financial records**. That shapes both rollback options.
 
-### (a) Rollback option — feature-flag disable (the supported rollback)
+### (a) Rollback option — disable POS payment-taking together with 008 (the supported rollback)
 
-Flag: `features.saleFinalization` (shape in `src/shared/app-config.ts`), sourced
-in main from the env var **`POS_PULSE_FEATURE_SALE_FINALIZATION`**. Default is
-**`false`** (fail-closed). To roll 008 back, set the flag to `false` and restart
-the terminal.
+> **RT-162 / owner decision D-1 (RT-160).** The earlier rollback — turn 008 off,
+> let 006 keep settling payments, and have the cashier write manual receipts — is
+> **retired for real-money pilot use.** In that mode the POS took money with **no
+> Sale row, no receipt, no `sale_sync_outbox` entry and no Backend-Core capture**:
+> the store's only record was the local `payment_attempts` / tender tables.
+> **The POS now refuses to start in that mode** (see "Invalid profile" below).
 
-**Behaviour in the disabled state** (verified against the flag's documented
-contract in `src/shared/app-config.ts`):
+Flags (shape in `src/shared/app-config.ts`, parsed in main by
+`src/main/app/feature-flags.ts`):
 
-- **006 still settles payments** — the cart/payment path is untouched; money is
-  still taken correctly.
-- **008's finalize listener short-circuits** — **no receipt prints, no drawer
-  kicks, no 008 audit-event emits.**
-- **The cashier falls back to manual receipts** (hand-written slip), exactly as in
-  the pre-008 world.
-- **The sync outbox stops growing** — with the listener short-circuited, no new
-  `sale_sync_outbox` rows are enqueued. **Existing rows remain** (append-only;
-  they are harmless `pending` rows — see T524(d)).
+- **`POS_PULSE_FEATURE_SALE_FINALIZATION`** → `features.saleFinalization`
+- **`POS_PULSE_FEATURE_PAYMENTS`** → `features.payments`
 
-This is the clean, reversible rollback: flip the flag off, the store keeps
-trading on manual receipts, and re-enabling later resumes finalization with no
-data repair needed.
+Both default to **`false`** (fail-closed). To roll 008 back, set **both** to
+`false` and restart the terminal:
+
+```text
+POS_PULSE_FEATURE_PAYMENTS=false
+POS_PULSE_FEATURE_SALE_FINALIZATION=false
+```
+
+**Behaviour in the rolled-back state:**
+
+- **The POS takes no payments.** `/app/checkout` renders the placeholder instead
+  of the PaymentSurface, so the cashier has no way to start a tender and no money
+  moves through the POS financial flow.
+- **008's finalize listener does not run** — no Sale rows, receipt prints, drawer
+  kicks or 008 audit-event emits.
+- **The sync outbox stops growing.** No new `sale_sync_outbox` rows are
+  enqueued. **Existing rows remain** (append-only; see T524(d)), and existing
+  `sales` rows are untouched.
+- **If the store must keep trading**, it does so through a **separately
+  documented manual store procedure outside the POS financial flow** (the store's
+  own contingency process for taking payment and issuing receipts by hand). That
+  procedure is owned by store operations, not by this runbook. The POS records
+  none of those sales, and they must be reconciled through that procedure — never
+  by re-enabling payments on a terminal with 008 off.
+
+Re-enabling later (both flags back to `true` + restart) resumes normal trading
+with no data repair needed.
+
+#### Invalid profile — `PAYMENTS` on with `SALE_FINALIZATION` off
+
+If a terminal starts with `POS_PULSE_FEATURE_PAYMENTS` truthy and
+`POS_PULSE_FEATURE_SALE_FINALIZATION` falsy or unset, **main refuses to start**
+before the database is opened or any payment surface exists:
+
+- the main log gets one `error` line, message **`app:cashier_profile_refused`**,
+  with `reason: "payments_without_sale_finalization"` and the parsed flag values;
+- a native error dialog («إعداد نقطة البيع غير صالح») names both env vars;
+- the process exits with code **1**.
+
+Fix: set both flags on (normal trading) or both off (rollback above), then
+restart. Setting only `SALE_FINALIZATION=false` is **not** a rollback — the
+terminal will not open.
 
 ### (b) NOT a rollback option — down-migration
 
@@ -239,7 +273,8 @@ Per Constitution **§P15 (Production Readiness Gates)**, a broken
 production-affecting feature is corrected by **forward-fix**, not by tearing down
 financial state. If 008 misbehaves:
 
-1. Disable via the feature flag (option a) to stop the bleeding immediately.
+1. Disable via the feature flags (option a — `PAYMENTS` **and**
+   `SALE_FINALIZATION` off) to stop the bleeding immediately.
 2. Forward-fix the defect in code and ship a corrected build.
 3. Never author a down-migration against the 008 financial tables.
 
@@ -247,7 +282,8 @@ financial state. If 008 misbehaves:
 
 | Situation | Action | Why |
 |:--|:--|:--|
-| 008 misbehaving in production, need it off **now** | `POS_PULSE_FEATURE_SALE_FINALIZATION=false` + restart | Reversible; 006 keeps settling payments; cashier uses manual receipts. |
-| Need to re-enable after a fix | Set flag back to `true` (per-tenant/per-branch decision) + restart | Finalization resumes; no data repair required. |
+| 008 misbehaving in production, need it off **now** | `POS_PULSE_FEATURE_PAYMENTS=false` **and** `POS_PULSE_FEATURE_SALE_FINALIZATION=false` + restart | Reversible; the POS takes no payments. Any trading continues only through the store's separate manual procedure outside the POS financial flow. |
+| Only `SALE_FINALIZATION=false` was set (payments still on) | Set `PAYMENTS=false` too (or `SALE_FINALIZATION` back to `true`) + restart | Invalid profile (D-1): the terminal refuses to start, logging `app:cashier_profile_refused`. |
+| Need to re-enable after a fix | Set **both** flags back to `true` (per-tenant/per-branch decision) + restart | Payments and finalization resume together; no data repair required. |
 | Tempted to drop/revert 008 tables | **Don't.** | `sales` are durable financial records; §P15 mandates forward-fix, not down-migration. |
 | Stray `pending` outbox rows after disable | Leave them | Append-only + harmless; no sync engine drains them yet (T524(d)). |

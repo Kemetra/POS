@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { SalesBridgeAPI } from '../../../shared/bridge-api.js';
-import type { DrawerFailureState } from './DrawerFailureBanner.js';
 
 /**
- * useDrawerBannerState — renderer poll hook backing `<DrawerFailureBanner>`.
+ * useDrawerBannerState — renderer poll hook backing the drawer notice (RT-241 D-B1).
  *
  * The drawer-side twin of `useBannerState`. Polls
  * `sales.subscribe({topic:'banner_state'})` on an interval and maps the
@@ -20,11 +19,24 @@ import type { DrawerFailureState } from './DrawerFailureBanner.js';
  * slice so the two banners coexist (Slice 4 decision).
  */
 
+/** The projected drawer failure: which sale's drawer failed + last-open time. */
+export interface DrawerFailureState {
+  sale_id: string;
+  /** UTC ISO-8601 of the terminal's last successful drawer open, or null. */
+  last_successful_open_at: string | null;
+}
+
 export interface UseDrawerBannerStateOptions {
   /** Poll interval in ms (default 1000). */
   intervalMs?: number;
   /** Injected for tests; production falls back to `window.api.sales`. */
   _testSalesBridge?: SalesBridgeAPI;
+  /**
+   * RT-241 (D-B1) — called with every KNOWN projection: the failure, or null
+   * when an `ok` read has none. A refused or failed read is unknown and is
+   * never reported.
+   */
+  onSnapshot?: (failure: DrawerFailureState | null) => void;
 }
 
 function resolveSalesBridge(injected?: SalesBridgeAPI): SalesBridgeAPI | null {
@@ -41,6 +53,9 @@ export function useDrawerBannerState(
   const intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
   const bridge = options._testSalesBridge;
   const [drawerFailure, setDrawerFailure] = useState<DrawerFailureState | null>(null);
+  // A ref, so a new callback identity never restarts the poll interval.
+  const onSnapshotRef = useRef(options.onSnapshot);
+  onSnapshotRef.current = options.onSnapshot;
 
   useEffect(() => {
     const sales = resolveSalesBridge(bridge);
@@ -57,12 +72,15 @@ export function useDrawerBannerState(
           if (cancelled) return;
           if (res.kind === 'ok' && 'banner_state' in res && res.banner_state.drawer_failure) {
             const d = res.banner_state.drawer_failure;
-            setDrawerFailure({
+            const failure = {
               sale_id: d.sale_id,
               last_successful_open_at: d.last_successful_open_at,
-            });
+            };
+            setDrawerFailure(failure);
+            onSnapshotRef.current?.(failure);
           } else {
             setDrawerFailure(null);
+            if (res.kind === 'ok' && 'banner_state' in res) onSnapshotRef.current?.(null);
           }
         })
         .catch(() => {

@@ -20,6 +20,10 @@ import type {
   CartLinesSetNoteResponse,
   CartLinesUpdateRequest,
   CartLinesUpdateResponse,
+  CartReturnToSaleRequest,
+  CartReturnToSaleResponse,
+  CartReturnToSaleEligibilityRequest,
+  CartReturnToSaleEligibilityResponse,
   CartSnapshotRequest,
   CartSnapshotResponse,
   CartSubscribeRequest,
@@ -152,6 +156,12 @@ function asLinesSetNoteReq(value: unknown): CartLinesSetNoteRequest | null {
   };
 }
 
+/**
+ * Discount placeholder add. Builds a FRESH object with only the contract
+ * fields: a renderer-supplied `attribution_operator_id` is deliberately
+ * dropped (RT-183), so the renderer can never choose the recorded approving
+ * supervisor. Main derives the approver from the authenticated session.
+ */
 function asDiscountAddReq(value: unknown): CartDiscountPlaceholdersAddRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -163,17 +173,12 @@ function asDiscountAddReq(value: unknown): CartDiscountPlaceholdersAddRequest | 
   ) {
     return null;
   }
-  const req: CartDiscountPlaceholdersAddRequest = {
+  return {
     cart_id: v['cart_id'],
     line_id: v['line_id'],
     placeholder_kind: v['placeholder_kind'],
     idempotency_key: v['idempotency_key'],
   };
-  if (typeof v['attribution_operator_id'] === 'string') {
-    (req as { attribution_operator_id?: string }).attribution_operator_id =
-      v['attribution_operator_id'];
-  }
-  return req;
 }
 
 function asDiscountRemoveReq(value: unknown): CartDiscountPlaceholdersRemoveRequest | null {
@@ -198,19 +203,19 @@ function asDiscountRemoveReq(value: unknown): CartDiscountPlaceholdersRemoveRequ
   return req;
 }
 
+/**
+ * Pre-handoff void. Builds a FRESH object with only the contract fields: a
+ * renderer-supplied `attribution_operator_id` is deliberately dropped
+ * (RT-184), so the renderer can never choose an operator recorded on a void.
+ */
 function asVoidReq(value: unknown): CartVoidRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (typeof v['cart_id'] !== 'string' || typeof v['idempotency_key'] !== 'string') return null;
-  const req: CartVoidRequest = {
+  return {
     cart_id: v['cart_id'],
     idempotency_key: v['idempotency_key'],
   };
-  if (typeof v['attribution_operator_id'] === 'string') {
-    (req as { attribution_operator_id?: string }).attribution_operator_id =
-      v['attribution_operator_id'];
-  }
-  return req;
 }
 
 /**
@@ -230,6 +235,22 @@ function asCancelPostHandoffReq(value: unknown): CartCancelPostHandoffRequest | 
     return null;
   }
   return { cart_id: cartId, handoff_action_id: handoffActionId, idempotency_key: idempotencyKey };
+}
+
+/** RT-26 — the same bounded-identifier request shape as `cart:cancelPostHandoff`. */
+const asReturnToSaleReq: (value: unknown) => CartReturnToSaleRequest | null =
+  asCancelPostHandoffReq;
+
+/** RT-26 — the read-only eligibility query: bounded cart + handoff ids only. */
+function asReturnToSaleEligibilityReq(value: unknown): CartReturnToSaleEligibilityRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const cartId = v['cart_id'];
+  const handoffActionId = v['handoff_action_id'];
+  if (!isBoundedId(cartId)) return null;
+  return isBoundedId(handoffActionId)
+    ? { cart_id: cartId, handoff_action_id: handoffActionId }
+    : null;
 }
 
 function asHandoffReq(value: unknown): CartHandoffRequest | null {
@@ -365,6 +386,27 @@ export function registerCartHandlers(ipcMain: IpcMain, deps: CartHandlerDeps): v
       const req = asCancelPostHandoffReq(request);
       if (req === null) return refuseInvalid();
       return handlers.cancelPostHandoff(req);
+    },
+  );
+
+  ipcMain.handle(
+    CART_IPC_CHANNELS.RETURN_TO_SALE,
+    async (_event: IpcMainInvokeEvent, request: unknown): Promise<CartReturnToSaleResponse> => {
+      const req = asReturnToSaleReq(request);
+      if (req === null) return refuseInvalid();
+      return handlers.returnToSale(req);
+    },
+  );
+
+  ipcMain.handle(
+    CART_IPC_CHANNELS.RETURN_TO_SALE_ELIGIBILITY,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<CartReturnToSaleEligibilityResponse> => {
+      const req = asReturnToSaleEligibilityReq(request);
+      if (req === null) return refuseInvalid();
+      return handlers.returnToSaleEligibility(req);
     },
   );
 

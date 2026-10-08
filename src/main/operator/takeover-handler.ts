@@ -17,6 +17,21 @@ import type { SessionManager } from './session-manager.js';
 import type { JwtHolder } from './jwt-holder.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { PairingStore } from '../pairing/store.js';
+import {
+  admitCashierOnline,
+  mintAdmissionKey,
+  refusalForAdmission,
+  refusalIfSessionLost,
+  type AdmissionKey,
+  type CashierAdmissionDeps,
+} from './cashier-admission.js';
+import {
+  capturePairingEpoch,
+  pairingEpochHolds,
+  signOutAbandonedSession,
+  type PairingEpochReader,
+  type PairingEpochTicket,
+} from './pairing-epoch.js';
 
 /** TTL for proto-sessions: 60 seconds. */
 const PROTO_SESSION_TTL_MS = 60_000;
@@ -29,12 +44,26 @@ const REFUSE_NO_CONN: OperatorRefusal = { kind: 'refused', category: 'no_connect
  * reports `takeover_required`. Holds everything needed to complete or
  * abandon the takeover without re-submitting credentials.
  *
- * `jwt` is `null` for the cashier path — cashier sessions are local-only
+ * `jwt` is `null` for the cashier path — cashier sessions hold no Clerk JWT
  * (AD-2) and never call Endpoint 4.
  */
 export interface ProtoSession {
   pending_takeover_id: string;
   operator_id: string;
+  /**
+   * RT-113 P2 — cashier only: `users.id`, the admission's `user_id` for the
+   * `takeover: true` call.
+   */
+  user_id?: string;
+  /**
+   * RT-113 P2 — cashier only: the takeover admission's idempotency key, minted
+   * on the first confirm and REUSED on a retry after `no_connection`, so a
+   * request that did reach the server replays instead of taking over twice.
+   * Codex P1 4185012967: the grant seam's send mark is bound to it and reused
+   * with it, so a replayed `admitted` never resurrects a grant invalidated
+   * after the first send.
+   */
+  admission_key?: AdmissionKey;
   display_name: string;
   role: Role;
   tenant_id: string;
@@ -42,6 +71,11 @@ export interface ProtoSession {
   jwt: string | null;
   /** `Date.now()` at creation; used to enforce the 60-second TTL. */
   created_at: number;
+  /**
+   * RT-215 (Codex P1) — the pairing epoch the proto was issued under. A
+   * confirm under any other pairing (revoked, or re-paired) is refused.
+   */
+  pairing_epoch?: string | null;
 }
 
 /**
@@ -96,6 +130,19 @@ export interface TakeoverHandlerDeps {
   auditEmitter: AuditEmitter;
   pairingStore: PairingStore;
   deviceTokenAttestation: () => Promise<string> | string;
+  /**
+   * RT-113 P2 — the device-authenticated cashier admission. The cashier
+   * takeover is `POST /api/pos/v1/cashier-admissions` with `takeover: true`
+   * (10763 D9). Without it the cashier path fails closed.
+   */
+  cashierAdmission?: CashierAdmissionDeps;
+  /**
+   * RT-215 / Codex P1 4181556645 — `PairingStore.getPairingEpoch`: captured at
+   * request start and re-checked right before the session is created, so a
+   * sign-in still in flight when the device is revoked (or re-paired) is
+   * refused instead of completing. Production wires it; tests may omit.
+   */
+  pairingEpoch?: PairingEpochReader;
   logger?: Logger;
 }
 
@@ -111,16 +158,17 @@ export interface TakeoverHandlerDeps {
  * event, no session change. Returns `{ kind: 'cancelled' }` idempotently.
  *
  * Cashier path — Endpoint 4 is skipped (AD-2, permanent decision):
- *   Cashier sessions are local-only. Cashier operators have no Clerk JWT to
- *   present to Endpoint 4's `Authorization: Bearer` header, so calling
- *   `backend.confirmTakeover` for the cashier path is permanently excluded
- *   under AD-2. The cashier takeover creates the new session locally without
- *   a backend round-trip, mirroring the cashier sign-in path. This is an
- *   architectural invariant, not a deferred gap: a future backend contract
- *   providing a non-Clerk-JWT cashier-safe confirmation path would require
- *   an approved AD amendment before this handler may call any backend
- *   endpoint for the cashier path. Decision recorded in
- *   `specs/004-operator-session/coordination.md` (2026-05-11, issue 85).
+ *   Cashier operators have no Clerk JWT to present to Endpoint 4's
+ *   `Authorization: Bearer` header, so calling `backend.confirmTakeover` for
+ *   the cashier path stays excluded under AD-2 (`specs/004-operator-session/
+ *   coordination.md`, 2026-05-11, issue 85).
+ *
+ *   RT-113 P2 — the approved non-Clerk, device-authenticated path now exists
+ *   (Backend-Core cashier-admissions, BC1 #696 / BC2 #697; RT-113 10763 D9,
+ *   owner decision 10844): the cashier takeover is an online admission with
+ *   `takeover: true`. The server ends the other device's admission; that
+ *   device learns on its next heartbeat. `no_connection` (or a 5xx) keeps the
+ *   proto-session and its idempotency key for a retry.
  *
  * Terminal-A passive polling (T069c):
  *   Terminal A discovers the takeover at its next `getCurrentSession` poll,
@@ -159,10 +207,18 @@ export class TakeoverHandler {
       return REFUSE_INVALID;
     }
 
-    if (proto.role === 'cashier') {
-      return this.confirmCashierTakeover(proto);
+    // RT-215 (Codex P1): the proto's pairing must still be the current one.
+    const pairing = capturePairingEpoch(this.deps.pairingEpoch, proto.pairing_epoch);
+    if (!pairingEpochHolds(pairing)) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'pairing_changed');
+      return REFUSE_INVALID;
     }
-    return this.confirmManagerAdminTakeover(proto);
+
+    if (proto.role === 'cashier') {
+      return this.confirmCashierTakeover(proto, pairing);
+    }
+    return this.confirmManagerAdminTakeover(proto, pairing);
   }
 
   cancelTakeover(req: CancelTakeoverRequest): Promise<CancelTakeoverResponse> {
@@ -177,6 +233,7 @@ export class TakeoverHandler {
 
   private async confirmManagerAdminTakeover(
     proto: ProtoSession,
+    pairing: PairingEpochTicket,
   ): Promise<ConfirmTakeoverResponse | OperatorRefusal> {
     const event_id = randomUUID();
     const attestation = await Promise.resolve(this.deps.deviceTokenAttestation());
@@ -198,6 +255,20 @@ export class TakeoverHandler {
       return REFUSE_INVALID;
     }
 
+    // RT-215 (Codex P1): revoked or re-paired while the confirm was in flight
+    // — drop the late success (synchronous with create() and the holders).
+    if (!pairingEpochHolds(pairing)) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'pairing_changed');
+      // Codex P2 4186872826: do not abandon the backend session it created.
+      signOutAbandonedSession(
+        this.deps.backend,
+        { session_id: backendResult.operator_session.id, jwt: proto.jwt },
+        this.deps.logger,
+      );
+      return REFUSE_INVALID;
+    }
+
     // backend returned signed_in — create local session
     const record = this.deps.sessionManager.create({
       operator_id: backendResult.operator.id,
@@ -207,6 +278,8 @@ export class TakeoverHandler {
       branch_id: backendResult.operator.branch_id,
       backend_session_id: backendResult.operator_session.id,
       started_at: backendResult.operator_session.issued_at,
+      // RT-17 slice 4 part 2: kept main-side for the manager PIN enrolment.
+      manager_user_id: backendResult.operator.user_id,
     });
 
     // 016 (review HIGH) — two credential seams, contract-correct. A takeover
@@ -233,6 +306,13 @@ export class TakeoverHandler {
     await this.emitTakeoverAudit(event_id, record);
 
     this.deps.protoStore.delete(proto.pending_takeover_id);
+    // RT-215: a revocation during the audit await latched this session (it
+    // ends at its safe point). Never answer it signed_in.
+    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    if (lost !== null) {
+      this.log('refused', 'manager_admin_session_lost');
+      return lost;
+    }
     this.log('signed_in', 'manager_admin_confirm');
 
     return {
@@ -251,23 +331,69 @@ export class TakeoverHandler {
 
   private async confirmCashierTakeover(
     proto: ProtoSession,
+    pairing: PairingEpochTicket,
   ): Promise<ConfirmTakeoverResponse | OperatorRefusal> {
-    // AD-2: cashier sessions are local-only; no Clerk JWT exists for the
-    // cashier identity, so Endpoint 4 cannot be called. See class-level JSDoc.
-    const event_id = randomUUID();
+    const admissionDeps = this.deps.cashierAdmission;
+    const user_id = proto.user_id;
+    if (admissionDeps === undefined || user_id === undefined || user_id.length === 0) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'cashier_admission_unavailable');
+      return REFUSE_INVALID;
+    }
 
+    proto.admission_key ??= mintAdmissionKey(admissionDeps);
+    const admission = await admitCashierOnline(admissionDeps, {
+      user_id,
+      operator_id: proto.operator_id,
+      takeover: true,
+      ...proto.admission_key,
+    });
+
+    if (admission.kind === 'no_connection' || admission.kind === 'unavailable') {
+      // Retain the proto-session (and its key) so the renderer can retry.
+      this.log('refused', `cashier_admission_${admission.kind}`);
+      return REFUSE_NO_CONN;
+    }
+    if (admission.kind !== 'admitted') {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', `cashier_admission_${admission.kind}`);
+      return refusalForAdmission(admission);
+    }
+    // RT-215 (Codex P1): revoked or re-paired while the admission was in flight.
+    if (!pairingEpochHolds(pairing)) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'pairing_changed');
+      return REFUSE_INVALID;
+    }
+
+    const event_id = randomUUID();
     const record = this.deps.sessionManager.create({
       operator_id: proto.operator_id,
-      display_name: proto.display_name,
+      display_name: admission.display_name,
       role: 'cashier',
       tenant_id: proto.tenant_id,
       branch_id: proto.branch_id,
       backend_session_id: '',
+      cashier_admission: {
+        user_id,
+        admission_id: admission.admission_id,
+        admission_ttl_seconds: admission.admission_ttl_seconds,
+        offline_grace_seconds: admission.offline_grace_seconds,
+        admission_generation: admission.admission_generation,
+        admission_requested_at_ms: admission.requested_at_ms,
+      },
     });
 
     await this.emitTakeoverAudit(event_id, record);
 
     this.deps.protoStore.delete(proto.pending_takeover_id);
+    // Codex P2 4179701431 — the keeper armed at create; the session may have
+    // been latched or ended during the await above. Never answer it signed_in.
+    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    if (lost !== null) {
+      this.log('refused', 'cashier_session_lost');
+      return lost;
+    }
     this.log('signed_in', 'cashier_confirm');
 
     return {

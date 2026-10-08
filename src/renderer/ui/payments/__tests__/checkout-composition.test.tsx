@@ -140,9 +140,16 @@ describe('022 US3 T070 — checkout three-column composition', () => {
     // panel — violating spec FR-23: "Keyboard focus traversal order MUST follow
     // the RTL visual order."
     render(<PaymentSurface />);
-    const columns = Array.from(screen.getByTestId('payment-surface-body').children).map(
-      (el) => el.className,
-    );
+    // RT-238: the methods and summary sit in a `panes` wrapper (it is transparent
+    // in the three-column composition and the scroller below 1217px), so read the
+    // three regions in document order rather than as direct children.
+    const columns = Array.from(
+      screen
+        .getByTestId('payment-surface-body')
+        .querySelectorAll(
+          '.payment-surface__amount, .payment-surface__methods, .payment-surface__summary',
+        ),
+    ).map((el) => el.className);
 
     expect(columns).toHaveLength(3);
     expect(columns[0]).toContain('payment-surface__amount');

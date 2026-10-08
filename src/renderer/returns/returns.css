@@ -1,0 +1,374 @@
+/*
+ * RT-15 S3 — the return flow (manager/admin, /app/returns).
+ *
+ * DESIGN.md vocabulary only: token colours, the 4px space scale, control
+ * 10px / panel 14px radii, hairline panels with no shadow, one filled-teal
+ * commit per region, status colour only on the outcome panel and the state
+ * badges, 44px targets, a 2px outline focus ring. Every rule is scoped under
+ * .rt-returns so nothing here can restyle another screen.
+ */
+
+.rt-returns {
+  display: grid;
+  gap: var(--space-4);
+  max-inline-size: 960px;
+  color: var(--color-text);
+  font-family: var(--font-family-sans);
+}
+
+.rt-returns :focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Money, quantities, codes: LTR-isolated Western digits, tabular. */
+.rt-returns .rt-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A server reference is long: let it break anywhere rather than overflow. */
+.rt-returns .rt-ref {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rt-returns__policy {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  line-height: var(--line-height-relaxed);
+}
+
+.rt-returns__panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.rt-returns__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rt-returns__heading {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+.rt-returns__meta {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-relaxed);
+}
+
+.rt-returns__notice {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-control);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-emphasis);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.rt-returns__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding-block-start: var(--space-2);
+}
+
+.rt-returns__lookup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.rt-returns__field {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rt-returns__field input {
+  min-block-size: 44px;
+  min-inline-size: 16rem;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-md);
+}
+
+/* Buttons: 44px floor; the one commit per region is filled teal. */
+.rt-btn {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.rt-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.rt-btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-emphasis);
+}
+
+.rt-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.rt-btn--commit {
+  min-block-size: 56px;
+  min-inline-size: 12rem;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Unavailable: sunken and muted, never a payable-looking teal. */
+.rt-btn:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.rt-lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rt-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.rt-line[data-returnable='false'] {
+  color: var(--color-text-muted);
+}
+
+.rt-line__text {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.rt-line__name {
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-normal);
+}
+
+.rt-line__meta,
+.rt-line__done {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.rt-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rt-stepper__btn {
+  padding-inline: 0;
+  font-size: var(--font-size-lg);
+}
+
+.rt-stepper__value {
+  min-inline-size: 3ch;
+  text-align: center;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.rt-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.rt-table th {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  text-align: start;
+}
+
+.rt-table td {
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--color-border-soft);
+  vertical-align: top;
+}
+
+.rt-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border);
+  font-weight: var(--font-weight-bold);
+}
+
+.rt-total__amount {
+  font-size: var(--font-size-3xl);
+  line-height: var(--line-height-tight);
+}
+
+/* Outcome: success only for a server-recorded return; everything else danger. */
+.rt-outcome {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid;
+  border-radius: var(--radius-control);
+  line-height: var(--line-height-relaxed);
+}
+
+.rt-outcome p {
+  margin: 0;
+}
+
+.rt-outcome__headline {
+  font-weight: var(--font-weight-bold);
+}
+
+.rt-outcome--success {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success-emphasis);
+}
+
+.rt-outcome--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-emphasis);
+}
+
+.rt-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.rt-facts dt {
+  color: var(--color-text-muted);
+}
+
+.rt-facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.rt-ref {
+  font-size: var(--font-size-xs);
+}
+
+/* Journal states: text label always; colour only reinforces it. */
+.rt-state {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rt-state--confirmed,
+.rt-state--paid_out {
+  border-color: var(--color-success);
+  color: var(--color-success-emphasis);
+}
+
+.rt-state--pending {
+  border-color: var(--color-info);
+  color: var(--color-info-emphasis);
+}
+
+.rt-state--refused,
+.rt-state--unknown {
+  border-color: var(--color-danger);
+  color: var(--color-danger-emphasis);
+}
+
+.rt-state__reason {
+  display: block;
+  margin-block-start: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/*
+ * RT-15 S4 — the cash payout under a confirmed outcome. Amber (warning) for
+ * degraded-but-operable states: the drawer did not open, a payout was
+ * interrupted, a manual payout awaits its explicit confirmation. Success green
+ * only once main recorded the payout; danger for a refusal or an unknown result.
+ */
+.rt-payout {
+  display: grid;
+  gap: var(--space-3);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.rt-outcome--warning {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-emphasis);
+}
+
+.rt-outcome--neutral {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.rt-outcome p + p {
+  margin-block-start: var(--space-1);
+}
+
+/* A row action keeps its label on one line. */
+.rt-table .rt-btn {
+  white-space: nowrap;
+}

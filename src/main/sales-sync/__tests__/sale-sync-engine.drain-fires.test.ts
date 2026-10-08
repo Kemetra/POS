@@ -54,7 +54,7 @@ function makeStateRepo(eligible: EligibleSale[]): {
   recordTransient: ReturnType<typeof vi.fn>;
   markDeadLetter: ReturnType<typeof vi.fn>;
 } {
-  const markSynced = vi.fn();
+  const markSynced = vi.fn(() => ({ saleRefMismatch: false }));
   const recordTransient = vi.fn();
   const markDeadLetter = vi.fn();
   const repo: SaleSyncStateRepo = {
@@ -70,11 +70,12 @@ function makeStateRepo(eligible: EligibleSale[]): {
 function makeEngine(over: Partial<SaleSyncEngineDeps>): SaleSyncEngineDeps {
   const salesRepo: SaleReadPort = { readById: () => fakeSaleRow() };
   return {
-    client: createFakeSaleSyncClient([{ kind: 'ok' }]),
+    client: createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]),
     stateRepo: makeStateRepo([{ sale_id: SALE_ID } as EligibleSale]).repo,
     salesRepo,
     tenantId: TENANT,
     branchId: BRANCH,
+    resolveTerminalId: () => 'terminal-1',
     getOperatorToken: () => 'envelope-present',
     now: () => '2026-06-19T09:00:00.000Z',
     backoff: { baseMs: 1000, maxMs: 300000 },
@@ -84,7 +85,7 @@ function makeEngine(over: Partial<SaleSyncEngineDeps>): SaleSyncEngineDeps {
 
 describe('sale-sync drain — fires the POST when a token is present', () => {
   it('POSTs an eligible pending sale and marks it synced when an operator token is present', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     const { repo, markSynced } = makeStateRepo([{ sale_id: SALE_ID } as EligibleSale]);
     const engine = createSaleSyncEngine(
       makeEngine({ client, stateRepo: repo, getOperatorToken: () => 'envelope-present' }),
@@ -106,7 +107,7 @@ describe('sale-sync drain — fires the POST when a token is present', () => {
   });
 
   it('PAUSES the drain (no POST) when no operator token is present — the FR-3 gate', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     const { repo, markSynced } = makeStateRepo([{ sale_id: SALE_ID } as EligibleSale]);
     const engine = createSaleSyncEngine(
       makeEngine({ client, stateRepo: repo, getOperatorToken: () => null }),
@@ -121,7 +122,7 @@ describe('sale-sync drain — fires the POST when a token is present', () => {
   });
 
   it('treats an empty-string token as ABSENT (envelope "" → paused, not a no_connection POST)', async () => {
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     const { repo, markSynced } = makeStateRepo([{ sale_id: SALE_ID } as EligibleSale]);
     const engine = createSaleSyncEngine(
       makeEngine({ client, stateRepo: repo, getOperatorToken: () => '' }),

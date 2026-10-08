@@ -42,7 +42,7 @@ describe('ReprintAffordance (Phase 5 chain coverage)', () => {
 
   it('renders the reprint button when a successful print exists', () => {
     render(<ReprintAffordance sale={printedSale} _testReceiptsBridge={okReprintBridge()} />);
-    expect(screen.getByRole('button', { name: /Reprint receipt/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' })).toBeInTheDocument();
   });
 
   it('calls receipts.reprint with the sale id and a fresh idempotency key', async () => {
@@ -56,7 +56,7 @@ describe('ReprintAffordance (Phase 5 chain coverage)', () => {
         _idempotencyKeyFactory={keyFactory}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Reprint receipt/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
     await waitFor(() => {
       expect(reprint).toHaveBeenCalledWith({
         sale_id: 'sale-1',
@@ -67,20 +67,20 @@ describe('ReprintAffordance (Phase 5 chain coverage)', () => {
 
   it('surfaces an inline failure when the reprint is refused', async () => {
     render(<ReprintAffordance sale={printedSale} _testReceiptsBridge={refusedReprintBridge()} />);
-    fireEvent.click(screen.getByRole('button', { name: /Reprint receipt/i }));
-    expect(await screen.findByRole('status')).toHaveTextContent(/Reprint failed/i);
+    fireEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/تعذّرت إعادة طباعة الإيصال/);
   });
 
   it('surfaces an inline failure when the reprint IPC rejects', async () => {
     render(<ReprintAffordance sale={printedSale} _testReceiptsBridge={throwingReprintBridge()} />);
-    fireEvent.click(screen.getByRole('button', { name: /Reprint receipt/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
     expect(await screen.findByRole('status')).toBeInTheDocument();
   });
 
   it('no-ops when no receipts bridge is available', () => {
     // No injected bridge, no window.api → resolveReceiptsBridge null → early return.
     render(<ReprintAffordance sale={printedSale} />);
-    const btn = screen.getByRole('button', { name: /Reprint receipt/i });
+    const btn = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
     fireEvent.click(btn);
     // No crash, no feedback row.
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
@@ -91,7 +91,7 @@ describe('ReprintAffordance (Phase 5 chain coverage)', () => {
     const uuid = vi.fn(() => '11111111-1111-4111-8111-111111111111');
     vi.stubGlobal('crypto', { randomUUID: uuid });
     render(<ReprintAffordance sale={printedSale} _testReceiptsBridge={bridge} />);
-    fireEvent.click(screen.getByRole('button', { name: /Reprint receipt/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
     await waitFor(() => {
       expect(uuid).toHaveBeenCalled();
     });

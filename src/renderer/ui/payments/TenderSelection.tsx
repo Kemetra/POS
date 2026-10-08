@@ -63,7 +63,7 @@ export function TenderSelection({
       data-testid="tender-selection"
       aria-label="اختر طريقة الدفع"
     >
-      <h2 className="tender-selection__heading">طريقة الدفع (Payment method)</h2>
+      <h2 className="tender-selection__heading">طريقة الدفع</h2>
 
       {/*
         POS v3.5 Slice 4 — 3-method grid (cash · card · voucher).
@@ -84,7 +84,7 @@ export function TenderSelection({
             selectedTender === 'cash' ? ' method-card--selected' : ''
           }`}
           data-testid="tender-cash"
-          aria-label="نقدي — Cash"
+          aria-label="نقدي"
           style={{ minHeight: touchTarget.min }}
           onClick={() => {
             onTenderSelect('cash');
@@ -107,7 +107,7 @@ export function TenderSelection({
             selectedTender === 'external_card_terminal' ? ' method-card--selected' : ''
           }`}
           data-testid="tender-external-card"
-          aria-label="بطاقة — Card terminal"
+          aria-label="بطاقة"
           style={{ minHeight: touchTarget.min }}
           onClick={() => {
             onTenderSelect('external_card_terminal');
@@ -135,7 +135,7 @@ export function TenderSelection({
             selectedTender === 'internal_voucher' ? ' method-card--selected' : ''
           }`}
           data-testid="tender-voucher"
-          aria-label={voucherEnabled ? 'قسيمة — Voucher' : 'قسيمة — غير متاحة حاليًا'}
+          aria-label={voucherEnabled ? 'قسيمة' : 'قسيمة — غير متاحة حاليًا'}
           disabled={!voucherEnabled}
           aria-disabled={voucherEnabled ? undefined : 'true'}
           style={{ minHeight: touchTarget.min }}

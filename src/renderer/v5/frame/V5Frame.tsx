@@ -3,6 +3,7 @@ import { CONNECTION_BANNER_MESSAGES, useConnectionState } from '../../connection
 import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
 import { ScreenTooSmall } from '../../ui/states/ScreenTooSmall';
 import { useViewportTier } from '../../viewport/useViewportTier';
+import { DialogHost } from '../foundation/Dialog';
 import { V5Navigation } from './V5Navigation';
 import '../foundation/foundation.css';
 import './frame.css';
@@ -22,6 +23,10 @@ interface V5FrameProps {
  * navigation after it (left), as in the approved Sale reference. Keyboard
  * focus therefore reaches the screen before the navigation.
  *
+ * RT-241: one DialogHost inside the frame is the portal node for every v5
+ * dialog, so a dialog keeps the frame's RTL scope and tokens and sits inside
+ * the lock's inert, concealed subtree.
+ *
  * AppShell parity (023 G0): below the 1024px floor only the too-small notice
  * renders, so the screen (and its bridge calls) never mounts; a non-online
  * connection state shows the same persistent banner as the legacy TopBar.
@@ -40,21 +45,23 @@ export function V5Frame({ notices, children }: V5FrameProps): JSX.Element {
 
   return (
     <div className="v5-frame" data-testid="v5-frame" dir="rtl" lang="ar">
-      <div className="v5-frame__body">
-        {connectionState !== 'online' && (
-          <StatusBanner
-            state={connectionState}
-            message={CONNECTION_BANNER_MESSAGES[connectionState]}
-          />
-        )}
-        {notices !== undefined && (
-          <div className="v5-frame__notices" data-testid="v5-frame-notices">
-            {notices}
-          </div>
-        )}
-        <main className="v5-frame__main">{children}</main>
-      </div>
-      <V5Navigation />
+      <DialogHost>
+        <div className="v5-frame__body">
+          {connectionState !== 'online' && (
+            <StatusBanner
+              state={connectionState}
+              message={CONNECTION_BANNER_MESSAGES[connectionState]}
+            />
+          )}
+          {notices !== undefined && (
+            <div className="v5-frame__notices" data-testid="v5-frame-notices">
+              {notices}
+            </div>
+          )}
+          <main className="v5-frame__main">{children}</main>
+        </div>
+        <V5Navigation />
+      </DialogHost>
     </div>
   );
 }

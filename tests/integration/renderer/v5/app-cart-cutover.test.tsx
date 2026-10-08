@@ -371,7 +371,10 @@ describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
     for (const path of ['/v5/sale', '/app/sale-v5']) {
       renderAt(path);
       // The router's no-match outcome, not a Sale that has not loaded yet.
-      expect(await screen.findByText(/404 Not Found/)).toBeInTheDocument();
+      // RT-241: it renders the Arabic ErrorScreen, not the router's English 404.
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'تعذّر عرض هذه الشاشة.' }),
+      ).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'مساحة البيع' })).not.toBeInTheDocument();
       expect(api().cart.create).not.toHaveBeenCalled();
       cleanup();

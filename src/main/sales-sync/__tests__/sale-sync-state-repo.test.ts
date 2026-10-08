@@ -27,7 +27,7 @@ beforeAll(async () => {
   await initSalesSyncSql();
 });
 
-const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1' };
+const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
 
 describe('T020 — sale-sync-state-repo', () => {
   it('read returns null before any attempt is recorded', () => {
@@ -90,7 +90,10 @@ describe('T020 — sale-sync-state-repo', () => {
     const repo = createSaleSyncStateRepo(handleFor(db));
     repo.markSynced({ saleId: 'sale-1', tenantId: 'tenant-1', branchId: 'branch-1', now: 'X' });
     // eligible() for a different tenant must not see sale-1.
-    const other = repo.eligible({ tenantId: 'tenant-2', branchId: 'branch-9' }, 'Z');
+    const other = repo.eligible(
+      { tenantId: 'tenant-2', branchId: 'branch-9', terminalId: 'term-1' },
+      'Z',
+    );
     expect(other.find((e) => e.sale_id === 'sale-1')).toBeUndefined();
     db.close();
   });
@@ -160,5 +163,146 @@ describe('T020 — sale-sync-state-repo', () => {
       ]);
       db.close();
     });
+  });
+});
+
+// ── RT-225 step 3 — support reset of `cashier_claim_refused` dead-letters ────────
+
+describe('RT-225 — resetCashierClaimRefused', () => {
+  const NOW = '2026-06-08T09:00:00.000Z';
+  const LATER = '2026-06-08T09:00:01.000Z';
+
+  /** One queued sale (durable Sale + outbox row) on `terminal`, in tenant-1/branch-1 by default. */
+  function queue(
+    db: ReturnType<typeof freshSalesSyncDb>,
+    saleId: string,
+    o: { terminal?: string; tenant?: string; branch?: string } = {},
+  ): void {
+    const where = {
+      tenant_id: o.tenant ?? 'tenant-1',
+      branch_id: o.branch ?? 'branch-1',
+      terminal_id: o.terminal ?? 'term-1',
+    };
+    seedSale(db, { sale_id: saleId, ...where });
+    seedOutbox(db, { sale_id: saleId, ...where });
+  }
+
+  function refuse(
+    repo: ReturnType<typeof createSaleSyncStateRepo>,
+    saleId: string,
+    o: { tenantId?: string; branchId?: string } = {},
+  ): void {
+    repo.markDeadLetter({
+      saleId,
+      tenantId: o.tenantId ?? 'tenant-1',
+      branchId: o.branchId ?? 'branch-1',
+      now: '2026-06-07T10:05:00.000Z',
+      reason: 'cashier_claim_refused',
+    });
+  }
+
+  it('re-queues the current terminal’s cashier_claim_refused dead-letters as pending and due', () => {
+    const db = freshSalesSyncDb();
+    queue(db, 'sale-1');
+    queue(db, 'sale-2');
+    const repo = createSaleSyncStateRepo(handleFor(db));
+    repo.recordTransient({
+      saleId: 'sale-1',
+      ...SCOPE,
+      now: '2026-06-07T10:04:00.000Z',
+      nextRetryAt: '2026-06-07T10:04:01.000Z',
+      errorCategory: 'device_unauthorized',
+    });
+    refuse(repo, 'sale-1');
+    refuse(repo, 'sale-2');
+    expect(repo.eligible(SCOPE, LATER)).toEqual([]);
+    expect(repo.readSyncStatus(SCOPE).deadLetter).toBe(2);
+
+    expect(repo.resetCashierClaimRefused(SCOPE, NOW)).toBe(2);
+
+    const row = nn(repo.read('sale-1'));
+    expect(row.sync_status).toBe('pending');
+    expect(row.next_retry_at).toBeNull();
+    expect(row.last_error_category).toBeNull();
+    expect(row.updated_at).toBe(NOW);
+    // Bookkeeping is kept: the attempt count is history, not reset.
+    expect(row.attempt_count).toBe(1);
+    expect(row.synced_at).toBeNull();
+    expect(repo.eligible(SCOPE, LATER).map((e) => e.sale_id)).toEqual(['sale-1', 'sale-2']);
+    const counts = repo.readSyncStatus(SCOPE);
+    expect(counts.deadLetter).toBe(0);
+    expect(counts.pending).toBe(2);
+    db.close();
+  });
+
+  it('leaves every other dead-letter reason, synced and pending rows untouched', () => {
+    const db = freshSalesSyncDb();
+    for (const id of ['perm', 'diverged', 'synced', 'pending']) queue(db, id);
+    const repo = createSaleSyncStateRepo(handleFor(db));
+    repo.markDeadLetter({ saleId: 'perm', ...SCOPE, now: '2026-06-07T10:05:00.000Z' });
+    repo.markDeadLetter({
+      saleId: 'diverged',
+      ...SCOPE,
+      now: '2026-06-07T10:05:00.000Z',
+      reason: 'payload_divergence',
+    });
+    repo.markSynced({ saleId: 'synced', ...SCOPE, now: '2026-06-07T10:05:00.000Z' });
+    repo.recordTransient({
+      saleId: 'pending',
+      ...SCOPE,
+      now: '2026-06-07T10:05:00.000Z',
+      nextRetryAt: '2026-06-09T00:00:00.000Z',
+      errorCategory: 'transient',
+    });
+    const before = ['perm', 'diverged', 'synced', 'pending'].map((id) => repo.read(id));
+
+    expect(repo.resetCashierClaimRefused(SCOPE, NOW)).toBe(0);
+
+    expect(['perm', 'diverged', 'synced', 'pending'].map((id) => repo.read(id))).toEqual(before);
+    db.close();
+  });
+
+  it('never touches an earlier pairing’s (held) rows or another tenant/branch', () => {
+    const db = freshSalesSyncDb();
+    queue(db, 'mine');
+    queue(db, 'old-terminal', { terminal: 'term-0' });
+    queue(db, 'other-branch', { branch: 'branch-2' });
+    queue(db, 'other-tenant', { tenant: 'tenant-2' });
+    const repo = createSaleSyncStateRepo(handleFor(db));
+    refuse(repo, 'mine');
+    refuse(repo, 'old-terminal');
+    refuse(repo, 'other-branch', { branchId: 'branch-2' });
+    refuse(repo, 'other-tenant', { tenantId: 'tenant-2' });
+
+    expect(repo.resetCashierClaimRefused(SCOPE, NOW)).toBe(1);
+
+    expect(nn(repo.read('mine')).sync_status).toBe('pending');
+    for (const id of ['old-terminal', 'other-branch', 'other-tenant']) {
+      const row = nn(repo.read(id));
+      expect(row.sync_status).toBe('dead_letter');
+      expect(row.last_error_category).toBe('cashier_claim_refused');
+    }
+    db.close();
+  });
+
+  it('no current pairing (null terminal): resets nothing', () => {
+    const db = freshSalesSyncDb();
+    queue(db, 'sale-1');
+    const repo = createSaleSyncStateRepo(handleFor(db));
+    refuse(repo, 'sale-1');
+    expect(repo.resetCashierClaimRefused({ ...SCOPE, terminalId: null }, NOW)).toBe(0);
+    expect(nn(repo.read('sale-1')).sync_status).toBe('dead_letter');
+    db.close();
+  });
+
+  it('is idempotent: a second reset finds nothing to do', () => {
+    const db = freshSalesSyncDb();
+    queue(db, 'sale-1');
+    const repo = createSaleSyncStateRepo(handleFor(db));
+    refuse(repo, 'sale-1');
+    expect(repo.resetCashierClaimRefused(SCOPE, NOW)).toBe(1);
+    expect(repo.resetCashierClaimRefused(SCOPE, LATER)).toBe(0);
+    expect(nn(repo.read('sale-1')).updated_at).toBe(NOW);
+    db.close();
   });
 });

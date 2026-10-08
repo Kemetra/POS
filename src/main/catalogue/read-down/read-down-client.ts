@@ -4,7 +4,8 @@
  * The CONCRETE live HTTP client behind the `ReadDownClient` DI seam
  * (`read-down-client-types.ts`). It fetches the SHIPPED backend catalogue
  * snapshot (`GET /api/pos/v1/catalog/snapshot`, Data-Pulse-2 PR #490) and maps the
- * transport outcome onto the contract union (`ok` / `no_connection` / `failed`).
+ * transport outcome onto the contract union (`ok` / `no_connection` / `failed` /
+ * `device_unauthorized` — RT-215: a 401, the device credential refused).
  *
  * Established repo pattern (mirrors `operator/backend-client.ts` + the
  * voucher-authority-client clients):
@@ -51,7 +52,8 @@
 import type { SellableCatalogRow } from './map-sellable-row.js';
 import type { ReadDownClient, ReadDownFetchResult } from './read-down-client-types.js';
 
-const SNAPSHOT_PATH = '/api/pos/v1/catalog/snapshot';
+/** RT-215: exported so the device-401 detector matches the same route. */
+export const SNAPSHOT_PATH = '/api/pos/v1/catalog/snapshot';
 const PAGE_TOKEN_PARAM = 'page_token';
 const DEFAULT_TIMEOUT_MS = 30_000;
 /**
@@ -120,7 +122,11 @@ interface ValidPage {
 }
 
 /** Per-page fetch outcome — mirrors the transport union plus the parsed page. */
-type PageResult = { kind: 'ok'; page: ValidPage } | { kind: 'no_connection' } | { kind: 'failed' };
+type PageResult =
+  | { kind: 'ok'; page: ValidPage }
+  | { kind: 'no_connection' }
+  | { kind: 'failed' }
+  | { kind: 'device_unauthorized' };
 
 export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownClient {
   const { fetch: fetchImpl, baseUrl, getDeviceToken } = deps;
@@ -149,8 +155,13 @@ export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownCl
       return { kind: 'no_connection' };
     }
 
+    if (response.status === 401) {
+      // RT-215 decision 2: the device credential was refused. Reported apart
+      // from `failed` (the body is still never surfaced, P7).
+      return { kind: 'device_unauthorized' };
+    }
     if (!response.ok) {
-      // Reached but non-2xx (401/403/404/5xx). Collapse to `failed` — the raw
+      // Reached but non-2xx (403/404/5xx). Collapse to `failed` — the raw
       // body is never surfaced (P7); the driver preserves the prior catalogue.
       return { kind: 'failed' };
     }
@@ -194,17 +205,19 @@ export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownCl
 
   return {
     async fetchSnapshot(): Promise<ReadDownFetchResult> {
-      // The device token is the sole credential. No token (unpaired) → treat as a
-      // reached-but-failed request: the driver records a failed attempt and the
-      // working catalogue is preserved (the writer never runs).
-      let deviceToken: string | null;
-      try {
-        deviceToken = await getDeviceToken();
-      } catch {
-        return { kind: 'failed' };
-      }
-      if (deviceToken === null || deviceToken.length === 0) {
-        return { kind: 'failed' };
+      // The device token is the sole credential. No token (unpaired, or RT-215:
+      // the device was revoked) → treat as a reached-but-failed request: the
+      // driver records a failed attempt and the working catalogue is preserved
+      // (the writer never runs). RT-215 / Codex P2: it is re-read before EVERY
+      // page, so a revocation confirmed mid-walk stops the next page from
+      // carrying the revoked token.
+      async function sendableToken(): Promise<string | null> {
+        try {
+          const token = await getDeviceToken();
+          return token !== null && token.length > 0 ? token : null;
+        } catch {
+          return null;
+        }
       }
 
       // Walk every page, accumulating `items`. All pages MUST share one `cursor`
@@ -223,9 +236,13 @@ export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownCl
       // The token alone cannot bound the loop (the server issues it); bound on
       // `maxPages` to fail closed on a bad server that never returns a null token.
       for (let guard = 0; guard < maxPages; guard += 1) {
+        const deviceToken = await sendableToken();
+        if (deviceToken === null) {
+          return { kind: 'failed' };
+        }
         const result = await fetchPage(deviceToken, pageToken);
         if (result.kind !== 'ok') {
-          return result.kind === 'no_connection' ? { kind: 'no_connection' } : { kind: 'failed' };
+          return { kind: result.kind };
         }
         // The cursor is pinned on the first page and MUST be identical on every
         // subsequent page. A drift (contract bug / cache mismatch) would yield a

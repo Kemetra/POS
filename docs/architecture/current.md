@@ -76,6 +76,37 @@ Three lifecycle concerns are factored out into `src/main/app/`:
 | `bootstrap-window.ts` | BrowserWindow construction + the renderer trust boundary |
 | `bootstrap-db.ts` | DB handle ownership and close mechanics (open/migrate stay at the root) |
 | `bootstrap-workers.ts` | Background-worker teardown: stop order, failure isolation, idempotency |
+| `single-instance.ts` | The one-process-per-terminal lock and the second-launch focus (RT-203) |
+
+### Single instance per terminal — load-bearing
+
+`index.ts` calls `app.requestSingleInstanceLock()` (through `acquireSingleInstance`) **before it
+builds anything else**, and the whole `whenReady` boot chain hangs off that call's result. A second
+launch does not get the lock: it calls `app.quit()` and never opens the database, runs migrations,
+starts a worker, registers IPC, builds the printer or drawer ports, or creates a window. The running
+instance gets a `second-instance` event and restores (if minimized) and focuses its tracked cashier
+window. It does not pick from `BrowserWindow.getAllWindows()`, because the hidden offscreen
+receipt-print window is a `BrowserWindow` too.
+
+The lock is per user-data directory, which is where `pos-pulse.db` lives. So "one process per
+terminal database" is what it guarantees. These main-process structures are process-local and are
+correct **only because of this lock**:
+
+| Structure | Process-local coordination |
+|:--|:--|
+| Sale sync (`sales-sync/sale-sync-engine.ts`) | in-memory single-flight drain |
+| Catalogue read-down (`catalogue/read-down/read-down-driver.ts`) | in-memory single-flight tick |
+| Finalize listener (`sales/finalize-listener.ts`) | in-memory single-flight tick |
+| Payments deferred-reversal resolver | in-memory `running` flag |
+| Returns resolver + dispatcher (`returns/`) | one pass per process; per-return in-flight map (and the returns payout serialization) |
+| Drawer kick (`drawer/drawer-kick.ts`) | read-then-write double-kick guard (`UNIQUE(sale_id)` is only the backstop) |
+| Receipt printing / drawer hardware | one owner of the device |
+
+Do not remove or bypass the lock without replacing each of these with cross-process (database-level)
+coordination. There is no dev or test override: nothing in the repo launches two instances on
+purpose (`scripts/dev-electron.cjs` spawns one Electron), so dev runs take the lock too. The wiring is
+pinned by the static guard `src/main/__tests__/bootstrap-single-instance.test.ts`; the packaged
+Windows behaviour is a lab check.
 
 ### Shutdown ordering — load-bearing
 
@@ -140,22 +171,36 @@ the outcomes it actually has:
 | Path | Result type | Members |
 |:--|:--|:--|
 | Catalogue read-down | `ReadDownFetchResult` | `ok` · `no_connection` · `failed` |
-| Sale capture-up | `SaleSyncResult` | `ok` · `duplicate` · `transient` · `permanent` · `no_connection` |
+| Sale capture-up | `SaleSyncResult` | `ok` · `divergent` · `transient` · `permanent` · `no_connection` |
 | Voucher authority client | `ValidateVoucherOutcome` / `RedeemVoucherOutcome` / `ReverseVoucherOutcome` | `validated` \| `redeemed` \| `reversed` · `refused` · `authority_unreachable` |
 
 Read them as three expressions of the same invariant. Read-down separates *unreachable*
 (`no_connection`) from *reached but failed* (`failed`). Sale-sync separates *unreachable* from a
 backend-issued rejection, and additionally splits retryable (`transient`) from terminal
-(`permanent`) and idempotent-success (`duplicate`) — the distinctions its retry policy needs.
+(`permanent`) and payload divergence (`divergent`) — the distinctions its retry policy needs.
 
 The `refused` / `authority_unreachable` pair belongs specifically to the **authority-client**
 interactions, where a refusal is a genuine business decision made by Data-Pulse-2 and must never be
 manufactured locally from a connection failure. `refused` always carries a closed-set
 `VoucherRefusalReason`; no free-text refusal crosses the bridge.
 
-For sale-sync specifically: `transient` and `no_connection` back off and retry, `permanent`
-dead-letters rather than spinning, and `duplicate` is treated as success (the backend already has
-the sale).
+For sale-sync specifically: `transient` and `no_connection` back off and retry, and `permanent`
+dead-letters rather than spinning. Idempotent replays are `ok`: Backend-Core answers a same-key
+retry with 201 and a provenance replay with 200, both carrying the identical `Sale`. A capture 409
+is never success (RT-190). Backend-Core sends it only as `idempotency_key_conflict`, meaning the
+key or provenance was already used for a **different** payload. So `divergent` dead-letters the
+sale with reason `payload_divergence` (`sale_sync_state.last_error_category`) and never retries
+it. The sale is counted in the sync-status `deadLetter` and `payloadDivergence` counts and logged
+as `sale_sync:payload_divergence` with only the `externalId` and a closed-set error code. A 409
+with a malformed body or another code is treated the same way (fail closed).
+
+A capture 425 `idempotency_in_progress` is never a rejection (RT-194). Backend-Core sends it,
+with `Retry-After`, while an earlier request with the same Idempotency-Key is still in flight —
+typically the till's own first attempt that hit the client timeout but is still committing. It is
+`transient`: the sale stays pending, the next attempt waits at least `Retry-After` (seconds or
+HTTP-date, clamped to 5 min; a missing or invalid header falls back to the backoff), and the retry
+with the same key gets the 201/200 replay and its `saleRef`. A 429 rate limit is handled the same
+way. There is no max-attempts cap, so a transient sale never dead-letters.
 
 **Pairing is outside this table and uses a different transport API.** `src/main/pairing/network.ts`
 throws a typed `TransportError` on a transport failure rather than returning a union member. It
@@ -173,8 +218,8 @@ do not assume a result union.
 
 | Credential | Scope | Used for |
 |:--|:--|:--|
-| Device token | The terminal | Catalogue read-down, sign-in attestation |
-| Operator envelope | The signed-in operator | Sale-sync routes |
+| Device token | The terminal | Catalogue read-down, sign-in attestation, cashier admissions, sale capture of a cashier's sale (with that sale's own cashier `operatorUserId`, RT-224) |
+| Operator envelope | The signed-in operator | Sale-sync routes for a sale with no recorded cashier (manager/admin sales, sales finalized before RT-224) |
 | Operator JWT | The provider identity | Sign-out, stuck-shifts, roster, takeover-confirm |
 
 Secrets live in Electron `safeStorage` (DPAPI on Windows). **A production build refuses to start**

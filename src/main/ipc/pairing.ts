@@ -1,6 +1,6 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
-import { PAIRING_IPC_CHANNELS } from '../../shared/pairing-types.js';
+import { PAIRING_IPC_CHANNELS, type PairingRecheckResult } from '../../shared/pairing-types.js';
 import type { PairingStore } from '../pairing/store.js';
 import type { PairingService } from '../pairing/service.js';
 
@@ -27,15 +27,20 @@ import type { PairingService } from '../pairing/service.js';
  *   - The boundary rejection MUST NOT echo the renderer-supplied
  *     payload (which could itself be a sensitive object). The thrown
  *     Error message is a stable, payload-free string.
+ *   - RECHECK (RT-215 10897-A): the renderer can only TRIGGER the
+ *     "Check again"; any argument it sends is ignored, and the answer is
+ *     `{ outcome }` only — the token never crosses the bridge.
  */
 
 export interface PairingHandlerDeps {
   store: PairingStore;
   service: PairingService;
+  /** RT-215 10897-A — the "Check again" (`pairing:recheck`); registered when given. */
+  recheck?: () => Promise<PairingRecheckResult>;
 }
 
 export function registerPairingHandlers(ipcMain: IpcMain, deps: PairingHandlerDeps): void {
-  const { store, service } = deps;
+  const { store, service, recheck } = deps;
 
   ipcMain.handle(PAIRING_IPC_CHANNELS.GET_STATUS, () => store.getStatus());
 
@@ -54,4 +59,8 @@ export function registerPairingHandlers(ipcMain: IpcMain, deps: PairingHandlerDe
     // omits `device_token` by construction — safe to forward verbatim.
     return service.submit(code);
   });
+
+  if (recheck !== undefined) {
+    ipcMain.handle(PAIRING_IPC_CHANNELS.RECHECK, () => recheck());
+  }
 }

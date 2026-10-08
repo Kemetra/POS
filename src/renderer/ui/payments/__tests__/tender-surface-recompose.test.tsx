@@ -10,7 +10,7 @@
  *      invariant ("exactly one amount-due presentation") lives in
  *      `single-amount-due.test.tsx`. Item 7 below is superseded with them.
  *   2. method grid uses tender-method-grid (3-method, NOT --four)
- *   3. cash path renders tender-slots + tender-row + MoneyRoll change-due
+ *   3. cash path renders tender-slots + tender-row + static change-due
  *   4. card path renders tender-slots + a tender-row__body instruction row
  *   5. voucher path renders voucher-field input + voucher-error (invalid)
  *   6. quick-amounts + quick-amount-btn render in the cash path
@@ -123,7 +123,7 @@ describe('TenderSelection — v3.5 visual recompose', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. CashEntry — amount-due-card + tender-row layout + MoneyRoll change
+// 2. CashEntry — amount-due-card + tender-row layout + static change
 // ---------------------------------------------------------------------------
 
 describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', () => {
@@ -181,32 +181,49 @@ describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', (
     expect(chipText).toContain('50.00');
   });
 
-  it('change-due row (tender-row--totals) shows MoneyRoll when overpaid', () => {
+  it('change-due row shows the static change when overpaid', () => {
     render(<CashEntry remainingBalanceMinor={1250} />);
     // Enter 15.00 (overpays by 2.50)
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
       target: { value: '15.00' },
     });
-    // Should have a totals row with the MoneyRoll
     const totalsRow = document.querySelector('.tender-row--totals');
     expect(totalsRow).toBeInTheDocument();
-    const roll = screen.getByTestId('money-roll');
-    expect(roll).toBeInTheDocument();
-    // MoneyRoll is always dir="ltr"
-    expect(roll).toHaveAttribute('dir', 'ltr');
+    const value = screen.getByTestId('cash-entry-change-due-value');
+    // Money is always dir="ltr".
+    expect(value).toHaveAttribute('dir', 'ltr');
+    expect(value).toHaveTextContent(/^2\.50 EGP$/);
   });
 
-  it('change-due MoneyRoll renders 0.00 when exact cash (no overpayment)', () => {
+  it('exact cash shows no change row', () => {
     render(<CashEntry remainingBalanceMinor={1250} />);
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
       target: { value: '12.50' },
     });
-    // Exact cash: change is 0 → MoneyRoll may render with zero or be absent;
-    // if absent that's acceptable (not a regression). If present, it's 0.00.
-    const roll = screen.queryByTestId('money-roll');
-    if (roll !== null) {
-      expect(roll).toHaveTextContent('0.00');
+    expect(screen.queryByTestId('cash-entry-change-due-value')).toBeNull();
+  });
+
+  it('the change is never animated: it shows the final value at once and on update (UX-06)', () => {
+    vi.useFakeTimers();
+    try {
+      render(<CashEntry remainingBalanceMinor={1250} />);
+      const input = screen.getByTestId('cash-entry-amount-input');
+      fireEvent.change(input, { target: { value: '15.00' } });
+      // No timers / animation frames advanced: the value is already final.
+      expect(screen.getByTestId('cash-entry-change-due-value').textContent).toBe('2.50 EGP');
+      fireEvent.change(input, { target: { value: '20.00' } });
+      expect(screen.getByTestId('cash-entry-change-due-value').textContent).toBe('7.50 EGP');
+    } finally {
+      vi.useRealTimers();
     }
+  });
+
+  it('the change groups thousands', () => {
+    render(<CashEntry remainingBalanceMinor={100000} />);
+    fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
+      target: { value: '2250.00' },
+    });
+    expect(screen.getByTestId('cash-entry-change-due-value').textContent).toBe('1,250.00 EGP');
   });
 
   it('quick-amount-btn--label chip (exact-change shortcut) is rendered', () => {

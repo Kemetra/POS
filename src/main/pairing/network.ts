@@ -74,14 +74,15 @@ type PairRequestBody = components['schemas']['TerminalPairRequest'];
 export type PairSuccessBody = components['schemas']['TerminalPairResponse'];
 
 /**
- * Failure body shape. The contract document declares
- * `TerminalPairErrorResponse` as `{ code, message }` but real-world
- * non-2xx responses MAY have any shape (or none). We type the field
- * loosely here and let `failure-mapping.ts` read `code` defensively.
+ * Failure body shape. Backend-Core returns pairing failures in the canonical
+ * envelope `{ error: { code, message, request_id? } }`
+ * (`pos-terminal-pairing.openapi.yaml` `components.schemas.Error`), but
+ * real-world non-2xx responses MAY have any shape (or none). We type the
+ * field loosely here and let `failure-mapping.ts` read `error.code`
+ * defensively. (RT-228: this was previously a flat `{ code, message }`.)
  */
 export interface PairFailureBody {
-  code?: string;
-  message?: string;
+  error?: unknown;
   [key: string]: unknown;
 }
 

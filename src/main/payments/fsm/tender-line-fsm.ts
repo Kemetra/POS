@@ -31,7 +31,11 @@ import type {
   PaymentActionKind,
   PaymentActionOutboxRepository,
 } from '../repositories/payment-action-outbox.repository.js';
-import { computeActionPayloadHash } from '../repositories/payment-action-outbox.repository.js';
+import {
+  hashActionPayload,
+  tenderApplyActionPayload,
+  tenderReverseActionPayload,
+} from '../action-payload.js';
 import type { RefusalReason, TenderType } from '../../../shared/payments/types.js';
 import { isLegalTenderLineTransition } from '../../../shared/payments/fsm-types.js';
 
@@ -177,34 +181,12 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
     return lines.findByAttempt(payment_attempt_id).find((l) => l.tender_line_id === tender_line_id);
   }
 
-  function writeApplyOutbox(
-    action_kind: PaymentActionKind,
-    input: ApplyTenderLineInput,
-    /**
-     * CR-1 — when the persisted `amount_applied_minor` differs from the
-     * caller's pre-call estimate (voucher V-A can cap the value
-     * authority-side, R-7), pass the persisted value here so the outbox
-     * hash matches the stored line row. A replay of the same idempotency
-     * key would otherwise re-hash `input.amount_applied_minor` and fail
-     * with `idempotency_payload_mismatch` even though the persisted state
-     * is consistent. Defaults to `input.amount_applied_minor` for cash /
-     * external_card_terminal / refused-voucher branches where the
-     * caller's value IS the persisted value.
-     */
-    effective_amount_applied_minor: number = input.amount_applied_minor,
-  ): void {
-    const redactedPayload: Record<string, unknown> = {
-      tender_line_id: input.tender_line_id,
-      payment_attempt_id: input.payment_attempt_id,
-      tender_type: input.tender_type,
-      amount_applied_minor: effective_amount_applied_minor,
-    };
-    if (input.tender_type === 'external_card_terminal' && input.external_reference !== undefined) {
-      // P-VII redaction at the hash boundary so the stored hash cannot encode
-      // the raw reference value.
-      redactedPayload.external_reference = '*****';
-    }
-    const hash = computeActionPayloadHash({ ...redactedPayload, action_kind });
+  function writeApplyOutbox(action_kind: PaymentActionKind, input: ApplyTenderLineInput): void {
+    // The hash covers the REQUESTED amount, never the persisted one: a voucher
+    // authority may cap the persisted `amount_applied_minor` (R-7), but a
+    // same-key retry carries the request, so the request is what it must
+    // match (RT-304; supersedes CR-1's persisted-amount hash).
+    const hash = hashActionPayload(action_kind, tenderApplyActionPayload(input));
     outbox.insert({
       action_id: input.action_id,
       payment_attempt_id: input.payment_attempt_id,
@@ -241,11 +223,7 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
       timestamp: input.reversed_at,
       last_action_id: input.action_id,
     });
-    const hash = computeActionPayloadHash({
-      tender_line_id: input.tender_line_id,
-      payment_attempt_id: input.payment_attempt_id,
-      action_kind: 'tender.reverse',
-    });
+    const hash = hashActionPayload('tender.reverse', tenderReverseActionPayload(input));
     outbox.insert({
       action_id: input.action_id,
       payment_attempt_id: input.payment_attempt_id,
@@ -392,9 +370,9 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
               apply_order,
               last_action_id: input.action_id,
             });
-            // CR-1 — the persisted line carries `outcome.applied_amount_minor`,
-            // not `input.amount_applied_minor`. Outbox hash must match.
-            writeApplyOutbox('tender.apply', input, outcome.applied_amount_minor);
+            // RT-304 — the line persists `outcome.applied_amount_minor`, but the
+            // outbox hash covers the requested `input.amount_applied_minor`.
+            writeApplyOutbox('tender.apply', input);
             return { kind: 'refused', reason: 'non_cash_overpayment_refused' };
           }
           lines.insert({
@@ -416,9 +394,9 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
             apply_order,
             last_action_id: input.action_id,
           });
-          // CR-1 — the persisted line carries `outcome.applied_amount_minor`,
-          // not `input.amount_applied_minor`. Outbox hash must match.
-          writeApplyOutbox('tender.apply', input, outcome.applied_amount_minor);
+          // RT-304 — the line persists `outcome.applied_amount_minor`, but the
+          // outbox hash covers the requested `input.amount_applied_minor`.
+          writeApplyOutbox('tender.apply', input);
           return {
             kind: 'ok',
             tender_line_id: input.tender_line_id,
@@ -524,11 +502,7 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
           timestamp: input.reversal_pending_since,
           last_action_id: input.action_id,
         });
-        const hash = computeActionPayloadHash({
-          tender_line_id: input.tender_line_id,
-          payment_attempt_id: input.payment_attempt_id,
-          action_kind: 'tender.reverse',
-        });
+        const hash = hashActionPayload('tender.reverse', tenderReverseActionPayload(input));
         outbox.insert({
           action_id: input.action_id,
           payment_attempt_id: input.payment_attempt_id,
@@ -562,11 +536,7 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
           timestamp: input.reversed_at,
           last_action_id: input.action_id,
         });
-        const hash = computeActionPayloadHash({
-          tender_line_id: input.tender_line_id,
-          payment_attempt_id: input.payment_attempt_id,
-          action_kind: 'tender.reverse',
-        });
+        const hash = hashActionPayload('tender.reverse', tenderReverseActionPayload(input));
         outbox.insert({
           action_id: input.action_id,
           payment_attempt_id: input.payment_attempt_id,

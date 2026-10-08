@@ -69,7 +69,11 @@ export interface CreateReadDownDriverDeps {
 export interface ReadDownDriver {
   /** Admit one tick synchronously; the read-down resolves on `completed`. */
   runTickOnce(): TickAdmission;
-  /** Install the background interval driver. Returns the timer handle. */
+  /**
+   * Install the background interval driver AND admit one immediate initial tick
+   * (RT-41). Idempotent while started: a repeat call returns the existing handle
+   * without a second interval or a second initial tick. Returns the timer handle.
+   */
   start(): NodeJS.Timeout;
   /** Stop the background driver (idempotent). */
   stop(): void;
@@ -132,14 +136,22 @@ export function createReadDownDriver(deps: CreateReadDownDriverDeps): ReadDownDr
     return { kind: 'started', completed: runTick() };
   }
 
-  /* c8 ignore start — start/stop interval wiring is exercised by the composition-root smoke (T039); unit tests drive runTickOnce directly */
   function start(): NodeJS.Timeout {
+    // Idempotent: an already-started driver neither installs a second interval
+    // nor admits a second initial tick.
     if (intervalHandle !== null) return intervalHandle;
     intervalHandle = setInterval(() => {
       // Fire-and-forget: single-flight coalesces a tick still running from the
       // previous interval (returns already_running, no-op). A tick never rejects.
       runTickOnce();
     }, deps.tickIntervalMs);
+    // RT-41 — one immediate, bounded initial tick so a freshly paired/restarted
+    // terminal has a catalogue without waiting a full interval (or a manual
+    // refresh). Admitted through the same single-flight gate as the interval and
+    // the `catalogue:refresh` bridge, so it can never overlap another pull; a
+    // transport failure is recorded like any other tick and retried by the next
+    // interval tick or a manual refresh. Fire-and-forget: a tick never rejects.
+    runTickOnce();
     return intervalHandle;
   }
 
@@ -149,7 +161,6 @@ export function createReadDownDriver(deps: CreateReadDownDriverDeps): ReadDownDr
       intervalHandle = null;
     }
   }
-  /* c8 ignore stop */
 
   return { runTickOnce, start, stop };
 }

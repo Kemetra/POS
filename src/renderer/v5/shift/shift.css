@@ -1,0 +1,222 @@
+/*
+ * RT-17 slice 4 part 3 — the v5 shift screens. Tokens only (DESIGN.md):
+ * panels are white with a hairline and no shadow, one teal commit per region,
+ * status colour only on the banner and alerts, logical properties only.
+ */
+
+.v5-shift {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.v5-shift-titlebar {
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  background: var(--color-surface);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.v5-shift-titlebar h1 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+.v5-shift-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.v5-shift > .v5-shift-panel,
+.v5-shift > .v5-shift-outcome,
+.v5-shift > .v5-shift-message {
+  margin: var(--space-3) var(--space-3) 0;
+}
+
+.v5-shift-panel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-shift-panel h2,
+.v5-shift-panel h3,
+.v5-shift-panel p {
+  margin: 0;
+}
+
+.v5-shift-panel h2 {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-shift-panel h3 {
+  margin-block-start: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-shift-hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.v5-shift-message {
+  line-height: var(--line-height-relaxed);
+}
+
+.v5-shift-fields {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.v5-shift-input,
+.v5-shift-fields textarea {
+  min-block-size: 44px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.v5-shift-fields textarea {
+  min-block-size: 88px;
+  padding-block: var(--space-2);
+  resize: vertical;
+}
+
+.v5-shift-money {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-shift-facts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.v5-shift-fact {
+  display: contents;
+}
+
+.v5-shift-facts dd {
+  margin: 0;
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.v5-shift-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+.v5-shift-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.v5-shift-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-shift-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.v5-shift-managers {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.v5-shift-manager {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+}
+
+.v5-shift-alert {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-control);
+  color: var(--color-danger);
+}
+
+.v5-shift-outcome {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-info);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.v5-shift-outcome p {
+  margin: 0;
+}
+
+/* The "shift required" gate: persistent until a shift is open (warning). */
+.v5-shift-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-warning);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius-control);
+  background: var(--color-warning-soft);
+  color: var(--color-text);
+}
+
+.v5-shift-banner p {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-shift-notice {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.v5-shift-notice a {
+  color: var(--color-primary-emphasis);
+  font-weight: var(--font-weight-semibold);
+}

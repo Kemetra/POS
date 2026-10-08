@@ -1,9 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  SALE_SYNC_REQUEST_TIMEOUT_MS,
   createSaleSyncClient,
   toWireBody,
   classifyStatus,
+  classifyDeviceStatus,
+  toCashierWireBody,
+  exponentFor,
+  knownExponentFor,
   minorUnitsToDecimalString,
 } from '../create-sale-sync-client.js';
 import type { CaptureSalePayload } from '../capture-payload.js';
@@ -86,6 +91,32 @@ function headerValue(init: RequestInit, name: string): string | null {
   const headers = init.headers as Record<string, string> | undefined;
   return headers?.[name] ?? null;
 }
+
+describe('exponentFor — ISO-4217 minor-unit exponent (shared with RT-15 returns)', () => {
+  it.each<[string, number]>([
+    ['EGP', 2],
+    ['USD', 2],
+    ['JPY', 0],
+    ['KWD', 3],
+    ['BHD', 3],
+    ['XYZ', 2],
+  ])('%s → %s (unknown currencies default to 2)', (currency, exponent) => {
+    expect(exponentFor(currency)).toBe(exponent);
+  });
+});
+
+describe('knownExponentFor — fail-closed lookup (RT-17 shift cash-up)', () => {
+  it.each<[string, number | undefined]>([
+    ['EGP', 2],
+    ['JPY', 0],
+    ['KWD', 3],
+    ['XYZ', undefined],
+    ['egp', undefined],
+    ['constructor', undefined],
+  ])('%s → %s (no default for an unknown currency)', (currency, exponent) => {
+    expect(knownExponentFor(currency)).toBe(exponent);
+  });
+});
 
 describe('minorUnitsToDecimalString — integer minor → exact-decimal string', () => {
   it('formats exponent-2 amounts with two fractional digits', () => {
@@ -220,11 +251,11 @@ describe('toWireBody — internal → DP2 CaptureSaleRequest wire shape', () => 
 
 describe('classifyStatus — HTTP → outcome union', () => {
   it('maps 200/201 → ok', () => {
-    expect(classifyStatus(200)).toEqual({ kind: 'ok' });
-    expect(classifyStatus(201)).toEqual({ kind: 'ok' });
+    expect(classifyStatus(200)).toEqual({ kind: 'ok', saleRef: null });
+    expect(classifyStatus(201)).toEqual({ kind: 'ok', saleRef: null });
   });
-  it('maps 409 → duplicate (idempotent success)', () => {
-    expect(classifyStatus(409)).toEqual({ kind: 'duplicate' });
+  it('RT-190: maps 409 → divergent (terminal, NOT success); the status alone decides', () => {
+    expect(classifyStatus(409)).toEqual({ kind: 'divergent', errorCode: 'unrecognized' });
   });
   it('maps 5xx → transient', () => {
     expect(classifyStatus(500)).toEqual({ kind: 'transient' });
@@ -243,6 +274,9 @@ describe('classifyStatus — HTTP → outcome union', () => {
     // Retry-After), not a contract defect — dead-lettering it would permanently
     // lose a perfectly valid sale just because the device was briefly too fast.
     expect(classifyStatus(429)).toEqual({ kind: 'transient' });
+  });
+  it('maps 425 idempotency_in_progress → transient (RT-194: the same key is still in flight, never dead-letter)', () => {
+    expect(classifyStatus(425)).toEqual({ kind: 'transient' });
   });
   it('maps genuine validation 4xx (400/404/422) → permanent (dead-letter)', () => {
     expect(classifyStatus(400)).toEqual({ kind: 'permanent' });
@@ -309,7 +343,7 @@ describe('createSaleSyncClient — outcome mapping', () => {
   const cases: Array<[number, string]> = [
     [200, 'ok'],
     [201, 'ok'],
-    [409, 'duplicate'],
+    [409, 'divergent'],
     [500, 'transient'],
     [401, 'transient'], // expired operator JWT — retryable, not dead-lettered
     [403, 'transient'],
@@ -465,5 +499,59 @@ describe('RT-79 — tenders on the wire (RT-10 D1; SaleTender contract)', () => 
     expect((await client.postSale(TENDERED)).kind).toBe('ok');
     const sent = JSON.parse(captured[0]?.init.body as string) as { tenders?: unknown[] };
     expect(sent.tenders).toHaveLength(2);
+  });
+});
+
+// RT-224 step 2 — the device path's pure helpers and its local-defect guard
+// (the request/response behaviour is in create-sale-sync-client.device.test.ts).
+describe('RT-224 step 2 — device-path helpers', () => {
+  const USER_ID = '0190a3c4-0000-7000-8000-00000000000a';
+
+  it('toCashierWireBody = toWireBody + operatorUserId, nothing else', () => {
+    expect(toCashierWireBody(PAYLOAD, 'EGP', USER_ID)).toEqual({
+      ...toWireBody(PAYLOAD, 'EGP'),
+      operatorUserId: USER_ID,
+    });
+  });
+
+  it('classifyDeviceStatus: 401 → device_unauthorized, 403 → refused, the rest as classifyStatus', () => {
+    expect(classifyDeviceStatus(401)).toEqual({ kind: 'device_unauthorized' });
+    expect(classifyDeviceStatus(403)).toEqual({ kind: 'refused' });
+    for (const status of [200, 201, 302, 400, 404, 409, 422, 425, 429, 500, 503]) {
+      expect(classifyDeviceStatus(status)).toEqual(classifyStatus(status));
+    }
+  });
+
+  it('postSaleAsCashier: a corrupt amount is permanent and never POSTed (like postSale)', async () => {
+    const { fetchImpl, captured } = captureFetch(201);
+    const client = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => TOKEN,
+      getDeviceToken: () => Promise.resolve('device-token'),
+      currentTerminalId: () => PAYLOAD.terminalId,
+    });
+    const corrupt: CaptureSalePayload = { ...PAYLOAD, totalMinor: 10.5 };
+    expect(await client.postSaleAsCashier(corrupt, USER_ID)).toEqual({ kind: 'permanent' });
+    expect(captured).toHaveLength(0);
+  });
+});
+
+describe('createSaleSyncClient — request timeout (RT-17 follow-up, drain bound)', () => {
+  it('bounds a request by SALE_SYNC_REQUEST_TIMEOUT_MS (15 s) unless a timeout is injected', async () => {
+    expect(SALE_SYNC_REQUEST_TIMEOUT_MS).toBe(15_000);
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      const { fetchImpl } = captureFetch(200);
+      const client = createSaleSyncClient({
+        baseUrl: BASE,
+        fetch: fetchImpl,
+        getOperatorToken: () => TOKEN,
+      });
+      await client.postSale(PAYLOAD);
+      expect(timeout).toHaveBeenCalledWith(SALE_SYNC_REQUEST_TIMEOUT_MS);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });

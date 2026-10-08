@@ -1,9 +1,7 @@
 import type { JSX } from 'react';
 import type { ConnectionState } from '../../ui/tokens/connection-state';
 import { IdentityStrip } from './IdentityStrip';
-import { ConnectionIndicator } from './ConnectionIndicator';
 import { OperatorSlot } from './OperatorSlot';
-import { ThemeToggle } from './ThemeToggle';
 import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
 import { CONNECTION_BANNER_MESSAGES } from '../../connection/connection-state';
 
@@ -19,13 +17,13 @@ interface TopBarProps {
  *
  * POS v3.5: the banner copy is Arabic-first (prototype copy — README §"App
  * shell & navigation" / "Connection states cycle"):
- *   degraded → "الاتصال بطيء — Connection slow"
+ *   degraded → "الاتصال بطيء"
  *   offline  → "غير متصل — البيع من قائمة الانتظار المحلية"
  *   syncing  → "جارٍ المزامنة…"
  *
  * All four states are covered; `online` is omitted from the rendered banner
  * via the `connectionState !== 'online'` guard, so it never reaches StatusBanner.
- * (The ConnectionIndicator pill keeps its own short English labels.)
+ * (RT-240: there is no connection pill; see the right cluster below.)
  */
 const BANNER_MESSAGES = CONNECTION_BANNER_MESSAGES;
 
@@ -33,7 +31,7 @@ const BANNER_MESSAGES = CONNECTION_BANNER_MESSAGES;
  * T049 [S3] / POS v3.5 — TopBar restyle.
  *
  * Left cluster: POS Pulse wordmark · tenant · branch · terminal chip.
- * Right cluster: ConnectionIndicator + ThemeToggle + OperatorSlot (sign out
+ * Right cluster: OperatorSlot (sign out
  * button is part of OperatorSlot when a session is active).
  * StatusBanner renders below the bar for non-online states.
  *
@@ -57,8 +55,10 @@ export function TopBar({
           <IdentityStrip tenantId={tenantId} branchId={branchId} terminalLabel={terminalLabel} />
         </div>
         <div className="top-bar__right">
-          <ConnectionIndicator state={connectionState} />
-          <ThemeToggle />
+          {/* RT-240 (I-7): no connection pill. Nothing drives the connection state
+              in production yet (only a dev toggle), so «Online» was a fabricated
+              claim; non-online states still show the banner below. No theme
+              toggle: the dark register is maintained but not offered (PRODUCT.md). */}
           <OperatorSlot />
         </div>
       </header>

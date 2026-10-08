@@ -2,6 +2,15 @@ import type { DatabaseHandle } from '../db/client.js';
 import type { SecretKey, SecretStore } from '../../shared/secret-store.js';
 import type { PairingStatus } from '../../shared/pairing-types.js';
 
+import {
+  bindingOf,
+  openDeviceToken,
+  sameBinding,
+  sealDeviceToken,
+  type OpenedDeviceToken,
+  type PairingBinding,
+} from './token-binding.js';
+
 /**
  * 002-terminal-pairing T011 — pairingStore.
  *
@@ -18,7 +27,10 @@ import type { PairingStatus } from '../../shared/pairing-types.js';
  *   ok     | present | paired     | n/a
  *   missing| present | invalid    | orphaned_row    (row sits alone)
  *   ok     | absent  | invalid    | missing_token   (token sits alone)
+ *   any    | revoked | invalid    | device_revoked  (RT-215; checked FIRST, review F7)
  *   garbled| any     | invalid    | decrypt_failed  (DPAPI cannot decrypt)
+ *   other  | present | invalid    | inconsistent    (RT-306; token sealed for another
+ *          |         |            |                  pairing, or unreadable)
  *
  * Reason mapping rationale: `orphaned_row` describes the row's state
  * (it is orphaned); `missing_token` describes what is missing relative
@@ -76,6 +88,24 @@ export interface TerminalAssignmentRow {
 }
 
 /**
+ * RT-215 — the row as read back: the pairing fields plus the durable
+ * device-revoked marker (migration 0042). Optional so an adapter written
+ * before 0042 still type-checks; `undefined` and `null` both mean "not
+ * revoked".
+ */
+export interface StoredAssignmentRow extends TerminalAssignmentRow {
+  /** Unix epoch seconds when the revocation was confirmed; null when not revoked. */
+  device_revoked_at?: number | null;
+}
+
+/** RT-215 — the identity of the pairing that was revoked (audit attribution). */
+export interface RevokedTerminalScope {
+  tenant_id: string;
+  branch_id: string;
+  terminal_id: string;
+}
+
+/**
  * Narrow surface the pairing store needs from the database. Production
  * adapter binds this to a `DatabaseHandle` (better-sqlite3); tests pass a
  * sql.js-backed implementation. The interface is intentionally small —
@@ -83,11 +113,22 @@ export interface TerminalAssignmentRow {
  */
 export interface PairingStoreDb {
   /** Read the single row, or null if absent. */
-  readAssignment(): TerminalAssignmentRow | null;
+  readAssignment(): StoredAssignmentRow | null;
   /** Write/replace the single row at id = 1. */
   writeAssignment(row: TerminalAssignmentRow): void;
   /** Delete the single row (idempotent). */
   deleteAssignment(): void;
+  /**
+   * RT-215 — set `device_revoked_at` on the single row if it is not set yet
+   * (idempotent: the first confirmation time is kept). A re-pair's
+   * `writeAssignment` (INSERT OR REPLACE) resets it to NULL.
+   */
+  markDeviceRevoked(atEpochSeconds: number): void;
+  /**
+   * RT-215 10897-A — set `device_revoked_at` back to NULL on the single row
+   * (a "Check again" the server answered 2xx). Idempotent.
+   */
+  clearDeviceRevoked(): void;
   /** Run `fn` inside BEGIN/COMMIT; rollback + rethrow on error. */
   transaction<T>(fn: () => T): T;
 }
@@ -122,6 +163,15 @@ export interface PairingStore {
   getCurrentTerminalId(): string | null;
 
   /**
+   * RT-215 rev546b S-2 — the STORED pairing epoch (`paired_at`) whatever the
+   * status, revoked included; null when no row exists. For the offline grant
+   * wrapper's prior-epoch floor ONLY (RT-113 F4 `prior + 1`): a send path must
+   * use `getStatus()` / `getPairingEpoch()`, which are null while revoked.
+   * Optional so the many read-only fakes stay valid.
+   */
+  getStoredPairingEpoch?(): number | null;
+
+  /**
    * Persist a successful pairing: write the device_token to the
    * SecretStore AND insert the assignment row, in a single
    * transactional unit. Rolls back the SecretStore write if the SQL
@@ -139,6 +189,69 @@ export interface PairingStore {
   clear(): Promise<void>;
 }
 
+/**
+ * RT-215 — the device-revoked capability. Kept off {@link PairingStore} so the
+ * many read-only consumers (and their fakes) do not grow a write method; only
+ * the revocation flow is handed this.
+ */
+export interface DeviceRevocationStore {
+  /**
+   * Record that Backend-Core confirmed this terminal's device credential is
+   * revoked. Durable (the pairing row) and immediate (an in-memory latch set
+   * FIRST, so the token stops being sendable even if the row write fails —
+   * that failure is then rethrown for the caller to log). Idempotent.
+   *
+   * Returns the revoked pairing's scope, or null when nothing is paired (then
+   * nothing is recorded). The device token is NOT deleted: it stays sealed,
+   * is never sent again, and a re-pair (`persist`) overwrites it.
+   *
+   * Fail closed (review F1): nothing automatic un-revokes it. The sealed token
+   * is never sent by a normal path again (owner approval (3), RT-215 10875).
+   * The two ways out are a re-pair with a new code, or the ONE user-initiated
+   * "Check again" that the server answers 2xx ({@link clearDeviceRevoked},
+   * RT-215 10897-A / 10906).
+   */
+  markDeviceRevoked(): RevokedTerminalScope | null;
+
+  /**
+   * RT-215 10897-A (owner approval 10906) — clear a revocation after the
+   * user-initiated "Check again" was answered 2xx. ONLY that flow calls it.
+   *
+   * Durable FIRST, then in memory: a failing row write is rethrown and the
+   * terminal stays revoked (fail closed). The pairing epoch changes, so a
+   * sign-in captured under the revocation stays stale. Returns the pairing's
+   * scope, or null (nothing done) when the terminal is not revoked.
+   */
+  clearDeviceRevoked(): RevokedTerminalScope | null;
+
+  /**
+   * RT-215 / Codex P1 4181556645 — SYNC: true while the pairing row is
+   * revoked (durable marker or the in-memory latch).
+   */
+  isDeviceRevoked(): boolean;
+
+  /**
+   * RT-215 / Codex P1 4181556645 — SYNC identity of the current USABLE
+   * pairing: null while unpaired or revoked; otherwise a value that changes on
+   * every pairing in this process (a re-pair, even of the same terminal id).
+   * Sign-in and takeover capture it at request start and re-check it right
+   * before creating the session, so a late success under a revoked or
+   * replaced pairing is dropped. Not a secret; never leaves the main process.
+   */
+  getPairingEpoch(): string | null;
+
+  /** See {@link PairingStore.getStoredPairingEpoch} (required on the real store). */
+  getStoredPairingEpoch(): number | null;
+
+  /**
+   * RT-306 — SYNC identity of the STORED pairing row whatever its status,
+   * revoked included; null when no row exists. For the "Check again" token read
+   * only, which runs while revoked: it sends nothing unless the sealed token is
+   * bound to this row. Not a secret; never leaves the main process.
+   */
+  getStoredPairingBinding(): PairingBinding | null;
+}
+
 export interface PersistInput extends TerminalAssignmentRow {
   /** Opaque server-issued token. SECRET — never logged. */
   device_token: string;
@@ -153,14 +266,86 @@ export interface CreatePairingStoreOptions {
    * key name without a code-wide find/replace.
    */
   deviceTokenKey: SecretKey;
+  /** RT-215 — wall clock for `device_revoked_at`. Defaults to `new Date()`. */
+  now?: () => Date;
 }
 
-export function createPairingStore(options: CreatePairingStoreOptions): PairingStore {
+type TokenState =
+  | { kind: 'present'; opened: OpenedDeviceToken }
+  | { kind: 'absent' }
+  | { kind: 'decrypt_failed' };
+
+/**
+ * The status of an UNREVOKED row and the token half (the revoked check runs
+ * first, before and after the token read — see `getStatus`).
+ */
+function statusFrom(tokenState: TokenState, row: StoredAssignmentRow | null): PairingStatus {
+  // decrypt_failed dominates the rest: the operator's first concern is
+  // "the SecretStore is unhealthy on this machine". The orphan
+  // direction beneath does not matter for the recovery flow.
+  if (tokenState.kind === 'decrypt_failed') return { kind: 'invalid', reason: 'decrypt_failed' };
+  const tokenPresent = tokenState.kind === 'present';
+  if (row === null)
+    return tokenPresent ? { kind: 'invalid', reason: 'missing_token' } : { kind: 'unpaired' };
+  if (tokenState.kind !== 'present') return { kind: 'invalid', reason: 'orphaned_row' };
+  // RT-306: a token sealed for another pairing (a crash mid-re-pair) or one that
+  // cannot be read back is never reported paired, so it is never sent.
+  const { opened } = tokenState;
+  if (opened.kind === 'malformed') return INCONSISTENT_STATUS;
+  if (opened.kind === 'bound' && !sameBinding(opened.binding, row)) return INCONSISTENT_STATUS;
+  return {
+    kind: 'paired',
+    tenant_id: row.tenant_id,
+    branch_id: row.branch_id,
+    terminal_id: row.terminal_id,
+    terminal_label: row.terminal_label,
+    paired_at: row.paired_at,
+  };
+}
+
+const DEVICE_REVOKED_STATUS: PairingStatus = { kind: 'invalid', reason: 'device_revoked' };
+
+/** RT-306 — getStatus re-reads at most this often while the row keeps changing. */
+const STATUS_READ_ATTEMPTS = 3;
+
+function sameStoredPairing(a: PairingBinding | null, b: PairingBinding | null): boolean {
+  return a === null || b === null ? a === b : sameBinding(a, b);
+}
+const INCONSISTENT_STATUS: PairingStatus = { kind: 'invalid', reason: 'inconsistent' };
+
+export function createPairingStore(
+  options: CreatePairingStoreOptions,
+): PairingStore & DeviceRevocationStore {
   const { secretStore, db, deviceTokenKey } = options;
+  const now = options.now ?? ((): Date => new Date());
+  /**
+   * RT-215 — set by markDeviceRevoked() BEFORE the row write, cleared by a
+   * re-pair (persist) or clear(). Makes the revocation take effect in this
+   * process even if the durable write fails.
+   */
+  let revokedInMemory = false;
+  /** RT-215 — bumped on every persist/clear/revoke; part of the pairing epoch. */
+  let generation = 0;
+
+  function rowRevoked(row: StoredAssignmentRow): boolean {
+    return revokedInMemory || typeof row.device_revoked_at === 'number';
+  }
+
+  function storedBinding(): PairingBinding | null {
+    const row = db.readAssignment();
+    return row === null ? null : bindingOf(row);
+  }
+
+  /** SYNC: is the CURRENT row revoked (in-memory latch or durable marker)? */
+  function isRevokedNow(): boolean {
+    const row = db.readAssignment();
+    return row !== null && rowRevoked(row);
+  }
 
   /**
    * Read the token defensively. Returns:
-   *   - `{ kind: 'present', value: string }` if a non-empty value is held,
+   *   - `{ kind: 'present', opened }` if a non-empty value is held (RT-306:
+   *     opened, so its binding can be compared with the row),
    *   - `{ kind: 'absent' }` if no entry exists,
    *   - `{ kind: 'decrypt_failed' }` if get() rejects (DPAPI failure).
    *
@@ -168,13 +353,11 @@ export function createPairingStore(options: CreatePairingStoreOptions): PairingS
    * installation; it MUST NOT throw out of getStatus() — the renderer
    * needs to land on /pairing with a banner instead of crashing the boot.
    */
-  async function readTokenState(): Promise<
-    { kind: 'present' } | { kind: 'absent' } | { kind: 'decrypt_failed' }
-  > {
+  async function readTokenState(): Promise<TokenState> {
     try {
       const value = await secretStore.get(deviceTokenKey);
       if (value === null || value.length === 0) return { kind: 'absent' };
-      return { kind: 'present' };
+      return { kind: 'present', opened: openDeviceToken(value) };
     } catch {
       // We do NOT include the underlying error message in the result.
       // The error MAY contain ciphertext bytes or path data; treating
@@ -186,33 +369,36 @@ export function createPairingStore(options: CreatePairingStoreOptions): PairingS
 
   return {
     async getStatus(): Promise<PairingStatus> {
-      const tokenState = await readTokenState();
+      // RT-215 (review F7): the pairing row is the source of truth for
+      // revocation, and it is reported FIRST — whatever state the token half
+      // is in, even an undecryptable one, the terminal must re-pair.
+      if (isRevokedNow()) return DEVICE_REVOKED_STATUS;
 
-      // decrypt_failed dominates: the operator's first concern is
-      // "the SecretStore is unhealthy on this machine". The orphan
-      // direction beneath does not matter for the recovery flow.
-      if (tokenState.kind === 'decrypt_failed') {
-        return { kind: 'invalid', reason: 'decrypt_failed' };
+      // RT-306 (Codex P2 on #582): an asynchronous SecretStore can resolve a
+      // token read after a re-pair has replaced the row, and that stale token
+      // would look like a token/row mismatch. Read again while the row changed
+      // under the read; a stable row with a mismatched token is the real thing.
+      let status: PairingStatus = DEVICE_REVOKED_STATUS;
+      for (let attempt = 0; attempt < STATUS_READ_ATTEMPTS; attempt += 1) {
+        const before = storedBinding();
+        const tokenState = await readTokenState();
+        // Codex P1 4186568808: the revocation may have been latched while the
+        // token read was pending. Re-read the row after the await and check
+        // again, so `paired` is never reported for a revoked device.
+        if (isRevokedNow()) return DEVICE_REVOKED_STATUS;
+        const row = db.readAssignment();
+        status = statusFrom(tokenState, row);
+        if (sameStoredPairing(before, row === null ? null : bindingOf(row))) return status;
       }
+      return status;
+    },
 
-      const row = db.readAssignment();
-      const tokenPresent = tokenState.kind === 'present';
-      const rowPresent = row !== null;
+    getStoredPairingEpoch(): number | null {
+      return db.readAssignment()?.paired_at ?? null;
+    },
 
-      if (!tokenPresent && !rowPresent) return { kind: 'unpaired' };
-      if (tokenPresent && rowPresent) {
-        return {
-          kind: 'paired',
-          tenant_id: row.tenant_id,
-          branch_id: row.branch_id,
-          terminal_id: row.terminal_id,
-          terminal_label: row.terminal_label,
-          paired_at: row.paired_at,
-        };
-      }
-      // tokenPresent XOR rowPresent — orphan in one direction.
-      if (rowPresent) return { kind: 'invalid', reason: 'orphaned_row' };
-      return { kind: 'invalid', reason: 'missing_token' };
+    getStoredPairingBinding(): PairingBinding | null {
+      return storedBinding();
     },
 
     getCurrentTerminalId(): string | null {
@@ -235,8 +421,15 @@ export function createPairingStore(options: CreatePairingStoreOptions): PairingS
       // `invalid/missing_token`; the operator re-pairs and is back to
       // a consistent state. The reverse order would leave an orphaned
       // row instead — same recovery surface, different reason.
-      await secretStore.set(deviceTokenKey, input.device_token);
+      //
+      // RT-306: on a RE-pair the same crash leaves the new token beside the
+      // old row. The token is sealed with the identity of the pairing it was
+      // issued for, so getStatus() reports that as `invalid/inconsistent` and
+      // no reader hands it out.
+      await secretStore.set(deviceTokenKey, sealDeviceToken(input.device_token, input));
       try {
+        // RT-215: a re-pair replaces the whole row (INSERT OR REPLACE), so
+        // `device_revoked_at` returns to NULL with the new pairing.
         db.transaction(() => {
           db.writeAssignment({
             tenant_id: input.tenant_id,
@@ -261,6 +454,39 @@ export function createPairingStore(options: CreatePairingStoreOptions): PairingS
         });
         throw err;
       }
+      revokedInMemory = false;
+      generation += 1;
+    },
+
+    markDeviceRevoked(): RevokedTerminalScope | null {
+      const row = db.readAssignment();
+      if (row === null) return null;
+      // In memory FIRST: the token stops being sendable at once, even if the
+      // durable write below throws (the caller logs that failure).
+      revokedInMemory = true;
+      generation += 1;
+      db.markDeviceRevoked(Math.floor(now().getTime() / 1000));
+      return { tenant_id: row.tenant_id, branch_id: row.branch_id, terminal_id: row.terminal_id };
+    },
+
+    clearDeviceRevoked(): RevokedTerminalScope | null {
+      const row = db.readAssignment();
+      if (row === null || !rowRevoked(row)) return null;
+      // Durable first: if this throws, the in-memory latch stays set.
+      db.clearDeviceRevoked();
+      revokedInMemory = false;
+      generation += 1;
+      return { tenant_id: row.tenant_id, branch_id: row.branch_id, terminal_id: row.terminal_id };
+    },
+
+    isDeviceRevoked(): boolean {
+      return isRevokedNow();
+    },
+
+    getPairingEpoch(): string | null {
+      const row = db.readAssignment();
+      if (row === null || rowRevoked(row)) return null;
+      return `${String(generation)}|${row.terminal_id}|${String(row.paired_at)}`;
     },
 
     async clear(): Promise<void> {
@@ -268,14 +494,14 @@ export function createPairingStore(options: CreatePairingStoreOptions): PairingS
       // correctness — clear() is the only path that wipes state and
       // there is no in-flight reader to race with.
       //
-      // T072 / US7 seam — deferred 401-interceptor hook:
-      // A future interceptor (post-US7) MAY call clear() automatically
-      // when the backend returns 401 on a paired request. When that
-      // feature lands, wire the call here — do NOT call clear() from
-      // the IPC handler or from network.ts. clear() owns no logger call
-      // by design (FR-8 / T071); the interceptor is responsible for its
-      // own log record before invoking this method.
+      // RT-215 (supersedes the T072 / US7 "clear() on 401" seam): a
+      // confirmed device 401 does NOT clear pairing state. It calls
+      // markDeviceRevoked(), which keeps the token sealed (never sent again;
+      // recovery is a re-pair with a new code) and keeps the row for the
+      // recovery screen. clear() owns no logger call by design (FR-8 / T071).
       db.deleteAssignment();
+      revokedInMemory = false;
+      generation += 1;
       await secretStore.delete(deviceTokenKey);
     },
   };
@@ -292,23 +518,27 @@ export function createPairingStore(options: CreatePairingStoreOptions): PairingS
  * `0003_terminal_assignment`.
  */
 export function bindPairingStoreDb(handle: DatabaseHandle): PairingStoreDb {
-  type SelectStmt = { get(): TerminalAssignmentRow | undefined };
+  type SelectStmt = { get(): StoredAssignmentRow | undefined };
   type RunStmt = { run(...params: unknown[]): unknown };
 
   let selectStmt: SelectStmt | null = null;
   let insertStmt: RunStmt | null = null;
   let deleteStmt: RunStmt | null = null;
+  let revokeStmt: RunStmt | null = null;
+  let unrevokeStmt: RunStmt | null = null;
 
   return {
-    readAssignment(): TerminalAssignmentRow | null {
+    readAssignment(): StoredAssignmentRow | null {
       // SELECT projects all 11 columns (5 baseline from 0003 + 6 added
       // by migration 0027). The new columns are NULLABLE at the SQL
       // layer; better-sqlite3 returns SQL NULL as JS `null` directly,
       // which matches the `string | null` shape on TerminalAssignmentRow.
+      // RT-215: + `device_revoked_at` (migration 0042).
       selectStmt ??= handle.prepare(
         `SELECT tenant_id, branch_id, terminal_id, terminal_label, paired_at,
                 branch_name, branch_address, tenant_tax_registration_id,
-                printer_vendor_id, printer_product_id, printer_com_port
+                printer_vendor_id, printer_product_id, printer_com_port,
+                device_revoked_at
          FROM terminal_assignment WHERE id = 1`,
       ) as SelectStmt;
       const row = selectStmt.get();
@@ -342,6 +572,22 @@ export function bindPairingStoreDb(handle: DatabaseHandle): PairingStoreDb {
     deleteAssignment(): void {
       deleteStmt ??= handle.prepare('DELETE FROM terminal_assignment WHERE id = 1') as RunStmt;
       deleteStmt.run();
+    },
+    markDeviceRevoked(atEpochSeconds: number): void {
+      // Keeps the FIRST confirmation time; a re-pair's INSERT OR REPLACE
+      // resets the column to NULL.
+      revokeStmt ??= handle.prepare(
+        `UPDATE terminal_assignment SET device_revoked_at = ?
+         WHERE id = 1 AND device_revoked_at IS NULL`,
+      ) as RunStmt;
+      revokeStmt.run(atEpochSeconds);
+    },
+    clearDeviceRevoked(): void {
+      // RT-215 10897-A — a row update; no schema change (migration 0042's column).
+      unrevokeStmt ??= handle.prepare(
+        'UPDATE terminal_assignment SET device_revoked_at = NULL WHERE id = 1',
+      ) as RunStmt;
+      unrevokeStmt.run();
     },
     transaction<T>(fn: () => T): T {
       // better-sqlite3's transaction() returns a wrapped callable.

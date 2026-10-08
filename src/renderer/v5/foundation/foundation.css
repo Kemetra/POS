@@ -36,6 +36,26 @@
   --v5-text-meta: var(--font-size-xs);
   --v5-text-muted: var(--color-text-muted);
 
+  /*
+   * RT-241 (VN-S2) — role aliases (freeze 15 §4, DESIGN.md typography and
+   * Motion). Aliases only: each resolves to a shipped token, no value changes.
+   * Target values for later bounded slices belong to UX-02/03/04.
+   */
+  --type-amount-hero: var(--font-size-4xl);
+  --type-amount-total: var(--font-size-3xl);
+  --type-screen-title: var(--font-size-xl);
+  --type-section: var(--font-size-md);
+  --type-control-lg: var(--font-size-md);
+  --type-body: var(--font-size-sm);
+  --type-money-row: var(--font-size-sm);
+  --type-meta: var(--font-size-xs);
+  --type-kbd: var(--font-size-2xs);
+  --motion-press: var(--duration-1);
+  --motion-flash: var(--duration-2);
+  --motion-notice-in: var(--duration-2);
+  --motion-dialog-in: var(--duration-3);
+  --motion-ease: var(--ease-out);
+
   font-family: var(--font-family-sans);
   color: var(--color-text);
   background: var(--v5-surface-page);
@@ -47,6 +67,16 @@
     --v5-nav-inline-size: 140px;
     --v5-gutter: var(--space-2);
     --v5-gap: var(--space-2);
+  }
+}
+
+/* Reduced motion: every motion role is zero; the state change stays visible by colour and text. */
+@media (prefers-reduced-motion: reduce) {
+  .v5-frame {
+    --motion-press: 0ms;
+    --motion-flash: 0ms;
+    --motion-notice-in: 0ms;
+    --motion-dialog-in: 0ms;
   }
 }
 

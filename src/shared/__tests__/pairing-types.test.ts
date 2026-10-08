@@ -18,8 +18,9 @@ describe('PAIRING_IPC_CHANNELS', () => {
     expect(PAIRING_IPC_CHANNELS.SUBMIT).toBe('pairing:submit');
   });
 
-  it('contains exactly two channels (no namespace creep at the foundational layer)', () => {
-    expect(Object.keys(PAIRING_IPC_CHANNELS)).toHaveLength(2);
+  it('contains exactly three channels (RT-215 10897-A added RECHECK; no other namespace creep)', () => {
+    expect(PAIRING_IPC_CHANNELS.RECHECK).toBe('pairing:recheck');
+    expect(Object.keys(PAIRING_IPC_CHANNELS)).toHaveLength(3);
   });
 
   it('every channel name is namespaced under "pairing:" (Constitution III hygiene)', () => {
@@ -35,6 +36,7 @@ describe('PAIRING_IPC_CHANNELS', () => {
     const channels: ReadonlyArray<PairingIpcChannel> = [
       PAIRING_IPC_CHANNELS.GET_STATUS,
       PAIRING_IPC_CHANNELS.SUBMIT,
+      PAIRING_IPC_CHANNELS.RECHECK,
     ];
     expect(channels).toContain('pairing:get-status');
     expect(channels).toContain('pairing:submit');
