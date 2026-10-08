@@ -9,6 +9,7 @@ import type { Database as SqlJsDatabase } from 'sql.js';
 import type { DatabaseHandle } from '../../../../../src/main/db/client.js';
 
 export function makeSqlJsHandle(db: SqlJsDatabase): DatabaseHandle {
+  let depth = 0;
   return {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     pragma(_sql: string): unknown {
@@ -60,17 +61,27 @@ export function makeSqlJsHandle(db: SqlJsDatabase): DatabaseHandle {
     },
 
     transaction<T extends (...args: never[]) => unknown>(fn: T): T {
-      // sql.js supports SAVEPOINT-style transactions; for our test usage
-      // a single-level BEGIN/COMMIT around the callback is sufficient and
-      // mirrors better-sqlite3's transaction wrapper return semantics.
+      // Mirrors better-sqlite3's wrapper: the outermost call is BEGIN/COMMIT,
+      // a nested call (a transaction function invoked inside another) is a
+      // SAVEPOINT that rolls back only its own writes on throw.
       return ((...args: unknown[]): unknown => {
-        db.run('BEGIN');
+        const nested = depth > 0;
+        const savepoint = `sp_${String(depth)}`;
+        db.run(nested ? `SAVEPOINT ${savepoint}` : 'BEGIN');
+        depth += 1;
         try {
           const result = (fn as (...a: unknown[]) => unknown)(...args);
-          db.run('COMMIT');
+          depth -= 1;
+          db.run(nested ? `RELEASE ${savepoint}` : 'COMMIT');
           return result;
         } catch (err) {
-          db.run('ROLLBACK');
+          depth -= 1;
+          if (nested) {
+            db.run(`ROLLBACK TO ${savepoint}`);
+            db.run(`RELEASE ${savepoint}`);
+          } else {
+            db.run('ROLLBACK');
+          }
           throw err;
         }
       }) as unknown as T;

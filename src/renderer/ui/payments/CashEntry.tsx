@@ -4,10 +4,11 @@ import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
+import { normalizeNumericInput } from '../forms/normalize-digits.js';
 import { quickAmounts } from '../../../shared/payments/quick-amounts.js';
 import { AmountPad } from './AmountPad.js';
-import { MoneyRoll } from './MoneyRoll.js';
 import { formatCheckoutMoney } from './format-checkout-money.js';
+import { PinnedPrimary } from './CheckoutActionBar.js';
 
 /**
  * 006-payments-tender Slice 2 + S3d T151 — <CashEntry>.
@@ -45,6 +46,14 @@ export interface CashEntryProps {
   tenderApply?: (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
   /** Fires with the `{ kind: 'ok', ... }` response on successful apply. */
   onApplied?: (response: Extract<TenderApplyResponse, { kind: 'ok' }>) => void;
+  /**
+   * RT-237 — the change main computed for the lines already applied, summed
+   * from the payment projection (`change_due_minor`). Once the attempt is fully
+   * tendered the remaining balance is 0, so re-deriving the change from the
+   * typed amount here would return the amount RECEIVED. From that point the
+   * row shows this value instead and never recomputes.
+   */
+  appliedChangeDueMinor?: number;
 }
 
 export function CashEntry({
@@ -54,6 +63,7 @@ export function CashEntry({
   paymentAttemptId,
   tenderApply,
   onApplied,
+  appliedChangeDueMinor = 0,
 }: CashEntryProps): JSX.Element {
   const [rawInput, setRawInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
@@ -85,11 +95,18 @@ export function CashEntry({
     ? isPositive && isRemainingValid && remainingBalanceMinor > 0
     : isSufficient;
 
+  // RT-237: bridged and fully tendered (remaining 0) means the cash line is
+  // already applied — the change is main's, read back from the projection.
+  // Recomputing here would be `received − 0`, i.e. the amount received.
+  const isFullyTendered = isBridged && isRemainingValid && remainingBalanceMinor === 0;
+
   // computeChangeDueMinor throws on under-tender; only compute it when the
   // cash amount actually covers the remaining balance.
-  const changeDueMinor = isSufficient
-    ? computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)
-    : null;
+  const changeDueMinor = isFullyTendered
+    ? appliedChangeDueMinor
+    : isSufficient
+      ? computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)
+      : null;
 
   async function handleConfirm(): Promise<void> {
     if (!canConfirm || amountAppliedMinor === null) {
@@ -148,8 +165,9 @@ export function CashEntry({
       {/*
         v3.5 tender-slots / tender-row layout.
         The amount-received row wraps the AmountPad + quick-amount chips.
-        The totals row shows the change-due via MoneyRoll (engine-computed,
-        no client-side subtraction — computeChangeDueMinor owns the math).
+        The totals row shows the change-due as a static formatted value
+        (engine-computed, no client-side subtraction — computeChangeDueMinor
+        owns the math). RT-243 / UX-06: money is never animated.
       */}
       <div className="tender-slots">
         <div
@@ -160,7 +178,7 @@ export function CashEntry({
             className="tender-row__label cash-entry__amount-label"
             htmlFor="cash-entry-amount-input"
           >
-            المبلغ المستلم (Amount received, EGP)
+            المبلغ المستلم (<span dir="ltr">EGP</span>)
           </label>
           <span className="tender-row__value" style={{ minWidth: 240, flex: 1 }}>
             <input
@@ -172,7 +190,7 @@ export function CashEntry({
               autoComplete="off"
               value={rawInput}
               onChange={(e) => {
-                const next = e.target.value;
+                const next = normalizeNumericInput(e.target.value);
                 // Keystroke guard: digits + optional single decimal, ≤2 frac.
                 if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
                   setRawInput(next);
@@ -187,7 +205,6 @@ export function CashEntry({
             */}
             <AmountPad
               valueMinor={amountAppliedMinor}
-              totalMinor={isRemainingValid ? remainingBalanceMinor : 0}
               onChange={(next) => {
                 setRawInput(formatMinorToInput(next));
                 setBridgeRefusal(false);
@@ -243,7 +260,8 @@ export function CashEntry({
           </span>
         </div>
 
-        {/* Totals row: change-due animated via MoneyRoll (engine-computed).
+        {/* Totals row: change-due shown as a static value (engine-computed;
+            RT-243 / UX-06: money is never animated).
             Only rendered when change is actually owed (> 0); exact cash
             produces changeDueMinor = 0 which should not show the row. */}
         {changeDueMinor !== null && changeDueMinor > 0 && (
@@ -251,12 +269,13 @@ export function CashEntry({
             className="tender-row tender-row--totals cash-entry__change-due"
             data-testid="cash-entry-change-due"
           >
-            <span className="tender-row__label">الباقي للعميل (Change due)</span>
+            <span className="tender-row__label">الباقي للعميل</span>
             <span
               dir="ltr"
               className="tender-row__value cash-entry__change-due-value change-row__value--positive"
+              data-testid="cash-entry-change-due-value"
             >
-              <MoneyRoll valueMinor={changeDueMinor} className="cash-entry__change-roll" /> EGP
+              {formatCheckoutMoney(changeDueMinor)}
             </span>
           </div>
         )}
@@ -276,31 +295,36 @@ export function CashEntry({
         </div>
       )}
 
-      {bridgeRefusal && (
-        <div
-          className="cash-entry__bridge-refusal"
-          data-testid="cash-entry-bridge-refusal"
-          role="status"
-          aria-live="polite"
-        >
-          تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
-        </div>
-      )}
-
       <div className="cash-entry__actions">
-        <button
-          type="button"
-          className="cash-entry__confirm"
-          data-testid="cash-entry-confirm"
-          style={{ minHeight: touchTarget.min }}
-          disabled={!canConfirm || isApplying}
-          aria-disabled={!canConfirm || isApplying ? 'true' : undefined}
-          onClick={() => {
-            void handleConfirm();
-          }}
-        >
-          تأكيد الدفع النقدي (Confirm cash payment)
-        </button>
+        {/* RT-238: while money is still owed this is the primary action and it
+            lives in the pinned slot; PaymentSurface decides who owns the slot. */}
+        <PinnedPrimary>
+          {/* The refusal travels with the apply, so it is never below the fold
+              while the button is pinned (Codex P2 on #569). */}
+          {bridgeRefusal && (
+            <div
+              className="cash-entry__bridge-refusal"
+              data-testid="cash-entry-bridge-refusal"
+              role="status"
+              aria-live="polite"
+            >
+              تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
+            </div>
+          )}
+          <button
+            type="button"
+            className="cash-entry__confirm checkout-commit"
+            data-testid="cash-entry-confirm"
+            style={{ minHeight: touchTarget.commit }}
+            disabled={!canConfirm || isApplying}
+            aria-disabled={!canConfirm || isApplying ? 'true' : undefined}
+            onClick={() => {
+              void handleConfirm();
+            }}
+          >
+            تأكيد الدفع النقدي
+          </button>
+        </PinnedPrimary>
         {onBack !== undefined && (
           <button
             type="button"

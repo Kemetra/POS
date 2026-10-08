@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import '@testing-library/jest-dom/vitest';
 
 import { PrinterFailureBanner } from '../PrinterFailureBanner.js';
-import { DrawerFailureBanner } from '../DrawerFailureBanner.js';
 import type { ReceiptsBridgeAPI } from '../../../../shared/bridge-api.js';
 
 afterEach(cleanup);
@@ -30,8 +29,8 @@ describe('022 US4 — operational failure affordances', () => {
     const banner = screen.getByTestId('printer-failure-banner');
     expect(banner).toHaveClass('v4-row');
     expect(banner).toHaveTextContent('فشل طباعة الإيصال');
-    expect(within(banner).getByRole('button', { name: /reprint/i })).toBeDisabled();
-    fireEvent.click(within(banner).getByRole('button', { name: /retry print/i }));
+    expect(within(banner).getByRole('button', { name: 'نسخة' })).toBeDisabled();
+    fireEvent.click(within(banner).getByRole('button', { name: 'إعادة المحاولة' }));
     await waitFor(() => {
       expect(retryPrint).toHaveBeenCalledWith({ sale_id: 'sale-1', idempotency_key: 'key-1' });
     });
@@ -39,21 +38,6 @@ describe('022 US4 — operational failure affordances', () => {
     expect(reprint).not.toHaveBeenCalled();
   });
 
-  it('keeps drawer failure persistent with its manual recovery action', () => {
-    const onManualOverride = vi.fn();
-    render(
-      <DrawerFailureBanner
-        drawerFailure={{ sale_id: 'sale-2', last_successful_open_at: null }}
-        onManualOverride={onManualOverride}
-        now="2026-09-23T00:00:00.000Z"
-      />,
-    );
-
-    const banner = screen.getByTestId('drawer-failure-banner');
-    expect(banner).toHaveClass('v4-row');
-    expect(banner).toHaveTextContent('لم يفتح درج النقود');
-    fireEvent.click(within(banner).getByRole('button', { name: /manual receipt/i }));
-    expect(onManualOverride).toHaveBeenCalledWith('sale-2');
-    expect(banner).toBeInTheDocument();
-  });
+  // RT-241 (D-B1): the drawer failure is no longer a persistent banner. Its
+  // manual recovery action is covered by DrawerNotice.test.tsx.
 });

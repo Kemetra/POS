@@ -1,0 +1,402 @@
+openapi: 3.1.0
+info:
+  title: Data-Pulse-2 POS Terminal Pairing API
+  version: "1.0.0-draft"
+  description: >
+    POS-Pulse 002-terminal-pairing + 008-sale-finalization-and-receipts
+    terminal pairing surface. Defines the single unauthenticated
+    operation that bootstraps the trust relationship between a POS
+    terminal and the backend.
+
+
+    `posPairTerminal` accepts a short-lived `pairing_code` and — on
+    success — returns the device's long-lived `device_token` (SECRET)
+    plus the terminal's full tenant + store binding + display +
+    operational config. The endpoint is the ONLY backend operation
+    that runs WITHOUT a prior `clerkJwt`; every other POS operation
+    is `clerkJwt`-authenticated (see the "Authentication boundary"
+    note below for the full auth posture). The terminal MUST store
+    the returned `device_token` in OS-level secret storage (Electron
+    `safeStorage` / DPAPI on Windows) and MUST NEVER log or echo it
+    to the renderer.
+
+
+    **Why this is unauthenticated**: pairing IS the bootstrap step.
+    The terminal has no token before this call; the `pairing_code`
+    itself is the one-time-use credential. Each successful pair
+    burns the code server-side (state transition `pending → used`),
+    so a code cannot be replayed. Rate-limiting is per source IP
+    + per `pairing_code` to defeat brute-force enumeration.
+
+
+    **POS-Pulse-consumed fields (Constitution §IV + POS-Pulse FR-014
+    + 008 plan §AD-12)**:
+      - `device_token`: opaque long-lived bearer. SECRET — stored
+        exclusively via `safeStorage`; redacted in every log sink.
+      - `tenant_id`, `branch_id`, `terminal_id`, `terminal_label`:
+        populate the single-row `terminal_assignment` table at the
+        terminal. Lifetime: until clear-pairing.
+      - `expires_at`: optional ISO-8601 expiry hint. POS-Pulse v1
+        ignores this field; reserved for future device-rotation
+        feature.
+      - `branch_name`, `branch_address`, `tenant_tax_registration_id`:
+        terminal-resident copies of branch + tenant detail used by the
+        POS receipt template (008 AD-6). The terminal does NOT re-fetch
+        these per sale — they are pinned at pair-time and read from
+        the local `terminal_assignment` row when finalising sales.
+        Egyptian Tax Authority e-invoicing rules require the
+        tax-registration number on every fiscal receipt; the field is
+        a string so the format can evolve (current ETA spec: 9-digit
+        numeric, but the contract is intentionally permissive at the
+        string level).
+      - `printer_vendor_id`, `printer_product_id`, `printer_com_port`:
+        terminal-resident printer config used by the POS print pipeline
+        (008 AD-1 / Slice 3). The vendor + product IDs are USB
+        identifiers in hex string form (e.g. `0x04B8` for Epson) and
+        are ALWAYS required — every supported printer model in
+        008 v1 is USB-connected (per docs/hardware-matrix.md, the
+        committed pair is Epson TM-T20III + APG VBS320, both USB).
+        The `printer_com_port` is an OPTIONAL additional field set
+        ONLY when an RS-232 serial path is also available alongside
+        the USB connection (some Epson models expose both); it is
+        sent as `null` for USB-only printers. The contract enforces:
+        `printer_vendor_id` non-null, `printer_product_id` non-null,
+        `printer_com_port` nullable string. A "COM-port-only" terminal
+        config is NOT permitted by this contract in 008 v1; pure-serial
+        printer support would require a future contract revision.
+
+
+    Authentication boundary: this surface is the ONLY backend operation
+    callable without `clerkJwt` or any device-bound bearer. All other
+    POS operations (sign-in, sales finalization, receipts, etc.) are
+    `clerkJwt`-authenticated. Backend-Core enforces both a durable
+    per-`pairing_code` attempt budget and a Redis-backed per-source-IP
+    window before code lookup. Source IP is derived using the deployment's
+    explicit trusted-proxy configuration per FR-9.
+
+
+    Idempotency model: the contract does NOT require an
+    `Idempotency-Key` header. Each `pairing_code` is server-side
+    single-use; replaying a successful pair with the same code
+    returns 410 `EXPIRED_CODE` (the code was consumed) rather than
+    a replayed device_token. This is the deliberate choice in
+    POS-Pulse spec 002 — a terminal that loses its token MUST
+    request a fresh pairing code from a tenant admin, not re-pair
+    with the same code.
+
+
+    PII / secret discipline (POS-Pulse Constitution §VII + FR-9):
+    the `device_token` MUST NOT appear in any log sink, support
+    bundle, response body of any other endpoint, or audit-event
+    payload. It is sourced ONLY from this endpoint's success
+    response and is consumed ONLY by the terminal's `safeStorage`.
+    The `pairing_code` itself is similarly sensitive in transit;
+    it never appears in logs or audit events.
+
+servers:
+  - url: https://api.example.com
+
+tags:
+  - name: pos-terminal-pairing
+    description: >
+      POS Terminal Pairing — the single unauthenticated bootstrap
+      operation that establishes the terminal's `device_token`
+      and tenant/branch/printer binding.
+
+paths:
+  /api/pos/v1/terminals/pair:
+    post:
+      summary: Pair a POS terminal using a short-lived pairing code.
+      operationId: posPairTerminal
+      tags: [pos-terminal-pairing]
+      security: []
+      description: >
+        Consume a one-time `pairing_code` (issued out-of-band by a
+        tenant admin via the dashboard) and bind the requesting
+        terminal to the tenant + branch the code was scoped to. The
+        success response carries the long-lived `device_token` plus
+        the terminal's full operational config.
+
+
+        **Failure-response error codes** (closed set, mirrors POS-Pulse
+        `src/main/pairing/failure-mapping.ts` switch keys):
+        `INVALID_CODE`, `EXPIRED_CODE`, `ALREADY_PAIRED`,
+        `BRANCH_MISMATCH`, `RATE_LIMITED`, `validation_failure`.
+
+
+        **State transitions**: on success the `pairing_code` row
+        transitions `pending → used`; a subsequent call with the same
+        code returns 410 `EXPIRED_CODE`. The terminal's
+        `terminal_assignment` row is created server-side; on
+        re-pairing of an already-paired terminal under the SAME
+        branch the response is 409 `ALREADY_PAIRED` (NOT a fresh
+        token); under a DIFFERENT branch the response is 409
+        `BRANCH_MISMATCH` (FR-14 — re-pair to a different branch
+        is admin-driven; the device retains its previously persisted
+        terminal_assignment row).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TerminalPairRequest"
+      responses:
+        "200":
+          description: >
+            Pairing succeeded. Body carries the long-lived
+            `device_token` (SECRET) plus the full terminal binding.
+            The token MUST be persisted in OS-level secret storage
+            and MUST NEVER be logged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerminalPairResponse"
+        "400":
+          description: >
+            Validation failure. `error.code = "validation_failure"`.
+            The request body did not match `TerminalPairRequest`
+            (e.g. missing `pairing_code`, malformed shape).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: >
+            Pairing code not found for any active tenant.
+            `error.code = "INVALID_CODE"`. Cross-tenant probes share
+            this non-disclosing response per Data-Pulse-2
+            Constitution §XIV.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: >
+            Conflict. The terminal is already paired (under the
+            requesting code's branch or a different branch).
+            `error.code` is one of `ALREADY_PAIRED`, `BRANCH_MISMATCH`.
+            Note: `BRANCH_MISMATCH` MUST NOT clear or replace the
+            prior pairing — recovery is admin-driven per POS-Pulse
+            FR-14.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: >
+            The pairing code is no longer redeemable (already used,
+            or admin-cancelled). `error.code = "EXPIRED_CODE"`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: >
+            Rate-limit exceeded for this pairing code or source IP.
+            `error.code = "RATE_LIMITED"`. The `Retry-After` header
+            carries the recommended back-off in seconds.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+                maximum: 300
+              description: >
+                Seconds to wait before retrying. POS-Pulse clamps this
+                value to `[1, 300]` defensively per the
+                `network.ts` parsing rules.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    TerminalPairRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - pairing_code
+      properties:
+        pairing_code:
+          type: string
+          minLength: 6
+          maxLength: 32
+          description: >
+            Short-lived pairing code issued by a tenant admin via the
+            dashboard. Format is opaque to the POS terminal (server
+            chooses; current default is 8 character alphanumeric).
+            Single-use: a successful pair burns the code server-side.
+
+    TerminalPairResponse:
+      type: object
+      additionalProperties: false
+      description: >
+        Successful pairing envelope. The `device_token` is a SECRET —
+        stored only via the terminal's OS secret storage, never
+        logged or echoed to any renderer. All other fields populate
+        the single-row `terminal_assignment` table at the terminal
+        and are read by the POS receipt + print pipelines.
+      required:
+        - device_token
+        - tenant_id
+        - branch_id
+        - terminal_id
+        - terminal_label
+        - branch_name
+        - branch_address
+        - tenant_tax_registration_id
+        - printer_vendor_id
+        - printer_product_id
+        - printer_com_port
+      properties:
+        device_token:
+          type: string
+          minLength: 32
+          maxLength: 512
+          description: >
+            Long-lived opaque device-authentication token. SECRET —
+            stored exclusively via `safeStorage` (DPAPI on Windows).
+            MUST NEVER appear in any log sink, audit-event payload,
+            support bundle, or response body of any other endpoint.
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            Optional ISO-8601 expiry hint. POS-Pulse v1 ignores this
+            field; reserved for a future device-rotation feature
+            that may pre-fetch a fresh token before this timestamp.
+        tenant_id:
+          type: string
+          format: uuid
+          description: >
+            Tenant the terminal is bound to. Persisted in the local
+            `terminal_assignment` row; included in every subsequent
+            POS-authenticated request via the JWT principal.
+        branch_id:
+          type: string
+          format: uuid
+          description: >
+            Branch (store) the terminal is bound to. Persisted in
+            `terminal_assignment`. Cross-branch operations are
+            refused at the backend per Data-Pulse-2 §II
+            multi-tenant RLS.
+        terminal_id:
+          type: string
+          format: uuid
+          description: >
+            Stable identifier for this physical terminal. Survives
+            re-pairing under the same branch (re-pair returns
+            `ALREADY_PAIRED`).
+        terminal_label:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: >
+            Human-readable terminal name (e.g. "Counter 1"). Printed
+            on receipts per POS-Pulse 008 AD-7 sale-number format
+            (`<terminal_label>-<YYYY-MM-DD>-<NNNNNN>`).
+        branch_name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: >
+            Human-readable branch / store name (e.g. "Maadi Pharmacy
+            Branch 3"). Printed on receipts per POS-Pulse 008 AD-6.
+            Added 2026-05-28 to satisfy the Slice 1 closeout-gap
+            audit finding.
+        branch_address:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: >
+            Human-readable branch address (free-form, multi-line
+            permitted via `\n`). Printed on receipts per POS-Pulse
+            008 AD-6. Added 2026-05-28 to satisfy the Slice 1
+            closeout-gap audit finding.
+        tenant_tax_registration_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: >
+            Tenant's tax-registration identifier (Egyptian Tax
+            Authority format: 9-digit numeric, but stored as string
+            for forward compatibility with other jurisdictions and
+            ETA spec evolution). Printed on every fiscal receipt
+            per Egyptian e-invoicing rules. Added 2026-05-28 to
+            satisfy the Slice 1 closeout-gap audit finding.
+        printer_vendor_id:
+          type: string
+          minLength: 4
+          maxLength: 8
+          pattern: "^0x[0-9A-Fa-f]{4}$"
+          description: >
+            USB vendor ID of the receipt printer, as a hex string
+            (e.g. `0x04B8` for Epson). Used by the POS print pipeline
+            (008 Slice 3) to discover the printer at app startup.
+            Added 2026-05-28 to satisfy the Slice 3 prep-audit
+            finding on printer-config provenance.
+        printer_product_id:
+          type: string
+          minLength: 4
+          maxLength: 8
+          pattern: "^0x[0-9A-Fa-f]{4}$"
+          description: >
+            USB product ID of the receipt printer, as a hex string
+            (e.g. `0x0202` for Epson TM-T20III). Paired with
+            `printer_vendor_id` to uniquely identify the device.
+            Added 2026-05-28 to satisfy the Slice 3 prep-audit
+            finding.
+        printer_com_port:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 32
+          description: >
+            OPTIONAL additional COM port (e.g. `COM3` on Windows,
+            `/dev/ttyS0` on Linux) set ONLY when an RS-232 serial path
+            is also available alongside the required USB connection
+            (some Epson models expose both). NULL for USB-only
+            printers. `printer_vendor_id` + `printer_product_id`
+            remain required regardless — a "COM-port-only" terminal
+            config is NOT permitted by this contract in 008 v1. Added
+            2026-05-28 to satisfy the Slice 3 prep-audit finding.
+
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      description: >
+        Canonical error envelope shared with `auth.openapi.yaml`,
+        `outbox.openapi.yaml`, `catalog/unknown-items.yaml`,
+        `pos-payments/vouchers.yaml`, and the other backend
+        contracts. The `error.code` enum is the closed set
+        documented per-operation above.
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable error code.
+              enum:
+                - INVALID_CODE
+                - EXPIRED_CODE
+                - ALREADY_PAIRED
+                - BRANCH_MISMATCH
+                - RATE_LIMITED
+                - validation_failure
+            message:
+              type: string
+              description: Human-readable summary; no sensitive data.
+            request_id:
+              type: string
+              format: uuid
+              nullable: true
+              description: Server-assigned correlation id.

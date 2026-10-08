@@ -2,10 +2,34 @@
 // is a planning snapshot and is NOT re-synced after this file exists.
 import type { LogRecord } from './log-record.js';
 import type { AppConfig } from './app-config.js';
-import type { PairingStatus, PairingSubmitResult } from './pairing-types.js';
+import type {
+  PairingStatus,
+  PairingRecheckResult,
+  PairingStatusChangedEvent,
+  PairingSubmitResult,
+} from './pairing-types.js';
 import type { Role } from './operator/role.js';
 import type { OperatorRefusal } from './audit/event-shape.js';
 import type { ForcedCloseReason } from './audit/payload-schemas.js';
+import type { ReturnsBridgeAPI } from './returns/types.js';
+import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
+
+export type {
+  ReturnJournalView,
+  ReturnLineInput,
+  ReturnQuoteView,
+  ReturnableSaleView,
+  ReturnsBridgeAPI,
+  ReturnsListResponse,
+  ReturnsLookupRequest,
+  ReturnsLookupResponse,
+  ReturnsQuoteRequest,
+  ReturnsQuoteResponse,
+  ReturnsRefusalReason,
+  ReturnsResolveResponse,
+  ReturnsSubmitRequest,
+  ReturnsSubmitResponse,
+} from './returns/types.js';
 import type {
   SaleId,
   SaleNumber,
@@ -35,6 +59,10 @@ import type {
   CartVoidResponse,
   CartCancelPostHandoffRequest,
   CartCancelPostHandoffResponse,
+  CartReturnToSaleRequest,
+  CartReturnToSaleResponse,
+  CartReturnToSaleEligibilityRequest,
+  CartReturnToSaleEligibilityResponse,
   CartHandoffRequest,
   CartHandoffResponse,
   CartSubscribeRequest,
@@ -99,6 +127,23 @@ export interface PairingBridgeAPI {
    * the appropriate outcome category (US2 + US3-7).
    */
   submit(pairing_code: string): Promise<PairingSubmitResult>;
+
+  /**
+   * RT-215 — subscribe to the main → renderer `pairing:status-changed` push
+   * (a confirmed device revocation reached its routing point, or a pairing
+   * succeeded). The payload is `{ kind }` / `{ kind: 'invalid', reason }` only.
+   * Returns the unsubscribe function. Optional so test fakes that predate it
+   * stay valid; production preload always provides it.
+   */
+  onStatusChanged?(cb: (event: PairingStatusChangedEvent) => void): () => void;
+
+  /**
+   * RT-215 10897-A (owner approval 10906) — the user-initiated "Check again"
+   * on `/pairing` while the terminal is device-revoked. Takes nothing (the
+   * renderer only triggers it) and resolves `{ outcome }` only. Optional so
+   * test fakes that predate it stay valid; production preload provides it.
+   */
+  recheckRevocation?(): Promise<PairingRecheckResult>;
 }
 
 /**
@@ -128,6 +173,44 @@ export interface OperatorSessionBridgeView {
   branch_id: string;
   /** ISO 8601 UTC timestamp the session was issued. */
   started_at: string;
+}
+
+/**
+ * RT-117 (RT-116 §2.4) — same-operator unlock of the CURRENT locked session.
+ * Cashier sessions use `pin`; manager/admin sessions use the interim online
+ * credential re-auth (owner decision Z3; replaced by the RT-114 credential).
+ * Secrets in these requests are consumed by main and never logged (P11).
+ */
+export type UnlockSessionRequest =
+  | { method: 'pin'; pin: string }
+  | { method: 'online_credential'; identifier: string; password: string };
+
+export type UnlockSessionResponse = { kind: 'unlocked' } | OperatorRefusal;
+
+/**
+ * RT-117 (RT-116 §7.2) — the only read served while locked. Totals only:
+ * no line items, no names, no credentials. `summary` is null when the
+ * session has no open cart.
+ */
+export interface LockStateSummary {
+  line_count: number;
+  total_minor: number;
+  tender_applied_minor: number;
+  has_live_tender: boolean;
+}
+
+export interface LockStateView {
+  state: 'active' | 'locked' | 'signed_out';
+  locked_at: string | null;
+  /** Role of the locked session, so the lock screen offers the right unlock form. */
+  role: Role | null;
+  display_name: string | null;
+  summary: LockStateSummary | null;
+}
+
+/** RT-117 — main → renderer push payload on `operator:session-state`. */
+export interface SessionStateEvent {
+  state: 'active' | 'locked' | 'ended';
 }
 
 export interface SignInSuccessResponse {
@@ -197,7 +280,10 @@ export interface ResetCashierPinResponse {
  * 019-cashier-pin-provisioning — manager/admin FIRST-PIN provisioning for a
  * cashier on this terminal. Distinct from reset (which changes an existing
  * PIN): provisioning CREATES the row where none exists, born keyed on the
- * provider-neutral `user_id` (028 §16), never the Clerk subject. Create-only:
+ * provider-neutral `user_id` (028 §16), never the Clerk subject. The renderer
+ * names the cashier by the roster `id` it already holds (RT-235); main resolves
+ * the neutral `user_id` from the manager roster and it never crosses the
+ * bridge (Constitution VII). Create-only:
  * refuses (`state_invalid`) if any row already exists (incl. a legacy
  * clerk-keyed one). Refuses `not_ready` when the roster carries no `user_id`
  * yet (FR-11) — never falls back to a provider-coupled key. Validated
@@ -207,10 +293,12 @@ export interface ProvisionCashierPinRequest {
   /** Client-generated UUID v4 (P5 idempotency key). */
   event_id: string;
   /**
-   * The cashier to provision, by PROVIDER-NEUTRAL `user_id` (028 §16 =
-   * DP-2 `users.id`), as delivered on the roster entry — NOT the Clerk subject.
+   * The cashier to provision, by the roster `id` the renderer already holds
+   * (the provider subject / session `operator_id`, as in reset and unlock).
+   * Main maps it to the PROVIDER-NEUTRAL `user_id` (028 §16 = DP-2 `users.id`)
+   * delivered on the manager roster entry; that key never crosses the bridge.
    */
-  target_user_id: string;
+  target_cashier_id: string;
   /** Plaintext 4–6 digit PIN — consumed by the main-process verifier, never persisted or logged. */
   initial_pin: string;
 }
@@ -334,6 +422,13 @@ export interface BranchRosterCashier {
 
 export interface ListBranchRosterSuccess {
   kind: 'roster';
+  /**
+   * RT-113 (10763 §3) — where the roster came from: `online` = the
+   * device-authenticated Backend-Core roster (P2); `offline` = the cashiers
+   * with a valid offline grant on this terminal (P1/P3). Main always sets it;
+   * optional only so existing renderer fixtures stay valid.
+   */
+  source?: 'online' | 'offline';
   cashiers: BranchRosterCashier[];
 }
 
@@ -385,6 +480,26 @@ export interface OperatorBridgeAPI {
    * missing from the bridge surface).
    */
   _reportActivity(): void;
+
+  /**
+   * RT-117 (RT-116 §2.4) — same-operator unlock of the CURRENT locked session.
+   * Resumes the SAME session id. Generic refusal on any mismatch; the lock is
+   * unchanged. Secrets in the request are never logged (P11).
+   */
+  unlockSession(req: UnlockSessionRequest): Promise<UnlockSessionResponse>;
+
+  /**
+   * RT-117 (RT-116 §7.2) — lock state + preserved-sale TOTALS for the lock
+   * screen. The only operator read served while locked.
+   */
+  getLockState(): Promise<LockStateView>;
+
+  /**
+   * RT-117 (RT-116 §7.2) — subscribe to main → renderer session-state pushes
+   * (`locked` / `active` / `ended`). The callback receives the payload only.
+   * Returns an unsubscribe function.
+   */
+  onSessionStateChanged(cb: (event: SessionStateEvent) => void): () => void;
 
   /**
    * T048 — Emit one audit event to the local outbox.
@@ -604,22 +719,55 @@ export interface PreloadBridgeAPI {
    * WR-1). Optional for the same staged-wiring reason as the namespaces above.
    */
   salesSync?: SalesSyncBridgeAPI;
+
+  /**
+   * RT-15 S2: the cashier return flow (`returns.*`). Main-process gated on
+   * `POS_PULSE_FEATURE_RETURNS` (default off), an operator session and the
+   * manager/admin role; refused while the session is locked. Optional for the
+   * same staged-wiring reason as the namespaces above (the renderer flow is S3).
+   */
+  returns?: ReturnsBridgeAPI;
+
+  /**
+   * RT-17 slice 4: the shift cash-up (`shiftCashup.*`). Registered in main only
+   * with `POS_PULSE_FEATURE_SHIFT_CASHUP` on (default off); gated there on the
+   * flag and an unlocked operator session; refused while the session is
+   * locked. Nothing that reveals the expected cash crosses it (blind count).
+   * Optional for the same staged-wiring reason as the namespaces above.
+   */
+  shiftCashup?: ShiftCashupBridgeAPI;
 }
 
 /**
  * 011-sale-sync-capture-up: typed read-only `salesSync.*` namespace. No write
- * channel exists. The response carries counts + one timestamp only — no token,
- * PII, or raw error (P7).
+ * channel exists. The response carries counts + one timestamp + one closed-set
+ * paused code only — no token, PII, or raw error (P7).
  */
 export interface SalesSyncBridgeAPI {
   syncStatus(): Promise<SaleSyncStatusResponse>;
 }
 
-/** The read-only sync-status payload (mirrors main `SaleSyncStatusCounts`). */
+/** The read-only sync-status payload (mirrors main `SaleSyncStatusSnapshot`). */
 export interface SaleSyncStatusResponse {
+  /** Unsent sales of the current terminal (RT-221). */
   pending: number;
+  /**
+   * RT-221: unsent sales queued under an earlier pairing of this terminal (a
+   * different `terminal_id`). Held — never sent under the new device identity.
+   */
+  heldPreviousPairing: number;
+  /** Every dead-lettered sale, payload divergences included. */
   deadLetter: number;
+  /** RT-190: dead-lettered sales whose capture answered 409 (payload divergence). */
+  payloadDivergence: number;
   lastSuccessAt: string | null;
+  /**
+   * RT-224: why the sale-sync drain cannot send right now, as a closed-set code;
+   * null when it can. `no_operator_credential` = the current session holds no sale
+   * credential (no session, or a cashier session — RT-224), so sales stay pending.
+   * Additive: the fields above keep their meaning.
+   */
+  paused: 'no_operator_credential' | null;
 }
 
 /**
@@ -641,7 +789,10 @@ export interface CartBridgeAPI {
     setNote(req: CartLinesSetNoteRequest): Promise<CartLinesSetNoteResponse>;
   };
   discountPlaceholders: {
-    /** Adds a discount placeholder; may require manager attribution. */
+    /**
+     * Adds a discount placeholder; may require manager attribution. The
+     * approver is the authenticated session operator, never renderer-supplied.
+     */
     add(req: CartDiscountPlaceholdersAddRequest): Promise<CartDiscountPlaceholdersAddResponse>;
     /** Removes a discount placeholder; mirrors attribution rule of add. */
     remove(
@@ -658,6 +809,23 @@ export interface CartBridgeAPI {
    * caller fails closed when it is absent — never falling back to `void`.
    */
   cancelPostHandoff?(req: CartCancelPostHandoffRequest): Promise<CartCancelPostHandoffResponse>;
+  /**
+   * RT-26 — Checkout Back/Esc: returns the SAME `frozen_handed_off` cart to
+   * `editing`. Main refuses once any tender exists for the cart or a payment
+   * settled / was force-failed; a zero-funds started attempt is cancelled and
+   * the envelope invalidated in the same transaction. Optional on the TYPE
+   * only (same precedent as `cancelPostHandoff?`): the production preload
+   * always wires it, and the sole caller fails closed when it is absent.
+   */
+  returnToSale?(req: CartReturnToSaleRequest): Promise<CartReturnToSaleResponse>;
+  /**
+   * RT-26 — read-only: would main allow `returnToSale` for this cart and
+   * handoff now (no writes)? Checkout fails closed until it answers `true`.
+   * Optional on the TYPE only, like `returnToSale?`.
+   */
+  returnToSaleEligibility?(
+    req: CartReturnToSaleEligibilityRequest,
+  ): Promise<CartReturnToSaleEligibilityResponse>;
   /** Freezes the cart and constructs the PaymentIntentEnvelope. */
   handoff(req: CartHandoffRequest): Promise<CartHandoffResponse>;
   /** Push-style cart state updates (type-only in Phase 2; S1+ runtime). */

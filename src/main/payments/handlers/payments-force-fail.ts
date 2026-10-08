@@ -22,6 +22,7 @@
  * at `audit-emitter.ts` line 244-249 for `payment.force_failed`).
  */
 
+import { attemptActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { PaymentAttemptFsm } from '../fsm/payment-attempt-fsm.js';
@@ -96,7 +97,7 @@ export function createPaymentsForceFailHandler(
       payment_attempt_id: req.payment_attempt_id,
       tender_line_id: null,
       action_kind: 'payment.force_fail',
-      payload: { payment_attempt_id: req.payment_attempt_id },
+      payload: attemptActionPayload(req),
       // Acting operator on the outbox = manager (the actor that
       // authorised the force-fail). The original cashier remains on
       // `payment_attempts.acting_operator_id` (immutable since
@@ -163,13 +164,12 @@ export function createPaymentsForceFailHandler(
       },
     });
 
-    // CR-1: finalize the idempotency reservation by writing the
-    // outbox row. The `commit` callback was returned by
-    // `checkOrReserve` with `kind: 'fresh'`; calling it here closes
-    // the §P5 idempotency contract so a same-key retry observes
-    // `kind: 'replay'` instead of attempting a second FSM transition.
-    reservation.commit();
-
+    // No `reservation.commit()` here: `paymentAttemptFsm.forceFail` writes
+    // the outbox row itself, in the same transaction as the state change
+    // (same pattern as payments-start / tender-apply). Committing again
+    // inserted the same `action_id` twice and threw a UNIQUE violation AFTER
+    // the force-fail had already committed (RT-304). A same-key retry now
+    // observes `kind: 'replay'` from the FSM's own row.
     return await Promise.resolve({
       kind: 'ok',
       force_failed_at: fsmOutcome.force_failed_at,

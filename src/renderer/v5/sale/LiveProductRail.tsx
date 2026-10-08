@@ -5,6 +5,8 @@ import { useDebouncedSearch } from '../../stores/useDebouncedSearch';
 import type { FreshnessState, RefreshFeedback } from '../../sale/useCatalogueFreshness';
 import { V5Icon } from '../foundation/V5Icon';
 import { LiveSearchResults } from './LiveSearchResults';
+import { SCAN_ANCHOR_ID } from '../../scan/scan-anchor';
+import { formatHumanDateTime } from '../../ui/format/human-format';
 
 interface Props {
   state: CatalogueSearchState;
@@ -20,17 +22,9 @@ interface Props {
   searchRef: RefObject<HTMLInputElement | null>;
 }
 
-/** Absolute Arabic timestamp; an unparseable value is shown verbatim rather than throwing. */
+/** Absolute Arabic timestamp (Western digits, 24-hour); an unparseable value is shown verbatim rather than throwing. */
 function formatStamp(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat('ar-EG', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  return formatHumanDateTime(iso, { withYear: true, month: 'long' }) ?? iso;
 }
 
 const FRESHNESS_COPY: Record<FreshnessState, (stamp: string) => string> = {
@@ -119,6 +113,7 @@ function SearchFields(props: Props): JSX.Element {
         <input
           ref={props.searchRef}
           id="v5-live-search"
+          data-scan-target="search"
           type="search"
           value={query}
           onChange={handleSearchChange}
@@ -129,7 +124,7 @@ function SearchFields(props: Props): JSX.Element {
         />
       </div>
       <p id="v5-live-search-note">اكتب حرفين للبحث، أو اضغط Enter للبحث فورًا.</p>
-      <label htmlFor="v5-live-scan" className="v5-live-scan-label">
+      <label htmlFor={SCAN_ANCHOR_ID} className="v5-live-scan-label">
         التقاط مسح الباركود
       </label>
       <div className="v5-live-scan-field">
@@ -137,7 +132,8 @@ function SearchFields(props: Props): JSX.Element {
           <V5Icon name="scan" />
         </span>
         <input
-          id="v5-live-scan"
+          id={SCAN_ANCHOR_ID}
+          data-scan-target="search"
           type="text"
           inputMode="none"
           placeholder="امسح الباركود هنا"

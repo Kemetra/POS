@@ -49,9 +49,9 @@ function receiptWebsite(): string {
 
 // ── Intermediate representation ──────────────────────────────────────────────
 
-type BandAlign = 'ltr' | 'rtl' | 'center';
+export type BandAlign = 'ltr' | 'rtl' | 'center';
 
-interface TextBand {
+export interface TextBand {
   kind: 'text';
   text: string;
   align: BandAlign;
@@ -59,13 +59,18 @@ interface TextBand {
   emphasis?: boolean;
 }
 
-interface RuleBand {
+export interface RuleBand {
   kind: 'rule';
   /** The repeated character forming the separator rule. */
   char: '=' | '-' | '#';
 }
 
-type Band = TextBand | RuleBand;
+/**
+ * One slip band. Exported (RT-15 S4) so another non-fiscal slip — the cash
+ * return slip — composes its own bands and reuses these serialisers, rather
+ * than growing a second printer path.
+ */
+export type Band = TextBand | RuleBand;
 
 // ── Helpers (pure) ───────────────────────────────────────────────────────────
 
@@ -74,7 +79,7 @@ function egp(minor: number): string {
 }
 
 /** UTC date-time formatted from a stored ISO string. No Intl, no new Date(). */
-function utcStamp(iso: string): string {
+export function utcStamp(iso: string): string {
   // "2026-05-27T08:42:18.000Z" → "2026-05-27 08:42:18 UTC"
   const date = iso.slice(0, 10);
   const time = iso.slice(11, 19);
@@ -82,7 +87,7 @@ function utcStamp(iso: string): string {
 }
 
 /** Word-wrap to 42 columns with a 4-column hanging indent on continuations. */
-function wrap(text: string, indent = 4): string[] {
+export function wrap(text: string, indent = 4): string[] {
   if (text.length <= COLS) return [text];
   const words = text.split(' ');
   const lines: string[] = [];
@@ -278,7 +283,11 @@ function toEscPos(bands: Band[]): Uint8Array {
 
 // ── Public entry ──────────────────────────────────────────────────────────────
 
-export function renderReceipt(payload: ReceiptPayload): ReceiptRenderOutput {
-  const bands = compose(payload);
+/** Serialise composed bands to both outputs (AD-6: one composition, two serialisers). */
+export function renderBands(bands: Band[]): ReceiptRenderOutput {
   return { escpos: toEscPos(bands), html: toHtml(bands) };
+}
+
+export function renderReceipt(payload: ReceiptPayload): ReceiptRenderOutput {
+  return renderBands(compose(payload));
 }

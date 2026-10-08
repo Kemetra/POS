@@ -1,4 +1,4 @@
-import type { Role } from '../../../shared/operator/role';
+import { roleDisplayNameAr, type Role } from '../../../shared/operator/role';
 import {
   shellNavEntries,
   type ShellNavEntryId,
@@ -38,19 +38,22 @@ export function isNavEntryCurrent(entry: V5NavEntry, pathname: string): boolean 
   return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
-/** Same rule as the legacy rail: unrestricted entries, or the role is allowed. */
+/**
+ * RT-241 / OD-6 — what the cashier's v5 nav may show. An allowlist, so a new
+ * placeholder never reaches the cashier by default. The Dashboard refuses the
+ * cashier role, and Sales, Inventory and Settings are placeholders (freeze 15
+ * §1: manager/admin only). Navigation only: route guards are unchanged.
+ */
+const CASHIER_NAV: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>(['cart']);
+
+/** Same rule as the legacy rail (unrestricted entries, or the role is allowed), plus OD-6. */
 export function visibleNavEntries(role: Role | undefined): ReadonlyArray<V5NavEntry> {
-  return v5NavEntries.filter(
-    (entry) => entry.allow === undefined || (role !== undefined && entry.allow.includes(role)),
-  );
+  return v5NavEntries.filter((entry) => {
+    if (role === 'cashier' && !CASHIER_NAV.has(entry.id)) return false;
+    return entry.allow === undefined || (role !== undefined && entry.allow.includes(role));
+  });
 }
 
-const ROLE_LABEL_AR: Readonly<Record<Role, string>> = {
-  cashier: 'كاشير',
-  manager: 'مدير',
-  admin: 'مسؤول النظام',
-};
-
 export function roleLabelAr(role: Role): string {
-  return ROLE_LABEL_AR[role];
+  return roleDisplayNameAr(role);
 }

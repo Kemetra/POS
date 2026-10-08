@@ -291,3 +291,28 @@ describe('registerPairingHandlers — pairing:submit (T024)', () => {
     );
   });
 });
+
+describe('registerPairingHandlers — pairing:recheck (RT-215 10897-A)', () => {
+  it('registers the RECHECK channel once when the recheck is wired, and forwards its result', async () => {
+    const handle = vi.fn<(channel: string, fn: IpcHandler) => void>();
+    const ipcMain = { handle } as unknown as IpcMain;
+    const recheck = vi.fn(() => Promise.resolve({ outcome: 'still_revoked' } as const));
+    registerPairingHandlers(ipcMain, {
+      store: makeFakeStore({ kind: 'invalid', reason: 'device_revoked' }),
+      service: makeFakeService(SUCCESS_RESULT).service,
+      recheck,
+    });
+
+    expect(PAIRING_IPC_CHANNELS.RECHECK).toBe('pairing:recheck');
+    const channels = handle.mock.calls.map((c) => c[0]);
+    expect(channels.filter((c) => c === PAIRING_IPC_CHANNELS.RECHECK)).toHaveLength(1);
+    const captured = handle.mock.calls.find((c) => c[0] === PAIRING_IPC_CHANNELS.RECHECK)?.[1];
+    if (captured === undefined) throw new Error('RECHECK handler not registered');
+    // The renderer can only TRIGGER it: any argument it sends is ignored.
+    await expect(captured({} as IpcMainInvokeEvent, { token: 'x' })).resolves.toEqual({
+      outcome: 'still_revoked',
+    });
+    expect(recheck).toHaveBeenCalledTimes(1);
+    expect(recheck).toHaveBeenCalledWith();
+  });
+});

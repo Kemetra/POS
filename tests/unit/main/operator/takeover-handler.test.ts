@@ -13,6 +13,10 @@ import type { JwtHolder } from '../../../../src/main/operator/jwt-holder.js';
 import type { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
 import type { AuditEvent } from '../../../../src/shared/audit/event-shape.js';
 import type { PairingStore } from '../../../../src/main/pairing/store.js';
+import {
+  FAKE_USER_ID,
+  fakeCashierAdmission,
+} from '../../../../src/main/operator/__tests__/__helpers__/fake-cashier-admission.js';
 
 // --- helpers ---
 
@@ -90,7 +94,6 @@ function makeBackend(kind: 'signed_in' | 'refused' | 'no_connection' = 'signed_i
     confirmTakeover: vi.fn(() =>
       Promise.resolve(kind === 'signed_in' ? signedInResponse : { kind }),
     ),
-    getActiveSession: vi.fn(() => Promise.resolve({ kind: 'none' as const })),
   } as unknown as BackendClient;
 }
 
@@ -131,6 +134,7 @@ function buildCashierProto(overrides: Partial<ProtoSession> = {}): ProtoSession 
   return {
     pending_takeover_id: randomUUID(),
     operator_id: 'cashier-001',
+    user_id: FAKE_USER_ID,
     display_name: 'Jane Cashier',
     role: 'cashier',
     tenant_id: 't1',
@@ -155,6 +159,7 @@ describe('TakeoverHandler — confirmTakeover: invalid/missing pending_takeover_
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({ pending_takeover_id: '' });
     expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });
@@ -171,6 +176,7 @@ describe('TakeoverHandler — confirmTakeover: invalid/missing pending_takeover_
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({ pending_takeover_id: randomUUID() });
     expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });
@@ -189,6 +195,7 @@ describe('TakeoverHandler — confirmTakeover: invalid/missing pending_takeover_
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({
       pending_takeover_id: proto.pending_takeover_id,
@@ -212,6 +219,7 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({
       pending_takeover_id: proto.pending_takeover_id,
@@ -238,6 +246,7 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
     // 016 (review HIGH): DP-2 splits POS auth. A manager/admin takeover installs
@@ -268,6 +277,7 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
     expect(emitFn).toHaveBeenCalledOnce();
@@ -288,6 +298,7 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
     const second = await handler.confirmTakeover({
@@ -309,6 +320,7 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({
       pending_takeover_id: proto.pending_takeover_id,
@@ -335,6 +347,7 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({
       pending_takeover_id: proto.pending_takeover_id,
@@ -345,7 +358,7 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
   });
 });
 
-describe('TakeoverHandler — confirmTakeover: cashier path (backend skipped)', () => {
+describe('TakeoverHandler — confirmTakeover: cashier path (Clerk takeover/confirm skipped; RT-113 P2 admits via takeover:true)', () => {
   it('returns signed_in without calling backend.confirmTakeover for cashier role', async () => {
     const store = makeProtoStore();
     const proto = buildCashierProto();
@@ -362,6 +375,7 @@ describe('TakeoverHandler — confirmTakeover: cashier path (backend skipped)', 
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({
       pending_takeover_id: proto.pending_takeover_id,
@@ -383,6 +397,7 @@ describe('TakeoverHandler — confirmTakeover: cashier path (backend skipped)', 
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
     expect(emitFn).toHaveBeenCalledOnce();
@@ -409,6 +424,7 @@ describe('TakeoverHandler — audit failure is best-effort', () => {
       auditEmitter: throwingEmitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({
       pending_takeover_id: proto.pending_takeover_id,
@@ -434,6 +450,7 @@ describe('TakeoverHandler — audit failure is best-effort', () => {
       auditEmitter: throwingEmitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.confirmTakeover({
       pending_takeover_id: proto.pending_takeover_id,
@@ -456,6 +473,7 @@ describe('TakeoverHandler — cancelTakeover', () => {
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.cancelTakeover({
       pending_takeover_id: proto.pending_takeover_id,
@@ -474,6 +492,7 @@ describe('TakeoverHandler — cancelTakeover', () => {
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     const result = await handler.cancelTakeover({ pending_takeover_id: randomUUID() });
     expect(result).toEqual({ kind: 'cancelled' });
@@ -492,6 +511,7 @@ describe('TakeoverHandler — cancelTakeover', () => {
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     await handler.cancelTakeover({ pending_takeover_id: proto.pending_takeover_id });
     expect(store.get(proto.pending_takeover_id)).toBeUndefined();
@@ -510,6 +530,7 @@ describe('TakeoverHandler — cancelTakeover', () => {
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     await handler.cancelTakeover({ pending_takeover_id: proto.pending_takeover_id });
     expect(emitFn).not.toHaveBeenCalled();
@@ -533,6 +554,7 @@ describe('TakeoverHandler — cancelTakeover', () => {
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
+      cashierAdmission: fakeCashierAdmission().deps,
     });
     await handler.cancelTakeover({ pending_takeover_id: proto.pending_takeover_id });
     expect(createFn).not.toHaveBeenCalled();

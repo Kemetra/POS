@@ -30,6 +30,7 @@
  *     the trusted main-side session (FR-013).
  */
 
+import { attemptActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { PaymentAttemptFsm } from '../fsm/payment-attempt-fsm.js';
@@ -155,7 +156,7 @@ export function createPaymentsConfirmHandler(
       payment_attempt_id: req.payment_attempt_id,
       tender_line_id: null,
       action_kind: 'payment.confirm',
-      payload: { payment_attempt_id: req.payment_attempt_id },
+      payload: attemptActionPayload(req),
       acting_operator_id: row.acting_operator_id,
       created_at: clock().toISOString(),
     });
@@ -260,6 +261,10 @@ export function createPaymentsConfirmHandler(
         return breakdown;
       });
 
+    // RT-224 step 2: the sale's own cashier `users.id`, captured now — the only
+    // time it is known — for the device-path sale sync. Only for an admitted
+    // cashier session that is the attempt's acting operator; never guessed.
+    const selling_user_id = sellingUserIdOf(session, row.acting_operator_id);
     auditEmitter.emitPaymentSettled({
       payment_attempt_id: req.payment_attempt_id,
       cart_id: row.envelope_cart_id,
@@ -267,6 +272,7 @@ export function createPaymentsConfirmHandler(
       settled_at: fsmOutcome.settled_at,
       attribution_operator_id: row.acting_operator_id,
       selling_operator_display_name: session.display_name,
+      ...(selling_user_id === null ? {} : { selling_user_id }),
       tenant_id: row.tenant_id,
       branch_id: row.branch_id,
       originating_terminal_id: row.terminal_id,
@@ -276,6 +282,19 @@ export function createPaymentsConfirmHandler(
 
     return await Promise.resolve({ kind: 'ok', settled_at: fsmOutcome.settled_at });
   };
+}
+
+/**
+ * RT-224 step 2: the confirming session's `users.id` when it is an admitted
+ * cashier session AND the operator who started the attempt; else null.
+ */
+export function sellingUserIdOf(
+  session: OperatorSessionForPayments,
+  actingOperatorId: string,
+): string | null {
+  const userId = session.user_id;
+  if (userId === undefined || userId.length === 0) return null;
+  return session.operator_id === actingOperatorId ? userId : null;
 }
 
 // Re-export the row type for downstream handlers that depend on the same

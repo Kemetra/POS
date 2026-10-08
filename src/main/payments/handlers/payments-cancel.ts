@@ -12,6 +12,7 @@
  * one line does not orphan the attempt-level audit row.
  */
 
+import { attemptActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { PaymentAttemptFsm } from '../fsm/payment-attempt-fsm.js';
@@ -81,7 +82,7 @@ export function createPaymentsCancelHandler(
       payment_attempt_id: req.payment_attempt_id,
       tender_line_id: null,
       action_kind: 'payment.cancel',
-      payload: { payment_attempt_id: req.payment_attempt_id },
+      payload: attemptActionPayload(req),
       acting_operator_id: row.acting_operator_id,
       created_at: clock().toISOString(),
     });
@@ -95,8 +96,16 @@ export function createPaymentsCancelHandler(
       // always co-occur (data-model §"PaymentAttempt" Invariant 2). The
       // reversed_tender_line_ids list is rebuilt from the lines repo, sorted
       // LIFO (apply_order DESC) to match the FSM's original sweep order.
+      //
+      // Only lines THIS cancel reversed belong in the answer: the FSM stamps
+      // each one with the derived action id `<cancel key>:rev:<line id>`, so a
+      // line a cashier reversed manually beforehand (its own action id) is
+      // left out, exactly as in the original response (RT-304 review).
       if (row.state === 'cancelled' && row.cancelled_at !== null) {
-        const lines = linesRepo.findByAttempt(req.payment_attempt_id);
+        const sweepPrefix = `${req.idempotency_key}:rev:`;
+        const lines = linesRepo
+          .findByAttempt(req.payment_attempt_id)
+          .filter((l) => l.last_action_id.startsWith(sweepPrefix));
         const reversed: string[] = lines
           .filter((l) => l.state === 'reversed')
           .sort((a, b) => b.apply_order - a.apply_order)

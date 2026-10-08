@@ -123,7 +123,17 @@ async function newFrozenCart(): Promise<Fixture> {
   });
 
   // Simulate frozen_handed_off with a prior handoff_action_id in outbox.
-  db.run(`UPDATE carts SET state = 'frozen_handed_off' WHERE cart_id = ?`, [createRes.cart_id]);
+  db.run(
+    `UPDATE carts SET state = 'frozen_handed_off', handoff_envelope_json = ? WHERE cart_id = ?`,
+    [
+      JSON.stringify({
+        handoff_action_id: 'handoff-action-t057',
+        lines: [],
+        discount_placeholders: [],
+      }),
+      createRes.cart_id,
+    ],
+  );
   db.run(
     `INSERT INTO cart_action_outbox
        (action_id, cart_id, line_id, action_kind, acting_operator_id,

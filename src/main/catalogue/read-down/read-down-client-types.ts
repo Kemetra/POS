@@ -36,7 +36,21 @@ export interface ReadDownFetchFailed {
   kind: 'failed';
 }
 
-export type ReadDownFetchResult = ReadDownFetchOk | ReadDownFetchNoConnection | ReadDownFetchFailed;
+/**
+ * RT-215 decision 2 — Backend-Core answered 401: the device credential was
+ * refused. Distinct from `failed` so the device-revoked flow can tell it apart
+ * (the device-401 detector confirms it with a second call). The driver treats
+ * it like any other failed fetch: the prior catalogue is preserved.
+ */
+export interface ReadDownFetchDeviceUnauthorized {
+  kind: 'device_unauthorized';
+}
+
+export type ReadDownFetchResult =
+  | ReadDownFetchOk
+  | ReadDownFetchNoConnection
+  | ReadDownFetchFailed
+  | ReadDownFetchDeviceUnauthorized;
 
 export interface ReadDownClient {
   /**

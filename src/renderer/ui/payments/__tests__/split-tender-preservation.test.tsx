@@ -95,23 +95,29 @@ function makeBridge(lines: ReturnType<typeof line>[]): {
   tender: TenderBridgeAPI;
   sales?: SalesBridgeAPI;
 } {
-  const attempt = {
+  // Like main: the lines exist only once an apply has happened. (RT-238: an attempt
+  // that is already fully paid when the entry opens has no apply to press.)
+  let applied = false;
+  const attempt = () => ({
     payment_attempt_id: 'pa-001',
     state: 'started',
     envelope_subtotal_minor: SUBTOTAL_MINOR,
     started_at: '2026-09-19T09:59:00.000Z',
-    tender_lines: lines,
-  };
+    tender_lines: applied ? lines : [],
+  });
   const payments = {
     start: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt_id: 'pa-001' })),
-    read: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt: attempt })),
+    read: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt: attempt() })),
     confirm: vi.fn(() =>
       Promise.resolve({ kind: 'ok' as const, settled_at: '2026-09-19T10:00:00.000Z' }),
     ),
     cancel: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
   } as unknown as PaymentsBridgeAPI;
   const tender = {
-    apply: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+    apply: vi.fn(() => {
+      applied = true;
+      return Promise.resolve({ kind: 'ok' as const });
+    }),
   } as unknown as TenderBridgeAPI;
   return { payments, tender };
 }

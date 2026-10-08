@@ -40,7 +40,8 @@ describe('<CashEntry> — AmountPad shared-state integration', () => {
 
   it('choosing the exact-total quick amount fills the amount and shows zero change', () => {
     render(<CashEntry remainingBalanceMinor={19925} onConfirm={vi.fn()} />);
-    fireEvent.click(screen.getByTestId('amount-pad-quick-19925'));
+    // RT-238: one chip group lives in CashEntry; «بالضبط» fills the exact total.
+    fireEvent.click(screen.getByRole('button', { name: 'بالضبط' }));
     const input = screen.getByTestId<HTMLInputElement>('cash-entry-amount-input');
     // Currency-amount string contract (see note above): 19925 minor → "199.25".
     expect(input.value).toBe('199.25');
@@ -50,8 +51,8 @@ describe('<CashEntry> — AmountPad shared-state integration', () => {
 
   it('an overpay quick amount drives the animated change-due (EGP shown)', () => {
     render(<CashEntry remainingBalanceMinor={19925} onConfirm={vi.fn()} />);
-    // 20000 is a quick-amount roll-up; change due = 20000 − 19925 = 75 → 0.75 EGP.
-    fireEvent.click(screen.getByTestId('amount-pad-quick-20000'));
+    // 200.00 is a quick-amount chip (20000 minor); change due = 20000 − 19925 = 75 → 0.75 EGP.
+    fireEvent.click(screen.getByRole('button', { name: /^200\.00/ }));
     const changeDue = screen.getByTestId('cash-entry-change-due');
     expect(changeDue).toHaveTextContent('0.75 EGP');
   });

@@ -13,6 +13,12 @@ const PATHS = {
   // Points toward the inline end of an RTL line: "forward" for this product.
   forward: 'M19 12H5M11 6l-6 6 6 6',
   cross: 'M12 5v14M5 12h14',
+  close: 'M6 6l12 12M18 6 6 18',
+  // RT-241 — status tones: each has its own shape, so a tone never rests on colour alone.
+  'status-info': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v5M12 8h.01',
+  'status-success': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12.5l2.5 2.5L16 9.5',
+  'status-warning': 'M12 4 2.5 20h19L12 4ZM12 10v4M12 17h.01',
+  'status-danger': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9 9l6 6M15 9l-6 6',
 } as const;
 
 export type V5IconName = keyof typeof PATHS;

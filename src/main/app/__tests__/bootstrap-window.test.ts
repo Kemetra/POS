@@ -83,9 +83,9 @@ function setup(options: { isDev?: boolean } = {}) {
     devServerUrl: RENDERER_ORIGIN,
   });
 
-  createWindow();
+  const created: unknown = createWindow();
 
-  return { win, browserWindowCtor, onHeadersReceived };
+  return { win, created, browserWindowCtor, onHeadersReceived };
 }
 
 /** Pull the handler registered for a given webContents event. */
@@ -278,5 +278,13 @@ describe('021 S3 — window bootstrap: content loading', () => {
     expect(win.loadURL).not.toHaveBeenCalled();
     // Devtools in a packaged POS terminal would expose the renderer to a cashier.
     expect(win.webContents.openDevTools).not.toHaveBeenCalled();
+  });
+});
+
+describe('RT-203 — window bootstrap: the window is handed back', () => {
+  it('returns the window it built, so a second launch can restore and focus it', () => {
+    const { win, created } = setup();
+
+    expect(created).toBe(win);
   });
 });

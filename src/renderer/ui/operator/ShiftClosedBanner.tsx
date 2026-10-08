@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { formatHumanDateTime } from '../format/human-format';
 
 interface ShiftClosedBannerProps {
   closedAt: string;
@@ -6,7 +7,7 @@ interface ShiftClosedBannerProps {
 }
 
 export function ShiftClosedBanner({ closedAt, onDismiss }: ShiftClosedBannerProps): JSX.Element {
-  const formatted = new Date(closedAt).toLocaleDateString(undefined, { dateStyle: 'medium' });
+  const formatted = formatHumanDateTime(closedAt, { withYear: true, withTime: false }) ?? closedAt;
   return (
     <div
       role="status"

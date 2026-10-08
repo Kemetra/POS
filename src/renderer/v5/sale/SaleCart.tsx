@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { DemoCartLine } from './demo-sale';
+import { formatHumanCount } from '../../ui/format/human-format';
 
 interface SaleCartProps {
   readonly lines: readonly DemoCartLine[];
@@ -52,7 +53,7 @@ export function SaleCart({ lines, subtotal, total }: SaleCartProps): JSX.Element
           <span className="v5-sale-eyebrow">المعاملة الجارية</span>
           <h2 id="v5-sale-cart-title">سلة المشتريات</h2>
         </div>
-        <span className="v5-sale-count">{lines.length} أصناف · 9 وحدات</span>
+        <span className="v5-sale-count">{`الأصناف: ${formatHumanCount(lines.length)} · الوحدات: 9`}</span>
       </div>
 
       <div className="v5-sale-cart-table">

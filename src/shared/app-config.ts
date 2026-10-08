@@ -46,11 +46,17 @@ export interface AppConfig {
      *
      * Defaults to `false`. Flip via `POS_PULSE_FEATURE_SALE_FINALIZATION`
      * in main. Disabled-by-default is the fail-safe per Constitution
-     * (Production Readiness Gates): in disabled state, 006 still settles
-     * payments but 008's finalize listener short-circuits — no receipt
-     * prints, no drawer kicks, no audit-event emits. The cashier falls
-     * back to manual receipts. See `docs/runbook/008-sale-finalization-and-receipts.md`
-     * (authored at Slice 6 T524 / T525) for the rollback path.
+     * (Production Readiness Gates): in disabled state 008's finalize
+     * listener short-circuits — no Sale row, receipt, drawer kick, outbox
+     * entry or audit-event emit.
+     *
+     * RT-162 / D-1: `payments` on with this flag off is an INVALID cashier
+     * profile — main refuses to start (`src/main/app/feature-flags.ts`)
+     * rather than settle money it cannot record. The renderer may still see
+     * `payments: true, saleFinalization: false` only in tests/historical
+     * paths; its post-settlement truthfulness copy is kept for that case.
+     * See `docs/runbook/008-sale-finalization-and-receipts.md` T525 for the
+     * rollback path (both flags off).
      */
     saleFinalization?: boolean;
     /**
@@ -72,5 +78,24 @@ export interface AppConfig {
      * (RT-79) still dead-letters any voucher-tendered sale regardless.
      */
     voucherTender?: boolean;
+    /**
+     * RT-15 S2 — enables the cashier return flow (`returns.*`).
+     *
+     * Defaults to `false` (AC1). Flip via `POS_PULSE_FEATURE_RETURNS` in main.
+     * Fail-closed: with it off every `returns.*` call is refused
+     * `feature_disabled` and nothing is journaled or sent. Backend-Core has
+     * its own gate (`POS_RETURNS_ENABLED`, 404 while off).
+     */
+    returns?: boolean;
+    /**
+     * RT-17 slice 3 — enables the main-process shift cash-up service (open,
+     * pay-in / pay-out, close) and starts the shift sync engine.
+     *
+     * Defaults to `false` (owner approval, Jira RT-17 comment 10920). Flip via
+     * `POS_PULSE_FEATURE_SHIFT_CASHUP` in main. Fail-closed: with it off every
+     * service call is refused `feature_disabled` and the engine is never
+     * started. Stays off until the slice 4 UI and verification are done.
+     */
+    shiftCashup?: boolean;
   };
 }

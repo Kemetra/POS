@@ -5,6 +5,8 @@ import { sales } from './sales.js';
 import { receipts } from './receipts.js';
 import { catalogue } from './catalogue.js';
 import { salesSync } from './sales-sync.js';
+import { returns } from './returns.js';
+import { shiftCashup } from './shift-cashup.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -29,7 +31,13 @@ import type {
   SignOutResponse,
   UnlockCashierRequest,
   UnlockCashierResponse,
+  UnlockSessionRequest,
+  UnlockSessionResponse,
+  LockStateView,
 } from '../shared/bridge-api';
+import { subscribeSessionState } from './session-state.js';
+import { subscribePairingStatus } from './pairing-status.js';
+import { invokePairingRecheck } from './pairing-recheck.js';
 import type { OperatorRefusal } from '../shared/audit/event-shape';
 import type { LogRecord } from '../shared/log-record';
 import type { AppConfig } from '../shared/app-config';
@@ -38,7 +46,7 @@ import {
   type PairingStatus,
   type PairingSubmitResult,
 } from '../shared/pairing-types';
-import { OPERATOR_IPC_CHANNELS } from '../shared/operator/channels';
+import { OPERATOR_IPC_CHANNELS, SESSION_LOCK_IPC_CHANNELS } from '../shared/operator/channels';
 
 /**
  * T033 + T061 + T067 — preload bridge wired to ipcRenderer.invoke.
@@ -63,6 +71,10 @@ const pairing: PairingBridgeAPI = {
   getStatus: () => ipcRenderer.invoke(PAIRING_IPC_CHANNELS.GET_STATUS) as Promise<PairingStatus>,
   submit: (pairing_code: string) =>
     ipcRenderer.invoke(PAIRING_IPC_CHANNELS.SUBMIT, pairing_code) as Promise<PairingSubmitResult>,
+  // RT-215 — the pairing-status push (validated `{ kind, reason? }` only).
+  onStatusChanged: (cb) => subscribePairingStatus(ipcRenderer, cb),
+  // RT-215 10897-A — the "Check again" (trigger only; validated `{ outcome }`).
+  recheckRevocation: () => invokePairingRecheck(ipcRenderer),
 };
 
 /**
@@ -84,6 +96,15 @@ const operator: OperatorBridgeAPI = {
       OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION,
     ) as Promise<OperatorSessionBridgeView | null>,
   _reportActivity: () => void ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY),
+  // RT-117 — inactivity lock: unlock, lock-screen read, and the state push.
+  unlockSession: (req: UnlockSessionRequest) =>
+    ipcRenderer.invoke(
+      SESSION_LOCK_IPC_CHANNELS.UNLOCK_SESSION,
+      req,
+    ) as Promise<UnlockSessionResponse>,
+  getLockState: () =>
+    ipcRenderer.invoke(SESSION_LOCK_IPC_CHANNELS.GET_LOCK_STATE) as Promise<LockStateView>,
+  onSessionStateChanged: (cb) => subscribeSessionState(ipcRenderer, cb),
   emitAuditEvent: (req: EmitAuditEventRequest) =>
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT, req) as Promise<
       EmitAuditEventResponse | OperatorRefusal
@@ -153,6 +174,13 @@ const api: PreloadBridgeAPI = {
   // 011-sale-sync-capture-up — read-only salesSync.* namespace (single
   // sales:syncStatus channel; the renderer can never trigger the drain — §A4).
   salesSync,
+  // RT-15 S2 — returns.* (lookup / quote / submit / resolve / list). Gated in
+  // main on the feature flag, session and manager/admin role.
+  returns,
+  // RT-17 slice 4 — shiftCashup.* (open / pay-in / pay-out / close / status).
+  // Registered in main only with the shift cash-up flag on; gated there on the
+  // flag and the operator session.
+  shiftCashup,
 };
 
 contextBridge.exposeInMainWorld('api', api);

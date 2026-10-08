@@ -30,7 +30,12 @@ import type {
 } from '../repositories/payment-attempts.repository.js';
 import type { PaymentTenderLinesRepository } from '../repositories/payment-tender-lines.repository.js';
 import type { PaymentActionOutboxRepository } from '../repositories/payment-action-outbox.repository.js';
-import { computeActionPayloadHash } from '../repositories/payment-action-outbox.repository.js';
+import {
+  attemptActionPayload,
+  failActionPayload,
+  hashActionPayload,
+  startActionPayload,
+} from '../action-payload.js';
 import type { RefusalReason } from '../../../shared/payments/types.js';
 import { isLegalPaymentAttemptTransition } from '../../../shared/payments/fsm-types.js';
 import { createTenderLineFsm } from './tender-line-fsm.js';
@@ -175,12 +180,7 @@ export function createPaymentAttemptFsm(deps: PaymentAttemptFsmDependencies): Pa
           }
           throw err;
         }
-        const hash = computeActionPayloadHash({
-          payment_attempt_id: input.payment_attempt_id,
-          envelope_handoff_action_id: input.envelope_handoff_action_id,
-          envelope_subtotal_minor: input.envelope_subtotal_minor,
-          action_kind: 'payment.attempt.start',
-        });
+        const hash = hashActionPayload('payment.attempt.start', startActionPayload(input));
         outbox.insert({
           action_id: input.action_id,
           payment_attempt_id: input.payment_attempt_id,
@@ -219,10 +219,7 @@ export function createPaymentAttemptFsm(deps: PaymentAttemptFsmDependencies): Pa
           timestamp: input.settled_at,
           last_action_id: input.action_id,
         });
-        const hash = computeActionPayloadHash({
-          payment_attempt_id: input.payment_attempt_id,
-          action_kind: 'payment.confirm',
-        });
+        const hash = hashActionPayload('payment.confirm', attemptActionPayload(input));
         outbox.insert({
           action_id: input.action_id,
           payment_attempt_id: input.payment_attempt_id,
@@ -271,11 +268,9 @@ export function createPaymentAttemptFsm(deps: PaymentAttemptFsmDependencies): Pa
           timestamp: input.cancelled_at,
           last_action_id: input.action_id,
         });
-        const hash = computeActionPayloadHash({
-          payment_attempt_id: input.payment_attempt_id,
-          reversed_tender_line_ids: reversed,
-          action_kind: 'payment.cancel',
-        });
+        // `reversed` is an outcome of this call, not part of the request, so it
+        // stays out of the hash: a retry must be able to reproduce it (RT-304).
+        const hash = hashActionPayload('payment.cancel', attemptActionPayload(input));
         outbox.insert({
           action_id: input.action_id,
           payment_attempt_id: input.payment_attempt_id,
@@ -311,11 +306,7 @@ export function createPaymentAttemptFsm(deps: PaymentAttemptFsmDependencies): Pa
           last_action_id: input.action_id,
           failure_reason: input.failure_reason,
         });
-        const hash = computeActionPayloadHash({
-          payment_attempt_id: input.payment_attempt_id,
-          failure_reason: input.failure_reason,
-          action_kind: 'payment.fail',
-        });
+        const hash = hashActionPayload('payment.fail', failActionPayload(input));
         outbox.insert({
           action_id: input.action_id,
           payment_attempt_id: input.payment_attempt_id,
@@ -358,11 +349,7 @@ export function createPaymentAttemptFsm(deps: PaymentAttemptFsmDependencies): Pa
           failure_reason: 'manager_force_failed',
           force_fail_attribution_operator_id: input.manager_operator_id,
         });
-        const hash = computeActionPayloadHash({
-          payment_attempt_id: input.payment_attempt_id,
-          failure_reason: 'manager_force_failed',
-          action_kind: 'payment.force_fail',
-        });
+        const hash = hashActionPayload('payment.force_fail', attemptActionPayload(input));
         outbox.insert({
           action_id: input.action_id,
           payment_attempt_id: input.payment_attempt_id,

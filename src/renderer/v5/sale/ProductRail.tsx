@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { DemoProduct } from './demo-sale';
+import { formatHumanCount } from '../../ui/format/human-format';
 
 interface ProductRailProps {
   readonly products: readonly DemoProduct[];
@@ -39,8 +40,11 @@ export function ProductRail({ products }: ProductRailProps): JSX.Element {
           <span className="v5-sale-eyebrow">اكتشاف المنتجات</span>
           <h2 id="v5-sale-products-title">الأصناف والمنتجات</h2>
         </div>
-        <span className="v5-sale-count" aria-label={`${String(products.length)} منتجات معروضة`}>
-          {products.length} أصناف
+        <span
+          className="v5-sale-count"
+          aria-label={`المنتجات المعروضة: ${formatHumanCount(products.length)}`}
+        >
+          {`الأصناف: ${formatHumanCount(products.length)}`}
         </span>
       </div>
       <div className="v5-sale-search-area">

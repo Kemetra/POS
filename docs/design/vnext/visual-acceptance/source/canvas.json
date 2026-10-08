@@ -1,0 +1,896 @@
+{
+ "v": 3,
+ "attachments": {},
+ "boards": {
+  "Checkout-1024.dc.html": {
+   "h": 768,
+   "page": "screens",
+   "title": "EXPLORATION · B3 · Cash — amount short · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 2320
+  },
+  "Checkout-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B3 · Cash — change due · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 2320
+  },
+  "Components.dc.html": {
+   "h": 3600,
+   "page": "components",
+   "title": "EXPLORATION · C · Component vocabulary",
+   "w": 1440,
+   "x": 0,
+   "y": 0
+  },
+  "Direction.dc.html": {
+   "h": 3560,
+   "page": "direction",
+   "title": "FROZEN | n/a · A · Visual direction (foundation)",
+   "w": 1440,
+   "x": 0,
+   "y": 0
+  },
+  "HeldRestore-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B6 · Held sale restore · 1280",
+   "w": 1280,
+   "x": 0,
+   "y": 5800
+  },
+  "I2-CheckoutOver-1024.dc.html": {
+   "h": 768,
+   "page": "core",
+   "title": "FROZEN | APPROVED RT-24 · Cash · change due · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 3480
+  },
+  "I2-CheckoutOver-1280.dc.html": {
+   "h": 800,
+   "page": "core",
+   "title": "FROZEN | APPROVED RT-24 · Cash · change due · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 3480
+  },
+  "I2-CheckoutUnder-1024.dc.html": {
+   "h": 768,
+   "page": "core",
+   "title": "FROZEN | APPROVED RT-24 · Cash · underpaid · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 2320
+  },
+  "I2-CheckoutUnder-1280.dc.html": {
+   "h": 800,
+   "page": "core",
+   "title": "FROZEN | APPROVED RT-24 · Cash · underpaid · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 2320
+  },
+  "I2-Consistency.dc.html": {
+   "h": 1900,
+   "page": "core",
+   "title": "FROZEN | n/a · Components used across the four screens",
+   "w": 1440,
+   "x": 0,
+   "y": 5800
+  },
+  "I2-LongCart-1024.dc.html": {
+   "h": 768,
+   "page": "core",
+   "title": "FROZEN | APPROVED RT-24 · Long cart · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 1160
+  },
+  "I2-LongCart-1280.dc.html": {
+   "h": 800,
+   "page": "core",
+   "title": "FROZEN | APPROVED RT-24 · Long cart · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 1160
+  },
+  "I2-PayUnknown-1024.dc.html": {
+   "h": 768,
+   "page": "core",
+   "title": "FROZEN | APPROVED recovery contract · Payment unknown · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 4640
+  },
+  "I2-PayUnknown-1280.dc.html": {
+   "h": 800,
+   "page": "core",
+   "title": "FROZEN | APPROVED recovery contract · Payment unknown · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 4640
+  },
+  "I2-Sale-1024.dc.html": {
+   "h": 768,
+   "page": "core",
+   "title": "FROZEN | APPROVED RT-24 · Sale · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 0
+  },
+  "I2-Sale-1280.dc.html": {
+   "h": 800,
+   "page": "core",
+   "title": "FROZEN | APPROVED RT-24 · Sale · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 0
+  },
+  "I3-CardFailed-1024.dc.html": {
+   "h": 768,
+   "page": "critical",
+   "title": "FROZEN | APPROVED payment contract · Definitive card payment failure · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 2320
+  },
+  "I3-CardFailed-1280.dc.html": {
+   "h": 800,
+   "page": "critical",
+   "title": "FROZEN | APPROVED payment contract · Definitive card payment failure · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 2320
+  },
+  "I3-CardFailed-Spec.dc.html": {
+   "h": 940,
+   "page": "critical",
+   "title": "FROZEN | APPROVED payment contract · Definitive card payment failure · spec",
+   "w": 560,
+   "x": 2464,
+   "y": 2320
+  },
+  "I3-Classification.dc.html": {
+   "h": 1900,
+   "page": "map",
+   "title": "Classification index — two axes",
+   "w": 1440,
+   "x": 1880,
+   "y": 0
+  },
+  "I3-HeldConcept-1024.dc.html": {
+   "h": 768,
+   "page": "critical",
+   "title": "CONDITIONAL CONCEPT | PENDING RT-158 · Held sale restore — visual concept · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 8120
+  },
+  "I3-HeldConcept-1280.dc.html": {
+   "h": 800,
+   "page": "critical",
+   "title": "CONDITIONAL CONCEPT | PENDING RT-158 · Held sale restore — visual concept · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 8120
+  },
+  "I3-HeldConcept-Spec.dc.html": {
+   "h": 940,
+   "page": "critical",
+   "title": "CONDITIONAL CONCEPT | PENDING RT-158 · Held sale restore — visual concept · spec",
+   "w": 560,
+   "x": 2464,
+   "y": 8120
+  },
+  "I3-JourneyMap.dc.html": {
+   "h": 1320,
+   "page": "map",
+   "title": "FROZEN | n/a · Journey & state overview",
+   "w": 1800,
+   "x": 0,
+   "y": 0
+  },
+  "I3-Locked-1024.dc.html": {
+   "h": 768,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-116 · Terminal locked, transaction preserved · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 4640
+  },
+  "I3-Locked-1280.dc.html": {
+   "h": 800,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-116 · Terminal locked, transaction preserved · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 4640
+  },
+  "I3-Locked-Spec.dc.html": {
+   "h": 940,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-116 · Terminal locked, transaction preserved · spec",
+   "w": 560,
+   "x": 2464,
+   "y": 4640
+  },
+  "I3-Manager-1024.dc.html": {
+   "h": 768,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-114 · Manager approval required · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 3480
+  },
+  "I3-Manager-1280.dc.html": {
+   "h": 800,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-114 · Manager approval required · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 3480
+  },
+  "I3-Manager-Spec.dc.html": {
+   "h": 940,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-114 · Manager approval required · spec",
+   "w": 560,
+   "x": 2464,
+   "y": 3480
+  },
+  "I3-Offline-1024.dc.html": {
+   "h": 768,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-113 · Offline while selling · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 0
+  },
+  "I3-Offline-1280.dc.html": {
+   "h": 800,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-113 · Offline while selling · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 0
+  },
+  "I3-Offline-Spec.dc.html": {
+   "h": 940,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-113 · Offline while selling · spec",
+   "w": 560,
+   "x": 2464,
+   "y": 0
+  },
+  "I3-Receipt-1024.dc.html": {
+   "h": 768,
+   "page": "critical",
+   "title": "FROZEN | APPROVED receipt contract · Completed sale + receipt printing failure · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 6960
+  },
+  "I3-Receipt-1280.dc.html": {
+   "h": 800,
+   "page": "critical",
+   "title": "FROZEN | APPROVED receipt contract · Completed sale + receipt printing failure · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 6960
+  },
+  "I3-Receipt-Spec.dc.html": {
+   "h": 940,
+   "page": "critical",
+   "title": "FROZEN | APPROVED receipt contract · Completed sale + receipt printing failure · spec",
+   "w": 560,
+   "x": 2464,
+   "y": 6960
+  },
+  "I3-Restored-1024.dc.html": {
+   "h": 768,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-116 · Post-unlock restored transaction · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 5800
+  },
+  "I3-Restored-1280.dc.html": {
+   "h": 800,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-116 · Post-unlock restored transaction · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 5800
+  },
+  "I3-Restored-Spec.dc.html": {
+   "h": 940,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-116 · Post-unlock restored transaction · spec",
+   "w": 560,
+   "x": 2464,
+   "y": 5800
+  },
+  "I3-Syncing-1024.dc.html": {
+   "h": 768,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-113 · Reconnected / syncing pending · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 1160
+  },
+  "I3-Syncing-1280.dc.html": {
+   "h": 800,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-113 · Reconnected / syncing pending · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 1160
+  },
+  "I3-Syncing-Spec.dc.html": {
+   "h": 940,
+   "page": "critical",
+   "title": "FROZEN | PENDING RT-113 · Reconnected / syncing pending · spec",
+   "w": 560,
+   "x": 2464,
+   "y": 1160
+  },
+  "Locked-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B8a · Locked · 1280",
+   "w": 1280,
+   "x": 0,
+   "y": 6960
+  },
+  "LongCart-1024.dc.html": {
+   "h": 768,
+   "page": "screens",
+   "title": "EXPLORATION · B2 · Long cart · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 1160
+  },
+  "LongCart-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B2 · Long cart, keyboard focus in cart · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 1160
+  },
+  "ManagerApproval-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B7 · Manager approval · 1280",
+   "w": 1280,
+   "x": 1360,
+   "y": 5800
+  },
+  "Offline-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B5a · Offline, 3 pending · 1280",
+   "w": 1280,
+   "x": 0,
+   "y": 4640
+  },
+  "PayFailed-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B4a · Payment failed (definitive) · 1280",
+   "w": 1280,
+   "x": 0,
+   "y": 3480
+  },
+  "PayUnknown-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B4b · Payment result unknown — recovery · 1280",
+   "w": 1280,
+   "x": 1360,
+   "y": 3480
+  },
+  "ReceiptFailed-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B9 · Completed + receipt failed · 1280",
+   "w": 1280,
+   "x": 0,
+   "y": 8120
+  },
+  "Restored-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B8b · After unlock — restored context · 1280",
+   "w": 1280,
+   "x": 1360,
+   "y": 6960
+  },
+  "Sale-1024.dc.html": {
+   "h": 768,
+   "page": "screens",
+   "title": "EXPLORATION · B1 · Sale — active cart · 1024×768",
+   "w": 1024,
+   "x": 1360,
+   "y": 0
+  },
+  "Sale-1280.dc.html": {
+   "h": 800,
+   "page": "screens",
+   "title": "EXPLORATION · B1 · Sale — active cart · 1280×800",
+   "w": 1280,
+   "x": 0,
+   "y": 0
+  },
+  "States.dc.html": {
+   "h": 1900,
+   "page": "states",
+   "title": "EXPLORATION · D · State consistency",
+   "w": 1440,
+   "x": 0,
+   "y": 0
+  },
+  "Syncing-1024.dc.html": {
+   "h": 768,
+   "page": "screens",
+   "title": "EXPLORATION · B5b · Reconnected, syncing · 1024",
+   "w": 1024,
+   "x": 1360,
+   "y": 4640
+  }
+ },
+ "createdOnFiles": {
+  "at": "2026-10-04T07:50:41.896Z",
+  "v": 1
+ },
+ "designSystems": [],
+ "launch": {
+  "page": "critical",
+  "view": "canvas"
+ },
+ "notes": {
+  "i2hold": {
+   "fill": "purple",
+   "page": "core",
+   "size": 24,
+   "text": "BEHAVIOR PENDING — RT-158: the «تعليق البيع / البيوع المعلّقة» controls on the Sale and Long-cart panes (purple dashed mark) are not implementation-safe. The rest of these screens: Visual FROZEN · Behavior APPROVED (RT-24).",
+   "w": 360,
+   "x": 2720,
+   "y": 3480
+  },
+  "i2row0": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "core",
+   "text": "Sale — normal active cart",
+   "w": 240,
+   "x": 0,
+   "y": -240
+  },
+  "i2row1": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "core",
+   "text": "Sale — long cart (24 lines)",
+   "w": 240,
+   "x": 0,
+   "y": 920
+  },
+  "i2row2": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "core",
+   "text": "Cash checkout — underpaid (remaining)",
+   "w": 240,
+   "x": 0,
+   "y": 2080
+  },
+  "i2row3": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "core",
+   "text": "Cash checkout — overpaid (change)",
+   "w": 240,
+   "x": 0,
+   "y": 3240
+  },
+  "i2row4": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "core",
+   "text": "Payment result unknown — recovery",
+   "w": 240,
+   "x": 0,
+   "y": 4400
+  },
+  "i2row5": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "core",
+   "text": "Consistency panel",
+   "w": 240,
+   "x": 0,
+   "y": 5560
+  },
+  "i2stk0": {
+   "fill": "gray",
+   "page": "core",
+   "size": 24,
+   "text": "Open assumptions (not frozen): Western digits, currency label ج.م after the amount, sale-ID format. No keyboard shortcuts are shown. The product-entry surface shows no focus state — focus ownership and scanner routing follow the existing input contract.",
+   "w": 360,
+   "x": 2720,
+   "y": 0
+  },
+  "i2stk1": {
+   "fill": "gray",
+   "page": "core",
+   "size": 24,
+   "text": "Pinned: shell, product entry, transaction line, cart header, \"more above\" bar, cart footer, and the whole summary pane with total and primary action. Only cart rows scroll. Row order (newest at bottom) mirrors the existing cart contract.",
+   "w": 360,
+   "x": 2720,
+   "y": 1160
+  },
+  "i2stk2": {
+   "fill": "gray",
+   "page": "core",
+   "size": 24,
+   "text": "Tender list shows Cash and Card only; other tenders / split tender are not designed. \"Amount due\" = sale total minus anything already paid (0.00 here).",
+   "w": 360,
+   "x": 2720,
+   "y": 2320
+  },
+  "i2stk4": {
+   "fill": "orange",
+   "page": "core",
+   "size": 24,
+   "text": "UNRESOLVED: what \"متابعة إجراء الاستعادة\" does, whether retry or cancel is ever allowed while the result is unknown — payment recovery contract. The screen only names one safe action and keeps the sale identifiable.",
+   "w": 360,
+   "x": 2720,
+   "y": 4640
+  },
+  "i3held": {
+   "fill": "purple",
+   "page": "critical",
+   "size": 24,
+   "text": "Visual: CONDITIONAL concept · Behavior: PENDING RT-158. Not implementation-safe. Who can hold/resume, persistence, limits, expiry and authorization are all RT-158.",
+   "w": 380,
+   "x": 3104,
+   "y": 8120
+  },
+  "i3open": {
+   "fill": "gray",
+   "page": "critical",
+   "size": 24,
+   "text": "Still open on every screen: Western vs Arabic-Indic digits · currency label/placement · keyboard shortcuts · focus ownership / scanner routing.",
+   "w": 380,
+   "x": 3104,
+   "y": 560
+  },
+  "i3row0": {
+   "kind": "title1",
+   "maxW": 3024,
+   "page": "critical",
+   "text": "1 · Offline while selling",
+   "w": 240,
+   "x": 0,
+   "y": -240
+  },
+  "i3row1": {
+   "kind": "title1",
+   "maxW": 3024,
+   "page": "critical",
+   "text": "2 · Reconnected / syncing pending",
+   "w": 240,
+   "x": 0,
+   "y": 920
+  },
+  "i3row2": {
+   "kind": "title1",
+   "maxW": 3024,
+   "page": "critical",
+   "text": "3 · Definitive card payment failure",
+   "w": 240,
+   "x": 0,
+   "y": 2080
+  },
+  "i3row3": {
+   "kind": "title1",
+   "maxW": 3024,
+   "page": "critical",
+   "text": "4 · Manager approval required",
+   "w": 240,
+   "x": 0,
+   "y": 3240
+  },
+  "i3row4": {
+   "kind": "title1",
+   "maxW": 3024,
+   "page": "critical",
+   "text": "5 · Terminal locked, transaction preserved",
+   "w": 240,
+   "x": 0,
+   "y": 4400
+  },
+  "i3row5": {
+   "kind": "title1",
+   "maxW": 3024,
+   "page": "critical",
+   "text": "6 · Post-unlock restored transaction",
+   "w": 240,
+   "x": 0,
+   "y": 5560
+  },
+  "i3row6": {
+   "kind": "title1",
+   "maxW": 3024,
+   "page": "critical",
+   "text": "7 · Completed sale + receipt printing failure",
+   "w": 240,
+   "x": 0,
+   "y": 6720
+  },
+  "i3row7": {
+   "kind": "title1",
+   "maxW": 3024,
+   "page": "critical",
+   "text": "— · Held sale restore — visual concept",
+   "w": 240,
+   "x": 0,
+   "y": 7880
+  },
+  "i3rule": {
+   "fill": "blue",
+   "page": "critical",
+   "size": 24,
+   "text": "Implementation-safe = Visual FROZEN AND Behavior APPROVED. Board titles read: VISUAL | BEHAVIOR · name. Offline, Syncing, Manager, Locked, Restored and Held are frozen visuals with PENDING behavior.",
+   "w": 380,
+   "x": 3104,
+   "y": 1160
+  },
+  "i3unk": {
+   "fill": "teal",
+   "page": "critical",
+   "size": 24,
+   "text": "Payment UNKNOWN is not redrawn here. Canonical reference stays on page B (Iteration 2): Visual FROZEN · Behavior APPROVED subject to the payment recovery contract.",
+   "w": 380,
+   "x": 3104,
+   "y": 0
+  },
+  "row0": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "screens",
+   "text": "B1 · Sale — active cart",
+   "w": 240,
+   "x": 0,
+   "y": -240
+  },
+  "row1": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "screens",
+   "text": "B2 · Sale — long cart (24 lines)",
+   "w": 240,
+   "x": 0,
+   "y": 920
+  },
+  "row2": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "screens",
+   "text": "B3 · Checkout — cash",
+   "w": 240,
+   "x": 0,
+   "y": 2080
+  },
+  "row3": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "screens",
+   "text": "B4 · Payment failed vs. result unknown",
+   "w": 240,
+   "x": 0,
+   "y": 3240
+  },
+  "row4": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "screens",
+   "text": "B5 · Offline / sync pending",
+   "w": 240,
+   "x": 0,
+   "y": 4400
+  },
+  "row5": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "screens",
+   "text": "B6 · Held sale restore  ·  B7 · Manager approval",
+   "w": 240,
+   "x": 0,
+   "y": 5560
+  },
+  "row6": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "screens",
+   "text": "B8 · Lock / recovery",
+   "w": 240,
+   "x": 0,
+   "y": 6720
+  },
+  "row7": {
+   "kind": "title1",
+   "maxW": 2640,
+   "page": "screens",
+   "text": "B9 · Sale completed, receipt print failed",
+   "w": 240,
+   "x": 0,
+   "y": 7880
+  },
+  "stk0": {
+   "fill": "gray",
+   "page": "screens",
+   "size": 24,
+   "text": "Placeholders, not decisions: key caps (F1, F2, F5–F9, F12, Esc), currency label ج.م, sale-ID format T03-000000 and branch names. Bind to the existing keymap and data.",
+   "w": 360,
+   "x": 2720,
+   "y": 0
+  },
+  "stk1": {
+   "fill": "gray",
+   "page": "screens",
+   "size": 24,
+   "text": "Shown: newest line appended at the bottom and kept in view; arrow keys move a separate keyboard selection (blue). Whether scanning while the cart has focus jumps back to the scan bar is a behaviour question for the existing input contract.",
+   "w": 360,
+   "x": 2720,
+   "y": 1160
+  },
+  "stk2": {
+   "fill": "gray",
+   "page": "screens",
+   "size": 24,
+   "text": "Tender list shows Cash and Card only. Other tenders, split tender and quick-cash amounts are NOT designed here — add only if the payment contract defines them.",
+   "w": 360,
+   "x": 2720,
+   "y": 2320
+  },
+  "stk3": {
+   "fill": "orange",
+   "page": "screens",
+   "size": 24,
+   "text": "UNRESOLVED: what \"Verify payment result\" actually does, whether retry is ever permitted while the result is unknown, and when cancel is allowed. All defined by the payment recovery contract. The design only withholds casual retry and keeps the sale identifiable.",
+   "w": 360,
+   "x": 2720,
+   "y": 3480
+  },
+  "stk4": {
+   "fill": "orange",
+   "page": "screens",
+   "size": 24,
+   "text": "UNRESOLVED: which tenders are allowed offline and any offline limits — product contract. Pending count and last-sync time are data slots.",
+   "w": 360,
+   "x": 2720,
+   "y": 4640
+  },
+  "stk5": {
+   "fill": "orange",
+   "page": "screens",
+   "size": 24,
+   "text": "UNRESOLVED: manager authorization method (badge scan / PIN shown as slots) and the reason list. Held-sale visibility across terminals/operators is a persistence/authorization rule — the third row (terminal 02) only shows how it would look if allowed.",
+   "w": 360,
+   "x": 2720,
+   "y": 5800
+  },
+  "stk6": {
+   "fill": "orange",
+   "page": "screens",
+   "size": 24,
+   "text": "UNRESOLVED: who may unlock (same cashier only vs. another operator / manager) and whether another user may take over the preserved sale.",
+   "w": 360,
+   "x": 2720,
+   "y": 6960
+  },
+  "stk7": {
+   "fill": "orange",
+   "page": "screens",
+   "size": 24,
+   "text": "UNRESOLVED: whether \"Continue without receipt\" and reprint limits exist — receipt contract. The design never offers to repeat the sale.",
+   "w": 360,
+   "x": 2720,
+   "y": 8120
+  }
+ },
+ "order": [
+  "Direction.dc.html",
+  "Components.dc.html",
+  "States.dc.html",
+  "Sale-1280.dc.html",
+  "Sale-1024.dc.html",
+  "LongCart-1280.dc.html",
+  "LongCart-1024.dc.html",
+  "Checkout-1280.dc.html",
+  "Checkout-1024.dc.html",
+  "PayFailed-1280.dc.html",
+  "PayUnknown-1280.dc.html",
+  "Offline-1280.dc.html",
+  "Syncing-1024.dc.html",
+  "HeldRestore-1280.dc.html",
+  "ManagerApproval-1280.dc.html",
+  "Locked-1280.dc.html",
+  "Restored-1280.dc.html",
+  "ReceiptFailed-1280.dc.html",
+  "I2-Sale-1280.dc.html",
+  "I2-Sale-1024.dc.html",
+  "I2-LongCart-1280.dc.html",
+  "I2-LongCart-1024.dc.html",
+  "I2-CheckoutUnder-1280.dc.html",
+  "I2-CheckoutUnder-1024.dc.html",
+  "I2-CheckoutOver-1280.dc.html",
+  "I2-CheckoutOver-1024.dc.html",
+  "I2-PayUnknown-1280.dc.html",
+  "I2-PayUnknown-1024.dc.html",
+  "I2-Consistency.dc.html",
+  "I3-Offline-1280.dc.html",
+  "I3-Offline-1024.dc.html",
+  "I3-Offline-Spec.dc.html",
+  "I3-Syncing-1280.dc.html",
+  "I3-Syncing-1024.dc.html",
+  "I3-Syncing-Spec.dc.html",
+  "I3-CardFailed-1280.dc.html",
+  "I3-CardFailed-1024.dc.html",
+  "I3-CardFailed-Spec.dc.html",
+  "I3-Manager-1280.dc.html",
+  "I3-Manager-1024.dc.html",
+  "I3-Manager-Spec.dc.html",
+  "I3-Locked-1280.dc.html",
+  "I3-Locked-1024.dc.html",
+  "I3-Locked-Spec.dc.html",
+  "I3-Restored-1280.dc.html",
+  "I3-Restored-1024.dc.html",
+  "I3-Restored-Spec.dc.html",
+  "I3-Receipt-1280.dc.html",
+  "I3-Receipt-1024.dc.html",
+  "I3-Receipt-Spec.dc.html",
+  "I3-HeldConcept-1280.dc.html",
+  "I3-HeldConcept-1024.dc.html",
+  "I3-HeldConcept-Spec.dc.html",
+  "I3-JourneyMap.dc.html",
+  "I3-Classification.dc.html"
+ ],
+ "pages": [
+  {
+   "id": "direction",
+   "name": "A · Visual direction (foundation)"
+  },
+  {
+   "id": "core",
+   "name": "B · Core cashier screens (iteration 2)"
+  },
+  {
+   "id": "critical",
+   "name": "B3 · Critical states (iteration 3)"
+  },
+  {
+   "id": "map",
+   "name": "E · Journey map & classification (two axes)"
+  },
+  {
+   "id": "screens",
+   "name": "Iteration 1 · EXPLORATION (superseded)"
+  },
+  {
+   "id": "components",
+   "name": "C · Components — EXPLORATION"
+  },
+  {
+   "id": "states",
+   "name": "D · State consistency — EXPLORATION"
+  }
+ ],
+ "title": "Design"
+}

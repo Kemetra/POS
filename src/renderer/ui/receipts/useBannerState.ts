@@ -15,7 +15,7 @@ import type { PrinterFailureState } from './PrinterFailureBanner.js';
  * unmount, and a poll resolving after unmount is ignored.
  *
  * Drawer-failure state is intentionally NOT surfaced here — that is the
- * Slice-4 `<DrawerFailureBanner>`'s own hook against the same snapshot.
+ * drawer notice's own hook (useDrawerBannerState) against the same snapshot.
  */
 
 export interface UseBannerStateOptions {

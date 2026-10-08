@@ -41,6 +41,7 @@ describe('#380 createStuckAttemptSweeper', () => {
       attemptsRepo: { findStartedByTerminal },
       discard,
       resolveTerminalId: () => 'terminal-real',
+      attemptHasLiveTender: () => false,
       logError: vi.fn(),
     });
 
@@ -60,6 +61,7 @@ describe('#380 createStuckAttemptSweeper', () => {
       attemptsRepo: { findStartedByTerminal },
       discard,
       resolveTerminalId: () => 'terminal-real', // this terminal — has no orphan
+      attemptHasLiveTender: () => false,
       logError: vi.fn(),
     });
 
@@ -76,6 +78,7 @@ describe('#380 createStuckAttemptSweeper', () => {
       attemptsRepo: { findStartedByTerminal },
       discard,
       resolveTerminalId: () => null,
+      attemptHasLiveTender: () => false,
       logError: vi.fn(),
     });
 
@@ -92,10 +95,64 @@ describe('#380 createStuckAttemptSweeper', () => {
       attemptsRepo: { findStartedByTerminal: () => row() },
       discard,
       resolveTerminalId: () => 'terminal-real',
+      attemptHasLiveTender: () => false,
       logError,
     });
 
     await expect(sweep()).resolves.toBeUndefined();
+    expect(logError).toHaveBeenCalled();
+  });
+
+  // RT-117 (RT-116 §9 S1 interim) — an attempt holding LIVE tender
+  // (applying | applied | reversal_pending) is never auto-reversed by a
+  // session start/end. The money stays recorded; resolution is explicit.
+  it('skips (never discards) a stuck attempt that holds live tender', async () => {
+    const discard = vi.fn(() => Promise.resolve({ kind: 'ok' as const, failed_at: 'x' }));
+    const attemptHasLiveTender = vi.fn((id: string) => id === 'pa-stuck');
+    const sweep = createStuckAttemptSweeper({
+      attemptsRepo: { findStartedByTerminal: () => row() },
+      discard,
+      resolveTerminalId: () => 'terminal-real',
+      attemptHasLiveTender,
+      logError: vi.fn(),
+    });
+
+    await sweep();
+
+    expect(attemptHasLiveTender).toHaveBeenCalledWith('pa-stuck');
+    expect(discard).not.toHaveBeenCalled();
+  });
+
+  it('still discards a zero-funds stuck attempt (no live tender)', async () => {
+    const discard = vi.fn(() => Promise.resolve({ kind: 'ok' as const, failed_at: 'x' }));
+    const sweep = createStuckAttemptSweeper({
+      attemptsRepo: { findStartedByTerminal: () => row() },
+      discard,
+      resolveTerminalId: () => 'terminal-real',
+      attemptHasLiveTender: () => false,
+      logError: vi.fn(),
+    });
+
+    await sweep();
+
+    expect(discard).toHaveBeenCalledWith({ payment_attempt_id: 'pa-stuck' });
+  });
+
+  it('skips the attempt (fail-closed) when the live-tender check throws', async () => {
+    const discard = vi.fn(() => Promise.resolve({ kind: 'ok' as const, failed_at: 'x' }));
+    const logError = vi.fn();
+    const sweep = createStuckAttemptSweeper({
+      attemptsRepo: { findStartedByTerminal: () => row() },
+      discard,
+      resolveTerminalId: () => 'terminal-real',
+      attemptHasLiveTender: () => {
+        throw new Error('db locked');
+      },
+      logError,
+    });
+
+    await expect(sweep()).resolves.toBeUndefined();
+    expect(discard).not.toHaveBeenCalled();
     expect(logError).toHaveBeenCalled();
   });
 });

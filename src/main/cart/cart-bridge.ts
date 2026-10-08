@@ -20,6 +20,10 @@ import type {
   CartLinesSetNoteResponse,
   CartLinesUpdateRequest,
   CartLinesUpdateResponse,
+  CartReturnToSaleRequest,
+  CartReturnToSaleResponse,
+  CartReturnToSaleEligibilityRequest,
+  CartReturnToSaleEligibilityResponse,
   CartSnapshotRequest,
   CartSnapshotResponse,
   CartSubscribeRequest,
@@ -31,12 +35,13 @@ import { CartState } from '../../shared/cart/cart-state.js';
 import type { CartRefusalReason } from '../../shared/cart/refusal.js';
 import { computeLineSubtotal, LineSubtotalError } from './line-subtotal.js';
 import { requireOperatorSession } from './require-operator-session.js';
-import type { CartStore, InsertDiscountPlaceholderInput } from './cart-store.js';
+import type { CartStore, InsertDiscountPlaceholderInput, InsertOutboxInput } from './cart-store.js';
 import { AuditEmitter } from '../audit/audit-emitter.js';
 import { buildPaymentIntentEnvelope } from './handoff-envelope-builder.js';
 import { freezeEnvelope } from '../../shared/cart/handoff-envelope.js';
 import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope.js';
 import type { CartPaymentStatus } from '../payments/repositories/payment-attempts.repository.js';
+import type { ReleaseCheckoutPayment } from '../payments/checkout-return-guard.js';
 
 /**
  * 005-sales-cart S2 — `cart.*` bridge handlers (T025/T026 from S1 +
@@ -168,6 +173,7 @@ export interface CartBridgeHandlersDeps {
   resolveItemRef?: ItemRefResolver;
   /** Optional clock for testability. Defaults to `() => new Date()`. */
   clock?: () => Date;
+
   /**
    * Optional audit emitter. Required for post-handoff cancel audit emission.
    * When omitted, pre-handoff void still works (no audit for cashier_voided).
@@ -183,6 +189,22 @@ export interface CartBridgeHandlersDeps {
    * and the production factory requires it.
    */
   cartPaymentStatus?: (cart_id: string) => CartPaymentStatus;
+  /**
+   * RT-26 — the payments record's verdict for Checkout Back
+   * (`bindCheckoutReturnGuard`): refuses on any tender activity or a settled /
+   * force-failed payment, and cancels a zero-funds started attempt. Runs inside
+   * the cart transaction. Optional on the type so unrelated fixtures construct
+   * unchanged; `returnToSale` FAILS CLOSED (`not_implemented`) without it, and
+   * the production factory requires it.
+   */
+  releaseCheckoutPayment?: ReleaseCheckoutPayment;
+  /**
+   * RT-26 — READ-ONLY twin of `releaseCheckoutPayment`
+   * (`bindCheckoutReturnAllowed`): the same payments proof, no writes. Backs
+   * `cart.returnToSaleEligibility`, which FAILS CLOSED (`not_implemented`)
+   * without it; the production factory requires it.
+   */
+  checkoutReturnAllowed?: (req: { cart_id: string; handoff_action_id: string }) => boolean;
 }
 
 /**
@@ -239,26 +261,49 @@ function postHandoffApprover(
  * mislabelled.
  */
 function postHandoffCancelRefusal(
-  store: Pick<CartStore, 'findLatestHandoffActionId'>,
-  cartState: CartState,
-  req: { cart_id: string; handoff_action_id: string },
+  cart: PersistedHandoffCart,
+  req: { handoff_action_id: string },
 ): CartRefusalReason | null {
-  if (cartState !== CartState.frozen_handed_off) return 'closed';
-  return store.findLatestHandoffActionId(req.cart_id) === req.handoff_action_id
-    ? null
-    : 'stale_version';
+  if ((cart.state as CartState) !== CartState.frozen_handed_off) return 'closed';
+  return isPersistedHandoff(cart, req.handoff_action_id) ? null : 'stale_version';
 }
 
-/** A recorded outbox row is a replay of THIS post-handoff cancel (same cart and handoff). */
-function isSameCancelReplay(
-  replay: { action_kind: string; cart_id: string; payload_json: string },
-  req: { cart_id: string; handoff_action_id: string },
+/** The cart fields that identify its current handoff. */
+interface PersistedHandoffCart {
+  state: string;
+  handoff_envelope_json: string | null;
+}
+
+/**
+ * Does `handoffActionId` name the handoff of the cart's PERSISTED envelope —
+ * the one payment would use? Written in the same transaction as the cart
+ * freeze, so unlike the outbox's wall-clock `applied_at` it cannot be fooled
+ * by a clock step between two handoffs of the same cart (RT-26 makes repeat
+ * handoffs possible).
+ */
+function isPersistedHandoff(cart: PersistedHandoffCart, handoffActionId: string): boolean {
+  return parseEnvelope(cart.handoff_envelope_json)?.handoff_action_id === handoffActionId;
+}
+
+type RecordedAction = { action_kind: string; cart_id: string; payload_json: string };
+type HandoffBoundRequest = { cart_id: string; handoff_action_id: string };
+
+/** A recorded outbox row is a replay of `actionKind` on the SAME cart and handoff. */
+function isSameHandoffReplay(
+  actionKind: string,
+  replay: RecordedAction,
+  req: HandoffBoundRequest,
 ): boolean {
   return (
-    replay.action_kind === 'cart.cancel.post_handoff' &&
+    replay.action_kind === actionKind &&
     replay.cart_id === req.cart_id &&
     recordedHandoffAction(replay.payload_json) === req.handoff_action_id
   );
+}
+
+/** A recorded outbox row is a replay of THIS post-handoff cancel (same cart and handoff). */
+function isSameCancelReplay(replay: RecordedAction, req: HandoffBoundRequest): boolean {
+  return isSameHandoffReplay('cart.cancel.post_handoff', replay, req);
 }
 
 /** The handoff action recorded in a post-handoff cancel outbox payload. */
@@ -271,6 +316,28 @@ function recordedHandoffAction(payloadJson: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** A recorded outbox row is a replay of THIS Back (same cart and handoff). */
+function isSameReturnReplay(replay: RecordedAction, req: HandoffBoundRequest): boolean {
+  return isSameHandoffReplay('cart.return_to_sale', replay, req);
+}
+
+/**
+ * Why a (non-replay) Back cannot proceed, or null. Only a `frozen_handed_off`
+ * cart is in Checkout; a cancelled one is closed, and any other state means the
+ * renderer's view is stale (already back, or never handed off). The request
+ * must name the handoff of the cart's PERSISTED envelope — the one payment
+ * would use — so an old envelope can never drive it.
+ */
+function returnToSaleRefusal(
+  cart: PersistedHandoffCart,
+  req: { handoff_action_id: string },
+): CartRefusalReason | null {
+  const state = cart.state as CartState;
+  if (state === CartState.cancelled) return 'closed';
+  if (state !== CartState.frozen_handed_off) return 'stale_version';
+  return isPersistedHandoff(cart, req.handoff_action_id) ? null : 'stale_version';
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
@@ -314,6 +381,35 @@ function computeUpdatedQuantity(
   return abs === 0 ? { kind: 'remove' } : { kind: 'ok', newQuantity: abs };
 }
 
+/** What the RT-26 transaction needs once every gate has passed. */
+interface ReturnToSaleContext {
+  session: OperatorSessionRecord;
+  store: CartStore;
+  cart: StoredCart;
+  release: ReleaseCheckoutPayment;
+}
+
+/** The append-only `cart.return_to_sale` outbox row (ids only). */
+function returnToSaleOutboxRow(
+  req: CartReturnToSaleRequest,
+  session: OperatorSessionRecord,
+  now: string,
+): InsertOutboxInput {
+  return {
+    action_id: req.idempotency_key,
+    cart_id: req.cart_id,
+    line_id: null,
+    action_kind: 'cart.return_to_sale',
+    acting_operator_id: session.operator_id,
+    attribution_operator_id: null,
+    operator_session_id: session.id,
+    payload_json: JSON.stringify(
+      scrubPayloadForOutbox({ cart_id: req.cart_id, handoff_action_id: req.handoff_action_id }),
+    ),
+    applied_at: now,
+  };
+}
+
 export class CartBridgeHandlers {
   /** S1 fallback — used only when deps.cartStore is omitted. */
   private readonly inMemCarts: Map<string, InMemoryCartRecord>;
@@ -336,6 +432,11 @@ export class CartBridgeHandlers {
     if (gate.kind !== 'ok') return refuse(gate.reason);
 
     const session = gate.session;
+
+    // RT-113 P2 — a session that lost its authority may finish or void the
+    // current sale but must not start a new one. (The safe-point re-check
+    // after this call runs at the IPC choke point, `sale-boundary-guard.ts`.)
+    if (session.authority_latch !== undefined) return refuse('authority_conflict');
 
     // #380 (F-007) — resolve the REAL terminal_id before doing any work. An
     // unpaired terminal cannot stamp a cart row (carts.terminal_id is NOT
@@ -424,6 +525,17 @@ export class CartBridgeHandlers {
     if (resolved.kind !== 'ok') {
       // The bridge contract has no per-resolver reason; collapse to generic.
       return refuse('wrong_owner');
+    }
+
+    // RT-113 P2 — while the session is latched, an EMPTY cart is a safe point,
+    // not the start of a new sale: refuse. The current non-empty sale may grow.
+    // Checked AFTER the lookup await (the heartbeat may latch the session
+    // during it) and before the synchronous write below.
+    if (
+      gated.session.authority_latch !== undefined &&
+      store.getActiveLines(req.cart_id).length === 0
+    ) {
+      return refuse('authority_conflict');
     }
 
     // Q4 merge path — application-layer uniqueness on (cart_id, item_ref) among active lines.
@@ -763,15 +875,16 @@ export class CartBridgeHandlers {
     const pctDigits = pctMatch?.[1] ?? null;
     const isAboveThreshold = pctDigits !== null && parseInt(pctDigits, 10) > 10;
 
-    if (isAboveThreshold) {
-      // Attribution must be present and must not be the acting cashier.
-      if (!req.attribution_operator_id || req.attribution_operator_id === session.operator_id) {
-        return refuse('manager_attribution_required');
-      }
+    // RT-183: the approving supervisor is derived from the authenticated
+    // session only — never from the renderer. A manager or admin session
+    // approves its own discount (RT-28 D2). A cashier session has no
+    // main-held approval to consume yet (the RT-28/RT-114 step-up does not
+    // exist), so an above-threshold add fails closed.
+    const sessionIsManager = session.role === 'manager' || session.role === 'admin';
+    if (isAboveThreshold && !sessionIsManager) {
+      return refuse('manager_attribution_required');
     }
-
-    // Narrowed after the guard above — safe to use without assertion in the isAboveThreshold branch.
-    const attributionOperatorId = req.attribution_operator_id ?? null;
+    const attributionOperatorId = isAboveThreshold ? session.operator_id : null;
 
     // Idempotency: the idempotency_key doubles as placeholder_id.
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -933,7 +1046,9 @@ export class CartBridgeHandlers {
         line_id: null,
         action_kind: 'cart.void',
         acting_operator_id: session.operator_id,
-        attribution_operator_id: req.attribution_operator_id ?? null,
+        // RT-184: a pre-handoff void needs no approver, and the renderer
+        // never chooses one.
+        attribution_operator_id: null,
         operator_session_id: session.id,
         payload_json: JSON.stringify(scrubPayloadForOutbox({ cart_id: req.cart_id })),
         applied_at: now,
@@ -996,7 +1111,7 @@ export class CartBridgeHandlers {
         : refuse('idempotency_payload_mismatch');
     }
 
-    const precondition = postHandoffCancelRefusal(store, cart.state as CartState, req);
+    const precondition = postHandoffCancelRefusal(cart, req);
     if (precondition !== null) return refuse(precondition);
 
     const now = this.clock().toISOString();
@@ -1049,6 +1164,170 @@ export class CartBridgeHandlers {
       },
     );
     return cancelled ? { kind: 'ok' } : refuse('closed');
+  }
+
+  // ── cart.returnToSale (RT-26) ───────────────────────────────────────
+
+  /**
+   * Checkout Back/Esc: return the SAME `frozen_handed_off` cart to `editing`.
+   *
+   * 1. Session gate, then the ownership/tenant gate every cart handler applies
+   *    (without `requireMutable` — the cart is frozen by definition).
+   * 2. Fails closed without the payments guard: main must be able to prove no
+   *    money moved before it unfreezes anything.
+   * 3. Idempotency replay before the state guard, bound to the SAME cart and
+   *    handoff (a lost response is retried with the same key and replays).
+   * 4. The cart must still be frozen, on the handoff of its persisted
+   *    envelope (`closed` / `stale_version` otherwise — a stale or replayed
+   *    Back with a new key, or an old envelope).
+   * 5. ONE transaction: the payments guard (refuses on any tender / settled /
+   *    force-failed; cancels a zero-funds started attempt), the conditional
+   *    `frozen_handed_off → editing` UPDATE that clears the persisted envelope,
+   *    the outbox row and the `cart.return_to_sale` audit event.
+   *
+   * Lines, notes, versions, placeholders and the cart id are untouched: no new
+   * cart, no void, no cancel. A blocked return refuses `frozen` (the cart stays
+   * in Checkout) and writes nothing.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async returnToSale(req: CartReturnToSaleRequest): Promise<CartReturnToSaleResponse> {
+    const ctx = this.resolveReturnToSale(req);
+    if (ctx.kind === 'replayed') return { kind: 'ok' };
+    if (ctx.kind === 'refused') return ctx;
+    if (!this.commitReturnToSale(ctx, req)) return refuse('frozen');
+
+    this.deps.logger?.info(
+      { event: 'cart.return_to_sale.ok', cart_id: req.cart_id },
+      'cart.returnToSale',
+    );
+    return { kind: 'ok' };
+  }
+
+  /**
+   * RT-26 — read-only eligibility for Checkout Back: the same gates and the
+   * same payments proof as `returnToSale`, with NO writes (no outbox, no audit,
+   * no attempt cancel). `returnable: false` for a cart that is not frozen on
+   * this handoff, or whose payments record blocks a Back. Checkout keeps Back
+   * disabled until this answers `true`, so a remount cannot re-enable Back
+   * after tender was ever touched.
+   */
+  returnToSaleEligibility(
+    req: CartReturnToSaleEligibilityRequest,
+  ): Promise<CartReturnToSaleEligibilityResponse> {
+    const gated = this.gateOwnedCart(req.cart_id);
+    if (gated.kind !== 'ok') return Promise.resolve(gated);
+    const allowed = this.deps.checkoutReturnAllowed;
+    if (allowed === undefined) return Promise.resolve(refuse('not_implemented'));
+    const returnable = returnToSaleRefusal(gated.cart, req) === null && allowed(req);
+    return Promise.resolve({ kind: 'ok', returnable });
+  }
+
+  /**
+   * Steps 1–4 of `returnToSale`: gates, fail-closed wiring, replay, state.
+   * `replayed` = this exact Back was already applied (the caller answers `ok`).
+   */
+  private resolveReturnToSale(
+    req: CartReturnToSaleRequest,
+  ):
+    | { kind: 'refused'; reason: CartRefusalReason }
+    | { kind: 'replayed' }
+    | ({ kind: 'ready' } & ReturnToSaleContext) {
+    const gated = this.gateOwnedCart(req.cart_id);
+    if (gated.kind !== 'ok') return gated;
+    const { session, store, cart } = gated;
+
+    const release = this.deps.releaseCheckoutPayment;
+    if (release === undefined) return refuse('not_implemented');
+
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      return isSameReturnReplay(replay, req)
+        ? { kind: 'replayed' }
+        : refuse('idempotency_payload_mismatch');
+    }
+
+    const precondition = returnToSaleRefusal(cart, req);
+    if (precondition !== null) return refuse(precondition);
+    return { kind: 'ready', session, store, cart, release };
+  }
+
+  /**
+   * Step 5: ONE transaction — payments guard, conditional cart UPDATE, outbox
+   * row, audit event. `false` when the payments guard refused (nothing written).
+   */
+  private commitReturnToSale(ctx: ReturnToSaleContext, req: CartReturnToSaleRequest): boolean {
+    const { session, store, cart, release } = ctx;
+    const now = this.clock().toISOString();
+    const event_id = randomUUID();
+    let cancelledAttemptId: string | null = null;
+
+    return store.returnFrozenCartToSaleAndOutbox(
+      { cart_id: req.cart_id, last_action_id: req.idempotency_key, updated_at: now },
+      returnToSaleOutboxRow(req, session, now),
+      () => {
+        const outcome = release({
+          cart_id: req.cart_id,
+          handoff_action_id: req.handoff_action_id,
+          action_id: req.idempotency_key,
+          at: now,
+          session_id: session.id,
+        });
+        if (outcome.kind !== 'released') return false;
+        cancelledAttemptId = outcome.cancelled_attempt_id;
+        return true;
+      },
+      () => {
+        this.deps.auditEmitter?.emit({
+          event_id,
+          tenant_id: cart.tenant_id,
+          branch_id: cart.branch_id,
+          originating_terminal_id: cart.terminal_id,
+          acting_operator_id: session.operator_id,
+          session_id: session.id,
+          shift_id: null,
+          action_category: 'cart.return_to_sale',
+          created_at: now,
+          approving_supervisor_id: null,
+          payload: {
+            cart_id: req.cart_id,
+            handoff_action_id: req.handoff_action_id,
+            cancelled_payment_attempt_id: cancelledAttemptId,
+          },
+        });
+      },
+    );
+  }
+
+  /**
+   * Session gate → DB store → cart lookup → ownership/tenant gate, WITHOUT
+   * `requireMutable` (a handed-off cart is frozen by definition).
+   */
+  private gateOwnedCart(
+    cart_id: string,
+  ):
+    | { kind: 'refused'; reason: CartRefusalReason }
+    | { kind: 'ok'; session: OperatorSessionRecord; store: CartStore; cart: StoredCart } {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    const store = this.deps.cartStore;
+    if (store === undefined) return refuse('not_implemented');
+
+    const cart = store.getCart(cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+    return { kind: 'ok', session, store, cart };
   }
 
   // ── cart.handoff ────────────────────────────────────────────────────

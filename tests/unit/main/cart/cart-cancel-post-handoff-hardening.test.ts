@@ -96,7 +96,14 @@ async function frozenCart(): Promise<Fixture> {
   const creator = as(cashier);
   const created = await creator.create({ idempotency_key: 'create-1' });
   if (created.kind !== 'ok') throw new Error('create failed');
-  db.run(`UPDATE carts SET state = 'frozen_handed_off' WHERE cart_id = ?`, [created.cart_id]);
+  // As cart.handoff persists it: frozen, with the envelope naming this handoff.
+  db.run(
+    `UPDATE carts SET state = 'frozen_handed_off', handoff_envelope_json = ? WHERE cart_id = ?`,
+    [
+      JSON.stringify({ handoff_action_id: HANDOFF, lines: [], discount_placeholders: [] }),
+      created.cart_id,
+    ],
+  );
   db.run(
     `INSERT INTO cart_action_outbox
        (action_id, cart_id, line_id, action_kind, acting_operator_id,
@@ -163,7 +170,13 @@ describe('cancelPostHandoff — idempotency replay is bound to the cart', () => 
     const handlersB = a.as(cashierB);
     const createdB = await handlersB.create({ idempotency_key: 'create-b' });
     if (createdB.kind !== 'ok') throw new Error('create b failed');
-    a.db.run(`UPDATE carts SET state = 'frozen_handed_off' WHERE cart_id = ?`, [createdB.cart_id]);
+    a.db.run(
+      `UPDATE carts SET state = 'frozen_handed_off', handoff_envelope_json = ? WHERE cart_id = ?`,
+      [
+        JSON.stringify({ handoff_action_id: HANDOFF, lines: [], discount_placeholders: [] }),
+        createdB.cart_id,
+      ],
+    );
     const res = await a.as(manager).cancelPostHandoff({
       cart_id: createdB.cart_id,
       handoff_action_id: HANDOFF,

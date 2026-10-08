@@ -84,6 +84,13 @@ resumes automatically once a fresh operator session is acquired (next operator s
 ### Edge Cases
 
 - Outbox drain must be strictly FIFO per terminal to preserve ordering guarantees for the backend.
+  **Superseded in part (RT-224 step 2):** the drain keeps FIFO **attempt order** (oldest due sale
+  first), but it is not a barrier. A sale whose credential is not held right now is skipped
+  untouched, so it does not block the sales queued behind it. Examples are a pre-RT-224 or
+  manager sale waiting for an operator envelope, or a cashier sale whose cashier cannot be proven
+  (held). Each sale is captured independently and idempotently per `externalId`, and Backend-Core
+  imposes no cross-sale ordering. The per-sale retry backoff already reordered attempts before
+  RT-224.
 - A crashed or force-quit terminal between staging and sync must not lose the outbox entry — entries must be persisted in SQLite before the sync attempt, never only in memory.
 - The `Idempotency-Key` and the payload's `externalId` field MUST be stable across restarts and retries for the same sale (derived deterministically from `sale_id`, never a fresh UUID at retry time), so the backend's `(tenant, sourceSystem, externalId)` dedup collapses retries to one record.
 - The sync engine must not block the operator UI — draining runs in the main process out of band from the renderer interaction loop.

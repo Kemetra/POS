@@ -6,6 +6,7 @@ import {
   type DevSkipOperatorSignInDeps,
 } from '../dev-skip-operator-signin.js';
 import { SessionManager } from '../session-manager.js';
+import { isShippedApp } from '../../app/shipped-app.js';
 
 function makeDeps(
   overrides: Partial<DevSkipOperatorSignInDeps> & { envFlag?: string } = {},
@@ -53,6 +54,28 @@ describe('applyDevSkipOperatorSignInIfRequested', () => {
 
     expect(result).toBe(false);
     expect(deps.sessionManager.create).not.toHaveBeenCalled();
+  });
+
+  // RT-165 — a renamed copy of the shipped exe reports app.isPackaged=false
+  // but still runs resources/app.asar; no fixture MANAGER session for it.
+  it('does NOT run for a renamed shipped exe (isPackaged=false, app.asar) with the flag set', () => {
+    const shipped = isShippedApp({
+      isPackaged: false,
+      appPath: 'C:\\copy\\resources\\app.asar',
+    });
+    const deps = makeDeps({ isPackaged: shipped, envFlag: '1' });
+
+    const result = applyDevSkipOperatorSignInIfRequested(deps);
+
+    expect(result).toBe(false);
+    expect(deps.sessionManager.create).not.toHaveBeenCalled();
+  });
+
+  it('still runs for an unpackaged dev build (`electron .`) with the flag set', () => {
+    const shipped = isShippedApp({ isPackaged: false, appPath: 'C:\\Users\\dev\\POS' });
+    const deps = makeDeps({ isPackaged: shipped, envFlag: '1' });
+
+    expect(applyDevSkipOperatorSignInIfRequested(deps)).toBe(true);
   });
 
   // Test 3: unpackaged + flag absent does not run

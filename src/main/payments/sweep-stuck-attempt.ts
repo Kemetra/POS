@@ -15,6 +15,11 @@
  *   • on session-START / sign-in — recovers the CRASH case, where the prior
  *     session's `end()` never ran so its orphan was never discarded.
  *
+ * RT-117 (RT-115 D3 / RT-116 §9): an attempt holding LIVE tender is never
+ * discarded — reversing it would record cash as returned (or a card as voided)
+ * while the money is still in the drawer / on the card. Only a zero-funds
+ * orphan is discarded (it has no tender lines to reverse).
+ *
  * It is keyed on the REAL terminal_id (resolved by the same accessor the F-007
  * part-a flip uses), so an orphan on a DIFFERENT terminal is left untouched.
  *
@@ -42,6 +47,13 @@ export interface StuckAttemptSweeperDeps {
    * the payment/sales/cart adapters do.
    */
   resolveTerminalId: () => string | null;
+  /**
+   * RT-117 (RT-116 §9, S1 interim) — does the attempt hold LIVE tender
+   * (`applying | applied | reversal_pending`)? Such an attempt is never
+   * auto-reversed by a session start/end: the money stays recorded and is
+   * resolved explicitly. Required, so a dropped wiring cannot reopen the path.
+   */
+  attemptHasLiveTender: (payment_attempt_id: string) => boolean;
   /** Structured error sink — failures here must not surface to the operator. */
   logError: (err: unknown, context: { terminal_id: string; payment_attempt_id: string }) => void;
 }
@@ -49,7 +61,7 @@ export interface StuckAttemptSweeperDeps {
 export type StuckAttemptSweeper = () => Promise<void>;
 
 export function createStuckAttemptSweeper(deps: StuckAttemptSweeperDeps): StuckAttemptSweeper {
-  const { attemptsRepo, discard, resolveTerminalId, logError } = deps;
+  const { attemptsRepo, discard, resolveTerminalId, attemptHasLiveTender, logError } = deps;
 
   return async function sweepStuckAttempt(): Promise<void> {
     const terminal_id = resolveTerminalId();
@@ -57,6 +69,17 @@ export function createStuckAttemptSweeper(deps: StuckAttemptSweeperDeps): StuckA
 
     const stuck = attemptsRepo.findStartedByTerminal(terminal_id);
     if (stuck === undefined) return; // no orphan on THIS terminal
+
+    // RT-117 — never auto-reverse money. A live-tender attempt is left as is
+    // (fail-closed: an unreadable check counts as live).
+    let live: boolean;
+    try {
+      live = attemptHasLiveTender(stuck.payment_attempt_id);
+    } catch (err) {
+      logError(err, { terminal_id, payment_attempt_id: stuck.payment_attempt_id });
+      return;
+    }
+    if (live) return;
 
     try {
       await discard({ payment_attempt_id: stuck.payment_attempt_id });

@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   freshCatalogueDb,
@@ -180,65 +180,74 @@ describe('T037 — read-down driver', () => {
     db.close();
   });
 
-  it('transport failure: the writer is NOT called, a failed attempt is recorded, prior catalogue preserved', async () => {
-    const db = freshCatalogueDb();
-    const handle = handleFor(db);
-    const syncStateRepo = createCatalogueSyncStateRepo(handle);
-    const writer = createReadDownWriter({ db: handle, syncStateRepo });
+  // RT-215: a 401 (`device_unauthorized`) is preserved exactly like any other failed fetch.
+  it.each(['no_connection', 'failed', 'device_unauthorized'] as const)(
+    'transport failure (%s): the writer is NOT called, a failed attempt is recorded, prior catalogue preserved',
+    async (failureKind) => {
+      const db = freshCatalogueDb();
+      const handle = handleFor(db);
+      const syncStateRepo = createCatalogueSyncStateRepo(handle);
+      const writer = createReadDownWriter({ db: handle, syncStateRepo });
 
-    // Seed a working catalogue with a successful first tick.
-    {
-      const { client } = fakeClient([
-        { kind: 'ok', sourceSnapshotId: 'snap-1', rows: [good('p-1')] },
-      ]);
-      const seedDriver = createReadDownDriver({
-        client,
+      // Seed a working catalogue with a successful first tick.
+      {
+        const { client } = fakeClient([
+          { kind: 'ok', sourceSnapshotId: 'snap-1', rows: [good('p-1')] },
+        ]);
+        const seedDriver = createReadDownDriver({
+          client,
+          writer,
+          tenantId: TENANT,
+          branchId: BRANCH,
+          now: () => '2026-06-07T09:00:00.000Z',
+          tickIntervalMs: 60_000,
+        });
+        const a = seedDriver.runTickOnce();
+        await nn(a.kind === 'started' ? a.completed : null);
+      }
+      expect(countRows(handle, 'products')).toBe(1);
+
+      // Now a transport failure. The writer must NOT run; the prior catalogue stays.
+      const { client: failing, calls } = fakeClient([{ kind: failureKind }]);
+      const driver = createReadDownDriver({
+        client: failing,
         writer,
         tenantId: TENANT,
         branchId: BRANCH,
-        now: () => '2026-06-07T09:00:00.000Z',
+        now: () => '2026-06-07T10:00:00.000Z',
         tickIntervalMs: 60_000,
       });
-      const a = seedDriver.runTickOnce();
-      await nn(a.kind === 'started' ? a.completed : null);
-    }
-    expect(countRows(handle, 'products')).toBe(1);
 
-    // Now a transport failure. The writer must NOT run; the prior catalogue stays.
-    const { client: failing, calls } = fakeClient([{ kind: 'no_connection' }]);
-    const driver = createReadDownDriver({
-      client: failing,
-      writer,
-      tenantId: TENANT,
-      branchId: BRANCH,
-      now: () => '2026-06-07T10:00:00.000Z',
-      tickIntervalMs: 60_000,
-    });
+      const admission = driver.runTickOnce();
+      expect(admission.kind).toBe('started');
+      const outcome = await nn(admission.kind === 'started' ? admission.completed : null);
 
-    const admission = driver.runTickOnce();
-    expect(admission.kind).toBe('started');
-    const outcome = await nn(admission.kind === 'started' ? admission.completed : null);
+      expect(outcome.outcome).toBe('failed');
+      expect(outcome.failureCategory).toBe('transport');
+      expect(calls()).toBe(1);
 
-    expect(outcome.outcome).toBe('failed');
-    expect(outcome.failureCategory).toBe('transport');
-    expect(calls()).toBe(1);
+      // Prior catalogue intact + still resolvable.
+      const repo = createProductRepo(handle);
+      expect(repo.lookupBySku(TENANT, 'SKU-p-1').kind).toBe('one');
+      expect(countRows(handle, 'products')).toBe(1);
 
-    // Prior catalogue intact + still resolvable.
-    const repo = createProductRepo(handle);
-    expect(repo.lookupBySku(TENANT, 'SKU-p-1').kind).toBe('one');
-    expect(countRows(handle, 'products')).toBe(1);
-
-    // Freshness clock NOT advanced; failure recorded for diagnostics.
-    const state = nn(syncStateRepo.read(TENANT));
-    expect(state.last_success_at).toBe('2026-06-07T09:00:00.000Z');
-    expect(state.last_outcome).toBe('failed');
-    expect(state.last_attempt_at).toBe('2026-06-07T10:00:00.000Z');
-    db.close();
-  });
+      // Freshness clock NOT advanced; failure recorded for diagnostics.
+      const state = nn(syncStateRepo.read(TENANT));
+      expect(state.last_success_at).toBe('2026-06-07T09:00:00.000Z');
+      expect(state.last_outcome).toBe('failed');
+      expect(state.last_attempt_at).toBe('2026-06-07T10:00:00.000Z');
+      db.close();
+    },
+  );
 });
 
 describe('T038 — driver lifecycle (start/stop)', () => {
-  it('start installs an interval and stop clears it (idempotent)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('start installs an interval and stop clears it (idempotent)', async () => {
+    vi.useFakeTimers();
     const db = freshCatalogueDb();
     const handle = handleFor(db);
     const syncStateRepo = createCatalogueSyncStateRepo(handle);
@@ -257,8 +266,167 @@ describe('T038 — driver lifecycle (start/stop)', () => {
     const handle1 = driver.start();
     // Calling start again returns the same handle (no second interval).
     expect(driver.start()).toBe(handle1);
+    expect(vi.getTimerCount()).toBe(1);
     driver.stop();
+    expect(vi.getTimerCount()).toBe(0);
     // stop is safe to call again.
+    driver.stop();
+    // Let the initial tick settle before closing the DB.
+    await vi.advanceTimersByTimeAsync(0);
+    db.close();
+  });
+});
+
+/**
+ * RT-41 — immediate first sync after paired startup. `start()` admits ONE
+ * initial tick through the same single-flight gate as the interval and the
+ * manual `catalogue:refresh`, then the hourly cadence continues unchanged.
+ */
+describe('RT-41 — initial read-down on start', () => {
+  const INTERVAL_MS = 60 * 60 * 1_000;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function setup(client: ReadDownClient): {
+    db: ReturnType<typeof freshCatalogueDb>;
+    handle: DatabaseHandle;
+    syncStateRepo: ReturnType<typeof createCatalogueSyncStateRepo>;
+    driver: ReturnType<typeof createReadDownDriver>;
+  } {
+    const db = freshCatalogueDb();
+    const handle = handleFor(db);
+    const syncStateRepo = createCatalogueSyncStateRepo(handle);
+    const writer = createReadDownWriter({ db: handle, syncStateRepo });
+    const driver = createReadDownDriver({
+      client,
+      writer,
+      tenantId: TENANT,
+      branchId: BRANCH,
+      now: () => new Date(Date.now()).toISOString(),
+      tickIntervalMs: INTERVAL_MS,
+    });
+    return { db, handle, syncStateRepo, driver };
+  }
+
+  it('start performs exactly one initial sync without waiting for the interval', async () => {
+    vi.useFakeTimers({ now: new Date('2026-06-07T10:00:00.000Z') });
+    const { client, calls } = fakeClient([
+      { kind: 'ok', sourceSnapshotId: 'snap-1', rows: [good('p-1'), good('p-2')] },
+    ]);
+    const { db, handle, syncStateRepo, driver } = setup(client);
+
+    driver.start();
+    // The initial fetch is admitted synchronously inside start() — no timer advance.
+    expect(calls()).toBe(1);
+
+    // Settle the in-flight tick (microtasks only; the clock does not move).
+    await vi.advanceTimersByTimeAsync(0);
+    expect(countRows(handle, 'products')).toBe(2);
+    expect(nn(syncStateRepo.read(TENANT)).last_success_at).toBe('2026-06-07T10:00:00.000Z');
+
+    // A repeat start() neither re-ticks nor installs a second interval.
+    driver.start();
+    expect(calls()).toBe(1);
+    expect(vi.getTimerCount()).toBe(1);
+
+    // Nothing else fires before the interval elapses.
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS - 1);
+    expect(calls()).toBe(1);
+
+    driver.stop();
+    db.close();
+  });
+
+  it('periodic cadence continues after the initial sync, one tick per interval', async () => {
+    vi.useFakeTimers({ now: new Date('2026-06-07T10:00:00.000Z') });
+    const { client, calls } = fakeClient([
+      { kind: 'ok', sourceSnapshotId: 'snap-1', rows: [good('p-1')] },
+    ]);
+    const { db, driver } = setup(client);
+
+    driver.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+    expect(calls()).toBe(2);
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+    expect(calls()).toBe(3);
+
+    // After stop, the cadence ends — no further pulls.
+    driver.stop();
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3);
+    expect(calls()).toBe(3);
+    db.close();
+  });
+
+  it('no overlap: while the initial tick is in flight, interval ticks and manual refresh are coalesced', async () => {
+    vi.useFakeTimers({ now: new Date('2026-06-07T10:00:00.000Z') });
+    const { client: gated, release } = gatedClient({
+      kind: 'ok',
+      sourceSnapshotId: 'snap-1',
+      rows: [good('p-1')],
+    });
+    let fetches = 0;
+    const counting: ReadDownClient = {
+      fetchSnapshot(): Promise<ReadDownFetchResult> {
+        fetches += 1;
+        return gated.fetchSnapshot();
+      },
+    };
+    const { db, handle, driver } = setup(counting);
+
+    driver.start();
+    expect(fetches).toBe(1);
+
+    // Manual refresh while the initial pull is in flight → already_running.
+    expect(driver.runTickOnce().kind).toBe('already_running');
+    // Interval elapses while the initial pull is still in flight → coalesced.
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+    expect(fetches).toBe(1);
+
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(countRows(handle, 'products')).toBe(1);
+
+    // Once settled, a manual refresh is admitted again.
+    const manual = driver.runTickOnce();
+    expect(manual.kind).toBe('started');
+    await nn(manual.kind === 'started' ? manual.completed : null);
+    expect(fetches).toBe(2);
+
+    driver.stop();
+    db.close();
+  });
+
+  it('offline backend at startup: safe (no catalogue change, failure recorded) and retried by the next tick', async () => {
+    vi.useFakeTimers({ now: new Date('2026-06-07T10:00:00.000Z') });
+    const { client, calls } = fakeClient([
+      { kind: 'no_connection' },
+      { kind: 'ok', sourceSnapshotId: 'snap-2', rows: [good('p-1')] },
+    ]);
+    const { db, handle, syncStateRepo, driver } = setup(client);
+
+    driver.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls()).toBe(1);
+
+    // Safe: nothing written, freshness clock not advanced, failure recorded.
+    expect(countRows(handle, 'products')).toBe(0);
+    const failed = nn(syncStateRepo.read(TENANT));
+    expect(failed.last_outcome).toBe('failed');
+    expect(failed.last_success_at).toBeNull();
+    expect(failed.last_attempt_at).toBe('2026-06-07T10:00:00.000Z');
+
+    // Retryable: the single-flight gate is released, so the next interval tick
+    // (or a manual refresh) runs and lands the catalogue.
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+    expect(calls()).toBe(2);
+    expect(countRows(handle, 'products')).toBe(1);
+    expect(nn(syncStateRepo.read(TENANT)).last_success_at).toBe('2026-06-07T11:00:00.000Z');
+
     driver.stop();
     db.close();
   });
