@@ -650,15 +650,17 @@ export function PaymentSurface({
   // surface, which can only update the store. Follow that outcome here so the
   // mounted surface never keeps a stale instruction or a dead Cancel (Codex P2,
   // #576). This surface's own cancels update the screen themselves, unless the
-  // store moves their attempt on while they are still in flight (RT-305): a
-  // retry sent after a remount may be slow or lose its answer, so the screen
-  // follows the store now and releases Cancel.
+  // store moves their attempt on, or ends it, while they are still in flight
+  // (RT-305; Codex P1 on #581): a retry sent after a remount may be slow or
+  // lose its answer, so the screen follows the store now and releases Cancel.
   useEffect(() => {
     const previous = lastHoldRef.current;
     lastHoldRef.current = cancelHold;
     const own = ownCancelRef.current;
     if (own !== null) {
-      if (own.status !== 'waiting' || paymentAttemptId === own.attemptId) return;
+      const slice = usePaymentStore.getState().paymentSlice;
+      const stillOpen = slice?.payment_attempt_id === own.attemptId && slice.state === 'started';
+      if (own.status !== 'waiting' || stillOpen) return;
       own.status = 'followed';
       ownCancelRef.current = null;
       setIsCancelling(false);
@@ -667,8 +669,9 @@ export function PaymentSurface({
     }
     if (previous === cancelHold) return;
     followStoreOutcome();
-    // Only a hold change triggers this (moving the attempt on always changes the
-    // hold of a cancel in flight); followStoreOutcome reads the store itself.
+    // Only a hold change triggers this (moving the attempt on, or ending it,
+    // always changes the hold of a cancel in flight); followStoreOutcome reads
+    // the store itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cancelHold]);
 

@@ -764,6 +764,75 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
   });
 
   it.each([
+    [
+      'settled',
+      {
+        ...attempt('settled', CARD_APPLIED),
+        settled_at: '2026-10-07T10:00:00.000Z',
+      },
+    ],
+    [
+      'force-failed with live tender',
+      {
+        ...attempt('force_failed', CARD_APPLIED),
+        force_failed_at: '2026-10-07T10:00:00.000Z',
+      },
+    ],
+  ])(
+    'follows the original read-back that ended the SAME attempt (%s) while the retry is pending (Codex P1, #581)',
+    async (label, ended) => {
+      const { bridge, script } = makeBridge();
+      await openWith(bridge, CARD_APPLIED);
+      let first: (r: PaymentsCancelResponse) => void = () => undefined;
+      let second: (r: PaymentsCancelResponse) => void = () => undefined;
+      script({
+        cancel: [
+          () =>
+            new Promise<PaymentsCancelResponse>((resolve) => {
+              first = resolve;
+            }),
+          () =>
+            new Promise<PaymentsCancelResponse>((resolve) => {
+              second = resolve;
+            }),
+        ],
+        read: () => Promise.resolve({ kind: 'ok', payment_attempt: ended }),
+      });
+      await clickCancel();
+      await remount(bridge);
+      await clickCancel();
+
+      // The original is refused; its read-back ends the same attempt id.
+      await act(async () => {
+        first({ kind: 'refused', reason: 'attempt_terminal' });
+        await Promise.resolve();
+      });
+      await settle();
+      const expectScreen = (): void => {
+        expect(usePaymentStore.getState().paymentSlice?.payment_attempt_id).toBe('pa-001');
+        if (label === 'settled') {
+          expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument();
+        } else {
+          expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(
+            CANCEL_LIVE_TENDER,
+          );
+          expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+          expect(screen.queryByTestId('payment-surface-cancel')).not.toBeInTheDocument();
+        }
+      };
+      expectScreen();
+
+      // The retry answering later changes nothing.
+      await act(async () => {
+        second({ kind: 'refused', reason: 'attempt_terminal' });
+        await Promise.resolve();
+      });
+      await settle();
+      expectScreen();
+    },
+  );
+
+  it.each([
     ['its answer', 'answer'],
     ['the read-back after its refusal', 'read'],
   ] as const)(
