@@ -60,6 +60,8 @@ describe('RT-243 completion — proof list shows only proven facts', () => {
     expect(amount.tagName).toBe('BDI');
     expect(amount).toHaveAttribute('dir', 'ltr');
     expect(amount).toHaveTextContent('992.25 EGP');
+    // FR-16: the settled amount stays the dominant figure even with no change.
+    expect(payment).toHaveAttribute('data-emphasis', 'true');
 
     // Every other line is not a success: success is for proven facts only.
     const lines = within(screen.getByTestId(IDS.proofs)).getAllByRole('listitem');
