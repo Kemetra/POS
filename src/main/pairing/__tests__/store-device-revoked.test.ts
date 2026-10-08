@@ -20,6 +20,7 @@ import {
   type PersistInput,
   type PairingStoreDb,
 } from '../store.js';
+import { openDeviceToken } from '../token-binding.js';
 
 /**
  * RT-215 — the durable device-revoked state on the pairing row.
@@ -170,7 +171,8 @@ describe('PairingStore — device revoked (RT-215)', () => {
     const s = store();
     await s.persist(pairing('term-1'));
     s.markDeviceRevoked();
-    expect(await secrets.get(KEY)).toBe(TOKEN);
+    // RT-306: sealed together with its pairing's identity.
+    expect(openDeviceToken((await secrets.get(KEY)) ?? '')).toMatchObject({ token: TOKEN });
   });
 
   it('reports device_revoked even when the token half is gone (row is the source of truth)', async () => {
@@ -292,7 +294,7 @@ describe('createSendableDeviceTokenReader (RT-215: never send a revoked token)',
     const read = readerOver(s);
     s.markDeviceRevoked();
     expect(await read()).toBeNull();
-    expect(await secrets.get(KEY)).toBe(TOKEN);
+    expect(openDeviceToken((await secrets.get(KEY)) ?? '')).toMatchObject({ token: TOKEN });
   });
 
   it('returns the NEW token after a re-pair', async () => {

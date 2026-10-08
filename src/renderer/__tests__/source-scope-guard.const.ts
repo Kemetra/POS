@@ -219,3 +219,27 @@ export const RT_228_PAIRING_ERROR_ENVELOPE_BRANCH_PREFIX = 'claude/rt-228-' as c
 export const RT_228_PAIRING_ERROR_ENVELOPE_EXEMPT_PREFIXES = [
   'src/main/pairing/',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `claude/rt-306-*` implements Jira RT-306 (RT-215 10901-(a), owner decision
+ * 10906): the sealed device token is bound to the pairing row it was issued
+ * for, so a crash between the token write and the row write during a re-pair
+ * fails closed (`invalid/inconsistent`, never sent) instead of sending the new
+ * token under the old terminal's identity. The binding lives in the pairing
+ * store and its token readers (`src/main/pairing/store.ts`, `device-token.ts`,
+ * `token-binding.ts`), so the fix necessarily touches `src/main/pairing/`.
+ *
+ * Authority: owner approval, 2026-10-08 (recorded on Jira RT-306): "a narrow
+ * source-scope exemption for the `claude/rt-306-` branch prefix, covering
+ * `src/main/pairing/` only", following the RT-215 / RT-228 pattern.
+ *
+ * Exemption is narrow: ONLY `src/main/pairing/`, ONLY on `claude/rt-306-*`.
+ * All other forbidden prefixes (`src/main/secrets/`, `src/shared/api-types.ts`,
+ * `scripts/codegen-api.ts`, `scripts/openapi-snapshot.json`,
+ * `.github/workflows/`) remain blocked on these branches. Narrowness is
+ * asserted by `source-scope-guard-rt306.test.ts`.
+ */
+export const RT_306_PAIRING_TOKEN_BINDING_BRANCH_PREFIX = 'claude/rt-306-' as const;
+export const RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES = [
+  'src/main/pairing/',
+] as const satisfies readonly ForbiddenPathPrefix[];

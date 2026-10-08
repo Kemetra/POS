@@ -50,6 +50,7 @@ import { bindAuditEventsStoreDb } from '../../../../src/main/audit/audit-events-
 import { createReadDownClient } from '../../../../src/main/catalogue/read-down/read-down-client.js';
 import { createSaleSyncClient } from '../../../../src/main/sales-sync/create-sale-sync-client.js';
 import type { PairingService } from '../../../../src/main/pairing/service.js';
+import { openDeviceToken } from '../../../../src/main/pairing/token-binding.js';
 import type {
   DeviceRevokedSource,
   PairingStatus,
@@ -610,7 +611,8 @@ describe('RT-215 device revocation — end to end', () => {
     await vi.advanceTimersByTimeAsync(DEVICE_401_CONFIRM_MS * 3);
 
     expect(w.backend.sent.slice(before)).toEqual([]); // nothing left the terminal
-    expect(await secrets.get(KEY)).toBe(OLD_TOKEN); // still sealed, not deleted
+    // Still sealed (RT-306: with its pairing's identity), not deleted.
+    expect(openDeviceToken((await secrets.get(KEY)) ?? '')).toMatchObject({ token: OLD_TOKEN });
   });
 
   it('is durable across a restart and routes to recovery at boot', async () => {

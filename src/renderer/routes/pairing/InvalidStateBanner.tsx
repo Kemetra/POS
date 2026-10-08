@@ -13,6 +13,9 @@ const MESSAGES: Record<InvalidReason, string> = {
   // stay on the terminal, held from the previous pairing (RT-221).
   device_revoked:
     'This terminal’s access was revoked. Unsent sales are kept on this terminal. Enter a new pairing code from the admin portal to continue.',
+  // RT-306 — the sealed token does not belong to the stored pairing (a crash
+  // during a re-pair). Nothing was sent with it.
+  inconsistent: 'This terminal needs to be paired again. The last pairing did not finish.',
 };
 
 interface InvalidStateBannerProps {
