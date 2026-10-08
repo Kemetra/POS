@@ -21,6 +21,7 @@ import type {
   PaymentsCancelRequest,
   PaymentsCancelResponse,
   PaymentsReadResponse,
+  PaymentsStartResponse,
   TenderBridgeAPI,
 } from '../../../../shared/bridge-api.js';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store.js';
@@ -103,6 +104,7 @@ interface Script {
 function makeBridge(): {
   bridge: { payments: PaymentsBridgeAPI; tender: TenderBridgeAPI };
   cancel: ReturnType<typeof vi.fn<(req: PaymentsCancelRequest) => Promise<PaymentsCancelResponse>>>;
+  start: ReturnType<typeof vi.fn<() => Promise<PaymentsStartResponse>>>;
   script: (s: Script) => void;
 } {
   let current: Script = { cancel: [], read: undefined };
@@ -115,9 +117,12 @@ function makeBridge(): {
   const read = vi.fn(() =>
     current.read === undefined ? Promise.resolve(READ_ERROR) : current.read(),
   );
+  const start = vi.fn<() => Promise<PaymentsStartResponse>>(() =>
+    Promise.resolve({ kind: 'ok', payment_attempt_id: 'pa-001' }),
+  );
   const bridge = {
     payments: {
-      start: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt_id: 'pa-001' })),
+      start,
       read,
       confirm: vi.fn(),
       cancel,
@@ -127,6 +132,7 @@ function makeBridge(): {
   return {
     bridge,
     cancel,
+    start,
     script: (s) => {
       current = s;
       cancelCalls = 0;
@@ -677,12 +683,19 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
     fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
     await settle();
 
-    // The original request answers first and ends the attempt; then the retry.
+    // The original request answers first and ends the attempt. RT-305: the
+    // screen follows it at once, with the retry still unanswered.
     await act(async () => {
       first(CANCEL_OK);
       await Promise.resolve();
     });
     await settle();
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    expect(screen.queryByTestId('payment-surface-bridge-refusal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-cancel')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+
+    // The retry answering later changes nothing.
     await act(async () => {
       second(CANCEL_OK);
       await Promise.resolve();
@@ -691,8 +704,132 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
     expect(usePaymentStore.getState().paymentSlice).toBeNull();
     expect(screen.queryByTestId('payment-surface-bridge-refusal')).not.toBeInTheDocument();
     expect(screen.queryByTestId('payment-surface-cancel')).not.toBeInTheDocument();
-    expect(await screen.findByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
+    expect(screen.getByTestId('payment-surface-back-blocked')).toHaveTextContent(CARD_VOID);
   });
+
+  it('a retry answering after the cashier started a new payment leaves that payment alone (RT-305)', async () => {
+    const { bridge, cancel, start, script } = makeBridge();
+    await openWith(bridge, CARD_APPLIED);
+    let first: (r: PaymentsCancelResponse) => void = () => undefined;
+    let second: (r: PaymentsCancelResponse) => void = () => undefined;
+    script({
+      cancel: [
+        () =>
+          new Promise<PaymentsCancelResponse>((resolve) => {
+            first = resolve;
+          }),
+        () =>
+          new Promise<PaymentsCancelResponse>((resolve) => {
+            second = resolve;
+          }),
+      ],
+      read: undefined,
+    });
+    await clickCancel();
+    await remount(bridge);
+    await clickCancel();
+    await act(async () => {
+      first(CANCEL_OK);
+      await Promise.resolve();
+    });
+    await settle();
+
+    // With the retry still out, a new payment begins and opens its cash entry.
+    start.mockResolvedValueOnce({
+      kind: 'ok',
+      payment_attempt_id: 'pa-002',
+    });
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(usePaymentStore.getState().paymentSlice?.payment_attempt_id).toBe('pa-002');
+    expect(screen.getByTestId('payment-surface-entry')).toBeInTheDocument();
+    const cancelButton = screen.getByTestId('payment-surface-cancel');
+    expect(cancelButton).not.toBeDisabled();
+
+    // The stale retry for pa-001 answers: the new attempt keeps its entry and Cancel.
+    await act(async () => {
+      second({ kind: 'refused', reason: 'internal_error' });
+      await Promise.resolve();
+    });
+    await settle();
+    expect(usePaymentStore.getState().paymentSlice?.payment_attempt_id).toBe('pa-002');
+    expect(screen.getByTestId('payment-surface-entry')).toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface-cancel')).not.toBeDisabled();
+    expect(screen.queryByTestId('payment-surface-bridge-refusal')).not.toBeInTheDocument();
+    // Only the two pa-001 cancels were ever sent.
+    expect(cancel.mock.calls.map(([req]) => req.payment_attempt_id)).toEqual(['pa-001', 'pa-001']);
+  });
+
+  it.each([
+    ['its answer', 'answer'],
+    ['the read-back after its refusal', 'read'],
+  ] as const)(
+    'once the screen followed the original outcome, %s re-applies nothing (RT-305)',
+    async (_label, lateStep) => {
+      const { bridge, start, script } = makeBridge();
+      await openWith(bridge, CARD_APPLIED);
+      let first: (r: PaymentsCancelResponse) => void = () => undefined;
+      let second: (r: PaymentsCancelResponse) => void = () => undefined;
+      let readBack: (r: PaymentsReadResponse) => void = () => undefined;
+      script({
+        cancel: [
+          () =>
+            new Promise<PaymentsCancelResponse>((resolve) => {
+              first = resolve;
+            }),
+          () =>
+            new Promise<PaymentsCancelResponse>((resolve) => {
+              second = resolve;
+            }),
+        ],
+        read: () =>
+          new Promise<PaymentsReadResponse>((resolve) => {
+            readBack = resolve;
+          }),
+      });
+      await clickCancel();
+      await remount(bridge);
+      await clickCancel();
+      if (lateStep === 'read') {
+        // The retry is refused; its read-back is still out when the original answers.
+        await act(async () => {
+          second({ kind: 'refused', reason: 'internal_error' });
+          await Promise.resolve();
+        });
+        await settle();
+      }
+      await act(async () => {
+        first(CANCEL_OK);
+        await Promise.resolve();
+      });
+      await settle();
+
+      // The cashier tries a new payment and main refuses it: that line must stay.
+      start.mockResolvedValueOnce({
+        kind: 'refused',
+        reason: 'internal_error',
+      });
+      await act(async () => {
+        screen.getByTestId('tender-cash').click();
+        await Promise.resolve();
+      });
+      await settle();
+      const startRefused = 'تعذّر بدء عملية الدفع';
+      expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(startRefused);
+
+      await act(async () => {
+        if (lateStep === 'answer') second(CANCEL_OK);
+        else readBack({ kind: 'ok', payment_attempt: attempt('cancelled', CARD_APPLIED) });
+        await Promise.resolve();
+      });
+      await settle();
+      expect(screen.getByTestId('payment-surface-bridge-refusal')).toHaveTextContent(startRefused);
+      expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    },
+  );
 
   it('a late refusal on a still-open attempt reopens payment with the named retry', async () => {
     const { bridge, script } = makeBridge();
