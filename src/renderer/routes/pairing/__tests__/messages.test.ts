@@ -4,6 +4,8 @@ import {
   ALREADY_PAIRED_MESSAGE,
   BRANCH_MISMATCH_MESSAGE,
   EMPTY_INPUT_MESSAGE,
+  SESSION_ACTIVE_MESSAGE,
+  TERMINAL_ALREADY_PAIRED_MESSAGE,
   EXPIRED_CODE_MESSAGE,
   GENERIC_FAILURE_MESSAGE,
   INVALID_CODE_MESSAGE,
@@ -192,7 +194,7 @@ describe('messages dictionary — distinct constants', () => {
     }
   });
 
-  it('all nine message constants are pairwise distinct', () => {
+  it('all eleven message constants are pairwise distinct', () => {
     const set = new Set([
       INVALID_CODE_MESSAGE,
       EXPIRED_CODE_MESSAGE,
@@ -203,8 +205,10 @@ describe('messages dictionary — distinct constants', () => {
       NETWORK_ERROR_MESSAGE,
       UNKNOWN_ERROR_MESSAGE,
       EMPTY_INPUT_MESSAGE,
+      SESSION_ACTIVE_MESSAGE,
+      TERMINAL_ALREADY_PAIRED_MESSAGE,
     ]);
-    expect(set.size).toBe(9);
+    expect(set.size).toBe(11);
   });
 
   it('every PairingOutcome maps to a non-empty message (totality)', () => {
@@ -217,11 +221,27 @@ describe('messages dictionary — distinct constants', () => {
       'rate_limited',
       'network_error',
       'unknown_error',
+      'session_active',
+      'terminal_already_paired',
     ];
     for (const outcome of all) {
       const msg = messageFor(outcome);
       expect(typeof msg).toBe('string');
       expect(msg.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('RT-215 review F3 — session_active', () => {
+  it('maps to the finish-and-sign-out copy', () => {
+    expect(messageFor('session_active')).toBe(SESSION_ACTIVE_MESSAGE);
+    expect(SESSION_ACTIVE_MESSAGE).toMatch(/sign out/i);
+  });
+});
+
+describe('RT-215 rev546b S-1 — terminal_already_paired', () => {
+  it('maps to the already-paired copy, distinct from the server-side already_paired', () => {
+    expect(messageFor('terminal_already_paired')).toBe(TERMINAL_ALREADY_PAIRED_MESSAGE);
+    expect(TERMINAL_ALREADY_PAIRED_MESSAGE).not.toBe(ALREADY_PAIRED_MESSAGE);
   });
 });

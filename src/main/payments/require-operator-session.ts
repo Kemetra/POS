@@ -51,6 +51,12 @@ export interface OperatorSessionForPayments {
    * `sales.selling_operator_display_name` column is NOT NULL.
    */
   readonly display_name: string;
+  /**
+   * RT-224 step 2 — the provider-neutral `users.id` of an ADMITTED cashier
+   * session (RT-113 P2); absent for manager/admin sessions. Main-only: it reaches
+   * only the `payment.settled` audit payload (`selling_user_id`), never the bridge.
+   */
+  readonly user_id?: string;
 }
 
 /**

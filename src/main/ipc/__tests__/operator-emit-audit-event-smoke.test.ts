@@ -79,6 +79,8 @@ function makeSession(role: 'manager' | 'admin' | 'cashier'): OperatorSessionReco
     backend_session_id: 'be-sess-t051',
     started_at: '2026-05-07T00:00:00.000Z',
     last_activity_at: '2026-05-07T00:00:00.000Z',
+    lock_state: 'active',
+    locked_at: null,
   };
 }
 

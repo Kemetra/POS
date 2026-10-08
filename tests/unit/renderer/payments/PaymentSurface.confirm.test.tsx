@@ -313,7 +313,9 @@ describe('PaymentSurface — payments.confirm button (T152)', () => {
         {
           tender_line_id: 'tl-1',
           tender_type: 'cash',
-          amount_applied_minor: 200,
+          // Fully tendered (RT-238): a commit with money still owed is sunken and
+          // never reaches main, so the refusal copy is tested on a payable attempt.
+          amount_applied_minor: 300,
           state: 'applied',
           apply_order: 1,
           applied_at: '2026-05-23T12:00:02.000Z',

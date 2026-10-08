@@ -67,6 +67,17 @@ function makeBridge(overrides?: Partial<OperatorBridgeAPI>): OperatorBridgeAPI {
     ),
     listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
     dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
+    unlockSession: vi.fn(() => Promise.resolve({ kind: 'unlocked' as const })),
+    getLockState: vi.fn(() =>
+      Promise.resolve({
+        state: 'active' as const,
+        locked_at: null,
+        role: null,
+        display_name: null,
+        summary: null,
+      }),
+    ),
+    onSessionStateChanged: vi.fn(() => () => undefined),
     ...overrides,
   };
 }

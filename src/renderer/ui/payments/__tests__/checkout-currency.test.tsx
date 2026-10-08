@@ -34,16 +34,26 @@ describe('formatCheckoutMoney', () => {
   });
 });
 
+/**
+ * RT-240: the label is Arabic and names the unit as the amounts do, `EGP`,
+ * isolated left-to-right so it never flips inside the Arabic label.
+ */
+function expectUnitLabel(text: string): void {
+  const label = screen.getByText((_, el) => el?.tagName === 'LABEL' && el.textContent === text);
+  const unit = label.querySelector('[dir="ltr"]');
+  expect(unit).toHaveTextContent(/^EGP$/);
+}
+
 describe('checkout entry components show EGP', () => {
   it('cash suggested amounts carry EGP', () => {
     render(<CashEntry remainingBalanceMinor={1230} onConfirm={vi.fn()} />);
-    expect(screen.getByText('المبلغ المستلم (Amount received, EGP)')).toBeInTheDocument();
+    expectUnitLabel('المبلغ المستلم (EGP)');
     expect(screen.getAllByRole('button', { name: /\d+\.\d{2} EGP/ }).length).toBeGreaterThan(0);
   });
 
   it('the external card amount and label carry EGP', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={12550} onConfirm={vi.fn()} />);
-    expect(screen.getByText('المبلغ المخصوم (Amount applied, EGP)')).toBeInTheDocument();
+    expectUnitLabel('المبلغ المخصوم (EGP)');
     expect(screen.getByText('125.50 EGP')).toBeInTheDocument();
   });
 
@@ -51,7 +61,7 @@ describe('checkout entry components show EGP', () => {
     render(
       <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={vi.fn()} />,
     );
-    expect(screen.getByText('المبلغ المطبّق (Amount to apply, EGP)')).toBeInTheDocument();
+    expectUnitLabel('المبلغ المطبّق (EGP)');
   });
 });
 

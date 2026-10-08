@@ -1,6 +1,5 @@
 import type { JSX } from 'react';
 
-import { quickAmounts } from '../../../shared/payments/quick-amounts.js';
 import { touchTarget } from '../tokens/touch.js';
 
 /**
@@ -8,8 +7,8 @@ import { touchTarget } from '../tokens/touch.js';
  *
  * Controlled cash keypad: the caller owns `valueMinor` (integer minor units)
  * and receives edits via `onChange`. Digits fill from the right like a
- * register (1·0·0·0·0 ⇒ 100.00). Includes 0, 00, delete, and quick-amount
- * buttons sourced from the shared `quickAmounts` helper.
+ * register (1·0·0·0·0 ⇒ 100.00). Includes 0, 00 and delete. The quick-amount
+ * chips live in `CashEntry` (one set, RT-238): they SET the received amount.
  *
  * It performs NO settlement math — no change-due, no totals. It only edits the
  * entered amount; change-due stays in money-math.ts. Money is shown `dir="ltr"`
@@ -35,11 +34,9 @@ export interface AmountPadProps {
   /** Current entered amount in minor units; null/undefined is treated as 0. */
   valueMinor: number | null | undefined;
   onChange: (next: number) => void;
-  /** Sale total in minor units — drives the quick-amount suggestions. */
-  totalMinor: number;
 }
 
-export function AmountPad({ valueMinor, onChange, totalMinor }: AmountPadProps): JSX.Element {
+export function AmountPad({ valueMinor, onChange }: AmountPadProps): JSX.Element {
   const current = valueMinor == null ? 0 : valueMinor;
 
   const pressDigit = (d: number): void => {
@@ -52,29 +49,10 @@ export function AmountPad({ valueMinor, onChange, totalMinor }: AmountPadProps):
     onChange(Math.floor(current / 10));
   };
 
-  const suggestions = quickAmounts(Number.isSafeInteger(totalMinor) ? totalMinor : 0);
-
   return (
     <div className="amount-pad" data-testid="amount-pad">
       <div className="amount-pad__display mono" dir="ltr" data-testid="amount-pad-display">
         {formatMinorUnits(current)}
-      </div>
-
-      <div className="amount-pad__quick" role="group" aria-label="مبالغ سريعة">
-        {suggestions.map((amount) => (
-          <button
-            key={amount}
-            type="button"
-            className="amount-pad__quick-key mono"
-            data-testid={`amount-pad-quick-${amount.toString()}`}
-            style={{ minHeight: touchTarget.min }}
-            onClick={() => {
-              onChange(amount);
-            }}
-          >
-            {formatMinorUnits(amount)}
-          </button>
-        ))}
       </div>
 
       <div className="amount-pad__grid">

@@ -7,6 +7,7 @@ import type { Logger } from 'pino';
 
 import { createCartBridgeHandlers } from '../../../../src/main/cart/wire-cart-handlers.js';
 import { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
+import { isShippedApp } from '../../../../src/main/app/shipped-app.js';
 import { makeSqlJsHandle } from './__helpers__/sql-js-handle.js';
 import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
 
@@ -202,6 +203,35 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
       item_ref: 'SKU-PARA-500',
       quantity: 1,
       idempotency_key: 'ikey-t100-line-pkg',
+    });
+
+    expect(addResult.kind).toBe('refused');
+  });
+
+  // RT-165 — a renamed copy of the shipped exe reports app.isPackaged=false
+  // but still runs resources/app.asar; it must not ring up fixture items.
+  it('does NOT wire fixture resolver for a renamed shipped exe (isPackaged=false, app.asar) with POS_PULSE_DEV_ITEM_RESOLVER=1', async () => {
+    vi.stubEnv('POS_PULSE_DEV_ITEM_RESOLVER', '1');
+
+    const sqlJsDb = freshDb();
+    const handlers = createCartBridgeHandlers({
+      dbHandle: makeSqlJsHandle(sqlJsDb),
+      getCurrentSession: () => makeSession(),
+      getTerminalId: () => 'terminal-test-380',
+      logger: makeTestLogger(),
+      auditEmitter: makeTestAuditEmitter(),
+      isPackaged: isShippedApp({ isPackaged: false, appPath: 'C:\\copy\\resources\\app.asar' }),
+    });
+
+    const createResult = await handlers.create({ idempotency_key: 'ikey-rt165-renamed' });
+    expect(createResult.kind).toBe('ok');
+    if (createResult.kind !== 'ok') return;
+
+    const addResult = await handlers.linesAdd({
+      cart_id: createResult.cart_id,
+      item_ref: 'SKU-PARA-500',
+      quantity: 1,
+      idempotency_key: 'ikey-rt165-renamed-line',
     });
 
     expect(addResult.kind).toBe('refused');

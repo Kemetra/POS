@@ -12,7 +12,7 @@
 > [10](10-direction-comparison.md); references `VN-B1-*`): a command bar holding the scan target
 > and search instead of the product rail, a full-width cart, the money column, and slim
 > navigation. The rows' states, RT-24 mappings and treatments are unchanged, but wherever a row
-> says "rail", read "command bar". The direct-add treatment in VN-09 still waits on RT-24 §C.1.
+> says "rail", read "command bar". The direct-add treatment in VN-09 is confirmed by owner decision D-C1 (2026-10-07; see [15](15-vnext-freeze-package.md) §3).
 > **Key hints are excluded from "unchanged":** any key a row names (for example VN-08's `F8`)
 > is RT-24's proposed, unconfirmed key map. Show it only once VN-S5 binds that key
 > ([`docs/DESIGN.md`](../../DESIGN.md), Keyboard hints).
@@ -32,7 +32,7 @@
 | VN-09 | Scan acknowledged / duplicate (+1 qty) | `EDITING` | §5 | V5 (confirm-first dialog) | Inline rail notice + row flash; direct-add **only if RT-24 §C.1 confirmed** | VN-R1 | Pilot |
 | VN-10 | Unknown barcode / unavailable item | `EDITING` | §5 | V5 inline notice | Inline danger/warn notice with the scanned code, LTR-isolated | — | Pilot |
 | VN-11 | Search: typing / results / none / loading / error / stale | `EDITING` | §6 | V5 | Retain; scan-paused state while search owns focus | VN-R1 1024 | Pilot |
-| VN-12 | Confirm-add dialog | `EDITING` | §5–§6 | V5 `SaleDialog` | Retain; **scanner suspended while open** (X-1 fix) | — | Pilot |
+| VN-12 | Confirm-add dialog | `EDITING` | §5–§6 | V5 `SaleDialog` | **Current state only — retired by owner decision D-C1 (2026-10-07):** direct add with an inline acknowledgement and undo ([15](15-vnext-freeze-package.md) §3). Until the direct-add slice ships, keep the scanner suspended while it is open (X-1 fix) | — | Pilot |
 | VN-13 | Line qty / note / remove | `EDITING` | §7 | V5 | Retain; restore stepper ArrowUp/Down | — | Pilot |
 | VN-14 | Cancel sale (pre-handoff) | → `CANCELLED` | §7 | V5 void confirm dialog | `ConfirmDialog` danger; safe option default focus | — | Pilot |
 | VN-15 | Manager approval: request / approved / denied | manager gate | §8 | None (in-sale) | `ManagerApprovalSheet` | VN-R6 | Pilot |

@@ -2,7 +2,9 @@ import { useMemo, useRef, useState, type JSX } from 'react';
 
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { PinnedPrimary } from './CheckoutActionBar.js';
 import { parseCurrencyToMinor } from './parse-currency-to-minor.js';
+import { normalizeNumericInput } from '../forms/normalize-digits.js';
 
 /**
  * 006-payments-tender Slice 4 T290 — <VoucherEntry>.
@@ -209,16 +211,17 @@ export function VoucherEntry({
         {/* Amount-to-apply row */}
         <div className="tender-row">
           <label className="tender-row__label voucher-entry__label" htmlFor="voucher-amount-input">
-            المبلغ المطبّق (Amount to apply, EGP)
+            المبلغ المطبّق (<span dir="ltr">EGP</span>)
           </label>
           <span className="tender-row__value">
             <input
               id="voucher-amount-input"
+              data-scan-refuse="amount"
               type="text"
               data-testid="voucher-entry-amount-input"
               value={rawAmountInput}
               onChange={(e) => {
-                const next = e.target.value;
+                const next = normalizeNumericInput(e.target.value);
                 if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
                   setRawAmountInput(next);
                   if (bridgeRefusal) setBridgeRefusal(false);
@@ -244,29 +247,30 @@ export function VoucherEntry({
       {/* Voucher hint: generic input guidance, no demo codes (SECURITY). */}
       <p className="voucher-hint">أدخل رمز القسيمة والمبلغ المطلوب تطبيقه، ثم اضغط «تطبيق».</p>
 
-      <button
-        type="button"
-        className="voucher-entry__confirm"
-        data-testid="voucher-entry-confirm"
-        style={{ minHeight: touchTarget.min }}
-        disabled={!canSubmit}
-        aria-disabled={!canSubmit ? 'true' : undefined}
-        onClick={handleSubmit}
-      >
-        تطبيق القسيمة (Apply voucher)
-      </button>
+      <PinnedPrimary>
+        <button
+          type="button"
+          className="voucher-entry__confirm checkout-commit"
+          data-testid="voucher-entry-confirm"
+          style={{ minHeight: touchTarget.commit }}
+          disabled={!canSubmit}
+          aria-disabled={!canSubmit ? 'true' : undefined}
+          onClick={handleSubmit}
+        >
+          تطبيق القسيمة
+        </button>
+        {isApplying && (
+          <div data-testid="voucher-entry-applying" aria-busy="true">
+            جارٍ التطبيق…
+          </div>
+        )}
 
-      {isApplying && (
-        <div data-testid="voucher-entry-applying" aria-busy="true">
-          جارٍ التطبيق… (Applying…)
-        </div>
-      )}
-
-      {bridgeRefusal && (
-        <div data-testid="voucher-entry-refused" role="alert">
-          {GENERIC_VOUCHER_REFUSAL_COPY}
-        </div>
-      )}
+        {bridgeRefusal && (
+          <div data-testid="voucher-entry-refused" role="alert">
+            {GENERIC_VOUCHER_REFUSAL_COPY}
+          </div>
+        )}
+      </PinnedPrimary>
     </section>
   );
 }

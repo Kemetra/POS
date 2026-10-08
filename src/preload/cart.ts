@@ -12,6 +12,8 @@ import type {
   CartDiscountPlaceholdersRemoveRequest,
   CartVoidRequest,
   CartCancelPostHandoffRequest,
+  CartReturnToSaleRequest,
+  CartReturnToSaleEligibilityRequest,
   CartHandoffRequest,
   CartSubscribeRequest,
   CartSnapshotRequest,
@@ -53,6 +55,12 @@ export const cart: CartBridgeAPI = {
 
   cancelPostHandoff: (req: CartCancelPostHandoffRequest) =>
     ipcRenderer.invoke(CART_IPC_CHANNELS.CANCEL_POST_HANDOFF, req),
+
+  returnToSale: (req: CartReturnToSaleRequest) =>
+    ipcRenderer.invoke(CART_IPC_CHANNELS.RETURN_TO_SALE, req),
+
+  returnToSaleEligibility: (req: CartReturnToSaleEligibilityRequest) =>
+    ipcRenderer.invoke(CART_IPC_CHANNELS.RETURN_TO_SALE_ELIGIBILITY, req),
 
   handoff: (req: CartHandoffRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.HANDOFF, req),
 

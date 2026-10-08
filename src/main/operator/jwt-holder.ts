@@ -19,12 +19,33 @@ export interface JwtHolder {
   set(backendSessionId: string, jwt: string): void;
   get(backendSessionId: string): string | null;
   clear(backendSessionId: string): void;
+  /** RT-215 — drop every held credential (a confirmed device revocation). */
+  clearAll(): void;
 }
 
-export function createJwtHolder(): JwtHolder {
+export interface CreateJwtHolderOptions {
+  /**
+   * RT-215 / Codex P1 4181556645 — while this returns true (the device is
+   * revoked), every write is dropped, so a sign-in that completes late can
+   * never repopulate a credential. A throwing predicate refuses (fail closed).
+   */
+  refuseWhile?: () => boolean;
+}
+
+function refuses(options: CreateJwtHolderOptions): boolean {
+  if (options.refuseWhile === undefined) return false;
+  try {
+    return options.refuseWhile();
+  } catch {
+    return true;
+  }
+}
+
+export function createJwtHolder(options: CreateJwtHolderOptions = {}): JwtHolder {
   const tokens = new Map<string, string>();
   return {
     set(backendSessionId, jwt) {
+      if (refuses(options)) return;
       // Envelope-retention (sync-gap fix). DP-2's takeover-confirm idempotent
       // replay returns `envelope: null` for the SAME backend_session_id — it
       // means "use the one you already hold from the first confirm". Call sites
@@ -42,6 +63,9 @@ export function createJwtHolder(): JwtHolder {
     },
     clear(backendSessionId) {
       tokens.delete(backendSessionId);
+    },
+    clearAll() {
+      tokens.clear();
     },
   };
 }

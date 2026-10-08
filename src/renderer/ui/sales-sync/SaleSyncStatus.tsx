@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 
 import type { SaleSyncStatusCounts } from '../../../main/sales-sync/sale-sync-state-repo.js';
 import type { PreloadBridgeAPI } from '../../../shared/bridge-api.js';
+import { pluralAr, type ArabicPluralForms } from '../../../shared/formatters/arabic-plural.js';
+import { formatHumanCount, formatHumanDateTime } from '../format/human-format';
 
 /**
  * 011-sale-sync-capture-up T054 — `SaleSyncStatus` read-only indicator.
@@ -20,6 +22,9 @@ import type { PreloadBridgeAPI } from '../../../shared/bridge-api.js';
  *   • attention    — N sales dead-lettered. VISIBLE but quiet — this is
  *                    accountability (a sale the backend rejected needs a human),
  *                    not a panic. Never red-screen; icon + plain Arabic text.
+ *                    RT-190: when some of them are payload divergences (the
+ *                    server holds a different sale than the till), the label
+ *                    says how many, so the operator knows what to investigate.
  * A rejected bridge invoke degrades to `unavailable` (loud-but-handled, never a
  * white screen).
  *
@@ -74,22 +79,34 @@ function toState(counts: SaleSyncStatusCounts): {
   return { state: 'all-synced', lastSuccessAt: counts.lastSuccessAt };
 }
 
-/** Arabic-locale ABSOLUTE time (no relative clock — it would drift and lie). */
+/** Arabic ABSOLUTE time, Western digits, 24-hour (UX-12; no relative clock — it would drift and lie). */
 function formatAbsolute(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat('ar-EG', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
+  return formatHumanDateTime(iso, { withYear: true, month: 'long' }) ?? iso;
 }
 
-/** Arabic-Indic numerals (the cashier's locale) for a count. */
+/** UX-12 / RT-258: one full sentence per Arabic plural category («عملية» = a sale). */
+const NEEDS_REVIEW: ArabicPluralForms = {
+  zero: 'لا عمليات بحاجة إلى مراجعة',
+  one: 'عملية واحدة بحاجة إلى مراجعة',
+  two: 'عمليتان بحاجة إلى مراجعة',
+  few: '{n} عمليات بحاجة إلى مراجعة',
+  many: '{n} عملية بحاجة إلى مراجعة',
+  other: '{n} عملية بحاجة إلى مراجعة',
+};
+
+/** «منها …»: the verb agrees with the count (dual → «تختلفان»; 3+ inanimate plural → «تختلف»). */
+const DIVERGENT: ArabicPluralForms = {
+  zero: 'لا شيء منها يختلف عن المسجَّل على الخادم',
+  one: 'منها واحدة تختلف عن المسجَّل على الخادم',
+  two: 'منها اثنتان تختلفان عن المسجَّل على الخادم',
+  few: 'منها {n} تختلف عن المسجَّل على الخادم',
+  many: 'منها {n} تختلف عن المسجَّل على الخادم',
+  other: 'منها {n} تختلف عن المسجَّل على الخادم',
+};
+
+/** Western digits (UX-12) for a count. */
 function arabicNumber(n: number): string {
-  return new Intl.NumberFormat('ar-EG').format(n);
+  return formatHumanCount(n);
 }
 
 const STATE_ICON: Record<Exclude<SyncState, 'loading'>, string> = {
@@ -105,6 +122,7 @@ export function SaleSyncStatus({ bridge }: SaleSyncStatusProps): JSX.Element {
   const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
   const [deadLetter, setDeadLetter] = useState(0);
+  const [payloadDivergence, setPayloadDivergence] = useState(0);
 
   const resolveBridge = useCallback((): SaleSyncStatusBridge => {
     /* v8 ignore next — production arm only reachable in Electron; tests inject `bridge` */
@@ -119,6 +137,7 @@ export function SaleSyncStatus({ bridge }: SaleSyncStatusProps): JSX.Element {
       setLastSuccessAt(next.lastSuccessAt);
       setPending(counts.pending);
       setDeadLetter(counts.deadLetter);
+      setPayloadDivergence(counts.payloadDivergence);
     } catch {
       setState('unavailable');
       setLastSuccessAt(null);
@@ -155,7 +174,10 @@ export function SaleSyncStatus({ bridge }: SaleSyncStatusProps): JSX.Element {
           </>
         )}
         {state === 'pending' && `في انتظار المزامنة: ${arabicNumber(pending)}`}
-        {state === 'attention' && `${arabicNumber(deadLetter)} عملية بحاجة إلى مراجعة`}
+        {state === 'attention' && pluralAr(deadLetter, NEEDS_REVIEW)}
+        {state === 'attention' &&
+          payloadDivergence > 0 &&
+          ` (${pluralAr(payloadDivergence, DIVERGENT)})`}
         {state === 'unavailable' && 'حالة المزامنة غير متاحة'}
       </span>
     </div>

@@ -113,17 +113,17 @@ describe('T241 — payments.forceFail audit dual-attribution', () => {
     });
   });
 
-  it('CR-1: idempotency reservation is committed exactly once on the success path', async () => {
-    // Regression for the CodeRabbit finding on PR #223: the handler
-    // reserves an idempotency slot via `checkOrReserve` but must call
-    // the returned `commit()` callback so the outbox row is durably
-    // written. Without commit, a same-key retry would observe
-    // `kind: 'fresh'` again and try a second FSM transition.
+  it('RT-304: never calls the reservation commit(); the FSM owns the outbox write', async () => {
+    // This pinned the opposite (CR-1, PR #223: commit() called once). That was
+    // the bug: `paymentAttemptFsm.forceFail` already inserts the outbox row in
+    // its own transaction, so a second insert of the same `action_id` threw a
+    // UNIQUE violation after the force-fail had committed. Same-key replay is
+    // proven against the real stack in idempotency-replay.real-stack.test.ts.
     const { idempotency, handler } = setup();
     expect(idempotency.commitCalls).toBe(0);
     const result = await handler(req());
     expect(result.kind).toBe('ok');
-    expect(idempotency.commitCalls).toBe(1);
+    expect(idempotency.commitCalls).toBe(0);
   });
 
   it('idempotency_payload_mismatch: refused; no FSM transition; no audit', async () => {

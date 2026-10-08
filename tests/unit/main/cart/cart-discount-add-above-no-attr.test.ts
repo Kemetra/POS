@@ -27,6 +27,7 @@ import { fileURLToPath } from 'url';
 import { CartBridgeHandlers, type ItemRefResolver } from '../../../../src/main/cart/cart-bridge.js';
 import { bindCartStore } from '../../../../src/main/cart/cart-store.js';
 import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
+import type { CartDiscountPlaceholdersAddRequest } from '../../../../src/shared/cart/bridge-types.js';
 import { makeSqlJsHandle } from './__helpers__/sql-js-handle.js';
 
 const __dirname0 = path.dirname(fileURLToPath(import.meta.url));
@@ -153,18 +154,17 @@ describe('cart.discountPlaceholders.add — above-threshold without attribution 
   });
 
   it('still refuses when cashier passes their own id as attribution (role check required)', async () => {
-    // A cashier cannot self-attribute above-threshold discounts; the
-    // attribution must be a manager/admin. T069 MUST verify the attributed
-    // operator's role, not just the presence of the field.
+    // A cashier cannot self-attribute above-threshold discounts. RT-183: the
+    // field is no longer part of the request contract and is ignored if a
+    // scripted renderer still sends it; the session role decides.
     const res = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_20',
       attribution_operator_id: 'cashier-1', // same as cashier, not a manager
       idempotency_key: 'dp-t060-d',
-    });
-    // RED until T069 — after that, should refuse with manager_attribution_required
-    // or role_denied when the attributed operator is not a manager/admin.
+    } as CartDiscountPlaceholdersAddRequest);
     expect(res.kind).toBe('refused');
+    if (res.kind === 'refused') expect(res.reason).toBe('manager_attribution_required');
   });
 });

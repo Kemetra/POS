@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
@@ -125,11 +125,49 @@ function signInAs(session: OperatorSessionView): void {
 }
 
 /**
+ * Records every location the router visits since the last render.
+ *
+ * A guard miss renders `<Navigate to="/sign-in">`, but these tests pre-sign a
+ * session into the store, and `SignInRoute` forwards a signed-in operator on to
+ * `/app` from an effect (→ the cashier landing, `/app/cart`). The router goes
+ * `/sign-in` → `/app` → `/app/cart` and settles there, so `route-sign-in`
+ * exists for one commit only. Polling the live DOM for it races that effect.
+ *
+ * RT-199: the previous fix latched the insertion with a MutationObserver, which
+ * is not reliable under happy-dom: `MutationObserverListener` holds its
+ * callback only through a `WeakRef`, so a full GC between `observe()` and the
+ * redirect silently stops record delivery and the latch never flips (Windows
+ * CI with coverage; reproduced locally by forcing GC during the run).
+ *
+ * Instead, read the router's own location history. `AppRouter`'s
+ * `PathMirrorBridge` mirrors every memory-router location into
+ * `window.history.replaceState`, and the spy keeps each call strongly
+ * referenced, so whether `/sign-in` was visited stays checkable after the
+ * forward has moved on.
+ */
+let replaceStateSpy: MockInstance<History['replaceState']> | null = null;
+
+function watchSignInRoute(): void {
+  replaceStateSpy?.mockRestore();
+  // The mirror skips a location equal to the current URL, so start each render
+  // from a neutral URL: a `/sign-in` left by an earlier test must not hide this
+  // render's visit.
+  window.history.replaceState(null, '', '/');
+  replaceStateSpy = vi.spyOn(window.history, 'replaceState');
+}
+
+/** The guard redirected the router to `/sign-in` (possibly transiently). */
+function signInRouteReached(): boolean {
+  return (replaceStateSpy?.mock.calls ?? []).some(([, , url]) => url === '/sign-in');
+}
+
+/**
  * Render AppRouter with a cashier pre-signed-in and an initial path, then
  * wait until the boot loading spinner is gone.
  */
 async function renderAsCashier(initialEntry: string): Promise<void> {
   signInAsCashier();
+  watchSignInRoute();
   render(
     <AppRouter
       pairing={pairedBridge()}
@@ -147,6 +185,7 @@ async function renderAsCashier(initialEntry: string): Promise<void> {
  */
 async function renderAsSession(session: OperatorSessionView, initialEntry: string): Promise<void> {
   signInAs(session);
+  watchSignInRoute();
   render(
     <AppRouter
       pairing={pairedBridge()}
@@ -164,6 +203,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  replaceStateSpy?.mockRestore();
+  replaceStateSpy = null;
   useOperatorSessionStore.getState().reset();
   cleanup();
 });
@@ -173,7 +214,9 @@ afterEach(() => {
 describe('SC-003 path 1 — /app/manager/stuck-shifts direct deep-link', () => {
   it('redirects cashier to /sign-in', async () => {
     await renderAsCashier('/app/manager/stuck-shifts');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
@@ -189,21 +232,27 @@ describe('SC-003 path 2 — /app/manager/stuck-shifts window.location', () => {
 describe('SC-003 path 3 — /app/manager/stuck-shifts?source=nav', () => {
   it('query string variant also redirects cashier to /sign-in', async () => {
     await renderAsCashier('/app/manager/stuck-shifts?source=nav');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
 describe('SC-003 path 4 — /app/manager/stuck-shifts?modal=force-close', () => {
   it('query string variant also redirects cashier to /sign-in', async () => {
     await renderAsCashier('/app/manager/stuck-shifts?modal=force-close');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
 describe('SC-003 path 5 — /app/manager/stuck-shifts?shift=abc123', () => {
   it('shift-id query param cannot bypass the guard', async () => {
     await renderAsCashier('/app/manager/stuck-shifts?shift=abc123');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
@@ -214,7 +263,7 @@ describe('SC-003 path 6 — /app/manager/stuck-shifts app-shell absent', () => {
     // separate commits; poll until BOTH have settled so we never observe the
     // transient window where they co-exist (D-001 root cause).
     await waitFor(() => {
-      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(signInRouteReached()).toBe(true);
       expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
     });
   });
@@ -225,7 +274,9 @@ describe('SC-003 path 6 — /app/manager/stuck-shifts app-shell absent', () => {
 describe('SC-003 path 7 — /app/manager/cashiers direct deep-link', () => {
   it('redirects cashier to /sign-in', async () => {
     await renderAsCashier('/app/manager/cashiers');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
@@ -241,21 +292,27 @@ describe('SC-003 path 8 — /app/manager/cashiers window.location', () => {
 describe('SC-003 path 9 — /app/manager/cashiers?cashier=user1', () => {
   it('query string variant also redirects cashier to /sign-in', async () => {
     await renderAsCashier('/app/manager/cashiers?cashier=user1');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
 describe('SC-003 path 10 — /app/manager/cashiers?action=reset', () => {
   it('action=reset query string cannot bypass the guard', async () => {
     await renderAsCashier('/app/manager/cashiers?action=reset');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
 describe('SC-003 path 11 — /app/manager/cashiers?action=unlock', () => {
   it('action=unlock query string cannot bypass the guard', async () => {
     await renderAsCashier('/app/manager/cashiers?action=unlock');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
@@ -265,7 +322,7 @@ describe('SC-003 path 12 — /app/manager/cashiers app-shell absent', () => {
     // Poll until both states settle (see path 6) — avoids the transient
     // co-existence window during the async guard redirect (D-001).
     await waitFor(() => {
-      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(signInRouteReached()).toBe(true);
       expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
     });
   });
@@ -330,7 +387,9 @@ describe('SC-003 path 17 — /app/settings (🔒 cashier)', () => {
 describe('SC-003 path 18 — cashier session preserved after stuck-shifts redirect', () => {
   it('store state remains signedIn with cashier role after guard redirect', async () => {
     await renderAsCashier('/app/manager/stuck-shifts');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
     const state = useOperatorSessionStore.getState().state;
     expect(state.kind).toBe('signedIn');
     if (state.kind === 'signedIn') {
@@ -354,7 +413,9 @@ describe('SC-003 path 19 — /app/dashboard (⛔ cashier — shows unavailable s
 describe('SC-003 path 20 — cashier session preserved after cashiers redirect', () => {
   it('store state remains signedIn with cashier role after /app/manager/cashiers redirect', async () => {
     await renderAsCashier('/app/manager/cashiers');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
     const state = useOperatorSessionStore.getState().state;
     expect(state.kind).toBe('signedIn');
     if (state.kind === 'signedIn') {
@@ -379,7 +440,7 @@ describe('SC-003 path 22 — stuck-shift-surface not in DOM after guard redirect
   it('no stuck-shift content is rendered when cashier hits /app/manager/stuck-shifts', async () => {
     await renderAsCashier('/app/manager/stuck-shifts');
     await waitFor(() => {
-      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(signInRouteReached()).toBe(true);
       // The ForcedCloseSurface / StuckShiftSurface must not render for cashier.
       expect(screen.queryByTestId('stuck-shifts-surface')).not.toBeInTheDocument();
       expect(screen.queryByTestId('forced-close-surface')).not.toBeInTheDocument();
@@ -403,7 +464,7 @@ describe('SC-003 path 23 — /app/returns direct deep-link (⛔ cashier)', () =>
     // Poll until both states settle (mirrors path 6/12) — avoids the transient
     // co-existence window during the async guard redirect (D-001).
     await waitFor(() => {
-      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(signInRouteReached()).toBe(true);
       expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
     });
   });
@@ -422,7 +483,7 @@ describe('SC-003 path 25 — /app/audit direct deep-link (⛔ cashier)', () => {
   it('redirects cashier to /sign-in', async () => {
     await renderAsCashier('/app/audit');
     await waitFor(() => {
-      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(signInRouteReached()).toBe(true);
       expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
     });
   });
@@ -440,26 +501,32 @@ describe('SC-003 path 26 — /app/audit window.location (⛔ cashier)', () => {
 describe('SC-003 path 27 — /app/returns?ref=sale123 query string (⛔ cashier)', () => {
   it('query string variant cannot bypass the guard', async () => {
     await renderAsCashier('/app/returns?ref=sale123');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
 describe('SC-003 path 28 — /app/audit?from=nav query string (⛔ cashier)', () => {
   it('query string variant cannot bypass the guard', async () => {
     await renderAsCashier('/app/audit?from=nav');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
   });
 });
 
 // ── PR #434 FIX 1 (positive) — manager + admin CAN reach returns + audit ───
 
 describe('SC-003 path 29 — /app/returns (✅ manager)', () => {
-  it('manager reaches /app/returns without redirect; placeholder shown', async () => {
+  // RT-15 S3: the placeholder is replaced by the return flow; with the
+  // returns flag off by default (AC1) the manager sees the disabled notice.
+  it('manager reaches /app/returns without redirect; the flow is gated off by default', async () => {
     await renderAsSession(MANAGER_SESSION, '/app/returns');
     await waitFor(() => {
       expect(screen.getByTestId('app-shell')).toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
-      expect(screen.getByText(/Returns are not yet available/i)).toBeInTheDocument();
+      expect(screen.getByText('المرتجعات غير مفعّلة على هذا الجهاز.')).toBeInTheDocument();
     });
   });
 });
@@ -476,12 +543,12 @@ describe('SC-003 path 30 — /app/audit (✅ manager)', () => {
 });
 
 describe('SC-003 path 31 — /app/returns (✅ admin)', () => {
-  it('admin reaches /app/returns without redirect; placeholder shown', async () => {
+  it('admin reaches /app/returns without redirect; the flow is gated off by default', async () => {
     await renderAsSession({ ...MANAGER_SESSION, id: 'sess-admin', role: 'admin' }, '/app/returns');
     await waitFor(() => {
       expect(screen.getByTestId('app-shell')).toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
-      expect(screen.getByText(/Returns are not yet available/i)).toBeInTheDocument();
+      expect(screen.getByText('المرتجعات غير مفعّلة على هذا الجهاز.')).toBeInTheDocument();
     });
   });
 });

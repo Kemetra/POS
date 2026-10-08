@@ -36,54 +36,15 @@
  * skips `commit()` leaves no audit/idempotency record (Constitution §P4).
  */
 
-import {
-  computeActionPayloadHash,
-  type PaymentActionKind,
-  type PaymentActionOutboxRepository,
+import { hashActionPayload } from './action-payload.js';
+import type {
+  PaymentActionKind,
+  PaymentActionOutboxRepository,
 } from './repositories/payment-action-outbox.repository.js';
 
-// ── Redaction allow-list (Constitution §P6 / §P7 / §P11) ─────────────────────
-
-/**
- * Field names whose **values** are redacted to `'*****'` in the canonical
- * payload before hashing. Each entry is a structural pointer — the field
- * appears in the request shape but its content must not be hashed in the
- * clear (which would let the outbox row stand as a structural witness of
- * the cleartext).
- *
- * `external_reference` — regex-bounded but redacted defensively (FR-008).
- */
-const REDACT_KEYS = new Set(['external_reference']);
-
-/**
- * Field names that are **stripped entirely** from the canonical payload
- * before hashing. Voucher tokens MUST NOT participate in the outbox-row
- * hash because the helper is also a defence-in-depth layer against
- * accidental token leakage in audit / log dumps (Constitution §P7).
- */
-const STRIP_KEYS = new Set([
-  'voucher_redemption_intent_token',
-  'voucher_code',
-  'voucher_authority_redemption_id',
-]);
-
-function redactPayload(payload: unknown): unknown {
-  if (Array.isArray(payload)) return payload.map(redactPayload);
-  if (payload !== null && typeof payload === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(payload)) {
-      if (STRIP_KEYS.has(key)) continue;
-      const value = (payload as Record<string, unknown>)[key];
-      if (REDACT_KEYS.has(key)) {
-        out[key] = '*****';
-      } else {
-        out[key] = redactPayload(value);
-      }
-    }
-    return out;
-  }
-  return payload;
-}
+// Redaction and the per-action payload shapes live in `./action-payload.ts`
+// (RT-304) so the FSMs that write the outbox row hash exactly what this
+// helper checks.
 
 // ── Public surface ──────────────────────────────────────────────────────────
 
@@ -111,7 +72,20 @@ export type ReserveOutcome =
        */
       commit(): void;
     }
-  | { kind: 'replay' }
+  | {
+      kind: 'replay';
+      /**
+       * The ORIGINAL action's identifiers, read from its outbox row. Those
+       * columns are immutable, unlike the attempt / line rows, whose `state`
+       * and `last_action_id` move on once the attempt is confirmed, cancelled
+       * or a line is reversed. A replay must rebuild the original result from
+       * these, not from whatever the mutable rows say today.
+       */
+      payment_attempt_id: string;
+      tender_line_id: string | null;
+      /** When the original action was recorded (its own clock reading). */
+      created_at: string;
+    }
   | { kind: 'mismatch' };
 
 export interface IdempotencyHelper {
@@ -128,14 +102,16 @@ export function createIdempotencyHelper(deps: IdempotencyHelperDependencies): Id
 
   return {
     checkOrReserve(input: ReserveInput): ReserveOutcome {
-      const hash = computeActionPayloadHash({
-        action_kind: input.action_kind,
-        payload: redactPayload(input.payload),
-      });
+      const hash = hashActionPayload(input.action_kind, input.payload);
       const existing = outbox.findByActionId(input.action_id);
       if (existing !== undefined) {
         if (existing.action_payload_hash === hash && existing.action_kind === input.action_kind) {
-          return { kind: 'replay' };
+          return {
+            kind: 'replay',
+            payment_attempt_id: existing.payment_attempt_id,
+            tender_line_id: existing.tender_line_id,
+            created_at: existing.created_at,
+          };
         }
         return { kind: 'mismatch' };
       }

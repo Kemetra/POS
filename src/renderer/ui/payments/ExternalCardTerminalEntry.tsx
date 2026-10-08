@@ -3,7 +3,9 @@ import { useMemo, useState, type JSX } from 'react';
 import { validateExternalReference } from '../../../shared/payments/external-reference-format.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { PinnedPrimary } from './CheckoutActionBar.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
+import { mapDigits, normalizeNumericInput } from '../forms/normalize-digits.js';
 import { formatCheckoutMoney } from './format-checkout-money.js';
 
 /**
@@ -131,9 +133,7 @@ export function ExternalCardTerminalEntry({
         {/* Instruction row */}
         <div className="tender-row">
           <span className="tender-row__label">جهاز الدفع</span>
-          <span className="tender-row__body">
-            أكمل العملية على جهاز البطاقات ثم أكّد. (Complete on the card terminal, then confirm.)
-          </span>
+          <span className="tender-row__body">أكمل العملية على جهاز البطاقات، ثم سجّل النتيجة.</span>
         </div>
 
         {/* Amount input row */}
@@ -142,7 +142,7 @@ export function ExternalCardTerminalEntry({
             className="tender-row__label external-card-terminal-entry__amount-label"
             htmlFor="external-card-amount-input"
           >
-            المبلغ المخصوم (Amount applied, EGP)
+            المبلغ المخصوم (<span dir="ltr">EGP</span>)
           </label>
           <span className="tender-row__value">
             <input
@@ -154,7 +154,7 @@ export function ExternalCardTerminalEntry({
               autoComplete="off"
               value={amountInput}
               onChange={(e) => {
-                const next = e.target.value;
+                const next = normalizeNumericInput(e.target.value);
                 if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
                   setAmountInput(next);
                   setBridgeRefusal(false);
@@ -201,24 +201,25 @@ export function ExternalCardTerminalEntry({
         className="external-card-terminal-entry__reference-label"
         htmlFor="external-card-reference-input"
       >
-        المرجع (Reference, optional, 6 chars max)
+        المرجع (اختياري، حتى 6 خانات)
       </label>
       {/* SECURITY: the reference field accepts up to 6 chars ^[A-Z0-9]{0,6}$.
           This pattern makes a PAN literally unrepresentable in this field
           (FR-007 / Constitution §P6). */}
       <input
         id="external-card-reference-input"
+        data-scan-refuse="reference"
         data-testid="external-card-reference-input"
         className="external-card-terminal-entry__reference-input"
         type="text"
         inputMode="text"
         autoComplete="off"
         maxLength={6}
-        placeholder="مثال: T1A2B3"
+        placeholder="T1A2B3"
         dir="ltr"
         value={referenceInput}
         onChange={(e) => {
-          setReferenceInput(e.target.value);
+          setReferenceInput(mapDigits(e.target.value));
           setBridgeRefusal(false);
         }}
       />
@@ -234,31 +235,33 @@ export function ExternalCardTerminalEntry({
         </div>
       )}
 
-      {bridgeRefusal && (
-        <div
-          className="external-card-terminal-entry__bridge-refusal"
-          data-testid="external-card-bridge-refusal"
-          role="status"
-          aria-live="polite"
-        >
-          تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
-        </div>
-      )}
-
       <div className="external-card-terminal-entry__actions">
-        <button
-          type="button"
-          className="external-card-terminal-entry__confirm"
-          data-testid="external-card-confirm"
-          style={{ minHeight: touchTarget.min }}
-          disabled={!canConfirm}
-          aria-disabled={!canConfirm ? 'true' : undefined}
-          onClick={() => {
-            void handleConfirm();
-          }}
-        >
-          تأكيد معالجة جهاز البطاقات (Confirm terminal processed payment)
-        </button>
+        {/* RT-238: the primary action lives in the pinned slot; PaymentSurface decides who owns it. */}
+        <PinnedPrimary>
+          {bridgeRefusal && (
+            <div
+              className="external-card-terminal-entry__bridge-refusal"
+              data-testid="external-card-bridge-refusal"
+              role="status"
+              aria-live="polite"
+            >
+              تعذّر تطبيق الدفعة. يرجى المحاولة مرة أخرى.
+            </div>
+          )}
+          <button
+            type="button"
+            className="external-card-terminal-entry__confirm checkout-commit"
+            data-testid="external-card-confirm"
+            style={{ minHeight: touchTarget.commit }}
+            disabled={!canConfirm}
+            aria-disabled={!canConfirm ? 'true' : undefined}
+            onClick={() => {
+              void handleConfirm();
+            }}
+          >
+            تأكيد معالجة جهاز البطاقات
+          </button>
+        </PinnedPrimary>
         {onBack !== undefined && (
           <button
             type="button"

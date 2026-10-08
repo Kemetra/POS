@@ -215,3 +215,56 @@ describe('useDrawerBannerState', () => {
     expect(bridge.subscribe).toHaveBeenCalled();
   });
 });
+
+/**
+ * RT-241 (D-B1) — `onSnapshot` reports every KNOWN projection: an `ok` read with
+ * or without a drawer failure. A refused or failed read is UNKNOWN and is never
+ * reported, so the drawer notice can never take its baseline from "no data".
+ */
+describe('useDrawerBannerState — onSnapshot (RT-241)', () => {
+  it('reports the mapped failure from an ok read', async () => {
+    const onSnapshot = vi.fn();
+    const bridge = salesBridge({
+      printer_failure: null,
+      drawer_failure: { sale_id: 'sale-1', last_successful_open_at: null },
+    });
+    renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge, onSnapshot }),
+    );
+    await waitFor(() => {
+      expect(onSnapshot).toHaveBeenCalledWith({ sale_id: 'sale-1', last_successful_open_at: null });
+    });
+  });
+
+  it('reports null from an ok read with no drawer failure', async () => {
+    const onSnapshot = vi.fn();
+    const bridge = salesBridge({ printer_failure: null, drawer_failure: null });
+    renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge, onSnapshot }),
+    );
+    await waitFor(() => {
+      expect(onSnapshot).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it.each([
+    ['refused', () => Promise.resolve({ kind: 'refused' as const, reason: 'no_session' as const })],
+    ['rejected', () => Promise.reject(new Error('ipc boom'))],
+  ])('never reports a %s read', async (_label, subscribe) => {
+    const onSnapshot = vi.fn();
+    const bridge: SalesBridgeAPI = {
+      read: vi.fn(),
+      findByNumber: vi.fn(),
+      subscribe: vi.fn(subscribe),
+      unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+    };
+    renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge, onSnapshot }),
+    );
+    await waitFor(() => {
+      expect(bridge.subscribe).toHaveBeenCalled();
+    });
+    await Promise.resolve();
+    expect(onSnapshot).not.toHaveBeenCalled();
+  });
+});

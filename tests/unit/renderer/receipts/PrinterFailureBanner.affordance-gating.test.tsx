@@ -73,7 +73,7 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={retryBridge()}
       />,
     );
-    expect(screen.getByRole('button', { name: /reprint/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'نسخة' })).toBeDisabled();
   });
 
   it('enables Reprint once a successful print exists for the sale', () => {
@@ -88,7 +88,7 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={retryBridge()}
       />,
     );
-    expect(screen.getByRole('button', { name: /reprint/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'نسخة' })).toBeEnabled();
   });
 
   it('calls onReprint with the sale id when the enabled Reprint button is clicked', async () => {
@@ -107,7 +107,7 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={retryBridge()}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: /reprint/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'نسخة' }));
     expect(onReprint).toHaveBeenCalledWith('sale-1');
   });
 
@@ -124,7 +124,7 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={bridge}
       />,
     );
-    const retry = screen.getByRole('button', { name: /retry/i });
+    const retry = screen.getByRole('button', { name: 'إعادة المحاولة' });
     expect(retry).toBeEnabled();
     await userEvent.click(retry);
     expect(bridge.retryPrint).toHaveBeenCalledWith(expect.objectContaining({ sale_id: 'sale-1' }));
@@ -143,7 +143,7 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={bridge}
       />,
     );
-    const manual = screen.getByRole('button', { name: /manual/i });
+    const manual = screen.getByRole('button', { name: 'إيصال يدوي' });
     expect(manual).toBeEnabled();
     await userEvent.click(manual);
     expect(bridge.manualOverride).toHaveBeenCalledWith(
@@ -165,7 +165,7 @@ describe('T262 — affordance gating', () => {
         _idempotencyKeyFactory={() => 'fixed-key-1'}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'إعادة المحاولة' }));
     const call = (bridge.retryPrint as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
       idempotency_key: string;
     };
@@ -188,7 +188,7 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={rejecting}
       />,
     );
-    const retry = screen.getByRole('button', { name: /retry/i });
+    const retry = screen.getByRole('button', { name: 'إعادة المحاولة' });
     await userEvent.click(retry);
     // The catch arm clears the in-flight phase → button is interactive again.
     await waitFor(() => expect(retry).toBeEnabled());
@@ -214,13 +214,13 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={rejecting}
       />,
     );
-    const manual = screen.getByRole('button', { name: /manual/i });
+    const manual = screen.getByRole('button', { name: 'إيصال يدوي' });
     await userEvent.click(manual);
     expect(rejecting.manualOverride).toHaveBeenCalledWith(
       expect.objectContaining({ sale_id: 'sale-1' }),
     );
     await waitFor(() => expect(manual).toBeEnabled());
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   it('locks ALL three actions while one mutation is in flight (single mutation phase, CodeRabbit #294)', async () => {
@@ -258,9 +258,9 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={bridge}
       />,
     );
-    const retry = screen.getByRole('button', { name: /retry/i });
-    const reprint = screen.getByRole('button', { name: /reprint/i });
-    const manual = screen.getByRole('button', { name: /manual/i });
+    const retry = screen.getByRole('button', { name: 'إعادة المحاولة' });
+    const reprint = screen.getByRole('button', { name: 'نسخة' });
+    const manual = screen.getByRole('button', { name: 'إيصال يدوي' });
 
     expect(reprint).toBeEnabled(); // enabled before any mutation
     await userEvent.click(retry);
@@ -298,10 +298,10 @@ describe('T262 — affordance gating', () => {
         onReprint={() => {}}
       />,
     );
-    const retry = screen.getByRole('button', { name: /retry/i });
+    const retry = screen.getByRole('button', { name: 'إعادة المحاولة' });
     await userEvent.click(retry);
     // No throw; the banner stays up.
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   // ── T512 /impeccable polish (2026-05-30) — in-flight action is surfaced ──
@@ -340,8 +340,8 @@ describe('T262 — affordance gating', () => {
         _testReceiptsBridge={bridge}
       />,
     );
-    const retry = screen.getByRole('button', { name: /retry/i });
-    const manual = screen.getByRole('button', { name: /manual/i });
+    const retry = screen.getByRole('button', { name: 'إعادة المحاولة' });
+    const manual = screen.getByRole('button', { name: 'إيصال يدوي' });
 
     // No action in flight → neither button is busy.
     expect(retry).not.toHaveAttribute('aria-busy');

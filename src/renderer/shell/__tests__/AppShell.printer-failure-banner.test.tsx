@@ -17,9 +17,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppShell } from '../AppShell';
 import type { SalesBridgeAPI } from '../../../shared/bridge-api';
 import type { BannerState } from '../../../shared/sales/types';
+import { useDrawerNoticeStore } from '../../ui/receipts/drawer-notice-store';
 
 afterEach(() => {
   cleanup();
+  useDrawerNoticeStore.getState().reset();
   delete (window as unknown as { api?: unknown }).api;
 });
 
@@ -59,7 +61,7 @@ describe('T291 — AppShell printer-failure banner integration', () => {
       }),
     };
     renderShell();
-    await waitFor(() => expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument());
   });
 
   it('does NOT render the banner when there is no print failure (both-null)', async () => {
@@ -69,13 +71,13 @@ describe('T291 — AppShell printer-failure banner integration', () => {
     renderShell();
     // The dashboard renders; the banner does not.
     await screen.findByTestId('dashboard-outlet');
-    expect(screen.queryByText(/Receipt print failed/i)).toBeNull();
+    expect(screen.queryByText('فشل طباعة الإيصال')).toBeNull();
   });
 
   it('does not crash when no sales bridge is available (banner stays unmounted)', () => {
     renderShell();
     expect(screen.getByTestId('dashboard-outlet')).toBeInTheDocument();
-    expect(screen.queryByText(/Receipt print failed/i)).toBeNull();
+    expect(screen.queryByText('فشل طباعة الإيصال')).toBeNull();
   });
 
   it('the Reprint + Manual entry-point callbacks are wired (clicking does not crash)', async () => {
@@ -92,16 +94,16 @@ describe('T291 — AppShell printer-failure banner integration', () => {
       }),
     };
     renderShell();
-    await waitFor(() => expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument());
-    await userEvent.click(screen.getByRole('button', { name: /reprint/i }));
-    await userEvent.click(screen.getByRole('button', { name: /manual/i }));
+    await waitFor(() => expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'نسخة' }));
+    await userEvent.click(screen.getByRole('button', { name: 'إيصال يدوي' }));
     // No throw; banner still present (entry-points are inert stubs).
-    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+    expect(screen.getByText('فشل طباعة الإيصال')).toBeInTheDocument();
   });
 
   it('mounts the drawer-failure banner and its Manual entry-point is wired', async () => {
     // Drawer twin of the printer-banner wiring check: a `.drawer_failure` slice
-    // feeds useDrawerBannerState → <DrawerFailureBanner>, whose only affordance
+    // feeds useDrawerBannerState → the D-B1 drawer notice, whose recovery affordance
     // is the Slice-6 manual-override entry-point. Clicking it exercises the
     // AppShell `onManualOverride` stub the printer-only fixtures never reach.
     (window as unknown as { api: { sales: SalesBridgeAPI } }).api = {
@@ -110,14 +112,29 @@ describe('T291 — AppShell printer-failure banner integration', () => {
         drawer_failure: { sale_id: 'sale-1', last_successful_open_at: null },
       }),
     };
+    // RT-241 (D-B1): this session already read a clean projection.
+    useDrawerNoticeStore.getState().observe(null);
     renderShell();
-    const drawerBanner = await screen.findByTestId('drawer-failure-banner');
+    const drawerBanner = await screen.findByTestId('drawer-notice');
     expect(drawerBanner).toBeInTheDocument();
     // Scope the click to the drawer banner — its Manual receipt button is the
     // only one on screen (printer_failure is null), but scoping keeps the intent
     // explicit and survives a future printer+drawer coexistence fixture.
-    await userEvent.click(within(drawerBanner).getByRole('button', { name: /manual receipt/i }));
+    await userEvent.click(within(drawerBanner).getByRole('button', { name: 'إيصال يدوي' }));
     // No throw; the banner persists (the entry-point is an inert Slice-6 stub).
-    expect(screen.getByTestId('drawer-failure-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-notice')).toBeInTheDocument();
+  });
+
+  it('RT-241 (D-B1): a drawer failure from before this run is not shown on the manager shell', async () => {
+    const bridge = salesBridge({
+      printer_failure: null,
+      drawer_failure: { sale_id: 'sale-old', last_successful_open_at: null },
+    });
+    (window as unknown as { api: { sales: SalesBridgeAPI } }).api = { sales: bridge };
+    renderShell();
+    await waitFor(() => {
+      expect(useDrawerNoticeStore.getState().baseline).toBe('sale-old');
+    });
+    expect(screen.queryByTestId('drawer-notice')).not.toBeInTheDocument();
   });
 });

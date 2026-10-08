@@ -168,7 +168,7 @@ describe('FindSaleReceipt — receipt-preview affordance (Phase 5)', () => {
 
   it('still shows the reprint affordance alongside the preview control', async () => {
     findSale({ kind: 'ok', sale: sale() }, previewBridge());
-    expect(await screen.findByRole('button', { name: /Reprint receipt/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'إعادة طباعة الإيصال' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Preview receipt/i })).toBeInTheDocument();
   });
 });

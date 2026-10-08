@@ -7,7 +7,8 @@
  * `runTickOnce()` returns `{ kind:'started', completed }` or `{ kind:'already_running' }`.
  *
  * Outcome handling:
- *   • ok / duplicate(409)  → markSynced (idempotent success)
+ *   • ok(200/201)          → markSynced (incl. idempotent replays)
+ *   • divergent(409)       → markDeadLetter(payload_divergence) + onPayloadDivergence (RT-190)
  *   • transient(5xx/timeout)→ recordTransient (stay pending, attempt++, backoff)
  *   • permanent(4xx)       → markDeadLetter + onDeadLetter notification
  *   • no_connection        → recordTransient-style stay-pending, no count loss
@@ -33,7 +34,7 @@ beforeAll(async () => {
   await initSalesSyncSql();
 });
 
-const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1' };
+const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: 'term-1' };
 
 interface Harness {
   deps: SaleSyncEngineDeps;
@@ -59,6 +60,7 @@ function harness(opts: {
     salesRepo,
     tenantId: SCOPE.tenantId,
     branchId: SCOPE.branchId,
+    resolveTerminalId: () => SCOPE.terminalId,
     getOperatorToken: () => (opts.token === undefined ? 'tok-1' : opts.token),
     now: opts.now ?? (() => '2026-06-07T10:05:00.000Z'),
     backoff: { baseMs: 1000, maxMs: 300_000 },
@@ -75,7 +77,7 @@ async function runOnce(deps: SaleSyncEngineDeps): Promise<void> {
 
 describe('sale-sync-engine', () => {
   it('T026 happy path: a freshly-enqueued sale (no state row) syncs to synced', async () => {
-    const h = harness({ script: [{ kind: 'ok' }] });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' }); // outbox row, NO state row — first drain
     await runOnce(h.deps);
@@ -83,14 +85,50 @@ describe('sale-sync-engine', () => {
     h.db.close();
   });
 
-  it('T030 duplicate (409) is treated as idempotent success (synced, no retry)', async () => {
-    const h = harness({ script: [{ kind: 'duplicate' }] });
+  it('RT-190: divergent (409) → terminal dead_letter with reason payload_divergence, never synced', async () => {
+    const divergences: Array<{ externalId: string; errorCode: string }> = [];
+    const h = harness({
+      script: [{ kind: 'divergent', errorCode: 'idempotency_key_conflict' }],
+    });
+    seedSale(h.db, { sale_id: 'sale-1' });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    await runOnce({ ...h.deps, onPayloadDivergence: (info) => divergences.push(info) });
+    const row = nn(h.stateRepo.read('sale-1'));
+    expect(row.sync_status).toBe('dead_letter');
+    expect(row.last_error_category).toBe('payload_divergence');
+    expect(row.synced_at).toBeNull();
+    expect(row.server_sale_ref).toBeNull();
+    expect(row.attempt_count).toBe(0);
+    expect(row.next_retry_at).toBeNull();
+    expect(divergences).toHaveLength(1);
+    expect(divergences[0]?.errorCode).toBe('idempotency_key_conflict');
+    expect(Object.keys(divergences[0] ?? {}).sort()).toEqual(['errorCode', 'externalId']);
+    // Its own notification only — not the generic dead-letter one.
+    expect(h.deadLetters).toEqual([]);
+    h.db.close();
+  });
+
+  it('RT-190: a divergent sale is never re-sent (no retry, no new key)', async () => {
+    const client = createFakeSaleSyncClient([{ kind: 'divergent', errorCode: 'unrecognized' }]);
+    const h = harness({});
+    seedSale(h.db, { sale_id: 'sale-1' });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    const deps = { ...h.deps, client };
+    await runOnce(deps);
+    // Far past any backoff window: still not eligible, still not POSTed again.
+    await runOnce({ ...deps, now: () => '2027-01-01T00:00:00.000Z' });
+    expect(client.calls).toHaveLength(1);
+    expect(h.stateRepo.eligible(SCOPE, '2027-01-01T00:00:00.000Z')).toEqual([]);
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('dead_letter');
+    h.db.close();
+  });
+
+  it('RT-190: a divergence without an onPayloadDivergence hook still dead-letters', async () => {
+    const h = harness({ script: [{ kind: 'divergent', errorCode: 'unrecognized' }] });
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     await runOnce(h.deps);
-    const row = nn(h.stateRepo.read('sale-1'));
-    expect(row.sync_status).toBe('synced');
-    expect(row.attempt_count).toBe(0);
+    expect(nn(h.stateRepo.read('sale-1')).last_error_category).toBe('payload_divergence');
     h.db.close();
   });
 
@@ -139,6 +177,7 @@ describe('sale-sync-engine', () => {
     seedOutbox(h.db, { sale_id: 'sale-1' });
     await runOnce(h.deps);
     expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('dead_letter');
+    expect(nn(h.stateRepo.read('sale-1')).last_error_category).toBe('permanent');
     expect(h.deadLetters).toEqual(['sale-1']);
     h.db.close();
   });
@@ -157,12 +196,20 @@ describe('sale-sync-engine', () => {
   });
 
   it('T034 drains in FIFO order by enqueued_at', async () => {
-    const h = harness({ script: [{ kind: 'ok' }, { kind: 'ok' }] });
+    const h = harness({
+      script: [
+        { kind: 'ok', saleRef: null },
+        { kind: 'ok', saleRef: null },
+      ],
+    });
     seedSale(h.db, { sale_id: 'sale-A' });
     seedSale(h.db, { sale_id: 'sale-B' });
     seedOutbox(h.db, { sale_id: 'sale-B', enqueued_at: '2026-06-07T10:00:02.000Z' });
     seedOutbox(h.db, { sale_id: 'sale-A', enqueued_at: '2026-06-07T10:00:01.000Z' });
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }, { kind: 'ok' }]);
+    const client = createFakeSaleSyncClient([
+      { kind: 'ok', saleRef: null },
+      { kind: 'ok', saleRef: null },
+    ]);
     const deps = { ...h.deps, client };
     await runOnce(deps);
     expect(client.calls.map((c) => c.externalId)).toEqual([
@@ -173,7 +220,7 @@ describe('sale-sync-engine', () => {
   });
 
   it('T040 operator-session gate: no token → no POST, sale stays unsynced', async () => {
-    const h = harness({ script: [{ kind: 'ok' }], token: null });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }], token: null });
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     await runOnce(h.deps);
@@ -190,8 +237,8 @@ describe('sale-sync-engine', () => {
     // takeover). The engine's envelope-present gate MUST treat '' as ABSENT — a
     // `=== null` check would let '' through, and the client would then reject it
     // as no_connection, a silent no-op drain. With token '' the drain must pause.
-    const h = harness({ script: [{ kind: 'ok' }], token: '' });
-    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }], token: '' });
+    const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
     const deps = { ...h.deps, client };
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' });
@@ -213,8 +260,8 @@ describe('sale-sync-engine', () => {
     // by the device token alone is structurally impossible. (The device token is read
     // by the client's Bearer/read-down paths, never by this engine gate.)
     for (const absentEnvelope of [null, ''] as Array<string | null>) {
-      const h = harness({ script: [{ kind: 'ok' }], token: absentEnvelope });
-      const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+      const h = harness({ script: [{ kind: 'ok', saleRef: null }], token: absentEnvelope });
+      const client = createFakeSaleSyncClient([{ kind: 'ok', saleRef: null }]);
       const deps = { ...h.deps, client };
       seedSale(h.db, { sale_id: 'sale-1' });
       seedOutbox(h.db, { sale_id: 'sale-1' });
@@ -226,7 +273,7 @@ describe('sale-sync-engine', () => {
   });
 
   it('single-flight: a second runTickOnce while one is in flight returns already_running', async () => {
-    const h = harness({ script: [{ kind: 'ok' }] });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
     seedSale(h.db, { sale_id: 'sale-1' });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     const engine = createSaleSyncEngine(h.deps);
@@ -246,7 +293,7 @@ describe('RT-79 — tenders through the engine', () => {
   const SINCE = '2026-06-01T00:00:00.000Z';
 
   async function tendered(tenderJson: string, tendersSince: string | null | undefined) {
-    const h = harness({ script: [{ kind: 'ok' }] });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
     seedSale(h.db, { sale_id: 'sale-1', tender_lines_summary_json: tenderJson });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     await runOnce({ ...h.deps, tendersSince });
@@ -269,7 +316,7 @@ describe('RT-79 — tenders through the engine', () => {
   });
 
   it('a not-sendable tender sale reports a tender reason to onDeadLetter (no PII)', async () => {
-    const h = harness({ script: [{ kind: 'ok' }] });
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
     seedSale(h.db, { sale_id: 'sale-1', tender_lines_summary_json: VOUCHER });
     seedOutbox(h.db, { sale_id: 'sale-1' });
     const reasons: (string | undefined)[] = [];

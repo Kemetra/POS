@@ -173,7 +173,7 @@ describe('network.pair() — success path (T019)', () => {
     // The catch-all behaviour locked at MVP: every reachable response
     // resolves; only transport failure rejects.
     const { fetch } = makeFakeFetch({
-      response: new Response(JSON.stringify({ code: 'INVALID_CODE', message: 'nope' }), {
+      response: new Response(JSON.stringify({ error: { code: 'INVALID_CODE', message: 'nope' } }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -185,7 +185,7 @@ describe('network.pair() — success path (T019)', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.status).toBe(400);
-      expect(result.body).toMatchObject({ code: 'INVALID_CODE' });
+      expect(result.body).toMatchObject({ error: { code: 'INVALID_CODE' } });
     }
   });
 
@@ -273,7 +273,7 @@ describe('network.pair() — transport failure (T021a)', () => {
 
 describe('network.pair() — verbatim forwarding of US3 failure envelopes (T038)', () => {
   it('400 INVALID_CODE: surfaces { ok: false, status: 400, body: <verbatim> }', async () => {
-    const failureBody = { code: 'INVALID_CODE', message: 'Code not recognised.' };
+    const failureBody = { error: { code: 'INVALID_CODE', message: 'Code not recognised.' } };
     const { fetch } = makeFakeFetch({
       response: new Response(JSON.stringify(failureBody), {
         status: 400,
@@ -287,14 +287,14 @@ describe('network.pair() — verbatim forwarding of US3 failure envelopes (T038)
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.status).toBe(400);
-      // Verbatim — the service / failure-mapping read body.code from
+      // Verbatim — the service / failure-mapping read body.error.code from
       // exactly this object.
       expect(result.body).toEqual(failureBody);
     }
   });
 
   it('410 EXPIRED_CODE: surfaces { ok: false, status: 410, body: <verbatim> }', async () => {
-    const failureBody = { code: 'EXPIRED_CODE', message: 'Code expired.' };
+    const failureBody = { error: { code: 'EXPIRED_CODE', message: 'Code expired.' } };
     const { fetch } = makeFakeFetch({
       response: new Response(JSON.stringify(failureBody), {
         status: 410,
@@ -313,7 +313,7 @@ describe('network.pair() — verbatim forwarding of US3 failure envelopes (T038)
   });
 
   it('409 ALREADY_PAIRED: surfaces { ok: false, status: 409, body: <verbatim> }', async () => {
-    const failureBody = { code: 'ALREADY_PAIRED', message: 'Code already used.' };
+    const failureBody = { error: { code: 'ALREADY_PAIRED', message: 'Code already used.' } };
     const { fetch } = makeFakeFetch({
       response: new Response(JSON.stringify(failureBody), {
         status: 409,
@@ -342,7 +342,7 @@ describe('network.pair() — verbatim forwarding of US3 failure envelopes (T038)
       [409, 'ALREADY_PAIRED'],
     ] as const) {
       const { fetch } = makeFakeFetch({
-        response: new Response(JSON.stringify({ code, message: 'x' }), {
+        response: new Response(JSON.stringify({ error: { code, message: 'x' } }), {
           status,
           headers: { 'Content-Type': 'application/json' },
         }),
@@ -356,11 +356,13 @@ describe('network.pair() — verbatim forwarding of US3 failure envelopes (T038)
     // Defensive: if the backend evolves the envelope to include extra
     // diagnostic fields (e.g., `request_id`), they MUST flow through
     // verbatim so future features can read them without changing the
-    // network contract. failure-mapping reads only `code` defensively.
+    // network contract. failure-mapping reads only `error.code` defensively.
     const failureBody = {
-      code: 'INVALID_CODE',
-      message: 'Code not recognised.',
-      request_id: 'req-7f3e9',
+      error: {
+        code: 'INVALID_CODE',
+        message: 'Code not recognised.',
+        request_id: 'req-7f3e9',
+      },
       hint: 'check terminal label',
     };
     const { fetch } = makeFakeFetch({
@@ -464,7 +466,7 @@ describe('network.pair() — Retry-After parsing on 429 (T052)', () => {
   function makeRateLimitResponse(retryAfter: string | null, status = 429): Response {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (retryAfter !== null) headers['Retry-After'] = retryAfter;
-    return new Response(JSON.stringify({ code: 'RATE_LIMITED', message: 'slow down' }), {
+    return new Response(JSON.stringify({ error: { code: 'RATE_LIMITED', message: 'slow down' } }), {
       status,
       headers,
     });
@@ -587,7 +589,7 @@ describe('network.pair() — Retry-After parsing on 429 (T052)', () => {
     // NOT cause the renderer to disable submit — that semantic belongs
     // to RATE_LIMITED only.
     const { fetch } = makeFakeFetch({
-      response: new Response(JSON.stringify({ code: 'UNKNOWN' }), {
+      response: new Response(JSON.stringify({ error: { code: 'UNKNOWN' } }), {
         status: 503,
         headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
       }),
@@ -609,7 +611,7 @@ describe('network.pair() — Retry-After parsing on 429 (T052)', () => {
     // failure-mapping will still route the body code (status-agnostic);
     // the timer surface specifically gates on 429.
     const { fetch } = makeFakeFetch({
-      response: new Response(JSON.stringify({ code: 'RATE_LIMITED' }), {
+      response: new Response(JSON.stringify({ error: { code: 'RATE_LIMITED' } }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', 'Retry-After': '5' },
       }),

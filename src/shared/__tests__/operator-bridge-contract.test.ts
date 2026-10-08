@@ -24,6 +24,10 @@ import type {
   TakeoverRequiredResponse,
   UnlockCashierRequest,
   UnlockCashierResponse,
+  UnlockSessionRequest,
+  UnlockSessionResponse,
+  LockStateView,
+  SessionStateEvent,
 } from '../bridge-api.js';
 import type { OperatorRefusal } from '../audit/event-shape.js';
 
@@ -57,6 +61,10 @@ describe('operator bridge typed surface (T008)', () => {
       | 'forceCloseShift'
       | 'listStuckShifts'
       | 'dismissShiftClosedNotice'
+      // RT-117 (RT-116 §7.2) — inactivity lock
+      | 'unlockSession'
+      | 'getLockState'
+      | 'onSessionStateChanged'
     >();
   });
 
@@ -161,5 +169,31 @@ describe('operator bridge typed surface (T008)', () => {
     type Keys = keyof TakeoverRequiredResponse;
     // Only `kind` + `pending_takeover_id` — no terminal label, no timestamp, no operator id.
     expectTypeOf<Keys>().toEqualTypeOf<'kind' | 'pending_takeover_id'>();
+  });
+
+  // RT-117 (RT-116 §2.4, §7.2) — inactivity lock surface.
+  it('unlockSession takes UnlockSessionRequest and resolves to UnlockSessionResponse', () => {
+    expectTypeOf<
+      Parameters<OperatorBridgeAPI['unlockSession']>[0]
+    >().toEqualTypeOf<UnlockSessionRequest>();
+    expectTypeOf<
+      Awaited<ReturnType<OperatorBridgeAPI['unlockSession']>>
+    >().toEqualTypeOf<UnlockSessionResponse>();
+  });
+
+  it('getLockState takes no arguments and resolves to LockStateView', () => {
+    expectTypeOf<Parameters<OperatorBridgeAPI['getLockState']>>().toEqualTypeOf<[]>();
+    expectTypeOf<
+      Awaited<ReturnType<OperatorBridgeAPI['getLockState']>>
+    >().toEqualTypeOf<LockStateView>();
+  });
+
+  it('onSessionStateChanged delivers SessionStateEvent and returns an unsubscribe', () => {
+    expectTypeOf<Parameters<OperatorBridgeAPI['onSessionStateChanged']>[0]>().toEqualTypeOf<
+      (event: SessionStateEvent) => void
+    >();
+    expectTypeOf<ReturnType<OperatorBridgeAPI['onSessionStateChanged']>>().toEqualTypeOf<
+      () => void
+    >();
   });
 });

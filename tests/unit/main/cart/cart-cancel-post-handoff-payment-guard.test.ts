@@ -80,7 +80,14 @@ async function frozenCartUnderManager(
   });
   const created = await creator.create({ idempotency_key: 'create-1' });
   if (created.kind !== 'ok') throw new Error('create failed');
-  db.run(`UPDATE carts SET state = 'frozen_handed_off' WHERE cart_id = ?`, [created.cart_id]);
+  // As cart.handoff persists it: frozen, with the envelope naming this handoff.
+  db.run(
+    `UPDATE carts SET state = 'frozen_handed_off', handoff_envelope_json = ? WHERE cart_id = ?`,
+    [
+      JSON.stringify({ handoff_action_id: 'handoff-1', lines: [], discount_placeholders: [] }),
+      created.cart_id,
+    ],
+  );
   // A real persisted handoff: the cancel's handoff_action_id is verified against it.
   db.run(
     `INSERT INTO cart_action_outbox
@@ -102,6 +109,8 @@ async function frozenCartUnderManager(
     auditEmitter: { emit } as unknown as AuditEmitter,
     isPackaged: true,
     cartPaymentStatus: guard,
+    releaseCheckoutPayment: () => ({ kind: 'blocked' }),
+    checkoutReturnAllowed: () => false,
   });
   return { db, cartId: created.cart_id, handlers, emit, guard };
 }

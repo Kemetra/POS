@@ -24,7 +24,10 @@ import type { DatabaseHandle } from '../../../src/main/db/client.js';
 import type { PairingStore } from '../../../src/main/pairing/store.js';
 import { SessionManager } from '../../../src/main/operator/session-manager.js';
 import { ProtoSessionStore } from '../../../src/main/operator/takeover-handler.js';
-import type { CheckActiveSessionHandler } from '../../../src/main/operator/check-active-session.js';
+import {
+  FAKE_USER_ID,
+  fakeCashierAdmission,
+} from '../../../src/main/operator/__tests__/__helpers__/fake-cashier-admission.js';
 import type { SecretKey, SecretStore } from '../../../src/shared/secret-store.js';
 
 /**
@@ -89,6 +92,7 @@ interface TestDbRow {
   branch_id: string;
   terminal_id: string;
   cashier_clerk_user_id: string;
+  user_id: string;
   pin_hash: Buffer;
   pin_salt: Buffer;
   failed_attempt_count: number;
@@ -113,6 +117,7 @@ beforeAll(async () => {
     branch_id: BRANCH,
     terminal_id: TERMINAL,
     cashier_clerk_user_id: CASHIER_ID,
+    user_id: FAKE_USER_ID,
     pin_hash: sealed.pin_hash,
     pin_salt: sealed.pin_salt,
     failed_attempt_count: 0,
@@ -193,12 +198,6 @@ function makePairedStore(): PairingStore {
   };
 }
 
-function makeCheckActive(): CheckActiveSessionHandler {
-  return {
-    checkActiveSession: vi.fn().mockResolvedValue({ kind: 'none' }),
-  } as unknown as CheckActiveSessionHandler;
-}
-
 function makeRequest(): CashierSignInRequest {
   return {
     kind: 'cashier',
@@ -216,7 +215,7 @@ function makeHandler(
     db: makeDb(baseRow, shiftRow),
     safeStorage: ss,
     sessionManager: new SessionManager(),
-    checkActiveSession: makeCheckActive(),
+    admission: fakeCashierAdmission().deps,
     pairingStore: makePairedStore(),
     protoStore: new ProtoSessionStore(),
     secretStore: store,

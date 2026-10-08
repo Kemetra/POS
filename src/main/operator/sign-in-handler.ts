@@ -18,11 +18,24 @@ import type { JwtHolder } from './jwt-holder.js';
 import type { DatabaseHandle } from '../db/client.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
 import type { PairingStore } from '../pairing/store.js';
-import { CheckActiveSessionHandler } from './check-active-session.js';
+import {
+  admitCashierOnline,
+  mintAdmissionKey,
+  refusalForAdmission,
+  refusalIfSessionLost,
+  type CashierAdmissionDeps,
+} from './cashier-admission.js';
 import { unsealPinMaterial } from './pin-seal.js';
 import { verifyPinWithWindow, rowMatchesScope, type PinScope } from './pin-lockout.js';
 import type { PinRow } from './pin-credential.js';
 import { ProtoSessionStore } from './takeover-handler.js';
+import {
+  capturePairingEpoch,
+  epochToRecord,
+  pairingEpochHolds,
+  signOutAbandonedSession,
+  type PairingEpochReader,
+} from './pairing-epoch.js';
 
 /**
  * 004-operator-session T026 — manager/admin sign-in handler.
@@ -86,6 +99,13 @@ export interface SignInHandlerDeps {
    * main-process memory only — NEVER bridged, NEVER logged (P7/P8).
    */
   envelopeHolder?: JwtHolder;
+  /**
+   * RT-215 / Codex P1 4181556645 — `PairingStore.getPairingEpoch`: captured at
+   * request start and re-checked right before the session is created, so a
+   * sign-in still in flight when the device is revoked (or re-paired) is
+   * refused instead of completing. Production wires it; tests may omit.
+   */
+  pairingEpoch?: PairingEpochReader;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -100,12 +120,20 @@ export class SignInHandler {
   async signIn(req: ManagerAdminSignInRequest): Promise<SignInResponse> {
     // Boundary input validation — generic refusal on shape miss; we
     // never echo the rejected payload (Constitution VII).
-    if (
-      typeof req.identifier !== 'string' ||
-      req.identifier.length === 0 ||
-      typeof req.password !== 'string' ||
-      req.password.length === 0
-    ) {
+    if (typeof req.identifier !== 'string' || typeof req.password !== 'string') {
+      this.logRefusal('invalid_input', 'shape');
+      return REFUSE_INVALID;
+    }
+    // RT-42 — normalise the identifier (email/username) by trimming
+    // surrounding whitespace before it reaches Clerk: a pasted trailing space
+    // otherwise fails Clerk's identifier format check (422) and surfaces as a
+    // generic credential refusal. Done here, in the authoritative main-process
+    // path, so it holds regardless of what the renderer sends. The PASSWORD is
+    // deliberately NOT trimmed or transformed — its bytes are passed through
+    // exactly as entered (leading/trailing spaces can be part of a password).
+    const identifier = req.identifier.trim();
+    const pairing = capturePairingEpoch(this.deps.pairingEpoch);
+    if (identifier.length === 0 || req.password.length === 0) {
       this.logRefusal('invalid_input', 'shape');
       return REFUSE_INVALID;
     }
@@ -113,7 +141,7 @@ export class SignInHandler {
     // 1. Clerk credential exchange — happens in main process; password
     //    is consumed by the exchanger and discarded after this call.
     const exchange = await this.deps.clerk.exchange({
-      identifier: req.identifier,
+      identifier,
       password: req.password,
     });
     if (exchange.kind === 'no_connection') {
@@ -157,6 +185,7 @@ export class SignInHandler {
         branch_id: '',
         jwt: exchange.jwt,
         created_at: Date.now(),
+        ...epochToRecord(pairing),
       });
       this.logSuccess('takeover_required');
       return { kind: 'takeover_required', pending_takeover_id } satisfies TakeoverRequiredResponse;
@@ -171,6 +200,20 @@ export class SignInHandler {
       return REFUSE_INVALID;
     }
 
+    // RT-215 (Codex P1): the device was revoked or re-paired while this
+    // sign-in was in flight — drop the late success. Synchronous with
+    // create() and the holder writes below (no await in between).
+    if (!pairingEpochHolds(pairing)) {
+      this.logRefusal('invalid_input', 'pairing_changed');
+      // Codex P2 4186872826: do not abandon the backend session it created.
+      signOutAbandonedSession(
+        this.deps.backend,
+        { session_id: backend.operator_session.id, jwt: exchange.jwt },
+        this.deps.logger,
+      );
+      return REFUSE_INVALID;
+    }
+
     // 4. Create local in-memory session. S3 makes this durable.
     const record = this.deps.sessionManager.create({
       operator_id: backend.operator.id,
@@ -180,6 +223,8 @@ export class SignInHandler {
       branch_id: backend.operator.branch_id,
       backend_session_id: backend.operator_session.id,
       started_at: backend.operator_session.issued_at,
+      // RT-17 slice 4 part 2: kept main-side for the manager PIN enrolment.
+      manager_user_id: backend.operator.user_id,
     });
     // 016 (review HIGH) — two credential seams, contract-correct:
     //
@@ -241,7 +286,12 @@ export class SignInHandler {
  *   4. Unseal pin_hash + pin_salt via safeStorage (DPAPI on Windows).
  *   5. Verify PIN via verifyPinWithWindow (handles PR-3 expired-lockout reset).
  *   6. Persist only safe lockout-state columns (failed_attempt_count, lockout_until).
- *   7. On match: check for an active session (T069b); return takeover_required or signed_in.
+ *   7. On match: RT-113 P2 — admit online through the device-authenticated
+ *      Backend-Core cashier-admissions resource (10763 D2; replaces the
+ *      Clerk-gated `GET /operators/active-session`, RT-182). `admitted` →
+ *      signed_in; `active_elsewhere` → takeover_required; anything else → the
+ *      generic refusal. Offline (no connection) the sign-in is refused, as
+ *      before; offline admission is RT113-P3.
  */
 
 /** DB row returned by the cashier_pin_records SELECT. Local to this module. */
@@ -250,11 +300,16 @@ interface CashierPinDbRow {
   branch_id: string;
   terminal_id: string;
   cashier_clerk_user_id: string;
+  /** 017 — provider-neutral `users.id`; the admission's `user_id` (RT-113 P2). */
+  user_id: string | null;
   pin_hash: Buffer;
   pin_salt: Buffer;
   failed_attempt_count: number;
   lockout_until: string | null;
 }
+
+/** The unsealed pin row plus the cashier's provider-neutral id. */
+type LoadedPinRow = PinRow & { user_id: string | null };
 
 /**
  * Request shape for the cashier sign-in path.
@@ -265,7 +320,10 @@ export interface CashierSignInRequest {
   cashier_clerk_user_id: string;
   /** Plaintext PIN — consumed by verifyPinWithWindow, never persisted or logged. */
   pin: string;
-  /** Display name used to populate the local session record. */
+  /**
+   * Display name from the picker. RT-113 P2: kept on a takeover proto-session
+   * only; an admitted session takes the server-resolved name.
+   */
   display_name: string;
 }
 
@@ -273,7 +331,11 @@ export interface CashierSignInHandlerDeps {
   db: DatabaseHandle;
   safeStorage: SafeStorageLike;
   sessionManager: SessionManager;
-  checkActiveSession: CheckActiveSessionHandler;
+  /**
+   * RT-113 P2 — the device-authenticated cashier admission (10763 D2). The
+   * cashier path makes no Clerk-gated call.
+   */
+  admission: CashierAdmissionDeps;
   pairingStore: PairingStore;
   /**
    * Shared proto-session store. Populated when signIn returns
@@ -282,6 +344,13 @@ export interface CashierSignInHandlerDeps {
   protoStore: ProtoSessionStore;
   /** T091 — DPAPI-backed secret store for dismiss records. Tests omit it. */
   secretStore?: SecretStore;
+  /**
+   * RT-215 / Codex P1 4181556645 — `PairingStore.getPairingEpoch`: captured at
+   * request start and re-checked right before the session is created, so a
+   * sign-in still in flight when the device is revoked (or re-paired) is
+   * refused instead of completing. Production wires it; tests may omit.
+   */
+  pairingEpoch?: PairingEpochReader;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -309,7 +378,31 @@ export function makeShiftDismissKey(
 export class CashierSignInHandler {
   constructor(private readonly deps: CashierSignInHandlerDeps) {}
 
+  /**
+   * RT-117 (RT-116 §2.4) — verify a cashier's PIN on this terminal WITHOUT
+   * creating a session. Used for same-operator unlock of a locked session.
+   * Same row lookup, scope guard, unseal and 004 lockout rules as sign-in.
+   * Returns null on a match, otherwise the generic refusal.
+   */
+  async verifyPin(cashier_clerk_user_id: string, pin: string): Promise<OperatorRefusal | null> {
+    const pairingStatus = await this.deps.pairingStore.getStatus();
+    if (pairingStatus.kind !== 'paired') {
+      this.logRefusal('invalid_input', 'not_paired');
+      return REFUSE_INVALID;
+    }
+    const scope: PinScope = {
+      tenant_id: pairingStatus.tenant_id,
+      branch_id: pairingStatus.branch_id,
+      terminal_id: pairingStatus.terminal_id,
+      cashier_clerk_user_id,
+    };
+    const loaded = this.loadPinRow(scope);
+    if ('kind' in loaded) return loaded;
+    return await this.verifyPinAndUpdateLockout(pin, loaded, scope);
+  }
+
   async signIn(req: CashierSignInRequest): Promise<SignInResponse> {
+    const pairing = capturePairingEpoch(this.deps.pairingEpoch);
     // 1. Terminal scope — must be paired to know tenant/branch/terminal
     const pairingStatus = await this.deps.pairingStore.getStatus();
     if (pairingStatus.kind !== 'paired') {
@@ -333,44 +426,79 @@ export class CashierSignInHandler {
     const pinRefusal = await this.verifyPinAndUpdateLockout(req.pin, pinRow, scope);
     if (pinRefusal !== null) return pinRefusal;
 
-    // 6. Check for an existing active session for this cashier (T069b)
-    const activeCheck = await this.deps.checkActiveSession.checkActiveSession(
-      req.cashier_clerk_user_id,
-      scope.branch_id,
-    );
-    if (activeCheck.kind === 'refused') {
-      this.logRefusal(activeCheck.category, 'active_session_check');
-      return activeCheck;
+    // 6. RT-113 P2 — online admission (10763 D2). The PIN never leaves the
+    //    device: this call is the device's attestation that it verified it.
+    const user_id = pinRow.user_id;
+    if (typeof user_id !== 'string' || user_id.length === 0) {
+      this.logRefusal('invalid_input', 'no_user_id');
+      return REFUSE_INVALID;
     }
-    if (activeCheck.kind === 'active') {
+    const admission = await admitCashierOnline(this.deps.admission, {
+      user_id,
+      operator_id: req.cashier_clerk_user_id,
+      takeover: false,
+      // A one-shot key: a retry is a new sign-in with a new key and mark.
+      ...mintAdmissionKey(this.deps.admission),
+    });
+    if (admission.kind === 'active_elsewhere') {
       const pending_takeover_id = randomUUID();
       this.deps.protoStore.set({
         pending_takeover_id,
         operator_id: req.cashier_clerk_user_id,
+        user_id,
         display_name: req.display_name,
         role: 'cashier',
         tenant_id: scope.tenant_id,
         branch_id: scope.branch_id,
         jwt: null,
         created_at: Date.now(),
+        ...epochToRecord(pairing),
       });
       this.logSuccess('takeover_required');
       return { kind: 'takeover_required', pending_takeover_id } satisfies TakeoverRequiredResponse;
     }
+    if (admission.kind !== 'admitted') {
+      const refusal = refusalForAdmission(admission);
+      this.logRefusal(refusal.category, `admission_${admission.kind}`);
+      return refusal;
+    }
+    // RT-215 (Codex P1): revoked or re-paired while the admission was in
+    // flight — drop the late `admitted` (synchronous with create() below).
+    if (!pairingEpochHolds(pairing)) {
+      this.logRefusal('invalid_input', 'pairing_changed');
+      return REFUSE_INVALID;
+    }
 
-    // 7. No active session — create local in-memory session
-    // AD-2: cashier PIN path is local-only; backend_session_id is empty.
+    // 7. Admitted — create the local in-memory session. Cashier sessions hold
+    //    no backend operator session (backend_session_id ''); the authority is
+    //    the live admission, kept alive by the CashierAdmissionKeeper.
     const record = this.deps.sessionManager.create({
       operator_id: req.cashier_clerk_user_id,
-      display_name: req.display_name,
+      display_name: admission.display_name,
       role: 'cashier',
       tenant_id: scope.tenant_id,
       branch_id: scope.branch_id,
       backend_session_id: '',
+      cashier_admission: {
+        user_id,
+        admission_id: admission.admission_id,
+        admission_ttl_seconds: admission.admission_ttl_seconds,
+        offline_grace_seconds: admission.offline_grace_seconds,
+        admission_generation: admission.admission_generation,
+        admission_requested_at_ms: admission.requested_at_ms,
+      },
     });
 
     // T091 — check for an undismissed forced-close shift on this cashier.
     const forced_close_notice = await this.resolveForcedCloseNotice(scope);
+
+    // Codex P2 4179701431 — the keeper armed at create; the session may have
+    // been latched or ended during the await above. Never answer it signed_in.
+    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    if (lost !== null) {
+      this.logRefusal(lost.category, 'session_lost');
+      return lost;
+    }
 
     this.logSuccess('signed_in');
     if (forced_close_notice !== undefined) {
@@ -399,11 +527,11 @@ export class CashierSignInHandler {
    * storage errors must not propagate out of the sign-in path (PR-1: no
    * ciphertext, hash, salt, or cashier id in logs or returned values).
    */
-  private loadPinRow(scope: PinScope): PinRow | OperatorRefusal {
+  private loadPinRow(scope: PinScope): LoadedPinRow | OperatorRefusal {
     type SelectStmt = { get(...p: unknown[]): CashierPinDbRow | undefined };
     const sealedRow = (
       this.deps.db.prepare(
-        `SELECT tenant_id, branch_id, terminal_id, cashier_clerk_user_id,
+        `SELECT tenant_id, branch_id, terminal_id, cashier_clerk_user_id, user_id,
                 pin_hash, pin_salt, failed_attempt_count, lockout_until
            FROM cashier_pin_records
           WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND cashier_clerk_user_id = ?`,
@@ -430,6 +558,7 @@ export class CashierSignInHandler {
         pin_salt: unsealed.pin_salt,
         failed_attempt_count: sealedRow.failed_attempt_count,
         lockout_until: sealedRow.lockout_until,
+        user_id: sealedRow.user_id ?? null,
       };
     } catch {
       this.logRefusal('invalid_input', 'pin_unseal');

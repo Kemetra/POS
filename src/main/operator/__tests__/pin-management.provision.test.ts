@@ -15,7 +15,10 @@ import type { AuditEvent } from '../../../shared/audit/event-shape.js';
 import type { OperatorSessionRecord } from '../session-manager.js';
 import type { PairingStatus } from '../../../shared/pairing-types.js';
 import type { SafeStorageLike } from '../../secrets/safe-storage.js';
+import { createBackendClient } from '../backend-client.js';
 import type { BackendClient, BackendRosterResponse } from '../backend-client.js';
+import { createJwtHolder } from '../jwt-holder.js';
+import type { Logger } from 'pino';
 
 /**
  * 019-cashier-pin-provisioning T014–T018 — provisionCashierPin handler.
@@ -36,6 +39,10 @@ import type { BackendClient, BackendRosterResponse } from '../backend-client.js'
  *    to a clerk-keyed row (FR-11).
  *  - T018 invalid/unpaired: bad PIN shape or unpaired terminal → invalid_input.
  *  - no_connection: a live roster fetch failure surfaces truthfully (advisor note).
+ *  - RT-214: the roster call carries the signed-in manager's operator-identity
+ *    JWT (held in the operator JWT holder, keyed on backend_session_id); no
+ *    request goes out without one; 401/403 map to existing refusal categories;
+ *    neither the JWT nor the PIN reaches a log line or the IPC result.
  */
 
 const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
@@ -139,6 +146,8 @@ function makeSession(overrides: Partial<OperatorSessionRecord> = {}): OperatorSe
     backend_session_id: 'bsess-1',
     started_at: '2026-06-13T08:00:00.000Z',
     last_activity_at: '2026-06-13T08:00:00.000Z',
+    lock_state: 'active',
+    locked_at: null,
     ...overrides,
   };
 }
@@ -196,12 +205,20 @@ function fakeBackend(roster: BackendRosterResponse): BackendClient {
     signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
     listRoster: vi.fn(() => Promise.resolve(roster)),
     confirmTakeover: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
-    getActiveSession: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
     getStuckShifts: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
   };
 }
 
+/** A fake backend whose `listRoster` spy is held as a plain function (no unbound method). */
+function spiedBackend(): { backend: BackendClient; listRoster: ReturnType<typeof vi.fn> } {
+  const listRoster = vi.fn(() => Promise.resolve(rosterWithUserId()));
+  return { backend: { ...fakeBackend(rosterWithUserId()), listRoster }, listRoster };
+}
+
 // ─── Handler factory ─────────────────────────────────────────────────────────
+
+/** The manager's held operator-identity JWT (opaque test value). */
+const MANAGER_JWT = 'manager-operator-identity-jwt';
 
 function makeHandler(opts: {
   db: SqlJsDatabase;
@@ -209,7 +226,15 @@ function makeHandler(opts: {
   captured: CapturedEvent[];
   roster?: BackendRosterResponse;
   pairing?: PairingStatus;
+  /** Override the whole backend (e.g. the real client over a fake fetch). */
+  backend?: BackendClient;
+  /** JWT held for `bsess-1`; `null` holds nothing. Defaults to MANAGER_JWT. */
+  jwt?: string | null;
+  logger?: Logger;
 }): PinManagementHandler {
+  const jwtHolder = createJwtHolder();
+  const jwt = opts.jwt === undefined ? MANAGER_JWT : opts.jwt;
+  if (jwt !== null) jwtHolder.set('bsess-1', jwt);
   const deps: PinManagementHandlerDeps = {
     db: bindHandle(opts.db),
     safeStorage: fakeSafeStorage(),
@@ -220,9 +245,21 @@ function makeHandler(opts: {
       getStatus: () => Promise.resolve(opts.pairing ?? makePairingStatus('paired')),
     } as PinManagementHandlerDeps['pairingStore'],
     auditEmitter: makeAuditEmitter(opts.captured),
-    backend: fakeBackend(opts.roster ?? rosterWithUserId()),
+    backend: opts.backend ?? fakeBackend(opts.roster ?? rosterWithUserId()),
+    jwtHolder,
+    ...(opts.logger === undefined ? {} : { logger: opts.logger }),
   };
   return new PinManagementHandler(deps);
+}
+
+/** A pino-shaped logger that records every call's arguments. */
+function capturingLogger(): { logger: Logger; lines: unknown[][] } {
+  const lines: unknown[][] = [];
+  const record = (...args: unknown[]): void => {
+    lines.push(args);
+  };
+  const logger = { info: record, warn: record, error: record, debug: record } as unknown as Logger;
+  return { logger, lines };
 }
 
 function selectRow(db: SqlJsDatabase, clerkId: string): Record<string, unknown> | undefined {
@@ -267,7 +304,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -294,7 +331,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '135790',
     });
 
@@ -336,7 +373,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
     const eventId = randomUUID();
     await handler.provisionCashierPin({
       event_id: eventId,
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -363,7 +400,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -390,7 +427,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -420,7 +457,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -445,7 +482,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -455,14 +492,58 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
     db.close();
   });
 
-  it('T017 not_ready: target_user_id not present on any roster entry → not_ready, no row', async () => {
+  it('T017 not_ready: target_cashier_id not present on any roster entry → not_ready, no row', async () => {
     const db = freshDb();
     const captured: CapturedEvent[] = [];
     const handler = makeHandler({ db, session: makeSession({ role: 'manager' }), captured });
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: 'not-a-rostered-neutral-id',
+      target_cashier_id: 'not-a-rostered-cashier',
+      initial_pin: '4729',
+    });
+
+    expect(result).toEqual({ kind: 'refused', category: 'not_ready' });
+    expect(rowCount(db)).toBe(0);
+    db.close();
+  });
+
+  it('RT-235 review: a roster entry whose user_id is the empty string is not_ready, no row (sign-in rejects an empty neutral id)', async () => {
+    const db = freshDb();
+    const captured: CapturedEvent[] = [];
+    const handler = makeHandler({
+      db,
+      session: makeSession({ role: 'manager' }),
+      captured,
+      roster: {
+        kind: 'roster',
+        cashiers: [
+          { id: CASHIER_CLERK_ID, user_id: '', display_name: 'Cashier A', role: 'cashier' },
+        ],
+      },
+    });
+
+    const result = await handler.provisionCashierPin({
+      event_id: randomUUID(),
+      target_cashier_id: CASHIER_CLERK_ID,
+      initial_pin: '4729',
+    });
+
+    expect(result).toEqual({ kind: 'refused', category: 'not_ready' });
+    expect(rowCount(db)).toBe(0);
+    expect(captured).toHaveLength(0);
+    db.close();
+  });
+
+  it('RT-235 the neutral user_id is resolved main-side: a request naming the user_id (not the roster id) is not_ready, no row', async () => {
+    const db = freshDb();
+    const captured: CapturedEvent[] = [];
+    const handler = makeHandler({ db, session: makeSession({ role: 'manager' }), captured });
+
+    // The renderer only ever holds the roster `id`; a raw user_id must never be accepted as the key.
+    const result = await handler.provisionCashierPin({
+      event_id: randomUUID(),
+      target_cashier_id: CASHIER_USER_ID,
       initial_pin: '4729',
     });
 
@@ -478,7 +559,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: 'abc', // not digits
     });
 
@@ -499,7 +580,7 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
@@ -520,12 +601,163 @@ describe('019 — PinManagementHandler.provisionCashierPin', () => {
 
     const result = await handler.provisionCashierPin({
       event_id: randomUUID(),
-      target_user_id: CASHIER_USER_ID,
+      target_cashier_id: CASHIER_CLERK_ID,
       initial_pin: '4729',
     });
 
     expect(result).toEqual({ kind: 'refused', category: 'no_connection' });
     expect(rowCount(db)).toBe(0);
     db.close();
+  });
+});
+
+// ─── RT-214 — the manager roster call carries the manager's operator JWT ─────
+
+describe('RT-214 — provisionCashierPin authenticates the manager roster call', () => {
+  const PIN = '4729';
+
+  function provision(
+    handler: PinManagementHandler,
+  ): ReturnType<PinManagementHandler['provisionCashierPin']> {
+    return handler.provisionCashierPin({
+      event_id: randomUUID(),
+      target_cashier_id: CASHIER_CLERK_ID,
+      initial_pin: PIN,
+    });
+  }
+
+  it('passes the held manager JWT (keyed on the session backend_session_id) to listRoster', async () => {
+    const db = freshDb();
+    const { backend, listRoster } = spiedBackend();
+    const handler = makeHandler({ db, session: makeSession(), captured: [], backend });
+
+    await expect(provision(handler)).resolves.toMatchObject({ kind: 'pin_provisioned' });
+    expect(listRoster).toHaveBeenCalledExactlyOnceWith('branch-1', MANAGER_JWT);
+    db.close();
+  });
+
+  it('end to end through the real client: the request carries Authorization: Bearer <manager jwt>', async () => {
+    const db = freshDb();
+    const requests: Request[] = [];
+    const backend = createBackendClient({
+      baseUrl: 'https://backend-core.test',
+      fetch: (input, init) => {
+        requests.push(new Request(input, init));
+        return Promise.resolve(
+          new Response(JSON.stringify(rosterWithUserId()), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      },
+    });
+    const handler = makeHandler({ db, session: makeSession(), captured: [], backend });
+
+    await expect(provision(handler)).resolves.toMatchObject({ kind: 'pin_provisioned' });
+    expect(requests).toHaveLength(1);
+    const req = requests[0];
+    expect(new URL(req?.url ?? '').pathname).toBe('/api/pos/v1/operators/roster');
+    expect(req?.headers.get('authorization')).toBe(`Bearer ${MANAGER_JWT}`);
+    db.close();
+  });
+
+  for (const [label, jwt] of [
+    ['no JWT held', null],
+    ['an empty JWT held', ''],
+  ] as const) {
+    it(`${label} → not_signed_in, no roster request, no row`, async () => {
+      const db = freshDb();
+      const captured: CapturedEvent[] = [];
+      const { backend, listRoster } = spiedBackend();
+      const handler = makeHandler({ db, session: makeSession(), captured, backend, jwt });
+
+      await expect(provision(handler)).resolves.toEqual({
+        kind: 'refused',
+        category: 'not_signed_in',
+      });
+      expect(listRoster).not.toHaveBeenCalled();
+      expect(rowCount(db)).toBe(0);
+      expect(captured).toHaveLength(0);
+      db.close();
+    });
+  }
+
+  it('a JWT held for a DIFFERENT backend session is not used → not_signed_in, no request', async () => {
+    const db = freshDb();
+    const { backend, listRoster } = spiedBackend();
+    const handler = makeHandler({
+      db,
+      session: makeSession({ backend_session_id: 'bsess-other' }),
+      captured: [],
+      backend,
+    });
+
+    await expect(provision(handler)).resolves.toEqual({
+      kind: 'refused',
+      category: 'not_signed_in',
+    });
+    expect(listRoster).not.toHaveBeenCalled();
+    db.close();
+  });
+
+  for (const [roster, category] of [
+    [{ kind: 'unauthenticated' }, 'not_signed_in'],
+    [{ kind: 'no_token' }, 'not_signed_in'],
+    [{ kind: 'forbidden' }, 'role_mismatch'],
+    [{ kind: 'refused' }, 'invalid_input'],
+  ] as const) {
+    it(`roster ${roster.kind} → ${category}, no row, no audit event`, async () => {
+      const db = freshDb();
+      const captured: CapturedEvent[] = [];
+      const handler = makeHandler({ db, session: makeSession(), captured, roster });
+
+      await expect(provision(handler)).resolves.toEqual({ kind: 'refused', category });
+      expect(rowCount(db)).toBe(0);
+      expect(captured).toHaveLength(0);
+      db.close();
+    });
+  }
+
+  for (const [status, category] of [
+    [401, 'not_signed_in'],
+    [403, 'role_mismatch'],
+  ] as const) {
+    it(`real client: HTTP ${String(status)} from Backend-Core → ${category}`, async () => {
+      const db = freshDb();
+      const backend = createBackendClient({
+        baseUrl: 'https://backend-core.test',
+        fetch: () => Promise.resolve(new Response('{"error":"unauthorized"}', { status })),
+      });
+      const handler = makeHandler({ db, session: makeSession(), captured: [], backend });
+
+      await expect(provision(handler)).resolves.toEqual({ kind: 'refused', category });
+      expect(rowCount(db)).toBe(0);
+      db.close();
+    });
+  }
+
+  it('neither the JWT nor the PIN reaches a log line or the IPC result', async () => {
+    const outcomes: unknown[] = [];
+    const { logger, lines } = capturingLogger();
+    for (const opts of [
+      {},
+      { jwt: null },
+      { roster: { kind: 'unauthenticated' } as const },
+      { roster: { kind: 'forbidden' } as const },
+    ]) {
+      const db = freshDb();
+      const handler = makeHandler({ db, session: makeSession(), captured: [], logger, ...opts });
+      outcomes.push(await provision(handler));
+      db.close();
+    }
+
+    expect(lines.length).toBeGreaterThan(0);
+    const logged = JSON.stringify(lines);
+    const returned = JSON.stringify(outcomes);
+    for (const secret of [MANAGER_JWT, PIN]) {
+      expect(logged).not.toContain(secret);
+      expect(returned).not.toContain(secret);
+    }
+    expect(logged.toLowerCase()).not.toContain('bearer');
   });
 });

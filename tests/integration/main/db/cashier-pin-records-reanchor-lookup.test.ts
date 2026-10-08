@@ -64,16 +64,18 @@ describe('017 T040 — offline-unlock lookup via the clerk bridge survives 0036'
   it('the exact CashierSignInHandler SELECT (WHERE cashier_clerk_user_id = ?) finds a born-neutral row', () => {
     const db = migratedDb();
     seedBornNeutral(db);
-    // Byte-for-byte the sign-in-handler SELECT (sign-in-handler.ts:331-336),
-    // keyed on the demoted bridge column the renderer can supply offline.
+    // The sign-in-handler SELECT (CashierSignInHandler.loadPinRow), keyed on
+    // the demoted bridge column the renderer can supply offline. RT-113 P2
+    // also reads user_id: it is the admission's `user_id`.
     const r = db.exec(
-      `SELECT tenant_id, branch_id, terminal_id, cashier_clerk_user_id,
+      `SELECT tenant_id, branch_id, terminal_id, cashier_clerk_user_id, user_id,
               pin_hash, pin_salt, failed_attempt_count, lockout_until
          FROM cashier_pin_records
         WHERE tenant_id='t' AND branch_id='b' AND terminal_id='term'
           AND cashier_clerk_user_id='clerk-A'`,
     );
     expect(r[0]?.values).toHaveLength(1);
+    expect(r[0]?.values[0]?.[4]).toBe('neutral-A');
     db.close();
   });
 

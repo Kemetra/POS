@@ -31,6 +31,7 @@
  *     request payload (FR-013).
  */
 
+import { startActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
 import type { PaymentAttemptFsm } from '../fsm/payment-attempt-fsm.js';
@@ -42,7 +43,7 @@ import type { CheckCartForPayment } from '../cart-payment-eligibility.js';
 
 export interface PaymentsStartHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
-  attemptsRepo: Pick<PaymentAttemptsRepository, 'findStartedByTerminal'>;
+  attemptsRepo: Pick<PaymentAttemptsRepository, 'findStartedByTerminal' | 'findById'>;
   paymentAttemptFsm: Pick<PaymentAttemptFsm, 'start' | 'cancel'>;
   idempotency: IdempotencyHelper;
   /**
@@ -124,15 +125,8 @@ function isValidStartInput(req: PaymentsStartRequest): boolean {
 }
 
 export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): PaymentsStartHandler {
-  const {
-    getCurrentSession,
-    attemptsRepo,
-    paymentAttemptFsm,
-    idempotency,
-    uuid,
-    clock,
-    checkCartForPayment,
-  } = deps;
+  const { getCurrentSession, paymentAttemptFsm, idempotency, uuid, clock, checkCartForPayment } =
+    deps;
 
   return async function paymentsStart(req): Promise<PaymentsStartResponse> {
     // 1. Session gate (no attempt yet — no ownership/isolation check).
@@ -160,12 +154,9 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
       payment_attempt_id,
       tender_line_id: null,
       action_kind: 'payment.attempt.start',
-      payload: {
-        envelope_handoff_action_id: req.envelope_handoff_action_id,
-        envelope_cart_id: req.envelope_cart_id,
-        envelope_subtotal_minor: req.envelope_subtotal_minor,
-        envelope_version: req.envelope_version,
-      },
+      // `envelope_version` is validated to the literal 'v1' above, so it adds
+      // nothing to the hash; the FSM hashes this same shape (RT-304).
+      payload: startActionPayload(req),
       acting_operator_id: session.operator_id,
       created_at: now,
     });
@@ -178,23 +169,36 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
     }
 
     if (reservation.kind === 'replay') {
-      // Reconstruct the original outcome by probing the partial-unique-index:
-      // a started attempt on this terminal whose `last_action_id` matches the
-      // idempotency_key is the row this replay refers to. The S3b idempotency
-      // contract: "the row is the source of truth".
-      const existing = attemptsRepo.findStartedByTerminal(session.terminal_id);
-      if (existing !== undefined && existing.last_action_id === req.idempotency_key) {
-        return await Promise.resolve({
-          kind: 'ok',
-          payment_attempt_id: existing.payment_attempt_id,
-        });
+      // The original attempt id is the outbox row's immutable
+      // `payment_attempt_id`. Probing the started row instead (partial unique
+      // index + `last_action_id`) only worked while the attempt was still
+      // `started`: once it is confirmed, cancelled or force-failed the row is
+      // no longer returned and its `last_action_id` has moved on, so a
+      // delayed retry answered `internal_error` (RT-304 review).
+      //
+      // The start hash covers only the envelope fields, so a retry made after
+      // the device / session moved to another terminal, branch or tenant would
+      // match. Unlike the other actions there is no attempt to run the
+      // isolation gate against up front, so check the original attempt's
+      // immutable scope tuple against the active session here.
+      const original = deps.attemptsRepo.findById(reservation.payment_attempt_id);
+      if (
+        original?.tenant_id !== session.tenant_id ||
+        original.branch_id !== session.branch_id ||
+        original.terminal_id !== session.terminal_id
+      ) {
+        return await Promise.resolve({ kind: 'refused', reason: 'tenant_isolation' });
       }
-      // The outbox row exists but no matching started row is queryable — this
-      // is a defence-in-depth path. The S3b idempotency module + FSM run
-      // both inside one transaction, so a missing started row alongside a
-      // committed outbox row is impossible in production. Refuse generically
-      // rather than fabricate a response.
-      return await Promise.resolve({ kind: 'refused', reason: 'internal_error' });
+      // A different operator session on the same terminal (a new sign-in)
+      // must not be handed the previous operator's attempt: every follow-up
+      // call on it would be refused `wrong_owner`.
+      if (original.operator_session_id !== session.operator_session_id) {
+        return await Promise.resolve({ kind: 'refused', reason: 'wrong_owner' });
+      }
+      return await Promise.resolve({
+        kind: 'ok',
+        payment_attempt_id: original.payment_attempt_id,
+      });
     }
 
     // 3a. Cart authority — the renderer supplies the envelope fields, so main
