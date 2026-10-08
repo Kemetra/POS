@@ -41,7 +41,7 @@
 >
 > **Success metric.** A cashier completes a sale, prints a receipt, and opens the drawer in under 10 seconds, with every transaction durably recorded and attributable to a named operator at a specific terminal, regardless of network state.
 >
-> **Also known as:** the legacy names `POS Pulse` / `POS-Pulse` (this repo), `SmartDataPulse` and `Data-Pulse-2` / `DP2` (`Kemetra/Backend-Core`) remain in use in code, packaging, config and docs.
+> **Also known as:** the legacy names `POS Pulse` / `POS-Pulse` (this repo), `SmartDataPulse` (the former platform name, now Retail Tower OS) and `Data-Pulse-2` / `DP2` (`Kemetra/Backend-Core`) remain in use in code, packaging, config and docs.
 
 ---
 
