@@ -1,98 +1,75 @@
 <div align="center">
 
-<img src="docs/assets/brand/pos-pulse-logo.svg" alt="POS-Pulse logo" width="120" height="120"/>
-
-# POS Pulse
-
-**Retail Tower OS, the POS track: the Windows cashier terminal for pharmacy branches, built on an architecture and design with AI embedded from the inside.**
+<img src="docs/assets/readme/hero.svg" alt="Retail Tower OS, POS track: one product, four development tracks, with AI woven through all of them" width="100%"/>
 
 <p align="center">
-  <a href="docs/product.md"><img alt="Product: POS Pulse" src="https://img.shields.io/badge/product-POS%20Pulse-0f766e?style=flat-square"></a>
-  <a href="README.md"><img alt="Repo: POS-Pulse" src="https://img.shields.io/badge/repo-POS--Pulse-181717?style=flat-square&logo=github&logoColor=white"></a>
-  <a href="docs/hardware-matrix.md"><img alt="Platform: Windows terminal" src="https://img.shields.io/badge/platform-Windows%20terminal-2563eb?style=flat-square"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-16a34a?style=flat-square"></a>
+  <a href="docs/product.md"><img alt="Retail Tower OS" src="https://img.shields.io/badge/Retail%20Tower-OS-0f766e?labelColor=0a0f24&style=flat-square"></a>
+  <a href="#-ai-is-native-to-the-architecture-and-the-design"><img alt="AI embedded by design" src="https://img.shields.io/badge/AI-embedded%20by%20design-a78bfa?labelColor=0a0f24&style=flat-square"></a>
+  <a href=".specify/memory/constitution.md"><img alt="Electron: sandboxed" src="https://img.shields.io/badge/Electron-sandboxed-14b8a6?labelColor=0a0f24&style=flat-square"></a>
+  <a href="src/shared/bridge-api.ts"><img alt="Bridge: typed only" src="https://img.shields.io/badge/bridge-typed%20only-60a5fa?labelColor=0a0f24&style=flat-square"></a>
+  <a href="migrations"><img alt="Local state: durable" src="https://img.shields.io/badge/local%20state-durable-34d399?labelColor=0a0f24&style=flat-square"></a>
+  <a href=".specify/memory/constitution.md"><img alt="Cards: no capture" src="https://img.shields.io/badge/cards-no%20capture-f87171?labelColor=0a0f24&style=flat-square"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-34d399?labelColor=0a0f24&style=flat-square"></a>
 </p>
 
 <p align="center">
-  <a href=".nvmrc"><img alt="Node.js >=20" src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=nodedotjs&logoColor=white"></a>
-  <a href="package-lock.json"><img alt="npm lockfile" src="https://img.shields.io/badge/npm-lockfile-cb3837?style=flat-square&logo=npm&logoColor=white"></a>
-  <a href="tsconfig.json"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white"></a>
-  <a href="package.json"><img alt="Electron 44" src="https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white"></a>
-  <a href="src/renderer"><img alt="React 19" src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=111827"></a>
-  <a href="vite.config.ts"><img alt="Vite 8" src="https://img.shields.io/badge/Vite-8-646cff?style=flat-square&logo=vite&logoColor=white"></a>
-  <a href="tailwind.config.ts"><img alt="Tailwind 4" src="https://img.shields.io/badge/Tailwind-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white"></a>
+  <a href=".nvmrc"><img alt="Node.js 20+" src="https://img.shields.io/badge/node-%E2%89%A520-339933?logo=nodedotjs&logoColor=white&labelColor=0a0f24&style=flat-square"></a>
+  <a href="tsconfig.json"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white&labelColor=0a0f24&style=flat-square"></a>
+  <a href="package.json"><img alt="Electron 44" src="https://img.shields.io/badge/Electron-44-47848f?logo=electron&logoColor=white&labelColor=0a0f24&style=flat-square"></a>
+  <a href="src/renderer"><img alt="React 19" src="https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=61dafb&labelColor=0a0f24&style=flat-square"></a>
+  <a href="vite.config.ts"><img alt="Vite 8" src="https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white&labelColor=0a0f24&style=flat-square"></a>
+  <a href="tailwind.config.ts"><img alt="Tailwind 4" src="https://img.shields.io/badge/Tailwind-4-06b6d4?logo=tailwindcss&logoColor=white&labelColor=0a0f24&style=flat-square"></a>
   <a href="https://github.com/Kemetra/POS/blob/badges/loc.svg"><img alt="LOC" src="https://raw.githubusercontent.com/Kemetra/POS/badges/loc.svg"></a>
 </p>
 
 <p align="center">
-  <a href=".specify/memory/constitution.md"><img alt="Electron: sandboxed" src="https://img.shields.io/badge/Electron-sandboxed-0f766e?style=flat-square"></a>
-  <a href="src/shared/bridge-api.ts"><img alt="Bridge: typed only" src="https://img.shields.io/badge/bridge-typed%20only-7c3aed?style=flat-square"></a>
-  <a href="migrations"><img alt="Local state: durable" src="https://img.shields.io/badge/local%20state-durable-16a34a?style=flat-square"></a>
-  <a href="docs/hardware-matrix.md"><img alt="Hardware: MVP matrix" src="https://img.shields.io/badge/hardware-MVP%20matrix-f97316?style=flat-square"></a>
-  <a href=".specify/memory/constitution.md"><img alt="Cards: no capture" src="https://img.shields.io/badge/cards-no%20capture-dc2626?style=flat-square"></a>
-  <a href="#-ai-embedded-by-design"><img alt="AI: embedded by design" src="https://img.shields.io/badge/AI-embedded%20by%20design-8b5cf6?style=flat-square"></a>
-  <a href="CLAUDE.md"><img alt="Work: Jira governed, GitHub main is truth" src="https://img.shields.io/badge/work-Jira%20governed-111827?style=flat-square"></a>
+  <a href="#-one-project-four-tracks"><b>Tracks</b></a> &nbsp;·&nbsp;
+  <a href="#-ai-is-native-to-the-architecture-and-the-design"><b>AI</b></a> &nbsp;·&nbsp;
+  <a href="#current-implementation-status"><b>Status</b></a> &nbsp;·&nbsp;
+  <a href="#integration-surfaces"><b>Sync</b></a> &nbsp;·&nbsp;
+  <a href="#getting-started"><b>Get started</b></a> &nbsp;·&nbsp;
+  <a href="docs/README.md"><b>Docs</b></a>
 </p>
-
-![POS Pulse terminal hero](docs/assets/hero-pos-pulse.svg)
 
 </div>
 
-> **Retail Tower OS** is one product. **POS Pulse** (also written POS-Pulse) is this repository's own surface: the Windows cashier terminal, and the **POS track** of Retail Tower OS. This repo (`Kemetra/POS`) contains no backend, admin frontend, or ERPNext/Frappe code. The product and brand names `POS Pulse` and `SmartDataPulse` remain in use in code, packaging, and docs; the legacy names Data-Pulse-2 / DP2 refer to `Kemetra/Backend-Core`.
+> **Retail Tower OS** is the product; this repository, [`Kemetra/POS`](https://github.com/Kemetra/POS), is its POS track: **POS Pulse** (also written POS-Pulse), the Windows cashier terminal. It contains no backend, admin frontend or ERPNext/Frappe code: those live in the sibling tracks below ([Backend-Core](https://github.com/Kemetra/Backend-Core), [Admin-Console](https://github.com/Kemetra/Admin-Console), [ERPNext-Connector](https://github.com/Kemetra/ERPNext-Connector)). The names `POS Pulse` and `SmartDataPulse` remain in use in code, packaging and docs; the legacy names Data-Pulse-2 / DP2 refer to `Kemetra/Backend-Core`.
 
 ---
 
-## 🧩 One project, four development tracks
+## 🧩 One project, four tracks
 
-Retail Tower OS is **one product**. The four repositories below are its development divisions, split by responsibility so each track can be built, tested, and released independently. They are **not separate products**: there is one architecture, one set of contracts, and one AI-embedded design across all four.
+<p align="center">
+  <img src="docs/assets/readme/tracks.svg" alt="Data flow: POS and Admin-Console talk to Backend-Core, which feeds the ERPNext-Connector, the only path to ERPNext. An AI layer runs through all four tracks." width="100%"/>
+</p>
 
-| Track | Repository | Responsibility |
+| Track | Repository | Owns |
 | --- | --- | --- |
-| Backend-Core | [`Kemetra/Backend-Core`](https://github.com/Kemetra/Backend-Core) | Contract and orchestration boundary: APIs, data, workers, tenant/store context, sync operations |
-| **POS** ◀ you are here | [`Kemetra/POS`](https://github.com/Kemetra/POS) | Windows cashier terminal: Electron app, offline state, receipts, POS ↔ Backend-Core sync |
-| Admin-Console | [`Kemetra/Admin-Console`](https://github.com/Kemetra/Admin-Console) | Admin/operator web frontend: tenant/store operations, catalog, inventory views, sync operations |
-| ERPNext-Connector | [`Kemetra/ERPNext-Connector`](https://github.com/Kemetra/ERPNext-Connector) | The only ERPNext/Frappe adapter: DocType mapping, posting |
+| **POS** ◀ you are here | [`Kemetra/POS`](https://github.com/Kemetra/POS) | Windows cashier terminal · offline state · receipts · POS ↔ Backend-Core sync |
+| **Backend-Core** | [`Kemetra/Backend-Core`](https://github.com/Kemetra/Backend-Core) | APIs · data · workers · tenant/store context · sync operations |
+| **Admin-Console** | [`Kemetra/Admin-Console`](https://github.com/Kemetra/Admin-Console) | Operator web UI · catalog · inventory views · sync ops |
+| **ERPNext-Connector** | [`Kemetra/ERPNext-Connector`](https://github.com/Kemetra/ERPNext-Connector) | The only ERPNext/Frappe adapter · DocType mapping · posting |
 
-```text
-POS / Admin-Console -> Backend-Core -> ERPNext-Connector -> ERPNext / Frappe
-```
-
-[`Kemetra/Orchestrator`](https://github.com/Kemetra/Orchestrator) is the technical handbook (architecture, ADRs, runbooks). It is not a track and holds no application code.
+<sub>One architecture, one set of contracts, one AI-embedded design. <a href="https://github.com/Kemetra/Orchestrator"><code>Kemetra/Orchestrator</code></a> is the technical handbook, not a track.</sub>
 
 ---
 
-## 🧠 AI-embedded by design
+## 🧠 AI is native to the architecture and the design
 
-Retail Tower OS is **AI-embedded**, not AI-integrated. AI is a **founding part of the architecture and the design** of the whole project, native from the inside. It is not a layer added on top, and it is not merely an integration with someone else's model. That holds for every track, this terminal included.
+<p align="center">
+  <img src="docs/assets/readme/ai-embedded.svg" alt="AI-integrated: the AI sits outside the boundary and reaches the system through a side channel. AI-embedded: the AI runs through every layer inside the boundary, under the same rules." width="100%"/>
+</p>
 
-- **Architecture.** Contracts, events, audit, tenant isolation, and the data model are built so that intelligent components can understand and act on them through the same boundaries as every other component.
-- **Design.** Product and UX design: workflows and surfaces are designed with intelligence as a native participant, while humans keep authority.
+<table>
+<tr>
+<td width="25%" valign="top"><b>🔒 Same boundary</b><br/><sub>Only the typed preload bridge (<a href="src/shared/bridge-api.ts"><code>bridge-api.ts</code></a>) and Backend-Core contracts. No privileged IPC, no side door.</sub></td>
+<td width="25%" valign="top"><b>🧾 Auditable</b><br/><sub>Sales, the outbox and audit events live in durable local SQLite, so AI-assisted actions can be traced and reviewed.</sub></td>
+<td width="25%" valign="top"><b>🏢 Tenant-safe</b><br/><sub>No card data, secrets or PII. Each terminal stays inside its own tenant and branch scope (<a href=".specify/memory/constitution.md">constitution</a>).</sub></td>
+<td width="25%" valign="top"><b>🧑‍⚖️ Human-governed</b><br/><sub>Cashier, manager and admin keep authority. Role checks and approval gates apply to AI as to a person.</sub></td>
+</tr>
+</table>
 
-| AI-integrated (what Retail Tower OS is **not**) | AI-embedded (what Retail Tower OS **is** designed to be) |
-| --- | --- |
-| AI is a feature bolted on top of a finished system | AI is a native layer of the system itself, in its architecture and its design |
-| Reaches data through side channels, screen scraping, or exports | Works on the same typed contracts, data model, and events as every other component |
-| Sits outside the security and audit model | Runs inside it: isolation, authorization, redaction, and audit apply to AI-driven actions like any other actor |
-| Can be removed without changing the architecture | Shapes the architecture: typed contracts, auditable outboxes, and structured, validated data are built to be understood and acted on by intelligent components |
-
-How each track carries it:
-
-- **Backend-Core:** contracts, events, and audit as the substrate.
-- **POS (this repo):** the cashier workflow and offline-first local state.
-- **Admin-Console:** operator surfaces.
-- **ERPNext-Connector:** ERP mapping and posting.
-
-What this means for this repository:
-
-- **Same bridge, same rules.** The renderer reaches the main process only through the typed preload bridge ([`src/shared/bridge-api.ts`](src/shared/bridge-api.ts)). AI-driven behavior gets no privileged IPC, no Node access in the renderer, and no side door around the Electron security boundary (`contextIsolation`, `sandbox`, sender-guarded IPC).
-- **Same contracts, same path.** Anything that needs the platform goes `POS -> Backend-Core` through its OpenAPI contracts. POS never calls ERPNext/Frappe directly, with or without AI in the loop.
-- **Local state is a first-class substrate.** Sales, the outbox, the catalogue read model, and audit events live in migration-backed SQLite with append-only guarantees. That structured, durable, attributable data is what intelligent components are meant to read and act on, within the same transactional and idempotency rules as the cashier.
-- **Designed with intelligence as a participant.** Cashier workflows and surfaces are designed so that assistance can appear inside them, with the cashier's confirmation and without the terminal ever showing a success it has not confirmed (constitution P2 and P9).
-- **No cardholder data, secrets, or PII.** Card capture stays out of scope, and logs and audit events stay redacted. Intelligent components inherit those rules; they are not an exception to them.
-- **Offline-aware.** The terminal keeps selling without a network, and AI-assisted behavior has to degrade honestly in the same way.
-- **Human-governed.** Cashier, manager, and admin keep authority. Role checks and approval gates (manager PIN, supervisor override) apply to AI-assisted actions exactly as they apply to a person.
-
-> AI-embedded describes the architectural and design direction of the project. It is not a claim that a particular AI capability ships today: the source on `main` of this repository contains no model or LLM integration. What is shipped is tracked in [Current implementation status](#current-implementation-status) and the per-feature specs under [`specs/`](specs).
+> AI-embedded describes the architectural and design direction. The source on `main` contains no model or LLM integration; what is shipped today is tracked in [Current implementation status](#current-implementation-status) and under [`specs/`](specs).
 
 ---
 
@@ -187,7 +164,7 @@ The terminal is well past the foundation slices. As of the baseline below, `main
 | Inventory awareness | Not implemented | n/a | [`013`](specs/013-inventory-awareness) (seed only) |
 | Credit and third-party tender, insurance co-pay | Not implemented | n/a | [`020`](specs/020-pos-credit-and-third-party-tender-flow) · [`0xx`](specs/0xx-insurance-copay) (spec only) |
 | Cashier flow state machine and smoke contract | Not implemented | n/a | [`018`](specs/018-pos-cashier-flow-state-machine-and-smoke-contract) (spec only) |
-| Any AI-driven feature | None on `main` | n/a | see [AI-embedded by design](#-ai-embedded-by-design) |
+| Any AI-driven feature | None on `main` | n/a | see [AI is native to the architecture and the design](#-ai-is-native-to-the-architecture-and-the-design) |
 
 All feature flags are fail-closed: each is read from its `POS_PULSE_FEATURE_*` environment variable and defaults to off ([`src/main/app/feature-flags.ts`](src/main/app/feature-flags.ts)). A route that shows a placeholder usually means its flag is off.
 
