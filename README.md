@@ -164,7 +164,7 @@ Open [the structure flowchart](docs/assets/structure-flowchart.svg) directly for
 
 > **Source of truth.** GitHub `main` is the technical truth for what is implemented; active work and priorities are tracked in Jira (project **RT**). The `Status:` headers inside `specs/*/spec.md` were written at spec time and often lag the code, so the table below is derived from what exists on `main` (source under `src/main`, migrations, routes, feature flags), not from those headers. [`specs/README.md`](specs/README.md) is a status index with the same caveat.
 
-The terminal is well past the foundation slices. As of the baseline below, `main` contains the full local cashier loop (pairing, operator sessions, cart, search and scan, tender, sale finalization, receipts, drawer), the two Backend-Core sync legs (catalogue read-down, sale capture-up), and flag-gated returns and shift cash-up.
+The terminal is well past the foundation slices. As of the baseline below, `main` contains the full local cashier loop (pairing, operator sessions, cart, search and scan, tender, sale finalization, receipts via OS print), the two Backend-Core sync legs (catalogue read-down, sale capture-up), and flag-gated returns and shift cash-up.
 
 | Capability | State on `main` | Gate | Spec |
 | --- | --- | --- | --- |
@@ -177,7 +177,7 @@ The terminal is well past the foundation slices. As of the baseline below, `main
 | Catalogue read-down from Backend-Core (`catalog/snapshot`) into local SQLite | Implemented | n/a | [`010`](specs/010-pos-catalog-read-down-consumption) |
 | Payments tender: cash and external card terminal (recorded, never captured) | Implemented | `POS_PULSE_FEATURE_PAYMENTS` (requires sale finalization) | [`006`](specs/006-payments-tender) |
 | Internal voucher tender | Implemented; outside the pilot | `POS_PULSE_FEATURE_VOUCHER_TENDER` | tracked in Jira RT |
-| Sale finalization, receipts (ESC/POS direct and OS-print paths), drawer kick | Implemented; **sale-level tax is hardcoded to 0, so customer-facing fiscal use is blocked** | `POS_PULSE_FEATURE_SALE_FINALIZATION` | [`008`](specs/008-sale-finalization-and-receipts) |
+| Sale finalization and receipts via OS print. Direct ESC/POS printing and cash-drawer kick are **not wired**: the ESC/POS path is a stub that is never selected, and the drawer transport always reports `no_drawer_configured` (a cash sale records a failed drawer row) | Implemented for OS print only; **sale-level tax is hardcoded to 0, so customer-facing fiscal use is blocked** | `POS_PULSE_FEATURE_SALE_FINALIZATION` | [`008`](specs/008-sale-finalization-and-receipts) |
 | Sale capture-up: outbox, drain engine, idempotent retry, dead-letter | Implemented and wired in the composition root; live end-to-end validation is tracked separately | n/a | [`011`](specs/011-sale-sync-capture-up) |
 | Returns (manager/admin, `/app/returns`) | Implemented | `POS_PULSE_FEATURE_RETURNS` | tracked in Jira RT |
 | Shift cash-up (open, pay-in/out, blind-count close, manager approval) and its sync | Implemented | `POS_PULSE_FEATURE_SHIFT_CASHUP` | tracked in Jira RT |
@@ -341,7 +341,7 @@ Backend-Core (APIs, database, workers, and the OpenAPI source of truth: [`Kemetr
 | Language | TypeScript 5 strict mode |
 | Local data | `better-sqlite3` · SQL migrations |
 | Security | Electron sandbox · context isolation · typed preload bridge · `safeStorage` · argon2 PIN hashing · Electron fuses |
-| Hardware | Keyboard-wedge scanner · ESC/POS printing (`node-thermal-printer`) with an OS-print fallback · optional cash drawer kick |
+| Hardware | Keyboard-wedge scanner · receipt printing through the OS print path (direct ESC/POS via `node-thermal-printer` is a stub, not selected) · cash-drawer kick is designed but not wired (the transport reports `no_drawer_configured`) |
 | Observability | pino · Sentry Electron |
 | Contracts | Pinned OpenAPI snapshot via `openapi-typescript` · vendored Backend-Core contracts · conformance suite |
 | Testing | Vitest · Testing Library · happy-dom · axe-core · sql.js |
