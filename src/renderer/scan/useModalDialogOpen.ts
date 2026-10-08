@@ -22,8 +22,16 @@ function subscribe(onChange: () => void): () => void {
     attributes: true,
     attributeFilter: ['aria-modal'],
   });
+  // A dialog takes focus on open and returns it on close, so a focus change is a
+  // second trigger that does not depend on the observer. happy-dom (the test
+  // DOM) holds an observer's callback behind a WeakRef, so a GC pass can stop it
+  // reporting; React re-reads the snapshot and bails out when nothing changed.
+  document.addEventListener('focusin', onChange);
+  document.addEventListener('focusout', onChange);
   return () => {
     observer.disconnect();
+    document.removeEventListener('focusin', onChange);
+    document.removeEventListener('focusout', onChange);
   };
 }
 
