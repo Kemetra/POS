@@ -23,7 +23,8 @@ const foundation = stripComments(readFileSync(resolve(__dirname, '../foundation.
 
 /** Declarations of the first top-level rule whose selector list is exactly `selector`. */
 function block(css: string, selector: string): Map<string, string> {
-  const escaped = selector.replace(/[.[\]()'":]/g, '\\$&');
+  // Escape every regex metacharacter, backslash included (CodeQL js/incomplete-sanitization).
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = new RegExp(`(?:^|[};])\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(css);
   if (match === null) throw new Error(`no rule for ${selector}`);
   const decls = new Map<string, string>();

@@ -7,6 +7,7 @@ import {
   useState,
   type JSX,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -81,6 +82,24 @@ function isNamedRadio(el: Element | null): el is HTMLInputElement {
   return el instanceof HTMLInputElement && el.type === 'radio' && el.name !== '';
 }
 
+/** A same-name radio group contributes one tab stop: the first radio seen for that name. */
+function keepsStop(el: HTMLElement, seenGroups: Set<string>): boolean {
+  if (!isNamedRadio(el)) return true;
+  if (seenGroups.has(el.name)) return false;
+  seenGroups.add(el.name);
+  return true;
+}
+
+/** The stop that stands for `el`: a radio group's checked radio, else `el` itself. */
+function groupStop(items: HTMLElement[], el: HTMLElement): HTMLElement {
+  if (!isNamedRadio(el)) return el;
+  return items.find((item) => isCheckedRadioOf(item, el.name)) ?? el;
+}
+
+function isCheckedRadioOf(item: Element, name: string): boolean {
+  return isNamedRadio(item) && item.name === name && item.checked;
+}
+
 /**
  * Tab stops in order. A same-name radio group is ONE stop, as in the browser:
  * its checked radio, else its first. (The manager-approval dialog opens with a
@@ -89,19 +108,8 @@ function isNamedRadio(el: Element | null): el is HTMLInputElement {
  */
 function tabStops(panel: HTMLElement): HTMLElement[] {
   const items = focusableIn(panel);
-  const groups = new Set<string>();
-  const stops: HTMLElement[] = [];
-  for (const el of items) {
-    if (!isNamedRadio(el)) {
-      stops.push(el);
-      continue;
-    }
-    if (groups.has(el.name)) continue;
-    groups.add(el.name);
-    const group = items.filter((item) => isNamedRadio(item) && item.name === el.name);
-    stops.push(group.find((radio) => (radio as HTMLInputElement).checked) ?? el);
-  }
-  return stops;
+  const seenGroups = new Set<string>();
+  return items.filter((el) => keepsStop(el, seenGroups)).map((el) => groupStop(items, el));
 }
 
 /** Is focus on this stop? Any radio of a group stands on the group's stop. */
@@ -110,20 +118,59 @@ function isOnStop(active: Element | null, stop: HTMLElement): boolean {
   return isNamedRadio(active) && isNamedRadio(stop) && active.name === stop.name;
 }
 
-/** Wraps Tab at the panel's edges. Returns true when it moved focus itself. */
-function trapTab(panel: HTMLElement, backwards: boolean): boolean {
+/**
+ * Where Tab must wrap to, or null when focus is not at an edge (the browser's
+ * own Tab then stays inside the panel). With no tab stop, the panel itself.
+ */
+function wrapTarget(panel: HTMLElement, backwards: boolean): HTMLElement | null {
   const stops = tabStops(panel);
   const first = stops[0];
   const last = stops[stops.length - 1];
-  if (first === undefined || last === undefined) {
-    panel.focus();
-    return true;
-  }
+  if (first === undefined || last === undefined) return panel;
+  const [edge, wrap] = backwards ? [first, last] : [last, first];
   const active = document.activeElement;
-  const atEdge = active === panel || isOnStop(active, backwards ? first : last);
-  if (!atEdge) return false;
-  (backwards ? last : first).focus();
-  return true;
+  return active === panel || isOnStop(active, edge) ? wrap : null;
+}
+
+function trapTab(event: ReactKeyboardEvent<HTMLDivElement>, panel: HTMLElement | null): void {
+  if (panel === null) return;
+  const target = wrapTarget(panel, event.shiftKey);
+  if (target === null) return;
+  event.preventDefault();
+  target.focus();
+}
+
+/** Esc stops at the dialog either way, so a listener behind it never acts on it. */
+function containEscape(event: ReactKeyboardEvent<HTMLDivElement>, onCancel?: () => void): void {
+  event.preventDefault();
+  event.stopPropagation();
+  onCancel?.();
+}
+
+/** A press on the backdrop itself must not move focus out of the dialog. */
+function keepFocusOnBackdropPress(event: ReactMouseEvent<HTMLDivElement>): void {
+  if (event.target === event.currentTarget) event.preventDefault();
+}
+
+/**
+ * Focus the safe control on open (or the panel, when it cannot take focus) and
+ * return focus to the invoker on close unless the caller routes it.
+ */
+function useDialogFocus(
+  panelRef: RefObject<HTMLDivElement | null>,
+  initialFocusRef: RefObject<HTMLElement | null>,
+  restoreFocus: boolean,
+): void {
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    (initialFocusRef.current ?? panelRef.current)?.focus();
+    // A safe control that cannot take focus (disabled, hidden) must not leave
+    // focus outside the dialog: fall back to the panel itself.
+    if (panelRef.current?.contains(document.activeElement) !== true) panelRef.current?.focus();
+    return () => {
+      if (restoreFocus && opener?.isConnected === true) opener.focus();
+    };
+  }, [panelRef, initialFocusRef, restoreFocus]);
 }
 
 export interface DialogProps {
@@ -150,40 +197,15 @@ export function Dialog({
 }: DialogProps): JSX.Element {
   const host = useContext(DialogHostContext);
   const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    (initialFocusRef.current ?? panelRef.current)?.focus();
-    // A safe control that cannot take focus (disabled, hidden) must not leave
-    // focus outside the dialog: fall back to the panel itself.
-    if (panelRef.current?.contains(document.activeElement) !== true) panelRef.current?.focus();
-    return () => {
-      if (restoreFocus && opener?.isConnected === true) opener.focus();
-    };
-  }, [initialFocusRef, restoreFocus]);
+  useDialogFocus(panelRef, initialFocusRef, restoreFocus);
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    const panel = panelRef.current;
-    if (event.key === 'Tab' && panel !== null) {
-      if (trapTab(panel, event.shiftKey)) event.preventDefault();
-      return;
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      onCancel?.();
-    }
+    if (event.key === 'Tab') trapTab(event, panelRef.current);
+    else if (event.key === 'Escape') containEscape(event, onCancel);
   };
 
   return createPortal(
-    <div
-      className="v5-dialog-backdrop"
-      dir="rtl"
-      lang="ar"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) event.preventDefault();
-      }}
-    >
+    <div className="v5-dialog-backdrop" dir="rtl" lang="ar" onMouseDown={keepFocusOnBackdropPress}>
       <div
         ref={panelRef}
         role="dialog"
