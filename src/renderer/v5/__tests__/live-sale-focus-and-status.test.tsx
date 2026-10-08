@@ -150,14 +150,22 @@ describe('ScanStatus (rule 7)', () => {
     const bridges = makeBridges();
     const user = await saleWithLines(bridges, 1);
     await user.click(screen.getByRole('button', { name: 'إلغاء البيع' }));
-    await waitFor(() => {
-      expect(screen.getByTestId('scan-status')).toHaveTextContent('المسح متوقف — نافذة مفتوحة');
-    });
+    // A loaded CI runner can take longer than waitFor's 1 s default to flip the
+    // status (seen red on shared runners), so give both transitions a wide bound.
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('scan-status')).toHaveTextContent('المسح متوقف — نافذة مفتوحة');
+      },
+      { timeout: 5000 },
+    );
     await user.click(screen.getByRole('button', { name: 'العودة' }));
-    await waitFor(() => {
-      expect(screen.getByTestId('scan-status')).toHaveTextContent('جاهز للمسح');
-    });
-  });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('scan-status')).toHaveTextContent('جاهز للمسح');
+      },
+      { timeout: 5000 },
+    );
+  }, 20_000);
 
   it('says unavailable when the catalogue is off, with text and an icon', () => {
     signIn({ productSearch: false });
