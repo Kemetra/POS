@@ -1156,6 +1156,7 @@ export function PaymentSurface({
 
   const appliedLines = (paymentSlice?.tender_lines ?? []).filter((l) => l.state === 'applied');
   const hasAppliedLine = appliedLines.length > 0;
+  const hasAppliedCash = appliedLines.some((l) => l.tender_type === 'cash');
   // Split-tender remaining-balance derivation (T154). Pass to entry components
   // so each successive line is scoped to what's still owed, not the full
   // subtotal.
@@ -1338,11 +1339,16 @@ export function PaymentSurface({
         </div>
 
         {/* RT-241 (D-B1) — a drawer that did not open on this session's sale
-            shows here as well as in the status area. A slot only: Checkout's
-            completion recomposition belongs to RT-243 (W1-C). */}
-        <div className="payment-surface__drawer-notice">
-          <DrawerNoticeInline />
-        </div>
+            shows here as well as in the status area, but only inside CASH
+            completion: the notice store knows the failure happened this
+            session, not that it belongs to this sale, so a card or voucher
+            completion must not say "open it manually" (Codex P2 on #579). A
+            slot only: Checkout's completion recomposition belongs to RT-243. */}
+        {hasAppliedCash && (
+          <div className="payment-surface__drawer-notice">
+            <DrawerNoticeInline />
+          </div>
+        )}
 
         <button
           type="button"
