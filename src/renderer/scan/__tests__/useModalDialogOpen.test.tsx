@@ -13,7 +13,7 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { JSX } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useModalDialogOpen } from '../useModalDialogOpen';
 
@@ -27,6 +27,7 @@ async function microtasks(): Promise<void> {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   cleanup();
   document.querySelectorAll('[data-test-modal]').forEach((el) => {
     el.remove();
@@ -83,5 +84,45 @@ describe('useModalDialogOpen', () => {
       await microtasks();
     });
     expect(screen.queryByTestId('probe')).toBeNull();
+  });
+
+  // happy-dom keeps an observer's callback behind a WeakRef that nothing else
+  // holds, so a GC pass on a loaded runner can silently stop it reporting (CI
+  // showed an open dialog in the DOM and the status still «جاهز للمسح» for 5 s).
+  // Dialogs move focus on open and give it back on close, so focus changes are a
+  // second trigger that does not depend on that observer.
+  describe('when the mutation observer never reports', () => {
+    class DeadObserver {
+      observe(): void {}
+      disconnect(): void {}
+      takeRecords(): MutationRecord[] {
+        return [];
+      }
+    }
+
+    it('still follows a dialog that takes focus on open and gives it back on close', async () => {
+      vi.stubGlobal('MutationObserver', DeadObserver);
+      render(<Probe />);
+      expect(screen.getByTestId('probe')).toHaveTextContent('closed');
+
+      const opener = document.createElement('button');
+      opener.setAttribute('data-test-modal', '');
+      document.body.append(opener);
+      opener.focus();
+
+      const modal = document.createElement('div');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('tabindex', '-1');
+      modal.setAttribute('data-test-modal', '');
+      document.body.append(modal);
+      modal.focus();
+      await microtasks();
+      expect(screen.getByTestId('probe')).toHaveTextContent('open');
+
+      modal.remove();
+      opener.focus();
+      await microtasks();
+      expect(screen.getByTestId('probe')).toHaveTextContent('closed');
+    });
   });
 });
