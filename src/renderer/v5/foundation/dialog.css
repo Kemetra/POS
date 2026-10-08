@@ -1,0 +1,40 @@
+/*
+ * RT-241 — the one v5 Dialog. Base values moved unchanged from the former
+ * `.v5-live-dialog-backdrop` / `.v5-live-dialog` rules (live-sale.css); the
+ * content rules (title, actions, buttons) stay there under `.v5-live-dialog`.
+ * No enter/exit animation: nothing to neutralise under reduced motion.
+ */
+
+/* The portal node and its anchor take no box, so they never become grid items. */
+.v5-dialog-anchor,
+.v5-dialog-host {
+  display: contents;
+}
+
+.v5-dialog-backdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-overlay-scrim);
+}
+
+.v5-dialog {
+  display: grid;
+  gap: var(--space-3);
+  inline-size: min(440px, calc(100% - var(--space-5)));
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-overlay);
+}
+
+/* Contrast themes drop the overlay shadow: the panel edge must carry the layer. */
+@media (forced-colors: active) {
+  .v5-dialog {
+    border: 2px solid CanvasText;
+  }
+}

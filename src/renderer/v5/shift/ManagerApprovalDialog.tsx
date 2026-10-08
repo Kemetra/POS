@@ -6,7 +6,7 @@ import {
   type ShiftCloseResponse,
   type ShiftEnrolledManager,
 } from '../../../shared/shift-cashup/types';
-import { SaleDialog } from '../sale/SaleDialog';
+import { Dialog } from '../foundation/Dialog';
 import { callShift, dismissUnlessBusy, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { normalizeDigits } from './shift-format';
@@ -85,7 +85,7 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
   };
 
   return (
-    <SaleDialog label={SHIFT_COPY.approvalTitle} onDismiss={dismiss} initialFocusRef={cancelRef}>
+    <Dialog label={SHIFT_COPY.approvalTitle} onCancel={dismiss} initialFocusRef={cancelRef}>
       <h2 className="v5-live-dialog-title">{SHIFT_COPY.approvalTitle}</h2>
       <p>{SHIFT_COPY.approvalBody}</p>
       <ManagerChoice
@@ -129,7 +129,7 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
           {SHIFT_COPY.approveCommit}
         </button>
       </div>
-    </SaleDialog>
+    </Dialog>
   );
 }
 

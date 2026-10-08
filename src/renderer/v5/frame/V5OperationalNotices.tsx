@@ -5,8 +5,7 @@ import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { ShiftClosedBanner } from '../../ui/operator/ShiftClosedBanner';
 import { PrinterFailureBanner } from '../../ui/receipts/PrinterFailureBanner';
 import { useBannerState } from '../../ui/receipts/useBannerState';
-import { DrawerFailureBanner } from '../../ui/receipts/DrawerFailureBanner';
-import { useDrawerBannerState } from '../../ui/receipts/useDrawerBannerState';
+import { DrawerNoticeBanner, useDrawerNoticeFeed } from '../../ui/receipts/DrawerNotice';
 import { ShiftNotice } from '../shift/ShiftNotice';
 
 type RecoveryAction = 'reprint' | 'manualOverride';
@@ -43,7 +42,8 @@ function useRecoveryAction(action: RecoveryAction): (saleId: string) => void {
 
 /**
  * The persistent operational banners the legacy app frame carries: forced
- * shift close, printer failure and drawer failure. Same components, same
+ * shift close, printer failure, and the D-B1 drawer notice (RT-241: this
+ * session's drawer failure only, until acknowledged). Same components, same
  * session store and banner-state polling, so a v5 screen never hides a real
  * failure. Each banner unmounts when there is nothing to report; with no
  * sales bridge the polling hooks resolve to null.
@@ -58,7 +58,8 @@ function useRecoveryAction(action: RecoveryAction): (saleId: string) => void {
 export function V5OperationalNotices(): JSX.Element {
   const sessionState = useOperatorSessionStore((s) => s.state);
   const printFailure = useBannerState();
-  const drawerFailure = useDrawerBannerState();
+  // RT-241 (D-B1): shown only for a drawer failure from this session.
+  useDrawerNoticeFeed();
   const reprint = useRecoveryAction('reprint');
   const manualOverride = useRecoveryAction('manualOverride');
   const notice = sessionState.kind === 'signedIn' ? sessionState.forced_close_notice : undefined;
@@ -74,11 +75,7 @@ export function V5OperationalNotices(): JSX.Element {
         />
       )}
       <PrinterFailureBanner printFailure={printFailure} onReprint={reprint} />
-      <DrawerFailureBanner
-        drawerFailure={drawerFailure}
-        now={new Date().toISOString()}
-        onManualOverride={manualOverride}
-      />
+      <DrawerNoticeBanner now={new Date().toISOString()} onManualOverride={manualOverride} />
       <ShiftNotice />
     </>
   );

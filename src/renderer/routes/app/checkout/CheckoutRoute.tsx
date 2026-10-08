@@ -11,6 +11,7 @@ import {
 import { Workspace } from '../../../shell/regions/Workspace';
 import { PaymentSurface } from '../../../ui/payments/PaymentSurface';
 import { CheckoutPlaceholder } from './CheckoutPlaceholder';
+import { acknowledgeDrawerNotice } from '../../../ui/receipts/drawer-notice-store';
 
 /**
  * 006-payments-tender — `/app/checkout` route.
@@ -48,6 +49,8 @@ export function CheckoutRoute(): JSX.Element {
     // durable in the main process; these stores are renderer-only working
     // state.) Then return to the cart to begin ringing the next sale.
     resetSaleStores();
+    // RT-241 (D-B1): «بيع جديد» acknowledges the drawer notice.
+    acknowledgeDrawerNotice();
     void navigate('/app/cart');
   }, [navigate]);
 

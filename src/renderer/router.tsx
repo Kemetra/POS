@@ -32,6 +32,9 @@ import { V5AppLayout } from './v5/frame/V5AppLayout';
 import { V5SaleRoute } from './v5/sale/V5SaleRoute';
 import { V5ShiftRoute } from './v5/shift/V5ShiftRoute';
 import { V5ShiftManagerRoute } from './v5/shift/V5ShiftManagerRoute';
+import { ErrorScreen } from './v5/foundation/ErrorScreen';
+import { RouteLoading } from './v5/foundation/RouteLoading';
+import { SupportedViewport } from './v5/foundation/SupportedViewport';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -131,7 +134,8 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   }, [props.pairing]);
 
   if (boot.phase === 'loading') {
-    return <main data-testid="route-loading" />;
+    // RT-241 (VN-S2): never blank while the start route is decided.
+    return <RouteLoading />;
   }
 
   // T034: routes are purely path-based after the initial decision.
@@ -140,12 +144,18 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // redirects back to /pairing on its own if the status it reads is
   // not 'paired' — so a stale boot state cannot strand the operator.
   // RT-215: a reason pushed at runtime (device revoked) wins over the boot one.
-  const pairingScreenElement =
-    boot.invalidReason !== undefined ? (
-      <PairingRoute pairing={props.pairing} bootReason={boot.invalidReason} />
-    ) : (
-      <PairingRoute pairing={props.pairing} />
-    );
+  // RT-241 (VN-S2): pairing, Ready and sign-in render outside the frame, so
+  // they carry their own supported-viewport guard (the route element only; the
+  // boot read above is unchanged).
+  const pairingScreenElement = (
+    <SupportedViewport>
+      {boot.invalidReason !== undefined ? (
+        <PairingRoute pairing={props.pairing} bootReason={boot.invalidReason} />
+      ) : (
+        <PairingRoute pairing={props.pairing} />
+      )}
+    </SupportedViewport>
+  );
   // T035 — /app/* parent route wired per contracts/shell-routes.ts.
   // Existing /pairing and /paired routes are unchanged.
   // Pairing-bypass guard (T007) stays green: unpaired/invalid terminals
@@ -163,7 +173,9 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // green).
   const signInElement =
     props.operator !== undefined ? (
-      <SignInRoute operator={props.operator} />
+      <SupportedViewport>
+        <SignInRoute operator={props.operator} />
+      </SupportedViewport>
     ) : (
       <Navigate to={boot.startPath} replace />
     );
@@ -184,7 +196,14 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   const appRoutes: RouteObject[] = [
     { path: '/', element: <Navigate to={boot.startPath} replace /> },
     { path: '/pairing', element: pairingScreenElement },
-    { path: '/paired', element: <PairedScreen pairing={props.pairing} /> },
+    {
+      path: '/paired',
+      element: (
+        <SupportedViewport>
+          <PairedScreen pairing={props.pairing} />
+        </SupportedViewport>
+      ),
+    },
     { path: '/sign-in', element: signInElement },
     {
       path: '/app',
@@ -303,8 +322,14 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   ];
   // RT-215 — one pathless layout over every route: it listens for the
   // `pairing:status-changed` push and moves a revoked terminal to /pairing.
+  // RT-241 (VN-S2): its errorElement is the one route error boundary, so a
+  // render failure shows the Arabic ErrorScreen instead of the router default.
   const routes: RouteObject[] = [
-    { element: <PairingRecoveryListener relay={relay} />, children: appRoutes },
+    {
+      element: <PairingRecoveryListener relay={relay} />,
+      errorElement: <ErrorScreen />,
+      children: appRoutes,
+    },
   ];
 
   // Tests use a memory router so window.location.pathname remains

@@ -12,6 +12,7 @@ import { LiveCatalogueRegion } from './LiveCatalogueRegion';
 import { LiveSaleCart } from './LiveSaleCart';
 import { ScanStatus } from './ScanStatus';
 import { focusScanOwner } from '../../scan/scan-anchor';
+import { acknowledgeDrawerNotice } from '../../ui/receipts/drawer-notice-store';
 import './sale-screen.css';
 import './live-sale.css';
 
@@ -196,6 +197,8 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           onVoid={voidThenStartFresh}
           onNewSale={() => {
             cart.startNewSale();
+            // RT-241 (D-B1): «بيع جديد» acknowledges the drawer notice.
+            acknowledgeDrawerNotice();
             focusScanOwner();
           }}
         />

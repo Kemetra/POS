@@ -91,7 +91,9 @@ describe('AppShell layout — T047 (BEM class assertions)', () => {
   it('ScreenTooSmall is shown below 1024px', () => {
     mockMatchMedia(1023);
     renderShell();
-    expect(screen.getByRole('heading', { level: 1, name: 'Screen too small' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: /^الشاشة أصغر من 1024×768\s?\.$/ }),
+    ).toBeInTheDocument();
   });
 
   // Workspace fills remaining space: .app-shell__content has flex:1 in CSS

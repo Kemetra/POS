@@ -23,7 +23,8 @@ import type {
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store.js';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../../stores/payment-store.js';
-import { DrawerFailureBanner } from '../../receipts/DrawerFailureBanner.js';
+import { DrawerNoticeBanner } from '../../receipts/DrawerNotice.js';
+import { useDrawerNoticeStore } from '../../receipts/drawer-notice-store.js';
 import { PrinterFailureBanner } from '../../receipts/PrinterFailureBanner.js';
 import { ReprintAffordance } from '../../receipts/ReprintAffordance.js';
 import { PaymentSurface } from '../PaymentSurface.js';
@@ -170,6 +171,13 @@ describe('RT-240 M-C2 — no cashier receipt surface says «طُبع»', () => {
           settle = resolve;
         }),
     );
+    // RT-241 (D-B1): a drawer failure from this session is on screen.
+    useDrawerNoticeStore.getState().reset();
+    useDrawerNoticeStore.getState().observe(null);
+    useDrawerNoticeStore.getState().observe({
+      sale_id: 's-1',
+      last_successful_open_at: '2026-10-07T09:00:00.000Z',
+    });
     const { container } = render(
       <>
         <PrinterFailureBanner
@@ -182,11 +190,7 @@ describe('RT-240 M-C2 — no cashier receipt surface says «طُبع»', () => {
           _testReceiptsBridge={{ retryPrint: vi.fn() } as unknown as ReceiptsBridgeAPI}
           _idempotencyKeyFactory={() => 'k'}
         />
-        <DrawerFailureBanner
-          drawerFailure={{ sale_id: 's-1', last_successful_open_at: '2026-10-07T09:00:00.000Z' }}
-          onManualOverride={vi.fn()}
-          now="2026-10-07T10:00:00.000Z"
-        />
+        <DrawerNoticeBanner onManualOverride={vi.fn()} now="2026-10-07T10:00:00.000Z" />
         <ReprintAffordance
           sale={{ sale_id: 's-1', has_successful_print: true }}
           _testReceiptsBridge={{ reprint } as unknown as ReceiptsBridgeAPI}

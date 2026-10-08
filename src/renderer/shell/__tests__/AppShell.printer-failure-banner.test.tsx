@@ -17,9 +17,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppShell } from '../AppShell';
 import type { SalesBridgeAPI } from '../../../shared/bridge-api';
 import type { BannerState } from '../../../shared/sales/types';
+import { useDrawerNoticeStore } from '../../ui/receipts/drawer-notice-store';
 
 afterEach(() => {
   cleanup();
+  useDrawerNoticeStore.getState().reset();
   delete (window as unknown as { api?: unknown }).api;
 });
 
@@ -101,7 +103,7 @@ describe('T291 — AppShell printer-failure banner integration', () => {
 
   it('mounts the drawer-failure banner and its Manual entry-point is wired', async () => {
     // Drawer twin of the printer-banner wiring check: a `.drawer_failure` slice
-    // feeds useDrawerBannerState → <DrawerFailureBanner>, whose only affordance
+    // feeds useDrawerBannerState → the D-B1 drawer notice, whose recovery affordance
     // is the Slice-6 manual-override entry-point. Clicking it exercises the
     // AppShell `onManualOverride` stub the printer-only fixtures never reach.
     (window as unknown as { api: { sales: SalesBridgeAPI } }).api = {
@@ -110,14 +112,29 @@ describe('T291 — AppShell printer-failure banner integration', () => {
         drawer_failure: { sale_id: 'sale-1', last_successful_open_at: null },
       }),
     };
+    // RT-241 (D-B1): this session already read a clean projection.
+    useDrawerNoticeStore.getState().observe(null);
     renderShell();
-    const drawerBanner = await screen.findByTestId('drawer-failure-banner');
+    const drawerBanner = await screen.findByTestId('drawer-notice');
     expect(drawerBanner).toBeInTheDocument();
     // Scope the click to the drawer banner — its Manual receipt button is the
     // only one on screen (printer_failure is null), but scoping keeps the intent
     // explicit and survives a future printer+drawer coexistence fixture.
     await userEvent.click(within(drawerBanner).getByRole('button', { name: 'إيصال يدوي' }));
     // No throw; the banner persists (the entry-point is an inert Slice-6 stub).
-    expect(screen.getByTestId('drawer-failure-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-notice')).toBeInTheDocument();
+  });
+
+  it('RT-241 (D-B1): a drawer failure from before this run is not shown on the manager shell', async () => {
+    const bridge = salesBridge({
+      printer_failure: null,
+      drawer_failure: { sale_id: 'sale-old', last_successful_open_at: null },
+    });
+    (window as unknown as { api: { sales: SalesBridgeAPI } }).api = { sales: bridge };
+    renderShell();
+    await waitFor(() => {
+      expect(useDrawerNoticeStore.getState().baseline).toBe('sale-old');
+    });
+    expect(screen.queryByTestId('drawer-notice')).not.toBeInTheDocument();
   });
 });

@@ -7,7 +7,7 @@ import {
   type ShiftMovementReasonCode,
   type ShiftMovementRequest,
 } from '../../../shared/shift-cashup/types';
-import { SaleDialog } from '../sale/SaleDialog';
+import { Dialog } from '../foundation/Dialog';
 import { callShift, dismissUnlessBusy, useSingleFlight } from './shift-bridge';
 import { MOVEMENT_REASON_LABELS, SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { parseShiftAmount } from './shift-format';
@@ -70,7 +70,7 @@ export function CashMovementDialog(props: Props): JSX.Element {
   };
 
   return (
-    <SaleDialog label={title} onDismiss={dismiss} initialFocusRef={amountRef}>
+    <Dialog label={title} onCancel={dismiss} initialFocusRef={amountRef}>
       <h2 className="v5-live-dialog-title">{title}</h2>
       <div className="v5-shift-fields">
         <label htmlFor={ids.amount}>{SHIFT_COPY.amountLabel}</label>
@@ -124,6 +124,6 @@ export function CashMovementDialog(props: Props): JSX.Element {
           {SHIFT_COPY.record}
         </button>
       </div>
-    </SaleDialog>
+    </Dialog>
   );
 }
