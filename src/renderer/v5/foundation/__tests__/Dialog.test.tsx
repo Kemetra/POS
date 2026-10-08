@@ -347,4 +347,40 @@ describe('ConfirmDialog', () => {
     await userEvent.keyboard('{Escape}');
     expect(onCancel).not.toHaveBeenCalled();
   });
+
+  it('a failed confirm says so inside the dialog, as an alert', () => {
+    render(
+      <DialogHost>
+        <ConfirmDialog
+          label="تأكيد"
+          title="إلغاء البيع؟"
+          cancelLabel="العودة"
+          confirmLabel="تأكيد الإلغاء"
+          error="تعذّر إلغاء البيع."
+          onCancel={vi.fn()}
+          onConfirm={vi.fn()}
+        />
+      </DialogHost>,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('تعذّر إلغاء البيع.');
+  });
+
+  it('the default tone commits with the primary button; no body means no description', () => {
+    render(
+      <DialogHost>
+        <ConfirmDialog
+          label="تأكيد"
+          title="متابعة؟"
+          cancelLabel="رجوع"
+          confirmLabel="متابعة"
+          onCancel={vi.fn()}
+          onConfirm={vi.fn()}
+        />
+      </DialogHost>,
+    );
+    expect(screen.getByRole('button', { name: 'متابعة' })).toHaveClass('v5-live-btn--primary');
+    expect(screen.getByRole('button', { name: 'متابعة' })).not.toHaveClass('v5-live-btn--danger');
+    expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-describedby');
+  });
 });
+
