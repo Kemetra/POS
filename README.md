@@ -66,7 +66,7 @@
 <tr>
 <td width="25%" valign="top"><b>🔒 Same boundary</b><br/><sub>Only the typed preload bridge (<a href="src/shared/bridge-api.ts"><code>bridge-api.ts</code></a>) and Backend-Core contracts. No privileged IPC, no side door.</sub></td>
 <td width="25%" valign="top"><b>🧾 Auditable</b><br/><sub>Sales, the outbox and audit events live in durable local SQLite, so AI-assisted actions can be traced and reviewed.</sub></td>
-<td width="25%" valign="top"><b>🏢 Tenant-safe</b><br/><sub>No card data, secrets or PII. Each terminal stays inside its own tenant and branch scope (<a href=".specify/memory/constitution.md">constitution</a>).</sub></td>
+<td width="25%" valign="top"><b>🏢 Tenant-safe</b><br/><sub>Card data is never captured, and logs and audit events stay redacted. Each terminal stays inside its own tenant and branch scope (<a href=".specify/memory/constitution.md">constitution</a>).</sub></td>
 <td width="25%" valign="top"><b>🧑‍⚖️ Human-governed</b><br/><sub>Cashier, manager and admin keep authority. Role checks and approval gates apply to AI as to a person.</sub></td>
 </tr>
 </table>
