@@ -121,6 +121,52 @@ describe('Dialog — modal semantics', () => {
   });
 });
 
+function RadioHarness({ checked }: { checked: string | null }): JSX.Element {
+  const safeRef = useRef<HTMLButtonElement>(null);
+  return (
+    <DialogHost>
+      <button type="button">خارج النافذة</button>
+      <Dialog label="اختيار المدير" initialFocusRef={safeRef}>
+        <fieldset>
+          <legend>المدير</legend>
+          {['أ', 'ب', 'ج'].map((name) => (
+            <label key={name}>
+              <input type="radio" name="manager" readOnly checked={checked === name} />
+              {name}
+            </label>
+          ))}
+        </fieldset>
+        <button ref={safeRef} type="button">
+          رجوع
+        </button>
+      </Dialog>
+    </DialogHost>
+  );
+}
+
+describe('Dialog — Tab trap with a radio group (one tab stop)', () => {
+  it('Shift+Tab from the checked radio, not the first, wraps to the last control', async () => {
+    render(<RadioHarness checked="ب" />);
+    screen.getByRole('radio', { name: 'ب' }).focus();
+    await userEvent.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'رجوع' })).toHaveFocus();
+  });
+
+  it('Tab from the last control wraps to the checked radio of the group', async () => {
+    render(<RadioHarness checked="ج" />);
+    screen.getByRole('button', { name: 'رجوع' }).focus();
+    await userEvent.tab();
+    expect(screen.getByRole('radio', { name: 'ج' })).toHaveFocus();
+  });
+
+  it('with no radio checked, Shift+Tab from the first radio still wraps inside', async () => {
+    render(<RadioHarness checked={null} />);
+    screen.getByRole('radio', { name: 'أ' }).focus();
+    await userEvent.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'رجوع' })).toHaveFocus();
+  });
+});
+
 describe('Dialog — Esc', () => {
   let windowKeys: ReturnType<typeof vi.fn<(key: string) => void>>;
   const onWindowKey = (event: KeyboardEvent): void => {

@@ -77,17 +77,50 @@ function focusableIn(panel: HTMLElement): HTMLElement[] {
   return Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
 }
 
+function isNamedRadio(el: Element | null): el is HTMLInputElement {
+  return el instanceof HTMLInputElement && el.type === 'radio' && el.name !== '';
+}
+
+/**
+ * Tab stops in order. A same-name radio group is ONE stop, as in the browser:
+ * its checked radio, else its first. (The manager-approval dialog opens with a
+ * radio group; without this, Shift+Tab from a checked radio that is not the
+ * first one walked out of the dialog.)
+ */
+function tabStops(panel: HTMLElement): HTMLElement[] {
+  const items = focusableIn(panel);
+  const groups = new Set<string>();
+  const stops: HTMLElement[] = [];
+  for (const el of items) {
+    if (!isNamedRadio(el)) {
+      stops.push(el);
+      continue;
+    }
+    if (groups.has(el.name)) continue;
+    groups.add(el.name);
+    const group = items.filter((item) => isNamedRadio(item) && item.name === el.name);
+    stops.push(group.find((radio) => (radio as HTMLInputElement).checked) ?? el);
+  }
+  return stops;
+}
+
+/** Is focus on this stop? Any radio of a group stands on the group's stop. */
+function isOnStop(active: Element | null, stop: HTMLElement): boolean {
+  if (active === stop) return true;
+  return isNamedRadio(active) && isNamedRadio(stop) && active.name === stop.name;
+}
+
 /** Wraps Tab at the panel's edges. Returns true when it moved focus itself. */
 function trapTab(panel: HTMLElement, backwards: boolean): boolean {
-  const items = focusableIn(panel);
-  const first = items[0];
-  const last = items[items.length - 1];
+  const stops = tabStops(panel);
+  const first = stops[0];
+  const last = stops[stops.length - 1];
   if (first === undefined || last === undefined) {
     panel.focus();
     return true;
   }
   const active = document.activeElement;
-  const atEdge = active === panel || active === (backwards ? first : last);
+  const atEdge = active === panel || isOnStop(active, backwards ? first : last);
   if (!atEdge) return false;
   (backwards ? last : first).focus();
   return true;
