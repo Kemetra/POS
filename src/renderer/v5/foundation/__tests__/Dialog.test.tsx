@@ -383,4 +383,3 @@ describe('ConfirmDialog', () => {
     expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-describedby');
   });
 });
-
