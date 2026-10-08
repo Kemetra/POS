@@ -30,7 +30,7 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
-    "@sentry/electron": "^7.13.0",
+    "@sentry/electron": "^7.20.1",
     "@tanstack/react-query": "^5.100.8",
     "argon2": "0.44.0",
     "better-sqlite3": "^12.9.0",
