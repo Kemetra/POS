@@ -35,7 +35,13 @@
 
 </div>
 
-> **Retail Tower OS** is the product; this repository, [`Kemetra/POS`](https://github.com/Kemetra/POS), is its POS track: **POS Pulse** (also written POS-Pulse), the Windows cashier terminal. It contains no backend, admin frontend or ERPNext/Frappe code: those live in the sibling tracks below ([Backend-Core](https://github.com/Kemetra/Backend-Core), [Admin-Console](https://github.com/Kemetra/Admin-Console), [ERPNext-Connector](https://github.com/Kemetra/ERPNext-Connector)). The names `POS Pulse` and `SmartDataPulse` remain in use in code, packaging and docs; the legacy names Data-Pulse-2 / DP2 refer to `Kemetra/Backend-Core`.
+> **Retail Tower OS** is the product; this repository, [`Kemetra/POS`](https://github.com/Kemetra/POS), is its POS track: the Windows cashier terminal for pharmacy checkout. It contains no backend, admin frontend or ERPNext/Frappe code: those live in the sibling tracks below ([Backend-Core](https://github.com/Kemetra/Backend-Core), [Admin-Console](https://github.com/Kemetra/Admin-Console), [ERPNext-Connector](https://github.com/Kemetra/ERPNext-Connector)).
+>
+> Pharmacy checkout needs a terminal that feels fast to cashiers and boringly safe to operators. The POS track keeps high-trust work in the Electron main process, keeps the renderer behind a typed preload bridge, and treats local terminal state as operationally important, not incidental UI cache. It consumes the Backend-Core contracts and keeps local terminal behavior secure, observable and offline aware.
+>
+> **Success metric.** A cashier completes a sale, prints a receipt, and opens the drawer in under 10 seconds, with every transaction durably recorded and attributable to a named operator at a specific terminal, regardless of network state.
+>
+> **Also known as:** the legacy names `POS Pulse` / `POS-Pulse` (this repo), `SmartDataPulse` and `Data-Pulse-2` / `DP2` (`Kemetra/Backend-Core`) remain in use in code, packaging, config and docs.
 
 ---
 
@@ -54,53 +60,7 @@
 
 <sub>One architecture, one set of contracts, one AI-embedded design. <a href="https://github.com/Kemetra/Orchestrator"><code>Kemetra/Orchestrator</code></a> is the technical handbook, not a track.</sub>
 
----
-
-## 🧠 AI is native to the architecture and the design
-
-<p align="center">
-  <img src="docs/assets/readme/ai-embedded.svg" alt="AI-integrated: the AI sits outside the boundary and reaches the system through a side channel. AI-embedded: the AI runs through every layer inside the boundary, under the same rules." width="100%"/>
-</p>
-
-<table>
-<tr>
-<td width="25%" valign="top"><b>🔒 Same boundary</b><br/><sub>Only the typed preload bridge (<a href="src/shared/bridge-api.ts"><code>bridge-api.ts</code></a>) and Backend-Core contracts. No privileged IPC, no side door.</sub></td>
-<td width="25%" valign="top"><b>🧾 Auditable</b><br/><sub>Sales, the outbox and audit events live in durable local SQLite, so AI-assisted actions can be traced and reviewed.</sub></td>
-<td width="25%" valign="top"><b>🏢 Tenant-safe</b><br/><sub>Card data is never captured, and logs and audit events stay redacted. Each terminal stays inside its own tenant and branch scope (<a href=".specify/memory/constitution.md">constitution</a>).</sub></td>
-<td width="25%" valign="top"><b>🧑‍⚖️ Human-governed</b><br/><sub>Cashier, manager and admin keep authority. Role checks and approval gates apply to AI as to a person.</sub></td>
-</tr>
-</table>
-
-> AI-embedded describes the architectural and design direction. The source on `main` contains no model or LLM integration; what is shipped today is tracked in [Current implementation status](#current-implementation-status) and under [`specs/`](specs).
-
----
-
-## 🔗 Synchronization with Retail Tower OS
-
-POS Pulse is the **edge** of the platform. For business data it speaks only to Backend-Core's contracts (`/api/pos/v1/*`), never to ERPNext. The one other outbound identity call is the operator sign-in credential exchange with the identity provider (see [`src/main/operator/clerk-client.ts`](src/main/operator/clerk-client.ts)). The resolved catalogue flows **down** into a local read model for offline lookup; finalized sales are captured locally in an outbox and drained **up** to the backend.
-
-<p align="center">
-  <img src="docs/assets/architecture/pos-pulse-architecture.svg" alt="Animated POS-Pulse synchronization diagram" width="100%"/>
-</p>
-
-<p align="center"><sub>POS-Pulse synchronization: catalogue down, sales captured to the outbox and drained up. The diagram labels Backend-Core with its legacy name, Data-Pulse-2.</sub></p>
-
-```text
-POS Pulse ──▶ Backend-Core ──▶ ERPNext-Connector ──▶ ERPNext / Frappe
-```
-
-### Where POS Pulse sits in Retail Tower OS
-
-The full five-repo ecosystem, with the control-plane band on top and POS Pulse as the highlighted **edge node**.
-
-<p align="center">
-  <img src="docs/assets/architecture/retail-tower-ecosystem.svg" alt="Retail Tower OS ecosystem diagram — five repositories with POS-Pulse highlighted as the edge node" width="100%"/>
-</p>
-
-<p align="center"><sub>POS-Pulse is the gold-badged node (★ THIS REPO). A live animated SVG that honors <code>prefers-reduced-motion</code>.</sub></p>
-
-Full detail: [docs/architecture/synchronization.md](docs/architecture/synchronization.md) ·
-Program technical handbook: [Orchestrator](https://github.com/Kemetra/Orchestrator).
+POS is the **edge** of the platform: it reads the resolved catalogue **down** into a local read model for offline lookup and drains finalized sales **up** from a local outbox, speaking only to Backend-Core's `/api/pos/v1/*` contracts and never to ERPNext (the one other outbound call is the operator sign-in credential exchange with the identity provider, see [`src/main/operator/clerk-client.ts`](src/main/operator/clerk-client.ts)). Full detail: [docs/architecture/synchronization.md](docs/architecture/synchronization.md).
 
 ### Integration surfaces
 
@@ -121,21 +81,22 @@ The OpenAPI contracts are owned by Backend-Core. This repo vendors a pinned subs
 
 ---
 
-## Live terminal control map
+## 🧠 AI is native to the architecture and the design
 
-[![POS Pulse live terminal map preview](docs/assets/pos-pulse-live-map-preview.svg)](docs/architecture/pos-pulse-live-map.html)
+<p align="center">
+  <img src="docs/assets/readme/ai-embedded.svg" alt="AI-integrated: the AI sits outside the boundary and reaches the system through a side channel. AI-embedded: the AI runs through every layer inside the boundary, under the same rules." width="100%"/>
+</p>
 
-Open the [interactive Three.js terminal map](docs/architecture/pos-pulse-live-map.html) through a local static server or docs host. It is backed by [topology JSON](docs/architecture/pos-pulse-live-map.json); the README stays GitHub-safe with the static SVG preview above.
+<table>
+<tr>
+<td width="25%" valign="top"><b>🔒 Same boundary</b><br/><sub>Only the typed preload bridge (<a href="src/shared/bridge-api.ts"><code>bridge-api.ts</code></a>) and Backend-Core contracts. No privileged IPC, no side door.</sub></td>
+<td width="25%" valign="top"><b>🧾 Auditable</b><br/><sub>Sales, the outbox and audit events live in durable local SQLite, so AI-assisted actions can be traced and reviewed.</sub></td>
+<td width="25%" valign="top"><b>🏢 Tenant-safe</b><br/><sub>Card data is never captured, and logs and audit events stay redacted. Each terminal stays inside its own tenant and branch scope (<a href=".specify/memory/constitution.md">constitution</a>).</sub></td>
+<td width="25%" valign="top"><b>🧑‍⚖️ Human-governed</b><br/><sub>Cashier, manager and admin keep authority. Role checks and approval gates apply to AI as to a person.</sub></td>
+</tr>
+</table>
 
----
-
-## Repository structure flow
-
-Every layer of POS Pulse — from the cashier's first scan to the SaaS handoff — in one animated diagram, framed by Spec Kit governance on the left and the quality and state machinery on the right.
-
-![POS Pulse animated repository structure flow](docs/assets/structure-flowchart.svg)
-
-Open [the structure flowchart](docs/assets/structure-flowchart.svg) directly for the full-resolution animated view. It traces each authenticated path: UI events into the renderer, validated payloads through the typed bridge, durable writes into SQLite, secrets through `safeStorage`, and contract-backed sync to the platform.
+> AI-embedded describes the architectural and design direction. The source on `main` contains no model or LLM integration; what is shipped today is tracked in [Current implementation status](#current-implementation-status) and under [`specs/`](specs).
 
 ---
 
@@ -172,17 +133,17 @@ All feature flags are fail-closed: each is read from its `POS_PULSE_FEATURE_*` e
 
 **Baseline for this table:** `origin/main` at `6ea6ce0` (2026-10-08), 44 SQL migrations (`migrations/0001`–`0044`), 697 test files (`*.test.ts[x]`), 7 vendored Backend-Core contract files, 24 spec folders (`001`–`023` plus `0xx-insurance-copay`). Re-verify against `main` before relying on it. The pilot terminal profile and readiness check are in [`docs/runbook/pilot-terminal-provisioning.md`](docs/runbook/pilot-terminal-provisioning.md).
 
----
+### Guarantees and evidence
 
-## What you can verify today
-
-| Claim | Repo-backed evidence |
+| Guarantee | Repo-backed evidence |
 | --- | --- |
-| Renderer cannot reach Node/Electron directly | [preload bridge](src/preload) · [bridge API](src/shared/bridge-api.ts) |
+| Secure Electron boundary: the renderer cannot reach Node/Electron directly (`contextIsolation`, sandboxing, typed preload bridge) | [preload bridge](src/preload) · [bridge API](src/shared/bridge-api.ts) |
 | High-trust work stays in Electron main | [main process](src/main) · [constitution](.specify/memory/constitution.md) |
 | Money avoids floating point | [shared money code](src/shared) · [constitution](.specify/memory/constitution.md) |
-| Local terminal state is migration-backed | [SQLite migrations](migrations) |
-| Hardware scope is intentionally narrow | [hardware matrix](docs/hardware-matrix.md) |
+| Local terminal state is migration-backed: SQLite migrations preserve terminal state and audit/event records predictably | [SQLite migrations](migrations) |
+| Logs and audit events avoid PII, cards, secrets and unsafe payloads | [constitution](.specify/memory/constitution.md) |
+| Terminal pairing establishes device identity and branch scope; cashier, manager and admin access is enforced through local session and role surfaces | [`002`](specs/002-terminal-pairing) · [`004`](specs/004-operator-session) |
+| Hardware scope is intentionally narrow: Windows x64, keyboard-wedge scanners, receipt printers and optional cash drawers (drawer kick is not wired, see the status table) | [hardware matrix](docs/hardware-matrix.md) |
 | Backend/API source of truth is external | [API snapshot](scripts/openapi-snapshot.json) · [constitution](.specify/memory/constitution.md) |
 | POS calls match Backend-Core contracts | [vendored contracts](contracts/backend-core/PIN) · [conformance suite](tests/contract/backend-core) |
 | POS never talks to ERPNext | [current architecture](docs/architecture/current.md) · [synchronization](docs/architecture/synchronization.md) |
@@ -190,62 +151,30 @@ All feature flags are fail-closed: each is read from its `POS_PULSE_FEATURE_*` e
 
 ---
 
-## Why this exists
-
-Pharmacy checkout needs a terminal that feels fast to cashiers and boringly safe to operators. **POS Pulse keeps high-trust work in the Electron main process, keeps the renderer behind a typed preload bridge, and treats local terminal state as operationally important — not incidental UI cache.**
-
-The backend SaaS platform lives outside this repository. POS Pulse consumes its contracts and keeps local terminal behavior secure, observable, and offline aware.
-
-> **Success metric.** A cashier completes a sale, prints a receipt, and opens the drawer in under 10 seconds — with every transaction durably recorded and attributable to a named operator at a specific terminal, regardless of network state.
-
----
-
-## Capabilities
-
-<table>
-<tr>
-<td width="33%" align="center" valign="top">
-  <img src="docs/assets/icons/secure-electron.svg" width="72" alt=""/><br/>
-  <strong>Secure Electron boundary</strong><br/>
-  <sub><code>contextIsolation</code>, sandboxing, and a typed preload bridge keep renderer code away from Node APIs.</sub>
-</td>
-<td width="33%" align="center" valign="top">
-  <img src="docs/assets/icons/terminal-pairing.svg" width="72" alt=""/><br/>
-  <strong>Terminal pairing</strong><br/>
-  <sub>Device identity and branch scope are established through explicit pairing flows.</sub>
-</td>
-<td width="33%" align="center" valign="top">
-  <img src="docs/assets/icons/operator-session.svg" width="72" alt=""/><br/>
-  <strong>Operator sessions</strong><br/>
-  <sub>Cashier, manager, and admin access is enforced through local session and role surfaces.</sub>
-</td>
-</tr>
-<tr>
-<td align="center" valign="top">
-  <img src="docs/assets/icons/local-database.svg" width="72" alt=""/><br/>
-  <strong>Local durability</strong><br/>
-  <sub>SQLite migrations preserve terminal state and audit/event records predictably.</sub>
-</td>
-<td align="center" valign="top">
-  <img src="docs/assets/icons/audit-trail.svg" width="72" alt=""/><br/>
-  <strong>Audit &amp; redaction</strong><br/>
-  <sub>Logs and audit events avoid PII, cards, secrets, and unsafe payloads.</sub>
-</td>
-<td align="center" valign="top">
-  <img src="docs/assets/icons/hardware.svg" width="72" alt=""/><br/>
-  <strong>Hardware discipline</strong><br/>
-  <sub>Windows x64, keyboard-wedge scanners, receipt printers, and optional cash drawers — intentionally narrow.</sub>
-</td>
-</tr>
-</table>
-
----
-
 ## Terminal architecture
 
-POS Pulse is an Electron 44 + React 19 + Vite 8 application. The app is split across the Electron main process, a typed preload bridge, the renderer, local SQLite, and generated API types from the Backend-Core platform contract. [`docs/architecture/current.md`](docs/architecture/current.md) is the canonical reference for the internal architecture.
+The POS terminal is an Electron 44 + React 19 + Vite 8 application. The app is split across the Electron main process, a typed preload bridge, the renderer, local SQLite, and generated API types from the Backend-Core platform contract. [`docs/architecture/current.md`](docs/architecture/current.md) is the canonical reference for the internal architecture.
 
-![POS Pulse architecture](docs/assets/architecture-terminal.svg)
+![POS terminal architecture](docs/assets/architecture-terminal.svg)
+
+### End-to-end transaction flow
+
+A sale travels through every process boundary — and never crosses one without a contract.
+
+![POS transaction flow](docs/assets/system-flow.svg)
+
+| Step | Lane | What happens |
+| :--: | --- | --- |
+| **1** | Renderer | Cashier scans an SKU; React cart state updates in minor-unit money. |
+| **2** | Preload | The typed `contextBridge` contract validates the call payload. |
+| **3** | Main | Money invariants (integer minor units) and the payment state machine check the transaction before any state mutates. |
+| **4** | Main | One atomic finalize transaction re-checks idempotency, allocates the sale number, and writes the sale and its pending outbox entry. |
+| **5** | Main | A redacted audit event is emitted in the same transaction. PII, card, and secret fields are stripped. Printing is dispatched after the commit, never inside it. |
+| **6** | Backend-Core | When online, the sale-sync engine drains the outbox with an idempotent, contract-backed `POST /api/pos/v1/sales`. Offline, the sale simply waits in the outbox. |
+
+<details><summary><b>More architecture views</b></summary>
+
+**Component map.** The same boundaries by source path.
 
 ```mermaid
 flowchart LR
@@ -267,22 +196,25 @@ flowchart LR
   renderer -. keyboard wedge / print UX .-> hardware
 ```
 
----
+**Synchronization.** Catalogue down, sales captured to the outbox and drained up. The diagram labels Backend-Core with a legacy name.
 
-## End-to-end transaction flow
+<p align="center">
+  <img src="docs/assets/architecture/pos-pulse-architecture.svg" alt="Animated POS synchronization diagram" width="100%"/>
+</p>
 
-A sale travels through every process boundary — and never crosses one without a contract.
+**Repository structure flow.** Every layer of the POS terminal, from the cashier's first scan to the SaaS handoff, in one animated diagram, framed by Spec Kit governance on the left and the quality and state machinery on the right.
 
-![POS Pulse transaction flow](docs/assets/system-flow.svg)
+![POS animated repository structure flow](docs/assets/structure-flowchart.svg)
 
-| Step | Lane | What happens |
-| :--: | --- | --- |
-| **1** | Renderer | Cashier scans an SKU; React cart state updates in minor-unit money. |
-| **2** | Preload | The typed `contextBridge` contract validates the call payload. |
-| **3** | Main | Money invariants (integer minor units) and the payment state machine check the transaction before any state mutates. |
-| **4** | Main | One atomic finalize transaction re-checks idempotency, allocates the sale number, and writes the sale and its pending outbox entry. |
-| **5** | Main | A redacted audit event is emitted in the same transaction. PII, card, and secret fields are stripped. Printing is dispatched after the commit, never inside it. |
-| **6** | Backend-Core | When online, the sale-sync engine drains the outbox with an idempotent, contract-backed `POST /api/pos/v1/sales`. Offline, the sale simply waits in the outbox. |
+Open [the structure flowchart](docs/assets/structure-flowchart.svg) directly for the full-resolution animated view. It traces each authenticated path: UI events into the renderer, validated payloads through the typed bridge, durable writes into SQLite, secrets through `safeStorage`, and contract-backed sync to the platform.
+
+**Live terminal control map.**
+
+[![POS live terminal map preview](docs/assets/pos-pulse-live-map-preview.svg)](docs/architecture/pos-pulse-live-map.html)
+
+Open the [interactive Three.js terminal map](docs/architecture/pos-pulse-live-map.html) through a local static server or docs host. It is backed by [topology JSON](docs/architecture/pos-pulse-live-map.json); the README stays GitHub-safe with the static SVG preview above.
+
+</details>
 
 ---
 
@@ -370,7 +302,7 @@ Full navigation lives in [docs/README.md](docs/README.md). Operational playbooks
 
 ## Development agreement
 
-POS Pulse follows the [constitution](.specify/memory/constitution.md) and the repo operating instructions in [`CLAUDE.md`](CLAUDE.md). The unit of work is a Jira issue (project RT); GitHub `main` is the technical truth. Start from `origin/main`, keep changes to the issue's scope, test first, preserve the secure Electron boundaries, avoid unsafe logging, and do not change dependency manifests, lockfiles, migrations, CI workflows, or security posture without explicit approval. The Spec Kit flow is used to author specs within an issue; the former Maestro and queue-dispatch workflow (`docs/maestro`) is historical reference only.
+The POS track follows the [constitution](.specify/memory/constitution.md) and the repo operating instructions in [`CLAUDE.md`](CLAUDE.md). The unit of work is a Jira issue (project RT); GitHub `main` is the technical truth. Start from `origin/main`, keep changes to the issue's scope, test first, preserve the secure Electron boundaries, avoid unsafe logging, and do not change dependency manifests, lockfiles, migrations, CI workflows, or security posture without explicit approval. The Spec Kit flow is used to author specs within an issue; the former Maestro and queue-dispatch workflow (`docs/maestro`) is historical reference only.
 
 <div align="center">
 <sub>Precise · accountable · unhurried.</sub>
