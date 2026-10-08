@@ -19,11 +19,6 @@
   line-height: var(--line-height-normal);
 }
 
-/* A notice belongs to its region: it spans it rather than shrinking to its text. */
-.v5-notice {
-  align-self: stretch;
-}
-
 .v5-banner[data-tone='info'],
 .v5-notice[data-tone='info'] {
   --tone-ink: var(--color-info);

@@ -4533,8 +4533,10 @@ body {
     justify-content: center;
   }
 
+  /* RT-241 (D-B1): the drawer notice slot shares the completion measure. */
   .payment-surface--settled > .v4-screen__header,
   .payment-surface__settled,
+  .payment-surface__drawer-notice:not(:empty),
   .payment-surface__new-sale {
     inline-size: min(100%, 48rem);
   }

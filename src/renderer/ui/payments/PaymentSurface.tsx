@@ -1340,7 +1340,9 @@ export function PaymentSurface({
         {/* RT-241 (D-B1) — a drawer that did not open on this session's sale
             shows here as well as in the status area. A slot only: Checkout's
             completion recomposition belongs to RT-243 (W1-C). */}
-        <DrawerNoticeInline />
+        <div className="payment-surface__drawer-notice">
+          <DrawerNoticeInline />
+        </div>
 
         <button
           type="button"
