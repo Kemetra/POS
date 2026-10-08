@@ -21,6 +21,7 @@ import { formatCheckoutMoney } from './format-checkout-money.js';
 import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
 import { CashEntry } from './CashEntry.js';
+import { RecordedTenderLedger } from './RecordedTenderLedger.js';
 import { CheckoutActionBar, FocusWhen, PrimarySlotContext } from './CheckoutActionBar.js';
 import { ExternalCardTerminalEntry } from './ExternalCardTerminalEntry.js';
 import { VoucherEntry } from './VoucherEntry.js';
@@ -1234,6 +1235,10 @@ export function PaymentSurface({
   // the projection is not trustworthy until main has been read again.
   const entryOwnsPrimary = phase === 'entry' && remainingBalanceMinor > 0 && afterApply === 'idle';
   const showSettle = hasAppliedLine && !entryOwnsPrimary && afterApply === 'idle' && !cancelOpen;
+  const entryOpen =
+    bridge !== null && phase === 'entry' && paymentAttemptId !== null && !cancelOpen;
+  // The cash entry shows main's change itself once the amount is covered.
+  const cashEntryOpen = entryOpen && selectedTender === 'cash';
 
   // Refusals and hints stay next to the commit, in the pinned bar. With no bridge
   // (Slice-1 mode) there is no bar, so they render in the surface as before.
@@ -1461,6 +1466,13 @@ export function PaymentSurface({
             >
               {formatCheckoutMoney(remainingBalanceMinor)}
             </span>
+            {/* RT-243 F1 — recorded money stays in view whether or not an entry
+                is open (Esc, or a remount after a resize below 1024). */}
+            <RecordedTenderLedger
+              lines={appliedLines}
+              changeDueMinor={appliedChangeDueMinor}
+              showChange={!cashEntryOpen}
+            />
           </section>
 
           <div className="payment-surface__panes">
@@ -1475,7 +1487,7 @@ export function PaymentSurface({
               />
 
               {/* S3d mode: entry component for the selected tender. */}
-              {bridge !== null && phase === 'entry' && paymentAttemptId !== null && !cancelOpen && (
+              {entryOpen && (
                 <div className="payment-surface__entry" data-testid="payment-surface-entry">
                   {selectedTender === 'cash' && (
                     <CashEntry

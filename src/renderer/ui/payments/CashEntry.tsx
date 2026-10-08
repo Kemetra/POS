@@ -7,7 +7,6 @@ import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-mi
 import { normalizeNumericInput } from '../forms/normalize-digits.js';
 import { quickAmounts } from '../../../shared/payments/quick-amounts.js';
 import { AmountPad } from './AmountPad.js';
-import { MoneyRoll } from './MoneyRoll.js';
 import { formatCheckoutMoney } from './format-checkout-money.js';
 import { PinnedPrimary } from './CheckoutActionBar.js';
 
@@ -166,8 +165,9 @@ export function CashEntry({
       {/*
         v3.5 tender-slots / tender-row layout.
         The amount-received row wraps the AmountPad + quick-amount chips.
-        The totals row shows the change-due via MoneyRoll (engine-computed,
-        no client-side subtraction — computeChangeDueMinor owns the math).
+        The totals row shows the change-due as a static formatted value
+        (engine-computed, no client-side subtraction — computeChangeDueMinor
+        owns the math). RT-243 / UX-06: money is never animated.
       */}
       <div className="tender-slots">
         <div
@@ -260,7 +260,8 @@ export function CashEntry({
           </span>
         </div>
 
-        {/* Totals row: change-due animated via MoneyRoll (engine-computed).
+        {/* Totals row: change-due shown as a static value (engine-computed;
+            RT-243 / UX-06: money is never animated).
             Only rendered when change is actually owed (> 0); exact cash
             produces changeDueMinor = 0 which should not show the row. */}
         {changeDueMinor !== null && changeDueMinor > 0 && (
@@ -272,8 +273,9 @@ export function CashEntry({
             <span
               dir="ltr"
               className="tender-row__value cash-entry__change-due-value change-row__value--positive"
+              data-testid="cash-entry-change-due-value"
             >
-              <MoneyRoll valueMinor={changeDueMinor} className="cash-entry__change-roll" /> EGP
+              {formatCheckoutMoney(changeDueMinor)}
             </span>
           </div>
         )}
