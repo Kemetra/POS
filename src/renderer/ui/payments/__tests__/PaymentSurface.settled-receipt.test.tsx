@@ -341,7 +341,13 @@ describe('US4a T014 — settled amount is the dominant numeric element', () => {
 
     const amount = await screen.findByTestId('payment-surface-settled-amount');
     expect(amount).toHaveAttribute('dir', 'ltr');
-    expect(amount.className).toContain('payment-surface__settled-amount');
+    // RT-243 — the amount is the value of the proven payment line in the V5
+    // proof list (freeze 15 A4), isolated as an LTR run.
+    expect(amount.className).toContain('v5-proof-line__value');
+    expect(amount.closest('[data-testid="completion-proof-payment"]')).toHaveAttribute(
+      'data-tone',
+      'success',
+    );
   });
 });
 
@@ -493,10 +499,14 @@ describe('022 US4 — completion convergence', () => {
     await renderSettled(makeBridge(null));
 
     const surface = screen.getByTestId('payment-surface');
-    expect(surface).toHaveClass('v4-screen');
-    expect(screen.getByTestId('payment-surface-settled')).toHaveClass('v4-panel');
-    expect(screen.getByTestId('payment-surface-new-sale')).toHaveClass('btn--primary');
-    expect(surface.querySelectorAll('.btn--primary')).toHaveLength(1);
+    // RT-243 — recomposed on the V5 vocabulary (freeze 15 S14), one commit.
+    expect(surface).toHaveClass('v5-completion');
+    expect(screen.getByTestId('payment-surface-settled')).toHaveClass('v5-completion__panel');
+    expect(screen.getByTestId('payment-surface-new-sale')).toHaveClass(
+      'v5-completion-btn--primary',
+    );
+    expect(surface.querySelectorAll('.v5-completion-btn--primary')).toHaveLength(1);
+    expect(surface.querySelectorAll('.btn--primary')).toHaveLength(0);
     expect(surface).not.toHaveTextContent(
       /SMS|WhatsApp|email|واتساب|ضريبة|VAT|ZATCA|mada|insurance|loyalty|rewards|KPI|15%|ريال|السعودية/i,
     );

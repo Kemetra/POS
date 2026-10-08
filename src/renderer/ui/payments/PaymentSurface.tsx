@@ -34,6 +34,7 @@ import type {
 } from '../../../shared/bridge-api.js';
 import type { PaymentAttemptRendererView } from '../../../shared/payments/types.js';
 import { DrawerNoticeInline } from '../receipts/DrawerNotice.js';
+import { CompletionPanel } from '../../v5/checkout/CompletionPanel.js';
 
 /**
  * 006-payments-tender S1 + S3d T152 — PaymentSurface.
@@ -438,6 +439,21 @@ function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
 }
 
 type Phase = 'tender_selection' | 'entry' | 'settled';
+
+/**
+ * RT-243 — the settled-phase markers existing suites assert (006 FR-031,
+ * invariant 14's never-stuck check, the cart→checkout walk), handed to the V5
+ * completion panel so its own tree stays free of legacy names.
+ */
+const COMPLETION_TEST_IDS = {
+  root: 'payment-surface',
+  panel: 'payment-surface-settled',
+  proofs: 'payment-surface-settled-pending',
+  amount: 'payment-surface-settled-amount',
+  change: 'payment-surface-settled-change',
+  cardVoid: 'payment-surface-settled-card-void',
+  newSale: 'payment-surface-new-sale',
+} as const;
 
 /** RT-239 (M-S7): a scan on a completed sale starts nothing; it says what to do. */
 function notifySaleComplete(): void {
@@ -1292,124 +1308,23 @@ export function PaymentSurface({
     // payment. 011 already derives one from `envelope_handoff_action_id`.
 
     return (
-      <section
-        className="v4-screen payment-surface--settled"
-        data-testid="payment-surface"
-        aria-label="الدفع"
-      >
-        <header className="v4-screen__header">
-          <h1 className="v4-screen__title">الدفع</h1>
-          <OperatorBadge display_name={display_name} role={role} />
-        </header>
-
-        {/* `payment-surface-settled` is the STABLE marker for "the settled
-            phase is on screen" — the contract existing tests assert (006
-            FR-031, invariant 14's never-stuck check, and the cart→checkout
-            integration walk). 022 US4a splits what is *inside* it into the two
-            truthful states below; the wrapper's meaning is unchanged, so those
-            tests keep passing unmodified. */}
+      <>
         <SettledScanOwner />
-        {cardVoidRequired && (
-          <p
-            className="payment-surface__back-blocked payment-surface__back-blocked--danger"
-            data-testid="payment-surface-settled-card-void"
-            data-tone="danger"
-            role="status"
-          >
-            {BACK_REASON_COPY.card_void}
-          </p>
-        )}
-        <div className="v4-panel payment-surface__settled" data-testid="payment-surface-settled">
-          {/* EXTERNAL REVIEW P1 (round 2) — "Require correlation before
-              declaring the current sale complete".
-              
-              Round 1 removed the receipt but LEFT an `isFinalized` branch that
-              rendered "تم إتمام البيع" (the sale is complete) from the SAME
-              uncorrelated `recent` row. That fixed the symptom and kept the
-              assertion: a prior sale finalizing late still promoted an
-              unrelated record into proof that THIS sale completed.
-
-              The terminal cannot establish that correlation — `recent` carries
-              no attempt/handoff identifier and `confirm` returns only
-              `settled_at` — so it must not claim completion at all. The two
-              truthful states of T013a collapse into the one the terminal can
-              actually support: the payment was taken.
-
-              Unblocks with T017, on the same backend identifier. */}
-          <div
-            className="v4-stack payment-surface__settled-pending"
-            data-testid="payment-surface-settled-pending"
-            // role="status", never "alert" — a truthful terminal state, not an
-            // error and not a failure.
-            role="status"
-            aria-live="polite"
-          >
-            <span className="payment-surface__settled-mark" aria-hidden="true">
-              ✓
-            </span>
-            <p className="payment-surface__settled-headline">تم استلام المبلغ</p>
-            {/* The flag governs what can be said about the RECEIPT only.
-                ON: 008's listener may write one, but the worker also starts
-                only for a terminal paired at boot (src/main/index.ts:1120-1126),
-                so we say no receipt has issued YET rather than promising one is
-                underway — true whether it arrives shortly or next launch, since
-                the startup recovery scan re-fires settled-but-unfinalized rows.
-                OFF: the whole 008 stack is unregistered (:441, :983), so no
-                receipt will ever exist and the copy says exactly that. */}
-            <p className="payment-surface__settled-detail">
-              {saleFinalizationFlag
-                ? 'تم تسجيل المبلغ. لم يصدر إيصال بعد.'
-                : 'لن يُسجَّل هذا البيع ولا يوجد إيصال له.'}
-            </p>
-            {/* FR-16: the settled amount is the dominant numeric element.
-                dir="ltr" isolates the numeral run inside RTL copy (FR-21). */}
-            <p
-              className="payment-surface__settled-amount"
-              data-testid="payment-surface-settled-amount"
-              dir="ltr"
-            >
-              {formatCheckoutMoney(envelope.subtotal_minor)}
-            </p>
-            {/* RT-237 (M-P5 / M-C1) — the change to hand back, as main
-                computed it at apply time. Absent for exact cash and for
-                non-cash sales: no change line rather than a 0.00 one. */}
-            {appliedChangeDueMinor > 0 && (
-              <p
-                className="payment-surface__settled-change"
-                data-testid="payment-surface-settled-change"
-              >
-                الباقي للعميل <span dir="ltr">{formatCheckoutMoney(appliedChangeDueMinor)}</span>
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* RT-241 (D-B1) — a drawer that did not open on this session's sale
-            shows here as well as in the status area, but only inside CASH
-            completion: the notice store knows the failure happened this
-            session, not that it belongs to this sale, so a card or voucher
-            completion must not say "open it manually" (Codex P2 on #579). A
-            slot only: Checkout's completion recomposition belongs to RT-243. */}
-        {hasAppliedCash && (
-          <div className="payment-surface__drawer-notice">
-            <DrawerNoticeInline />
-          </div>
-        )}
-
-        <button
-          type="button"
-          className="btn btn--lg btn--primary payment-surface__new-sale"
-          data-testid="payment-surface-new-sale"
-          onClick={() => {
-            // Routing + store reset is delegated to the route owner so this
-            // component stays Router-agnostic. Guarded — a missing handler is
-            // a safe no-op (Slice-1 / bare-render tests).
-            onNewSale?.();
-          }}
-        >
-          بيع جديد
-        </button>
-      </section>
+        <CompletionPanel
+          paidMinor={envelope.subtotal_minor}
+          changeDueMinor={appliedChangeDueMinor}
+          saleFinalization={saleFinalizationFlag}
+          cardVoidCopy={cardVoidRequired ? BACK_REASON_COPY.card_void : null}
+          // RT-241 (D-B1) — a drawer that did not open on this session's sale
+          // shows here only inside CASH completion: the notice store knows the
+          // failure happened this session, not that it belongs to this sale, so
+          // a card or voucher completion must not say "open it manually".
+          drawerNotice={hasAppliedCash ? <DrawerNoticeInline /> : null}
+          operator={<OperatorBadge display_name={display_name} role={role} />}
+          onNewSale={onNewSale}
+          testIds={COMPLETION_TEST_IDS}
+        />
+      </>
     );
   }
 
