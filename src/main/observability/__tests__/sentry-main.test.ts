@@ -164,6 +164,9 @@ describe('initSentryMain — safe init options (D1)', () => {
   });
 
   it('sets sendDefaultPii to false', () => {
+    // Deprecated in @sentry/electron 7.20 in favour of dataCollection, but still the shipped, honoured
+    // setting: the test must pin what init() actually receives until that migration is decided.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(callInitWithDsn().sendDefaultPii).toBe(false);
   });
 
