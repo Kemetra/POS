@@ -304,6 +304,13 @@ function statusFrom(tokenState: TokenState, row: StoredAssignmentRow | null): Pa
 }
 
 const DEVICE_REVOKED_STATUS: PairingStatus = { kind: 'invalid', reason: 'device_revoked' };
+
+/** RT-306 — getStatus re-reads at most this often while the row keeps changing. */
+const STATUS_READ_ATTEMPTS = 3;
+
+function sameStoredPairing(a: PairingBinding | null, b: PairingBinding | null): boolean {
+  return a === null || b === null ? a === b : sameBinding(a, b);
+}
 const INCONSISTENT_STATUS: PairingStatus = { kind: 'invalid', reason: 'inconsistent' };
 
 export function createPairingStore(
@@ -322,6 +329,11 @@ export function createPairingStore(
 
   function rowRevoked(row: StoredAssignmentRow): boolean {
     return revokedInMemory || typeof row.device_revoked_at === 'number';
+  }
+
+  function storedBinding(): PairingBinding | null {
+    const row = db.readAssignment();
+    return row === null ? null : bindingOf(row);
   }
 
   /** SYNC: is the CURRENT row revoked (in-memory latch or durable marker)? */
@@ -362,13 +374,23 @@ export function createPairingStore(
       // is in, even an undecryptable one, the terminal must re-pair.
       if (isRevokedNow()) return DEVICE_REVOKED_STATUS;
 
-      const tokenState = await readTokenState();
-
-      // Codex P1 4186568808: the revocation may have been latched while the
-      // token read was pending. Re-read the row after the await and check
-      // again, so `paired` is never reported for a revoked device.
-      if (isRevokedNow()) return DEVICE_REVOKED_STATUS;
-      return statusFrom(tokenState, db.readAssignment());
+      // RT-306 (Codex P2 on #582): an asynchronous SecretStore can resolve a
+      // token read after a re-pair has replaced the row, and that stale token
+      // would look like a token/row mismatch. Read again while the row changed
+      // under the read; a stable row with a mismatched token is the real thing.
+      let status: PairingStatus = DEVICE_REVOKED_STATUS;
+      for (let attempt = 0; attempt < STATUS_READ_ATTEMPTS; attempt += 1) {
+        const before = storedBinding();
+        const tokenState = await readTokenState();
+        // Codex P1 4186568808: the revocation may have been latched while the
+        // token read was pending. Re-read the row after the await and check
+        // again, so `paired` is never reported for a revoked device.
+        if (isRevokedNow()) return DEVICE_REVOKED_STATUS;
+        const row = db.readAssignment();
+        status = statusFrom(tokenState, row);
+        if (sameStoredPairing(before, row === null ? null : bindingOf(row))) return status;
+      }
+      return status;
     },
 
     getStoredPairingEpoch(): number | null {
@@ -376,8 +398,7 @@ export function createPairingStore(
     },
 
     getStoredPairingBinding(): PairingBinding | null {
-      const row = db.readAssignment();
-      return row === null ? null : bindingOf(row);
+      return storedBinding();
     },
 
     getCurrentTerminalId(): string | null {

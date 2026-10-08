@@ -286,6 +286,38 @@ describe('RT-306 — the binding is checked against the row AFTER the token read
   });
 });
 
+describe('RT-306 — getStatus reads a coherent token/row pair (Codex P2, #582)', () => {
+  it('a re-pair landing during the token read reports the new pairing, not inconsistent', async () => {
+    const s = store();
+    await s.persist(OLD);
+    let release: () => void = () => undefined;
+    let reached: () => void = () => undefined;
+    const called = new Promise<void>((r) => {
+      reached = r;
+    });
+    let held = true;
+    const snapshotting: SecretStore = {
+      ...secrets,
+      get: (k) => {
+        const captured = secrets.get(k);
+        if (!held) return captured;
+        held = false; // only the first read is held
+        reached();
+        return new Promise((resolve, reject) => {
+          release = () => {
+            captured.then(resolve, reject);
+          };
+        });
+      },
+    };
+    const pending = store(bindPairingStoreDb(handle), snapshotting).getStatus();
+    await called; // the OLD sealed value captured
+    await s.persist(NEW); // the re-pair completes
+    release();
+    await expect(pending).resolves.toMatchObject({ kind: 'paired', terminal_id: 'term-new' });
+  });
+});
+
 describe('RT-306 — normal pairing behaviour is unchanged', () => {
   it('a completed pairing is paired and sends the raw token (never the sealed envelope)', async () => {
     const s = store();
