@@ -242,7 +242,7 @@
   gap: 2px;
   min-block-size: 56px;
   padding: var(--space-1) 2px;
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-xs);
   text-align: center;
 }
 
@@ -264,18 +264,18 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-xs);
   white-space: normal;
 }
 
 .v5-frame[data-nav='slim'] .v5-frame__operator-role,
 .v5-frame[data-nav='slim'] .v5-frame__sign-out-hint {
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-xs);
 }
 
 .v5-frame[data-nav='slim'] .v5-frame__sign-out button {
   padding-inline: 2px;
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-xs);
   line-height: var(--line-height-snug);
 }
 

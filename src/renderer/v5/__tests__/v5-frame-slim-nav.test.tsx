@@ -114,6 +114,14 @@ describe('slim rail CSS', () => {
     expect(css).toMatch(/\.v5-frame\[data-nav='slim'\]\s*\{[^}]*--v5-nav-inline-size:\s*76px/);
   });
 
+  // DESIGN.md "The Twelve-Pixel Rule": nothing a cashier reads is below 12px;
+  // 11px (--font-size-2xs) is for keyboard-hint chips only.
+  it('never sets slim-rail text below 12px', () => {
+    const slimRules = [...css.matchAll(/\.v5-frame\[data-nav='slim'\][^{]*\{([^}]*)\}/g)];
+    expect(slimRules.length).toBeGreaterThan(0);
+    for (const [, body] of slimRules) expect(body).not.toMatch(/--font-size-2xs/);
+  });
+
   it('keeps the link target floor in the slim rail', () => {
     const rule = /\.v5-frame\[data-nav='slim'\] \.v5-frame__link\s*\{([^}]*)\}/.exec(css);
     expect(rule).not.toBeNull();
