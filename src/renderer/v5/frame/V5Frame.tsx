@@ -1,10 +1,12 @@
 import type { JSX, ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { CONNECTION_BANNER_MESSAGES, useConnectionState } from '../../connection/connection-state';
 import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
 import { ScreenTooSmall } from '../../ui/states/ScreenTooSmall';
 import { useViewportTier } from '../../viewport/useViewportTier';
 import { DialogHost } from '../foundation/Dialog';
 import { V5Navigation } from './V5Navigation';
+import { isActiveSaleRoute } from './nav-model';
 import '../foundation/foundation.css';
 import './frame.css';
 
@@ -30,10 +32,16 @@ interface V5FrameProps {
  * AppShell parity (023 G0): below the 1024px floor only the too-small notice
  * renders, so the screen (and its bridge calls) never mounts; a non-online
  * connection state shows the same persistent banner as the legacy TopBar.
+ *
+ * RT-242 (VN-S12): on an active-sale route the nav is the slim rail
+ * (`data-nav="slim"`), elsewhere the labelled panel — decided by the route
+ * alone, never by cart state.
  */
 export function V5Frame({ notices, children }: V5FrameProps): JSX.Element {
   const tier = useViewportTier();
   const { state: connectionState } = useConnectionState();
+  const { pathname } = useLocation();
+  const nav = isActiveSaleRoute(pathname) ? 'slim' : 'panel';
 
   if (tier === 'too-small') {
     return (
@@ -44,7 +52,7 @@ export function V5Frame({ notices, children }: V5FrameProps): JSX.Element {
   }
 
   return (
-    <div className="v5-frame" data-testid="v5-frame" dir="rtl" lang="ar">
+    <div className="v5-frame" data-testid="v5-frame" data-nav={nav} dir="rtl" lang="ar">
       <DialogHost>
         <div className="v5-frame__body">
           {connectionState !== 'online' && (

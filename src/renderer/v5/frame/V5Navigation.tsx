@@ -1,14 +1,28 @@
 import type { JSX } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import type { ShellNavEntryId } from '../../../../specs/003-pos-ui-shell/contracts/shell-routes';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
-import { V5Icon } from '../foundation/V5Icon';
+import { V5Icon, type V5IconName } from '../foundation/V5Icon';
 import { isNavEntryCurrent, roleLabelAr, visibleNavEntries } from './nav-model';
 import { V5SignOut } from './V5SignOut';
+
+/** RT-242: the slim rail's glyph per entry (decorative; the label beside it names the entry). */
+const NAV_ICON: Readonly<Record<ShellNavEntryId, V5IconName>> = {
+  dashboard: 'nav-dashboard',
+  cart: 'nav-cart',
+  sales: 'nav-sales',
+  returns: 'nav-returns',
+  audit: 'nav-audit',
+  inventory: 'nav-inventory',
+  settings: 'nav-settings',
+};
 
 /**
  * Primary v5 navigation. Owns the only brand mark and the operator identity,
  * so no screen repeats either. Labels stay visible at every supported width:
- * operators are workflow experts, not icon readers.
+ * operators are workflow experts, not icon readers. On an active-sale route
+ * the frame narrows this to the slim rail (RT-242); the icon then sits above
+ * the label, which is still the link's text and accessible name.
  */
 export function V5Navigation(): JSX.Element {
   const session = useOperatorSessionStore((s) =>
@@ -34,7 +48,10 @@ export function V5Navigation(): JSX.Element {
               aria-current={isNavEntryCurrent(entry, pathname) ? 'page' : undefined}
               className={`v5-frame__link${isNavEntryCurrent(entry, pathname) ? ' v5-frame__link--active' : ''}`}
             >
-              {entry.label}
+              <span className="v5-frame__link-icon">
+                <V5Icon name={NAV_ICON[entry.id]} />
+              </span>
+              <span className="v5-frame__link-label">{entry.label}</span>
             </Link>
           </li>
         ))}

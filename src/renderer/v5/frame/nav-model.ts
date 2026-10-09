@@ -10,6 +10,20 @@ export const V5_SALE_PATH = '/app/cart';
 /** Routes that belong to the Sale entry: the sale and its checkout. */
 const SALE_LOOP_PATHS: ReadonlyArray<string> = ['/app/cart', '/app/checkout'];
 
+function onPath(pathname: string, path: string): boolean {
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+/**
+ * RT-242 (VN-S12) — an active-sale route: the Sale, its Checkout and the
+ * completion inside it. The frame shows the slim rail here and the labelled
+ * panel elsewhere. Route-based by owner decision (RT-242 session, 2026-10-09):
+ * the frame never reads cart state.
+ */
+export function isActiveSaleRoute(pathname: string): boolean {
+  return SALE_LOOP_PATHS.some((path) => onPath(pathname, path));
+}
+
 export interface V5NavEntry {
   readonly id: ShellNavEntryId;
   /** Arabic label: both the visible text and the accessible name. */
@@ -34,8 +48,7 @@ export const v5NavEntries: ReadonlyArray<V5NavEntry> = shellNavEntries.map((entr
  * entry stays current through checkout: one sale, one place in the nav.
  */
 export function isNavEntryCurrent(entry: V5NavEntry, pathname: string): boolean {
-  const paths = entry.id === 'cart' ? SALE_LOOP_PATHS : [entry.path];
-  return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  return entry.id === 'cart' ? isActiveSaleRoute(pathname) : onPath(pathname, entry.path);
 }
 
 /**

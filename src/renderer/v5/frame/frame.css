@@ -205,6 +205,80 @@
   font-size: var(--v5-text-meta);
 }
 
+/* The glyph belongs to the slim rail only; the labelled panel stays text. */
+.v5-frame__link-icon {
+  display: none;
+}
+
+/* ── Slim rail on an active-sale route (RT-242, VN-S12; DESIGN.md Direction B) ── */
+
+.v5-frame[data-nav='slim'] {
+  --v5-nav-inline-size: 76px;
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__nav {
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-1);
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* The wordmark gives way to the mark; the brand is still one name for assistive tech. */
+.v5-frame[data-nav='slim'] .v5-frame__brand-name {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__link {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-block-size: 56px;
+  padding: var(--space-1) 2px;
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__link-icon {
+  display: block;
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__link-label {
+  overflow-wrap: anywhere;
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__operator {
+  padding-inline: 0;
+  text-align: center;
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__operator-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: var(--font-size-xs);
+  white-space: normal;
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__operator-role,
+.v5-frame[data-nav='slim'] .v5-frame__sign-out-hint {
+  font-size: var(--font-size-xs);
+}
+
+.v5-frame[data-nav='slim'] .v5-frame__sign-out button {
+  padding-inline: 2px;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .v5-frame__link {
     transition: none;
