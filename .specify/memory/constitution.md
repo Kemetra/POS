@@ -44,6 +44,11 @@ Bump rationale: MINOR — a Tech Stack substitution within an existing category 
   - ✅ `README.md` repository map — `.specify` row updated to constitution v1.6.0.
   - ✅ `CLAUDE.md` authoritative-documents table — version reference updated to v1.6.0
     (it previously still cited v1.3.0).
+  - ✅ `docs/maestro/README.md` — both "currently v1.5.1" references updated to v1.6.0.
+  - ➖ Left unchanged on purpose: version-pinned history (`docs/impeccable-embed-preflight.md`,
+    `specs/**`), the name of the 1.5.1 Principle VIII clarification in
+    `docs/maestro/goal-templates.md`, and "e.g. v1.5.1" examples in
+    `docs/maestro/report-schema.md` and `docs/maestro/workflow.md`.
 
   Follow-up TODOs (open):
   - ⏳ UPDATER_IMPLEMENTATION — no updater or installer exists on `main` yet. The rules
