@@ -42,8 +42,10 @@ export function runStartupMigrations(deps: StartupMigrationsDeps): StartupMigrat
       onBeforeApply: (pending) => {
         const snapshot = writePreMigrationSnapshot({
           backupsDir: path.join(userDataDir, 'backups'),
-          // `pending` is name-sorted, so its last entry is the upgrade's target.
-          targetHead: pending[pending.length - 1] ?? '',
+          // `pending` is name-sorted and never empty here (the runner only calls
+          // this hook when something is pending), so its last entry is the
+          // upgrade's target.
+          targetHead: pending.slice(-1).join(''),
           vacuumInto,
           now,
         });

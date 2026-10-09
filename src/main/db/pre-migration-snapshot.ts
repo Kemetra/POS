@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, rmSync } from 'fs';
+import { mkdirSync, readdirSync, renameSync, rmSync } from 'fs';
 import path from 'path';
 
 import type { DatabaseHandle } from './client.js';
@@ -27,6 +27,7 @@ import type { DatabaseHandle } from './client.js';
 
 export const SNAPSHOT_FILE_PREFIX = 'pos-pulse-pre-migration-';
 export const DEFAULT_SNAPSHOT_RETENTION = 3;
+const PARTIAL_SUFFIX = '.partial';
 
 export interface PreMigrationSnapshotOptions {
   backupsDir: string;
@@ -56,11 +57,28 @@ export function writePreMigrationSnapshot(
   const existing = listSnapshots(backupsDir).find((name) => name.startsWith(headPrefix));
   if (existing !== undefined) return { path: path.join(backupsDir, existing), created: false };
 
+  // A `.partial` left by a crash mid-copy is never a snapshot; clear it so the
+  // copy below starts on an empty path (VACUUM INTO refuses a non-empty file).
+  for (const name of readdirSync(backupsDir)) {
+    if (name.startsWith(SNAPSHOT_FILE_PREFIX) && name.endsWith(PARTIAL_SUFFIX)) {
+      rmSync(path.join(backupsDir, name), { force: true });
+    }
+  }
+
   // ISO-8601 with ':' and '.' replaced keeps the name filesystem-safe.
   const stamp = now().toISOString().replace(/[:.]/g, '-');
   const fileName = `${headPrefix}${stamp}.db`;
   const target = path.join(backupsDir, fileName);
-  vacuumInto(target);
+  // Copy to a temp name and publish by rename only once the copy succeeded, so
+  // an interrupted copy can never be mistaken for this head's snapshot.
+  const partial = `${target}${PARTIAL_SUFFIX}`;
+  try {
+    vacuumInto(partial);
+    renameSync(partial, target);
+  } catch (err) {
+    rmSync(partial, { force: true });
+    throw err;
+  }
 
   const others = listSnapshots(backupsDir).filter((name) => name !== fileName);
   for (const stale of others.slice(0, Math.max(0, others.length - (retain - 1)))) {

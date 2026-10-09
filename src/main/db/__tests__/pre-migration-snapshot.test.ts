@@ -65,7 +65,8 @@ describe('writePreMigrationSnapshot', () => {
     const result = write('0045_next', '2026-10-09T08:30:15.123Z', written);
 
     expect(result.created).toBe(true);
-    expect(written).toEqual([result.path]);
+    // Copied to a temp name first, then published by rename.
+    expect(written).toEqual([`${result.path}.partial`]);
     expect(path.dirname(result.path)).toBe(backupsDir);
     expect(path.basename(result.path)).toBe(snap('0045_next', '2026-10-09T08-30-15-123Z'));
     expect(existsSync(result.path)).toBe(true);
@@ -78,7 +79,7 @@ describe('writePreMigrationSnapshot', () => {
     const second = write('0045_next', '2026-10-09T08:05:00.000Z', written);
     const third = write('0045_next', '2026-10-09T08:10:00.000Z', written);
 
-    expect(written).toEqual([first.path]);
+    expect(written).toEqual([`${first.path}.partial`]);
     expect(second).toEqual({ path: first.path, created: false });
     expect(third).toEqual({ path: first.path, created: false });
     expect(snapshotsIn(backupsDir)).toEqual([snap('0045_next', '2026-10-09T08-00-00-000Z')]);
@@ -132,6 +133,38 @@ describe('writePreMigrationSnapshot', () => {
       snap('0042_b', '2026-02-01T00-00-00-000Z'),
       'support-export.db',
     ]);
+  });
+
+  it('never leaves a partial copy that a later launch could mistake for a snapshot', () => {
+    expect(() =>
+      writePreMigrationSnapshot({
+        backupsDir,
+        targetHead: '0045_next',
+        vacuumInto: (target) => {
+          writeFileSync(target, 'half a database');
+          throw new Error('SQLITE_FULL');
+        },
+        now: () => new Date('2026-10-09T08:00:00.000Z'),
+      }),
+    ).toThrow(/SQLITE_FULL/);
+    expect(readdirSync(backupsDir)).toEqual([]);
+
+    // The retry on the next launch must take a real snapshot, not reuse a stub.
+    const written: string[] = [];
+    const retry = write('0045_next', '2026-10-09T08:05:00.000Z', written);
+    expect(retry.created).toBe(true);
+    expect(written).toHaveLength(1);
+  });
+
+  it('clears a temp file left by a crash and still writes the snapshot', () => {
+    mkdirSync(backupsDir, { recursive: true });
+    const leftover = `${snap('0045_next', '2026-10-09T07-00-00-000Z')}.partial`;
+    writeFileSync(path.join(backupsDir, leftover), 'power loss mid-copy');
+
+    const result = write('0045_next', '2026-10-09T08:00:00.000Z');
+
+    expect(result.created).toBe(true);
+    expect(readdirSync(backupsDir)).toEqual([path.basename(result.path)]);
   });
 
   it('defaults to a small bounded retention', () => {
