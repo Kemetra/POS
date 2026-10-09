@@ -43,20 +43,6 @@ import { cashDraft } from '../../../v5/checkout/cash-draft.js';
 
 afterEach(cleanup);
 
-/**
- * Query a single element by CSS selector and narrow it to non-null. `querySelector`
- * is typed `T | null`; `expect(...).not.toBeNull()` is not a TS type guard, so this
- * helper throws (narrowing the return) instead of using a non-null assertion
- * (`@typescript-eslint/no-non-null-assertion` forbids `el!`).
- */
-function queryOrThrow(selector: string): HTMLElement {
-  const el = document.querySelector<HTMLElement>(selector);
-  if (el === null) {
-    throw new Error(`expected an element matching "${selector}", found none`);
-  }
-  return el;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -233,25 +219,23 @@ describe('ExternalCardTerminalEntry — v3.5 visual recompose (card tender-slots
     expect(document.querySelectorAll('.amount-due-card')).toHaveLength(0);
   });
 
-  it('renders tender-slots with at least one tender-row for card terminal instruction', () => {
+  /*
+   * RETARGETED by RT-243 W1-C (freeze 15 S10; 08 I-10; VN-R4). The card entry
+   * is the V5 composition: the M-P6 instruction as an info Notice, the amount to
+   * key into the terminal as a fact (no field), and the optional reference.
+   */
+  it('renders the instruction as an info notice with Arabic copy', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
-    expect(document.querySelector('.tender-slots')).toBeInTheDocument();
-    expect(document.querySelectorAll('.tender-row').length).toBeGreaterThanOrEqual(1);
+    const notice = screen.getByTestId('external-card-instruction');
+    expect(notice).toHaveAttribute('data-tone', 'info');
+    expect(notice.textContent).toMatch(/[ا-ي]/);
   });
 
-  it('card instruction row uses tender-row__body for the instructional text', () => {
+  it('shows the amount in a dir=ltr run, not in an input', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
-    const body = queryOrThrow('.tender-row__body');
-    // Must contain Arabic instruction copy
-    expect(body.textContent).toMatch(/[ا-ي]/);
-  });
-
-  it('card totals row (tender-row--totals) shows the amount in a dir=ltr mono span', () => {
-    render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
-    const totalsRow = queryOrThrow('.tender-row--totals');
-    // The value span must be dir="ltr"
-    const value = totalsRow.querySelector('[dir="ltr"]');
-    expect(value).toBeInTheDocument();
+    const value = screen.getByTestId('external-card-amount-value');
+    expect(value).toHaveAttribute('dir', 'ltr');
+    expect(value.tagName).not.toBe('INPUT');
   });
 });
 

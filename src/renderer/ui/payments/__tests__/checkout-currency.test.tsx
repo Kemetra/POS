@@ -52,10 +52,10 @@ describe('checkout entry components show EGP', () => {
     expect(screen.getAllByRole('button', { name: /\d+\.\d{2} EGP/ }).length).toBeGreaterThan(0);
   });
 
-  it('the external card amount and label carry EGP', () => {
+  it('the external card amount carries EGP (a fact, not a field: RT-243 W1-C)', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={12550} onConfirm={vi.fn()} />);
-    expectUnitLabel('المبلغ المخصوم (EGP)');
-    expect(screen.getByText('125.50 EGP')).toBeInTheDocument();
+    expect(screen.getByTestId('external-card-amount')).toHaveTextContent('المبلغ المُقتطع');
+    expect(screen.getByText('125.50 EGP')).toHaveAttribute('dir', 'ltr');
   });
 
   it('the voucher amount label carries EGP', () => {

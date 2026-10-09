@@ -70,15 +70,11 @@ describe('RT-259 — ExternalCardTerminalEntry inputs', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={7_500} onConfirm={vi.fn()} />);
   }
 
-  it('amount «٥٠٫٠٠» shows "50.00"', () => {
+  // RT-243 W1-C: the card amount is no longer a field (it is always exactly
+  // what is owed), so only the reference takes typed digits here.
+  it('has no amount field to normalise', () => {
     renderCard();
-    expect(change('external-card-amount-input', '٥٠٫٠٠').value).toBe('50.00');
-  });
-
-  it('amount rejects the Arabic thousands separator', () => {
-    renderCard();
-    const before = screen.getByTestId<HTMLInputElement>('external-card-amount-input').value;
-    expect(change('external-card-amount-input', '١٬٠٠٠').value).toBe(before);
+    expect(screen.queryByTestId('external-card-amount-input')).toBeNull();
   });
 
   it('reference «T١A٢» becomes "T1A2" (digits only; stays [A-Z0-9]{0,6})', () => {

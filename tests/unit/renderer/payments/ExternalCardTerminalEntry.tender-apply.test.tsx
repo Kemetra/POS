@@ -141,13 +141,13 @@ describe('ExternalCardTerminalEntry — tender.apply wiring (T151)', () => {
     expect(bridgeRefusal.textContent).not.toMatch(/non_cash_overpayment_refused/);
   });
 
-  it('does not call tenderApply when the input is over the remaining balance', async () => {
+  it('does not call tenderApply when nothing is owed (RT-243 W1-C: no amount field)', async () => {
     const user = userEvent.setup();
     const tenderApply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>();
 
     render(
       <ExternalCardTerminalEntry
-        remainingBalanceMinor={500}
+        remainingBalanceMinor={0}
         paymentAttemptId="pa-1"
         tenderApply={tenderApply}
         onApplied={vi.fn()}
@@ -155,9 +155,7 @@ describe('ExternalCardTerminalEntry — tender.apply wiring (T151)', () => {
       />,
     );
 
-    const input = screen.getByTestId('external-card-amount-input');
-    await user.clear(input);
-    await user.type(input, '6.00');
+    expect(screen.queryByTestId('external-card-amount-input')).toBeNull();
     const button = screen.getByTestId('external-card-confirm');
     expect(button).toBeDisabled();
     await user.click(button);
