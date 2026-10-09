@@ -321,6 +321,38 @@ describe('Checkout focus and accessibility on Direction B', () => {
   });
 });
 
+describe('Selected tender tile keeps its state under hover and forced colours — CSS tripwire', () => {
+  /**
+   * `:hover:not(:disabled)` outranks `[aria-checked='true']`, so a hover rule
+   * that does not exclude the selected tile replaces its fill while the pointer
+   * rests on it (right after the click). Under forced colours the selected tile
+   * is `forced-color-adjust: none`, so that left HighlightText on a light
+   * background: unreadable. Dev-harness probe (Chromium, forced colours) before
+   * the fix: tile background rgb(245,247,251) under white text.
+   */
+  const css = readFileSync(resolve(__dirname, '../checkout.css'), 'utf-8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  );
+  const forced = css.slice(css.indexOf('@media (forced-colors: active)'));
+
+  it('no tile hover rule can repaint the selected tile', () => {
+    const hovers = css.match(/[^{}]*\.v5-tender-tile:hover[^{]*\{/g) ?? [];
+    expect(hovers.length).toBeGreaterThan(0);
+    for (const rule of hovers) expect(rule).toContain(":not([aria-checked='true'])");
+  });
+
+  it('the selected tile children use the system pair under forced colours', () => {
+    for (const child of ['label', 'detail', 'icon']) {
+      expect(forced).toMatch(
+        new RegExp(
+          `\\.v5-tender-tile\\[aria-checked='true'\\] \\.v5-tender-tile__${child}[^{]*\\{[^}]*HighlightText`,
+        ),
+      );
+    }
+  });
+});
+
 describe('Checkout action slots keep their place (A2, N-02) — CSS tripwire', () => {
   /**
    * A SOURCE TRIPWIRE, not a cascade check (jsdom does no layout). In the money

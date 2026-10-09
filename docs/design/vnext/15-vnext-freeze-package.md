@@ -320,6 +320,9 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-P18 | Cancel outcome unknown: the response and the read-back were both lost (RT-298). No payment action until Cancel again resolves it; the retry replays the same key | «تعذّر التأكد من إلغاء عملية الدفع. لا تسجّل أي مبلغ. اضغط «إلغاء» مرة أخرى للتحقق.» | neutral (payment refusal line) today; danger styling is W1-C scope |
 | M-P19 | Cancel refused because the payment already ended another way (settled, failed or force-failed; RT-298). Offers no retry | «لم تعد عملية الدفع هذه مفتوحة، فلا يمكن إلغاؤها.» | neutral (payment refusal line) |
 | M-P20 | Cancel refused and the read-back shows a force-failed attempt that still holds live tender (RT-298). Main refuses any new payment for the cart, so payment actions stay closed; M-P13 too when a card line is live | «أوقف المدير عملية الدفع هذه وفيها مبالغ مسجّلة، فلا يمكن الدفع لهذا البيع الآن. اطلب من المدير مراجعتها.» | neutral (payment refusal line) |
+| M-P21 | Order summary counts (RT-243 W1-C; owner-approved 2026-10-09) | «الأصناف ‹n› · القطع ‹m›» (lines · units, Western digits) | neutral |
+| M-P22 | Order summary disclosure at 1024 (RT-243 W1-C; owner-approved 2026-10-09) | «عرض الأصناف» | neutral |
+| M-P23 | Cart frozen during payment badge (RT-243 W1-C; owner-approved 2026-10-09) | «مجمّدة» | neutral |
 | **Completion and receipt** | | | |
 | M-C1 | Completed | «اكتمل البيع» · «رقم البيع ‹no›» ⏳ D-N1 · «الباقي للعميل ‹amount›» | success (proven only) |
 | M-C2 | Receipt sent (OS-print) | «أُرسل الإيصال للطابعة» | info |
