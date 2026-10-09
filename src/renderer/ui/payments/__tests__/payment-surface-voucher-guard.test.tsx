@@ -2,7 +2,7 @@
  * RT-103 — PaymentSurface's own voucher guard (defence in depth behind the disabled tile).
  *
  * The disabled tile never calls `onTenderSelect`, so clicking it cannot prove the surface
- * guard exists. Here TenderSelection is stubbed with an always-clickable voucher button,
+ * guard exists. Here TenderPicker is stubbed with an always-clickable voucher button,
  * so the ONLY thing standing between a voucher selection and `payments.start` is
  * `PaymentSurface.handleTenderSelect`. The flag-on case is the positive control: it
  * shows the stub really reaches the handler.
@@ -18,8 +18,8 @@ import { usePaymentStore } from '../../../stores/payment-store.js';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store.js';
 import { PaymentSurface } from '../PaymentSurface.js';
 
-vi.mock('../TenderSelection.js', () => ({
-  TenderSelection: (props: { onTenderSelect: (tender: string) => void }) => (
+vi.mock('../../../v5/checkout/TenderPicker.js', () => ({
+  TenderPicker: (props: { onTenderSelect: (tender: string) => void }) => (
     <button
       type="button"
       data-testid="stub-voucher"

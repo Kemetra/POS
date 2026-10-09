@@ -82,10 +82,10 @@ describe('EGP amounts stay left-to-right in the RTL checkout', () => {
   }
 
   it('in the order summary', async () => {
-    const { PaymentCartSummary } = await import('../PaymentCartSummary');
+    const { OrderSummary } = await import('../../../v5/checkout/OrderSummary');
     const { container } = render(
       <div dir="rtl">
-        <PaymentCartSummary
+        <OrderSummary
           envelope={
             {
               subtotal_minor: 1500,
@@ -121,7 +121,9 @@ describe('EGP amounts stay left-to-right in the RTL checkout', () => {
 // the generic sign again. The rendering checks above prove the output.
 describe('checkout source tripwire', () => {
   it.each([
-    'PaymentCartSummary.tsx',
+    '../../v5/checkout/OrderSummary.tsx',
+    '../../v5/checkout/TenderPicker.tsx',
+    '../../v5/checkout/PaymentLedger.tsx',
     'CashEntry.tsx',
     'ExternalCardTerminalEntry.tsx',
     'VoucherEntry.tsx',

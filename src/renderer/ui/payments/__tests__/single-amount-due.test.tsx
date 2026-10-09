@@ -4,7 +4,7 @@
  * ── THE DEFECT THIS LOCKS OUT ─────────────────────────────────────────────
  *
  * `PaymentSurface` owns the amount due. It renders it as
- * `.payment-surface__amount-value` at `--font-size-4xl` (44px/700) — the
+ * `.v5-ledger__due-value` (RT-243 W1-C; was `.payment-surface__amount-value`) at `--font-size-4xl` (44px/700) — the
  * dominant numeric on the surface, per spec FR-16 and the approved design
  * handoff ("the amount due is the dominant numeric on the surface").
  *
@@ -165,7 +165,7 @@ describe('022 Phase C — exactly one amount-due presentation on the live surfac
     await mountEntryPhase('tender-cash');
 
     const value = screen.getByTestId('payment-surface-amount-due');
-    expect(value).toHaveClass('payment-surface__amount-value');
+    expect(value).toHaveClass('v5-ledger__due-value');
     // Money stays LTR-isolated (D-006) — unchanged by this cleanup.
     expect(value).toHaveAttribute('dir', 'ltr');
   });

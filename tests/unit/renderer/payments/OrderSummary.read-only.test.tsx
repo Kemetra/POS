@@ -1,5 +1,5 @@
 /**
- * T022 — PaymentCartSummary is read-only.
+ * T022 — OrderSummary is read-only.
  *
  * No edit affordances (quantity steppers, remove buttons, note editing) must appear.
  * Lines are rendered with display_name, quantity, and line_subtotal_minor.
@@ -12,7 +12,7 @@ import '@testing-library/jest-dom/vitest';
 
 afterEach(cleanup);
 
-import { PaymentCartSummary } from '../../../../src/renderer/ui/payments/PaymentCartSummary.js';
+import { OrderSummary } from '../../../../src/renderer/v5/checkout/OrderSummary.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 
 function makeEnvelope(overrides: Partial<PaymentIntentEnvelope> = {}): PaymentIntentEnvelope {
@@ -56,21 +56,21 @@ function makeEnvelope(overrides: Partial<PaymentIntentEnvelope> = {}): PaymentIn
   };
 }
 
-describe('PaymentCartSummary — line rendering', () => {
+describe('OrderSummary — line rendering', () => {
   it('renders display_name for each line', () => {
-    render(<PaymentCartSummary envelope={makeEnvelope()} />);
+    render(<OrderSummary envelope={makeEnvelope()} />);
     expect(screen.getByText('Paracetamol 500mg')).toBeInTheDocument();
     expect(screen.getByText('Amoxicillin 250mg')).toBeInTheDocument();
   });
 
   it('renders quantity for each line', () => {
-    render(<PaymentCartSummary envelope={makeEnvelope()} />);
+    render(<OrderSummary envelope={makeEnvelope()} />);
     expect(screen.getByText('×2')).toBeInTheDocument();
     expect(screen.getByText('×1')).toBeInTheDocument();
   });
 
   it('renders line_subtotal_minor formatted as currency', () => {
-    render(<PaymentCartSummary envelope={makeEnvelope()} />);
+    render(<OrderSummary envelope={makeEnvelope()} />);
     // line-1: 300 minor = 3.00 EGP
     expect(screen.getByTestId('payment-summary-line-subtotal-0')).toHaveTextContent('3.00 EGP');
     // line-2: 500 minor = 5.00 EGP
@@ -78,13 +78,13 @@ describe('PaymentCartSummary — line rendering', () => {
   });
 
   it('renders the envelope subtotal_minor', () => {
-    render(<PaymentCartSummary envelope={makeEnvelope()} />);
+    render(<OrderSummary envelope={makeEnvelope()} />);
     // makeEnvelope subtotal_minor: 800 = 8.00 EGP
     expect(screen.getByTestId('payment-summary-subtotal')).toHaveTextContent('8.00 EGP');
   });
 });
 
-describe('PaymentCartSummary — unsafe integer guard', () => {
+describe('OrderSummary — unsafe integer guard', () => {
   it('renders em-dash placeholder when line_subtotal_minor is not a safe integer', () => {
     const unsafe = Number.MAX_SAFE_INTEGER + 1;
     const env = makeEnvelope({
@@ -103,26 +103,26 @@ describe('PaymentCartSummary — unsafe integer guard', () => {
       ],
       subtotal_minor: unsafe,
     });
-    render(<PaymentCartSummary envelope={env} />);
+    render(<OrderSummary envelope={env} />);
     // The em-dash fallback should appear (at least twice — line + subtotal)
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 });
 
-describe('PaymentCartSummary — no edit affordances', () => {
+describe('OrderSummary — no edit affordances', () => {
   it('does not render quantity increment/decrement buttons', () => {
-    render(<PaymentCartSummary envelope={makeEnvelope()} />);
+    render(<OrderSummary envelope={makeEnvelope()} />);
     expect(screen.queryByRole('button', { name: /increment|decrement|\+|-/i })).toBeNull();
   });
 
   it('does not render remove buttons', () => {
-    render(<PaymentCartSummary envelope={makeEnvelope()} />);
+    render(<OrderSummary envelope={makeEnvelope()} />);
     expect(screen.queryByRole('button', { name: /remove|delete/i })).toBeNull();
   });
 
   it('does not render note edit affordances', () => {
-    render(<PaymentCartSummary envelope={makeEnvelope()} />);
+    render(<OrderSummary envelope={makeEnvelope()} />);
     expect(screen.queryByRole('button', { name: /note|edit note/i })).toBeNull();
   });
 });

@@ -43,6 +43,19 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-243 W1-C: the Checkout harness, same DEV-only contract as the Sale proof
+  // (no bridge, no pairing, no flags from main; an in-memory payment stand-in).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/checkout-proof')
+) {
+  void import('./v5/checkout/dev/CheckoutProof').then(({ CheckoutProof }) => {
+    root.render(
+      <React.StrictMode>
+        <CheckoutProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();

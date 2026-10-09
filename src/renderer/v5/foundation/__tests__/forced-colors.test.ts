@@ -50,6 +50,7 @@ function ruleFor(css: string, selector: string): string {
 
 const frame = forcedColorsCss(read('../../frame/frame.css'));
 const sale = forcedColorsCss(read('../../sale/live-sale.css'));
+const checkout = forcedColorsCss(read('../../checkout/checkout.css'));
 
 describe('forced colors — V5 frame', () => {
   it('the current nav entry is a system selection, not a tint', () => {
@@ -104,4 +105,26 @@ describe('forced colors — Sale', () => {
     expect(body).toMatch(/color:\s*GrayText/);
     expect(body).toMatch(/border-color:\s*GrayText/);
   });
+});
+
+describe('forced colors — Checkout (RT-243 W1-C)', () => {
+  it('the selected tender tile is a system selection, not a tint', () => {
+    const body = ruleFor(checkout, ".v5-tender-tile[aria-checked='true']");
+    expect(body).toMatch(/background:\s*Highlight/);
+    expect(body).toMatch(/color:\s*HighlightText/);
+    expect(body).toMatch(/forced-color-adjust:\s*none/);
+  });
+
+  it('a tile disabled by policy (the pilot voucher) reads as disabled', () => {
+    const body = ruleFor(checkout, '.v5-tender-tile:disabled');
+    expect(body).toMatch(/color:\s*GrayText/);
+    expect(body).toMatch(/border-color:\s*GrayText/);
+  });
+
+  it.each(['.v5-order-summary', '.v5-checkout__tender', '.v5-ledger'])(
+    '%s keeps its panel edge when tints are dropped',
+    (selector) => {
+      expect(ruleFor(checkout, selector)).toMatch(/border-color:\s*CanvasText/);
+    },
+  );
 });

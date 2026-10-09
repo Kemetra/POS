@@ -2,7 +2,7 @@
  * 022 US3 T076 — RED: zero English-only operator-facing strings across the
  * WORKING (pre-settlement) tender flow.
  *
- * Covers FR-19 / SC-4 for: PaymentCartSummary, TenderSelection, CashEntry,
+ * Covers FR-19 / SC-4 for: OrderSummary, TenderPicker, CashEntry,
  * AmountPad, VoucherEntry, ExternalCardTerminalEntry.
  *
  * WHY THIS TEST SCANS ATTRIBUTES, NOT JUST TEXT NODES
@@ -59,12 +59,12 @@ import type { PaymentsBridgeAPI, TenderBridgeAPI } from '../../../../shared/brid
 import { AmountPad } from '../AmountPad.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
-import { PaymentCartSummary } from '../PaymentCartSummary.js';
+import { OrderSummary } from '../../../v5/checkout/OrderSummary.js';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../../stores/payment-store.js';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store.js';
 import { PaymentSurface } from '../PaymentSurface.js';
-import { TenderSelection } from '../TenderSelection.js';
+import { TenderPicker } from '../../../v5/checkout/TenderPicker.js';
 import { VoucherEntry } from '../VoucherEntry.js';
 
 afterEach(cleanup);
@@ -249,16 +249,16 @@ function expectNoEnglishOnlyStrings(root: HTMLElement, surface: string): void {
 // ---------------------------------------------------------------------------
 
 describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () => {
-  it('PaymentCartSummary carries no English-only operator-facing string', () => {
-    const { container } = render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expectNoEnglishOnlyStrings(container, 'PaymentCartSummary');
+  it('OrderSummary carries no English-only operator-facing string', () => {
+    const { container } = render(<OrderSummary envelope={makeEnvelope()} />);
+    expectNoEnglishOnlyStrings(container, 'OrderSummary');
   });
 
-  it('TenderSelection carries no English-only operator-facing string', () => {
+  it('TenderPicker carries no English-only operator-facing string', () => {
     const { container } = render(
-      <TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />,
+      <TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />,
     );
-    expectNoEnglishOnlyStrings(container, 'TenderSelection');
+    expectNoEnglishOnlyStrings(container, 'TenderPicker');
   });
 
   it('CashEntry carries no English-only operator-facing string', () => {

@@ -24,7 +24,7 @@ import { PrinterFailureBanner } from '../../receipts/PrinterFailureBanner.js';
 import { ReprintAffordance } from '../../receipts/ReprintAffordance.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
-import { TenderSelection } from '../TenderSelection.js';
+import { TenderPicker } from '../../../v5/checkout/TenderPicker.js';
 import { VoucherEntry } from '../VoucherEntry.js';
 import { latinLeaks } from './latin-leaks.js';
 
@@ -54,7 +54,7 @@ describe('RT-240 — Checkout surfaces are Arabic only', () => {
   it.each([true, false])('tender selection (voucher tile enabled: %s)', (voucherEnabled) => {
     expect(
       sweep(
-        <TenderSelection
+        <TenderPicker
           envelope={ENVELOPE}
           selectedTender={null}
           voucherEnabled={voucherEnabled}
