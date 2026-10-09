@@ -41,6 +41,9 @@ Bump rationale: MINOR — a Tech Stack substitution within an existing category 
   - ✅ `.specify/templates/plan-template.md` — no changes required.
   - ✅ `.specify/templates/spec-template.md` — no changes required.
   - ✅ `.specify/templates/tasks-template.md` — no changes required.
+  - ✅ `README.md` repository map — `.specify` row updated to constitution v1.6.0.
+  - ✅ `CLAUDE.md` authoritative-documents table — version reference updated to v1.6.0
+    (it previously still cited v1.3.0).
 
   Follow-up TODOs (open):
   - ⏳ UPDATER_IMPLEMENTATION — no updater or installer exists on `main` yet. The rules
