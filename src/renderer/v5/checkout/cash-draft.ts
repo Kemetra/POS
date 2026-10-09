@@ -18,11 +18,13 @@ export type CashDraft =
   | { readonly kind: 'change'; readonly changeMinor: number }
   | { readonly kind: 'shortfall'; readonly shortMinor: number };
 
+/** A positive safe integer: an amount of money that can be previewed. */
+function isPositiveMinor(value: number | null): value is number {
+  return value !== null && Number.isSafeInteger(value) && value > 0;
+}
+
 export function cashDraft(receivedMinor: number | null, dueMinor: number): CashDraft | null {
-  if (receivedMinor === null || !Number.isSafeInteger(receivedMinor) || receivedMinor <= 0) {
-    return null;
-  }
-  if (!Number.isSafeInteger(dueMinor) || dueMinor <= 0) return null;
+  if (!isPositiveMinor(receivedMinor) || !isPositiveMinor(dueMinor)) return null;
   if (receivedMinor < dueMinor) {
     return { kind: 'shortfall', shortMinor: dueMinor - receivedMinor };
   }
