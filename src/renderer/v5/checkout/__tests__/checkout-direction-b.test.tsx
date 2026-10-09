@@ -7,6 +7,8 @@
  * here. These tests pin what is observable: the disclosure semantics, the Esc
  * layer order, the money column's content, and where focus goes.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -319,5 +321,41 @@ describe('Checkout focus and accessibility on Direction B', () => {
     await settle();
     expect(screen.getByTestId('payment-ledger')).toBeInTheDocument();
     await expectNoAxeViolations(container);
+  });
+});
+
+describe('Checkout action slots keep their place (A2, N-02) — CSS tripwire', () => {
+  /**
+   * A SOURCE TRIPWIRE, not a cascade check (jsdom does no layout). In the money
+   * column the slots stack, commit above cancel. If an empty slot collapsed,
+   * Esc after a full cash apply (cancel leaves) would drop «تأكيد الدفع» into the
+   * exact place «إلغاء» held — the N-02 slip RT-238 exists to prevent. The
+   * harness geometry probe (dev evidence in the PR) is the runtime proof.
+   */
+  const css = readFileSync(resolve(__dirname, '../checkout.css'), 'utf-8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  );
+
+  /** Every declaration block whose selector list includes `selector`. */
+  function blocks(selector: string): string[] {
+    return css
+      .split('}')
+      .map((rule) => rule.split('{'))
+      .filter(([sel]) => sel?.split(',').some((s) => s.trim() === selector))
+      .map(([, body]) => body ?? '');
+  }
+
+  it.each([
+    '.v5-ledger__actions .checkout-actions__slot--end',
+    '.v5-ledger__actions .checkout-actions__slot--start',
+  ])('%s reserves its height at both densities', (selector) => {
+    const sized = blocks(selector).filter((body) => /min-block-size:/.test(body));
+    expect(sized.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('no rule collapses an empty action slot or the action band', () => {
+    expect(css).not.toMatch(/checkout-actions__slot[^{]*:empty/);
+    expect(css).not.toMatch(/v5-ledger__actions[^{]*:not\(:has/);
   });
 });

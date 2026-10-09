@@ -456,29 +456,35 @@
   margin-inline-start: 0;
 }
 
-.v5-ledger__actions .checkout-actions__slot:empty {
-  display: none;
+/*
+ * Slot stability (A2, the N-02 slip): both slots keep their height when empty,
+ * so the band never reflows. When cancel leaves (Esc closes the entry), the
+ * commit does NOT drop into the place cancel held; when the commit leaves,
+ * cancel does not rise into the commit's place. Never collapse an empty slot.
+ */
+.v5-ledger__actions .checkout-actions__slot--end {
+  min-block-size: 60px;
 }
 
-/* No action and no notice yet: no empty band (the end slot stays mounted for the entry portal). */
-.v5-ledger__actions:not(:has(button, p, [role])) {
-  display: none;
-}
-
-/* Every commit the slot can hold spans the column (DESIGN.md: full panel width). */
-.v5-ledger__actions .checkout-actions__slot--end > button {
+/* Every commit the slot can hold spans the column at one fixed height
+   (DESIGN.md: full panel width), so apply → settle never changes the band. */
+.v5-ledger__actions .checkout-actions__slot--end button {
   inline-size: 100%;
+  block-size: 60px;
   min-block-size: 60px;
 }
 
 .v5-ledger__actions .checkout-actions__slot--start {
+  min-block-size: calc(44px + var(--space-4) + 1px);
   padding-block-start: var(--space-4);
   border-block-start: 1px solid var(--color-border-soft);
 }
 
 .v5-ledger__actions .checkout-actions__slot--start > button {
   inline-size: 100%;
+  block-size: 44px;
   min-block-size: 44px;
+  padding-block: 0;
 }
 
 /* ── Compact (a 1024 window) ───────────────────────────────────────────── */
@@ -608,10 +614,16 @@
   }
 
   .v5-ledger__actions .checkout-actions__slot--start {
+    min-block-size: calc(44px + var(--space-3) + 1px);
     padding-block-start: var(--space-3);
   }
 
-  .v5-ledger__actions .checkout-actions__slot--end > button {
+  .v5-ledger__actions .checkout-actions__slot--end {
+    min-block-size: 56px;
+  }
+
+  .v5-ledger__actions .checkout-actions__slot--end button {
+    block-size: 56px;
     min-block-size: 56px;
   }
 }
