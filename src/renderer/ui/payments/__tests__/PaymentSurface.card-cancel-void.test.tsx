@@ -138,9 +138,8 @@ async function applyCardViaUi(): Promise<void> {
     screen.getByTestId('tender-external-card').click();
     await Promise.resolve();
   });
-  fireEvent.change(await screen.findByTestId('external-card-amount-input'), {
-    target: { value: '50.00' },
-  });
+  // The card records exactly what is owed (RT-243 W1-C: no amount field).
+  await screen.findByTestId('external-card-terminal-entry');
   fireEvent.click(screen.getByTestId('external-card-confirm'));
   await settle();
 }

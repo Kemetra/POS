@@ -446,6 +446,83 @@
   color: var(--color-text-muted);
 }
 
+/* ── Card terminal entry (CardTerminalEntry) ──────────────────────────────
+ * The instruction, the amount to key into the terminal (a fact, not a field)
+ * and the optional reference. The commit lives in the ledger's pinned slot.
+ */
+
+.v5-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.v5-card__amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-card__amount-label {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-card__amount-value {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+.v5-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.v5-card__label {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+/* The reference is short and LTR: six characters at the inline end. */
+.v5-card__input {
+  inline-size: 100%;
+  min-block-size: 48px;
+  padding-inline: var(--space-4);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-lg);
+  letter-spacing: 0.08em;
+  text-align: end;
+}
+
+.v5-card__input:focus {
+  border-color: var(--color-primary);
+}
+
+.v5-card__input[aria-invalid='true'] {
+  border-color: var(--color-warning-emphasis);
+}
+
+.v5-card__error {
+  margin: 0;
+  color: var(--color-warning-emphasis);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
 /* ── Money column (PaymentLedger) ───────────────────────────────────────── */
 
 .v5-ledger {
@@ -736,6 +813,14 @@
     font-size: var(--font-size-lg);
   }
 
+  .v5-card {
+    gap: var(--space-2);
+  }
+
+  .v5-card__amount-value {
+    font-size: var(--font-size-xl);
+  }
+
   .v5-ledger__due {
     padding: var(--space-3);
   }
@@ -830,8 +915,17 @@
     border-color: ButtonText;
   }
 
-  .v5-cash__input:focus {
+  .v5-cash__input:focus,
+  .v5-card__input:focus {
     border-color: Highlight;
+  }
+
+  .v5-card__input {
+    border-color: ButtonText;
+  }
+
+  .v5-card__input[aria-invalid='true'] {
+    border-style: dashed;
   }
 
   /* The pressed chip: a system highlight, as the selected tender tile. */

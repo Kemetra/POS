@@ -368,13 +368,15 @@ describe('022 US3 T076 — conditional states carry no English-only string', () 
     expectNoEnglishOnlyStrings(container, 'ExternalCardTerminalEntry (reference-format error)');
   });
 
-  it('ExternalCardTerminalEntry exact-amount refusal', () => {
+  it('ExternalCardTerminalEntry invalid reference', () => {
+    // RT-243 W1-C: the amount is a fact, so the reference error is the card
+    // entry's one conditional state.
     const { container } = render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
-    // Under the remaining balance: card terminal requires an exact amount.
-    fireEvent.change(screen.getByTestId('external-card-amount-input'), {
-      target: { value: '10.00' },
+    fireEvent.change(screen.getByTestId('external-card-reference-input'), {
+      target: { value: 'ab' },
     });
-    expectNoEnglishOnlyStrings(container, 'ExternalCardTerminalEntry (amount refusal)');
+    expect(screen.getByTestId('external-card-reference-error')).toBeInTheDocument();
+    expectNoEnglishOnlyStrings(container, 'ExternalCardTerminalEntry (reference error)');
   });
 
   it('PaymentSurface bridged action row (confirm / cancel) carries no English-only string', async () => {

@@ -1,16 +1,18 @@
 /**
- * T044 — <ExternalCardTerminalEntry> overpayment refusal test.
+ * T044 — <ExternalCardTerminalEntry> exact-amount test (RT-243 W1-C: the amount
+ * is a fact, not a field).
  *
  * Asserts:
- *   - The amount field defaults to remainingBalanceMinor (exact-amount cashier flow).
- *   - The component refuses overpayment (amount > remaining) with generic copy
- *     that the cashier maps to the FR-006 audit category `non_cash_overpayment_refused`.
- *   - The structured reason name `non_cash_overpayment_refused` MUST NOT appear
- *     in the renderer DOM.
+ *   - The entry records exactly remainingBalanceMinor and shows that figure.
+ *     There is no amount field, so neither an overpayment nor an underpayment can
+ *     be entered (FR-006: no overpay and no underpay on a non-cash tender; main
+ *     refuses either as `non_cash_overpayment_refused`, whose name MUST NOT
+ *     appear in the renderer DOM).
+ *   - Nothing to charge (zero, negative, unsafe) cannot be recorded.
  *   - No card-data fields exist (no PAN, CVV, expiry, cardholder name).
  *
  * References: FR-007 / FR-008 / FR-010, spec §"Tender scope" §"Cash overpayment
- * vs. non-cash overpayment", visual-direction §State 3.
+ * vs. non-cash overpayment", 08 I-10, freeze 15 S10.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -31,18 +33,29 @@ function setup(props: Partial<ComponentProps<typeof ExternalCardTerminalEntry>> 
       onConfirm={onConfirm}
     />,
   );
-  const input = screen.getByTestId('external-card-amount-input');
   const confirm = screen.getByTestId('external-card-confirm');
-  return { ...view, onConfirm, input, confirm };
+  return { ...view, onConfirm, confirm };
 }
 
-describe('<ExternalCardTerminalEntry> — defaults to exact amount', () => {
-  it('amount field defaults to remainingBalanceMinor', () => {
-    const { input } = setup({ remainingBalanceMinor: 12550 });
-    expect(input.value).toBe('125.50');
+describe('<ExternalCardTerminalEntry> — records exactly what is owed', () => {
+  it('shows the amount to key into the terminal, LTR and grouped', () => {
+    setup({ remainingBalanceMinor: 125_050 });
+    const value = screen.getByTestId('external-card-amount-value');
+    expect(value).toHaveTextContent('1,250.50 EGP');
+    expect(value).toHaveAttribute('dir', 'ltr');
+    expect(screen.getByTestId('external-card-amount')).toHaveTextContent('المبلغ المُقتطع');
   });
 
-  it('confirm is enabled when amount equals remaining (default)', () => {
+  it('has no amount field: the amount cannot be over or under what is owed', () => {
+    setup();
+    expect(screen.queryByTestId('external-card-amount-input')).toBeNull();
+    // The reference is the only text field.
+    expect(screen.getAllByRole('textbox')).toEqual([
+      screen.getByTestId('external-card-reference-input'),
+    ]);
+  });
+
+  it('confirm is enabled for a positive amount owed', () => {
     const { confirm } = setup({ remainingBalanceMinor: 12550 });
     expect(confirm).toBeEnabled();
   });
@@ -56,39 +69,36 @@ describe('<ExternalCardTerminalEntry> — defaults to exact amount', () => {
       externalReference: null,
     });
   });
-});
 
-describe('<ExternalCardTerminalEntry> — refuses overpayment', () => {
-  it('disables confirm when amount > remaining', () => {
-    const { input, confirm } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '20000' } });
-    expect(confirm).toBeDisabled();
-  });
-
-  it('shows generic "amount must be exact" copy when overpay attempted', () => {
-    const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '20000' } });
-    expect(screen.getByTestId('external-card-refusal')).toHaveTextContent(/مطابقاً تماماً|يطابق/);
-  });
-
-  it('does not leak the structured reason `non_cash_overpayment_refused` to the DOM', () => {
-    const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '20000' } });
+  it('never puts the structured reason `non_cash_overpayment_refused` in the DOM', () => {
+    setup();
     expect(document.body.innerHTML).not.toContain('non_cash_overpayment_refused');
   });
 
-  it('does not call onConfirm when amount > remaining', () => {
+  it('shows the M-P6 instruction: charge on the terminal, then record the result', () => {
+    setup();
+    expect(screen.getByTestId('external-card-instruction')).toHaveTextContent(
+      'أكمل العملية على جهاز البطاقات، ثم سجّل النتيجة.',
+    );
+  });
+});
+
+describe('<ExternalCardTerminalEntry> — nothing to charge cannot be recorded', () => {
+  it.each([
+    ['zero', 0],
+    ['negative', -1],
+    ['unsafe', Number.MAX_SAFE_INTEGER + 1],
+  ])('%s: confirm is disabled and onConfirm never fires', (_label, remaining) => {
     const onConfirm = vi.fn();
-    const { input, confirm } = setup({ remainingBalanceMinor: 12550, onConfirm });
-    fireEvent.change(input, { target: { value: '20000' } });
+    const { confirm } = setup({ remainingBalanceMinor: remaining, onConfirm });
+    expect(confirm).toBeDisabled();
     fireEvent.click(confirm);
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('disables confirm when amount < remaining (no underpay on non-cash)', () => {
-    const { input, confirm } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '100.00' } });
-    expect(confirm).toBeDisabled();
+  it('renders an em dash, never a wrong figure, for an unsafe amount', () => {
+    setup({ remainingBalanceMinor: Number.MAX_SAFE_INTEGER + 1 });
+    expect(screen.getByTestId('external-card-amount-value').textContent).toBe('—');
   });
 });
 
@@ -112,13 +122,6 @@ describe('<ExternalCardTerminalEntry> — no card data fields', () => {
     setup();
     expect(screen.queryByLabelText(/cardholder|holder name/i)).toBeNull();
   });
-
-  it('amount input is the only numeric data input', () => {
-    setup();
-    const inputs = screen.getAllByRole('textbox');
-    // Amount + optional reference field at most.
-    expect(inputs.length).toBeLessThanOrEqual(2);
-  });
 });
 
 describe('<ExternalCardTerminalEntry> — accessibility floor', () => {
@@ -128,28 +131,16 @@ describe('<ExternalCardTerminalEntry> — accessibility floor', () => {
     expect(Number.parseFloat(confirm.style.minHeight)).toBeGreaterThanOrEqual(44);
     expect(confirm.style.minHeight).toBe('56px');
   });
-});
 
-describe('<ExternalCardTerminalEntry> — safe-integer guard on remaining', () => {
-  it('renders the em-dash in instructional copy when remainingBalanceMinor is unsafe', () => {
-    const unsafe = Number.MAX_SAFE_INTEGER + 1;
-    render(<ExternalCardTerminalEntry remainingBalanceMinor={unsafe} onConfirm={vi.fn()} />);
-    // formatMinorUnits returns '—' for unsafe input; the instructional copy
-    // includes it.
-    expect(document.body.textContent).toContain('—');
-  });
-
-  it('starts with empty amount input when remainingBalanceMinor is unsafe', () => {
-    const unsafe = Number.MAX_SAFE_INTEGER + 1;
-    render(<ExternalCardTerminalEntry remainingBalanceMinor={unsafe} onConfirm={vi.fn()} />);
-    const input = screen.getByTestId('external-card-amount-input');
-    expect(input.value).toBe('');
-  });
-
-  it('refuses an under-amount with the dedicated under-amount refusal copy', () => {
-    const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '100.00' } });
-    expect(screen.getByTestId('external-card-refusal-underpay')).toHaveTextContent(/يطابق/);
+  it('ties an invalid reference to its error (aria-invalid + aria-describedby)', () => {
+    setup();
+    const input = screen.getByTestId('external-card-reference-input');
+    expect(input).not.toHaveAttribute('aria-invalid');
+    fireEvent.change(input, { target: { value: 'ab' } });
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription(
+      'صيغة المرجع غير صحيحة. استخدم حتى 6 أحرف إنجليزية كبيرة أو أرقام.',
+    );
   });
 });
 

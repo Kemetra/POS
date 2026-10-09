@@ -209,11 +209,10 @@ describe('PaymentSurface — external_card_terminal apply path (coverage)', () =
     //    the inline `tenderApply` and `onApplied` lambdas (lines 354 + 355).
     await user.click(screen.getByTestId('tender-external-card'));
 
-    // 2. The entry mounts. Default amount equals remainingBalanceMinor (1000), so the
+    // 2. The entry mounts. It records exactly remainingBalanceMinor (1000), so the
     //    confirm button is enabled without further input — reference is optional.
     await screen.findByTestId('external-card-terminal-entry');
-    const amountInput = screen.getByTestId('external-card-amount-input');
-    expect((amountInput as HTMLInputElement).value).toBe('10.00');
+    expect(screen.getByTestId('external-card-amount-value')).toHaveTextContent('10.00 EGP');
 
     // 3. Submit the entry. This invokes the line-354 lambda (tenderApply prop).
     await user.click(screen.getByTestId('external-card-confirm'));

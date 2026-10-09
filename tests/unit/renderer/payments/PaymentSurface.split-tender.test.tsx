@@ -281,9 +281,8 @@ describe('PaymentSurface — split-tender UX (T154)', () => {
     await user.click(screen.getByTestId('tender-external-card'));
     const entry = await screen.findByTestId('external-card-terminal-entry');
     expect(entry).toBeInTheDocument();
-    const amountInput = screen.getByTestId('external-card-amount-input');
-    // Default amount = remaining balance for external_card_terminal.
-    expect((amountInput as HTMLInputElement).value).toBe('6.00');
+    // The card records exactly the remaining balance for external_card_terminal.
+    expect(screen.getByTestId('external-card-amount-value')).toHaveTextContent('6.00 EGP');
   });
 
   it('stays in the entry view (and shows confirm) when the running sum hits the subtotal exactly', async () => {
