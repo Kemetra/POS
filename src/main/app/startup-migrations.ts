@@ -31,19 +31,15 @@ export interface StartupMigrationsDeps {
   logger: StartupMigrationsLogger;
 }
 
-export type StartupMigrationsResult =
-  | { ok: true; applied: number }
-  | { ok: false; refusal: SchemaAheadRefusal };
+export type StartupMigrationsResult = { ok: true } | { ok: false; refusal: SchemaAheadRefusal };
 
 export function runStartupMigrations(deps: StartupMigrationsDeps): StartupMigrationsResult {
   const { db, files, vacuumInto, userDataDir, now, logger } = deps;
-  let applied = 0;
   try {
     runMigrations({
       db,
       files,
       onBeforeApply: (pending) => {
-        applied = pending.length;
         const snapshotPath = writePreMigrationSnapshot({
           backupsDir: path.join(userDataDir, 'backups'),
           vacuumInto,
@@ -57,5 +53,5 @@ export function runStartupMigrations(deps: StartupMigrationsDeps): StartupMigrat
     logger.error({ unknownMigrations: err.unknownMigrations }, 'db:schema_ahead_refused');
     return { ok: false, refusal: describeSchemaAheadRefusal(err.unknownMigrations) };
   }
-  return { ok: true, applied };
+  return { ok: true };
 }

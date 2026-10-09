@@ -85,7 +85,7 @@ describe('runStartupMigrations', () => {
       logger: log,
     });
 
-    expect(result).toEqual({ ok: true, applied: 1 });
+    expect(result).toEqual({ ok: true });
     expect(readdirSync(path.join(userDataDir, 'backups'))).toEqual([
       `${SNAPSHOT_FILE_PREFIX}2026-10-09T00-00-00-000Z.db`,
     ]);
