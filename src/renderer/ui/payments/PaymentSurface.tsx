@@ -20,6 +20,7 @@ import { useScanNoticeStore } from '../../scan/scan-notice-store.js';
 import { TenderPicker, type TenderKind } from '../../v5/checkout/TenderPicker.js';
 import { OrderSummary } from '../../v5/checkout/OrderSummary.js';
 import { PaymentLedger } from '../../v5/checkout/PaymentLedger.js';
+import { ToneIcon } from '../../v5/foundation/ToneIcon.js';
 import '../../v5/checkout/checkout.css';
 import { CashEntry } from './CashEntry.js';
 import { CheckoutActionBar, FocusWhen, PrimarySlotContext } from './CheckoutActionBar.js';
@@ -420,14 +421,18 @@ function BackToSaleButton(props: { back: BackControl; onBack: () => void }): JSX
 /** Why Back is disabled: money recorded, money reversed, or an entry is open. */
 function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
   if (!props.back.showReason || props.back.reason === null) return null;
+  const tone = props.back.reason === 'card_void' ? 'danger' : 'info';
+  // RT-243 W1-C: the V5 Notice treatment (tone border, tint, tone icon), so the
+  // M-P13 danger reads as danger by shape too, never by colour alone.
   return (
     <p
       className="v5-checkout__back-reason"
       data-testid="payment-surface-back-blocked"
-      data-tone={props.back.reason === 'card_void' ? 'danger' : 'info'}
+      data-tone={tone}
       role="status"
     >
-      {BACK_REASON_COPY[props.back.reason]}
+      <ToneIcon tone={tone} />
+      <span>{BACK_REASON_COPY[props.back.reason]}</span>
     </p>
   );
 }
