@@ -773,6 +773,13 @@ export function PaymentSurface({
   // its outcome is unconfirmed; main is read first. Esc must not close the
   // panel either: Cancel lives there and is the named way out (Codex P2, #576).
   const cancelOpen = isCancelling || cancelHold !== 'none';
+  // M-P7: the confirm belongs to the Cancel press that opened it. If the dialog's
+  // guard fails while it is up (the phase moves on, or a hold from another
+  // surface's cancel appears), drop the request, so it never reopens by itself
+  // when the guard holds again (CodeRabbit on #615).
+  useEffect(() => {
+    if (phase !== 'entry' || cancelOpen) setConfirmCardCancel(false);
+  }, [phase, cancelOpen]);
   useEscapeKey(phase === 'entry' && !cancelOpen, () => {
     setSelectedTender(null);
     setPhase('tender_selection');
