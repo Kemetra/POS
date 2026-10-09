@@ -500,3 +500,99 @@ describe('RT-238 — keyboard-only and axe on the touched surfaces', () => {
     await expectNoAxeViolations(screen.getByTestId('payment-surface'));
   });
 });
+
+describe('RT-243 F1 — a remount reads main again before offering an apply or a settle', () => {
+  /** The Checkout unmounts below 1024 and mounts again on return (RT-241); the store survives. */
+  async function remount(bridge: ReturnType<typeof makeBridge>): Promise<void> {
+    cleanup();
+    render(<PaymentSurface _testBridge={bridge} />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  async function pickCash(): Promise<void> {
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+  }
+
+  it('after a failed post-apply read, the remount keeps the apply out of reach and offers the retry', async () => {
+    const bridge = await openCash();
+    bridge.read.mockRejectedValue(new Error('ipc'));
+    await typeAndApply('50.00');
+    await screen.findByTestId('payment-surface-reread');
+    const readsBefore = bridge.read.mock.calls.length;
+
+    await remount(bridge);
+
+    // Main is read again on the remount, and it still cannot be read.
+    expect(bridge.read.mock.calls.length).toBeGreaterThan(readsBefore);
+    expect(await screen.findByTestId('payment-surface-reread')).toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface-reread-notice')).toHaveTextContent('لا تكرر الدفع');
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+    // Opening the cash entry does not bring the apply back: a second press would
+    // record the whole amount again, as change to hand back.
+    await pickCash();
+    expect(screen.queryByTestId('cash-entry-confirm')).not.toBeInTheDocument();
+    expect(bridge.apply).toHaveBeenCalledTimes(1);
+  });
+
+  it('when main answers on the remount, the screen shows main and not the stale projection', async () => {
+    const bridge = await openCash();
+    bridge.read.mockRejectedValue(new Error('ipc'));
+    await typeAndApply('20.00');
+    await screen.findByTestId('payment-surface-reread');
+    // The stored projection never saw the 20.00: it still says 50.00 is due.
+    expect(screen.getByTestId('payment-surface-amount-due')).toHaveTextContent('50.00 EGP');
+
+    // Main is reachable again by the time the Checkout comes back.
+    bridge.read.mockReset();
+    bridge.read.mockResolvedValue({
+      kind: 'ok',
+      payment_attempt: {
+        payment_attempt_id: 'pa-001',
+        state: 'started',
+        envelope_subtotal_minor: DUE,
+        started_at: '2026-10-07T09:00:30.000Z',
+        tender_lines: [
+          {
+            tender_line_id: 'tl-1',
+            tender_type: 'cash',
+            state: 'applied',
+            amount_applied_minor: 2_000,
+            applied_at: '2026-10-07T09:01:00.000Z',
+            apply_order: 1,
+          },
+        ],
+      },
+    });
+    await remount(bridge);
+
+    expect(bridge.read).toHaveBeenCalled();
+    expect(screen.getByTestId('payment-surface-amount-due')).toHaveTextContent('30.00 EGP');
+    expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+    // The next cash apply is offered against what main says is still owed.
+    await pickCash();
+    expect(await screen.findByTestId('cash-entry-confirm')).toBeInTheDocument();
+  });
+
+  it('while the remount read is in flight, neither the apply nor the settle is offered', async () => {
+    const bridge = await openCash();
+    await typeAndApply('50.00');
+    await screen.findByTestId('payment-surface-confirm');
+
+    bridge.read.mockReset();
+    bridge.read.mockReturnValue(new Promise(() => {}));
+    await remount(bridge);
+
+    expect(bridge.read).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+    await pickCash();
+    expect(screen.queryByTestId('cash-entry-confirm')).not.toBeInTheDocument();
+    expect(bridge.confirm).not.toHaveBeenCalled();
+    expect(bridge.apply).toHaveBeenCalledTimes(1);
+  });
+});

@@ -651,6 +651,15 @@ export function PaymentSurface({
     if (!resumable) store.clearAttempt();
     setPhase(resumable ? resumePhase(kept, hold) : 'tender_selection');
     setBridgeRefusalCopy(resumable ? CANCEL_HOLD_COPY[hold] : null);
+    // RT-243 F1 — the stored projection may be stale: a post-apply read that
+    // failed before the remount left no trace here (`afterApply` is component
+    // state). Read main again before any apply or settle is offered; a failed
+    // read keeps them out of reach and offers the retry, as after an apply. A
+    // cancel hold owns its own read-back (RT-298), so it is left to that.
+    if (resumable && kept === 'started' && hold === 'none') void handleLineApplied();
+    // handleLineApplied reads the store and this render's attempt; the reset
+    // must only run when the session or the handoff changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionState.kind, envelopeHandoffId]);
 
   /**
