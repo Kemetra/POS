@@ -21,6 +21,8 @@ import { TenderPicker, type TenderKind } from '../../v5/checkout/TenderPicker.js
 import { OrderSummary } from '../../v5/checkout/OrderSummary.js';
 import { PaymentLedger } from '../../v5/checkout/PaymentLedger.js';
 import { cashDraft } from '../../v5/checkout/cash-draft.js';
+import { RecoveryPanel } from '../../v5/checkout/RecoveryPanel.js';
+import { ConfirmDialog } from '../../v5/foundation/ConfirmDialog.js';
 import { ToneIcon } from '../../v5/foundation/ToneIcon.js';
 import '../../v5/checkout/checkout.css';
 import { CashEntry } from './CashEntry.js';
@@ -461,6 +463,16 @@ const COMPLETION_TEST_IDS = {
   newSale: 'payment-surface-new-sale',
 } as const;
 
+/** RT-243 W1-C — the recovery-line markers existing suites assert, kept out of the V5 tree. */
+const RECOVERY_TEST_IDS = {
+  refusal: 'payment-surface-bridge-refusal',
+  reversalPending: 'payment-surface-reversal-pending-hint',
+} as const;
+
+/** M-P7 — the catalogue copy, split at its sentence break into title and body. */
+const CARD_CANCEL_TITLE = 'إلغاء الدفع هنا لا يلغي الخصم على جهاز البطاقات.';
+const CARD_CANCEL_BODY = 'ألغِ العملية على الجهاز أولاً، ثم أكّد.';
+
 /** RT-239 (M-S7): a scan on a completed sale starts nothing; it says what to do. */
 function notifySaleComplete(): void {
   useScanNoticeStore.getState().show(SCAN_SALE_COMPLETE_MESSAGE);
@@ -555,6 +567,9 @@ export function PaymentSurface({
   const cancelRecovery = usePaymentStore((s) => s.cancelRecovery);
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [reversalPending, setReversalPending] = useState<boolean>(false);
+  // RT-243 W1-C (M-P7, RT-116 §3) — the cancel confirm shown when a card charge
+  // may stand on the terminal.
+  const [confirmCardCancel, setConfirmCardCancel] = useState<boolean>(false);
   // RT-26 — a Back is in flight, and whether this handoff ever had tender
   // (a payments.cancel that reversed lines clears the projection, but main
   // still refuses Back for that cart, so the control stays disabled).
@@ -1274,33 +1289,39 @@ export function PaymentSurface({
 
   // Refusals and hints stay next to the commit, in the pinned bar. With no bridge
   // (Slice-1 mode) there is no bar, so they render in the surface as before.
+  // RT-243 W1-C: they are the V5 RecoveryPanel; the copy is unchanged.
   const notices = (
-    <>
-      {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids
-                  was non-empty in the most recent cancel response. Copy is fixed (no
-                  id interpolation) per FR-017 / token minimisation. */}
-      {reversalPending && (
-        <div
-          className="payment-surface__reversal-pending-hint"
-          data-testid="payment-surface-reversal-pending-hint"
-          role="status"
-          aria-live="polite"
-        >
-          هناك عمليات عكس قيد المعالجة وستتم قريباً.
-        </div>
-      )}
-      {bridgeRefusalCopy !== null && (
-        <div
-          className="payment-surface__bridge-refusal"
-          data-testid="payment-surface-bridge-refusal"
-          role="status"
-          aria-live="polite"
-        >
-          {bridgeRefusalCopy}
-        </div>
-      )}
-    </>
+    <RecoveryPanel
+      refusal={bridgeRefusalCopy}
+      refusalIsUnknownOutcome={bridgeRefusalCopy === CANCEL_UNKNOWN_COPY}
+      reversalPending={reversalPending}
+      testIds={RECOVERY_TEST_IDS}
+    />
   );
+
+  /**
+   * M-P7 (RT-116 §3) — a cancel here does not void a charge on the standalone
+   * terminal. When one may stand (a card line is recorded, or a card apply was
+   * sent for this sale, even one whose answer was lost: the RT-256 facts), the
+   * cashier confirms first, with «رجوع» focused. A retry of a cancel already
+   * sent (a hold stands) replays the same key and is not asked again.
+   */
+  function requestCancel(): void {
+    const store = usePaymentStore.getState();
+    const safety = store.cardSafety;
+    const cardForThisSale =
+      safety !== null &&
+      safety.handoffId === envelopeHandoffId &&
+      (safety.cardApplyAttempted || safety.appliedCardLineIds.length > 0);
+    const cardRecorded = (store.paymentSlice?.tender_lines ?? []).some(
+      (l) => l.tender_type === 'external_card_terminal' && l.state === 'applied',
+    );
+    if (cancelHold === 'none' && (cardForThisSale || cardRecorded)) {
+      setConfirmCardCancel(true);
+      return;
+    }
+    void handleCancel();
+  }
 
   /*
    * RT-238 — the pinned action bar (15 §4 A2). Cancel lives in the start slot,
@@ -1321,9 +1342,7 @@ export function PaymentSurface({
               data-testid="payment-surface-cancel"
               disabled={isCancelling}
               aria-disabled={isCancelling ? 'true' : undefined}
-              onClick={() => {
-                void handleCancel();
-              }}
+              onClick={requestCancel}
             >
               إلغاء
             </button>
@@ -1444,6 +1463,24 @@ export function PaymentSurface({
         </header>
 
         <BackBlockedReason back={back} />
+
+        {confirmCardCancel && phase === 'entry' && !cancelOpen && (
+          <ConfirmDialog
+            label={CARD_CANCEL_TITLE}
+            title={CARD_CANCEL_TITLE}
+            body={CARD_CANCEL_BODY}
+            cancelLabel="رجوع"
+            confirmLabel="تأكيد الإلغاء"
+            tone="danger"
+            onCancel={() => {
+              setConfirmCardCancel(false);
+            }}
+            onConfirm={() => {
+              setConfirmCardCancel(false);
+              void handleCancel();
+            }}
+          />
+        )}
 
         {/*
         RT-243 W1-C — Direction B (DESIGN.md; freeze 15 §4): order summary ·

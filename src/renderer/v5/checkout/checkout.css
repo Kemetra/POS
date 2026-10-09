@@ -523,6 +523,25 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* ── Recovery lines (RecoveryPanel) ────────────────────────────────────────
+ * In the pinned action bar, above the commit. Tones are the Notice's; a plain
+ * refusal line is neutral, as the catalogue asks (M-P17, M-P19, M-P20).
+ */
+
+.v5-recovery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.v5-recovery__line {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-relaxed, 1.5);
+}
+
 /* ── Money column (PaymentLedger) ───────────────────────────────────────── */
 
 .v5-ledger {
