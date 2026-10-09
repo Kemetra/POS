@@ -181,8 +181,18 @@ async function remount(bridge: ReturnType<typeof makeBridge>['bridge']): Promise
   await settle();
 }
 
-async function clickCancel(): Promise<void> {
+/**
+ * RT-243 W1-C — Cancel as a cashier does it: after a card (or a card apply), the
+ * M-P7 confirm comes first and is confirmed; otherwise the click cancels directly.
+ */
+function pressCancel(): void {
   fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+  const confirm = screen.queryByRole('button', { name: 'تأكيد الإلغاء' });
+  if (confirm !== null) fireEvent.click(confirm);
+}
+
+async function clickCancel(): Promise<void> {
+  pressCancel();
   await settle();
 }
 
@@ -633,7 +643,7 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
       ],
       read: undefined,
     });
-    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    pressCancel();
     await settle();
 
     await remount(bridge);
@@ -677,10 +687,10 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
       ],
       read: undefined,
     });
-    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    pressCancel();
     await settle();
     await remount(bridge);
-    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    pressCancel();
     await settle();
 
     // The original request answers first and ends the attempt. RT-305: the
@@ -914,7 +924,7 @@ describe('RT-298 — cancel recovery survives leaving Checkout (Codex P2, #576)'
       read: () =>
         Promise.resolve({ kind: 'ok', payment_attempt: attempt('started', CASH_APPLIED) }),
     });
-    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    pressCancel();
     await settle();
 
     await remount(bridge);
@@ -943,7 +953,7 @@ describe('RT-298 — a late cancel answer never touches a newer attempt (Codex P
       ],
       read: undefined,
     });
-    fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+    pressCancel();
     await settle();
 
     await remount(bridge);

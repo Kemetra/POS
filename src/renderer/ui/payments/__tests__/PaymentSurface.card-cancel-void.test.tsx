@@ -127,8 +127,18 @@ function seed(lines: readonly Line[]): void {
   });
 }
 
-async function clickCancel(): Promise<void> {
+/**
+ * RT-243 W1-C — Cancel as a cashier does it: after a card (or a card apply), the
+ * M-P7 confirm comes first and is confirmed; otherwise the click cancels directly.
+ */
+function pressCancel(): void {
   fireEvent.click(screen.getByTestId('payment-surface-cancel'), { detail: 1 });
+  const confirm = screen.queryByRole('button', { name: 'تأكيد الإلغاء' });
+  if (confirm !== null) fireEvent.click(confirm);
+}
+
+async function clickCancel(): Promise<void> {
+  pressCancel();
   await settle();
 }
 

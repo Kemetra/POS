@@ -162,6 +162,16 @@ function withAppliedCash(): PaymentAttemptRendererView {
   };
 }
 
+/**
+ * RT-243 W1-C — Cancel as a cashier does it: after a card line, the M-P7 confirm
+ * comes first and is confirmed; otherwise the click cancels directly.
+ */
+async function pressCancel(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.click(screen.getByTestId('payment-surface-cancel'));
+  const confirm = screen.queryByRole('button', { name: 'تأكيد الإلغاء' });
+  if (confirm !== null) await user.click(confirm);
+}
+
 describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
   it('Back asks main with the envelope ids, then returns to /app/cart with the cart editable', async () => {
     const user = userEvent.setup();
@@ -386,7 +396,7 @@ describe('CheckoutRoute — Back to the same sale (RT-26)', () => {
     });
     // From here main's durable record says no (tender history on this cart).
     returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
-    await user.click(screen.getByTestId('payment-surface-cancel'));
+    await pressCancel(user);
     await waitFor(() => {
       expect(usePaymentStore.getState().paymentSlice).toBeNull();
     });
@@ -428,7 +438,7 @@ describe('CheckoutRoute — RT-240 Back reasons use the catalog wording (M-P1 / 
       usePaymentStore.getState().applyAttemptSnapshot(withAppliedCash());
     });
     returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
-    await user.click(screen.getByTestId('payment-surface-cancel'));
+    await pressCancel(user);
     await waitFor(() => {
       expect(usePaymentStore.getState().paymentSlice).toBeNull();
     });
@@ -482,7 +492,7 @@ describe('CheckoutRoute — RT-240 Back reasons use the catalog wording (M-P1 / 
       });
     });
     returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
-    await user.click(screen.getByTestId('payment-surface-cancel'));
+    await pressCancel(user);
     await waitFor(() => {
       expect(usePaymentStore.getState().paymentSlice).toBeNull();
     });
@@ -511,7 +521,7 @@ describe('CheckoutRoute — RT-240 Back reasons use the catalog wording (M-P1 / 
         usePaymentStore.getState().applyAttemptSnapshot(withAppliedCash());
       });
       returnToSaleEligibility.mockResolvedValue({ kind: 'ok', returnable: false });
-      await user.click(screen.getByTestId('payment-surface-cancel'));
+      await pressCancel(user);
       await waitFor(() => {
         expect(usePaymentStore.getState().paymentSlice).toBeNull();
       });
