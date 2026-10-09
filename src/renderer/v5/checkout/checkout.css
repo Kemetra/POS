@@ -289,7 +289,11 @@
   transition: background-color var(--duration-1) var(--ease-out);
 }
 
-.v5-tender-tile:hover:not(:disabled) {
+/* Hover never overrides the selected state: `:hover:not(:disabled)` outranks
+   `[aria-checked='true']`, so without the exclusion the pointer resting on a
+   just-picked tile wiped its selection fill (and, under forced colours, left
+   HighlightText on a light background). */
+.v5-tender-tile:hover:not(:disabled):not([aria-checked='true']) {
   background: var(--color-surface-muted);
 }
 
@@ -911,6 +915,14 @@
     background: Highlight;
     color: HighlightText;
     forced-color-adjust: none;
+  }
+
+  /* forced-color-adjust: none reaches the children too, so their author colours
+     (the muted detail line) would sit on Highlight: give them the system pair. */
+  .v5-tender-tile[aria-checked='true'] .v5-tender-tile__label,
+  .v5-tender-tile[aria-checked='true'] .v5-tender-tile__detail,
+  .v5-tender-tile[aria-checked='true'] .v5-tender-tile__icon {
+    color: HighlightText;
   }
 
   .v5-tender-tile__check {
