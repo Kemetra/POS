@@ -83,26 +83,29 @@ function ResultsList(props: {
     event.preventDefault();
   }
 
+  // A listbox owns only options: the truncation note sits after it, not inside it.
   return (
-    <ul
-      className="v5-sale-product-list"
-      role="listbox"
-      tabIndex={0}
-      aria-label="نتائج البحث"
-      aria-activedescendant={`v5-live-result-${String(activeIndex)}`}
-      onKeyDown={handleKeyDown}
-    >
-      {items.map((product, index) => (
-        <ProductRow
-          key={product.product_id}
-          product={product}
-          index={index}
-          active={index === activeIndex}
-          onSelect={onSelect}
-        />
-      ))}
-      {props.truncated && <li className="v5-live-message">النتائج محدودة؛ عدّل البحث لتضييقها.</li>}
-    </ul>
+    <>
+      <ul
+        className="v5-sale-product-list"
+        role="listbox"
+        tabIndex={0}
+        aria-label="نتائج البحث"
+        aria-activedescendant={`v5-live-result-${String(activeIndex)}`}
+        onKeyDown={handleKeyDown}
+      >
+        {items.map((product, index) => (
+          <ProductRow
+            key={product.product_id}
+            product={product}
+            index={index}
+            active={index === activeIndex}
+            onSelect={onSelect}
+          />
+        ))}
+      </ul>
+      {props.truncated && <p className="v5-live-message">النتائج محدودة؛ عدّل البحث لتضييقها.</p>}
+    </>
   );
 }
 
@@ -117,6 +120,11 @@ function ProductMeta({ product }: { product: ProductSnapshotDisplay }): JSX.Elem
   );
 }
 
+/**
+ * RT-242: the option itself is the activation target (click, or Enter on the
+ * listbox). Nothing inside it is focusable — a nested button was the axe
+ * `nested-interactive` violation. The «اختيار» cue is visual only.
+ */
 function ProductRow(props: {
   product: ProductSnapshotDisplay;
   index: number;
@@ -130,6 +138,9 @@ function ProductRow(props: {
       className="v5-sale-product-row"
       role="option"
       aria-selected={props.active}
+      onClick={() => {
+        props.onSelect(product);
+      }}
     >
       <div className="v5-sale-product-copy">
         <strong>{product.display_name_ar}</strong>
@@ -145,15 +156,9 @@ function ProductRow(props: {
         <span className="v5-sale-product-price" dir="ltr">
           {formatHumanMoney(product.price_minor)}
         </span>
-        <button
-          type="button"
-          aria-label={`اختيار ${product.display_name_ar}`}
-          onClick={() => {
-            props.onSelect(product);
-          }}
-        >
+        <span className="v5-sale-product-pick" aria-hidden="true">
           اختيار
-        </button>
+        </span>
       </div>
     </li>
   );

@@ -79,7 +79,7 @@
     color: GrayText;
   }
 
-  /* An edge, not a fill: forced-color-adjust is inherited and would un-force the row's button. */
+  /* An edge, not a fill: forced-color-adjust is inherited and would un-force the row's «اختيار» cue. */
   .v5-sale-product-row[aria-selected='true'] {
     outline: 3px solid Highlight;
     outline-offset: -3px;
@@ -161,7 +161,7 @@
 .v5-live-discount button,
 .v5-live-message button,
 .v5-live-state button,
-.v5-sale-product-tail button {
+.v5-sale-product-pick {
   min-block-size: 44px;
   min-inline-size: 44px;
   padding-inline: var(--space-3);
@@ -173,6 +173,17 @@
   font-size: var(--font-size-sm);
   white-space: nowrap;
   cursor: pointer;
+}
+
+/* RT-242: the option is the click target; «اختيار» is a visual cue, not a control. */
+.v5-sale-product-row[role='option'] {
+  cursor: pointer;
+}
+
+.v5-sale-product-pick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .v5-live-void {
@@ -336,8 +347,7 @@
 .v5-live-void:focus-visible,
 .v5-live-message button:focus-visible,
 .v5-live-line-actions button:focus-visible,
-.v5-live-freshness button:focus-visible,
-.v5-sale-product-tail button:focus-visible {
+.v5-live-freshness button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }

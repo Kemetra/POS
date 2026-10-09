@@ -610,7 +610,8 @@ describe('live v5 Sale adapter', () => {
     expect(flagged).toHaveTextContent('بوصفة طبية');
     expect(plain).not.toHaveTextContent('مادة خاضعة للرقابة');
     expect(plain).not.toHaveTextContent('بوصفة طبية');
-    await user.click(screen.getByRole('button', { name: 'اختيار ترامادول' }));
+    // RT-242: the option itself is the pick target (no nested button).
+    await user.click(flagged as HTMLElement);
     const dialog = await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
     expect(dialog).toHaveTextContent('مادة خاضعة للرقابة');
     expect(dialog).toHaveTextContent('بوصفة طبية');
