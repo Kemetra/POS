@@ -10,6 +10,7 @@ import {
   bindMigrationsDb,
   readMigrationsFromDisk,
   runMigrations,
+  SchemaAheadError,
   type AppliedRow,
   type MigrationFile,
   type MigrationsDb,
@@ -301,6 +302,119 @@ describe('runMigrations', () => {
       expect(fake.transactionsCommitted).toBe(1);
       expect(fake.applied.map((r) => r.name)).toEqual(['0097_late_marker']);
     });
+  });
+});
+
+/**
+ * RT-320 — roll-forward safety (ADR-0006 rule 2). A build must never run on a
+ * database that a newer build has migrated: `schema_migrations` naming a file
+ * this build does not ship means the DB is ahead of the code.
+ */
+describe('runMigrations — SchemaAheadGuard (RT-320)', () => {
+  it('refuses with SchemaAheadError naming the unknown migrations', () => {
+    const fake = makeFakeDb();
+    runMigrations({ db: fake.db, files: [FILE_INIT, FILE_SMOKE, FILE_THIRD] });
+
+    // An older build ships only 0001 and 0002.
+    let caught: unknown = null;
+    try {
+      runMigrations({ db: fake.db, files: [FILE_INIT, FILE_SMOKE] });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(SchemaAheadError);
+    expect((caught as SchemaAheadError).unknownMigrations).toEqual(['0003_more']);
+  });
+
+  it('applies nothing when it refuses, even if the older build has its own pending file', () => {
+    const fake = makeFakeDb();
+    runMigrations({ db: fake.db, files: [FILE_INIT, FILE_THIRD] });
+    const commitsBefore = fake.transactionsCommitted;
+
+    // This build knows 0001 + 0002 but not 0003: 0002 is pending, 0003 is unknown.
+    expect(() => {
+      runMigrations({ db: fake.db, files: [FILE_INIT, FILE_SMOKE] });
+    }).toThrow(SchemaAheadError);
+    expect(fake.applied.map((r) => r.name)).toEqual(['0001_init', '0003_more']);
+    expect(fake.transactionsCommitted).toBe(commitsBefore);
+  });
+
+  it('starts normally when the database matches the build', () => {
+    const fake = makeFakeDb();
+    runMigrations({ db: fake.db, files: [FILE_INIT, FILE_SMOKE] });
+    expect(() => {
+      runMigrations({ db: fake.db, files: [FILE_INIT, FILE_SMOKE] });
+    }).not.toThrow();
+  });
+
+  it('starts normally and applies pending files when the database is behind the build', () => {
+    const fake = makeFakeDb();
+    runMigrations({ db: fake.db, files: [FILE_INIT] });
+    runMigrations({ db: fake.db, files: [FILE_INIT, FILE_SMOKE] });
+    expect(fake.applied.map((r) => r.name)).toEqual(['0001_init', '0002_smoke']);
+  });
+});
+
+/**
+ * RT-320 — pre-migration snapshot hook (ADR-0006 rule 4). The runner tells the
+ * caller once, before the first pending file, so the caller can copy the DB.
+ */
+describe('runMigrations — onBeforeApply hook (RT-320)', () => {
+  it('fires once, before the first pending file, with the pending names', () => {
+    const fake = makeFakeDb();
+    runMigrations({ db: fake.db, files: [FILE_INIT] });
+
+    const calls: Array<{ pending: readonly string[]; appliedAtCall: number }> = [];
+    runMigrations({
+      db: fake.db,
+      files: [FILE_INIT, FILE_SMOKE, FILE_THIRD],
+      onBeforeApply: (pending) => {
+        calls.push({ pending, appliedAtCall: fake.applied.length });
+      },
+    });
+
+    expect(calls).toEqual([{ pending: ['0002_smoke', '0003_more'], appliedAtCall: 1 }]);
+  });
+
+  it('does not fire when nothing is pending', () => {
+    const fake = makeFakeDb();
+    runMigrations({ db: fake.db, files: [FILE_INIT] });
+    const onBeforeApply = vi.fn();
+    runMigrations({ db: fake.db, files: [FILE_INIT], onBeforeApply });
+    expect(onBeforeApply).not.toHaveBeenCalled();
+  });
+
+  it('does not fire on a fresh database (nothing to protect yet)', () => {
+    const fake = makeFakeDb();
+    const onBeforeApply = vi.fn();
+    runMigrations({ db: fake.db, files: [FILE_INIT, FILE_SMOKE], onBeforeApply });
+    expect(onBeforeApply).not.toHaveBeenCalled();
+    expect(fake.applied).toHaveLength(2);
+  });
+
+  it('does not fire when the SchemaAheadGuard refuses', () => {
+    const fake = makeFakeDb();
+    runMigrations({ db: fake.db, files: [FILE_INIT, FILE_THIRD] });
+    const onBeforeApply = vi.fn();
+    expect(() => {
+      runMigrations({ db: fake.db, files: [FILE_INIT, FILE_SMOKE], onBeforeApply });
+    }).toThrow(SchemaAheadError);
+    expect(onBeforeApply).not.toHaveBeenCalled();
+  });
+
+  it('applies nothing and rethrows when the hook throws (no migration without a snapshot)', () => {
+    const fake = makeFakeDb();
+    runMigrations({ db: fake.db, files: [FILE_INIT] });
+    expect(() => {
+      runMigrations({
+        db: fake.db,
+        files: [FILE_INIT, FILE_SMOKE],
+        onBeforeApply: () => {
+          throw new Error('disk full');
+        },
+      });
+    }).toThrow(/disk full/);
+    expect(fake.applied.map((r) => r.name)).toEqual(['0001_init']);
   });
 });
 
