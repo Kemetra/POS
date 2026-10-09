@@ -17,11 +17,12 @@ import { OperatorBadge } from '../operator/OperatorBadge.js';
 import { useScanOwner } from '../../scan/ScanGuardHost.js';
 import { SCAN_SALE_COMPLETE_MESSAGE } from '../../scan/scan-messages.js';
 import { useScanNoticeStore } from '../../scan/scan-notice-store.js';
-import { formatCheckoutMoney } from './format-checkout-money.js';
-import { TenderSelection, type TenderKind } from './TenderSelection.js';
-import { PaymentCartSummary } from './PaymentCartSummary.js';
+import { TenderPicker, type TenderKind } from '../../v5/checkout/TenderPicker.js';
+import { OrderSummary } from '../../v5/checkout/OrderSummary.js';
+import { PaymentLedger } from '../../v5/checkout/PaymentLedger.js';
+import { ToneIcon } from '../../v5/foundation/ToneIcon.js';
+import '../../v5/checkout/checkout.css';
 import { CashEntry } from './CashEntry.js';
-import { RecordedTenderLedger } from './RecordedTenderLedger.js';
 import { CheckoutActionBar, FocusWhen, PrimarySlotContext } from './CheckoutActionBar.js';
 import { ExternalCardTerminalEntry } from './ExternalCardTerminalEntry.js';
 import { VoucherEntry } from './VoucherEntry.js';
@@ -404,7 +405,7 @@ function BackToSaleButton(props: { back: BackControl; onBack: () => void }): JSX
   return (
     <button
       type="button"
-      className="btn btn--md btn--secondary payment-surface__back"
+      className="v5-checkout-back"
       data-testid="payment-surface-back"
       disabled={!props.back.enabled}
       aria-disabled={props.back.ariaDisabled}
@@ -412,9 +413,7 @@ function BackToSaleButton(props: { back: BackControl; onBack: () => void }): JSX
       onClick={props.onBack}
     >
       رجوع إلى البيع
-      <kbd className="payment-surface__back-key" dir="ltr">
-        Esc
-      </kbd>
+      <kbd dir="ltr">Esc</kbd>
     </button>
   );
 }
@@ -422,23 +421,29 @@ function BackToSaleButton(props: { back: BackControl; onBack: () => void }): JSX
 /** Why Back is disabled: money recorded, money reversed, or an entry is open. */
 function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
   if (!props.back.showReason || props.back.reason === null) return null;
+  const tone = props.back.reason === 'card_void' ? 'danger' : 'info';
+  // RT-243 W1-C: the V5 Notice treatment (tone border, tint, tone icon), so the
+  // M-P13 danger reads as danger by shape too, never by colour alone.
   return (
     <p
-      className={
-        props.back.reason === 'card_void'
-          ? 'payment-surface__back-blocked payment-surface__back-blocked--danger'
-          : 'payment-surface__back-blocked'
-      }
+      className="v5-checkout__back-reason"
       data-testid="payment-surface-back-blocked"
-      data-tone={props.back.reason === 'card_void' ? 'danger' : 'info'}
+      data-tone={tone}
       role="status"
     >
-      {BACK_REASON_COPY[props.back.reason]}
+      <ToneIcon tone={tone} />
+      <span>{BACK_REASON_COPY[props.back.reason]}</span>
     </p>
   );
 }
 
 type Phase = 'tender_selection' | 'entry' | 'settled';
+
+/** RT-243 W1-C — the amount-due markers existing suites assert, kept out of the V5 tree. */
+const LEDGER_TEST_IDS = {
+  dueLabel: 'payment-surface-amount-label',
+  due: 'payment-surface-amount-due',
+} as const;
 
 /**
  * RT-243 — the settled-phase markers existing suites assert (006 FR-031,
@@ -1286,6 +1291,87 @@ export function PaymentSurface({
     </>
   );
 
+  /*
+   * RT-238 — the pinned action bar (15 §4 A2). Cancel lives in the start slot,
+   * the primary/commit in the end slot, and neither slot is ever filled by an
+   * action of the opposite consequence. RT-243 W1-C mounts it unchanged at the
+   * foot of the money column, outside its scrolling middle, so the commit cannot
+   * scroll out of view; refusals stay with it.
+   */
+  const actionBar =
+    bridge === null ? undefined : (
+      <CheckoutActionBar
+        endSlotRef={setPrimarySlot}
+        cancel={
+          phase === 'entry' ? (
+            <button
+              type="button"
+              className="payment-surface__cancel"
+              data-testid="payment-surface-cancel"
+              disabled={isCancelling}
+              aria-disabled={isCancelling ? 'true' : undefined}
+              onClick={() => {
+                void handleCancel();
+              }}
+            >
+              إلغاء
+            </button>
+          ) : null
+        }
+        // RT-298: while a cancel is open nothing here may move the attempt
+        // on, the post-apply read retry included (Codex P2, #576).
+        commit={
+          cancelOpen ? null : afterApply === 'failed' ? (
+            <button
+              type="button"
+              className="checkout-commit"
+              data-testid="payment-surface-reread"
+              onClick={() => {
+                void handleLineApplied();
+              }}
+            >
+              إعادة المحاولة
+            </button>
+          ) : showSettle ? (
+            <button
+              type="button"
+              className="payment-surface__confirm checkout-commit"
+              data-testid="payment-surface-confirm"
+              disabled={isConfirming}
+              aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
+              aria-describedby={fullyTendered ? undefined : 'payment-commit-reason'}
+              onKeyDown={guardCommitKey}
+              onClick={() => {
+                handleCommitClick(fullyTendered);
+              }}
+            >
+              تأكيد الدفع
+            </button>
+          ) : null
+        }
+        reason={
+          cancelOpen ? null : afterApply === 'failed' ? (
+            <p
+              className="checkout-actions__reason"
+              data-testid="payment-surface-reread-notice"
+              role="status"
+            >
+              تم تسجيل المبلغ، لكن تعذّر تحديث حالة الدفع. لا تكرر الدفع.
+            </p>
+          ) : showSettle && !fullyTendered ? (
+            <p
+              id="payment-commit-reason"
+              className="checkout-actions__reason"
+              data-testid="payment-surface-commit-reason"
+            >
+              المبلغ أقل من المستحق
+            </p>
+          ) : null
+        }
+        notices={notices}
+      />
+    );
+
   if (phase === 'settled') {
     // 022 US4a — NFR-6 / P2, as REVISED by external review round 2.
     //
@@ -1330,9 +1416,9 @@ export function PaymentSurface({
 
   return (
     <PrimarySlotContext.Provider value={{ node: primarySlot, entryOwnsPrimary }}>
-      <section className="payment-surface" data-testid="payment-surface" aria-label="الدفع">
-        <header className="payment-surface__header">
-          <h1 className="payment-surface__title">الدفع</h1>
+      <section className="v5-checkout" data-testid="payment-surface" aria-label="الدفع">
+        <header className="v5-checkout__titlebar">
+          <h1>الدفع</h1>
           {/* RT-26 — Back to the same sale (Esc). Disabled, with the reason
             below, once tender exists; main refuses it in that case too. */}
           <BackToSaleButton
@@ -1341,114 +1427,90 @@ export function PaymentSurface({
               void handleBackToSale();
             }}
           />
-          <OperatorBadge display_name={display_name} role={role} />
+          <div className="v5-checkout__operator">
+            <OperatorBadge display_name={display_name} role={role} />
+          </div>
         </header>
 
         <BackBlockedReason back={back} />
 
         {/*
-        022 US3 T070 — three-column composition.
+        RT-243 W1-C — Direction B (DESIGN.md; freeze 15 §4): order summary ·
+        tender panel · money column, the money column in the Sale's place.
 
-        DOM ORDER IS AMOUNT → METHODS → SUMMARY, and that is load-bearing, not
-        incidental. Tab order follows DOM order; neither CSS placement nor
-        `dir="rtl"` reorders it. The design handoff's own README orders page
-        shells left-to-right in source (summary → methods → amount), which would
-        send keyboard focus to the centre methods column before the visually
-        preceding amount panel — violating spec FR-23 ("Keyboard focus traversal
-        order MUST follow the RTL visual order"). The prototype had no keyboard
-        requirement; this product does, so the source order is RTL here and the
-        stylesheet does not re-order it.
-
-        The 1024–1279px reflow (amount panel drops below the methods) is a media
-        query on `.payment-surface__body`, NOT a `useViewportTier` branch — the
-        hook debounces tier changes by 100ms while CSS applies instantly, so a
-        React-gated reflow would leave ~100ms of broken layout on every
-        crossing. Same reasoning as the `.sale-layout` / `.tender-method-grid`
-        narrow rules, which #450/#451 documented as NOT dead CSS.
+        DOM ORDER IS SUMMARY → TENDER → MONEY, the RTL visual order (FR-23): Tab
+        runs tiles → entry → the ledger's commit (freeze 15 §3.3). The 1024
+        reflow (summary strip on top) is a container query in checkout.css, NOT
+        a `useViewportTier` branch: the hook debounces tier changes by 100ms
+        while CSS applies instantly (#450/#451).
       */}
-        <div className="payment-surface__body" data-testid="payment-surface-body">
-          <section className="payment-surface__amount" aria-label="المبلغ المستحق">
-            <span
-              className="payment-surface__amount-label"
-              data-testid="payment-surface-amount-label"
-            >
-              المبلغ المستحق
-            </span>
-            <span
-              className="payment-surface__amount-value"
-              data-testid="payment-surface-amount-due"
-              dir="ltr"
-            >
-              {formatCheckoutMoney(remainingBalanceMinor)}
-            </span>
-            {/* RT-243 F1 — recorded money stays in view whether or not an entry
-                is open (Esc, or a remount after a resize below 1024). */}
-            <RecordedTenderLedger
-              lines={appliedLines}
-              changeDueMinor={appliedChangeDueMinor}
-              showChange={!cashEntryOpen}
+        <div className="v5-checkout__body" data-testid="payment-surface-body">
+          <OrderSummary envelope={envelope} />
+
+          <div className="v5-checkout__tender">
+            <TenderPicker
+              envelope={envelope}
+              selectedTender={selectedTender}
+              voucherEnabled={voucherTenderFlag}
+              onTenderSelect={(tender) => {
+                void handleTenderSelect(tender);
+              }}
             />
-          </section>
 
-          <div className="payment-surface__panes">
-            <div className="payment-surface__methods">
-              <TenderSelection
-                envelope={envelope}
-                selectedTender={selectedTender}
-                voucherEnabled={voucherTenderFlag}
-                onTenderSelect={(tender) => {
-                  void handleTenderSelect(tender);
-                }}
-              />
-
-              {/* S3d mode: entry component for the selected tender. */}
-              {entryOpen && (
-                <div className="payment-surface__entry" data-testid="payment-surface-entry">
-                  {selectedTender === 'cash' && (
-                    <CashEntry
-                      remainingBalanceMinor={remainingBalanceMinor}
-                      paymentAttemptId={paymentAttemptId}
-                      tenderApply={(req) => bridge.tender.apply(req)}
-                      appliedChangeDueMinor={appliedChangeDueMinor}
-                      onApplied={() => {
-                        void handleLineApplied();
-                      }}
-                    />
-                  )}
-                  {selectedTender === 'external_card_terminal' && (
-                    <ExternalCardTerminalEntry
-                      remainingBalanceMinor={remainingBalanceMinor}
-                      paymentAttemptId={paymentAttemptId}
-                      tenderApply={(req) => {
-                        // Recorded before the call: if main commits but the
-                        // response is lost, a later cancel still warns (RT-256).
-                        usePaymentStore.getState().recordCardApplyAttempted();
-                        return bridge.tender.apply(req);
-                      }}
-                      onApplied={(response) => {
-                        usePaymentStore.getState().recordCardApplied(response.tender_line_id);
-                        void handleLineApplied();
-                      }}
-                    />
-                  )}
-                  {selectedTender === 'internal_voucher' && voucherTenderFlag && (
-                    <VoucherEntry
-                      remainingBalanceMinor={remainingBalanceMinor}
-                      paymentAttemptId={paymentAttemptId}
-                      tenderApply={(req) => bridge.tender.apply(req)}
-                      onApplied={() => {
-                        void handleLineApplied();
-                      }}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="payment-surface__summary">
-              <PaymentCartSummary envelope={envelope} />
-            </div>
+            {/* S3d mode: entry component for the selected tender. */}
+            {entryOpen && (
+              <div className="payment-surface__entry" data-testid="payment-surface-entry">
+                {selectedTender === 'cash' && (
+                  <CashEntry
+                    remainingBalanceMinor={remainingBalanceMinor}
+                    paymentAttemptId={paymentAttemptId}
+                    tenderApply={(req) => bridge.tender.apply(req)}
+                    appliedChangeDueMinor={appliedChangeDueMinor}
+                    onApplied={() => {
+                      void handleLineApplied();
+                    }}
+                  />
+                )}
+                {selectedTender === 'external_card_terminal' && (
+                  <ExternalCardTerminalEntry
+                    remainingBalanceMinor={remainingBalanceMinor}
+                    paymentAttemptId={paymentAttemptId}
+                    tenderApply={(req) => {
+                      // Recorded before the call: if main commits but the
+                      // response is lost, a later cancel still warns (RT-256).
+                      usePaymentStore.getState().recordCardApplyAttempted();
+                      return bridge.tender.apply(req);
+                    }}
+                    onApplied={(response) => {
+                      usePaymentStore.getState().recordCardApplied(response.tender_line_id);
+                      void handleLineApplied();
+                    }}
+                  />
+                )}
+                {selectedTender === 'internal_voucher' && voucherTenderFlag && (
+                  <VoucherEntry
+                    remainingBalanceMinor={remainingBalanceMinor}
+                    paymentAttemptId={paymentAttemptId}
+                    tenderApply={(req) => bridge.tender.apply(req)}
+                    onApplied={() => {
+                      void handleLineApplied();
+                    }}
+                  />
+                )}
+              </div>
+            )}
           </div>
+
+          {/* RT-243 F1 — recorded money stays in view whether or not an entry
+              is open (Esc, or a remount after a resize below 1024). */}
+          <PaymentLedger
+            dueMinor={remainingBalanceMinor}
+            lines={appliedLines}
+            changeDueMinor={appliedChangeDueMinor}
+            showChange={!cashEntryOpen}
+            testIds={LEDGER_TEST_IDS}
+            actions={actionBar}
+          />
         </div>
 
         {/* Slice-1 mode: status banner only (no bridge wiring). */}
@@ -1467,84 +1529,6 @@ export function PaymentSurface({
           </div>
         )}
 
-        {/*
-        RT-238 — the pinned action bar (15 §4 A2). Cancel lives at inline-start,
-        the primary/commit at inline-end, and neither slot is ever filled by an
-        action of the opposite consequence. The bar is outside the scrolling
-        panes, so the commit cannot scroll out of view; refusals stay with it.
-      */}
-        {bridge !== null && (
-          <CheckoutActionBar
-            endSlotRef={setPrimarySlot}
-            cancel={
-              phase === 'entry' ? (
-                <button
-                  type="button"
-                  className="payment-surface__cancel"
-                  data-testid="payment-surface-cancel"
-                  disabled={isCancelling}
-                  aria-disabled={isCancelling ? 'true' : undefined}
-                  onClick={() => {
-                    void handleCancel();
-                  }}
-                >
-                  إلغاء
-                </button>
-              ) : null
-            }
-            // RT-298: while a cancel is open nothing here may move the attempt
-            // on, the post-apply read retry included (Codex P2, #576).
-            commit={
-              cancelOpen ? null : afterApply === 'failed' ? (
-                <button
-                  type="button"
-                  className="checkout-commit"
-                  data-testid="payment-surface-reread"
-                  onClick={() => {
-                    void handleLineApplied();
-                  }}
-                >
-                  إعادة المحاولة
-                </button>
-              ) : showSettle ? (
-                <button
-                  type="button"
-                  className="payment-surface__confirm checkout-commit"
-                  data-testid="payment-surface-confirm"
-                  disabled={isConfirming}
-                  aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
-                  aria-describedby={fullyTendered ? undefined : 'payment-commit-reason'}
-                  onKeyDown={guardCommitKey}
-                  onClick={() => {
-                    handleCommitClick(fullyTendered);
-                  }}
-                >
-                  تأكيد الدفع
-                </button>
-              ) : null
-            }
-            reason={
-              cancelOpen ? null : afterApply === 'failed' ? (
-                <p
-                  className="checkout-actions__reason"
-                  data-testid="payment-surface-reread-notice"
-                  role="status"
-                >
-                  تم تسجيل المبلغ، لكن تعذّر تحديث حالة الدفع. لا تكرر الدفع.
-                </p>
-              ) : showSettle && !fullyTendered ? (
-                <p
-                  id="payment-commit-reason"
-                  className="checkout-actions__reason"
-                  data-testid="payment-surface-commit-reason"
-                >
-                  المبلغ أقل من المستحق
-                </p>
-              ) : null
-            }
-            notices={notices}
-          />
-        )}
         {/* The primary action changes under the cashier's hands; keep focus with them. */}
         {bridge === null && notices}
         <FocusWhen
@@ -1559,7 +1543,9 @@ export function PaymentSurface({
         <FocusWhen
           active={phase === 'tender_selection' && hasAppliedLine && !fullyTendered}
           find={() =>
-            document.querySelector<HTMLElement>('.payment-surface__methods button:not([disabled])')
+            document.querySelector<HTMLElement>(
+              '[data-testid="tender-selection"] [role="radio"]:not([disabled])',
+            )
           }
         />
       </section>

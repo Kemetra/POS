@@ -1,10 +1,12 @@
 /**
- * T021 — TenderSelection tender availability.
+ * T021 — TenderPicker tender availability.
  *
  * Cash and external_card_terminal are enabled and selectable.
  * internal_voucher is always reserved (aria-disabled + "(not available)" sub-label).
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -12,7 +14,7 @@ import '@testing-library/jest-dom/vitest';
 
 afterEach(cleanup);
 
-import { TenderSelection } from '../../../../src/renderer/ui/payments/TenderSelection.js';
+import { TenderPicker } from '../../../../src/renderer/v5/checkout/TenderPicker.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 
 function makeEnvelope(overrides: Partial<PaymentIntentEnvelope> = {}): PaymentIntentEnvelope {
@@ -45,9 +47,9 @@ function makeEnvelope(overrides: Partial<PaymentIntentEnvelope> = {}): PaymentIn
   };
 }
 
-describe('TenderSelection — cash', () => {
+describe('TenderPicker — cash', () => {
   it('renders a cash tender button that is enabled', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
     const btn = screen.getByTestId('tender-cash');
     expect(btn).toBeInTheDocument();
     expect(btn).not.toBeDisabled();
@@ -57,16 +59,16 @@ describe('TenderSelection — cash', () => {
   it('calls onTenderSelect with "cash" when clicked', async () => {
     const user = userEvent.setup();
     const handler = vi.fn();
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={handler} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={handler} />);
     await user.click(screen.getByTestId('tender-cash'));
     expect(handler).toHaveBeenCalledWith('cash');
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('TenderSelection — external_card_terminal', () => {
+describe('TenderPicker — external_card_terminal', () => {
   it('renders an external card terminal button that is enabled', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
     const btn = screen.getByTestId('tender-external-card');
     expect(btn).toBeInTheDocument();
     expect(btn).not.toBeDisabled();
@@ -76,21 +78,21 @@ describe('TenderSelection — external_card_terminal', () => {
   it('calls onTenderSelect with "external_card_terminal" when clicked', async () => {
     const user = userEvent.setup();
     const handler = vi.fn();
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={handler} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={handler} />);
     await user.click(screen.getByTestId('tender-external-card'));
     expect(handler).toHaveBeenCalledWith('external_card_terminal');
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('TenderSelection — internal_voucher (Wave 5c T291 — enabled configuration)', () => {
+describe('TenderPicker — internal_voucher (Wave 5c T291 — enabled configuration)', () => {
   // Wave 5c T291 — when the voucher tender is enabled, the slot routes to
   // <VoucherEntry> via onTenderSelect('internal_voucher'). RT-103: it is enabled
   // only by opt-in (`voucherEnabled`); the pilot default (disabled) is covered in
   // src/renderer/ui/payments/__tests__/voucher-pilot-restriction.test.tsx.
 
   it('renders the voucher slot as visible and enabled', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} voucherEnabled />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} voucherEnabled />);
     const btn = screen.getByTestId('tender-voucher');
     expect(btn).toBeInTheDocument();
     expect(btn).not.toBeDisabled();
@@ -98,7 +100,7 @@ describe('TenderSelection — internal_voucher (Wave 5c T291 — enabled configu
   });
 
   it('does NOT render the legacy "(not available)" sub-label', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
     // The Slice-1 reserved-disabled hint element is gone.
     expect(screen.queryByTestId('tender-voucher-hint')).not.toBeInTheDocument();
   });
@@ -106,21 +108,35 @@ describe('TenderSelection — internal_voucher (Wave 5c T291 — enabled configu
   it('calls onTenderSelect with "internal_voucher" when clicked', async () => {
     const user = userEvent.setup();
     const handler = vi.fn();
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={handler} voucherEnabled />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={handler} voucherEnabled />);
     await user.click(screen.getByTestId('tender-voucher'));
     expect(handler).toHaveBeenCalledWith('internal_voucher');
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('TenderSelection — touch targets', () => {
-  it('renders all tender buttons with minimum 44px height', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+describe('TenderPicker — touch targets', () => {
+  /**
+   * RT-243 W1-C — a SOURCE TRIPWIRE, not a cascade check: the tiles take their
+   * size from checkout.css (DESIGN.md: 84px comfortable, 72px compact, never
+   * under the 44px floor). jsdom does no layout; the packaged capture measures it.
+   */
+  const css = readFileSync(
+    resolve(__dirname, '../../../../src/renderer/v5/checkout/checkout.css'),
+    'utf-8',
+  ).replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('declares the tile height for both densities, both above the 44px floor', () => {
+    const sizes = [...css.matchAll(/\.v5-tender-tile\s*\{[^}]*min-block-size:\s*(\d+)px/g)].map(
+      (m) => Number(m[1]),
+    );
+    expect(sizes).toEqual([84, 72]);
+  });
+
+  it('renders every tender as a tile the stylesheet sizes', () => {
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
     for (const id of ['tender-cash', 'tender-external-card', 'tender-voucher']) {
-      const btn = screen.getByTestId(id);
-      const style = btn.getAttribute('style') ?? '';
-      // minHeight set inline via touchTarget.min (44)
-      expect(style).toMatch(/min-height:\s*44/);
+      expect(screen.getByTestId(id)).toHaveClass('v5-tender-tile');
     }
   });
 });

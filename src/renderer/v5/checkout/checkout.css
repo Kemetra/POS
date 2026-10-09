@@ -1,0 +1,690 @@
+/*
+ * RT-243 W1-C — Checkout, Direction B (DESIGN.md "Frame — Direction B";
+ * freeze 15 §4; pack VN-B2, I2-CheckoutUnder / I2-CheckoutOver).
+ *
+ *   Comfortable (v5-screen > 1120px, a 1280 window):
+ *   ┌ order summary ┐┌ tender panel (fluid) ┐┌ money column ┐
+ *   │ 280px          ││ tiles · entry          ││ due (hero)   │
+ *   │ lines scroll   ││ scrolls if it must     ││ recorded     │
+ *   │ subtotal       ││                        ││ actions      │
+ *   └────────────────┘└────────────────────────┘└──────────────┘
+ *
+ *   Compact (≤ 1120px, a 1024 window): the summary is a one-line strip on
+ *   top with «عرض الأصناف»; tender panel fluid; money column 296px.
+ *
+ * The money column is the Sale's (same place, 320px comfortable): the amount
+ * due and the actions are rows of their own outside the scrolling middle, so
+ * neither can be scrolled away (08 I-3) and nothing sticky covers focus.
+ *
+ * Tokens only, logical properties only, borders before shadows, money in the
+ * shipped mono tabular treatment (owner decision 2026-10-07, RT-262).
+ */
+
+.v5-checkout {
+  --v5-checkout-summary: 280px;
+  --v5-money-column: 320px;
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+/* ── Titlebar ───────────────────────────────────────────────────────────── */
+
+.v5-checkout__titlebar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 48px;
+  padding-inline: var(--space-4);
+  background: var(--color-surface);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.v5-checkout__titlebar h1 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+/* Back sits next to the title: the first control in reading order (§3.2). */
+.v5-checkout-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.v5-checkout-back:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+/* Disabled-by-state: sunken with muted ink, the reason sits right below. */
+.v5-checkout-back:disabled {
+  border-style: dashed;
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.v5-checkout-back kbd {
+  padding-inline: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+}
+
+.v5-checkout__operator {
+  margin-inline-start: auto;
+}
+
+/*
+ * Why Back is not available (M-P1/M-P2/M-P3), or the M-P13 terminal-void danger.
+ * The V5 Notice treatment (messages.css): a tone border all round, a soft tint
+ * and the tone icon, so danger differs by shape, not colour alone.
+ */
+.v5-checkout__back-reason {
+  --tone-ink: var(--color-info);
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-2) var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-info);
+  border-radius: var(--radius-control);
+  background: var(--color-info-soft);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.v5-checkout__back-reason[data-tone='danger'] {
+  --tone-ink: var(--color-danger);
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-emphasis);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ── Screen grid ────────────────────────────────────────────────────────── */
+
+.v5-checkout__body {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: var(--v5-checkout-summary) minmax(0, 1fr) var(--v5-money-column);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'summary tender money';
+  gap: var(--space-3);
+  min-block-size: 0;
+  padding: var(--space-3);
+}
+
+.v5-checkout-heading {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+/* Panels: surface, one hairline, card radius, no shadow. Panels never nest. */
+.v5-order-summary,
+.v5-checkout__tender,
+.v5-ledger {
+  min-inline-size: 0;
+  min-block-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+/* ── Order summary ──────────────────────────────────────────────────────── */
+
+.v5-order-summary {
+  grid-area: summary;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.v5-order-summary__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.v5-order-summary__frozen {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-inline-start: auto;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-order-summary__counts {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* Only the compact strip needs it; at comfortable density the list is always shown. */
+.v5-order-summary__toggle {
+  display: none;
+}
+
+.v5-order-summary__lines {
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.v5-order-summary__line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name amount'
+    'qty amount';
+  column-gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+  font-size: var(--font-size-sm);
+}
+
+.v5-order-summary__name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v5-order-summary__qty {
+  grid-area: qty;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.v5-order-summary__amount {
+  grid-area: amount;
+  align-self: center;
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.v5-order-summary__total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  border-end-start-radius: var(--radius-card);
+  border-end-end-radius: var(--radius-card);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ── Tender panel ───────────────────────────────────────────────────────── */
+
+.v5-checkout__tender {
+  grid-area: tender;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.v5-tender-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.v5-tender-picker__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.v5-tender-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-block-size: 84px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--duration-1) var(--ease-out);
+}
+
+.v5-tender-tile:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+/* Selected: Teal Wash fill, Pharmacy Teal ink and boundary, plus the check glyph. */
+.v5-tender-tile[aria-checked='true'] {
+  border: 2px solid var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+/* Disabled by policy (RT-103): present, sunken, the reason in its own text; no fade. */
+.v5-tender-tile:disabled {
+  border-style: dashed;
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.v5-tender-tile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  align-self: stretch;
+}
+
+.v5-tender-tile__check {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-tender-tile__label {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-tender-tile__detail {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* ── Money column (PaymentLedger) ───────────────────────────────────────── */
+
+.v5-ledger {
+  grid-area: money;
+  container: v5-ledger / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.v5-ledger__due {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  border-start-start-radius: var(--radius-card);
+  border-start-end-radius: var(--radius-card);
+}
+
+.v5-ledger__due-label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+/* FR-16: the dominant figure on the screen, at the inline end (an LTR amount). */
+.v5-ledger__due-value {
+  align-self: flex-end;
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  /* The hero token, but never wider than the column: a 99,999.99 EGP due still
+     fits 296px on one line, 123,456.78 too (container units, no React measuring). */
+  font-size: min(var(--type-amount-hero, var(--font-size-4xl)), 12.5cqi);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+}
+
+.v5-ledger__due-currency {
+  color: var(--color-text-muted);
+  font-size: 0.45em;
+  letter-spacing: 0;
+}
+
+.v5-ledger__middle {
+  min-block-size: 0;
+  overflow-y: auto;
+}
+
+.v5-ledger-recorded {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-4);
+}
+
+.v5-ledger-recorded__label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-ledger-recorded__lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-ledger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-block-size: 36px;
+  margin: 0;
+  border-block-end: 1px solid var(--color-border-soft);
+  font-size: var(--font-size-sm);
+}
+
+.v5-ledger-row__amount {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-lg);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+/* M-P5: the change to hand back is large and neutral, never a success colour. */
+.v5-ledger-row--change {
+  min-block-size: 44px;
+  border-block-end: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-ledger-row--change .v5-ledger-row__amount {
+  font-size: var(--font-size-2xl);
+}
+
+/*
+ * The actions: the Checkout action bar (RT-238 slots) mounted unchanged. In the
+ * money column the two slots stack — the primary/commit slot first, the cancel
+ * slot below it in a separate region ≥ 16px away (DESIGN.md touch targets), as
+ * «الدفع» and the void sit in the Sale's money column. A slot that is empty in
+ * one state stays empty; neither slot ever holds the other's consequence (A2).
+ */
+.v5-ledger__actions {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.v5-ledger__actions .checkout-actions {
+  gap: var(--space-2);
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
+.v5-ledger__actions .checkout-actions__row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.v5-ledger__actions .checkout-actions__slot {
+  align-items: stretch;
+  margin-inline-start: 0;
+}
+
+/*
+ * Slot stability (A2, the N-02 slip): both slots keep their height when empty,
+ * so the band never reflows. When cancel leaves (Esc closes the entry), the
+ * commit does NOT drop into the place cancel held; when the commit leaves,
+ * cancel does not rise into the commit's place. Never collapse an empty slot.
+ */
+.v5-ledger__actions .checkout-actions__slot--end {
+  min-block-size: 60px;
+}
+
+/* Every commit the slot can hold spans the column at one fixed height
+   (DESIGN.md: full panel width), so apply → settle never changes the band. */
+.v5-ledger__actions .checkout-actions__slot--end button {
+  inline-size: 100%;
+  block-size: 60px;
+  min-block-size: 60px;
+}
+
+.v5-ledger__actions .checkout-actions__slot--start {
+  min-block-size: calc(44px + var(--space-4) + 1px);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border-soft);
+}
+
+.v5-ledger__actions .checkout-actions__slot--start > button {
+  inline-size: 100%;
+  block-size: 44px;
+  min-block-size: 44px;
+  padding-block: 0;
+}
+
+/* ── Compact (a 1024 window) ───────────────────────────────────────────── */
+
+@container v5-screen (max-width: 1120px) {
+  .v5-checkout {
+    --v5-money-column: 296px;
+  }
+
+  .v5-checkout__titlebar {
+    min-block-size: 44px;
+    padding-inline: var(--space-3);
+  }
+
+  .v5-checkout__body {
+    grid-template-columns: minmax(0, 1fr) var(--v5-money-column);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'summary summary'
+      'tender money';
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  /* The strip: heading, frozen pill, counts, subtotal and the disclosure on one line. */
+  .v5-order-summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .v5-order-summary__head {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    padding: var(--space-2) var(--space-3);
+    border-block-end: 0;
+  }
+
+  .v5-order-summary__frozen {
+    margin-inline-start: 0;
+  }
+
+  .v5-order-summary__counts {
+    flex-basis: auto;
+    font-size: var(--font-size-sm);
+  }
+
+  .v5-order-summary__toggle {
+    display: inline-flex;
+    order: 1;
+    align-items: center;
+    min-block-size: 44px;
+    margin-inline-start: auto;
+    padding-inline: var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--color-primary-emphasis);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    cursor: pointer;
+  }
+
+  .v5-order-summary__toggle:hover {
+    background: var(--color-primary-soft);
+  }
+
+  .v5-order-summary__total {
+    padding: var(--space-2) var(--space-3);
+    border-block-start: 0;
+    background: transparent;
+  }
+
+  /* Collapsed: the list is not rendered at all (and so not focusable). */
+  .v5-order-summary__lines {
+    display: none;
+  }
+
+  /* Open: the list drops over the tender panel; the money column never moves. */
+  .v5-order-summary[data-open='true'] .v5-order-summary__lines {
+    position: absolute;
+    inset-block-start: calc(100% + var(--space-1));
+    inset-inline-start: 0;
+    z-index: 3;
+    display: block;
+    inline-size: min(420px, 100%);
+    max-block-size: 60vh;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-overlay);
+  }
+
+  .v5-checkout__tender {
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .v5-tender-picker__tiles {
+    gap: var(--space-2);
+  }
+
+  .v5-tender-tile {
+    min-block-size: 72px;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .v5-ledger__due {
+    padding: var(--space-3);
+  }
+
+  .v5-ledger__due-value {
+    font-size: min(var(--font-size-3xl), 12.5cqi);
+  }
+
+  .v5-ledger-recorded {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .v5-ledger__actions {
+    padding: var(--space-2) var(--space-3) var(--space-3);
+  }
+
+  .v5-ledger__actions .checkout-actions__row {
+    gap: var(--space-3);
+  }
+
+  .v5-ledger__actions .checkout-actions__slot--start {
+    min-block-size: calc(44px + var(--space-3) + 1px);
+    padding-block-start: var(--space-3);
+  }
+
+  .v5-ledger__actions .checkout-actions__slot--end {
+    min-block-size: 56px;
+  }
+
+  .v5-ledger__actions .checkout-actions__slot--end button {
+    block-size: 56px;
+    min-block-size: 56px;
+  }
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .v5-tender-tile {
+    transition: none;
+  }
+}
+
+/* ── Forced colours ────────────────────────────────────────────────────── */
+
+@media (forced-colors: active) {
+  .v5-order-summary,
+  .v5-checkout__tender,
+  .v5-ledger,
+  .v5-checkout__back-reason {
+    border-color: CanvasText;
+  }
+
+  .v5-tender-tile {
+    border-color: ButtonText;
+  }
+
+  /* Selected keeps a system highlight and the check glyph, never colour alone.
+     forced-color-adjust: none, or the text's Canvas backplate hides HighlightText
+     (the RT-241 nav precedent); the tile holds no nested control to un-force. */
+  .v5-tender-tile[aria-checked='true'] {
+    border: 3px solid Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .v5-tender-tile__check {
+    background: HighlightText;
+    color: Highlight;
+  }
+
+  .v5-tender-tile:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
+  .v5-checkout-back:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
+  .v5-order-summary[data-open='true'] .v5-order-summary__lines {
+    border-color: CanvasText;
+  }
+}

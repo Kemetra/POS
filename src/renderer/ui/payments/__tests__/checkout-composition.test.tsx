@@ -36,7 +36,7 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store.
 import { usePaymentStore } from '../../../stores/payment-store.js';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store.js';
 import { PaymentSurface } from '../PaymentSurface.js';
-import { TenderSelection } from '../TenderSelection.js';
+import { TenderPicker } from '../../../v5/checkout/TenderPicker.js';
 
 const SUBTOTAL_MINOR = 5000;
 
@@ -123,38 +123,36 @@ afterEach(() => {
 // T070 — three-column composition + amount-due hierarchy
 // ---------------------------------------------------------------------------
 
-describe('022 US3 T070 — checkout three-column composition', () => {
-  it('renders the three columns of the composition', () => {
-    render(<PaymentSurface />);
-    const body = screen.getByTestId('payment-surface-body');
-    expect(body.querySelector('.payment-surface__amount')).not.toBeNull();
-    expect(body.querySelector('.payment-surface__methods')).not.toBeNull();
-    expect(body.querySelector('.payment-surface__summary')).not.toBeNull();
-  });
-
-  it('DOM order is amount → methods → summary, matching the RTL visual order (FR-23)', () => {
-    // THE load-bearing assertion of this file. Tab order follows DOM order; a
-    // dir="rtl" attribute does not reorder it. The handoff warns that the
-    // designer's LTR source order (summary → methods → amount) would send
-    // keyboard focus to the centre column before the visually-preceding amount
-    // panel — violating spec FR-23: "Keyboard focus traversal order MUST follow
-    // the RTL visual order."
-    render(<PaymentSurface />);
-    // RT-238: the methods and summary sit in a `panes` wrapper (it is transparent
-    // in the three-column composition and the scroller below 1217px), so read the
-    // three regions in document order rather than as direct children.
-    const columns = Array.from(
+describe('022 US3 T070 / RT-243 W1-C — checkout Direction B composition', () => {
+  /** The three regions of the body, in document order. */
+  function regions(): HTMLElement[] {
+    return Array.from(
       screen
         .getByTestId('payment-surface-body')
-        .querySelectorAll(
-          '.payment-surface__amount, .payment-surface__methods, .payment-surface__summary',
-        ),
-    ).map((el) => el.className);
+        .querySelectorAll<HTMLElement>('.v5-order-summary, .v5-checkout__tender, .v5-ledger'),
+    );
+  }
 
-    expect(columns).toHaveLength(3);
-    expect(columns[0]).toContain('payment-surface__amount');
-    expect(columns[1]).toContain('payment-surface__methods');
-    expect(columns[2]).toContain('payment-surface__summary');
+  it('renders the summary, the tender panel and the money column', () => {
+    render(<PaymentSurface />);
+    expect(regions()).toHaveLength(3);
+    expect(screen.getByTestId('payment-cart-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('tender-selection')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'المبلغ المستحق' })).toBeInTheDocument();
+  });
+
+  it('DOM order is summary → tender → money, matching the RTL visual order (FR-23)', () => {
+    // THE load-bearing assertion of this file. Tab order follows DOM order; a
+    // dir="rtl" attribute does not reorder it. Direction B (DESIGN.md) puts the
+    // order summary at the inline start (right), the tender panel in the middle
+    // and the money column at the inline end (left), so focus must run summary
+    // → tiles → entry → commit (freeze 15 §3.3), never jump to the money column
+    // before the tender the cashier is choosing.
+    render(<PaymentSurface />);
+    const classes = regions().map((el) => el.className);
+    expect(classes[0]).toContain('v5-order-summary');
+    expect(classes[1]).toContain('v5-checkout__tender');
+    expect(classes[2]).toContain('v5-ledger');
   });
 
   it('the amount-due numeric is the dominant value: LTR, tabular, its own class', () => {
@@ -163,7 +161,7 @@ describe('022 US3 T070 — checkout three-column composition', () => {
     // FR-21: money is LTR mono and never bidi-reordered, whatever the surface dir.
     expect(value).toHaveAttribute('dir', 'ltr');
     // FR-16: the dominant numeric carries the hierarchy class the token sizes.
-    expect(value.className).toContain('payment-surface__amount-value');
+    expect(value.className).toContain('v5-ledger__due-value');
   });
 
   it('the amount column carries an Arabic label for the amount due', () => {
@@ -172,18 +170,14 @@ describe('022 US3 T070 — checkout three-column composition', () => {
     expect(label.textContent).toMatch(/[؀-ۿ]/);
   });
 
-  it('the body carries the reflow hook the narrow-tier media rule keys off', () => {
-    // The 1024-1279px reflow (amount panel below the methods) is expressed as a
-    // media query on this class, NOT gated on `useViewportTier`.
-    //
-    // That is deliberate and load-bearing: `useViewportTier` DEBOUNCES tier
-    // changes by 100ms while CSS applies the instant the viewport crosses a
-    // breakpoint. A React-gated reflow would leave ~100ms of broken layout on
-    // every crossing — the same defect documented for the `.sale-layout` and
-    // `.tender-method-grid` narrow rules (#450/#451), which must NOT be deleted
-    // as dead CSS for exactly this reason.
+  it('the body carries the class the container-query reflow keys off', () => {
+    // The 1024 reflow (summary strip on top, two columns) is a container query
+    // on this class in checkout.css, NOT gated on `useViewportTier`: the hook
+    // DEBOUNCES tier changes by 100ms while CSS applies the instant the width
+    // crosses, so a React-gated reflow would leave ~100ms of broken layout on
+    // every crossing (#450/#451).
     render(<PaymentSurface />);
-    expect(screen.getByTestId('payment-surface-body').className).toContain('payment-surface__body');
+    expect(screen.getByTestId('payment-surface-body').className).toContain('v5-checkout__body');
   });
 });
 
@@ -193,36 +187,35 @@ describe('022 US3 T070 — checkout three-column composition', () => {
 
 describe('022 US3 T071 — tender grid renders exactly the three supported tenders', () => {
   it('renders three tiles and no more', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
-    const tiles = document.querySelectorAll('.tender-method-grid .method-card');
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    const tiles = screen.getAllByRole('radio');
     expect(tiles).toHaveLength(3);
   });
 
   it('renders exactly cash, external_card_terminal and internal_voucher', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     expect(screen.getByTestId('tender-cash')).toBeInTheDocument();
     expect(screen.getByTestId('tender-external-card')).toBeInTheDocument();
     expect(screen.getByTestId('tender-voucher')).toBeInTheDocument();
   });
 
   it('never renders an unsupported tender (RECONCILIATION §B non-capabilities)', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     const text = document.body.textContent;
     // The mockup's six-tile grid carries these; they are NOT authorised here.
     for (const forbidden of ['مدى', 'بطاقة ائتمان', 'شركة تأمين', 'محفظة', 'قسيمة هدية']) {
       expect(text).not.toContain(forbidden);
     }
-    expect(document.querySelector('.method-grid--four')).toBeNull();
   });
 
   it('each tile carries a distinct sub-label, not a synonym of its own name', () => {
     // Guards the copy regression caught in review: translating the <small>
     // glosses produced near-synonyms stacked on one tile (نقدي / نقداً). The
     // slot is a muted DESCRIPTIVE sub-label per the mockup, not a second name.
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     for (const testid of ['tender-cash', 'tender-external-card', 'tender-voucher']) {
       const tile = screen.getByTestId(testid);
-      const labelNode = tile.querySelector('.tender-selection__option-label');
+      const labelNode = tile.querySelector('.v5-tender-tile__label');
       const subNode = tile.querySelector('small');
       if (labelNode === null || subNode === null) {
         throw new Error(`${testid}: expected both a label and a sub-label node`);
@@ -238,7 +231,7 @@ describe('022 US3 T071 — tender grid renders exactly the three supported tende
     }
   });
 
-  it('the selected tile carries the selected class and a check badge', async () => {
+  it('the selected tile is checked and carries a check glyph (never colour alone)', async () => {
     render(<PaymentSurface _testBridge={makeBridge()} />);
     await act(async () => {
       screen.getByTestId('tender-cash').click();
@@ -248,8 +241,11 @@ describe('022 US3 T071 — tender grid renders exactly the three supported tende
       await Promise.resolve();
     });
     const cash = screen.getByTestId('tender-cash');
-    expect(cash.className).toContain('method-card--selected');
     expect(cash.getAttribute('aria-checked')).toBe('true');
-    expect(cash.querySelector('.method-card__check')).not.toBeNull();
+    expect(cash.querySelector('.v5-tender-tile__check svg')).not.toBeNull();
+    // Only the selected tile carries the glyph.
+    expect(
+      screen.getByTestId('tender-external-card').querySelector('.v5-tender-tile__check'),
+    ).toBeNull();
   });
 });

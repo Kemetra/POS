@@ -61,10 +61,10 @@ export function CheckoutActionBar(props: CheckoutActionBarProps): JSX.Element {
   return (
     <div className="checkout-actions" data-testid="payment-surface-actions">
       {props.notices}
+      {/* RT-243 W1-C: in the money column the slots stack, commit above cancel
+          (as «الدفع» above the void on the Sale), so the end slot comes first in
+          DOM and Tab order matches what the cashier sees. */}
       <div className="checkout-actions__row">
-        <div className="checkout-actions__slot checkout-actions__slot--start" data-slot="start">
-          {props.cancel}
-        </div>
         <div
           ref={props.endSlotRef}
           className="checkout-actions__slot checkout-actions__slot--end"
@@ -72,6 +72,9 @@ export function CheckoutActionBar(props: CheckoutActionBarProps): JSX.Element {
         >
           {props.commit}
           {props.reason}
+        </div>
+        <div className="checkout-actions__slot checkout-actions__slot--start" data-slot="start">
+          {props.cancel}
         </div>
       </div>
     </div>

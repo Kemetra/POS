@@ -9,7 +9,7 @@
  *      assertions are RETARGETED in place to assert its ABSENCE. The positive
  *      invariant ("exactly one amount-due presentation") lives in
  *      `single-amount-due.test.tsx`. Item 7 below is superseded with them.
- *   2. method grid uses tender-method-grid (3-method, NOT --four)
+ *   2. the tender tiles sit in one radiogroup (3 methods, NOT --four)
  *   3. cash path renders tender-slots + tender-row + static change-due
  *   4. card path renders tender-slots + a tender-row__body instruction row
  *   5. voucher path renders voucher-field input + voucher-error (invalid)
@@ -34,7 +34,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import type { PaymentIntentEnvelope } from '../../../../shared/cart/handoff-envelope.js';
-import { TenderSelection } from '../TenderSelection.js';
+import { TenderPicker } from '../../../v5/checkout/TenderPicker.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
 import { VoucherEntry } from '../VoucherEntry.js';
@@ -59,7 +59,7 @@ function queryOrThrow(selector: string): HTMLElement {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// A complete, correctly-typed envelope. TenderSelection only reads
+// A complete, correctly-typed envelope. TenderPicker only reads
 // subtotal_minor, but the prop type is the full PaymentIntentEnvelope, so the
 // helper returns every field (annotated, so tsc enforces the shape — a partial
 // object compiles under Vitest's esbuild transform but fails `tsc --noEmit`).
@@ -81,16 +81,16 @@ function makeEnvelope(subtotalMinor = 5000): PaymentIntentEnvelope {
 }
 
 // ---------------------------------------------------------------------------
-// 1. TenderSelection — amount-due-card structure
+// 1. TenderPicker — amount-due-card structure
 //    The amount-due-card is part of PaymentSurface (the orchestrator). We test
-//    the TenderSelection component's 3-method grid here, and verify the card
+//    the TenderPicker component's 3-method grid here, and verify the card
 //    via PaymentSurface in a separate group below.
 // ---------------------------------------------------------------------------
 
-describe('TenderSelection — v3.5 visual recompose', () => {
-  it('renders the three tender options in a tender-method-grid container', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
-    const grid = document.querySelector('.tender-method-grid');
+describe('TenderPicker — v3.5 visual recompose', () => {
+  it('renders the three tender options in one radiogroup', () => {
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    const grid = screen.getByRole('radiogroup', { name: 'طريقة الدفع' });
     expect(grid).toBeInTheDocument();
     // All three buttons must be children of the grid
     const cashBtn = screen.getByTestId('tender-cash');
@@ -102,21 +102,21 @@ describe('TenderSelection — v3.5 visual recompose', () => {
   });
 
   it('Arabic labels are present on the tender method buttons', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     // v3.5 prototype uses Arabic-first labels: نقدي / بطاقة / قسيمة
     expect(screen.getByTestId('tender-cash')).toHaveTextContent('نقدي');
     expect(screen.getByTestId('tender-external-card')).toHaveTextContent('بطاقة');
     expect(screen.getByTestId('tender-voucher')).toHaveTextContent('قسيمة');
   });
 
-  it('selected tender method gets method-card--selected class when clicked', () => {
+  it('activating a tender tile reports the method to the parent', () => {
     const onSelect = vi.fn();
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={onSelect} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={onSelect} />);
     const cashBtn = screen.getByTestId('tender-cash');
     fireEvent.click(cashBtn);
     expect(onSelect).toHaveBeenCalledWith('cash');
     // After re-render with the active method, the button should have the
-    // selected class. Since TenderSelection is stateless (parent owns state),
+    // selected class. Since TenderPicker is stateless (parent owns state),
     // we check the callback fired — selection state is verified via
     // PaymentSurface integration below.
   });
@@ -406,8 +406,8 @@ describe('VoucherEntry — v3.5 visual recompose (voucher-field, voucher-error)'
 // ---------------------------------------------------------------------------
 
 describe('NEGATIVE — rejected prototype behaviours are absent', () => {
-  it('N1a: insurance method label (Arabic تأمين) never renders in TenderSelection', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+  it('N1a: insurance method label (Arabic تأمين) never renders in TenderPicker', () => {
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     // Should NOT contain the insurance Arabic label
     expect(screen.queryByText('تأمين')).toBeNull();
     // Should NOT contain the credit Arabic label
@@ -415,13 +415,13 @@ describe('NEGATIVE — rejected prototype behaviours are absent', () => {
   });
 
   it('N1b: insurance / credit method buttons never render (no data-testid for them)', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     expect(screen.queryByTestId('tender-insurance')).toBeNull();
     expect(screen.queryByTestId('tender-credit')).toBeNull();
   });
 
-  it('N2: method-grid--four class never appears in the TenderSelection DOM', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+  it('N2: method-grid--four class never appears in the TenderPicker DOM', () => {
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     expect(document.querySelector('.method-grid--four')).toBeNull();
   });
 

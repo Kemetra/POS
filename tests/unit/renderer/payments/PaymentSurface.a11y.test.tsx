@@ -95,23 +95,33 @@ describe('PaymentSurface — accessibility', () => {
     expect(btn).toHaveAttribute('aria-label', 'بطاقة');
   });
 
-  it('all enabled tender buttons meet 44px touch target', () => {
+  it('every tender button is a V5 tender tile (its 72/84px target lives in checkout.css)', () => {
+    // RT-243 W1-C: the size is CSS (tile 84px comfortable, 72px compact; see the
+    // source tripwire in TenderPicker.tender-availability.test.tsx). jsdom does no
+    // layout, so here only the hook the stylesheet keys off is checked.
     setup();
     render(<PaymentSurface />);
     for (const id of ['tender-cash', 'tender-external-card', 'tender-voucher']) {
-      const btn = screen.getByTestId(id);
-      const style = btn.getAttribute('style') ?? '';
-      expect(style).toMatch(/min-height:\s*44/);
+      expect(screen.getByTestId(id)).toHaveClass('v5-tender-tile');
     }
   });
 
-  it('keyboard Tab reaches the cash tender button', async () => {
+  it('keyboard Tab reaches the cash tender button, passing only the order summary', async () => {
+    // RT-243 W1-C (Direction B): the order summary sits before the tender panel
+    // in RTL reading order. It is one tab stop, like the Sale cart: the scrolling
+    // line list at 1280, or the «عرض الأصناف» disclosure at 1024 (CSS shows one
+    // of the two; jsdom loads no CSS, so both are reachable here).
     const user = userEvent.setup();
     setup();
     render(<PaymentSurface />);
-    await user.tab();
-    // The first Tab from the surface root should land on the cash tender button
-    // (it's the first focusable interactive element in the body).
-    expect(screen.getByTestId('tender-cash')).toHaveFocus();
+    const summary = screen.getByTestId('payment-cart-summary');
+    const cash = screen.getByTestId('tender-cash');
+    for (let i = 0; i < 4 && document.activeElement !== cash; i += 1) {
+      await user.tab();
+      if (document.activeElement !== cash) {
+        expect(summary.contains(document.activeElement)).toBe(true);
+      }
+    }
+    expect(cash).toHaveFocus();
   });
 });

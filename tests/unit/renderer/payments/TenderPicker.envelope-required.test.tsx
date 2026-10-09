@@ -1,7 +1,7 @@
 /**
- * T020 — TenderSelection refuses to render without envelope.
+ * T020 — TenderPicker refuses to render without envelope.
  *
- * When no envelope is provided, TenderSelection must not render any
+ * When no envelope is provided, TenderPicker must not render any
  * tender buttons. This guards against mounting the surface before the
  * handoff contract arrives.
  */
@@ -12,7 +12,7 @@ import '@testing-library/jest-dom/vitest';
 
 afterEach(cleanup);
 
-import { TenderSelection } from '../../../../src/renderer/ui/payments/TenderSelection.js';
+import { TenderPicker } from '../../../../src/renderer/v5/checkout/TenderPicker.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 
 function makeEnvelope(overrides: Partial<PaymentIntentEnvelope> = {}): PaymentIntentEnvelope {
@@ -45,14 +45,14 @@ function makeEnvelope(overrides: Partial<PaymentIntentEnvelope> = {}): PaymentIn
   };
 }
 
-describe('TenderSelection — envelope required', () => {
+describe('TenderPicker — envelope required', () => {
   it('renders nothing (null) when envelope is null', () => {
-    const { container } = render(<TenderSelection envelope={null} onTenderSelect={() => {}} />);
+    const { container } = render(<TenderPicker envelope={null} onTenderSelect={() => {}} />);
     expect(container.firstChild).toBeNull();
   });
 
   it('renders tender buttons when envelope is provided', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
     expect(screen.getByTestId('tender-selection')).toBeInTheDocument();
   });
 });

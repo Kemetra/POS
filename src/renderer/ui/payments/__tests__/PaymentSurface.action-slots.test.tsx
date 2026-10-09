@@ -165,15 +165,30 @@ async function typeAndApply(amount: string): Promise<void> {
   });
 }
 
-describe('RT-238 — the action bar is outside the scrolling panes', () => {
-  it('renders the bar as a sibling after the body, never inside it', async () => {
+describe('RT-238 — the action bar is outside the scrolling regions', () => {
+  it('renders the bar at the foot of the money column, outside its scrolling middle and the tender panel', async () => {
+    // RT-243 W1-C (Direction B): the bar moved into the money column, in its own
+    // pinned row (`.v5-ledger__actions`) after the amount due and the recorded
+    // money; the column's middle and the tender panel scroll, the bar never does.
     await openCash();
-    const surface = screen.getByTestId('payment-surface');
-    const body = screen.getByTestId('payment-surface-body');
+    const ledger = screen.getByRole('region', { name: 'المبلغ المستحق' });
     const bar = screen.getByTestId('payment-surface-actions');
-    expect(body.contains(bar)).toBe(false);
-    expect(bar.parentElement).toBe(surface);
-    expect(body.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bar.parentElement).toHaveClass('v5-ledger__actions');
+    expect(bar.parentElement?.parentElement).toBe(ledger);
+    const middle = ledger.querySelector('.v5-ledger__middle');
+    expect(middle?.contains(bar)).toBe(false);
+    expect(screen.getByTestId('payment-surface-entry').contains(bar)).toBe(false);
+    expect(
+      screen.getByTestId('payment-surface-amount-due').compareDocumentPosition(bar) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('stacks the commit slot before the cancel slot (DOM = Tab = visual order)', async () => {
+    await openCash();
+    const end = slot('end');
+    const start = slot('start');
+    expect(end.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('has both slots from the start, even before any action exists', () => {

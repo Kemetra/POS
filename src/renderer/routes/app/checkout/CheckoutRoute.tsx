@@ -8,7 +8,6 @@ import {
   useBackToSaleEligibility,
   useCheckoutBackToSale,
 } from '../../../sale/useCheckoutBackToSale';
-import { Workspace } from '../../../shell/regions/Workspace';
 import { PaymentSurface } from '../../../ui/payments/PaymentSurface';
 import { CheckoutPlaceholder } from './CheckoutPlaceholder';
 import { acknowledgeDrawerNotice } from '../../../ui/receipts/drawer-notice-store';
@@ -71,14 +70,14 @@ export function CheckoutRoute(): JSX.Element {
   }
 
   // 023 Slice G: checkout renders in the v5 frame, where PaymentSurface's own
-  // Arabic heading is the screen's one title (no English-only Workspace title).
+  // Arabic heading is the screen's one title. RT-243 W1-C: it fills the frame's
+  // `v5-screen` container directly, as the Sale does (no padded Workspace), so
+  // the Direction B columns and the money column line up across the journey.
   return (
-    <Workspace>
-      <PaymentSurface
-        onNewSale={handleNewSale}
-        onBackToSale={backToSale}
-        backToSaleEligibility={backEligibility}
-      />
-    </Workspace>
+    <PaymentSurface
+      onNewSale={handleNewSale}
+      onBackToSale={backToSale}
+      backToSaleEligibility={backEligibility}
+    />
   );
 }

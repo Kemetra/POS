@@ -21,7 +21,7 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store.
 import { usePaymentStore } from '../../../stores/payment-store.js';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store.js';
 import { PaymentSurface } from '../PaymentSurface.js';
-import { TenderSelection } from '../TenderSelection.js';
+import { TenderPicker } from '../../../v5/checkout/TenderPicker.js';
 
 function makeEnvelope(): PaymentIntentEnvelope {
   return {
@@ -105,9 +105,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('RT-103 TenderSelection — pilot restriction (default)', () => {
+describe('RT-103 TenderPicker — pilot restriction (default)', () => {
   it('renders the voucher tile disabled, and cash + card enabled', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     expect(screen.getByTestId('tender-voucher')).toBeDisabled();
     expect(screen.getByTestId('tender-voucher')).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('tender-cash')).toBeEnabled();
@@ -116,14 +116,14 @@ describe('RT-103 TenderSelection — pilot restriction (default)', () => {
 
   it('a click on the voucher tile never selects the voucher tender', async () => {
     const onTenderSelect = vi.fn();
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={onTenderSelect} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={onTenderSelect} />);
     await userEvent.click(screen.getByTestId('tender-voucher'));
     expect(onTenderSelect).not.toHaveBeenCalled();
   });
 
   it('the keyboard path cannot reach or invoke the voucher tender', async () => {
     const onTenderSelect = vi.fn();
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={onTenderSelect} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={onTenderSelect} />);
     const user = userEvent.setup();
     const reached: (string | null)[] = [];
     for (let i = 0; i < 4; i++) {
@@ -139,16 +139,16 @@ describe('RT-103 TenderSelection — pilot restriction (default)', () => {
   });
 
   it('tells the cashier the voucher is unavailable (not a silent dead tile)', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
     expect(screen.getByTestId('tender-voucher')).toHaveTextContent('غير متاحة حاليًا');
   });
 });
 
-describe('RT-103 TenderSelection — voucher explicitly enabled', () => {
+describe('RT-103 TenderPicker — voucher explicitly enabled', () => {
   it('the voucher tile is enabled and selects internal_voucher', async () => {
     const onTenderSelect = vi.fn();
     render(
-      <TenderSelection envelope={makeEnvelope()} onTenderSelect={onTenderSelect} voucherEnabled />,
+      <TenderPicker envelope={makeEnvelope()} onTenderSelect={onTenderSelect} voucherEnabled />,
     );
     const voucher = screen.getByTestId('tender-voucher');
     expect(voucher).toBeEnabled();

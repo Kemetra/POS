@@ -205,7 +205,7 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
     expect(reason).toHaveTextContent(CARD_VOID);
     expect(screen.getByTestId('payment-surface')).not.toHaveTextContent(COMPLETE_OR_CANCEL);
     // Catalog tone `danger` (Codex P2): not the muted Back explanation style.
-    expect(reason).toHaveClass('payment-surface__back-blocked--danger');
+    // RT-243 W1-C: the tone is the styling hook (`[data-tone='danger']`).
     expect(reason).toHaveAttribute('data-tone', 'danger');
   });
 
@@ -334,7 +334,6 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
     const reason = await backReasonLine();
     expect(reason).toHaveTextContent(CASH_REVERSED);
     expect(reason).not.toHaveTextContent(CARD_VOID);
-    expect(reason).not.toHaveClass('payment-surface__back-blocked--danger');
     expect(reason).toHaveAttribute('data-tone', 'info');
   });
 });
