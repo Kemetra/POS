@@ -79,6 +79,23 @@ describe('command bar and results dropdown', () => {
     expect(anchor()).toHaveFocus();
   });
 
+  // Codex review on #610: a keystroke inside the 150 ms debounce window must not
+  // reopen the results after Esc closed them.
+  it('Esc cancels a pending typed search, so the results stay closed', async () => {
+    signIn();
+    const bridges = withResults(makeBridges());
+    renderSale(bridges);
+    const user = userEvent.setup();
+    await user.type(searchBox(), 'بنا');
+    await screen.findByRole('listbox', { name: 'نتائج البحث' });
+    const searches = (bridges.catalogue.search as Mock).mock.calls.length;
+    await user.type(searchBox(), 'د{Escape}');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect((bridges.catalogue.search as Mock).mock.calls).toHaveLength(searches);
+    expect(screen.queryByRole('listbox', { name: 'نتائج البحث' })).not.toBeInTheDocument();
+    expect(anchor()).toHaveFocus();
+  });
+
   it('Esc from inside the results list closes them too', async () => {
     signIn();
     renderSale(withResults(makeBridges()));

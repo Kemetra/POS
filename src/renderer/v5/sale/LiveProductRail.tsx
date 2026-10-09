@@ -10,7 +10,7 @@ import {
 } from 'react';
 import type { CatalogueSearchState } from '../../stores/catalogueSearchStore';
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
-import { useDebouncedSearch } from '../../stores/useDebouncedSearch';
+import { useDebouncedSearch, type DebouncedSearch } from '../../stores/useDebouncedSearch';
 import type { FreshnessState, RefreshFeedback } from '../../sale/useCatalogueFreshness';
 import { V5Icon } from '../foundation/V5Icon';
 import { LiveSearchResults } from './LiveSearchResults';
@@ -84,11 +84,15 @@ export function LiveProductRail(props: Props): JSX.Element {
     previousKind.current = props.state.kind;
   }, [props.state.kind]);
 
+  // Owned here, not in the field, so Esc can drop a keystroke still inside the
+  // debounce window; otherwise it would reopen the results after dismissal.
+  const search = useDebouncedSearch(props.onSearch);
   const open = resultsOpen(props.state);
   function handleKeyDown(event: KeyboardEvent<HTMLElement>): void {
     if (event.key !== 'Escape' || !open) return;
     event.preventDefault();
     event.stopPropagation();
+    search.cancel();
     setQuery('');
     if (props.onDismiss) props.onDismiss();
     else props.onRecover();
@@ -108,7 +112,7 @@ export function LiveProductRail(props: Props): JSX.Element {
         <SearchField
           query={query}
           setQuery={setQuery}
-          onSearch={props.onSearch}
+          search={search}
           onRecover={props.onRecover}
           searchRef={props.searchRef}
         />
@@ -185,11 +189,11 @@ function ScanField(props: { onScan: (barcode: string) => void }): JSX.Element {
 function SearchField(props: {
   query: string;
   setQuery: (value: string) => void;
-  onSearch: (query: string) => void;
+  search: DebouncedSearch;
   onRecover: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
 }): JSX.Element {
-  const search = useDebouncedSearch(props.onSearch);
+  const { search } = props;
   function handleChange(event: ChangeEvent<HTMLInputElement>): void {
     const value = event.target.value;
     props.setQuery(value);
