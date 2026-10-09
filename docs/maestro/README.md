@@ -40,7 +40,7 @@ reads what Spec Kit produced and orchestrates execution against it.
   `/speckit-clarify`, `/speckit-plan`, and `/speckit-tasks`. Maestro reads the
   result; it does not author the spec.
 - **Not a constitution-replacement.** The constitution
-  (`.specify/memory/constitution.md`, currently v1.5.1) is the highest-priority
+  (`.specify/memory/constitution.md`, currently v1.6.0) is the highest-priority
   document. Maestro principles MUST defer to Constitution principles I–IX and
   cross-feature P1–P18 in every conflict. Where Maestro and the constitution
   disagree, the constitution wins.
@@ -58,7 +58,7 @@ reads what Spec Kit produced and orchestrates execution against it.
 When two documents disagree, the higher-listed wins:
 
 1. **`.specify/memory/constitution.md`** — the constitution
-   (currently v1.5.1). Highest priority. Principles I–IX are NON-NEGOTIABLE;
+   (currently v1.6.0). Highest priority. Principles I–IX are NON-NEGOTIABLE;
    P1–P18 are MUST/SHOULD with the Exception Procedure for waiver.
 2. **`CLAUDE.md`** (project root) — locked technical decisions, hard rules
    always in force, the `useful commands` block.

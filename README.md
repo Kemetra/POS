@@ -232,7 +232,7 @@ Open the [interactive Three.js terminal map](docs/architecture/pos-pulse-live-ma
 | `specs` | Spec Kit artifacts, `001`–`023` plus `0xx-insurance-copay`: design records, not the authority for current behavior (see [`specs/README.md`](specs/README.md)) |
 | `docs` | Documentation index · current architecture · hardware matrix · product · design system and RT-104 VNext package · runbooks · assets |
 | `scripts` | OpenAPI codegen and verification · contract re-pin · dev-electron launcher · perf seed · LOC badge automation |
-| `.specify` | Spec Kit infrastructure · constitution v1.5.1 · templates |
+| `.specify` | Spec Kit infrastructure · constitution v1.6.0 · templates |
 | `.github` | CI workflow (static, test, Windows package, docs fast path) · PR template · CODEOWNERS |
 
 ### What this repo owns

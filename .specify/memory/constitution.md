@@ -1,6 +1,79 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.5.1 → 1.6.0
+Bump rationale: MINOR — a Tech Stack substitution within an existing category (update feed
+  host → provider-neutral origin; installer kind named) plus materially changed guidance in
+  Additional Constraints (update-origin binding, TLS pinning scope, signature verification
+  rule, update identity freeze). No Roman-numeral Core Principle or P1–P18 principle is
+  added, removed or redefined.
+
+  Why this update is needed:
+  - Jira RT-234 (owner-confirmed 2026-10-09) decided the POS delivery/update architecture:
+    signed per-user NSIS + electron-updater `generic` provider against a configurable,
+    provider-neutral HTTPS origin; roll-forward only; staged lab → canary → cohort → GA.
+    It is recorded in Orchestrator ADR-0006 and the POS design spec
+    `docs/superpowers/specs/2026-10-09-rt-234-pos-delivery-update-design.md`.
+  - The v1.5.1 text fixed the feed at `https://pos.smartdatapulse.tech/updates/`, named
+    `stable` / `beta` channels, and REQUIRED TLS certificate pinning for the feed. Those
+    conflict with RT-234 D8 (provider-neutral delivery). RT-319 makes this amendment a
+    precondition for the updater implementation (RT-322), so the constitution and the
+    ADR do not disagree.
+
+  Modified sections:
+  - Mission → platform surfaces table: `pos.smartdatapulse.tech` no longer carries the
+    auto-update feed.
+  - Additional Constraints → Platform Integration: the "Auto-update feed" row becomes
+    "Update origin" (configured HTTPS origin, provider-neutral; channels `lab` / `canary` /
+    `stable`). The TLS bullet keeps TLS mandatory for every outbound call and pinning
+    RECOMMENDED for the API, and states that pinning is NOT required for the update origin.
+  - Additional Constraints → Security: the code-signature bullet is made explicit (pinned
+    publisher, RFC 3161 timestamp, sha512, fail closed and surfaced, no lower-version install).
+  - Additional Constraints → Tech Stack: "Build & ship" names per-user NSIS and the
+    `generic` provider against the configured origin; a new "Update identity" bullet freezes
+    `appId`, `productName` and the package `name`.
+  - All other sections → unchanged.
+
+  Added sections: none. Removed sections: none.
+  Modified principles: none.
+
+  Templates requiring updates:
+  - ✅ `.specify/templates/plan-template.md` — no changes required.
+  - ✅ `.specify/templates/spec-template.md` — no changes required.
+  - ✅ `.specify/templates/tasks-template.md` — no changes required.
+  - ✅ `README.md` repository map — `.specify` row updated to constitution v1.6.0.
+  - ✅ `CLAUDE.md` authoritative-documents table — version reference updated to v1.6.0
+    (it previously still cited v1.3.0).
+  - ✅ `docs/maestro/README.md` — both "currently v1.5.1" references updated to v1.6.0.
+  - ➖ Left unchanged on purpose: version-pinned history (`docs/impeccable-embed-preflight.md`,
+    `specs/**`), the name of the 1.5.1 Principle VIII clarification in
+    `docs/maestro/goal-templates.md`, and "e.g. v1.5.1" examples in
+    `docs/maestro/report-schema.md` and `docs/maestro/workflow.md`.
+
+  Follow-up TODOs (open):
+  - ⏳ UPDATER_IMPLEMENTATION — no updater or installer exists on `main` yet. The rules
+    added here bind RT-321 (signed per-user NSIS + release workflow) and RT-322
+    (UpdateService + SafePointGate); RT-320 adds the SchemaAheadGuard that ADR-0006
+    rule 2 relies on. Verification: RT-324.
+  - ⏳ FLEET_VERSION_CONTRACT — server-side minimum-supported version, fleet version
+    reporting and the runtime compatibility signal are a gated Backend-Core contract
+    (RT-323). Not constitution scope until that contract exists.
+
+  Resolved TODOs (this revision):
+  - ✅ The v1.1.x consequence-ledger item "Auto-update (`electron-updater`) … feed at
+    `https://pos.smartdatapulse.tech/updates/`" is superseded by the provider-neutral
+    origin rule. The ledger entry is retained below as history.
+
+  Compatibility ledger:
+  - No shipped code changes. `ELECTRON_UPDATE_FEED_URL` keeps its name as the
+    configuration key for the update origin.
+  - The update identity freeze matches the current `electron-builder.yml` and
+    `package.json` exactly; nothing is renamed.
+  - Prior feature plans pin earlier constitution versions and make no update-feed
+    assertions that conflict with this revision.
+
+History (prior revisions retained for reference):
+
 Version change: 1.5.0 → 1.5.1
 Bump rationale: PATCH — non-redefining clarification of an existing principle.
   Principle VIII ("Terminal Identity is Independent of User Identity (NON-NEGOTIABLE)")
@@ -83,8 +156,6 @@ Bump rationale: PATCH — non-redefining clarification of an existing principle.
   - Prior feature plans (001 v1.0+, 002 v1.2+, 003 v1.3.0, 004 v1.5.0) make no assertions
     that conflict with this clause. 003's plan pins v1.3.0 and is unaffected; 004's plan
     pins v1.5.0 and references this clarification as the §A1 gate.
-
-History (prior revisions retained for reference):
 
 Version change: 1.4.0 → 1.5.0
 Bump rationale: MINOR — introduces a new section ("Cross-Feature POS Principles", P1–P18),
@@ -435,7 +506,7 @@ client of the platform, not the platform itself:
 
 | Surface                          | Role                                                  |
 |:---------------------------------|:------------------------------------------------------|
-| `pos.smartdatapulse.tech`        | Product landing, installer download, auto-update feed |
+| `pos.smartdatapulse.tech`        | Product landing, installer download                   |
 | `api.smartdatapulse.tech`        | Backend REST API consumed by this app                 |
 | `app.smartdatapulse.tech` (sep.) | Web analytics dashboard (separate repo)               |
 
@@ -928,14 +999,14 @@ the originating spec.
 
 ### Platform Integration
 
-POS-Pulse is bound to the SmartDataPulse platform on three explicit endpoints. These are the only
-remote hosts the production app contacts (in addition to Sentry's ingest URL):
+POS-Pulse is bound to the SmartDataPulse platform on the explicit endpoints below. These are the
+only remote hosts the production app contacts (in addition to Sentry's ingest URL):
 
 | Purpose            | URL (production)                                    | Notes                                              |
 |:-------------------|:----------------------------------------------------|:---------------------------------------------------|
 | Backend API        | `https://api.smartdatapulse.tech`                   | All transactional, sync, and config calls          |
 | OpenAPI spec       | `https://api.smartdatapulse.tech/openapi.json`      | Source of truth for `openapi-typescript` codegen   |
-| Auto-update feed   | `https://pos.smartdatapulse.tech/updates/`          | `electron-updater` channel (`stable` / `beta`)     |
+| Update origin      | Configured HTTPS origin (`ELECTRON_UPDATE_FEED_URL`) | Provider-neutral static origin; `electron-updater` `generic` provider; channels `lab` / `canary` / `stable` (ADR-0006) |
 | Landing / download | `https://pos.smartdatapulse.tech`                   | Installer download, release notes (separate repo)  |
 
 Constraints on this binding:
@@ -943,8 +1014,10 @@ Constraints on this binding:
 - The base URL MUST be configurable via build-time env (`VITE_API_BASE_URL`,
   `ELECTRON_UPDATE_FEED_URL`) for staging and dev environments. Hardcoded production hostnames in
   source code outside the env layer are PROHIBITED.
-- TLS MUST be enforced for every outbound call; certificate pinning is REQUIRED for the auto-update
-  feed and RECOMMENDED for the API.
+- TLS MUST be enforced for every outbound call; certificate pinning is RECOMMENDED for the API.
+  Pinning is NOT required for the update origin: update authenticity comes from the signature
+  and sha512 verification required under Security, and pinning a CDN or object-storage
+  certificate would stop fleet updates on routine certificate rotation.
 - Network egress from the renderer is blocked at the CSP layer; only the main process opens
   connections to the hosts above.
 - A single typed API client (generated from the OpenAPI spec) is the only path to the backend; ad-hoc
@@ -1008,7 +1081,11 @@ client MUST expect:
   via Electron's `safeStorage` — DPAPI on Windows, Keychain on macOS, libsecret on Linux — never
   plaintext. Production builds MUST refuse to start if `safeStorage.isEncryptionAvailable()` returns
   false.
-- The auto-updater MUST verify code signatures before applying updates. Unsigned updates are rejected.
+- The auto-updater MUST verify the Authenticode signature (publisher pinned to the stable
+  certificate subject; RFC 3161 timestamped) and the channel-file sha512 before applying an
+  update, and MUST fail closed: an unsigned, mismatched or unverifiable update is never
+  installed, and the failure is surfaced, not silent. The auto-updater MUST NOT install a
+  version lower than the one running (roll-forward only, ADR-0006).
 - No card data (PAN, CVV) ever touches POS-Pulse storage or logs. Card capture is delegated to a PCI-DSS
   certified payment terminal; only authorization tokens / last-4 may be persisted.
 - Content Security Policy (CSP) MUST disallow `unsafe-eval` and inline scripts in production builds.
@@ -1122,8 +1199,14 @@ within a category, MAJOR bump if it shifts a Core Principle's enforcement).
   HTML/canvas fallback (`node-thermal-printer` or equivalent for the direct path; the OS print queue
   for the fallback). The choice is per-printer, not per-feature.
 - Hardware: barcode scanners as keyboard-wedge HID input only (no native SDK).
-- Build & ship: Vite for renderer, `tsc` for main, electron-builder for Windows installers,
-  electron-updater pointed at `https://pos.smartdatapulse.tech/updates/` for auto-update.
+- Build & ship: Vite for renderer, `tsc` for main, electron-builder for Windows installers
+  (per-user NSIS), electron-updater (`generic` provider) against the configured update origin
+  for auto-update (ADR-0006).
+- Update identity (frozen): `appId` `tech.smartdatapulse.pos`, `productName` `POS Pulse`, and
+  the package `name` `pos-pulse`. Together they determine the installer identity, install
+  directory, executable name and the `userData` path that holds the local database and
+  DPAPI-protected secrets. Changing any of them breaks the update chain and orphans terminal
+  data, so it requires an amendment and a data-migration plan.
 - API typings: `openapi-typescript` reading from `https://api.smartdatapulse.tech/openapi.json`,
   generated into `src/shared/api-types.ts` and committed to the repo.
 
@@ -1326,6 +1409,6 @@ feature) when 003 closes.
 
 ---
 
-**Version:** 1.5.1
+**Version:** 1.6.0
 **Ratified:** 2026-05-01
-**Last Amended:** 2026-05-05
+**Last Amended:** 2026-10-09
