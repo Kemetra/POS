@@ -59,7 +59,7 @@ interface HarnessParams {
   readonly preset: string;
 }
 
-function readParams(): HarnessParams {
+export function readParams(): HarnessParams {
   const query = window.location.hash.split('?')[1] ?? '';
   const params = new URLSearchParams(query);
   const lines = Number.parseInt(params.get('lines') ?? '10', 10);
@@ -105,7 +105,7 @@ function makeEnvelope(lineCount: number): PaymentIntentEnvelope {
 const ATTEMPT_ID = 'dev-attempt';
 
 /** An in-memory stand-in for main's payment projection. Presentation only. */
-function makeBridge(subtotal: number, seed: readonly TenderLineRendererView[]) {
+export function makeBridge(subtotal: number, seed: readonly TenderLineRendererView[]) {
   let lines: TenderLineRendererView[] = [...seed];
   let state: PaymentAttemptRendererView['state'] = 'started';
   const now = (): string => new Date().toISOString();
@@ -195,7 +195,7 @@ function seedLine(
   };
 }
 
-function presetLines(preset: string, subtotal: number): TenderLineRendererView[] {
+export function presetLines(preset: string, subtotal: number): TenderLineRendererView[] {
   const half = Math.floor(subtotal / 2);
   switch (preset) {
     case 'partial':
@@ -216,6 +216,11 @@ function presetLines(preset: string, subtotal: number): TenderLineRendererView[]
 }
 
 let prepared: { bridge: ReturnType<typeof makeBridge>; params: HarnessParams } | null = null;
+
+/** Test seam: forget the seeded page so the next render reads the hash again. */
+export function resetCheckoutProofForTests(): void {
+  prepared = null;
+}
 
 /** Seeds the stores once, before the first render (module state: the harness is one page). */
 function prepare(): NonNullable<typeof prepared> {
