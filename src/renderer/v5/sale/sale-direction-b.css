@@ -1,0 +1,375 @@
+/*
+ * RT-242 (VNext W1-B) — Sale layout, Direction B (OD-7; DESIGN.md "Frame —
+ * Direction B"; pack I2-Sale / I2-LongCart). Live Sale only: the static proof
+ * keeps sale-screen.css.
+ *
+ *   ┌ command bar (scan · search) ┐┌ money ┐
+ *   │ status line · freshness      ││ column│
+ *   ├──────────────────────────────┤│       │
+ *   │ cart (takes the workspace)   ││ total │
+ *   │                              ││ commit│
+ *   └──────────────────────────────┘└ void ─┘
+ *
+ * Comfortable (workspace > 1120px): money column 320px, 60px rows.
+ * Compact (≤ 1120px, a 1024 window): money column 280px, 52px rows.
+ */
+
+.v5-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+/* ── Screen grid ────────────────────────────────────────────────────────── */
+
+.v5-live-sale .v5-sale-workstation {
+  --v5-money-column: 320px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--v5-money-column);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'command money'
+    'cart money';
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.v5-live-sale .v5-sale-workstation[data-catalogue='false'] {
+  grid-template-columns: minmax(0, 1fr) var(--v5-money-column);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'cart money';
+}
+
+.v5-live-sale .v5-sale-command {
+  grid-area: command;
+}
+
+.v5-live-sale .v5-sale-cart {
+  grid-area: cart;
+}
+
+.v5-live-sale .v5-sale-money {
+  grid-area: money;
+}
+
+/* The scan status keeps a slim strip only when there is no command bar. */
+.v5-live-sale .v5-live-titlebar {
+  min-block-size: 44px;
+}
+
+/* ── Command bar ────────────────────────────────────────────────────────── */
+
+.v5-sale-command {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.v5-sale-command-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 40%);
+  gap: var(--space-2);
+}
+
+.v5-sale-command-input {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-inline-size: 0;
+}
+
+.v5-sale-command-input label {
+  margin: 0;
+  color: var(--color-primary-emphasis);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+/* The scan target is the primary entry: solid, framed in primary, always findable. */
+.v5-live-sale .v5-sale-command .v5-live-scan-field {
+  min-block-size: 56px;
+  padding-inline: var(--space-3);
+  border: 2px solid var(--color-primary);
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.v5-live-sale .v5-sale-command .v5-live-scan-field input {
+  block-size: 28px;
+}
+
+.v5-live-sale .v5-sale-command .v5-live-scan-label {
+  margin-block-start: 0;
+}
+
+.v5-live-sale .v5-sale-command .v5-sale-search-field {
+  min-block-size: 56px;
+}
+
+.v5-live-sale .v5-sale-command .v5-sale-search-field input {
+  block-size: 28px;
+}
+
+/* One quiet line: scan owner, the last add, and how fresh the catalogue is. */
+.v5-sale-command-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+}
+
+.v5-live-sale .v5-sale-command-status .v5-live-scan-status {
+  margin-inline-start: 0;
+}
+
+.v5-sale-last-add {
+  overflow: hidden;
+  min-inline-size: 0;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v5-sale-last-add:empty {
+  display: none;
+}
+
+.v5-live-sale .v5-sale-command-status .v5-live-freshness {
+  margin-inline-start: auto;
+  padding-inline: var(--space-2) 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+}
+
+.v5-live-sale .v5-sale-command-status .v5-live-freshness[data-tone='warning'] {
+  padding-inline-end: var(--space-1);
+  background: var(--color-warning-soft);
+}
+
+/* Results drop down over the cart; Esc or a pick closes them. About five rows show. */
+.v5-sale-dropdown {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline: 0;
+  display: flex;
+  flex-direction: column;
+  max-block-size: 360px;
+  margin-block-start: var(--space-1);
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-overlay);
+}
+
+.v5-sale-dropdown .v5-sale-product-row {
+  min-block-size: 60px;
+  padding: var(--space-1) var(--space-3);
+}
+
+/* ── Cart ───────────────────────────────────────────────────────────────── */
+
+.v5-live-sale .v5-sale-cart-heading {
+  min-block-size: 44px;
+  padding-block: var(--space-1);
+}
+
+.v5-live-sale .v5-sale-cart-columns,
+.v5-live-sale .v5-sale-cart-line {
+  grid-template-columns: 24px minmax(0, 1fr) 128px 96px 112px 112px;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+}
+
+.v5-live-sale .v5-sale-cart-columns span:nth-child(n + 3) {
+  text-align: center;
+}
+
+.v5-live-sale .v5-sale-cart-line {
+  min-block-size: 60px;
+  padding-block: var(--space-1);
+}
+
+.v5-live-sale .v5-sale-cart-line:focus-visible {
+  outline: var(--v5-focus-ring);
+  outline-offset: -2px;
+}
+
+/*
+ * The line the last add landed on. Physical box-shadow on purpose: an inset
+ * shadow has no logical form, and in this RTL screen the inline start is the
+ * right edge (negative x paints the right side).
+ */
+.v5-live-sale .v5-sale-cart-line[data-last-added='true'] {
+  box-shadow: inset -4px 0 0 var(--color-primary);
+}
+
+.v5-live-sale .v5-sale-cart-line[data-flash='true'] {
+  animation: v5-row-flash var(--motion-flash) var(--motion-ease);
+}
+
+@keyframes v5-row-flash {
+  from {
+    background: var(--color-primary-soft);
+  }
+}
+
+.v5-live-sale .v5-live-line-actions {
+  justify-content: flex-end;
+  gap: 0;
+  margin: 0;
+}
+
+.v5-live-sale .v5-live-line-actions button {
+  padding-inline: var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.v5-live-sale .v5-live-line-actions button[data-row-action='remove'] {
+  color: var(--color-danger-emphasis);
+}
+
+.v5-live-sale .v5-live-line-actions button[data-row-action='remove']:hover {
+  background: var(--color-danger-soft);
+}
+
+/* ── Money column ───────────────────────────────────────────────────────── */
+
+.v5-sale-money {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-block-size: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-sale-money-title {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Totals and the commit sit together at the foot: the total is read right above the action. */
+.v5-sale-money-commit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-start: auto;
+}
+
+/* The void is a separate region, at least 16px from the commit (DESIGN.md touch targets). */
+.v5-sale-money-secondary {
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.v5-sale-money-secondary .v5-live-void {
+  inline-size: 100%;
+}
+
+.v5-sale-money-counts {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.v5-sale-money-counts > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: 30px;
+  font-size: var(--font-size-sm);
+}
+
+.v5-sale-money-counts dt {
+  color: var(--color-text-muted);
+}
+
+.v5-sale-money-counts dd {
+  margin: 0;
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* As in the pack: the label above, the amount below it at the inline end — never wrapped. */
+.v5-live-sale .v5-sale-money .v5-sale-grand-total {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin-block-start: var(--space-1);
+  padding-block: var(--space-2);
+}
+
+.v5-live-sale .v5-sale-money .v5-sale-grand-total strong {
+  align-self: flex-end;
+}
+
+/* ── Compact (a 1024 window) ───────────────────────────────────────────── */
+
+@container v5-screen (max-width: 1120px) {
+  .v5-live-sale .v5-sale-workstation {
+    --v5-money-column: 280px;
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  /* The row number gives way to the product name. */
+  .v5-live-sale .v5-sale-cart-columns,
+  .v5-live-sale .v5-sale-cart-line {
+    grid-template-columns: minmax(0, 1fr) 120px 84px 100px 104px;
+    gap: var(--space-1);
+    padding-inline: var(--space-2);
+  }
+
+  .v5-live-sale .v5-sale-cart-columns > span:first-child,
+  .v5-live-sale .v5-sale-line-index {
+    display: none;
+  }
+
+  .v5-live-sale .v5-sale-cart-line {
+    min-block-size: 52px;
+    padding-block: 2px;
+  }
+
+  .v5-sale-money {
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .v5-live-sale .v5-sale-grand-total strong {
+    font-size: var(--font-size-2xl);
+  }
+}
+
+@media (forced-colors: active) {
+  .v5-sale-dropdown {
+    border-color: CanvasText;
+  }
+
+  /* box-shadow is dropped in forced colours: mark the last add with a real edge. */
+  .v5-live-sale .v5-sale-cart-line[data-last-added='true'] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}

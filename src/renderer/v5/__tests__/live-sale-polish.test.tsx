@@ -74,10 +74,17 @@ describe('v5 Sale polish — transaction state in the cart heading', () => {
     expect(state).not.toHaveAttribute('role');
   });
 
-  it('places the void entry point in the cart heading, not on its own toolbar row', () => {
+  // RT-242 (Direction B): the void moves to the money column's own region,
+  // apart from the commit, and no longer sits in the cart heading.
+  it('places the void in the money column, in its own region apart from the commit', () => {
     render(<LiveSaleCart {...cart()} />);
     const voidButton = screen.getByRole('button', { name: 'إلغاء البيع' });
-    expect(cartHeading()).toContainElement(voidButton);
+    const money = screen.getByRole('region', { name: 'ملخص العملية' });
+    expect(money).toContainElement(voidButton);
+    expect(cartHeading()).not.toContainElement(voidButton);
+    const commit = screen.getByRole('button', { name: /تسليم السلة للدفع/ });
+    expect(voidButton.closest('.v5-sale-money-secondary')).not.toBeNull();
+    expect(commit.closest('.v5-sale-money-secondary')).toBeNull();
   });
 
   it('drops the decorative eyebrow above the cart heading', () => {

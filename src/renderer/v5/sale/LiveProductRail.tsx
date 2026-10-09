@@ -1,7 +1,16 @@
-import { useState, type ChangeEvent, type JSX, type KeyboardEvent, type RefObject } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type JSX,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import type { CatalogueSearchState } from '../../stores/catalogueSearchStore';
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
-import { useDebouncedSearch } from '../../stores/useDebouncedSearch';
+import { useDebouncedSearch, type DebouncedSearch } from '../../stores/useDebouncedSearch';
 import type { FreshnessState, RefreshFeedback } from '../../sale/useCatalogueFreshness';
 import { V5Icon } from '../foundation/V5Icon';
 import { LiveSearchResults } from './LiveSearchResults';
@@ -19,6 +28,10 @@ interface Props {
   onScan: (barcode: string) => void;
   onSelect: (product: ProductSnapshotDisplay) => void;
   onRecover: () => void;
+  /** Esc: close the results and hand focus back to the scan owner (15 §3.2). */
+  onDismiss?: () => void;
+  /** The scan-owner status and the last-add acknowledgement, owned by the workspace. */
+  status?: ReactNode;
   searchRef: RefObject<HTMLInputElement | null>;
 }
 
@@ -50,16 +63,73 @@ const FEEDBACK_COPY: Record<RefreshFeedback, string | null> = {
   'already-running': 'جارٍ التحديث بالفعل',
 };
 
+/** The search FSM states that have something to show below the command bar. */
+function resultsOpen(state: CatalogueSearchState): boolean {
+  return state.kind !== 'idle' && state.kind !== 'confirm_pending';
+}
+
+/**
+ * RT-242 (VNext W1-B, Direction B) — the Sale command bar: the scan target and
+ * typed search side by side above the cart, the scan-owner status and catalogue
+ * freshness on one quiet line beneath, and the search results as a dropdown
+ * over the cart that closes on Esc or on a pick. Behaviour is unchanged: the
+ * same two fields, the same handlers, confirm-first add.
+ */
 export function LiveProductRail(props: Props): JSX.Element {
+  const [query, setQuery] = useState('');
+  const previousKind = useRef(props.state.kind);
+  // A pick resolved (added or cancelled): the typed query has done its job.
+  useEffect(() => {
+    if (previousKind.current === 'confirm_pending' && props.state.kind === 'idle') setQuery('');
+    previousKind.current = props.state.kind;
+  }, [props.state.kind]);
+
+  // Owned here, not in the field, so Esc can drop a keystroke still inside the
+  // debounce window; otherwise it would reopen the results after dismissal.
+  const search = useDebouncedSearch(props.onSearch);
+  const open = resultsOpen(props.state);
+  function handleKeyDown(event: KeyboardEvent<HTMLElement>): void {
+    if (event.key !== 'Escape' || !open) return;
+    event.preventDefault();
+    event.stopPropagation();
+    search.cancel();
+    setQuery('');
+    if (props.onDismiss) props.onDismiss();
+    else props.onRecover();
+  }
+
+  return (
+    <section
+      className="v5-sale-command"
+      aria-labelledby="v5-live-products-title"
+      onKeyDown={handleKeyDown}
+    >
+      <h2 id="v5-live-products-title" className="v5-visually-hidden">
+        الأصناف والمنتجات
+      </h2>
+      <div className="v5-sale-command-fields">
+        <ScanField onScan={props.onScan} />
+        <SearchField
+          query={query}
+          setQuery={setQuery}
+          search={search}
+          onRecover={props.onRecover}
+          searchRef={props.searchRef}
+        />
+      </div>
+      <div className="v5-sale-command-status">
+        {props.status}
+        <FreshnessBar {...props} />
+      </div>
+      {open && <ResultsDropdown {...props} />}
+    </section>
+  );
+}
+
+function ResultsDropdown(props: Props): JSX.Element {
   const count = props.state.kind === 'results' ? props.state.items.length : 0;
   return (
-    <section className="v5-sale-products" aria-labelledby="v5-live-products-title">
-      <div className="v5-sale-region-heading">
-        <h2 id="v5-live-products-title">الأصناف والمنتجات</h2>
-      </div>
-      <div className="v5-sale-search-area">
-        <SearchFields {...props} />
-      </div>
+    <div className="v5-sale-dropdown">
       <div className="v5-sale-list-heading">
         <span>
           نتائج البحث
@@ -74,63 +144,29 @@ export function LiveProductRail(props: Props): JSX.Element {
           onRecover={props.onRecover}
         />
       </div>
-      <FreshnessBar {...props} />
-    </section>
+    </div>
   );
 }
 
-function SearchFields(props: Props): JSX.Element {
-  const [query, setQuery] = useState('');
+/** The scan owner's focus anchor: unmistakably the scanner's, not a second search box. */
+function ScanField(props: { onScan: (barcode: string) => void }): JSX.Element {
   const [barcode, setBarcode] = useState('');
-  const search = useDebouncedSearch(props.onSearch);
-
-  function handleSearchChange(event: ChangeEvent<HTMLInputElement>): void {
-    const value = event.target.value;
-    setQuery(value);
-    if (value.length === 0) props.onRecover();
-    search.onType(value);
-  }
-  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    search.onScanSubmit(query);
-  }
-  function handleScanKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     const value = barcode.trim();
     setBarcode('');
     if (value.length > 0) props.onScan(value);
   }
-
   return (
-    <>
-      <label htmlFor="v5-live-search">البحث بالاسم أو الباركود</label>
-      <div className="v5-sale-search-field">
-        <span aria-hidden="true" className="v5-sale-search-icon">
-          <V5Icon name="search" />
-        </span>
-        <input
-          ref={props.searchRef}
-          id="v5-live-search"
-          data-scan-target="search"
-          type="search"
-          value={query}
-          onChange={handleSearchChange}
-          onKeyDown={handleSearchKeyDown}
-          placeholder="اسم الصنف أو الباركود"
-          autoComplete="off"
-          aria-describedby="v5-live-search-note"
-        />
-      </div>
-      <p id="v5-live-search-note">اكتب حرفين للبحث، أو اضغط Enter للبحث فورًا.</p>
-      <label htmlFor={SCAN_ANCHOR_ID} className="v5-live-scan-label">
-        التقاط مسح الباركود
-      </label>
-      <div className="v5-live-scan-field">
-        <span aria-hidden="true" className="v5-live-scan-icon">
-          <V5Icon name="scan" />
-        </span>
+    <div className="v5-live-scan-field">
+      <span aria-hidden="true" className="v5-live-scan-icon">
+        <V5Icon name="scan" size={24} />
+      </span>
+      <div className="v5-sale-command-input">
+        <label htmlFor={SCAN_ANCHOR_ID} className="v5-live-scan-label">
+          التقاط مسح الباركود
+        </label>
         <input
           id={SCAN_ANCHOR_ID}
           data-scan-target="search"
@@ -142,11 +178,57 @@ function SearchFields(props: Props): JSX.Element {
           onChange={(event) => {
             setBarcode(event.target.value);
           }}
-          onKeyDown={handleScanKeyDown}
+          onKeyDown={handleKeyDown}
           aria-label="حقل التقاط مسح الباركود"
         />
       </div>
-    </>
+    </div>
+  );
+}
+
+function SearchField(props: {
+  query: string;
+  setQuery: (value: string) => void;
+  search: DebouncedSearch;
+  onRecover: () => void;
+  searchRef: RefObject<HTMLInputElement | null>;
+}): JSX.Element {
+  const { search } = props;
+  function handleChange(event: ChangeEvent<HTMLInputElement>): void {
+    const value = event.target.value;
+    props.setQuery(value);
+    if (value.length === 0) props.onRecover();
+    search.onType(value);
+  }
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    search.onScanSubmit(props.query);
+  }
+  return (
+    <div className="v5-sale-search-field">
+      <span aria-hidden="true" className="v5-sale-search-icon">
+        <V5Icon name="search" />
+      </span>
+      <div className="v5-sale-command-input">
+        <label htmlFor="v5-live-search">البحث بالاسم أو الباركود</label>
+        <input
+          ref={props.searchRef}
+          id="v5-live-search"
+          data-scan-target="search"
+          type="search"
+          value={props.query}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          placeholder="اسم الصنف أو الباركود"
+          autoComplete="off"
+          aria-describedby="v5-live-search-note"
+        />
+      </div>
+      <p id="v5-live-search-note" className="v5-visually-hidden">
+        اكتب حرفين للبحث، أو اضغط Enter للبحث فورًا.
+      </p>
+    </div>
   );
 }
 
