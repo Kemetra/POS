@@ -185,24 +185,49 @@ describe('writePreMigrationSnapshot', () => {
   });
 });
 
+function recordingHandle(): { handle: DatabaseHandle; prepared: string[]; runs: unknown[][] } {
+  const runs: unknown[][] = [];
+  const prepared: string[] = [];
+  const handle = {
+    prepare(sql: string) {
+      prepared.push(sql);
+      return {
+        run: (...params: unknown[]) => {
+          runs.push(params);
+        },
+      };
+    },
+  } as unknown as DatabaseHandle;
+  return { handle, prepared, runs };
+}
+
 describe('bindVacuumInto', () => {
   it('runs VACUUM INTO with the target path as a bound parameter', () => {
-    const runs: unknown[][] = [];
-    const prepared: string[] = [];
-    const handle = {
-      prepare(sql: string) {
-        prepared.push(sql);
-        return {
-          run: (...params: unknown[]) => {
-            runs.push(params);
-          },
-        };
-      },
-    } as unknown as DatabaseHandle;
+    const { handle, prepared, runs } = recordingHandle();
+    const target = path.resolve(tmpRoot, "it's here.db");
 
-    bindVacuumInto(handle)("C:\\data\\it's here.db");
+    bindVacuumInto(handle)(target);
 
     expect(prepared).toEqual(['VACUUM INTO ?']);
-    expect(runs).toEqual([["C:\\data\\it's here.db"]]);
+    expect(runs).toEqual([[path.toNamespacedPath(target)]]);
   });
+
+  // SQLite's Windows VFS rejects a path once `<path>-journal` would exceed
+  // MAX_PATH (observed: 251 chars works, 252 fails with SQLITE_CANTOPEN). The
+  // snapshot lives deeper than the live DB, so a long `userData` (redirected
+  // profile, long user name) would fail only the snapshot and halt startup.
+  it.runIf(process.platform === 'win32')(
+    'passes Windows paths in long-path form so SQLite is not capped at MAX_PATH',
+    () => {
+      const { handle, runs } = recordingHandle();
+
+      bindVacuumInto(handle)('C:\\Users\\u\\AppData\\Roaming\\pos-pulse\\backups\\a.db.partial');
+      bindVacuumInto(handle)('\\\\fileserver\\profiles\\u\\pos-pulse\\backups\\a.db.partial');
+
+      expect(runs).toEqual([
+        ['\\\\?\\C:\\Users\\u\\AppData\\Roaming\\pos-pulse\\backups\\a.db.partial'],
+        ['\\\\?\\UNC\\fileserver\\profiles\\u\\pos-pulse\\backups\\a.db.partial'],
+      ]);
+    },
+  );
 });

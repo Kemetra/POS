@@ -97,10 +97,17 @@ function listSnapshots(backupsDir: string): string[] {
  * Bind `vacuumInto` to a better-sqlite3 handle. `VACUUM INTO` writes a
  * transactionally consistent copy (WAL content included) without blocking
  * readers; the path is a bound parameter, so quotes in it are safe.
+ *
+ * On Windows the path is passed in long-path form (`\\?\C:\…`, `\\?\UNC\…`).
+ * SQLite's Windows VFS otherwise refuses a path once `<path>-journal` would
+ * exceed MAX_PATH (SQLITE_CANTOPEN at 252+ chars). The snapshot sits deeper
+ * than the live DB, so without this a long `userData` (redirected profile,
+ * long user name) would fail only the snapshot and halt startup. Elsewhere
+ * `toNamespacedPath` returns the path unchanged.
  */
 export function bindVacuumInto(handle: DatabaseHandle): (targetPath: string) => void {
   return (targetPath) => {
     const stmt = handle.prepare('VACUUM INTO ?') as { run(...params: unknown[]): unknown };
-    stmt.run(targetPath);
+    stmt.run(path.toNamespacedPath(targetPath));
   };
 }
