@@ -13,6 +13,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { formatCheckoutMoney } from '../format-checkout-money';
 import { CashEntry } from '../CashEntry';
+import { PaymentLedger } from '../../../v5/checkout/PaymentLedger';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry';
 import { VoucherEntry } from '../VoucherEntry';
 
@@ -100,19 +101,31 @@ describe('EGP amounts stay left-to-right in the RTL checkout', () => {
     expectEveryEgpAmountIsLtr(container);
   });
 
-  it('in the cash change due', async () => {
-    const userEvent = (await import('@testing-library/user-event')).default;
+  it('in the ledger cash preview (change and shortfall)', () => {
+    for (const draft of [
+      { kind: 'change', changeMinor: 250 } as const,
+      { kind: 'shortfall', shortMinor: 125_000 } as const,
+    ]) {
+      const { container, unmount } = render(
+        <div dir="rtl">
+          <PaymentLedger dueMinor={1250} lines={[]} changeDueMinor={0} draft={draft} />
+        </div>,
+      );
+      expect(screen.getByTestId('payment-ledger-draft')).toHaveTextContent(
+        draft.kind === 'change' ? '2.50 EGP' : '1,250.00 EGP',
+      );
+      expectEveryEgpAmountIsLtr(container);
+      unmount();
+    }
+  });
+
+  it('in the quick-amount chips', () => {
     const { container } = render(
       <div dir="rtl">
         <CashEntry remainingBalanceMinor={1250} onConfirm={vi.fn()} />
       </div>,
     );
-    await userEvent.setup().type(screen.getByTestId('cash-entry-amount-input'), '15.00');
-    expect(screen.getByTestId('cash-entry-change-due')).toHaveTextContent('2.50 EGP');
-    const changeValue = screen
-      .getByTestId('cash-entry-change-due')
-      .querySelector('.cash-entry__change-due-value');
-    expect(changeValue?.closest('[dir="ltr"]')).not.toBeNull();
+    expect(screen.getAllByTestId('quick-amount').length).toBeGreaterThan(0);
     expectEveryEgpAmountIsLtr(container);
   });
 });
@@ -125,6 +138,8 @@ describe('checkout source tripwire', () => {
     '../../v5/checkout/TenderPicker.tsx',
     '../../v5/checkout/PaymentLedger.tsx',
     'CashEntry.tsx',
+    '../../v5/checkout/QuickAmounts.tsx',
+    '../../v5/checkout/CashKeypad.tsx',
     'ExternalCardTerminalEntry.tsx',
     'VoucherEntry.tsx',
     'PaymentSurface.tsx',

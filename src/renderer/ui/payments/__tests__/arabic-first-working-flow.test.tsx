@@ -3,7 +3,7 @@
  * WORKING (pre-settlement) tender flow.
  *
  * Covers FR-19 / SC-4 for: OrderSummary, TenderPicker, CashEntry,
- * AmountPad, VoucherEntry, ExternalCardTerminalEntry.
+ * CashKeypad, VoucherEntry, ExternalCardTerminalEntry.
  *
  * WHY THIS TEST SCANS ATTRIBUTES, NOT JUST TEXT NODES
  * ---------------------------------------------------
@@ -56,7 +56,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import type { PaymentIntentEnvelope } from '../../../../shared/cart/handoff-envelope.js';
 import type { PaymentsBridgeAPI, TenderBridgeAPI } from '../../../../shared/bridge-api.js';
-import { AmountPad } from '../AmountPad.js';
+import { CashKeypad } from '../../../v5/checkout/CashKeypad.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
 import { OrderSummary } from '../../../v5/checkout/OrderSummary.js';
@@ -266,9 +266,9 @@ describe('022 US3 T076 — Arabic-first working tender flow (FR-19 / SC-4)', () 
     expectNoEnglishOnlyStrings(container, 'CashEntry');
   });
 
-  it('AmountPad carries no English-only operator-facing string', () => {
-    const { container } = render(<AmountPad valueMinor={0} onChange={vi.fn()} />);
-    expectNoEnglishOnlyStrings(container, 'AmountPad');
+  it('CashKeypad carries no English-only operator-facing string', () => {
+    const { container } = render(<CashKeypad valueMinor={0} onChange={vi.fn()} />);
+    expectNoEnglishOnlyStrings(container, 'CashKeypad');
   });
 
   it('VoucherEntry carries no English-only operator-facing string', () => {

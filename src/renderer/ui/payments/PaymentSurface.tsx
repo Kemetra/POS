@@ -20,6 +20,7 @@ import { useScanNoticeStore } from '../../scan/scan-notice-store.js';
 import { TenderPicker, type TenderKind } from '../../v5/checkout/TenderPicker.js';
 import { OrderSummary } from '../../v5/checkout/OrderSummary.js';
 import { PaymentLedger } from '../../v5/checkout/PaymentLedger.js';
+import { cashDraft } from '../../v5/checkout/cash-draft.js';
 import { ToneIcon } from '../../v5/foundation/ToneIcon.js';
 import '../../v5/checkout/checkout.css';
 import { CashEntry } from './CashEntry.js';
@@ -521,6 +522,8 @@ export function PaymentSurface({
   const paymentSlice = usePaymentStore((s) => s.paymentSlice);
 
   const [selectedTender, setSelectedTender] = useState<TenderKind | null>(null);
+  // RT-243 W1-C — the cash typed but not yet applied, for the ledger's preview.
+  const [cashDraftMinor, setCashDraftMinor] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>('tender_selection');
   // RT-238: the pinned primary slot the entry components render their apply-commit into.
   const [primarySlot, setPrimarySlot] = useState<HTMLElement | null>(null);
@@ -1236,8 +1239,8 @@ export function PaymentSurface({
     : 0;
 
   // RT-237 — the change to hand back is main's `change_due_minor` on the
-  // applied lines, never recomputed here. Shown after apply (CashEntry) and on
-  // completion; unsafe values are skipped like the amount accumulator above.
+  // applied lines, never recomputed here. Shown after apply (PaymentLedger) and
+  // on completion; unsafe values are skipped like the amount accumulator above.
   let appliedChangeDueMinor = 0;
   for (const line of appliedLines) {
     const change = line.change_due_minor;
@@ -1258,8 +1261,16 @@ export function PaymentSurface({
   const showSettle = hasAppliedLine && !entryOwnsPrimary && afterApply === 'idle' && !cancelOpen;
   const entryOpen =
     bridge !== null && phase === 'entry' && paymentAttemptId !== null && !cancelOpen;
-  // The cash entry shows main's change itself once the amount is covered.
+  // RT-243 W1-C (RT-255 item 1) — the change or shortfall of the cash being
+  // typed is previewed in the pinned ledger, only while money is still owed and
+  // the projection is current. Once the due is covered the ledger shows main's
+  // recorded change instead; a preview against a zero due would show the amount
+  // received as change (RT-237).
   const cashEntryOpen = entryOpen && selectedTender === 'cash';
+  const ledgerDraft =
+    cashEntryOpen && afterApply === 'idle' && remainingBalanceMinor > 0
+      ? cashDraft(cashDraftMinor, remainingBalanceMinor)
+      : null;
 
   // Refusals and hints stay next to the commit, in the pinned bar. With no bridge
   // (Slice-1 mode) there is no bar, so they render in the surface as before.
@@ -1465,7 +1476,7 @@ export function PaymentSurface({
                     remainingBalanceMinor={remainingBalanceMinor}
                     paymentAttemptId={paymentAttemptId}
                     tenderApply={(req) => bridge.tender.apply(req)}
-                    appliedChangeDueMinor={appliedChangeDueMinor}
+                    onDraftChange={setCashDraftMinor}
                     onApplied={() => {
                       void handleLineApplied();
                     }}
@@ -1507,7 +1518,7 @@ export function PaymentSurface({
             dueMinor={remainingBalanceMinor}
             lines={appliedLines}
             changeDueMinor={appliedChangeDueMinor}
-            showChange={!cashEntryOpen}
+            draft={ledgerDraft}
             testIds={LEDGER_TEST_IDS}
             actions={actionBar}
           />

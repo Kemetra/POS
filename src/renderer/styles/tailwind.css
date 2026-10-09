@@ -1987,22 +1987,6 @@ body {
   }
 
   /*
-   * 022 US3 T072 — quick-amount buttons. Radius 10 is already
-   * `--radius-control`; the mockup's 10x4 padding is the tighter chip shape.
-   * The 44px minimum touch target is preserved — the mockup's padding must not
-   * shrink the hit area below the hardware-matrix floor.
-   *
-   * The mockup groups the chips 4-up then 3-up; that grouping is presentational
-   * and adapts to the supported denominations, so it is NOT reproduced as a
-   * fixed cage. Presentation only — no client-side money arithmetic (T072).
-   */
-  .quick-amounts .quick-amount-btn {
-    padding-block: var(--space-2);
-    padding-inline: var(--space-1);
-    min-inline-size: 76px;
-  }
-
-  /*
    * 022 US3 T072 — the primary confirm action. Padding 15x40, label 16/700.
    * The cancel action turns red on hover per the mockup; it uses the measured
    * `--color-danger` token, NOT the handoff's stock Tailwind red, because the
@@ -2181,68 +2165,6 @@ body {
       border: 2px dashed GrayText;
       color: GrayText;
     }
-  }
-
-  /* Cash keypad (AmountPad). */
-  .amount-pad {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .amount-pad__display {
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-card);
-    background-color: var(--color-surface-sunken);
-    border: 1px solid var(--color-border);
-    font-size: var(--font-size-2xl);
-    text-align: end;
-  }
-
-  .amount-pad__quick {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-  }
-
-  .amount-pad__quick-key {
-    flex: 1 1 auto;
-    min-block-size: 44px;
-    padding-inline: var(--space-3);
-    border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-control);
-    background-color: var(--color-primary-soft);
-    color: var(--color-text);
-    cursor: pointer;
-  }
-
-  .amount-pad__grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-2);
-  }
-
-  .amount-pad__key {
-    min-block-size: 44px;
-    border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-control);
-    background-color: var(--color-surface);
-    color: var(--color-text);
-    font-size: var(--font-size-lg);
-    cursor: pointer;
-  }
-
-  .amount-pad__key:hover {
-    background-color: var(--color-surface-elevated);
-  }
-
-  .amount-pad__key:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-  }
-
-  .amount-pad__key--del {
-    color: var(--color-text-muted);
   }
 
   /*
@@ -3128,54 +3050,6 @@ body {
     font-variant-numeric: tabular-nums;
     font-weight: var(--font-weight-bold);
     color: var(--color-warning-emphasis);
-  }
-
-  /* ── Quick-amount chips (kit.css 475-504) ───────────────────────────────── */
-  .quick-amounts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-  }
-  .quick-amount-btn {
-    min-block-size: 52px;
-    min-inline-size: 96px;
-    padding-inline: var(--space-4);
-    border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-control);
-    background: var(--color-surface);
-    color: var(--color-text);
-    font-family: var(--font-family-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: var(--font-size-md);
-    font-weight: var(--font-weight-semibold);
-    cursor: pointer;
-    transition:
-      background-color var(--duration-1) var(--ease-out),
-      border-color var(--duration-1) var(--ease-out);
-  }
-  .quick-amount-btn:hover {
-    background: var(--color-primary-soft);
-    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
-  }
-  .quick-amount-btn--selected {
-    background: var(--color-primary-soft);
-    border-color: var(--color-primary);
-    color: var(--color-primary-emphasis);
-    box-shadow: inset 0 0 0 1px var(--color-primary);
-  }
-  /* Label chip uses sans-serif (Arabic "بالضبط" exact label). */
-  .quick-amount-btn--label {
-    font-family: var(--font-family-sans);
-  }
-  .quick-amount-btn:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
-  }
-
-  /* Change-due positive value (success register). */
-  .change-row__value--positive {
-    color: var(--color-success-emphasis);
-    font-weight: var(--font-weight-bold);
   }
 
   /* ── Voucher-field wrapper (kit.css 511-524) ────────────────────────────── */

@@ -2,6 +2,8 @@ import type { JSX, ReactNode } from 'react';
 
 import type { TenderLineRendererView, TenderType } from '../../../shared/payments/types';
 import { formatHumanMoney } from '../../ui/format/human-format';
+import { Notice } from '../foundation/Notice';
+import type { CashDraft } from './cash-draft';
 
 /**
  * RT-243 W1-C (freeze 15 §4 `PaymentLedger`; DESIGN.md Direction B) — the
@@ -26,6 +28,12 @@ import { formatHumanMoney } from '../../ui/format/human-format';
  * attempt holds. A line still applying or reversed is not recorded money and is
  * not listed. The change is main's `change_due_minor` (M-P5), never recomputed.
  * Nothing here claims a settle, a print or a sync.
+ *
+ * Cash draft (RT-243 W1-C; RT-255 item 1): while cash is typed and not yet
+ * applied, what it would mean sits under the amount due — the change to hand
+ * back, or how much it is short (M-P4). It is a preview of the field, kept apart
+ * from the recorded money, and it is never asked for once the due is covered
+ * (the recorded change is main's from then on).
  *
  * Presentational: amounts in, no store, no bridge. Test hooks the caller owns
  * arrive through `testIds`, so the V5 tree stays free of legacy names.
@@ -70,17 +78,40 @@ export interface PaymentLedgerProps {
   readonly lines: readonly TenderLineRendererView[];
   /** Main's change to hand back over those lines; 0 for none. */
   readonly changeDueMinor: number;
-  /** False while the cash entry is open: it already shows the same change. */
-  readonly showChange: boolean;
+  /** The cash typed but not yet applied, against the amount due; null for none. */
+  readonly draft?: CashDraft | null;
   /** The pinned action region (the Checkout action bar). */
   readonly actions?: ReactNode;
   readonly testIds?: PaymentLedgerTestIds;
 }
 
+function DraftPreview(props: { draft: CashDraft }): JSX.Element {
+  const { draft } = props;
+  return (
+    <div className="v5-ledger-draft" data-testid="payment-ledger-draft">
+      {draft.kind === 'change' ? (
+        <p
+          className="v5-ledger-row v5-ledger-row--change"
+          data-testid="payment-ledger-draft-change"
+        >
+          الباقي للعميل{' '}
+          <bdi className="v5-ledger-row__amount" dir="ltr">
+            {formatHumanMoney(draft.changeMinor)}
+          </bdi>
+        </p>
+      ) : (
+        <Notice tone="warning" testId="payment-ledger-draft-shortfall">
+          المبلغ المستلم أقل من المستحق بـ <bdi dir="ltr">{formatHumanMoney(draft.shortMinor)}</bdi>
+          .
+        </Notice>
+      )}
+    </div>
+  );
+}
+
 function RecordedMoney(props: {
   lines: readonly TenderLineRendererView[];
   changeDueMinor: number;
-  showChange: boolean;
 }): JSX.Element | null {
   if (props.lines.length === 0) return null;
   return (
@@ -103,7 +134,7 @@ function RecordedMoney(props: {
           </li>
         ))}
       </ul>
-      {props.showChange && props.changeDueMinor > 0 && (
+      {props.changeDueMinor > 0 && (
         <p className="v5-ledger-row v5-ledger-row--change" data-testid="payment-ledger-change">
           الباقي للعميل{' '}
           <span className="v5-ledger-row__amount" dir="ltr">
@@ -141,7 +172,7 @@ export function PaymentLedger({
   dueMinor,
   lines,
   changeDueMinor,
-  showChange,
+  draft = null,
   actions,
   testIds = {},
 }: PaymentLedgerProps): JSX.Element {
@@ -154,7 +185,8 @@ export function PaymentLedger({
         <HeroAmount minor={dueMinor} testId={testIds.due} />
       </div>
       <div className="v5-ledger__middle">
-        <RecordedMoney lines={lines} changeDueMinor={changeDueMinor} showChange={showChange} />
+        {draft !== null && <DraftPreview draft={draft} />}
+        <RecordedMoney lines={lines} changeDueMinor={changeDueMinor} />
       </div>
       {actions !== undefined && <div className="v5-ledger__actions">{actions}</div>}
     </section>

@@ -1,7 +1,8 @@
 /**
  * CashEntry — cashier enters the natural currency amount the customer pays
  * (e.g. "12.50"), not raw minor units. On overpayment the change-due ("money
- * back to client") shows the correct amount. Storage/math stay minor units.
+ * back to client") is the correct amount (shown by the ledger since RT-243
+ * W1-C). Storage/math stay minor units.
  */
 
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
@@ -33,25 +34,20 @@ describe('CashEntry — currency-amount input (EGP), not minor units', () => {
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), { target: { value: '12.50' } });
     fireEvent.click(screen.getByTestId('cash-entry-confirm'));
     expect(onConfirm).toHaveBeenCalledWith({ amountAppliedMinor: 1250, changeDueMinor: 0 });
-    // Exact cash → no change-due row shown (change is 0).
-    expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
   });
 
-  it('shows change due ("money back to client") when the customer overpays: pays 15.00 for a 12.50 sale → 2.50 EGP', () => {
+  it('confirms an overpayment with its change: pays 15.00 for a 12.50 sale → 2.50 EGP (250)', () => {
+    // The change is shown by the pinned ledger (RT-243 W1-C), not the entry.
     const { onConfirm } = renderCash();
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), { target: { value: '15.00' } });
-    // Change-due row appears and shows the formatted overage.
-    const change = screen.getByTestId('cash-entry-change-due');
-    expect(change).toHaveTextContent('2.50 EGP');
     fireEvent.click(screen.getByTestId('cash-entry-confirm'));
     expect(onConfirm).toHaveBeenCalledWith({ amountAppliedMinor: 1500, changeDueMinor: 250 });
   });
 
-  it('does not confirm an under-tender: pays 10.00 for a 12.50 sale → confirm disabled, no change row', () => {
+  it('does not confirm an under-tender: pays 10.00 for a 12.50 sale → confirm disabled', () => {
     const { onConfirm } = renderCash();
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), { target: { value: '10.00' } });
     expect(screen.getByTestId('cash-entry-confirm')).toBeDisabled();
-    expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
     fireEvent.click(screen.getByTestId('cash-entry-confirm'));
     expect(onConfirm).not.toHaveBeenCalled();
   });

@@ -292,11 +292,13 @@ describe('RT-243 F1 — recorded tender survives a Checkout remount', () => {
     expect(screen.getByTestId('payment-surface-amount-due')).toHaveTextContent('8.00 EGP');
   });
 
-  it('shows change once while the cash entry is open (the entry already shows it)', async () => {
+  it('shows change once, in the pinned ledger, while the cash entry is open (RT-255 item 1)', async () => {
     const bridge = makeBridge();
     await openWith(bridge, [line('tl-1', 'cash', 2000, 1, { change_due_minor: 700 })]);
     expect(screen.getByTestId('payment-surface-entry')).toBeInTheDocument();
-    expect(screen.getAllByText('الباقي للعميل')).toHaveLength(1);
-    expect(screen.queryByTestId('payment-ledger-change')).not.toBeInTheDocument();
+    expect(screen.getAllByText('الباقي للعميل', { exact: false })).toHaveLength(1);
+    expect(screen.getByTestId('payment-ledger-change')).toHaveTextContent('7.00 EGP');
+    // The due is covered, so the entry's typed amount is not previewed.
+    expect(screen.queryByTestId('payment-ledger-draft')).not.toBeInTheDocument();
   });
 });
