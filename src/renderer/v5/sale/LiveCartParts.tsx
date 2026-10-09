@@ -17,6 +17,10 @@ export function money(minor: number): string {
 interface LineProps {
   line: CartLineItem;
   index: number;
+  /** RT-242: the line the last confirmed add landed on (marked until the next add). */
+  lastAdded?: boolean;
+  /** RT-242: the 150 ms acknowledgement flash on that line. */
+  flashing?: boolean;
   editable: boolean;
   onIncrement: (line: CartLineItem) => void;
   onDecrement: (line: CartLineItem) => void;
@@ -37,20 +41,41 @@ function settleRowFocus(event: MouseEvent<HTMLButtonElement>, keyboardPlan?: () 
   else keyboardPlan?.();
 }
 
+/**
+ * RT-242 (Direction B row): name · quantity · unit price · line total · actions.
+ * «حذف» sits in its own column at the far end, never next to the stepper's +.
+ * The row itself takes focus for ↑ / ↓ (tabIndex −1: not an extra Tab stop).
+ */
 export function CartLineRow(props: LineProps): JSX.Element {
   const { line } = props;
   return (
-    <li className="v5-sale-cart-line" data-line-id={line.lineId}>
+    <li
+      className="v5-sale-cart-line"
+      data-line-id={line.lineId}
+      data-last-added={props.lastAdded === true ? 'true' : undefined}
+      data-flash={props.flashing === true ? 'true' : undefined}
+      tabIndex={-1}
+    >
       <span className="v5-sale-line-index" dir="ltr">
         {props.index + 1}
       </span>
       <div className="v5-sale-line-product">
         <strong>{line.displayName}</strong>
         {line.note && <span className="v5-sale-line-meta">ملاحظة: {line.note}</span>}
+      </div>
+      <QuantityControl {...props} />
+      <span className="v5-sale-line-unit" dir="ltr">
+        {money(line.unitPriceMinor)}
+      </span>
+      <strong className="v5-sale-line-total" dir="ltr">
+        {money(line.lineSubtotalMinor)}
+      </strong>
+      <div className="v5-live-line-actions">
         {props.editable && (
-          <div className="v5-live-line-actions">
+          <>
             <button
               type="button"
+              data-row-action="note"
               onClick={() => {
                 props.onOpenNote(line);
               }}
@@ -69,16 +94,9 @@ export function CartLineRow(props: LineProps): JSX.Element {
             >
               حذف
             </button>
-          </div>
+          </>
         )}
       </div>
-      <span className="v5-sale-line-unit" dir="ltr">
-        {money(line.unitPriceMinor)}
-      </span>
-      <QuantityControl {...props} />
-      <strong className="v5-sale-line-total" dir="ltr">
-        {money(line.lineSubtotalMinor)}
-      </strong>
     </li>
   );
 }

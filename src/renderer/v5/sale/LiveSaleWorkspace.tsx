@@ -15,6 +15,7 @@ import { focusScanOwner } from '../../scan/scan-anchor';
 import { acknowledgeDrawerNotice } from '../../ui/receipts/drawer-notice-store';
 import './sale-screen.css';
 import './live-sale.css';
+import './sale-direction-b.css';
 
 interface Props {
   cartBridge?: CartBridgeAPI;
@@ -34,7 +35,7 @@ export function LiveSaleWorkspace(props: Props): JSX.Element {
   if (!cartEnabled)
     return (
       <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
-        <SaleTitle scanAvailable={false} />
+        <SaleTitle scanAvailable={false} withStatus />
         <p className="v5-live-message">سلة البيع غير مفعّلة على هذا الجهاز بعد.</p>
       </section>
     );
@@ -83,14 +84,39 @@ const SALE_TITLE_ID = 'v5-sale-title';
 
 /**
  * Screen title only. Branding and operator identity belong to the app frame
- * (the v5 frame), never to the screen.
+ * (the v5 frame), never to the screen. RT-242 (Direction B): the title is for
+ * heading navigation only; the command bar is the first thing on screen. With
+ * no command bar (catalogue off, or the cart still being read) the scan status
+ * keeps its own slim strip so it is never missing.
  */
-function SaleTitle(props: { scanAvailable: boolean }): JSX.Element {
+function SaleTitle(props: { scanAvailable: boolean; withStatus: boolean }): JSX.Element {
   return (
-    <div className="v5-live-titlebar">
-      <h1 id={SALE_TITLE_ID}>مساحة البيع</h1>
-      <ScanStatus available={props.scanAvailable} />
+    <div className={props.withStatus ? 'v5-live-titlebar' : undefined}>
+      <h1 id={SALE_TITLE_ID} className="v5-visually-hidden">
+        مساحة البيع
+      </h1>
+      {props.withStatus && <ScanStatus available={props.scanAvailable} />}
     </div>
+  );
+}
+
+interface LastAdd {
+  readonly lineId: string;
+  readonly name: string;
+  /** Changes on every add, so a re-add of the same line still scrolls and flashes. */
+  readonly nonce: number;
+}
+
+/** UX-11: a concise, polite acknowledgement of the last confirmed add. */
+function AddAcknowledgement({ last }: { last: LastAdd | null }): JSX.Element {
+  return (
+    <p className="v5-sale-last-add" role="status" aria-live="polite">
+      {last !== null && (
+        <>
+          أُضيف: <bdi>{last.name}</bdi>
+        </>
+      )}
+    </p>
   );
 }
 
@@ -121,6 +147,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
   const cartId = useCartStore((state) => state.activeCart?.cart_id ?? null);
   const settledCartId = usePaymentStore(selectSettledCartId);
   const [voided, setVoided] = useState(false);
+  const [lastAdd, setLastAdd] = useState<LastAdd | null>(null);
   const cart = useSaleCartController({
     hydrateActiveCart: true,
     ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
@@ -138,6 +165,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
     if (ok) {
       cart.startNewSale();
       setVoided(true);
+      setLastAdd(null);
       // The «إلغاء البيع» control that opened the dialog is gone: hand focus to the scan owner.
       focusScanOwner();
     }
@@ -146,6 +174,11 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
   const acceptAddedLine = (line: AddedLineResult): void => {
     setVoided(false);
     cart.acceptAddedLine(line);
+    setLastAdd((previous) => ({
+      lineId: line.line_id,
+      name: line.display_name,
+      nonce: (previous?.nonce ?? 0) + 1,
+    }));
   };
 
   // An existing cart whose persisted lines are not known yet: show only a
@@ -154,7 +187,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
   if (cart.hydration !== 'ready') {
     return (
       <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
-        <SaleTitle scanAvailable={false} />
+        <SaleTitle scanAvailable={false} withStatus />
         <CartHydrationState failed={cart.hydration === 'failed'} onRetry={cart.retryHydration} />
       </section>
     );
@@ -162,11 +195,17 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
 
   return (
     <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
-      <SaleTitle scanAvailable={props.catalogueEnabled} />
+      <SaleTitle scanAvailable={false} withStatus={!props.catalogueEnabled} />
       <div className="v5-sale-workstation" data-catalogue={String(props.catalogueEnabled)}>
         {props.catalogueEnabled && (
           <LiveCatalogueRegion
             onLineAdded={acceptAddedLine}
+            status={
+              <>
+                <ScanStatus available />
+                <AddAcknowledgement last={lastAdd} />
+              </>
+            }
             {...(props.cartBridge ? { cartBridge: props.cartBridge } : {})}
             {...(props.catalogueBridge ? { catalogueBridge: props.catalogueBridge } : {})}
           />
@@ -177,6 +216,8 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           subtotalMinor={cart.subtotalMinor}
           itemCount={cart.itemCount}
           frozenSubtotalMinor={frozenSubtotal(frozen, cart.envelope)}
+          lastAddedLineId={lastAdd?.lineId ?? null}
+          lastAddNonce={lastAdd?.nonce ?? 0}
           canHandoff={cartState === CartState.editing && cart.lines.length > 0}
           handingOff={cartState === CartState.handing_off}
           cancelled={cartState === CartState.cancelled}
@@ -197,6 +238,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           onVoid={voidThenStartFresh}
           onNewSale={() => {
             cart.startNewSale();
+            setLastAdd(null);
             // RT-241 (D-B1): «بيع جديد» acknowledges the drawer notice.
             acknowledgeDrawerNotice();
             focusScanOwner();

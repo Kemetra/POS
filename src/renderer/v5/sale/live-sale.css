@@ -88,50 +88,16 @@
 
 /*
  * Inside the v5 frame the Sale is measured by the space it receives, not by
- * the viewport: at a 1280px window the nav leaves ~1070px, which needs the
- * same compact tracks the viewport rule gives a 1024-class window. Outside the
- * frame (no v5-screen container) the viewport rule in sale-screen.css applies.
+ * the viewport (the v5-screen container). The Direction B grid, its compact
+ * tracks and the money column live in sale-direction-b.css (RT-242).
  */
 @container v5-screen (max-width: 1120px) {
   .v5-live-titlebar {
     padding-inline: var(--space-3);
   }
 
-  .v5-sale-workstation {
-    grid-template-columns: 320px minmax(0, 1fr);
-    gap: var(--space-2);
-    padding: var(--space-2);
-  }
-
-  /*
-   * Unit price is quiet (xs) and fits the widest realistic amount,
-   * "1234.50 EGP"; the line total (sm, bold) gets the wider column. A tighter
-   * stepper hands the product name the difference.
-   */
-  .v5-sale-cart-columns,
-  .v5-sale-cart-line {
-    grid-template-columns: 16px minmax(0, 1fr) 84px 120px 100px;
-    gap: var(--space-1);
-    padding-inline: var(--space-2);
-  }
-
-  .v5-sale-cart-footer {
-    gap: var(--space-2);
-    padding: var(--space-3);
-  }
-
   .v5-sale-grand-total {
     padding-inline: var(--space-3);
-  }
-
-  .v5-sale-grand-total strong {
-    font-size: var(--font-size-2xl);
-  }
-}
-
-@container v5-screen (max-width: 900px) {
-  .v5-sale-workstation {
-    grid-template-columns: 288px minmax(0, 1fr);
   }
 }
 
@@ -362,14 +328,6 @@
 
 /* ── Polish pass (v5 live Sale only; the static proof keeps sale-screen.css) ── */
 
-/* The v5-screen container is absent in the legacy shell preview: same compact grid by viewport. */
-@media (max-width: 1120px) {
-  .v5-sale-cart-columns,
-  .v5-sale-cart-line {
-    grid-template-columns: 16px minmax(0, 1fr) 84px 120px 100px;
-  }
-}
-
 .v5-icon {
   display: block;
   flex: 0 0 auto;
@@ -550,16 +508,6 @@
   min-block-size: 32px;
 }
 
-.v5-live-sale .v5-sale-cart-line {
-  min-block-size: 64px;
-  padding-block: var(--space-1);
-}
-
-.v5-live-line-actions {
-  gap: 0;
-  margin-inline-start: calc(-1 * var(--space-3));
-}
-
 .v5-live-sale .v5-sale-line-unit {
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
@@ -584,11 +532,7 @@
   scrollbar-width: thin;
 }
 
-/* Totals + the one primary action. */
-.v5-live-sale .v5-sale-cart-footer {
-  padding: var(--space-3);
-}
-
+/* Totals + the one primary action (in the Direction B money column). */
 .v5-live-sale .v5-sale-total-row {
   min-block-size: 30px;
 }

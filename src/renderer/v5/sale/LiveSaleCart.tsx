@@ -4,6 +4,7 @@ import { formatHumanCount } from '../../ui/format/human-format';
 import { V5Icon } from '../foundation/V5Icon';
 import { CartLineRow, NoteDialog, VoidControl, money } from './LiveCartParts';
 import { useRemovalFocus } from './useRemovalFocus';
+import { moveRowFocus, useNewestRowInView } from './useCartRowFocus';
 
 interface Props {
   lines: readonly CartLineItem[];
@@ -21,6 +22,10 @@ interface Props {
   /** The previous sale was just voided; acknowledged until the next line lands. */
   voided?: boolean;
   handoffError: string | null;
+  /** RT-242: the line the last confirmed add landed on; scrolled into view and flashed. */
+  lastAddedLineId?: string | null;
+  /** Changes on every add, so a +1 on the same line flashes again. */
+  lastAddNonce?: number;
   onIncrement: (line: CartLineItem) => void;
   onDecrement: (line: CartLineItem) => void;
   onRemove: (line: CartLineItem) => void;
@@ -32,7 +37,23 @@ interface Props {
   onNewSale?: () => void;
 }
 
+/**
+ * RT-242 (VNext W1-B, Direction B): the cart takes the workspace and the money
+ * column sits on the inline end — totals, the one primary action and, apart
+ * from it, the void. Two sibling regions so the workspace grid can give the
+ * money column the full height: the total and the commit are never scrolled
+ * away, however long the cart.
+ */
 export function LiveSaleCart(props: Props): JSX.Element {
+  return (
+    <>
+      <CartRegion {...props} />
+      <MoneyColumn {...props} />
+    </>
+  );
+}
+
+function CartRegion(props: Props): JSX.Element {
   const [noteLineId, setNoteLineId] = useState<string | null>(null);
   const editingLine = props.lines.find((item) => item.lineId === noteLineId) ?? null;
   const editable = props.frozenSubtotalMinor === null && !props.cancelled;
@@ -44,16 +65,22 @@ export function LiveSaleCart(props: Props): JSX.Element {
         <span className="v5-sale-count">
           {`الأصناف: ${formatHumanCount(props.lines.length)} · الوحدات: ${formatHumanCount(props.itemCount)}`}
         </span>
-        {props.canVoid && <VoidControl onVoid={props.onVoid} />}
       </div>
-      {/* Focusable so a frozen cart, which has no line controls, still scrolls by keyboard. */}
-      <div className="v5-sale-cart-table" role="region" aria-label="بنود السلة" tabIndex={0}>
+      {/* Focusable so a frozen cart, which has no line controls, still scrolls by keyboard; ↓ enters the rows. */}
+      <div
+        className="v5-sale-cart-table"
+        role="region"
+        aria-label="بنود السلة"
+        tabIndex={0}
+        onKeyDown={moveRowFocus}
+      >
         <div className="v5-sale-cart-columns" aria-hidden="true">
           <span>#</span>
           <span>الصنف</span>
-          <span>سعر الوحدة</span>
           <span>الكمية</span>
+          <span>سعر الوحدة</span>
           <span>الإجمالي</span>
+          <span />
         </div>
         <CartLines
           {...props}
@@ -86,10 +113,37 @@ export function LiveSaleCart(props: Props): JSX.Element {
           }}
         />
       )}
-      <footer className="v5-sale-cart-footer">
+    </section>
+  );
+}
+
+/** The inline-end money column: totals and the commit at the foot, the void apart below them. */
+function MoneyColumn(props: Props): JSX.Element {
+  return (
+    // A labelled region, not <aside>: a complementary landmark may not nest inside <main>.
+    <section className="v5-sale-money" aria-labelledby="v5-live-money-title">
+      <h2 id="v5-live-money-title" className="v5-sale-money-title">
+        ملخص العملية
+      </h2>
+      <dl className="v5-sale-money-counts">
+        <div>
+          <dt>الأصناف</dt>
+          <dd dir="ltr">{formatHumanCount(props.lines.length)}</dd>
+        </div>
+        <div>
+          <dt>الوحدات</dt>
+          <dd dir="ltr">{formatHumanCount(props.itemCount)}</dd>
+        </div>
+      </dl>
+      <div className="v5-sale-money-commit">
         <CartTotals {...props} />
         <CartActions {...props} />
-      </footer>
+      </div>
+      {props.canVoid && (
+        <div className="v5-sale-money-secondary">
+          <VoidControl onVoid={props.onVoid} />
+        </div>
+      )}
     </section>
   );
 }
@@ -98,6 +152,7 @@ function CartLines(
   props: Props & { editable: boolean; onOpenNote: (line: CartLineItem) => void },
 ): JSX.Element {
   const planRemoval = useRemovalFocus(props.lines);
+  const flashing = useNewestRowInView(props.lastAddedLineId ?? null, props.lastAddNonce ?? 0);
   if (props.lines.length === 0)
     return <p className="v5-live-message">لا توجد أصناف في السلة بعد.</p>;
   return (
@@ -107,6 +162,8 @@ function CartLines(
           key={line.lineId}
           line={line}
           index={index}
+          lastAdded={line.lineId === props.lastAddedLineId}
+          flashing={flashing && line.lineId === props.lastAddedLineId}
           editable={props.editable}
           onIncrement={props.onIncrement}
           onDecrement={props.onDecrement}

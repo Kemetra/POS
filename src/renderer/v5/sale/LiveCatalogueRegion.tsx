@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type JSX } from 'react';
+import { useCallback, useEffect, useRef, type JSX, type ReactNode } from 'react';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
 import { formatHumanMoney } from '../../ui/format/human-format';
 import type { AddedLineResult } from '../../sale/useSaleCartController';
@@ -13,11 +13,13 @@ import { focusScanOwner } from '../../scan/scan-anchor';
 
 interface Props {
   onLineAdded: (line: AddedLineResult) => void;
+  /** Shown on the command bar's status line (scan owner + last add). */
+  status?: ReactNode;
   cartBridge?: CartBridgeAPI;
   catalogueBridge?: CatalogueBridgeAPI;
 }
 
-/** Product discovery + confirm-first add. Mounted only when the productSearch flag is on. */
+/** Product discovery (the Direction B command bar) + confirm-first add. Mounted only when the productSearch flag is on. */
 export function LiveCatalogueRegion(props: Props): JSX.Element {
   const searchRef = useRef<HTMLInputElement>(null);
   const catalogue = useSaleCatalogueController({
@@ -46,10 +48,17 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
     clearSearch();
     focusSearch();
   }, [clearSearch, focusSearch]);
+  // 15 §3.3: Esc closes the results and the next scan is the next thing the cashier does.
+  const dismiss = useCallback((): void => {
+    clearSearch();
+    focusScanOwner();
+  }, [clearSearch]);
 
   return (
     <>
       <LiveProductRail
+        status={props.status}
+        onDismiss={dismiss}
         state={catalogue.state}
         freshness={freshness.state}
         lastSuccessAt={freshness.lastSuccessAt}
