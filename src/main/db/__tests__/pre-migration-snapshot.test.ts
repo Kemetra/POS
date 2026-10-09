@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 
@@ -14,14 +14,18 @@ import {
 /**
  * RT-320 — pre-migration snapshot (ADR-0006 rule 4). Before a new build applies
  * its first pending migration, the DB is copied to `userData/backups/` for
- * support-assisted recovery. Uses a real temp dir; the SQLite copy itself is a
- * fake `vacuumInto` so no native binding loads in Vitest (R1).
+ * support-assisted recovery. One snapshot per target schema head: a retry of
+ * the same upgrade keeps the original pre-upgrade copy. Uses a real temp dir;
+ * the SQLite copy itself is a fake `vacuumInto` so no native binding loads in
+ * Vitest (R1).
  */
 
 let tmpRoot: string;
+let backupsDir: string;
 
 beforeEach(() => {
   tmpRoot = mkdtempSync(path.join(os.tmpdir(), 'pos-snapshot-'));
+  backupsDir = path.join(tmpRoot, 'backups');
 });
 
 afterEach(() => {
@@ -41,66 +45,91 @@ function snapshotsIn(dir: string): string[] {
     .sort();
 }
 
+function snap(head: string, stamp: string): string {
+  return `${SNAPSHOT_FILE_PREFIX}${head}.${stamp}.db`;
+}
+
+function write(head: string, iso: string, written: string[] = [], retain?: number) {
+  return writePreMigrationSnapshot({
+    backupsDir,
+    targetHead: head,
+    vacuumInto: fakeVacuumInto(written),
+    now: () => new Date(iso),
+    ...(retain === undefined ? {} : { retain }),
+  });
+}
+
 describe('writePreMigrationSnapshot', () => {
-  it('creates the backups dir and copies the DB into it', () => {
-    const backupsDir = path.join(tmpRoot, 'backups');
+  it('creates the backups dir and names the copy after the target head and time', () => {
     const written: string[] = [];
+    const result = write('0045_next', '2026-10-09T08:30:15.123Z', written);
 
-    const target = writePreMigrationSnapshot({
-      backupsDir,
-      vacuumInto: fakeVacuumInto(written),
-      now: () => new Date('2026-10-09T08:30:15.123Z'),
-    });
-
-    expect(written).toEqual([target]);
-    expect(path.dirname(target)).toBe(backupsDir);
-    expect(path.basename(target)).toBe(`${SNAPSHOT_FILE_PREFIX}2026-10-09T08-30-15-123Z.db`);
-    expect(existsSync(target)).toBe(true);
+    expect(result.created).toBe(true);
+    expect(written).toEqual([result.path]);
+    expect(path.dirname(result.path)).toBe(backupsDir);
+    expect(path.basename(result.path)).toBe(snap('0045_next', '2026-10-09T08-30-15-123Z'));
+    expect(existsSync(result.path)).toBe(true);
   });
 
-  it('keeps only the newest snapshots up to the retention limit', () => {
-    const backupsDir = path.join(tmpRoot, 'backups');
+  it('keeps the original snapshot when a retry targets the same head', () => {
     const written: string[] = [];
-    const stamps = [
-      '2026-01-01T00:00:00.000Z',
-      '2026-02-01T00:00:00.000Z',
-      '2026-03-01T00:00:00.000Z',
-      '2026-04-01T00:00:00.000Z',
-    ];
-    for (const stamp of stamps) {
-      writePreMigrationSnapshot({
-        backupsDir,
-        vacuumInto: fakeVacuumInto(written),
-        now: () => new Date(stamp),
-        retain: 3,
-      });
-    }
+    const first = write('0045_next', '2026-10-09T08:00:00.000Z', written);
+    // A later migration in the batch failed; every relaunch retries the upgrade.
+    const second = write('0045_next', '2026-10-09T08:05:00.000Z', written);
+    const third = write('0045_next', '2026-10-09T08:10:00.000Z', written);
+
+    expect(written).toEqual([first.path]);
+    expect(second).toEqual({ path: first.path, created: false });
+    expect(third).toEqual({ path: first.path, created: false });
+    expect(snapshotsIn(backupsDir)).toEqual([snap('0045_next', '2026-10-09T08-00-00-000Z')]);
+  });
+
+  it('keeps only the snapshots for the newest heads up to the retention limit', () => {
+    write('0041_a', '2026-01-01T00:00:00.000Z', [], 3);
+    write('0042_b', '2026-02-01T00:00:00.000Z', [], 3);
+    write('0043_c', '2026-03-01T00:00:00.000Z', [], 3);
+    write('0044_d', '2026-04-01T00:00:00.000Z', [], 3);
 
     expect(snapshotsIn(backupsDir)).toEqual([
-      `${SNAPSHOT_FILE_PREFIX}2026-02-01T00-00-00-000Z.db`,
-      `${SNAPSHOT_FILE_PREFIX}2026-03-01T00-00-00-000Z.db`,
-      `${SNAPSHOT_FILE_PREFIX}2026-04-01T00-00-00-000Z.db`,
+      snap('0042_b', '2026-02-01T00-00-00-000Z'),
+      snap('0043_c', '2026-03-01T00-00-00-000Z'),
+      snap('0044_d', '2026-04-01T00-00-00-000Z'),
     ]);
   });
 
+  it('keeps the new snapshot when the clock has moved backward', () => {
+    write('0041_a', '2027-06-01T00:00:00.000Z', [], 3);
+    write('0042_b', '2027-07-01T00:00:00.000Z', [], 3);
+    write('0043_c', '2027-08-01T00:00:00.000Z', [], 3);
+
+    // Clock corrected back to 2026 before the next upgrade.
+    const result = write('0044_d', '2026-01-01T00:00:00.000Z', [], 3);
+
+    expect(existsSync(result.path)).toBe(true);
+    expect(snapshotsIn(backupsDir)).toEqual([
+      snap('0042_b', '2027-07-01T00-00-00-000Z'),
+      snap('0043_c', '2027-08-01T00-00-00-000Z'),
+      snap('0044_d', '2026-01-01T00-00-00-000Z'),
+    ]);
+  });
+
+  it('never prunes the snapshot it just wrote', () => {
+    mkdirSync(backupsDir, { recursive: true });
+    writeFileSync(path.join(backupsDir, snap('0099_odd', '2026-01-01T00-00-00-000Z')), 'x');
+
+    const result = write('0045_next', '2026-10-09T00:00:00.000Z', [], 1);
+
+    expect(snapshotsIn(backupsDir)).toEqual([path.basename(result.path)]);
+  });
+
   it('never prunes files it did not create', () => {
-    const backupsDir = path.join(tmpRoot, 'backups');
-    writePreMigrationSnapshot({
-      backupsDir,
-      vacuumInto: fakeVacuumInto([]),
-      now: () => new Date('2026-01-01T00:00:00.000Z'),
-    });
+    write('0041_a', '2026-01-01T00:00:00.000Z');
     writeFileSync(path.join(backupsDir, 'support-export.db'), 'keep me');
 
-    writePreMigrationSnapshot({
-      backupsDir,
-      vacuumInto: fakeVacuumInto([]),
-      now: () => new Date('2026-02-01T00:00:00.000Z'),
-      retain: 1,
-    });
+    write('0042_b', '2026-02-01T00:00:00.000Z', [], 1);
 
     expect(readdirSync(backupsDir).sort()).toEqual([
-      `${SNAPSHOT_FILE_PREFIX}2026-02-01T00-00-00-000Z.db`,
+      snap('0042_b', '2026-02-01T00-00-00-000Z'),
       'support-export.db',
     ]);
   });
@@ -110,10 +139,10 @@ describe('writePreMigrationSnapshot', () => {
   });
 
   it('propagates a failed copy so startup halts instead of migrating unprotected', () => {
-    const backupsDir = path.join(tmpRoot, 'backups');
     expect(() =>
       writePreMigrationSnapshot({
         backupsDir,
+        targetHead: '0045_next',
         vacuumInto: () => {
           throw new Error('SQLITE_FULL');
         },

@@ -40,12 +40,17 @@ export function runStartupMigrations(deps: StartupMigrationsDeps): StartupMigrat
       db,
       files,
       onBeforeApply: (pending) => {
-        const snapshotPath = writePreMigrationSnapshot({
+        const snapshot = writePreMigrationSnapshot({
           backupsDir: path.join(userDataDir, 'backups'),
+          // `pending` is name-sorted, so its last entry is the upgrade's target.
+          targetHead: pending[pending.length - 1] ?? '',
           vacuumInto,
           now,
         });
-        logger.info({ snapshotPath, pending }, 'db:pre-migration-snapshot');
+        logger.info(
+          { snapshotPath: snapshot.path, created: snapshot.created, pending },
+          'db:pre-migration-snapshot',
+        );
       },
     });
   } catch (err) {
