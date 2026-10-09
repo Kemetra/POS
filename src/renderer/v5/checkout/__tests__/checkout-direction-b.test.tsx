@@ -230,7 +230,7 @@ describe('OrderSummary — frozen, read-only, a strip with a disclosure at 1024'
 
 describe('PaymentLedger — the money column', () => {
   it('shows the amount due alone before any tender', () => {
-    render(<PaymentLedger dueMinor={DUE} lines={[]} changeDueMinor={0} showChange />);
+    render(<PaymentLedger dueMinor={DUE} lines={[]} changeDueMinor={0} />);
     const column = screen.getByRole('region', { name: 'المبلغ المستحق' });
     expect(column).toHaveTextContent('50.00 EGP');
     expect(screen.queryByTestId('payment-ledger')).not.toBeInTheDocument();
@@ -246,7 +246,6 @@ describe('PaymentLedger — the money column', () => {
           line('tl-3', 'cash', 2500, 3, { change_due_minor: 500 }),
         ]}
         changeDueMinor={500}
-        showChange
       />,
     );
     const rows = screen.getAllByTestId('payment-ledger-line').map((row) => row.textContent);
@@ -254,16 +253,15 @@ describe('PaymentLedger — the money column', () => {
     expect(screen.getByTestId('payment-ledger-change')).toHaveTextContent('الباقي للعميل 5.00 EGP');
   });
 
-  it('leaves the change to the cash entry while it is open', () => {
+  it('keeps the recorded change in the column whatever the entry does (RT-255 item 1)', () => {
     render(
       <PaymentLedger
         dueMinor={0}
         lines={[line('tl-1', 'cash', 6000, 1, { change_due_minor: 1000 })]}
         changeDueMinor={1000}
-        showChange={false}
       />,
     );
-    expect(screen.queryByTestId('payment-ledger-change')).not.toBeInTheDocument();
+    expect(screen.getByTestId('payment-ledger-change')).toHaveTextContent('10.00 EGP');
   });
 
   it('places the actions after the recorded money, outside the scrolling middle', () => {
@@ -272,7 +270,6 @@ describe('PaymentLedger — the money column', () => {
         dueMinor={DUE}
         lines={[line('tl-1', 'cash', 1000, 1)]}
         changeDueMinor={0}
-        showChange
         actions={<button type="button">تأكيد الدفع</button>}
       />,
     );

@@ -1,17 +1,23 @@
-import { useMemo, useState, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 
 import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
 import { normalizeNumericInput } from '../forms/normalize-digits.js';
-import { quickAmounts } from '../../../shared/payments/quick-amounts.js';
-import { AmountPad } from './AmountPad.js';
-import { formatCheckoutMoney } from './format-checkout-money.js';
 import { PinnedPrimary } from './CheckoutActionBar.js';
+import { QuickAmounts } from '../../v5/checkout/QuickAmounts.js';
+import { CashKeypad } from '../../v5/checkout/CashKeypad.js';
 
 /**
- * 006-payments-tender Slice 2 + S3d T151 — <CashEntry>.
+ * 006-payments-tender Slice 2 + S3d T151, recomposed for RT-243 W1-C
+ * (freeze 15 §6 Checkout / cash; VN-B2) — <CashEntry>.
+ *
+ * The cash entry is the amount field, the quick amounts and an LTR keypad, all
+ * three editing one value. It shows no money of its own: the amount due, the
+ * change and any shortfall are in the pinned ledger (`PaymentLedger`), so none of
+ * them can scroll below the fold (RT-255 item 1). The typed amount reaches the
+ * ledger through `onDraftChange`.
  *
  * Modes:
  *   • Slice-2 (display-only): caller passes `onConfirm`. Confirm fires with
@@ -21,6 +27,9 @@ import { PinnedPrimary } from './CheckoutActionBar.js';
  *     with a fresh UUID v4 idempotency_key (R-10), calls the bridge, and
  *     either fires `onApplied(response)` on success or renders generic
  *     refusal copy on `{ kind: 'refused' }`.
+ *
+ * Cash stays two-step (D-P2): this apply records the cash line; the settle is
+ * the ledger's «تأكيد الدفع».
  *
  * SECURITY:
  *   - No card data of any kind (this is the cash surface).
@@ -47,13 +56,11 @@ export interface CashEntryProps {
   /** Fires with the `{ kind: 'ok', ... }` response on successful apply. */
   onApplied?: (response: Extract<TenderApplyResponse, { kind: 'ok' }>) => void;
   /**
-   * RT-237 — the change main computed for the lines already applied, summed
-   * from the payment projection (`change_due_minor`). Once the attempt is fully
-   * tendered the remaining balance is 0, so re-deriving the change from the
-   * typed amount here would return the amount RECEIVED. From that point the
-   * row shows this value instead and never recomputes.
+   * The amount in the field, integer minor units, or null when it is empty or
+   * does not parse. Called on every change and with null when the entry closes,
+   * so the ledger never previews an amount that is no longer on screen.
    */
-  appliedChangeDueMinor?: number;
+  onDraftChange?: (receivedMinor: number | null) => void;
 }
 
 export function CashEntry({
@@ -63,13 +70,34 @@ export function CashEntry({
   paymentAttemptId,
   tenderApply,
   onApplied,
-  appliedChangeDueMinor = 0,
+  onDraftChange,
 }: CashEntryProps): JSX.Element {
   const [rawInput, setRawInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const amountAppliedMinor = useMemo(() => parseCurrencyToMinor(rawInput), [rawInput]);
+
+  // Freeze 15 §3.2: opening the cash entry puts focus in the amount field
+  // (typing allowed; a scan burst there is refused, M-S5; Enter never applies).
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  // The ledger previews what is in the field; the latest callback is kept in a
+  // ref so a new function identity from the parent does not re-report.
+  const draftRef = useRef(onDraftChange);
+  draftRef.current = onDraftChange;
+  useEffect(() => {
+    draftRef.current?.(amountAppliedMinor);
+  }, [amountAppliedMinor]);
+  useEffect(
+    () => () => {
+      draftRef.current?.(null);
+    },
+    [],
+  );
 
   const isRemainingValid =
     Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0;
@@ -95,18 +123,10 @@ export function CashEntry({
     ? isPositive && isRemainingValid && remainingBalanceMinor > 0
     : isSufficient;
 
-  // RT-237: bridged and fully tendered (remaining 0) means the cash line is
-  // already applied — the change is main's, read back from the projection.
-  // Recomputing here would be `received − 0`, i.e. the amount received.
-  const isFullyTendered = isBridged && isRemainingValid && remainingBalanceMinor === 0;
-
-  // computeChangeDueMinor throws on under-tender; only compute it when the
-  // cash amount actually covers the remaining balance.
-  const changeDueMinor = isFullyTendered
-    ? appliedChangeDueMinor
-    : isSufficient
-      ? computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)
-      : null;
+  function setAmount(next: string): void {
+    setRawInput(next);
+    setBridgeRefusal(false);
+  }
 
   async function handleConfirm(): Promise<void> {
     if (!canConfirm || amountAppliedMinor === null) {
@@ -140,150 +160,67 @@ export function CashEntry({
       return;
     }
 
-    if (changeDueMinor !== null) {
-      onConfirm?.({ amountAppliedMinor, changeDueMinor });
-    }
+    // Slice-2: computeChangeDueMinor throws on under-tender; canConfirm already
+    // holds `isSufficient` here.
+    onConfirm?.({
+      amountAppliedMinor,
+      changeDueMinor: computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor),
+    });
   }
 
   return (
-    <section className="cash-entry" data-testid="cash-entry" aria-label="إدخال النقد">
-      {/*
-        022 Phase C — the amount due is NOT rendered here.
-
-        `PaymentSurface` owns it, as `.payment-surface__amount-value` at 44px/700
-        — the dominant numeric on the surface (FR-16 + design handoff). This
-        component mounts inside `.payment-surface__methods`, so the v3.5
-        `.amount-due-card` that used to live here put the same value on screen a
-        second time at 32px with a different label, which structurally defeats
-        the hierarchy FR-16 requires.
-
-        `remainingBalanceMinor` is still received and still drives this
-        component's own logic (over-tender guard, change-due, quick amounts) —
-        only the duplicate PRESENTATION is gone. No money math changed.
-      */}
-
-      {/*
-        v3.5 tender-slots / tender-row layout.
-        The amount-received row wraps the AmountPad + quick-amount chips.
-        The totals row shows the change-due as a static formatted value
-        (engine-computed, no client-side subtraction — computeChangeDueMinor
-        owns the math). RT-243 / UX-06: money is never animated.
-      */}
-      <div className="tender-slots">
-        <div
-          className="tender-row"
-          style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }}
+    <section className="cash-entry v5-cash" data-testid="cash-entry" aria-label="إدخال النقد">
+      <div className="v5-cash__field">
+        <label
+          className="v5-cash__label cash-entry__amount-label"
+          htmlFor="cash-entry-amount-input"
         >
-          <label
-            className="tender-row__label cash-entry__amount-label"
-            htmlFor="cash-entry-amount-input"
-          >
-            المبلغ المستلم (<span dir="ltr">EGP</span>)
-          </label>
-          <span className="tender-row__value" style={{ minWidth: 240, flex: 1 }}>
-            <input
-              id="cash-entry-amount-input"
-              data-testid="cash-entry-amount-input"
-              className="cash-entry__amount-input"
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              value={rawInput}
-              onChange={(e) => {
-                const next = normalizeNumericInput(e.target.value);
-                // Keystroke guard: digits + optional single decimal, ≤2 frac.
-                if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
-                  setRawInput(next);
-                  setBridgeRefusal(false);
-                }
-              }}
-            />
-            {/*
-              POS v3.5 — AmountPad is a VIEW over the single `rawInput` source
-              of truth. Writes back via formatMinorToInput to avoid the 100×
-              parse bug (see Merge Reconciliation note in original component).
-            */}
-            <AmountPad
-              valueMinor={amountAppliedMinor}
-              onChange={(next) => {
-                setRawInput(formatMinorToInput(next));
-                setBridgeRefusal(false);
-              }}
-            />
-
-            {/*
-              Quick-amount chips (prototype .quick-amounts / .quick-amount-btn).
-              The first chip is the "exact" label (بالضبط), subsequent chips are
-              rounded-up suggestions. All values dir="ltr" mono (D-006).
-              AmountPad already includes quick-keys, but we also surface the
-              prototype-style quick-amount chips here so the visual layer matches.
-            */}
-            <span className="quick-amounts" style={{ marginTop: 'var(--space-2)' }}>
-              {/* Exact-amount chip */}
-              <button
-                type="button"
-                className={`quick-amount-btn quick-amount-btn--label${amountAppliedMinor === remainingBalanceMinor ? ' quick-amount-btn--selected' : ''}`}
-                onClick={() => {
-                  setRawInput(formatMinorToInput(remainingBalanceMinor));
-                  setBridgeRefusal(false);
-                }}
-              >
-                بالضبط
-              </button>
-              {/* Rounded-up suggestion chips (prototype pos-app.jsx:783-789).
-                  `quickAmounts` returns ascending banknote roll-ups with the
-                  exact total first; we already rendered the exact total as the
-                  بالضبط chip above, so drop the leading exact value and render
-                  the rounded suggestions. Each chip writes the value back as a
-                  currency STRING via `formatMinorToInput` — no money arithmetic
-                  here (settlement math stays in computeChangeDueMinor). Values
-                  are dir="ltr" mono (D-006). */}
-              {isRemainingValid &&
-                quickAmounts(remainingBalanceMinor)
-                  .filter((v) => v > remainingBalanceMinor)
-                  .map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      className={`quick-amount-btn${
-                        amountAppliedMinor === v ? ' quick-amount-btn--selected' : ''
-                      }`}
-                      onClick={() => {
-                        setRawInput(formatMinorToInput(v));
-                        setBridgeRefusal(false);
-                      }}
-                    >
-                      <span dir="ltr">{formatCheckoutMoney(v)}</span>
-                    </button>
-                  ))}
-            </span>
-          </span>
-        </div>
-
-        {/* Totals row: change-due shown as a static value (engine-computed;
-            RT-243 / UX-06: money is never animated).
-            Only rendered when change is actually owed (> 0); exact cash
-            produces changeDueMinor = 0 which should not show the row. */}
-        {changeDueMinor !== null && changeDueMinor > 0 && (
-          <div
-            className="tender-row tender-row--totals cash-entry__change-due"
-            data-testid="cash-entry-change-due"
-          >
-            <span className="tender-row__label">الباقي للعميل</span>
-            <span
-              dir="ltr"
-              className="tender-row__value cash-entry__change-due-value change-row__value--positive"
-              data-testid="cash-entry-change-due-value"
-            >
-              {formatCheckoutMoney(changeDueMinor)}
-            </span>
-          </div>
-        )}
+          المبلغ المستلم (<span dir="ltr">EGP</span>)
+        </label>
+        <input
+          ref={inputRef}
+          id="cash-entry-amount-input"
+          data-testid="cash-entry-amount-input"
+          className="v5-cash__input cash-entry__amount-input"
+          type="text"
+          inputMode="numeric"
+          dir="ltr"
+          autoComplete="off"
+          value={rawInput}
+          onChange={(e) => {
+            const next = normalizeNumericInput(e.target.value);
+            // Keystroke guard: digits + optional single decimal, ≤2 frac.
+            if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
+              setAmount(next);
+            }
+          }}
+        />
       </div>
 
+      {/* One group of chips; each SETS the amount (VN-B2), written back as the
+          field's own string so the field stays the one source of truth. */}
+      {isRemainingValid && (
+        <QuickAmounts
+          dueMinor={remainingBalanceMinor}
+          valueMinor={amountAppliedMinor}
+          onSet={(minor) => {
+            setAmount(formatMinorToInput(minor));
+          }}
+        />
+      )}
+
+      {/* A view over the same value; written back through formatMinorToInput to
+          avoid the 100× parse bug. */}
+      <CashKeypad
+        valueMinor={amountAppliedMinor}
+        onChange={(next) => {
+          setAmount(formatMinorToInput(next));
+        }}
+      />
+
       {/* Slice-2 under-tender banner. In S3d bridged mode the cashier may apply
-          a partial cash line (split tender), so the banner is hidden; the main
-          process owns the settlement invariant. */}
+          a partial cash line (split tender), so the shortfall is the ledger's
+          M-P4 line instead; the main process owns the settlement invariant. */}
       {isUnderTender && !isBridged && (
         <div
           className="cash-entry__refusal"

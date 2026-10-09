@@ -208,16 +208,20 @@ describe('RT-237 — change after apply equals the main-process change_due_minor
       fireEvent.click(chipButton as HTMLElement);
     }
 
-    // BEFORE apply: the live preview is received − due (unchanged behaviour).
+    // BEFORE apply: the pinned ledger previews received − due (RT-243 W1-C
+    // moved it there from the scrolling entry, RT-255 item 1).
     const expectedText = `${String(Math.trunc(expectedChange / 100))}.${String(expectedChange % 100).padStart(2, '0')} EGP`;
-    expect(screen.getByTestId('cash-entry-change-due')).toHaveTextContent(expectedText);
+    expect(screen.getByTestId('payment-ledger-draft-change')).toHaveTextContent(expectedText);
 
     await applyCash();
 
-    // AFTER apply: the row must STILL show the change — not the amount
-    // received, which is what the pre-fix code showed (received − 0).
-    const row = screen.getByTestId('cash-entry-change-due');
+    // AFTER apply: the ledger must STILL show the change — main's recorded
+    // `change_due_minor`, not the amount received, which is what the pre-fix
+    // code showed (received − 0). The preview is gone; exactly one change row.
+    expect(screen.queryByTestId('payment-ledger-draft')).not.toBeInTheDocument();
+    const row = screen.getByTestId('payment-ledger-change');
     expect(row).toHaveTextContent(expectedText);
+    expect(screen.getAllByText('الباقي للعميل', { exact: false })).toHaveLength(1);
     if (typed !== null) {
       expect(row).not.toHaveTextContent(`${typed} EGP`);
     }
@@ -248,7 +252,8 @@ describe('RT-237 — completion shows the same change', () => {
     await openCash(5_000);
     fireEvent.click(screen.getByText('بالضبط'));
     await applyCash();
-    expect(screen.queryByTestId('cash-entry-change-due')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-ledger-change')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-ledger-draft')).not.toBeInTheDocument();
 
     await confirmPayment();
     expect(await screen.findByTestId('payment-surface-settled')).toBeInTheDocument();

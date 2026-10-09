@@ -25,6 +25,7 @@ import { ReprintAffordance } from '../../receipts/ReprintAffordance.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
 import { TenderPicker } from '../../../v5/checkout/TenderPicker.js';
+import { PaymentLedger } from '../../../v5/checkout/PaymentLedger.js';
 import { VoucherEntry } from '../VoucherEntry.js';
 import { latinLeaks } from './latin-leaks.js';
 
@@ -64,11 +65,25 @@ describe('RT-240 — Checkout surfaces are Arabic only', () => {
     ).toEqual([]);
   });
 
-  it('cash entry, including the change row', () => {
+  it('cash entry, with an amount typed', () => {
     const { container } = render(<CashEntry remainingBalanceMinor={1500} onConfirm={vi.fn()} />);
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), { target: { value: '20' } });
-    expect(screen.getByTestId('cash-entry-change-due')).toBeInTheDocument();
+    expect(screen.getByTestId('cash-keypad')).toBeInTheDocument();
     expect(latinLeaks(container)).toEqual([]);
+  });
+
+  it('the ledger cash preview: change and shortfall (RT-243 W1-C)', () => {
+    for (const draft of [
+      { kind: 'change', changeMinor: 500 } as const,
+      { kind: 'shortfall', shortMinor: 500 } as const,
+    ]) {
+      const { container, unmount } = render(
+        <PaymentLedger dueMinor={1500} lines={[]} changeDueMinor={0} draft={draft} />,
+      );
+      expect(screen.getByTestId('payment-ledger-draft')).toBeInTheDocument();
+      expect(latinLeaks(container)).toEqual([]);
+      unmount();
+    }
   });
 
   it('card entry', () => {

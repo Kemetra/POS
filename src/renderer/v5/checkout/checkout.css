@@ -335,6 +335,117 @@
   font-size: var(--font-size-xs);
 }
 
+/* ── Cash entry (CashEntry · QuickAmounts · CashKeypad) ─────────────────
+ * One value, three ways in: the field, the chips (they SET it) and an LTR
+ * keypad. No money of its own: the change and any shortfall are in the ledger.
+ */
+
+.v5-cash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.v5-cash__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.v5-cash__label {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+/* The amount received: LTR, at the inline end, the largest figure in the panel. */
+.v5-cash__input {
+  inline-size: 100%;
+  min-block-size: 56px;
+  padding-inline: var(--space-4);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-3xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  text-align: end;
+}
+
+.v5-cash__input:focus {
+  border-color: var(--color-primary);
+}
+
+/* Chips take their content width and wrap rather than clip: a grouped amount
+   («3,000.00 EGP») is never cut, whatever the panel width. */
+.v5-quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.v5-quick-amount,
+.v5-cash-keypad__key {
+  min-block-size: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background-color var(--duration-1) var(--ease-out);
+}
+
+.v5-quick-amount {
+  flex: 1 0 auto;
+  min-inline-size: 96px;
+  padding-inline: var(--space-2);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.v5-quick-amount--exact {
+  font-family: var(--font-family-sans);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-quick-amount:hover,
+.v5-cash-keypad__key:hover {
+  background: var(--color-surface-muted);
+}
+
+/* The chip equal to the field: Teal Wash with a 2px boundary drawn inside the
+   1px border, so pressing never changes the chip's size or wraps the row;
+   aria-pressed carries the state for assistive tech and forced colours. */
+.v5-quick-amount[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  color: var(--color-primary-emphasis);
+}
+
+.v5-cash-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.v5-cash-keypad__key {
+  min-block-size: 52px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.v5-cash-keypad__key--delete {
+  color: var(--color-text-muted);
+}
+
 /* ── Money column (PaymentLedger) ───────────────────────────────────────── */
 
 .v5-ledger {
@@ -386,6 +497,15 @@
 .v5-ledger__middle {
   min-block-size: 0;
   overflow-y: auto;
+}
+
+/* The cash being typed, before it is applied (a preview, not recorded money). */
+.v5-ledger-draft {
+  padding: var(--space-2) var(--space-4) 0;
+}
+
+.v5-ledger-draft .v5-ledger-row--change {
+  border-block-end: 1px solid var(--color-border-soft);
 }
 
 .v5-ledger-recorded {
@@ -602,6 +722,20 @@
     padding: var(--space-2) var(--space-3);
   }
 
+  .v5-cash {
+    gap: var(--space-2);
+  }
+
+  .v5-cash__input {
+    min-block-size: 48px;
+    font-size: var(--font-size-2xl);
+  }
+
+  .v5-cash-keypad__key {
+    min-block-size: 44px;
+    font-size: var(--font-size-lg);
+  }
+
   .v5-ledger__due {
     padding: var(--space-3);
   }
@@ -612,6 +746,10 @@
 
   .v5-ledger-recorded {
     padding: var(--space-2) var(--space-3);
+  }
+
+  .v5-ledger-draft {
+    padding: var(--space-2) var(--space-3) 0;
   }
 
   .v5-ledger__actions {
@@ -640,7 +778,9 @@
 /* ── Reduced motion ────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
-  .v5-tender-tile {
+  .v5-tender-tile,
+  .v5-quick-amount,
+  .v5-cash-keypad__key {
     transition: none;
   }
 }
@@ -682,6 +822,24 @@
   .v5-checkout-back:disabled {
     border-color: GrayText;
     color: GrayText;
+  }
+
+  .v5-cash__input,
+  .v5-quick-amount,
+  .v5-cash-keypad__key {
+    border-color: ButtonText;
+  }
+
+  .v5-cash__input:focus {
+    border-color: Highlight;
+  }
+
+  /* The pressed chip: a system highlight, as the selected tender tile. */
+  .v5-quick-amount[aria-pressed='true'] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
   }
 
   .v5-order-summary[data-open='true'] .v5-order-summary__lines {

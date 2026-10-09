@@ -10,10 +10,11 @@
  *      invariant ("exactly one amount-due presentation") lives in
  *      `single-amount-due.test.tsx`. Item 7 below is superseded with them.
  *   2. the tender tiles sit in one radiogroup (3 methods, NOT --four)
- *   3. cash path renders tender-slots + tender-row + static change-due
+ *   3. cash path renders the V5 field + one chip group + keypad; the change is
+ *      the ledger's (RT-243 W1-C)
  *   4. card path renders tender-slots + a tender-row__body instruction row
  *   5. voucher path renders voucher-field input + voucher-error (invalid)
- *   6. quick-amounts + quick-amount-btn render in the cash path
+ *   6. quick amounts render in the cash path and SET the value
  *   7. SUPERSEDED with item 1 — the amount-due label is no longer rendered by
  *      these components, so there is no label here to carry Arabic copy.
  *   8. Money values (change-due) render dir="ltr" mono
@@ -26,7 +27,7 @@
  *       only the bridge can apply a voucher line (bridge refusal is generic)
  *   N4. No client-side change computation: the component never computes
  *       tendered - total itself; change-due comes from the engine
- *       (computeChangeDueMinor, which CashEntry already calls)
+ *       (computeChangeDueMinor, through the ledger's `cashDraft`)
  */
 
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
@@ -38,6 +39,7 @@ import { TenderPicker } from '../../../v5/checkout/TenderPicker.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
 import { VoucherEntry } from '../VoucherEntry.js';
+import { cashDraft } from '../../../v5/checkout/cash-draft.js';
 
 afterEach(cleanup);
 
@@ -147,116 +149,76 @@ describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', (
     expect(document.querySelectorAll('.amount-due-card')).toHaveLength(0);
   });
 
-  it('renders tender-slots container with a tender-row for cash input', () => {
+  /*
+   * RETARGETED by RT-243 W1-C (freeze 15 §6 Checkout / cash; VN-B2). The cash
+   * entry is the V5 composition: the amount field, ONE group of quick amounts
+   * that SET the value, and an LTR keypad. It no longer renders the change: the
+   * change (and any shortfall) is in the pinned ledger, so it cannot scroll below
+   * the fold (RT-255 item 1). The change assertions that stood here now run
+   * against `PaymentLedger` in `cash-entry-v5.test.tsx`; the static-value and
+   * thousands-grouping checks moved with them.
+   */
+  it('renders the amount field, one quick-amount group and the keypad', () => {
     render(<CashEntry remainingBalanceMinor={5000} />);
-    const slots = document.querySelector('.tender-slots');
-    expect(slots).toBeInTheDocument();
-    const rows = document.querySelectorAll('.tender-row');
-    expect(rows.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('renders quick-amounts chips inside the cash input row', () => {
-    render(<CashEntry remainingBalanceMinor={5000} />);
-    const quickAmounts = document.querySelector('.quick-amounts');
-    expect(quickAmounts).toBeInTheDocument();
-    const chips = document.querySelectorAll('.quick-amount-btn');
-    expect(chips.length).toBeGreaterThan(0);
+    expect(screen.getByTestId('cash-entry-amount-input')).toBeInTheDocument();
+    expect(screen.getAllByRole('group')).toHaveLength(1);
+    expect(screen.getByTestId('quick-amounts')).toBeInTheDocument();
+    expect(screen.getByTestId('cash-keypad')).toBeInTheDocument();
   });
 
   it('renders the prototype rounded-banknote suggestion chips (exact + roll-ups)', () => {
     // 12.30 due → quickAmounts(1230) = [1230, 5000, 10000, 20000, 50000]:
-    // the exact chip (بالضبط) PLUS the rounded banknote roll-ups. The prototype
-    // (pos-app.jsx:780-790) renders the exact chip + up to 4 rounded suggestions,
-    // so the chip count must exceed 1 (the lone exact chip is a parity miss).
+    // the exact chip (بالضبط) PLUS the rounded banknote roll-ups.
     render(<CashEntry remainingBalanceMinor={1230} />);
-    const chips = document.querySelectorAll('.quick-amount-btn');
+    const chips = screen.getByTestId('quick-amounts').querySelectorAll('button');
     expect(chips.length).toBeGreaterThanOrEqual(2);
-    // The exact-label chip carries Arabic بالضبط; the suggestion chips carry
-    // dir="ltr" mono money values. The next banknote roll-up above 12.30 is
-    // 50.00 (¤5000 minor) — it must appear as a chip value.
     const chipText = Array.from(chips)
       .map((c) => c.textContent)
       .join(' ');
     expect(chipText).toContain('بالضبط');
-    expect(chipText).toContain('50.00');
+    expect(chipText).toContain('50.00 EGP');
   });
 
-  it('change-due row shows the static change when overpaid', () => {
+  it('renders no change of its own when overpaid (the ledger owns it)', () => {
     render(<CashEntry remainingBalanceMinor={1250} />);
-    // Enter 15.00 (overpays by 2.50)
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
       target: { value: '15.00' },
     });
-    const totalsRow = document.querySelector('.tender-row--totals');
-    expect(totalsRow).toBeInTheDocument();
-    const value = screen.getByTestId('cash-entry-change-due-value');
-    // Money is always dir="ltr".
-    expect(value).toHaveAttribute('dir', 'ltr');
-    expect(value).toHaveTextContent(/^2\.50 EGP$/);
+    expect(screen.getByTestId('cash-entry')).not.toHaveTextContent('الباقي للعميل');
+    expect(document.querySelector('.tender-row--totals')).toBeNull();
   });
 
-  it('exact cash shows no change row', () => {
-    render(<CashEntry remainingBalanceMinor={1250} />);
-    fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
-      target: { value: '12.50' },
-    });
-    expect(screen.queryByTestId('cash-entry-change-due-value')).toBeNull();
-  });
-
-  it('the change is never animated: it shows the final value at once and on update (UX-06)', () => {
-    vi.useFakeTimers();
-    try {
-      render(<CashEntry remainingBalanceMinor={1250} />);
-      const input = screen.getByTestId('cash-entry-amount-input');
-      fireEvent.change(input, { target: { value: '15.00' } });
-      // No timers / animation frames advanced: the value is already final.
-      expect(screen.getByTestId('cash-entry-change-due-value').textContent).toBe('2.50 EGP');
-      fireEvent.change(input, { target: { value: '20.00' } });
-      expect(screen.getByTestId('cash-entry-change-due-value').textContent).toBe('7.50 EGP');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('the change groups thousands', () => {
-    render(<CashEntry remainingBalanceMinor={100000} />);
-    fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
-      target: { value: '2250.00' },
-    });
-    expect(screen.getByTestId('cash-entry-change-due-value').textContent).toBe('1,250.00 EGP');
-  });
-
-  it('quick-amount-btn--label chip (exact-change shortcut) is rendered', () => {
+  it('the exact (بالضبط) chip carries Arabic copy', () => {
     render(<CashEntry remainingBalanceMinor={5000} />);
-    const exactBtn = queryOrThrow('.quick-amount-btn--label');
-    // Must contain Arabic "بالضبط" (exact) label
-    expect(exactBtn.textContent).toMatch(/[ا-ي]/);
+    expect(screen.getByTestId('quick-amount-exact').textContent).toBe('بالضبط');
   });
 
   it('clicking the exact (بالضبط) chip fills the amount input with the exact balance', () => {
     render(<CashEntry remainingBalanceMinor={5000} />);
-    const exactBtn = queryOrThrow('.quick-amount-btn--label');
+    const exactBtn = screen.getByTestId('quick-amount-exact');
     fireEvent.click(exactBtn);
     // 5000 minor → "50.00" currency string (formatMinorToInput round-trip).
     expect(screen.getByTestId('cash-entry-amount-input')).toHaveValue('50.00');
-    // Once the exact amount is entered, the chip carries the --selected modifier
-    // (space-delimited token alongside --label, not a concatenated class).
-    expect(exactBtn.className).toContain('quick-amount-btn--selected');
+    // The chip equal to the field is pressed (announced, never colour alone).
+    expect(exactBtn).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('clicking a rounded-banknote suggestion chip fills the input with that amount', () => {
+  it('clicking a rounded-banknote suggestion chip SETS the input to that amount', () => {
     render(<CashEntry remainingBalanceMinor={1230} />);
-    // The first suggestion chip above the exact 12.30 is 50.00 (¤5000 roll-up).
-    const suggestionChip = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('.quick-amount-btn'),
-    ).find((c) => !c.className.includes('--label') && c.textContent.includes('50.00'));
+    const suggestionChip = screen
+      .getAllByTestId('quick-amount')
+      .find((c) => c.textContent.includes('50.00'));
     if (suggestionChip === undefined) {
       throw new Error('expected a rounded-banknote suggestion chip showing 50.00');
     }
+    fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
+      target: { value: '20.00' },
+    });
     fireEvent.click(suggestionChip);
+    // Set, not add: 50.00, never 70.00.
     expect(screen.getByTestId('cash-entry-amount-input')).toHaveValue('50.00');
-    // The clicked suggestion now carries the --selected modifier.
-    expect(suggestionChip.className).toContain('quick-amount-btn--selected');
+    expect(suggestionChip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('quick-amount-exact')).toHaveAttribute('aria-pressed', 'false');
   });
 });
 
@@ -469,17 +431,15 @@ describe('NEGATIVE — rejected prototype behaviours are absent', () => {
     expect(screen.queryByText('voucher_not_found')).toBeNull();
   });
 
-  it('N4: CashEntry does NOT compute change client-side (tendered - total) — change-due comes from computeChangeDueMinor', () => {
-    // This test verifies the engine contract: the change-due value rendered
-    // matches what computeChangeDueMinor(1500, 1250) = 250 produces, NOT a
-    // client-side expression of tendered - total. We verify the OUTPUT is
-    // correct (250 minor = ¤2.50). The implementation must not duplicate math.
-    render(<CashEntry remainingBalanceMinor={1250} />);
+  it('N4: the change preview comes from computeChangeDueMinor, not a client-side expression', () => {
+    // RT-243 W1-C: the entry reports the typed amount; the ledger's preview goes
+    // through `cashDraft`, which calls computeChangeDueMinor (money-math.ts).
+    const onDraftChange = vi.fn();
+    render(<CashEntry remainingBalanceMinor={1250} onDraftChange={onDraftChange} />);
     fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
       target: { value: '15.00' },
     });
-    // The correct change-due is ¤2.50 (250 minor units)
-    const changeDue = screen.getByTestId('cash-entry-change-due');
-    expect(changeDue).toHaveTextContent('2.50');
+    expect(onDraftChange).toHaveBeenLastCalledWith(1500);
+    expect(cashDraft(1500, 1250)).toEqual({ kind: 'change', changeMinor: 250 });
   });
 });

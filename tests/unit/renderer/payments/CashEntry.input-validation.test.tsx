@@ -28,6 +28,7 @@ function setup(props: Partial<ComponentProps<typeof CashEntry>> = {}) {
       remainingBalanceMinor={remainingBalanceMinor}
       onConfirm={onConfirm}
       {...(props.onBack ? { onBack: props.onBack } : {})}
+      {...(props.onDraftChange ? { onDraftChange: props.onDraftChange } : {})}
     />,
   );
   const input = screen.getByTestId('cash-entry-amount-input');
@@ -101,31 +102,32 @@ describe('<CashEntry> — confirm enablement', () => {
   });
 });
 
-describe('<CashEntry> — change-due display (display only, major units)', () => {
-  it('hides change-due row when not earned (amount < remaining)', () => {
-    const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '100.00' } });
-    expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
+describe("<CashEntry> — the change is the ledger's, not the entry's (RT-243 W1-C)", () => {
+  it('reports every parsed amount upward and null for an unparseable one', () => {
+    const onDraftChange = vi.fn();
+    const { input } = setup({ remainingBalanceMinor: 12550, onDraftChange });
+    expect(onDraftChange).toHaveBeenLastCalledWith(null);
+    fireEvent.change(input, { target: { value: '150.00' } });
+    expect(onDraftChange).toHaveBeenLastCalledWith(15000);
+    fireEvent.change(input, { target: { value: '126.5' } });
+    expect(onDraftChange).toHaveBeenLastCalledWith(12650);
+    fireEvent.change(input, { target: { value: '' } });
+    expect(onDraftChange).toHaveBeenLastCalledWith(null);
   });
 
-  it('hides change-due row when amount == remaining (exact change)', () => {
-    const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '125.50' } });
-    expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
+  it('reports null when it closes, so the ledger never previews a vanished amount', () => {
+    const onDraftChange = vi.fn();
+    const { input, unmount } = setup({ remainingBalanceMinor: 12550, onDraftChange });
+    fireEvent.change(input, { target: { value: '150.00' } });
+    unmount();
+    expect(onDraftChange).toHaveBeenLastCalledWith(null);
   });
 
-  it('renders change-due in major units when overpay (150.00 − 125.50 = 24.50 EGP)', () => {
+  it('renders no change of its own, even when overpaid (150.00 − 125.50)', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
     fireEvent.change(input, { target: { value: '150.00' } });
-    const changeDue = screen.getByTestId('cash-entry-change-due');
-    expect(changeDue).toHaveTextContent('24.50 EGP');
-  });
-
-  it('renders change-due as 1.00 EGP for amount=126.50 remaining=125.50', () => {
-    const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '126.50' } });
-    const changeDue = screen.getByTestId('cash-entry-change-due');
-    expect(changeDue).toHaveTextContent('1.00 EGP');
+    expect(screen.getByTestId('cash-entry')).not.toHaveTextContent('الباقي للعميل');
+    expect(screen.getByTestId('cash-entry')).not.toHaveTextContent('24.50');
   });
 });
 
@@ -185,7 +187,7 @@ describe('<CashEntry> — safe-integer guard on remaining', () => {
     // The component renders (no throw) ...
     expect(screen.getByTestId('cash-entry')).toBeInTheDocument();
     // ... and offers no quick-amount affordance derived from the bad value.
-    expect(screen.queryAllByTestId('cash-entry-quick-amount')).toHaveLength(0);
+    expect(screen.queryByTestId('quick-amounts')).toBeNull();
     // ... and cannot be confirmed on it.
     expect(screen.getByTestId('cash-entry-confirm')).toBeDisabled();
   });
@@ -202,11 +204,11 @@ describe('<CashEntry> — does not crash on negative remainingBalanceMinor', () 
     }).not.toThrow();
   });
 
-  it('keeps Confirm disabled and skips change-due when remainingBalanceMinor is negative', () => {
+  it('keeps Confirm disabled and offers no quick amounts when remainingBalanceMinor is negative', () => {
     const { input, confirm } = setup({ remainingBalanceMinor: -1 });
     fireEvent.change(input, { target: { value: '0' } });
     expect(confirm).toBeDisabled();
-    expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
+    expect(screen.queryByTestId('quick-amounts')).toBeNull();
   });
 
   it('does not show under-tender refusal when remainingBalanceMinor is negative', () => {

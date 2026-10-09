@@ -291,11 +291,12 @@ describe('RT-238 — fixed slots: cancel at inline-start, commit at inline-end (
 });
 
 describe('RT-238 — one quick-amount group (I-9: chips SET the value)', () => {
-  it('the keypad no longer repeats the quick amounts', async () => {
+  it('the keypad does not repeat the quick amounts: one chip group', async () => {
     await openCash();
-    expect(document.querySelectorAll('.quick-amounts')).toHaveLength(1);
-    expect(document.querySelector('.amount-pad__quick')).toBeNull();
-    expect(screen.queryByTestId(/amount-pad-quick-/)).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('quick-amounts')).toHaveLength(1);
+    const keypad = screen.getByTestId('cash-keypad');
+    expect(keypad.textContent).not.toContain('EGP');
+    expect(keypad.textContent).not.toContain('بالضبط');
   });
 
   it('a chip sets (does not add to) the received amount', async () => {
