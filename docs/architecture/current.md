@@ -132,6 +132,10 @@ a no-op. These are the two most likely silent regressions in this area and both 
 - **Migrations:** a custom transactional runner (`src/main/db/migrate.ts`) over numbered SQL files in
   `migrations/`. Applied at startup; a failure halts launch via `app.exit(1)` rather than running on a
   half-migrated database.
+- **Roll-forward safety (RT-320, ADR-0006):**
+  - **Database ahead of the build:** if `schema_migrations` names a migration this build does not ship, startup is refused with an operator dialog (`SchemaAheadError`, `src/main/app/startup-migrations.ts`). A newer build has migrated the DB.
+  - **Pre-migration snapshot:** before the first pending migration on an already-migrated DB, a `VACUUM INTO` snapshot is written to `<userData>/backups/` (newest 3 kept). It is never restored automatically. If the snapshot fails, startup halts.
+  - **Shipped migrations are immutable:** a migration file that has shipped in any signed release is never edited, renamed, renumbered or deleted. Corrections go in a new migration.
 - **Append-only tables** are enforced by SQLite triggers, not by convention.
 - **Money is integer minor units everywhere.** No floats, guarded by `Number.isSafeInteger`.
 

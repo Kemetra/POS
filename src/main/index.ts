@@ -145,7 +145,9 @@ import { assessLaunchSwitches } from './app/launch-switch-guard.js';
 import { isShippedApp } from './app/shipped-app.js';
 import { acquireSingleInstance, restoreAndFocus } from './app/single-instance.js';
 import { openDatabase } from './db/client.js';
-import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
+import { bindMigrationsDb, readMigrationsFromDisk } from './db/migrate.js';
+import { bindVacuumInto } from './db/pre-migration-snapshot.js';
+import { runStartupMigrations } from './app/startup-migrations.js';
 import { createSecretStore } from './secrets/index.js';
 import { createLogger, waitForLogDrain } from './logging/logger.js';
 import { initSentryMain } from './observability/sentry-main.js';
@@ -521,8 +523,32 @@ singleInstanceReady
     dbHolder.set(db);
     mainLogger.info({ dbPath }, 'db:opened');
 
+    // RT-320 — roll-forward safety (ADR-0006): refuse a DB a newer build has
+    // migrated, and snapshot to <userData>/backups/ before pending migrations.
     const files = readMigrationsFromDisk(resolveMigrationsDir());
-    runMigrations({ db: bindMigrationsDb(db), files });
+    const migrated = runStartupMigrations({
+      db: bindMigrationsDb(db),
+      files,
+      vacuumInto: bindVacuumInto(db),
+      userDataDir: app.getPath('userData'),
+      now: () => new Date(),
+      logger: mainLogger,
+    });
+    if (!migrated.ok) {
+      // Same async-dialog-then-exit shape as the cashier-profile refusal above.
+      closeDbHandle();
+      const exitRefused = (): void => {
+        app.exit(1);
+      };
+      void dialog
+        .showMessageBox({
+          type: 'error',
+          title: migrated.refusal.title,
+          message: migrated.refusal.body,
+        })
+        .then(exitRefused, exitRefused);
+      return;
+    }
     mainLogger.info({ count: files.length }, 'db:migrations-applied');
 
     // 009 T049b — dev-only catalogue fixture seed. Fail-closed: no-op in the

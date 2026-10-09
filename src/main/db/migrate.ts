@@ -65,6 +65,38 @@ function sha256Hex(content: string): string {
 export interface RunMigrationsOptions {
   db: MigrationsDb;
   files: MigrationFile[];
+  /**
+   * RT-320 — called once, before the first pending file is applied, with the
+   * pending names. Fires only when the DB already holds applied migrations (a
+   * fresh DB has nothing to protect). If it throws, nothing is applied and the
+   * error propagates. Production wires the pre-migration snapshot here.
+   */
+  onBeforeApply?: (pending: readonly string[]) => void;
+}
+
+/**
+ * RT-320 / ADR-0006 rule 2 — the database is ahead of this build.
+ *
+ * `schema_migrations` names migrations this build does not ship, so a newer
+ * build has already migrated this DB. Running on it would read and write a
+ * schema the code does not understand, so startup is refused (fail closed).
+ * This holds however the older binary reached the machine (updater, manual
+ * installer, copied folder).
+ *
+ * Shipped migrations are immutable for the same reason: a migration file that
+ * has shipped in any signed release is never edited, renamed, renumbered or
+ * deleted. A bad migration is corrected by a new migration in a higher version.
+ */
+export class SchemaAheadError extends Error {
+  readonly unknownMigrations: readonly string[];
+
+  constructor(unknownMigrations: readonly string[]) {
+    super(
+      `database is ahead of this build: unknown applied migrations ${unknownMigrations.join(', ')}`,
+    );
+    this.name = 'SchemaAheadError';
+    this.unknownMigrations = unknownMigrations;
+  }
 }
 
 /**
@@ -103,7 +135,7 @@ function fileOptsOutOfTransactionWrap(sql: string): boolean {
  * Throws on the first failure (caller decides whether to halt the app).
  */
 export function runMigrations(options: RunMigrationsOptions): void {
-  const { db, files } = options;
+  const { db, files, onBeforeApply } = options;
 
   // Step 1: ensure the bookkeeping table exists. Bootstrap chicken-and-egg —
   // we can't read schema_migrations to know whether 0001_init has run if the
@@ -113,11 +145,20 @@ export function runMigrations(options: RunMigrationsOptions): void {
   // Step 2: which names are already on disk?
   const applied = new Set<string>(db.listAppliedNames());
 
+  // Step 2b (RT-320): refuse a DB that a newer build has migrated, before
+  // touching anything.
+  const known = new Set(files.map((f) => f.name));
+  const unknown = [...applied].filter((name) => !known.has(name)).sort();
+  if (unknown.length > 0) throw new SchemaAheadError(unknown);
+
+  const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name));
+  const pending = sorted.filter((f) => !applied.has(f.name)).map((f) => f.name);
+  if (pending.length > 0 && applied.size > 0) onBeforeApply?.(pending);
+
   // Step 3: walk files in sorted order; apply each pending one. Each file is
   // either wrapped in a single transaction (the default) or — if it carries
   // the `-- @no-wrap-transaction` marker — executed directly, with bookkeeping
   // recorded in a second, smaller transaction afterwards.
-  const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name));
   for (const file of sorted) {
     if (applied.has(file.name)) continue;
 
