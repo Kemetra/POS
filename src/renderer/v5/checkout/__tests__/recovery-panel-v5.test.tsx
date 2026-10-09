@@ -290,6 +290,32 @@ describe('M-P7 — confirm before cancelling when a card charge may stand (RT-11
     expect(bridge.cancel).toHaveBeenCalledTimes(2);
   });
 
+  it('never comes back by itself after a hold hid it (CodeRabbit on #615)', async () => {
+    // Another surface's cancel raises a hold while this confirm is open, then
+    // the hold clears with the phase still ‘entry’. The cashier did not press
+    // Cancel again, so the confirm must not reappear.
+    const bridge = makeBridge();
+    await recordCard(bridge);
+    await click(screen.getByTestId('payment-surface-cancel'));
+    expect(dialog()).not.toBeNull();
+    await act(async () => {
+      const store = usePaymentStore.getState();
+      store.cancelKeyFor('pa-001');
+      store.setCancelHold('in_flight');
+      await Promise.resolve();
+    });
+    await settle();
+    expect(dialog()).toBeNull();
+    await act(async () => {
+      usePaymentStore.getState().clearCancelRecovery();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(screen.getByTestId('payment-surface-entry')).toBeInTheDocument();
+    expect(dialog()).toBeNull();
+    expect(bridge.cancel).not.toHaveBeenCalled();
+  });
+
   it('is axe-clean with the confirm open', async () => {
     await recordCard(makeBridge());
     await click(screen.getByTestId('payment-surface-cancel'));
