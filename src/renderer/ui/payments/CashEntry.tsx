@@ -8,6 +8,7 @@ import { normalizeNumericInput } from '../forms/normalize-digits.js';
 import { PinnedPrimary } from './CheckoutActionBar.js';
 import { QuickAmounts } from '../../v5/checkout/QuickAmounts.js';
 import { CashKeypad } from '../../v5/checkout/CashKeypad.js';
+import { Notice } from '../../v5/foundation/Notice.js';
 
 /**
  * 006-payments-tender Slice 2 + S3d T151, recomposed for RT-243 W1-C
@@ -61,6 +62,11 @@ export interface CashEntryProps {
    * so the ledger never previews an amount that is no longer on screen.
    */
   onDraftChange?: (receivedMinor: number | null) => void;
+  /**
+   * RT-339 — main refused the cash because nothing is left to pay: this screen
+   * has not seen a tender main already holds. The caller reads main again.
+   */
+  onNothingOwed?: () => void;
 }
 
 export function CashEntry({
@@ -71,9 +77,11 @@ export function CashEntry({
   tenderApply,
   onApplied,
   onDraftChange,
+  onNothingOwed,
 }: CashEntryProps): JSX.Element {
   const [rawInput, setRawInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
+  const [nothingOwed, setNothingOwed] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -126,6 +134,7 @@ export function CashEntry({
   function setAmount(next: string): void {
     setRawInput(next);
     setBridgeRefusal(false);
+    setNothingOwed(false);
   }
 
   async function handleConfirm(): Promise<void> {
@@ -135,6 +144,7 @@ export function CashEntry({
 
     if (tenderApply !== undefined && paymentAttemptId !== undefined) {
       setBridgeRefusal(false);
+      setNothingOwed(false);
       setIsApplying(true);
       try {
         const response = await tenderApply({
@@ -145,6 +155,10 @@ export function CashEntry({
         });
         if (response.kind === 'ok') {
           onApplied?.(response);
+        } else if (response.reason === 'attempt_fully_tendered') {
+          // Retrying can never help here, so this is not the generic line.
+          setNothingOwed(true);
+          onNothingOwed?.();
         } else {
           setBridgeRefusal(true);
         }
@@ -230,6 +244,15 @@ export function CashEntry({
         >
           المبلغ غير كافٍ لإتمام هذه الدفعة.
         </div>
+      )}
+
+      {/* RT-339 (M-P24) — outside the pinned slot, so it stays on screen once
+          the read-back shows the money already recorded and the settle takes
+          the slot. */}
+      {nothingOwed && (
+        <Notice tone="warning" testId="cash-entry-nothing-owed">
+          لا يوجد مبلغ مستحق على هذا البيع. لم يُسجَّل هذا المبلغ.
+        </Notice>
       )}
 
       <div className="cash-entry__actions">

@@ -1565,6 +1565,10 @@ export function PaymentSurface({
                     onApplied={() => {
                       void handleLineApplied();
                     }}
+                    // RT-339: main holds tender this screen has not seen; read it.
+                    onNothingOwed={() => {
+                      void handleLineApplied();
+                    }}
                   />
                 )}
                 {selectedTender === 'external_card_terminal' && (

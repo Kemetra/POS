@@ -531,3 +531,73 @@ describe('T085 — TenderLine FSM apply (attempt-state gating)', () => {
     if (result.kind === 'refused') expect(result.reason).toBe('attempt_terminal');
   });
 });
+
+describe('RT-339 — a cash apply with nothing owed is refused, and nothing is written', () => {
+  function cashApply(fsm: ReturnType<typeof buildFsm>['fsm'], id: string, amount: number) {
+    return fsm.apply({
+      tender_line_id: id,
+      payment_attempt_id: 'pa-1',
+      tender_type: 'cash',
+      amount_applied_minor: amount,
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:02.000Z',
+      action_id: `apply-${id}`,
+    });
+  }
+
+  it('after an exact cash apply, a second cash apply is refused as attempt_fully_tendered', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    expect(cashApply(fsm, 'tl-1', 1500).kind).toBe('ok');
+
+    // A stale screen still shows 15.00 due and sends the same cash again.
+    expect(cashApply(fsm, 'tl-2', 1500)).toEqual({
+      kind: 'refused',
+      reason: 'attempt_fully_tendered',
+    });
+    // No line (so no change to hand back), and no outbox row.
+    expect(lines.findByAttempt('pa-1').map((l) => l.tender_line_id)).toEqual(['tl-1']);
+    expect(outbox.findByActionId('apply-tl-2')).toBeUndefined();
+  });
+
+  it('after a card covers the whole amount, a cash apply is refused', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const card = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'external_card_terminal',
+      amount_applied_minor: 1500,
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(card.kind).toBe('ok');
+    expect(cashApply(fsm, 'tl-2', 500)).toEqual({
+      kind: 'refused',
+      reason: 'attempt_fully_tendered',
+    });
+    expect(lines.findByAttempt('pa-1')).toHaveLength(1);
+  });
+
+  it('cash that covered the amount with change counts as paid: the next cash apply is refused', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    expect(cashApply(fsm, 'tl-1', 2000).kind).toBe('ok');
+    expect(cashApply(fsm, 'tl-2', 2000)).toEqual({
+      kind: 'refused',
+      reason: 'attempt_fully_tendered',
+    });
+    expect(lines.findByAttempt('pa-1')).toHaveLength(1);
+  });
+
+  it('while money is still owed, cash still applies, overpay and change included', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    expect(cashApply(fsm, 'tl-1', 1000).kind).toBe('ok');
+    const second = cashApply(fsm, 'tl-2', 2000);
+    expect(second.kind).toBe('ok');
+    if (second.kind === 'ok') expect(second.change_due_minor).toBe(1500);
+    expect(lines.findByAttempt('pa-1')).toHaveLength(2);
+  });
+});

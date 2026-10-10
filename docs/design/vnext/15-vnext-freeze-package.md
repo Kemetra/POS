@@ -323,6 +323,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-P21 | Order summary counts (RT-243 W1-C; owner-approved 2026-10-09) | «الأصناف ‹n› · القطع ‹m›» (lines · units, Western digits) | neutral |
 | M-P22 | Order summary disclosure at 1024 (RT-243 W1-C; owner-approved 2026-10-09) | «عرض الأصناف» | neutral |
 | M-P23 | Cart frozen during payment badge (RT-243 W1-C; owner-approved 2026-10-09) | «مجمّدة» | neutral |
+| M-P24 | Cash refused by main because nothing is left to pay; the screen then reads main again (RT-339; wording proposed, owner to confirm). Never «try again» | «لا يوجد مبلغ مستحق على هذا البيع. لم يُسجَّل هذا المبلغ.» | warning |
 | **Completion and receipt** | | | |
 | M-C1 | Completed | «اكتمل البيع» · «رقم البيع ‹no›» ⏳ D-N1 · «الباقي للعميل ‹amount›» | success (proven only) |
 | M-C2 | Receipt sent (OS-print) | «أُرسل الإيصال للطابعة» | info |
