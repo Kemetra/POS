@@ -118,7 +118,6 @@ describe('command bar and results dropdown', () => {
     const listbox = await screen.findByRole('listbox', { name: 'نتائج البحث' });
     await user.click(within(listbox).getAllByRole('option')[0] as HTMLElement);
     expect(screen.queryByRole('listbox', { name: 'نتائج البحث' })).not.toBeInTheDocument();
-    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
     await screen.findByRole('list', { name: 'أصناف السلة' });
     expect(searchBox()).toHaveValue('');
   });

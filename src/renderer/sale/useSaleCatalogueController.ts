@@ -6,7 +6,6 @@ import type {
   CatalogueSearchResponse,
   PreloadBridgeAPI,
 } from '../../shared/bridge-api';
-import type { ProductSnapshotDisplay } from '../../shared/catalogue/product-snapshot';
 import { useCartStore } from '../stores/cart-store';
 import { useCatalogueSearchStore } from '../stores/catalogueSearchStore';
 
@@ -43,33 +42,11 @@ function applySearchResponse(store: SearchStore, res: CatalogueSearchResponse): 
   }
 }
 
-/** Map a barcode lookup onto the FSM; a refusal returns to idle without a reason. */
-function applyScanResponse(store: SearchStore, res: CatalogueLookupResponse): void {
-  switch (res.kind) {
-    case 'one':
-      store.resolveSingleMatch(res.product);
-      break;
-    case 'not_found':
-      store.resolveNotFound();
-      break;
-    case 'ambiguous':
-      store.resolveAmbiguous();
-      break;
-    case 'catalogue_unavailable':
-      store.resolveCatalogueUnavailable();
-      break;
-    case 'refused':
-      store.clear();
-      break;
-  }
-}
-
 export function useSaleCatalogueController(options: SaleCatalogueOptions): {
   state: ReturnType<typeof useCatalogueSearchStore.getState>['state'];
   effectiveCartId: string;
   runTypedSearch: (query: string) => Promise<void>;
-  runScan: (barcode: string) => Promise<void>;
-  selectResult: (product: ProductSnapshotDisplay) => void;
+  lookupScan: (barcode: string) => Promise<CatalogueLookupResponse | null>;
   recover: () => void;
   ensureCart: () => Promise<string | null>;
 } {
@@ -127,24 +104,23 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
     [getCatalogue],
   );
 
-  const runScan = useCallback(
-    async (barcode: string): Promise<void> => {
-      const gen = ++lookupGenRef.current;
-      useCatalogueSearchStore.getState().beginSearch(barcode);
-      try {
-        const res = await getCatalogue().lookupBarcode({ barcode });
-        if (gen !== lookupGenRef.current) return;
-        applyScanResponse(useCatalogueSearchStore.getState(), res);
-      } catch {
-        if (gen === lookupGenRef.current) useCatalogueSearchStore.getState().clear();
-      }
+  /**
+   * RT-242 (D-C1): an exact barcode lookup for the direct-add lane. It does not
+   * drive the search FSM (a scan opens no results panel); it closes any open
+   * results and supersedes a typed lookup still in flight, so a late answer
+   * cannot reopen them. `null` when the transport fails.
+   */
+  const lookupScan = useCallback(
+    async (barcode: string): Promise<CatalogueLookupResponse | null> => {
+      lookupGenRef.current += 1;
+      useCatalogueSearchStore.getState().clear();
+      return getCatalogue()
+        .lookupBarcode({ barcode })
+        .catch(() => null);
     },
     [getCatalogue],
   );
 
-  const selectResult = useCallback((product: ProductSnapshotDisplay): void => {
-    useCatalogueSearchStore.getState().selectResult(product);
-  }, []);
   const recover = useCallback((): void => {
     useCatalogueSearchStore.getState().clear();
   }, []);
@@ -153,8 +129,7 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
     state,
     effectiveCartId: options.cartId ?? activeCart?.cart_id ?? '',
     runTypedSearch,
-    runScan,
-    selectResult,
+    lookupScan,
     recover,
     ensureCart,
   };

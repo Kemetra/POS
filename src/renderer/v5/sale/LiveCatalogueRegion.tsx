@@ -1,25 +1,36 @@
 import { useCallback, useEffect, useRef, type JSX, type ReactNode } from 'react';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
-import { formatHumanMoney } from '../../ui/format/human-format';
+import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
 import type { AddedLineResult } from '../../sale/useSaleCartController';
 import { useSaleCatalogueController } from '../../sale/useSaleCatalogueController';
-import { useConfirmSaleAdd } from '../../sale/useConfirmSaleAdd';
+import { useDirectSaleAdd, type AddBlock } from '../../sale/useDirectSaleAdd';
 import { useCatalogueFreshness } from '../../sale/useCatalogueFreshness';
 import { useScanOwner } from '../../scan/ScanGuardHost';
+import { useScanNoticeStore } from '../../scan/scan-notice-store';
 import { LiveProductRail } from './LiveProductRail';
-import { Dialog } from '../foundation/Dialog';
-import { SaleProductFlags } from './SaleProductFlags';
 import { focusScanOwner } from '../../scan/scan-anchor';
 
 interface Props {
-  onLineAdded: (line: AddedLineResult) => void;
-  /** Shown on the command bar's status line (scan owner + last add). */
+  onLineAdded: (line: AddedLineResult, actionId: string, product: ProductSnapshotDisplay) => void;
+  /** A scan or pick was queued (anything offering Undo of an older action must go). */
+  onAddQueued?: () => void;
+  /** Read when each queued add runs: a paid or handed-off cart takes no line. */
+  addBlock: () => AddBlock;
+  /** Shown on the command bar's status line (scan owner + last cart action). */
   status?: ReactNode;
   cartBridge?: CartBridgeAPI;
   catalogueBridge?: CatalogueBridgeAPI;
 }
 
-/** Product discovery (the Direction B command bar) + confirm-first add. Mounted only when the productSearch flag is on. */
+function notifyScan(message: string): void {
+  useScanNoticeStore.getState().show(message);
+}
+
+/**
+ * Product discovery (the Direction B command bar) + direct add (owner decision
+ * D-C1): a resolved scan or a picked result adds at once, with no confirm
+ * dialog. Mounted only when the productSearch flag is on.
+ */
 export function LiveCatalogueRegion(props: Props): JSX.Element {
   const searchRef = useRef<HTMLInputElement>(null);
   const catalogue = useSaleCatalogueController({
@@ -27,16 +38,26 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
     ...(props.catalogueBridge ? { catalogueBridge: props.catalogueBridge } : {}),
   });
   const freshness = useCatalogueFreshness(props.catalogueBridge);
+  // The first add creates the cart (#466).
+  const direct = useDirectSaleAdd({
+    ensureCart: catalogue.ensureCart,
+    lookupScan: catalogue.lookupScan,
+    addBlock: props.addBlock,
+    onLineAdded: props.onLineAdded,
+    notify: notifyScan,
+    ...(props.onAddQueued ? { onQueued: props.onAddQueued } : {}),
+    ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
+  });
   const focusSearch = useCallback((): void => {
     searchRef.current?.focus();
   }, []);
   // RT-239: a wedge burst is a scan wherever focus is; this screen receives it.
-  const { runScan } = catalogue;
+  const { scan } = direct;
   const receiveScan = useCallback(
     (code: string): void => {
-      void runScan(code);
+      void scan(code);
     },
-    [runScan],
+    [scan],
   );
   useScanOwner(receiveScan);
   // Arriving on the Sale (sign-in, unlock, «بيع جديد», Back from Checkout): the scan owner has focus.
@@ -53,89 +74,31 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
     clearSearch();
     focusScanOwner();
   }, [clearSearch]);
-
-  return (
-    <>
-      <LiveProductRail
-        status={props.status}
-        onDismiss={dismiss}
-        state={catalogue.state}
-        freshness={freshness.state}
-        lastSuccessAt={freshness.lastSuccessAt}
-        feedback={freshness.feedback}
-        refreshing={freshness.refreshing}
-        onRefresh={() => void freshness.refresh()}
-        onSearch={(query) => void catalogue.runTypedSearch(query)}
-        onScan={(barcode) => void catalogue.runScan(barcode)}
-        onSelect={catalogue.selectResult}
-        onRecover={recover}
-        searchRef={searchRef}
-      />
-      {/* The first confirmed add creates the cart (#466). */}
-      <ConfirmAddDialog
-        cartId={catalogue.effectiveCartId}
-        ensureCart={catalogue.ensureCart}
-        onLineAdded={props.onLineAdded}
-        onResolved={focusScanOwner}
-        {...(props.cartBridge ? { bridge: props.cartBridge } : {})}
-      />
-    </>
+  // 15 §3.1 rule 6: a pick closes the results and hands focus back to the scan owner.
+  const pick = useCallback(
+    (product: ProductSnapshotDisplay): void => {
+      clearSearch();
+      focusScanOwner();
+      void direct.pick(product);
+    },
+    [clearSearch, direct],
   );
-}
 
-function ConfirmAddDialog(props: {
-  cartId: string;
-  ensureCart: () => Promise<string | null>;
-  onLineAdded: (line: AddedLineResult) => void;
-  onResolved: () => void;
-  bridge?: CartBridgeAPI;
-}): JSX.Element | null {
-  const addRef = useRef<HTMLButtonElement>(null);
-  const confirm = useConfirmSaleAdd(props);
-  if (confirm.product === null) return null;
-  const product = confirm.product;
   return (
-    <Dialog
-      label="تأكيد إضافة الصنف"
-      onCancel={confirm.cancel}
-      initialFocusRef={addRef}
-      restoreFocus={false}
-    >
-      <h2 className="v5-live-dialog-title">تأكيد الصنف</h2>
-      <p className="v5-live-dialog-name">{product.display_name_ar}</p>
-      {product.display_name_en && (
-        <p lang="en" dir="ltr" className="v5-live-dialog-secondary">
-          {product.display_name_en}
-        </p>
-      )}
-      <SaleProductFlags product={product} />
-      <p dir="ltr" className="v5-live-dialog-price">
-        {formatHumanMoney(product.price_minor)}
-      </p>
-      {confirm.error && (
-        <p role="alert" className="v5-live-notice v5-live-notice--danger">
-          {confirm.error}
-        </p>
-      )}
-      <div className="v5-live-dialog-actions">
-        <button
-          type="button"
-          className="v5-live-btn"
-          disabled={confirm.adding}
-          onClick={confirm.cancel}
-        >
-          إلغاء
-        </button>
-        <button
-          ref={addRef}
-          type="button"
-          className="v5-live-btn v5-live-btn--primary"
-          disabled={confirm.adding}
-          onClick={() => void confirm.confirm()}
-        >
-          إضافة إلى السلة
-        </button>
-      </div>
-    </Dialog>
+    <LiveProductRail
+      status={props.status}
+      onDismiss={dismiss}
+      state={catalogue.state}
+      freshness={freshness.state}
+      lastSuccessAt={freshness.lastSuccessAt}
+      feedback={freshness.feedback}
+      refreshing={freshness.refreshing}
+      onRefresh={() => void freshness.refresh()}
+      onSearch={(query) => void catalogue.runTypedSearch(query)}
+      onScan={receiveScan}
+      onSelect={pick}
+      onRecover={recover}
+      searchRef={searchRef}
+    />
   );
 }

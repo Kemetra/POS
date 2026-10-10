@@ -1,9 +1,11 @@
-import { useState, type JSX } from 'react';
+import { useRef, type JSX, type ReactNode } from 'react';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../shared/bridge-api';
 import { CartState } from '../../../shared/cart/cart-state';
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope';
 import type { Role } from '../../../shared/operator/role';
-import { useSaleCartController, type AddedLineResult } from '../../sale/useSaleCartController';
+import type { AddBlock } from '../../sale/useDirectSaleAdd';
+import { useSaleCartController } from '../../sale/useSaleCartController';
+import { useLineFlagsStore } from '../../stores/line-flags-store';
 import { useCartStore } from '../../stores/cart-store';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
@@ -11,8 +13,8 @@ import { usePaymentStore, type PaymentStore } from '../../stores/payment-store';
 import { LiveCatalogueRegion } from './LiveCatalogueRegion';
 import { LiveSaleCart } from './LiveSaleCart';
 import { ScanStatus } from './ScanStatus';
-import { focusScanOwner } from '../../scan/scan-anchor';
-import { acknowledgeDrawerNotice } from '../../ui/receipts/drawer-notice-store';
+import { CartStatusLine } from './CartStatusLine';
+import { useLiveSaleActions } from './useLiveSaleActions';
 import './sale-screen.css';
 import './live-sale.css';
 import './sale-direction-b.css';
@@ -89,34 +91,19 @@ const SALE_TITLE_ID = 'v5-sale-title';
  * no command bar (catalogue off, or the cart still being read) the scan status
  * keeps its own slim strip so it is never missing.
  */
-function SaleTitle(props: { scanAvailable: boolean; withStatus: boolean }): JSX.Element {
+function SaleTitle(props: {
+  scanAvailable: boolean;
+  withStatus: boolean;
+  lastAction?: ReactNode;
+}): JSX.Element {
   return (
     <div className={props.withStatus ? 'v5-live-titlebar' : undefined}>
       <h1 id={SALE_TITLE_ID} className="v5-visually-hidden">
         مساحة البيع
       </h1>
       {props.withStatus && <ScanStatus available={props.scanAvailable} />}
+      {props.withStatus && props.lastAction}
     </div>
-  );
-}
-
-interface LastAdd {
-  readonly lineId: string;
-  readonly name: string;
-  /** Changes on every add, so a re-add of the same line still scrolls and flashes. */
-  readonly nonce: number;
-}
-
-/** UX-11: a concise, polite acknowledgement of the last confirmed add. */
-function AddAcknowledgement({ last }: { last: LastAdd | null }): JSX.Element {
-  return (
-    <p className="v5-sale-last-add" role="status" aria-live="polite">
-      {last !== null && (
-        <>
-          أُضيف: <bdi>{last.name}</bdi>
-        </>
-      )}
-    </p>
   );
 }
 
@@ -141,45 +128,30 @@ function CartHydrationState(props: { failed: boolean; onRetry: () => void }): JS
   );
 }
 
+/** Why a scan or pick cannot add to the cart on screen (read when each queued add runs). */
+function addBlockOf(state: CartState | null, paid: boolean): AddBlock {
+  if (paid) return 'paid';
+  if (state === CartState.frozen_handed_off || state === CartState.handing_off) return 'frozen';
+  return null;
+}
+
 function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }): JSX.Element {
   const paymentsEnabled = useFeatureFlagsStore((state) => state.payments);
   const cartState = useCartStore((state) => state.activeCart?.state ?? null);
   const cartId = useCartStore((state) => state.activeCart?.cart_id ?? null);
   const settledCartId = usePaymentStore(selectSettledCartId);
-  const [voided, setVoided] = useState(false);
-  const [lastAdd, setLastAdd] = useState<LastAdd | null>(null);
+  const lineFlags = useLineFlagsStore((state) => state.byLine);
   const cart = useSaleCartController({
     hydrateActiveCart: true,
     ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
   });
+  const actions = useLiveSaleActions(cart, props.cartBridge);
   const frozen = cartState === CartState.frozen_handed_off;
   // Frozen alone is not "paid": only a settled attempt for THIS cart is —
   // known to the renderer, or reported by main when the cart was reopened.
   const paid = frozen && isKnownPaid(cartId, settledCartId, cart.hydratedPaid);
-
-  // Reset only after the bridge confirms the void; a refusal or rejected
-  // transport keeps the existing cart. The voided cart stays cancelled in the
-  // DB; only the renderer's pointer to it is dropped.
-  const voidThenStartFresh = async (): Promise<boolean> => {
-    const ok = await cart.voidCart().catch(() => false);
-    if (ok) {
-      cart.startNewSale();
-      setVoided(true);
-      setLastAdd(null);
-      // The «إلغاء البيع» control that opened the dialog is gone: hand focus to the scan owner.
-      focusScanOwner();
-    }
-    return ok;
-  };
-  const acceptAddedLine = (line: AddedLineResult): void => {
-    setVoided(false);
-    cart.acceptAddedLine(line);
-    setLastAdd((previous) => ({
-      lineId: line.line_id,
-      name: line.display_name,
-      nonce: (previous?.nonce ?? 0) + 1,
-    }));
-  };
+  const addBlock = useRef<AddBlock>(null);
+  addBlock.current = addBlockOf(cartState, paid);
 
   // An existing cart whose persisted lines are not known yet: show only a
   // small state. No catalogue (so no cart create and no add into an unknown
@@ -193,17 +165,31 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
     );
   }
 
+  const lastAction = (
+    <CartStatusLine
+      announcement={actions.undo.announcement}
+      offer={actions.undo.offer}
+      canUndo={actions.undo.canUndo}
+      onUndo={() => void actions.undo.undo()}
+    />
+  );
   return (
     <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
-      <SaleTitle scanAvailable={false} withStatus={!props.catalogueEnabled} />
+      <SaleTitle
+        scanAvailable={false}
+        withStatus={!props.catalogueEnabled}
+        lastAction={lastAction}
+      />
       <div className="v5-sale-workstation" data-catalogue={String(props.catalogueEnabled)}>
         {props.catalogueEnabled && (
           <LiveCatalogueRegion
-            onLineAdded={acceptAddedLine}
+            onLineAdded={actions.acceptAddedLine}
+            onAddQueued={actions.onAddQueued}
+            addBlock={() => addBlock.current}
             status={
               <>
                 <ScanStatus available />
-                <AddAcknowledgement last={lastAdd} />
+                {lastAction}
               </>
             }
             {...(props.cartBridge ? { cartBridge: props.cartBridge } : {})}
@@ -212,37 +198,32 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
         )}
         <LiveSaleCart
           lines={cart.lines}
+          lineFlags={lineFlags}
           discounts={cart.discountPlaceholders}
           subtotalMinor={cart.subtotalMinor}
           itemCount={cart.itemCount}
           frozenSubtotalMinor={frozenSubtotal(frozen, cart.envelope)}
-          lastAddedLineId={lastAdd?.lineId ?? null}
-          lastAddNonce={lastAdd?.nonce ?? 0}
+          lastAddedLineId={actions.lastAdd?.lineId ?? null}
+          lastAddNonce={actions.lastAdd?.nonce ?? 0}
           canHandoff={cartState === CartState.editing && cart.lines.length > 0}
           handingOff={cartState === CartState.handing_off}
           cancelled={cartState === CartState.cancelled}
           canVoid={canVoidCart(cartState, props.role, paid)}
           canContinue={!paid && frozen && cart.envelope !== null && paymentsEnabled}
           paid={paid}
-          voided={voided}
+          voided={actions.voided}
           handoffError={cart.handoffError}
-          onIncrement={(line) => void cart.incrementLine(line.lineId, line.version)}
-          onDecrement={(line) => void cart.decrementLine(line.lineId, line.version)}
-          onRemove={(line) => void cart.removeLine(line.lineId, line.version)}
-          onSaveNote={(line, note) => cart.saveNote(line.lineId, line.version, note)}
-          onRemoveDiscount={(id) => void cart.removeDiscount(id)}
-          onHandoff={() => void cart.handoff()}
+          onIncrement={actions.onIncrement}
+          onDecrement={actions.onDecrement}
+          onRemove={actions.onRemove}
+          onSaveNote={actions.onSaveNote}
+          onRemoveDiscount={actions.onRemoveDiscount}
+          onHandoff={actions.onHandoff}
           onContinue={() => {
             cart.continueToPayment(props.onPaymentContinue);
           }}
-          onVoid={voidThenStartFresh}
-          onNewSale={() => {
-            cart.startNewSale();
-            setLastAdd(null);
-            // RT-241 (D-B1): «بيع جديد» acknowledges the drawer notice.
-            acknowledgeDrawerNotice();
-            focusScanOwner();
-          }}
+          onVoid={actions.onVoid}
+          onNewSale={actions.onNewSale}
         />
       </div>
     </section>

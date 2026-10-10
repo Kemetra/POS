@@ -1,6 +1,4 @@
 import {
-  useEffect,
-  useRef,
   useState,
   type ChangeEvent,
   type JSX,
@@ -72,22 +70,20 @@ function resultsOpen(state: CatalogueSearchState): boolean {
  * RT-242 (VNext W1-B, Direction B) — the Sale command bar: the scan target and
  * typed search side by side above the cart, the scan-owner status and catalogue
  * freshness on one quiet line beneath, and the search results as a dropdown
- * over the cart that closes on Esc or on a pick. Behaviour is unchanged: the
- * same two fields, the same handlers, confirm-first add.
+ * over the cart. A pick adds at once (D-C1): the dropdown closes and the typed
+ * query, having done its job, is cleared.
  */
 export function LiveProductRail(props: Props): JSX.Element {
   const [query, setQuery] = useState('');
-  const previousKind = useRef(props.state.kind);
-  // A pick resolved (added or cancelled): the typed query has done its job.
-  useEffect(() => {
-    if (previousKind.current === 'confirm_pending' && props.state.kind === 'idle') setQuery('');
-    previousKind.current = props.state.kind;
-  }, [props.state.kind]);
-
   // Owned here, not in the field, so Esc can drop a keystroke still inside the
   // debounce window; otherwise it would reopen the results after dismissal.
   const search = useDebouncedSearch(props.onSearch);
   const open = resultsOpen(props.state);
+  function select(product: ProductSnapshotDisplay): void {
+    search.cancel();
+    setQuery('');
+    props.onSelect(product);
+  }
   function handleKeyDown(event: KeyboardEvent<HTMLElement>): void {
     if (event.key !== 'Escape' || !open) return;
     event.preventDefault();
@@ -121,7 +117,7 @@ export function LiveProductRail(props: Props): JSX.Element {
         {props.status}
         <FreshnessBar {...props} />
       </div>
-      {open && <ResultsDropdown {...props} />}
+      {open && <ResultsDropdown {...props} onSelect={select} />}
     </section>
   );
 }

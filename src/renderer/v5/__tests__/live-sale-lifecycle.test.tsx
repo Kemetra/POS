@@ -172,7 +172,6 @@ async function scanAndAdd(user: ReturnType<typeof userEvent.setup>): Promise<voi
     screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
     '6221000000011{Enter}',
   );
-  await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
 }
 
 describe('V5 reopens a sale whose payment already settled', () => {
@@ -240,7 +239,7 @@ describe('V5 reopens a sale whose payment already settled', () => {
     useDrawerNoticeStore.getState().reset();
   });
 
-  it('New sale clears a pending catalogue confirmation left over from the finished sale', async () => {
+  it('New sale clears a catalogue result left over from the finished sale', async () => {
     signIn();
     leftCheckoutAfterSettle();
     const b = bridges(() => Promise.resolve({ kind: 'ok', snapshot: frozenSnapshot() }));
@@ -256,7 +255,6 @@ describe('V5 reopens a sale whose payment already settled', () => {
     await user.click(newSale);
 
     expect(useCatalogueSearchStore.getState().state).toEqual({ kind: 'idle' });
-    expect(screen.queryByRole('button', { name: 'إضافة إلى السلة' })).not.toBeInTheDocument();
   });
 
   it('New sale discards a catalogue lookup still in flight for the finished sale', async () => {
@@ -278,7 +276,6 @@ describe('V5 reopens a sale whose payment already settled', () => {
     });
 
     expect(useCatalogueSearchStore.getState().state).toEqual({ kind: 'idle' });
-    expect(screen.queryByRole('button', { name: 'إضافة إلى السلة' })).not.toBeInTheDocument();
     expect(b.fns.add).not.toHaveBeenCalled();
   });
 

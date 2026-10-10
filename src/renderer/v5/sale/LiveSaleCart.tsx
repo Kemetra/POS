@@ -4,10 +4,13 @@ import { formatHumanCount } from '../../ui/format/human-format';
 import { V5Icon } from '../foundation/V5Icon';
 import { CartLineRow, NoteDialog, VoidControl, money } from './LiveCartParts';
 import { useRemovalFocus } from './useRemovalFocus';
+import type { LineFlags } from '../../stores/line-flags-store';
 import { moveRowFocus, useNewestRowInView } from './useCartRowFocus';
 
 interface Props {
   lines: readonly CartLineItem[];
+  /** RT-242 (M-S9): awareness flags of the product each line was added from (display only, I-17). */
+  lineFlags?: Readonly<Record<string, LineFlags>>;
   discounts: readonly DiscountPlaceholderSeed[];
   subtotalMinor: number;
   itemCount: number;
@@ -22,7 +25,7 @@ interface Props {
   /** The previous sale was just voided; acknowledged until the next line lands. */
   voided?: boolean;
   handoffError: string | null;
-  /** RT-242: the line the last confirmed add landed on; scrolled into view and flashed. */
+  /** RT-242: the line the last add landed on; scrolled into view and flashed. */
   lastAddedLineId?: string | null;
   /** Changes on every add, so a +1 on the same line flashes again. */
   lastAddNonce?: number;
@@ -161,6 +164,7 @@ function CartLines(
         <CartLineRow
           key={line.lineId}
           line={line}
+          flags={props.lineFlags?.[line.lineId]}
           index={index}
           lastAdded={line.lineId === props.lastAddedLineId}
           flashing={flashing && line.lineId === props.lastAddedLineId}

@@ -13,6 +13,8 @@ import { useCatalogueSearchStore } from '../../stores/catalogueSearchStore';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { usePaymentStore } from '../../stores/payment-store';
+import { useScanNoticeStore } from '../../scan/scan-notice-store';
+import { SALE_ADD_FAILED_MESSAGE } from '../../scan/scan-messages';
 import { LiveSaleWorkspace } from '../sale/LiveSaleWorkspace';
 import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
 
@@ -23,6 +25,7 @@ afterEach(() => {
   useFeatureFlagsStore.getState().reset();
   useOperatorSessionStore.getState().reset();
   usePaymentStore.getState().reset();
+  useScanNoticeStore.setState({ message: null, seq: 0 });
 });
 
 type Role = 'cashier' | 'manager' | 'admin';
@@ -108,6 +111,7 @@ function makeBridges(): {
     void: fns.voidCart,
     handoff: fns.handoff,
     subscribe: vi.fn(),
+    undoLast: vi.fn(),
   } as unknown as CartBridgeAPI;
   const catalogue = {
     search: fns.search,
@@ -131,29 +135,26 @@ function renderSale(bridges: ReturnType<typeof makeBridges>, onPaymentContinue =
   );
 }
 
-async function scanAndOpenConfirm(user: ReturnType<typeof userEvent.setup>): Promise<void> {
-  // No cart precondition: the first confirmed add creates it (#466).
-  const scan = screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' });
-  await user.type(scan, '6223004355218{Enter}');
-  await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
+async function scan(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  // No cart precondition: the first add creates it (#466).
+  const field = screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' });
+  await user.type(field, '6223004355218{Enter}');
 }
 
+/** D-C1: a resolved scan adds at once, with no confirm dialog. */
 async function addOneLine(user: ReturnType<typeof userEvent.setup>): Promise<void> {
-  await scanAndOpenConfirm(user);
-  await user.click(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
+  await scan(user);
   await screen.findByRole('list', { name: 'أصناف السلة' });
 }
 
 describe('live v5 Sale adapter', () => {
-  it('scans, confirms, hands off, then mounts the existing payment envelope', async () => {
+  it('scans (direct add), hands off, then mounts the existing payment envelope', async () => {
     signIn();
     const bridges = makeBridges();
     const onPaymentContinue = vi.fn();
     renderSale(bridges, onPaymentContinue);
     const user = userEvent.setup();
-    await scanAndOpenConfirm(user);
-    expect(bridges.fns.add).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
+    await scan(user);
     await waitFor(() => {
       expect(screen.getAllByText('15.00 EGP').length).toBeGreaterThan(0);
     });
@@ -218,17 +219,12 @@ describe('live v5 Sale adapter', () => {
     expect(bridges.fns.create).not.toHaveBeenCalled();
   });
 
-  it('offers add confirmation with no cart yet; Add creates the cart, then adds (#466)', async () => {
+  it('a scan with no cart yet creates the cart, then adds (#466)', async () => {
     signIn();
     const bridges = makeBridges();
     renderSale(bridges);
-    const user = userEvent.setup();
-    await user.type(
-      screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
-      '6223004355218{Enter}',
-    );
     expect(bridges.fns.create).not.toHaveBeenCalled();
-    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
+    await scan(userEvent.setup());
     await waitFor(() => {
       expect(bridges.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-1' }));
     });
@@ -243,15 +239,13 @@ describe('live v5 Sale adapter', () => {
       .mockResolvedValueOnce({ kind: 'ok', cart_id: 'cart-1' });
     renderSale(bridges);
     const user = userEvent.setup();
-    await user.type(
-      screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
-      '6223004355218{Enter}',
-    );
-    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/تعذّرت الإضافة/);
+    await scan(user);
+    await waitFor(() => {
+      expect(useScanNoticeStore.getState().message).toBe(SALE_ADD_FAILED_MESSAGE);
+    });
     expect(bridges.fns.add).not.toHaveBeenCalled();
     expect(screen.queryByText(/no_session/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
+    await scan(user);
     await waitFor(() => {
       expect(bridges.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-1' }));
     });
@@ -279,24 +273,23 @@ describe('live v5 Sale adapter', () => {
     expect(screen.queryByText(/no_session/)).not.toBeInTheDocument();
   });
 
-  it('moves focus to Add when confirm opens; Escape cancels without a write and returns to the scan owner', async () => {
+  it('a scan adds with no dialog and focus stays on the scan owner (D-C1)', async () => {
     signIn();
     const bridges = makeBridges();
     renderSale(bridges);
-    const user = userEvent.setup();
-    await scanAndOpenConfirm(user);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
-    await user.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: 'تأكيد إضافة الصنف' })).not.toBeInTheDocument();
-    expect(bridges.fns.add).not.toHaveBeenCalled();
+    await addOneLine(userEvent.setup());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(bridges.fns.add).toHaveBeenCalledWith(
+      expect.objectContaining({ item_ref: PANADOL.product_id, quantity: 1 }),
+    );
     // RT-239 rule 6: the next scan is the next thing the cashier does, so focus
-    // returns to the scan owner, not the search box (RT-159 F-07).
+    // stays on the scan owner, not the search box (RT-159 F-07).
     expect(document.activeElement).toBe(
       screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
     );
   });
 
-  it('typed search lists only real result fields and supports keyboard selection into confirm', async () => {
+  it('typed search lists only real result fields; a keyboard pick adds that result directly', async () => {
     signIn();
     const bridges = makeBridges();
     const full: ProductSnapshotDisplay = {
@@ -332,9 +325,13 @@ describe('live v5 Sale adapter', () => {
       listbox.focus();
     });
     await user.keyboard('{ArrowDown}{Enter}');
-    const dialog = await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
-    expect(dialog).toHaveTextContent('بنادول نايت');
-    expect(bridges.fns.add).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(bridges.fns.add).toHaveBeenCalledWith(
+        expect.objectContaining({ item_ref: 'p-2', quantity: 1 }),
+      );
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('listbox', { name: 'نتائج البحث' })).not.toBeInTheDocument();
   });
 
   it('shows a generic add refusal and keeps the cart empty', async () => {
@@ -342,10 +339,10 @@ describe('live v5 Sale adapter', () => {
     const bridges = makeBridges();
     bridges.fns.add.mockResolvedValue({ kind: 'refused', reason: 'stale_version' });
     renderSale(bridges);
-    const user = userEvent.setup();
-    await scanAndOpenConfirm(user);
-    await user.click(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/تعذّرت الإضافة/);
+    await scan(userEvent.setup());
+    await waitFor(() => {
+      expect(useScanNoticeStore.getState().message).toBe(SALE_ADD_FAILED_MESSAGE);
+    });
     expect(screen.queryByText(/stale_version/)).not.toBeInTheDocument();
     expect(screen.getByText(/لا توجد أصناف في السلة/)).toBeInTheDocument();
   });
@@ -586,7 +583,7 @@ describe('live v5 Sale adapter', () => {
     expect(screen.queryByRole('button', { name: 'إلغاء البيع' })).not.toBeInTheDocument();
   });
 
-  it('surfaces controlled / Rx awareness on result rows and the confirm dialog only when flagged', async () => {
+  it('surfaces controlled / Rx awareness on result rows and on the added line only when flagged (M-S9)', async () => {
     signIn();
     const bridges = makeBridges();
     const controlled: ProductSnapshotDisplay = {
@@ -612,9 +609,11 @@ describe('live v5 Sale adapter', () => {
     expect(plain).not.toHaveTextContent('بوصفة طبية');
     // RT-242: the option itself is the pick target (no nested button).
     await user.click(flagged as HTMLElement);
-    const dialog = await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
-    expect(dialog).toHaveTextContent('مادة خاضعة للرقابة');
-    expect(dialog).toHaveTextContent('بوصفة طبية');
+    const lines = await screen.findByRole('list', { name: 'أصناف السلة' });
+    // Display only (I-17): the badge sits on the line, nothing blocks the sale.
+    const row = within(lines).getAllByRole('listitem')[0];
+    expect(row).toHaveTextContent('مادة خاضعة للرقابة');
+    expect(row).toHaveTextContent('بوصفة طبية');
   });
 
   it('keeps the void dialog open on refusal, matching legacy, and leaks no reason', async () => {
@@ -651,7 +650,7 @@ describe('live v5 Sale touch targets', () => {
 
   // Ported from the retired legacy duplicate-scan / keyboard-walkthrough story 3
   // (023 Slice H): the production wedge-scanner path, keyboard only.
-  it('a duplicate scan confirms by keyboard and merges into the same line', async () => {
+  it('a duplicate scan adds +1 by keyboard and merges into the same line', async () => {
     signIn();
     const bridges = makeBridges();
     bridges.fns.add
@@ -685,10 +684,9 @@ describe('live v5 Sale touch targets', () => {
       });
       await user.keyboard('6223004355218{Enter}');
       expect(scan).toHaveValue('');
-      await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
-      expect(bridges.fns.lookupBarcode).toHaveBeenCalledTimes(expectedCalls);
-      // Focus sits on Add when the dialog opens, so Enter confirms.
-      await user.keyboard('{Enter}');
+      await waitFor(() => {
+        expect(bridges.fns.lookupBarcode).toHaveBeenCalledTimes(expectedCalls);
+      });
       await waitFor(() => {
         expect(bridges.fns.add).toHaveBeenCalledTimes(expectedCalls);
       });
@@ -705,8 +703,8 @@ describe('live v5 Sale touch targets', () => {
   });
 
   // Ported from the retired legacy Sale a11y suites (023 Slice H): the jsdom axe
-  // pass now runs on the V5 Sale's empty, confirm and one-line states.
-  it('is axe-clean empty, with the confirm dialog open, and with one line', async () => {
+  // pass now runs on the V5 Sale's empty and one-line (Undo offered) states.
+  it('is axe-clean empty and with one line and the Undo offer showing', async () => {
     signIn();
     const bridges = makeBridges();
     const { container } = render(
@@ -717,11 +715,8 @@ describe('live v5 Sale touch targets', () => {
       />,
     );
     await expectNoAxeViolations(container);
-    const user = userEvent.setup();
-    await scanAndOpenConfirm(user);
-    await expectNoAxeViolations(container);
-    await user.click(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
-    await screen.findByRole('list', { name: 'أصناف السلة' });
+    await addOneLine(userEvent.setup());
+    await screen.findByRole('button', { name: 'تراجع عن إضافة بنادول' });
     await expectNoAxeViolations(container);
   });
 });

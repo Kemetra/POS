@@ -6,6 +6,8 @@ import { ConfirmDialog } from '../foundation/ConfirmDialog';
 import { Dialog } from '../foundation/Dialog';
 import { focusScanOwner } from '../../scan/scan-anchor';
 import type { RemovalControl } from './useRemovalFocus';
+import { SaleProductFlags } from './SaleProductFlags';
+import type { LineFlags } from '../../stores/line-flags-store';
 
 // Legacy LineNotePopover parity: same length cap, unchanged-save and empty-clear guards.
 const NOTE_MAX_LENGTH = 200;
@@ -16,8 +18,10 @@ export function money(minor: number): string {
 
 interface LineProps {
   line: CartLineItem;
+  /** RT-242 (M-S9): the add-time product flags, shown as a badge beside the name. */
+  flags?: LineFlags | undefined;
   index: number;
-  /** RT-242: the line the last confirmed add landed on (marked until the next add). */
+  /** RT-242: the line the last add landed on (marked until the next add). */
   lastAdded?: boolean;
   /** RT-242: the 150 ms acknowledgement flash on that line. */
   flashing?: boolean;
@@ -61,6 +65,7 @@ export function CartLineRow(props: LineProps): JSX.Element {
       </span>
       <div className="v5-sale-line-product">
         <strong>{line.displayName}</strong>
+        {props.flags && <SaleProductFlags product={props.flags} />}
         {line.note && <span className="v5-sale-line-meta">ملاحظة: {line.note}</span>}
       </div>
       <QuantityControl {...props} />

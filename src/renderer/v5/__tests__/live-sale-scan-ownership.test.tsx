@@ -62,21 +62,39 @@ describe('the Sale screen is the scan owner (F-01)', () => {
       });
       expect(bridges.update).not.toHaveBeenCalled();
       expect(bridges.remove).not.toHaveBeenCalled();
-      await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
+      // D-C1: the scan adds directly; no dialog stands between scan and cart.
+      await waitFor(() => {
+        expect(bridges.add).toHaveBeenCalledTimes(2);
+      });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     },
   );
 
-  it('a second burst while the add dialog is open is refused, not lost silently', async () => {
+  it('a burst with «تراجع» focused is a scan: it adds, and never undoes the last add', async () => {
     const bridges = makeBridges();
     await saleWithLines(bridges);
     armScanGuard();
-    const body = document.body;
-    burst(body, '6223004355218');
-    const dialog = await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
-    bridges.lookupBarcode.mockClear();
+    const undo = screen.getByRole('button', { name: 'تراجع عن إضافة بنادول' });
+    act(() => {
+      undo.focus();
+    });
+    burst(undo, '6223004355218');
+    await waitFor(() => {
+      expect(bridges.lookupBarcode).toHaveBeenCalledWith({ barcode: '6223004355218' });
+    });
+    expect(bridges.undoLast).not.toHaveBeenCalled();
+  });
+
+  it('a burst while a dialog is open is refused, not lost silently (M-S6)', async () => {
+    const bridges = makeBridges();
+    await saleWithLines(bridges);
+    armScanGuard();
+    fireEvent.click(screen.getByRole('button', { name: 'إلغاء البيع' }));
+    const dialog = await screen.findByRole('dialog', { name: 'تأكيد إلغاء البيع' });
     burst(dialog, '6223004355219');
     expect(await screen.findByText(SCAN_DIALOG_OPEN_MESSAGE)).toBeInTheDocument();
     expect(bridges.lookupBarcode).not.toHaveBeenCalled();
+    expect(bridges.voidCart).not.toHaveBeenCalled();
   });
 
   it('a burst typed into the search field is a scan and clears the field', async () => {
