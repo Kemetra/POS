@@ -32,6 +32,7 @@ import { VoucherEntry } from './VoucherEntry.js';
 import type { BackToSaleEligibility } from '../../sale/useCheckoutBackToSale.js';
 import type {
   PaymentsBridgeAPI,
+  PaymentsReadResponse,
   PreloadBridgeAPI,
   SalesBridgeAPI,
   TenderBridgeAPI,
@@ -922,12 +923,20 @@ export function PaymentSurface({
   async function readAttemptWithRetry(
     attemptId: string,
   ): Promise<PaymentAttemptRendererView | null> {
+    const outcome = await readAttemptOutcome(attemptId);
+    return outcome?.kind === 'ok' ? outcome.payment_attempt : null;
+  }
+
+  /**
+   * The read with main's answer kept: the attempt, main's refusal (whose reason
+   * can say a retry is pointless, Codex P2 on #626), or null when it could not
+   * be reached at all.
+   */
+  async function readAttemptOutcome(attemptId: string): Promise<PaymentsReadResponse | null> {
     if (bridge === null) return null;
     for (let attempt = 0; attempt < READ_ATTEMPTS; attempt += 1) {
       try {
-        const readResponse = await bridge.payments.read({ payment_attempt_id: attemptId });
-        if (readResponse.kind === 'ok') return readResponse.payment_attempt;
-        return null;
+        return await bridge.payments.read({ payment_attempt_id: attemptId });
       } catch {
         // Retry: the line itself was applied in main; only the read failed.
       }
@@ -1341,8 +1350,16 @@ export function PaymentSurface({
     confirmReasonRef.current = reason;
     setReadAfter('confirm');
     setAfterApply('reading');
-    const attempt = await readAttemptWithRetry(attemptId);
+    const outcome = await readAttemptOutcome(attemptId);
     if (!isStillCurrent(attemptId, envelopeAtStart)) return;
+    // main's session gate refused the read too: no retry from here can succeed.
+    if (outcome?.kind === 'refused' && !confirmNeedsReadBack(outcome.reason)) {
+      setAfterApply('idle');
+      setReadAfter('tender');
+      setBridgeRefusalCopy(confirmRefusalCopy(outcome.reason, false));
+      return;
+    }
+    const attempt = outcome?.kind === 'ok' ? outcome.payment_attempt : null;
     if (attempt === null) {
       // The outcome is unknown: offer the read retry (M-P15), never the commit.
       // The retry comes back here, with this reason (Codex P2 on #626).

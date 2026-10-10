@@ -261,6 +261,27 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     },
   );
 
+  // Codex P2 on #626: a lost confirm answer whose read-back main refuses at its
+  // session gate must not loop a read retry that can never succeed.
+  it.each<[RefusalReason, string]>([
+    ['no_session', 'انتهت الجلسة. سجّل الدخول من جديد ثم أكمل الدفع.'],
+    ['wrong_owner', 'لا يمكن إتمام هذا الدفع من هذه الجلسة'],
+  ])(
+    'a lost confirm whose read-back is refused %s shows the guidance, not a dead retry',
+    async (reason, copy) => {
+      const h = makeHarness();
+      await pickCash(h);
+      h.confirm.mockRejectedValueOnce(new Error('ipc lost'));
+      h.read.mockResolvedValue({ kind: 'refused', reason });
+
+      await pressConfirm();
+
+      expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+      expect(refusalText()).toContain(copy);
+      expect(refusalText()).not.toContain(TRY_AGAIN);
+    },
+  );
+
   it('a refusal a retry can clear keeps «try again» while main still holds the attempt open', async () => {
     const h = makeHarness();
     await pickCash(h);
