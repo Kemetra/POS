@@ -61,6 +61,13 @@ export interface PaymentState {
    * reset, or once a cancel outcome is applied.
    */
   cancelRecovery: CancelRecovery | null;
+  /**
+   * RT-356 — the attempt a tender apply (any type) was sent on, whatever its
+   * outcome. Kept across a Checkout remount so a failed re-read says «تم تسجيل
+   * المبلغ» (M-P15) only when money may be on the attempt, and M-P27 otherwise.
+   * Renderer memory only. Cleared with the attempt and on reset.
+   */
+  tenderSentAttemptId: string | null;
 }
 
 export type CancelHold = 'none' | 'in_flight' | 'unconfirmed' | 'live_tender';
@@ -101,6 +108,8 @@ export interface PaymentStore extends PaymentState {
   markCardVoidRequired(): void;
   /** RT-298 — the cancel key for `attemptId`: minted once, then reused by every retry. */
   cancelKeyFor(attemptId: string): string;
+  /** RT-356 — a tender apply was sent on `attemptId` (outcome unknown yet). */
+  recordTenderApplySent(attemptId: string): void;
   /** RT-298 — set the hold on the recorded cancel (no-op when none is recorded). */
   setCancelHold(hold: CancelHold): void;
   /** RT-298 — a cancel outcome was applied: forget the key and any hold. */
@@ -135,6 +144,7 @@ const INITIAL: PaymentState = {
   attemptHandoffId: null,
   cardSafety: null,
   cancelRecovery: null,
+  tenderSentAttemptId: null,
 };
 
 export const usePaymentStore = create<PaymentStore>((set, get) => ({
@@ -153,6 +163,7 @@ export const usePaymentStore = create<PaymentStore>((set, get) => ({
             attemptHandoffId: null,
             cardSafety,
             cancelRecovery,
+            tenderSentAttemptId: null,
           }
         : { envelope: freezeEnvelope(envelope), cardSafety, cancelRecovery };
     });
@@ -161,7 +172,10 @@ export const usePaymentStore = create<PaymentStore>((set, get) => ({
     set((s) => ({ paymentSlice: view, attemptHandoffId: s.envelope?.handoff_action_id ?? null }));
   },
   clearAttempt: () => {
-    set({ paymentSlice: null, attemptHandoffId: null });
+    set({ paymentSlice: null, attemptHandoffId: null, tenderSentAttemptId: null });
+  },
+  recordTenderApplySent: (attemptId) => {
+    set({ tenderSentAttemptId: attemptId });
   },
   reset: () => {
     set({ ...INITIAL });

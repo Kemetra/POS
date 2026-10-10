@@ -35,6 +35,7 @@ import type {
   PaymentsReadResponse,
   PreloadBridgeAPI,
   SalesBridgeAPI,
+  TenderApplyRequest,
   TenderBridgeAPI,
 } from '../../../shared/bridge-api.js';
 import type {
@@ -925,6 +926,17 @@ export function PaymentSurface({
     followEndedWithReason(attempt);
   }
 
+  /**
+   * Every tender apply goes through here: the attempt it was sent on is kept in
+   * the store before the call, so a remount knows money may be recorded even if
+   * the answer or the follow-up read is lost (RT-356).
+   */
+  function sendTenderApply(req: TenderApplyRequest): ReturnType<TenderBridgeAPI['apply']> {
+    if (bridge === null) return Promise.reject(new Error('no payment bridge'));
+    usePaymentStore.getState().recordTenderApplySent(req.payment_attempt_id);
+    return bridge.tender.apply(req);
+  }
+
   /** A read is idempotent: a transient IPC failure is retried before giving up. */
   const READ_ATTEMPTS = 3;
 
@@ -999,7 +1011,13 @@ export function PaymentSurface({
   async function rereadOnResume(): Promise<void> {
     if (bridge === null || paymentAttemptId === null) return;
     const attemptId = paymentAttemptId;
-    const envelopeAtStart = usePaymentStore.getState().envelope;
+    const store = usePaymentStore.getState();
+    const envelopeAtStart = store.envelope;
+    // RT-356 — M-P15 says an amount was recorded: true only once one was sent on
+    // this attempt (kept in the store across the remount); otherwise M-P27.
+    const moneyMaybeRecorded =
+      store.tenderSentAttemptId === attemptId || (store.paymentSlice?.tender_lines.length ?? 0) > 0;
+    setReadAfter(moneyMaybeRecorded ? 'tender' : 'start');
     setAfterApply('reading');
     const attempt = await readAttemptWithRetry(attemptId);
     if (!isStillCurrent(attemptId, envelopeAtStart)) return;
@@ -1683,7 +1701,7 @@ export function PaymentSurface({
                   <CashEntry
                     remainingBalanceMinor={remainingBalanceMinor}
                     paymentAttemptId={paymentAttemptId}
-                    tenderApply={(req) => bridge.tender.apply(req)}
+                    tenderApply={sendTenderApply}
                     onDraftChange={setCashDraftMinor}
                     onApplied={() => {
                       void handleLineApplied();
@@ -1702,7 +1720,7 @@ export function PaymentSurface({
                       // Recorded before the call: if main commits but the
                       // response is lost, a later cancel still warns (RT-256).
                       usePaymentStore.getState().recordCardApplyAttempted();
-                      return bridge.tender.apply(req);
+                      return sendTenderApply(req);
                     }}
                     onApplied={(response) => {
                       usePaymentStore.getState().recordCardApplied(response.tender_line_id);
@@ -1714,7 +1732,7 @@ export function PaymentSurface({
                   <VoucherEntry
                     remainingBalanceMinor={remainingBalanceMinor}
                     paymentAttemptId={paymentAttemptId}
-                    tenderApply={(req) => bridge.tender.apply(req)}
+                    tenderApply={sendTenderApply}
                     onApplied={() => {
                       void handleLineApplied();
                     }}

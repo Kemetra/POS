@@ -463,6 +463,29 @@ describe('RT-341 — a started attempt is never reported as «could not start»'
     expect(screen.queryByTestId('cash-entry-confirm')).not.toBeInTheDocument();
   });
 
+  // Codex P2 on #626 / RT-356: across a remount, M-P15 («تم تسجيل المبلغ») only
+  // when an amount was sent on this attempt; the apply-sent case keeps it
+  // (PaymentSurface.action-slots: "after a failed post-apply read, the remount…").
+  it('a remount whose re-read fails on an attempt no amount was sent on keeps M-P27', async () => {
+    const h = makeHarness();
+    h.read.mockRejectedValue(new Error('ipc lost'));
+    await pickCash(h);
+
+    cleanup();
+    render(
+      <PaymentSurface
+        _testBridge={h.bridge}
+        onBackToSale={() => Promise.resolve(true)}
+        onNewSale={vi.fn()}
+      />,
+    );
+    await settle();
+
+    const notice = screen.getByTestId('payment-surface-reread-notice');
+    expect(notice).toHaveTextContent('بدأت عملية الدفع');
+    expect(notice).not.toHaveTextContent('تم تسجيل المبلغ');
+  });
+
   it('the retry reads main and opens the cash entry as it stood', async () => {
     const h = makeHarness();
     h.read.mockRejectedValue(new Error('ipc lost'));
