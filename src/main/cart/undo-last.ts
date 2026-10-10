@@ -76,6 +76,19 @@ function isUndoEffect(value: unknown): value is CartUndoEffect {
   return value === 'removed' || value === 'decremented' || value === 'restored';
 }
 
+/**
+ * True when `row` is an ORDINARY (non-Undo) action of one of `kinds`. Undo
+ * rows reuse the `cart.line.remove` / `cart.line.update` kinds, so the
+ * ordinary remove/update replay paths must not mistake one for their own
+ * replay and report success for a mutation that never happened.
+ */
+export function isOrdinaryReplayOf(row: OutboxRow, kinds: readonly string[]): boolean {
+  return (
+    kinds.includes(row.action_kind) &&
+    !('undo_of_action_id' in (parsePayload(row.payload_json) ?? {}))
+  );
+}
+
 /** The row records an Undo of the request's target on the request's cart. */
 function recordsUndoOf(
   req: CartUndoLastRequest,

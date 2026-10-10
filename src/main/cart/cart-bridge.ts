@@ -33,7 +33,7 @@ import type {
   CartVoidRequest,
   CartVoidResponse,
 } from '../../shared/cart/bridge-types.js';
-import { planUndo, replayUndo } from './undo-last.js';
+import { isOrdinaryReplayOf, planUndo, replayUndo } from './undo-last.js';
 import { CartState } from '../../shared/cart/cart-state.js';
 import type { CartRefusalReason } from '../../shared/cart/refusal.js';
 import { computeLineSubtotal, LineSubtotalError } from './line-subtotal.js';
@@ -692,7 +692,7 @@ export class CartBridgeHandlers {
     // Idempotency replay (mirrors linesAdd).
     const replay = store.getOutboxRow(req.idempotency_key);
     if (replay !== undefined) {
-      if (replay.action_kind !== 'cart.line.update' && replay.action_kind !== 'cart.line.remove') {
+      if (!isOrdinaryReplayOf(replay, ['cart.line.update', 'cart.line.remove'])) {
         return refuse('idempotency_payload_mismatch');
       }
       const replayLine = store.getLine(req.cart_id, req.line_id);
@@ -767,7 +767,7 @@ export class CartBridgeHandlers {
 
     const replay = store.getOutboxRow(keys.idempotency_key);
     if (replay !== undefined) {
-      if (replay.action_kind !== 'cart.line.remove') {
+      if (!isOrdinaryReplayOf(replay, ['cart.line.remove'])) {
         return refuse('idempotency_payload_mismatch');
       }
       return { kind: 'ok' };

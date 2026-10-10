@@ -411,6 +411,70 @@ describe('cart.undoLast — idempotency', () => {
   });
 });
 
+describe('ordinary mutations never replay an Undo row (Undo rows reuse remove/update kinds)', () => {
+  it('reusing an Undo-of-add key for linesRemove of ANOTHER line → mismatch, line not removed', async () => {
+    const f = await fixture();
+    await add(f, 'a-1');
+    const b = await add(f, 'b-1', 'SKU-B');
+    await f.handlers.undoLast({
+      cart_id: f.cart_id,
+      target_action_id: 'b-1',
+      idempotency_key: 'u-1',
+    });
+    const a = await add(f, 'a-2', 'SKU-B'); // a fresh active SKU-B line
+    const digest = stateDigest(f.db);
+    expect(
+      await f.handlers.linesRemove({
+        cart_id: f.cart_id,
+        line_id: a.line_id,
+        version: a.version,
+        idempotency_key: 'u-1',
+      }),
+    ).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
+    expect(stateDigest(f.db)).toEqual(digest);
+    expect(b.line_id).not.toBe(a.line_id);
+  });
+
+  it('reusing an Undo-of-merge key for linesUpdate → mismatch, no writes', async () => {
+    const f = await fixture();
+    const a = await add(f, 'a-1', 'SKU-A', 2);
+    await add(f, 'm-1', 'SKU-A', 1);
+    await f.handlers.undoLast({
+      cart_id: f.cart_id,
+      target_action_id: 'm-1',
+      idempotency_key: 'u-1',
+    });
+    const digest = stateDigest(f.db);
+    expect(
+      await f.handlers.linesUpdate({
+        cart_id: f.cart_id,
+        line_id: a.line_id,
+        op: 'increment',
+        version: 3,
+        idempotency_key: 'u-1',
+      }),
+    ).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
+    expect(stateDigest(f.db)).toEqual(digest);
+  });
+
+  it('ordinary remove/update replays still succeed', async () => {
+    const f = await fixture();
+    const a = await add(f, 'a-1', 'SKU-A', 2);
+    const upd = {
+      cart_id: f.cart_id,
+      line_id: a.line_id,
+      op: 'increment' as const,
+      version: 1,
+      idempotency_key: 'i-1',
+    };
+    expect(await f.handlers.linesUpdate(upd)).toEqual({ kind: 'ok', version: 2 });
+    expect(await f.handlers.linesUpdate(upd)).toEqual({ kind: 'ok', version: 2 });
+    const rem = { cart_id: f.cart_id, line_id: a.line_id, version: 2, idempotency_key: 'r-1' };
+    expect(await f.handlers.linesRemove(rem)).toEqual({ kind: 'ok' });
+    expect(await f.handlers.linesRemove(rem)).toEqual({ kind: 'ok' });
+  });
+});
+
 describe('cart.undoLast — eligibility refusals leave no writes', () => {
   async function expectUnavailable(f: Fixture, target: string): Promise<void> {
     const digest = stateDigest(f.db);
