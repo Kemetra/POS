@@ -525,6 +525,14 @@ export class CartBridgeHandlers {
     // R7 seam — resolve item_ref to display_name + unit_price_minor snapshot.
     const resolver = this.deps.resolveItemRef ?? DEFAULT_ITEM_REF_RESOLVER;
     const resolved = await resolver(req.item_ref);
+
+    // RT-349 — a same-key add may have committed during the await; replay it
+    // rather than hitting the outbox primary key. Synchronous from here on.
+    const replayAfterResolve = store.getOutboxRow(req.idempotency_key);
+    if (replayAfterResolve !== undefined) {
+      return this.replayLinesAdd(req, store, replayAfterResolve);
+    }
+
     if (resolved.kind !== 'ok') {
       // The bridge contract has no per-resolver reason; collapse to generic.
       return refuse('wrong_owner');
