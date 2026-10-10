@@ -1,5 +1,6 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import type { CartAnnouncement, UndoOffer } from '../../sale/useSaleUndo';
+import { focusScanOwner } from '../../scan/scan-anchor';
 
 /**
  * How long «تراجع» stays offered while untouched. Presentation only: main
@@ -64,6 +65,18 @@ export function CartStatusLine(props: {
   const [hovered, setHovered] = useState(false);
   const offer = props.canUndo ? props.offer : null;
   const visible = useOfferLifetime(offer?.seq ?? null, focused || hovered);
+  const shown = offer !== null && visible;
+  const focusedRef = useRef(false);
+  focusedRef.current = focused;
+  // A focused «تراجع» that goes away (its Undo settled, a scan withdrew it)
+  // fires no blur: drop the pause, and hand focus back to the scan owner
+  // rather than leaving it on the page body (15 §3.1 rule 6).
+  useEffect(() => {
+    if (shown || !focusedRef.current) return;
+    setFocused(false);
+    setHovered(false);
+    focusScanOwner();
+  }, [shown]);
   return (
     <div
       className="v5-sale-last-action"
@@ -83,7 +96,7 @@ export function CartStatusLine(props: {
       <p className="v5-sale-last-add" role="status" aria-live="polite">
         {props.announcement !== null && announcementText(props.announcement)}
       </p>
-      {offer !== null && visible && (
+      {shown && (
         <button
           type="button"
           className="v5-sale-undo"

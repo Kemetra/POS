@@ -25,10 +25,18 @@ export interface DirectSaleAddOptions {
   lookupScan: (code: string) => Promise<CatalogueLookupResponse | null>;
   /** Read at the moment each queued add runs, never at enqueue time. */
   addBlock: () => AddBlock;
-  /** A bridge-confirmed add, with the idempotency key of that add (the Undo target, RT-245). */
-  onLineAdded: (line: AddedLineResult, actionId: string, product: ProductSnapshotDisplay) => void;
+  /**
+   * A bridge-confirmed add, with the idempotency key of that add (the Undo
+   * target, RT-245) and the ticket `onQueued` returned when it was queued.
+   */
+  onLineAdded: (
+    line: AddedLineResult,
+    actionId: string,
+    product: ProductSnapshotDisplay,
+    ticket: number,
+  ) => void;
   /** A scan or pick was queued: anything offering to undo an older action must go. */
-  onQueued?: () => void;
+  onQueued?: () => number;
   /** A one-line, non-blocking exception notice (M-S3, M-S7, a refused add). */
   notify: (message: string) => void;
   bridge?: CartBridgeAPI;
@@ -70,47 +78,52 @@ export function useDirectSaleAdd(options: DirectSaleAddOptions): {
   optionsRef.current = options;
   const laneRef = useRef<Promise<void>>(Promise.resolve());
 
-  const enqueue = useCallback((job: () => Promise<void>): Promise<void> => {
-    optionsRef.current.onQueued?.();
-    const next = laneRef.current.then(job, job);
+  const enqueue = useCallback((job: (ticket: number) => Promise<void>): Promise<void> => {
+    const ticket = optionsRef.current.onQueued?.() ?? 0;
+    const run = (): Promise<void> => job(ticket);
+    const next = laneRef.current.then(run, run);
     laneRef.current = next.catch(() => undefined);
     return next;
   }, []);
 
-  const addProduct = useCallback(async (product: ProductSnapshotDisplay): Promise<void> => {
-    const opts = optionsRef.current;
-    const cartId = await opts.ensureCart();
-    if (cartId === null || cartId === '') {
-      opts.notify(SALE_ADD_FAILED_MESSAGE);
-      return;
-    }
-    const actionId = crypto.randomUUID();
-    const res = await (opts.bridge ?? readCartBridge()).lines
-      .add({
-        cart_id: cartId,
-        item_ref: product.product_id,
-        quantity: 1,
-        idempotency_key: actionId,
-      })
-      .catch(() => null);
-    if (res?.kind !== 'ok') {
-      opts.notify(SALE_ADD_FAILED_MESSAGE);
-      return;
-    }
-    opts.onLineAdded(
-      {
-        line_id: res.line_id,
-        display_name: res.display_name,
-        unit_price_minor: res.unit_price_minor,
-        line_subtotal_minor: res.line_subtotal_minor,
-        quantity: res.quantity,
-        version: res.version,
-        merged: res.merged,
-      },
-      actionId,
-      product,
-    );
-  }, []);
+  const addProduct = useCallback(
+    async (product: ProductSnapshotDisplay, ticket: number): Promise<void> => {
+      const opts = optionsRef.current;
+      const cartId = await opts.ensureCart();
+      if (cartId === null || cartId === '') {
+        opts.notify(SALE_ADD_FAILED_MESSAGE);
+        return;
+      }
+      const actionId = crypto.randomUUID();
+      const res = await (opts.bridge ?? readCartBridge()).lines
+        .add({
+          cart_id: cartId,
+          item_ref: product.product_id,
+          quantity: 1,
+          idempotency_key: actionId,
+        })
+        .catch(() => null);
+      if (res?.kind !== 'ok') {
+        opts.notify(SALE_ADD_FAILED_MESSAGE);
+        return;
+      }
+      opts.onLineAdded(
+        {
+          line_id: res.line_id,
+          display_name: res.display_name,
+          unit_price_minor: res.unit_price_minor,
+          line_subtotal_minor: res.line_subtotal_minor,
+          quantity: res.quantity,
+          version: res.version,
+          merged: res.merged,
+        },
+        actionId,
+        product,
+        ticket,
+      );
+    },
+    [],
+  );
 
   /** False (with its notice) when the cart on screen cannot take a line. */
   const admits = useCallback((): boolean => {
@@ -123,10 +136,10 @@ export function useDirectSaleAdd(options: DirectSaleAddOptions): {
 
   const scan = useCallback(
     (code: string): Promise<void> =>
-      enqueue(async () => {
+      enqueue(async (ticket) => {
         if (!admits()) return;
         const res = await optionsRef.current.lookupScan(code);
-        if (res?.kind === 'one') await addProduct(res.product);
+        if (res?.kind === 'one') await addProduct(res.product, ticket);
         else optionsRef.current.notify(lookupNotice(code, res));
       }),
     [addProduct, admits, enqueue],
@@ -134,8 +147,8 @@ export function useDirectSaleAdd(options: DirectSaleAddOptions): {
 
   const pick = useCallback(
     (product: ProductSnapshotDisplay): Promise<void> =>
-      enqueue(async () => {
-        if (admits()) await addProduct(product);
+      enqueue(async (ticket) => {
+        if (admits()) await addProduct(product, ticket);
       }),
     [addProduct, admits, enqueue],
   );

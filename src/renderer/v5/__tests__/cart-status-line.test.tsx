@@ -77,6 +77,27 @@ describe('CartStatusLine', () => {
     expect(screen.queryByRole('button', UNDO)).not.toBeInTheDocument();
   });
 
+  it('a focused «تراجع» that goes away leaves no stuck pause: the next offer still expires', () => {
+    const { rerender } = render(view(offer(1)));
+    act(() => {
+      screen.getByRole('button', UNDO).focus();
+    });
+    // The Undo settled (or a scan withdrew it): the focused button unmounts with no blur.
+    rerender(
+      <CartStatusLine
+        announcement={{ kind: 'undone', seq: 2 }}
+        offer={null}
+        canUndo
+        onUndo={vi.fn()}
+      />,
+    );
+    rerender(view(offer(3)));
+    act(() => {
+      vi.advanceTimersByTime(UNDO_NOTICE_MS);
+    });
+    expect(screen.queryByRole('button', UNDO)).not.toBeInTheDocument();
+  });
+
   it('a new offer restarts the lifetime', () => {
     const { rerender } = render(view(offer(1)));
     act(() => {

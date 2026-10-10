@@ -125,6 +125,22 @@ describe('Undo of the last direct add', () => {
     expect(second).toBe(first);
   });
 
+  it('a lost Undo response with no retry still re-reads the cart, so it is never stale', async () => {
+    const bridges = makeBridges();
+    bridges.undoLast.mockRejectedValue(new Error('ipc'));
+    bridges.snapshot.mockResolvedValue(snapshotWith([]));
+    const user = await saleWithLines(bridges);
+
+    await user.click(screen.getByRole('button', { name: 'تراجع عن إضافة بنادول' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
+    });
+    expect(bridges.snapshot).toHaveBeenCalledWith({ cart_id: 'cart-1' });
+    // The offer stays for a retry with the same key.
+    expect(screen.getByRole('button', { name: 'تراجع عن إضافة بنادول' })).toBeInTheDocument();
+  });
+
   it('a cart re-read that fails after the Undo falls back to reading the cart again, never to a stale list', async () => {
     const bridges = makeBridges();
     bridges.undoLast.mockResolvedValue({
@@ -198,6 +214,23 @@ describe('Undo of a delete', () => {
     // The restored line carries main's version for the next mutation.
     await user.click(screen.getByRole('button', { name: 'زيادة كمية بنادول' }));
     expect(bridges.update).toHaveBeenCalledWith(expect.objectContaining({ version: 3 }));
+  });
+
+  it('a delete still in flight offers no Undo once a later change has started', async () => {
+    const bridges = makeBridges();
+    let confirmRemove: (value: unknown) => void = () => undefined;
+    bridges.remove.mockReturnValueOnce(new Promise((resolve) => (confirmRemove = resolve)));
+    const user = await saleWithLines(bridges, 2);
+
+    await user.click(screen.getAllByRole('button', { name: /^حذف$/ })[0] as HTMLElement);
+    await user.click(screen.getByRole('button', { name: 'زيادة كمية بروفين' }));
+    await act(async () => {
+      confirmRemove({ kind: 'ok' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText(/حُذف/)).toHaveTextContent('حُذف بنادول.');
+    expect(screen.queryByRole('button', { name: /^تراجع/ })).not.toBeInTheDocument();
   });
 
   it('a refused delete offers no Undo', async () => {

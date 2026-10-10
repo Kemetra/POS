@@ -50,15 +50,18 @@ export function useLiveSaleActions(cart: SaleCart, bridge: CartBridgeAPI | undef
       line: AddedLineResult,
       actionId: string,
       product: ProductSnapshotDisplay,
+      ticket: number,
     ): void => {
       setVoided(false);
       cart.acceptAddedLine(line);
       useLineFlagsStore.getState().remember(line.line_id, product);
       setLastAdd((previous) => ({ lineId: line.line_id, nonce: (previous?.nonce ?? 0) + 1 }));
       const cartId = useCartStore.getState().activeCart?.cart_id;
-      if (cartId !== undefined) undo.offerUndo('added', line.display_name, cartId, actionId);
+      if (cartId !== undefined) {
+        undo.offerUndo('added', line.display_name, cartId, actionId, ticket);
+      }
     },
-    onAddQueued: undo.dismiss,
+    onAddQueued: undo.withdraw,
     onIncrement: (line: CartLineItem): void => {
       undo.dismiss();
       void cart.incrementLine(line.lineId, line.version);
@@ -68,11 +71,11 @@ export function useLiveSaleActions(cart: SaleCart, bridge: CartBridgeAPI | undef
       void cart.decrementLine(line.lineId, line.version);
     },
     onRemove: (line: CartLineItem): void => {
-      undo.dismiss();
+      const ticket = undo.withdraw();
       const cartId = useCartStore.getState().activeCart?.cart_id;
       void cart.removeLine(line.lineId, line.version).then((actionId) => {
         if (actionId !== null && cartId !== undefined) {
-          undo.offerUndo('removed', line.displayName, cartId, actionId);
+          undo.offerUndo('removed', line.displayName, cartId, actionId, ticket);
         }
       });
     },

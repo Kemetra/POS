@@ -54,7 +54,7 @@ function setup(overrides: Partial<DirectSaleAddOptions> = {}, block: AddBlock = 
     lookupScan: vi.fn().mockResolvedValue({ kind: 'one', product: PANADOL }),
     addBlock: () => block,
     onLineAdded: vi.fn(),
-    onQueued: vi.fn(),
+    onQueued: vi.fn(() => 7),
     notify: vi.fn(),
     bridge,
     ...overrides,
@@ -78,6 +78,7 @@ describe('useDirectSaleAdd', () => {
       expect.objectContaining({ line_id: 'line-p-1', merged: false }),
       key,
       PANADOL,
+      7,
     );
     expect(options.notify).not.toHaveBeenCalled();
   });

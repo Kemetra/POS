@@ -11,9 +11,14 @@ import { LiveProductRail } from './LiveProductRail';
 import { focusScanOwner } from '../../scan/scan-anchor';
 
 interface Props {
-  onLineAdded: (line: AddedLineResult, actionId: string, product: ProductSnapshotDisplay) => void;
+  onLineAdded: (
+    line: AddedLineResult,
+    actionId: string,
+    product: ProductSnapshotDisplay,
+    ticket: number,
+  ) => void;
   /** A scan or pick was queued (anything offering Undo of an older action must go). */
-  onAddQueued?: () => void;
+  onAddQueued?: () => number;
   /** Read when each queued add runs: a paid or handed-off cart takes no line. */
   addBlock: () => AddBlock;
   /** Shown on the command bar's status line (scan owner + last cart action). */

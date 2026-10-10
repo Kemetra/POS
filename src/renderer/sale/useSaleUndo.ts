@@ -51,8 +51,23 @@ export function useSaleUndo(options: SaleUndoOptions): {
   offer: UndoOffer | null;
   announcement: CartAnnouncement | null;
   canUndo: boolean;
-  offerUndo: (kind: UndoableKind, name: string, cartId: string, targetActionId: string) => void;
-  /** Another cart mutation (or the end of the sale) invalidates the offer. */
+  /**
+   * Announce a committed add / remove, and offer its Undo only if nothing was
+   * withdrawn since `ticket` was taken: a change started while this action was
+   * still in flight is newer, and main would refuse the Undo.
+   */
+  offerUndo: (
+    kind: UndoableKind,
+    name: string,
+    cartId: string,
+    targetActionId: string,
+    ticket: number,
+  ) => void;
+  /**
+   * Another cart mutation (or the end of the sale) invalidates the offer.
+   * Returns the ticket an action started now passes back to `offerUndo`.
+   */
+  withdraw: () => number;
   dismiss: () => void;
   /** Drop the offer and the last announcement (a new sale). */
   clear: () => void;
@@ -61,6 +76,7 @@ export function useSaleUndo(options: SaleUndoOptions): {
   const [offer, setOffer] = useState<UndoOffer | null>(null);
   const [announcement, setAnnouncement] = useState<CartAnnouncement | null>(null);
   const seqRef = useRef(0);
+  const epochRef = useRef(0);
   const busyRef = useRef(false);
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -71,23 +87,36 @@ export function useSaleUndo(options: SaleUndoOptions): {
   const canUndo = (options.bridge ?? readCartBridgeOrNull())?.undoLast !== undefined;
 
   const offerUndo = useCallback(
-    (kind: UndoableKind, name: string, cartId: string, targetActionId: string): void => {
+    (
+      kind: UndoableKind,
+      name: string,
+      cartId: string,
+      targetActionId: string,
+      ticket: number,
+    ): void => {
       seqRef.current += 1;
       const seq = seqRef.current;
       setAnnouncement({ kind, name, seq });
+      if (ticket !== epochRef.current) return;
       setOffer({ kind, name, cartId, targetActionId, undoKey: crypto.randomUUID(), seq });
     },
     [],
   );
 
-  const dismiss = useCallback((): void => {
+  const withdraw = useCallback((): number => {
+    epochRef.current += 1;
     setOffer(null);
+    return epochRef.current;
   }, []);
 
+  const dismiss = useCallback((): void => {
+    withdraw();
+  }, [withdraw]);
+
   const clear = useCallback((): void => {
-    setOffer(null);
+    withdraw();
     setAnnouncement(null);
-  }, []);
+  }, [withdraw]);
 
   const undo = useCallback(async (): Promise<void> => {
     const current = offer;
@@ -102,8 +131,12 @@ export function useSaleUndo(options: SaleUndoOptions): {
           idempotency_key: current.undoKey,
         })
         .catch(() => null);
-      // A lost response keeps the offer: pressing again replays the same key.
-      if (res === null) return;
+      // A lost response keeps the offer (pressing again replays the same key),
+      // but main may have applied the inverse: re-read so the cart is not stale.
+      if (res === null) {
+        await optionsRef.current.resync();
+        return;
+      }
       seqRef.current += 1;
       setAnnouncement({ kind: res.kind === 'ok' ? 'undone' : 'unavailable', seq: seqRef.current });
       setOffer(null);
@@ -114,5 +147,5 @@ export function useSaleUndo(options: SaleUndoOptions): {
     }
   }, [getBridge, offer]);
 
-  return { offer, announcement, canUndo, offerUndo, dismiss, clear, undo };
+  return { offer, announcement, canUndo, offerUndo, withdraw, dismiss, clear, undo };
 }
