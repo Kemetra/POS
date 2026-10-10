@@ -144,6 +144,28 @@ function scrubPayloadForOutbox(payload: Record<string, unknown>): Record<string,
   return out;
 }
 
+/**
+ * RT-349 — does a stored `cart.line.add` / `cart.line.merge` outbox row carry
+ * the same cart, item and quantity as this add request? The add row stores
+ * `quantity`; the merge row stores `quantity_added`.
+ */
+function isSameAddPayload(
+  req: CartLinesAddRequest,
+  replay: { cart_id: string; payload_json: string },
+): boolean {
+  if (replay.cart_id !== req.cart_id) return false;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(replay.payload_json);
+  } catch {
+    return false;
+  }
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as { item_ref?: unknown; quantity?: unknown; quantity_added?: unknown };
+  const quantity = p.quantity ?? p.quantity_added;
+  return p.item_ref === req.item_ref && quantity === req.quantity;
+}
+
 export interface CartBridgeHandlersDeps {
   /** Returns the currently-authenticated operator session, or null. */
   getCurrentSession: () => OperatorSessionRecord | null;
@@ -526,17 +548,10 @@ export class CartBridgeHandlers {
     const resolver = this.deps.resolveItemRef ?? DEFAULT_ITEM_REF_RESOLVER;
     const resolved = await resolver(req.item_ref);
 
-    // RT-350 — the IPC lock guard only checks at entry. If the session that
-    // started this add signed out, was swapped or locked during the await,
-    // write nothing under it.
-    if (!this.isSessionStillLive(gated.session)) return refuse('no_session');
-
-    // RT-349 — a same-key add may have committed during the await; replay it
-    // rather than hitting the outbox primary key. Synchronous from here on.
-    const replayAfterResolve = store.getOutboxRow(req.idempotency_key);
-    if (replayAfterResolve !== undefined) {
-      return this.replayLinesAdd(req, store, replayAfterResolve);
-    }
+    // Everything from here on is synchronous: re-prove what the await may
+    // have changed before writing.
+    const afterResolve = this.recheckAfterResolve(req, gated);
+    if (afterResolve !== null) return afterResolve;
 
     if (resolved.kind !== 'ok') {
       // The bridge contract has no per-resolver reason; collapse to generic.
@@ -571,6 +586,9 @@ export class CartBridgeHandlers {
     if (replay.action_kind !== 'cart.line.add' && replay.action_kind !== 'cart.line.merge') {
       return refuse('idempotency_payload_mismatch');
     }
+    // FR-018 (0009): the same key with a different payload is refused, never
+    // answered with the original action's result.
+    if (!isSameAddPayload(req, replay)) return refuse('idempotency_payload_mismatch');
     const replayLineId = replay.line_id;
     if (replayLineId === null) return refuse('idempotency_payload_mismatch');
     const replayLine = store.getLine(req.cart_id, replayLineId);
@@ -1699,6 +1717,23 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
+    return null;
+  }
+
+  /**
+   * What the resolver await in `linesAdd` may have changed, or null to proceed:
+   * - RT-350: the IPC lock guard only checks at entry, so if the session that
+   *   started this add signed out, was swapped or locked, write nothing under it;
+   * - RT-349: a same-key add that committed meanwhile is replayed rather than
+   *   hitting the outbox primary key.
+   */
+  private recheckAfterResolve(
+    req: CartLinesAddRequest,
+    gated: MutableCartContext,
+  ): CartLinesAddResponse | null {
+    if (!this.isSessionStillLive(gated.session)) return refuse('no_session');
+    const replay = gated.store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) return this.replayLinesAdd(req, gated.store, replay);
     return null;
   }
 

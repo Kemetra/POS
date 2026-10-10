@@ -120,4 +120,58 @@ describe('RT-349 — concurrent adds with one idempotency key', () => {
       );
     },
   );
+
+  // FR-018 / 0009: the same key with a different payload is refused, never
+  // answered with the first call's result.
+  interface AddPayload {
+    item_ref: string;
+    quantity: number;
+  }
+  interface Mismatch {
+    label: string;
+    first: AddPayload;
+    second: AddPayload;
+  }
+  const MISMATCHES: readonly Mismatch[] = [
+    {
+      label: 'a different item on a new line',
+      first: { item_ref: 'SKU-B', quantity: 1 },
+      second: { item_ref: 'SKU-C', quantity: 1 },
+    },
+    {
+      label: 'a different quantity on a new line',
+      first: { item_ref: 'SKU-B', quantity: 1 },
+      second: { item_ref: 'SKU-B', quantity: 3 },
+    },
+    {
+      label: 'a different quantity on a merge',
+      first: { item_ref: 'SKU-A', quantity: 1 },
+      second: { item_ref: 'SKU-A', quantity: 3 },
+    },
+  ];
+  const addWithDupKey = (
+    f: Fixture,
+    payload: AddPayload,
+  ): ReturnType<Fixture['handlers']['linesAdd']> =>
+    f.handlers.linesAdd({ cart_id: f.cart_id, ...payload, idempotency_key: 'dup' });
+  const MISMATCH_REFUSAL = { kind: 'refused', reason: 'idempotency_payload_mismatch' };
+
+  it.each(MISMATCHES)('refuses $label when the calls overlap', async ({ first, second }) => {
+    const f = await makeEditingCart();
+    const release = f.holdResolver();
+    const pending = [addWithDupKey(f, first), addWithDupKey(f, second)];
+    release();
+
+    const [r1, r2] = await Promise.all(pending);
+    expect(r1?.kind).toBe('ok');
+    expect(r2).toEqual(MISMATCH_REFUSAL);
+  });
+
+  it.each(MISMATCHES)('refuses $label on a later retry', async ({ first, second }) => {
+    const f = await makeEditingCart();
+    const r1 = await addWithDupKey(f, first);
+    const r2 = await addWithDupKey(f, second);
+    expect(r1.kind).toBe('ok');
+    expect(r2).toEqual(MISMATCH_REFUSAL);
+  });
 });
