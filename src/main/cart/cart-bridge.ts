@@ -589,7 +589,8 @@ export class CartBridgeHandlers {
       if (err instanceof LineSubtotalError) return refuse('not_implemented');
       throw err;
     }
-    ctx.store.mergeLineAndOutbox(
+    // RT-347: a handoff or void may have committed during the resolver await.
+    const merged = ctx.store.mergeLineAndOutbox(
       {
         line_id: existing.line_id,
         quantity: newQuantity,
@@ -614,6 +615,7 @@ export class CartBridgeHandlers {
         applied_at: now,
       },
     );
+    if (!merged) return refuse('frozen');
     return {
       kind: 'ok',
       line_id: existing.line_id,
@@ -642,7 +644,8 @@ export class CartBridgeHandlers {
       throw err;
     }
     const line_id = randomUUID();
-    ctx.store.insertLineAndOutbox(
+    // RT-347: a handoff or void may have committed during the resolver await.
+    const inserted = ctx.store.insertLineAndOutbox(
       {
         line_id,
         cart_id: req.cart_id,
@@ -669,6 +672,7 @@ export class CartBridgeHandlers {
         applied_at: now,
       },
     );
+    if (!inserted) return refuse('frozen');
     return {
       kind: 'ok',
       line_id,

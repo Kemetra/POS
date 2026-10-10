@@ -210,8 +210,14 @@ export interface DiscountPlaceholderRow {
 
 export interface CartStore {
   insertCartAndOutbox(cart: InsertCartInput, outbox: InsertOutboxInput): void;
-  insertLineAndOutbox(line: InsertCartLineInput, outbox: InsertOutboxInput): void;
-  mergeLineAndOutbox(update: UpdateCartLineQtyInput, outbox: InsertOutboxInput): void;
+  /**
+   * RT-347 — the add paths re-prove, inside the write transaction, that the
+   * cart is still mutable (the bridge awaits the item resolver between its
+   * gate and this call; a handoff or void may commit in between). Return
+   * `false` with nothing written when it no longer is.
+   */
+  insertLineAndOutbox(line: InsertCartLineInput, outbox: InsertOutboxInput): boolean;
+  mergeLineAndOutbox(update: UpdateCartLineQtyInput, outbox: InsertOutboxInput): boolean;
   updateLineQuantityAndOutbox(update: UpdateCartLineQtyInput, outbox: InsertOutboxInput): void;
   setLineNoteAndOutbox(update: UpdateCartLineNoteInput, outbox: InsertOutboxInput): void;
   softRemoveLineAndOutbox(remove: SoftRemoveCartLineInput, outbox: InsertOutboxInput): void;
@@ -318,6 +324,13 @@ const CANCEL_CART_SQL = `UPDATE carts
     SET state = 'cancelled', cancelled_at = ?, cancellation_reason = ?, updated_at = ?,
         last_action_id = ?`;
 
+/**
+ * RT-347 — commit-time twin of the bridge's mutability gate
+ * (`requireOperatorSession` + the `handing_off` freeze).
+ */
+const MUTABLE_CART_GUARD_SQL = `SELECT 1 AS ok FROM carts
+    WHERE cart_id = ? AND state NOT IN ('handing_off', 'frozen_handed_off', 'cancelled')`;
+
 export function bindCartStore(db: DatabaseHandle): CartStore {
   const insertCart = db.prepare(
     `INSERT INTO carts (
@@ -371,6 +384,8 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
            updated_at = ?
      WHERE line_id = ?`,
   ) as PrepareRun;
+
+  const mutableCartGuardStmt = db.prepare(MUTABLE_CART_GUARD_SQL) as PrepareGet<{ ok: number }>;
 
   // ── RT-254 Undo: commit-time guards + inverse writes ──
   // Insertion order (rowid) is the lineage order: the outbox is append-only.
@@ -543,8 +558,9 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
       })();
     },
 
-    insertLineAndOutbox(line, outbox): void {
-      db.transaction(() => {
+    insertLineAndOutbox(line, outbox): boolean {
+      return db.transaction((): boolean => {
+        if (mutableCartGuardStmt.get(line.cart_id) === undefined) return false;
         writeOutbox(outbox);
         insertLine.run(
           line.line_id,
@@ -560,14 +576,17 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
           line.created_at,
         );
         recomputeSubtotal(line.cart_id, line.created_at, line.last_action_id);
-        // Cart transitions empty → editing on the first add. Bridge layer
-        // decides this; we only ever set state when it changes.
+        // Cart transitions empty → editing on the first add. The guard above
+        // keeps this from ever reviving a frozen or cancelled cart.
         setCartStateStmt.run('editing', line.created_at, line.last_action_id, line.cart_id);
+        return true;
       })();
     },
 
-    mergeLineAndOutbox(update, outbox): void {
-      db.transaction(() => {
+    mergeLineAndOutbox(update, outbox): boolean {
+      return db.transaction((): boolean => {
+        // Caller guarantees outbox.cart_id matches the line's cart_id.
+        if (mutableCartGuardStmt.get(outbox.cart_id) === undefined) return false;
         writeOutbox(outbox);
         updateLineQty.run(
           update.quantity,
@@ -576,8 +595,8 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
           update.updated_at,
           update.line_id,
         );
-        // Caller guarantees outbox.cart_id matches the line's cart_id.
         recomputeSubtotal(outbox.cart_id, update.updated_at, update.last_action_id);
+        return true;
       })();
     },
 
