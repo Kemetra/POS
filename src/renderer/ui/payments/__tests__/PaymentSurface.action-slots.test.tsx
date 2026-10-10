@@ -595,4 +595,80 @@ describe('RT-243 F1 — a remount reads main again before offering an apply or a
     expect(bridge.confirm).not.toHaveBeenCalled();
     expect(bridge.apply).toHaveBeenCalledTimes(1);
   });
+
+  it('a settle whose response was lost comes back as the settled screen, not another commit (Codex P1, #618)', async () => {
+    const bridge = await openCash();
+    await typeAndApply('50.00');
+    const commit = await screen.findByTestId('payment-surface-confirm');
+    // Main settles, but the answer never reaches the renderer.
+    bridge.confirm.mockRejectedValueOnce(new Error('ipc'));
+    await act(async () => {
+      fireEvent.click(commit, { detail: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(usePaymentStore.getState().paymentSlice?.state).toBe('started');
+
+    bridge.read.mockReset();
+    bridge.read.mockResolvedValue({
+      kind: 'ok',
+      payment_attempt: {
+        payment_attempt_id: 'pa-001',
+        state: 'settled',
+        envelope_subtotal_minor: DUE,
+        started_at: '2026-10-07T09:00:30.000Z',
+        settled_at: '2026-10-07T09:02:00.000Z',
+        tender_lines: [
+          {
+            tender_line_id: 'tl-1',
+            tender_type: 'cash',
+            state: 'applied',
+            amount_applied_minor: DUE,
+            applied_at: '2026-10-07T09:01:00.000Z',
+            apply_order: 1,
+          },
+        ],
+      },
+    });
+    await remount(bridge);
+
+    expect(await screen.findByTestId('payment-surface-settled')).toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+    expect(usePaymentStore.getState().paymentSlice?.state).toBe('settled');
+    expect(bridge.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('an attempt main already ended is dropped on the remount, with nothing offered against it', async () => {
+    const bridge = await openCash();
+    await typeAndApply('20.00');
+    await screen.findByTestId('payment-surface-commit-reason');
+
+    bridge.read.mockReset();
+    bridge.read.mockResolvedValue({
+      kind: 'ok',
+      payment_attempt: {
+        payment_attempt_id: 'pa-001',
+        state: 'cancelled',
+        envelope_subtotal_minor: DUE,
+        started_at: '2026-10-07T09:00:30.000Z',
+        tender_lines: [
+          {
+            tender_line_id: 'tl-1',
+            tender_type: 'cash',
+            state: 'reversed',
+            amount_applied_minor: 2_000,
+            applied_at: '2026-10-07T09:01:00.000Z',
+            apply_order: 1,
+          },
+        ],
+      },
+    });
+    await remount(bridge);
+
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+    expect(screen.getByTestId('payment-surface-amount-due')).toHaveTextContent('50.00 EGP');
+    expect(bridge.apply).toHaveBeenCalledTimes(1);
+  });
 });

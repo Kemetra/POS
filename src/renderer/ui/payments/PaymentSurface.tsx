@@ -656,8 +656,8 @@ export function PaymentSurface({
     // state). Read main again before any apply or settle is offered; a failed
     // read keeps them out of reach and offers the retry, as after an apply. A
     // cancel hold owns its own read-back (RT-298), so it is left to that.
-    if (resumable && kept === 'started' && hold === 'none') void handleLineApplied();
-    // handleLineApplied reads the store and this render's attempt; the reset
+    if (resumable && kept === 'started' && hold === 'none') void rereadOnResume();
+    // rereadOnResume reads the store and this render's attempt; the reset
     // must only run when the session or the handoff changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionState.kind, envelopeHandoffId]);
@@ -925,6 +925,31 @@ export function PaymentSurface({
     );
   }
 
+  /**
+   * RT-243 F1 — the remount read. Nothing is offered until main answers; a
+   * failed read offers the retry (M-P15). Main's answer is followed whatever
+   * it says: a settle whose response was lost before the remount comes back as
+   * the settled screen, never as another commit (Codex P1 on #618).
+   */
+  async function rereadOnResume(): Promise<void> {
+    if (bridge === null || paymentAttemptId === null) return;
+    const attemptId = paymentAttemptId;
+    const envelopeAtStart = usePaymentStore.getState().envelope;
+    setAfterApply('reading');
+    const attempt = await readAttemptWithRetry(attemptId);
+    if (!isStillCurrent(attemptId, envelopeAtStart)) return;
+    if (attempt === null) {
+      setAfterApply('failed');
+      return;
+    }
+    setAfterApply('idle');
+    if (attempt.state === 'started') {
+      usePaymentStore.getState().applyAttemptSnapshot(attempt);
+      return;
+    }
+    followEndedAttempt(attempt);
+  }
+
   async function handleLineApplied(): Promise<void> {
     if (bridge === null || paymentAttemptId === null || envelope === null) {
       return;
@@ -1080,8 +1105,15 @@ export function PaymentSurface({
       return;
     }
     setBridgeRefusalCopy(CANCEL_NOT_OPEN_COPY);
-    // As on a remount of the same handoff: settled comes back as the settled
-    // screen; any other ended attempt is dropped, so the next tender starts anew.
+    followEndedAttempt(attempt);
+  }
+
+  /**
+   * An attempt main has moved past `started`, as on a remount of the same
+   * handoff: settled comes back as the settled screen; any other ended attempt
+   * is dropped, so the next tender starts anew.
+   */
+  function followEndedAttempt(attempt: PaymentAttemptRendererView): void {
     if (attempt.state === 'settled') {
       usePaymentStore.getState().applyAttemptSnapshot(attempt);
       setPhase('settled');
