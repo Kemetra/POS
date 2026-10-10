@@ -526,6 +526,11 @@ export class CartBridgeHandlers {
     const resolver = this.deps.resolveItemRef ?? DEFAULT_ITEM_REF_RESOLVER;
     const resolved = await resolver(req.item_ref);
 
+    // RT-350 — the IPC lock guard only checks at entry. If the session that
+    // started this add signed out, was swapped or locked during the await,
+    // write nothing under it.
+    if (!this.isSessionStillLive(gated.session)) return refuse('no_session');
+
     // RT-349 — a same-key add may have committed during the await; replay it
     // rather than hitting the outbox primary key. Synchronous from here on.
     const replayAfterResolve = store.getOutboxRow(req.idempotency_key);
@@ -1695,6 +1700,12 @@ export class CartBridgeHandlers {
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
     return null;
+  }
+
+  /** RT-350 — `origin` is still the current, unlocked session. */
+  private isSessionStillLive(origin: OperatorSessionRecord): boolean {
+    const current = this.deps.getCurrentSession();
+    return current !== null && current.id === origin.id && current.lock_state !== 'locked';
   }
 
   /**
