@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope.js';
 import { freezeEnvelope } from '../../shared/cart/handoff-envelope.js';
-import type { PaymentAttemptRendererView } from '../../shared/payments/types.js';
+import type { PaymentAttemptRendererView, RefusalReason } from '../../shared/payments/types.js';
 
 /**
  * 006-payments-tender — payment store.
@@ -61,6 +61,26 @@ export interface PaymentState {
    * reset, or once a cancel outcome is applied.
    */
   cancelRecovery: CancelRecovery | null;
+  /**
+   * RT-356 — the attempt a tender apply (any type) was sent on, whatever its
+   * outcome. Kept across a Checkout remount so a failed re-read says «تم تسجيل
+   * المبلغ» (M-P15) only when money may be on the attempt, and M-P27 otherwise.
+   * Renderer memory only. Cleared with the attempt and on reset.
+   */
+  tenderSentAttemptId: string | null;
+  /**
+   * RT-340 — a refused or lost settle whose read-back failed: the attempt and
+   * the confirm's refusal reason (null when the confirm itself failed). Kept
+   * across a Checkout remount so the resumed read makes the same copy decision
+   * (Codex P2 on #626). Cleared once main has been read, with the attempt, and
+   * on reset.
+   */
+  confirmReadPending: ConfirmReadPending | null;
+}
+
+export interface ConfirmReadPending {
+  readonly attemptId: string;
+  readonly reason: RefusalReason | null;
 }
 
 export type CancelHold = 'none' | 'in_flight' | 'unconfirmed' | 'live_tender';
@@ -101,6 +121,10 @@ export interface PaymentStore extends PaymentState {
   markCardVoidRequired(): void;
   /** RT-298 — the cancel key for `attemptId`: minted once, then reused by every retry. */
   cancelKeyFor(attemptId: string): string;
+  /** RT-340 — record or clear the pending confirm read-back. */
+  setConfirmReadPending(pending: ConfirmReadPending | null): void;
+  /** RT-356 — a tender apply was sent on `attemptId` (outcome unknown yet). */
+  recordTenderApplySent(attemptId: string): void;
   /** RT-298 — set the hold on the recorded cancel (no-op when none is recorded). */
   setCancelHold(hold: CancelHold): void;
   /** RT-298 — a cancel outcome was applied: forget the key and any hold. */
@@ -135,6 +159,8 @@ const INITIAL: PaymentState = {
   attemptHandoffId: null,
   cardSafety: null,
   cancelRecovery: null,
+  tenderSentAttemptId: null,
+  confirmReadPending: null,
 };
 
 export const usePaymentStore = create<PaymentStore>((set, get) => ({
@@ -153,6 +179,8 @@ export const usePaymentStore = create<PaymentStore>((set, get) => ({
             attemptHandoffId: null,
             cardSafety,
             cancelRecovery,
+            tenderSentAttemptId: null,
+            confirmReadPending: null,
           }
         : { envelope: freezeEnvelope(envelope), cardSafety, cancelRecovery };
     });
@@ -161,7 +189,18 @@ export const usePaymentStore = create<PaymentStore>((set, get) => ({
     set((s) => ({ paymentSlice: view, attemptHandoffId: s.envelope?.handoff_action_id ?? null }));
   },
   clearAttempt: () => {
-    set({ paymentSlice: null, attemptHandoffId: null });
+    set({
+      paymentSlice: null,
+      attemptHandoffId: null,
+      tenderSentAttemptId: null,
+      confirmReadPending: null,
+    });
+  },
+  setConfirmReadPending: (pending) => {
+    set({ confirmReadPending: pending });
+  },
+  recordTenderApplySent: (attemptId) => {
+    set({ tenderSentAttemptId: attemptId });
   },
   reset: () => {
     set({ ...INITIAL });

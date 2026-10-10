@@ -65,7 +65,14 @@ function makeBridge(cancel: { reversed: readonly string[]; pending?: readonly st
   return {
     payments: {
       start: vi.fn(() => Promise.resolve({ kind: 'ok' as const, payment_attempt_id: 'pa-001' })),
-      read: vi.fn(() => Promise.resolve({ kind: 'error' as const })),
+      // RT-341: a read answers with what the store holds, standing in for main
+      // (nothing is offered until the read after a start has answered).
+      read: vi.fn(() =>
+        Promise.resolve({
+          kind: 'ok' as const,
+          payment_attempt: usePaymentStore.getState().paymentSlice ?? attemptWith([]),
+        }),
+      ),
       confirm: vi.fn(),
       cancel: vi.fn(() =>
         Promise.resolve({
@@ -262,7 +269,13 @@ describe('RT-256 — card cancel requires a terminal void before another charge 
 
   it('a card applied in this Checkout is recognised even when the read after apply failed (Codex P1)', async () => {
     const bridge = makeBridge({ reversed: ['tl-card-1'] });
-    stub(bridge, 'payments', 'read', () => Promise.reject(new Error('ipc')));
+    // The read after the start answers; every read after the card apply fails.
+    let reads = 0;
+    stub(bridge, 'payments', 'read', () =>
+      reads++ === 0
+        ? Promise.resolve({ kind: 'ok', payment_attempt: attemptWith([]) })
+        : Promise.reject(new Error('ipc')),
+    );
     stub(bridge, 'tender', 'apply', () =>
       Promise.resolve({
         kind: 'ok',

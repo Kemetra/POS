@@ -300,12 +300,18 @@ describe('PaymentSurface — payments.confirm button (T152)', () => {
     });
   });
 
-  it('renders generic refusal copy on confirm refused', async () => {
+  // RT-340: a refused settle reads main back. tender_underpaid cannot succeed on
+  // retry, so it gets no «try again»: the refreshed projection blocks the commit.
+  it('re-reads main on a tender_underpaid refusal and never says «try again»', async () => {
     const user = userEvent.setup();
     const confirm = vi.fn<(req: PaymentsConfirmRequest) => Promise<PaymentsConfirmResponse>>(
       async () => await Promise.resolve({ kind: 'refused', reason: 'tender_underpaid' }),
     );
-    const bridge = makeBridge({ payments: { confirm } });
+    const read = vi.fn<(req: PaymentsReadRequest) => Promise<PaymentsReadResponse>>(
+      async () =>
+        await Promise.resolve({ kind: 'ok', payment_attempt: makeAttemptView('started') }),
+    );
+    const bridge = makeBridge({ payments: { confirm, read } });
 
     render(<PaymentSurface _testBridge={bridge} />);
     usePaymentStore.getState().applyAttemptSnapshot(
@@ -325,9 +331,11 @@ describe('PaymentSurface — payments.confirm button (T152)', () => {
 
     await user.click(await screen.findByTestId('payment-surface-confirm'));
 
-    const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/تعذّر إتمام|يرجى المحاولة/);
-    expect(refusal.textContent).not.toMatch(/tender_underpaid/);
+    await waitFor(() => {
+      expect(read).toHaveBeenCalledWith({ payment_attempt_id: 'pa-1' });
+    });
+    expect(document.body.textContent).not.toMatch(/يرجى المحاولة|tender_underpaid/);
+    expect(screen.queryByTestId('payment-surface-settled')).not.toBeInTheDocument();
   });
 
   // Regression / behaviour-lock (2026-06-19): during a live smoke a settle click
@@ -338,7 +346,7 @@ describe('PaymentSurface — payments.confirm button (T152)', () => {
   // locks in that the click reaches the bridge AND the correct-guard refusal is
   // surfaced as generic copy — so the behaviour is never "fixed" away as a bug,
   // and the wiring (click → payments.confirm) stays proven on this path too.
-  it('fires payments.confirm on click and shows generic copy when the attempt is wrong_owner (stale-session guard, NOT a no-op)', async () => {
+  it('fires payments.confirm on click and shows fixed copy when the attempt is wrong_owner (stale-session guard, NOT a no-op)', async () => {
     const user = userEvent.setup();
     const confirm = vi.fn<(req: PaymentsConfirmRequest) => Promise<PaymentsConfirmResponse>>(
       async () => await Promise.resolve({ kind: 'refused', reason: 'wrong_owner' }),
@@ -367,11 +375,13 @@ describe('PaymentSurface — payments.confirm button (T152)', () => {
     });
     expect(confirm.mock.calls[0]?.[0]?.payment_attempt_id).toBe('pa-1');
 
-    // The correct-guard refusal surfaces as generic copy; the structured reason
+    // The correct-guard refusal surfaces as fixed copy; the structured reason
     // never enters the DOM (FR-005). Surface stays on the payment phase (NOT
-    // settled) so the cashier can start a fresh sale.
+    // settled). RT-340: no retry from this session can succeed, so the line
+    // names who can act instead of «try again».
     const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
-    expect(refusal).toHaveTextContent(/تعذّر إتمام|يرجى المحاولة/);
+    expect(refusal).toHaveTextContent('لا يمكن إتمام هذا الدفع من هذه الجلسة');
+    expect(refusal.textContent).not.toMatch(/يرجى المحاولة/);
     expect(refusal.textContent).not.toMatch(/wrong_owner/);
     expect(screen.queryByTestId('payment-surface-settled')).not.toBeInTheDocument();
   });

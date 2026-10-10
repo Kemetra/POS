@@ -107,7 +107,12 @@ function makeBridge(): {
   start: ReturnType<typeof vi.fn<() => Promise<PaymentsStartResponse>>>;
   script: (s: Script) => void;
 } {
-  let current: Script = { cancel: [], read: undefined };
+  // RT-341: main answers the read right after a start (nothing is offered until
+  // it does); each test scripts the reads it is about once the entry is open.
+  let current: Script = {
+    cancel: [],
+    read: () => Promise.resolve({ kind: 'ok', payment_attempt: attempt('started', []) }),
+  };
   let cancelCalls = 0;
   const cancel = vi.fn<(req: PaymentsCancelRequest) => Promise<PaymentsCancelResponse>>(() => {
     const step = current.cancel[Math.min(cancelCalls, current.cancel.length - 1)];
