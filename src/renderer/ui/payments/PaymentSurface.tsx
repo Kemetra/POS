@@ -45,6 +45,7 @@ import {
   TENDER_READ_FAILED_COPY,
   confirmNeedsReadBack,
   confirmRefusalCopy,
+  moneyStillDue,
 } from './payment-read-copy.js';
 
 /**
@@ -1330,7 +1331,7 @@ export function PaymentSurface({
     reason: RefusalReason | null,
   ): Promise<void> {
     if (!confirmNeedsReadBack(reason)) {
-      setBridgeRefusalCopy(confirmRefusalCopy(reason));
+      setBridgeRefusalCopy(confirmRefusalCopy(reason, false));
       return;
     }
     const envelopeAtStart = usePaymentStore.getState().envelope;
@@ -1346,7 +1347,7 @@ export function PaymentSurface({
     setAfterApply('idle');
     if (attempt.state === 'started') {
       usePaymentStore.getState().applyAttemptSnapshot(attempt);
-      setBridgeRefusalCopy(confirmRefusalCopy(reason));
+      setBridgeRefusalCopy(confirmRefusalCopy(reason, moneyStillDue(attempt)));
       return;
     }
     // Set first: a force-failed attempt with live tender replaces it with M-P20.

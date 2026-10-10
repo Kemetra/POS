@@ -223,6 +223,19 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     expect(screen.getByTestId('payment-surface-amount-due')).toHaveTextContent('8.00');
   });
 
+  it('tender_underpaid while main still shows the sale fully tendered is never silent', async () => {
+    const h = makeHarness();
+    await pickCash(h);
+    h.confirm.mockResolvedValueOnce({ kind: 'refused', reason: 'tender_underpaid' });
+    h.read.mockResolvedValue(ok(attempt('started')));
+
+    await pressConfirm();
+
+    // The commit is still offered, so the refusal must say something.
+    expect(screen.getByTestId('payment-surface-confirm')).toBeInTheDocument();
+    expect(refusalText()).not.toBe('');
+  });
+
   it.each<RefusalReason>(['no_session', 'role_denied', 'wrong_owner', 'tenant_isolation'])(
     '%s names who can act, never «try again» and never a read retry that cannot succeed',
     async (reason) => {

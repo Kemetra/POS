@@ -1,4 +1,4 @@
-import type { RefusalReason } from '../../../shared/payments/types.js';
+import type { PaymentAttemptRendererView, RefusalReason } from '../../../shared/payments/types.js';
 
 /**
  * RT-340 / RT-341 — the payment lines Checkout shows after main has been read
@@ -40,13 +40,26 @@ export function confirmNeedsReadBack(reason: RefusalReason | null): boolean {
   return reason === null || !SESSION_REFUSALS.has(reason);
 }
 
+/** Main's read shows money still owed on the attempt (applied lines below its subtotal). */
+export function moneyStillDue(attempt: PaymentAttemptRendererView): boolean {
+  let applied = 0;
+  for (const line of attempt.tender_lines) {
+    if (line.state === 'applied' && Number.isSafeInteger(line.amount_applied_minor)) {
+      applied += line.amount_applied_minor;
+    }
+  }
+  return applied < attempt.envelope_subtotal_minor;
+}
+
 /**
  * The line for a settle main refused (or whose answer was lost: `null`) while
- * the attempt is still open. `tender_underpaid` gets none: the refreshed
- * projection blocks the commit and gives its own reason.
+ * the attempt is still open. `tender_underpaid` gets none when the refreshed
+ * projection shows money owed: it blocks the commit and gives its own reason.
+ * If the read still shows the sale covered, the commit stays offered, so the
+ * refusal must not be silent; a re-read may yet reconcile the two.
  */
-export function confirmRefusalCopy(reason: RefusalReason | null): string | null {
-  if (reason === 'tender_underpaid') return null;
+export function confirmRefusalCopy(reason: RefusalReason | null, stillDue: boolean): string | null {
+  if (reason === 'tender_underpaid') return stillDue ? null : CONFIRM_RETRY_COPY;
   if (reason !== null && SESSION_REFUSALS.has(reason)) return CONFIRM_NOT_ALLOWED_COPY;
   return CONFIRM_RETRY_COPY;
 }
