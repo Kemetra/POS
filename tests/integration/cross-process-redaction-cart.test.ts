@@ -526,9 +526,9 @@ const BRIDGE_FIXTURES: readonly BridgeCallFixture[] = [
     payload: {
       action_kind: 'cart.discarded_on_session_end',
       cart_id: 'cart-uuid-discard',
-      // Mirrors session-end-handler.ts:90 — operator_session_id +
-      // discard_cause are the only fields ever serialised into the
-      // outbox payload. No note / no attribution.
+      // RT-352 — held-carts.ts writes this outbox kind when it closes an
+      // empty cart; its payload is cart_id + operator_session_id only.
+      // No note / no attribution.
       request: {
         cart_id: 'cart-uuid-discard',
         operator_session_id: 'op-sess-id',

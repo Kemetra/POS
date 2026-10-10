@@ -2,6 +2,7 @@ import { useId, useRef, useState, type SyntheticEvent, type JSX } from 'react';
 
 import type { OperatorBridgeAPI } from '../../../shared/bridge-api.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
+import { completeSignIn } from '../../session/complete-sign-in.js';
 import { SIGN_IN_REFUSAL_COPY, EMPTY_INPUT_MESSAGE } from './messages.js';
 
 /**
@@ -80,7 +81,8 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
         passwordRef.current.value = '';
       }
       if (response.kind === 'signed_in') {
-        useOperatorSessionStore.getState().resolveSignedIn(response.session);
+        // RT-352 — adopt the re-attached draft before routing on.
+        await completeSignIn(props.operator, response.session);
       } else if (response.kind === 'takeover_required') {
         useOperatorSessionStore.getState().promptTakeover(response.pending_takeover_id);
       } else {

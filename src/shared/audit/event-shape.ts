@@ -40,7 +40,12 @@ export const AUDIT_ACTION_CATEGORIES = [
   'cart.handoff_to_payment',
   'cart.cancel.post_handoff',
   'cart.discount.above_threshold',
+  // Kept (the catalogue never shrinks) but no longer emitted: RT-115 D5
+  // superseded the 005 Q3 discard; a draft is held instead (RT-352).
   'cart.discarded_on_session_end',
+  // RT-352 (RT-116 §7.3) — a draft cart outlives its session (RT-115 D3.2).
+  'cart.held_on_session_end',
+  'cart.reattached',
   // RT-26 — Checkout Back: a handed-off cart with no tender activity returns
   // to `editing` (envelope invalidated). Open-set at the SQL layer (0004).
   'cart.return_to_sale',

@@ -386,11 +386,14 @@ describe('cashier sign-in — a session lost during the post-create await', () =
   ] as const)(
     'latched (%s) but not yet ended during the read: refused %s, not signed_in',
     async (cause: AuthorityLatchCause, category) => {
-      const { handler } = buildWithDismissRead((sm) => {
+      const { handler, sessions } = buildWithDismissRead((sm) => {
         const current = sm.getCurrent();
         if (current !== null) sm.latchAuthority(current.id, cause);
       });
       await expect(handler.signIn(request())).resolves.toEqual({ kind: 'refused', category });
+      // RT-352 — the refused, latched session is ended, not left alive behind the refusal.
+      expect(sessions.getCurrent()).toBeNull();
+      expect(sessions.getLastEndCause()).toBe(cause);
     },
   );
 

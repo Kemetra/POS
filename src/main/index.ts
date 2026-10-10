@@ -6,6 +6,7 @@ import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
 import { createSaleBoundaryIpcMain } from './ipc/sale-boundary-guard.js';
 import { registerSessionLockHandlers } from './ipc/session-lock.js';
+import { registerResumeStateHandler } from './ipc/resume-state.js';
 import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
 import { createLockStateReader, createSafePointProbe } from './operator/lock-state-reader.js';
 import { wireSessionStatePush } from './operator/session-state-push.js';
@@ -20,6 +21,8 @@ import { registerPairingHandlers } from './ipc/pairing.js';
 import { registerOperatorHandlers } from './ipc/operator.js';
 import { registerCartHandlers } from './ipc/cart.js';
 import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
+import { bindCartStore } from './cart/cart-store.js';
+import { createHeldCarts, registerHeldCartLifecycle } from './cart/held-carts.js';
 // 009-product-search-and-barcode-lookup S4 (T043) — production R7 resolver.
 import { createProductRepo } from './catalogue/product-repo.js';
 import { createCatalogueResolver } from './catalogue/resolve-item-ref.js';
@@ -938,6 +941,26 @@ singleInstanceReady
         logger: mainLogger,
       }),
       getLockState: getOperatorLockState,
+    });
+
+    // RT-352 (RT-116 S4a, RT-115 D3.2) — a draft cart outlives its session: it
+    // is held for its operator on this terminal and re-attached at that
+    // operator's next sign-in, including after a restart. Read once by the
+    // renderer after sign-in through `operator.getResumeState()`.
+    const heldCarts = createHeldCarts({
+      db,
+      cartStore: bindCartStore(db),
+      auditEmitter,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+    });
+    registerHeldCartLifecycle({
+      sessionManager: operatorSessionManager,
+      heldCarts,
+      logger: mainLogger,
+    });
+    registerResumeStateHandler(guardedIpcMain, {
+      getResumeState: () => heldCarts.getResumeState(operatorSessionManager.getCurrent()),
+      logger: mainLogger,
     });
 
     // RT-113 P2 — keep the online cashier admission live (heartbeat at ≤ TTL/2

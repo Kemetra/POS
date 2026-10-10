@@ -21,7 +21,7 @@ import {
   admitCashierOnline,
   mintAdmissionKey,
   refusalForAdmission,
-  refusalIfSessionLost,
+  refuseLostSession,
   type AdmissionKey,
   type CashierAdmissionDeps,
 } from './cashier-admission.js';
@@ -308,7 +308,7 @@ export class TakeoverHandler {
     this.deps.protoStore.delete(proto.pending_takeover_id);
     // RT-215: a revocation during the audit await latched this session (it
     // ends at its safe point). Never answer it signed_in.
-    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    const lost = refuseLostSession(this.deps.sessionManager, record.id);
     if (lost !== null) {
       this.log('refused', 'manager_admin_session_lost');
       return lost;
@@ -389,7 +389,7 @@ export class TakeoverHandler {
     this.deps.protoStore.delete(proto.pending_takeover_id);
     // Codex P2 4179701431 — the keeper armed at create; the session may have
     // been latched or ended during the await above. Never answer it signed_in.
-    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    const lost = refuseLostSession(this.deps.sessionManager, record.id);
     if (lost !== null) {
       this.log('refused', 'cashier_session_lost');
       return lost;

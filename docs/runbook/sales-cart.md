@@ -84,20 +84,30 @@ the IPC boundary, so a cashier session cannot borrow manager authority from the 
 
 ---
 
-## Session-end cart discard
+## Session end: draft cart is held and re-attached (RT-352)
 
-**Trigger:** Operator session ends (sign-out, inactivity timeout, or session takeover).
+**Policy (RT-115 D3.2, RT-116 §3; supersedes the 005 Q3 discard):** a draft cart outlives its
+operator session. It is **held** for its operator on its terminal and **re-attached** when that
+operator next signs in there, including after an app restart. It is never shown to another
+cashier.
 
-**Policy (Q3a — LOCKED 2026-05-14):**
-- Draft carts (`empty` or `editing`) are discarded automatically → state `cancelled`.
-- `frozen_handed_off` carts are NOT discarded on session end (payment flow in progress).
+**Trigger:** any session end — sign-out, takeover, revocation, restart. Inactivity no longer ends
+a session; it locks it (RT-117), and a lock leaves the cart untouched.
 
-**Audit:** `cart.discarded_on_session_end` event emitted with `discard_cause`.
+**What happens:**
+- `editing` / `discount_pending_attribution` cart → kept as it is. Audit
+  `cart.held_on_session_end` (`cart_id`, `operator_session_id`, `end_cause`).
+- `empty` cart → cancelled with `cancellation_reason = 'session_ended'`, no audit (nothing to lose).
+- `frozen_handed_off` cart → untouched (payment-side recovery is RT-116 S5).
 
-**Discard causes:**
-- `signed_out` — operator signed out normally.
-- `inactivity_timeout` — session expired due to inactivity.
-- `superseded_by_takeover` — another operator took over the terminal.
+**At sign-in** (every admitted sign-in, so it also covers a restart, which fires no session end):
+main matches the owner key `(tenant_id, branch_id, terminal_id, owning_operator_id)`, closes the
+operator's empty carts from earlier sessions, and re-binds the newest held draft to the new
+session. Audit `cart.reattached` (`cart_id`, `from_operator_session_id`, `to_operator_session_id`).
+The renderer reads `operator.getResumeState()` and opens the Sale screen on that cart. Further
+drafts stay held and are counted in `other_held_cart_count`.
+
+`cart.discarded_on_session_end` stays in the audit catalogue but is no longer emitted.
 
 ---
 
@@ -204,11 +214,11 @@ cause categories below directly to the cashier — operator-facing copy stays ge
    renders lines after the bridge confirms persistence (no optimistic add). If the process was
    killed mid-write, the in-progress line never reached `cart_lines`; the outbox row for the
    pending action may or may not be present depending on when the kill occurred.
-2. **Operator session ended (sign-out, lock, inactivity timeout, takeover).** Per Q3 (LOCKED
-   2026-05-14), draft carts (`empty` / `editing`) are discarded at session end and an
-   audit row `cart.discarded_on_session_end` is written with `discard_cause` set to
-   `signed_out`, `inactivity_timeout`, or `superseded_by_takeover`. The cart will not return
-   when the same cashier signs back in.
+2. **The cashier signed in on a different terminal.** A held draft (RT-352) re-attaches only for
+   the same operator on the same terminal (owner key `tenant_id, branch_id, terminal_id,
+   owning_operator_id`). It reappears when they sign in on the terminal that owns it. Check
+   `audit_events` for `cart.held_on_session_end` / `cart.reattached` for that `cart_id`. Carts
+   written before #380 (F-007) carry `terminal_id = branch_id` and never match; they stay held.
 3. **Tenant or branch mismatch.** The operator signed back in under a different tenant or
    branch than the one that owned the cart. Cart isolation (FR-002) refuses access from any
    other tenant/branch pairing; from the cashier's view the cart appears to have vanished.
@@ -230,9 +240,13 @@ outbox rows or audit payloads off the device.
    ordered by `created_at`. Note the latest `action_kind` and whether a corresponding row
    exists in `carts`. Use placeholders in any working notes — refer to identifiers as
    `<cart-id>`, `<session-id>`, `<operator-id>`.
-3. Cross-reference `audit_events` for terminal action categories on the same `<cart-id>`:
-   `cart.cancel.post_handoff`, `cart.handoff_to_payment`, or `cart.discarded_on_session_end`.
-   The presence of one of these confirms category (2), (4), or (5) above.
+3. Cross-reference `audit_events` for action categories on the same `<cart-id>`:
+   - `cart.held_on_session_end` / `cart.reattached` (RT-352) confirm category (2): the draft
+     is held, not closed. Its `carts` row shows the owning `terminal_id` and
+     `owning_operator_id`.
+   - `cart.cancel.post_handoff` or `cart.handoff_to_payment` confirm category (4) or (5).
+   - `cart.discarded_on_session_end` is no longer emitted (RT-115 D5); it appears only on
+     rows written before RT-352.
 4. If no terminal audit row exists and the cart is absent from `carts`, suspect category (1)
    (force-kill before commit). The outbox row, if present, is sufficient to characterise the
    state without replaying any action.
@@ -241,9 +255,12 @@ outbox rows or audit payloads off the device.
 
 ### Resolution
 
-- Categories (2), (4), (5): no action — the cart is correctly closed or frozen. Confirm to
-  the cashier with generic copy ("the previous cart has been closed; please start a new
-  cart").
+- Category (2): the draft is held, not lost. Ask the cashier to sign in again on the
+  terminal that owns it; it re-attaches at that sign-in with its lines. Do not tell them to
+  start a new cart. A pre-#380 cart (`terminal_id = branch_id`) cannot re-attach; it waits
+  for manager recovery (RT-116 S6).
+- Categories (4), (5): no action — the cart is correctly closed or frozen. Confirm to the
+  cashier with generic copy ("the previous cart has been closed; please start a new cart").
 - Category (3): verify the cashier signed back in under the same tenant + branch.
 - Category (1): start a new cart. Do NOT attempt to replay outbox entries by hand — the
   outbox is owned by the bridge and any manual mutation risks the FSM invariants.

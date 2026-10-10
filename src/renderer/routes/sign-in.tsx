@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { OperatorBridgeAPI, BranchRosterCashier } from '../../shared/bridge-api.js';
 import type { Role } from '../../shared/operator/role.js';
 import { useOperatorSessionStore } from '../stores/operator-session-store.js';
+import { completeHydratedSignIn, completeSignIn } from '../session/complete-sign-in.js';
 import { RosterList, type RosterEntry } from '../ui/operator/RosterList.js';
 import { ManagerAdminSignInForm } from '../ui/operator/ManagerAdminSignInForm.js';
 import { PinPad } from '../ui/operator/PinPad.js';
@@ -78,11 +79,10 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
     let cancelled = false;
     operator
       .getCurrentSession()
-      .then((session) => {
-        if (cancelled) return;
-        if (session !== null) {
-          useOperatorSessionStore.getState().hydrateSignedIn(session);
-        }
+      .then(async (session) => {
+        if (cancelled || session === null) return;
+        // RT-352 — adopt the session's draft cart too (e.g. after a renderer reload).
+        await completeHydratedSignIn(operator, session);
       })
       .catch(() => {
         // IPC failure — keep current signedOut state silently.
@@ -150,9 +150,8 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
       // Clear PIN immediately on resolution (PR-1 defence in depth).
       setPin('');
       if (response.kind === 'signed_in') {
-        useOperatorSessionStore
-          .getState()
-          .resolveSignedIn(response.session, response.forced_close_notice);
+        // RT-352 — adopt the re-attached draft before routing into the Sale.
+        await completeSignIn(operator, response.session, response.forced_close_notice);
       } else if (response.kind === 'takeover_required') {
         useOperatorSessionStore.getState().promptTakeover(response.pending_takeover_id);
       } else {
