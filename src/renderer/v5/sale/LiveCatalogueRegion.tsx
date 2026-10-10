@@ -4,6 +4,7 @@ import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-s
 import type { AddedLineResult } from '../../sale/useSaleCartController';
 import { useSaleCatalogueController } from '../../sale/useSaleCatalogueController';
 import { useDirectSaleAdd, type AddBlock } from '../../sale/useDirectSaleAdd';
+import type { AddLane } from '../../sale/useAddLane';
 import { useCatalogueFreshness } from '../../sale/useCatalogueFreshness';
 import { useScanOwner } from '../../scan/ScanGuardHost';
 import { useScanNoticeStore } from '../../scan/scan-notice-store';
@@ -21,6 +22,8 @@ interface Props {
   onAddQueued?: () => number;
   /** Read when each queued add runs: a paid or handed-off cart takes no line. */
   addBlock: () => AddBlock;
+  /** The Sale's add lane: it ends pending adds with the sale and holds handoff while one runs. */
+  lane?: AddLane;
   /** Shown on the command bar's status line (scan owner + last cart action). */
   status?: ReactNode;
   cartBridge?: CartBridgeAPI;
@@ -49,6 +52,7 @@ export function LiveCatalogueRegion(props: Props): JSX.Element {
     lookupScan: catalogue.lookupScan,
     addBlock: props.addBlock,
     onLineAdded: props.onLineAdded,
+    ...(props.lane ? { lane: props.lane } : {}),
     notify: notifyScan,
     ...(props.onAddQueued ? { onQueued: props.onAddQueued } : {}),
     ...(props.cartBridge ? { bridge: props.cartBridge } : {}),

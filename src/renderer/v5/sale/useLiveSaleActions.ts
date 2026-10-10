@@ -7,6 +7,7 @@ import type {
   useSaleCartController,
 } from '../../sale/useSaleCartController';
 import { useSaleUndo } from '../../sale/useSaleUndo';
+import type { AddLane } from '../../sale/useAddLane';
 import { focusScanOwner } from '../../scan/scan-anchor';
 import { useCartStore } from '../../stores/cart-store';
 import { useLineFlagsStore } from '../../stores/line-flags-store';
@@ -26,7 +27,11 @@ export interface LastAdd {
  * other mutation (stepper, note, discount, handoff, void, new sale, the next
  * scan) withdraws it first, since main would refuse it anyway.
  */
-export function useLiveSaleActions(cart: SaleCart, bridge: CartBridgeAPI | undefined) {
+export function useLiveSaleActions(
+  cart: SaleCart,
+  bridge: CartBridgeAPI | undefined,
+  lane: AddLane,
+) {
   const [voided, setVoided] = useState(false);
   const [lastAdd, setLastAdd] = useState<LastAdd | null>(null);
   const undo = useSaleUndo({
@@ -35,7 +40,9 @@ export function useLiveSaleActions(cart: SaleCart, bridge: CartBridgeAPI | undef
     ...(bridge ? { bridge } : {}),
   });
 
+  // A scan still in the lane belongs to the sale that just ended (Codex P1 on #621).
   const endSale = (): void => {
+    lane.cancelPending();
     cart.startNewSale();
     setLastAdd(null);
     undo.clear();
@@ -87,7 +94,9 @@ export function useLiveSaleActions(cart: SaleCart, bridge: CartBridgeAPI | undef
       undo.dismiss();
       void cart.removeDiscount(id);
     },
+    // Never raced against an add: the freeze waits until every admitted add has settled.
     onHandoff: (): void => {
+      if (lane.busy) return;
       undo.dismiss();
       void cart.handoff();
     },
@@ -96,6 +105,7 @@ export function useLiveSaleActions(cart: SaleCart, bridge: CartBridgeAPI | undef
     // DB; only the renderer's pointer to it is dropped.
     onVoid: async (): Promise<boolean> => {
       undo.dismiss();
+      lane.cancelPending();
       const ok = await cart.voidCart().catch(() => false);
       if (ok) {
         endSale();

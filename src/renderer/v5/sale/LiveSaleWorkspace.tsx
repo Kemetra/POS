@@ -4,6 +4,7 @@ import { CartState } from '../../../shared/cart/cart-state';
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope';
 import type { Role } from '../../../shared/operator/role';
 import type { AddBlock } from '../../sale/useDirectSaleAdd';
+import { useAddLane } from '../../sale/useAddLane';
 import { useSaleCartController } from '../../sale/useSaleCartController';
 import { useLineFlagsStore } from '../../stores/line-flags-store';
 import { useCartStore } from '../../stores/cart-store';
@@ -145,13 +146,18 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
     hydrateActiveCart: true,
     ...(props.cartBridge ? { bridge: props.cartBridge } : {}),
   });
-  const actions = useLiveSaleActions(cart, props.cartBridge);
+  const lane = useAddLane();
+  const actions = useLiveSaleActions(cart, props.cartBridge, lane);
   const frozen = cartState === CartState.frozen_handed_off;
   // Frozen alone is not "paid": only a settled attempt for THIS cart is —
   // known to the renderer, or reported by main when the cart was reopened.
   const paid = frozen && isKnownPaid(cartId, settledCartId, cart.hydratedPaid);
-  const addBlock = useRef<AddBlock>(null);
-  addBlock.current = addBlockOf(cartState, paid);
+  // Paid comes from this render; the cart state is read live, so a scan that
+  // runs after handoff has started is refused even before the next render.
+  const paidRef = useRef(paid);
+  paidRef.current = paid;
+  const addBlock = (): AddBlock =>
+    addBlockOf(useCartStore.getState().activeCart?.state ?? null, paidRef.current);
 
   // An existing cart whose persisted lines are not known yet: show only a
   // small state. No catalogue (so no cart create and no add into an unknown
@@ -185,7 +191,8 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           <LiveCatalogueRegion
             onLineAdded={actions.acceptAddedLine}
             onAddQueued={actions.onAddQueued}
-            addBlock={() => addBlock.current}
+            addBlock={addBlock}
+            lane={lane}
             status={
               <>
                 <ScanStatus available />
@@ -205,7 +212,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           frozenSubtotalMinor={frozenSubtotal(frozen, cart.envelope)}
           lastAddedLineId={actions.lastAdd?.lineId ?? null}
           lastAddNonce={actions.lastAdd?.nonce ?? 0}
-          canHandoff={cartState === CartState.editing && cart.lines.length > 0}
+          canHandoff={cartState === CartState.editing && cart.lines.length > 0 && !lane.busy}
           handingOff={cartState === CartState.handing_off}
           cancelled={cartState === CartState.cancelled}
           canVoid={canVoidCart(cartState, props.role, paid)}
