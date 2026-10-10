@@ -4,6 +4,7 @@ import type {
   CatalogueLookupResponse,
   PreloadBridgeAPI,
 } from '../../shared/bridge-api';
+import type { CartLinesAddResponse } from '../../shared/cart/bridge-types';
 import type { ProductSnapshotDisplay } from '../../shared/catalogue/product-snapshot';
 import type { AddedLineResult } from './useSaleCartController';
 import {
@@ -63,12 +64,71 @@ function lookupNotice(code: string, res: CatalogueLookupResponse | null): string
   }
 }
 
+/** The bridge-confirmed line, without the response discriminant. */
+function addedLine(res: Extract<CartLinesAddResponse, { kind: 'ok' }>): AddedLineResult {
+  return {
+    line_id: res.line_id,
+    display_name: res.display_name,
+    unit_price_minor: res.unit_price_minor,
+    line_subtotal_minor: res.line_subtotal_minor,
+    quantity: res.quantity,
+    version: res.version,
+    merged: res.merged,
+  };
+}
+
+/** One add of quantity 1; the add's idempotency key becomes the Undo target. */
+async function addProduct(
+  opts: DirectSaleAddOptions,
+  product: ProductSnapshotDisplay,
+  ticket: number,
+): Promise<void> {
+  const cartId = await opts.ensureCart();
+  if (cartId === null || cartId === '') {
+    opts.notify(SALE_ADD_FAILED_MESSAGE);
+    return;
+  }
+  const actionId = crypto.randomUUID();
+  const res = await (opts.bridge ?? readCartBridge()).lines
+    .add({ cart_id: cartId, item_ref: product.product_id, quantity: 1, idempotency_key: actionId })
+    .catch(() => null);
+  if (res?.kind !== 'ok') {
+    opts.notify(SALE_ADD_FAILED_MESSAGE);
+    return;
+  }
+  opts.onLineAdded(addedLine(res), actionId, product, ticket);
+}
+
+/** False (with its notice) when the cart on screen cannot take a line. */
+function admits(opts: DirectSaleAddOptions): boolean {
+  const block = opts.addBlock();
+  if (block === 'paid') opts.notify(SCAN_SALE_COMPLETE_MESSAGE);
+  else if (block === 'frozen') opts.notify(SALE_FROZEN_MESSAGE);
+  return block === null;
+}
+
+async function scanAndAdd(opts: DirectSaleAddOptions, code: string, ticket: number): Promise<void> {
+  if (!admits(opts)) return;
+  const res = await opts.lookupScan(code);
+  if (res?.kind === 'one') await addProduct(opts, res.product, ticket);
+  else opts.notify(lookupNotice(code, res));
+}
+
+async function pickAndAdd(
+  opts: DirectSaleAddOptions,
+  product: ProductSnapshotDisplay,
+  ticket: number,
+): Promise<void> {
+  if (admits(opts)) await addProduct(opts, product, ticket);
+}
+
 /**
  * RT-242 (owner decision D-C1) — direct add for a resolved scan and a picked
  * search result: no confirm dialog. Every scan and pick joins ONE serial lane
  * (lookup, then add), so two scans in quick succession add two lines in scan
  * order and none is lost to a newer lookup. Exceptions are notices, never
- * dialogs. Each add sends quantity 1, so a merge is exactly +1 (RT-245).
+ * dialogs. Each add sends quantity 1, so a merge is exactly +1 (RT-245). The
+ * options are read when each job runs, never at enqueue time.
  */
 export function useDirectSaleAdd(options: DirectSaleAddOptions): {
   scan: (code: string) => Promise<void>;
@@ -78,80 +138,25 @@ export function useDirectSaleAdd(options: DirectSaleAddOptions): {
   optionsRef.current = options;
   const laneRef = useRef<Promise<void>>(Promise.resolve());
 
-  const enqueue = useCallback((job: (ticket: number) => Promise<void>): Promise<void> => {
-    const ticket = optionsRef.current.onQueued?.() ?? 0;
-    const run = (): Promise<void> => job(ticket);
-    const next = laneRef.current.then(run, run);
-    laneRef.current = next.catch(() => undefined);
-    return next;
-  }, []);
-
-  const addProduct = useCallback(
-    async (product: ProductSnapshotDisplay, ticket: number): Promise<void> => {
-      const opts = optionsRef.current;
-      const cartId = await opts.ensureCart();
-      if (cartId === null || cartId === '') {
-        opts.notify(SALE_ADD_FAILED_MESSAGE);
-        return;
-      }
-      const actionId = crypto.randomUUID();
-      const res = await (opts.bridge ?? readCartBridge()).lines
-        .add({
-          cart_id: cartId,
-          item_ref: product.product_id,
-          quantity: 1,
-          idempotency_key: actionId,
-        })
-        .catch(() => null);
-      if (res?.kind !== 'ok') {
-        opts.notify(SALE_ADD_FAILED_MESSAGE);
-        return;
-      }
-      opts.onLineAdded(
-        {
-          line_id: res.line_id,
-          display_name: res.display_name,
-          unit_price_minor: res.unit_price_minor,
-          line_subtotal_minor: res.line_subtotal_minor,
-          quantity: res.quantity,
-          version: res.version,
-          merged: res.merged,
-        },
-        actionId,
-        product,
-        ticket,
-      );
+  const enqueue = useCallback(
+    (job: (opts: DirectSaleAddOptions, ticket: number) => Promise<void>): Promise<void> => {
+      const ticket = optionsRef.current.onQueued?.() ?? 0;
+      const run = (): Promise<void> => job(optionsRef.current, ticket);
+      const next = laneRef.current.then(run, run);
+      laneRef.current = next.catch(() => undefined);
+      return next;
     },
     [],
   );
 
-  /** False (with its notice) when the cart on screen cannot take a line. */
-  const admits = useCallback((): boolean => {
-    const opts = optionsRef.current;
-    const block = opts.addBlock();
-    if (block === 'paid') opts.notify(SCAN_SALE_COMPLETE_MESSAGE);
-    else if (block === 'frozen') opts.notify(SALE_FROZEN_MESSAGE);
-    return block === null;
-  }, []);
-
   const scan = useCallback(
-    (code: string): Promise<void> =>
-      enqueue(async (ticket) => {
-        if (!admits()) return;
-        const res = await optionsRef.current.lookupScan(code);
-        if (res?.kind === 'one') await addProduct(res.product, ticket);
-        else optionsRef.current.notify(lookupNotice(code, res));
-      }),
-    [addProduct, admits, enqueue],
+    (code: string): Promise<void> => enqueue((opts, ticket) => scanAndAdd(opts, code, ticket)),
+    [enqueue],
   );
-
   const pick = useCallback(
     (product: ProductSnapshotDisplay): Promise<void> =>
-      enqueue(async (ticket) => {
-        if (admits()) await addProduct(product, ticket);
-      }),
-    [addProduct, admits, enqueue],
+      enqueue((opts, ticket) => pickAndAdd(opts, product, ticket)),
+    [enqueue],
   );
-
   return { scan, pick };
 }

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { CartBridgeAPI, PreloadBridgeAPI } from '../../shared/bridge-api';
+import type { CartUndoLastResponse } from '../../shared/cart/bridge-types';
 
 /** The last cart action the Sale can offer to undo: a direct add (M-S2) or a delete (M-S8). */
 export type UndoableKind = 'added' | 'removed';
@@ -40,12 +41,87 @@ interface SaleUndoOptions {
   onSettled?: () => void;
 }
 
+/** An Undo can be sent: none in flight, an offer standing, and a bridge that can undo. */
+function canSend(
+  busy: boolean,
+  offer: UndoOffer | null,
+  bridge: CartBridgeAPI,
+): offer is UndoOffer {
+  return !busy && offer !== null && bridge.undoLast !== undefined;
+}
+
+/** `null` when the transport failed: main may or may not have applied the inverse. */
+async function sendUndo(
+  bridge: CartBridgeAPI,
+  offer: UndoOffer,
+): Promise<CartUndoLastResponse | null> {
+  if (bridge.undoLast === undefined) return null;
+  return bridge
+    .undoLast({
+      cart_id: offer.cartId,
+      target_action_id: offer.targetActionId,
+      idempotency_key: offer.undoKey,
+    })
+    .catch(() => null);
+}
+
+/**
+ * The offer and the announcement. `seq` restarts the notice's lifetime on
+ * every offer; the epoch makes an action that committed after a later change
+ * started (a withdraw) announce itself without offering an Undo.
+ */
+function useUndoOfferState() {
+  const [offer, setOffer] = useState<UndoOffer | null>(null);
+  const [announcement, setAnnouncement] = useState<CartAnnouncement | null>(null);
+  const seqRef = useRef(0);
+  const epochRef = useRef(0);
+  const nextSeq = useCallback((): number => {
+    seqRef.current += 1;
+    return seqRef.current;
+  }, []);
+
+  const offerUndo = useCallback(
+    (
+      kind: UndoableKind,
+      name: string,
+      cartId: string,
+      targetActionId: string,
+      ticket: number,
+    ): void => {
+      const seq = nextSeq();
+      setAnnouncement({ kind, name, seq });
+      if (ticket !== epochRef.current) return;
+      setOffer({ kind, name, cartId, targetActionId, undoKey: crypto.randomUUID(), seq });
+    },
+    [nextSeq],
+  );
+  const withdraw = useCallback((): number => {
+    epochRef.current += 1;
+    setOffer(null);
+    return epochRef.current;
+  }, []);
+  const announceOutcome = useCallback(
+    (ok: boolean): void => {
+      setAnnouncement({ kind: ok ? 'undone' : 'unavailable', seq: nextSeq() });
+      setOffer(null);
+    },
+    [nextSeq],
+  );
+  const clear = useCallback((): void => {
+    withdraw();
+    setAnnouncement(null);
+  }, [withdraw]);
+  return { offer, announcement, offerUndo, withdraw, announceOutcome, clear };
+}
+
 /**
  * RT-242 — the renderer side of the RT-245 Undo contract. The renderer names
  * only the action it just completed; main (`cart.undoLast`) proves it is still
  * the cart's newest action and applies the exact inverse. On any answer, ok or
- * refused, the offer goes and the cart is re-read from main. A bridge without
- * `undoLast` offers nothing (fail closed).
+ * refused, the offer goes and the cart is re-read from main. A lost response
+ * keeps the offer (pressing again replays the same key) but still re-reads, as
+ * main may have applied the inverse. A bridge without `undoLast` offers
+ * nothing (fail closed).
  */
 export function useSaleUndo(options: SaleUndoOptions): {
   offer: UndoOffer | null;
@@ -73,79 +149,38 @@ export function useSaleUndo(options: SaleUndoOptions): {
   clear: () => void;
   undo: () => Promise<void>;
 } {
-  const [offer, setOffer] = useState<UndoOffer | null>(null);
-  const [announcement, setAnnouncement] = useState<CartAnnouncement | null>(null);
-  const seqRef = useRef(0);
-  const epochRef = useRef(0);
+  const state = useUndoOfferState();
+  const { offer, withdraw, announceOutcome } = state;
   const busyRef = useRef(false);
   const optionsRef = useRef(options);
   optionsRef.current = options;
-  const getBridge = useCallback(
-    (): CartBridgeAPI => options.bridge ?? readCartBridge(),
-    [options.bridge],
-  );
-  const canUndo = (options.bridge ?? readCartBridgeOrNull())?.undoLast !== undefined;
 
-  const offerUndo = useCallback(
-    (
-      kind: UndoableKind,
-      name: string,
-      cartId: string,
-      targetActionId: string,
-      ticket: number,
-    ): void => {
-      seqRef.current += 1;
-      const seq = seqRef.current;
-      setAnnouncement({ kind, name, seq });
-      if (ticket !== epochRef.current) return;
-      setOffer({ kind, name, cartId, targetActionId, undoKey: crypto.randomUUID(), seq });
-    },
-    [],
-  );
-
-  const withdraw = useCallback((): number => {
-    epochRef.current += 1;
-    setOffer(null);
-    return epochRef.current;
-  }, []);
+  const undo = useCallback(async (): Promise<void> => {
+    const bridge = options.bridge ?? readCartBridge();
+    if (!canSend(busyRef.current, offer, bridge)) return;
+    busyRef.current = true;
+    try {
+      const res = await sendUndo(bridge, offer);
+      if (res !== null) announceOutcome(res.kind === 'ok');
+      await optionsRef.current.resync();
+      if (res !== null) optionsRef.current.onSettled?.();
+    } finally {
+      busyRef.current = false;
+    }
+  }, [announceOutcome, offer, options.bridge]);
 
   const dismiss = useCallback((): void => {
     withdraw();
   }, [withdraw]);
 
-  const clear = useCallback((): void => {
-    withdraw();
-    setAnnouncement(null);
-  }, [withdraw]);
-
-  const undo = useCallback(async (): Promise<void> => {
-    const current = offer;
-    const bridge = getBridge();
-    if (busyRef.current || current === null || bridge.undoLast === undefined) return;
-    busyRef.current = true;
-    try {
-      const res = await bridge
-        .undoLast({
-          cart_id: current.cartId,
-          target_action_id: current.targetActionId,
-          idempotency_key: current.undoKey,
-        })
-        .catch(() => null);
-      // A lost response keeps the offer (pressing again replays the same key),
-      // but main may have applied the inverse: re-read so the cart is not stale.
-      if (res === null) {
-        await optionsRef.current.resync();
-        return;
-      }
-      seqRef.current += 1;
-      setAnnouncement({ kind: res.kind === 'ok' ? 'undone' : 'unavailable', seq: seqRef.current });
-      setOffer(null);
-      await optionsRef.current.resync();
-      optionsRef.current.onSettled?.();
-    } finally {
-      busyRef.current = false;
-    }
-  }, [getBridge, offer]);
-
-  return { offer, announcement, canUndo, offerUndo, withdraw, dismiss, clear, undo };
+  return {
+    offer,
+    announcement: state.announcement,
+    canUndo: (options.bridge ?? readCartBridgeOrNull())?.undoLast !== undefined,
+    offerUndo: state.offerUndo,
+    withdraw,
+    dismiss,
+    clear: state.clear,
+    undo,
+  };
 }
