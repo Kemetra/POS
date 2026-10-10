@@ -41,13 +41,16 @@ type StateListener = (event: { state: 'active' | 'locked' | 'ended' }) => void;
 /** A main-side fake for boot hydration: lock state, its push, and the session re-read. */
 function hydrationOperator(opts: { locked?: boolean; current?: () => Promise<unknown> } = {}) {
   let listener: StateListener | null = null;
+  let locked = opts.locked === true;
   const getResumeState = vi.fn(() => Promise.resolve(resume({ cart_id: 'cart-9' })));
   return {
     getResumeState,
     getCurrentSession: (opts.current ??
       (() => Promise.resolve(SESSION))) as () => Promise<OperatorSessionView | null>,
-    getLockState: () =>
-      Promise.resolve({ state: opts.locked === true ? 'locked' : 'active' } as LockStateView),
+    getLockState: () => Promise.resolve({ state: locked ? 'locked' : 'active' } as LockStateView),
+    setLocked: (value: boolean) => {
+      locked = value;
+    },
     onSessionStateChanged: (cb: StateListener) => {
       listener = cb;
       return () => {
@@ -203,6 +206,43 @@ describe('RT-352 completeHydratedSignIn — reload while the session is locked',
     await done;
 
     expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    expect(useCartStore.getState().activeCart).toBeNull();
+  });
+});
+
+describe('RT-352 completeHydratedSignIn — the resume read is refused', () => {
+  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+  beforeEach(() => {
+    useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
+  });
+
+  it('waits again when the session locks between the unlock and the read', async () => {
+    const operator = hydrationOperator({ locked: true });
+    operator.getResumeState.mockRejectedValueOnce(new Error('session_locked'));
+    const done = completeHydratedSignIn(operator, SESSION);
+    await settle();
+    operator.push('active'); // unlocked, but locked again before the read ran
+    await settle();
+    expect(operator.getResumeState).toHaveBeenCalledTimes(1);
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+
+    operator.setLocked(false);
+    operator.push('active');
+    await done;
+
+    expect(operator.getResumeState).toHaveBeenCalledTimes(2);
+    expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-9');
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+  });
+
+  it('hydrates with no cart when the read fails for any other reason', async () => {
+    const operator = hydrationOperator();
+    operator.getResumeState.mockRejectedValueOnce(new Error('ipc'));
+    await completeHydratedSignIn(operator, SESSION);
+
+    expect(operator.getResumeState).toHaveBeenCalledTimes(1);
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
     expect(useCartStore.getState().activeCart).toBeNull();
   });
 });

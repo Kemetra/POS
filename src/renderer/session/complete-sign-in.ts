@@ -1,4 +1,4 @@
-import type { OperatorBridgeAPI } from '../../shared/bridge-api';
+import type { OperatorBridgeAPI, ResumeStateView } from '../../shared/bridge-api';
 import { useCartStore } from '../stores/cart-store';
 import {
   useOperatorSessionStore,
@@ -99,6 +99,31 @@ function untilUnlocked(operator: HydrationReader): Promise<void> {
   });
 }
 
+/** True only when main reports the session locked; a failed read is not a lock. */
+async function isLocked(operator: HydrationReader): Promise<boolean> {
+  const view = await operator.getLockState().catch(() => null);
+  return view?.state === 'locked';
+}
+
+/**
+ * Reads the session's cart once it is unlocked. Main may lock again between
+ * the unlock and the read, and the lock guard then refuses the read: on a
+ * refused read while locked, wait for the next unlock and read again. Any
+ * other failure means nothing to adopt.
+ */
+async function readCartWhenUnlocked(
+  operator: HydrationReader,
+  read: () => Promise<ResumeStateView>,
+): Promise<string | null> {
+  await untilUnlocked(operator);
+  const cart_id = await read().then(
+    (view) => view.cart_id,
+    () => undefined,
+  );
+  if (cart_id !== undefined) return cart_id;
+  return (await isLocked(operator)) ? readCartWhenUnlocked(operator, read) : null;
+}
+
 /** True while main still holds `session_id`; a failing read counts as gone. */
 async function stillHeldByMain(operator: HydrationReader, session_id: string): Promise<boolean> {
   const current = await operator.getCurrentSession().catch(() => null);
@@ -120,11 +145,11 @@ export async function completeHydratedSignIn(
   const hydrate = (): void => {
     useOperatorSessionStore.getState().hydrateSignedIn(session);
   };
-  if (operator.getResumeState === undefined) {
+  const read = operator.getResumeState?.bind(operator);
+  if (read === undefined) {
     adoptAndEnter(null, hydrate);
     return;
   }
-  await untilUnlocked(operator);
-  const cart_id = await (readResumeCartId(operator) ?? null);
+  const cart_id = await readCartWhenUnlocked(operator, read);
   if (await stillHeldByMain(operator, session.id)) adoptAndEnter(cart_id, hydrate);
 }
