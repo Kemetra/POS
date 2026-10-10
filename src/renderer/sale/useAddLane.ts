@@ -13,6 +13,8 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 export interface AddLane {
   enqueue(job: (isCurrent: () => boolean) => Promise<void>): Promise<void>;
   cancelPending(): void;
+  /** Resolves once every job queued so far has settled. */
+  drain(): Promise<void>;
   readonly busy: boolean;
 }
 
@@ -45,5 +47,10 @@ export function useAddLane(): AddLane {
     generationRef.current += 1;
   }, []);
 
-  return useMemo(() => ({ enqueue, cancelPending, busy }), [enqueue, cancelPending, busy]);
+  const drain = useCallback((): Promise<void> => laneRef.current, []);
+
+  return useMemo(
+    () => ({ enqueue, cancelPending, drain, busy }),
+    [enqueue, cancelPending, drain, busy],
+  );
 }

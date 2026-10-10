@@ -143,6 +143,42 @@ describe('useSaleCartController', () => {
     expect(result.current.lines).toEqual([]);
   });
 
+  it('resync ignores a cart read that answers after the active cart changed (RT-242)', async () => {
+    useCartStore.getState().applyCartCreated('cart-1');
+    let answer: (value: unknown) => void = () => undefined;
+    const { bridge } = cartBridge();
+    const withSnapshot = {
+      ...bridge,
+      snapshot: vi.fn(() => new Promise((resolve) => (answer = resolve))),
+    } as unknown as CartBridgeAPI;
+    const { result } = renderHook(() =>
+      useSaleCartController({ bridge: withSnapshot, initialLines: [initialLine] }),
+    );
+    let pending: Promise<void> = Promise.resolve();
+    act(() => {
+      pending = result.current.resync();
+    });
+    act(() => {
+      useCartStore.getState().reset();
+    });
+    await act(async () => {
+      answer({
+        kind: 'ok',
+        snapshot: {
+          cart_id: 'cart-1',
+          state: CartState.editing,
+          lines: [],
+          discount_placeholders: [],
+          paid: false,
+          envelope: null,
+        },
+      });
+      await pending;
+    });
+    expect(result.current.lines).toEqual([initialLine]);
+    expect(result.current.hydration).toBe('ready');
+  });
+
   it('keeps a line on refused removal and clears it after confirmed removal', async () => {
     useCartStore.getState().applyCartCreated('cart-1');
     const { bridge, remove } = cartBridge();

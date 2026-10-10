@@ -35,36 +35,36 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
-async function voidSale(user: Awaited<ReturnType<typeof saleWithLines>>): Promise<void> {
-  await user.click(screen.getByRole('button', { name: 'إلغاء البيع' }));
-  await user.click(screen.getByRole('button', { name: 'تأكيد الإلغاء' }));
-  await screen.findByText('تم إلغاء البيع.');
-}
-
-describe('the direct-add lane ends with its sale', () => {
-  it('a scan whose lookup answers after the void creates no cart and adds nothing', async () => {
+describe('void and the direct-add lane', () => {
+  it('a void waits for an admitted add, then ends the sale with nothing leaking into the next', async () => {
     const bridges = makeBridges();
     const user = await saleWithLines(bridges);
     const lookup = deferred<unknown>();
     bridges.lookupBarcode.mockReset();
     bridges.lookupBarcode.mockReturnValueOnce(lookup.promise);
     await user.type(screen.getByRole('textbox', SCAN_FIELD), '6223004355218{Enter}');
-    await voidSale(user);
+    await user.click(screen.getByRole('button', { name: 'إلغاء البيع' }));
+    await user.click(screen.getByRole('button', { name: 'تأكيد الإلغاء' }));
+    // The void is held until the scan it follows has settled.
+    expect(bridges.voidCart).not.toHaveBeenCalled();
 
     await act(async () => {
       lookup.resolve({ kind: 'one', product: BRUFEN });
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
-    expect(bridges.add).toHaveBeenCalledOnce();
+    await screen.findByText('تم إلغاء البيع.');
+    expect(bridges.add).toHaveBeenCalledTimes(2);
+    expect(bridges.voidCart).toHaveBeenCalledOnce();
     expect((bridges.cart as unknown as { create: Mock }).create).toHaveBeenCalledOnce();
     expect(useCartStore.getState().activeCart).toBeNull();
     expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
-    expect(useScanNoticeStore.getState().message).toBeNull();
+    expect(screen.queryByRole('button', { name: /^تراجع/ })).not.toBeInTheDocument();
   });
 
-  it('an add that answers after the void shows no line in the next sale', async () => {
+  it('a refused void keeps the line its in-flight add committed (Codex P2 on #621)', async () => {
     const bridges = makeBridges();
+    bridges.voidCart.mockResolvedValue({ kind: 'refused', reason: 'role_denied' });
     const user = await saleWithLines(bridges);
     const add = deferred<unknown>();
     bridges.add.mockReset();
@@ -73,12 +73,13 @@ describe('the direct-add lane ends with its sale', () => {
     await waitFor(() => {
       expect(bridges.add).toHaveBeenCalledOnce();
     });
-    await voidSale(user);
+    await user.click(screen.getByRole('button', { name: 'إلغاء البيع' }));
+    await user.click(screen.getByRole('button', { name: 'تأكيد الإلغاء' }));
 
     await act(async () => {
       add.resolve({
         kind: 'ok',
-        line_id: 'line-late',
+        line_id: 'line-2',
         merged: false,
         version: 1,
         display_name: 'بروفين',
@@ -86,13 +87,14 @@ describe('the direct-add lane ends with its sale', () => {
         line_subtotal_minor: 2500,
         quantity: 1,
       });
-      // Let the whole add chain run (several promise hops), not just one tick.
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
-    expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/أُضيف: بروفين/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^تراجع/ })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(bridges.voidCart).toHaveBeenCalledOnce();
+    });
+    expect(document.querySelectorAll('.v5-sale-cart-line')).toHaveLength(2);
+    expect(screen.getByText(/أُضيف:/)).toHaveTextContent('أُضيف: بروفين');
   });
 });
 

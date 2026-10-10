@@ -158,12 +158,33 @@ describe('Undo of the last direct add', () => {
     expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
   });
 
-  it('a cart read that answers after the sale ended never paints the old cart', async () => {
+  it('an Undo still in flight never clears the offer of an add scanned after it (Codex P2 on #621)', async () => {
+    const bridges = makeBridges();
+    let answerUndo: (value: unknown) => void = () => undefined;
+    bridges.undoLast.mockReturnValueOnce(new Promise((resolve) => (answerUndo = resolve)));
+    bridges.snapshot.mockResolvedValue(snapshotWith([]));
+    const user = await saleWithLines(bridges);
+    await user.click(screen.getByRole('button', { name: 'تراجع عن إضافة بنادول' }));
+    await user.type(screen.getByRole('textbox', SCAN_FIELD), '6223004355218{Enter}');
+
+    await act(async () => {
+      answerUndo({ kind: 'ok', effect: 'removed', line_id: 'line-1', version: 2 });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    // The scan ran after the Undo settled: its add is the newest action, with its own offer.
+    expect(
+      await screen.findByRole('button', { name: 'تراجع عن إضافة بروفين' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/أُضيف:/)).toHaveTextContent('أُضيف: بروفين');
+  });
+
+  it('a void waits for an Undo in flight, and the late cart read never paints the ended sale', async () => {
     const bridges = makeBridges();
     bridges.undoLast.mockResolvedValue({
       kind: 'ok',
       effect: 'removed',
-      line_id: 'line-1',
+      line_id: 'line-2',
       version: 2,
     });
     let answerSnapshot: (value: unknown) => void = () => undefined;
@@ -172,15 +193,15 @@ describe('Undo of the last direct add', () => {
     await user.click(screen.getByRole('button', { name: 'تراجع عن إضافة بروفين' }));
     await user.click(screen.getByRole('button', { name: 'إلغاء البيع' }));
     await user.click(screen.getByRole('button', { name: 'تأكيد الإلغاء' }));
-    await screen.findByText('تم إلغاء البيع.');
+    expect(bridges.voidCart).not.toHaveBeenCalled();
 
     await act(async () => {
       answerSnapshot(snapshotWith([{ id: 'line-1', name: 'بنادول' }]));
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
+    await screen.findByText('تم إلغاء البيع.');
     expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
-    expect(screen.queryByText('تعذّر تحميل السلة الحالية.')).not.toBeInTheDocument();
   });
 
   it('any other cart change withdraws the offer (main would refuse it anyway)', async () => {

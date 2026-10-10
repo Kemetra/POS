@@ -42,6 +42,8 @@ export function useLiveSaleActions(
   const undo = useSaleUndo({
     resync: cart.resync,
     onSettled: focusScanOwner,
+    // In the add lane: ordered with adds, and dropped if its sale has ended.
+    run: (job) => lane.enqueue((isCurrent) => (isCurrent() ? job() : Promise.resolve())),
     ...(bridge ? { bridge } : {}),
   });
 
@@ -118,9 +120,11 @@ export function useLiveSaleActions(
     // Reset only after the bridge confirms the void; a refusal or rejected
     // transport keeps the existing cart. The voided cart stays cancelled in the
     // DB; only the renderer's pointer to it is dropped.
+    // Adds already admitted settle first: a refused void then leaves them in
+    // the sale they belong to, and a confirmed one ends any queued after it.
     onVoid: async (): Promise<boolean> => {
       undo.dismiss();
-      lane.cancelPending();
+      await lane.drain();
       const ok = await cart.voidCart().catch(() => false);
       if (ok) {
         endSale();

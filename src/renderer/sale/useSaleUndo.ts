@@ -39,6 +39,12 @@ interface SaleUndoOptions {
   resync: () => Promise<void>;
   /** Where focus goes once the Undo has settled (the scan owner, 15 §3.1 rule 6). */
   onSettled?: () => void;
+  /**
+   * Runs the Undo in the Sale's add lane, so it is ordered with the adds
+   * around it: an older Undo never settles over a newer add's offer, and a
+   * re-read never interleaves with an add. Without it the Undo runs at once.
+   */
+  run?: (job: () => Promise<void>) => Promise<void>;
 }
 
 /** An Undo can be sent: none in flight, an offer standing, and a bridge that can undo. */
@@ -155,18 +161,20 @@ export function useSaleUndo(options: SaleUndoOptions): {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  const undo = useCallback(async (): Promise<void> => {
+  const undo = useCallback((): Promise<void> => {
     const bridge = options.bridge ?? readCartBridge();
-    if (!canSend(busyRef.current, offer, bridge)) return;
+    if (!canSend(busyRef.current, offer, bridge)) return Promise.resolve();
     busyRef.current = true;
-    try {
+    const job = async (): Promise<void> => {
       const res = await sendUndo(bridge, offer);
       if (res !== null) announceOutcome(res.kind === 'ok');
       await optionsRef.current.resync();
       if (res !== null) optionsRef.current.onSettled?.();
-    } finally {
+    };
+    const run = optionsRef.current.run ?? ((j: () => Promise<void>) => j());
+    return run(job).finally(() => {
       busyRef.current = false;
-    }
+    });
   }, [announceOutcome, offer, options.bridge]);
 
   const dismiss = useCallback((): void => {
