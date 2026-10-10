@@ -569,9 +569,9 @@ export function PaymentSurface({
   // RT-341 — what the pending or failed read follows: a fresh start has no money
   // on it yet, so its retry line must not say an amount was recorded (M-P15).
   // RT-340: a failed read-back after a refused settle retries through the same
-  // copy decision, so the confirm's reason is kept with it.
+  // copy decision; the confirm's reason is kept in the store
+  // (`confirmReadPending`), so a remount keeps it too.
   const [readAfter, setReadAfter] = useState<'start' | 'tender' | 'confirm'>('tender');
-  const confirmReasonRef = useRef<RefusalReason | null>(null);
 
   // RT-238: the entry opens below the method tiles, inside the scrolling panes;
   // bring it into view so the cashier never has to hunt for the amount field.
@@ -945,8 +945,12 @@ export function PaymentSurface({
    * tenant). Every retry from this session is refused the same way, so offer
    * nothing and say who can act (M-P28 / M-P26) instead of a dead retry.
    */
+  function isSessionRefusal(outcome: PaymentsReadResponse | PaymentRefusal | null): boolean {
+    return outcome?.kind === 'refused' && !confirmNeedsReadBack(outcome.reason);
+  }
+
   function blockOnSessionRefusal(outcome: PaymentsReadResponse | PaymentRefusal | null): boolean {
-    if (outcome?.kind !== 'refused' || confirmNeedsReadBack(outcome.reason)) return false;
+    if (outcome?.kind !== 'refused' || !isSessionRefusal(outcome)) return false;
     setAfterApply('blocked');
     setReadAfter('tender');
     setBridgeRefusalCopy(confirmRefusalCopy(outcome.reason, false));
@@ -1012,6 +1016,13 @@ export function PaymentSurface({
     if (bridge === null || paymentAttemptId === null) return;
     const attemptId = paymentAttemptId;
     const store = usePaymentStore.getState();
+    // RT-340 — a settle whose read-back failed before the remount: resume that
+    // reconciliation, so the same copy decision follows (Codex P2 on #626).
+    const pending = store.confirmReadPending;
+    if (pending?.attemptId === attemptId) {
+      await reconcileAfterConfirm(attemptId, pending.reason);
+      return;
+    }
     const envelopeAtStart = store.envelope;
     // RT-356 — M-P15 says an amount was recorded: true only once one was sent on
     // this attempt (kept in the store across the remount); otherwise M-P27.
@@ -1392,20 +1403,23 @@ export function PaymentSurface({
     reason: RefusalReason | null,
   ): Promise<void> {
     if (reason !== null && blockOnSessionRefusal({ kind: 'refused', reason })) return;
-    const envelopeAtStart = usePaymentStore.getState().envelope;
-    confirmReasonRef.current = reason;
+    const store = usePaymentStore.getState();
+    const envelopeAtStart = store.envelope;
+    store.setConfirmReadPending({ attemptId, reason });
     setReadAfter('confirm');
     setAfterApply('reading');
     const outcome = await readAttemptOutcome(attemptId);
     if (!isStillCurrent(attemptId, envelopeAtStart)) return;
-    if (blockOnSessionRefusal(outcome)) return;
     const attempt = outcome?.kind === 'ok' ? outcome.payment_attempt : null;
-    if (attempt === null) {
+    if (attempt === null && !isSessionRefusal(outcome)) {
       // The outcome is unknown: offer the read retry (M-P15), never the commit.
-      // The retry comes back here, with this reason (Codex P2 on #626).
+      // The retry, here or after a remount, comes back here with this reason
+      // (Codex P2 on #626).
       setAfterApply('failed');
       return;
     }
+    usePaymentStore.getState().setConfirmReadPending(null);
+    if (blockOnSessionRefusal(outcome) || attempt === null) return;
     setAfterApply('idle');
     setReadAfter('tender');
     if (attempt.state === 'started') {
@@ -1550,7 +1564,8 @@ export function PaymentSurface({
               onClick={() => {
                 if (readAfter === 'start') void readAfterStart(paymentAttemptId);
                 else if (readAfter === 'confirm' && paymentAttemptId !== null) {
-                  void reconcileAfterConfirm(paymentAttemptId, confirmReasonRef.current);
+                  const pending = usePaymentStore.getState().confirmReadPending;
+                  void reconcileAfterConfirm(paymentAttemptId, pending?.reason ?? null);
                 } else void handleLineApplied();
               }}
             >

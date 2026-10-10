@@ -362,6 +362,35 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     },
   );
 
+  // Codex P2 on #626: the confirm context must survive a Checkout remount.
+  it.each([
+    ['still open and covered → the retry line', attempt('started'), TRY_AGAIN],
+    ['ended → M-P25', attempt('cancelled'), 'انتهت عملية الدفع هذه دون أن تكتمل'],
+  ] as const)(
+    'a lost confirm with a lost read, then a remount whose read answers %s',
+    async (_label, answer, copy) => {
+      const h = makeHarness();
+      await pickCash(h);
+      h.confirm.mockRejectedValueOnce(new Error('ipc lost'));
+      h.read.mockRejectedValue(new Error('ipc lost'));
+      await pressConfirm();
+      expect(screen.getByTestId('payment-surface-reread')).toBeInTheDocument();
+
+      cleanup();
+      h.read.mockResolvedValue(ok(answer));
+      render(
+        <PaymentSurface
+          _testBridge={h.bridge}
+          onBackToSale={() => Promise.resolve(true)}
+          onNewSale={vi.fn()}
+        />,
+      );
+      await settle();
+
+      expect(refusalText()).toContain(copy);
+    },
+  );
+
   it('a read retry that finds the attempt ended says why it is gone (M-P25)', async () => {
     const h = makeHarness();
     await pickCash(h);
