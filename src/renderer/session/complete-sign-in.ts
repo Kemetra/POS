@@ -26,6 +26,7 @@ import {
  */
 
 type ResumeReader = Pick<OperatorBridgeAPI, 'getResumeState'>;
+type HydrationReader = Pick<OperatorBridgeAPI, 'getResumeState' | 'getCurrentSession'>;
 
 function readResumeCartId(operator: ResumeReader): Promise<string | null> | null {
   const read = operator.getResumeState;
@@ -69,12 +70,29 @@ export function completeSignIn(
   });
 }
 
-/** Boot hydration: main already holds `session` (dev bypass, renderer reload). */
-export function completeHydratedSignIn(
-  operator: ResumeReader,
+/** True while main still holds `session_id`; a failing read counts as gone. */
+async function stillHeldByMain(operator: HydrationReader, session_id: string): Promise<boolean> {
+  const current = await operator.getCurrentSession().catch(() => null);
+  return current?.id === session_id;
+}
+
+/**
+ * Boot hydration: main already holds `session` (dev bypass, renderer reload).
+ * While signedOut the store ignores main's session-state pushes, so a session
+ * that ends during the resume read is re-checked here; it is never hydrated.
+ */
+export async function completeHydratedSignIn(
+  operator: HydrationReader,
   session: OperatorSessionView,
 ): Promise<void> {
-  return enterWithResumedCart(operator, () => {
+  const hydrate = (): void => {
     useOperatorSessionStore.getState().hydrateSignedIn(session);
-  });
+  };
+  const pending = readResumeCartId(operator);
+  if (pending === null) {
+    adoptAndEnter(null, hydrate);
+    return;
+  }
+  const cart_id = await pending;
+  if (await stillHeldByMain(operator, session.id)) adoptAndEnter(cart_id, hydrate);
 }

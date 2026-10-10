@@ -240,9 +240,13 @@ outbox rows or audit payloads off the device.
    ordered by `created_at`. Note the latest `action_kind` and whether a corresponding row
    exists in `carts`. Use placeholders in any working notes — refer to identifiers as
    `<cart-id>`, `<session-id>`, `<operator-id>`.
-3. Cross-reference `audit_events` for terminal action categories on the same `<cart-id>`:
-   `cart.cancel.post_handoff`, `cart.handoff_to_payment`, or `cart.discarded_on_session_end`.
-   The presence of one of these confirms category (2), (4), or (5) above.
+3. Cross-reference `audit_events` for action categories on the same `<cart-id>`:
+   - `cart.held_on_session_end` / `cart.reattached` (RT-352) confirm category (2): the draft
+     is held, not closed. Its `carts` row shows the owning `terminal_id` and
+     `owning_operator_id`.
+   - `cart.cancel.post_handoff` or `cart.handoff_to_payment` confirm category (4) or (5).
+   - `cart.discarded_on_session_end` is no longer emitted (RT-115 D5); it appears only on
+     rows written before RT-352.
 4. If no terminal audit row exists and the cart is absent from `carts`, suspect category (1)
    (force-kill before commit). The outbox row, if present, is sufficient to characterise the
    state without replaying any action.
@@ -251,9 +255,12 @@ outbox rows or audit payloads off the device.
 
 ### Resolution
 
-- Categories (2), (4), (5): no action — the cart is correctly closed or frozen. Confirm to
-  the cashier with generic copy ("the previous cart has been closed; please start a new
-  cart").
+- Category (2): the draft is held, not lost. Ask the cashier to sign in again on the
+  terminal that owns it; it re-attaches at that sign-in with its lines. Do not tell them to
+  start a new cart. A pre-#380 cart (`terminal_id = branch_id`) cannot re-attach; it waits
+  for manager recovery (RT-116 S6).
+- Categories (4), (5): no action — the cart is correctly closed or frozen. Confirm to the
+  cashier with generic copy ("the previous cart has been closed; please start a new cart").
 - Category (3): verify the cashier signed back in under the same tenant + branch.
 - Category (1): start a new cart. Do NOT attempt to replay outbox entries by hand — the
   outbox is owned by the bridge and any manual mutation risks the FSM invariants.

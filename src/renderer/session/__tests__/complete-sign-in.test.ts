@@ -15,6 +15,7 @@ import type { ResumeStateView } from '../../../shared/bridge-api';
  */
 
 const SESSION = {
+  id: 'session-1',
   operator_id: 'cashier-1',
   display_name: 'Cashier One',
   role: 'cashier',
@@ -35,6 +36,8 @@ beforeEach(() => {
 });
 
 const RESUME_CART_9 = { getResumeState: () => Promise.resolve(resume({ cart_id: 'cart-9' })) };
+/** Boot hydration also re-reads the session after the resume read. */
+const HYDRATE_CART_9 = { ...RESUME_CART_9, getCurrentSession: () => Promise.resolve(SESSION) };
 
 describe('RT-352 — the cart is adopted before the session turns signedIn', () => {
   it.each([
@@ -46,7 +49,7 @@ describe('RT-352 — the cart is adopted before the session turns signedIn', () 
       name: 'a boot hydration (renderer reload, dev bypass)',
       enter: () => {
         useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
-        return completeHydratedSignIn(RESUME_CART_9, SESSION);
+        return completeHydratedSignIn(HYDRATE_CART_9, SESSION);
       },
     },
   ])('on $name', async ({ enter }) => {
@@ -116,8 +119,35 @@ describe('RT-352 completeSignIn', () => {
 
 describe('RT-352 completeHydratedSignIn', () => {
   it('drops the adopted cart when the store is no longer signedOut', async () => {
-    await completeHydratedSignIn(RESUME_CART_9, SESSION); // store is signingIn (beforeEach)
+    await completeHydratedSignIn(HYDRATE_CART_9, SESSION); // store is signingIn (beforeEach)
     expect(useOperatorSessionStore.getState().state.kind).toBe('signingIn');
     expect(useCartStore.getState().activeCart).toBeNull();
+  });
+});
+
+describe('RT-352 completeHydratedSignIn — the session ends during the resume read', () => {
+  beforeEach(() => {
+    useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
+  });
+
+  it.each([
+    { name: 'main holds no session any more', current: () => Promise.resolve(null) },
+    {
+      name: 'main holds another session',
+      current: () => Promise.resolve({ ...SESSION, id: 'session-2' }),
+    },
+    { name: 'the re-check fails', current: () => Promise.reject(new Error('ipc')) },
+  ])('never hydrates when $name', async ({ current }) => {
+    await completeHydratedSignIn({ ...RESUME_CART_9, getCurrentSession: current }, SESSION);
+
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    expect(useCartStore.getState().activeCart).toBeNull();
+  });
+
+  it('hydrates at once, without a re-check, when the bridge has no resume read', async () => {
+    const getCurrentSession = vi.fn(() => Promise.resolve(null));
+    await completeHydratedSignIn({ getCurrentSession }, SESSION);
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+    expect(getCurrentSession).not.toHaveBeenCalled();
   });
 });
