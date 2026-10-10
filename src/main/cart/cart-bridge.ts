@@ -144,6 +144,28 @@ function scrubPayloadForOutbox(payload: Record<string, unknown>): Record<string,
   return out;
 }
 
+/**
+ * RT-349 — does a stored `cart.line.add` / `cart.line.merge` outbox row carry
+ * the same cart, item and quantity as this add request? The add row stores
+ * `quantity`; the merge row stores `quantity_added`.
+ */
+function isSameAddPayload(
+  req: CartLinesAddRequest,
+  replay: { cart_id: string; payload_json: string },
+): boolean {
+  if (replay.cart_id !== req.cart_id) return false;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(replay.payload_json);
+  } catch {
+    return false;
+  }
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as { item_ref?: unknown; quantity?: unknown; quantity_added?: unknown };
+  const quantity = p.quantity ?? p.quantity_added;
+  return p.item_ref === req.item_ref && quantity === req.quantity;
+}
+
 export interface CartBridgeHandlersDeps {
   /** Returns the currently-authenticated operator session, or null. */
   getCurrentSession: () => OperatorSessionRecord | null;
@@ -525,6 +547,14 @@ export class CartBridgeHandlers {
     // R7 seam — resolve item_ref to display_name + unit_price_minor snapshot.
     const resolver = this.deps.resolveItemRef ?? DEFAULT_ITEM_REF_RESOLVER;
     const resolved = await resolver(req.item_ref);
+
+    // RT-349 — a same-key add may have committed during the await; replay it
+    // rather than hitting the outbox primary key. Synchronous from here on.
+    const replayAfterResolve = store.getOutboxRow(req.idempotency_key);
+    if (replayAfterResolve !== undefined) {
+      return this.replayLinesAdd(req, store, replayAfterResolve);
+    }
+
     if (resolved.kind !== 'ok') {
       // The bridge contract has no per-resolver reason; collapse to generic.
       return refuse('wrong_owner');
@@ -558,6 +588,9 @@ export class CartBridgeHandlers {
     if (replay.action_kind !== 'cart.line.add' && replay.action_kind !== 'cart.line.merge') {
       return refuse('idempotency_payload_mismatch');
     }
+    // FR-018 (0009): the same key with a different payload is refused, never
+    // answered with the original action's result.
+    if (!isSameAddPayload(req, replay)) return refuse('idempotency_payload_mismatch');
     const replayLineId = replay.line_id;
     if (replayLineId === null) return refuse('idempotency_payload_mismatch');
     const replayLine = store.getLine(req.cart_id, replayLineId);
