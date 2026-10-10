@@ -63,6 +63,8 @@ import type {
   CartReturnToSaleResponse,
   CartReturnToSaleEligibilityRequest,
   CartReturnToSaleEligibilityResponse,
+  CartUndoLastRequest,
+  CartUndoLastResponse,
   CartHandoffRequest,
   CartHandoffResponse,
   CartSubscribeRequest,
@@ -826,6 +828,15 @@ export interface CartBridgeAPI {
   returnToSaleEligibility?(
     req: CartReturnToSaleEligibilityRequest,
   ): Promise<CartReturnToSaleEligibilityResponse>;
+  /**
+   * RT-254 — Undo the cart's LAST action (RT-245 contract). The renderer
+   * names only the action it just completed and a fresh idempotency key; main
+   * proves eligibility and chooses the inverse (remove / decrement / restore).
+   * `undo_not_available` means dismiss the affordance — never compose an
+   * inverse in the renderer. Optional on the TYPE only (same precedent as
+   * `returnToSale?`): the production preload always wires it.
+   */
+  undoLast?(req: CartUndoLastRequest): Promise<CartUndoLastResponse>;
   /** Freezes the cart and constructs the PaymentIntentEnvelope. */
   handoff(req: CartHandoffRequest): Promise<CartHandoffResponse>;
   /** Push-style cart state updates (type-only in Phase 2; S1+ runtime). */

@@ -173,6 +173,33 @@ export type CartReturnToSaleEligibilityResponse =
   | { readonly kind: 'ok'; readonly returnable: boolean }
   | CartRefusal;
 
+// ── cart.undoLast (RT-254, contract RT-245) ───────────────────────────────────
+// Immediate Undo of the cart's LAST action. The renderer names only the action
+// it just completed (`target_action_id` = that call's idempotency key) and a
+// FRESH idempotency key for the Undo itself; main proves the target is still
+// the cart's newest action and chooses the exact inverse: a new line is
+// soft-removed, a merge is decremented by exactly its persisted quantity, a
+// delete is restored on the same row. The renderer never picks the inverse.
+// Any target that is no longer eligible refuses `undo_not_available`.
+
+export interface CartUndoLastRequest {
+  readonly cart_id: string;
+  readonly target_action_id: string;
+  readonly idempotency_key: string;
+}
+
+export type CartUndoEffect = 'removed' | 'decremented' | 'restored';
+
+export type CartUndoLastResponse =
+  | {
+      readonly kind: 'ok';
+      readonly effect: CartUndoEffect;
+      readonly line_id: string;
+      /** The line's version after the Undo (the next mutation must send it). */
+      readonly version: number;
+    }
+  | CartRefusal;
+
 // ── cart.handoff ──────────────────────────────────────────────────────────────
 
 export interface CartHandoffRequest {

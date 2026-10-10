@@ -24,6 +24,11 @@ export const CART_IPC_CHANNELS = {
    * Back disabled after a remount when tender history exists.
    */
   RETURN_TO_SALE_ELIGIBILITY: 'cart:returnToSaleEligibility',
+  /**
+   * RT-254 — main-authoritative Undo of the cart's last action (RT-245
+   * contract). Main chooses the inverse; the renderer names only the target.
+   */
+  UNDO_LAST: 'cart:undoLast',
 } as const;
 
 export type CartIpcChannel = (typeof CART_IPC_CHANNELS)[keyof typeof CART_IPC_CHANNELS];

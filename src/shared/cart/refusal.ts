@@ -17,7 +17,13 @@ export type CartRefusalReason =
    * account refused, device revoked) and ends at its next safe point: no NEW
    * sale may start. Generic: no cause is disclosed (10763 §3).
    */
-  | 'authority_conflict';
+  | 'authority_conflict'
+  /**
+   * RT-254 — `cart.undoLast`: the named action is no longer the cart's
+   * eligible last action (a later mutation, handoff, or changed line state).
+   * Generic: the renderer only dismisses its Undo affordance.
+   */
+  | 'undo_not_available';
 
 export interface CartRefusal {
   readonly kind: 'refused';

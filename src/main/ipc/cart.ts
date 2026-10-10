@@ -28,6 +28,8 @@ import type {
   CartSnapshotResponse,
   CartSubscribeRequest,
   CartSubscribeResponse,
+  CartUndoLastRequest,
+  CartUndoLastResponse,
   CartVoidRequest,
   CartVoidResponse,
 } from '../../shared/cart/bridge-types.js';
@@ -253,6 +255,23 @@ function asReturnToSaleEligibilityReq(value: unknown): CartReturnToSaleEligibili
     : null;
 }
 
+/**
+ * RT-254 — Undo. Builds a FRESH object with only the three contract fields,
+ * each a bounded id: no inverse kind, line id, quantity or scope crosses this
+ * bridge — main derives every one of them from persisted lineage.
+ */
+function asUndoLastReq(value: unknown): CartUndoLastRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const cartId = v['cart_id'];
+  const targetActionId = v['target_action_id'];
+  const idempotencyKey = v['idempotency_key'];
+  if (!isBoundedId(cartId) || !isBoundedId(targetActionId) || !isBoundedId(idempotencyKey)) {
+    return null;
+  }
+  return { cart_id: cartId, target_action_id: targetActionId, idempotency_key: idempotencyKey };
+}
+
 function asHandoffReq(value: unknown): CartHandoffRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -407,6 +426,15 @@ export function registerCartHandlers(ipcMain: IpcMain, deps: CartHandlerDeps): v
       const req = asReturnToSaleEligibilityReq(request);
       if (req === null) return refuseInvalid();
       return handlers.returnToSaleEligibility(req);
+    },
+  );
+
+  ipcMain.handle(
+    CART_IPC_CHANNELS.UNDO_LAST,
+    async (_event: IpcMainInvokeEvent, request: unknown): Promise<CartUndoLastResponse> => {
+      const req = asUndoLastReq(request);
+      if (req === null) return refuseInvalid();
+      return handlers.undoLast(req);
     },
   );
 

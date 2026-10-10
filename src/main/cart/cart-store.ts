@@ -164,6 +164,28 @@ export interface ReturnCartToSaleInput {
   updated_at: string;
 }
 
+/**
+ * RT-254 — the inverse main chose for `cart.undoLast` (contract RT-245).
+ * `decrement` carries the already-computed quantity/subtotal (the bridge owns
+ * the integer-minor-unit arithmetic, same as every other line mutation).
+ */
+export type UndoInverse =
+  | { readonly kind: 'soft_remove' }
+  | { readonly kind: 'decrement'; readonly quantity: number; readonly line_subtotal_minor: number }
+  | { readonly kind: 'restore' };
+
+/** The facts the Undo was decided on; the write commits only while they all still hold. */
+export interface UndoLastInput {
+  cart_id: string;
+  line_id: string;
+  /** Must still be `carts.last_action_id`, the line's `last_action_id`, and the cart's newest outbox row. */
+  target_action_id: string;
+  /** The line version the bridge read; the write requires it unchanged. */
+  expected_line_version: number;
+  inverse: UndoInverse;
+  now: string;
+}
+
 export interface InsertDiscountPlaceholderInput {
   placeholder_id: string;
   cart_id: string;
@@ -193,6 +215,18 @@ export interface CartStore {
   updateLineQuantityAndOutbox(update: UpdateCartLineQtyInput, outbox: InsertOutboxInput): void;
   setLineNoteAndOutbox(update: UpdateCartLineNoteInput, outbox: InsertOutboxInput): void;
   softRemoveLineAndOutbox(remove: SoftRemoveCartLineInput, outbox: InsertOutboxInput): void;
+  /**
+   * RT-254 `cart.undoLast` as ONE conditional transaction. Re-proves, at
+   * commit time, that the cart is still `editing`, that the target is both
+   * `carts.last_action_id` and the cart's newest outbox row (a note or
+   * discount edit writes outbox lineage without moving `carts.last_action_id`),
+   * and that the line still carries the target action, the expected version
+   * and the matching active/removed state (a restore also needs no other
+   * active line for the same item_ref). Only then does it apply the inverse,
+   * write the outbox row and recompute the subtotal. Returns `false` with
+   * nothing written when any fact no longer holds.
+   */
+  undoLastActionAndOutbox(input: UndoLastInput, outbox: InsertOutboxInput): boolean;
   /**
    * Atomically writes the discount placeholder row + outbox row, then calls
    * `onInserted` (if provided) inside the same transaction — same audit-atomic
@@ -338,6 +372,40 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
      WHERE line_id = ?`,
   ) as PrepareRun;
 
+  // ── RT-254 Undo: commit-time guards + inverse writes ──
+  // Insertion order (rowid) is the lineage order: the outbox is append-only.
+  const undoCartGuardStmt = db.prepare(
+    `SELECT 1 AS ok FROM carts
+      WHERE cart_id = ? AND state = 'editing' AND last_action_id = ?
+        AND (SELECT action_id FROM cart_action_outbox
+              WHERE cart_id = ? ORDER BY rowid DESC LIMIT 1) = ?`,
+  ) as PrepareGet<{ ok: number }>;
+  const UNDO_LINE_MATCH = `WHERE line_id = ? AND cart_id = ? AND last_action_id = ? AND version = ?`;
+  const undoSoftRemoveStmt = db.prepare(
+    `UPDATE cart_lines
+        SET removed_at = ?, last_action_id = ?, updated_at = ?, version = version + 1
+      ${UNDO_LINE_MATCH} AND removed_at IS NULL`,
+  ) as PrepareRun;
+  const undoDecrementStmt = db.prepare(
+    `UPDATE cart_lines
+        SET quantity = ?, line_subtotal_minor = ?, last_action_id = ?, updated_at = ?,
+            version = version + 1
+      ${UNDO_LINE_MATCH} AND removed_at IS NULL`,
+  ) as PrepareRun;
+  // Restore clears `removed_at` on the SAME row: line id, price snapshot,
+  // note and attached placeholders are untouched. Q4 (one active line per
+  // item_ref) is re-proved here because it is application-layer only.
+  const undoRestoreStmt = db.prepare(
+    `UPDATE cart_lines
+        SET removed_at = NULL, last_action_id = ?, updated_at = ?, version = version + 1
+      ${UNDO_LINE_MATCH} AND removed_at IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM cart_lines AS twin
+                         WHERE twin.cart_id = cart_lines.cart_id
+                           AND twin.item_ref = cart_lines.item_ref
+                           AND twin.removed_at IS NULL
+                           AND twin.line_id <> cart_lines.line_id)`,
+  ) as PrepareRun;
+
   const getCartStmt = db.prepare(`SELECT * FROM carts WHERE cart_id = ?`) as PrepareGet<CartRow>;
   const getLineStmt = db.prepare(
     `SELECT * FROM cart_lines WHERE cart_id = ? AND line_id = ?`,
@@ -420,6 +488,32 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
       row.payload_json,
       row.applied_at,
     );
+  }
+
+  /** Applies the Undo inverse to the line only while every precondition holds. */
+  function applyUndoInverse(input: UndoLastInput, undo_action_id: string): boolean {
+    const match = [
+      input.line_id,
+      input.cart_id,
+      input.target_action_id,
+      input.expected_line_version,
+    ];
+    const { inverse, now } = input;
+    let result: { changes: number };
+    if (inverse.kind === 'soft_remove') {
+      result = undoSoftRemoveStmt.run(now, undo_action_id, now, ...match);
+    } else if (inverse.kind === 'decrement') {
+      result = undoDecrementStmt.run(
+        inverse.quantity,
+        inverse.line_subtotal_minor,
+        undo_action_id,
+        now,
+        ...match,
+      );
+    } else {
+      result = undoRestoreStmt.run(undo_action_id, now, ...match);
+    }
+    return result.changes === 1;
   }
 
   function recomputeSubtotal(cart_id: string, updated_at: string, last_action_id: string): number {
@@ -518,6 +612,20 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
           remove.line_id,
         );
         recomputeSubtotal(outbox.cart_id, remove.removed_at, remove.last_action_id);
+      })();
+    },
+
+    undoLastActionAndOutbox(input, outbox): boolean {
+      return db.transaction((): boolean => {
+        const target = input.target_action_id;
+        if (undoCartGuardStmt.get(input.cart_id, target, input.cart_id, target) === undefined) {
+          return false;
+        }
+        // Nothing has been written yet: a zero-row line UPDATE leaves no trace.
+        if (!applyUndoInverse(input, outbox.action_id)) return false;
+        writeOutbox(outbox);
+        recomputeSubtotal(input.cart_id, input.now, outbox.action_id);
+        return true;
       })();
     },
 

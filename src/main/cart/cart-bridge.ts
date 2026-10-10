@@ -28,9 +28,12 @@ import type {
   CartSnapshotResponse,
   CartSubscribeRequest,
   CartSubscribeResponse,
+  CartUndoLastRequest,
+  CartUndoLastResponse,
   CartVoidRequest,
   CartVoidResponse,
 } from '../../shared/cart/bridge-types.js';
+import { planUndo, replayUndo } from './undo-last.js';
 import { CartState } from '../../shared/cart/cart-state.js';
 import type { CartRefusalReason } from '../../shared/cart/refusal.js';
 import { computeLineSubtotal, LineSubtotalError } from './line-subtotal.js';
@@ -798,6 +801,71 @@ export class CartBridgeHandlers {
       },
     );
     return { kind: 'ok' };
+  }
+
+  // ── cart.undoLast (RT-254, contract RT-245) ─────────────────────────
+  //
+  // Order is load-bearing: authorization (session, ownership, tenant, mutable
+  // state) → replay of THIS Undo key (before eligibility, so a lost response
+  // replays even though the Undo is now the cart's last action) → main-owned
+  // eligibility + inverse → one conditional transaction. No audit event.
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async undoLast(req: CartUndoLastRequest): Promise<CartUndoLastResponse> {
+    const gated = this.resolveMutableCart(req.cart_id);
+    if (gated.kind !== 'ok') return gated;
+    const { session, store, cart } = gated;
+
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) return replayUndo(req, replay);
+
+    const plan = planUndo(store, cart, req);
+    if (plan.kind !== 'ok') return plan;
+
+    // RT-113 P2 — same safe-point rule as `linesAdd`: a latched session may
+    // not bring an emptied cart back to life.
+    if (
+      plan.effect === 'restored' &&
+      session.authority_latch !== undefined &&
+      store.getActiveLines(req.cart_id).length === 0
+    ) {
+      return refuse('authority_conflict');
+    }
+
+    const now = this.clock().toISOString();
+    const applied = store.undoLastActionAndOutbox(
+      {
+        cart_id: req.cart_id,
+        line_id: plan.line.line_id,
+        target_action_id: req.target_action_id,
+        expected_line_version: plan.line.version,
+        inverse: plan.inverse,
+        now,
+      },
+      {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: plan.line.line_id,
+        action_kind: plan.outboxKind,
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify(scrubPayloadForOutbox(plan.payload)),
+        applied_at: now,
+      },
+    );
+    if (!applied) return refuse('undo_not_available');
+
+    this.deps.logger?.info(
+      { event: 'cart.undo_last.ok', cart_id: req.cart_id, effect: plan.effect },
+      'cart.undoLast',
+    );
+    return {
+      kind: 'ok',
+      effect: plan.effect,
+      line_id: plan.line.line_id,
+      version: plan.line.version + 1,
+    };
   }
 
   // ── cart.lines.setNote ──────────────────────────────────────────────
