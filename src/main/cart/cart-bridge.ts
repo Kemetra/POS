@@ -548,12 +548,10 @@ export class CartBridgeHandlers {
     const resolver = this.deps.resolveItemRef ?? DEFAULT_ITEM_REF_RESOLVER;
     const resolved = await resolver(req.item_ref);
 
-    // RT-349 — a same-key add may have committed during the await; replay it
-    // rather than hitting the outbox primary key. Synchronous from here on.
-    const replayAfterResolve = store.getOutboxRow(req.idempotency_key);
-    if (replayAfterResolve !== undefined) {
-      return this.replayLinesAdd(req, store, replayAfterResolve);
-    }
+    // Everything from here on is synchronous: re-prove what the await may
+    // have changed before writing.
+    const afterResolve = this.recheckAfterResolve(req, gated);
+    if (afterResolve !== null) return afterResolve;
 
     if (resolved.kind !== 'ok') {
       // The bridge contract has no per-resolver reason; collapse to generic.
@@ -1720,6 +1718,29 @@ export class CartBridgeHandlers {
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
     return null;
+  }
+
+  /**
+   * What the resolver await in `linesAdd` may have changed, or null to proceed:
+   * - RT-350: the IPC lock guard only checks at entry, so if the session that
+   *   started this add signed out, was swapped or locked, write nothing under it;
+   * - RT-349: a same-key add that committed meanwhile is replayed rather than
+   *   hitting the outbox primary key.
+   */
+  private recheckAfterResolve(
+    req: CartLinesAddRequest,
+    gated: MutableCartContext,
+  ): CartLinesAddResponse | null {
+    if (!this.isSessionStillLive(gated.session)) return refuse('no_session');
+    const replay = gated.store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) return this.replayLinesAdd(req, gated.store, replay);
+    return null;
+  }
+
+  /** RT-350 — `origin` is still the current, unlocked session. */
+  private isSessionStillLive(origin: OperatorSessionRecord): boolean {
+    const current = this.deps.getCurrentSession();
+    return current !== null && current.id === origin.id && current.lock_state !== 'locked';
   }
 
   /**
