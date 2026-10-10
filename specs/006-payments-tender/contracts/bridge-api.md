@@ -374,14 +374,14 @@ voucher.
 
 ```text
 | { kind: 'ok', tender_line_id: UUID v4, applied_at: UTC timestamp, change_due_minor?: integer }
-| { kind: 'refused', reason: 'no_session' | 'role_denied' | 'wrong_owner' | 'attempt_terminal' | 'invalid_input' | 'non_cash_overpayment_refused' | 'voucher_not_found' | 'voucher_expired' | 'voucher_cancelled' | 'voucher_already_redeemed' | 'voucher_tenant_mismatch' | 'voucher_branch_mismatch' | 'dependency_unavailable' | 'idempotency_payload_mismatch' | 'tender_not_yet_supported' }
+| { kind: 'refused', reason: 'no_session' | 'role_denied' | 'wrong_owner' | 'attempt_terminal' | 'attempt_fully_tendered' | 'invalid_input' | 'non_cash_overpayment_refused' | 'voucher_not_found' | 'voucher_expired' | 'voucher_cancelled' | 'voucher_already_redeemed' | 'voucher_tenant_mismatch' | 'voucher_branch_mismatch' | 'dependency_unavailable' | 'idempotency_payload_mismatch' | 'tender_not_yet_supported' }
 ```
 
 **Effects (per tender_type):**
 
 | `tender_type` | Effects |
 |:--|:--|
-| `cash` | Writes `payment_tender_lines` row with `state='applied'`. Computes `change_due_minor` if over-tendered. Writes `payment_action_outbox` row. Emits `tender.applied`. |
+| `cash` | Writes `payment_tender_lines` row with `state='applied'`. Computes `change_due_minor` if over-tendered. Writes `payment_action_outbox` row. Emits `tender.applied`. **RT-339:** when nothing is left to pay (main's remaining balance ≤ 0), refuses with `attempt_fully_tendered` and writes nothing: no line, no outbox row, no audit. A same-key retry is evaluated again. |
 | `external_card_terminal` | Validates `external_reference` regex main-side. Refuses overpayment with `non_cash_overpayment_refused`. Writes line + outbox. Emits `tender.applied` with `external_reference` redacted to `*****` in any non-payload log. |
 | `internal_voucher` | (Slice 4 only). Calls `vouchers.validate` (Contract V-A). On success: writes line with `state='applied'`, stores `voucher_redemption_intent_token`. On any voucher refusal: writes line with `state='refused'`, stores `refusal_reason`. Emits `tender.applied` or `tender.refused`. **Until Slice 4 commissions:** `internal_voucher` returns `tender_not_yet_supported`. |
 

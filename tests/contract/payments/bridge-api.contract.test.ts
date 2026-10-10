@@ -140,6 +140,7 @@ describe('006 bridge-api contract — shared closed unions', () => {
       'attempt_already_started_on_terminal',
       'attempt_terminal',
       'tender_underpaid',
+      'attempt_fully_tendered',
       'internal_error',
       'idempotency_payload_mismatch',
       'invalid_input',

@@ -463,3 +463,30 @@ describe('RT-304 — replay after the original action has been superseded', () =
     expect(await s.reverse(req)).toEqual(first);
   });
 });
+
+describe('RT-339 — cash with nothing owed, through the real tender.apply handler', () => {
+  it('is refused, writes nothing, and a same-key retry is evaluated again and refused again', async () => {
+    const s = build();
+    const attempt = await tenderedAttempt(s, 'cart-339');
+    const again = {
+      payment_attempt_id: attempt,
+      tender_type: 'cash' as const,
+      amount_applied_minor: 1500,
+      idempotency_key: 'k-again',
+    };
+    const refused = { kind: 'refused', reason: 'attempt_fully_tendered' };
+
+    expect(await s.apply(again)).toEqual(refused);
+    expect(s.lines.findByAttempt(attempt)).toHaveLength(1);
+    expect(s.outbox.findByActionId('k-again')).toBeUndefined();
+
+    expect(await s.apply(again)).toEqual(refused);
+    expect(s.lines.findByAttempt(attempt)).toHaveLength(1);
+
+    // The original apply still replays on its own key, and the attempt settles on it.
+    const original = await s.apply({ ...again, idempotency_key: 'k-apply-cart-339' });
+    expect(original.kind).toBe('ok');
+    const settled = await s.confirm({ payment_attempt_id: attempt, idempotency_key: 'k-confirm' });
+    expect(settled.kind).toBe('ok');
+  });
+});

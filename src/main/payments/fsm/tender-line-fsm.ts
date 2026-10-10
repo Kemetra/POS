@@ -431,6 +431,15 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
           }
         }
 
+        // RT-339 — cash with nothing left to pay is never recorded. It can only
+        // come from a screen that has not seen the earlier tender, and the
+        // overage rule below would book the whole amount as change to hand
+        // back. Refused before any write, like an input error (D-F2): no line,
+        // no outbox entry, no audit.
+        if (input.tender_type === 'cash' && remaining <= 0) {
+          return { kind: 'refused', reason: 'attempt_fully_tendered' };
+        }
+
         // cash: may overpay; change_due_minor handles the overage.
         let change_due_minor: number | null = null;
         if (input.tender_type === 'cash' && input.amount_applied_minor > remaining) {

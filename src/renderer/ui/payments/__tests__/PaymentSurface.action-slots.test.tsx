@@ -672,3 +672,56 @@ describe('RT-243 F1 — a remount reads main again before offering an apply or a
     expect(bridge.apply).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('RT-339 — main refuses a cash apply because nothing is owed', () => {
+  it('says so, never «try again», and reads main so the screen shows the money already recorded', async () => {
+    const bridge = await openCash();
+    // Main already holds the full amount; this screen has not seen it yet.
+    bridge.apply.mockResolvedValueOnce({ kind: 'refused', reason: 'attempt_fully_tendered' });
+    bridge.read.mockReset();
+    bridge.read.mockResolvedValue({
+      kind: 'ok',
+      payment_attempt: {
+        payment_attempt_id: 'pa-001',
+        state: 'started',
+        envelope_subtotal_minor: DUE,
+        started_at: '2026-10-07T09:00:30.000Z',
+        tender_lines: [
+          {
+            tender_line_id: 'tl-0',
+            tender_type: 'cash',
+            state: 'applied',
+            amount_applied_minor: DUE,
+            applied_at: '2026-10-07T09:00:50.000Z',
+            apply_order: 1,
+          },
+        ],
+      },
+    });
+    await typeAndApply('50.00');
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('cash-entry-nothing-owed')).toHaveTextContent(
+      'لا يوجد مبلغ مستحق على هذا البيع. لم يُسجَّل هذا المبلغ.',
+    );
+    expect(screen.queryByTestId('cash-entry-bridge-refusal')).not.toBeInTheDocument();
+    expect(bridge.read).toHaveBeenCalled();
+    expect(screen.getByTestId('payment-surface-amount-due')).toHaveTextContent('0.00 EGP');
+    expect(await screen.findByTestId('payment-surface-confirm')).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(screen.queryByTestId('cash-entry-confirm')).not.toBeInTheDocument();
+    await expectNoAxeViolations(screen.getByTestId('payment-surface'));
+  });
+
+  it('any other refusal keeps the generic line', async () => {
+    const bridge = await openCash();
+    bridge.apply.mockResolvedValueOnce({ kind: 'refused', reason: 'attempt_terminal' });
+    await typeAndApply('50.00');
+    expect(screen.getByTestId('cash-entry-bridge-refusal')).toBeInTheDocument();
+    expect(screen.queryByTestId('cash-entry-nothing-owed')).not.toBeInTheDocument();
+  });
+});

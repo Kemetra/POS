@@ -78,6 +78,8 @@ export const REFUSAL_REASONS = [
   'attempt_already_started_on_terminal',
   'attempt_terminal',
   'tender_underpaid',
+  // RT-339: a cash apply on an attempt with nothing left to pay.
+  'attempt_fully_tendered',
   'internal_error',
   // Idempotency (R-10).
   'idempotency_payload_mismatch',
