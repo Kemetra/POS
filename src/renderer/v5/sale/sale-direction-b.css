@@ -149,6 +149,33 @@
   display: none;
 }
 
+/* RT-242 (M-S2 / M-S8): the last cart action and its «تراجع», on the same quiet line. */
+.v5-sale-last-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.v5-live-sale .v5-sale-undo {
+  min-block-size: 44px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-live-sale .v5-sale-undo:focus-visible {
+  outline: var(--v5-focus-ring);
+  outline-offset: 2px;
+}
+
 .v5-live-sale .v5-sale-command-status .v5-live-freshness {
   margin-inline-start: auto;
   padding-inline: var(--space-2) 0;
@@ -365,6 +392,10 @@
 @media (forced-colors: active) {
   .v5-sale-dropdown {
     border-color: CanvasText;
+  }
+
+  .v5-live-sale .v5-sale-undo {
+    border-color: ButtonText;
   }
 
   /* box-shadow is dropped in forced colours: mark the last add with a real edge. */

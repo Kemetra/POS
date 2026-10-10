@@ -162,7 +162,6 @@ async function scanAddHandoffContinue(user: ReturnType<typeof userEvent.setup>):
     await screen.findByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
     '6221000000001{Enter}',
   );
-  await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
   const handoffBtn = await screen.findByRole('button', { name: /تسليم السلة/ });
   await waitFor(() => expect(handoffBtn).toBeEnabled());
   await user.click(handoffBtn);

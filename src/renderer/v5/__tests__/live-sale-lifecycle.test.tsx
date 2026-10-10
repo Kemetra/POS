@@ -15,6 +15,8 @@ import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { usePaymentStore } from '../../stores/payment-store';
 import { useDrawerNoticeStore } from '../../ui/receipts/drawer-notice-store';
+import { useScanNoticeStore } from '../../scan/scan-notice-store';
+import { SALE_FROZEN_MESSAGE, SCAN_SALE_COMPLETE_MESSAGE } from '../../scan/scan-messages';
 import { LiveSaleWorkspace } from '../sale/LiveSaleWorkspace';
 
 /**
@@ -31,6 +33,7 @@ afterEach(() => {
   useFeatureFlagsStore.getState().reset();
   useOperatorSessionStore.getState().reset();
   usePaymentStore.getState().reset();
+  useScanNoticeStore.setState({ message: null, seq: 0 });
 });
 
 const PAID = 'cart-paid';
@@ -172,7 +175,6 @@ async function scanAndAdd(user: ReturnType<typeof userEvent.setup>): Promise<voi
     screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
     '6221000000011{Enter}',
   );
-  await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
 }
 
 describe('V5 reopens a sale whose payment already settled', () => {
@@ -240,7 +242,7 @@ describe('V5 reopens a sale whose payment already settled', () => {
     useDrawerNoticeStore.getState().reset();
   });
 
-  it('New sale clears a pending catalogue confirmation left over from the finished sale', async () => {
+  it('New sale clears a catalogue result left over from the finished sale', async () => {
     signIn();
     leftCheckoutAfterSettle();
     const b = bridges(() => Promise.resolve({ kind: 'ok', snapshot: frozenSnapshot() }));
@@ -256,7 +258,6 @@ describe('V5 reopens a sale whose payment already settled', () => {
     await user.click(newSale);
 
     expect(useCatalogueSearchStore.getState().state).toEqual({ kind: 'idle' });
-    expect(screen.queryByRole('button', { name: 'إضافة إلى السلة' })).not.toBeInTheDocument();
   });
 
   it('New sale discards a catalogue lookup still in flight for the finished sale', async () => {
@@ -278,7 +279,6 @@ describe('V5 reopens a sale whose payment already settled', () => {
     });
 
     expect(useCatalogueSearchStore.getState().state).toEqual({ kind: 'idle' });
-    expect(screen.queryByRole('button', { name: 'إضافة إلى السلة' })).not.toBeInTheDocument();
     expect(b.fns.add).not.toHaveBeenCalled();
   });
 
@@ -307,6 +307,38 @@ describe('V5 reopens a sale whose payment already settled', () => {
         within(screen.getByRole('list', { name: 'أصناف السلة' })).getAllByRole('listitem'),
       ).toHaveLength(1);
     });
+  });
+});
+
+describe('V5 direct add refuses a cart that cannot take a line (D-C1)', () => {
+  it('a scan on a paid sale adds nothing, creates no cart and says the sale is complete (M-S7)', async () => {
+    signIn();
+    leftCheckoutAfterSettle();
+    const b = bridges(() => Promise.resolve({ kind: 'ok', snapshot: frozenSnapshot() }));
+    renderSale(b);
+    await screen.findByRole('button', { name: 'بيع جديد' });
+    await scanAndAdd(userEvent.setup());
+    await waitFor(() => {
+      expect(useScanNoticeStore.getState().message).toBe(SCAN_SALE_COMPLETE_MESSAGE);
+    });
+    expect(b.fns.add).not.toHaveBeenCalled();
+    expect(b.fns.create).not.toHaveBeenCalled();
+  });
+
+  it('a scan on a cart handed to payment adds nothing and creates no cart', async () => {
+    signIn();
+    useCartStore.setState({
+      activeCart: { cart_id: PAID, state: CartState.frozen_handed_off, lastLineId: null },
+    });
+    const b = bridges(() => Promise.resolve({ kind: 'ok', snapshot: frozenSnapshot() }));
+    renderSale(b);
+    await screen.findByRole('button', { name: /المتابعة إلى الدفع/ });
+    await scanAndAdd(userEvent.setup());
+    await waitFor(() => {
+      expect(useScanNoticeStore.getState().message).toBe(SALE_FROZEN_MESSAGE);
+    });
+    expect(b.fns.add).not.toHaveBeenCalled();
+    expect(b.fns.create).not.toHaveBeenCalled();
   });
 });
 

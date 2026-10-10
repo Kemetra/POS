@@ -228,7 +228,6 @@ describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
       screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
       '6221000000001{Enter}',
     );
-    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
     await waitFor(() => {
       expect(useCartStore.getState().activeCart).not.toBeNull();
     });

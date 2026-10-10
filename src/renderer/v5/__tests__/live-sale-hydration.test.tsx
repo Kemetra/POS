@@ -243,7 +243,6 @@ describe('V5 hydrates an existing active cart', () => {
       screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
       '6221000000011{Enter}',
     );
-    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
     expect(b.fns.add).toHaveBeenCalledWith(expect.objectContaining({ cart_id: EXISTING }));
     await waitFor(() => {
       expect(within(cartLines()).getAllByText('باراسيتامول')).toHaveLength(1);
@@ -381,7 +380,6 @@ describe('V5 with no active cart', () => {
       screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
       '6221000000011{Enter}',
     );
-    await user.click(await screen.findByRole('button', { name: 'إضافة إلى السلة' }));
     await waitFor(() => {
       expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-new');
     });

@@ -1,11 +1,11 @@
 /**
  * Shared harness for the live v5 Sale tests that need a real cart in the
  * workspace: fake bridges, a signed-in cashier, and a sale built the ordinary
- * (human-speed) way through the scan field and the confirm dialog.
+ * (human-speed) way through the scan field, with direct add (D-C1).
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../../shared/bridge-api';
 import type { ProductSnapshotDisplay } from '../../../../shared/catalogue/product-snapshot';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
@@ -67,6 +67,9 @@ export interface Bridges {
   remove: ReturnType<typeof vi.fn>;
   voidCart: ReturnType<typeof vi.fn>;
   lookupBarcode: ReturnType<typeof vi.fn>;
+  undoLast: ReturnType<typeof vi.fn>;
+  snapshot: ReturnType<typeof vi.fn>;
+  add: ReturnType<typeof vi.fn>;
 }
 
 /** Bridges whose first two adds produce the lines بنادول then بروفين. */
@@ -74,6 +77,8 @@ export function makeBridges(): Bridges {
   const update = vi.fn().mockResolvedValue({ kind: 'ok', version: 2 });
   const remove = vi.fn().mockResolvedValue({ kind: 'ok' });
   const voidCart = vi.fn().mockResolvedValue({ kind: 'ok' });
+  const undoLast = vi.fn();
+  const snapshot = vi.fn();
   const lookupBarcode = vi
     .fn()
     .mockResolvedValueOnce({ kind: 'one', product: PANADOL })
@@ -90,6 +95,8 @@ export function makeBridges(): Bridges {
     void: voidCart,
     handoff: vi.fn(),
     subscribe: vi.fn(),
+    undoLast,
+    snapshot,
   } as unknown as CartBridgeAPI;
   const catalogue = {
     search: vi.fn(),
@@ -100,7 +107,7 @@ export function makeBridges(): Bridges {
     refresh: vi.fn().mockResolvedValue({ kind: 'refused', reason: 'no_session' }),
     counts: vi.fn(),
   } as unknown as CatalogueBridgeAPI;
-  return { cart, catalogue, update, remove, voidCart, lookupBarcode };
+  return { cart, catalogue, update, remove, voidCart, lookupBarcode, undoLast, snapshot, add };
 }
 
 export function renderSale(bridges: Bridges): void {
@@ -113,15 +120,16 @@ export function renderSale(bridges: Bridges): void {
   );
 }
 
-/** Scan one code at human speed and confirm the add dialog; waits for the line to land. */
+/** Scan one code at human speed; the add is direct (D-C1). Waits for the NEW line to land. */
 export async function addLineByScan(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  const before = document.querySelectorAll('.v5-sale-cart-line').length;
   await user.type(
     screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
     '6223004355218{Enter}',
   );
-  await screen.findByRole('dialog', { name: 'تأكيد إضافة الصنف' });
-  await user.click(screen.getByRole('button', { name: 'إضافة إلى السلة' }));
-  await screen.findByRole('list', { name: 'أصناف السلة' });
+  await waitFor(() => {
+    expect(document.querySelectorAll('.v5-sale-cart-line')).toHaveLength(before + 1);
+  });
 }
 
 /** A signed-in sale with `count` lines (1 or 2) in the cart. */

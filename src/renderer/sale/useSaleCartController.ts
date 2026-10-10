@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CartBridgeAPI, PreloadBridgeAPI } from '../../shared/bridge-api';
-import type { CartSnapshot } from '../../shared/cart/bridge-types';
+import type { CartSnapshot, CartSnapshotResponse } from '../../shared/cart/bridge-types';
 import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope';
 import { CartState } from '../../shared/cart/cart-state';
 import { useCartStore } from '../stores/cart-store';
@@ -70,6 +70,14 @@ function linesFromSnapshot(snapshot: CartSnapshot): CartLineItem[] {
   }));
 }
 
+/** A successful read of exactly the cart that was asked for. */
+function isSnapshotOf(
+  res: CartSnapshotResponse,
+  cartId: string,
+): res is Extract<CartSnapshotResponse, { kind: 'ok' }> {
+  return res.kind === 'ok' && res.snapshot.cart_id === cartId;
+}
+
 /** Align the renderer cart FSM with the authoritative state; the id never changes. */
 function syncCartStore(snapshot: CartSnapshot): void {
   useCartStore.setState((s) => {
@@ -112,12 +120,17 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
   /** Main reported the hydrated cart as a settled (paid) sale. */
   hydratedPaid: boolean;
   retryHydration: () => void;
+  /** Re-read the active cart from main (RT-242 Undo). */
+  resync: () => Promise<void>;
   subtotalMinor: number;
   itemCount: number;
   acceptAddedLine: (result: AddedLineResult) => void;
   incrementLine: (lineId: string, version: number) => Promise<void>;
-  decrementLine: (lineId: string, version: number) => Promise<void>;
-  removeLine: (lineId: string, version: number) => Promise<void>;
+  /** The update's key once main confirms it (main records a decrement past zero as a remove). */
+  decrementLine: (lineId: string, version: number) => Promise<string | null>;
+  removeLine: (lineId: string, version: number) => Promise<string | null>;
+  /** A remove for this line is in flight (a repeat press is not a new action). */
+  isRemoving: (lineId: string) => boolean;
   saveNote: (lineId: string, version: number, note: string | null) => Promise<boolean>;
   handoff: () => Promise<void>;
   voidCart: () => Promise<boolean>;
@@ -149,6 +162,21 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
   const [hydrationAttempt, setHydrationAttempt] = useState(0);
   const [hydratedPaid, setHydratedPaid] = useState(false);
 
+  const applySnapshot = useCallback((snapshot: CartSnapshot): void => {
+    setLines(linesFromSnapshot(snapshot));
+    setDiscountPlaceholders(
+      snapshot.discount_placeholders.map((dp) => ({
+        placeholderId: dp.placeholder_id,
+        lineId: dp.line_id,
+        // Attribution is deliberately not projected to the renderer.
+        attribution_operator_id: null,
+      })),
+    );
+    setEnvelope(snapshot.envelope);
+    setHydratedPaid(snapshot.paid);
+    syncCartStore(snapshot);
+  }, []);
+
   useEffect(() => {
     if (hydrateCartId === null) return;
     let cancelled = false;
@@ -165,33 +193,46 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
       if (cancelled) return;
       // Generic failure: a refusal (any reason) or a mismatched cart never
       // renders as an empty cart and never triggers a replacement cart.
-      if (res.kind !== 'ok' || res.snapshot.cart_id !== hydrateCartId) {
+      if (!isSnapshotOf(res, hydrateCartId)) {
         fail();
         return;
       }
-      setLines(linesFromSnapshot(res.snapshot));
-      setDiscountPlaceholders(
-        res.snapshot.discount_placeholders.map((dp) => ({
-          placeholderId: dp.placeholder_id,
-          lineId: dp.line_id,
-          // Attribution is deliberately not projected to the renderer.
-          attribution_operator_id: null,
-        })),
-      );
-      setEnvelope(res.snapshot.envelope);
-      setHydratedPaid(res.snapshot.paid);
-      syncCartStore(res.snapshot);
+      applySnapshot(res.snapshot);
       setHydration('ready');
     }, fail);
     return () => {
       cancelled = true;
     };
-  }, [getBridge, hydrateCartId, hydrationAttempt]);
+  }, [applySnapshot, getBridge, hydrateCartId, hydrationAttempt]);
 
   const retryHydration = useCallback((): void => {
     setHydration('loading');
     setHydrationAttempt((n) => n + 1);
   }, []);
+
+  /**
+   * RT-242 — rebuild the projection from main's `cart.snapshot` of the active
+   * cart (after an Undo, whose inverse only main knows). Silent when the read
+   * succeeds; otherwise the cart is re-read through the hydration path, so a
+   * stale projection is never shown as current.
+   */
+  const resync = useCallback(async (): Promise<void> => {
+    const cartId = useCartStore.getState().activeCart?.cart_id ?? null;
+    if (cartId === null) return;
+    const bridge = getBridge();
+    const res =
+      bridge.snapshot === undefined
+        ? null
+        : await bridge.snapshot({ cart_id: cartId }).catch(() => null);
+    // The sale may have ended during the read: never paint its cart over the next one.
+    if (useCartStore.getState().activeCart?.cart_id !== cartId) return;
+    if (res !== null && isSnapshotOf(res, cartId)) {
+      applySnapshot(res.snapshot);
+      return;
+    }
+    setHydrateCartId(cartId);
+    retryHydration();
+  }, [applySnapshot, getBridge, retryHydration]);
 
   const acceptAddedLine = useCallback((res: AddedLineResult): void => {
     useCartStore.getState().applyLineAdded(res.line_id);
@@ -252,17 +293,18 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
   );
 
   const decrementLine = useCallback(
-    async (lineId: string, version: number): Promise<void> => {
+    async (lineId: string, version: number): Promise<string | null> => {
       const cart = useCartStore.getState().activeCart;
-      if (!cart) return;
+      if (!cart) return null;
+      const actionId = crypto.randomUUID();
       const res = await getBridge().lines.update({
         cart_id: cart.cart_id,
         line_id: lineId,
         op: 'decrement',
         version,
-        idempotency_key: crypto.randomUUID(),
+        idempotency_key: actionId,
       });
-      if (res.kind !== 'ok') return;
+      if (res.kind !== 'ok') return null;
       setLines((prev) => {
         const line = prev.find((item) => item.lineId === lineId);
         if (!line) return prev;
@@ -279,24 +321,37 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
             : item,
         );
       });
+      return actionId;
     },
     [getBridge],
   );
 
+  /** Resolves to the remove's idempotency key once main confirms it (the Undo target, RT-245); else `null`. */
+  // A second Delete before the first answers would get an unrecorded `ok`
+  // from main (the line is already removed), so it is not sent at all.
+  const removingRef = useRef(new Set<string>());
   const removeLine = useCallback(
-    async (lineId: string, version: number): Promise<void> => {
+    async (lineId: string, version: number): Promise<string | null> => {
       const cart = useCartStore.getState().activeCart;
-      if (!cart) return;
-      const res = await getBridge().lines.remove({
-        cart_id: cart.cart_id,
-        line_id: lineId,
-        version,
-        idempotency_key: crypto.randomUUID(),
-      });
-      if (res.kind === 'ok') setLines((prev) => prev.filter((line) => line.lineId !== lineId));
+      if (!cart || removingRef.current.has(lineId)) return null;
+      removingRef.current.add(lineId);
+      const actionId = crypto.randomUUID();
+      const res = await getBridge()
+        .lines.remove({
+          cart_id: cart.cart_id,
+          line_id: lineId,
+          version,
+          idempotency_key: actionId,
+        })
+        .finally(() => removingRef.current.delete(lineId));
+      if (res.kind !== 'ok') return null;
+      setLines((prev) => prev.filter((line) => line.lineId !== lineId));
+      return actionId;
     },
     [getBridge],
   );
+
+  const isRemoving = useCallback((lineId: string): boolean => removingRef.current.has(lineId), []);
 
   const saveNote = useCallback(
     async (lineId: string, version: number, note: string | null): Promise<boolean> => {
@@ -445,12 +500,14 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
     hydration,
     hydratedPaid,
     retryHydration,
+    resync,
     subtotalMinor,
     itemCount,
     acceptAddedLine,
     incrementLine,
     decrementLine,
     removeLine,
+    isRemoving,
     saveNote,
     handoff,
     voidCart,

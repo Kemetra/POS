@@ -104,6 +104,26 @@ describe('useSaleCatalogueController', () => {
     expect(create).toHaveBeenCalledTimes(3);
   });
 
+  it('ensureCart does not adopt a cart whose create answers after its sale ended (RT-242)', async () => {
+    const { cart, catalogue, create } = bridges();
+    create.mockResolvedValue({ kind: 'ok', cart_id: 'cart-late' });
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    let current = true;
+    let pending: Promise<string | null> = Promise.resolve(null);
+    act(() => {
+      pending = result.current.ensureCart(() => current);
+      current = false;
+    });
+    let id: string | null = 'unset';
+    await act(async () => {
+      id = await pending;
+    });
+    expect(id).toBeNull();
+    expect(useCartStore.getState().activeCart).toBeNull();
+  });
+
   it('ensureCart reuses an explicit or already-active cart without creating', async () => {
     const { cart, catalogue, create } = bridges();
     const explicit = renderHook(() =>
@@ -118,7 +138,7 @@ describe('useSaleCatalogueController', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('maps search and exact scan responses through the existing FSM', async () => {
+  it('maps typed search through the FSM; a scan lookup returns the raw answer (D-C1)', async () => {
     useCartStore.getState().applyCartCreated('cart-1');
     const { cart, catalogue, search, lookupBarcode } = bridges();
     search.mockResolvedValue({ kind: 'results', items: [product], truncated: false });
@@ -131,51 +151,39 @@ describe('useSaleCatalogueController', () => {
       await result.current.runTypedSearch('بنادول');
     });
     expect(result.current.state.kind).toBe('results');
-    act(() => {
-      result.current.selectResult(product);
-    });
-    expect(result.current.state.kind).toBe('confirm_pending');
-    act(() => {
-      result.current.recover();
-    });
+    let answer: unknown = null;
     await act(async () => {
-      await result.current.runScan('6223004355218');
+      answer = await result.current.lookupScan('6223004355218');
     });
-    expect(result.current.state.kind).toBe('confirm_pending');
+    expect(answer).toEqual({ kind: 'one', product });
+    // A scan opens no results panel and closes the one that was open.
+    expect(result.current.state.kind).toBe('idle');
     expect(search.mock.calls[0]?.[0]).toEqual({ query: 'بنادول' });
     expect(lookupBarcode.mock.calls[0]?.[0]).toEqual({ barcode: '6223004355218' });
   });
 
-  it('ignores a superseded lookup that answers after a newer one began', async () => {
+  it('a scan supersedes a typed search still in flight, so its late answer opens nothing', async () => {
     useCartStore.getState().applyCartCreated('cart-1');
-    const { cart, catalogue, lookupBarcode } = bridges();
-    const newer = { ...product, product_id: 'product-2', display_name_ar: 'كونجستال' };
-    let answerOld: (value: unknown) => void = () => undefined;
-    let answerNew: (value: unknown) => void = () => undefined;
-    lookupBarcode
-      .mockReturnValueOnce(new Promise((resolve) => (answerOld = resolve)))
-      .mockReturnValueOnce(new Promise((resolve) => (answerNew = resolve)));
+    const { cart, catalogue, search, lookupBarcode } = bridges();
+    let answerSearch: (value: unknown) => void = () => undefined;
+    search.mockReturnValueOnce(new Promise((resolve) => (answerSearch = resolve)));
+    lookupBarcode.mockResolvedValue({ kind: 'one', product });
     const { result } = renderHook(() =>
       useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
     );
 
-    let oldScan: Promise<void> = Promise.resolve();
-    let newScan: Promise<void> = Promise.resolve();
+    let typed: Promise<void> = Promise.resolve();
     act(() => {
-      oldScan = result.current.runScan('6220000000001');
-      newScan = result.current.runScan('6220000000002');
+      typed = result.current.runTypedSearch('بنا');
     });
     await act(async () => {
-      answerOld({ kind: 'one', product });
-      await oldScan;
+      await result.current.lookupScan('6223004355218');
     });
-    expect(result.current.state).toEqual({ kind: 'searching', query: '6220000000002' });
-
     await act(async () => {
-      answerNew({ kind: 'one', product: newer });
-      await newScan;
+      answerSearch({ kind: 'results', items: [product], truncated: false });
+      await typed;
     });
-    expect(result.current.state).toEqual({ kind: 'confirm_pending', product: newer });
+    expect(result.current.state.kind).toBe('idle');
   });
 
   it('a superseded lookup that fails does not clear the newer one', async () => {
@@ -220,24 +228,7 @@ describe('useSaleCatalogueController', () => {
     expect(result.current.state.kind).toBe(expected);
   });
 
-  it.each([
-    [{ kind: 'not_found' }, 'not_found'],
-    [{ kind: 'ambiguous' }, 'ambiguous'],
-    [{ kind: 'catalogue_unavailable' }, 'catalogue_unavailable'],
-    [{ kind: 'refused', reason: 'no_session' }, 'idle'],
-  ])('maps scan %o to %s', async (response, expected) => {
-    const { cart, catalogue, lookupBarcode } = bridges();
-    lookupBarcode.mockResolvedValue(response);
-    const { result } = renderHook(() =>
-      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
-    );
-    await act(async () => {
-      await result.current.runScan('6223004355218');
-    });
-    expect(result.current.state.kind).toBe(expected);
-  });
-
-  it('a rejected search or scan returns the FSM to idle, never stuck searching', async () => {
+  it('a rejected search returns the FSM to idle; a rejected scan lookup answers null', async () => {
     const { cart, catalogue, search, lookupBarcode } = bridges();
     search.mockRejectedValue(new Error('ipc'));
     lookupBarcode.mockRejectedValue(new Error('ipc'));
@@ -248,9 +239,11 @@ describe('useSaleCatalogueController', () => {
       await result.current.runTypedSearch('بنادول');
     });
     expect(result.current.state.kind).toBe('idle');
+    let answer: unknown = 'unset';
     await act(async () => {
-      await result.current.runScan('6223004355218');
+      answer = await result.current.lookupScan('6223004355218');
     });
+    expect(answer).toBeNull();
     expect(result.current.state.kind).toBe('idle');
   });
 });
