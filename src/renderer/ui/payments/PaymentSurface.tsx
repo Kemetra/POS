@@ -36,9 +36,16 @@ import type {
   SalesBridgeAPI,
   TenderBridgeAPI,
 } from '../../../shared/bridge-api.js';
-import type { PaymentAttemptRendererView } from '../../../shared/payments/types.js';
+import type { PaymentAttemptRendererView, RefusalReason } from '../../../shared/payments/types.js';
 import { DrawerNoticeInline } from '../receipts/DrawerNotice.js';
 import { CompletionPanel } from '../../v5/checkout/CompletionPanel.js';
+import {
+  CONFIRM_ENDED_COPY,
+  START_READ_FAILED_COPY,
+  TENDER_READ_FAILED_COPY,
+  confirmNeedsReadBack,
+  confirmRefusalCopy,
+} from './payment-read-copy.js';
 
 /**
  * 006-payments-tender S1 + S3d T152 — PaymentSurface.
@@ -550,6 +557,9 @@ export function PaymentSurface({
   // before anything else is offered. Until it is, the apply is not offered again
   // (a second press would record the whole amount a second time, as change).
   const [afterApply, setAfterApply] = useState<'idle' | 'reading' | 'failed'>('idle');
+  // RT-341 — what the pending or failed read follows: a fresh start has no money
+  // on it yet, so its retry line must not say an amount was recorded (M-P15).
+  const [readAfter, setReadAfter] = useState<'start' | 'tender'>('tender');
 
   // RT-238: the entry opens below the method tiles, inside the scrolling panes;
   // bring it into view so the cashier never has to hunt for the amount field.
@@ -628,6 +638,7 @@ export function PaymentSurface({
     setTenderTouched(false);
     setTenderReversed(false);
     setAfterApply('idle');
+    setReadAfter('tender');
     // Resume a same-handoff attempt across a remount (leaving checkout and
     // coming back): a `started` one is still held by main, so forgetting it
     // would re-enable sign-out and make the next tender re-run payments.start,
@@ -835,6 +846,7 @@ export function PaymentSurface({
     }
 
     setIsStarting(true);
+    let startedAttemptId: string;
     try {
       const startResponse = await bridge.payments.start({
         envelope_handoff_action_id: envelope.handoff_action_id,
@@ -850,35 +862,54 @@ export function PaymentSurface({
       }
 
       setPhase('entry');
-      setAfterApply('idle');
+      startedAttemptId = startResponse.payment_attempt_id;
 
       // Main now holds a started attempt: record it at once, so an open
       // payment is known (and V5 sign-out blocked) even if the read below is
       // slow or fails. The read then replaces this with main's snapshot.
       usePaymentStore.getState().applyAttemptSnapshot({
-        payment_attempt_id: startResponse.payment_attempt_id,
+        payment_attempt_id: startedAttemptId,
         state: 'started',
         envelope_subtotal_minor: envelope.subtotal_minor,
         started_at: new Date().toISOString(),
         tender_lines: [],
       });
-
-      // Seed the paymentSlice with an initial read so the surface can react to
-      // applied lines as they land. This also populates the paymentAttemptId
-      // derivation above.
-      const readResponse = await bridge.payments.read({
-        payment_attempt_id: startResponse.payment_attempt_id,
-      });
-      if (readResponse.kind === 'ok') {
-        usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
-      }
     } catch {
       // Bridge rejection (network / IPC layer error). Treat as a generic
       // refusal — no structured reason crosses into the DOM (FR-005 / FR-017).
       setBridgeRefusalCopy('تعذّر بدء عملية الدفع. يرجى المحاولة مرة أخرى.');
+      return;
     } finally {
       setIsStarting(false);
     }
+    // The start succeeded, so a failure from here on is a read failure, never
+    // «could not start» (RT-341).
+    await readAfterStart(startedAttemptId);
+  }
+
+  /**
+   * RT-341 — read main after a successful start. Nothing is offered until it
+   * answers (the RT-243 F1 rule); a failed or refused read offers the retry,
+   * and an attempt main has moved on is followed, as on a remount.
+   */
+  async function readAfterStart(attemptId: string | null): Promise<void> {
+    if (attemptId === null) return;
+    const envelopeAtStart = usePaymentStore.getState().envelope;
+    setReadAfter('start');
+    setAfterApply('reading');
+    const attempt = await readAttemptWithRetry(attemptId);
+    if (!isStillCurrent(attemptId, envelopeAtStart)) return;
+    if (attempt === null) {
+      setAfterApply('failed');
+      return;
+    }
+    setAfterApply('idle');
+    setReadAfter('tender');
+    if (attempt.state === 'started') {
+      usePaymentStore.getState().applyAttemptSnapshot(attempt);
+      return;
+    }
+    followEndedAttempt(attempt);
   }
 
   /** A read is idempotent: a transient IPC failure is retried before giving up. */
@@ -965,8 +996,15 @@ export function PaymentSurface({
       setAfterApply('failed');
       return;
     }
-    usePaymentStore.getState().applyAttemptSnapshot(attempt);
     setAfterApply('idle');
+    // RT-340 — this read is also the retry after a lost settle: an attempt main
+    // has moved past `started` is followed (settled → Completion), never
+    // offered another commit.
+    if (attempt.state !== 'started') {
+      followEndedAttempt(attempt);
+      return;
+    }
+    usePaymentStore.getState().applyAttemptSnapshot(attempt);
     // Split-tender (T154): if the running sum is still below the subtotal,
     // return to tender selection so the cashier may add another line. When
     // the sum equals the subtotal, the surface stays put and the confirm
@@ -1262,25 +1300,58 @@ export function PaymentSurface({
     if (bridge === null || paymentAttemptId === null) {
       return;
     }
+    const attemptId = paymentAttemptId;
     setBridgeRefusalCopy(null);
     setIsConfirming(true);
     try {
-      const response = await bridge.payments.confirm({
-        payment_attempt_id: paymentAttemptId,
-        idempotency_key: crypto.randomUUID(),
-      });
-      if (response.kind === 'ok') {
+      const response = await bridge.payments
+        .confirm({ payment_attempt_id: attemptId, idempotency_key: crypto.randomUUID() })
+        .catch(() => null);
+      if (response?.kind === 'ok') {
         setPhase('settled');
-        recordSettledFromConfirm(paymentAttemptId, response.settled_at);
-        void refineSettledAttempt(paymentAttemptId);
-      } else {
-        setBridgeRefusalCopy('تعذّر إتمام عملية الدفع. يرجى المحاولة مرة أخرى.');
+        recordSettledFromConfirm(attemptId, response.settled_at);
+        void refineSettledAttempt(attemptId);
+        return;
       }
-    } catch {
-      setBridgeRefusalCopy('تعذّر إتمام عملية الدفع. يرجى المحاولة مرة أخرى.');
+      await reconcileAfterConfirm(attemptId, response?.reason ?? null);
     } finally {
       setIsConfirming(false);
     }
+  }
+
+  /**
+   * RT-340 — the settle was refused or its answer lost, but main may have
+   * settled it (a confirm whose response was lost comes back as
+   * `attempt_terminal`). Read main and follow it rather than inviting a retry
+   * that cannot succeed. `reason` is null when the confirm itself failed.
+   */
+  async function reconcileAfterConfirm(
+    attemptId: string,
+    reason: RefusalReason | null,
+  ): Promise<void> {
+    if (!confirmNeedsReadBack(reason)) {
+      setBridgeRefusalCopy(confirmRefusalCopy(reason));
+      return;
+    }
+    const envelopeAtStart = usePaymentStore.getState().envelope;
+    setReadAfter('tender');
+    setAfterApply('reading');
+    const attempt = await readAttemptWithRetry(attemptId);
+    if (!isStillCurrent(attemptId, envelopeAtStart)) return;
+    if (attempt === null) {
+      // The outcome is unknown: offer the read retry (M-P15), never the commit.
+      setAfterApply('failed');
+      return;
+    }
+    setAfterApply('idle');
+    if (attempt.state === 'started') {
+      usePaymentStore.getState().applyAttemptSnapshot(attempt);
+      setBridgeRefusalCopy(confirmRefusalCopy(reason));
+      return;
+    }
+    // Set first: a force-failed attempt with live tender replaces it with M-P20.
+    setBridgeRefusalCopy(attempt.state === 'settled' ? null : CONFIRM_ENDED_COPY);
+    followEndedAttempt(attempt);
   }
 
   const appliedLines = (paymentSlice?.tender_lines ?? []).filter((l) => l.state === 'applied');
@@ -1405,7 +1476,8 @@ export function PaymentSurface({
               className="checkout-commit"
               data-testid="payment-surface-reread"
               onClick={() => {
-                void handleLineApplied();
+                if (readAfter === 'start') void readAfterStart(paymentAttemptId);
+                else void handleLineApplied();
               }}
             >
               إعادة المحاولة
@@ -1434,7 +1506,7 @@ export function PaymentSurface({
               data-testid="payment-surface-reread-notice"
               role="status"
             >
-              تم تسجيل المبلغ، لكن تعذّر تحديث حالة الدفع. لا تكرر الدفع.
+              {readAfter === 'start' ? START_READ_FAILED_COPY : TENDER_READ_FAILED_COPY}
             </p>
           ) : showSettle && !fullyTendered ? (
             <p

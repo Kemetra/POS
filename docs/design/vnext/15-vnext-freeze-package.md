@@ -324,6 +324,9 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-P22 | Order summary disclosure at 1024 (RT-243 W1-C; owner-approved 2026-10-09) | «عرض الأصناف» | neutral |
 | M-P23 | Cart frozen during payment badge (RT-243 W1-C; owner-approved 2026-10-09) | «مجمّدة» | neutral |
 | M-P24 | Cash refused by main because nothing is left to pay; the screen then reads main again (RT-339; owner-approved 2026-10-10). Never «try again» | «لا يوجد مبلغ مستحق على هذا البيع. لم يُسجَّل هذا المبلغ.» | warning |
+| M-P25 | Settle refused or its answer lost, and the read-back shows the attempt ended without settling (cancelled, failed or force-failed elsewhere); the attempt is dropped (RT-340; **proposed, pending owner approval**). A settled read-back shows Completion instead | «انتهت عملية الدفع هذه دون أن تكتمل. اختر طريقة دفع للبدء من جديد.» | neutral (payment refusal line) |
+| M-P26 | Settle refused by main's session gate (no session, role, owner or tenant): no retry from this session can succeed and the read-back would be refused too (RT-340; **proposed, pending owner approval**). Never «try again» | «لا يمكن إتمام هذا الدفع من هذه الجلسة. اطلب من المدير مراجعته.» | neutral (payment refusal line) |
+| M-P27 | Payment started but the read after it failed or was refused: nothing is recorded on it yet, so M-P15 would be untrue. No apply or settle until the retry reads main (RT-341; **proposed, pending owner approval**). Never «تعذّر بدء» | «بدأت عملية الدفع، لكن تعذّر تحديث حالتها. اضغط «إعادة المحاولة».» | warning |
 | **Completion and receipt** | | | |
 | M-C1 | Completed | «اكتمل البيع» · «رقم البيع ‹no›» ⏳ D-N1 · «الباقي للعميل ‹amount›» | success (proven only) |
 | M-C2 | Receipt sent (OS-print) | «أُرسل الإيصال للطابعة» | info |
