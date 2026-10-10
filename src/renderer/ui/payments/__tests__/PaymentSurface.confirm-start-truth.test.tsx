@@ -112,12 +112,13 @@ async function settle(): Promise<void> {
   });
 }
 
-async function pickCash(h: Harness): Promise<void> {
+async function pickCash(h: Harness, backToSaleEligibility?: 'returnable'): Promise<void> {
   render(
     <PaymentSurface
       _testBridge={h.bridge}
       onBackToSale={() => Promise.resolve(true)}
       onNewSale={vi.fn()}
+      {...(backToSaleEligibility === undefined ? {} : { backToSaleEligibility })}
     />,
   );
   await act(async () => {
@@ -209,6 +210,20 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
     expect(refusalText()).toContain('انتهت عملية الدفع هذه دون أن تكتمل');
     expect(refusalText()).not.toContain(TRY_AGAIN);
+  });
+
+  // Codex P2 on #626: main refuses Back for a cart with any tender history, so
+  // dropping an ended attempt that held tender must keep Back closed.
+  it('an ended attempt with tender, dropped after a refused confirm, keeps Back closed', async () => {
+    const h = makeHarness();
+    await pickCash(h, 'returnable');
+    h.confirm.mockResolvedValueOnce({ kind: 'refused', reason: 'attempt_terminal' });
+    h.read.mockResolvedValue(ok(attempt('failed')));
+
+    await pressConfirm();
+
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    expect(screen.getByTestId('payment-surface-back')).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('tender_underpaid refreshes the projection; the commit reason explains, not «try again»', async () => {

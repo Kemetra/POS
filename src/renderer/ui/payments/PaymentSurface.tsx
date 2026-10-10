@@ -1237,6 +1237,9 @@ export function PaymentSurface({
       { reversed_tender_line_ids: lineIds, reversal_pending_tender_line_ids: [] },
       attempt.tender_lines,
     );
+    // Main refuses Back for a cart with any tender history; the projection that
+    // showed it is cleared here, so keep the fact (Codex P2 on #626).
+    if (attempt.tender_lines.length > 0) setTenderTouched(true);
     usePaymentStore.getState().clearCancelRecovery();
     setSelectedTender(null);
     setPhase('tender_selection');
