@@ -215,6 +215,19 @@ export interface SessionStateEvent {
   state: 'active' | 'locked' | 'ended';
 }
 
+/**
+ * RT-352 (RT-116 §7.2) — what the signed-in operator resumes. Ids and a count
+ * only: no line items, names or amounts.
+ */
+export interface ResumeStateView {
+  /** The draft cart re-attached to the current session at sign-in, if any. */
+  cart_id: string | null;
+  /** Reserved for the stuck-attempt slice (RT-116 S5); always null today. */
+  payment_attempt_id: null;
+  /** Further drafts this operator holds on this terminal that were not re-attached. */
+  other_held_cart_count: number;
+}
+
 export interface SignInSuccessResponse {
   kind: 'signed_in';
   session: OperatorSessionBridgeView;
@@ -495,6 +508,13 @@ export interface OperatorBridgeAPI {
    * screen. The only operator read served while locked.
    */
   getLockState(): Promise<LockStateView>;
+
+  /**
+   * RT-352 (RT-116 §7.2) — read once after an admitted sign-in: the draft cart
+   * main re-attached to this session (RT-115 D3.2). Refused while locked.
+   * Optional so a bridge without it degrades to "nothing to resume".
+   */
+  getResumeState?(): Promise<ResumeStateView>;
 
   /**
    * RT-117 (RT-116 §7.2) — subscribe to main → renderer session-state pushes

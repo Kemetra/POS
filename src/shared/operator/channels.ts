@@ -49,4 +49,13 @@ export const SESSION_LOCK_IPC_CHANNELS = {
   SESSION_STATE: 'operator:session-state',
 } as const;
 
+/**
+ * RT-352 (RT-116 §7.2) — held-cart resume. Its own registrar
+ * (`ipc/resume-state.ts`), so it is kept apart from `OPERATOR_IPC_CHANNELS`.
+ */
+export const RESUME_STATE_IPC_CHANNELS = {
+  /** The draft cart re-attached at sign-in (ids + a count only). */
+  GET_RESUME_STATE: 'operator:get-resume-state',
+} as const;
+
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

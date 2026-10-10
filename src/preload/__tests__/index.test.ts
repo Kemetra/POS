@@ -5,7 +5,11 @@ import {
   type PairingStatus,
   type PairingSubmitResult,
 } from '../../shared/pairing-types';
-import { OPERATOR_IPC_CHANNELS, SESSION_LOCK_IPC_CHANNELS } from '../../shared/operator/channels';
+import {
+  OPERATOR_IPC_CHANNELS,
+  RESUME_STATE_IPC_CHANNELS,
+  SESSION_LOCK_IPC_CHANNELS,
+} from '../../shared/operator/channels';
 
 const exposeInMainWorld = vi.fn<(name: string, api: unknown) => void>();
 const ipcRendererInvoke = vi.fn<(channel: string, ...args: unknown[]) => Promise<unknown>>();
@@ -175,6 +179,8 @@ describe('preload bridge', () => {
         'unlockSession',
         'getLockState',
         'onSessionStateChanged',
+        // RT-352 — held-cart resume
+        'getResumeState',
       ].sort(),
     );
   });
@@ -213,5 +219,23 @@ describe('preload bridge', () => {
       pin: '1234',
     });
     expect(ipcRendererInvoke).toHaveBeenCalledWith(SESSION_LOCK_IPC_CHANNELS.GET_LOCK_STATE);
+  });
+
+  // RT-352 — the held-cart resume read invokes its documented channel, no args.
+  it('operator.getResumeState invokes operator:get-resume-state with no arguments', async () => {
+    ipcRendererInvoke.mockResolvedValue({
+      cart_id: null,
+      payment_attempt_id: null,
+      other_held_cart_count: 0,
+    });
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    await api.operator.getResumeState?.();
+
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(RESUME_STATE_IPC_CHANNELS.GET_RESUME_STATE);
   });
 });

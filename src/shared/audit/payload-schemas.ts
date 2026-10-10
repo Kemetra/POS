@@ -218,6 +218,29 @@ export interface CartCancelPostHandoffPayload {
 }
 
 /**
+ * `cart.held_on_session_end` (RT-352, RT-116 §3.3) — the session that owned
+ * a draft cart ended; the cart is kept for its operator on its terminal
+ * (RT-115 D3.2). Ids and the end cause only. `end_cause` is null when the
+ * session ended without one.
+ */
+export interface CartHeldOnSessionEndPayload {
+  cart_id: string;
+  operator_session_id: string;
+  end_cause: SessionEndCause | null;
+}
+
+/**
+ * `cart.reattached` (RT-352, RT-116 §3.1) — at sign-in, the operator's held
+ * draft cart on this terminal was re-bound from its dead session to the new
+ * one. Ids only.
+ */
+export interface CartReattachedPayload {
+  cart_id: string;
+  from_operator_session_id: string;
+  to_operator_session_id: string;
+}
+
+/**
  * `cart.return_to_sale` (RT-26) — Checkout Back: a `frozen_handed_off` cart
  * with no tender activity returned to `editing`, its envelope invalidated.
  * Cashier-initiated, no manager attribution. Ids only — no amounts, no lines.
@@ -486,6 +509,9 @@ export type AuditPayloadMap = {
   'cart.cancel.post_handoff': CartCancelPostHandoffPayload;
   'cart.discount.above_threshold': CartDiscountAboveThresholdPayload;
   'cart.discarded_on_session_end': CartDiscardedOnSessionEndPayload;
+  // RT-352
+  'cart.held_on_session_end': CartHeldOnSessionEndPayload;
+  'cart.reattached': CartReattachedPayload;
   // RT-26
   'cart.return_to_sale': CartReturnToSalePayload;
   // 008-sale-finalization-and-receipts (AD-9 / Slice 1c T093 — shaped;

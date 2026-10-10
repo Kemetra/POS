@@ -9,9 +9,10 @@ import { usePaymentStore } from './payment-store.js';
  * the `signedIn` state for any reason (sign-out, takeover-prompt,
  * forced-close, inactivity), the cart store is reset.
  *
- * Q3 LOCKED 2026-05-14: "discard immediately on session end" — the
- * draft is unrecoverable; the audit emission (`cart.discarded_on_session_end`)
- * is the main-process responsibility under S3 / §A3.
+ * The renderer forgets the cart; main does not discard it. RT-115 D3.2
+ * (RT-352) superseded the 005 Q3 discard: main holds the draft for its
+ * operator on this terminal and re-attaches it at that operator's next
+ * sign-in, which the renderer adopts through `completeSignIn`.
  *
  * Returns the unsubscribe function so tests can detach the hook and
  * mounts can clean up on unmount.

@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, type JSX } from 'react';
 
 import type { OperatorBridgeAPI } from '../../../shared/bridge-api.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
+import { completeSignIn } from '../../session/complete-sign-in.js';
 import { SIGN_IN_REFUSAL_COPY } from './messages.js';
 
 /**
@@ -52,7 +53,8 @@ export function TakeoverPrompt({
     try {
       const response = await operator.confirmTakeover({ pending_takeover_id });
       if (response.kind === 'signed_in') {
-        useOperatorSessionStore.getState().resolveSignedIn(response.session);
+        // RT-352 — adopt the re-attached draft before routing on.
+        await completeSignIn(operator, response.session);
         return;
       }
       // At this point response is OperatorRefusal (signed_in handled above).

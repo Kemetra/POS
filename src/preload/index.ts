@@ -34,6 +34,7 @@ import type {
   UnlockSessionRequest,
   UnlockSessionResponse,
   LockStateView,
+  ResumeStateView,
 } from '../shared/bridge-api';
 import { subscribeSessionState } from './session-state.js';
 import { subscribePairingStatus } from './pairing-status.js';
@@ -46,7 +47,11 @@ import {
   type PairingStatus,
   type PairingSubmitResult,
 } from '../shared/pairing-types';
-import { OPERATOR_IPC_CHANNELS, SESSION_LOCK_IPC_CHANNELS } from '../shared/operator/channels';
+import {
+  OPERATOR_IPC_CHANNELS,
+  RESUME_STATE_IPC_CHANNELS,
+  SESSION_LOCK_IPC_CHANNELS,
+} from '../shared/operator/channels';
 
 /**
  * T033 + T061 + T067 — preload bridge wired to ipcRenderer.invoke.
@@ -105,6 +110,9 @@ const operator: OperatorBridgeAPI = {
   getLockState: () =>
     ipcRenderer.invoke(SESSION_LOCK_IPC_CHANNELS.GET_LOCK_STATE) as Promise<LockStateView>,
   onSessionStateChanged: (cb) => subscribeSessionState(ipcRenderer, cb),
+  // RT-352 — the draft cart main re-attached at sign-in (ids + a count only).
+  getResumeState: () =>
+    ipcRenderer.invoke(RESUME_STATE_IPC_CHANNELS.GET_RESUME_STATE) as Promise<ResumeStateView>,
   emitAuditEvent: (req: EmitAuditEventRequest) =>
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT, req) as Promise<
       EmitAuditEventResponse | OperatorRefusal
