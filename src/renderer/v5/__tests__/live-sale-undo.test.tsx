@@ -299,6 +299,27 @@ describe('Undo of a delete', () => {
     expect(bridges.undoLast.mock.calls[0]?.[0]).toMatchObject({ target_action_id: updateKey });
   });
 
+  it('a second minus on a noted one-unit line before the first answers is not sent', async () => {
+    const bridges = makeBridges();
+    const user = await saleWithLines(bridges);
+    await user.click(screen.getByRole('button', { name: 'ملاحظة' }));
+    await user.type(screen.getByRole('textbox', { name: 'ملاحظة الصنف' }), 'بعد الأكل');
+    await user.click(screen.getByRole('button', { name: 'حفظ' }));
+    await screen.findByText(/ملاحظة: بعد الأكل/);
+    let confirmUpdate: (value: unknown) => void = () => undefined;
+    bridges.update.mockReturnValueOnce(new Promise((resolve) => (confirmUpdate = resolve)));
+
+    await user.click(screen.getByRole('button', { name: 'إنقاص كمية بنادول' }));
+    await user.click(screen.getByRole('button', { name: 'إنقاص كمية بنادول' }));
+    await act(async () => {
+      confirmUpdate({ kind: 'ok', version: 3 });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(bridges.update).toHaveBeenCalledOnce();
+    expect(await screen.findByRole('button', { name: 'تراجع عن حذف بنادول' })).toBeInTheDocument();
+  });
+
   it('a second Delete before the first answers is not sent', async () => {
     const bridges = makeBridges();
     let confirmRemove: (value: unknown) => void = () => undefined;

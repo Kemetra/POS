@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { CartBridgeAPI } from '../../../shared/bridge-api';
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
 import type {
@@ -26,6 +26,13 @@ function removedLine(line: CartLineItem, actionId: string | null): actionId is s
   return actionId !== null && line.quantity <= 1;
 }
 
+/** Run `send` unless one for the same line is still in flight (a repeat press is not a new action). */
+function onceAtATime(pending: Set<string>, lineId: string, send: () => Promise<void>): void {
+  if (pending.has(lineId)) return;
+  pending.add(lineId);
+  void send().finally(() => pending.delete(lineId));
+}
+
 /**
  * RT-242 — the Sale's cart actions with the RT-245 Undo offer attached: a
  * direct add or a delete offers «تراجع» for exactly that action, and every
@@ -39,6 +46,7 @@ export function useLiveSaleActions(
 ) {
   const [voided, setVoided] = useState(false);
   const [lastAdd, setLastAdd] = useState<LastAdd | null>(null);
+  const removalsRef = useRef(new Set<string>());
   const undo = useSaleUndo({
     resync: cart.resync,
     onSettled: focusScanOwner,
@@ -82,15 +90,19 @@ export function useLiveSaleActions(
       undo.dismiss();
       void cart.incrementLine(line.lineId, line.version);
     },
-    // Only a noted one-unit line reaches here at quantity 1: main records that decrement as a remove.
+    // Only a noted one-unit line reaches here at quantity 1: main records that
+    // decrement as a remove, so it is undoable and, like Delete, sent once at a time.
     onDecrement: (line: CartLineItem): void => {
-      const ticket = undo.withdraw();
-      const cartId = useCartStore.getState().activeCart?.cart_id;
-      void cart.decrementLine(line.lineId, line.version).then((actionId) => {
+      const send = async (): Promise<void> => {
+        const ticket = undo.withdraw();
+        const cartId = useCartStore.getState().activeCart?.cart_id;
+        const actionId = await cart.decrementLine(line.lineId, line.version);
         if (removedLine(line, actionId) && cartId !== undefined) {
           undo.offerUndo('removed', line.displayName, cartId, actionId, ticket);
         }
-      });
+      };
+      if (line.quantity > 1) void send();
+      else onceAtATime(removalsRef.current, line.lineId, send);
     },
     onRemove: (line: CartLineItem): void => {
       // A repeat press while the first remove is in flight changes nothing: keep its offer.
