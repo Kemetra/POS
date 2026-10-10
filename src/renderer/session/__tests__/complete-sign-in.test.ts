@@ -6,7 +6,7 @@ import {
   useOperatorSessionStore,
   type OperatorSessionView,
 } from '../../stores/operator-session-store';
-import type { ResumeStateView } from '../../../shared/bridge-api';
+import type { LockStateView, ResumeStateView } from '../../../shared/bridge-api';
 
 /**
  * RT-352 — the renderer adopts the draft main re-attached at sign-in BEFORE
@@ -36,8 +36,27 @@ beforeEach(() => {
 });
 
 const RESUME_CART_9 = { getResumeState: () => Promise.resolve(resume({ cart_id: 'cart-9' })) };
-/** Boot hydration also re-reads the session after the resume read. */
-const HYDRATE_CART_9 = { ...RESUME_CART_9, getCurrentSession: () => Promise.resolve(SESSION) };
+type StateListener = (event: { state: 'active' | 'locked' | 'ended' }) => void;
+
+/** A main-side fake for boot hydration: lock state, its push, and the session re-read. */
+function hydrationOperator(opts: { locked?: boolean; current?: () => Promise<unknown> } = {}) {
+  let listener: StateListener | null = null;
+  const getResumeState = vi.fn(() => Promise.resolve(resume({ cart_id: 'cart-9' })));
+  return {
+    getResumeState,
+    getCurrentSession: (opts.current ??
+      (() => Promise.resolve(SESSION))) as () => Promise<OperatorSessionView | null>,
+    getLockState: () =>
+      Promise.resolve({ state: opts.locked === true ? 'locked' : 'active' } as LockStateView),
+    onSessionStateChanged: (cb: StateListener) => {
+      listener = cb;
+      return () => {
+        listener = null;
+      };
+    },
+    push: (state: 'active' | 'locked' | 'ended') => listener?.({ state }),
+  };
+}
 
 describe('RT-352 — the cart is adopted before the session turns signedIn', () => {
   it.each([
@@ -49,7 +68,7 @@ describe('RT-352 — the cart is adopted before the session turns signedIn', () 
       name: 'a boot hydration (renderer reload, dev bypass)',
       enter: () => {
         useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
-        return completeHydratedSignIn(HYDRATE_CART_9, SESSION);
+        return completeHydratedSignIn(hydrationOperator(), SESSION);
       },
     },
   ])('on $name', async ({ enter }) => {
@@ -119,7 +138,7 @@ describe('RT-352 completeSignIn', () => {
 
 describe('RT-352 completeHydratedSignIn', () => {
   it('drops the adopted cart when the store is no longer signedOut', async () => {
-    await completeHydratedSignIn(HYDRATE_CART_9, SESSION); // store is signingIn (beforeEach)
+    await completeHydratedSignIn(hydrationOperator(), SESSION); // store is signingIn (beforeEach)
     expect(useOperatorSessionStore.getState().state.kind).toBe('signingIn');
     expect(useCartStore.getState().activeCart).toBeNull();
   });
@@ -138,7 +157,7 @@ describe('RT-352 completeHydratedSignIn — the session ends during the resume r
     },
     { name: 'the re-check fails', current: () => Promise.reject(new Error('ipc')) },
   ])('never hydrates when $name', async ({ current }) => {
-    await completeHydratedSignIn({ ...RESUME_CART_9, getCurrentSession: current }, SESSION);
+    await completeHydratedSignIn(hydrationOperator({ current }), SESSION);
 
     expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
     expect(useCartStore.getState().activeCart).toBeNull();
@@ -146,8 +165,44 @@ describe('RT-352 completeHydratedSignIn — the session ends during the resume r
 
   it('hydrates at once, without a re-check, when the bridge has no resume read', async () => {
     const getCurrentSession = vi.fn(() => Promise.resolve(null));
-    await completeHydratedSignIn({ getCurrentSession }, SESSION);
+    const { getLockState, onSessionStateChanged } = hydrationOperator();
+    await completeHydratedSignIn(
+      { getCurrentSession, getLockState, onSessionStateChanged },
+      SESSION,
+    );
     expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
     expect(getCurrentSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('RT-352 completeHydratedSignIn — reload while the session is locked', () => {
+  beforeEach(() => {
+    useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
+  });
+
+  it('waits for the unlock, then reads and adopts the cart', async () => {
+    const operator = hydrationOperator({ locked: true });
+    const done = completeHydratedSignIn(operator, SESSION);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(operator.getResumeState).not.toHaveBeenCalled();
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+
+    operator.push('active');
+    await done;
+
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+    expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-9');
+  });
+
+  it('never hydrates when the locked session ends instead of unlocking', async () => {
+    const operator = hydrationOperator({ locked: true, current: () => Promise.resolve(null) });
+    const done = completeHydratedSignIn(operator, SESSION);
+    await Promise.resolve();
+    operator.push('ended');
+    await done;
+
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    expect(useCartStore.getState().activeCart).toBeNull();
   });
 });

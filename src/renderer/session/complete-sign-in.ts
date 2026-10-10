@@ -26,7 +26,10 @@ import {
  */
 
 type ResumeReader = Pick<OperatorBridgeAPI, 'getResumeState'>;
-type HydrationReader = Pick<OperatorBridgeAPI, 'getResumeState' | 'getCurrentSession'>;
+type HydrationReader = Pick<
+  OperatorBridgeAPI,
+  'getResumeState' | 'getCurrentSession' | 'getLockState' | 'onSessionStateChanged'
+>;
 
 function readResumeCartId(operator: ResumeReader): Promise<string | null> | null {
   const read = operator.getResumeState;
@@ -70,6 +73,32 @@ export function completeSignIn(
   });
 }
 
+/**
+ * Resolves once main's session is not locked. A locked session refuses the
+ * resume read (lock guard), so reading it then would look like "no cart".
+ * Subscribes before reading the lock state, so an unlock in between is not
+ * missed. An `ended` push, or a failed read, also resolves; the session
+ * re-check that follows then refuses to hydrate.
+ */
+function untilUnlocked(operator: HydrationReader): Promise<void> {
+  return new Promise((resolve) => {
+    let unsubscribe: (() => void) | null = null;
+    let settled = false;
+    const settle = (): void => {
+      if (settled) return;
+      settled = true;
+      unsubscribe?.();
+      resolve();
+    };
+    unsubscribe = operator.onSessionStateChanged((event) => {
+      if (event.state !== 'locked') settle();
+    });
+    operator.getLockState().then((view) => {
+      if (view.state !== 'locked') settle();
+    }, settle);
+  });
+}
+
 /** True while main still holds `session_id`; a failing read counts as gone. */
 async function stillHeldByMain(operator: HydrationReader, session_id: string): Promise<boolean> {
   const current = await operator.getCurrentSession().catch(() => null);
@@ -78,8 +107,11 @@ async function stillHeldByMain(operator: HydrationReader, session_id: string): P
 
 /**
  * Boot hydration: main already holds `session` (dev bypass, renderer reload).
- * While signedOut the store ignores main's session-state pushes, so a session
- * that ends during the resume read is re-checked here; it is never hydrated.
+ * A reload while that session is locked waits behind the lock screen until
+ * it unlocks, then reads the cart: the app stays mounted under the lock, so
+ * a Sale screen hydrated without the cart would never pick it up. While
+ * signedOut the store ignores main's session-state pushes, so a session that
+ * ends meanwhile is re-checked here; it is never hydrated.
  */
 export async function completeHydratedSignIn(
   operator: HydrationReader,
@@ -88,11 +120,11 @@ export async function completeHydratedSignIn(
   const hydrate = (): void => {
     useOperatorSessionStore.getState().hydrateSignedIn(session);
   };
-  const pending = readResumeCartId(operator);
-  if (pending === null) {
+  if (operator.getResumeState === undefined) {
     adoptAndEnter(null, hydrate);
     return;
   }
-  const cart_id = await pending;
+  await untilUnlocked(operator);
+  const cart_id = await (readResumeCartId(operator) ?? null);
   if (await stillHeldByMain(operator, session.id)) adoptAndEnter(cart_id, hydrate);
 }
