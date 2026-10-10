@@ -5,7 +5,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { CartBridgeHandlers, type ItemRefResolver } from '../../../../src/main/cart/cart-bridge.js';
-import { bindCartStore, type CartStore } from '../../../../src/main/cart/cart-store.js';
+import {
+  bindCartStore,
+  type CartStore,
+  type UndoInverse,
+} from '../../../../src/main/cart/cart-store.js';
 import { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
 import { bindAuditEventsStoreDb } from '../../../../src/main/audit/audit-events-store.js';
 import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
@@ -53,22 +57,35 @@ function session(overrides: Partial<OperatorSessionRecord> = {}): OperatorSessio
   };
 }
 
-const resolver: ItemRefResolver = (item_ref) => {
-  if (item_ref === 'SKU-A')
-    return Promise.resolve({ kind: 'ok', display_name: 'Panadol', unit_price_minor: 100 });
-  if (item_ref === 'SKU-B')
-    return Promise.resolve({ kind: 'ok', display_name: 'Brufen', unit_price_minor: 250 });
-  return Promise.resolve({ kind: 'refused', reason: 'unknown_item' });
-};
+/** Catalogue prices the resolver currently answers with (tests may change them). */
+interface Catalogue {
+  prices: Record<string, number>;
+  calls: number;
+}
+
+function catalogueResolver(catalogue: Catalogue): ItemRefResolver {
+  const names: Record<string, string> = { 'SKU-A': 'Panadol', 'SKU-B': 'Brufen' };
+  return (item_ref) => {
+    catalogue.calls += 1;
+    const price = catalogue.prices[item_ref];
+    const name = names[item_ref];
+    if (price === undefined || name === undefined) {
+      return Promise.resolve({ kind: 'refused', reason: 'unknown_item' });
+    }
+    return Promise.resolve({ kind: 'ok', display_name: name, unit_price_minor: price });
+  };
+}
 
 interface Fixture {
   db: SqlJsDatabase;
   store: CartStore;
   handlers: CartBridgeHandlers;
   cart_id: string;
+  catalogue: Catalogue;
   make: (opts?: {
     session?: OperatorSessionRecord | null;
     store?: CartStore;
+    clock?: () => Date;
   }) => CartBridgeHandlers;
 }
 
@@ -78,20 +95,21 @@ async function fixture(): Promise<Fixture> {
   const handle = makeSqlJsHandle(db);
   const store = bindCartStore(handle);
   const auditEmitter = new AuditEmitter(bindAuditEventsStoreDb(handle));
+  const catalogue: Catalogue = { prices: { 'SKU-A': 100, 'SKU-B': 250 }, calls: 0 };
   const make: Fixture['make'] = (opts = {}) =>
     new CartBridgeHandlers({
       getCurrentSession: () => (opts.session === undefined ? session() : opts.session),
       getTerminalId: () => 'terminal-undo',
       cartStore: opts.store ?? store,
-      resolveItemRef: resolver,
+      resolveItemRef: catalogueResolver(catalogue),
       auditEmitter,
       cartPaymentStatus: () => 'none',
-      clock: () => new Date('2026-10-10T10:00:00.000Z'),
+      clock: opts.clock ?? ((): Date => new Date('2026-10-10T10:00:00.000Z')),
     });
   const handlers = make();
   const c = await handlers.create({ idempotency_key: 'c-1' });
   if (c.kind !== 'ok') throw new Error('create failed');
-  return { db, store, handlers, cart_id: c.cart_id, make };
+  return { db, store, handlers, cart_id: c.cart_id, catalogue, make };
 }
 
 function scalar(db: SqlJsDatabase, sql: string, params: (string | number)[] = []): unknown {
@@ -684,6 +702,98 @@ describe('cart.undoLast — race, restart', () => {
     expect(applied).toBe(false);
     expect(outboxCount(f.db)).toBe(before);
     expect(lineRow(f.db, a.line_id)['removed_at']).toBeNull();
+  });
+
+  describe('store: the commit-time line guards hold on their own (planUndo bypassed)', () => {
+    function attempt(
+      f: Fixture,
+      line_id: string,
+      target: string,
+      version: number,
+      inverse: UndoInverse,
+      kind: string,
+    ): boolean {
+      return f.store.undoLastActionAndOutbox(
+        {
+          cart_id: f.cart_id,
+          line_id,
+          target_action_id: target,
+          expected_line_version: version,
+          inverse,
+          now: '2026-10-10T10:00:00.000Z',
+        },
+        {
+          action_id: 'u-direct',
+          cart_id: f.cart_id,
+          line_id,
+          action_kind: kind,
+          acting_operator_id: 'cashier-1',
+          attribution_operator_id: null,
+          operator_session_id: 'sess-undo',
+          payload_json: '{}',
+          applied_at: '2026-10-10T10:00:00.000Z',
+        },
+      );
+    }
+
+    it('restore refuses while another ACTIVE line holds the same item_ref (Q4)', async () => {
+      const f = await fixture();
+      const a = await add(f, 'a-1', 'SKU-A');
+      await f.handlers.linesRemove({
+        cart_id: f.cart_id,
+        line_id: a.line_id,
+        version: 1,
+        idempotency_key: 'r-1',
+      });
+      f.db.run(
+        `INSERT INTO cart_lines (line_id, cart_id, item_ref, display_name, quantity, unit_price_minor,
+           line_subtotal_minor, note, version, last_action_id, created_at, updated_at)
+         VALUES ('twin', ?, 'SKU-A', 'Panadol', 1, 100, 100, NULL, 1, 'zz', 't', 't')`,
+        [f.cart_id],
+      );
+      const digest = stateDigest(f.db);
+      expect(attempt(f, a.line_id, 'r-1', 2, { kind: 'restore' }, 'cart.line.restore')).toBe(false);
+      expect(stateDigest(f.db)).toEqual(digest);
+    });
+
+    it('restore refuses a line that is already active', async () => {
+      const f = await fixture();
+      const a = await add(f, 'a-1', 'SKU-A');
+      const digest = stateDigest(f.db);
+      expect(attempt(f, a.line_id, 'a-1', 1, { kind: 'restore' }, 'cart.line.restore')).toBe(false);
+      expect(stateDigest(f.db)).toEqual(digest);
+    });
+
+    it('decrement refuses a line that was soft-removed', async () => {
+      const f = await fixture();
+      const a = await add(f, 'a-1', 'SKU-A', 2);
+      await add(f, 'm-1', 'SKU-A', 1);
+      f.db.run(`UPDATE cart_lines SET removed_at = 't' WHERE line_id = ?`, [a.line_id]);
+      const digest = stateDigest(f.db);
+      const inverse: UndoInverse = { kind: 'decrement', quantity: 2, line_subtotal_minor: 200 };
+      expect(attempt(f, a.line_id, 'm-1', 2, inverse, 'cart.line.update')).toBe(false);
+      expect(stateDigest(f.db)).toEqual(digest);
+    });
+  });
+
+  it('never re-resolves the price and has no wall-clock expiry', async () => {
+    const f = await fixture();
+    const a = await add(f, 'a-1', 'SKU-A', 2);
+    await add(f, 'm-1', 'SKU-A', 1);
+    // The catalogue price changes and six hours pass before the Undo.
+    f.catalogue.prices['SKU-A'] = 999;
+    const callsBefore = f.catalogue.calls;
+    const later = f.make({ clock: () => new Date('2026-10-10T16:00:00.000Z') });
+    expect(
+      await later.undoLast({ cart_id: f.cart_id, target_action_id: 'm-1', idempotency_key: 'u-1' }),
+    ).toMatchObject({ kind: 'ok', effect: 'decremented' });
+    expect(f.catalogue.calls).toBe(callsBefore);
+    expect(lineRow(f.db, a.line_id)).toMatchObject({
+      quantity: 2,
+      unit_price_minor: 100,
+      line_subtotal_minor: 200,
+    });
+    expect(cartRow(f.db, f.cart_id)['cart_subtotal_minor']).toBe(200);
   });
 
   it('restart: eligibility is lineage-based (no in-memory state), and the snapshot exposes no action ids', async () => {
