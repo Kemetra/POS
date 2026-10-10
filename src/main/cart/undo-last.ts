@@ -54,13 +54,15 @@ function mismatch(): Refused {
   return { kind: 'refused', reason: 'idempotency_payload_mismatch' };
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /** Parses an outbox payload into a plain object; null when unreadable. */
 function parsePayload(json: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(json);
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
+    return isPlainObject(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -74,6 +76,22 @@ function isUndoEffect(value: unknown): value is CartUndoEffect {
   return value === 'removed' || value === 'decremented' || value === 'restored';
 }
 
+/** The row records an Undo of the request's target on the request's cart. */
+function recordsUndoOf(
+  req: CartUndoLastRequest,
+  row: OutboxRow,
+  payload: Record<string, unknown>,
+): boolean {
+  return row.cart_id === req.cart_id && payload['undo_of_action_id'] === req.target_action_id;
+}
+
+/** The recorded effect, only when it agrees with the row's outbox kind. */
+function recordedEffect(row: OutboxRow, payload: Record<string, unknown>): CartUndoEffect | null {
+  const effect = payload['effect'];
+  if (!isUndoEffect(effect)) return null;
+  return OUTBOX_KIND_BY_EFFECT[effect] === row.action_kind ? effect : null;
+}
+
 /**
  * Replay of an Undo key that already has an outbox row. Returns the ORIGINAL
  * effect and resulting version recorded with it (a lost response must not
@@ -83,12 +101,11 @@ function isUndoEffect(value: unknown): value is CartUndoEffect {
  */
 export function replayUndo(req: CartUndoLastRequest, row: OutboxRow): CartUndoLastResponse {
   const payload = parsePayload(row.payload_json);
-  if (payload === null || row.cart_id !== req.cart_id || row.line_id === null) return mismatch();
-  if (payload['undo_of_action_id'] !== req.target_action_id) return mismatch();
-  const effect = payload['effect'];
+  if (payload === null || row.line_id === null) return mismatch();
+  if (!recordsUndoOf(req, row, payload)) return mismatch();
+  const effect = recordedEffect(row, payload);
   const version = payload['result_version'];
-  if (!isUndoEffect(effect) || OUTBOX_KIND_BY_EFFECT[effect] !== row.action_kind) return mismatch();
-  if (!isPositiveInteger(version)) return mismatch();
+  if (effect === null || !isPositiveInteger(version)) return mismatch();
   return { kind: 'ok', effect, line_id: row.line_id, version };
 }
 
@@ -130,28 +147,45 @@ function planDecrement(
   };
 }
 
-/** Chooses the exact inverse for the target's kind, given the line's CURRENT state. */
-function chooseInverse(
+interface ChosenInverse {
+  effect: CartUndoEffect;
+  inverse: UndoInverse;
+  extra: Record<string, unknown>;
+}
+
+/** Chooses the exact inverse for one target kind, given the line's CURRENT state. */
+type InversePlanner = (
   store: CartStore,
-  kind: string,
   line: CartLineRow,
   targetPayload: Record<string, unknown>,
-): { effect: CartUndoEffect; inverse: UndoInverse; extra: Record<string, unknown> } | null {
-  const active = line.removed_at === null;
-  if (kind === 'cart.line.add') {
-    return active ? { effect: 'removed', inverse: { kind: 'soft_remove' }, extra: {} } : null;
-  }
-  if (kind === 'cart.line.merge') {
-    const planned = active ? planDecrement(line, targetPayload) : null;
-    return planned === null ? null : { effect: 'decremented', ...planned };
-  }
-  if (kind === 'cart.line.remove' && !active) {
-    // Q4: never restore beside another active line for the same item.
-    if (store.findActiveLineByItemRef(line.cart_id, line.item_ref) !== undefined) return null;
-    return { effect: 'restored', inverse: { kind: 'restore' }, extra: {} };
-  }
-  return null;
-}
+) => ChosenInverse | null;
+
+/** add → soft-remove the same row, while it is still active. */
+const undoAdd: InversePlanner = (_store, line) =>
+  line.removed_at === null
+    ? { effect: 'removed', inverse: { kind: 'soft_remove' }, extra: {} }
+    : null;
+
+/** merge → subtract exactly what the merge added, while the line is still active. */
+const undoMerge: InversePlanner = (_store, line, targetPayload) => {
+  const planned = line.removed_at === null ? planDecrement(line, targetPayload) : null;
+  return planned === null ? null : { effect: 'decremented', ...planned };
+};
+
+/** remove → restore the same row, while it is still removed and Q4 still holds. */
+const undoRemove: InversePlanner = (store, line) => {
+  if (line.removed_at === null) return null;
+  // Q4: never restore beside another active line for the same item.
+  if (store.findActiveLineByItemRef(line.cart_id, line.item_ref) !== undefined) return null;
+  return { effect: 'restored', inverse: { kind: 'restore' }, extra: {} };
+};
+
+/** The only undoable target kinds (a Map, so no prototype key can match). */
+const PLANNER_BY_TARGET_KIND: ReadonlyMap<string, InversePlanner> = new Map([
+  ['cart.line.add', undoAdd],
+  ['cart.line.merge', undoMerge],
+  ['cart.line.remove', undoRemove],
+]);
 
 /**
  * Decides whether `req.target_action_id` can be undone right now and how.
@@ -167,7 +201,8 @@ export function planUndo(
   if (target === null) return unavailable();
   const line = store.getLine(cart.cart_id, target.line_id);
   if (line?.last_action_id !== req.target_action_id) return unavailable();
-  const chosen = chooseInverse(store, target.row.action_kind, line, target.payload);
+  const planner = PLANNER_BY_TARGET_KIND.get(target.row.action_kind);
+  const chosen = planner?.(store, line, target.payload) ?? null;
   if (chosen === null) return unavailable();
   return {
     kind: 'ok',

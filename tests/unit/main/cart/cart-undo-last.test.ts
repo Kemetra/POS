@@ -705,14 +705,15 @@ describe('cart.undoLast — race, restart', () => {
   });
 
   describe('store: the commit-time line guards hold on their own (planUndo bypassed)', () => {
-    function attempt(
-      f: Fixture,
-      line_id: string,
-      target: string,
-      version: number,
-      inverse: UndoInverse,
-      kind: string,
-    ): boolean {
+    interface Attempt {
+      line_id: string;
+      target: string;
+      version: number;
+      inverse: UndoInverse;
+      kind: string;
+    }
+
+    function attempt(f: Fixture, { line_id, target, version, inverse, kind }: Attempt): boolean {
       return f.store.undoLastActionAndOutbox(
         {
           cart_id: f.cart_id,
@@ -752,7 +753,15 @@ describe('cart.undoLast — race, restart', () => {
         [f.cart_id],
       );
       const digest = stateDigest(f.db);
-      expect(attempt(f, a.line_id, 'r-1', 2, { kind: 'restore' }, 'cart.line.restore')).toBe(false);
+      expect(
+        attempt(f, {
+          line_id: a.line_id,
+          target: 'r-1',
+          version: 2,
+          inverse: { kind: 'restore' },
+          kind: 'cart.line.restore',
+        }),
+      ).toBe(false);
       expect(stateDigest(f.db)).toEqual(digest);
     });
 
@@ -760,7 +769,15 @@ describe('cart.undoLast — race, restart', () => {
       const f = await fixture();
       const a = await add(f, 'a-1', 'SKU-A');
       const digest = stateDigest(f.db);
-      expect(attempt(f, a.line_id, 'a-1', 1, { kind: 'restore' }, 'cart.line.restore')).toBe(false);
+      expect(
+        attempt(f, {
+          line_id: a.line_id,
+          target: 'a-1',
+          version: 1,
+          inverse: { kind: 'restore' },
+          kind: 'cart.line.restore',
+        }),
+      ).toBe(false);
       expect(stateDigest(f.db)).toEqual(digest);
     });
 
@@ -771,7 +788,15 @@ describe('cart.undoLast — race, restart', () => {
       f.db.run(`UPDATE cart_lines SET removed_at = 't' WHERE line_id = ?`, [a.line_id]);
       const digest = stateDigest(f.db);
       const inverse: UndoInverse = { kind: 'decrement', quantity: 2, line_subtotal_minor: 200 };
-      expect(attempt(f, a.line_id, 'm-1', 2, inverse, 'cart.line.update')).toBe(false);
+      expect(
+        attempt(f, {
+          line_id: a.line_id,
+          target: 'm-1',
+          version: 2,
+          inverse,
+          kind: 'cart.line.update',
+        }),
+      ).toBe(false);
       expect(stateDigest(f.db)).toEqual(digest);
     });
   });
