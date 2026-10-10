@@ -39,6 +39,8 @@ const SESSION: OperatorSessionRecord = {
   started_at: '2026-10-10T08:00:00.000Z',
   backend_session_id: 'b',
   last_activity_at: '2026-10-10T08:00:00.000Z',
+  lock_state: 'active',
+  locked_at: null,
 };
 
 type ResolveResult = Awaited<ReturnType<ItemRefResolver>>;
