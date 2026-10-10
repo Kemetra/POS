@@ -1,6 +1,8 @@
 /**
- * RT-239 (VNext A2) — cashier-facing scan notices, verbatim from the freeze
- * package message catalog (15 §5). Arabic only; nothing here is invented.
+ * RT-239 (VNext A2) / RT-242 — cashier-facing scan and add notices. Arabic only.
+ * Every string is verbatim from the freeze package message catalog (15 §5) or
+ * existing app copy, except `SALE_FROZEN_MESSAGE`, which is marked as proposed
+ * copy pending owner approval.
  */
 
 /** The three kinds of field that must never receive a scan. */
