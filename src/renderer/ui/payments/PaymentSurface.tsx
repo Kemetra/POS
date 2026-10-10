@@ -1237,8 +1237,13 @@ export function PaymentSurface({
       },
       attempt.tender_lines,
     );
-    usePaymentStore.getState().applyAttemptSnapshot(attempt);
-    usePaymentStore.getState().setCancelHold('live_tender');
+    const store = usePaymentStore.getState();
+    store.applyAttemptSnapshot(attempt);
+    // The hold lives on the attempt's cancel record. A confirm or remount read
+    // reaches here without one, and setting a hold on no record is a no-op
+    // (Codex P2 on #626): make sure the record exists first.
+    store.cancelKeyFor(attempt.payment_attempt_id);
+    store.setCancelHold('live_tender');
     setBridgeRefusalCopy(CANCEL_LIVE_TENDER_COPY);
     setSelectedTender(null);
     setPhase('tender_selection');

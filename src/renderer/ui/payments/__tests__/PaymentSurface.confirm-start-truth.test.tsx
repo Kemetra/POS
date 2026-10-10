@@ -226,6 +226,27 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     expect(screen.getByTestId('payment-surface-back')).toHaveAttribute('aria-disabled', 'true');
   });
 
+  // Codex P2 on #626: a confirm leaves no cancel record, so the live-tender hold
+  // must be created here, or Confirm and the tender tiles come back.
+  it('a force-failed attempt with live tender, read back after a refused confirm, is held', async () => {
+    const h = makeHarness();
+    await pickCash(h);
+    h.confirm.mockResolvedValueOnce({ kind: 'refused', reason: 'attempt_terminal' });
+    h.read.mockResolvedValue(ok(attempt('force_failed')));
+
+    await pressConfirm();
+
+    expect(usePaymentStore.getState().cancelRecovery?.hold).toBe('live_tender');
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+    expect(refusalText()).toContain('أوقف المدير عملية الدفع هذه');
+    await act(async () => {
+      screen.getByTestId('tender-cash').click();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(screen.queryByTestId('payment-surface-entry')).not.toBeInTheDocument();
+  });
+
   it('tender_underpaid refreshes the projection; the commit reason explains, not «try again»', async () => {
     const h = makeHarness();
     await pickCash(h);
