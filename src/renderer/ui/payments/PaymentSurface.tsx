@@ -560,7 +560,10 @@ export function PaymentSurface({
   const [afterApply, setAfterApply] = useState<'idle' | 'reading' | 'failed'>('idle');
   // RT-341 — what the pending or failed read follows: a fresh start has no money
   // on it yet, so its retry line must not say an amount was recorded (M-P15).
-  const [readAfter, setReadAfter] = useState<'start' | 'tender'>('tender');
+  // RT-340: a failed read-back after a refused settle retries through the same
+  // copy decision, so the confirm's reason is kept with it.
+  const [readAfter, setReadAfter] = useState<'start' | 'tender' | 'confirm'>('tender');
+  const confirmReasonRef = useRef<RefusalReason | null>(null);
 
   // RT-238: the entry opens below the method tiles, inside the scrolling panes;
   // bring it into view so the cashier never has to hunt for the amount field.
@@ -1335,16 +1338,19 @@ export function PaymentSurface({
       return;
     }
     const envelopeAtStart = usePaymentStore.getState().envelope;
-    setReadAfter('tender');
+    confirmReasonRef.current = reason;
+    setReadAfter('confirm');
     setAfterApply('reading');
     const attempt = await readAttemptWithRetry(attemptId);
     if (!isStillCurrent(attemptId, envelopeAtStart)) return;
     if (attempt === null) {
       // The outcome is unknown: offer the read retry (M-P15), never the commit.
+      // The retry comes back here, with this reason (Codex P2 on #626).
       setAfterApply('failed');
       return;
     }
     setAfterApply('idle');
+    setReadAfter('tender');
     if (attempt.state === 'started') {
       usePaymentStore.getState().applyAttemptSnapshot(attempt);
       setBridgeRefusalCopy(confirmRefusalCopy(reason, moneyStillDue(attempt)));
@@ -1486,7 +1492,9 @@ export function PaymentSurface({
               data-testid="payment-surface-reread"
               onClick={() => {
                 if (readAfter === 'start') void readAfterStart(paymentAttemptId);
-                else void handleLineApplied();
+                else if (readAfter === 'confirm' && paymentAttemptId !== null) {
+                  void reconcileAfterConfirm(paymentAttemptId, confirmReasonRef.current);
+                } else void handleLineApplied();
               }}
             >
               إعادة المحاولة

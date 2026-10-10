@@ -277,6 +277,34 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument();
   });
 
+  // Codex P2 / CodeRabbit on #626: the read retry after a failed confirm read-back
+  // must make the same copy decision as the read-back itself.
+  it.each([
+    ['tender_underpaid', { kind: 'refused', reason: 'tender_underpaid' }],
+    ['a lost answer', null],
+  ] as const)(
+    'after %s and a failed read-back, the retry that finds the sale covered is never silent',
+    async (_label, answer) => {
+      const h = makeHarness();
+      await pickCash(h);
+      if (answer === null) h.confirm.mockRejectedValueOnce(new Error('ipc lost'));
+      else h.confirm.mockResolvedValueOnce(answer);
+      h.read.mockRejectedValue(new Error('ipc lost'));
+      await pressConfirm();
+      expect(screen.getByTestId('payment-surface-reread')).toBeInTheDocument();
+
+      h.read.mockResolvedValue(ok(attempt('started')));
+      await act(async () => {
+        screen.getByTestId('payment-surface-reread').click();
+        await Promise.resolve();
+      });
+      await settle();
+
+      expect(screen.getByTestId('payment-surface-confirm')).toBeInTheDocument();
+      expect(refusalText()).toContain(TRY_AGAIN);
+    },
+  );
+
   it('a read retry that finds the attempt ended says why it is gone (M-P25)', async () => {
     const h = makeHarness();
     await pickCash(h);
