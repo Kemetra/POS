@@ -12,9 +12,12 @@ export const CONFIRM_RETRY_COPY = 'تعذّر إتمام عملية الدفع. 
 export const CONFIRM_ENDED_COPY =
   'انتهت عملية الدفع هذه دون أن تكتمل. اختر طريقة دفع للبدء من جديد.';
 
-/** RT-340 — this session may not settle the attempt; no retry from here can succeed. */
+/** M-P26 — this session may not settle the attempt; no retry from here can succeed. */
 export const CONFIRM_NOT_ALLOWED_COPY =
   'لا يمكن إتمام هذا الدفع من هذه الجلسة. اطلب من المدير مراجعته.';
+
+/** M-P28 — main has no session (it ended); signing in again is the way on, not a manager. */
+export const CONFIRM_NO_SESSION_COPY = 'انتهت الجلسة. سجّل الدخول من جديد ثم أكمل الدفع.';
 
 /** M-P15 — money is on the attempt but its state could not be read. */
 export const TENDER_READ_FAILED_COPY =
@@ -60,6 +63,7 @@ export function moneyStillDue(attempt: PaymentAttemptRendererView): boolean {
  */
 export function confirmRefusalCopy(reason: RefusalReason | null, stillDue: boolean): string | null {
   if (reason === 'tender_underpaid') return stillDue ? null : CONFIRM_RETRY_COPY;
+  if (reason === 'no_session') return CONFIRM_NO_SESSION_COPY;
   if (reason !== null && SESSION_REFUSALS.has(reason)) return CONFIRM_NOT_ALLOWED_COPY;
   return CONFIRM_RETRY_COPY;
 }

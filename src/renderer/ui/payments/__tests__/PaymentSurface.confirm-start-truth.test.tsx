@@ -236,9 +236,15 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     expect(refusalText()).not.toBe('');
   });
 
-  it.each<RefusalReason>(['no_session', 'role_denied', 'wrong_owner', 'tenant_isolation'])(
+  // M-P26 for role / owner / tenant; M-P28 (sign in again) when main's session ended.
+  it.each<[RefusalReason, string]>([
+    ['no_session', 'انتهت الجلسة. سجّل الدخول من جديد ثم أكمل الدفع.'],
+    ['role_denied', 'لا يمكن إتمام هذا الدفع من هذه الجلسة'],
+    ['wrong_owner', 'لا يمكن إتمام هذا الدفع من هذه الجلسة'],
+    ['tenant_isolation', 'لا يمكن إتمام هذا الدفع من هذه الجلسة'],
+  ])(
     '%s names who can act, never «try again» and never a read retry that cannot succeed',
-    async (reason) => {
+    async (reason, copy) => {
       const h = makeHarness();
       await pickCash(h);
       const readsBefore = h.read.mock.calls.length;
@@ -248,7 +254,7 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
 
       await pressConfirm();
 
-      expect(refusalText()).toContain('لا يمكن إتمام هذا الدفع من هذه الجلسة');
+      expect(refusalText()).toContain(copy);
       expect(refusalText()).not.toContain(TRY_AGAIN);
       expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
       expect(h.read.mock.calls.length).toBe(readsBefore);
