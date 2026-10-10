@@ -120,4 +120,55 @@ describe('RT-349 — concurrent adds with one idempotency key', () => {
       );
     },
   );
+
+  // FR-018 / 0009: the same key with a different payload is refused, never
+  // answered with the first call's result.
+  const MISMATCHES: ReadonlyArray<[string, string, number, string, number]> = [
+    ['a different item on a new line', 'SKU-B', 1, 'SKU-C', 1],
+    ['a different quantity on a new line', 'SKU-B', 1, 'SKU-B', 3],
+    ['a different quantity on a merge', 'SKU-A', 1, 'SKU-A', 3],
+  ];
+
+  it.each(MISMATCHES)(
+    'refuses %s when the calls overlap',
+    async (_label, item1, qty1, item2, qty2) => {
+      const f = await makeEditingCart();
+      const release = f.holdResolver();
+      const first = f.handlers.linesAdd({
+        cart_id: f.cart_id,
+        item_ref: item1,
+        quantity: qty1,
+        idempotency_key: 'dup',
+      });
+      const second = f.handlers.linesAdd({
+        cart_id: f.cart_id,
+        item_ref: item2,
+        quantity: qty2,
+        idempotency_key: 'dup',
+      });
+      release();
+
+      const [r1, r2] = await Promise.all([first, second]);
+      expect(r1.kind).toBe('ok');
+      expect(r2).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
+    },
+  );
+
+  it.each(MISMATCHES)('refuses %s on a later retry', async (_label, item1, qty1, item2, qty2) => {
+    const f = await makeEditingCart();
+    const r1 = await f.handlers.linesAdd({
+      cart_id: f.cart_id,
+      item_ref: item1,
+      quantity: qty1,
+      idempotency_key: 'dup',
+    });
+    const r2 = await f.handlers.linesAdd({
+      cart_id: f.cart_id,
+      item_ref: item2,
+      quantity: qty2,
+      idempotency_key: 'dup',
+    });
+    expect(r1.kind).toBe('ok');
+    expect(r2).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
+  });
 });
