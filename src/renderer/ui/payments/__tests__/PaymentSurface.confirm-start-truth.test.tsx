@@ -391,6 +391,30 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     },
   );
 
+  // Review on e0d018f: the remount must resume with the confirm's own reason.
+  it('a tender_underpaid confirm with a lost read, then a remount whose read shows money due, adds no retry line', async () => {
+    const h = makeHarness();
+    await pickCash(h);
+    h.confirm.mockResolvedValueOnce({ kind: 'refused', reason: 'tender_underpaid' });
+    h.read.mockRejectedValue(new Error('ipc lost'));
+    await pressConfirm();
+    expect(screen.getByTestId('payment-surface-reread')).toBeInTheDocument();
+
+    cleanup();
+    h.read.mockResolvedValue(ok(attempt('started', [cash(500)])));
+    render(
+      <PaymentSurface
+        _testBridge={h.bridge}
+        onBackToSale={() => Promise.resolve(true)}
+        onNewSale={vi.fn()}
+      />,
+    );
+    await settle();
+
+    expect(refusalText()).not.toContain(TRY_AGAIN);
+    expect(screen.getByTestId('payment-surface-amount-due')).toHaveTextContent('8.00');
+  });
+
   it('a read retry that finds the attempt ended says why it is gone (M-P25)', async () => {
     const h = makeHarness();
     await pickCash(h);

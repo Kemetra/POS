@@ -1414,7 +1414,9 @@ export function PaymentSurface({
     if (attempt === null && !isSessionRefusal(outcome)) {
       // The outcome is unknown: offer the read retry (M-P15), never the commit.
       // The retry, here or after a remount, comes back here with this reason
-      // (Codex P2 on #626).
+      // (Codex P2 on #626). Set again: a reconcile of the same attempt that
+      // answered meanwhile may have cleared it.
+      usePaymentStore.getState().setConfirmReadPending({ attemptId, reason });
       setAfterApply('failed');
       return;
     }
@@ -1565,7 +1567,8 @@ export function PaymentSurface({
                 if (readAfter === 'start') void readAfterStart(paymentAttemptId);
                 else if (readAfter === 'confirm' && paymentAttemptId !== null) {
                   const pending = usePaymentStore.getState().confirmReadPending;
-                  void reconcileAfterConfirm(paymentAttemptId, pending?.reason ?? null);
+                  const reason = pending?.attemptId === paymentAttemptId ? pending.reason : null;
+                  void reconcileAfterConfirm(paymentAttemptId, reason);
                 } else void handleLineApplied();
               }}
             >
