@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { completeSignIn } from '../complete-sign-in';
+import { completeHydratedSignIn, completeSignIn } from '../complete-sign-in';
 import { useCartStore } from '../../stores/cart-store';
 import {
   useOperatorSessionStore,
@@ -97,5 +97,38 @@ describe('RT-352 completeSignIn', () => {
       SESSION,
     );
     expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-current');
+  });
+});
+
+describe('RT-352 completeHydratedSignIn (renderer reload, dev bypass)', () => {
+  beforeEach(() => {
+    useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
+  });
+
+  it('adopts the session cart before hydrating signedIn', async () => {
+    let cartWhenSignedIn: string | null | undefined;
+    const unsubscribe = useOperatorSessionStore.subscribe((s) => {
+      if (s.state.kind === 'signedIn') {
+        cartWhenSignedIn = useCartStore.getState().activeCart?.cart_id;
+      }
+    });
+
+    await completeHydratedSignIn(
+      { getResumeState: () => Promise.resolve(resume({ cart_id: 'cart-7' })) },
+      SESSION,
+    );
+    unsubscribe();
+
+    expect(cartWhenSignedIn).toBe('cart-7');
+  });
+
+  it('drops the adopted cart when the store is no longer signedOut', async () => {
+    useOperatorSessionStore.getState().beginSignIn();
+    await completeHydratedSignIn(
+      { getResumeState: () => Promise.resolve(resume({ cart_id: 'cart-7' })) },
+      SESSION,
+    );
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signingIn');
+    expect(useCartStore.getState().activeCart).toBeNull();
   });
 });

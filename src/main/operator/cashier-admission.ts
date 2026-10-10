@@ -416,6 +416,24 @@ export function refusalIfSessionLost(
     : REFUSE_STATE_INVALID;
 }
 
+/**
+ * RT-352 — {@link refusalIfSessionLost}, and when the refused session is still
+ * the current (latched) one, end it with its latch cause. The renderer is told
+ * the sign-in failed, so no session may stay alive behind that answer. Its
+ * re-attached draft cart is held, not lost (RT-115 D3.2): it re-attaches at
+ * the next admitted sign-in. Without this, the re-attached lines would keep
+ * the latched session from ever reaching its safe point.
+ */
+export function refuseLostSession(
+  sessionManager: Pick<SessionManager, 'getCurrent' | 'getLastEndCause' | 'end'>,
+  session_id: string,
+): OperatorRefusal | null {
+  const refusal = refusalIfSessionLost(sessionManager, session_id);
+  const current = sessionManager.getCurrent();
+  if (refusal !== null && current?.id === session_id) sessionManager.end(current.authority_latch);
+  return refusal;
+}
+
 /** The last end cause, when the session ended (none current); a replaced session has none. */
 function endCauseIfEnded(
   sessionManager: Pick<SessionManager, 'getLastEndCause'>,

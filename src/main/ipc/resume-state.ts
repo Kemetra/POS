@@ -8,8 +8,9 @@ import { RESUME_STATE_IPC_CHANNELS } from '../../shared/operator/channels.js';
  * RT-352 (RT-116 §7.2) — `operator:get-resume-state`. Read-only, no request
  * arguments, and not on the locked-session allowlist (refused while locked).
  * The view carries ids and a count only. A failing read never crosses the
- * bridge as an error: it is logged and answered as "nothing to resume", and
- * the cart stays held for the next sign-in.
+ * bridge as an error: it is logged and answered as "nothing to resume". The
+ * draft stays bound to the session in main and re-attaches at the next
+ * sign-in after that session ends.
  */
 
 export interface ResumeStateHandlerDeps {

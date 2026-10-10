@@ -22,7 +22,7 @@ import {
   admitCashierOnline,
   mintAdmissionKey,
   refusalForAdmission,
-  refusalIfSessionLost,
+  refuseLostSession,
   type CashierAdmissionDeps,
 } from './cashier-admission.js';
 import { unsealPinMaterial } from './pin-seal.js';
@@ -494,7 +494,7 @@ export class CashierSignInHandler {
 
     // Codex P2 4179701431 — the keeper armed at create; the session may have
     // been latched or ended during the await above. Never answer it signed_in.
-    const lost = refusalIfSessionLost(this.deps.sessionManager, record.id);
+    const lost = refuseLostSession(this.deps.sessionManager, record.id);
     if (lost !== null) {
       this.logRefusal(lost.category, 'session_lost');
       return lost;

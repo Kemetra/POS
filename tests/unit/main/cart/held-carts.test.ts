@@ -64,13 +64,17 @@ function bootTerminal(): Terminal {
   return { sessions, held, emit };
 }
 
-function signIn(t: Terminal, operator_id: string): OperatorSessionRecord {
+function signIn(
+  t: Terminal,
+  operator_id: string,
+  scope: { tenant_id?: string; branch_id?: string } = {},
+): OperatorSessionRecord {
   return t.sessions.create({
     operator_id,
     display_name: operator_id,
     role: 'cashier',
-    tenant_id: 'tenant-1',
-    branch_id: 'branch-1',
+    tenant_id: scope.tenant_id ?? 'tenant-1',
+    branch_id: scope.branch_id ?? 'branch-1',
     backend_session_id: '',
   });
 }
@@ -165,14 +169,16 @@ describe('RT-352 — held draft cart re-attaches for its owner', () => {
   it.each([
     { name: 'a different cashier on the same terminal', operator: 'cashier-2', terminal: TERMINAL },
     { name: 'the same cashier on another terminal', operator: 'cashier-1', terminal: 'terminal-b' },
-  ])('never re-attaches the draft for $name', async ({ operator, terminal }) => {
+    { name: 'the same cashier in another tenant', operator: 'cashier-1', tenant_id: 'tenant-2' },
+    { name: 'the same cashier in another branch', operator: 'cashier-1', branch_id: 'branch-2' },
+  ])('never re-attaches the draft for $name', async (row) => {
     const t = bootTerminal();
     const owner = signIn(t, 'cashier-1');
     const cart = await openCart(t, 'editing');
     t.sessions.end('signed_out');
-    terminalId = terminal;
+    terminalId = row.terminal ?? TERMINAL;
 
-    const other = signIn(t, operator);
+    const other = signIn(t, row.operator, row);
 
     expect(cartRow(cart).operator_session_id).toBe(owner.id);
     expect(t.held.getResumeState(other)).toEqual({
