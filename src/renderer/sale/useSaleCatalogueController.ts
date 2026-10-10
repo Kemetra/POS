@@ -48,7 +48,8 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
   runTypedSearch: (query: string) => Promise<void>;
   lookupScan: (barcode: string) => Promise<CatalogueLookupResponse | null>;
   recover: () => void;
-  ensureCart: () => Promise<string | null>;
+  /** `isCurrent` false at resolve time: the created cart is not adopted (its sale ended). */
+  ensureCart: (isCurrent?: () => boolean) => Promise<string | null>;
 } {
   const state = useCatalogueSearchStore((store) => store.state);
   const activeCart = useCartStore((store) => store.activeCart);
@@ -67,27 +68,30 @@ export function useSaleCatalogueController(options: SaleCatalogueOptions): {
     [options.catalogueBridge],
   );
 
-  const ensureCart = useCallback((): Promise<string | null> => {
-    if (options.cartId !== undefined && options.cartId !== '') {
-      return Promise.resolve(options.cartId);
-    }
-    const existing = useCartStore.getState().activeCart;
-    if (existing !== null) return Promise.resolve(existing.cart_id);
-    if (creatingRef.current !== null) return creatingRef.current;
-    const pending = getCart()
-      .create({ idempotency_key: crypto.randomUUID() })
-      .then((res) => {
-        if (res.kind !== 'ok') return null;
-        useCartStore.getState().applyCartCreated(res.cart_id);
-        return res.cart_id;
-      })
-      .catch(() => null)
-      .finally(() => {
-        creatingRef.current = null;
-      });
-    creatingRef.current = pending;
-    return pending;
-  }, [getCart, options.cartId]);
+  const ensureCart = useCallback(
+    (isCurrent?: () => boolean): Promise<string | null> => {
+      if (options.cartId !== undefined && options.cartId !== '') {
+        return Promise.resolve(options.cartId);
+      }
+      const existing = useCartStore.getState().activeCart;
+      if (existing !== null) return Promise.resolve(existing.cart_id);
+      if (creatingRef.current !== null) return creatingRef.current;
+      const pending = getCart()
+        .create({ idempotency_key: crypto.randomUUID() })
+        .then((res) => {
+          if (res.kind !== 'ok' || isCurrent?.() === false) return null;
+          useCartStore.getState().applyCartCreated(res.cart_id);
+          return res.cart_id;
+        })
+        .catch(() => null)
+        .finally(() => {
+          creatingRef.current = null;
+        });
+      creatingRef.current = pending;
+      return pending;
+    },
+    [getCart, options.cartId],
+  );
 
   const runTypedSearch = useCallback(
     async (query: string): Promise<void> => {

@@ -21,8 +21,11 @@ import {
 export type AddBlock = 'paid' | 'frozen' | null;
 
 export interface DirectSaleAddOptions {
-  /** Creates (or returns) the active cart on the first add; `null` on failure (#466). */
-  ensureCart: () => Promise<string | null>;
+  /**
+   * Creates (or returns) the active cart on the first add; `null` on failure
+   * (#466) or when the job's sale ended while the create was in flight.
+   */
+  ensureCart: (isCurrent?: () => boolean) => Promise<string | null>;
   /** Exact barcode lookup; `null` when the transport failed. */
   lookupScan: (code: string) => Promise<CatalogueLookupResponse | null>;
   /** Read at the moment each queued add runs, never at enqueue time. */
@@ -91,7 +94,7 @@ interface AddJob {
  * A job whose sale ended while it waited creates no cart and shows no line.
  */
 async function addProduct(job: AddJob, product: ProductSnapshotDisplay): Promise<void> {
-  const cartId = job.isCurrent() ? await job.opts.ensureCart() : null;
+  const cartId = job.isCurrent() ? await job.opts.ensureCart(job.isCurrent) : null;
   if (!job.isCurrent()) return;
   if (!cartId) {
     job.opts.notify(SALE_ADD_FAILED_MESSAGE);

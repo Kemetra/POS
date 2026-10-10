@@ -104,6 +104,26 @@ describe('useSaleCatalogueController', () => {
     expect(create).toHaveBeenCalledTimes(3);
   });
 
+  it('ensureCart does not adopt a cart whose create answers after its sale ended (RT-242)', async () => {
+    const { cart, catalogue, create } = bridges();
+    create.mockResolvedValue({ kind: 'ok', cart_id: 'cart-late' });
+    const { result } = renderHook(() =>
+      useSaleCatalogueController({ cartBridge: cart, catalogueBridge: catalogue }),
+    );
+    let current = true;
+    let pending: Promise<string | null> = Promise.resolve(null);
+    act(() => {
+      pending = result.current.ensureCart(() => current);
+      current = false;
+    });
+    let id: string | null = 'unset';
+    await act(async () => {
+      id = await pending;
+    });
+    expect(id).toBeNull();
+    expect(useCartStore.getState().activeCart).toBeNull();
+  });
+
   it('ensureCart reuses an explicit or already-active cart without creating', async () => {
     const { cart, catalogue, create } = bridges();
     const explicit = renderHook(() =>

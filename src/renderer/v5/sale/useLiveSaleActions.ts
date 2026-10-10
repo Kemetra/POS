@@ -21,6 +21,11 @@ export interface LastAdd {
   readonly nonce: number;
 }
 
+/** A confirmed decrement of a one-unit line: main recorded it as a remove, so it is undoable. */
+function removedLine(line: CartLineItem, actionId: string | null): actionId is string {
+  return actionId !== null && line.quantity <= 1;
+}
+
 /**
  * RT-242 — the Sale's cart actions with the RT-245 Undo offer attached: a
  * direct add or a delete offers «تراجع» for exactly that action, and every
@@ -61,6 +66,8 @@ export function useLiveSaleActions(
     ): void => {
       setVoided(false);
       cart.acceptAddedLine(line);
+      // 15 §3.1 rule 6: after an add the next scan is the next thing the cashier does.
+      focusScanOwner();
       useLineFlagsStore.getState().remember(line.line_id, product);
       setLastAdd((previous) => ({ lineId: line.line_id, nonce: (previous?.nonce ?? 0) + 1 }));
       const cartId = useCartStore.getState().activeCart?.cart_id;
@@ -73,11 +80,19 @@ export function useLiveSaleActions(
       undo.dismiss();
       void cart.incrementLine(line.lineId, line.version);
     },
+    // Only a noted one-unit line reaches here at quantity 1: main records that decrement as a remove.
     onDecrement: (line: CartLineItem): void => {
-      undo.dismiss();
-      void cart.decrementLine(line.lineId, line.version);
+      const ticket = undo.withdraw();
+      const cartId = useCartStore.getState().activeCart?.cart_id;
+      void cart.decrementLine(line.lineId, line.version).then((actionId) => {
+        if (removedLine(line, actionId) && cartId !== undefined) {
+          undo.offerUndo('removed', line.displayName, cartId, actionId, ticket);
+        }
+      });
     },
     onRemove: (line: CartLineItem): void => {
+      // A repeat press while the first remove is in flight changes nothing: keep its offer.
+      if (cart.isRemoving(line.lineId)) return;
       const ticket = undo.withdraw();
       const cartId = useCartStore.getState().activeCart?.cart_id;
       void cart.removeLine(line.lineId, line.version).then((actionId) => {

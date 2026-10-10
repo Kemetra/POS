@@ -158,6 +158,31 @@ describe('Undo of the last direct add', () => {
     expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
   });
 
+  it('a cart read that answers after the sale ended never paints the old cart', async () => {
+    const bridges = makeBridges();
+    bridges.undoLast.mockResolvedValue({
+      kind: 'ok',
+      effect: 'removed',
+      line_id: 'line-1',
+      version: 2,
+    });
+    let answerSnapshot: (value: unknown) => void = () => undefined;
+    bridges.snapshot.mockReturnValueOnce(new Promise((resolve) => (answerSnapshot = resolve)));
+    const user = await saleWithLines(bridges, 2);
+    await user.click(screen.getByRole('button', { name: 'تراجع عن إضافة بروفين' }));
+    await user.click(screen.getByRole('button', { name: 'إلغاء البيع' }));
+    await user.click(screen.getByRole('button', { name: 'تأكيد الإلغاء' }));
+    await screen.findByText('تم إلغاء البيع.');
+
+    await act(async () => {
+      answerSnapshot(snapshotWith([{ id: 'line-1', name: 'بنادول' }]));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(screen.queryByRole('list', { name: 'أصناف السلة' })).not.toBeInTheDocument();
+    expect(screen.queryByText('تعذّر تحميل السلة الحالية.')).not.toBeInTheDocument();
+  });
+
   it('any other cart change withdraws the offer (main would refuse it anyway)', async () => {
     const bridges = makeBridges();
     const user = await saleWithLines(bridges);
@@ -231,6 +256,46 @@ describe('Undo of a delete', () => {
 
     expect(await screen.findByText(/حُذف/)).toHaveTextContent('حُذف بنادول.');
     expect(screen.queryByRole('button', { name: /^تراجع/ })).not.toBeInTheDocument();
+  });
+
+  it('a decrement that removes a noted one-unit line offers its Undo (main records it as a remove)', async () => {
+    const bridges = makeBridges();
+    const user = await saleWithLines(bridges);
+    await user.click(screen.getByRole('button', { name: 'ملاحظة' }));
+    await user.type(screen.getByRole('textbox', { name: 'ملاحظة الصنف' }), 'بعد الأكل');
+    await user.click(screen.getByRole('button', { name: 'حفظ' }));
+    await screen.findByText(/ملاحظة: بعد الأكل/);
+
+    await user.click(screen.getByRole('button', { name: 'إنقاص كمية بنادول' }));
+
+    const offer = await screen.findByRole('button', { name: 'تراجع عن حذف بنادول' });
+    expect(offer).toBeInTheDocument();
+    const updateKey = (bridges.update.mock.calls[0]?.[0] as { idempotency_key: string })
+      .idempotency_key;
+    bridges.undoLast.mockResolvedValue({ kind: 'refused', reason: 'undo_not_available' });
+    bridges.snapshot.mockResolvedValue(snapshotWith([]));
+    await user.click(offer);
+    expect(bridges.undoLast.mock.calls[0]?.[0]).toMatchObject({ target_action_id: updateKey });
+  });
+
+  it('a second Delete before the first answers is not sent', async () => {
+    const bridges = makeBridges();
+    let confirmRemove: (value: unknown) => void = () => undefined;
+    bridges.remove.mockReturnValueOnce(new Promise((resolve) => (confirmRemove = resolve)));
+    const user = await saleWithLines(bridges);
+    await user.click(screen.getByRole('button', { name: /^حذف$/ }));
+    await user.click(screen.getByRole('button', { name: /^حذف$/ }));
+    await act(async () => {
+      confirmRemove({ kind: 'ok' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(bridges.remove).toHaveBeenCalledOnce();
+    const removeKey = (bridges.remove.mock.calls[0]?.[0] as { idempotency_key: string })
+      .idempotency_key;
+    bridges.undoLast.mockResolvedValue({ kind: 'refused', reason: 'undo_not_available' });
+    bridges.snapshot.mockResolvedValue(snapshotWith([]));
+    await user.click(await screen.findByRole('button', { name: 'تراجع عن حذف بنادول' }));
+    expect(bridges.undoLast.mock.calls[0]?.[0]).toMatchObject({ target_action_id: removeKey });
   });
 
   it('a refused delete offers no Undo', async () => {

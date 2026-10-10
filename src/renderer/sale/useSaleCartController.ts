@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CartBridgeAPI, PreloadBridgeAPI } from '../../shared/bridge-api';
 import type { CartSnapshot, CartSnapshotResponse } from '../../shared/cart/bridge-types';
 import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope';
@@ -126,8 +126,11 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
   itemCount: number;
   acceptAddedLine: (result: AddedLineResult) => void;
   incrementLine: (lineId: string, version: number) => Promise<void>;
-  decrementLine: (lineId: string, version: number) => Promise<void>;
+  /** The update's key once main confirms it (main records a decrement past zero as a remove). */
+  decrementLine: (lineId: string, version: number) => Promise<string | null>;
   removeLine: (lineId: string, version: number) => Promise<string | null>;
+  /** A remove for this line is in flight (a repeat press is not a new action). */
+  isRemoving: (lineId: string) => boolean;
   saveNote: (lineId: string, version: number, note: string | null) => Promise<boolean>;
   handoff: () => Promise<void>;
   voidCart: () => Promise<boolean>;
@@ -221,6 +224,8 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
       bridge.snapshot === undefined
         ? null
         : await bridge.snapshot({ cart_id: cartId }).catch(() => null);
+    // The sale may have ended during the read: never paint its cart over the next one.
+    if (useCartStore.getState().activeCart?.cart_id !== cartId) return;
     if (res !== null && isSnapshotOf(res, cartId)) {
       applySnapshot(res.snapshot);
       return;
@@ -288,17 +293,18 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
   );
 
   const decrementLine = useCallback(
-    async (lineId: string, version: number): Promise<void> => {
+    async (lineId: string, version: number): Promise<string | null> => {
       const cart = useCartStore.getState().activeCart;
-      if (!cart) return;
+      if (!cart) return null;
+      const actionId = crypto.randomUUID();
       const res = await getBridge().lines.update({
         cart_id: cart.cart_id,
         line_id: lineId,
         op: 'decrement',
         version,
-        idempotency_key: crypto.randomUUID(),
+        idempotency_key: actionId,
       });
-      if (res.kind !== 'ok') return;
+      if (res.kind !== 'ok') return null;
       setLines((prev) => {
         const line = prev.find((item) => item.lineId === lineId);
         if (!line) return prev;
@@ -315,28 +321,37 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
             : item,
         );
       });
+      return actionId;
     },
     [getBridge],
   );
 
   /** Resolves to the remove's idempotency key once main confirms it (the Undo target, RT-245); else `null`. */
+  // A second Delete before the first answers would get an unrecorded `ok`
+  // from main (the line is already removed), so it is not sent at all.
+  const removingRef = useRef(new Set<string>());
   const removeLine = useCallback(
     async (lineId: string, version: number): Promise<string | null> => {
       const cart = useCartStore.getState().activeCart;
-      if (!cart) return null;
+      if (!cart || removingRef.current.has(lineId)) return null;
+      removingRef.current.add(lineId);
       const actionId = crypto.randomUUID();
-      const res = await getBridge().lines.remove({
-        cart_id: cart.cart_id,
-        line_id: lineId,
-        version,
-        idempotency_key: actionId,
-      });
+      const res = await getBridge()
+        .lines.remove({
+          cart_id: cart.cart_id,
+          line_id: lineId,
+          version,
+          idempotency_key: actionId,
+        })
+        .finally(() => removingRef.current.delete(lineId));
       if (res.kind !== 'ok') return null;
       setLines((prev) => prev.filter((line) => line.lineId !== lineId));
       return actionId;
     },
     [getBridge],
   );
+
+  const isRemoving = useCallback((lineId: string): boolean => removingRef.current.has(lineId), []);
 
   const saveNote = useCallback(
     async (lineId: string, version: number, note: string | null): Promise<boolean> => {
@@ -492,6 +507,7 @@ export function useSaleCartController(options: SaleCartControllerOptions = {}): 
     incrementLine,
     decrementLine,
     removeLine,
+    isRemoving,
     saveNote,
     handoff,
     voidCart,

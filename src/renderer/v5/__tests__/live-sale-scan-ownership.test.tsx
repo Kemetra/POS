@@ -67,6 +67,12 @@ describe('the Sale screen is the scan owner (F-01)', () => {
         expect(bridges.add).toHaveBeenCalledTimes(2);
       });
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      // 15 §3.1 rule 6: after the add, focus is back on the scan owner, not the row control.
+      await waitFor(() => {
+        expect(document.activeElement).toBe(
+          screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' }),
+        );
+      });
     },
   );
 
