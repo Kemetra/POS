@@ -52,7 +52,7 @@ describe('CartStatusLine', () => {
     expect(screen.getByRole('status')).toHaveTextContent('أُضيف: بنادول');
   });
 
-  it('holds while focused or hovered, and restarts when focus leaves', () => {
+  it('holds while focused or hovered, and runs on when the pause ends', () => {
     render(view(offer(1)));
     const button = screen.getByRole('button', UNDO);
     act(() => {
@@ -98,6 +98,28 @@ describe('CartStatusLine', () => {
     expect(screen.queryByRole('button', UNDO)).not.toBeInTheDocument();
   });
 
+  it('a pause resumes the remaining lifetime; it does not start a fresh one', () => {
+    render(view(offer(1)));
+    act(() => {
+      vi.advanceTimersByTime(UNDO_NOTICE_MS - 1000);
+    });
+    const button = screen.getByRole('button', UNDO);
+    act(() => {
+      button.focus();
+    });
+    act(() => {
+      vi.advanceTimersByTime(UNDO_NOTICE_MS * 3);
+    });
+    expect(screen.getByRole('button', UNDO)).toBeInTheDocument();
+    act(() => {
+      button.blur();
+    });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(screen.queryByRole('button', UNDO)).not.toBeInTheDocument();
+  });
+
   it('a new offer restarts the lifetime', () => {
     const { rerender } = render(view(offer(1)));
     act(() => {
@@ -119,8 +141,14 @@ describe('CartStatusLine', () => {
     );
   });
 
-  it('shows no button when the bridge cannot undo', () => {
+  it('shows no button when the bridge cannot undo, and announces none', () => {
     render(view(offer(1), false));
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/^أُضيف: بنادول$/);
+  });
+
+  it('announces that Undo is available inside the live region', () => {
+    render(view(offer(1)));
+    expect(screen.getByRole('status')).toHaveTextContent('أُضيف: بنادول · تراجع');
   });
 });
