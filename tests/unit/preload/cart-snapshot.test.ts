@@ -39,6 +39,7 @@ describe('preload cart — snapshot (V5 active cart read)', () => {
         'returnToSaleEligibility',
         'snapshot',
         'subscribe',
+        'undoLast',
         'void',
       ].sort(),
     );
