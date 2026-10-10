@@ -37,7 +37,11 @@ import type {
   SalesBridgeAPI,
   TenderBridgeAPI,
 } from '../../../shared/bridge-api.js';
-import type { PaymentAttemptRendererView, RefusalReason } from '../../../shared/payments/types.js';
+import type {
+  PaymentAttemptRendererView,
+  PaymentRefusal,
+  RefusalReason,
+} from '../../../shared/payments/types.js';
 import { DrawerNoticeInline } from '../receipts/DrawerNotice.js';
 import { CompletionPanel } from '../../v5/checkout/CompletionPanel.js';
 import {
@@ -558,7 +562,9 @@ export function PaymentSurface({
   // RT-238 / Codex P1: after a successful apply the projection must be re-read
   // before anything else is offered. Until it is, the apply is not offered again
   // (a second press would record the whole amount a second time, as change).
-  const [afterApply, setAfterApply] = useState<'idle' | 'reading' | 'failed'>('idle');
+  // `blocked`: main's session gate refused the read, so no retry from this
+  // session can succeed; nothing is offered and the refusal line says why.
+  const [afterApply, setAfterApply] = useState<'idle' | 'reading' | 'failed' | 'blocked'>('idle');
   // RT-341 — what the pending or failed read follows: a fresh start has no money
   // on it yet, so its retry line must not say an amount was recorded (M-P15).
   // RT-340: a failed read-back after a refused settle retries through the same
@@ -902,8 +908,10 @@ export function PaymentSurface({
     const envelopeAtStart = usePaymentStore.getState().envelope;
     setReadAfter('start');
     setAfterApply('reading');
-    const attempt = await readAttemptWithRetry(attemptId);
+    const outcome = await readAttemptOutcome(attemptId);
     if (!isStillCurrent(attemptId, envelopeAtStart)) return;
+    if (blockOnSessionRefusal(outcome)) return;
+    const attempt = outcome?.kind === 'ok' ? outcome.payment_attempt : null;
     if (attempt === null) {
       setAfterApply('failed');
       return;
@@ -919,6 +927,19 @@ export function PaymentSurface({
 
   /** A read is idempotent: a transient IPC failure is retried before giving up. */
   const READ_ATTEMPTS = 3;
+
+  /**
+   * Codex P2 on #626 — main's session gate refused (no session, role, owner or
+   * tenant). Every retry from this session is refused the same way, so offer
+   * nothing and say who can act (M-P28 / M-P26) instead of a dead retry.
+   */
+  function blockOnSessionRefusal(outcome: PaymentsReadResponse | PaymentRefusal | null): boolean {
+    if (outcome?.kind !== 'refused' || confirmNeedsReadBack(outcome.reason)) return false;
+    setAfterApply('blocked');
+    setReadAfter('tender');
+    setBridgeRefusalCopy(confirmRefusalCopy(outcome.reason, false));
+    return true;
+  }
 
   async function readAttemptWithRetry(
     attemptId: string,
@@ -1001,8 +1022,10 @@ export function PaymentSurface({
     const attemptId = paymentAttemptId;
     const envelopeAtStart = usePaymentStore.getState().envelope;
     setAfterApply('reading');
-    const attempt = await readAttemptWithRetry(attemptId);
+    const outcome = await readAttemptOutcome(attemptId);
     if (!isStillCurrent(attemptId, envelopeAtStart)) return;
+    if (blockOnSessionRefusal(outcome)) return;
+    const attempt = outcome?.kind === 'ok' ? outcome.payment_attempt : null;
     if (attempt === null) {
       // The apply succeeded in main but its state could not be read. Keep the
       // apply out of reach and offer a retry instead.
@@ -1342,23 +1365,14 @@ export function PaymentSurface({
     attemptId: string,
     reason: RefusalReason | null,
   ): Promise<void> {
-    if (!confirmNeedsReadBack(reason)) {
-      setBridgeRefusalCopy(confirmRefusalCopy(reason, false));
-      return;
-    }
+    if (reason !== null && blockOnSessionRefusal({ kind: 'refused', reason })) return;
     const envelopeAtStart = usePaymentStore.getState().envelope;
     confirmReasonRef.current = reason;
     setReadAfter('confirm');
     setAfterApply('reading');
     const outcome = await readAttemptOutcome(attemptId);
     if (!isStillCurrent(attemptId, envelopeAtStart)) return;
-    // main's session gate refused the read too: no retry from here can succeed.
-    if (outcome?.kind === 'refused' && !confirmNeedsReadBack(outcome.reason)) {
-      setAfterApply('idle');
-      setReadAfter('tender');
-      setBridgeRefusalCopy(confirmRefusalCopy(outcome.reason, false));
-      return;
-    }
+    if (blockOnSessionRefusal(outcome)) return;
     const attempt = outcome?.kind === 'ok' ? outcome.payment_attempt : null;
     if (attempt === null) {
       // The outcome is unknown: offer the read retry (M-P15), never the commit.

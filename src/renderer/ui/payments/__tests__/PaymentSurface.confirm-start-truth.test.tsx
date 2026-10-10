@@ -12,7 +12,7 @@
  * ignored. Both now keep apply and settle out of reach and offer the read
  * retry until main has been read.
  */
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
@@ -395,6 +395,50 @@ describe('RT-341 — a started attempt is never reported as «could not start»'
       expect(usePaymentStore.getState().paymentSlice?.payment_attempt_id).toBe('pa-001');
     },
   );
+
+  // Codex P2 on #626: main's session gate refuses every retry of this read.
+  it.each<[RefusalReason, string]>([
+    ['no_session', 'انتهت الجلسة. سجّل الدخول من جديد ثم أكمل الدفع.'],
+    ['wrong_owner', 'لا يمكن إتمام هذا الدفع من هذه الجلسة'],
+  ])(
+    'a post-start read refused %s shows the guidance, no dead retry and no apply',
+    async (reason, copy) => {
+      const h = makeHarness();
+      h.read.mockResolvedValue({ kind: 'refused', reason });
+      await pickCash(h);
+
+      expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cash-entry-confirm')).not.toBeInTheDocument();
+      expect(refusalText()).toContain(copy);
+    },
+  );
+
+  it('a post-apply read refused at the session gate shows the guidance, not a dead retry', async () => {
+    const h = makeHarness();
+    h.read.mockResolvedValue(ok(attempt('started', [])));
+    (h.bridge.tender as unknown as { apply: unknown }).apply = vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok',
+        tender_line_id: 'tl-1',
+        applied_at: '2026-10-10T09:01:00.000Z',
+      }),
+    );
+    await pickCash(h);
+    h.read.mockResolvedValue({ kind: 'refused', reason: 'wrong_owner' });
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('cash-entry-amount-input'), {
+        target: { value: '13.00' },
+      });
+      fireEvent.click(screen.getByTestId('cash-entry-confirm'));
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-surface-confirm')).not.toBeInTheDocument();
+    expect(refusalText()).toContain('لا يمكن إتمام هذا الدفع من هذه الجلسة');
+  });
 
   it('no apply is offered while the read after a start is still pending', async () => {
     const h = makeHarness();
