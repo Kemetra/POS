@@ -910,7 +910,7 @@ export function PaymentSurface({
       usePaymentStore.getState().applyAttemptSnapshot(attempt);
       return;
     }
-    followEndedAttempt(attempt);
+    followEndedWithReason(attempt);
   }
 
   /** A read is idempotent: a transient IPC failure is retried before giving up. */
@@ -1002,7 +1002,7 @@ export function PaymentSurface({
     // has moved past `started` is followed (settled → Completion), never
     // offered another commit.
     if (attempt.state !== 'started') {
-      followEndedAttempt(attempt);
+      followEndedWithReason(attempt);
       return;
     }
     usePaymentStore.getState().applyAttemptSnapshot(attempt);
@@ -1350,7 +1350,15 @@ export function PaymentSurface({
       setBridgeRefusalCopy(confirmRefusalCopy(reason, moneyStillDue(attempt)));
       return;
     }
-    // Set first: a force-failed attempt with live tender replaces it with M-P20.
+    followEndedWithReason(attempt);
+  }
+
+  /**
+   * RT-340 — follow an attempt main ended after this surface sent a payment
+   * action, saying why it is gone (M-P25) unless it settled. The line is set
+   * first: a force-failed attempt with live tender replaces it with M-P20.
+   */
+  function followEndedWithReason(attempt: PaymentAttemptRendererView): void {
     setBridgeRefusalCopy(attempt.state === 'settled' ? null : CONFIRM_ENDED_COPY);
     followEndedAttempt(attempt);
   }

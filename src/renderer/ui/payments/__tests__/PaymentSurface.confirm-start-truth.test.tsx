@@ -270,7 +270,29 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
     await pressConfirm();
 
     expect(refusalText()).toContain(TRY_AGAIN);
-    expect(screen.getByTestId('payment-surface-confirm')).toBeInTheDocument();
+    // The commit is still offered and a press really settles again.
+    h.confirm.mockResolvedValueOnce({ kind: 'ok', settled_at: '2026-10-10T09:03:00.000Z' });
+    await pressConfirm();
+    expect(h.confirm).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument();
+  });
+
+  it('a read retry that finds the attempt ended says why it is gone (M-P25)', async () => {
+    const h = makeHarness();
+    await pickCash(h);
+    h.confirm.mockRejectedValueOnce(new Error('ipc lost'));
+    h.read.mockRejectedValue(new Error('ipc lost'));
+    await pressConfirm();
+
+    h.read.mockResolvedValue(ok(attempt('cancelled')));
+    await act(async () => {
+      screen.getByTestId('payment-surface-reread').click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(usePaymentStore.getState().paymentSlice).toBeNull();
+    expect(refusalText()).toContain('انتهت عملية الدفع هذه دون أن تكتمل');
   });
 
   it('a lost confirm with a lost read offers the read retry, never the commit', async () => {
