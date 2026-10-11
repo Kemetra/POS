@@ -222,6 +222,20 @@ describe('RT-358 ReauthDialog', () => {
     expect(opener).toHaveFocus();
   });
 
+  it('renders inside its own subtree (so the lock’s inert, concealed wrapper covers it)', () => {
+    signInAs('Manager One');
+    render(
+      <div data-testid="app-subtree">
+        <ReauthDialog
+          operator={bridge({ kind: 'reauthenticated' })}
+          onReauthenticated={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </div>,
+    );
+    expect(screen.getByTestId('app-subtree')).toContainElement(screen.getByRole('dialog'));
+  });
+
   it('while a request is in flight, the fields and buttons are disabled and Esc does not cancel', async () => {
     signInAs('Manager One');
     let release: (v: ReauthenticateResponse) => void = () => undefined;

@@ -3,7 +3,7 @@ import { useId, useRef, useState, type JSX, type SyntheticEvent } from 'react';
 import type { OperatorBridgeAPI, ReauthenticateResponse } from '../../../shared/bridge-api.js';
 import type { RefusalCategory } from '../../../shared/audit/event-shape.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
-import { Dialog } from '../../v5/foundation/Dialog.js';
+import { Dialog, DialogHost } from '../../v5/foundation/Dialog.js';
 import { EMPTY_INPUT_MESSAGE, REAUTH_COPY, SIGN_IN_REFUSAL_COPY } from './messages.js';
 import '../../v5/sale/live-sale.css';
 import '../../v5/shift/shift.css';
@@ -94,62 +94,71 @@ export function ReauthDialog({
     if (!submitting) void submit();
   };
 
+  // Its own DialogHost: the legacy AppShell routes have none, and the fallback
+  // portal (document.body) would sit outside the lock's inert, concealed
+  // subtree — the dialog would float over the lock screen.
   return (
-    <Dialog
-      label={REAUTH_COPY.title}
-      {...(submitting ? {} : { onCancel })}
-      initialFocusRef={identifierRef}
-    >
-      <h2 className="v5-live-dialog-title">{REAUTH_COPY.title}</h2>
-      <form onSubmit={handleSubmit} noValidate>
-        {displayName !== null && (
-          <p data-testid="reauth-manager-name">
-            {REAUTH_COPY.managerLabel}: <bdi>{displayName}</bdi>
-          </p>
-        )}
-        <div className="v5-shift-fields">
-          <label htmlFor={identifierId}>{REAUTH_COPY.identifierLabel}</label>
-          <input
-            id={identifierId}
-            ref={identifierRef}
-            className="v5-shift-input v5-ltr"
-            type="text"
-            autoComplete="username"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            disabled={submitting}
-            value={identifier}
-            onChange={(e) => {
-              setIdentifier(e.target.value);
-            }}
-            data-testid="reauth-identifier"
-          />
-          <label htmlFor={passwordId}>{REAUTH_COPY.passwordLabel}</label>
-          <input
-            id={passwordId}
-            className="v5-shift-input v5-ltr"
-            type="password"
-            autoComplete="current-password"
-            disabled={submitting}
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-            }}
-            data-testid="reauth-password"
-          />
-        </div>
-        <ReauthFeedback submitting={submitting} feedback={feedback} />
-        <div>
-          <button type="button" className="v5-live-btn" disabled={submitting} onClick={onCancel}>
-            {REAUTH_COPY.cancel}
-          </button>
-          <button type="submit" className="v5-live-btn v5-live-btn--primary" disabled={submitting}>
-            {REAUTH_COPY.submit}
-          </button>
-        </div>
-      </form>
-    </Dialog>
+    <DialogHost>
+      <Dialog
+        label={REAUTH_COPY.title}
+        {...(submitting ? {} : { onCancel })}
+        initialFocusRef={identifierRef}
+      >
+        <h2 className="v5-live-dialog-title">{REAUTH_COPY.title}</h2>
+        <form onSubmit={handleSubmit} noValidate>
+          {displayName !== null && (
+            <p data-testid="reauth-manager-name">
+              {REAUTH_COPY.managerLabel}: <bdi>{displayName}</bdi>
+            </p>
+          )}
+          <div className="v5-shift-fields">
+            <label htmlFor={identifierId}>{REAUTH_COPY.identifierLabel}</label>
+            <input
+              id={identifierId}
+              ref={identifierRef}
+              className="v5-shift-input v5-ltr"
+              type="text"
+              autoComplete="username"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              disabled={submitting}
+              value={identifier}
+              onChange={(e) => {
+                setIdentifier(e.target.value);
+              }}
+              data-testid="reauth-identifier"
+            />
+            <label htmlFor={passwordId}>{REAUTH_COPY.passwordLabel}</label>
+            <input
+              id={passwordId}
+              className="v5-shift-input v5-ltr"
+              type="password"
+              autoComplete="current-password"
+              disabled={submitting}
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+              }}
+              data-testid="reauth-password"
+            />
+          </div>
+          <ReauthFeedback submitting={submitting} feedback={feedback} />
+          <div>
+            <button type="button" className="v5-live-btn" disabled={submitting} onClick={onCancel}>
+              {REAUTH_COPY.cancel}
+            </button>
+            <button
+              type="submit"
+              className="v5-live-btn v5-live-btn--primary"
+              disabled={submitting}
+            >
+              {REAUTH_COPY.submit}
+            </button>
+          </div>
+        </form>
+      </Dialog>
+    </DialogHost>
   );
 }
 

@@ -83,7 +83,7 @@ describe('RT-358 StuckShiftSurface — re-auth required', () => {
     expect(bridge.listStuckShifts).toHaveBeenCalledTimes(2);
   });
 
-  it('a second reauth_required right after a re-auth shows the error state, not a new prompt', async () => {
+  it('a second reauth_required right after a re-auth: Arabic copy, no Retry, no new prompt', async () => {
     const user = userEvent.setup();
     const bridge = makeBridge([REAUTH_REQUIRED, REAUTH_REQUIRED]);
     renderSurface(bridge);
@@ -92,8 +92,12 @@ describe('RT-358 StuckShiftSurface — re-auth required', () => {
     await waitFor(() => {
       expect(bridge.listStuckShifts).toHaveBeenCalledTimes(2);
     });
-    expect(await screen.findByTestId('stuck-shift-surface-error')).toBeInTheDocument();
+    expect(await screen.findByTestId('stuck-shift-surface-reauth-failed')).toHaveTextContent(
+      SIGN_IN_REFUSAL_COPY.not_signed_in,
+    );
     expect(screen.queryByTestId('reauth-required')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Unable to load|try again/i);
   });
 
   it('cancelling the dialog leaves the notice in place', async () => {

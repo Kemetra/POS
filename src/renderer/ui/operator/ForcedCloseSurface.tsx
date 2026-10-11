@@ -10,6 +10,7 @@ import type {
   ListStuckShiftsResponse,
 } from '../../../shared/bridge-api.js';
 import { ReauthDialog, ReauthRequiredNotice } from './ReauthDialog.js';
+import { SIGN_IN_REFUSAL_COPY } from './messages.js';
 
 // ─── Duration formatting ──────────────────────────────────────────────────────
 
@@ -147,6 +148,8 @@ type SurfaceState =
   | { kind: 'error' }
   /** RT-358 — the manager's sign-in expired; the re-auth dialog may be open. */
   | { kind: 'reauth'; dialogOpen: boolean }
+  /** RT-358 — refused right after a re-auth: Arabic sign-in copy, no Retry, no new prompt. */
+  | { kind: 'reauthFailed'; message: string }
   | { kind: 'list'; shifts: StuckShiftSummary[] };
 
 /** RT-358 — a list answer as a surface state; a second re-auth prompt is never shown. */
@@ -154,10 +157,13 @@ function surfaceOf(res: ListStuckShiftsResponse, afterReauth: boolean): SurfaceS
   if (res.kind === 'stuck_shifts') {
     return res.shifts.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: res.shifts };
   }
-  if (res.category === 'reauth_required' && !afterReauth) {
-    return { kind: 'reauth', dialogOpen: false };
+  if (afterReauth) {
+    const category = res.category === 'reauth_required' ? 'not_signed_in' : res.category;
+    return { kind: 'reauthFailed', message: SIGN_IN_REFUSAL_COPY[category] };
   }
-  return { kind: 'error' };
+  return res.category === 'reauth_required'
+    ? { kind: 'reauth', dialogOpen: false }
+    : { kind: 'error' };
 }
 
 type DialogState =
@@ -268,6 +274,12 @@ export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Ele
             setSurface({ kind: 'reauth', dialogOpen: true });
           }}
         />
+      )}
+
+      {surface.kind === 'reauthFailed' && (
+        <p data-testid="stuck-shift-surface-reauth-failed" role="alert" dir="rtl" lang="ar">
+          {surface.message}
+        </p>
       )}
 
       {surface.kind === 'reauth' && surface.dialogOpen && (

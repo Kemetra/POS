@@ -137,8 +137,25 @@ describe('RT-358 CashierManagement — re-auth required on «Set first PIN»', (
     await waitFor(() => {
       expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(2);
     });
-    expect(await screen.findByTestId('action-error')).toBeInTheDocument();
+    expect(await screen.findByTestId('action-error')).toHaveTextContent(
+      SIGN_IN_REFUSAL_COPY.not_signed_in,
+    );
     expect(screen.queryByTestId('reauth-required')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Action could not be completed|try again/i);
+  });
+
+  it('a no_connection right after a re-auth uses the Arabic copy, not the English generic error', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge([REAUTH_REQUIRED, { kind: 'refused', category: 'no_connection' }]);
+    renderSurface(bridge);
+    await submitFirstPin(user);
+    await screen.findByTestId('reauth-required');
+    await reauthenticate(user);
+
+    expect(await screen.findByTestId('action-error')).toHaveTextContent(
+      SIGN_IN_REFUSAL_COPY.no_connection,
+    );
+    expect(document.body.textContent).not.toMatch(/Action could not be completed/);
   });
 
   it('a refused re-auth keeps the dialog open and does not re-submit', async () => {

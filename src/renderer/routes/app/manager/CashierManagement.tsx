@@ -4,9 +4,12 @@ import type {
   OperatorBridgeAPI,
   BranchRosterCashier,
   ProvisionCashierPinRequest,
+  ProvisionCashierPinResponse,
   ResetCashierPinRequest,
   UnlockCashierRequest,
 } from '../../../../shared/bridge-api.js';
+import type { OperatorRefusal, RefusalCategory } from '../../../../shared/audit/event-shape.js';
+import { SIGN_IN_REFUSAL_COPY } from '../../../ui/operator/messages.js';
 import { Workspace } from '../../../shell/regions/Workspace.js';
 import { ReauthDialog, ReauthRequiredNotice } from '../../../ui/operator/ReauthDialog.js';
 
@@ -60,6 +63,30 @@ type ActionState =
 
 const PIN_ALREADY_SET_MESSAGE = 'This cashier already has a PIN. Use Reset PIN to change it.';
 const CASHIER_NOT_READY_MESSAGE = "This cashier can't be activated yet.";
+
+/**
+ * The surface state for a provisioning answer. RT-358: `reauth_required`
+ * prompts once; any refusal right after a re-auth uses the Arabic sign-in copy
+ * (never the English generic retry, never a second prompt).
+ */
+function firstPinOutcome(
+  res: ProvisionCashierPinResponse | OperatorRefusal,
+  ctx: { cashier: BranchRosterCashier; pin: string; afterReauth: boolean },
+): ActionState {
+  if (res.kind === 'pin_provisioned') return { kind: 'success', message: 'First PIN set.' };
+  if (res.category === 'state_invalid') return { kind: 'error', message: PIN_ALREADY_SET_MESSAGE };
+  if (res.category === 'not_ready') return { kind: 'error', message: CASHIER_NOT_READY_MESSAGE };
+  if (ctx.afterReauth) return { kind: 'error', message: refusalAfterReauth(res.category) };
+  if (res.category === 'reauth_required') {
+    return { kind: 'reauthRequired', cashier: ctx.cashier, pin: ctx.pin, dialogOpen: false };
+  }
+  return { kind: 'error' };
+}
+
+/** A refusal right after a re-auth: never a new prompt, so `reauth_required` reads as signed out. */
+function refusalAfterReauth(category: RefusalCategory): string {
+  return SIGN_IN_REFUSAL_COPY[category === 'reauth_required' ? 'not_signed_in' : category];
+}
 
 export function CashierManagement({ operator }: Props): JSX.Element {
   const [cashiers, setCashiers] = useState<BranchRosterCashier[] | null>(null);
@@ -155,17 +182,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
     };
     const res = await runExclusive(() => operator.provisionCashierPin(req));
     if (res === undefined) return;
-    if (res.kind === 'pin_provisioned') {
-      setAction({ kind: 'success', message: 'First PIN set.' });
-    } else if (res.category === 'reauth_required' && !afterReauth) {
-      setAction({ kind: 'reauthRequired', cashier, pin, dialogOpen: false });
-    } else if (res.category === 'state_invalid') {
-      setAction({ kind: 'error', message: PIN_ALREADY_SET_MESSAGE });
-    } else if (res.category === 'not_ready') {
-      setAction({ kind: 'error', message: CASHIER_NOT_READY_MESSAGE });
-    } else {
-      setAction({ kind: 'error' });
-    }
+    setAction(firstPinOutcome(res, { cashier, pin, afterReauth }));
   }
 
   function handleSetFirstPinConfirm(): void {
