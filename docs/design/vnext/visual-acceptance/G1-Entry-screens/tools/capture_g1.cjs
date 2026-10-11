@@ -1,10 +1,15 @@
 // Capture every G-1 reference (light + forced colours) and run fit + axe checks.
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 // Needs playwright-core and an installed Chromium. Point PLAYWRIGHT_CORE at a playwright-core
 // folder if it is not resolvable from here. Usage: node capture_g1.cjs <G1 folder> [axe.min.js]
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 
+if (!process.argv[2]) {
+  console.error('usage: node capture_g1.cjs <G1-Entry-screens folder> [axe.min.js]');
+  process.exit(2);
+}
 const dir = path.resolve(process.argv[2]);
 const outDir = path.join(dir, 'captures');
 const axePath = process.argv[3];
@@ -22,7 +27,7 @@ fs.mkdirSync(outDir, { recursive: true });
       const ctx = await browser.newContext({ viewport: { width: w + 48, height: h + 48 }, deviceScaleFactor: 1 });
       const page = await ctx.newPage();
       if (mode === 'forced') await page.emulateMedia({ forcedColors: 'active' });
-      await page.goto('file:///' + path.join(dir, f).replace(/\\/g, '/'));
+      await page.goto(pathToFileURL(path.join(dir, f)).href);
       const el = await page.$('.rt');
       await el.screenshot({ path: path.join(outDir, f.replace('.html', `-${mode}.png`)) });
       if (mode === 'light') {
@@ -48,8 +53,13 @@ fs.mkdirSync(outDir, { recursive: true });
             const r = n.getBoundingClientRect();
             return r.width > 0 && (r.height < 44 || r.width < 44);
           }).length;
-          const clipped = [...document.querySelectorAll('.who-name, .auth-who h2')].filter((n) => n.scrollWidth > n.clientWidth + 1).length;
-          return { out, scroll, small, targets, clipped, keypadTop };
+          // The header name is one line (overflow is a failure); roster names wrap to two lines,
+          // then clamp, so they are counted separately (vertical, not horizontal, overflow).
+          const clipped = [...document.querySelectorAll('.auth-who h2')].filter((n) => n.scrollWidth > n.clientWidth + 1).length;
+          const names = [...document.querySelectorAll('.who-name')];
+          const wrapped = names.filter((n) => n.clientHeight > parseFloat(getComputedStyle(n).lineHeight) * 1.5).length;
+          const clamped = names.filter((n) => n.scrollHeight > n.clientHeight + 3).length;
+          return { out, scroll, small, targets, clipped, wrapped, clamped, keypadTop };
         });
         let axe = null;
         if (axePath) {

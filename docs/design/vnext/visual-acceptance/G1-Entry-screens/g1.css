@@ -417,8 +417,9 @@ body {
   line-height: 1.5;
 }
 .auth-who .badge {
-  background: var(--primary);
-  color: #fff;
+  /* not filled teal: the commit below is the region's one teal fill */
+  background: var(--primary-soft);
+  color: var(--primary-emphasis);
 }
 .prompt {
   display: flex;
@@ -491,6 +492,21 @@ body {
 }
 .notice-warning .icon {
   color: var(--warning);
+}
+.notice-neutral {
+  border-color: var(--border);
+  background: var(--surface-elevated);
+  color: var(--text);
+  font-weight: 400;
+}
+.notice-neutral .icon {
+  color: var(--text-muted);
+}
+.notice-action {
+  align-items: center;
+}
+.notice-action p {
+  flex: 1;
 }
 .notice-danger .icon {
   color: var(--danger);
@@ -778,6 +794,10 @@ body {
   .notice {
     border-color: CanvasText;
   }
+  /* Selected / current keep the system highlight. forced-color-adjust: none, or the text's
+     Canvas backplate hides HighlightText: the shipped precedent is v5/checkout/checkout.css
+     (selected tender tile) and v5/frame/frame.css (current nav entry). DESIGN.md's
+     "product images only" wording predates it; flagged in G1-Spec.html. */
   .who[aria-pressed='true'],
   .btn[aria-pressed='true'],
   .nav a[aria-current='page'] {
@@ -786,8 +806,14 @@ body {
     background: Highlight;
     color: HighlightText;
   }
+  /* The un-forced subtree needs the system pair on its children too. */
+  .who[aria-pressed='true'] .who-name,
+  .btn[aria-pressed='true'] .icon,
+  .nav a[aria-current='page'] .icon {
+    color: HighlightText;
+  }
   .who[aria-pressed='true'] .badge {
-    forced-color-adjust: none;
+    border-color: HighlightText;
     background: HighlightText;
     color: Highlight;
   }
@@ -811,9 +837,8 @@ body {
     border-color: CanvasText;
   }
   .dots span.on {
-    forced-color-adjust: none;
-    border-color: CanvasText;
-    background: CanvasText;
+    /* a border-filled dot survives forced colours without un-forcing anything */
+    border-width: 7px;
   }
   .dots.err,
   .notice-danger {
@@ -826,10 +851,9 @@ body {
     border: 2px solid CanvasText;
   }
   .mark i {
-    forced-color-adjust: none;
-    background: CanvasText;
+    border: 2px solid CanvasText;
   }
   .mark i::after {
-    background: Canvas;
+    border: 1px solid CanvasText;
   }
 }

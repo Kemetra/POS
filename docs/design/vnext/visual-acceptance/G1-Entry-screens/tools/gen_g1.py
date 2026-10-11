@@ -8,9 +8,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-OUT = Path(sys.argv[1])
-
-BRANCH = "فرع المعادي"
 TERMINAL = "POS-03"
 
 ROSTER = [
@@ -22,12 +19,12 @@ ROSTER = [
     "كريم فتحي",
 ]
 ROSTER_LONG = ROSTER + [
-    "عبد الرحمن مصطفى السيد الشناوي",
+    "عبد الرحمن مصطفى السيد عبد الفتاح الشناوي",
     "هدى محمد",
     "مصطفى جمال",
     "سلمى طارق",
     "إسلام حسن",
-    "فاطمة الزهراء عبد العزيز منصور",
+    "محمد عبد الرحمن مصطفى السيد عبد الفتاح الشناوي الدمياطي",
     "عمرو وليد",
     "دينا سامح",
     "يوسف أشرف",
@@ -81,11 +78,11 @@ def page(title: str, width: int, body: str, label: str) -> str:
 def bar(signed_context: bool = True, role: str | None = None) -> str:
     ctx = ""
     if signed_context:
+        # terminal_label is admin free text, not an id: <bdi>, body font. The branch name is
+        # not shown: the renderer has no branch-name field on main (RT-244 decision).
         ctx = (
             '<span class="sep" aria-hidden="true"></span>'
-            f'<span class="ctx"><b>{BRANCH}</b></span>'
-            '<span class="sep" aria-hidden="true"></span>'
-            f'<span class="ctx">الجهاز <span class="num">{TERMINAL}</span></span>'
+            f'<span class="ctx">الجهاز <b><bdi>{TERMINAL}</bdi></b></span>'
         )
     if role:
         ctx += f'<span class="sep" aria-hidden="true"></span><span class="ctx">{role}</span>'
@@ -236,6 +233,7 @@ def state_lockout(w: int) -> str:
 
 
 def state_unreachable(w: int) -> str:
+    # no_connection only. Another roster refusal shows «تعذّر تحميل قائمة الكاشير.» in the same slot.
     notice = (
         '<div class="roster-empty">'
         f'<p class="notice notice-warning" role="alert">{icon("warn")}'
@@ -244,13 +242,25 @@ def state_unreachable(w: int) -> str:
     return signin_stage(roster_panel(notice), auth_waiting("لا يمكن إدخال الرقم السري قبل تحميل القائمة."))
 
 
+def state_roster_empty(w: int) -> str:
+    # The roster loaded and holds no cashier: a fact, not a fault (neutral, not warning).
+    notice = (
+        '<div class="roster-empty">'
+        f'<p class="notice notice-neutral" role="status">{icon("users")}'
+        "لا يوجد كاشير مسجّل في هذا الفرع.</p></div>"
+    )
+    return signin_stage(
+        roster_panel(notice), auth_waiting("الدخول بالرقم السري يحتاج كاشيرًا مسجّلًا في هذا الفرع.")
+    )
+
+
 def state_ready(w: int) -> str:
     return (
         bar(signed_context=False)
         + '<main class="center"><section class="card" aria-labelledby="ready-h">'
         f'<span class="card-icon">{icon("terminal")}</span>'
         '<h1 id="ready-h">الجهاز مرتبط وجاهز.</h1>'
-        f'<dl class="facts"><dt>الجهاز</dt><dd><span class="num">{TERMINAL}</span></dd></dl>'
+        f'<dl class="facts"><dt>الجهاز</dt><dd><bdi>{TERMINAL}</bdi></dd></dl>'
         '<button type="button" class="btn btn-primary commit focus">متابعة</button>'
         "</section></main>"
     )
@@ -286,7 +296,14 @@ def state_reauth(w: int) -> str:
         '<button type="button" class="btn">تعيين أول رقم سري</button></li>'
         for n in ROSTER[:4]
     )
-    work = f'<section class="work" inert><h1>الكاشير</h1><ul class="rows">{rows}</ul></section>'
+    notice = (
+        f'<div class="notice notice-warning notice-action" role="alert">{icon("warn")}'
+        '<p>انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.</p>'
+        '<button type="button" class="btn btn-primary">تسجيل الدخول</button></div>'
+    )
+    work = (
+        f'<section class="work" inert><h1>الكاشير</h1><ul class="rows">{rows}</ul>{notice}</section>'
+    )
     dialog = (
         '<div class="scrim">'
         '<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="reauth-h">'
@@ -319,6 +336,7 @@ STATES = [
     ("WrongPin", "رقم سري غير صحيح", state_wrong_pin),
     ("Lockout", "محاولات كثيرة", state_lockout),
     ("Unreachable", "تعذّر تحميل القائمة", state_unreachable),
+    ("RosterEmpty", "لا يوجد كاشير مسجّل", state_roster_empty),
     ("Ready", "الجهاز مرتبط وجاهز", state_ready),
     ("Pairing", "ربط الجهاز", state_pairing),
     ("Reauth", "تسجيل دخول المدير مرة أخرى", state_reauth),
@@ -326,13 +344,16 @@ STATES = [
 
 
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+    if len(sys.argv) != 2:
+        sys.exit("usage: python -I gen_g1.py <G1-Entry-screens folder>")
+    out = Path(sys.argv[1])
+    out.mkdir(parents=True, exist_ok=True)
     for key, title, fn in STATES:
         for w in (1024, 1280):
-            (OUT / f"G1-{key}-{w}.html").write_text(
+            (out / f"G1-{key}-{w}.html").write_text(
                 page(title, w, fn(w), f"G1-{key}"), encoding="utf-8"
             )
-    print(f"[OK] wrote {len(STATES) * 2} files to {OUT}")
+    print(f"[OK] wrote {len(STATES) * 2} files to {out}")
 
 
 if __name__ == "__main__":
