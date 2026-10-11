@@ -144,6 +144,20 @@ describe('RT-358 CashierManagement — re-auth required on «Set first PIN»', (
     expect(document.body.textContent).not.toMatch(/Action could not be completed|try again/i);
   });
 
+  it('a state_invalid right after a re-auth (lock or latch before the retry) is not reported as "already has a PIN"', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge([REAUTH_REQUIRED, { kind: 'refused', category: 'state_invalid' }]);
+    renderSurface(bridge);
+    await submitFirstPin(user);
+    await screen.findByTestId('reauth-required');
+    await reauthenticate(user);
+
+    expect(await screen.findByTestId('action-error')).toHaveTextContent(
+      SIGN_IN_REFUSAL_COPY.state_invalid,
+    );
+    expect(document.body.textContent).not.toMatch(/already has a PIN/);
+  });
+
   it('a no_connection right after a re-auth uses the Arabic copy, not the English generic error', async () => {
     const user = userEvent.setup();
     const bridge = makeBridge([REAUTH_REQUIRED, { kind: 'refused', category: 'no_connection' }]);

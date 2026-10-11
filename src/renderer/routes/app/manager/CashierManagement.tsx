@@ -74,9 +74,12 @@ function firstPinOutcome(
   ctx: { cashier: BranchRosterCashier; pin: string; afterReauth: boolean },
 ): ActionState {
   if (res.kind === 'pin_provisioned') return { kind: 'success', message: 'First PIN set.' };
+  // After a re-auth, `state_invalid` may also mean the session locked or was
+  // latched before the retry ran, so it gets the neutral sign-in copy, never
+  // the create-only "already has a PIN" message.
+  if (ctx.afterReauth) return { kind: 'error', message: refusalAfterReauth(res.category) };
   if (res.category === 'state_invalid') return { kind: 'error', message: PIN_ALREADY_SET_MESSAGE };
   if (res.category === 'not_ready') return { kind: 'error', message: CASHIER_NOT_READY_MESSAGE };
-  if (ctx.afterReauth) return { kind: 'error', message: refusalAfterReauth(res.category) };
   if (res.category === 'reauth_required') {
     return { kind: 'reauthRequired', cashier: ctx.cashier, pin: ctx.pin, dialogOpen: false };
   }
