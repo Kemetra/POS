@@ -790,6 +790,21 @@ describe('createBackendClient — getStuckShifts request shape (Wave 4.1 Endpoin
     }
   });
 
+  // RT-358 (RT-247 §2.2) — the handler must tell a 401 (re-auth can fix it)
+  // apart from a 403 or a 5xx (it cannot).
+  for (const [status, kind] of [
+    [401, 'unauthenticated'],
+    [403, 'forbidden'],
+    [500, 'refused'],
+    [404, 'refused'],
+  ] as const) {
+    it(`HTTP ${String(status)} → ${kind}`, async () => {
+      const { fetchImpl } = captureFetch(new Response('{"error":"x"}', { status }));
+      const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+      await expect(client.getStuckShifts('b1', 'jwt')).resolves.toEqual({ kind });
+    });
+  }
+
   it('accepts an empty shifts array (no stuck shifts on branch)', async () => {
     const { fetchImpl } = captureFetch(
       new Response(JSON.stringify({ kind: 'ok', shifts: [] }), { status: 200 }),
@@ -880,8 +895,8 @@ describe('createBackendClient — getStuckShifts request shape (Wave 4.1 Endpoin
     expect(res.kind).toBe('refused');
   });
 
-  it('collapses 4xx/5xx to refused', async () => {
-    for (const status of [400, 401, 403, 404, 500]) {
+  it('collapses every other 4xx/5xx to refused (401/403 are told apart, RT-358)', async () => {
+    for (const status of [400, 404, 409, 500]) {
       const { fetchImpl } = captureFetch(new Response('{}', { status }));
       const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
       const res = await client.getStuckShifts('b1', 'jwt');

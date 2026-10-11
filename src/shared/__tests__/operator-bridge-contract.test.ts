@@ -67,6 +67,8 @@ describe('operator bridge typed surface (T008)', () => {
       | 'onSessionStateChanged'
       // RT-352 (RT-116 §7.2) — held-cart resume
       | 'getResumeState'
+      // RT-358 (RT-247 D-A1) — in-place manager re-auth
+      | 'reauthenticate'
     >();
   });
 

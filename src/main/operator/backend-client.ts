@@ -169,6 +169,10 @@ export interface BackendStuckShiftsSuccess {
 
 export type BackendStuckShiftsResponse =
   | BackendStuckShiftsSuccess
+  /** RT-358 — 401: the operator-identity JWT was refused (re-auth may fix it). */
+  | { kind: 'unauthenticated' }
+  /** RT-358 — 403: told apart from 401 so it never prompts for re-auth. */
+  | { kind: 'forbidden' }
   | { kind: 'refused' }
   | { kind: 'no_connection' };
 
@@ -333,6 +337,7 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
           signal: AbortSignal.timeout(timeoutMs),
         },
         interpretStuckShiftsResponse,
+        stuckShiftsRefusal,
       );
     },
   };
@@ -429,6 +434,13 @@ function parseRosterCashier(entry: unknown): BackendRosterCashier | null {
 
 /** RT-214: a non-2xx roster answer. 401/403 are told apart; the rest collapse (PR-2). */
 function rosterRefusal(status: number): BackendRosterResponse {
+  if (status === 401) return { kind: 'unauthenticated' };
+  if (status === 403) return { kind: 'forbidden' };
+  return { kind: 'refused' };
+}
+
+/** RT-358: a non-2xx stuck-shifts answer, classified like the roster's (RT-214). */
+function stuckShiftsRefusal(status: number): BackendStuckShiftsResponse {
   if (status === 401) return { kind: 'unauthenticated' };
   if (status === 403) return { kind: 'forbidden' };
   return { kind: 'refused' };

@@ -58,4 +58,14 @@ export const RESUME_STATE_IPC_CHANNELS = {
   GET_RESUME_STATE: 'operator:get-resume-state',
 } as const;
 
+/**
+ * RT-358 (RT-247 D-A1) — in-place manager re-auth after the held sign-in JWT
+ * expired. Its own registrar (`ipc/reauth.ts`); not on the locked-session
+ * allowlist (refused while locked).
+ */
+export const REAUTH_IPC_CHANNELS = {
+  /** Same-operator credential check; stores the fresh JWT main-side only. */
+  REAUTHENTICATE: 'operator:reauthenticate',
+} as const;
+
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

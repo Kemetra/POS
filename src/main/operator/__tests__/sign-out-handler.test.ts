@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { SignOutHandler } from '../sign-out-handler.js';
 import { SessionManager } from '../session-manager.js';
 import type { BackendClient, BackendSignOutResponse } from '../backend-client.js';
+import { jwtWithExp } from './__helpers__/jwt-fixture.js';
+import type { Logger } from 'pino';
 
 /**
  * 004-operator-session T027 + T024 — sign-out handler.
@@ -134,5 +136,90 @@ describe('SignOutHandler', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.jwt).toBe(JWT);
     expect(calls[0]?.jwt).not.toBe(ENVELOPE);
+  });
+});
+
+describe('SignOutHandler — RT-358 option A: skip the backend call for an expired JWT', () => {
+  const NOW_MS = Date.parse('2026-10-11T12:00:00.000Z');
+  const EXPIRED = jwtWithExp(NOW_MS / 1000 - 60);
+  const VALID = jwtWithExp(NOW_MS / 1000 + 600);
+
+  function capturingLogger(): { logger: Logger; events: unknown[] } {
+    const events: unknown[] = [];
+    const info = (obj: { event?: unknown }): void => {
+      events.push(obj.event);
+    };
+    return { logger: { info } as unknown as Logger, events };
+  }
+
+  it('an expired JWT: local session ended, holders cleared, no backend request, backend_skipped logged', async () => {
+    const sessionManager = makeFilledManager();
+    const calls: unknown[] = [];
+    const cleared: string[] = [];
+    const { logger, events } = capturingLogger();
+    const handler = new SignOutHandler({
+      backend: fakeBackend({ kind: 'signed_out' }, calls),
+      sessionManager,
+      jwtFor: () => EXPIRED,
+      clearJwt: (id) => cleared.push(id),
+      hasFreshReauthMark: () => false,
+      nowMs: () => NOW_MS,
+      logger,
+    });
+
+    await expect(handler.signOut()).resolves.toEqual({ kind: 'signed_out' });
+    expect(sessionManager.getCurrent()).toBeNull();
+    expect(cleared).toEqual(['be-sess-1']);
+    expect(calls).toEqual([]);
+    expect(events).toContain('operator.sign_out.backend_skipped');
+  });
+
+  it('a JWT that looks expired (fast clock) but carries a fresh mark is still sent', async () => {
+    const sessionManager = makeFilledManager();
+    const calls: Array<{ jwt: string }> = [];
+    const handler = new SignOutHandler({
+      backend: fakeBackend({ kind: 'signed_out' }, calls),
+      sessionManager,
+      jwtFor: () => EXPIRED,
+      hasFreshReauthMark: (id) => id === 'be-sess-1',
+      nowMs: () => NOW_MS,
+    });
+
+    await handler.signOut();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.jwt).toBe(EXPIRED);
+  });
+
+  it('the mark is read before the holders are cleared', async () => {
+    const sessionManager = makeFilledManager();
+    const calls: unknown[] = [];
+    let marked = true;
+    const handler = new SignOutHandler({
+      backend: fakeBackend({ kind: 'signed_out' }, calls),
+      sessionManager,
+      jwtFor: () => EXPIRED,
+      clearJwt: () => {
+        marked = false;
+      },
+      hasFreshReauthMark: () => marked,
+      nowMs: () => NOW_MS,
+    });
+
+    await handler.signOut();
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a valid JWT is sent as before', async () => {
+    const sessionManager = makeFilledManager();
+    const calls: unknown[] = [];
+    const handler = new SignOutHandler({
+      backend: fakeBackend({ kind: 'signed_out' }, calls),
+      sessionManager,
+      jwtFor: () => VALID,
+      nowMs: () => NOW_MS,
+    });
+
+    await handler.signOut();
+    expect(calls).toHaveLength(1);
   });
 });

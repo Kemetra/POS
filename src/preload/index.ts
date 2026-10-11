@@ -33,6 +33,8 @@ import type {
   UnlockCashierResponse,
   UnlockSessionRequest,
   UnlockSessionResponse,
+  ReauthenticateRequest,
+  ReauthenticateResponse,
   LockStateView,
   ResumeStateView,
 } from '../shared/bridge-api';
@@ -50,6 +52,7 @@ import {
 import {
   OPERATOR_IPC_CHANNELS,
   RESUME_STATE_IPC_CHANNELS,
+  REAUTH_IPC_CHANNELS,
   SESSION_LOCK_IPC_CHANNELS,
 } from '../shared/operator/channels';
 
@@ -109,6 +112,9 @@ const operator: OperatorBridgeAPI = {
     ) as Promise<UnlockSessionResponse>,
   getLockState: () =>
     ipcRenderer.invoke(SESSION_LOCK_IPC_CHANNELS.GET_LOCK_STATE) as Promise<LockStateView>,
+  // RT-358 — in-place manager re-auth after `reauth_required`.
+  reauthenticate: (req: ReauthenticateRequest) =>
+    ipcRenderer.invoke(REAUTH_IPC_CHANNELS.REAUTHENTICATE, req) as Promise<ReauthenticateResponse>,
   onSessionStateChanged: (cb) => subscribeSessionState(ipcRenderer, cb),
   // RT-352 — the draft cart main re-attached at sign-in (ids + a count only).
   getResumeState: () =>

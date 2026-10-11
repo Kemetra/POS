@@ -72,14 +72,15 @@ function makeDeps(
   session: OperatorSessionRecord | null,
   backendResult: Awaited<ReturnType<BackendClient['getStuckShifts']>>,
   calls?: { branchId?: string; jwt?: string }[],
-  jwtForSession?: string,
+  // RT-358: never an empty bearer, so a JWT is held unless a test says otherwise.
+  jwtForSession = 'jwt-default',
 ): StuckShiftsHandlerDeps {
   const jwtHolder = createJwtHolder();
-  if (session !== null && jwtForSession !== undefined) {
+  if (session !== null) {
     jwtHolder.set(session.backend_session_id, jwtForSession);
   }
   return {
-    sessionManager: { getCurrent: () => session },
+    sessionManager: { getCurrent: () => session, endIfCurrent: () => null },
     backendClient: fakeBackend(backendResult, calls),
     jwtHolder,
   };

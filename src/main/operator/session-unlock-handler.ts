@@ -4,6 +4,13 @@ import type { UnlockSessionRequest, UnlockSessionResponse } from '../../shared/b
 import type { OperatorRefusal, RefusalCategory } from '../../shared/audit/event-shape.js';
 
 import type { ClerkExchanger } from './clerk-client.js';
+import {
+  credentialSnapshotOf,
+  freshCredentialBlocker,
+  storeFreshCredential,
+} from './fresh-credential.js';
+import type { JwtHolder } from './jwt-holder.js';
+import { OnlineCredentialVerifier } from './online-credential-verifier.js';
 import type { OperatorSessionRecord, SessionManager } from './session-manager.js';
 
 /**
@@ -24,8 +31,17 @@ import type { OperatorSessionRecord, SessionManager } from './session-manager.js
  *   • single-flight — one verification at a time; a concurrent call is refused
  *     `rate_limited`, so parallel PIN attempts cannot race the 004 lockout
  *     counter (read → Argon2 → write);
- *   • the online-credential path has a main-side limiter mirroring the 004 PIN
- *     lockout (5 failures → 5 min). A network failure never counts.
+ *   • the online-credential path goes through the `OnlineCredentialVerifier`
+ *     (RT-358), shared with `operator:reauthenticate`: one limiter mirroring
+ *     the 004 PIN lockout (5 failures → 5 min, a network failure never counts)
+ *     and one in-flight gate for every online attempt.
+ *
+ * RT-358 (RT-247 Q2 = yes) — the online unlock already exchanges a fresh JWT;
+ * it now stores it (with the one-shot re-auth mark) instead of discarding it,
+ * so a manager who just unlocked is not asked for the password again minutes
+ * later. It is stored only when the post-exchange check passes for a session
+ * still LOCKED (same session, not latched, device not revoked); otherwise the
+ * unlock refuses and stores nothing. No local authority is refreshed.
  *
  * Refusals are generic (NFR-003). Credentials are never logged (P11).
  */
@@ -35,23 +51,27 @@ export interface SessionUnlockHandlerDeps {
   /** 004 local PIN check for this terminal's cashier; null on a match. */
   verifyCashierPin: (operator_id: string, pin: string) => Promise<OperatorRefusal | null>;
   clerk: ClerkExchanger;
+  /** RT-358 — the online check shared with re-auth. Built from `clerk` when omitted. */
+  onlineVerifier?: OnlineCredentialVerifier;
+  /** RT-358 Q2 — where the unlock's fresh JWT is stored. Omitted → not stored. */
+  jwtHolder?: Pick<JwtHolder, 'set'>;
+  /** RT-358 Q2 — a revoked device never receives a fresh credential. */
+  isDeviceRevoked?: () => boolean;
+  /** RT-358 — monotonic clock (ms) for the re-auth mark. Tests inject. */
+  monoNowMs?: () => number;
   now?: () => Date;
   logger?: Logger;
-}
-
-/** Same thresholds as the 004 PIN lockout (`pin-lockout.ts`). */
-const MAX_ONLINE_FAILURES = 5;
-const ONLINE_LOCKOUT_MS = 5 * 60_000;
-
-interface OnlineFailures {
-  operator_id: string;
-  count: number;
-  locked_until_ms: number | null;
 }
 
 interface LockedSession {
   kind: 'locked';
   session: OperatorSessionRecord;
+}
+
+/** A verified credential; `jwt` only on the online path. */
+interface Verified {
+  kind: 'verified';
+  jwt?: string;
 }
 
 function refuse(category: RefusalCategory): OperatorRefusal {
@@ -64,9 +84,16 @@ function isNonEmptyString(v: unknown): v is string {
 
 export class SessionUnlockHandler {
   private inFlight = false;
-  private onlineFailures: OnlineFailures | null = null;
+  private readonly online: OnlineCredentialVerifier;
 
-  constructor(private readonly deps: SessionUnlockHandlerDeps) {}
+  constructor(private readonly deps: SessionUnlockHandlerDeps) {
+    this.online =
+      deps.onlineVerifier ??
+      new OnlineCredentialVerifier({
+        clerk: deps.clerk,
+        ...(deps.now === undefined ? {} : { now: deps.now }),
+      });
+  }
 
   async unlock(req: UnlockSessionRequest): Promise<UnlockSessionResponse> {
     if (this.inFlight) return this.refused('rate_limited', 'concurrent');
@@ -84,13 +111,34 @@ export class SessionUnlockHandler {
     const { session } = precheck;
 
     const verdict = await this.verify(session, req);
-    if (verdict !== null) return verdict;
+    if (verdict.kind === 'refused') return verdict;
 
     // The session must still be the same locked session after the await.
     if (!this.isStillLocked(session.id)) return this.refused('state_invalid', 'session_changed');
+    if (verdict.jwt !== undefined) {
+      const blocked = this.storeOnlineJwt(session, verdict.jwt);
+      if (blocked !== null) return blocked;
+    }
     this.deps.sessionManager.unlock(this.now().toISOString());
     this.deps.logger?.info({ event: 'operator.session.unlocked' }, 'session unlocked');
     return { kind: 'unlocked' };
+  }
+
+  /** RT-358 Q2 — store the online unlock's JWT, or refuse when the session may not get it. */
+  private storeOnlineJwt(session: OperatorSessionRecord, jwt: string): OperatorRefusal | null {
+    const snapshot = credentialSnapshotOf(session);
+    const blocker = freshCredentialBlocker(
+      this.deps.sessionManager,
+      snapshot,
+      'locked',
+      this.deps.isDeviceRevoked ?? (() => false),
+    );
+    if (blocker !== null) return this.refused(blocker, 'session_changed');
+    if (this.deps.jwtHolder !== undefined) {
+      const mono = this.deps.monoNowMs?.() ?? performance.now();
+      storeFreshCredential(this.deps.jwtHolder, snapshot, jwt, mono);
+    }
+    return null;
   }
 
   private currentLockedSession(): OperatorRefusal | LockedSession {
@@ -103,7 +151,7 @@ export class SessionUnlockHandler {
   private verify(
     session: OperatorSessionRecord,
     req: UnlockSessionRequest,
-  ): Promise<OperatorRefusal | null> {
+  ): Promise<OperatorRefusal | Verified> {
     return session.role === 'cashier'
       ? this.verifyCashier(session.operator_id, req)
       : this.verifyOnline(session.operator_id, req);
@@ -117,54 +165,24 @@ export class SessionUnlockHandler {
   private async verifyCashier(
     operator_id: string,
     req: UnlockSessionRequest,
-  ): Promise<OperatorRefusal | null> {
+  ): Promise<OperatorRefusal | Verified> {
     if (req.method !== 'pin' || !isNonEmptyString(req.pin)) {
       return this.refused('invalid_input', 'shape');
     }
     const result = await this.deps.verifyCashierPin(operator_id, req.pin);
-    return result === null ? null : this.refused(result.category, 'pin');
+    return result === null ? { kind: 'verified' } : this.refused(result.category, 'pin');
   }
 
   private async verifyOnline(
     operator_id: string,
     req: UnlockSessionRequest,
-  ): Promise<OperatorRefusal | null> {
+  ): Promise<OperatorRefusal | Verified> {
     if (req.method !== 'online_credential' || !hasOnlineCredential(req)) {
       return this.refused('invalid_input', 'shape');
     }
-    if (this.isOnlineLockedOut(operator_id)) return this.refused('rate_limited', 'online_lockout');
-
-    const exchange = await this.deps.clerk.exchange({
-      identifier: req.identifier,
-      password: req.password,
-    });
-    if (exchange.kind === 'no_connection') return this.refused('no_connection', 'clerk');
-    if (exchange.kind !== 'ok' || exchange.operator_id !== operator_id) {
-      this.recordOnlineFailure(operator_id);
-      return this.refused('invalid_input', 'identity');
-    }
-    this.onlineFailures = null;
-    return null;
-  }
-
-  /** True while the operator's online backoff is active; an expired one resets. */
-  private isOnlineLockedOut(operator_id: string): boolean {
-    const f = this.onlineFailures;
-    if (f?.operator_id !== operator_id || f.locked_until_ms === null) return false;
-    if (this.now().getTime() < f.locked_until_ms) return true;
-    this.onlineFailures = null;
-    return false;
-  }
-
-  private recordOnlineFailure(operator_id: string): void {
-    const prior = this.onlineFailures?.operator_id === operator_id ? this.onlineFailures.count : 0;
-    const count = prior + 1;
-    this.onlineFailures = {
-      operator_id,
-      count,
-      locked_until_ms:
-        count >= MAX_ONLINE_FAILURES ? this.now().getTime() + ONLINE_LOCKOUT_MS : null,
-    };
+    const verdict = await this.online.verify(operator_id, req.identifier, req.password);
+    if (verdict.kind === 'refused') return this.refused(verdict.category, verdict.stage);
+    return { kind: 'verified', jwt: verdict.jwt };
   }
 
   private now(): Date {

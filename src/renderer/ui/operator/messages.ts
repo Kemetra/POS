@@ -32,6 +32,9 @@ export const SIGN_IN_REFUSAL_COPY: Readonly<Record<RefusalCategory, string>> = O
   // cashier has no provider-neutral identifier yet, so provisioning is not
   // possible. Never presented as a failed attempt.
   not_ready: 'لا يمكن تفعيل هذا الكاشير بعد.',
+  // RT-358 (RT-247 D-A1, UX-12, owner decision 2026-10-07) — the manager's
+  // sign-in expired. The only action offered is «تسجيل الدخول», never a retry.
+  reauth_required: 'انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.',
 });
 
 export const EMPTY_INPUT_MESSAGE = 'أدخل بيانات الدخول للمتابعة.';
