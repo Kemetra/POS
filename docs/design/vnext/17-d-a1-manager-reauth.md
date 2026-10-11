@@ -162,7 +162,12 @@ later (owner decision Q2). Storing it adds **no** local authority: the online un
 unlocks the session today after the same exchange, and storing the JWT only changes which
 credential the next `operator-identity` request presents, which the backend still checks. If it
 does, it must go through the same path as re-auth: the post-await session check and the one-shot
-"just re-authenticated" mark of §2.4. Without the mark, a JWT refused right after an unlock
+"just re-authenticated" mark of §2.4. The post-await check shares its identity, latch and
+revocation parts with re-auth, but the **expected lock state depends on the operation**:
+re-auth expects the session to be still **unlocked**, while an online unlock expects the same
+session to be still **locked**, as `unlockOnce` already requires (`isStillLocked`,
+`session-unlock-handler.ts:89-114`). An unlock stores the JWT and sets the mark only after that
+check passes and the session is unlocked; if the check fails it stores nothing. Without the mark, a JWT refused right after an unlock
 would prompt for the password a second time, right after the manager typed it.
 
 ### 2.4 Retry once, then fail closed
@@ -320,8 +325,10 @@ Main (vitest, `src/main/operator/__tests__/`):
 - Q1 = no: re-auth leaves `manager_signed_in_at` unchanged, and manager-PIN enrolment more than
   two minutes after the original sign-in is still refused `reauth_required` after a successful
   re-auth.
-- If Q2 = yes: a successful online unlock stores the JWT and sets the one-shot mark, and the
-  same post-await race refuses without storing.
+- If Q2 = yes: a successful online unlock of a session that is still locked after the exchange
+  stores the JWT and sets the one-shot mark (the locked success path). If the session ended,
+  changed, was already unlocked or was latched during the exchange, the unlock refuses and
+  stores nothing. Re-auth uses the same shared checks with the opposite lock expectation.
 - Retry (§2.4): after re-auth, a 401 on the next call ends the local session
   (`session-state: ended`) and returns `not_signed_in`, not `reauth_required`. The mark is
   consumed **before** that request is sent: a second call after it maps a 401 to
