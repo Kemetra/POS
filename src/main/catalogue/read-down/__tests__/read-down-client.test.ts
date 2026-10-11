@@ -322,7 +322,7 @@ describe('createReadDownClient — cursor pagination', () => {
 
   // RT-394 (Backend-Core 28d0249): the server scans exactly `limit` products per
   // page and emits only the sellable ones, so a page can hold NO items yet still
-  // carry a token. Only a null token ends the walk — never an empty page.
+  // carry a token. Only a null/empty token ends the walk — never an empty page.
   it('RT-395: continues past an empty non-terminal page (items: [] with a token)', async () => {
     const { fetchImpl, captured } = scriptedFetch([
       okResponse(page([ROW], 'snap-1', 'tok-2')),
@@ -361,6 +361,7 @@ describe('createReadDownClient — cursor pagination', () => {
 
     expect(result).toEqual({ kind: 'ok', sourceSnapshotId: 'snap-1', rows: [] });
     expect(captured).toHaveLength(2); // the empty first page did NOT end the walk
+    expect(captured[1]?.url).toBe(`${BASE}${SNAPSHOT_PATH}?page_token=tok-2`);
   });
 
   it('treats an empty-string next_page_token as the last page', async () => {
