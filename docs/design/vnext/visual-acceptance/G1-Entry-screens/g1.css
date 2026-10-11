@@ -386,6 +386,10 @@ body {
 .auth {
   min-block-size: 0;
 }
+.auth .panel-head {
+  /* same height before and after a name is picked, so the keypad never moves */
+  min-block-size: 70px;
+}
 .auth-body {
   flex: 1;
   min-block-size: 0;
@@ -455,7 +459,8 @@ body {
   border-color: var(--danger);
 }
 .feedback {
-  min-block-size: 44px;
+  /* reserved for the tallest refusal (two lines at 304px), so the keypad never moves */
+  min-block-size: 70px;
   display: flex;
   align-items: center;
 }

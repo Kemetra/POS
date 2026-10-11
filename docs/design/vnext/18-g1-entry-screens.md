@@ -1,7 +1,8 @@
 # 18 — G-1 entry-screen references: design brief (PROPOSED)
 
-> **Status: PROPOSED.** The owner approved this brief on 2026-10-11, including the §6 decisions
-> as recommended. The references are built in
+> **Status: PROPOSED.** On 2026-10-11 the owner approved this brief and §6 items 1–5 as
+> recommended. §6 item 6 and the unreachable-state PIN-column line were added after that
+> approval and are still proposed. The references are built in
 > [`visual-acceptance/G1-Entry-screens/`](visual-acceptance/G1-Entry-screens/G1-Spec.html) and are
 > waiting for owner visual approval. Until that approval they stay PROPOSED, not FROZEN.
 > Jira **RT-246** (Work Mode: Planning). It blocks **RT-244** (W1-D). It closes gap **G-1** in
@@ -35,7 +36,7 @@ The sign-in screen is a single centred stage with two zones, using the Direction
 - **Inline start (right): "who are you".** The roster, the widest zone. It scrolls inside its own
   region. Each cashier is a 60px tile (52px at 1024) with an initials badge and the name; long
   Arabic names wrap to two lines.
-- **Inline end (left): "prove it".** A fixed column of 320px (296px at 1024). It is in the same
+- **Inline end (left): "prove it".** A fixed column of 340px (304px at 1024). It is in the same
   place as the money column, which keeps the commit position consistent across the product.
   - Before selection: a quiet prompt, «اختر اسمك من القائمة لإدخال الرقم السري.». The keypad
     stays visible but disabled, so selecting a name never reflows the layout.
