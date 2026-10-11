@@ -320,6 +320,50 @@ describe('createReadDownClient — cursor pagination', () => {
     expect(captured[1]?.url).toBe(`${BASE}${SNAPSHOT_PATH}?page_token=tok-2`);
   });
 
+  // RT-394 (Backend-Core 28d0249): the server scans exactly `limit` products per
+  // page and emits only the sellable ones, so a page can hold NO items yet still
+  // carry a token. Only a null/empty token ends the walk — never an empty page.
+  it('RT-395: continues past an empty non-terminal page (items: [] with a token)', async () => {
+    const { fetchImpl, captured } = scriptedFetch([
+      okResponse(page([ROW], 'snap-1', 'tok-2')),
+      okResponse(page([], 'snap-1', 'tok-3')),
+      okResponse(page([ROW2], 'snap-1', null)),
+    ]);
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+    });
+
+    const result = await client.fetchSnapshot();
+
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok') {
+      expect(result.rows).toEqual([ROW, ROW2]); // the row after the empty page is kept
+      expect(result.sourceSnapshotId).toBe('snap-1');
+    }
+    expect(captured).toHaveLength(3);
+    expect(captured[2]?.url).toBe(`${BASE}${SNAPSHOT_PATH}?page_token=tok-3`);
+  });
+
+  it('RT-395: an all-empty walk (leading empty page with a token) is ok with zero rows', async () => {
+    const { fetchImpl, captured } = scriptedFetch([
+      okResponse(page([], 'snap-1', 'tok-2')),
+      okResponse(page([], 'snap-1', null)),
+    ]);
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+    });
+
+    const result = await client.fetchSnapshot();
+
+    expect(result).toEqual({ kind: 'ok', sourceSnapshotId: 'snap-1', rows: [] });
+    expect(captured).toHaveLength(2); // the empty first page did NOT end the walk
+    expect(captured[1]?.url).toBe(`${BASE}${SNAPSHOT_PATH}?page_token=tok-2`);
+  });
+
   it('treats an empty-string next_page_token as the last page', async () => {
     const { fetchImpl, captured } = scriptedFetch([okResponse(page([ROW], 'snap-1', ''))]);
     const client = createReadDownClient({
