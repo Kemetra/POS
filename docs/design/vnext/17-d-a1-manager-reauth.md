@@ -86,16 +86,23 @@ It reuses the online path of `SessionUnlockHandler` (`session-unlock-handler.ts:
 
 - `clerk.exchange({ identifier, password })`.
 - **The exchanged `operator_id` must equal the active session's operator.** Re-auth refreshes
-  the credential of the person already signed in; it never swaps identity. A different person
-  is refused (`role_mismatch`) and must use sign-out and sign-in or takeover.
+  the credential of the person already signed in; it never swaps identity. Another person's
+  valid credentials are refused with the **same generic `invalid_input` as wrong credentials**,
+  as `SessionUnlockHandler.verifyOnline` already does (`session-unlock-handler.ts:141-145`), so
+  the result never reveals that another account's credentials were valid. That person must use
+  sign-out and sign-in or takeover.
 - The same 5-failures / 5-minute lockout as the online unlock, shared with it.
 - **Re-check the session after the exchange.** Snapshot the active session (`id`,
   `backend_session_id`, `operator_id`) before `clerk.exchange`, and after it resolves confirm
-  that the same session is still the current one, as `SessionUnlockHandler.unlockOnce` already
-  does (`isStillLocked`, `session-unlock-handler.ts:89-114`). If sign-out, revocation, a
-  takeover or any other transition happened during the network call, refuse with
-  `not_signed_in` and store nothing. A late success must never repopulate credentials for an
-  ended session.
+  that the same session is still the current one **and still unlocked**
+  (`lock_state` is not `locked`), as `SessionUnlockHandler.unlockOnce` already re-checks its own
+  state (`isStillLocked`, `session-unlock-handler.ts:89-114`).
+  - Sign-out, revocation or takeover during the network call → refuse `not_signed_in` and store
+    nothing. A late success must never repopulate credentials for an ended session.
+  - An inactivity lock during the call → refuse `state_invalid` and store nothing. `lock()` keeps
+    the same session id and only changes `lock_state` (`session-manager.ts:309-313`), and the
+    routed surface stays mounted behind the lock overlay, so without this check a late success
+    would retry a privileged action behind the lock screen.
 - On success: `operatorJwtHolder.set(active.backend_session_id, exchange.jwt)`. No new backend
   session is created. A fresh JWT for the same Clerk user satisfies the backend, which matches
   `session.user_id` to the JWT's user (`pos-operators.service.ts`, sign-out path).
@@ -105,6 +112,15 @@ still-current session record, through a new `SessionManager` method keyed by ses
 `renewAdmission`). Re-auth creates no session, and `SessionManager.create` is the only place that
 sets the timestamp today, so without this step `manager-pin-enrollment.ts` would still refuse a
 re-authenticated manager after two minutes.
+
+The step-up refresh is only useful if the enrolment surface can reach re-auth. Today
+`ManagerPinEnrollment` (`src/renderer/v5/shift/ManagerPinEnrollment.tsx:66-80`) clears its fields
+**before** submitting and shows `reauth_required` as static text, so the manager can only sign
+out and sign in again. With Q1, the slice also gives that surface the §2.5 warning and dialog:
+- On `reauth_required` it offers «تسجيل الدخول». After a successful re-auth it re-submits the
+  enrolment once.
+- The entered manager PINs are kept in component memory until the request settles, and cleared
+  on success, on cancel and on any other refusal, instead of before the request.
 
 The lock-screen online unlock already does a full `clerk.exchange` and then throws the JWT
 away. It should also store it, so a manager who unlocked the screen is not asked again minutes
@@ -120,15 +136,22 @@ The retried request looks exactly like the first one, so main needs its own reco
 re-auth just happened. Without it a second 401 would only map to `reauth_required` again and
 prompt again.
 
-- **The marker.** On a successful `operator:reauthenticate`, main marks the held JWT for the
-  active `backend_session_id` as **just re-authenticated**. The mark lives next to the JWT in
-  the holder (for example `set(sessionId, jwt, { reauthenticated: true })`), so it is bound to
-  that session and is cleared with it on sign-out, revocation or takeover.
+- **The marker.** On a successful `operator:reauthenticate` (and, with Q2, a successful online
+  unlock), main marks the held JWT for the active `backend_session_id` as **just
+  re-authenticated**, with the time it was set. The mark lives next to the JWT in the holder (for
+  example `set(sessionId, jwt, { reauthenticatedAt })`), so it is bound to that session and is
+  cleared with it on sign-out, revocation or takeover.
+- **Short-lived.** The mark is only valid for `REAUTH_MARK_TTL_MS`, **60 seconds**, measured
+  on a monotonic clock. That is long enough for the immediate retry, and short enough that
+  "exchanged seconds ago" stays true. An expired mark is treated as absent. Without the limit, a
+  mark left by an unlock with no protected call afterwards could survive until the JWT itself
+  expires at the backend. A slow terminal clock can hide that expiry from the `exp` pre-check, so
+  the eventual 401 would end a healthy session instead of prompting.
 - **Consumed by the next call.** The first `operator-identity` request that presents that JWT
   consumes the mark **before** the request is sent, whatever the outcome. The mark is never
   carried by IPC; the renderer cannot set or replay it.
 - **What a 401 means.** For a request that consumed the mark, a 401 is not "re-auth
-  required": a JWT exchanged seconds ago was refused, so the backend operator session itself
+  required": a JWT exchanged within the last `REAUTH_MARK_TTL_MS` was refused, so the backend operator session itself
   is gone (expired or revoked). Main ends the local session (`sessionManager.end()`; the
   existing `operator:session-state` push sends the renderer to sign-in) and returns
   `not_signed_in`. The sign-in screen shows `SIGN_IN_REFUSAL_COPY.not_signed_in`.
@@ -192,6 +215,7 @@ sign-in.
 | new `src/main/operator/reauth-handler.ts` + `src/main/ipc/operator.ts` + `src/shared/operator/channels.ts` + `src/shared/bridge-api.ts` + preload | `operator:reauthenticate` |
 | `src/renderer/ui/operator/messages.ts` | The owner-approved copy and the action label |
 | `src/renderer/routes/app/manager/CashierManagement.tsx`, `src/renderer/ui/operator/ForcedCloseSurface.tsx` | The inline warning, the dialog, retry once |
+| `src/renderer/v5/shift/ManagerPinEnrollment.tsx` (if Q1 = yes) | The same warning and dialog on `reauth_required`; keep the PINs until the request settles; re-submit once |
 | new `src/renderer/ui/operator/ReauthDialog.tsx` | The dialog |
 
 ## 4. Tests to write (implementation slice)
@@ -206,7 +230,11 @@ Main (vitest, `src/main/operator/__tests__/`):
   different `operator_id` → refused and the holder is unchanged; `no_connection` → refused,
   holder unchanged; the lockout is shared with the online unlock.
 - Re-auth race: the session ends, is revoked or is taken over while `clerk.exchange` is in
-  flight → refused `not_signed_in`, and neither the JWT nor the mark is stored.
+  flight → refused `not_signed_in`, and neither the JWT nor the mark is stored. The session
+  **locks** while the exchange is in flight → refused `state_invalid`, nothing stored, and no
+  retry runs behind the lock.
+- Another operator's valid credentials → `invalid_input`, the same as wrong credentials; no
+  distinct refusal reveals that they were valid.
 - If Q1 = yes: after re-auth, `manager_signed_in_at` is refreshed on the current session, and
   manager-PIN enrolment more than two minutes after the original sign-in is allowed.
 - If Q2 = yes: a successful online unlock stores the JWT and sets the one-shot mark, and the
@@ -216,6 +244,8 @@ Main (vitest, `src/main/operator/__tests__/`):
   consumed **before** that request is sent: a second call after it maps a 401 to
   `reauth_required` again. A successful call also consumes it. Sign-out, revocation and
   takeover clear it. No IPC payload can set it.
+- Mark TTL: a mark older than `REAUTH_MARK_TTL_MS` (fake monotonic clock) is ignored, so a 401
+  maps to `reauth_required` and the session is not ended.
 - Sign-out with an expired JWT → local session ended, holders cleared, no backend request,
   `backend_skipped` logged.
 - Redaction: no JWT, identifier or password in logs or audit events
@@ -226,6 +256,9 @@ Renderer:
   «تسجيل الدخول»; no «حاول مرة أخرى», no English. Success re-submits the PIN once; cancel clears
   the PIN fields.
 - `StuckShiftSurface`: same copy; success reloads the list.
+- If Q1 = yes, `ManagerPinEnrollment`: `reauth_required` offers «تسجيل الدخول»; success
+  re-submits the enrolment once with the kept PINs; the PINs are cleared on success, cancel and
+  any other refusal.
 - `ReauthDialog`: focus, Escape, Tab trap, focus return; wrong credentials show sign-in copy.
 
 Bench (packaged, RT-246 / G-1): sign in as manager, wait past JWT expiry (or shorten it on the
