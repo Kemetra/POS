@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
-import { SignInProof, readSignInProofParams } from '../dev/SignInProof';
+import { SignInProof, makeProofOperator, readSignInProofParams } from '../dev/SignInProof';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
+import type { OperatorBridgeAPI } from '../../../../shared/bridge-api';
 
 /**
  * RT-244 W1-D — the DEV-only sign-in harness renders the real SignInRoute in
@@ -39,5 +40,69 @@ describe('SignInProof — the real sign-in screen against an in-memory bridge', 
     await waitFor(() =>
       expect(screen.getByTestId('roster-state')).toHaveAttribute('data-state', 'offline'),
     );
+  });
+});
+
+describe('makeProofOperator — the in-memory bridge', () => {
+  it('serves each roster kind', async () => {
+    const roster = (kind: string): ReturnType<OperatorBridgeAPI['listBranchRoster']> =>
+      makeProofOperator({ roster: kind, signin: 'invalid_input' }).listBranchRoster();
+    await expect(roster('offline')).resolves.toEqual({
+      kind: 'refused',
+      category: 'no_connection',
+    });
+    await expect(roster('refused')).resolves.toEqual({
+      kind: 'refused',
+      category: 'invalid_input',
+    });
+    await expect(roster('empty')).resolves.toMatchObject({ kind: 'roster', cashiers: [] });
+    const typical = await roster('typical');
+    expect(typical.kind === 'roster' ? typical.cashiers : []).toHaveLength(6);
+  });
+
+  it('refuses every sign-in with the chosen category', async () => {
+    const operator = makeProofOperator({ roster: 'typical', signin: 'rate_limited' });
+    await expect(
+      operator.signIn({
+        kind: 'cashier',
+        cashier_clerk_user_id: 'proof-cashier-0',
+        pin: '1234',
+        display_name: 'منى',
+      }),
+    ).resolves.toEqual({ kind: 'refused', category: 'rate_limited' });
+  });
+
+  it('answers the calls the sign-in screen does not make without a session', async () => {
+    const operator = makeProofOperator({ roster: 'typical', signin: 'invalid_input' });
+    const notSignedIn = { kind: 'refused', category: 'not_signed_in' };
+    await expect(operator.getCurrentSession()).resolves.toBeNull();
+    await expect(operator.signOut()).resolves.toEqual({ kind: 'signed_out' });
+    await expect(operator.cancelTakeover({ pending_takeover_id: 'p' })).resolves.toEqual({
+      kind: 'cancelled',
+    });
+    await expect(operator.listStuckShifts()).resolves.toEqual({
+      kind: 'stuck_shifts',
+      shifts: [],
+    });
+    await expect(operator.dismissShiftClosedNotice()).resolves.toBeUndefined();
+    await expect(operator.getLockState()).resolves.toMatchObject({ state: 'active' });
+    // The request shapes do not matter: every one of these refuses unread.
+    const calls = operator as unknown as Record<string, () => Promise<unknown>>;
+    for (const name of [
+      'emitAuditEvent',
+      '_emitAuditEventSmoke',
+      'confirmTakeover',
+      'resetCashierPin',
+      'provisionCashierPin',
+      'unlockCashier',
+      'forceCloseShift',
+      'unlockSession',
+    ]) {
+      await expect(calls[name]?.(), name).resolves.toEqual(notSignedIn);
+    }
+    expect(() => {
+      operator._reportActivity();
+      operator.onSessionStateChanged(() => undefined)();
+    }).not.toThrow();
   });
 });
