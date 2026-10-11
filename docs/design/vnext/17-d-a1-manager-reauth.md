@@ -197,7 +197,12 @@ prompt again.
   required": a JWT exchanged within the last `REAUTH_MARK_TTL_MS` was refused, so the person's
   authority is gone at the backend (§1.2) and another password will not help. Main ends that session through
   `sessionManager.endIfCurrent(snapshot.id, …)` (the existing `operator:session-state` push
-  sends the renderer to sign-in) and returns `not_signed_in`. The sign-in screen shows
+  sends the renderer to sign-in) and returns `not_signed_in`. `SessionManager.end()` clears only
+  `current`; the credential holders are cleared separately by the sign-out and revocation
+  wiring. So, only when `endIfCurrent` actually ended the snapshot session, main also clears
+  that session's credentials, keyed by `snapshot.backend_session_id`: the JWT and its mark
+  (`operatorJwtHolder.clear`) and the envelope (`operatorEnvelopeHolder.clear`), as sign-out does
+  (`src/main/index.ts:881-884`). A replacement session's credentials are never touched. The sign-in screen shows
   `SIGN_IN_REFUSAL_COPY.not_signed_in`.
 - **Otherwise.** A 401 on a request without the mark, while the snapshot session is still
   current, maps to `reauth_required` as in §2.2.
@@ -254,7 +259,7 @@ first**. Options for the backend session when the JWT is stale:
 
 | Option | What happens | Recommendation |
 |---|---|---|
-| **A.** Skip the backend call when the held JWT is already expired; log `operator.sign_out.backend_skipped` | The backend session lives until its `expires_at`; the next manager sign-in on this terminal gets the existing takeover prompt (today's behaviour, minus a request that can only fail) | **Recommended for the pilot** |
+| **A.** Skip the backend call when the held JWT is already expired; log `operator.sign_out.backend_skipped`. A JWT with a fresh mark (§2.4) is not skipped: as in §2.1 it bypasses the `exp` pre-check, so a manager who just re-authenticated or unlocked online on a fast-clock terminal still ends the backend session | The backend session lives until its `expires_at`; the next manager sign-in on this terminal gets the existing takeover prompt (today's behaviour, minus a request that can only fail) | **Recommended for the pilot** |
 | B. Ask for re-auth before signing out | A manager can't sign out without their password | Rejected: sign-out must always work |
 | C. A device-attested sign-out route in Backend-Core | Ends the backend session without the operator JWT | A new cross-repo contract; raise as a Backend-Core follow-up only if takeover friction matters in the pilot |
 
@@ -272,7 +277,7 @@ sign-in.
 | `src/main/operator/pin-management.ts` | Locked or latched session → `state_invalid` at entry and again after each await (before the roster request, before the PIN write); pre-check (skipped for the marked retry) and 401 → `reauth_required` |
 | `src/main/operator/backend-client.ts` | A status classifier for `getStuckShifts` (401 → `unauthenticated`, 403 → `forbidden`, else `refused`), like `rosterRefusal`; widen `BackendStuckShiftsResponse` |
 | `src/main/operator/stuck-shifts-handler.ts` | Locked or latched session → `state_invalid` at entry and again before the request; pre-check (skipped for the marked retry), no-JWT guard, `unauthenticated` → `reauth_required` |
-| `src/main/operator/sign-out-handler.ts` | Option A: skip the call when expired, log it |
+| `src/main/operator/sign-out-handler.ts` | Option A: skip the call when expired (unless the JWT carries a fresh mark), log it |
 | `src/main/operator/session-unlock-handler.ts` | Shared online-credential check with a new shared online in-flight gate covering manager online unlock and re-auth; the existing `unlock()` guard stays (it serialises cashier PIN unlocks); if Q2 = yes, store the JWT on success through the same path as re-auth (post-await check incl. latch and revocation, one-shot mark); no local authority is refreshed |
 | `src/main/operator/session-manager.ts` | `endIfCurrent(sessionId, cause)` for the §2.4 fail-closed path. Nothing refreshes `manager_signed_in_at` (Q1 = no) |
 | new `src/main/operator/reauth-handler.ts` + `src/main/ipc/operator.ts` + `src/shared/operator/channels.ts` + `src/shared/bridge-api.ts` + preload | `operator:reauthenticate` |
@@ -333,7 +338,11 @@ Main (vitest, `src/main/operator/__tests__/`):
 - Mark TTL: a mark older than `REAUTH_MARK_TTL_MS` (fake monotonic clock) is ignored, so a 401
   maps to `reauth_required` and the session is not ended.
 - Sign-out with an expired JWT → local session ended, holders cleared, no backend request,
-  `backend_skipped` logged.
+  `backend_skipped` logged. Sign-out with a JWT that looks expired by a fast clock but carries a
+  fresh mark → the backend sign-out request is sent.
+- Fail-closed end (§2.4): after `endIfCurrent` ends the snapshot session, its JWT, mark and
+  envelope are cleared. When the session already changed, `endIfCurrent` is a no-op and the
+  replacement session's JWT, mark and envelope are untouched.
 - Redaction: no JWT, identifier or password in logs or audit events
   (`src/tests/operator-redaction.test.ts`).
 
