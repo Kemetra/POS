@@ -1014,6 +1014,21 @@ describe('RT-358 — provisionCashierPin with an expired manager sign-in JWT', (
     },
   );
 
+  it('an unmarked 401 after a lock during the roster request → state_invalid, no prompt', async () => {
+    const db = freshDb();
+    const sm = liveSession();
+    const listRoster = vi.fn(() => {
+      sm.lock('2026-10-11T12:00:00.000Z');
+      return Promise.resolve({ kind: 'unauthenticated' } as const);
+    });
+    const backend = { ...fakeBackend(rosterWithUserId()), listRoster };
+    const res = await provision(build({ db, sm, holder: holderWith(VALID), backend }));
+
+    expect(res).toEqual({ kind: 'refused', category: 'state_invalid' });
+    expect(sm.getCurrent()).not.toBeNull();
+    db.close();
+  });
+
   it('a late marked 401 after the session was replaced ends nothing and clears nothing', async () => {
     const db = freshDb();
     const sm = liveSession();

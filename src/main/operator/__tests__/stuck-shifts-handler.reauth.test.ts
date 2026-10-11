@@ -164,6 +164,22 @@ describe('RT-358 StuckShiftsHandler — re-auth required', () => {
     });
   });
 
+  it('an unmarked 401 after a lock during the request → state_invalid, no prompt', async () => {
+    const sm = managerSession();
+    const { handler } = setup({
+      sm,
+      result: { kind: 'unauthenticated' },
+      onCall: () => {
+        sm.lock('2026-10-11T12:00:00.000Z');
+      },
+    });
+    await expect(handler.listStuckShifts()).resolves.toEqual({
+      kind: 'refused',
+      category: 'state_invalid',
+    });
+    expect(sm.getCurrent()).not.toBeNull();
+  });
+
   it('a late marked 401 after the session was replaced does not end the new one', async () => {
     const sm = managerSession();
     const { handler, jwtHolder, cleared } = setup({
