@@ -1,13 +1,11 @@
-# 18 — G-1 entry-screen references: design brief (PROPOSED)
+# 18 — G-1 entry-screen references: design brief (APPROVED)
 
-> **Status: PROPOSED.**
+> **Status: APPROVED.** The references are visual FROZEN / behaviour APPROVED.
 >
-> - **Approved:** on 2026-10-11 the owner approved this brief and §6 items 1–5 as recommended.
-> - **Still proposed:** everything added after that approval. That is §6 items 6–8, the
->   unreachable and empty-roster PIN-column lines, and the empty-roster state.
-> - **References:** built in
->   [`visual-acceptance/G1-Entry-screens/`](visual-acceptance/G1-Entry-screens/G1-Spec.html). They
->   wait for owner visual approval and stay PROPOSED, not FROZEN, until then.
+> - **Brief:** on 2026-10-11 the owner approved this brief and §6 items 1–5 as recommended.
+> - **References and copy:** later the same day, the owner approved the references and every
+>   proposed string, including §6 items 6–8 («موافق على الشكل والنصوص»).
+> - **Where:** [`visual-acceptance/G1-Entry-screens/`](visual-acceptance/G1-Entry-screens/G1-Spec.html).
 > - **Jira:** **RT-246** (Work Mode: Planning). It blocks **RT-244** (W1-D) and closes gap **G-1** in
 >   [15 §6](15-vnext-freeze-package.md).
 >
@@ -120,7 +118,7 @@ The sign-in screen is a single centred stage with two zones, using the Direction
 - **Out of scope.** Takeover, lock and first-PIN set are not part of G-1. `PinPad` is rendered only
   by sign-in; the lock screen imports only its length limits.
 
-## 6. Decisions for the owner (recommended answer first)
+## 6. Owner decisions (all approved as written, 2026-10-11)
 
 1. **Layout.** The two-zone stage, with manager entry swapping the inline-end column (§3).
 2. **Role nouns.** «الكاشير» / «المدير» everywhere on these screens.
@@ -167,7 +165,5 @@ The full copy table, with the shipped string each one replaces, is in `G1-Spec.h
 - **Captures.** Playwright Chromium, light and `forcedColors: 'active'`, for every reference at both
   widths. The in-app browser cannot emulate forced colours. These captures emulate the Chromium
   palette; they are not the real Windows contrast theme.
-- **Classification.** Every file is **PROPOSED** until the owner approves the visuals. After
-  approval:
-  - the files become visual FROZEN / behaviour APPROVED;
-  - 15 §6 (G-1) and `visual-acceptance/index.html` are updated.
+- **Classification.** All files are visual FROZEN / behaviour APPROVED (owner, 2026-10-11).
+  15 §6 (G-1) and `visual-acceptance/index.html` list them.

@@ -381,10 +381,11 @@ its states at **1024×768 and 1280×800**, light and `forced-colors`, and compar
 | Held sale restore | I3-HeldConcept | — | ❌ concept (RT-158) | not in wave 1 |
 | Manager approval | I3-Manager | I3-Manager-1024 | ⏳ RT-114 | panel visual frozen only |
 | Lock / recovery | I3-Locked, I3-Restored | …-1024 | ✅ visual (§2.1) | nothing of the sale visible |
+| Sign-in, PIN, Ready, pairing, manager re-sign-in (G-1) | G1-*-1280 | G1-*-1024 | ✅ (RT-246, owner-approved 2026-10-11) | the deltas and copy table in [`G1-Spec.html`](visual-acceptance/G1-Entry-screens/G1-Spec.html) and [18](18-g1-entry-screens.md); no branch name in the strip unless RT-244 adds the bridge field; no roster retry unless RT-244 adds it |
 | Completion / receipt failure | I3-Receipt-1280 | I3-Receipt-1024 | ✅ with deltas | «أُرسل الإيصال للطابعة» rather than «طُبع» for OS-print (N-09); show «الباقي للعميل»; sale number only per D-N1; drawer warning placement per D-B1 |
 
 **Gaps (no reference exists; new acceptance references needed before those slices):**
-- **G-1** Sign-in and PIN (VN-03/04), the F-14 recompose, **plus the Ready (M-F1) and pairing (VN-02) screens**. All four need accepted references at 1024 and 1280 before W1-D.
+- ~~**G-1** Sign-in and PIN (VN-03/04), the F-14 recompose, **plus the Ready (M-F1) and pairing (VN-02) screens**. All four need accepted references at 1024 and 1280 before W1-D.~~ **Closed by RT-246**: the references are in [`visual-acceptance/G1-Entry-screens/`](visual-acceptance/G1-Entry-screens/G1-Spec.html) (owner-approved 2026-10-11).
 - **G-2** Shift open / close / status (RT-17 shipped V5 screens, which are the de-facto
   reference: K28/K29).
 - **G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون

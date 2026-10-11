@@ -1,4 +1,4 @@
-"""Generate the RT-246 G-1 entry-screen reference HTML files (PROPOSED).
+"""Generate the RT-246 G-1 entry-screen reference HTML files (FROZEN, owner-approved 2026-10-11).
 
 Usage: python -I gen_g1.py <G1-Entry-screens folder>
 """
@@ -63,7 +63,7 @@ def page(title: str, width: int, body: str, label: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PROPOSED · RT-246 G-1 · {title} · {width}×{height}</title>
+<title>FROZEN · RT-246 G-1 · {title} · {width}×{height}</title>
 <link rel="stylesheet" href="g1.css">
 </head>
 <body>
