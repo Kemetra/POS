@@ -58,7 +58,11 @@ manager sign-in on the terminal gets `takeover_required` and the takeover prompt
 1. **Before the call:** if the held JWT has an `exp` claim in the past, do not send the request.
    Decode the payload only to read `exp`. This is classification, not trust: the backend stays
    the authority and verifies every JWT it receives. If the token has no readable `exp`, skip
-   this step and rely on (2).
+   this step and rely on (2). **The marked retry (§2.4) skips this pre-check.** If the
+   terminal clock is ahead of Clerk by the JWT lifetime or more, a JWT exchanged seconds ago
+   already looks expired; without the bypass the retry would return `reauth_required` again
+   without ever sending a request, and the manager could never finish. The retry still goes
+   through the 401 fail-closed path of §2.4.
 2. **After the call:** a **401** from an `operator-identity` route is treated as re-auth
    required. It is generic (§1.2), so the retry rule in §2.4 decides what to do if re-auth
    does not help.
@@ -104,9 +108,12 @@ It reuses the online path of `SessionUnlockHandler` (`session-unlock-handler.ts:
   today wraps `SessionUnlockHandler.unlock()` (`session-unlock-handler.ts:66-77`), outside the
   online check that re-auth reuses. Sharing only the failure counter would let several
   concurrent `operator:reauthenticate` calls pass the pre-await lockout check and each send a
-  password attempt before any failure is recorded. The slice moves the in-flight gate into the
-  shared online-credential check, so one gate covers both unlock and re-auth: a second attempt
-  while one is in flight is refused `rate_limited` and sends nothing.
+  password attempt before any failure is recorded. The slice **keeps** the existing guard on
+  `unlock()`, which also serialises cashier PIN unlocks (`verifyCashierPin` and its
+  read / Argon2 / write failure counter, `session-unlock-handler.test.ts:232-245`), and **adds**
+  a shared online gate inside the online-credential check that covers manager online unlock
+  and re-auth. A second online attempt while one is in flight is refused `rate_limited` and
+  sends nothing.
 - **Re-check the session after the exchange.** Snapshot the active session (`id`,
   `backend_session_id`, `operator_id`) before `clerk.exchange`, and after it resolves confirm
   that the same session is still the current one **and still unlocked**
@@ -197,10 +204,19 @@ retried again.
 cannot cover a lock that happens after re-auth returns and before the renderer re-runs the
 action. Today `provisionCashierPin` and `listStuckShifts` check only the role. The slice makes
 each protected handler (`provisionCashierPin`, `listStuckShifts` and, with Q1, the manager-PIN
-enrolment) refuse `state_invalid` at entry, before any request is sent, when the current
-session is locked (`lock_state === 'locked'`) or has `authority_latch` set. This applies to
-every call, not only retries: a privileged action never runs behind the lock screen or on a
-latched session.
+enrolment) refuse `state_invalid` when the current session is locked (`lock_state === 'locked'`)
+or has `authority_latch` set. This applies to every call, not only retries: a privileged action
+never runs behind the lock screen or on a latched session.
+
+An entry check alone is not enough, because the handlers await before they act.
+`provisionCashierPin`, for example, awaits `pairingStore.getStatus()` (`pin-management.ts:313`)
+before the roster request, then awaits that request before writing the PIN. So each handler
+snapshots the session (`id`, `backend_session_id`) at entry and repeats the check after every
+`await`, in particular **immediately before the backend call** and **immediately before any
+local side effect** (the PIN write). If the session changed, locked or latched in between, it
+refuses (`not_signed_in` if the session changed or ended, otherwise `state_invalid`) and does
+nothing further. One helper (for example `stillActive(snapshot)`) keeps the check identical
+everywhere.
 
 ### 2.5 UX (screen states S21 and M6)
 
@@ -247,11 +263,11 @@ sign-in.
 |---|---|
 | `src/shared/audit/event-shape.ts` | `reauth_required` in `REFUSAL_CATEGORIES` |
 | `src/main/operator/jwt-holder.ts` (or a small sibling) | `isExpired(jwt, now)`: decode the payload, read `exp`; unreadable means "unknown", not expired. The per-session one-shot "just re-authenticated" mark (§2.4): set on re-auth, consumed before the next `operator-identity` request, cleared with the session |
-| `src/main/operator/pin-management.ts` | Locked or latched session → `state_invalid` at entry; pre-check and 401 → `reauth_required` |
+| `src/main/operator/pin-management.ts` | Locked or latched session → `state_invalid` at entry and again after each await (before the roster request, before the PIN write); pre-check (skipped for the marked retry) and 401 → `reauth_required` |
 | `src/main/operator/backend-client.ts` | A status classifier for `getStuckShifts` (401 → `unauthenticated`, 403 → `forbidden`, else `refused`), like `rosterRefusal`; widen `BackendStuckShiftsResponse` |
-| `src/main/operator/stuck-shifts-handler.ts` | Locked or latched session → `state_invalid` at entry; pre-check, no-JWT guard, `unauthenticated` → `reauth_required` |
+| `src/main/operator/stuck-shifts-handler.ts` | Locked or latched session → `state_invalid` at entry and again before the request; pre-check (skipped for the marked retry), no-JWT guard, `unauthenticated` → `reauth_required` |
 | `src/main/operator/sign-out-handler.ts` | Option A: skip the call when expired, log it |
-| `src/main/operator/session-unlock-handler.ts` | Shared online-credential check, with the in-flight gate moved into it so one gate covers unlock and re-auth; if Q2 = yes, store the JWT on success through the same path as re-auth (post-await check incl. latch and revocation, one-shot mark, step-up refresh) |
+| `src/main/operator/session-unlock-handler.ts` | Shared online-credential check with a new shared online in-flight gate covering manager online unlock and re-auth; the existing `unlock()` guard stays (it serialises cashier PIN unlocks); if Q2 = yes, store the JWT on success through the same path as re-auth (post-await check incl. latch and revocation, one-shot mark, step-up refresh) |
 | `src/main/operator/session-manager.ts` | `endIfCurrent(sessionId, cause)` for the §2.4 fail-closed path. If Q1 = yes: a session-id-keyed method that refreshes `manager_signed_in_at` on the current record (like `renewAdmission`) |
 | new `src/main/operator/reauth-handler.ts` + `src/main/ipc/operator.ts` + `src/shared/operator/channels.ts` + `src/shared/bridge-api.ts` + preload | `operator:reauthenticate` |
 | `src/renderer/ui/operator/messages.ts` | The owner-approved copy and the action label |
@@ -281,10 +297,15 @@ Main (vitest, `src/main/operator/__tests__/`):
   session is kept latched until its safe point → refused `not_signed_in`, nothing stored, no
   step-up refresh.
 - Concurrency: two `operator:reauthenticate` calls at once → the second is refused
-  `rate_limited` and sends no exchange; the same between an online unlock and a re-auth.
+  `rate_limited` and sends no exchange; the same between a manager online unlock and a
+  re-auth. Concurrent cashier PIN unlocks stay serialised by the `unlock()` guard (the existing
+  `session-unlock-handler.test.ts:232-245` keeps passing).
 - Protected handlers: a locked or latched session → `state_invalid`, and no request sent.
   Lock between a successful re-auth and the renderer's retry → the retry is refused
-  `state_invalid` and nothing runs.
+  `state_invalid` and nothing runs. Lock or latch while `pairingStore.getStatus()` is awaited
+  → no backend request. Lock or latch while the roster request is in flight → no PIN is
+  written. The session ends and a new one starts during either await → `not_signed_in`,
+  nothing written.
 - Another operator's valid credentials → `invalid_input`, the same as wrong credentials; no
   distinct refusal reveals that they were valid.
 - If Q1 = yes: after re-auth, `manager_signed_in_at` is refreshed on the current session, and
@@ -301,6 +322,9 @@ Main (vitest, `src/main/operator/__tests__/`):
   `not_signed_in`, the new session is **not** ended, its holders and mark are untouched and no
   end hooks run. The same race without the mark → `not_signed_in`, not `reauth_required`.
 - `endIfCurrent`: ends the session for a matching id; no-op for any other id.
+- Fast clock: a marked JWT whose `exp` is already in the past by the terminal clock (fake clock
+  ahead of the JWT lifetime) → the retry is still sent; a 401 on it still fails closed.
+  Without the mark, the same JWT → `reauth_required` with no request sent.
 - Mark TTL: a mark older than `REAUTH_MARK_TTL_MS` (fake monotonic clock) is ignored, so a 401
   maps to `reauth_required` and the session is not ended.
 - Sign-out with an expired JWT → local session ended, holders cleared, no backend request,
@@ -340,7 +364,9 @@ which ranks above the freeze package). S21 and M6 point here.
 ## 7. Risks
 
 - **Clock skew.** The `exp` pre-check uses the terminal clock. A fast clock asks for re-auth
-  early; a slow one falls through to the 401 path. Neither is unsafe.
+  early, and the marked retry skips the pre-check (§2.1), so even a clock ahead by more than
+  the JWT lifetime cannot trap the manager in a loop; a slow one falls through to the 401 path.
+  Neither is unsafe.
 - **The JWT lifetime.** It is set by the Clerk configuration (about 19 minutes was observed),
   not by the POS. A short lifetime means frequent prompts; refresh (OQ-9) is the later fix.
 - **A generic 401 that is not expiry** (for example, a disabled user) costs one extra prompt
