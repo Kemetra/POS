@@ -112,7 +112,7 @@ Reference IDs: pack `I2-*` / `I3-*`, older `VN-R*`, re-audit `K*`.
 | S18 | Locked / restored | unlock (same cashier PIN) | everything behind the lock | **nothing of the sale visible** (privacy) | takeover by another operator | RT-116 ✅, RT-161 In Review; see §2.1 | I3-Locked, I3-Restored | lock hides lines and amounts |
 | S19 | Live tender after restart | «متابعة الدفع المفتوح» | new sale until resolved | «يوجد دفع مفتوح من قبل إعادة التشغيل» | complete or cancel it | **RT-116 S5** ⏳ | — | re-attach proven on packaged |
 | S20 | Shift required / closed | «فتح الوردية» | nothing (advisory by design, RT-17 comment 10919; flag off on pilot terminals until RT-17 is accepted) | banner «لا توجد وردية مفتوحة…» | open the shift | RT-17 ✅; attribution check ⏳ D-S1 | VN-R11, K25 | a pre-shift cash sale, then the shift close totals |
-| S21 | Session credential expired (manager action) | «تسجيل الدخول مرة أخرى» | the manager action | «انتهت صلاحية دخول المدير…» | re-sign-in | **⏳ D-A1** (OQ-9) | K21 | first PIN 20 min after sign-in |
+| S21 | Session credential expired (manager action) | «تسجيل الدخول» | the manager action | M-A3 «انتهت جلسة الدخول…» | re-auth dialog, then the action runs once more ([17](17-d-a1-manager-reauth.md)) | **⏳ D-A1** (OQ-9) | K21 | first PIN 20 min after sign-in |
 | S22 | Storage blocked / route error | — | collecting money | blocking ErrorScreen | per screen | I-8 ✅ | VN-R9 | — |
 
 Manager → Cashiers (M-states, manager surface; RT-235 behaviour ✅, VNext presentation):
@@ -124,7 +124,7 @@ Manager → Cashiers (M-states, manager surface; RT-235 behaviour ✅, VNext pre
 | M3 | Cashier with a PIN | — | «تعيين أول رقم سري» | badge «جاهز» | — |
 | M4 | Cashier locked out | «فك القفل» | — | badge «مقفل» | — |
 | M5 | Setting PIN (entry + confirm) | «حفظ» | — | two fields, digits only, **4–6** (the cashier PIN rule: `PIN_RE` in `pin-management.ts`; 6–8 is the separate manager-PIN rule) | mismatch refused inline |
-| M6 | Refused (session expired, N-01) | «تسجيل الدخول مرة أخرى» | save | M-A3 copy | per D-A1 |
+| M6 | Refused (session expired, N-01) | «تسجيل الدخول» | save | M-A3 copy | per D-A1 ([17](17-d-a1-manager-reauth.md)) |
 
 ### 2.1 Lock-screen conflict, resolved explicitly
 
@@ -342,7 +342,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | **Manager approval** ⏳ RT-114 | | | |
 | M-A1 | Approval needed | «هذا الإجراء يحتاج موافقة المدير.» | info |
 | M-A2 | Approved / denied | «وافق المدير ‹الاسم›.» / «لم يوافق المدير. لم يتغيّر شيء.» | success / neutral |
-| M-A3 | Manager session expired ⏳ D-A1 | «انتهت صلاحية دخول المدير. سجّل الدخول مرة أخرى للمتابعة.» | warning |
+| M-A3 | Manager session expired ⏳ D-A1 ([17](17-d-a1-manager-reauth.md)) | «انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.» (UX-12 wording; owner decision 2026-10-07, RT-247) | warning |
 | **Held sales** ⏳ RT-158 | | | |
 | M-H1 | Held / resume | «عُلِّق البيع ‹label›.» / «استئناف البيع» | neutral |
 | **Returns entry** | | | |
@@ -437,7 +437,7 @@ Every implementation slice:
 | **D-F2** | Main-process plausibility bound on cash received | F-02 main side | Bound by currency maximum (RT-17 already has a shift-amount bound) |
 | **D-S1** | Shift is advisory by design (RT-17 comment 10919). Confirm on the bench whether a settled pre-shift cash sale is counted in the next shift's expected cash | S20, N-06 | Bench check under RT-17; only if it is not counted, raise a contract item |
 | **D-B1** | Drawer-failure presentation: today a persistent bilingual banner (about 178 px) on every screen, across sessions and restarts (N-08) | W1-A banner work, M-C4 | Show it inside cash completion and in the status indicator; clear it after an acknowledgement or the next successful drawer event. This changes 008's presentation and needs an owner decision |
-| **D-A1** | Manager JWT expiry (OQ-9): refresh vs re-auth prompt | N-01, M6, S21 | Re-auth prompt with M-A3 for pilot; refresh later |
+| **D-A1** | Manager JWT expiry (OQ-9): refresh vs re-auth prompt | N-01, M6, S21 | Re-auth prompt with M-A3 for pilot; refresh later. Planned in [17-d-a1-manager-reauth.md](17-d-a1-manager-reauth.md) (RT-247) |
 | **D-N1** | Sale number display / quotability | S14, returns lookup | Short display form + recent-sales list for returns |
 | **D-P1** | External-card decline / UNKNOWN input | S11, S12 trigger | Outcome selector on card entry (approved / declined / not sure) under RT-10 |
 | **D-P2** | One-step vs two-step cash commit | W1-C variant | Keep two-step (today); revisit after W1-C |
