@@ -100,6 +100,13 @@ It reuses the online path of `SessionUnlockHandler` (`session-unlock-handler.ts:
   the result never reveals that another account's credentials were valid. That person must use
   sign-out and sign-in or takeover.
 - The same 5-failures / 5-minute lockout as the online unlock, shared with it.
+- **One credential attempt at a time.** The single-flight guard that protects the lockout
+  today wraps `SessionUnlockHandler.unlock()` (`session-unlock-handler.ts:66-77`), outside the
+  online check that re-auth reuses. Sharing only the failure counter would let several
+  concurrent `operator:reauthenticate` calls pass the pre-await lockout check and each send a
+  password attempt before any failure is recorded. The slice moves the in-flight gate into the
+  shared online-credential check, so one gate covers both unlock and re-auth: a second attempt
+  while one is in flight is refused `rate_limited` and sends nothing.
 - **Re-check the session after the exchange.** Snapshot the active session (`id`,
   `backend_session_id`, `operator_id`) before `clerk.exchange`, and after it resolves confirm
   that the same session is still the current one **and still unlocked**
@@ -111,6 +118,12 @@ It reuses the online path of `SessionUnlockHandler` (`session-unlock-handler.ts:
     the same session id and only changes `lock_state` (`session-manager.ts:309-313`), and the
     routed surface stays mounted behind the lock overlay, so without this check a late success
     would retry a privileged action behind the lock screen.
+  - A confirmed device revocation during the call → refuse `not_signed_in` and store nothing.
+    Revocation does not always end the session at once: the revocation flow clears the
+    credential holders and latches the session, but `CashierAdmissionKeeper.latchCurrentSession`
+    keeps the same unlocked session until its safe point (`src/main/index.ts:997-1018`,
+    `cashier-admission-keeper.ts:331-345`). So the check also rejects a session with
+    `authority_latch` set, and a device that `pairingStore.isDeviceRevoked()` reports revoked.
 - On success: `operatorJwtHolder.set(active.backend_session_id, exchange.jwt)`. No new backend
   session is created. A fresh JWT for the same Clerk user satisfies the backend, which matches
   `session.user_id` to the JWT's user (`pos-operators.service.ts`, sign-out path).
@@ -180,6 +193,15 @@ The renderer re-runs the original action **once** after a successful re-auth. Th
 decision is made in main, from the mark, so there is no loop of prompts even if the renderer
 retried again.
 
+**The protected handlers re-check the session themselves.** The post-exchange check in §2.3
+cannot cover a lock that happens after re-auth returns and before the renderer re-runs the
+action. Today `provisionCashierPin` and `listStuckShifts` check only the role. The slice makes
+each protected handler (`provisionCashierPin`, `listStuckShifts` and, with Q1, the manager-PIN
+enrolment) refuse `state_invalid` at entry, before any request is sent, when the current
+session is locked (`lock_state === 'locked'`) or has `authority_latch` set. This applies to
+every call, not only retries: a privileged action never runs behind the lock screen or on a
+latched session.
+
 ### 2.5 UX (screen states S21 and M6)
 
 On the manager surface where the action failed (`CashierManagement`, `StuckShiftSurface`), show
@@ -225,11 +247,11 @@ sign-in.
 |---|---|
 | `src/shared/audit/event-shape.ts` | `reauth_required` in `REFUSAL_CATEGORIES` |
 | `src/main/operator/jwt-holder.ts` (or a small sibling) | `isExpired(jwt, now)`: decode the payload, read `exp`; unreadable means "unknown", not expired. The per-session one-shot "just re-authenticated" mark (§2.4): set on re-auth, consumed before the next `operator-identity` request, cleared with the session |
-| `src/main/operator/pin-management.ts` | Pre-check and 401 → `reauth_required` |
+| `src/main/operator/pin-management.ts` | Locked or latched session → `state_invalid` at entry; pre-check and 401 → `reauth_required` |
 | `src/main/operator/backend-client.ts` | A status classifier for `getStuckShifts` (401 → `unauthenticated`, 403 → `forbidden`, else `refused`), like `rosterRefusal`; widen `BackendStuckShiftsResponse` |
-| `src/main/operator/stuck-shifts-handler.ts` | Pre-check, no-JWT guard, `unauthenticated` → `reauth_required` |
+| `src/main/operator/stuck-shifts-handler.ts` | Locked or latched session → `state_invalid` at entry; pre-check, no-JWT guard, `unauthenticated` → `reauth_required` |
 | `src/main/operator/sign-out-handler.ts` | Option A: skip the call when expired, log it |
-| `src/main/operator/session-unlock-handler.ts` | Shared online-credential check; if Q2 = yes, store the JWT on success through the same path as re-auth (post-await check, one-shot mark, step-up refresh) |
+| `src/main/operator/session-unlock-handler.ts` | Shared online-credential check, with the in-flight gate moved into it so one gate covers unlock and re-auth; if Q2 = yes, store the JWT on success through the same path as re-auth (post-await check incl. latch and revocation, one-shot mark, step-up refresh) |
 | `src/main/operator/session-manager.ts` | `endIfCurrent(sessionId, cause)` for the §2.4 fail-closed path. If Q1 = yes: a session-id-keyed method that refreshes `manager_signed_in_at` on the current record (like `renewAdmission`) |
 | new `src/main/operator/reauth-handler.ts` + `src/main/ipc/operator.ts` + `src/shared/operator/channels.ts` + `src/shared/bridge-api.ts` + preload | `operator:reauthenticate` |
 | `src/renderer/ui/operator/messages.ts` | The owner-approved copy and the action label |
@@ -255,6 +277,14 @@ Main (vitest, `src/main/operator/__tests__/`):
   flight → refused `not_signed_in`, and neither the JWT nor the mark is stored. The session
   **locks** while the exchange is in flight → refused `state_invalid`, nothing stored, and no
   retry runs behind the lock.
+- Re-auth race: a device revocation is confirmed while `clerk.exchange` is in flight and the
+  session is kept latched until its safe point → refused `not_signed_in`, nothing stored, no
+  step-up refresh.
+- Concurrency: two `operator:reauthenticate` calls at once → the second is refused
+  `rate_limited` and sends no exchange; the same between an online unlock and a re-auth.
+- Protected handlers: a locked or latched session → `state_invalid`, and no request sent.
+  Lock between a successful re-auth and the renderer's retry → the retry is refused
+  `state_invalid` and nothing runs.
 - Another operator's valid credentials → `invalid_input`, the same as wrong credentials; no
   distinct refusal reveals that they were valid.
 - If Q1 = yes: after re-auth, `manager_signed_in_at` is refreshed on the current session, and
