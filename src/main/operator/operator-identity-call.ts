@@ -79,11 +79,14 @@ export class OperatorIdentityCall {
   }
 
   onUnauthenticated(snapshot: SessionSnapshot, marked: boolean): OperatorRefusal {
-    const current = this.deps.sessionManager.getCurrent();
-    if (current?.id !== snapshot.id) return refuse('not_signed_in');
-    // Unmarked: a session that locked or latched while the request was in
-    // flight is refused `state_invalid` — never a re-auth prompt behind the lock.
-    if (!marked) return this.stillActive(snapshot) ?? refuse('reauth_required');
+    // A session that ended, changed, locked or latched while the request was
+    // in flight gets the same answer as after any other await, and nothing
+    // more: no re-auth prompt behind the lock, and no fail-closed end either
+    // (a latched session ends at its own safe point; a locked one is decided
+    // by its next request after unlock).
+    const inactive = this.stillActive(snapshot);
+    if (inactive !== null) return inactive;
+    if (!marked) return refuse('reauth_required');
     const ended = this.deps.sessionManager.endIfCurrent(
       snapshot.id,
       'account_disabled_mid_session',

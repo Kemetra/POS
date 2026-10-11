@@ -148,6 +148,33 @@ describe('OperatorIdentityCall.onUnauthenticated', () => {
     expect(sm.getCurrent()?.id).toBe(snap.id);
   });
 
+  it.each([
+    [
+      'locked',
+      (sm: SessionManager) => {
+        sm.lock('2026-10-11T12:00:00.000Z');
+      },
+    ],
+    [
+      'latched',
+      (sm: SessionManager) =>
+        sm.latchAuthority(sm.getCurrent()?.id ?? '', 'terminal_session_terminated'),
+    ],
+  ])(
+    'a marked 401 after the session %s in flight → state_invalid; nothing ended or cleared',
+    (_l, mutate) => {
+      const { call, snap, sm, jwtHolder, envelopeHolder } = setup(VALID);
+      mutate(sm);
+      expect(call.onUnauthenticated(snap, true)).toEqual({
+        kind: 'refused',
+        category: 'state_invalid',
+      });
+      expect(sm.getCurrent()?.id).toBe(snap.id);
+      expect(jwtHolder.get('be-1')).toBe(VALID);
+      expect(envelopeHolder.get('be-1')).toBe('envelope-1');
+    },
+  );
+
   it('a marked 401 ends that session and clears its JWT, mark and envelope', () => {
     const { call, snap, sm, jwtHolder, envelopeHolder } = setup(VALID);
     const ended = vi.fn();
