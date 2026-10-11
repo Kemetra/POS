@@ -96,6 +96,32 @@ function seedProto(protoStore: ProtoSessionStore): string {
   return pending_takeover_id;
 }
 
+describe('TakeoverHandler — RT-358 a takeover never inherits a re-auth mark', () => {
+  it('the new session’s JWT carries no "just re-authenticated" mark', async () => {
+    const protoStore = new ProtoSessionStore();
+    const sessionManager = new SessionManager();
+    const jwtHolder = createJwtHolder();
+    // A leftover mark under the id the takeover installs (e.g. a replayed id).
+    jwtHolder.set('be-sess-2', 'older-jwt', { reauthenticatedAtMs: 1_000 });
+    const handler = new TakeoverHandler({
+      protoStore,
+      sessionManager,
+      backend: fakeBackend(CONFIRM_SUCCESS, {}),
+      jwtHolder,
+      envelopeHolder: createJwtHolder(),
+      auditEmitter: fakeAuditEmitter(),
+      pairingStore: fakePairingStore(),
+      deviceTokenAttestation: () => 'attest',
+    });
+
+    const res = await handler.confirmTakeover({ pending_takeover_id: seedProto(protoStore) });
+
+    expect(res.kind).toBe('signed_in');
+    expect(jwtHolder.get('be-sess-2')).toBe(PROTO_JWT);
+    expect(jwtHolder.hasFreshMark('be-sess-2', 1_001)).toBe(false);
+  });
+});
+
 describe('TakeoverHandler — credential seam (016 review HIGH)', () => {
   it('confirm CALL receives proto.jwt; jwtHolder gets the JWT; envelopeHolder gets the envelope', async () => {
     const protoStore = new ProtoSessionStore();

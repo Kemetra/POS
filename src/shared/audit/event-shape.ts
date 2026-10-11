@@ -163,6 +163,11 @@ export type Fr025MandatoryAttribute = (typeof FR025_MANDATORY_ATTRIBUTES)[number
  * falling back to a provider-coupled key. A degraded-state signal
  * (P9), distinct from `invalid_input` — the request was well-formed,
  * the upstream identity simply isn't available.
+ *
+ * `reauth_required` (RT-358 / RT-247 D-A1) — the manager's held sign-in JWT
+ * has expired (or an `operator-identity` route answered 401): the session is
+ * still valid locally, and signing in again in place will let the action
+ * continue. Never offered as a generic retry.
  */
 export const REFUSAL_CATEGORIES = [
   'invalid_input',
@@ -172,6 +177,7 @@ export const REFUSAL_CATEGORIES = [
   'not_signed_in',
   'state_invalid',
   'not_ready',
+  'reauth_required',
 ] as const;
 export type RefusalCategory = (typeof REFUSAL_CATEGORIES)[number];
 

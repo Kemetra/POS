@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createJwtHolder } from '../jwt-holder.js';
+import { REAUTH_MARK_TTL_MS, createJwtHolder } from '../jwt-holder.js';
 
 /**
  * 004-operator-session — main-process JwtHolder tests.
@@ -98,5 +98,75 @@ describe('JwtHolder — RT-215 refuseWhile (Codex P1)', () => {
     });
     h.set('be-1', 'jwt');
     expect(h.get('be-1')).toBeNull();
+  });
+});
+
+describe('JwtHolder — RT-358 one-shot "just re-authenticated" mark (RT-247 §2.4)', () => {
+  const T0 = 1_000_000;
+
+  it('a set with reauthenticatedAtMs marks the JWT; consumeMark returns true once', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt-fresh', { reauthenticatedAtMs: T0 });
+    expect(h.hasFreshMark('be-1', T0 + 1)).toBe(true);
+    expect(h.consumeMark('be-1', T0 + 1)).toBe(true);
+    expect(h.consumeMark('be-1', T0 + 2)).toBe(false);
+    expect(h.hasFreshMark('be-1', T0 + 2)).toBe(false);
+    expect(h.get('be-1')).toBe('jwt-fresh');
+  });
+
+  it('a plain set carries no mark and drops an earlier one', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt-a', { reauthenticatedAtMs: T0 });
+    h.set('be-1', 'jwt-b');
+    expect(h.consumeMark('be-1', T0 + 1)).toBe(false);
+  });
+
+  it(`a mark older than REAUTH_MARK_TTL_MS (${String(REAUTH_MARK_TTL_MS)} ms) is ignored, and consuming it still drops it`, () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt', { reauthenticatedAtMs: T0 });
+    expect(h.hasFreshMark('be-1', T0 + REAUTH_MARK_TTL_MS - 1)).toBe(true);
+    expect(h.hasFreshMark('be-1', T0 + REAUTH_MARK_TTL_MS)).toBe(false);
+    expect(h.consumeMark('be-1', T0 + REAUTH_MARK_TTL_MS)).toBe(false);
+  });
+
+  it('a mark from the future (clock went backwards) is not fresh', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt', { reauthenticatedAtMs: T0 });
+    expect(h.hasFreshMark('be-1', T0 - 1)).toBe(false);
+  });
+
+  it('the mark is bound to its session id', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt-1', { reauthenticatedAtMs: T0 });
+    h.set('be-2', 'jwt-2');
+    expect(h.consumeMark('be-2', T0 + 1)).toBe(false);
+    expect(h.consumeMark('be-1', T0 + 1)).toBe(true);
+  });
+
+  it('clear and clearAll drop the mark with the JWT', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt-1', { reauthenticatedAtMs: T0 });
+    h.clear('be-1');
+    h.set('be-1', 'jwt-1b');
+    expect(h.consumeMark('be-1', T0 + 1)).toBe(false);
+
+    h.set('be-2', 'jwt-2', { reauthenticatedAtMs: T0 });
+    h.clearAll();
+    h.set('be-2', 'jwt-2b');
+    expect(h.consumeMark('be-2', T0 + 1)).toBe(false);
+  });
+
+  it('an empty replay set neither clobbers the JWT nor its mark', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'jwt', { reauthenticatedAtMs: T0 });
+    h.set('be-1', '');
+    expect(h.get('be-1')).toBe('jwt');
+    expect(h.consumeMark('be-1', T0 + 1)).toBe(true);
+  });
+
+  it('no mark is stored while the device is revoked', () => {
+    const h = createJwtHolder({ refuseWhile: () => true });
+    h.set('be-1', 'jwt', { reauthenticatedAtMs: T0 });
+    expect(h.consumeMark('be-1', T0 + 1)).toBe(false);
   });
 });

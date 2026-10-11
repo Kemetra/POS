@@ -48,6 +48,11 @@ import type { SessionManager, OperatorSessionRecord } from './session-manager.js
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { BackendClient, BackendRosterResponse } from './backend-client.js';
 import type { JwtHolder } from './jwt-holder.js';
+import {
+  OperatorIdentityCall,
+  snapshotOf,
+  type SessionSnapshot,
+} from './operator-identity-call.js';
 import { requireRole } from './role-enforcement.js';
 import { hashPin } from './pin-credential.js';
 import { sealPinMaterial } from './pin-seal.js';
@@ -86,20 +91,20 @@ const REFUSE_ROLE_MISMATCH: OperatorRefusal = { kind: 'refused', category: 'role
 
 /**
  * RT-214 — a roster answer that is not a roster, mapped to an existing refusal:
- *   - no_token / 401 → not_signed_in: the manager's operator-identity JWT is
- *     absent, expired or rejected; signing in again mints a fresh one.
+ *   - no_token → not_signed_in: no operator-identity JWT is held.
+ *   - 401 → handled by `OperatorIdentityCall.onUnauthenticated` (RT-358):
+ *     `reauth_required`, or fail closed on the marked retry. Never reaches here.
  *   - 403 → role_mismatch: Backend-Core says the caller is not manager-eligible
  *     (RT-150). The contract answers 401 for this today; 403 is defensive.
  *   - no_connection → no_connection; any other refusal → invalid_input (as before).
  */
 function rosterRefusal(
-  roster: Exclude<BackendRosterResponse, { kind: 'roster' }>,
+  roster: Exclude<BackendRosterResponse, { kind: 'roster' } | { kind: 'unauthenticated' }>,
 ): OperatorRefusal {
   switch (roster.kind) {
     case 'no_connection':
       return REFUSE_NO_CONNECTION;
     case 'no_token':
-    case 'unauthenticated':
       return REFUSE_NOT_SIGNED_IN;
     case 'forbidden':
       return REFUSE_ROLE_MISMATCH;
@@ -130,7 +135,16 @@ export interface PinManagementHandlerDeps {
    * manager's JWT, exactly as sign-out and stuck-shifts do. Never logged,
    * never returned over IPC.
    */
-  jwtHolder: Pick<JwtHolder, 'get'>;
+  jwtHolder: Pick<JwtHolder, 'get' | 'consumeMark' | 'clear'>;
+  /**
+   * RT-358 — clears the sale-sync envelope of a session ended by the
+   * fail-closed path (production wires the envelope holder).
+   */
+  clearEnvelope?: (backendSessionId: string) => void;
+  /** RT-358 — wall clock (ms) for the JWT `exp` check. Tests inject. */
+  nowMs?: () => number;
+  /** RT-358 — monotonic clock (ms) for the re-auth mark. Tests inject. */
+  monoNowMs?: () => number;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -138,7 +152,17 @@ export interface PinManagementHandlerDeps {
 // ─── Handler ──────────────────────────────────────────────────────────────
 
 export class PinManagementHandler {
-  constructor(private readonly deps: PinManagementHandlerDeps) {}
+  private readonly identityCall: OperatorIdentityCall;
+
+  constructor(private readonly deps: PinManagementHandlerDeps) {
+    this.identityCall = new OperatorIdentityCall({
+      sessionManager: deps.sessionManager,
+      jwtHolder: deps.jwtHolder,
+      ...(deps.clearEnvelope === undefined ? {} : { clearEnvelope: deps.clearEnvelope }),
+      ...(deps.nowMs === undefined ? {} : { nowMs: deps.nowMs }),
+      ...(deps.monoNowMs === undefined ? {} : { monoNowMs: deps.monoNowMs }),
+    });
+  }
 
   /**
    * T072 — manager/admin PIN reset for a cashier on this terminal.
@@ -296,6 +320,12 @@ export class PinManagementHandler {
     }
     // requireRole throws on null session — safe to narrow here.
     const activeSession = session as OperatorSessionRecord;
+    // RT-358: every step re-checks this snapshot — same session, unlocked,
+    // not latched — so the PIN is never written behind the lock screen or for
+    // an operator who signed out while a call was in flight.
+    const snapshot = snapshotOf(activeSession);
+    const inactiveAtEntry = this.identityCall.stillActive(snapshot);
+    if (inactiveAtEntry !== null) return this.refuseProvision(inactiveAtEntry);
 
     // Input validation — generic refusal; never echo the rejected value.
     if (
@@ -319,24 +349,12 @@ export class PinManagementHandler {
     const { tenant_id, branch_id, terminal_id } = pairingStatus;
     const { target_cashier_id } = req;
 
-    // RT-214: the roster route needs the manager's operator-identity JWT. With
-    // none held for this session, refuse before any request goes out.
-    const jwt = this.deps.jwtHolder.get(activeSession.backend_session_id) ?? '';
-    if (jwt === '') {
-      this.log('info', 'provision_cashier_pin.refused', 'not_signed_in');
-      return REFUSE_NOT_SIGNED_IN;
-    }
-
     // Resolve the cashier's roster entry by provider-neutral user_id. This is
     // the ONLY source of the user_id→clerk mapping required by both the legacy
     // create-only check and the NOT-NULL clerk PK column. The mapping is
     // resolved here and NEVER crosses the bridge.
-    const roster = await this.deps.backend.listRoster(branch_id, jwt);
-    if (roster.kind !== 'roster') {
-      const refusal = rosterRefusal(roster);
-      this.log('info', 'provision_cashier_pin.refused', refusal.category);
-      return refusal;
-    }
+    const roster = await this.fetchRoster(snapshot, branch_id);
+    if (roster.kind !== 'roster') return this.refuseProvision(roster);
 
     // FR-11: the cashier must carry a provider-neutral user_id. Absent → not_ready,
     // no row, no fallback to a clerk-keyed row. Also covers the pre-DP-2 state
@@ -373,6 +391,10 @@ export class PinManagementHandler {
     // Hash the new PIN — plaintext is consumed here and never stored.
     const raw = await hashPin(req.initial_pin);
     const sealed = sealPinMaterial(raw, this.deps.safeStorage);
+
+    // RT-358: the hash was awaited — re-check immediately before the write.
+    const inactiveBeforeWrite = this.identityCall.stillActive(snapshot);
+    if (inactiveBeforeWrite !== null) return this.refuseProvision(inactiveBeforeWrite);
 
     // INSERT a born-neutral row: user_id is the identity key; cashier_clerk_user_id
     // satisfies the current PK and bridges to 017's re-key. failed=0, lockout=null.
@@ -514,6 +536,33 @@ export class PinManagementHandler {
 
     this.log('info', 'unlock_cashier.success', undefined);
     return { kind: 'unlocked', audit_event_id: req.event_id };
+  }
+
+  /**
+   * RT-214 + RT-358 — the authenticated roster read for provisioning. The
+   * session is re-checked before the request (after the pairing await) and
+   * after it (before the create-only check and the PIN write). An expired JWT
+   * is refused `reauth_required` without sending; a 401 goes through the
+   * retry-once / fail-closed rule.
+   */
+  private async fetchRoster(
+    snapshot: SessionSnapshot,
+    branch_id: string,
+  ): Promise<Extract<BackendRosterResponse, { kind: 'roster' }> | OperatorRefusal> {
+    const prepared = this.identityCall.prepare(snapshot);
+    if (prepared.kind === 'refused') return prepared;
+    const roster = await this.deps.backend.listRoster(branch_id, prepared.jwt);
+    if (roster.kind === 'unauthenticated') {
+      return this.identityCall.onUnauthenticated(snapshot, prepared.marked);
+    }
+    const inactiveAfter = this.identityCall.stillActive(snapshot);
+    if (inactiveAfter !== null) return inactiveAfter;
+    return roster.kind === 'roster' ? roster : rosterRefusal(roster);
+  }
+
+  private refuseProvision(refusal: OperatorRefusal): OperatorRefusal {
+    this.log('info', 'provision_cashier_pin.refused', refusal.category);
+    return refusal;
   }
 
   private log(level: 'info' | 'warn', event: string, category: string | undefined): void {

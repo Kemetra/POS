@@ -91,6 +91,8 @@ describe('audit/event-shape — OperatorRefusal envelope (NFR-003 / PR-2)', () =
       'state_invalid',
       // 019-cashier-pin-provisioning FR-11 — truthful "cannot provision yet" state.
       'not_ready',
+      // RT-358 (RT-247 D-A1) — the manager's held sign-in JWT expired: sign in again in place.
+      'reauth_required',
     ]);
   });
 

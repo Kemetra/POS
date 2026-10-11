@@ -190,6 +190,18 @@ export type UnlockSessionRequest =
 export type UnlockSessionResponse = { kind: 'unlocked' } | OperatorRefusal;
 
 /**
+ * RT-358 (RT-247 D-A1) — the signed-in manager proves their credentials again
+ * after a `reauth_required` refusal. The fresh JWT stays in main; the renderer
+ * only learns that it worked.
+ */
+export interface ReauthenticateRequest {
+  identifier: string;
+  password: string;
+}
+
+export type ReauthenticateResponse = { kind: 'reauthenticated' } | OperatorRefusal;
+
+/**
  * RT-117 (RT-116 §7.2) — the only read served while locked. Totals only:
  * no line items, no names, no credentials. `summary` is null when the
  * session has no open cart.
@@ -502,6 +514,17 @@ export interface OperatorBridgeAPI {
    * unchanged. Secrets in the request are never logged (P11).
    */
   unlockSession(req: UnlockSessionRequest): Promise<UnlockSessionResponse>;
+
+  /**
+   * RT-358 (RT-247 D-A1) — in-place re-auth for the signed-in manager / admin
+   * after an action was refused `reauth_required`. The same operator only
+   * (another person's credentials → `invalid_input`); lockout and one attempt
+   * at a time are shared with the online unlock (`rate_limited`). Refused
+   * while locked. On success the renderer re-runs the refused action once.
+   * Optional in the type (like `getResumeState`) so existing renderer test
+   * doubles stay valid; the production preload always provides it.
+   */
+  reauthenticate?(req: ReauthenticateRequest): Promise<ReauthenticateResponse>;
 
   /**
    * RT-117 (RT-116 §7.2) — lock state + preserved-sale TOTALS for the lock

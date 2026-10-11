@@ -281,6 +281,16 @@ export class SessionManager {
     return ending;
   }
 
+  /**
+   * RT-358 (RT-247 plan §2.4) — end the session only while `session_id` still
+   * names it. A late answer for an earlier session must never end the one
+   * that replaced it. Returns the ended record, or null (no-op).
+   */
+  endIfCurrent(session_id: string, cause: SessionEndCause): OperatorSessionRecord | null {
+    if (this.current?.id !== session_id) return null;
+    return this.end(cause);
+  }
+
   /** Returns the end_cause recorded for the most recently ended session. */
   getLastEndCause(): SessionEndCause | null {
     return this.lastEndCause;

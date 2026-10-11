@@ -12,12 +12,13 @@ import { verifyPin } from '../pin-credential.js';
 import type { DatabaseHandle } from '../../db/client.js';
 import type { AuditEmitter } from '../../audit/audit-emitter.js';
 import type { AuditEvent } from '../../../shared/audit/event-shape.js';
-import type { OperatorSessionRecord } from '../session-manager.js';
+import { SessionManager, type OperatorSessionRecord } from '../session-manager.js';
 import type { PairingStatus } from '../../../shared/pairing-types.js';
 import type { SafeStorageLike } from '../../secrets/safe-storage.js';
 import { createBackendClient } from '../backend-client.js';
 import type { BackendClient, BackendRosterResponse } from '../backend-client.js';
-import { createJwtHolder } from '../jwt-holder.js';
+import { createJwtHolder, type JwtHolder } from '../jwt-holder.js';
+import { jwtWithExp } from './__helpers__/jwt-fixture.js';
 import type { Logger } from 'pino';
 
 /**
@@ -231,23 +232,38 @@ function makeHandler(opts: {
   /** JWT held for `bsess-1`; `null` holds nothing. Defaults to MANAGER_JWT. */
   jwt?: string | null;
   logger?: Logger;
+  /** RT-358 — a real session manager instead of the static `session`. */
+  sessionManager?: SessionManager;
+  /** RT-358 — a pre-filled holder instead of one built from `jwt`. */
+  jwtHolder?: JwtHolder;
+  /** RT-358 — replaces the pairing read (e.g. to act during its await). */
+  getStatus?: () => Promise<PairingStatus>;
+  clearEnvelope?: (backendSessionId: string) => void;
+  nowMs?: () => number;
+  monoNowMs?: () => number;
 }): PinManagementHandler {
-  const jwtHolder = createJwtHolder();
+  const jwtHolder = opts.jwtHolder ?? createJwtHolder();
   const jwt = opts.jwt === undefined ? MANAGER_JWT : opts.jwt;
-  if (jwt !== null) jwtHolder.set('bsess-1', jwt);
+  if (opts.jwtHolder === undefined && jwt !== null) jwtHolder.set('bsess-1', jwt);
   const deps: PinManagementHandlerDeps = {
     db: bindHandle(opts.db),
     safeStorage: fakeSafeStorage(),
-    sessionManager: {
-      getCurrent: () => opts.session,
-    } as PinManagementHandlerDeps['sessionManager'],
+    sessionManager:
+      opts.sessionManager ??
+      ({
+        getCurrent: () => opts.session,
+      } as PinManagementHandlerDeps['sessionManager']),
     pairingStore: {
-      getStatus: () => Promise.resolve(opts.pairing ?? makePairingStatus('paired')),
+      getStatus:
+        opts.getStatus ?? (() => Promise.resolve(opts.pairing ?? makePairingStatus('paired'))),
     } as PinManagementHandlerDeps['pairingStore'],
     auditEmitter: makeAuditEmitter(opts.captured),
     backend: opts.backend ?? fakeBackend(opts.roster ?? rosterWithUserId()),
     jwtHolder,
     ...(opts.logger === undefined ? {} : { logger: opts.logger }),
+    ...(opts.clearEnvelope === undefined ? {} : { clearEnvelope: opts.clearEnvelope }),
+    ...(opts.nowMs === undefined ? {} : { nowMs: opts.nowMs }),
+    ...(opts.monoNowMs === undefined ? {} : { monoNowMs: opts.monoNowMs }),
   };
   return new PinManagementHandler(deps);
 }
@@ -701,7 +717,8 @@ describe('RT-214 — provisionCashierPin authenticates the manager roster call',
   });
 
   for (const [roster, category] of [
-    [{ kind: 'unauthenticated' }, 'not_signed_in'],
+    // RT-358 (RT-247 D-A1): a 401 asks the manager to sign in again in place.
+    [{ kind: 'unauthenticated' }, 'reauth_required'],
     [{ kind: 'no_token' }, 'not_signed_in'],
     [{ kind: 'forbidden' }, 'role_mismatch'],
     [{ kind: 'refused' }, 'invalid_input'],
@@ -719,7 +736,7 @@ describe('RT-214 — provisionCashierPin authenticates the manager roster call',
   }
 
   for (const [status, category] of [
-    [401, 'not_signed_in'],
+    [401, 'reauth_required'],
     [403, 'role_mismatch'],
   ] as const) {
     it(`real client: HTTP ${String(status)} from Backend-Core → ${category}`, async () => {
@@ -759,5 +776,280 @@ describe('RT-214 — provisionCashierPin authenticates the manager roster call',
       expect(returned).not.toContain(secret);
     }
     expect(logged.toLowerCase()).not.toContain('bearer');
+  });
+});
+
+// ─── RT-358 (RT-247 D-A1) — re-auth required, retry once, fail closed ────────
+
+describe('RT-358 — provisionCashierPin with an expired manager sign-in JWT', () => {
+  const NOW_MS = Date.parse('2026-10-11T12:00:00.000Z');
+  const MONO = 9_000_000;
+  const EXPIRED = jwtWithExp(NOW_MS / 1000 - 60);
+  const VALID = jwtWithExp(NOW_MS / 1000 + 600);
+
+  function liveSession(sm = new SessionManager(), backend_session_id = 'bsess-1'): SessionManager {
+    sm.create({
+      operator_id: 'mgr-operator-1',
+      display_name: 'Manager One',
+      role: 'manager',
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      backend_session_id,
+    });
+    return sm;
+  }
+
+  function rosterOnce(...answers: BackendRosterResponse[]): {
+    backend: BackendClient;
+    listRoster: ReturnType<typeof vi.fn>;
+  } {
+    const queue = [...answers];
+    const listRoster = vi.fn(() => Promise.resolve(queue.shift() ?? rosterWithUserId()));
+    return { backend: { ...fakeBackend(rosterWithUserId()), listRoster }, listRoster };
+  }
+
+  function provision(
+    handler: PinManagementHandler,
+    target = CASHIER_CLERK_ID,
+  ): ReturnType<PinManagementHandler['provisionCashierPin']> {
+    return handler.provisionCashierPin({
+      event_id: randomUUID(),
+      target_cashier_id: target,
+      initial_pin: '4729',
+    });
+  }
+
+  function build(opts: {
+    db: SqlJsDatabase;
+    sm: SessionManager;
+    holder: JwtHolder;
+    backend: BackendClient;
+    getStatus?: () => Promise<PairingStatus>;
+    clearEnvelope?: (id: string) => void;
+  }): PinManagementHandler {
+    return makeHandler({
+      db: opts.db,
+      session: null,
+      captured: [],
+      backend: opts.backend,
+      sessionManager: opts.sm,
+      jwtHolder: opts.holder,
+      ...(opts.getStatus === undefined ? {} : { getStatus: opts.getStatus }),
+      ...(opts.clearEnvelope === undefined ? {} : { clearEnvelope: opts.clearEnvelope }),
+      nowMs: () => NOW_MS,
+      monoNowMs: () => MONO,
+    });
+  }
+
+  function holderWith(jwt: string, marked = false): JwtHolder {
+    const h = createJwtHolder();
+    h.set('bsess-1', jwt, marked ? { reauthenticatedAtMs: MONO - 100 } : undefined);
+    return h;
+  }
+
+  it('an expired JWT → reauth_required, and no roster request is sent', async () => {
+    const db = freshDb();
+    const { backend, listRoster } = rosterOnce();
+    const sm = liveSession();
+    const res = await provision(build({ db, sm, holder: holderWith(EXPIRED), backend }));
+
+    expect(res).toEqual({ kind: 'refused', category: 'reauth_required' });
+    expect(listRoster).not.toHaveBeenCalled();
+    expect(rowCount(db)).toBe(0);
+    expect(sm.getCurrent()).not.toBeNull();
+    db.close();
+  });
+
+  it('a 401 on an unmarked request → reauth_required; the session is not ended', async () => {
+    const db = freshDb();
+    const { backend } = rosterOnce({ kind: 'unauthenticated' });
+    const sm = liveSession();
+    const res = await provision(build({ db, sm, holder: holderWith(VALID), backend }));
+
+    expect(res).toEqual({ kind: 'refused', category: 'reauth_required' });
+    expect(sm.getCurrent()).not.toBeNull();
+    db.close();
+  });
+
+  it('the marked retry skips the exp pre-check (fast clock) and provisions on success', async () => {
+    const db = freshDb();
+    const { backend, listRoster } = rosterOnce(rosterWithUserId());
+    const sm = liveSession();
+    const holder = holderWith(EXPIRED, true);
+    const res = await provision(build({ db, sm, holder, backend }));
+
+    expect(res).toMatchObject({ kind: 'pin_provisioned' });
+    expect(listRoster).toHaveBeenCalledWith('branch-1', EXPIRED);
+    expect(holder.hasFreshMark('bsess-1', MONO)).toBe(false);
+    db.close();
+  });
+
+  it('a 401 on the marked retry ends that session and clears its JWT, mark and envelope', async () => {
+    const db = freshDb();
+    const { backend, listRoster } = rosterOnce({ kind: 'unauthenticated' });
+    const sm = liveSession();
+    const holder = holderWith(EXPIRED, true);
+    const cleared: string[] = [];
+    const res = await provision(
+      build({ db, sm, holder, backend, clearEnvelope: (id) => cleared.push(id) }),
+    );
+
+    expect(res).toEqual({ kind: 'refused', category: 'not_signed_in' });
+    expect(listRoster).toHaveBeenCalledTimes(1);
+    expect(sm.getCurrent()).toBeNull();
+    expect(sm.getLastEndCause()).toBe('account_disabled_mid_session');
+    expect(holder.get('bsess-1')).toBeNull();
+    expect(cleared).toEqual(['bsess-1']);
+    expect(rowCount(db)).toBe(0);
+    db.close();
+  });
+
+  it('the mark is consumed by a successful call: a later 401 asks for re-auth again', async () => {
+    const db = freshDb();
+    const { backend } = rosterOnce(rosterWithUserId(), { kind: 'unauthenticated' });
+    const sm = liveSession();
+    const handler = build({ db, sm, holder: holderWith(VALID, true), backend });
+
+    await expect(provision(handler)).resolves.toMatchObject({ kind: 'pin_provisioned' });
+    await expect(provision(handler, 'clerk-cashier-B')).resolves.toEqual({
+      kind: 'refused',
+      category: 'reauth_required',
+    });
+    expect(sm.getCurrent()).not.toBeNull();
+    db.close();
+  });
+
+  it.each([
+    [
+      'locked',
+      (sm: SessionManager) => {
+        sm.lock('2026-10-11T12:00:00.000Z');
+      },
+    ],
+    [
+      'latched',
+      (sm: SessionManager) =>
+        sm.latchAuthority(sm.getCurrent()?.id ?? '', 'terminal_session_terminated'),
+    ],
+  ])('a %s session → state_invalid at entry, no request', async (_label, mutate) => {
+    const db = freshDb();
+    const { backend, listRoster } = rosterOnce();
+    const sm = liveSession();
+    mutate(sm);
+    const res = await provision(build({ db, sm, holder: holderWith(VALID), backend }));
+
+    expect(res).toEqual({ kind: 'refused', category: 'state_invalid' });
+    expect(listRoster).not.toHaveBeenCalled();
+    db.close();
+  });
+
+  it('a lock while the pairing read is awaited → state_invalid, no request', async () => {
+    const db = freshDb();
+    const { backend, listRoster } = rosterOnce();
+    const sm = liveSession();
+    const getStatus = (): Promise<PairingStatus> => {
+      sm.lock('2026-10-11T12:00:00.000Z');
+      return Promise.resolve(makePairingStatus('paired'));
+    };
+    const res = await provision(build({ db, sm, holder: holderWith(VALID), backend, getStatus }));
+
+    expect(res).toEqual({ kind: 'refused', category: 'state_invalid' });
+    expect(listRoster).not.toHaveBeenCalled();
+    db.close();
+  });
+
+  it('a new session during the pairing read → not_signed_in, no request', async () => {
+    const db = freshDb();
+    const { backend, listRoster } = rosterOnce();
+    const sm = liveSession();
+    const getStatus = (): Promise<PairingStatus> => {
+      sm.end('signed_out');
+      liveSession(sm, 'bsess-1');
+      return Promise.resolve(makePairingStatus('paired'));
+    };
+    const res = await provision(build({ db, sm, holder: holderWith(VALID), backend, getStatus }));
+
+    expect(res).toEqual({ kind: 'refused', category: 'not_signed_in' });
+    expect(listRoster).not.toHaveBeenCalled();
+    db.close();
+  });
+
+  it.each([
+    [
+      'locks',
+      (sm: SessionManager) => {
+        sm.lock('2026-10-11T12:00:00.000Z');
+      },
+      'state_invalid',
+    ],
+    [
+      'is latched',
+      (sm: SessionManager) =>
+        sm.latchAuthority(sm.getCurrent()?.id ?? '', 'terminal_session_terminated'),
+      'state_invalid',
+    ],
+    [
+      'is replaced',
+      (sm: SessionManager) => {
+        sm.end('signed_out');
+        liveSession(sm, 'bsess-2');
+      },
+      'not_signed_in',
+    ],
+  ] as const)(
+    'the session %s while the roster request is in flight → no PIN written',
+    async (_label, mutate, category) => {
+      const db = freshDb();
+      const sm = liveSession();
+      const listRoster = vi.fn(() => {
+        mutate(sm);
+        return Promise.resolve(rosterWithUserId());
+      });
+      const backend = { ...fakeBackend(rosterWithUserId()), listRoster };
+      const res = await provision(build({ db, sm, holder: holderWith(VALID), backend }));
+
+      expect(res).toEqual({ kind: 'refused', category });
+      expect(rowCount(db)).toBe(0);
+      db.close();
+    },
+  );
+
+  it('an unmarked 401 after a lock during the roster request → state_invalid, no prompt', async () => {
+    const db = freshDb();
+    const sm = liveSession();
+    const listRoster = vi.fn(() => {
+      sm.lock('2026-10-11T12:00:00.000Z');
+      return Promise.resolve({ kind: 'unauthenticated' } as const);
+    });
+    const backend = { ...fakeBackend(rosterWithUserId()), listRoster };
+    const res = await provision(build({ db, sm, holder: holderWith(VALID), backend }));
+
+    expect(res).toEqual({ kind: 'refused', category: 'state_invalid' });
+    expect(sm.getCurrent()).not.toBeNull();
+    db.close();
+  });
+
+  it('a late marked 401 after the session was replaced ends nothing and clears nothing', async () => {
+    const db = freshDb();
+    const sm = liveSession();
+    const holder = holderWith(VALID, true);
+    const cleared: string[] = [];
+    const listRoster = vi.fn(() => {
+      sm.end('signed_out');
+      liveSession(sm, 'bsess-2');
+      holder.set('bsess-2', 'jwt-2', { reauthenticatedAtMs: MONO });
+      return Promise.resolve({ kind: 'unauthenticated' } as const);
+    });
+    const backend = { ...fakeBackend(rosterWithUserId()), listRoster };
+    const res = await provision(
+      build({ db, sm, holder, backend, clearEnvelope: (id) => cleared.push(id) }),
+    );
+
+    expect(res).toEqual({ kind: 'refused', category: 'not_signed_in' });
+    expect(sm.getCurrent()?.backend_session_id).toBe('bsess-2');
+    expect(holder.get('bsess-2')).toBe('jwt-2');
+    expect(holder.hasFreshMark('bsess-2', MONO)).toBe(true);
+    expect(cleared).toEqual([]);
+    db.close();
   });
 });

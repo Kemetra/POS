@@ -7,6 +7,7 @@ import {
 } from '../../shared/pairing-types';
 import {
   OPERATOR_IPC_CHANNELS,
+  REAUTH_IPC_CHANNELS,
   RESUME_STATE_IPC_CHANNELS,
   SESSION_LOCK_IPC_CHANNELS,
 } from '../../shared/operator/channels';
@@ -181,8 +182,25 @@ describe('preload bridge', () => {
         'onSessionStateChanged',
         // RT-352 — held-cart resume
         'getResumeState',
+        // RT-358 — in-place manager re-auth
+        'reauthenticate',
       ].sort(),
     );
+  });
+
+  it('RT-358: operator.reauthenticate invokes operator:reauthenticate with the request', async () => {
+    ipcRendererInvoke.mockResolvedValue({ kind: 'reauthenticated' });
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+    const req = { identifier: 'mgr@example.test', password: 'pw' };
+
+    await expect(api.operator.reauthenticate?.(req)).resolves.toEqual({
+      kind: 'reauthenticated',
+    });
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(REAUTH_IPC_CHANNELS.REAUTHENTICATE, req);
   });
 
   it('operator S5 methods invoke the documented IPC channels', async () => {

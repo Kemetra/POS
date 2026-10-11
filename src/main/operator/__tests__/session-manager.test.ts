@@ -353,3 +353,47 @@ describe('SessionManager — RT-17 slice 4 part 2: the manager’s users.id (man
     expect(JSON.stringify(m.getCurrentBridgeView())).not.toContain(MANAGER_USER);
   });
 });
+
+describe('SessionManager — RT-358 endIfCurrent (RT-247 §2.4 fail-closed path)', () => {
+  function withManager(): SessionManager {
+    const m = new SessionManager();
+    m.create({
+      operator_id: 'op-1',
+      display_name: 'Manager',
+      role: 'manager',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      backend_session_id: 'be-1',
+    });
+    return m;
+  }
+
+  it('ends the session when the id still names it, with the cause and the end hooks', () => {
+    const m = withManager();
+    const id = m.getCurrent()?.id ?? '';
+    const ended = vi.fn();
+    m.onEnded(ended);
+
+    const record = m.endIfCurrent(id, 'account_disabled_mid_session');
+
+    expect(record?.id).toBe(id);
+    expect(m.getCurrent()).toBeNull();
+    expect(m.getLastEndCause()).toBe('account_disabled_mid_session');
+    expect(ended).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a no-op for any other id: the current session and its hooks are untouched', () => {
+    const m = withManager();
+    const current = m.getCurrent();
+    const ended = vi.fn();
+    m.onEnded(ended);
+
+    expect(m.endIfCurrent('some-older-session', 'account_disabled_mid_session')).toBeNull();
+    expect(m.getCurrent()).toBe(current);
+    expect(ended).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op with no current session', () => {
+    expect(new SessionManager().endIfCurrent('x', 'signed_out')).toBeNull();
+  });
+});

@@ -8,6 +8,9 @@ import { createSaleBoundaryIpcMain } from './ipc/sale-boundary-guard.js';
 import { registerSessionLockHandlers } from './ipc/session-lock.js';
 import { registerResumeStateHandler } from './ipc/resume-state.js';
 import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
+import { OnlineCredentialVerifier } from './operator/online-credential-verifier.js';
+import { ReauthHandler } from './operator/reauth-handler.js';
+import { registerReauthHandler } from './ipc/reauth.js';
 import { createLockStateReader, createSafePointProbe } from './operator/lock-state-reader.js';
 import { wireSessionStatePush } from './operator/session-state-push.js';
 import { wireSessionLockAudit } from './operator/session-lock-audit.js';
@@ -882,6 +885,10 @@ singleInstanceReady
         operatorJwtHolder.clear(sessionId);
         operatorEnvelopeHolder.clear(sessionId);
       },
+      // RT-358 (Q3 = A): an expired JWT skips the backend call unless it was
+      // just re-authenticated (its fresh mark bypasses the clock check).
+      hasFreshReauthMark: (sessionId) =>
+        operatorJwtHolder.hasFreshMark(sessionId, performance.now()),
       logger: mainLogger,
     });
     const operatorRosterHandler = new RosterHandler({
@@ -932,15 +939,31 @@ singleInstanceReady
       sessionManager: operatorSessionManager,
       resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
     });
+    // RT-358 (RT-247 D-A1) — ONE online credential check for the manager
+    // online unlock and the in-place re-auth: one lockout, one in-flight gate.
+    const onlineCredentialVerifier = new OnlineCredentialVerifier({ clerk: clerkExchanger });
     registerSessionLockHandlers(guardedIpcMain, {
       unlockHandler: new SessionUnlockHandler({
         sessionManager: operatorSessionManager,
         verifyCashierPin: (operator_id, pin) =>
           operatorCashierSignInHandler.verifyPin(operator_id, pin),
         clerk: clerkExchanger,
+        onlineVerifier: onlineCredentialVerifier,
+        // Q2 = yes: the online unlock keeps its fresh JWT (with the one-shot mark).
+        jwtHolder: operatorJwtHolder,
+        isDeviceRevoked: () => pairingStore.isDeviceRevoked(),
         logger: mainLogger,
       }),
       getLockState: getOperatorLockState,
+    });
+    registerReauthHandler(guardedIpcMain, {
+      reauthHandler: new ReauthHandler({
+        sessionManager: operatorSessionManager,
+        verifier: onlineCredentialVerifier,
+        jwtHolder: operatorJwtHolder,
+        isDeviceRevoked: () => pairingStore.isDeviceRevoked(),
+        logger: mainLogger,
+      }),
     });
 
     // RT-352 (RT-116 S4a, RT-115 D3.2) — a draft cart outlives its session: it
@@ -1103,6 +1126,10 @@ singleInstanceReady
       // RT-214 — the roster is operator-identity + manager gated: present the
       // signed-in manager's JWT from the same holder sign-out/stuck-shifts use.
       jwtHolder: operatorJwtHolder,
+      // RT-358 — a session ended by the fail-closed path loses its envelope too.
+      clearEnvelope: (sessionId) => {
+        operatorEnvelopeHolder.clear(sessionId);
+      },
       logger: mainLogger,
     });
 
@@ -1140,6 +1167,11 @@ singleInstanceReady
         sessionManager: operatorSessionManager,
         backendClient: operatorBackend,
         jwtHolder: operatorJwtHolder,
+        // RT-358 — a session ended by the fail-closed path loses its envelope too.
+        clearEnvelope: (sessionId) => {
+          operatorEnvelopeHolder.clear(sessionId);
+        },
+        logger: mainLogger,
       }),
     });
 
