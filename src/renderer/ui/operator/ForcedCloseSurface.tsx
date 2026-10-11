@@ -9,6 +9,7 @@ import type {
   StuckShiftSummary,
   ListStuckShiftsResponse,
 } from '../../../shared/bridge-api.js';
+import { ReauthDialog, ReauthRequiredNotice } from './ReauthDialog.js';
 
 // ─── Duration formatting ──────────────────────────────────────────────────────
 
@@ -137,14 +138,27 @@ export function ForcedCloseForm({
 // ─── StuckShiftSurface (T090 — orchestrated container) ───────────────────────
 
 export interface StuckShiftSurfaceProps {
-  operator: Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>;
+  operator: Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift' | 'reauthenticate'>;
 }
 
 type SurfaceState =
   | { kind: 'loading' }
   | { kind: 'empty' }
   | { kind: 'error' }
+  /** RT-358 — the manager's sign-in expired; the re-auth dialog may be open. */
+  | { kind: 'reauth'; dialogOpen: boolean }
   | { kind: 'list'; shifts: StuckShiftSummary[] };
+
+/** RT-358 — a list answer as a surface state; a second re-auth prompt is never shown. */
+function surfaceOf(res: ListStuckShiftsResponse, afterReauth: boolean): SurfaceState {
+  if (res.kind === 'stuck_shifts') {
+    return res.shifts.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: res.shifts };
+  }
+  if (res.category === 'reauth_required' && !afterReauth) {
+    return { kind: 'reauth', dialogOpen: false };
+  }
+  return { kind: 'error' };
+}
 
 type DialogState =
   | { kind: 'idle' }
@@ -164,17 +178,14 @@ export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Ele
   const [surface, setSurface] = useState<SurfaceState>({ kind: 'loading' });
   const [dialog, setDialog] = useState<DialogState>({ kind: 'idle' });
 
-  const fetchShifts = useCallback(async (): Promise<void> => {
-    setSurface({ kind: 'loading' });
-    const res: ListStuckShiftsResponse = await operator.listStuckShifts();
-    if (res.kind === 'stuck_shifts') {
-      setSurface(
-        res.shifts.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: res.shifts },
-      );
-    } else {
-      setSurface({ kind: 'error' });
-    }
-  }, [operator]);
+  const fetchShifts = useCallback(
+    async (afterReauth = false): Promise<void> => {
+      setSurface({ kind: 'loading' });
+      const res: ListStuckShiftsResponse = await operator.listStuckShifts();
+      setSurface(surfaceOf(res, afterReauth));
+    },
+    [operator],
+  );
 
   useEffect(() => {
     void fetchShifts();
@@ -249,6 +260,26 @@ export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Ele
             Retry
           </button>
         </div>
+      )}
+
+      {surface.kind === 'reauth' && (
+        <ReauthRequiredNotice
+          onSignIn={() => {
+            setSurface({ kind: 'reauth', dialogOpen: true });
+          }}
+        />
+      )}
+
+      {surface.kind === 'reauth' && surface.dialogOpen && (
+        <ReauthDialog
+          operator={operator}
+          onReauthenticated={() => {
+            void fetchShifts(true);
+          }}
+          onCancel={() => {
+            setSurface({ kind: 'reauth', dialogOpen: false });
+          }}
+        />
       )}
 
       {surface.kind === 'list' && (

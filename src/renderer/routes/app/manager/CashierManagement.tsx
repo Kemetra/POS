@@ -8,6 +8,7 @@ import type {
   UnlockCashierRequest,
 } from '../../../../shared/bridge-api.js';
 import { Workspace } from '../../../shell/regions/Workspace.js';
+import { ReauthDialog, ReauthRequiredNotice } from '../../../ui/operator/ReauthDialog.js';
 
 /**
  * T078 — Manager/admin cashier management surface.
@@ -29,12 +30,23 @@ import { Workspace } from '../../../shell/regions/Workspace.js';
  * `user_id` stays main-side. Two refusals get a truthful message (a PIN
  * already exists / the cashier is not ready, 019 FR-5 / FR-11); the refusal
  * category itself never reaches the DOM.
+ *
+ * RT-358 (RT-247 D-A1) — when the manager's sign-in has expired, Save PIN is
+ * refused `reauth_required`: the Arabic notice offers only «تسجيل الدخول»,
+ * which opens the re-auth dialog on this surface. The typed PIN stays in this
+ * component's state meanwhile; on success it is submitted again exactly once,
+ * on cancel it is cleared. A second `reauth_required` right after a re-auth is
+ * a plain error, never a new prompt (main fails closed on the marked retry).
  */
 
 interface Props {
   operator: Pick<
     OperatorBridgeAPI,
-    'listBranchRoster' | 'resetCashierPin' | 'provisionCashierPin' | 'unlockCashier'
+    | 'listBranchRoster'
+    | 'resetCashierPin'
+    | 'provisionCashierPin'
+    | 'unlockCashier'
+    | 'reauthenticate'
   >;
 }
 
@@ -42,6 +54,7 @@ type ActionState =
   | { kind: 'idle' }
   | { kind: 'resetPin'; cashier: BranchRosterCashier; pin: string }
   | { kind: 'setFirstPin'; cashier: BranchRosterCashier; pin: string }
+  | { kind: 'reauthRequired'; cashier: BranchRosterCashier; pin: string; dialogOpen: boolean }
   | { kind: 'success'; message: string }
   | { kind: 'error'; message?: string };
 
@@ -130,17 +143,22 @@ export function CashierManagement({ operator }: Props): JSX.Element {
     }
   }
 
-  async function handleSetFirstPinConfirm(): Promise<void> {
-    if (action.kind !== 'setFirstPin') return;
+  async function submitFirstPin(
+    cashier: BranchRosterCashier,
+    pin: string,
+    afterReauth: boolean,
+  ): Promise<void> {
     const req: ProvisionCashierPinRequest = {
       event_id: crypto.randomUUID(),
-      target_cashier_id: action.cashier.id,
-      initial_pin: action.pin,
+      target_cashier_id: cashier.id,
+      initial_pin: pin,
     };
     const res = await runExclusive(() => operator.provisionCashierPin(req));
     if (res === undefined) return;
     if (res.kind === 'pin_provisioned') {
       setAction({ kind: 'success', message: 'First PIN set.' });
+    } else if (res.category === 'reauth_required' && !afterReauth) {
+      setAction({ kind: 'reauthRequired', cashier, pin, dialogOpen: false });
     } else if (res.category === 'state_invalid') {
       setAction({ kind: 'error', message: PIN_ALREADY_SET_MESSAGE });
     } else if (res.category === 'not_ready') {
@@ -148,6 +166,19 @@ export function CashierManagement({ operator }: Props): JSX.Element {
     } else {
       setAction({ kind: 'error' });
     }
+  }
+
+  function handleSetFirstPinConfirm(): void {
+    if (action.kind !== 'setFirstPin') return;
+    void submitFirstPin(action.cashier, action.pin, false);
+  }
+
+  /** RT-358 — the re-auth worked: submit the same PIN again, once. */
+  function handleReauthenticated(): void {
+    if (action.kind !== 'reauthRequired') return;
+    const { cashier, pin } = action;
+    setAction({ ...action, dialogOpen: false });
+    void submitFirstPin(cashier, pin, true);
   }
 
   function handlePinChange(e: React.ChangeEvent<HTMLInputElement>): void {
@@ -256,9 +287,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
               type="button"
               className="btn btn--primary btn--md"
               disabled={pending}
-              onClick={() => {
-                void handleSetFirstPinConfirm();
-              }}
+              onClick={handleSetFirstPinConfirm}
             >
               Save PIN
             </button>
@@ -273,6 +302,24 @@ export function CashierManagement({ operator }: Props): JSX.Element {
               Cancel
             </button>
           </div>
+        )}
+
+        {action.kind === 'reauthRequired' && (
+          <ReauthRequiredNotice
+            onSignIn={() => {
+              setAction({ ...action, dialogOpen: true });
+            }}
+          />
+        )}
+
+        {action.kind === 'reauthRequired' && action.dialogOpen && (
+          <ReauthDialog
+            operator={operator}
+            onReauthenticated={handleReauthenticated}
+            onCancel={() => {
+              setAction({ kind: 'idle' });
+            }}
+          />
         )}
 
         {action.kind === 'success' && (

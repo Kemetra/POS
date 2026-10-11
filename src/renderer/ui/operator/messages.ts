@@ -38,3 +38,20 @@ export const SIGN_IN_REFUSAL_COPY: Readonly<Record<RefusalCategory, string>> = O
 });
 
 export const EMPTY_INPUT_MESSAGE = 'أدخل بيانات الدخول للمتابعة.';
+
+/**
+ * RT-358 (RT-247 D-A1, UX-12, owner decision 2026-10-07) — the in-place manager
+ * re-auth. The notice text is `SIGN_IN_REFUSAL_COPY.reauth_required`; its ONE
+ * action is «تسجيل الدخول» — never a generic retry. Field labels match the
+ * manager sign-in form.
+ */
+export const REAUTH_COPY = Object.freeze({
+  action: 'تسجيل الدخول',
+  title: 'تسجيل الدخول مرة أخرى',
+  managerLabel: 'المدير',
+  identifierLabel: 'البريد الإلكتروني أو اسم المستخدم',
+  passwordLabel: 'كلمة المرور',
+  submit: 'تسجيل الدخول',
+  submitting: 'جارٍ تسجيل الدخول…',
+  cancel: 'إلغاء',
+});
