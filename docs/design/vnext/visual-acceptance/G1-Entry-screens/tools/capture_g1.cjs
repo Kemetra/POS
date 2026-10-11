@@ -20,6 +20,7 @@ fs.mkdirSync(outDir, { recursive: true });
   const files = fs.readdirSync(dir).filter((f) => /^G1-.*-(1024|1280)\.html$/.test(f)).sort();
   const report = [];
   const tops = {};
+  const failures = [];
   for (const f of files) {
     const w = f.includes('-1024') ? 1024 : 1280;
     const h = w === 1024 ? 768 : 800;
@@ -71,12 +72,25 @@ fs.mkdirSync(outDir, { recursive: true });
         }
         report.push(`${f}: ${JSON.stringify({ ...fit, axe })}`);
         if (fit.keypadTop !== null) (tops[w] = tops[w] || new Set()).add(fit.keypadTop);
+        // `wrapped` and `scroll` are information; everything else is a failed check.
+        const failed = [];
+        if (fit.out.length) failed.push(...fit.out);
+        if (fit.small) failed.push(`${fit.small} text node(s) below 12px`);
+        if (fit.targets) failed.push(`${fit.targets} control(s) below 44x44`);
+        if (fit.clipped) failed.push(`${fit.clipped} header name(s) cut off`);
+        if (fit.clamped) failed.push(`${fit.clamped} roster name(s) clamped`);
+        if (axe && axe.length) failed.push(`axe: ${axe.join(', ')}`);
+        if (failed.length) {
+          failures.push(`${f}: ${failed.join('; ')}`);
+          process.exitCode = 1;
+        }
       }
       await ctx.close();
     }
   }
   await browser.close();
   console.log(report.join('\n'));
+  for (const line of failures) console.log(`[FAIL] ${line}`);
   for (const [w, set] of Object.entries(tops)) {
     console.log(`keypad top @${w}: ${[...set].join(', ')} ${set.size === 1 ? '[OK] identical' : '[FAIL] moves'}`);
     if (set.size !== 1) process.exitCode = 1;
