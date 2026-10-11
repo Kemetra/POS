@@ -34,6 +34,7 @@ interface FakeWindow {
   webContents: FakeWebContents;
   loadURL: ReturnType<typeof vi.fn>;
   loadFile: ReturnType<typeof vi.fn>;
+  removeMenu: ReturnType<typeof vi.fn>;
 }
 
 function createFakeWindow(): FakeWindow {
@@ -45,6 +46,7 @@ function createFakeWindow(): FakeWindow {
     },
     loadURL: vi.fn(),
     loadFile: vi.fn(),
+    removeMenu: vi.fn(),
   };
 }
 
@@ -278,6 +280,34 @@ describe('021 S3 — window bootstrap: content loading', () => {
     expect(win.loadURL).not.toHaveBeenCalled();
     // Devtools in a packaged POS terminal would expose the renderer to a cashier.
     expect(win.webContents.openDevTools).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * RT-314 (RT-312 D3/D4) — viewport stability. The default Electron menu costs
+ * about 25 CSS px of height and carries Reload / DevTools / Zoom accelerators;
+ * page zoom otherwise persists per origin across restarts (measured on
+ * Electron 44: a level set in one launch came back on the next). Both change
+ * the cashier's viewport outside the app's control, so both are switched off
+ * on the window itself, in dev as in packaged builds.
+ */
+describe('RT-314 — window bootstrap: no menu bar, zoom locked', () => {
+  it.each([false, true])('removes the native menu bar (isDev=%s)', (isDev) => {
+    const { win } = setup({ isDev });
+
+    // Auto-hide is rejected (D3): Alt would bring the bar back and shrink the
+    // viewport in the middle of a sale. The menu is removed outright.
+    expect(win.removeMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('constructs the window with page zoom disabled', () => {
+    const { browserWindowCtor } = setup();
+    const opts = firstArgOf(browserWindowCtor, 'BrowserWindow') as BrowserWindowOptions;
+
+    // 'disabled' pins the default zoom: keyboard, Ctrl+wheel and programmatic
+    // changes are all ignored, and a level persisted by an earlier launch is
+    // not restored (D4). Accessibility scaling goes through Windows Scale.
+    expect(opts.webPreferences.zoomMode).toBe('disabled');
   });
 });
 
