@@ -7,6 +7,7 @@ import {
   credentialSnapshotOf,
   freshCredentialBlocker,
   storeFreshCredential,
+  type CredentialSnapshot,
 } from './fresh-credential.js';
 import type { JwtHolder } from './jwt-holder.js';
 import type { OnlineCredentialVerifier } from './online-credential-verifier.js';
@@ -49,18 +50,12 @@ export class ReauthHandler {
   constructor(private readonly deps: ReauthHandlerDeps) {}
 
   async reauthenticate(req: ReauthenticateRequest): Promise<ReauthenticateResponse> {
-    const session = this.deps.sessionManager.getCurrent();
-    if (session === null) return this.refused('not_signed_in', 'no_session');
-    if (session.role === 'cashier') return this.refused('role_mismatch', 'role');
-    const snapshot = credentialSnapshotOf(session);
-    const atEntry = this.blocker(snapshot);
-    if (atEntry !== null) return this.refused(atEntry, 'entry');
-    if (!isNonEmptyString(req.identifier) || !isNonEmptyString(req.password)) {
-      return this.refused('invalid_input', 'shape');
-    }
+    const admitted = this.admit(req);
+    if (admitted.kind === 'refused') return admitted;
+    const { snapshot } = admitted;
 
     const verdict = await this.deps.verifier.verify(
-      session.operator_id,
+      snapshot.operator_id,
       req.identifier,
       req.password,
     );
@@ -73,7 +68,23 @@ export class ReauthHandler {
     return { kind: 'reauthenticated' };
   }
 
-  private blocker(snapshot: ReturnType<typeof credentialSnapshotOf>): RefusalCategory | null {
+  /** The checks before any credential is sent: a manager on a usable session, a well-formed request. */
+  private admit(
+    req: ReauthenticateRequest,
+  ): { kind: 'admitted'; snapshot: CredentialSnapshot } | OperatorRefusal {
+    const session = this.deps.sessionManager.getCurrent();
+    if (session === null) return this.refused('not_signed_in', 'no_session');
+    if (session.role === 'cashier') return this.refused('role_mismatch', 'role');
+    const snapshot = credentialSnapshotOf(session);
+    const atEntry = this.blocker(snapshot);
+    if (atEntry !== null) return this.refused(atEntry, 'entry');
+    if (!isNonEmptyString(req.identifier) || !isNonEmptyString(req.password)) {
+      return this.refused('invalid_input', 'shape');
+    }
+    return { kind: 'admitted', snapshot };
+  }
+
+  private blocker(snapshot: CredentialSnapshot): RefusalCategory | null {
     return freshCredentialBlocker(
       this.deps.sessionManager,
       snapshot,

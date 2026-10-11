@@ -10,17 +10,25 @@
 
 export type JwtExpiry = 'expired' | 'valid' | 'unknown';
 
-function readExpSeconds(jwt: string): number | null {
-  const parts = jwt.split('.');
-  if (parts.length !== 3) return null;
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function decodePayload(segment: string): unknown {
   try {
-    const payload: unknown = JSON.parse(Buffer.from(parts[1] ?? '', 'base64url').toString('utf8'));
-    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
-    const exp = (payload as Record<string, unknown>)['exp'];
-    return typeof exp === 'number' && Number.isFinite(exp) ? exp : null;
+    return JSON.parse(Buffer.from(segment, 'base64url').toString('utf8'));
   } catch {
     return null;
   }
+}
+
+function readExpSeconds(jwt: string): number | null {
+  const parts = jwt.split('.');
+  if (parts.length !== 3) return null;
+  const payload = decodePayload(parts[1] ?? '');
+  if (!isRecord(payload)) return null;
+  const exp = payload['exp'];
+  return typeof exp === 'number' && Number.isFinite(exp) ? exp : null;
 }
 
 export function jwtExpiry(jwt: string, nowMs: number): JwtExpiry {

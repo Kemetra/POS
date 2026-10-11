@@ -44,6 +44,18 @@ function revoked(isDeviceRevoked: () => boolean): boolean {
   }
 }
 
+/** The current session is the snapshot's: same id, backend session and operator. */
+function isSnapshotSession(
+  current: OperatorSessionRecord | null,
+  snapshot: CredentialSnapshot,
+): current is OperatorSessionRecord {
+  return (
+    current?.id === snapshot.id &&
+    current.backend_session_id === snapshot.backend_session_id &&
+    current.operator_id === snapshot.operator_id
+  );
+}
+
 /** Null when the snapshot session may receive the fresh credential. */
 export function freshCredentialBlocker(
   sessionManager: Pick<SessionManager, 'getCurrent'>,
@@ -52,13 +64,7 @@ export function freshCredentialBlocker(
   isDeviceRevoked: () => boolean,
 ): RefusalCategory | null {
   const current = sessionManager.getCurrent();
-  if (
-    current?.id !== snapshot.id ||
-    current.backend_session_id !== snapshot.backend_session_id ||
-    current.operator_id !== snapshot.operator_id
-  ) {
-    return 'not_signed_in';
-  }
+  if (!isSnapshotSession(current, snapshot)) return 'not_signed_in';
   if (current.authority_latch !== undefined || revoked(isDeviceRevoked)) return 'not_signed_in';
   const locked = current.lock_state === 'locked';
   if (locked !== (expected === 'locked')) return 'state_invalid';
