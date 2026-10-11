@@ -56,6 +56,19 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-244 W1-D: the sign-in harness, same DEV-only contract as the Checkout
+  // harness (the real SignInRoute against an in-memory operator bridge).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/sign-in-proof')
+) {
+  void import('./v5/entry/dev/SignInProof').then(({ SignInProof }) => {
+    root.render(
+      <React.StrictMode>
+        <SignInProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();

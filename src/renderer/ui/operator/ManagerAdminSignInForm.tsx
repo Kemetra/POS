@@ -4,6 +4,9 @@ import type { OperatorBridgeAPI } from '../../../shared/bridge-api.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import { completeSignIn } from '../../session/complete-sign-in.js';
 import { SIGN_IN_REFUSAL_COPY, EMPTY_INPUT_MESSAGE } from './messages.js';
+import { V5Icon } from '../../v5/foundation/V5Icon.js';
+import { SIGN_IN_COPY } from '../../v5/entry/entry-copy.js';
+import { RefusalNotice } from '../../v5/entry/RefusalNotice.js';
 
 /**
  * 004-operator-session T019 + T021 + T029 — Manager / admin sign-in
@@ -115,27 +118,32 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
   };
 
   return (
+    // RT-244 (G-1 references): the form fills the sign-in screen's inline-end
+    // column; its commit sits at the bottom. Identifier and password are LTR.
     <form
       onSubmit={handleSubmit}
-      className="v4-stack"
+      className="v5-entry__auth-body"
       data-testid="manager-admin-sign-in-form"
       noValidate
     >
       {onBack !== undefined && (
         <button
           type="button"
-          className="btn btn--ghost btn--md"
+          className="v5-entry__btn v5-entry__btn--ghost"
           data-testid="sign-in-back"
           onClick={onBack}
         >
-          ← العودة إلى قائمة الكاشير
+          <V5Icon name="back" />
+          {SIGN_IN_COPY.back}
         </button>
       )}
-      <div className="v4-field">
+      <div className="v5-entry__field">
         <label htmlFor={identifierId}>البريد الإلكتروني أو اسم المستخدم</label>
         <input
           id={identifierId}
           ref={identifierRef}
+          className="v5-entry__input"
+          dir="ltr"
           type="text"
           autoComplete="username"
           autoCapitalize="off"
@@ -146,11 +154,13 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
           data-testid="sign-in-identifier"
         />
       </div>
-      <div className="v4-field">
+      <div className="v5-entry__field">
         <label htmlFor={passwordId}>كلمة المرور</label>
         <input
           id={passwordId}
           ref={passwordRef}
+          className="v5-entry__input"
+          dir="ltr"
           type="password"
           autoComplete="current-password"
           disabled={isSubmitting}
@@ -159,33 +169,30 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
         />
       </div>
 
-      <div className="v4-feedback" role="status" aria-live="polite">
+      <div className="v5-entry__feedback" role="status" aria-live="polite">
         {isSubmitting ? (
-          <span data-testid="sign-in-spinner">جارٍ تسجيل الدخول…</span>
+          <span className="v5-entry__status" data-testid="sign-in-spinner">
+            جارٍ تسجيل الدخول…
+          </span>
         ) : refusalCategory !== undefined ? (
-          <span
-            role="alert"
-            data-testid="sign-in-refusal"
-            data-category={refusalCategory}
-            className="v4-feedback__error"
-          >
+          <RefusalNotice testId="sign-in-refusal" category={refusalCategory}>
             {SIGN_IN_REFUSAL_COPY[refusalCategory]}
-          </span>
+          </RefusalNotice>
         ) : emptyInputShown ? (
-          <span role="alert" data-testid="sign-in-empty-input" className="v4-feedback__error">
-            {EMPTY_INPUT_MESSAGE}
-          </span>
+          <RefusalNotice testId="sign-in-empty-input">{EMPTY_INPUT_MESSAGE}</RefusalNotice>
         ) : null}
       </div>
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        data-testid="sign-in-submit"
-        className="btn btn--primary btn--lg"
-      >
-        {isSubmitting ? 'جارٍ تسجيل الدخول…' : 'تسجيل الدخول'}
-      </button>
+      <div className="v5-entry__auth-actions">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          data-testid="sign-in-submit"
+          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+        >
+          {isSubmitting ? 'جارٍ تسجيل الدخول…' : 'تسجيل الدخول'}
+        </button>
+      </div>
     </form>
   );
 }

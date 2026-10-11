@@ -33,7 +33,7 @@ afterEach(() => {
 describe('PinPad dot-only guard — PR-1 security invariant', () => {
   it('dot elements have no "value" attribute', () => {
     renderPinPad('1234');
-    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'));
+    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.v5-entry__dot'));
     expect(dots.length).toBeGreaterThan(0);
     for (const dot of dots) {
       expect(dot).not.toHaveAttribute('value');
@@ -42,7 +42,7 @@ describe('PinPad dot-only guard — PR-1 security invariant', () => {
 
   it('dot elements have no "data-value" attribute', () => {
     renderPinPad('1234');
-    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'));
+    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.v5-entry__dot'));
     for (const dot of dots) {
       expect(dot).not.toHaveAttribute('data-value');
     }
@@ -50,7 +50,7 @@ describe('PinPad dot-only guard — PR-1 security invariant', () => {
 
   it('dot elements have no "title" attribute', () => {
     renderPinPad('1234');
-    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'));
+    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.v5-entry__dot'));
     for (const dot of dots) {
       expect(dot).not.toHaveAttribute('title');
     }

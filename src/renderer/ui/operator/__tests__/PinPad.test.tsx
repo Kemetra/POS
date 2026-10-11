@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
-import { PinPad, PIN_MAX_LENGTH } from '../PinPad.js';
+import { PinPad, PinPadPreview, PIN_MAX_LENGTH } from '../PinPad.js';
 
 /**
  * 004-operator-session T074 — PinPad component tests.
@@ -56,16 +56,16 @@ describe('PinPad — rendering', () => {
 
   it('renders PIN_MAX_LENGTH dot indicators', () => {
     renderPinPad();
-    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'));
+    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.v5-entry__dot'));
     expect(dots).toHaveLength(PIN_MAX_LENGTH);
   });
 
   it('PR #434 FIX 3: keypad grid is LTR-isolated (dir="ltr") under an RTL shell', () => {
-    // The app shell root is dir="rtl"; the 1-2-3 / 4-5-6 / 7-8-9 / ⌫-0-↵ keypad
+    // The app shell root is dir="rtl"; the 1-2-3 / 4-5-6 / 7-8-9 / ·-0-⌫ keypad
     // must auto-place left-to-right regardless of inherited direction, else the
     // grid mirrors. dir is a standard HTML attribute, not a new component prop.
     const { container } = renderPinPad();
-    const grid = container.querySelector('.pin-pad__grid');
+    const grid = container.querySelector('.v5-entry__keypad');
     expect(grid).not.toBeNull();
     expect(grid).toHaveAttribute('dir', 'ltr');
   });
@@ -285,5 +285,67 @@ describe('PinPad — backspace onKeyDown handler', () => {
     const backspaceBtn = screen.getByTestId('pin-pad-backspace');
     fireEvent.keyDown(backspaceBtn, { key: 'a' });
     expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('PinPad — RT-244 G-1 layout', () => {
+  it('lays the bottom row out as blank · 0 · ⌫, with no ↵ key in the grid', () => {
+    const { container } = renderPinPad();
+    const grid = container.querySelector('.v5-entry__keypad');
+    const cells = Array.from(grid?.children ?? []);
+    expect(cells).toHaveLength(12);
+    expect(cells[9]).toHaveAttribute('aria-hidden', 'true');
+    expect(cells[10]).toBe(screen.getByTestId('pin-pad-key-0'));
+    expect(cells[11]).toBe(screen.getByTestId('pin-pad-backspace'));
+    expect(grid?.textContent).not.toContain('↵');
+  });
+
+  it('the commit sits under the keypad and carries the given Arabic label', () => {
+    render(<PinPad value="" onChange={vi.fn()} onSubmit={vi.fn()} submitLabel="دخول" />);
+    const commit = screen.getByTestId('pin-pad-enter');
+    expect(commit).toHaveTextContent('دخول');
+    const grid = screen.getByRole('group', { name: 'إدخال الرقم السري' });
+    expect(grid.compareDocumentPosition(commit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renders the feedback slot between the dots and the keypad', () => {
+    render(
+      <PinPad
+        value=""
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        feedback={<span data-testid="slot-content">x</span>}
+      />,
+    );
+    const dots = screen.getByTestId('pin-pad-dots');
+    const slot = screen.getByTestId('slot-content');
+    const grid = screen.getByRole('group', { name: 'إدخال الرقم السري' });
+    expect(dots.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(slot.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('marks the dots field refused and links it to the message', () => {
+    render(<PinPad value="" onChange={vi.fn()} onSubmit={vi.fn()} error describedBy="err-id" />);
+    const dots = screen.getByTestId('pin-pad-dots');
+    expect(dots).toHaveAttribute('data-error', 'true');
+    expect(dots).toHaveAttribute('aria-describedby', 'err-id');
+  });
+});
+
+describe('PinPadPreview — the PIN column before a cashier is picked', () => {
+  it('shows the prompt and a fully disabled keypad and commit', () => {
+    render(<PinPadPreview prompt="اختر اسمك" />);
+    expect(screen.getByTestId('pin-awaiting-selection')).toHaveTextContent('اختر اسمك');
+    const keys = screen.getByTestId('pin-pad-preview').querySelectorAll('button');
+    expect(keys.length).toBe(12);
+    for (const key of Array.from(keys)) expect(key).toBeDisabled();
+  });
+
+  it('accepts no input: no keyboard listener, no PIN dots', async () => {
+    render(<PinPadPreview prompt="اختر اسمك" />);
+    const user = userEvent.setup();
+    await user.keyboard('1234{Enter}');
+    expect(screen.queryByTestId('pin-pad-dots')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('pin-pad')).not.toBeInTheDocument();
   });
 });

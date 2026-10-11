@@ -273,9 +273,12 @@ describe('022 US1-R3 — sign-in PIN track fits its keypad', () => {
     expect(rail).toBe(3);
   });
 
+  // RT-244 (VNext W1-D): the sign-in route now composes the v5 two-zone stage
+  // (`RosterPanel`, then one `AuthPanel` holding the PIN pad or the manager
+  // form). The task-flow rule is unchanged: the roster comes first in the DOM.
   it('keeps the DOM ordered by task flow, not by paint order', () => {
     const route = readFileSync(resolve(__dirname, '../../routes/sign-in.tsx'), 'utf-8');
-    const order = ['v4-col--rail', 'v4-col--roster', 'v4-col--pin'].map((c) => route.indexOf(c));
+    const order = ['<RosterPanel', '<AuthPanel'].map((c) => route.indexOf(c));
     expect(order.every((i) => i > -1)).toBe(true);
     // Ascending source positions: a cashier is chosen BEFORE the PIN is typed,
     // and keyboard traversal must follow that, whatever the paint order is.

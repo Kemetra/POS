@@ -110,13 +110,16 @@ describe('022 hard reset — rebuilt screens use the v4 vocabulary', () => {
         ).toEqual([]);
       });
 
-      it('composes from the shared v4 layout layer', () => {
+      // RT-244 (VNext W1-D): sign-in moved on from the v4 layer to the v5
+      // vocabulary (`.v5-entry*`), which supersedes it. Either shared layer
+      // counts; a per-screen BEM class still does not.
+      it('composes from a shared layout layer (v4 or its v5 successor)', () => {
         const used = classNamesIn(readFileSync(path, 'utf-8'));
-        const v4 = [...used].filter((cls) => cls.startsWith('v4-'));
+        const shared = [...used].filter((cls) => cls.startsWith('v4-') || cls.startsWith('v5-'));
         expect(
-          v4.length,
-          `${file} references no \`.v4-*\` class, so it is not rebuilt onto the ` +
-            'shared layout vocabulary.',
+          shared.length,
+          `${file} references no \`.v4-*\` or \`.v5-*\` class, so it is not rebuilt onto ` +
+            'a shared layout vocabulary.',
         ).toBeGreaterThan(0);
       });
 
