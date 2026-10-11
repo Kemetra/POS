@@ -99,12 +99,28 @@ later (owner decision Q2).
 
 ### 2.4 Retry once, then fail closed
 
-After a successful re-auth, the renderer re-runs the original action **once**.
-- If that call succeeds, the flow continues.
-- If it returns 401 again, the backend operator session itself is gone (expired or revoked).
-  Main ends the local session (`sessionManager.end()`; the existing `operator:session-state`
-  push sends the renderer to sign-in), and the sign-in screen shows
-  `SIGN_IN_REFUSAL_COPY.not_signed_in`. There is no loop of prompts.
+The retried request looks exactly like the first one, so main needs its own record that a
+re-auth just happened. Without it a second 401 would only map to `reauth_required` again and
+prompt again.
+
+- **The marker.** On a successful `operator:reauthenticate`, main marks the held JWT for the
+  active `backend_session_id` as **just re-authenticated**. The mark lives next to the JWT in
+  the holder (for example `set(sessionId, jwt, { reauthenticated: true })`), so it is bound to
+  that session and is cleared with it on sign-out, revocation or takeover.
+- **Consumed by the next call.** The first `operator-identity` request that presents that JWT
+  consumes the mark **before** the request is sent, whatever the outcome. The mark is never
+  carried by IPC; the renderer cannot set or replay it.
+- **What a 401 means.** For a request that consumed the mark, a 401 is not "re-auth
+  required": a JWT exchanged seconds ago was refused, so the backend operator session itself
+  is gone (expired or revoked). Main ends the local session (`sessionManager.end()`; the
+  existing `operator:session-state` push sends the renderer to sign-in) and returns
+  `not_signed_in`. The sign-in screen shows `SIGN_IN_REFUSAL_COPY.not_signed_in`.
+- **Otherwise.** A 401 on a request without the mark maps to `reauth_required` as in §2.2.
+- **Success.** If that request succeeds, the mark is already gone and the flow continues.
+
+The renderer re-runs the original action **once** after a successful re-auth. The fail-closed
+decision is made in main, from the mark, so there is no loop of prompts even if the renderer
+retried again.
 
 ### 2.5 UX (screen states S21 and M6)
 
@@ -150,7 +166,7 @@ sign-in.
 | File | Change |
 |---|---|
 | `src/shared/audit/event-shape.ts` | `reauth_required` in `REFUSAL_CATEGORIES` |
-| `src/main/operator/jwt-holder.ts` (or a small sibling) | `isExpired(jwt, now)`: decode the payload, read `exp`; unreadable means "unknown", not expired |
+| `src/main/operator/jwt-holder.ts` (or a small sibling) | `isExpired(jwt, now)`: decode the payload, read `exp`; unreadable means "unknown", not expired. The per-session one-shot "just re-authenticated" mark (§2.4): set on re-auth, consumed before the next `operator-identity` request, cleared with the session |
 | `src/main/operator/pin-management.ts` | Pre-check and 401 → `reauth_required` |
 | `src/main/operator/stuck-shifts-handler.ts` | Pre-check, no-JWT guard, 401 → `reauth_required` |
 | `src/main/operator/sign-out-handler.ts` | Option A: skip the call when expired, log it |
@@ -171,7 +187,11 @@ Main (vitest, `src/main/operator/__tests__/`):
 - Re-auth: the same operator → the holder is updated for the active `backend_session_id`; a
   different `operator_id` → refused and the holder is unchanged; `no_connection` → refused,
   holder unchanged; the lockout is shared with the online unlock.
-- Retry: re-auth, then the call 401s again → the local session ends (`session-state: ended`).
+- Retry (§2.4): after re-auth, a 401 on the next call ends the local session
+  (`session-state: ended`) and returns `not_signed_in`, not `reauth_required`. The mark is
+  consumed **before** that request is sent: a second call after it maps a 401 to
+  `reauth_required` again. A successful call also consumes it. Sign-out, revocation and
+  takeover clear it. No IPC payload can set it.
 - Sign-out with an expired JWT → local session ended, holders cleared, no backend request,
   `backend_skipped` logged.
 - Redaction: no JWT, identifier or password in logs or audit events
