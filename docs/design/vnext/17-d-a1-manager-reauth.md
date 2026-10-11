@@ -73,7 +73,15 @@ Add **`reauth_required`** to the closed `REFUSAL_CATEGORIES` set
 | Handler | Today | After |
 |---|---|---|
 | `provisionCashierPin` | 401 / no JWT → `not_signed_in` | expired `exp` or 401 → `reauth_required`. No active session or no JWT held → `not_signed_in` (unchanged) |
-| `listStuckShifts` | 401 → `invalid_input`; empty JWT still sent | expired `exp` or 401 → `reauth_required`; no JWT held → `not_signed_in`, and no request is sent |
+| `listStuckShifts` | 401 → `invalid_input`; empty JWT still sent | expired `exp` or 401 → `reauth_required`; no JWT held → `not_signed_in`, and no request is sent; 403 and 5xx keep today's `invalid_input` |
+
+The stuck-shifts mapping needs a backend-client change first. `getStuckShifts` calls
+`fetchAndInterpret` without a status classifier (`backend-client.ts:327-336`), so every non-2xx
+response collapses to the same `{ kind: 'refused' }` and the handler cannot tell a 401 from a
+403 or a 5xx. The slice gives it a classifier like the roster's `rosterRefusal`
+(`backend-client.ts:431-435`): 401 → `unauthenticated`, 403 → `forbidden`, anything else →
+`refused`, with `BackendStuckShiftsResponse` widened to match. Only `unauthenticated` maps to
+`reauth_required`. The provision-PIN path already gets `unauthenticated` from `listRoster`.
 
 The audit event records `reauth_required` like any other refusal category. The JWT never
 appears in logs, audit events or IPC payloads; `src/tests/operator-redaction.test.ts` must
@@ -150,12 +158,22 @@ prompt again.
 - **Consumed by the next call.** The first `operator-identity` request that presents that JWT
   consumes the mark **before** the request is sent, whatever the outcome. The mark is never
   carried by IPC; the renderer cannot set or replay it.
+- **Bound to the request's session.** Before sending, the handler snapshots the active
+  session's `id` and `backend_session_id`. A 401 acts only on that session. If the session
+  has ended or changed while the request was in flight (sign-out and a new sign-in, or a
+  takeover), the handler returns `not_signed_in` and does nothing else: it ends no session,
+  clears no holder and asks for no re-auth. A late 401 must never end or prompt an unrelated
+  operator. `SessionManager.end()` has no session-id guard today (`session-manager.ts:266`), so
+  the slice adds a session-id-keyed `endIfCurrent(sessionId, cause)` that ends the session only
+  if it is still the current one.
 - **What a 401 means.** For a request that consumed the mark, a 401 is not "re-auth
   required": a JWT exchanged within the last `REAUTH_MARK_TTL_MS` was refused, so the backend operator session itself
-  is gone (expired or revoked). Main ends the local session (`sessionManager.end()`; the
-  existing `operator:session-state` push sends the renderer to sign-in) and returns
-  `not_signed_in`. The sign-in screen shows `SIGN_IN_REFUSAL_COPY.not_signed_in`.
-- **Otherwise.** A 401 on a request without the mark maps to `reauth_required` as in §2.2.
+  is gone (expired or revoked). Main ends that session through
+  `sessionManager.endIfCurrent(snapshot.id, …)` (the existing `operator:session-state` push
+  sends the renderer to sign-in) and returns `not_signed_in`. The sign-in screen shows
+  `SIGN_IN_REFUSAL_COPY.not_signed_in`.
+- **Otherwise.** A 401 on a request without the mark, while the snapshot session is still
+  current, maps to `reauth_required` as in §2.2.
 - **Success.** If that request succeeds, the mark is already gone and the flow continues.
 
 The renderer re-runs the original action **once** after a successful re-auth. The fail-closed
@@ -208,10 +226,11 @@ sign-in.
 | `src/shared/audit/event-shape.ts` | `reauth_required` in `REFUSAL_CATEGORIES` |
 | `src/main/operator/jwt-holder.ts` (or a small sibling) | `isExpired(jwt, now)`: decode the payload, read `exp`; unreadable means "unknown", not expired. The per-session one-shot "just re-authenticated" mark (§2.4): set on re-auth, consumed before the next `operator-identity` request, cleared with the session |
 | `src/main/operator/pin-management.ts` | Pre-check and 401 → `reauth_required` |
-| `src/main/operator/stuck-shifts-handler.ts` | Pre-check, no-JWT guard, 401 → `reauth_required` |
+| `src/main/operator/backend-client.ts` | A status classifier for `getStuckShifts` (401 → `unauthenticated`, 403 → `forbidden`, else `refused`), like `rosterRefusal`; widen `BackendStuckShiftsResponse` |
+| `src/main/operator/stuck-shifts-handler.ts` | Pre-check, no-JWT guard, `unauthenticated` → `reauth_required` |
 | `src/main/operator/sign-out-handler.ts` | Option A: skip the call when expired, log it |
 | `src/main/operator/session-unlock-handler.ts` | Shared online-credential check; if Q2 = yes, store the JWT on success through the same path as re-auth (post-await check, one-shot mark, step-up refresh) |
-| `src/main/operator/session-manager.ts` | If Q1 = yes: a session-id-keyed method that refreshes `manager_signed_in_at` on the current record (like `renewAdmission`) |
+| `src/main/operator/session-manager.ts` | `endIfCurrent(sessionId, cause)` for the §2.4 fail-closed path. If Q1 = yes: a session-id-keyed method that refreshes `manager_signed_in_at` on the current record (like `renewAdmission`) |
 | new `src/main/operator/reauth-handler.ts` + `src/main/ipc/operator.ts` + `src/shared/operator/channels.ts` + `src/shared/bridge-api.ts` + preload | `operator:reauthenticate` |
 | `src/renderer/ui/operator/messages.ts` | The owner-approved copy and the action label |
 | `src/renderer/routes/app/manager/CashierManagement.tsx`, `src/renderer/ui/operator/ForcedCloseSurface.tsx` | The inline warning, the dialog, retry once |
@@ -226,6 +245,9 @@ Main (vitest, `src/main/operator/__tests__/`):
 - Provision PIN and stuck shifts: expired JWT → `reauth_required` **and no request sent**;
   backend 401 → `reauth_required`; no JWT held → `not_signed_in`.
 - Stuck shifts never sends an empty bearer.
+- Backend client `getStuckShifts`: 401 → `unauthenticated`, 403 → `forbidden`, 500 →
+  `refused`. In the handler only `unauthenticated` becomes `reauth_required`; 403 and 5xx keep
+  today's mapping.
 - Re-auth: the same operator → the holder is updated for the active `backend_session_id`; a
   different `operator_id` → refused and the holder is unchanged; `no_connection` → refused,
   holder unchanged; the lockout is shared with the online unlock.
@@ -244,6 +266,11 @@ Main (vitest, `src/main/operator/__tests__/`):
   consumed **before** that request is sent: a second call after it maps a 401 to
   `reauth_required` again. A successful call also consumes it. Sign-out, revocation and
   takeover clear it. No IPC payload can set it.
+- Retry-request race: the session ends and a new one starts (sign-out then sign-in, or a
+  takeover) while the marked request is in flight, then the old request gets a 401 → returns
+  `not_signed_in`, the new session is **not** ended, its holders and mark are untouched and no
+  end hooks run. The same race without the mark → `not_signed_in`, not `reauth_required`.
+- `endIfCurrent`: ends the session for a matching id; no-op for any other id.
 - Mark TTL: a mark older than `REAUTH_MARK_TTL_MS` (fake monotonic clock) is ignored, so a 401
   maps to `reauth_required` and the session is not ended.
 - Sign-out with an expired JWT → local session ended, holders cleared, no backend request,
