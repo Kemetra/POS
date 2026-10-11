@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FROZEN · RT-246 G-1 · مراجع شاشات الدخول</title>
+<style>
+:root{--primary:#0f766e;--primary-soft:#e6f4f1;--bg:#f7f9fa;--surface:#fff;--text:#0f1d2e;--muted:#53647a;--border:#d8dfe7;--warn-soft:#fdf1e0;--warn:#7d4500;--mono:ui-monospace,'Cascadia Code','JetBrains Mono',Consolas,monospace}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Dubai','Segoe UI',Tahoma,Arial,system-ui,sans-serif;font-size:15px;line-height:1.7}
+main{max-inline-size:1180px;margin:0 auto;padding:32px 24px 64px}
+h1{margin:0 0 4px;font-size:24px;line-height:1.3}
+h2{margin:48px 0 12px;font-size:20px}
+h3{margin:0;font-size:16px}
+p{margin:0 0 12px;max-inline-size:75ch}
+.status{display:flex;gap:12px;align-items:flex-start;margin:20px 0 8px;padding:14px 16px;border:1px solid #a35a00;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-weight:600}
+.ltr,code,.num{direction:ltr;unicode-bidi:isolate}
+code,.num{font-family:var(--mono);font-size:.9em}
+table{inline-size:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+th,td{padding:10px 14px;border-block-end:1px solid #e7ecf2;text-align:start;vertical-align:top}
+th{background:#f3f6fa;font-size:13px;color:var(--muted);font-weight:700}
+tr:last-child td{border-block-end:0}
+.tag{display:inline-block;padding:0 8px;border-radius:9999px;font-size:12px;font-weight:700;white-space:nowrap}
+.t-shipped{background:#eef2f6;color:#0f1d2e}
+.t-proposed{background:var(--primary-soft);color:#0b5b55}
+.refs{display:grid;gap:28px}
+.ref{padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.ref-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;margin-block-end:8px}
+.ref-head a{color:var(--primary);font-weight:600}
+.ref p{color:var(--muted);margin:0 0 12px}
+.shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.shots figure{margin:0}
+.shots img{display:block;inline-size:100%;block-size:auto;border:1px solid var(--border);border-radius:10px}
+.shots figcaption{font-size:12px;color:var(--muted);margin-block-start:4px}
+details{margin-block-start:10px}
+summary{cursor:pointer;color:var(--primary);font-weight:600}
+ul{margin:0 0 12px;padding-inline-start:20px}
+li{margin-block-end:6px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+@media (max-width:760px){.shots{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>مراجع شاشات الدخول (G-1)</h1>
+<p class="muted">Jira <span class="ltr">RT-246</span> · تمنع <span class="ltr">RT-244</span> (W1-D) · الخطة: <a href="../../18-g1-entry-screens.md"><span class="ltr">18-g1-entry-screens.md</span></a></p>
+
+<div class="status" role="note">
+  <span>الحالة: <b>visual FROZEN / behaviour APPROVED</b>. وافق المالك على الشكل وكل النصوص المقترحة في الجلسة يوم <span class="num">2026-10-11</span> («موافق على الشكل والنصوص»). النصوص الموسومة «مقترح» أدناه صارت معتمدة، وتبقى الوسوم لتوضيح أي نص جديد وأي نص مشحون. هذه هي مرجع RT-244 (W1-D).</span>
+</div>
+
+<h2>كيف تُقرأ</h2>
+<ul>
+  <li>كل حالة لها ملف HTML بمقاسين: <span class="num">1024×768</span> و<span class="num">1280×800</span>، ولكل منهما صورة فاتحة وصورة بوضع التباين العالي في Windows (<code>forced-colors: active</code>) داخل <code>captures/</code>.</li>
+  <li>الألوان والخط والمسافات من <span class="ltr">docs/DESIGN.md</span> (القيم المشحونة في <code>tailwind.css</code>). الخط Dubai فقط، بلا خطوط خارجية.</li>
+  <li>السلوك من <code>main</code>: لا يظهر أي مسار غير موجود في الكود اليوم.</li>
+</ul>
+
+<h2>المراجع</h2>
+<div class="refs">
+
+<section class="ref">
+  <div class="ref-head"><h3>1 · قائمة الكاشير</h3><a href="G1-Roster-1280.html">1280</a><a href="G1-Roster-1024.html">1024</a></div>
+  <p>منطقتان: «من أنت» على اليمين، و«أثبت» على اليسار في مكان عمود المبلغ نفسه. لوحة الأرقام ظاهرة ومعطّلة حتى يُختار اسم، فلا يتحرك شيء عند الاختيار.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-Roster-1280-light.png" alt="قائمة الكاشير بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-Roster-1024-light.png" alt="قائمة الكاشير بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-Roster-1280-forced.png" alt="قائمة الكاشير، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-Roster-1024-forced.png" alt="قائمة الكاشير، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>1ب · قائمة طويلة (18 اسمًا)</h3><a href="G1-RosterLong-1280.html">1280</a><a href="G1-RosterLong-1024.html">1024</a></div>
+  <p>القائمة تتمرر داخل منطقتها فقط، وأسماء طويلة تلتف لسطرين. لوحة الرقم السري وزر «دخول» ظاهران بالكامل عند المقاسين (هذا هو عطل F-14).</p>
+  <div class="shots">
+    <figure><img src="captures/G1-RosterLong-1280-light.png" alt="قائمة طويلة بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-RosterLong-1024-light.png" alt="قائمة طويلة بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-RosterLong-1280-forced.png" alt="قائمة طويلة، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-RosterLong-1024-forced.png" alt="قائمة طويلة، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>2 · دخول المدير</h3><a href="G1-Manager-1280.html">1280</a><a href="G1-Manager-1024.html">1024</a></div>
+  <p>زر «دخول المدير» تحت القائمة يبدّل العمود الأيسر بالحقلين الحقيقيين: البريد الإلكتروني أو اسم المستخدم (<span class="ltr">LTR</span>) وكلمة المرور. لا يوجد حقل «كود الموظف» في الكود.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-Manager-1280-light.png" alt="دخول المدير بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-Manager-1024-light.png" alt="دخول المدير بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-Manager-1280-forced.png" alt="دخول المدير، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-Manager-1024-forced.png" alt="دخول المدير، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>3 · إدخال الرقم السري</h3><a href="G1-Pin-1280.html">1280</a><a href="G1-Pin-1024.html">1024</a></div>
+  <p>الاسم المختار مميز بلون الاختيار وشريط على بدايته. 4 من 6 نقاط، لوحة أرقام من اليسار لليمين (1-2-3 فوق)، والتركيز ظاهر على حقل النقاط. «دخول» يعمل من 4 أرقام.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-Pin-1280-light.png" alt="إدخال الرقم السري بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-Pin-1024-light.png" alt="إدخال الرقم السري بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-Pin-1280-forced.png" alt="إدخال الرقم السري، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-Pin-1024-forced.png" alt="إدخال الرقم السري، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>4 · رقم سري غير صحيح</h3><a href="G1-WrongPin-1280.html">1280</a><a href="G1-WrongPin-1024.html">1024</a></div>
+  <p>الرسالة العامة المشحونة لفئة <code>invalid_input</code> في مكانها المحجوز فوق اللوحة، فلا تتحرك اللوحة. النقاط فُرّغت، واللوحة ما زالت تعمل.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-WrongPin-1280-light.png" alt="رقم سري غير صحيح بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-WrongPin-1024-light.png" alt="رقم سري غير صحيح بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-WrongPin-1280-forced.png" alt="رقم سري غير صحيح، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-WrongPin-1024-forced.png" alt="رقم سري غير صحيح، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>4ب · محاولات كثيرة</h3><a href="G1-Lockout-1280.html">1280</a><a href="G1-Lockout-1024.html">1024</a></div>
+  <p>نفس المكان ونفس الشكل، برسالة <code>rate_limited</code> المشحونة.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-Lockout-1280-light.png" alt="محاولات كثيرة بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-Lockout-1024-light.png" alt="محاولات كثيرة بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots"><figure><img src="captures/G1-Lockout-1280-forced.png" alt="محاولات كثيرة ، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure><figure><img src="captures/G1-Lockout-1024-forced.png" alt="محاولات كثيرة ، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure></div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>5 · تعذّر تحميل القائمة</h3><a href="G1-Unreachable-1280.html">1280</a><a href="G1-Unreachable-1024.html">1024</a></div>
+  <p>لحالة <code>no_connection</code> فقط: تنبيه تحذيري داخل منطقة القائمة، بلا زر «أعد المحاولة» (القائمة تُحمَّل مرة واحدة عند فتح الشاشة). أي رفض آخر للقائمة يعرض في المكان نفسه «تعذّر تحميل قائمة الكاشير.» بلا ذكر للاتصال. زر «دخول المدير» باقٍ دون أي إيحاء بأنه يعمل بلا اتصال: المساران يحتاجان الخادم على <code>main</code>.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-Unreachable-1280-light.png" alt="تعذّر تحميل القائمة بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-Unreachable-1024-light.png" alt="تعذّر تحميل القائمة بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-Unreachable-1280-forced.png" alt="تعذّر تحميل القائمة، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-Unreachable-1024-forced.png" alt="تعذّر تحميل القائمة، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>5ب · لا يوجد كاشير مسجّل</h3><a href="G1-RosterEmpty-1280.html">1280</a><a href="G1-RosterEmpty-1024.html">1024</a></div>
+  <p>القائمة وصلت فعلًا لكنها فارغة. هذه حقيقة وليست عطلًا، فالتنبيه محايد وليس تحذيرًا، ولا يذكر الاتصال.</p>
+  <div class="shots"><figure><img src="captures/G1-RosterEmpty-1280-light.png" alt="لا يوجد كاشير مسجّل بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure><figure><img src="captures/G1-RosterEmpty-1024-light.png" alt="لا يوجد كاشير مسجّل بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure></div>
+  <details><summary>وضع التباين العالي</summary><div class="shots"><figure><img src="captures/G1-RosterEmpty-1280-forced.png" alt="لا يوجد كاشير مسجّل ، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure><figure><img src="captures/G1-RosterEmpty-1024-forced.png" alt="لا يوجد كاشير مسجّل ، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure></div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>6 · الجهاز مرتبط وجاهز (بعد إعادة التشغيل)</h3><a href="G1-Ready-1280.html">1280</a><a href="G1-Ready-1024.html">1024</a></div>
+  <p>نص M-F1 بدل «PAIRED / Ready / Continue» الإنجليزي. اسم الجهاز (<code>terminal_label</code>، نص حر يكتبه المشرف، بالخط العادي داخل <code>&lt;bdi&gt;</code>) هو الحقيقة الوحيدة المعروضة. ليس لون نجاح: الحالة محايدة.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-Ready-1280-light.png" alt="الجهاز جاهز بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-Ready-1024-light.png" alt="الجهاز جاهز بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-Ready-1280-forced.png" alt="الجهاز جاهز، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-Ready-1024-forced.png" alt="الجهاز جاهز، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>7 · ربط الجهاز</h3><a href="G1-Pairing-1280.html">1280</a><a href="G1-Pairing-1024.html">1024</a></div>
+  <p>حقل واحد حر للرمز (خط ثابت العرض، من اليسار لليمين)، لأن طول الرمز يحدده الخادم (<code>pairing-http.md</code>). القيمة الظاهرة للتوضيح فقط. مكان الرسالة محجوز تحت الحقل.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-Pairing-1280-light.png" alt="ربط الجهاز بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-Pairing-1024-light.png" alt="ربط الجهاز بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-Pairing-1280-forced.png" alt="ربط الجهاز، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-Pairing-1024-forced.png" alt="ربط الجهاز، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+
+<section class="ref">
+  <div class="ref-head"><h3>8 · تسجيل دخول المدير مرة أخرى</h3><a href="G1-Reauth-1280.html">1280</a><a href="G1-Reauth-1024.html">1024</a></div>
+  <p>نسخة HTML مطابقة لـ <code>ReauthDialog</code> المشحون (<span class="ltr">#630</span>)، وليست صورة من التطبيق: العنوان، «المدير: الاسم»، الحقلان، «إلغاء» و«تسجيل الدخول». خلفه يبقى تنبيه M-A3 المشحون (<code>ReauthRequiredNotice</code>) بزر «تسجيل الدخول». باقي الشاشة خلفه للتوضيح فقط؛ تصميم شاشة إدارة الكاشير النهائي من نصيب G-3.</p>
+  <div class="shots">
+    <figure><img src="captures/G1-Reauth-1280-light.png" alt="تسجيل دخول المدير مرة أخرى بمقاس 1280"><figcaption>1280 · فاتح</figcaption></figure>
+    <figure><img src="captures/G1-Reauth-1024-light.png" alt="تسجيل دخول المدير مرة أخرى بمقاس 1024"><figcaption>1024 · فاتح</figcaption></figure>
+  </div>
+  <details><summary>وضع التباين العالي</summary><div class="shots">
+    <figure><img src="captures/G1-Reauth-1280-forced.png" alt="تسجيل دخول المدير مرة أخرى، تباين عالٍ، 1280"><figcaption>1280 · تباين عالٍ</figcaption></figure>
+    <figure><img src="captures/G1-Reauth-1024-forced.png" alt="تسجيل دخول المدير مرة أخرى، تباين عالٍ، 1024"><figcaption>1024 · تباين عالٍ</figcaption></figure>
+  </div></details>
+</section>
+</div>
+
+<h2>النصوص</h2>
+<table>
+  <thead><tr><th>المكان</th><th>النص</th><th>المصدر</th></tr></thead>
+  <tbody>
+    <tr><td>عنوان الشاشة</td><td>«تسجيل الدخول» · «كل عمليات الوردية تُسجَّل باسمك.»</td><td><span class="tag t-proposed">مقترح</span> العنوان (بدل «تسجيل دخول الصيدلي») · السطر <span class="tag t-shipped">مشحون</span></td></tr>
+    <tr><td>عنوان القائمة</td><td>«الكاشير في هذا الفرع»</td><td><span class="tag t-proposed">مقترح</span> بدل «صيادلة هذا الفرع» (UX-12)</td></tr>
+    <tr><td>انتظار الاختيار</td><td>«اختر اسمك من القائمة لإدخال الرقم السري.»</td><td><span class="tag t-proposed">مقترح</span> بدل «اختر صيدليًا من القائمة…»</td></tr>
+    <tr><td>دور الكاشير تحت الاسم</td><td>«الكاشير»</td><td><span class="tag t-proposed">مقترح</span> بدل «صيدلي» (UX-12)</td></tr>
+    <tr><td>زر المدير / عنوانه</td><td>«دخول المدير»</td><td><span class="tag t-proposed">مقترح</span> بدل «كود الموظف · Staff code»</td></tr>
+    <tr><td>حقول المدير</td><td>«البريد الإلكتروني أو اسم المستخدم» · «كلمة المرور» · «تسجيل الدخول» · «جارٍ تسجيل الدخول…»</td><td><span class="tag t-shipped">مشحون</span></td></tr>
+    <tr><td>زر الرقم السري</td><td>«دخول»</td><td><span class="tag t-proposed">مقترح</span> بدل مفتاح ↵ داخل اللوحة</td></tr>
+    <tr><td>رقم غير صحيح</td><td>«بيانات الدخول غير صحيحة. حاول مرة أخرى.»</td><td><span class="tag t-shipped">مشحون</span> <code>invalid_input</code></td></tr>
+    <tr><td>محاولات كثيرة</td><td>«محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.»</td><td><span class="tag t-shipped">مشحون</span> <code>rate_limited</code></td></tr>
+    <tr><td>القائمة لم تُحمَّل: <code>no_connection</code></td><td>«تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.» · في العمود الأيسر: «لا يمكن إدخال الرقم السري قبل تحميل القائمة.»</td><td><span class="tag t-proposed">مقترح</span> بدل «تعذّر الوصول إلى الخادم. حاول مرة أخرى.» و«No cashiers available…»</td></tr>
+    <tr><td>القائمة لم تُحمَّل: رفض آخر</td><td>«تعذّر تحميل قائمة الكاشير.» · العمود الأيسر كما سبق</td><td><span class="tag t-proposed">مقترح</span> بدل «No cashiers available…» (اليوم بلا رسالة)</td></tr>
+    <tr><td>القائمة فارغة</td><td>«لا يوجد كاشير مسجّل في هذا الفرع.» · في العمود الأيسر: «الدخول بالرقم السري يحتاج كاشيرًا مسجّلًا في هذا الفرع.»</td><td><span class="tag t-proposed">مقترح</span> بدل «No cashiers available…»</td></tr>
+    <tr><td>رجوع</td><td>«رجوع»</td><td>من دخول المدير <span class="tag t-proposed">مقترح</span> بدل «← العودة إلى قائمة الكاشير» · من الرقم السري <span class="tag t-shipped">مشحون</span></td></tr>
+    <tr><td>بلاطة الكاشير</td><td>الاسم فقط</td><td><span class="tag t-proposed">مقترح</span> حذف تسمية الدور الإنجليزية «Cashier» من كل بلاطة</td></tr>
+    <tr><td>جاهز</td><td>«الجهاز مرتبط وجاهز.» · «الجهاز» · «متابعة»</td><td>M-F1 (معتمد في 15) بدل «PAIRED / Ready / Continue»</td></tr>
+    <tr><td>ربط الجهاز</td><td>«ربط الجهاز» · «أدخل رمز الربط الظاهر في لوحة الإدارة.» · «رمز الربط» · «ربط الجهاز» / «جارٍ الربط…»</td><td><span class="tag t-proposed">مقترح</span> بدل الإنجليزي</td></tr>
+    <tr><td>نتائج الربط</td><td>غير صحيح «الرمز غير صحيح. تحقق منه وحاول مرة أخرى.» · منتهي «انتهت صلاحية الرمز. أنشئ رمزًا جديدًا.» · مستخدم «هذا الرمز مُستخدم من قبل.» · فرع آخر «الجهاز مسجّل لفرع آخر. اطلب من المشرف فكّه.» · كثرة «محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.» · بلا اتصال «لا يوجد اتصال. تحقق من الشبكة وحاول مرة أخرى.» · غير ذلك «تعذّر الربط. حاول مرة أخرى.» · جلسة مفتوحة «أنهِ البيع الحالي وسجّل الخروج قبل ربط الجهاز مرة أخرى.» · مربوط بالفعل «هذا الجهاز مربوط بالفعل.» · حقل فارغ «أدخل رمز الربط.»</td><td><span class="tag t-proposed">مقترح</span> بدل <code>pairing/messages.ts</code></td></tr>
+    <tr><td>دخول المدير مرة أخرى</td><td>«تسجيل الدخول مرة أخرى» · «المدير: ‹الاسم›» · «إلغاء» · «تسجيل الدخول» · رسالة M-A3</td><td><span class="tag t-shipped">مشحون</span> <code>REAUTH_COPY</code></td></tr>
+  </tbody>
+</table>
+
+<h2>فروق يطبقها المنفّذ (RT-244)</h2>
+<ul>
+  <li><b>التركيب:</b> عمودان بدل ثلاثة. نموذج المدير لم يعد عمودًا دائمًا؛ يحلّ محل عمود الرقم السري ويرجع بـ«رجوع».</li>
+  <li><b>لوحة الأرقام:</b> ظاهرة دائمًا (معطّلة قبل الاختيار) فلا يتحرك التخطيط. الصف الأخير: فراغ، 0، حذف. مفتاح ↵ يصبح زر «دخول» بعرض العمود؛ زر Enter في الكيبورد يبقى يرسل كما اليوم.</li>
+  <li><b>شارة الاسم:</b> في رأس عمود الرقم السري تكون بلون الاختيار الفاتح، لا تعبئة teal، لأن زر «دخول» هو تعبئة teal الوحيدة في العمود.</li>
+  <li><b>حرف الشارة:</b> أول حرف من الاسم، لا أول حرفين (اليوم <code>slice(0, 2).toUpperCase()</code> يكسر اتصال الحروف العربية).</li>
+  <li><b>القائمة:</b> شبكة من عمودين، بلاطة 60 (52 عند 1024)، تتمرر داخل منطقتها؛ الاسم يلتف لسطرين ثم يُقطع والاسم كامل في الاسم الإتاحي.</li>
+  <li><b>الشريط العلوي:</b> «POS Pulse» واسم الجهاز فقط. لا مؤشر اتصال (A4 / X-2) حتى توجد إشارة حقيقية. <b>اسم الفرع غير معروض</b>: على <code>main</code> لا يصل للواجهة إلا <code>branch_id</code>، و<code>branch_name</code> موجود في العملية الرئيسية فقط ويمكن أن يكون فارغًا. عرضه يحتاج حقلًا جديدًا في الجسر (مراجعة §A4) وبديلًا للقيمة الفارغة، وهذا قرار لـ RT-244 وليس جزءًا من هذه المراجع.</li>
+  <li><b>حقل المعرّف للمدير:</b> يأخذ <code>dir="ltr"</code> (اليوم بلا اتجاه).</li>
+  <li><b>المسافات:</b> شاشات الدخول خارج عمل البيع، فهوامشها أوسع من ملفّي الكثافة في DESIGN.md (24/16/20 عند 1280 و16/12/16 عند 1024). هذا استثناء مقصود لشاشات الدخول فقط؛ أحجام الأزرار والخط لا تتغير.</li>
+  <li><b>التباين العالي:</b> البلاطة المختارة وزر «دخول المدير» المضغوط وعنصر التنقل الحالي تستخدم <code>forced-color-adjust: none</code> مع <code>Highlight</code>، كما يفعل الكود المشحون (<code>v5/checkout/checkout.css</code> للبلاطة المختارة و<code>v5/frame/frame.css</code> للتنقل). نص DESIGN.md «لصور المنتجات فقط» أقدم من هذه السابقة ويحتاج تحديثًا. نقاط الرقم السري والشعار لا تستخدمه.</li>
+  <li><b>الخط الثابت العرض:</b> للرموز والمعرّفات ولأرقام لوحة الأرقام (كما في لوحة الكاش المشحونة)، وليس لاسم الجهاز.</li>
+  <li><b>لا سلوك جديد:</b> لا إعادة محاولة لتحميل القائمة، ولا دخول بلا اتصال، ولا رسالة تفرّق بين خطأ الاسم والرقم (P11 / PR-2).</li>
+  <li><b>حدود التغيير:</b> <code>PinPad</code> تعرضه شاشة الدخول وحدها اليوم؛ شاشة القفل تستورد منه حدود الطول (4–6) فقط، فتغيير اللوحة لا يصل للقفل (W1-D بدون القفل).</li>
+  <li><b>ليست ضمن G-1:</b> نقل الوردية لجهاز آخر (takeover)، والقفل، وتعيين أول رقم سري.</li>
+</ul>
+
+<h2>الفحوص التي شُغّلت على هذه الملفات</h2>
+<ul>
+  <li>axe-core 4.11.4 على كل ملف (22 ملفًا): 0 مخالفات.</li>
+  <li>لا نص أقل من 12px، وكل زر وحقل ≥ 44×44، واسم الرأس لا يُقطع. في القائمة الطويلة اسمان يلتفان لسطرين عند 1024 وعند 1280.</li>
+  <li>لوحة الرقم السري وزر «دخول» والحوار والبطاقات داخل الإطار بالكامل عند المقاسين؛ القائمة الطويلة تتمرر داخل منطقتها.</li>
+  <li>مكان لوحة الأرقام ثابت في كل حالات الدخول (قبل الاختيار، والإدخال، والخطأ، وكثرة المحاولات، وتعذّر القائمة، والقائمة الفارغة): <span class="num">335px</span> عند 1024 و<span class="num">355px</span> عند 1280 من أعلى الإطار.</li>
+  <li>الصور مأخوذة بـ Playwright Chromium، فاتح و<code>forced-colors: active</code>. ليست صورًا من التطبيق الحقيقي ولا من جهاز مثبت.</li>
+  <li>صور التباين العالي محاكاة Chromium بألوانه الافتراضية (لذلك يظهر <code>GrayText</code> بلون داكن)، وليست سمة التباين الحقيقية في Windows. هذه لم تُصوَّر.</li>
+  <li>أدوات التوليد والتصوير في <code>tools/</code>: <code>gen_g1.py</code> يكتب الملفات، و<code>capture_g1.cjs</code> يصوّر ويفحص.</li>
+</ul>
+</main>
+</body>
+</html>

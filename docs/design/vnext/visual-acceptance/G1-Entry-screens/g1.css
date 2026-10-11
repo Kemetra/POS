@@ -1,0 +1,859 @@
+/*
+ * RT-246 G-1 entry-screen references (visual FROZEN, owner-approved 2026-10-11). Tokens are the shipped light :root values
+ * from src/renderer/styles/tailwind.css, as recorded in docs/DESIGN.md. No external fonts:
+ * Dubai ships with Windows 10/11 and is the product face (OD-2).
+ */
+:root {
+  --primary: #0f766e;
+  --primary-emphasis: #0b5b55;
+  --primary-soft: #e6f4f1;
+  --background: #f7f9fa;
+  --surface: #ffffff;
+  --surface-elevated: #f3f6fa;
+  --surface-sunken: #eef2f6;
+  --text: #0f1d2e;
+  --text-muted: #53647a;
+  --border: #d8dfe7;
+  --border-soft: #e7ecf2;
+  --border-strong: #6f7b89;
+  --scrim: rgba(8, 14, 24, 0.55);
+  --warning: #a35a00;
+  --warning-emphasis: #7d4500;
+  --warning-soft: #fdf1e0;
+  --danger: #b3261e;
+  --danger-emphasis: #8c1d18;
+  --danger-soft: #fbe9e7;
+  --shadow-overlay: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+  --font: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+
+  /* comfortable (1280) */
+  --gutter: 24px;
+  --gap: 16px;
+  --pad: 20px;
+  --bar: 48px;
+  --tile: 60px;
+  --key: 64px;
+  --commit: 60px;
+  --auth-col: 340px;
+}
+
+html {
+  background: var(--surface-sunken);
+}
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: var(--font);
+}
+::selection {
+  background: var(--primary-soft);
+  color: var(--primary-emphasis);
+}
+
+/* ── the captured frame ─────────────────────────────────────────── */
+.rt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-inline: auto;
+  background: var(--background);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+.rt *,
+.rt *::before,
+.rt *::after {
+  box-sizing: border-box;
+}
+.rt h1,
+.rt h2,
+.rt p {
+  margin: 0;
+}
+:where(.rt) button,
+:where(.rt) input {
+  font: inherit;
+  color: inherit;
+}
+.w1280 {
+  inline-size: 1280px;
+  block-size: 800px;
+}
+.w1024 {
+  inline-size: 1024px;
+  block-size: 768px;
+  --gutter: 16px;
+  --gap: 12px;
+  --pad: 16px;
+  --bar: 44px;
+  --tile: 52px;
+  --key: 56px;
+  --commit: 56px;
+  --auth-col: 304px;
+}
+
+/* LTR-isolated Western digits, codes and ids (DESIGN.md Numerals) */
+.num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.muted {
+  color: var(--text-muted);
+}
+.icon {
+  flex: none;
+  inline-size: 20px;
+  block-size: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── context strip ─────────────────────────────────────────────── */
+.bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  block-size: var(--bar);
+  padding-inline: var(--gutter);
+  border-block-end: 1px solid var(--border);
+  background: var(--surface);
+}
+.mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary-emphasis);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mark i {
+  position: relative;
+  display: block;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 6px;
+  background: var(--primary);
+}
+.mark i::after {
+  content: '';
+  position: absolute;
+  inset: 5px 9px;
+  border-radius: 1px;
+  background: #fff;
+}
+.sep {
+  inline-size: 1px;
+  block-size: 20px;
+  background: var(--border);
+}
+.ctx {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.ctx b {
+  color: var(--text);
+  font-weight: 600;
+}
+.ctx .num {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ── sign-in stage: who (inline start) | prove it (inline end) ─── */
+.stage {
+  flex: 1;
+  min-block-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--auth-col);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--gap);
+  inline-size: 100%;
+  max-inline-size: 1120px;
+  margin-inline: auto;
+  padding: var(--gutter);
+}
+.stage-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.stage-head h1 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.stage-head p {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.panel {
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 56px;
+  padding: 12px var(--pad);
+  border-block-end: 1px solid var(--border-soft);
+}
+.panel-head h2 {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* roster */
+.roster {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  padding: var(--pad);
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.who {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  inline-size: 100%;
+  block-size: var(--tile);
+  padding-inline: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: start;
+  cursor: pointer;
+}
+.who:hover {
+  background: var(--surface-elevated);
+}
+.badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 9999px;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+.w1024 .badge {
+  inline-size: 30px;
+  block-size: 30px;
+  font-size: 14px;
+}
+.who-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.w1024 .who-name {
+  font-size: 14px;
+}
+.who[aria-pressed='true'] {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-emphasis);
+}
+.who[aria-pressed='true']::before {
+  /* DESIGN.md No-Accent Rule: selection = wash + teal ink + 2px inline-start bar */
+  content: '';
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: -1px;
+  inline-size: 2px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+.who[aria-pressed='true'] .badge {
+  background: var(--primary);
+  color: #fff;
+}
+
+.panel-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px var(--pad);
+  border-block-start: 1px solid var(--border-soft);
+}
+
+/* buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-block-size: 44px;
+  padding-inline: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn:hover {
+  background: var(--surface-elevated);
+}
+.btn[aria-pressed='true'] {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-emphasis);
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+.btn-ghost:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+.btn-primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover {
+  border-color: var(--primary-emphasis);
+  background: var(--primary-emphasis);
+}
+.btn-primary:disabled {
+  border-color: var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.commit {
+  inline-size: 100%;
+  min-block-size: var(--commit);
+  font-size: 16px;
+  font-weight: 700;
+}
+.focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* auth column */
+.auth {
+  min-block-size: 0;
+}
+.auth .panel-head {
+  /* same height before and after a name is picked, so the keypad never moves */
+  min-block-size: 70px;
+}
+.auth-body {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--pad);
+}
+.auth-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-inline-size: 0;
+  flex: 1;
+}
+.auth-who h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auth-who .meta {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.auth-who .badge {
+  /* not filled teal: the commit below is the region's one teal fill */
+  background: var(--primary-soft);
+  color: var(--primary-emphasis);
+}
+.prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 56px;
+  padding-inline: 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* PIN dots — the PIN field itself (LTR) */
+.dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  block-size: 56px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  direction: ltr;
+}
+.dots span {
+  inline-size: 14px;
+  block-size: 14px;
+  border: 2px solid var(--border-strong);
+  border-radius: 9999px;
+}
+.dots span.on {
+  border-color: var(--text);
+  background: var(--text);
+}
+.dots.err {
+  border-color: var(--danger);
+}
+.feedback {
+  /* reserved for the tallest refusal (two lines at 304px), so the keypad never moves */
+  min-block-size: 70px;
+  display: flex;
+  align-items: center;
+}
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  inline-size: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.notice .icon {
+  margin-block-start: 1px;
+}
+.notice-danger {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-emphasis);
+}
+.notice-warning {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning-emphasis);
+}
+.notice-warning .icon {
+  color: var(--warning);
+}
+.notice-neutral {
+  border-color: var(--border);
+  background: var(--surface-elevated);
+  color: var(--text);
+  font-weight: 400;
+}
+.notice-neutral .icon {
+  color: var(--text-muted);
+}
+.notice-action {
+  align-items: center;
+}
+.notice-action p {
+  flex: 1;
+}
+.notice-danger .icon {
+  color: var(--danger);
+}
+.status-line {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* keypad: LTR, 1-2-3 on top (DESIGN.md Layout) */
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  direction: ltr;
+}
+.key {
+  display: grid;
+  place-items: center;
+  block-size: var(--key);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.key:hover {
+  background: var(--surface-elevated);
+}
+.key .icon {
+  inline-size: 24px;
+  block-size: 24px;
+}
+.key-blank {
+  visibility: hidden;
+}
+.keypad[aria-disabled='true'] .key {
+  border-color: var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: default;
+}
+.auth-actions {
+  margin-block-start: auto;
+  display: grid;
+  gap: 8px;
+}
+
+/* manager form */
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.input {
+  block-size: 48px;
+  padding-inline: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 16px;
+}
+.input.ltr {
+  text-align: left;
+}
+.pw {
+  letter-spacing: 0.2em;
+}
+
+/* roster unreachable */
+.roster-empty {
+  flex: 1;
+  padding: var(--pad);
+}
+
+/* ── single-card stage: Ready, pairing ────────────────────────── */
+.center {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+}
+.card {
+  display: grid;
+  gap: 16px;
+  inline-size: 440px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.w1024 .card {
+  padding: 28px;
+}
+.card-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 48px;
+  block-size: 48px;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.card-icon .icon {
+  inline-size: 26px;
+  block-size: 26px;
+}
+.card h1 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.card p {
+  color: var(--text-muted);
+}
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-elevated);
+}
+.facts dt {
+  color: var(--text-muted);
+}
+.facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.code-input {
+  block-size: 56px;
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-align: left;
+}
+.slot {
+  min-block-size: 24px;
+}
+
+/* ── manager screen behind the re-sign-in prompt ──────────────── */
+.app {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+}
+.nav {
+  flex: none;
+  order: 2; /* inline end (left) in RTL: nav sits after the screen */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  inline-size: 208px;
+  padding: 12px;
+  border-inline-start: 1px solid var(--border);
+  background: var(--background);
+}
+.w1024 .nav {
+  inline-size: 140px;
+  padding: 8px;
+}
+.nav a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 44px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.nav a[aria-current='page'] {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.nav a[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: 0;
+  inline-size: 2px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+.work {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gutter);
+}
+.work h1 {
+  font-size: 20px;
+  font-weight: 700;
+}
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.rows li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 60px;
+  padding-inline: var(--pad);
+  border-block-end: 1px solid var(--border-soft);
+}
+.rows li:last-child {
+  border-block-end: 0;
+}
+.rows li span:nth-child(2) {
+  flex: 1;
+  font-weight: 600;
+}
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: var(--scrim);
+}
+.dialog {
+  display: grid;
+  gap: 12px;
+  inline-size: 440px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-overlay);
+}
+.dialog h2 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.dialog form {
+  display: grid;
+  gap: 12px;
+}
+.dialog .fields {
+  display: grid;
+  gap: 8px;
+}
+.dialog .fields label {
+  font-weight: 600;
+}
+.dialog .input {
+  block-size: 44px;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-block-start: 8px;
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .panel,
+  .card,
+  .who,
+  .btn,
+  .key,
+  .dots,
+  .input,
+  .rows,
+  .prompt,
+  .notice {
+    border-color: CanvasText;
+  }
+  /* Selected / current keep the system highlight. forced-color-adjust: none, or the text's
+     Canvas backplate hides HighlightText: the shipped precedent is v5/checkout/checkout.css
+     (selected tender tile) and v5/frame/frame.css (current nav entry). DESIGN.md's
+     "product images only" wording predates it; flagged in G1-Spec.html. */
+  .who[aria-pressed='true'],
+  .btn[aria-pressed='true'],
+  .nav a[aria-current='page'] {
+    forced-color-adjust: none;
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+  /* The un-forced subtree needs the system pair on its children too. */
+  .who[aria-pressed='true'] .who-name,
+  .btn[aria-pressed='true'] .icon,
+  .nav a[aria-current='page'] .icon {
+    color: HighlightText;
+  }
+  .who[aria-pressed='true'] .badge {
+    border-color: HighlightText;
+    background: HighlightText;
+    color: Highlight;
+  }
+  .badge,
+  .card-icon {
+    border: 1px solid CanvasText;
+  }
+  .who[aria-pressed='true']::before,
+  .nav a[aria-current='page']::before {
+    display: none;
+  }
+  .btn-primary {
+    border: 2px solid ButtonText;
+  }
+  .btn-primary:disabled,
+  .keypad[aria-disabled='true'] .key {
+    border-color: GrayText;
+    color: GrayText;
+  }
+  .dots span {
+    border-color: CanvasText;
+  }
+  .dots span.on {
+    /* a border-filled dot survives forced colours without un-forcing anything */
+    border-width: 7px;
+  }
+  .dots.err,
+  .notice-danger {
+    border: 2px solid CanvasText;
+  }
+  .focus {
+    outline-color: Highlight;
+  }
+  .dialog {
+    border: 2px solid CanvasText;
+  }
+  .mark i {
+    border: 2px solid CanvasText;
+  }
+  .mark i::after {
+    border: 1px solid CanvasText;
+  }
+}
