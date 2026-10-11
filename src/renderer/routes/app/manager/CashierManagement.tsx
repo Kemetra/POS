@@ -324,7 +324,8 @@ export function CashierManagement({ operator }: Props): JSX.Element {
           </div>
         )}
 
-        {action.kind === 'reauthRequired' && (
+        {/* Hidden while the PIN retry after a re-auth is in flight: one prompt only. */}
+        {action.kind === 'reauthRequired' && !pending && (
           <ReauthRequiredNotice
             onSignIn={() => {
               setAction({ ...action, dialogOpen: true });

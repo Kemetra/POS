@@ -166,6 +166,34 @@ describe('RT-358 CashierManagement — re-auth required on «Set first PIN»', (
     },
   );
 
+  it('while the PIN retry is in flight, no «تسجيل الدخول» action is offered (one prompt only)', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge([REAUTH_REQUIRED]);
+    let release: (v: object) => void = () => undefined;
+    bridge.provisionCashierPin
+      .mockImplementationOnce(() => Promise.resolve(REAUTH_REQUIRED))
+      .mockImplementationOnce(
+        () =>
+          new Promise<object>((resolve) => {
+            release = resolve;
+          }),
+      );
+    renderSurface(bridge);
+    await submitFirstPin(user);
+    await screen.findByTestId('reauth-required');
+    await reauthenticate(user);
+
+    await waitFor(() => {
+      expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByTestId('reauth-required')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: REAUTH_COPY.action })).not.toBeInTheDocument();
+
+    release({ kind: 'pin_provisioned', audit_event_id: 'e2' });
+    expect(await screen.findByTestId('action-success')).toBeInTheDocument();
+    expect(bridge.reauthenticate).toHaveBeenCalledTimes(1);
+  });
+
   it('a refused re-auth keeps the dialog open and does not re-submit', async () => {
     const user = userEvent.setup();
     const bridge = makeBridge([REAUTH_REQUIRED], { kind: 'refused', category: 'invalid_input' });
