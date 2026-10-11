@@ -205,9 +205,10 @@ function DigitKey({
 }
 
 /**
- * The PIN field: focusable (G-1 state 3), so its label and the refusal it is
- * described by are read when it takes focus. Digits still arrive through the
- * pad's window listener; the field never holds them.
+ * The PIN field: a focusable textbox (G-1 state 3), so assistive technology
+ * announces the active credential field, its label and the refusal it is
+ * described by. Digits arrive through the pad's window listener; the field
+ * never holds them, and its only content is the masked dots.
  */
 function PinDots({
   filled,
@@ -227,11 +228,12 @@ function PinDots({
   return (
     <div
       ref={ref}
-      role="group"
+      role="textbox"
       tabIndex={0}
       className="v5-entry__dots"
       data-testid="pin-pad-dots"
       data-error={error || undefined}
+      aria-invalid={error || undefined}
       aria-label={`الرقم السري، أُدخل ${String(filled)} من ${String(PIN_MAX_LENGTH)}`}
       aria-describedby={describedBy}
     >

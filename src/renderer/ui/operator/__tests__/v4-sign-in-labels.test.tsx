@@ -92,12 +92,12 @@ describe('022 T054 (1) — operator-facing primary labels are Arabic-first', () 
 
   it('the pin-pad group and its glyph keys carry Arabic accessible names', () => {
     render(<PinPad value="" onChange={vi.fn()} onSubmit={vi.fn()} />);
-    // Two role="group" elements exist: the dot/progress region and the key
-    // grid. Assert BOTH are Arabic rather than picking one.
-    const groups = screen.getAllByRole('group');
-    expect(groups.length).toBeGreaterThan(1);
-    for (const group of groups) {
-      expect(group.getAttribute('aria-label')).toMatch(ARABIC);
+    // Two named regions exist: the PIN field (a textbox since RT-244, so it is
+    // announced as the active credential field) and the key grid. Assert BOTH
+    // are Arabic rather than picking one.
+    const regions = [screen.getByRole('textbox'), screen.getByRole('group')];
+    for (const region of regions) {
+      expect(region.getAttribute('aria-label')).toMatch(ARABIC);
     }
     // ⌫ renders as a glyph, so aria-label IS its only accessible name — there
     // is no visible word to mismatch (2.5.3 does not bind here). RT-244: the
