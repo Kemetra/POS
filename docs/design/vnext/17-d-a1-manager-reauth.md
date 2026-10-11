@@ -157,8 +157,10 @@ needs a Backend-Core route that validates the operator session without revoking 
 new contract, listed as a follow-up in §6, not invented here.
 
 The lock-screen online unlock already does a full `clerk.exchange` and then throws the JWT
-away. It should also store it, so a manager who unlocked the screen is not asked again minutes
-later (owner decision Q2). Storing it adds **no** local authority: the online unlock already
+away. **Only if the owner accepts Q2** (recommended, not yet decided), it also stores it, so a
+manager who unlocked the screen is not asked again minutes later. Until Q2 is accepted, the
+online unlock keeps today's behaviour and the slice does not touch it, apart from the shared
+in-flight gate. Storing it adds **no** local authority: the online unlock already
 unlocks the session today after the same exchange, and storing the JWT only changes which
 credential the next `operator-identity` request presents, which the backend still checks. If it
 does, it must go through the same path as re-auth: the post-await session check and the one-shot
