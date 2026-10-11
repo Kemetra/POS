@@ -55,6 +55,8 @@ export interface PinPadProps {
   submitLabel?: string;
   /** Wires the dots region to the refusal message, when one is shown. */
   describedBy?: string;
+  /** Moves focus to the PIN field on mount (a cashier was just picked). */
+  autoFocus?: boolean;
 }
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
@@ -69,6 +71,7 @@ export function PinPad(props: PinPadProps): JSX.Element {
     feedback,
     submitLabel = 'دخول',
     describedBy,
+    autoFocus = false,
   } = props;
   const canSubmit = value.length >= PIN_MIN_LENGTH;
   const canAppend = value.length < PIN_MAX_LENGTH;
@@ -128,7 +131,12 @@ export function PinPad(props: PinPadProps): JSX.Element {
 
   return (
     <div className="v5-entry__pin" data-testid="pin-pad" data-disabled={disabled || undefined}>
-      <PinDots filled={value.length} error={error} describedBy={describedBy} />
+      <PinDots
+        filled={value.length}
+        error={error}
+        describedBy={describedBy}
+        autoFocus={autoFocus}
+      />
       <div className="v5-entry__feedback">{feedback}</div>
 
       <div className="v5-entry__keypad" role="group" aria-label="إدخال الرقم السري" dir="ltr">
@@ -196,22 +204,35 @@ function DigitKey({
   );
 }
 
+/**
+ * The PIN field: focusable (G-1 state 3), so its label and the refusal it is
+ * described by are read when it takes focus. Digits still arrive through the
+ * pad's window listener; the field never holds them.
+ */
 function PinDots({
   filled,
   error,
   describedBy,
+  autoFocus,
 }: {
   filled: number;
   error: boolean;
   describedBy?: string | undefined;
+  autoFocus: boolean;
 }): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+  }, [autoFocus]);
   return (
     <div
+      ref={ref}
       role="group"
+      tabIndex={0}
       className="v5-entry__dots"
       data-testid="pin-pad-dots"
       data-error={error || undefined}
-      aria-label={`أُدخل ${String(filled)} من ${String(PIN_MAX_LENGTH)}`}
+      aria-label={`الرقم السري، أُدخل ${String(filled)} من ${String(PIN_MAX_LENGTH)}`}
       aria-describedby={describedBy}
     >
       {Array.from({ length: PIN_MAX_LENGTH }, (_, i) => (

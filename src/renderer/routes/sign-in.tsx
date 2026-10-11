@@ -127,17 +127,30 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
     setCashierError(undefined);
   };
 
+  // A sign-in in flight owns the column: switching it would unmount the form
+  // that is waiting for the answer, and the answer would land on the wrong
+  // panel (or nowhere). The tiles and the manager toggle are inert meanwhile.
   const handleCashierSelect = (cashier: RosterEntry): void => {
+    if (fsm.kind === 'signingIn') return;
     // Clear PIN and error whenever a new cashier is selected.
+    if (mode === 'manager') useOperatorSessionStore.getState().clearRefusal();
     setMode('cashier');
     setSelectedCashier(cashier);
     setPin('');
     setCashierError(undefined);
   };
 
-  const handleManagerEntry = (): void => {
+  const switchMode = (next: Mode): void => {
+    if (fsm.kind === 'signingIn') return;
+    // The refusal lives in the shared FSM: never carry one path's refusal
+    // into the other path's panel.
+    useOperatorSessionStore.getState().clearRefusal();
     clearCashier();
-    setMode((current) => (current === 'manager' ? 'cashier' : 'manager'));
+    setMode(next);
+  };
+
+  const handleManagerEntry = (): void => {
+    switchMode(mode === 'manager' ? 'cashier' : 'manager');
   };
 
   const handlePinChange = (newPin: string): void => {
@@ -218,12 +231,14 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
           state={rosterState}
           managerMode={mode === 'manager'}
           onManagerEntry={handleManagerEntry}
+          disabled={isSigningIn}
           roster={
             <RosterList
               cashiers={rosterEntries}
               inert={rosterState !== 'ready'}
               onSelect={handleCashierSelect}
               selectedId={selectedCashier?.id}
+              disabled={isSigningIn}
             />
           }
         />
@@ -239,7 +254,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
                   testId="sign-in-manager-back"
                   disabled={isSigningIn}
                   onClick={() => {
-                    setMode('cashier');
+                    switchMode('cashier');
                   }}
                 />
               </>
@@ -278,6 +293,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
                 disabled={isSigningIn}
                 error={cashierError !== undefined}
                 submitLabel={SIGN_IN_COPY.submit}
+                autoFocus
                 {...(cashierError !== undefined ? { describedBy: 'cashier-sign-in-error' } : {})}
                 feedback={
                   // Note 1 invariant — alert XOR spinner, one live region.

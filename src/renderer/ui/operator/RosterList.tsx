@@ -38,10 +38,12 @@ export interface RosterListProps {
   onSelect?: (cashier: RosterEntry) => void;
   /** id of the currently selected cashier (highlights the tile). */
   selectedId?: string | undefined;
+  /** True while a sign-in is in flight: no tile may switch the column. */
+  disabled?: boolean;
 }
 
 export function RosterList(props: RosterListProps): JSX.Element {
-  const { cashiers, inert, onSelect, selectedId } = props;
+  const { cashiers, inert, onSelect, selectedId, disabled = false } = props;
 
   if (inert === true || cashiers.length === 0) {
     return <div data-testid="roster-list" data-state="inert" hidden />;
@@ -75,6 +77,7 @@ export function RosterList(props: RosterListProps): JSX.Element {
                 data-testid={`roster-item-${String(idx)}`}
                 aria-pressed={selected}
                 aria-label={c.display_name}
+                disabled={disabled}
                 onClick={() => {
                   onSelect(c);
                 }}

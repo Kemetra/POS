@@ -34,11 +34,14 @@ export function RosterPanel({
   roster,
   managerMode,
   onManagerEntry,
+  disabled = false,
 }: {
   state: RosterState;
   roster: ReactNode;
   managerMode: boolean;
   onManagerEntry: () => void;
+  /** True while a sign-in is in flight: the column must not switch. */
+  disabled?: boolean;
 }): JSX.Element {
   const notice = ROSTER_NOTICE[state];
   return (
@@ -68,6 +71,7 @@ export function RosterPanel({
           className="v5-entry__btn"
           data-testid="sign-in-manager-entry"
           aria-pressed={managerMode}
+          disabled={disabled}
           onClick={onManagerEntry}
         >
           <V5Icon name="key" />

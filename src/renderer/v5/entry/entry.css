@@ -1,9 +1,10 @@
 /*
  * RT-244 (VNext W1-D) — the entry screens: sign-in, Ready and pairing.
  * Visual authority: the owner-approved G-1 references (RT-246),
- * docs/design/vnext/visual-acceptance/G1-Entry-screens/. Tokens only: every value
- * resolves to a shipped token from styles/tailwind.css. Scoped under .v5-entry
- * so it never restyles a legacy screen.
+ * docs/design/vnext/visual-acceptance/G1-Entry-screens/. Every colour, radius and
+ * type size resolves to a shipped token from styles/tailwind.css; the few raw px
+ * sizes are the G-1 reference geometry (column, tile, key and head heights).
+ * Scoped under .v5-entry so it never restyles a legacy screen.
  */
 
 .v5-entry {
@@ -221,6 +222,11 @@
 
 .v5-entry__who:hover {
   background: var(--color-surface-elevated);
+}
+
+/* inert while a sign-in is in flight */
+.v5-entry__who:disabled {
+  cursor: not-allowed;
 }
 
 .v5-entry__who[aria-pressed='true'] {
@@ -446,6 +452,12 @@
   border-color: var(--color-danger);
 }
 
+/* the PIN field takes focus when a cashier is picked (G-1 state 3) */
+.v5-entry__dots:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 .v5-entry__dot {
   inline-size: 14px;
   block-size: 14px;
@@ -586,7 +598,8 @@
     border: 2px solid CanvasText;
   }
 
-  .v5-entry :where(button, input, a):focus-visible {
+  .v5-entry :where(button, input, a):focus-visible,
+  .v5-entry__dots:focus-visible {
     outline-color: Highlight;
   }
 }

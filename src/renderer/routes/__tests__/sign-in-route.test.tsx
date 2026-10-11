@@ -529,6 +529,76 @@ describe('SignInRoute — RT-244 two-zone stage', () => {
     expect(dots).toHaveAttribute('aria-describedby', error.id);
     expect(dots.querySelectorAll('[data-state="filled"]')).toHaveLength(0);
   });
+
+  it('picking a cashier moves focus to the PIN field', async () => {
+    const user = userEvent.setup();
+    renderSignInRoute(withCashier());
+    await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
+    await user.click(screen.getByTestId('roster-item-0'));
+    expect(screen.getByTestId('pin-pad-dots')).toHaveFocus();
+  });
+
+  // pr-review Major: a sign-in in flight owns the column. Switching it would
+  // unmount the form awaiting the answer and drop (or misplace) the refusal.
+  it('a pending manager sign-in keeps the column: the toggle and the tiles are inert', async () => {
+    const user = userEvent.setup();
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+      signIn: () => new Promise<SignInResponse>(() => undefined),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
+    await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
+    await user.type(screen.getByTestId('sign-in-password'), 'p');
+    await user.click(screen.getByTestId('sign-in-submit'));
+    await waitFor(() => expect(screen.getByTestId('sign-in-spinner')).toBeInTheDocument());
+
+    expect(screen.getByTestId('sign-in-manager-entry')).toBeDisabled();
+    expect(screen.getByTestId('roster-item-0')).toBeDisabled();
+    await user.click(screen.getByTestId('roster-item-0'));
+    expect(screen.getByTestId('manager-admin-sign-in-form')).toBeInTheDocument();
+  });
+
+  it('a pending cashier sign-in keeps the column: «دخول المدير» is inert', async () => {
+    const user = userEvent.setup();
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+      signIn: () => new Promise<SignInResponse>(() => undefined),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
+    await user.click(screen.getByTestId('roster-item-0'));
+    for (const d of ['1', '2', '3', '4']) await user.click(screen.getByTestId(`pin-pad-key-${d}`));
+    await user.click(screen.getByTestId('pin-pad-enter'));
+    await waitFor(() => expect(screen.getByTestId('cashier-sign-in-spinner')).toBeInTheDocument());
+
+    expect(screen.getByTestId('sign-in-manager-entry')).toBeDisabled();
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
+    expect(screen.queryByTestId('manager-admin-sign-in-form')).not.toBeInTheDocument();
+    expect(screen.getByTestId('pin-section')).toBeInTheDocument();
+  });
+
+  // pr-review Minor: the refusal lives in the shared FSM; a cashier's wrong PIN
+  // must not open the manager form already showing «بيانات الدخول غير صحيحة».
+  it('a cashier refusal does not follow into the manager form', async () => {
+    const user = userEvent.setup();
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+      signIn: () =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
+    await user.click(screen.getByTestId('roster-item-0'));
+    for (const d of ['1', '2', '3', '4']) await user.click(screen.getByTestId(`pin-pad-key-${d}`));
+    await user.click(screen.getByTestId('pin-pad-enter'));
+    await screen.findByTestId('cashier-sign-in-error');
+
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
+    expect(screen.getByTestId('manager-admin-sign-in-form')).toBeInTheDocument();
+    expect(screen.queryByTestId('sign-in-refusal')).not.toBeInTheDocument();
+  });
 });
 
 describe('SignInRoute — cashier selection', () => {
