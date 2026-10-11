@@ -8,9 +8,10 @@ import type { BrowserWindow as BrowserWindowClass, Session } from 'electron';
  * new-window denial, and the session-header CSP layer. Previously this was
  * `createWindow()` inline in `src/main/index.ts` (`:203–:262`).
  *
- * **Nothing here is new policy.** Every security value below is the verbatim
- * carry-forward of what `createWindow()` already did; S3 relocates it without
- * altering a single character (spec NFR-5, Constitution III). The CSP strings
+ * **Nothing here was new policy in S3.** Every security value below is the
+ * verbatim carry-forward of what `createWindow()` already did; S3 relocated it
+ * without altering a single character (spec NFR-5, Constitution III). Later
+ * additions are tagged with their issue (RT-314: menu and zoom). The CSP strings
  * are exported so tests can assert them literally rather than by shape — a
  * dropped directive is precisely the silent weakening this slice must not
  * introduce.
@@ -93,8 +94,18 @@ export function createWindowFactory(deps: CreateWindowDeps): () => BrowserWindow
         sandbox: true,
         webSecurity: true,
         preload: deps.preloadPath,
+        // RT-314 (RT-312 D4): page zoom is pinned at the default. Keyboard,
+        // Ctrl+wheel and programmatic changes are ignored, and a level an
+        // earlier launch persisted for this origin is not restored.
+        // Accessibility scaling goes through Windows Scale instead.
+        zoomMode: 'disabled',
       },
     });
+
+    // RT-314 (RT-312 D3): no native menu bar. It costs ~25 CSS px of height and
+    // carries Reload / DevTools / Zoom accelerators. Removed, not auto-hidden:
+    // Alt would bring an auto-hidden bar back mid-sale and shrink the viewport.
+    win.removeMenu();
 
     // Renderer origin allow-list (single source of truth — see resolveRendererOrigin).
     const rendererOrigin = deps.resolveRendererOrigin();
