@@ -6,7 +6,7 @@
 | Source | [15-vnext-freeze-package.md](15-vnext-freeze-package.md) §7 **D-A1**: "Re-auth prompt for pilot; refresh later". Screen states S21 and M6. |
 | Finding | N-01 ([14-rt159-packaged-reaudit.md](14-rt159-packaged-reaudit.md)): about 19 minutes after a manager signs in, «Set first PIN» fails with "Action could not be completed. Please try again.", and no retry can help. Sign-out is refused at the backend too, so the next manager sign-in needs a takeover. |
 | Baseline | POS `origin/main@0a99967`; Backend-Core contract at `origin/main@a4b1631`. |
-| Owner decisions already taken | Copy (2026-10-07, RT-247 comment 11157): **«انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.»** with one named action **«تسجيل الدخول»**. No generic retry. This replaces M-A3 (§5 below). |
+| Owner decisions already taken | Copy (2026-10-07, RT-247 comment 11157): **«انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.»** with one named action **«تسجيل الدخول»**. No generic retry. This replaces M-A3 (§5 below). Q1–Q4 (2026-10-11, RT-247 comment 11454): **all accepted as recommended**, see §6. |
 | Related | RT-235 (first PIN), RT-214 (roster), RT-159, RT-246 (G-1 visual reference). |
 
 ## 1. What happens today
@@ -142,8 +142,8 @@ It reuses the online path of `SessionUnlockHandler` (`session-unlock-handler.ts:
   session is created. A fresh JWT for the same Clerk user satisfies the backend, which matches
   `session.user_id` to the JWT's user (`pos-operators.service.ts`, sign-out path).
 
-**Re-auth refreshes the JWT only, never local manager authority** (owner decision Q1,
-recommended *no*). In particular it does not refresh `manager_signed_in_at`, the timestamp the
+**Re-auth refreshes the JWT only, never local manager authority** (owner decision Q1 = **no**,
+2026-10-11). In particular it does not refresh `manager_signed_in_at`, the timestamp the
 2-minute manager-PIN enrolment step-up checks (`manager-pin-enrollment.ts:47`). Re-auth proves
 the Clerk credentials, not the backend operator session, and the POS cannot check that session
 without revoking it (§1.2). Refreshing the step-up would let `ManagerPinEnrollment` create or
@@ -157,13 +157,11 @@ needs a Backend-Core route that validates the operator session without revoking 
 new contract, listed as a follow-up in §6, not invented here.
 
 The lock-screen online unlock already does a full `clerk.exchange` and then throws the JWT
-away. **Only if the owner accepts Q2** (recommended, not yet decided), it also stores it, so a
-manager who unlocked the screen is not asked again minutes later. Until Q2 is accepted, the
-online unlock keeps today's behaviour and the slice does not touch it, apart from the shared
-in-flight gate. Storing it adds **no** local authority: the online unlock already
+away. By owner decision Q2 = **yes** (2026-10-11), it also stores it, so a manager who
+unlocked the screen is not asked again minutes later. Storing it adds **no** local authority: the online unlock already
 unlocks the session today after the same exchange, and storing the JWT only changes which
-credential the next `operator-identity` request presents, which the backend still checks. If it
-does, it must go through the same path as re-auth: the post-await session check and the one-shot
+credential the next `operator-identity` request presents, which the backend still checks. It
+goes through the same path as re-auth: the post-await session check and the one-shot
 "just re-authenticated" mark of §2.4. The post-await check shares its identity, latch and
 revocation parts with re-auth, but the **expected lock state depends on the operation**:
 re-auth expects the session to be still **unlocked**, while an online unlock expects the same
@@ -178,7 +176,7 @@ The retried request looks exactly like the first one, so main needs its own reco
 re-auth just happened. Without it a second 401 would only map to `reauth_required` again and
 prompt again.
 
-- **The marker.** On a successful `operator:reauthenticate` (and, with Q2, a successful online
+- **The marker.** On a successful `operator:reauthenticate` (and, per Q2, a successful online
   unlock), main marks the held JWT for the active `backend_session_id` as **just
   re-authenticated**, with the time it was set. The mark lives next to the JWT in the holder (for
   example `set(sessionId, jwt, { reauthenticatedAt })`), so it is bound to that session and is
@@ -285,7 +283,7 @@ sign-in.
 | `src/main/operator/backend-client.ts` | A status classifier for `getStuckShifts` (401 → `unauthenticated`, 403 → `forbidden`, else `refused`), like `rosterRefusal`; widen `BackendStuckShiftsResponse` |
 | `src/main/operator/stuck-shifts-handler.ts` | Locked or latched session → `state_invalid` at entry and again before the request; pre-check (skipped for the marked retry), no-JWT guard, `unauthenticated` → `reauth_required` |
 | `src/main/operator/sign-out-handler.ts` | Option A: skip the call when expired (unless the JWT carries a fresh mark), log it |
-| `src/main/operator/session-unlock-handler.ts` | Shared online-credential check with a new shared online in-flight gate covering manager online unlock and re-auth; the existing `unlock()` guard stays (it serialises cashier PIN unlocks); if Q2 = yes, store the JWT on success through the same path as re-auth (post-await check incl. latch and revocation, one-shot mark); no local authority is refreshed |
+| `src/main/operator/session-unlock-handler.ts` | Shared online-credential check with a new shared online in-flight gate covering manager online unlock and re-auth; the existing `unlock()` guard stays (it serialises cashier PIN unlocks); per Q2, store the JWT on success through the same path as re-auth (post-await check incl. latch and revocation, one-shot mark); no local authority is refreshed |
 | `src/main/operator/session-manager.ts` | `endIfCurrent(sessionId, cause)` for the §2.4 fail-closed path. Nothing refreshes `manager_signed_in_at` (Q1 = no) |
 | new `src/main/operator/reauth-handler.ts` + `src/main/ipc/operator.ts` + `src/shared/operator/channels.ts` + `src/shared/bridge-api.ts` + preload | `operator:reauthenticate` |
 | `src/renderer/ui/operator/messages.ts` | The owner-approved copy and the action label |
@@ -327,7 +325,7 @@ Main (vitest, `src/main/operator/__tests__/`):
 - Q1 = no: re-auth leaves `manager_signed_in_at` unchanged, and manager-PIN enrolment more than
   two minutes after the original sign-in is still refused `reauth_required` after a successful
   re-auth.
-- If Q2 = yes: a successful online unlock of a session that is still locked after the exchange
+- Q2 = yes: a successful online unlock of a session that is still locked after the exchange
   stores the JWT and sets the one-shot mark (the locked success path). If the session ended,
   changed, was already unlocked or was latched during the exchange, the unlock refuses and
   stores nothing. Re-auth uses the same shared checks with the opposite lock expectation.
@@ -374,7 +372,9 @@ which ranks above the freeze package). S21 and M6 point here.
 
 ## 6. Owner decisions
 
-| # | Question | Recommendation |
+Decided 2026-10-11 (RT-247 comment 11454): **all four accepted as recommended.**
+
+| # | Question | Decision |
 |---|---|---|
 | Q1 | Does a successful re-auth reset `manager_signed_in_at`, the timestamp the 2-minute manager-PIN enrolment step-up checks (`manager-pin-enrollment.ts:47`)? | **No.** Re-auth proves the Clerk credentials but not the backend operator session, and enrolment is local only, so a refresh could mint a 30-day manager PIN on an expired or revoked backend session (§2.3). Enrolment keeps requiring a real sign-in. A "yes" needs a Backend-Core route that validates the operator session without revoking it (a new contract, follow-up) |
 | Q2 | Should the lock-screen online unlock also store its fresh JWT? | **Yes.** It already does the exchange; storing it (with the one-shot mark and the post-await check) avoids a second prompt minutes later |
