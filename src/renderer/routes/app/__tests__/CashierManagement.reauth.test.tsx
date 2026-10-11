@@ -144,33 +144,27 @@ describe('RT-358 CashierManagement — re-auth required on «Set first PIN»', (
     expect(document.body.textContent).not.toMatch(/Action could not be completed|try again/i);
   });
 
-  it('a state_invalid right after a re-auth (lock or latch before the retry) is not reported as "already has a PIN"', async () => {
-    const user = userEvent.setup();
-    const bridge = makeBridge([REAUTH_REQUIRED, { kind: 'refused', category: 'state_invalid' }]);
-    renderSurface(bridge);
-    await submitFirstPin(user);
-    await screen.findByTestId('reauth-required');
-    await reauthenticate(user);
+  // A refusal on the retry right after a re-auth uses the Arabic sign-in copy:
+  // never the English generic error, and never "already has a PIN" for a
+  // state_invalid that may come from a lock or latch before the retry ran.
+  it.each([
+    ['state_invalid', /already has a PIN|Action could not be completed/],
+    ['no_connection', /Action could not be completed/],
+  ] as const)(
+    'a %s right after a re-auth uses the Arabic sign-in copy',
+    async (category, absent) => {
+      const user = userEvent.setup();
+      renderSurface(makeBridge([REAUTH_REQUIRED, { kind: 'refused', category }]));
+      await submitFirstPin(user);
+      await screen.findByTestId('reauth-required');
+      await reauthenticate(user);
 
-    expect(await screen.findByTestId('action-error')).toHaveTextContent(
-      SIGN_IN_REFUSAL_COPY.state_invalid,
-    );
-    expect(document.body.textContent).not.toMatch(/already has a PIN/);
-  });
-
-  it('a no_connection right after a re-auth uses the Arabic copy, not the English generic error', async () => {
-    const user = userEvent.setup();
-    const bridge = makeBridge([REAUTH_REQUIRED, { kind: 'refused', category: 'no_connection' }]);
-    renderSurface(bridge);
-    await submitFirstPin(user);
-    await screen.findByTestId('reauth-required');
-    await reauthenticate(user);
-
-    expect(await screen.findByTestId('action-error')).toHaveTextContent(
-      SIGN_IN_REFUSAL_COPY.no_connection,
-    );
-    expect(document.body.textContent).not.toMatch(/Action could not be completed/);
-  });
+      expect(await screen.findByTestId('action-error')).toHaveTextContent(
+        SIGN_IN_REFUSAL_COPY[category],
+      );
+      expect(document.body.textContent).not.toMatch(absent);
+    },
+  );
 
   it('a refused re-auth keeps the dialog open and does not re-submit', async () => {
     const user = userEvent.setup();
