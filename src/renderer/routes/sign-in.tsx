@@ -1,20 +1,35 @@
 import { useEffect, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import type { OperatorBridgeAPI, BranchRosterCashier } from '../../shared/bridge-api.js';
-import type { Role } from '../../shared/operator/role.js';
+import type {
+  OperatorBridgeAPI,
+  BranchRosterCashier,
+  PairingBridgeAPI,
+} from '../../shared/bridge-api.js';
 import { useOperatorSessionStore } from '../stores/operator-session-store.js';
 import { completeHydratedSignIn, completeSignIn } from '../session/complete-sign-in.js';
 import { RosterList, type RosterEntry } from '../ui/operator/RosterList.js';
 import { ManagerAdminSignInForm } from '../ui/operator/ManagerAdminSignInForm.js';
-import { PinPad } from '../ui/operator/PinPad.js';
+import { PinPad, PinPadPreview } from '../ui/operator/PinPad.js';
 import { TakeoverPrompt } from '../ui/operator/TakeoverPrompt.js';
 import { SIGN_IN_REFUSAL_COPY } from '../ui/operator/messages.js';
+import { EntryStrip, useTerminalLabel } from '../v5/entry/EntryStrip.js';
+import { RefusalNotice } from '../v5/entry/RefusalNotice.js';
+import {
+  AuthHeading,
+  AuthPanel,
+  BackButton,
+  PickedCashier,
+  RosterPanel,
+  pinPromptFor,
+  type RosterState,
+} from '../v5/entry/SignInPanels.js';
+import { SIGN_IN_COPY } from '../v5/entry/entry-copy.js';
+import '../v5/entry/entry.css';
 
 /**
  * 004-operator-session T029 / T075 / T077 — `/sign-in` route.
  *
- * S4 activates:
  *   - Roster fetch on mount via `operator.listBranchRoster()`.
  *   - Cashier selection → PinPad shown (Surface 4).
  *   - PIN submit → `operator.signIn({kind:'cashier',...})`.
@@ -23,43 +38,34 @@ import { SIGN_IN_REFUSAL_COPY } from '../ui/operator/messages.js';
  *   - `refused`          → inline alert (Note 1 invariant: alert XOR spinner)
  *   - `cancelTakeover`   → back to cashier PIN entry
  *
+ * RT-244 (VNext W1-D) recomposes the screen on the owner-approved G-1
+ * references (RT-246): one stage, two zones. The roster ("who are you") is the
+ * inline start; the inline end is one fixed column that holds the PIN pad, or
+ * the manager form when «دخول المدير» is pressed. The keypad is in view before a
+ * name is picked (disabled), so picking never reflows the layout. Behaviour is
+ * unchanged: no roster retry, no offline sign-in, one generic message per
+ * refusal category (P11 / PR-2).
+ *
  * #101 boundary: no terminal-A invalidation, no 30-second assertion,
- * no T056 assertion. Terminal A discovers session invalidation only after
- * a backend-validated call fails, an app restart, or once #101 implements
- * backend probe/push. getCurrentSession is local-only until #101.
+ * no T056 assertion. getCurrentSession is local-only until #101.
  */
 
 export interface SignInRouteProps {
   operator: OperatorBridgeAPI;
+  /** Read once for the terminal label in the context strip. Optional. */
+  pairing?: PairingBridgeAPI;
 }
 
-/**
- * Role → Arabic business name (Arabic-first copy, v3.5 recompose).
- *
- * The prototype `SignInScreen` carries a `ROLE_NAMES` map; we re-declare the
- * mapping locally (do NOT import prototype code) so the route renders the
- * operator's role in Arabic. This is purely presentational — it never feeds
- * auth, which stays IPC-backed (`operator.signIn`).
- */
-const ROLE_NAME_AR: Readonly<Record<Role, string>> = Object.freeze({
-  cashier: 'صيدلي',
-  manager: 'مدير الصيدلية',
-  admin: 'مشرف',
-});
+type Mode = 'cashier' | 'manager';
 
 export function SignInRoute(props: SignInRouteProps): JSX.Element {
   const { operator } = props;
   const fsm = useOperatorSessionStore((s) => s.state);
   const navigate = useNavigate();
+  const terminalLabel = useTerminalLabel(props.pairing);
 
-  // Once the FSM reaches `signedIn` — via the manager/admin form, the
-  // cashier PIN path, a confirmed takeover, or boot-time hydration — the
-  // operator is authenticated but the router is still parked on
-  // `/sign-in`. The path-based router only pulls a signed-out user OUT of
-  // `/app` (OperatorRouteGuard); nothing pushes a signed-in user IN. This
-  // effect is that missing seam — the sign-in counterpart to the pairing
-  // flow's `navigate('/paired')`. `replace` mirrors the `<Navigate replace>`
-  // convention so Back does not return to the sign-in screen.
+  // Once the FSM reaches `signedIn` the router is still parked on /sign-in;
+  // this effect is the seam that moves a signed-in operator into /app.
   useEffect(() => {
     if (fsm.kind === 'signedIn') {
       void navigate('/app', { replace: true });
@@ -67,14 +73,14 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
   }, [fsm.kind, navigate]);
 
   const [cashiers, setCashiers] = useState<ReadonlyArray<BranchRosterCashier>>([]);
-  const [rosterError, setRosterError] = useState<string | undefined>(undefined);
+  const [rosterState, setRosterState] = useState<RosterState>('loading');
+  const [mode, setMode] = useState<Mode>('cashier');
   const [selectedCashier, setSelectedCashier] = useState<RosterEntry | undefined>(undefined);
   const [pin, setPin] = useState('');
   const [cashierError, setCashierError] = useState<string | undefined>(undefined);
 
-  // On mount, check whether the main process already holds an operator session
-  // (e.g. seeded by the dev bypass). If so, hydrate the store directly so
-  // existing guard/router logic can route past /sign-in without user input.
+  // Boot hydration: a session the main process already holds (e.g. seeded by
+  // the dev bypass) routes past /sign-in without user input.
   useEffect(() => {
     let cancelled = false;
     operator
@@ -92,8 +98,8 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
     };
   }, [operator]);
 
-  // Fetch roster on mount. Failure is soft — the roster renders inert
-  // and the manager/admin form remains available.
+  // Fetch the roster once on mount (no retry: RT-246 decision). The screen
+  // states what the fetch proved — tiles, offline, refused or empty.
   useEffect(() => {
     let cancelled = false;
     operator
@@ -102,28 +108,49 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
         if (cancelled) return;
         if (res.kind === 'roster') {
           setCashiers(res.cashiers);
+          setRosterState(res.cashiers.length > 0 ? 'ready' : 'empty');
         } else {
-          // Roster unavailable (not signed in, role mismatch, etc.)
-          // Render inert — not an error the user needs to act on here.
-          setRosterError(
-            res.category === 'no_connection' ? SIGN_IN_REFUSAL_COPY.no_connection : undefined,
-          );
+          setRosterState(res.category === 'no_connection' ? 'offline' : 'refused');
         }
       })
       .catch(() => {
-        // Swallow — roster is best-effort at this screen.
-        if (!cancelled) setRosterError(undefined);
+        if (!cancelled) setRosterState('refused');
       });
     return () => {
       cancelled = true;
     };
   }, [operator]);
 
+  const clearCashier = (): void => {
+    setSelectedCashier(undefined);
+    setPin('');
+    setCashierError(undefined);
+  };
+
+  // A sign-in in flight owns the column: switching it would unmount the form
+  // that is waiting for the answer, and the answer would land on the wrong
+  // panel (or nowhere). The tiles and the manager toggle are inert meanwhile.
   const handleCashierSelect = (cashier: RosterEntry): void => {
+    if (fsm.kind === 'signingIn') return;
     // Clear PIN and error whenever a new cashier is selected.
+    if (mode === 'manager') useOperatorSessionStore.getState().clearRefusal();
+    setMode('cashier');
     setSelectedCashier(cashier);
     setPin('');
     setCashierError(undefined);
+  };
+
+  const switchMode = (next: Mode): void => {
+    if (fsm.kind === 'signingIn') return;
+    // The refusal lives in the shared FSM: never carry one path's refusal
+    // into the other path's panel.
+    useOperatorSessionStore.getState().clearRefusal();
+    clearCashier();
+    setMode(next);
+  };
+
+  const handleManagerEntry = (): void => {
+    switchMode(mode === 'manager' ? 'cashier' : 'manager');
   };
 
   const handlePinChange = (newPin: string): void => {
@@ -169,11 +196,10 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
   const isSigningIn = fsm.kind === 'signingIn';
 
   // When the FSM transitions back to signedOut (after cancel or refusal),
-  // clear the selected cashier and PIN so the UI resets cleanly.
+  // clear the PIN; the selected cashier stays so the user can retry.
   useEffect(() => {
     if (fsm.kind === 'signedOut') {
       setPin('');
-      // Don't clear selectedCashier — allow the user to retry.
     }
   }, [fsm.kind]);
 
@@ -193,139 +219,100 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
   }));
 
   return (
-    // 022 hard reset — v4 composition. Three RTL column tracks, reading from the
-    // inline start: identity/staff-code rail, cashier roster (the widest track,
-    // it carries the primary choice), and the PIN column.
-    //
-    // The v3.5 shape was a two-column split where the PIN pad appeared INLINE
-    // beneath the roster, so choosing a cashier reflowed the surface and pushed
-    // the keypad below the fold. The reference gives the keypad its own
-    // persistent column; that is the structural change, not a restyle.
-    //
-    // Geometry comes from the shared v4 layout vocabulary (`.v4-*`), not from
-    // per-screen BEM. No `sign-in-route__*` / `sign-in-pane__*` / `sign-in-split`
-    // class survives here.
-    <main data-testid="route-sign-in" className="v4-screen" dir="rtl">
-      <header className="v4-screen__header">
-        <div>
-          <h1 className="v4-screen__title">تسجيل دخول الصيدلي</h1>
-          <p className="v4-screen__subtitle">كل عمليات الوردية تُسجَّل باسمك.</p>
+    <main data-testid="route-sign-in" className="v5-entry" dir="rtl" lang="ar">
+      <EntryStrip {...(terminalLabel !== undefined ? { terminalLabel } : {})} />
+      <div className="v5-entry__stage">
+        <div className="v5-entry__head">
+          <h1 className="v5-entry__title">{SIGN_IN_COPY.title}</h1>
+          <p className="v5-entry__subtitle">{SIGN_IN_COPY.subtitle}</p>
         </div>
-        {/* NO STEPPER HERE — deliberate.
-         *
-         * The reference sign-in shows a 3-step progress rail
-         * (تسجيل الدخول → بدء الوردية → جاهز للبيع). That product has a
-         * shift-start step; POS-Pulse does not. `SignInRoute` navigates
-         * straight to `/app` on `signedIn` (see the effect above), and
-         * `specs/015-shift-cash-management` has not shipped — RECONCILIATION
-         * §B lists shift close as explicitly NOT authorised.
-         *
-         * Rendering two pending steps would be a layout filled with a
-         * behaviour claim: RECONCILIATION §A — "it does not invent a
-         * behaviour to fill a layout" — and PRODUCT.md principle 1,
-         * "honest surfaces". The stepper's visual treatment is kept in the
-         * v4 layout layer for checkout, which has a real multi-step flow. */}
-      </header>
 
-      {/* Roster is the widest track: selecting the operator is the primary act.
-          The PIN column holds a fixed 300px so the keypad never reflows. */}
-      <div className="v4-columns v4-columns--sign-in">
-        <section className="v4-panel v4-col--rail" aria-labelledby="signin-staff-code">
-          <div className="v4-panel__head">
-            {/* Bilingual section label retained verbatim: `sign-in-route.test.tsx`
-                pins this exact string. The rebuild changes composition, not copy —
-                re-pointing a passing assertion to fit new markup would weaken it. */}
-            <h2 className="v4-panel__title" id="signin-staff-code">
-              كود الموظف · Staff code
-            </h2>
-          </div>
-          <p className="v4-panel__hint">للمدير أو المشرف — الدخول بكود الموظف وكلمة السر.</p>
-          <ManagerAdminSignInForm operator={operator} />
-        </section>
+        <RosterPanel
+          state={rosterState}
+          managerMode={mode === 'manager'}
+          onManagerEntry={handleManagerEntry}
+          disabled={isSigningIn}
+          roster={
+            <RosterList
+              cashiers={rosterEntries}
+              inert={rosterState !== 'ready'}
+              onSelect={handleCashierSelect}
+              selectedId={selectedCashier?.id}
+              disabled={isSigningIn}
+            />
+          }
+        />
 
-        <section className="v4-panel v4-col--roster" aria-label="قائمة الكاشير">
-          <div className="v4-panel__head">
-            <h2 className="v4-panel__title">صيادلة هذا الفرع</h2>
-          </div>
-          {rosterError !== undefined && (
-            <p className="v4-feedback__error" role="alert">
-              {rosterError}
-            </p>
-          )}
-          <RosterList
-            cashiers={rosterEntries}
-            inert={cashiers.length === 0}
-            onSelect={handleCashierSelect}
-            selectedId={selectedCashier?.id}
-          />
-        </section>
-
-        {/* PIN column. Persistent track: it holds its width whether or not a
-            cashier is selected, so selection never reflows the two columns
-            beside it. Before selection it states what it is waiting for. */}
-        <aside className="v4-panel v4-col--pin" aria-label="إدخال الرقم السري">
-          {selectedCashier === undefined ? (
-            <>
-              <div className="v4-panel__head">
-                <h2 className="v4-panel__title">الرقم السري</h2>
-              </div>
-              <p className="v4-panel__hint" data-testid="pin-awaiting-selection">
-                اختر صيدليًا من القائمة لإدخال الرقم السري.
-              </p>
-            </>
-          ) : (
+        {mode === 'manager' ? (
+          <AuthPanel
+            head={
+              <>
+                <div className="v5-entry__auth-who">
+                  <AuthHeading>{SIGN_IN_COPY.managerHeading}</AuthHeading>
+                </div>
+                <BackButton
+                  testId="sign-in-manager-back"
+                  disabled={isSigningIn}
+                  onClick={() => {
+                    switchMode('cashier');
+                  }}
+                />
+              </>
+            }
+          >
+            <ManagerAdminSignInForm operator={operator} />
+          </AuthPanel>
+        ) : selectedCashier === undefined ? (
+          <AuthPanel head={<AuthHeading>{SIGN_IN_COPY.pinHeading}</AuthHeading>}>
+            <div className="v5-entry__auth-body">
+              <PinPadPreview prompt={pinPromptFor(rosterState)} />
+            </div>
+          </AuthPanel>
+        ) : (
+          <AuthPanel
+            head={
+              <>
+                <PickedCashier name={selectedCashier.display_name} />
+                <BackButton
+                  testId="cashier-pin-cancel"
+                  disabled={isSigningIn}
+                  onClick={clearCashier}
+                />
+              </>
+            }
+          >
             <div
-              className="v4-stack"
+              className="v5-entry__auth-body"
               data-testid="pin-section"
               data-error={cashierError !== undefined || undefined}
             >
-              <div className="v4-panel__head">
-                <h2 className="v4-panel__title" data-testid="pin-cashier-name">
-                  {selectedCashier.display_name}
-                </h2>
-              </div>
-              <p className="v4-panel__hint">{ROLE_NAME_AR[selectedCashier.role]}</p>
-
-              {/* Note 1 invariant — alert XOR spinner. One live region, one
-                  message at a time; the box is reserved so a refusal never
-                  reflows the keypad beneath it. */}
-              <div className="v4-feedback" role="status" aria-live="polite">
-                {isSigningIn ? (
-                  <span data-testid="cashier-sign-in-spinner">جارٍ تسجيل الدخول…</span>
-                ) : cashierError !== undefined ? (
-                  <span
-                    role="alert"
-                    data-testid="cashier-sign-in-error"
-                    className="v4-feedback__error"
-                  >
-                    {cashierError}
-                  </span>
-                ) : null}
-              </div>
-
               <PinPad
                 value={pin}
                 onChange={handlePinChange}
                 onSubmit={handleCashierSubmit}
                 disabled={isSigningIn}
+                error={cashierError !== undefined}
+                submitLabel={SIGN_IN_COPY.submit}
+                autoFocus
+                {...(cashierError !== undefined ? { describedBy: 'cashier-sign-in-error' } : {})}
+                feedback={
+                  // Note 1 invariant — alert XOR spinner, one live region.
+                  <div role="status" aria-live="polite">
+                    {isSigningIn ? (
+                      <span className="v5-entry__status" data-testid="cashier-sign-in-spinner">
+                        {SIGN_IN_COPY.signingIn}
+                      </span>
+                    ) : cashierError !== undefined ? (
+                      <RefusalNotice testId="cashier-sign-in-error" id="cashier-sign-in-error">
+                        {cashierError}
+                      </RefusalNotice>
+                    ) : null}
+                  </div>
+                }
               />
-
-              <button
-                type="button"
-                className="btn btn--ghost btn--md"
-                data-testid="cashier-pin-cancel"
-                disabled={isSigningIn}
-                onClick={() => {
-                  setSelectedCashier(undefined);
-                  setPin('');
-                  setCashierError(undefined);
-                }}
-              >
-                رجوع
-              </button>
             </div>
-          )}
-        </aside>
+          </AuthPanel>
+        )}
       </div>
     </main>
   );

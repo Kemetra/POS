@@ -1,0 +1,605 @@
+/*
+ * RT-244 (VNext W1-D) — the entry screens: sign-in, Ready and pairing.
+ * Visual authority: the owner-approved G-1 references (RT-246),
+ * docs/design/vnext/visual-acceptance/G1-Entry-screens/. Every colour, radius and
+ * type size resolves to a shipped token from styles/tailwind.css; the few raw px
+ * sizes are the G-1 reference geometry (column, tile, key and head heights).
+ * Scoped under .v5-entry so it never restyles a legacy screen.
+ */
+
+.v5-entry {
+  /* comfortable (≥1280) — entry screens sit outside the sale workspace, so their
+     gutters are wider than the sale density profiles (G1-Spec «المسافات») */
+  --entry-gutter: var(--space-5);
+  --entry-gap: var(--space-4);
+  --entry-pad: 20px;
+  --entry-bar: 48px;
+  --entry-tile: 60px;
+  --entry-key: 64px;
+  --entry-commit: 60px;
+  --entry-auth-col: 340px;
+
+  display: flex;
+  flex-direction: column;
+  block-size: 100vh;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+/* 1024–1279px: the POS floor tier (compact). */
+@media (max-width: 1279px) {
+  .v5-entry {
+    --entry-gutter: var(--space-4);
+    --entry-gap: var(--space-3);
+    --entry-pad: var(--space-4);
+    --entry-bar: 44px;
+    --entry-tile: 52px;
+    --entry-key: 56px;
+    --entry-commit: 56px;
+    --entry-auth-col: 304px;
+  }
+}
+
+.v5-entry *,
+.v5-entry *::before,
+.v5-entry *::after {
+  box-sizing: border-box;
+}
+
+.v5-entry :where(h1, h2, p) {
+  margin: 0;
+}
+
+.v5-entry :where(button, input) {
+  font: inherit;
+  color: inherit;
+}
+
+.v5-entry :where(button, input, a):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.v5-entry .v5-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ── context strip ─────────────────────────────────────────────── */
+.v5-entry__bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  block-size: var(--entry-bar);
+  padding-inline: var(--entry-gutter);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.v5-entry__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-primary-emphasis);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+.v5-entry__brand-mark {
+  display: grid;
+  place-items: center;
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-entry__sep {
+  inline-size: 1px;
+  block-size: 20px;
+  background: var(--color-border);
+}
+
+.v5-entry__context {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.v5-entry__context b {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ── sign-in stage: who (inline start) | prove it (inline end) ─── */
+.v5-entry__stage {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) var(--entry-auth-col);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--entry-gap);
+  inline-size: 100%;
+  max-inline-size: 1120px;
+  min-block-size: 0;
+  margin-inline: auto;
+  padding: var(--entry-gutter);
+}
+
+.v5-entry__head {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.v5-entry__title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+.v5-entry__subtitle {
+  color: var(--color-text-muted);
+}
+
+.v5-entry__panel {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-entry__panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 56px;
+  padding: var(--space-3) var(--entry-pad);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-entry__panel-title {
+  overflow: hidden;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v5-entry__panel-body {
+  flex: 1;
+  min-block-size: 0;
+  padding: var(--entry-pad);
+}
+
+.v5-entry__panel-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--entry-pad);
+  border-block-start: 1px solid var(--color-border-soft);
+}
+
+/* roster grid */
+.v5-entry__roster {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--space-2);
+  min-block-size: 0;
+  margin: 0;
+  padding: var(--entry-pad);
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-color: var(--color-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.v5-entry__who {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  block-size: var(--entry-tile);
+  padding-inline: var(--space-3) 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  text-align: start;
+  cursor: pointer;
+}
+
+.v5-entry__who:hover {
+  background: var(--color-surface-elevated);
+}
+
+/* inert while a sign-in is in flight */
+.v5-entry__who:disabled {
+  cursor: not-allowed;
+}
+
+.v5-entry__who[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+/* DESIGN.md No-Accent Rule: selection = wash + teal ink + 2px inline-start bar */
+.v5-entry__who[aria-pressed='true']::before {
+  position: absolute;
+  inset-block: var(--space-2);
+  inset-inline-start: -1px;
+  inline-size: 2px;
+  border-radius: 2px;
+  background: var(--color-primary);
+  content: '';
+}
+
+.v5-entry__badge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.v5-entry__who[aria-pressed='true'] .v5-entry__badge {
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-entry__name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (max-width: 1279px) {
+  .v5-entry__badge {
+    inline-size: 30px;
+    block-size: 30px;
+    font-size: var(--font-size-sm);
+  }
+
+  .v5-entry__name {
+    font-size: var(--font-size-sm);
+  }
+}
+
+/* buttons */
+.v5-entry__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-entry__btn:hover {
+  background: var(--color-surface-elevated);
+}
+
+.v5-entry__btn[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+.v5-entry__btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.v5-entry__btn--ghost:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.v5-entry__btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-entry__btn--primary:hover {
+  border-color: var(--color-primary-emphasis);
+  background: var(--color-primary-emphasis);
+}
+
+/* An unavailable commit is sunken with muted ink, never full teal (DESIGN.md Buttons). */
+.v5-entry__btn--primary:disabled,
+.v5-entry__btn--primary[aria-disabled='true'] {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.v5-entry__btn:disabled {
+  cursor: not-allowed;
+}
+
+.v5-entry__commit {
+  inline-size: 100%;
+  min-block-size: var(--entry-commit);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+/* auth column */
+.v5-entry__auth .v5-entry__panel-head {
+  /* same height before and after a name is picked, so the keypad never moves */
+  min-block-size: 70px;
+}
+
+.v5-entry__auth-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-block-size: 0;
+  padding: var(--entry-pad);
+}
+
+.v5-entry__pin {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-block-size: 0;
+}
+
+.v5-entry__auth-who {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.v5-entry__auth-who > div {
+  min-inline-size: 0;
+}
+
+.v5-entry__auth-who .v5-entry__badge {
+  /* not filled teal: the commit below is the region's one teal fill */
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+.v5-entry__meta {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.v5-entry__prompt {
+  display: flex;
+  align-items: center;
+  min-block-size: 56px;
+  padding-inline: 14px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-normal);
+}
+
+/* reserved for the tallest refusal (two lines at 304px), so the keypad never moves */
+.v5-entry__feedback {
+  display: flex;
+  align-items: center;
+  min-block-size: 70px;
+}
+
+.v5-entry__feedback > * {
+  inline-size: 100%;
+}
+
+.v5-entry__status {
+  color: var(--color-text-muted);
+}
+
+.v5-entry__auth-actions {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-start: auto;
+}
+
+/* PIN dots: LTR */
+.v5-entry__dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  block-size: 56px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  direction: ltr;
+}
+
+.v5-entry__dots[data-error='true'] {
+  border-color: var(--color-danger);
+}
+
+/* the PIN field takes focus when a cashier is picked (G-1 state 3) */
+.v5-entry__dots:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.v5-entry__dot {
+  inline-size: 14px;
+  block-size: 14px;
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+}
+
+.v5-entry__dot[data-state='filled'] {
+  border-color: var(--color-text);
+  background: var(--color-text);
+}
+
+/* keypad: LTR, 1-2-3 on top (DESIGN.md Layout) */
+.v5-entry__keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  direction: ltr;
+}
+
+.v5-entry__key {
+  display: grid;
+  place-items: center;
+  block-size: var(--entry-key);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.v5-entry__key:hover {
+  background: var(--color-surface-elevated);
+}
+
+.v5-entry__key--blank {
+  visibility: hidden;
+}
+
+.v5-entry__keypad[aria-disabled='true'] .v5-entry__key,
+.v5-entry__key:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+/* manager form */
+.v5-entry__field {
+  display: grid;
+  gap: 6px;
+}
+
+.v5-entry__field label {
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-entry__input {
+  block-size: 48px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-size: var(--font-size-md);
+}
+
+.v5-entry__input[dir='ltr'] {
+  text-align: left;
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .v5-entry__panel,
+  .v5-entry__who,
+  .v5-entry__btn,
+  .v5-entry__key,
+  .v5-entry__dots,
+  .v5-entry__input,
+  .v5-entry__prompt {
+    border-color: CanvasText;
+  }
+
+  /* Selected keeps the system highlight. forced-color-adjust: none, or the text's
+     Canvas backplate hides HighlightText (the v5/frame and v5/checkout precedent). */
+  .v5-entry__who[aria-pressed='true'],
+  .v5-entry__btn[aria-pressed='true'] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .v5-entry__who[aria-pressed='true'] .v5-entry__name,
+  .v5-entry__btn[aria-pressed='true'] .v5-icon {
+    color: HighlightText;
+  }
+
+  .v5-entry__who[aria-pressed='true'] .v5-entry__badge {
+    border-color: HighlightText;
+    background: HighlightText;
+    color: Highlight;
+  }
+
+  .v5-entry__badge,
+  .v5-entry__brand-mark {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-entry__who[aria-pressed='true']::before {
+    display: none;
+  }
+
+  .v5-entry__btn--primary {
+    border: 2px solid ButtonText;
+  }
+
+  .v5-entry__btn--primary:disabled,
+  .v5-entry__btn--primary[aria-disabled='true'],
+  .v5-entry__keypad[aria-disabled='true'] .v5-entry__key,
+  .v5-entry__key:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
+  .v5-entry__dot {
+    border-color: CanvasText;
+  }
+
+  /* a border-filled dot survives forced colours without un-forcing anything */
+  .v5-entry__dot[data-state='filled'] {
+    border-width: 7px;
+  }
+
+  .v5-entry__dots[data-error='true'] {
+    border: 2px solid CanvasText;
+  }
+
+  .v5-entry :where(button, input, a):focus-visible,
+  .v5-entry__dots:focus-visible {
+    outline-color: Highlight;
+  }
+}

@@ -174,7 +174,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   const signInElement =
     props.operator !== undefined ? (
       <SupportedViewport>
-        <SignInRoute operator={props.operator} />
+        <SignInRoute operator={props.operator} pairing={props.pairing} />
       </SupportedViewport>
     ) : (
       <Navigate to={boot.startPath} replace />

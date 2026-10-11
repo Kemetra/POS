@@ -42,9 +42,13 @@ describe('RosterList — inert state', () => {
     expect(screen.getByTestId('roster-list')).toHaveAttribute('data-state', 'inert');
   });
 
-  it('shows the empty-state message when inert', () => {
+  // RT-244: the sign-in route owns the truthful roster state (offline, refused
+  // or empty); the list itself renders no message, and never the old English one.
+  it('renders no message and no tiles when inert', () => {
     render(<RosterList cashiers={[]} />);
-    expect(screen.getByText(/Cashier sign-in is not yet available/i)).toBeInTheDocument();
+    const list = screen.getByTestId('roster-list');
+    expect(list.textContent).toBe('');
+    expect(screen.queryByText(/Cashier sign-in is not yet available/i)).not.toBeInTheDocument();
   });
 });
 
@@ -108,16 +112,16 @@ describe('RosterList — selectedId', () => {
     expect(screen.getByTestId('roster-item-1')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('selected cashier li gets the --selected CSS class', () => {
+  it('selected cashier li is marked data-selected', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} selectedId="c2" />);
     const item = screen.getByTestId('roster-item-1').closest('li');
-    expect(item).toHaveClass('roster-list__item--selected');
+    expect(item).toHaveAttribute('data-selected', 'true');
   });
 
-  it('unselected cashier li does NOT get the --selected CSS class', () => {
+  it('unselected cashier li is NOT marked data-selected', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} selectedId="c2" />);
     const item = screen.getByTestId('roster-item-0').closest('li');
-    expect(item).not.toHaveClass('roster-list__item--selected');
+    expect(item).not.toHaveAttribute('data-selected');
   });
 });
 
@@ -140,5 +144,27 @@ describe('RosterList — minimum disclosure (F-1)', () => {
   it('does not emit data-cashier-id on any element', () => {
     const { container } = render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} />);
     expect(container.outerHTML).not.toContain('data-cashier-id');
+  });
+});
+
+describe('RosterList — RT-244 G-1 tiles', () => {
+  const ARABIC = [{ id: 'a1', display_name: 'منى عبد الرحمن', role: 'cashier' as const }];
+
+  it('badges a tile with the first letter of the name, not two letters', () => {
+    render(<RosterList cashiers={ARABIC} onSelect={vi.fn()} />);
+    const badge = screen.getByTestId('roster-item-0').querySelector('.v5-entry__badge');
+    expect(badge?.textContent).toBe('م');
+  });
+
+  it('names each tile button by the full cashier name, with no English role label', () => {
+    render(<RosterList cashiers={ARABIC} onSelect={vi.fn()} />);
+    const tile = screen.getByRole('button', { name: 'منى عبد الرحمن' });
+    expect(tile).toBe(screen.getByTestId('roster-item-0'));
+    expect(tile.textContent).not.toMatch(/Cashier/i);
+  });
+
+  it('names the roster list in Arabic', () => {
+    render(<RosterList cashiers={ARABIC} onSelect={vi.fn()} />);
+    expect(screen.getByRole('list', { name: 'قائمة الكاشير' })).toBeInTheDocument();
   });
 });

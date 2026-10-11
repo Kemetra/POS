@@ -31,6 +31,12 @@ const PATHS = {
   'tender-card': 'M3 6h18v12H3zM3 10h18M7 15h4',
   'tender-voucher': 'M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4zM14 7v10',
   check: 'M5 12.5l4.5 4.5L19 7.5',
+  // RT-244 — entry screens. `backspace` points left, as on the LTR keypad it sits
+  // on; `back` points toward the inline start of an RTL line ("back" for this
+  // product). The visible label or aria-label carries the meaning.
+  backspace: 'M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM12 9l5 6M17 9l-5 6',
+  back: 'M9 6l6 6-6 6',
+  key: 'M8 19a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM11 12l8-8M16 7l2.5 2.5M14 9l2 2',
   lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
   'nav-settings':
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4z',

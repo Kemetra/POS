@@ -151,13 +151,30 @@ describe('AppRouter + /sign-in (T022)', () => {
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
   });
 
-  it('renders /sign-in directly with the form and the inert roster', async () => {
+  // RT-244: the manager form is behind «دخول المدير» (it swaps the PIN column);
+  // an empty roster is stated, not rendered as an inert list.
+  it('renders /sign-in directly with the manager entry and the empty-roster state', async () => {
+    const user = userEvent.setup();
     render(
       <AppRouter pairing={pairedBridge()} operator={operatorBridge({})} initialEntry="/sign-in" />,
     );
     await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('roster-state')).toHaveAttribute('data-state', 'empty'),
+    );
+    expect(screen.queryByTestId('manager-admin-sign-in-form')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
     expect(screen.getByTestId('manager-admin-sign-in-form')).toBeInTheDocument();
-    expect(screen.getByTestId('roster-list')).toHaveAttribute('data-state', 'inert');
+  });
+
+  it('shows the paired terminal label in the context strip', async () => {
+    render(
+      <AppRouter pairing={pairedBridge()} operator={operatorBridge({})} initialEntry="/sign-in" />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('entry-terminal-label')).toHaveTextContent('Counter 1'),
+    );
+    expect(screen.getByTestId('entry-strip')).toHaveTextContent('POS Pulse');
   });
 
   it('successful sign-in surfaces signedIn state in the operator session store', async () => {
@@ -166,6 +183,7 @@ describe('AppRouter + /sign-in (T022)', () => {
       <AppRouter pairing={pairedBridge()} operator={operatorBridge({})} initialEntry="/sign-in" />,
     );
     await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
     await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
     await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
@@ -184,6 +202,7 @@ describe('AppRouter + /sign-in (T022)', () => {
       <AppRouter pairing={pairedBridge()} operator={operatorBridge({})} initialEntry="/sign-in" />,
     );
     await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
     await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
     await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
@@ -214,6 +233,7 @@ describe('AppRouter + /sign-in (T022)', () => {
     });
     render(<AppRouter pairing={pairedBridge()} operator={bridge} initialEntry="/sign-in" />);
     await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
     await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
     await user.type(screen.getByTestId('sign-in-password'), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
@@ -297,12 +317,12 @@ describe('AppRouter + /sign-in (T022)', () => {
 });
 
 // ─── v3.5 prototype recompose (visual / RTL / Arabic-first) ──────────────────
-// These assert the prototype's VISUAL LANGUAGE only: RTL shell, Arabic-first
-// copy, the "كود الموظف · Staff code" section label, and the role→Arabic map on
-// a selected cashier row. They must NOT assert any client-side credential
-// logic — production keeps IPC-backed auth (operator.signIn) unchanged.
-describe('SignInRoute — v3.5 prototype recompose', () => {
-  it('route shell is RTL and carries the Arabic-first title + section label', async () => {
+// RT-244 (VNext W1-D) — the G-1 copy: RTL shell, Arabic-only labels with the
+// UX-12 role nouns «الكاشير» / «المدير», and no bilingual section label. They
+// must NOT assert any client-side credential logic — production keeps
+// IPC-backed auth (operator.signIn) unchanged.
+describe('SignInRoute — G-1 recompose copy', () => {
+  it('route shell is RTL and carries the Arabic-only title, headings and manager entry', async () => {
     const bridge = operatorBridge({
       listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
     });
@@ -312,12 +332,14 @@ describe('SignInRoute — v3.5 prototype recompose', () => {
     // RTL shell (Arabic-first layout).
     expect(screen.getByTestId('route-sign-in')).toHaveAttribute('dir', 'rtl');
 
-    // Arabic title + section label lifted from the prototype.
-    expect(screen.getByText('تسجيل دخول الصيدلي')).toBeInTheDocument();
-    expect(screen.getByText('كود الموظف · Staff code')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'تسجيل الدخول' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'الكاشير في هذا الفرع' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'الرقم السري' })).toBeInTheDocument();
+    expect(screen.getByTestId('sign-in-manager-entry')).toHaveTextContent('دخول المدير');
+    expect(screen.queryByText(/Staff code|كود الموظف|صيدلي/)).not.toBeInTheDocument();
   });
 
-  it('a selected cashier row shows the Arabic role name (role→Arabic map)', async () => {
+  it('a selected cashier shows the UX-12 role noun «الكاشير», not «صيدلي»', async () => {
     const user = userEvent.setup();
     const bridge = operatorBridge({
       listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
@@ -326,9 +348,9 @@ describe('SignInRoute — v3.5 prototype recompose', () => {
     await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
     await user.click(screen.getByTestId(`roster-item-0`));
 
-    // cashier → "صيدلي" per the prototype's ROLE_NAMES map.
     expect(screen.getByTestId('pin-section')).toBeInTheDocument();
-    expect(screen.getByText('صيدلي')).toBeInTheDocument();
+    expect(screen.getByText('الكاشير')).toBeInTheDocument();
+    expect(screen.queryByText('صيدلي')).not.toBeInTheDocument();
   });
 });
 
@@ -371,16 +393,26 @@ describe('SignInRoute — roster fetch', () => {
     await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
   });
 
-  it('shows no_connection alert when roster returns no_connection category', async () => {
+  it('shows the offline roster warning when the roster returns no_connection', async () => {
     const bridge = operatorBridge({
       listBranchRoster: () =>
         Promise.resolve({ kind: 'refused' as const, category: 'no_connection' as const }),
     });
     renderSignInRoute(bridge);
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.',
+      ),
+    );
+    expect(screen.getByTestId('pin-awaiting-selection')).toHaveTextContent(
+      'لا يمكن إدخال الرقم السري قبل تحميل القائمة.',
+    );
+    // No retry control: the roster is fetched once on mount (RT-246 decision).
+    expect(screen.queryByRole('button', { name: /أعد المحاولة|إعادة المحاولة/ })).toBeNull();
   });
 
-  it('shows no alert for non-no_connection refusal (soft failure)', async () => {
+  // RT-244: any other refusal is stated generically, with no connection hint.
+  it('shows the generic roster warning for a non-no_connection refusal', async () => {
     const bridge = operatorBridge({
       listBranchRoster: () =>
         Promise.resolve({ kind: 'refused' as const, category: 'role_mismatch' as const }),
@@ -392,10 +424,13 @@ describe('SignInRoute — roster fetch', () => {
     await waitFor(() => {
       expect(rosterMock).toHaveBeenCalled();
     });
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('تعذّر تحميل قائمة الكاشير.'),
+    );
+    expect(screen.getByRole('alert').textContent).not.toContain('الاتصال');
   });
 
-  it('swallows a thrown exception from listBranchRoster (best-effort)', async () => {
+  it('states a thrown exception from listBranchRoster as the generic roster warning', async () => {
     const bridge = operatorBridge({
       listBranchRoster: () => Promise.reject(new Error('network failure')),
     });
@@ -405,31 +440,168 @@ describe('SignInRoute — roster fetch', () => {
     await waitFor(() => {
       expect(rosterMock).toHaveBeenCalled();
     });
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('تعذّر تحميل قائمة الكاشير.'),
+    );
+  });
+
+  it('states an empty roster as a fact, not a warning', async () => {
+    renderSignInRoute(operatorBridge({}));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('لا يوجد كاشير مسجّل في هذا الفرع.'),
+    );
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('pin-awaiting-selection')).toHaveTextContent(
+      'الدخول بالرقم السري يحتاج كاشيرًا مسجّلًا في هذا الفرع.',
+    );
+  });
+});
+
+// ─── RT-244 helpers: one-cashier roster, PIN submit, manager submit ─────────
+
+type SignInFn = (req: ManagerAdminSignInRequest) => Promise<SignInResponse>;
+type User = ReturnType<typeof userEvent.setup>;
+
+const rosterWithCashier = (): Promise<ListBranchRosterResponse> =>
+  Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] });
+const refusedInvalid: SignInFn = () =>
+  Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const });
+const neverResolves: SignInFn = () => new Promise<SignInResponse>(() => undefined);
+
+/** Renders the route with the one-cashier roster and waits for its tile. */
+async function renderWithCashier(signIn?: SignInFn): Promise<User> {
+  const user = userEvent.setup();
+  renderSignInRoute(
+    operatorBridge({ listBranchRoster: rosterWithCashier, ...(signIn ? { signIn } : {}) }),
+  );
+  await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
+  return user;
+}
+
+/** Picks the cashier, types a 4-digit PIN and presses «دخول». */
+async function pickCashierAndSubmitPin(user: User): Promise<void> {
+  await user.click(screen.getByTestId('roster-item-0'));
+  for (const d of ['1', '2', '3', '4']) await user.click(screen.getByTestId(`pin-pad-key-${d}`));
+  await user.click(screen.getByTestId('pin-pad-enter'));
+}
+
+/** Opens the manager form, fills it and submits. */
+async function submitManagerForm(user: User): Promise<void> {
+  await user.click(screen.getByTestId('sign-in-manager-entry'));
+  await user.type(screen.getByTestId('sign-in-identifier'), 'manager@x.test');
+  await user.type(screen.getByTestId('sign-in-password'), 'p');
+  await user.click(screen.getByTestId('sign-in-submit'));
+}
+
+describe('SignInRoute — RT-244 two-zone stage', () => {
+  it('shows the keypad, disabled, before a cashier is picked', async () => {
+    await renderWithCashier();
+    expect(screen.getByTestId('pin-awaiting-selection')).toHaveTextContent(
+      'اختر اسمك من القائمة لإدخال الرقم السري.',
+    );
+    const preview = screen.getByTestId('pin-pad-preview');
+    for (const key of Array.from(preview.querySelectorAll('button'))) expect(key).toBeDisabled();
+  });
+
+  it('«دخول المدير» swaps the PIN column for the manager form, and «رجوع» swaps it back', async () => {
+    const user = await renderWithCashier();
+    const entry = screen.getByTestId('sign-in-manager-entry');
+    await user.click(entry);
+    expect(entry).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('manager-admin-sign-in-form')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'دخول المدير' })).toBeInTheDocument();
+    expect(screen.queryByTestId('pin-pad-preview')).not.toBeInTheDocument();
+    // The roster stays in view while the manager signs in.
+    expect(screen.getByTestId('roster-item-0')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('sign-in-manager-back'));
+    expect(screen.queryByTestId('manager-admin-sign-in-form')).not.toBeInTheDocument();
+    expect(screen.getByTestId('pin-pad-preview')).toBeInTheDocument();
+    expect(entry).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('picking a cashier while the manager form is open returns to the PIN pad', async () => {
+    const user = await renderWithCashier();
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
+    await user.click(screen.getByTestId('roster-item-0'));
+    expect(screen.queryByTestId('manager-admin-sign-in-form')).not.toBeInTheDocument();
+    expect(screen.getByTestId('pin-section')).toBeInTheDocument();
+  });
+
+  it('the manager identifier and password fields are LTR', async () => {
+    const user = await renderWithCashier();
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
+    expect(screen.getByTestId('sign-in-identifier')).toHaveAttribute('dir', 'ltr');
+    expect(screen.getByTestId('sign-in-password')).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('a wrong PIN shows the generic refusal in the reserved slot and links it to the PIN field', async () => {
+    const user = await renderWithCashier(refusedInvalid);
+    await pickCashierAndSubmitPin(user);
+    const error = await screen.findByTestId('cashier-sign-in-error');
+    expect(error).toHaveTextContent('بيانات الدخول غير صحيحة. حاول مرة أخرى.');
+    const field = screen.getByRole('textbox', { name: /الرقم السري/ });
+    expect(field).toBe(screen.getByTestId('pin-pad-dots'));
+    expect(field).toHaveAttribute('data-error', 'true');
+    expect(field).toHaveAttribute('aria-describedby', error.id);
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field.querySelectorAll('[data-state="filled"]')).toHaveLength(0);
+  });
+
+  it('picking a cashier moves focus to the PIN field', async () => {
+    const user = await renderWithCashier();
+    await user.click(screen.getByTestId('roster-item-0'));
+    expect(screen.getByRole('textbox', { name: /الرقم السري/ })).toHaveFocus();
+  });
+
+  // pr-review Major: a sign-in in flight owns the column. Switching it would
+  // unmount the form awaiting the answer and drop (or misplace) the refusal.
+  it('a pending manager sign-in keeps the column: the toggle and the tiles are inert', async () => {
+    const user = await renderWithCashier(neverResolves);
+    await submitManagerForm(user);
+    await waitFor(() => expect(screen.getByTestId('sign-in-spinner')).toBeInTheDocument());
+
+    expect(screen.getByTestId('sign-in-manager-entry')).toBeDisabled();
+    expect(screen.getByTestId('roster-item-0')).toBeDisabled();
+    await user.click(screen.getByTestId('roster-item-0'));
+    expect(screen.getByTestId('manager-admin-sign-in-form')).toBeInTheDocument();
+  });
+
+  it('a pending cashier sign-in keeps the column: «دخول المدير» is inert', async () => {
+    const user = await renderWithCashier(neverResolves);
+    await pickCashierAndSubmitPin(user);
+    await waitFor(() => expect(screen.getByTestId('cashier-sign-in-spinner')).toBeInTheDocument());
+
+    expect(screen.getByTestId('sign-in-manager-entry')).toBeDisabled();
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
+    expect(screen.queryByTestId('manager-admin-sign-in-form')).not.toBeInTheDocument();
+    expect(screen.getByTestId('pin-section')).toBeInTheDocument();
+  });
+
+  // pr-review Minor: the refusal lives in the shared FSM; a cashier's wrong PIN
+  // must not open the manager form already showing «بيانات الدخول غير صحيحة».
+  it('a cashier refusal does not follow into the manager form', async () => {
+    const user = await renderWithCashier(refusedInvalid);
+    await pickCashierAndSubmitPin(user);
+    await screen.findByTestId('cashier-sign-in-error');
+
+    await user.click(screen.getByTestId('sign-in-manager-entry'));
+    expect(screen.getByTestId('manager-admin-sign-in-form')).toBeInTheDocument();
+    expect(screen.queryByTestId('sign-in-refusal')).not.toBeInTheDocument();
   });
 });
 
 describe('SignInRoute — cashier selection', () => {
   it('shows the PIN section after a cashier is selected', async () => {
-    const user = userEvent.setup();
-    const bridge = operatorBridge({
-      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
-    });
-    renderSignInRoute(bridge);
-    await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
-    await user.click(screen.getByTestId(`roster-item-0`));
+    const user = await renderWithCashier();
+    await user.click(screen.getByTestId('roster-item-0'));
     expect(screen.getByTestId('pin-section')).toBeInTheDocument();
     expect(screen.getByTestId('pin-cashier-name')).toHaveTextContent(CASHIER.display_name);
   });
 
   it('Back button dismisses the PIN section', async () => {
-    const user = userEvent.setup();
-    const bridge = operatorBridge({
-      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
-    });
-    renderSignInRoute(bridge);
-    await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
-    await user.click(screen.getByTestId(`roster-item-0`));
+    const user = await renderWithCashier();
+    await user.click(screen.getByTestId('roster-item-0'));
     await user.click(screen.getByTestId('cashier-pin-cancel'));
     expect(screen.queryByTestId('pin-section')).not.toBeInTheDocument();
   });
