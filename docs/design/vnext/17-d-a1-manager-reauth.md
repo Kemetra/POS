@@ -89,13 +89,30 @@ It reuses the online path of `SessionUnlockHandler` (`session-unlock-handler.ts:
   the credential of the person already signed in; it never swaps identity. A different person
   is refused (`role_mismatch`) and must use sign-out and sign-in or takeover.
 - The same 5-failures / 5-minute lockout as the online unlock, shared with it.
+- **Re-check the session after the exchange.** Snapshot the active session (`id`,
+  `backend_session_id`, `operator_id`) before `clerk.exchange`, and after it resolves confirm
+  that the same session is still the current one, as `SessionUnlockHandler.unlockOnce` already
+  does (`isStillLocked`, `session-unlock-handler.ts:89-114`). If sign-out, revocation, a
+  takeover or any other transition happened during the network call, refuse with
+  `not_signed_in` and store nothing. A late success must never repopulate credentials for an
+  ended session.
 - On success: `operatorJwtHolder.set(active.backend_session_id, exchange.jwt)`. No new backend
   session is created. A fresh JWT for the same Clerk user satisfies the backend, which matches
   `session.user_id` to the JWT's user (`pos-operators.service.ts`, sign-out path).
 
+If Q1 is accepted, a successful re-auth also refreshes `manager_signed_in_at` on the
+still-current session record, through a new `SessionManager` method keyed by session id (like
+`renewAdmission`). Re-auth creates no session, and `SessionManager.create` is the only place that
+sets the timestamp today, so without this step `manager-pin-enrollment.ts` would still refuse a
+re-authenticated manager after two minutes.
+
 The lock-screen online unlock already does a full `clerk.exchange` and then throws the JWT
 away. It should also store it, so a manager who unlocked the screen is not asked again minutes
-later (owner decision Q2).
+later (owner decision Q2). If it does, it must go through the same path as re-auth: the
+post-await session check, the one-shot "just re-authenticated" mark of §2.4, and (if Q1 is
+accepted) the `manager_signed_in_at` refresh. Without the mark, a session that expired while the
+screen was locked would answer the next call with a 401 and prompt for the password a second
+time, right after the manager typed it.
 
 ### 2.4 Retry once, then fail closed
 
@@ -170,7 +187,8 @@ sign-in.
 | `src/main/operator/pin-management.ts` | Pre-check and 401 → `reauth_required` |
 | `src/main/operator/stuck-shifts-handler.ts` | Pre-check, no-JWT guard, 401 → `reauth_required` |
 | `src/main/operator/sign-out-handler.ts` | Option A: skip the call when expired, log it |
-| `src/main/operator/session-unlock-handler.ts` | Shared online-credential check; store the JWT on success (if Q2 = yes) |
+| `src/main/operator/session-unlock-handler.ts` | Shared online-credential check; if Q2 = yes, store the JWT on success through the same path as re-auth (post-await check, one-shot mark, step-up refresh) |
+| `src/main/operator/session-manager.ts` | If Q1 = yes: a session-id-keyed method that refreshes `manager_signed_in_at` on the current record (like `renewAdmission`) |
 | new `src/main/operator/reauth-handler.ts` + `src/main/ipc/operator.ts` + `src/shared/operator/channels.ts` + `src/shared/bridge-api.ts` + preload | `operator:reauthenticate` |
 | `src/renderer/ui/operator/messages.ts` | The owner-approved copy and the action label |
 | `src/renderer/routes/app/manager/CashierManagement.tsx`, `src/renderer/ui/operator/ForcedCloseSurface.tsx` | The inline warning, the dialog, retry once |
@@ -187,6 +205,12 @@ Main (vitest, `src/main/operator/__tests__/`):
 - Re-auth: the same operator → the holder is updated for the active `backend_session_id`; a
   different `operator_id` → refused and the holder is unchanged; `no_connection` → refused,
   holder unchanged; the lockout is shared with the online unlock.
+- Re-auth race: the session ends, is revoked or is taken over while `clerk.exchange` is in
+  flight → refused `not_signed_in`, and neither the JWT nor the mark is stored.
+- If Q1 = yes: after re-auth, `manager_signed_in_at` is refreshed on the current session, and
+  manager-PIN enrolment more than two minutes after the original sign-in is allowed.
+- If Q2 = yes: a successful online unlock stores the JWT and sets the one-shot mark, and the
+  same post-await race refuses without storing.
 - Retry (§2.4): after re-auth, a 401 on the next call ends the local session
   (`session-state: ended`) and returns `not_signed_in`, not `reauth_required`. The mark is
   consumed **before** that request is sent: a second call after it maps a 401 to
@@ -218,8 +242,8 @@ which ranks above the freeze package). S21 and M6 point here.
 
 | # | Question | Recommendation |
 |---|---|---|
-| Q1 | Does a successful re-auth reset `manager_signed_in_at`, the timestamp the 2-minute manager-PIN enrolment step-up checks (`manager-pin-enrollment.ts:47`)? | **Yes.** Re-auth is a full password check, as strong as a fresh sign-in |
-| Q2 | Should the lock-screen online unlock also store its fresh JWT? | **Yes.** It already does the exchange; storing it avoids a second prompt minutes later |
+| Q1 | Does a successful re-auth reset `manager_signed_in_at`, the timestamp the 2-minute manager-PIN enrolment step-up checks (`manager-pin-enrollment.ts:47`)? | **Yes.** Re-auth is a full password check, as strong as a fresh sign-in. Needs the `SessionManager` refresh in §2.3 |
+| Q2 | Should the lock-screen online unlock also store its fresh JWT? | **Yes.** It already does the exchange; storing it (with the one-shot mark and the post-await check) avoids a second prompt minutes later |
 | Q3 | Sign-out with a stale JWT: option A now, C as a Backend-Core follow-up? | **A** for the pilot; open C only if takeover friction shows up |
 | Q4 | Re-auth in a dialog on the same surface, or send the manager to the sign-in screen? | **Dialog.** It keeps the manager's place and typed PIN |
 
