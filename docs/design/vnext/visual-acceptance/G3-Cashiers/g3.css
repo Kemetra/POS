@@ -266,7 +266,8 @@ body {
   inline-size: 30px;
   block-size: 30px;
 }
-/* a name wraps and the row grows; it is never cut: two cashiers must not look alike (G-1 rule) */
+/* a name wraps and the row grows; it is never cut, so two cashiers cannot look alike
+   (stricter than G-1, which clamps at two lines) */
 .name {
   font-size: 15px;
   font-weight: 600;

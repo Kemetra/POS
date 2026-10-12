@@ -56,15 +56,19 @@ fs.mkdirSync(outDir, { recursive: true });
           // A name that wraps is information; a name that is cut is a failure.
           const names = [...document.querySelectorAll('.name')];
           const wrapped = names.filter((n) => n.clientHeight > parseFloat(getComputedStyle(n).lineHeight) * 1.5).length;
-          const clipped = names.filter((n) => n.scrollHeight > n.clientHeight + 3).length;
-          // Behind a dialog, nothing outside it may take focus.
-          const dialog = document.querySelector('[role="dialog"]');
-          const leaks = dialog
-            ? [...document.querySelectorAll('.rt a, .rt button, .rt input')].filter(
-                (n) => !dialog.contains(n) && !n.closest('[inert]'),
-              ).length
-            : 0;
-          return { out, spill, scroll, small, targets, wrapped, clipped, leaks };
+          // Cut either way: a clamp (vertical) or an ellipsis (sideways).
+          const clipped = names.filter(
+            (n) => n.scrollHeight > n.clientHeight + 3 || n.scrollWidth > n.clientWidth + 1,
+          ).length;
+          // Behind a dialog, nothing outside it may take focus, and the dialog itself must not be inert.
+          const dialog = document.querySelector('[role="dialog"], [role="alertdialog"]');
+          const focusable =
+            'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"]), [contenteditable]';
+          const live = (n) => !n.closest('[inert]');
+          const all = [...document.querySelectorAll('.rt')].flatMap((rt) => [...rt.querySelectorAll(focusable)]);
+          const leaks = dialog ? all.filter((n) => !dialog.contains(n) && live(n)).length : 0;
+          const deadDialog = dialog ? !live(dialog) || !all.some((n) => dialog.contains(n) && live(n)) : false;
+          return { out, spill, scroll, small, targets, wrapped, clipped, leaks, deadDialog };
         });
         let axe = null;
         if (axePath) {
@@ -83,6 +87,7 @@ fs.mkdirSync(outDir, { recursive: true });
         if (fit.targets) failed.push(`${fit.targets} control(s) below 44x44`);
         if (fit.clipped) failed.push(`${fit.clipped} name(s) clipped`);
         if (fit.leaks) failed.push(`${fit.leaks} control(s) focusable behind the dialog`);
+        if (fit.deadDialog) failed.push('the dialog itself is inert or has no reachable control');
         if (axe && axe.length) failed.push(`axe: ${axe.join(', ')}`);
         if (failed.length) {
           failures.push(`${f}: ${failed.join('; ')}`);
