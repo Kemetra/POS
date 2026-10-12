@@ -273,14 +273,30 @@ describe('focus', () => {
     expect(tile).toHaveFocus();
   });
 
-  it('stays on a banner the cashier is using', () => {
+  it('stays on a banner the cashier is using, and the notice is announced instead (Codex P2 on #651)', () => {
     render(<Frame banner />);
+    const live = screen.getByTestId('fit-block-live');
+    expect(live).toHaveAttribute('role', 'status');
+    expect(live).toBeEmptyDOMElement();
     const banner = screen.getByRole('button', { name: 'تم' });
     act(() => {
       banner.focus();
     });
     remeasure(false);
     expect(banner).toHaveFocus();
+    expect(live).toHaveTextContent('لا تتّسع الشاشة لعرض الدفع كاملًا.');
+    remeasure(true);
+    expect(live).toBeEmptyDOMElement();
+  });
+
+  it('is not announced twice: when focus moves to the heading, the live region stays empty', () => {
+    render(<Frame />);
+    act(() => {
+      screen.getByRole('button', { name: 'نقدي' }).focus();
+    });
+    remeasure(false);
+    expect(screen.getByRole('heading', { level: 2 })).toHaveFocus();
+    expect(screen.getByTestId('fit-block-live')).toBeEmptyDOMElement();
   });
 
   it('lands on <main>, never <body>, when the last control is gone', () => {

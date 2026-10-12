@@ -183,9 +183,15 @@ function focusIsLost(): boolean {
   return active === null || active === document.body;
 }
 
-/** Entering a block: focus on the screen (or already lost) moves to the notice heading. */
-function focusOnEntry(root: HTMLElement | null, heading: HTMLElement | null): void {
-  if (focusIsLost() || root?.contains(document.activeElement) === true) heading?.focus();
+/**
+ * Entering a block: focus on the screen (or already lost) moves to the notice
+ * heading. Returns whether it moved; when it did not (a banner or the navigation
+ * keeps it), the notice has to be announced another way.
+ */
+function focusOnEntry(root: HTMLElement | null, heading: HTMLElement | null): boolean {
+  if (!focusIsLost() && root?.contains(document.activeElement) !== true) return false;
+  heading?.focus();
+  return true;
 }
 
 /** Leaving a block: lost focus goes back to the last control used, else to <main>. */
@@ -215,23 +221,30 @@ function useLastFocused(rootRef: RefObject<HTMLElement | null>): RefObject<HTMLE
 /**
  * Focus across a block. On entry, focus inside the screen (or already lost)
  * moves to the notice heading, so the message is announced; focus on a banner
- * or the navigation stays where the cashier put it. On exit, lost focus goes
- * back to the control the cashier last used on the screen, else to <main>.
+ * or the navigation stays where the cashier put it, and the returned flag asks
+ * for the notice to be announced through the live region instead (never both,
+ * so it is not read twice). On exit, lost focus goes back to the control the
+ * cashier last used on the screen, else to <main>.
  */
 function useBlockFocus(
   blocked: boolean,
   rootRef: RefObject<HTMLElement | null>,
   headingRef: RefObject<HTMLHeadingElement | null>,
-): void {
+): boolean {
   const lastFocused = useLastFocused(rootRef);
   const wasBlocked = useRef(blocked);
+  const [announce, setAnnounce] = useState(false);
   useEffect(() => {
     const changed = blocked !== wasBlocked.current;
     wasBlocked.current = blocked;
     if (!changed) return;
-    if (blocked) focusOnEntry(rootRef.current, headingRef.current);
-    else focusOnExit(lastFocused.current, rootRef.current);
+    if (blocked) setAnnounce(!focusOnEntry(rootRef.current, headingRef.current));
+    else {
+      setAnnounce(false);
+      focusOnExit(lastFocused.current, rootRef.current);
+    }
   }, [blocked, rootRef, headingRef, lastFocused]);
+  return blocked && announce;
 }
 
 interface FitGuardProps {
@@ -270,13 +283,18 @@ export function FitGuard({ surface, children }: FitGuardProps): JSX.Element {
 
   useScanSuspended(blocked);
   useBlockedKeys(blocked, [rootRef, noticeRef]);
-  useBlockFocus(blocked, rootRef, headingRef);
+  const announce = useBlockFocus(blocked, rootRef, headingRef);
 
   return (
     <>
       <div ref={rootRef} className="v5-fit-guard" inert={blocked}>
         {children}
       </div>
+      {/* Always mounted, so a change is announced. Filled only when focus stayed
+          on a banner or the navigation; otherwise focus reads the heading. */}
+      <p className="v5-fit-guard__live" role="status" data-testid="fit-block-live">
+        {announce ? HEADING[surface] : ''}
+      </p>
       {blocked && (
         <section
           ref={noticeRef}
