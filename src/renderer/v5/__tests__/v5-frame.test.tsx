@@ -24,11 +24,12 @@ afterEach(() => {
 });
 
 /** Every media query false: a viewport under the 1024px floor. */
+/** Below the 1024px width floor; the height floors (RT-313) are met. */
 function stubTooSmallViewport(): void {
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => ({
-      matches: false,
+      matches: query.includes('min-height'),
       media: query,
       onchange: null,
       addListener: vi.fn(),

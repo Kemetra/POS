@@ -28,7 +28,7 @@ import { useOperatorSessionStore } from '../../stores/operator-session-store';
  * (Returns, Audit) that the router guard (FIX 1) would redirect away anyway.
  */
 export function NavRail(): JSX.Element | null {
-  const tier = useViewportTier();
+  const { tier } = useViewportTier();
   const role = useOperatorSessionStore((s) =>
     s.state.kind === 'signedIn' ? s.state.session.role : undefined,
   );

@@ -1,11 +1,12 @@
 import type { JSX } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import { TopBar } from './regions/TopBar';
 import { NavRail } from './regions/NavRail';
 import { ScreenTooSmall } from '../ui/states/ScreenTooSmall';
-import { useViewportTier } from './viewport/useViewportTier';
+import { useViewportTier, viewportShortfall } from './viewport/useViewportTier';
+import { useFocusOnReturn } from '../viewport/useFocusOnReturn';
 import { useConnectionState } from './connection/useConnectionState';
 import type { PairingStatus } from '../../shared/pairing-types';
 import { useOperatorSessionStore } from '../stores/operator-session-store';
@@ -23,6 +24,8 @@ interface AppShellProps {
  *
  * Composes TopBar (banner), NavRail (navigation), and MainContent (main / Outlet).
  * At < 1024 px the NavRail is suppressed and ScreenTooSmall replaces MainContent.
+ * RT-313: the same below 600 px of height, with the notice's height copy. On
+ * return, focus lands on MainContent unless the remounted screen took it.
  *
  * T045 (US4): wires the ?conn= dev toggle to useConnectionState.
  * The wiring is gated by import.meta.env.DEV so it is tree-shaken from
@@ -30,7 +33,9 @@ interface AppShellProps {
  * for the same reason.
  */
 export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
-  const tier = useViewportTier();
+  const shortfall = viewportShortfall(useViewportTier());
+  const contentRef = useRef<HTMLElement>(null);
+  useFocusOnReturn(shortfall !== null, () => contentRef.current);
   const { state: connectionState, setState: setConnectionState } = useConnectionState();
   const sessionState = useOperatorSessionStore((s) => s.state);
   // T291 — printer-failure banner state, polled from sales.subscribe(banner_state).
@@ -59,7 +64,7 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
   const terminalLabel = pairedStatus?.terminal_label ?? '';
   const notice = sessionState.kind === 'signedIn' ? sessionState.forced_close_notice : undefined;
 
-  if (tier === 'too-small') {
+  if (shortfall !== null) {
     return (
       <div className="app-shell" data-testid="app-shell" dir="rtl">
         <TopBar
@@ -68,7 +73,7 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
           terminalLabel={terminalLabel}
           connectionState={connectionState}
         />
-        <ScreenTooSmall />
+        <ScreenTooSmall shortfall={shortfall} />
       </div>
     );
   }
@@ -86,7 +91,7 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
       />
       <div className="app-shell__body">
         <NavRail />
-        <main className="app-shell__content">
+        <main ref={contentRef} className="app-shell__content" tabIndex={-1}>
           {notice !== undefined ? (
             <ShiftClosedBanner
               closedAt={notice.closed_at}

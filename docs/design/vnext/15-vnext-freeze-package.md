@@ -361,7 +361,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-K3 | PIN mismatch | «الرقمان غير متطابقين.» | warning |
 | **Frame** | | | |
 | M-F1 | Ready after restart (replaces English) | «الجهاز مرتبط وجاهز.» · «متابعة» | neutral |
-| M-F2 | Screen too small | «الشاشة أصغر من 1024×768. كبّر النافذة أو استخدم شاشة أكبر.» | warning |
+| M-F2 | Screen too small. Three variants (RT-313; owner-approved as RT-312 D5, 2026-10-08): **width** when the effective viewport is narrower than 1024 CSS px, **height** when it is shorter than 600 CSS px, **both** when it is under both floors (the width heading with the height action). `1024×768`, `100%` and `125%` are Western digits in `<bdi dir="ltr">` runs | width: «الشاشة أصغر من 1024×768. كبّر النافذة أو استخدم شاشة أكبر.» · height: «ارتفاع الشاشة أقل من الحد المدعوم. كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.» · both: «الشاشة أصغر من 1024×768. كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.» | warning |
 
 ---
 

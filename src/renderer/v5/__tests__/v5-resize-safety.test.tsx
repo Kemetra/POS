@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import '@testing-library/jest-dom/vitest';
@@ -15,6 +15,8 @@ import { V5Frame } from '../frame/V5Frame';
 import { LiveSaleWorkspace } from '../sale/LiveSaleWorkspace';
 import { addLineByScan, makeBridges, signIn } from './__helpers__/live-sale-harness';
 import { installViewport, resizeTo, settleTier } from './__helpers__/viewport-bands';
+import { ScanGuardHost, resetScanGuardForTests } from '../../scan/ScanGuardHost';
+import { SCAN_UNAVAILABLE_MESSAGE } from '../../scan/scan-messages';
 
 /**
  * RT-241 responsive preflight — resize safety (regression only). Dropping
@@ -22,19 +24,45 @@ import { installViewport, resizeTo, settleTier } from './__helpers__/viewport-ba
  * back must not lose the cashier's cart or payment authority, must not commit
  * anything, and must not claim a completion. No cart or payment contract is
  * changed by W1-A; this records what the frame does to the screens it hosts.
+ *
+ * RT-313 (RT-312 D6): the 600px height floor keeps the same unmount/remount,
+ * so every walk runs across the width floor, the height floor and both.
  */
 
-const TOO_SMALL = /^الشاشة أصغر من 1024×768\s?\.$/;
+type Floor = 'width' | 'height' | 'both';
 
-async function walkTheBoundary(): Promise<void> {
-  resizeTo(1023);
+/** For each floor: the size just under it, then the size just back over it (CSS px). */
+const WALKS: Record<Floor, readonly [readonly [number, number], readonly [number, number]]> = {
+  width: [
+    [1023, 800],
+    [1024, 800],
+  ],
+  height: [
+    [1280, 599],
+    [1280, 600],
+  ],
+  both: [
+    [1023, 599],
+    [1024, 600],
+  ],
+};
+
+const FLOORS = Object.keys(WALKS) as Floor[];
+
+function notice(): Element | null {
+  return document.querySelector('.screen-too-small');
+}
+
+async function walkTheBoundary(floor: Floor): Promise<void> {
+  const [under, over] = WALKS[floor];
+  resizeTo(...under);
   await settleTier();
-  expect(screen.getByRole('heading', { name: TOO_SMALL })).toBeInTheDocument();
-  resizeTo(1024);
+  expect(notice()).toHaveAttribute('data-shortfall', floor);
+  resizeTo(...over);
   await settleTier();
-  resizeTo(1280);
+  resizeTo(1280, 800);
   await settleTier();
-  expect(screen.queryByRole('heading', { name: TOO_SMALL })).not.toBeInTheDocument();
+  expect(notice()).toBeNull();
 }
 
 afterEach(() => {
@@ -47,7 +75,7 @@ afterEach(() => {
   delete (window as unknown as { api?: unknown }).api;
 });
 
-describe('resize 1280 → 1023 → 1024 → 1280 with a non-empty cart', () => {
+describe.each(FLOORS)('resize across the %s floor and back with a non-empty cart', (floor) => {
   it('keeps the same cart and its lines; no new cart is created', async () => {
     installViewport(1280);
     signIn();
@@ -91,7 +119,7 @@ describe('resize 1280 → 1023 → 1024 → 1280 with a non-empty cart', () => {
     const cartId = useCartStore.getState().activeCart?.cart_id;
     expect(cartId).toBe('cart-1');
 
-    await walkTheBoundary();
+    await walkTheBoundary(floor);
 
     const lines = await screen.findByRole('list', { name: 'أصناف السلة' });
     expect(within(lines).getByText('بنادول')).toBeInTheDocument();
@@ -149,7 +177,7 @@ const APPLIED_ATTEMPT = {
   ],
 };
 
-describe('resize 1280 → 1023 → 1024 → 1280 during a live Checkout', () => {
+describe.each(FLOORS)('resize across the %s floor and back during a live Checkout', (floor) => {
   it('keeps the attempt and its applied tender, commits nothing and claims no completion', async () => {
     installViewport(1280);
     useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true });
@@ -194,7 +222,7 @@ describe('resize 1280 → 1023 → 1024 → 1280 during a live Checkout', () => 
     usePaymentStore.getState().applyAttemptSnapshot(APPLIED_ATTEMPT);
     expect(await screen.findByTestId('payment-surface-confirm')).toBeInTheDocument();
 
-    await walkTheBoundary();
+    await walkTheBoundary(floor);
 
     expect(await screen.findByTestId('payment-surface-confirm')).toBeInTheDocument();
     const slice = usePaymentStore.getState().paymentSlice;
@@ -203,5 +231,73 @@ describe('resize 1280 → 1023 → 1024 → 1280 during a live Checkout', () => 
     expect(usePaymentStore.getState().envelope?.handoff_action_id).toBe('handoff-001');
     expect(confirm).not.toHaveBeenCalled();
     expect(screen.queryByTestId('payment-surface-settled')).not.toBeInTheDocument();
+  });
+});
+
+describe('scanner input while the height notice shows (RT-313)', () => {
+  it('reaches no field and adds nothing; the cart is intact on return', async () => {
+    resetScanGuardForTests();
+    installViewport(1280, 800);
+    signIn();
+    const bridges = makeBridges();
+    // Remounting the Sale re-reads its active cart from main (RT-116 hydration).
+    bridges.snapshot.mockResolvedValue({
+      kind: 'ok',
+      snapshot: {
+        cart_id: 'cart-1',
+        state: CartState.editing,
+        lines: [
+          {
+            line_id: 'line-1',
+            display_name: 'بنادول',
+            quantity: 1,
+            unit_price_minor: 1500,
+            line_subtotal_minor: 1500,
+            note: null,
+            version: 1,
+          },
+        ],
+        discount_placeholders: [],
+        paid: false,
+        envelope: null,
+      },
+    });
+    render(
+      <MemoryRouter initialEntries={['/app/cart']}>
+        <ScanGuardHost />
+        <V5Frame>
+          <LiveSaleWorkspace
+            cartBridge={bridges.cart}
+            catalogueBridge={bridges.catalogue}
+            onPaymentContinue={vi.fn()}
+          />
+        </V5Frame>
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await addLineByScan(user);
+    bridges.lookupBarcode.mockClear();
+    bridges.add.mockClear();
+
+    resizeTo(1280, 599);
+    await settleTier();
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(document.activeElement).toBe(heading);
+    expect(document.querySelectorAll('input, textarea')).toHaveLength(0);
+
+    // A scanner burst: keys back to back, ending in Enter.
+    for (const key of '6223004355218') fireEvent.keyDown(heading, { key });
+    fireEvent.keyDown(heading, { key: 'Enter' });
+
+    expect(bridges.lookupBarcode).not.toHaveBeenCalled();
+    expect(bridges.add).not.toHaveBeenCalled();
+    expect(screen.getByTestId('scan-notice')).toHaveTextContent(SCAN_UNAVAILABLE_MESSAGE);
+
+    resizeTo(1280, 800);
+    await settleTier();
+    const lines = await screen.findByRole('list', { name: 'أصناف السلة' });
+    expect(within(lines).getAllByText('بنادول')).toHaveLength(1);
+    expect(screen.getByRole('textbox', { name: 'حقل التقاط مسح الباركود' })).toHaveValue('');
+    expect(bridges.add).not.toHaveBeenCalled();
   });
 });

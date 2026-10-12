@@ -39,7 +39,7 @@ function mockMatchMedia(width: number): void {
           ? width >= 1280
           : query.includes('min-width: 1024px')
             ? width >= 1024
-            : false,
+            : query.includes('min-height'),
         media: query,
         onchange: null,
         addListener: vi.fn(),

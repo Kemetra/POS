@@ -21,7 +21,7 @@ interface Props {
  */
 export function StuckShiftBadge({ count }: Props): JSX.Element | null {
   const state = useOperatorSessionStore((s) => s.state);
-  const tier = useViewportTier();
+  const { tier } = useViewportTier();
 
   if (state.kind !== 'signedIn') return null;
   if (state.session.role === 'cashier') return null;

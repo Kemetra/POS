@@ -35,6 +35,35 @@
   /* DESIGN.md Motion: 220 ms dialog in, ease-out, from an already-visible start.
      The role alias drops to 0 ms under reduced motion (foundation.css). */
   animation: v5-dialog-in var(--motion-dialog-in, 220ms) var(--motion-ease, ease-out) both;
+  /* RT-313 (RT-312 B2): never taller than the viewport. A taller dialog scrolls
+     inside the panel, so it is no longer clipped at both ends. The fallback
+     gutter covers a host outside the frame. */
+  max-block-size: calc(100dvh - 2 * var(--v5-gutter, var(--space-3)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Focus not obscured (WCAG 2.4.11, 04-design-language): a field focused near
+     the foot scrolls clear of the pinned action row — its 44px controls, its
+     bottom padding and its top margin. */
+  scroll-padding-block-end: calc(var(--v5-target, 44px) + var(--space-5) + var(--space-2));
+}
+
+/*
+ * RT-313 — the action row stays pinned at the foot of a scrolling panel. It is
+ * the panel's last <div> (ConfirmDialog, shift and cart dialogs), or the last
+ * <div> of a form that ends the panel (ReauthDialog). Chromium pins a sticky
+ * box inside the scroll container's padding, so the panel's bottom padding
+ * moves onto the row: otherwise scrolled content shows through that strip.
+ */
+.v5-dialog > div:last-child,
+.v5-dialog > form:last-child > div:last-child {
+  position: sticky;
+  inset-block-end: 0;
+  padding-block-end: var(--space-5);
+  background: var(--color-surface);
+}
+
+.v5-dialog:has(> div:last-child, > form:last-child > div:last-child) {
+  padding-block-end: 0;
 }
 
 @keyframes v5-dialog-in {
