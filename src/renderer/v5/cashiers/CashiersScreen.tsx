@@ -194,10 +194,12 @@ export function CashiersScreen({ operator, pairing }: Props): JSX.Element {
         <PinDialog
           mode={dialog.mode}
           name={dialog.cashier.display_name}
-          pending={pending}
+          // `busy`, not `pending`: after a refusal the dialog stays open while
+          // the list re-reads, and no second Save may go out on stale state.
+          pending={busy}
           onSave={onSave}
           onCancel={() => {
-            if (!pending) setDialog(null);
+            if (!busy) setDialog(null);
           }}
         />
       )}

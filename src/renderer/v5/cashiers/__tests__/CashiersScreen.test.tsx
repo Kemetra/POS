@@ -500,6 +500,36 @@ describe('RT-424 CashiersScreen — one action at a time', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
+  it('after a refusal, the open dialog stays disabled until the re-read lands', async () => {
+    const reread = deferred<ListCashierPinStatusResponse>();
+    const bridge = makeBridge({
+      reads: [cashiers(...ROSTER), reread.promise],
+      provision: [{ kind: 'refused', category: 'not_ready' }],
+    });
+    const user = userEvent.setup();
+    renderScreen(bridge);
+    await openFirstPin(user);
+    await typePins(user, '4729', '4729');
+    await user.click(screen.getByRole('button', { name: C.save }));
+    expect(await screen.findByTestId('pin-dialog-message')).toHaveTextContent(C.notReady);
+
+    // The re-read is still in flight: the fields, «حفظ» and «إلغاء» stay disabled.
+    expect(screen.getByLabelText(C.newPin)).toBeDisabled();
+    expect(screen.getByRole('button', { name: C.cancel })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      reread.resolve(cashiers(...ROSTER));
+      await reread.promise;
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText(C.newPin)).toBeEnabled();
+    });
+    expect(screen.getByLabelText(C.newPin)).toHaveFocus();
+  });
+
   it('a re-read keeps the rows on screen and disables every action until it lands', async () => {
     const reread = deferred<ListCashierPinStatusResponse>();
     const bridge = makeBridge({ reads: [cashiers(...ROSTER), reread.promise] });
