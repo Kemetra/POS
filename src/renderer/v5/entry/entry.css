@@ -537,7 +537,9 @@
 .v5-entry__center {
   display: grid;
   flex: 1;
-  place-items: center;
+  /* safe: a card taller than the stage (the revoked card at the 600px floor,
+     RT-313) starts at the top, so its heading stays reachable by scrolling */
+  place-items: safe center;
   min-block-size: 0;
   padding: var(--entry-gutter);
   overflow-y: auto;

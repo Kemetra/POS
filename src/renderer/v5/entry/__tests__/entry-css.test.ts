@@ -111,6 +111,11 @@ describe('RT-244 PR2 entry.css — the Ready and pairing card', () => {
     expect(pxVar(compact, 'entry-card-pad')).toBe(28);
   });
 
+  it('centres the card safely, so an oversized card scrolls from its top (RT-313)', () => {
+    expect(ruleBody(css, '.v5-entry__center')).toMatch(/place-items:\s*safe center/);
+    expect(ruleBody(css, '.v5-entry__center')).toMatch(/overflow-y:\s*auto/);
+  });
+
   it('sets the pairing code in the mono token, LTR-aligned by the shared field rule', () => {
     expect(ruleBody(css, '.v5-entry__code-input')).toMatch(
       /font-family:\s*var\(--font-family-mono\)/,
