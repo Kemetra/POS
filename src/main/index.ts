@@ -968,6 +968,7 @@ singleInstanceReady
         cashierAdmissions: cashierAdmissionClient,
         logger: mainLogger,
       }),
+      logger: mainLogger,
     });
     registerReauthHandler(guardedIpcMain, {
       reauthHandler: new ReauthHandler({

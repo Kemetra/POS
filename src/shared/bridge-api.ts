@@ -564,8 +564,11 @@ export interface OperatorBridgeAPI {
    * RT-424 (RT-251 doc 19 §2) — the device roster with each cashier's PIN
    * state on this terminal, for Manager → Cashiers. Manager and admin only
    * (cashier → `role_mismatch`); scope comes from the pairing, never the
-   * renderer. Read-only: no write, no audit event. Refused while locked (not
-   * on the locked-session allowlist). A separate method from
+   * renderer. Read-only: no write, no audit event. Not on the locked-session
+   * allowlist: while the session is locked the promise REJECTS (the main-side
+   * lock guard throws `SessionLockedError` before the handler runs), so a
+   * caller must catch it; a lock that lands during the read resolves to
+   * `{ kind: 'refused', category: 'not_signed_in' }`. A separate method from
    * `listBranchRoster`, which sign-in calls without a role gate.
    * Optional in the type (like `reauthenticate`) so existing renderer test
    * doubles stay valid; the production preload always provides it.

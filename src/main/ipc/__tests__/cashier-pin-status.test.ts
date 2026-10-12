@@ -59,15 +59,22 @@ describe('RT-424 registerCashierPinStatusHandler', () => {
 
   it('a throwing handler → invalid_input, nothing thrown across the bridge', async () => {
     const fake = fakeIpcMain();
+    const warn = vi.fn();
     registerCashierPinStatusHandler(fake.ipcMain, {
       cashierPinStatusHandler: {
-        listCashierPinStatus: () => Promise.reject(new Error('boom: user-neutral-secret')),
+        listCashierPinStatus: () => Promise.reject(new TypeError('boom: user-neutral-secret')),
       },
+      logger: { warn },
     });
     await expect(fake.invoke(LIST)).resolves.toEqual({
       kind: 'refused',
       category: 'invalid_input',
     });
+    expect(warn).toHaveBeenCalledWith(
+      { event: 'operator.cashier_pin_status.failed', err_name: 'TypeError' },
+      'cashier pin status failed',
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('user-neutral-secret');
   });
 });
 

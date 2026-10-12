@@ -184,6 +184,7 @@ describe('RT-424 CashierPinStatusHandler — role gate and scope', () => {
       kind: 'refused',
       category: 'not_signed_in',
     });
+    expect(h.getStatus).not.toHaveBeenCalled();
     expect(h.listRoster).not.toHaveBeenCalled();
   });
 
@@ -283,6 +284,22 @@ describe('RT-424 CashierPinStatusHandler — the state of each roster entry', ()
     });
   });
 
+  // Sign-in parity: `new Date('not-a-date') > now` is false, so sign-in treats the
+  // row as not locked and lets the cashier try a PIN. The read must agree.
+  it('reads an unparseable lockout_until as ready, as sign-in does', async () => {
+    seedPin({
+      clerk: AMIRA.operator_id,
+      user_id: AMIRA.user_id,
+      failed: 5,
+      lockout_until: 'not-a-date',
+    });
+    const res = await harness({ roster: roster(AMIRA) }).handler.listCashierPinStatus();
+    expect(res).toEqual({
+      kind: 'cashiers',
+      cashiers: [{ id: AMIRA.operator_id, display_name: AMIRA.display_name, pin: 'ready' }],
+    });
+  });
+
   it('carries locked_until only on a locked row', async () => {
     seedPin({ clerk: BASSEM.operator_id, user_id: BASSEM.user_id });
     seedPin({
@@ -334,6 +351,12 @@ describe('RT-424 CashierPinStatusHandler — the session during the awaits', () 
       'signs out',
       (h) => {
         h.setSession(null);
+      },
+    ],
+    [
+      'changes backend session',
+      (h) => {
+        h.setSession(managerSession({ backend_session_id: 'bsess-OTHER' }));
       },
     ],
     [
