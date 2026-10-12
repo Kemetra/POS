@@ -66,7 +66,7 @@ repeating a completed sale. The boundaries below are fixed.
 | Manager approval | In-sale gated actions | cashier requests, manager approves | **RT-114 To Do**: panel frozen, auth not designed | I3-Manager |
 | Lock / restored | Inactivity or a manual lock | everyone | RT-116 **Done**, RT-117 Done, RT-161 In Review (privacy) | I3-Locked, I3-Restored |
 | Shift / cash-up | Frame «الوردية» and the Sale shift banner | cashier opens and closes; manager sees status | RT-17 **Done** (screens shipped, V5) | VN-R11, K28/K29 |
-| Manager → Cashiers (first PIN, reset, unlock) | Frame (manager) | manager / admin | RT-235 merged (functional); **VNext owns final IA** (RT-159 comment 11093) | none yet (see §6 gap G-3) |
+| Manager → Cashiers (first PIN, reset, unlock) | Frame (manager) | manager / admin | RT-235 merged (functional); **VNext owns final IA** (RT-159 comment 11093) | G3-* in [`G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html) (§6 G-3, closed by RT-251) |
 | Device revoked / check again | Boot, or any 401 confirm | everyone | RT-215 merged | none (restyle only) |
 | Pairing / Ready | First run, re-pair | installer / manager | 002 / RT-202 / RT-228 | none (restyle only) |
 | Diagnostics, Audit, Inventory, Settings | Frame | manager / admin only (OD-6) | legacy placeholders | VN-M5/M6 |
@@ -120,7 +120,7 @@ Manager → Cashiers (M-states, manager surface; RT-235 behaviour ✅, VNext pre
 | # | State | Primary | Blocked | Status | Evidence |
 |---|---|---|---|---|---|
 | M1 | Roster loading / unreachable | retry | all row actions | «تعذّر تحميل قائمة الكاشير — تحقق من الاتصال» | backend stopped |
-| M2 | Cashier with **no PIN on this terminal** | «تعيين أول رقم سري» | unlock, reset | badge «بدون رقم سري» | needs D-M1 (a status read exists? see §6 G-3) |
+| M2 | Cashier with **no PIN on this terminal** | «تعيين أول رقم سري» | unlock, reset | badge «بدون رقم سري» | `no_pin` from the D-M1 status read ([19](19-d-m1-cashier-pin-status.md) §2–§3, RT-251) |
 | M3 | Cashier with a PIN | — | «تعيين أول رقم سري» | badge «جاهز» | — |
 | M4 | Cashier locked out | «فك القفل» | — | badge «مقفل» | — |
 | M5 | Setting PIN (entry + confirm) | «حفظ» | — | two fields, digits only, **4–6** (the cashier PIN rule: `PIN_RE` in `pin-management.ts`; 6–8 is the separate manager-PIN rule) | mismatch refused inline |
@@ -388,11 +388,7 @@ its states at **1024×768 and 1280×800**, light and `forced-colors`, and compar
 - ~~**G-1** Sign-in and PIN (VN-03/04), the F-14 recompose, **plus the Ready (M-F1) and pairing (VN-02) screens**. All four need accepted references at 1024 and 1280 before W1-D.~~ **Closed by RT-246**: the references are in [`visual-acceptance/G1-Entry-screens/`](visual-acceptance/G1-Entry-screens/G1-Spec.html) (owner-approved 2026-10-11).
 - **G-2** Shift open / close / status (RT-17 shipped V5 screens, which are the de-facto
   reference: K28/K29).
-- **G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون
-  رقم سري» truthfully. The read contract, the state → action matrix and the copy are proposed in
-  [19](19-d-m1-cashier-pin-status.md) (RT-251). The brief, the references in
-  [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html) and the copy are
-  owner-approved (2026-10-12).
+- ~~**G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون رقم سري» truthfully.~~ **Closed by RT-251**: the read contract, the state → action matrix and the copy are in [19](19-d-m1-cashier-pin-status.md), and the references are in [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html) (owner-approved 2026-10-12). Behaviour stays PENDING the implementation slice.
 - **G-4** Restart re-attach (S19).
 - **G-5** Undo notice (A1).
 
@@ -445,7 +441,7 @@ Every implementation slice:
 | **D-N1** | Sale number display / quotability | S14, returns lookup | Short display form + recent-sales list for returns |
 | **D-P1** | External-card decline / UNKNOWN input | S11, S12 trigger | Outcome selector on card entry (approved / declined / not sure) under RT-10 |
 | **D-P2** | One-step vs two-step cash commit | W1-C variant | Keep two-step (today); revisit after W1-C |
-| **D-M1** | Manager → Cashiers PIN-status read | G-3, M2–M4 | Add a read model; then design the surface. Proposed in [19](19-d-m1-cashier-pin-status.md) (RT-251) |
+| ~~**D-M1**~~ | ~~Manager → Cashiers PIN-status read~~ | G-3, M2–M4 | **Closed by RT-251** (owner-approved 2026-10-12): the read contract, matrix and copy are in [19](19-d-m1-cashier-pin-status.md). Planning is done; what remains is an Implementation slice (main-process read + IPC, renderer, tests, §A4 re-check), not a Lane C decision |
 | **RT-113 / 114 / 116 S4–S6 / 158 / 28 / 161** | existing contracts | S5, S6, S15–S19, M-O*, M-A*, M-H* | Unchanged owners; their UI slices follow their contracts |
 
 **Not proposed:** a big-bang rewrite; any slice touching IPC/DB/API/payment/sync/ERP without its
