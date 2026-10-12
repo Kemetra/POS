@@ -8,6 +8,7 @@ import {
 import {
   OPERATOR_IPC_CHANNELS,
   REAUTH_IPC_CHANNELS,
+  CASHIER_PIN_STATUS_IPC_CHANNELS,
   RESUME_STATE_IPC_CHANNELS,
   SESSION_LOCK_IPC_CHANNELS,
 } from '../../shared/operator/channels';
@@ -184,6 +185,8 @@ describe('preload bridge', () => {
         'getResumeState',
         // RT-358 — in-place manager re-auth
         'reauthenticate',
+        // RT-424 — manager-only cashier PIN status
+        'listCashierPinStatus',
       ].sort(),
     );
   });
@@ -201,6 +204,21 @@ describe('preload bridge', () => {
       kind: 'reauthenticated',
     });
     expect(ipcRendererInvoke).toHaveBeenCalledWith(REAUTH_IPC_CHANNELS.REAUTHENTICATE, req);
+  });
+
+  it('RT-424: operator.listCashierPinStatus invokes its channel with no arguments', async () => {
+    ipcRendererInvoke.mockResolvedValue({ kind: 'cashiers', cashiers: [] });
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    await expect(api.operator.listCashierPinStatus?.()).resolves.toEqual({
+      kind: 'cashiers',
+      cashiers: [],
+    });
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(CASHIER_PIN_STATUS_IPC_CHANNELS.LIST);
   });
 
   it('operator S5 methods invoke the documented IPC channels', async () => {

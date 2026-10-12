@@ -11,6 +11,7 @@ import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
 import { OnlineCredentialVerifier } from './operator/online-credential-verifier.js';
 import { ReauthHandler } from './operator/reauth-handler.js';
 import { registerReauthHandler } from './ipc/reauth.js';
+import { registerCashierPinStatusHandler } from './ipc/cashier-pin-status.js';
 import { createLockStateReader, createSafePointProbe } from './operator/lock-state-reader.js';
 import { wireSessionStatePush } from './operator/session-state-push.js';
 import { wireSessionLockAudit } from './operator/session-lock-audit.js';
@@ -184,6 +185,7 @@ import {
   withOfflineGrantPairing,
 } from './operator/offline-grant-wiring.js';
 import { RosterHandler } from './operator/roster-handler.js';
+import { CashierPinStatusHandler } from './operator/cashier-pin-status.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
 // RT-215 — device-revoked state + pairing recovery.
 import {
@@ -955,6 +957,18 @@ singleInstanceReady
         logger: mainLogger,
       }),
       getLockState: getOperatorLockState,
+    });
+    // RT-424 (RT-251 doc 19 §2) — manager-only cashier PIN status for
+    // Manager → Cashiers. Device roster + this terminal's PIN rows; read-only.
+    registerCashierPinStatusHandler(guardedIpcMain, {
+      cashierPinStatusHandler: new CashierPinStatusHandler({
+        db,
+        sessionManager: operatorSessionManager,
+        pairingStore,
+        cashierAdmissions: cashierAdmissionClient,
+        logger: mainLogger,
+      }),
+      logger: mainLogger,
     });
     registerReauthHandler(guardedIpcMain, {
       reauthHandler: new ReauthHandler({

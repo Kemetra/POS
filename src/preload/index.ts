@@ -33,6 +33,7 @@ import type {
   UnlockCashierResponse,
   UnlockSessionRequest,
   UnlockSessionResponse,
+  ListCashierPinStatusResponse,
   ReauthenticateRequest,
   ReauthenticateResponse,
   LockStateView,
@@ -53,6 +54,7 @@ import {
   OPERATOR_IPC_CHANNELS,
   RESUME_STATE_IPC_CHANNELS,
   REAUTH_IPC_CHANNELS,
+  CASHIER_PIN_STATUS_IPC_CHANNELS,
   SESSION_LOCK_IPC_CHANNELS,
 } from '../shared/operator/channels';
 
@@ -115,6 +117,11 @@ const operator: OperatorBridgeAPI = {
   // RT-358 — in-place manager re-auth after `reauth_required`.
   reauthenticate: (req: ReauthenticateRequest) =>
     ipcRenderer.invoke(REAUTH_IPC_CHANNELS.REAUTHENTICATE, req) as Promise<ReauthenticateResponse>,
+  // RT-424 — manager-only cashier PIN status (no renderer arguments).
+  listCashierPinStatus: () =>
+    ipcRenderer.invoke(
+      CASHIER_PIN_STATUS_IPC_CHANNELS.LIST,
+    ) as Promise<ListCashierPinStatusResponse>,
   onSessionStateChanged: (cb) => subscribeSessionState(ipcRenderer, cb),
   // RT-352 — the draft cart main re-attached at sign-in (ids + a count only).
   getResumeState: () =>

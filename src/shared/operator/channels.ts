@@ -68,4 +68,13 @@ export const REAUTH_IPC_CHANNELS = {
   REAUTHENTICATE: 'operator:reauthenticate',
 } as const;
 
+/**
+ * RT-424 (RT-251 doc 19 §2) — the manager-only cashier PIN-status read. Its
+ * own registrar (`ipc/cashier-pin-status.ts`); not on the locked-session
+ * allowlist (refused while locked).
+ */
+export const CASHIER_PIN_STATUS_IPC_CHANNELS = {
+  LIST: 'operator:list-cashier-pin-status',
+} as const;
+
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

@@ -462,6 +462,40 @@ export interface ListBranchRosterSuccess {
 export type ListBranchRosterResponse = ListBranchRosterSuccess | OperatorRefusal;
 
 /**
+ * RT-424 (RT-251 doc 19 §2) — a cashier's PIN state on THIS terminal.
+ *
+ *   - `no_pin`: no PIN row matches the cashier (the sign-in match).
+ *   - `ready`: a row matches and is not locked out. It does not promise that
+ *     sign-in succeeds (admission, unsealing and the pairing epoch can refuse).
+ *   - `locked`: a row matches and `lockout_until > now`. The lock ends on its own.
+ */
+export type CashierPinState = 'no_pin' | 'ready' | 'locked';
+
+/**
+ * RT-424 — one roster cashier with their PIN state. Fixed enums plus the
+ * roster `display_name`; the PIN hash and salt, the failure count, `user_id`
+ * and the tenant, branch and terminal ids never cross the bridge.
+ */
+export interface CashierPinStatus {
+  /** The roster id (`operator_id`), as `listBranchRoster` gives it. */
+  id: string;
+  display_name: string;
+  pin: CashierPinState;
+  /** ISO 8601, present only when `pin === 'locked'` (doc 19 §7 D3). */
+  locked_until?: string;
+}
+
+export type ListCashierPinStatusRefusalCategory =
+  | 'not_signed_in'
+  | 'role_mismatch'
+  | 'no_connection'
+  | 'invalid_input';
+
+export type ListCashierPinStatusResponse =
+  | { kind: 'cashiers'; cashiers: CashierPinStatus[] }
+  | { kind: 'refused'; category: ListCashierPinStatusRefusalCategory };
+
+/**
  * `operator.*` namespace. Manager/admin paths only at S1; cashier,
  * takeover-confirm, roster, audit-event-emit, and PIN management land
  * in later slices behind their gates.
@@ -525,6 +559,21 @@ export interface OperatorBridgeAPI {
    * doubles stay valid; the production preload always provides it.
    */
   reauthenticate?(req: ReauthenticateRequest): Promise<ReauthenticateResponse>;
+
+  /**
+   * RT-424 (RT-251 doc 19 §2) — the device roster with each cashier's PIN
+   * state on this terminal, for Manager → Cashiers. Manager and admin only
+   * (cashier → `role_mismatch`); scope comes from the pairing, never the
+   * renderer. Read-only: no write, no audit event. Not on the locked-session
+   * allowlist: while the session is locked the promise REJECTS (the main-side
+   * lock guard throws `SessionLockedError` before the handler runs), so a
+   * caller must catch it; a lock that lands during the read resolves to
+   * `{ kind: 'refused', category: 'not_signed_in' }`. A separate method from
+   * `listBranchRoster`, which sign-in calls without a role gate.
+   * Optional in the type (like `reauthenticate`) so existing renderer test
+   * doubles stay valid; the production preload always provides it.
+   */
+  listCashierPinStatus?(): Promise<ListCashierPinStatusResponse>;
 
   /**
    * RT-117 (RT-116 §7.2) — lock state + preserved-sale TOTALS for the lock

@@ -12,6 +12,8 @@ import type {
   ForceCloseShiftRequest,
   ForceCloseShiftResponse,
   ListBranchRosterResponse,
+  ListCashierPinStatusResponse,
+  CashierPinStatus,
   ListStuckShiftsResponse,
   ProvisionCashierPinRequest,
   ProvisionCashierPinResponse,
@@ -69,6 +71,8 @@ describe('operator bridge typed surface (T008)', () => {
       | 'getResumeState'
       // RT-358 (RT-247 D-A1) — in-place manager re-auth
       | 'reauthenticate'
+      // RT-424 (RT-251 doc 19) — manager-only cashier PIN status
+      | 'listCashierPinStatus'
     >();
   });
 
@@ -183,6 +187,23 @@ describe('operator bridge typed surface (T008)', () => {
     expectTypeOf<
       Awaited<ReturnType<OperatorBridgeAPI['unlockSession']>>
     >().toEqualTypeOf<UnlockSessionResponse>();
+  });
+
+  it('RT-424: listCashierPinStatus takes no arguments and resolves to the closed union', () => {
+    type Method = NonNullable<OperatorBridgeAPI['listCashierPinStatus']>;
+    expectTypeOf<Parameters<Method>>().toEqualTypeOf<[]>();
+    expectTypeOf<Awaited<ReturnType<Method>>>().toEqualTypeOf<ListCashierPinStatusResponse>();
+    expectTypeOf<ListCashierPinStatusResponse>().toEqualTypeOf<
+      | { kind: 'cashiers'; cashiers: CashierPinStatus[] }
+      | {
+          kind: 'refused';
+          category: 'not_signed_in' | 'role_mismatch' | 'no_connection' | 'invalid_input';
+        }
+    >();
+    expectTypeOf<keyof CashierPinStatus>().toEqualTypeOf<
+      'id' | 'display_name' | 'pin' | 'locked_until'
+    >();
+    expectTypeOf<CashierPinStatus['pin']>().toEqualTypeOf<'no_pin' | 'ready' | 'locked'>();
   });
 
   it('getLockState takes no arguments and resolves to LockStateView', () => {
