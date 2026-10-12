@@ -26,18 +26,24 @@ function clips(el: Element): boolean {
   return CLIPPING.has(getComputedStyle(el).overflowY);
 }
 
+/** The ancestors of `el` that clip it, nearest first, up to and including `stop`. */
+function clippingAncestors(el: Element, stop: Element): Element[] {
+  const found: Element[] = [];
+  for (let a = el.parentElement; a !== null; a = a.parentElement) {
+    if (clips(a)) found.push(a);
+    if (a === stop) break;
+  }
+  return found;
+}
+
 /** The visible block-axis extent of `el` once every clipping ancestor up to `stop` is applied. */
 function visibleBlockSize(el: Element, stop: Element): number {
   const rect = el.getBoundingClientRect();
   let top = rect.top;
   let bottom = rect.bottom;
-  for (let a = el.parentElement; a !== null; a = a.parentElement) {
-    if (clips(a)) {
-      const box = a.getBoundingClientRect();
-      top = Math.max(top, box.top);
-      bottom = Math.min(bottom, box.bottom);
-    }
-    if (a === stop) break;
+  for (const box of clippingAncestors(el, stop).map((a) => a.getBoundingClientRect())) {
+    top = Math.max(top, box.top);
+    bottom = Math.min(bottom, box.bottom);
   }
   return Math.max(0, bottom - top);
 }
@@ -77,24 +83,18 @@ function rowsFit(list: HTMLElement, stop: Element): boolean {
 export function surfaceFits(root: Element, stop: Element): boolean {
   // No layout engine (the test DOM): <main> has no height, so there is nothing to judge.
   if (stop.getBoundingClientRect().height === 0) return true;
-  for (const el of Array.from(root.querySelectorAll('[data-fit="pinned"]'))) {
-    if (!pinnedFits(el, stop)) return false;
-  }
-  for (const list of Array.from(root.querySelectorAll<HTMLElement>('[data-fit-rows]'))) {
-    if (!rowsFit(list, stop)) return false;
-  }
-  return true;
+  const pinned = Array.from(root.querySelectorAll('[data-fit="pinned"]'));
+  const lists = Array.from(root.querySelectorAll<HTMLElement>('[data-fit-rows]'));
+  return pinned.every((el) => pinnedFits(el, stop)) && lists.every((list) => rowsFit(list, stop));
 }
 
 /** The elements whose size changes can change the answer: the marked ones and what clips them. */
 export function fitObservationTargets(root: Element, stop: Element): Element[] {
+  const marked = Array.from(root.querySelectorAll('[data-fit="pinned"], [data-fit-rows]'));
   const targets = new Set<Element>([stop]);
-  for (const el of Array.from(root.querySelectorAll('[data-fit="pinned"], [data-fit-rows]'))) {
+  for (const el of marked) {
     targets.add(el);
-    for (let a = el.parentElement; a !== null; a = a.parentElement) {
-      if (clips(a)) targets.add(a);
-      if (a === stop) break;
-    }
+    clippingAncestors(el, stop).forEach((a) => targets.add(a));
   }
   return Array.from(targets);
 }

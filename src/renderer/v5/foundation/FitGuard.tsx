@@ -54,6 +54,28 @@ function hasFrameBanners(main: Element): boolean {
   );
 }
 
+/** Observe exactly `next`: stop observing what left it, start on what is new. */
+function syncObserved(
+  observer: ResizeObserver,
+  observed: Set<Element>,
+  next: ReadonlySet<Element>,
+): void {
+  const gone = Array.from(observed).filter((el) => !next.has(el));
+  const added = Array.from(next).filter((el) => !observed.has(el));
+  gone.forEach((el) => {
+    observer.unobserve(el);
+    observed.delete(el);
+  });
+  added.forEach((el) => {
+    observer.observe(el);
+    observed.add(el);
+  });
+}
+
+function sameFit(a: Fit, b: Fit): boolean {
+  return a.fits === b.fits && a.banners === b.banners;
+}
+
 /**
  * Re-measures whenever <main>, a marked element or one of its clipping
  * ancestors changes size, or the screen's tree changes (a pinned row mounts,
@@ -79,30 +101,14 @@ function useSurfaceFit(rootRef: RefObject<HTMLElement | null>): Fit {
     const resize = new ResizeObserver(schedule);
     const mutation = new MutationObserver(schedule);
 
-    function track(): void {
-      const next = new Set(fitObservationTargets(root as Element, stop));
-      for (const el of observed) {
-        if (!next.has(el)) {
-          resize.unobserve(el);
-          observed.delete(el);
-        }
-      }
-      for (const el of next) {
-        if (!observed.has(el)) {
-          resize.observe(el);
-          observed.add(el);
-        }
-      }
-    }
-
     function measure(): void {
       pending = false;
-      track();
+      syncObserved(resize, observed, new Set(fitObservationTargets(root as Element, stop)));
       const next: Fit = {
         fits: surfaceFits(root as Element, stop),
         banners: hasFrameBanners(stop),
       };
-      setFit((prev) => (prev.fits === next.fits && prev.banners === next.banners ? prev : next));
+      setFit((prev) => (sameFit(prev, next) ? prev : next));
     }
 
     mutation.observe(root, { childList: true, subtree: true });
@@ -115,6 +121,20 @@ function useSurfaceFit(rootRef: RefObject<HTMLElement | null>): Fit {
   }, [rootRef]);
 
   return fit;
+}
+
+function isNowhere(target: Node | null): boolean {
+  return target === null || target === document.body || target === document.documentElement;
+}
+
+/** A key the block swallows: anything but Tab, aimed at a covered area or at nowhere. */
+function isCoveredKey(
+  event: KeyboardEvent,
+  areas: ReadonlyArray<RefObject<HTMLElement | null>>,
+): boolean {
+  if (event.key === 'Tab') return false;
+  const target = event.target as Node | null;
+  return isNowhere(target) || areas.some((ref) => ref.current?.contains(target) === true);
 }
 
 /**
@@ -134,12 +154,7 @@ function useBlockedKeys(
   useEffect(() => {
     if (!blocked) return undefined;
     const swallow = (event: KeyboardEvent): void => {
-      if (event.key === 'Tab') return;
-      const target = event.target as Node | null;
-      const nowhere =
-        target === null || target === document.body || target === document.documentElement;
-      const covered = areasRef.current.some((ref) => ref.current?.contains(target) === true);
-      if (!nowhere && !covered) return;
+      if (!isCoveredKey(event, areasRef.current)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
     };
@@ -155,19 +170,21 @@ function focusIsLost(): boolean {
   return active === null || active === document.body;
 }
 
-/**
- * Focus across a block. On entry, focus inside the screen (or already lost)
- * moves to the notice heading, so the message is announced; focus on a banner
- * or the navigation stays where the cashier put it. On exit, lost focus goes
- * back to the control the cashier last used on the screen, else to <main>.
- */
-function useBlockFocus(
-  blocked: boolean,
-  rootRef: RefObject<HTMLElement | null>,
-  headingRef: RefObject<HTMLHeadingElement | null>,
-): void {
-  const lastFocused = useRef<HTMLElement | null>(null);
+/** Entering a block: focus on the screen (or already lost) moves to the notice heading. */
+function focusOnEntry(root: HTMLElement | null, heading: HTMLElement | null): void {
+  if (focusIsLost() || root?.contains(document.activeElement) === true) heading?.focus();
+}
 
+/** Leaving a block: lost focus goes back to the last control used, else to <main>. */
+function focusOnExit(previous: HTMLElement | null, root: HTMLElement | null): void {
+  if (!focusIsLost()) return;
+  if (previous?.isConnected === true) previous.focus();
+  if (focusIsLost()) root?.closest<HTMLElement>('.v5-frame__main')?.focus();
+}
+
+/** The last element that took focus inside `rootRef`. */
+function useLastFocused(rootRef: RefObject<HTMLElement | null>): RefObject<HTMLElement | null> {
+  const lastFocused = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const root = rootRef.current;
     if (root === null) return undefined;
@@ -179,22 +196,29 @@ function useBlockFocus(
       root.removeEventListener('focusin', remember);
     };
   }, [rootRef]);
+  return lastFocused;
+}
 
+/**
+ * Focus across a block. On entry, focus inside the screen (or already lost)
+ * moves to the notice heading, so the message is announced; focus on a banner
+ * or the navigation stays where the cashier put it. On exit, lost focus goes
+ * back to the control the cashier last used on the screen, else to <main>.
+ */
+function useBlockFocus(
+  blocked: boolean,
+  rootRef: RefObject<HTMLElement | null>,
+  headingRef: RefObject<HTMLHeadingElement | null>,
+): void {
+  const lastFocused = useLastFocused(rootRef);
   const wasBlocked = useRef(blocked);
   useEffect(() => {
-    const entered = blocked && !wasBlocked.current;
-    const left = !blocked && wasBlocked.current;
+    const changed = blocked !== wasBlocked.current;
     wasBlocked.current = blocked;
-    if (entered) {
-      const active = document.activeElement;
-      if (focusIsLost() || rootRef.current?.contains(active) === true) headingRef.current?.focus();
-      return;
-    }
-    if (!left || !focusIsLost()) return;
-    const previous = lastFocused.current;
-    if (previous?.isConnected === true) previous.focus();
-    if (focusIsLost()) rootRef.current?.closest<HTMLElement>('.v5-frame__main')?.focus();
-  }, [blocked, rootRef, headingRef]);
+    if (!changed) return;
+    if (blocked) focusOnEntry(rootRef.current, headingRef.current);
+    else focusOnExit(lastFocused.current, rootRef.current);
+  }, [blocked, rootRef, headingRef, lastFocused]);
 }
 
 interface FitGuardProps {
