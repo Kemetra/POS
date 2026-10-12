@@ -11,6 +11,8 @@ import { SessionUnlockHandler } from './operator/session-unlock-handler.js';
 import { OnlineCredentialVerifier } from './operator/online-credential-verifier.js';
 import { ReauthHandler } from './operator/reauth-handler.js';
 import { registerReauthHandler } from './ipc/reauth.js';
+import { CashierPinStatusHandler } from './operator/cashier-pin-status-handler.js';
+import { registerCashierPinStatusHandler } from './ipc/cashier-pin-status.js';
 import { createLockStateReader, createSafePointProbe } from './operator/lock-state-reader.js';
 import { wireSessionStatePush } from './operator/session-state-push.js';
 import { wireSessionLockAudit } from './operator/session-lock-audit.js';
@@ -962,6 +964,17 @@ singleInstanceReady
         verifier: onlineCredentialVerifier,
         jwtHolder: operatorJwtHolder,
         isDeviceRevoked: () => pairingStore.isDeviceRevoked(),
+        logger: mainLogger,
+      }),
+    });
+    // RT-424 (D-M1) — the manager's Cashiers screen: the device roster with
+    // each cashier's PIN state on this terminal. Read-only; refused while locked.
+    registerCashierPinStatusHandler(guardedIpcMain, {
+      cashierPinStatusHandler: new CashierPinStatusHandler({
+        db,
+        sessionManager: operatorSessionManager,
+        pairingStore,
+        cashierAdmissions: cashierAdmissionClient,
         logger: mainLogger,
       }),
     });

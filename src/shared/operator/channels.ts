@@ -16,6 +16,8 @@ export const OPERATOR_IPC_CHANNELS = {
   EMIT_AUDIT_EVENT_SMOKE: 'operator:_emit-audit-event-smoke',
   /** T070b — list cashiers on the terminal's paired branch. */
   LIST_BRANCH_ROSTER: 'operator:list-branch-roster',
+  /** RT-424 (D-M1) — manager/admin: the roster with each cashier's PIN state on this terminal. */
+  LIST_CASHIER_PIN_STATUS: 'operator:list-cashier-pin-status',
   /** T070 — confirm a pending takeover via capability token. */
   TAKEOVER_CONFIRM: 'operator:takeover-confirm',
   /** T071 — cancel a pending takeover; pure local discard. */

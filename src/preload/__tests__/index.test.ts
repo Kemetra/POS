@@ -170,6 +170,8 @@ describe('preload bridge', () => {
         'forceCloseShift',
         'getCurrentSession',
         'listBranchRoster',
+        // RT-424 — manager Cashiers screen PIN-status read
+        'listCashierPinStatus',
         'listStuckShifts',
         'provisionCashierPin',
         'resetCashierPin',
@@ -201,6 +203,21 @@ describe('preload bridge', () => {
       kind: 'reauthenticated',
     });
     expect(ipcRendererInvoke).toHaveBeenCalledWith(REAUTH_IPC_CHANNELS.REAUTHENTICATE, req);
+  });
+
+  it('RT-424: operator.listCashierPinStatus invokes its channel with no arguments', async () => {
+    ipcRendererInvoke.mockResolvedValue({ kind: 'cashiers', cashiers: [] });
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    await expect(api.operator.listCashierPinStatus?.()).resolves.toEqual({
+      kind: 'cashiers',
+      cashiers: [],
+    });
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(OPERATOR_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS);
   });
 
   it('operator S5 methods invoke the documented IPC channels', async () => {

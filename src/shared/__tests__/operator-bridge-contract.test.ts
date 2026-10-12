@@ -12,6 +12,7 @@ import type {
   ForceCloseShiftRequest,
   ForceCloseShiftResponse,
   ListBranchRosterResponse,
+  ListCashierPinStatusResponse,
   ListStuckShiftsResponse,
   ProvisionCashierPinRequest,
   ProvisionCashierPinResponse,
@@ -69,6 +70,8 @@ describe('operator bridge typed surface (T008)', () => {
       | 'getResumeState'
       // RT-358 (RT-247 D-A1) — in-place manager re-auth
       | 'reauthenticate'
+      // RT-424 (D-M1) — manager Cashiers screen PIN-status read
+      | 'listCashierPinStatus'
     >();
   });
 
@@ -124,6 +127,13 @@ describe('operator bridge typed surface (T008)', () => {
     expectTypeOf<Awaited<ReturnType<OperatorBridgeAPI['forceCloseShift']>>>().toEqualTypeOf<
       ForceCloseShiftResponse | OperatorRefusal
     >();
+
+    expectTypeOf<
+      Parameters<NonNullable<OperatorBridgeAPI['listCashierPinStatus']>>
+    >().toEqualTypeOf<[]>();
+    expectTypeOf<
+      Awaited<ReturnType<NonNullable<OperatorBridgeAPI['listCashierPinStatus']>>>
+    >().toEqualTypeOf<ListCashierPinStatusResponse>();
 
     expectTypeOf<Parameters<OperatorBridgeAPI['listStuckShifts']>>().toEqualTypeOf<[]>();
     expectTypeOf<

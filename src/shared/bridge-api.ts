@@ -9,7 +9,7 @@ import type {
   PairingSubmitResult,
 } from './pairing-types.js';
 import type { Role } from './operator/role.js';
-import type { OperatorRefusal } from './audit/event-shape.js';
+import type { OperatorRefusal, RefusalCategory } from './audit/event-shape.js';
 import type { ForcedCloseReason } from './audit/payload-schemas.js';
 import type { ReturnsBridgeAPI } from './returns/types.js';
 import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
@@ -462,6 +462,37 @@ export interface ListBranchRosterSuccess {
 export type ListBranchRosterResponse = ListBranchRosterSuccess | OperatorRefusal;
 
 /**
+ * RT-424 (D-M1, doc 19 §2) — the PIN state of one roster cashier on THIS
+ * terminal. `locked` = a PIN row in scope whose `lockout_until` is still in
+ * the future; `ready` = that row exists and is not locked; `no_pin` = no row.
+ * «جاهز» promises only that: sign-in can still be refused online.
+ */
+export type CashierPinState = 'no_pin' | 'ready' | 'locked';
+
+/**
+ * RT-424 — one row of the manager's Cashiers screen. Minimum disclosure: no
+ * PIN hash or salt, no failure count, no `user_id`, no tenant / branch /
+ * terminal id. `display_name` is the only text.
+ */
+export interface CashierPinStatus {
+  /** The roster id (`operator_id`), the same id `listBranchRoster` gives. */
+  id: string;
+  display_name: string;
+  pin: CashierPinState;
+  /** ISO 8601 end of the lockout. Present only when `pin === 'locked'` (D3). */
+  locked_until?: string;
+}
+
+export type CashierPinStatusRefusalCategory = Extract<
+  RefusalCategory,
+  'not_signed_in' | 'role_mismatch' | 'no_connection' | 'invalid_input'
+>;
+
+export type ListCashierPinStatusResponse =
+  | { kind: 'cashiers'; cashiers: CashierPinStatus[] }
+  | { kind: 'refused'; category: CashierPinStatusRefusalCategory };
+
+/**
  * `operator.*` namespace. Manager/admin paths only at S1; cashier,
  * takeover-confirm, roster, audit-event-emit, and PIN management land
  * in later slices behind their gates.
@@ -581,6 +612,19 @@ export interface OperatorBridgeAPI {
    * Branch scope comes from the active operator session (trusted main-side).
    */
   listBranchRoster(): Promise<ListBranchRosterResponse>;
+
+  /**
+   * RT-424 (D-M1, doc 19 §2) — the roster with each cashier's PIN state on
+   * this terminal, for the manager's Cashiers screen.
+   *
+   * Manager and admin only (cashier → `role_mismatch`); refused while locked.
+   * A separate method on purpose: `listBranchRoster` has no role gate because
+   * the sign-in screen uses it, and must not reveal who is locked out.
+   * Read-only: no write, no audit event. Optional in the type (like
+   * `reauthenticate`) so existing renderer test doubles stay valid; the
+   * production preload always provides it.
+   */
+  listCashierPinStatus?(): Promise<ListCashierPinStatusResponse>;
 
   /**
    * T070 — confirm a pending takeover using the capability token returned
