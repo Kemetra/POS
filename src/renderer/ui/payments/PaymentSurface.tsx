@@ -45,6 +45,7 @@ import type {
 } from '../../../shared/payments/types.js';
 import { DrawerNoticeInline } from '../receipts/DrawerNotice.js';
 import { CompletionPanel } from '../../v5/checkout/CompletionPanel.js';
+import { FitGuard } from '../../v5/foundation/FitGuard.js';
 import {
   CONFIRM_ENDED_COPY,
   START_READ_FAILED_COPY,
@@ -537,7 +538,25 @@ function resolveBridge(testBridge: ResolvedBridge | undefined): ResolvedBridge |
   };
 }
 
-export function PaymentSurface({
+/**
+ * RT-412 (RT-312 D2) — covered by the in-surface fit notice, never shown
+ * clipped, when the amount due, the recorded change, the commit or the cancel
+ * would not fit (stacked banners in the 600–767px band). The ledger marks them;
+ * completion marks nothing, so only the payment in progress can be covered.
+ */
+export function PaymentSurface(props: PaymentSurfaceProps = {}): JSX.Element | null {
+  const signedIn = useOperatorSessionStore((s) => s.state.kind === 'signedIn');
+  const hasEnvelope = usePaymentStore((s) => s.envelope !== null);
+  // The body's own gate, kept here too so "nothing to pay" still renders nothing at all.
+  if (!signedIn || !hasEnvelope) return null;
+  return (
+    <FitGuard surface="checkout">
+      <PaymentSurfaceBody {...props} />
+    </FitGuard>
+  );
+}
+
+function PaymentSurfaceBody({
   _testBridge,
   onNewSale,
   onBackToSale,

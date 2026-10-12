@@ -397,3 +397,41 @@ describe('human typing is never claimed', () => {
     expect(notices).toEqual([]);
   });
 });
+
+describe('suspension (RT-412: the screen under the fit notice)', () => {
+  it('a burst that would reach the owner is refused with M-S1 while suspended', () => {
+    mount('<button id="del">حذف</button>');
+    focus('#del');
+    const release = guard.suspend();
+    const enter = scan(guard, '6221000000011');
+    expect(enter.preventDefault).toHaveBeenCalled();
+    expect(enter.stopImmediatePropagation).toHaveBeenCalled();
+    expect(owner).not.toHaveBeenCalled();
+    expect(notices).toEqual([SCAN_UNAVAILABLE_MESSAGE]);
+
+    release();
+    scan(guard, '6221000000011', { start: 5000 });
+    expect(owner).toHaveBeenCalledWith('6221000000011');
+  });
+
+  it('suspensions nest, and a release is counted once', () => {
+    const first = guard.suspend();
+    const second = guard.suspend();
+    first();
+    first();
+    scan(guard, '6221000000011');
+    expect(owner).not.toHaveBeenCalled();
+    second();
+    scan(guard, '6221000000011', { start: 5000 });
+    expect(owner).toHaveBeenCalledTimes(1);
+  });
+
+  it('a protected field still refuses with its own notice (M-S5 before M-S1)', () => {
+    mount('<input id="amt" inputmode="numeric" data-scan-refuse="amount" />');
+    focus('#amt');
+    guard.suspend();
+    scan(guard, '6221000000011');
+    expect(owner).not.toHaveBeenCalled();
+    expect(notices).toEqual([SCAN_REFUSED_MESSAGE.amount]);
+  });
+});

@@ -76,12 +76,20 @@ supported until it is verified on pilot hardware (RT-407). 768 px stays the full
 | Effective height | Rail and `MainContent` | Support |
 |:--|:--|:--|
 | **≥ 768 px** | Rendered. | Full reference. |
-| **600 – 767 px** | Rendered (Sale and Checkout run). | Compact-height band; not supported until verified on pilot hardware (RT-407). |
+| **600 – 767 px** | Rendered (Sale and Checkout run). Where a screen cannot show its must-see elements, the in-surface fit notice (M-F3) covers it; the rail and banners stay. | Compact-height band; not supported until verified on pilot hardware (RT-407). |
 | **< 600 px** | **Not rendered.** `ScreenTooSmall` (height variant). | Blocked. |
 
 > **Amended by RT-313 (2026-10-12).** The height floor and band come from the RT-312 owner
 > decisions D1 (600 px floor, 600–767 compact-height band, 768 full reference), D2 (block below
 > the floor) and D6 (below the floor, keep the unmount/remount).
+>
+> **Amended by RT-412 (2026-10-12; RT-312 D2, owner decisions RT-412 D1–D4).** Inside the band,
+> Sale and Checkout are measured, not thresholded: each marks what must stay fully visible
+> (Checkout: amount due, recorded change, commit, cancel; Sale: total, commit, void, and room for
+> 4 cart rows), and a state that would clip any of it is covered by the in-surface notice M-F3
+> instead. The screen stays **mounted** under the notice (not unmounted as below the floor):
+> inert, with no key or scan reaching it, and back as it was when it fits again. The rail and
+> the frame banners stay above it and usable, because acting on a banner is usually the way back.
 
 The `useViewportTier` hook (`src/renderer/viewport/useViewportTier.ts`, re-exported from
 `src/renderer/shell/viewport/useViewportTier.ts`) returns `{ tier, height }`: `tier` is

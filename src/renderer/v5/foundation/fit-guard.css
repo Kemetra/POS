@@ -1,0 +1,79 @@
+/*
+ * RT-412 (RT-312 D2) — the in-surface fit notice. Aliases only, scoped under
+ * .v5-frame like the rest of the foundation.
+ */
+
+/* The guard adds no box: the screen keeps its place in <main>'s flex column. */
+.v5-frame .v5-fit-guard {
+  display: contents;
+}
+
+/* Read by assistive tech, never seen: the notice's announcement when focus stays on a banner. */
+.v5-frame .v5-fit-guard__live {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * Covers the whole screen, opaque: a screen that cannot show its total and its
+ * actions is not shown at all. The banners and the navigation sit outside
+ * <main>, so they stay visible and usable.
+ */
+.v5-frame .v5-fit-block {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: safe center;
+  justify-content: center;
+  overflow: auto;
+  padding: var(--v5-gutter);
+  background: var(--v5-surface-page);
+}
+
+.v5-frame .v5-fit-block__card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  max-inline-size: 440px;
+  padding: var(--space-5);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-card);
+  background: var(--v5-surface-panel);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.v5-frame .v5-fit-block__card .v5-tone-icon {
+  color: var(--color-warning);
+}
+
+.v5-frame .v5-fit-block__title {
+  margin: 0;
+  font-size: var(--v5-text-section);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+/* It takes focus by script so the message is announced; it is not a control. */
+.v5-frame .v5-fit-block__title:focus {
+  outline: none;
+}
+
+.v5-frame .v5-fit-block__body {
+  margin: 0;
+  font-size: var(--v5-text-body);
+  line-height: var(--line-height-relaxed);
+}
+
+@media (forced-colors: active) {
+  .v5-frame .v5-fit-block__card {
+    border-color: CanvasText;
+  }
+}

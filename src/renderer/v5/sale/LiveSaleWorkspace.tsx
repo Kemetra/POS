@@ -16,6 +16,7 @@ import { LiveSaleCart } from './LiveSaleCart';
 import { ScanStatus } from './ScanStatus';
 import { CartStatusLine } from './CartStatusLine';
 import { useLiveSaleActions } from './useLiveSaleActions';
+import { FitGuard } from '../foundation/FitGuard';
 import './sale-screen.css';
 import './live-sale.css';
 import './sale-direction-b.css';
@@ -26,8 +27,22 @@ interface Props {
   onPaymentContinue: () => void;
 }
 
-/** Guarded route adapter. One cart controller instance owns all bridge-confirmed line display state. */
+/**
+ * RT-412 (RT-312 D2) — covered by the in-surface fit notice, never shown
+ * clipped, when the total, the commit or the void, or room for 4 cart rows,
+ * would not fit (stacked banners in the 600–767px band). The cart marks them;
+ * the states without a cart mark nothing, so they never block.
+ */
 export function LiveSaleWorkspace(props: Props): JSX.Element {
+  return (
+    <FitGuard surface="sale">
+      <LiveSaleScreen {...props} />
+    </FitGuard>
+  );
+}
+
+/** Guarded route adapter. One cart controller instance owns all bridge-confirmed line display state. */
+function LiveSaleScreen(props: Props): JSX.Element {
   const cartEnabled = useFeatureFlagsStore((state) => state.cart);
   const productSearchEnabled = useFeatureFlagsStore((state) => state.productSearch);
   const session = useOperatorSessionStore((state) => state.state);

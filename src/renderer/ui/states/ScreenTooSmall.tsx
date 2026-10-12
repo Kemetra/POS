@@ -21,8 +21,11 @@ const HEIGHT_HEADING = 'ارتفاع الشاشة أقل من الحد المد�
 /** M-F2 (width) action. */
 const WIDTH_ACTION = 'كبّر النافذة أو استخدم شاشة أكبر.';
 
-/** M-F2 height variant (RT-312 D5), second sentence: the action. */
-function HeightAction(): JSX.Element {
+/**
+ * M-F2 height variant (RT-312 D5), second sentence: the action. Exported for
+ * RT-412's in-surface notice, which gives the same action when no banner shows.
+ */
+export function HeightAction(): JSX.Element {
   return (
     <>
       كبّر النافذة، أو اضبط مقياس العرض في Windows على <Ltr>100%</Ltr> أو <Ltr>125%</Ltr>.

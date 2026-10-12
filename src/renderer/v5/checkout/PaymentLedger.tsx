@@ -140,7 +140,7 @@ function RecordedMoney(props: { lines: readonly TenderLineRendererView[] }): JSX
 /** Main's change over the recorded lines (M-P5), in its pinned row under the amount due. */
 function RecordedChange(props: { changeDueMinor: number }): JSX.Element {
   return (
-    <div className="v5-ledger__change">
+    <div className="v5-ledger__change" data-fit="pinned">
       <p className="v5-ledger-row v5-ledger-row--change" data-testid="payment-ledger-change">
         الباقي للعميل{' '}
         <span className="v5-ledger-row__amount" dir="ltr">
@@ -183,7 +183,7 @@ export function PaymentLedger({
 }: PaymentLedgerProps): JSX.Element {
   return (
     <section className="v5-ledger" aria-label="المبلغ المستحق">
-      <div className="v5-ledger__due">
+      <div className="v5-ledger__due" data-fit="pinned">
         <span className="v5-ledger__due-label" data-testid={testIds.dueLabel}>
           المبلغ المستحق
         </span>
@@ -194,7 +194,11 @@ export function PaymentLedger({
         {draft !== null && <DraftPreview draft={draft} />}
         <RecordedMoney lines={lines} />
       </div>
-      {actions !== undefined && <div className="v5-ledger__actions">{actions}</div>}
+      {actions !== undefined && (
+        <div className="v5-ledger__actions" data-fit="pinned">
+          {actions}
+        </div>
+      )}
     </section>
   );
 }

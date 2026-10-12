@@ -337,7 +337,7 @@ Today's code still prints `123.45 EGP` with no grouping, and renders some times 
 
 The money column keeps the same place through the whole journey: the Sale total becomes the Checkout amount due and «الدفع» becomes «تأكيد الدفع». Column widths are reference-kit values (`design/vnext/references/`), confirmed in the real app by *(VN-S12)* (Sale layout and slim nav) and *(VN-S4)* (Checkout content); today's shipped Sale is still the Direction A V5 layout.
 
-**The Never-Scrolled-Away Rule.** At neither width may the total, the amount due, the safe back/cancel, suspend (when applicable) or the primary action be scrolled out of view.
+**The Never-Scrolled-Away Rule.** At neither width may the total, the amount due, the safe back/cancel, suspend (when applicable) or the primary action be scrolled out of view. In the 600–767px compact-height band, a Sale or Checkout state that cannot keep them in view (stacked banners with actions) is covered by the in-surface fit notice M-F3 rather than shown clipped (RT-312 D2, RT-412); the screen stays mounted and inert under it, and the banners stay usable.
 
 **Touch targets.** Every interactive control is at least 44×44px. The primary commit is 56px tall and full panel width (60px at comfortable). Tender tiles are 72px (compact) / 84px (comfortable); numpad keys 56×56 / 60×64 with ≥ 8px spacing; quick-amount chips 48px (they *set* the amount, never add). Cart row actions are 44×44 and ≥ 8px apart, and remove is never adjacent to plus. Destructive and commit actions are separated from frequent actions by ≥ 16px or a separate region.
 
