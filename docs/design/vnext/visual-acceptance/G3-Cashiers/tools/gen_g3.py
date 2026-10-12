@@ -7,6 +7,7 @@ Usage: python -I gen_g3.py <G3-Cashiers folder>
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -179,16 +180,29 @@ def notice(kind: str, text: str, action: str = "") -> str:
     return f'<div class="notice notice-{kind}" role="{role}">{icon(glyph)}<p>{text}</p>{action}</div>'
 
 
-def pin_dialog(title: str, mismatch: bool = False) -> str:
+PIN_RE = re.compile(r"^\d{4,6}$")  # the cashier rule (pin-management.ts PIN_RE)
+
+# The dialog's phases: (first field, confirmation, focused field). «حفظ» is enabled only when
+# both fields hold 4–6 digits and match (brief §4); a mismatch clears both and refocuses the first.
+PIN_PHASES = {
+    "typing": ("1234", "123", 2),
+    "complete": ("1234", "1234", 2),
+    "mismatch": ("", "", 1),
+}
+
+
+def pin_dialog(title: str, phase: str) -> str:
+    first, second, focused = PIN_PHASES[phase]
+    mismatch = phase == "mismatch"
     inv = ' aria-invalid="true" aria-describedby="pin-hint pin-msg"' if mismatch else ' aria-describedby="pin-hint"'
-    first_val = "" if mismatch else "1234"
     msg = (
         '<span class="notice notice-warning" role="alert">'
         f'{icon("warn")}<p>الرقمان غير متطابقين.</p></span>'
         if mismatch
         else ""
     )
-    save_disabled = " disabled" if mismatch else ""
+    ready = bool(PIN_RE.match(first)) and first == second
+    save_disabled = "" if ready else " disabled"
     return (
         '<div class="scrim">'
         '<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pin-h">'
@@ -197,11 +211,11 @@ def pin_dialog(title: str, mismatch: bool = False) -> str:
         '<p class="hint" id="pin-hint">من 4 إلى 6 أرقام.</p>'
         '<div class="fields">'
         '<div class="field"><label for="pin-1">الرقم السري الجديد</label>'
-        f'<input id="pin-1" class="input pin{" focus" if mismatch else ""}" type="password" inputmode="numeric"'
-        f' autocomplete="off" value="{first_val}"{inv}></div>'
+        f'<input id="pin-1" class="input pin{" focus" if focused == 1 else ""}" type="password" inputmode="numeric"'
+        f' autocomplete="off" value="{first}"{inv}></div>'
         '<div class="field"><label for="pin-2">تأكيد الرقم السري</label>'
-        f'<input id="pin-2" class="input pin{"" if mismatch else " focus"}" type="password" inputmode="numeric"'
-        f' autocomplete="off" value="{"" if mismatch else "123"}"{inv}></div>'
+        f'<input id="pin-2" class="input pin{" focus" if focused == 2 else ""}" type="password" inputmode="numeric"'
+        f' autocomplete="off" value="{second}"{inv}></div>'
         "</div>"
         f'<div class="slot" id="pin-msg" role="status" aria-live="polite">{msg}</div>'
         '<div class="dialog-actions">'
@@ -222,19 +236,19 @@ def state_list_long(w: int) -> str:
 
 def state_first_pin(w: int) -> str:
     return screen(panel(rows(CASHIERS), len(CASHIERS)), inert=True) + pin_dialog(
-        f"تعيين أول رقم سري لـ <bdi>{CASHIERS[1][0]}</bdi>"
+        f"تعيين أول رقم سري لـ <bdi>{CASHIERS[1][0]}</bdi>", "typing"
     )
 
 
 def state_mismatch(w: int) -> str:
     return screen(panel(rows(CASHIERS), len(CASHIERS)), inert=True) + pin_dialog(
-        f"تعيين أول رقم سري لـ <bdi>{CASHIERS[1][0]}</bdi>", mismatch=True
+        f"تعيين أول رقم سري لـ <bdi>{CASHIERS[1][0]}</bdi>", "mismatch"
     )
 
 
 def state_change_pin(w: int) -> str:
     return screen(panel(rows(CASHIERS), len(CASHIERS)), inert=True) + pin_dialog(
-        f"تغيير الرقم السري لـ <bdi>{CASHIERS[0][0]}</bdi>"
+        f"تغيير الرقم السري لـ <bdi>{CASHIERS[0][0]}</bdi>", "complete"
     )
 
 
