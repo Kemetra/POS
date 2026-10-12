@@ -58,6 +58,20 @@
 }
 
 /*
+ * RT-407 (RT-312 D12): the compact composition is chosen by height as well as
+ * by width. A viewport shorter than 768px (the 600–767px compact-height band;
+ * below 600 the frame shows only the RT-313 notice) marks the screen container,
+ * and the screens' compact queries read the mark with `style()`:
+ *   @container v5-screen (max-width: 1120px) or style(--v5-screen-height: compact)
+ * So the compact rules exist once, and the container stays inline-size only.
+ */
+@media (height < 768px) {
+  .v5-frame__main {
+    --v5-screen-height: compact;
+  }
+}
+
+/*
  * RT-313: <main> takes focus by script when the too-small notice gives way
  * (tabIndex -1, never a Tab stop). It is not a control, and the frame's ring
  * would frame the whole workspace.
