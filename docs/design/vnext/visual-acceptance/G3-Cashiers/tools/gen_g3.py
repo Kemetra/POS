@@ -166,7 +166,16 @@ def screen(content: str, notice: str = "", inert: bool = False) -> str:
     return f'<main class="screen"{i}>{head()}{notice}{content}</main>{nav()}'
 
 
-def notice(kind: str, glyph: str, text: str, role: str, action: str = "") -> str:
+# Each tone has its own glyph and live-region role: warnings interrupt, the rest are polite.
+NOTICE = {
+    "success": ("ok", "status"),
+    "neutral": ("info", "status"),
+    "warning": ("warn", "alert"),
+}
+
+
+def notice(kind: str, text: str, action: str = "") -> str:
+    glyph, role = NOTICE[kind]
     return f'<div class="notice notice-{kind}" role="{role}">{icon(glyph)}<p>{text}</p>{action}</div>'
 
 
@@ -231,13 +240,13 @@ def state_change_pin(w: int) -> str:
 
 def state_set_done(w: int) -> str:
     items = [(n, "ready" if i == 1 else s) for i, (n, s) in enumerate(CASHIERS)]
-    done = notice("success", "ok", f"تم تعيين الرقم السري لـ <bdi>{CASHIERS[1][0]}</bdi>.", "status")
+    done = notice("success", f"تم تعيين الرقم السري لـ <bdi>{CASHIERS[1][0]}</bdi>.")
     return screen(panel(rows(items), len(items)), notice=done)
 
 
 def state_unlock_done(w: int) -> str:
     items = [(n, "ready" if i == 2 else s) for i, (n, s) in enumerate(CASHIERS)]
-    done = notice("success", "ok", f"تم فك القفل عن <bdi>{CASHIERS[2][0]}</bdi>.", "status")
+    done = notice("success", f"تم فك القفل عن <bdi>{CASHIERS[2][0]}</bdi>.")
     return screen(panel(rows(items), len(items)), notice=done)
 
 
@@ -245,7 +254,7 @@ def state_unreachable(w: int) -> str:
     retry = f'<button type="button" class="btn focus">{icon("retry")}إعادة المحاولة</button>'
     body = (
         '<div class="panel-state">'
-        + notice("warning", "warn", "تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.", "alert", retry)
+        + notice("warning", "تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.", retry)
         + "</div>"
     )
     return screen(panel(body))
@@ -254,7 +263,7 @@ def state_unreachable(w: int) -> str:
 def state_empty(w: int) -> str:
     body = (
         '<div class="panel-state">'
-        + notice("neutral", "info", "لا يوجد كاشير مسجّل في هذا الفرع.", "status")
+        + notice("neutral", "لا يوجد كاشير مسجّل في هذا الفرع.")
         + "</div>"
     )
     return screen(panel(body, 0))
@@ -264,7 +273,7 @@ def state_reauth(w: int) -> str:
     # M6 (RT-247): provision found the manager's sign-in expired. The shipped re-auth notice sits
     # above the list, and the shipped re-auth dialog (G1-Reauth) opens from «تسجيل الدخول».
     action = '<button type="button" class="btn btn-primary focus">تسجيل الدخول</button>'
-    expired = notice("warning", "warn", "انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.", "alert", action)
+    expired = notice("warning", "انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.", action)
     return screen(panel(rows(CASHIERS), len(CASHIERS)), notice=expired)
 
 
