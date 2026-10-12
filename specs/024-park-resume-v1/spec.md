@@ -100,7 +100,9 @@ Jira state: RT-352 is In Review (packaged evidence pending). No issue for RT-116
   - `ALTER TABLE carts ADD COLUMN parked_at TEXT NULL`
   - `ALTER TABLE carts ADD COLUMN park_label TEXT NULL CHECK (park_label IS NULL OR length(park_label) <= 40)`
   - `CREATE INDEX idx_carts_parked ON carts (tenant_id, branch_id, terminal_id, owning_operator_id) WHERE parked_at IS NOT NULL AND state = 'editing'`
-- **No `cart_action_outbox` rebuild** and no new outbox kind for park or resume. Park and resume are recorded in `audit_events` (K6). Idempotency uses the request key stored in `carts.last_action_id`.
+  - a new append-only table **`cart_park_actions`** (R-7): `idempotency_key TEXT PRIMARY KEY`, `cart_id TEXT NOT NULL`, `action_kind TEXT NOT NULL CHECK (action_kind IN ('cart.park', 'cart.resume'))`, `request_hash TEXT NOT NULL`, `outcome_json TEXT NOT NULL`, `applied_at TEXT NOT NULL`, with no-update / no-delete triggers on the `cart_action_outbox` pattern. Additive: no rebuild of any existing table.
+- **No `cart_action_outbox` rebuild** and no new outbox kind for park or resume. Park and resume are recorded in `audit_events` (K6).
+- **Idempotency is durable** (R-7): every successful park and resume writes one `cart_park_actions` row in the same transaction, with a hash of the request and its outcome. A key is recognised for as long as the row exists, whatever actions follow. `carts.last_action_id` is still set to the key, which is what closes the Undo window (R-3), but it is **not** the idempotency record. A key already used for a different action kind, in `cart_park_actions` or in `cart_action_outbox`, is refused `idempotency_payload_mismatch`, as the cart bridge does today.
 - **Exclusions on `main` that PK-2 must add** (all are read paths that would otherwise treat a parked cart as the operator's live or held draft):
 
   | Path on `main` | Change |
@@ -142,7 +144,7 @@ Then it sets `parked_at = now`, `park_label`, `last_action_id = idempotency_key`
 
 - Returns `{ kind: 'parked' }`.
 - **The renderer clears the Sale screen only after this returns** (durable save, then clear — I-13).
-- **Replay:** the same key on a cart whose `last_action_id` equals it and `parked_at IS NOT NULL` returns `{ kind: 'parked' }` and writes nothing.
+- **Replay:** a key found in `cart_park_actions` with the same `request_hash` returns its recorded outcome and writes nothing, even after later actions on the cart. The same key with a different request is refused `idempotency_payload_mismatch`. A refusal writes no `cart_park_actions` row, so a retry is evaluated again.
 - **Refusals:** `not_parkable`, `park_limit_reached`, `wrong_owner`, `session_locked`, `invalid_label`. Each writes `cart.park_refused` with the reason, except `session_locked` (central refusal, nothing reaches the handler).
 
 ### 3.2 `cart.listParked()`
@@ -165,10 +167,11 @@ For a parked cart owned by the current operator, compares each active line with 
   diff_token }
 ```
 
-- A line is **unavailable** when its product no longer resolves in the local read model.
+- A line is **unavailable** only when the catalogue repo answers **`not_found`** for its product: zero active matches against a populated, readable catalogue (`src/main/catalogue/product-repo.ts`, FR-24). An inactive product counts as not found for selling.
+- When the repo answers **`unavailable`** (catalogue empty, missing or unreadable), no line is classified. The call is refused **`catalogue_unavailable`**, the same reason the catalogue bridge already uses. An infrastructure failure must never be read as "every product was removed".
 - `diff_token` is a digest of `changes` + `unavailable`. It is opaque to the renderer.
 - Read only. Writes nothing.
-- Refusals: `not_parked`, `wrong_owner`.
+- Refusals: `not_parked`, `wrong_owner`, `catalogue_unavailable`.
 
 ### 3.4 `cart.resume({ cart_id, accept_changes, diff_token, current_cart: 'park' | 'keep', idempotency_key })`
 
@@ -185,16 +188,17 @@ An **`empty`** current cart is not a conflict. It is closed in the same transact
 |---|---|
 | `checkout_in_progress` | The current cart is `handing_off` / `frozen_handed_off`, or has a `started` attempt. |
 | `price_changes_unaccepted` | The recomputed `diff_token` differs from the one supplied, or changes / unavailable lines exist and `accept_changes` is `false`. |
+| `catalogue_unavailable` | The catalogue read model is empty, missing or unreadable when the diff is recomputed. Nothing changes; the sale stays parked. |
 | `not_parked`, `wrong_owner`, `session_locked` | As named. |
 
 **On success, in one transaction:**
 
 1. Clear `parked_at` and `park_label`. Set `operator_session_id` to the current session and `last_action_id` to the key.
 2. Re-price each changed line through the existing `cart.line.update` outbox kind.
-3. **Soft-remove each unavailable line through the existing `cart.line.remove` outbox kind** (see §5, R-1).
+3. **Soft-remove each unavailable line through the existing `cart.line.remove` outbox kind** (see §5, R-1). Only `not_found` lines qualify; a catalogue failure has already refused the call.
 4. Write `cart.resumed`.
 
-No merge of two carts and no overwrite, ever. Replay of the same key returns the first outcome.
+No merge of two carts and no overwrite, ever. Replay follows §3.1: the `cart_park_actions` row returns the first outcome, and a different request under the same key is refused `idempotency_payload_mismatch`. A `current_cart: 'park'` swap is one resume action with one row; it writes no separate park row.
 
 ---
 
@@ -235,6 +239,7 @@ Committing K1–K6 against `main` surfaced points the planning record did not se
 | R-4 | Pricing 607 (business-day boundary) and the fixed 12 h marker. | The `stale` marker is 12 h **or** an earlier Cairo business day; revalidation runs on every resume regardless (K4). | Strictest reading of 605–607 with no new configuration. |
 | R-5 | Parked carts are bound to an `operator_session_id` that may end. | Parking leaves `operator_session_id` as it was; resume re-binds it. Session end, restart and re-attach skip parked carts (K5 table). | Matches the record's K5 and RT-352's mechanism. |
 | R-6 | Resume while the session holds an `empty` cart. `findDraftCartBySession` returns the newest by `created_at`, so leaving the empty cart would hide the resumed one. | Close the empty cart in the resume transaction with RT-352's existing empty-cart close. No new cancellation reason, so no `carts` CHECK rebuild. | An empty cart has nothing to lose (RT-116 §3.3 row 1). |
+| R-7 | Idempotency. The planning record used `carts.last_action_id` alone, but every later cart action overwrites it, so a delayed retry of an old `park(K)` would not be recognised and could park the active sale again (Codex review on #650). | An additive append-only `cart_park_actions` table records each park and resume key with its request hash and outcome (K5). It adds a table to the ratified K5 "two nullable columns", but still rebuilds nothing and adds no outbox kind. | The cart bridge's replay guarantee rests on a durable append-only record; park and resume need the same. |
 
 ## 6. Open points (need an owner decision before PK-2)
 
@@ -273,12 +278,12 @@ This section is the RT-439 amendment of the RT-116 contract (Confluence RETAIL 1
 
 | Id | Scope | Depends on | Gates |
 |---|---|---|---|
-| **PK-2** | main + bridge: migration (§K5); `cart.park` / `listParked` / `previewResume` / `resume`; the K5 exclusions; `cart_parked` refusal on mutations; limit; audit; shift-close refusal with a blocking count (K4, OP-2) | PK-1 (this) | §A2, §A4 |
+| **PK-2** | main + bridge: migration (§K5, incl. `cart_park_actions`); `cart.park` / `listParked` / `previewResume` / `resume`; the K5 exclusions; `cart_parked` refusal on mutations; limit; audit; shift-close refusal with a blocking count (K4, OP-2) | PK-1 (this) | §A2, §A4 |
 | **RT-116 S6** | manager recovery (RT-116 §5), including parked carts in `recovery.listHeld` and `recovery.cancelHeldCart` (§4.3) | RT-116 S5, RT-114 MA-1 + MA-2 | §A2, §A4; **before pilot** (OP-2) |
 | **PK-3** | VN-S11 UI: `SuspendedSaleList`, park button, `ResumeConflictPanel` (VN-R10), stale badge, durable save then clear; Suspend visually distinct from Cancel and Void (I-2) | PK-2 | owner visual approval |
 | **PK-V** | packaged verification: park → next customer → resume; 5 parked then a 6th; restart and sign-out with parked sales; price change between park and resume; another cashier cannot see them; (after S6) manager cancel | PK-3 | — |
 
-PK-2 acceptance criteria (from the record, plus §5): a test for every refusal; a parked cart survives restart, sign-out and lock; it is never auto re-attached; never visible to or resumable by another operator; the 6th park is refused; a price change needs acceptance; an unavailable line is removed only on an accepted resume; no tender is touched; no Undo across a park.
+PK-2 acceptance criteria (from the record, plus §5): a test for every refusal; a parked cart survives restart, sign-out and lock; it is never auto re-attached; never visible to or resumable by another operator; the 6th park is refused; a price change needs acceptance; an unavailable line is removed only on an accepted resume; a catalogue failure refuses preview and resume with `catalogue_unavailable` and removes nothing; a delayed retry of a park key after later cart actions replays and does not park again; no tender is touched; no Undo across a park.
 
 ## 10. Next safe action
 
