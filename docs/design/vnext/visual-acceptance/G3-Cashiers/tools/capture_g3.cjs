@@ -53,11 +53,18 @@ fs.mkdirSync(outDir, { recursive: true });
             const r = n.getBoundingClientRect();
             return r.width > 0 && (r.height < 44 || r.width < 44);
           }).length;
-          // Names wrap to two lines (information); a name clamped past two lines is a failure.
+          // A name that wraps is information; a name that is cut is a failure.
           const names = [...document.querySelectorAll('.name')];
           const wrapped = names.filter((n) => n.clientHeight > parseFloat(getComputedStyle(n).lineHeight) * 1.5).length;
-          const clamped = names.filter((n) => n.scrollHeight > n.clientHeight + 3).length;
-          return { out, spill, scroll, small, targets, wrapped, clamped };
+          const clipped = names.filter((n) => n.scrollHeight > n.clientHeight + 3).length;
+          // Behind a dialog, nothing outside it may take focus.
+          const dialog = document.querySelector('[role="dialog"]');
+          const leaks = dialog
+            ? [...document.querySelectorAll('.rt a, .rt button, .rt input')].filter(
+                (n) => !dialog.contains(n) && !n.closest('[inert]'),
+              ).length
+            : 0;
+          return { out, spill, scroll, small, targets, wrapped, clipped, leaks };
         });
         let axe = null;
         if (axePath) {
@@ -74,7 +81,8 @@ fs.mkdirSync(outDir, { recursive: true });
         if (fit.spill) failed.push(`${fit.spill} row(s) spill horizontally`);
         if (fit.small) failed.push(`${fit.small} text node(s) below 12px`);
         if (fit.targets) failed.push(`${fit.targets} control(s) below 44x44`);
-        if (fit.clamped) failed.push(`${fit.clamped} name(s) clamped`);
+        if (fit.clipped) failed.push(`${fit.clipped} name(s) clipped`);
+        if (fit.leaks) failed.push(`${fit.leaks} control(s) focusable behind the dialog`);
         if (axe && axe.length) failed.push(`axe: ${axe.join(', ')}`);
         if (failed.length) {
           failures.push(`${f}: ${failed.join('; ')}`);

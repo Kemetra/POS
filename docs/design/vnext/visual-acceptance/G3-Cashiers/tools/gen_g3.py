@@ -86,12 +86,13 @@ def page(title: str, width: int, body: str, label: str) -> str:
 """
 
 
-def nav() -> str:
+def nav(inert: bool = False) -> str:
     # The Cashiers screen has no nav entry on main (it opens from the Dashboard link), so no
     # entry is current here: the reference shows main as it is.
+    i = " inert" if inert else ""
     links = "".join(f'<li><a href="#">{label}</a></li>' for label in NAV)
     return (
-        '<nav class="nav" aria-label="التنقل الرئيسي">'
+        f'<nav class="nav" aria-label="التنقل الرئيسي"{i}>'
         f'<div class="brand"><i aria-hidden="true">{icon("cross")}</i><span class="ltr">POS Pulse</span></div>'
         f'<ul class="links">{links}</ul>'
         f'<div class="operator"><b>{MANAGER}</b><span>المدير</span>'
@@ -163,8 +164,9 @@ def rows(items: list[tuple[str, str]], focus_index: int | None = None) -> str:
 
 
 def screen(content: str, notice: str = "", inert: bool = False) -> str:
+    # Behind a dialog the whole background is inert, the nav included, so Tab cannot leave it.
     i = " inert" if inert else ""
-    return f'<main class="screen"{i}>{head()}{notice}{content}</main>{nav()}'
+    return f'<main class="screen"{i}>{head()}{notice}{content}</main>{nav(inert)}'
 
 
 # Each tone has its own glyph and live-region role: warnings interrupt, the rest are polite.
