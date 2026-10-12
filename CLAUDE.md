@@ -619,6 +619,6 @@ npm run package:dir          # electron-builder --win --dir (unsigned)
 After changing code, run `code_health_review` on the changed files. If Code Health drops, fix the
 issues, run the review again, and use `code_health_score` to confirm the result. Before each
 commit, stage the files and run `pre_commit_code_health_safeguard`; commit only when it passes. It
-checks staged and uncommitted changes only, so running it after the commit checks nothing. Before
-opening a PR, `analyze_change_set` reviews the whole branch. The CodeScene Code Health Review GitHub
-check also gates every PR.
+checks staged and uncommitted changes only; once changes are committed they are out of its scope.
+Before opening a PR, `analyze_change_set` reviews the whole branch. The CodeScene Code Health Review
+GitHub check also gates every PR.
