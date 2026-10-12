@@ -89,7 +89,7 @@ Jira state: RT-352 is In Review (packaged evidence pending). No issue for RT-116
 - **Stale marker (display only).** A parked sale is shown `stale` when it is older than **12 h**, **or** it was parked on an earlier business day than today (Africa/Cairo calendar, the same rule as D-N1, RT-249 comment 11720). The marker changes nothing in the revalidation.
 - **Repricing is explicit** (Pricing 608): the preview shows old price, new price and difference per line; nothing is applied until the cashier accepts.
 - **Promotions are out of scope** (Pricing 610): resume revalidates price and availability only. It never re-evaluates or folds in promotion changes; that stays with the Offer Engine.
-- **Shift close (reconciled).** The rule is keyed to the **cash session**, not the login operator ("Employee Work Shift ≠ Login Session ≠ Cash Session"). On `main` the cash session is the terminal's open shift (`shift_cashup_opens`, one per terminal). **Closing that shift is refused while any parked sale exists on the terminal, whoever parked it.** A parked cart has no physical cash effect, so it never changes expected cash; the refusal exists so no unpaid sale outlives the cash session unnoticed. See open point OP-2.
+- **Shift close (reconciled).** The rule is keyed to the **cash session**, not the login operator ("Employee Work Shift ≠ Login Session ≠ Cash Session"). On `main` the cash session is the terminal's open shift (`shift_cashup_opens`, one per terminal). **Closing that shift is refused while any parked sale exists on the terminal, whoever parked it.** A parked cart has no physical cash effect, so it never changes expected cash; the refusal exists so no unpaid sale outlives the cash session unnoticed. The refusal reports how many parked sales block the close (a count only: no owner, label or amount). **Owner decision OP-2 (2026-10-12):** the refusal stays, and the manager cancel path (RT-116 S6, §4.3) must land before the pilot, so an abandoned parked sale can always be cleared.
 
 ### K5 — Reuse RT-116, no second mechanism
 
@@ -241,7 +241,7 @@ Committing K1–K6 against `main` surfaced points the planning record did not se
 | # | Point | Recommendation |
 |---|---|---|
 | OP-1 | None of the RT-116 S3, S5, S6 slices has a Jira issue. Park's manager rows (§4.3) wait on S6. | Create the S6 issue after RT-114 MA-2; it is not blocking PK-2. |
-| OP-2 | **Shift close vs. abandoned parked sales.** Until §4.3's manager cancel exists, a parked sale whose owner never returns would block closing that terminal's shift indefinitely. | Ship the shift-close refusal in PK-2 **with** an owner-visible count, and add the manager cancel path (S6) before pilot; or, if S6 will not land before pilot, downgrade the refusal to a blocking warning the shift closer must acknowledge (audited). Owner to choose. |
+| ~~OP-2~~ | **Shift close vs. abandoned parked sales.** Until §4.3's manager cancel exists, a parked sale whose owner never returns would block closing that terminal's shift indefinitely. | **Decided by the owner 2026-10-12: keep the refusal; RT-116 S6 must land before the pilot.** The warning alternative is rejected. Consequence: if Park v1 ships for the pilot, S6, and its dependencies RT-116 S5 and RT-114 MA-1/MA-2, are pilot-blocking with it. |
 
 ---
 
@@ -273,7 +273,8 @@ This section is the RT-439 amendment of the RT-116 contract (Confluence RETAIL 1
 
 | Id | Scope | Depends on | Gates |
 |---|---|---|---|
-| **PK-2** | main + bridge: migration (§K5); `cart.park` / `listParked` / `previewResume` / `resume`; the K5 exclusions; `cart_parked` refusal on mutations; limit; audit; shift-close refusal per OP-2 | PK-1 (this), OP-2 decided | §A2, §A4 |
+| **PK-2** | main + bridge: migration (§K5); `cart.park` / `listParked` / `previewResume` / `resume`; the K5 exclusions; `cart_parked` refusal on mutations; limit; audit; shift-close refusal with a blocking count (K4, OP-2) | PK-1 (this) | §A2, §A4 |
+| **RT-116 S6** | manager recovery (RT-116 §5), including parked carts in `recovery.listHeld` and `recovery.cancelHeldCart` (§4.3) | RT-116 S5, RT-114 MA-1 + MA-2 | §A2, §A4; **before pilot** (OP-2) |
 | **PK-3** | VN-S11 UI: `SuspendedSaleList`, park button, `ResumeConflictPanel` (VN-R10), stale badge, durable save then clear; Suspend visually distinct from Cancel and Void (I-2) | PK-2 | owner visual approval |
 | **PK-V** | packaged verification: park → next customer → resume; 5 parked then a 6th; restart and sign-out with parked sales; price change between park and resume; another cashier cannot see them; (after S6) manager cancel | PK-3 | — |
 
@@ -281,4 +282,4 @@ PK-2 acceptance criteria (from the record, plus §5): a test for every refusal; 
 
 ## 10. Next safe action
 
-Owner decides **OP-2**, then create **PK-2**.
+OP-2 is decided. Create **PK-2**, and an issue for **RT-116 S6** so the pilot dependency is tracked.
