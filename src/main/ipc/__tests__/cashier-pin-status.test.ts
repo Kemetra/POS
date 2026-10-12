@@ -78,6 +78,43 @@ describe('RT-424 registerCashierPinStatusHandler', () => {
   });
 });
 
+describe('RT-424 registerCashierPinStatusHandler — a non-Error rejection', () => {
+  it('logs the value type, never the value, and answers invalid_input', async () => {
+    const fake = fakeIpcMain();
+    const warn = vi.fn();
+    registerCashierPinStatusHandler(fake.ipcMain, {
+      cashierPinStatusHandler: {
+        // A plain object, not an Error (a non-Error rejection reaches the catch too).
+        listCashierPinStatus: () =>
+          Promise.reject(
+            Object.assign(Object.create(null) as Error, { secret: 'user-neutral-secret' }),
+          ),
+      },
+      logger: { warn },
+    });
+    await expect(fake.invoke(LIST)).resolves.toEqual({
+      kind: 'refused',
+      category: 'invalid_input',
+    });
+    expect(warn).toHaveBeenCalledWith(
+      { event: 'operator.cashier_pin_status.failed', err_name: 'object' },
+      'cashier pin status failed',
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('user-neutral-secret');
+  });
+
+  it('answers invalid_input without a logger too', async () => {
+    const fake = fakeIpcMain();
+    registerCashierPinStatusHandler(fake.ipcMain, {
+      cashierPinStatusHandler: { listCashierPinStatus: () => Promise.reject(new Error('x')) },
+    });
+    await expect(fake.invoke(LIST)).resolves.toEqual({
+      kind: 'refused',
+      category: 'invalid_input',
+    });
+  });
+});
+
 describe('RT-424 operator:list-cashier-pin-status behind the session lock guard', () => {
   it('is not on the locked-session allowlist', () => {
     expect(LOCKED_ALLOWED_CHANNELS.has(LIST)).toBe(false);
