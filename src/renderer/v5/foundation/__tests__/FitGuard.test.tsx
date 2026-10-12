@@ -181,13 +181,40 @@ describe('no key reaches the covered screen', () => {
     expect(seen).toEqual([]);
   });
 
-  it('Tab passes, and keys on a banner reach it', () => {
+  it('Tab passes', () => {
     render(<Frame banner />);
     const seen = keysSeen();
     remeasure(false);
     press(document.body, 'Tab');
-    press(screen.getByRole('button', { name: 'تم' }), 'Enter');
-    expect(seen).toEqual(['Tab', 'Enter']);
+    expect(seen).toEqual(['Tab']);
+  });
+
+  it('a key on a banner reaches the banner, but not the screen behind (Codex P1 on #651)', () => {
+    render(<Frame banner />);
+    const seen = keysSeen();
+    const button = screen.getByRole('button', { name: 'تم' });
+    const onButton: string[] = [];
+    button.addEventListener('keydown', (e) => onButton.push(e.key));
+    remeasure(false);
+    press(button, 'Escape');
+    press(button, 'Enter');
+    expect(onButton).toEqual(['Escape', 'Enter']);
+    // Checkout's Esc = Back listens on window: it never hears it.
+    expect(seen).toEqual([]);
+  });
+
+  it('an open modal dialog keeps its keys (a window-level PIN pad still works)', () => {
+    render(<Frame banner />);
+    const seen = keysSeen();
+    remeasure(false);
+    const dialog = document.createElement('div');
+    dialog.setAttribute('aria-modal', 'true');
+    const field = document.createElement('input');
+    dialog.append(field);
+    document.body.append(dialog);
+    press(field, '5');
+    expect(seen).toEqual(['5']);
+    dialog.remove();
   });
 
   it('once it fits again, keys flow as before', () => {

@@ -137,11 +137,19 @@ function isCoveredKey(
   return isNowhere(target) || areas.some((ref) => ref.current?.contains(target) === true);
 }
 
+function modalIsOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null;
+}
+
 /**
  * While blocked, no key reaches the covered screen. `inert` stops focus and
- * clicks but not window listeners (Checkout's Esc = Back), so keys aimed at the
- * screen, the notice or nowhere (<body>) are swallowed in the capture phase.
- * The scan guard listens earlier in the same phase and refuses a burst itself.
+ * clicks but not window listeners (Checkout's Esc = Back), so:
+ *  - keys aimed at the screen, the notice or nowhere (<body>) are swallowed in
+ *    the capture phase. The scan guard listens earlier in the same phase and
+ *    refuses a burst itself;
+ *  - keys on a banner or the navigation reach that control (and React's root
+ *    listener), then stop at the document, before the screen's window
+ *    shortcuts. An open modal dialog owns the keyboard and is left alone.
  * Tab passes, so the keyboard still reaches the banners and the navigation.
  */
 function useBlockedKeys(
@@ -158,9 +166,14 @@ function useBlockedKeys(
       event.preventDefault();
       event.stopImmediatePropagation();
     };
+    const stopAtDocument = (event: KeyboardEvent): void => {
+      if (event.key !== 'Tab' && !modalIsOpen()) event.stopPropagation();
+    };
     window.addEventListener('keydown', swallow, { capture: true });
+    document.addEventListener('keydown', stopAtDocument);
     return () => {
       window.removeEventListener('keydown', swallow, { capture: true });
+      document.removeEventListener('keydown', stopAtDocument);
     };
   }, [blocked]);
 }

@@ -5,7 +5,12 @@
  * not expand the `overflow` shorthand (a browser does), so `overflow-y` is set.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { fitObservationTargets, rowCapacity, surfaceFits } from '../fit-measure';
+import {
+  fitObservationTargets,
+  requiredRowSpace,
+  surfaceFits,
+  visibleRowSpace,
+} from '../fit-measure';
 
 /** The element for `selector`; a missing one is a broken fixture. */
 function must(selector: string): HTMLElement {
@@ -123,9 +128,14 @@ function list(
 }
 
 describe('row capacity', () => {
-  it('counts rows in the visible list height, the column labels excluded', () => {
+  it('counts the visible list height, the column labels excluded', () => {
     const { main, list: el } = list(100, 32 + 4 * 52);
-    expect(rowCapacity(el, main)).toBe(4);
+    expect(visibleRowSpace(el, main)).toBe(4 * 52);
+  });
+
+  it('with no rows drawn yet, needs four rows of the minimum size', () => {
+    const { list: el } = list(100, 32 + 4 * 52);
+    expect(requiredRowSpace(el, 4, 52)).toBe(4 * 52);
   });
 
   it('four whole rows fit', () => {
@@ -142,6 +152,23 @@ describe('row capacity', () => {
     const { main, root } = list(300, 32 + 6 * 52);
     // 300 + 344 = 644, but <main> ends at 500: 200 visible, minus 32 = 3.2 rows.
     expect(surfaceFits(root, main)).toBe(false);
+  });
+
+  it('drawn rows count at their real height: two tall rows (a note, a badge) and two empty slots', () => {
+    const { main, root, list: el } = list(100, 32 + 4 * 52);
+    el.insertAdjacentHTML('beforeend', '<ol><li data-fit-row></li><li data-fit-row></li></ol>');
+    for (const row of Array.from(el.querySelectorAll('[data-fit-row]'))) box(row, 0, 80);
+    expect(requiredRowSpace(el, 4, 52)).toBe(2 * 80 + 2 * 52);
+    // 208px on screen, 264px needed: fewer than four rows would show.
+    expect(surfaceFits(root, main)).toBe(false);
+  });
+
+  it('only the first four drawn rows count, however long the cart is', () => {
+    const { main, root, list: el } = list(100, 32 + 4 * 52);
+    el.insertAdjacentHTML('beforeend', `<ol>${'<li data-fit-row></li>'.repeat(9)}</ol>`);
+    for (const row of Array.from(el.querySelectorAll('[data-fit-row]'))) box(row, 0, 52);
+    expect(requiredRowSpace(el, 4, 52)).toBe(4 * 52);
+    expect(surfaceFits(root, main)).toBe(true);
   });
 
   it('a list without a row size is not judged', () => {

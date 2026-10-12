@@ -153,6 +153,8 @@ describe('Sale marks the total + commit, the void and the 4-row cart, inside the
     const table = guard?.querySelector('.v5-sale-cart-table');
     expect(table).toHaveAttribute('data-fit-rows', '4');
     expect(table?.querySelector('.v5-sale-cart-columns')).toHaveAttribute('data-fit-exclude');
+    // Drawn rows count at their real height (Codex P2 on #651).
+    expect(table?.querySelector('.v5-sale-cart-line')).toHaveAttribute('data-fit-row');
     expect(document.querySelector('[data-testid="fit-block"]')).toBeNull();
   });
 });

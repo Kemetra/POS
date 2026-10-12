@@ -55,6 +55,7 @@ export function CartLineRow(props: LineProps): JSX.Element {
   return (
     <li
       className="v5-sale-cart-line"
+      data-fit-row
       data-line-id={line.lineId}
       data-last-added={props.lastAdded === true ? 'true' : undefined}
       data-flash={props.flashing === true ? 'true' : undefined}

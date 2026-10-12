@@ -4,9 +4,10 @@
  *
  * A screen marks what has to stay fully visible with `data-fit="pinned"` (the
  * Checkout due, change, commit and cancel; the Sale total, commit and void), and
- * a scrolling list that must keep a capacity with `data-fit-rows="<n>"`. The
- * list's row size is the `--v5-fit-row-size` custom property it carries; a
- * `data-fit-exclude` child (the sticky column labels) is not row space.
+ * a scrolling list that must keep a capacity with `data-fit-rows="<n>"`. Its
+ * drawn rows (`data-fit-row`) count at their real height, the slots not filled
+ * yet at the `--v5-fit-row-size` minimum the list carries; a `data-fit-exclude`
+ * child (the sticky column labels) is not row space.
  *
  * Only the block axis is measured: this is the height guard. Every number comes
  * from the laid-out boxes, so the check follows the CSS instead of a copy of it.
@@ -15,9 +16,6 @@
 
 /** Sub-pixel slack: fractional DPI rounds a box edge by up to a device pixel. */
 const TOLERANCE_PX = 1;
-
-/** The same slack for a row capacity: a row a pixel short of whole still counts. */
-const ROW_TOLERANCE = 0.02;
 
 const CLIPPING = new Set(['hidden', 'clip', 'auto', 'scroll']);
 
@@ -55,24 +53,41 @@ function pinnedFits(el: Element, stop: Element): boolean {
   return height - visibleBlockSize(el, stop) <= TOLERANCE_PX;
 }
 
-/** How many rows of the list's row size fit in the part of it that is on screen. */
-export function rowCapacity(list: HTMLElement, stop: Element): number | null {
-  const row = Number.parseFloat(getComputedStyle(list).getPropertyValue('--v5-fit-row-size'));
-  if (!Number.isFinite(row) || row <= 0) return null;
-  const excluded = Array.from(list.querySelectorAll<HTMLElement>('[data-fit-exclude]')).reduce(
-    (sum, child) => sum + child.getBoundingClientRect().height,
+function heightOf(el: Element): number {
+  return el.getBoundingClientRect().height;
+}
+
+/** The list's minimum row size (`--v5-fit-row-size`), or null when it has none. */
+function rowSize(list: HTMLElement): number | null {
+  const size = Number.parseFloat(getComputedStyle(list).getPropertyValue('--v5-fit-row-size'));
+  return Number.isFinite(size) && size > 0 ? size : null;
+}
+
+/**
+ * The height `required` rows take: the rows already drawn at their real height
+ * (a long name, a badge or a note makes a row taller than the minimum), and
+ * the slots not filled yet at the minimum row size.
+ */
+export function requiredRowSpace(list: HTMLElement, required: number, size: number): number {
+  const drawn = Array.from(list.querySelectorAll('[data-fit-row]')).slice(0, required);
+  return drawn.reduce((sum, row) => sum + heightOf(row), 0) + (required - drawn.length) * size;
+}
+
+/** The row space of the list that is on screen: its visible part, the column labels excluded. */
+export function visibleRowSpace(list: HTMLElement, stop: Element): number {
+  const excluded = Array.from(list.querySelectorAll('[data-fit-exclude]')).reduce(
+    (sum, child) => sum + heightOf(child),
     0,
   );
-  const visible = Math.min(list.clientHeight, visibleBlockSize(list, stop));
-  return (visible - excluded) / row;
+  return Math.min(list.clientHeight, visibleBlockSize(list, stop)) - excluded;
 }
 
 function rowsFit(list: HTMLElement, stop: Element): boolean {
   if (list.getClientRects().length === 0) return true;
   const required = Number.parseInt(list.dataset.fitRows ?? '', 10);
-  const capacity = rowCapacity(list, stop);
-  if (!Number.isSafeInteger(required) || capacity === null) return true;
-  return capacity >= required - ROW_TOLERANCE;
+  const size = rowSize(list);
+  if (!Number.isSafeInteger(required) || size === null) return true;
+  return visibleRowSpace(list, stop) >= requiredRowSpace(list, required, size) - TOLERANCE_PX;
 }
 
 /**
