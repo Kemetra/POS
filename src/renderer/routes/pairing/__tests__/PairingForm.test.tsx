@@ -479,7 +479,7 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
     await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(locations).not.toContain('/paired');
   });
@@ -493,7 +493,7 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
     await user.type(input, 'TYPED-VALUE{Enter}');
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     // The value the operator typed must still be in the input so they
     // can correct one character rather than retype the whole code.
@@ -565,7 +565,7 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
     await user.type(screen.getByRole('textbox'), `${sentinel}{Enter}`);
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     // The status region's text MUST NOT contain the sentinel — only the
     // input element holds the value (for retry).
@@ -581,7 +581,7 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
 
     await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(document.body.textContent).not.toContain('device_token');
   });
@@ -722,7 +722,7 @@ describe('PairingForm — BRANCH_MISMATCH outcome (T050)', () => {
     await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(locations).not.toContain('/paired');
   });
@@ -736,7 +736,7 @@ describe('PairingForm — BRANCH_MISMATCH outcome (T050)', () => {
     await user.type(input, 'TYPED-MISMATCH-VALUE{Enter}');
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(input.value).toBe('TYPED-MISMATCH-VALUE');
   });
@@ -750,7 +750,7 @@ describe('PairingForm — BRANCH_MISMATCH outcome (T050)', () => {
     await user.type(screen.getByRole('textbox'), `${sentinel}{Enter}`);
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     // The status region's text MUST NOT contain the sentinel — only
     // the input element holds the value (for retry).
@@ -767,7 +767,7 @@ describe('PairingForm — BRANCH_MISMATCH outcome (T050)', () => {
 
     await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(document.body.textContent).not.toContain('device_token');
   });
@@ -930,7 +930,7 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
     submitWithCode('CODE');
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(locations).not.toContain('/paired');
   });
@@ -942,7 +942,7 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
     submitWithCode('TYPED-RATE-VALUE');
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('TYPED-RATE-VALUE');
   });
@@ -955,7 +955,7 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
     submitWithCode(sentinel);
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(screen.getByRole('status').textContent).not.toContain(sentinel);
   });
@@ -966,7 +966,7 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
 
     submitWithCode('CODE');
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(document.body.textContent).not.toContain('device_token');
   });
@@ -1126,5 +1126,44 @@ describe('PairingForm — focus after a refused code (RT-244 PR2)', () => {
       expect(screen.getByRole('status')).toHaveTextContent(INVALID_CODE_MESSAGE);
     });
     await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
+  });
+
+  it('a submit that throws shows the "other" copy and returns focus to the field', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({
+      submitImpl: () => {
+        screen.getByRole('textbox').blur();
+        return Promise.reject(new Error('ipc handler threw'));
+      },
+    });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pairing-message')).toHaveTextContent(UNKNOWN_ERROR_MESSAGE);
+    });
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
+  });
+
+  it('leaves focus where the operator moved it while the submit ran', async () => {
+    const user = userEvent.setup();
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    const { bridge } = makeBridge({
+      submitImpl: () => {
+        elsewhere.focus();
+        return Promise.resolve({ outcome: 'invalid_code' });
+      },
+    });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pairing-message')).toHaveTextContent(INVALID_CODE_MESSAGE);
+    });
+    expect(elsewhere).toHaveFocus();
+    elsewhere.remove();
   });
 });

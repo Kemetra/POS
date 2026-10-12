@@ -111,7 +111,7 @@ export const RECHECK_UNREACHABLE_MESSAGE = 'Couldn’t reach the server — try 
 /**
  * Exhaustive by type: adding a `PairingOutcome` without a message fails the
  * typecheck. `success` maps to the generic fallback — the form navigates on
- * success and the message region unmounts, so it is never observed.
+ * success and the form unmounts, so it is never observed.
  */
 const MESSAGE_FOR: Readonly<Record<PairingOutcome, string>> = {
   invalid_code: INVALID_CODE_MESSAGE,

@@ -26,10 +26,12 @@ import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-
  *      - `submitting` — gates re-entry (a second Enter while the first
  *        call is still pending is dropped) and disables the submit
  *        button.
- *      - `statusMessage` — the operator-facing message rendered in a
- *        `role="status"` region. `null` when the form is idle; the
- *        empty-input validation copy on a no-content submit (T045);
- *        the outcome's message family on a non-success result (T043).
+ *      - `statusMessage` — the operator-facing message rendered in the
+ *        always-mounted `role="status"` slot (RT-244). `null` when the
+ *        form is idle, so the slot is empty; the empty-input
+ *        validation copy on a no-content submit (T045); the outcome's
+ *        message family on a non-success result (T043), or the
+ *        generic copy when the submit throws.
  *      - `disabledUntil` (T057, US5) — epoch-ms timestamp when the
  *        rate-limit window expires. `null` means "no rate limit
  *        active". A `useEffect` schedules a single `setTimeout` to
@@ -90,9 +92,9 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [disabledUntil, setDisabledUntil] = useState<number | null>(null);
-  // Set when a submit ends without navigating: the field was disabled while it
-  // ran, which drops focus to <body>, so it takes focus back once re-enabled
-  // and a scanner operator can scan the next code (RT-244 PR2).
+  // Set while a submit that has not navigated away is in flight: the field was
+  // disabled while it ran, which drops focus to <body>, so it takes focus back
+  // once re-enabled and a scanner operator can scan the next code (RT-244 PR2).
   const refocusAfterSubmit = useRef(false);
   const navigate = useNavigate();
 
@@ -117,7 +119,10 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
   useEffect(() => {
     if (submitting || !refocusAfterSubmit.current) return;
     refocusAfterSubmit.current = false;
-    inputRef.current?.focus();
+    // Only reclaim focus the disabled field lost; never pull it away from a
+    // control the operator moved to while the submit ran.
+    const active = document.activeElement;
+    if (active === null || active === document.body) inputRef.current?.focus();
   }, [submitting]);
 
   // Compute fresh on every render. `disabledUntil` is the epoch-ms
@@ -142,13 +147,16 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
     // Clear any prior message so a stale failure copy does not visually
     // stack with the in-flight state.
     setStatusMessage(null);
+    // Set before the await so a thrown submit refocuses too; only success,
+    // which navigates away, clears it.
+    refocusAfterSubmit.current = true;
     try {
       const result = await pairing.submit(code);
       if (result.outcome === 'success') {
+        refocusAfterSubmit.current = false;
         void navigate('/paired', { replace: true });
         return;
       }
-      refocusAfterSubmit.current = true;
       if (result.outcome === 'rate_limited') {
         // T057 — start the disabled-window. The retry_after_s value
         // is the authoritative wait time (already parsed and clamped
@@ -165,6 +173,11 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
       // unknown_error). The form re-enables and stays editable so the
       // operator can retry.
       setStatusMessage(messageFor(result.outcome));
+    } catch {
+      // The bridge maps every failure to an outcome; a rejection means the
+      // main handler threw (IPC). Show the generic copy so the operator can
+      // retry, and never echo the thrown value (Constitution VII).
+      setStatusMessage(messageFor('unknown_error'));
     } finally {
       setSubmitting(false);
     }
