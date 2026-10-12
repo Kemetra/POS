@@ -55,6 +55,12 @@ describe('dialog.css — never taller than the viewport (RT-313)', () => {
     expect(panel).toMatch(/overscroll-behavior:\s*contain/);
   });
 
+  it('reserves the pinned row as end scroll padding, so a focused field is never hidden under it', () => {
+    expect(panel).toMatch(
+      /scroll-padding-block-end:\s*calc\(var\(--v5-target, 44px\) \+ var\(--space-5\) \+ var\(--space-2\)\)/,
+    );
+  });
+
   it('pins the action row at the foot of the panel, on an opaque fill', () => {
     const row = ruleBody(ACTION_ROW);
     expect(row).toMatch(/position:\s*sticky/);

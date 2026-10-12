@@ -41,6 +41,10 @@
   max-block-size: calc(100dvh - 2 * var(--v5-gutter, var(--space-3)));
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Focus not obscured (WCAG 2.4.11, 04-design-language): a field focused near
+     the foot scrolls clear of the pinned action row — its 44px controls, its
+     bottom padding and its top margin. */
+  scroll-padding-block-end: calc(var(--v5-target, 44px) + var(--space-5) + var(--space-2));
 }
 
 /*
