@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import { AppRouter } from '../router';
+import { installViewport, resizeTo, settleTier } from '../v5/__tests__/__helpers__/viewport-bands';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../../shared/bridge-api';
 import type { PairingStatus } from '../../shared/pairing-types';
 
@@ -16,13 +17,14 @@ import type { PairingStatus } from '../../shared/pairing-types';
 
 const TOO_SMALL_HEADING = /^الشاشة أصغر من 1024×768\s?\.$/;
 
-function stubViewport(width: number): void {
+function stubViewport(width: number, height = 800): void {
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => {
-      const min = Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? '0');
+      const minWidth = Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? '0');
+      const minHeight = Number(/min-height:\s*(\d+)px/.exec(query)?.[1] ?? '0');
       return {
-        matches: width >= min,
+        matches: width >= minWidth && height >= minHeight,
         media: query,
         onchange: null,
         addListener: vi.fn(),
@@ -104,5 +106,78 @@ describe('supported-viewport guard outside the frame', () => {
 
     await waitFor(() => expect(screen.getByTestId('route-pairing')).toBeInTheDocument());
     expect(screen.queryByRole('heading', { name: TOO_SMALL_HEADING })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * RT-313 (RT-312 D1/D5) — the 600px height floor applies outside the frame
+ * too, with the height copy, and the boot read is still unchanged.
+ */
+const HEIGHT_HEADING = 'ارتفاع الشاشة أقل من الحد المدعوم.';
+
+describe('supported-viewport height floor outside the frame (RT-313)', () => {
+  it('pairing at 599px high shows only the height notice; the boot read still runs once', async () => {
+    stubViewport(1280, 599);
+    const { bridge, getStatus } = bridgeWith({ kind: 'unpaired' });
+    render(<AppRouter pairing={bridge} />);
+
+    expect(await screen.findByRole('heading', { name: HEIGHT_HEADING })).toBeInTheDocument();
+    expect(screen.queryByTestId('route-pairing')).not.toBeInTheDocument();
+    expect(getStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('sign-in at 599px high never mounts the sign-in screen', async () => {
+    stubViewport(1024, 599);
+    const { bridge } = bridgeWith(PAIRED);
+    render(
+      <AppRouter pairing={bridge} operator={{} as OperatorBridgeAPI} initialEntry="/sign-in" />,
+    );
+
+    expect(await screen.findByRole('heading', { name: HEIGHT_HEADING })).toBeInTheDocument();
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+  });
+
+  it('the Ready screen at 600px high renders as before', async () => {
+    stubViewport(1024, 600);
+    const { bridge } = bridgeWith(PAIRED);
+    render(<AppRouter pairing={bridge} />);
+
+    await waitFor(() => expect(screen.getByTestId('route-paired')).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: HEIGHT_HEADING })).not.toBeInTheDocument();
+  });
+
+  it('back over the floor, focus is in the remounted pairing screen, never on <body>', async () => {
+    installViewport(1280, 800);
+    const { bridge } = bridgeWith({ kind: 'unpaired' });
+    render(<AppRouter pairing={bridge} />);
+    await waitFor(() => expect(screen.getByTestId('route-pairing')).toBeInTheDocument());
+
+    resizeTo(1280, 599);
+    await settleTier();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: HEIGHT_HEADING }));
+
+    resizeTo(1280, 800);
+    await settleTier();
+    const pairing = screen.getByTestId('route-pairing');
+    expect(document.activeElement).not.toBe(document.body);
+    expect(pairing.contains(document.activeElement)).toBe(true);
+  });
+
+  it('the Ready screen remounts through a loading state: focus stays in the guard, never on <body>', async () => {
+    installViewport(1280, 800);
+    const { bridge } = bridgeWith(PAIRED);
+    render(<AppRouter pairing={bridge} />);
+    await waitFor(() => expect(screen.getByTestId('route-paired')).toBeInTheDocument());
+
+    resizeTo(1280, 599);
+    await settleTier();
+    resizeTo(1280, 800);
+    await settleTier();
+    const ready = await screen.findByTestId('route-paired');
+    const box = ready.closest('.v5-supported-viewport');
+    expect(box).not.toBeNull();
+    expect(document.activeElement).toBe(box);
+    // Programmatically focusable, but not a Tab stop.
+    expect(box).toHaveAttribute('tabindex', '-1');
   });
 });

@@ -44,11 +44,14 @@ const ICON_ONLY_QUERY = '(min-width: 1024px)';
 
 type Band = 'expanded' | 'icon-only' | 'too-small';
 
-/** Real match semantics: each query tracks its own state independently. */
+/**
+ * Real match semantics: each query tracks its own state independently. The
+ * height floors (RT-313) are always met: this test is about width crossings.
+ */
 function matchesFor(band: Band, query: string): boolean {
   if (query === EXPANDED_QUERY) return band === 'expanded';
   if (query === ICON_ONLY_QUERY) return band === 'expanded' || band === 'icon-only';
-  return false;
+  return query.includes('min-height');
 }
 
 let band: Band = 'expanded';

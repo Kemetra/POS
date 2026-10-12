@@ -1,9 +1,10 @@
-import type { JSX, ReactNode } from 'react';
+import { useRef, type JSX, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CONNECTION_BANNER_MESSAGES, useConnectionState } from '../../connection/connection-state';
 import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
 import { ScreenTooSmall } from '../../ui/states/ScreenTooSmall';
-import { useViewportTier } from '../../viewport/useViewportTier';
+import { useFocusOnReturn } from '../../viewport/useFocusOnReturn';
+import { useViewportTier, viewportShortfall } from '../../viewport/useViewportTier';
 import { DialogHost } from '../foundation/Dialog';
 import { V5Navigation } from './V5Navigation';
 import { isActiveSaleRoute } from './nav-model';
@@ -33,20 +34,27 @@ interface V5FrameProps {
  * renders, so the screen (and its bridge calls) never mounts; a non-online
  * connection state shows the same persistent banner as the legacy TopBar.
  *
+ * RT-313 (RT-312 D1/D2/D6): the same applies below the 600px height floor,
+ * with the notice's height copy. The screen unmounts and remounts as before.
+ * On return, a screen that focuses its own control keeps it; otherwise focus
+ * lands on <main>, never on <body>.
+ *
  * RT-242 (VN-S12): on an active-sale route the nav is the slim rail
  * (`data-nav="slim"`), elsewhere the labelled panel — decided by the route
  * alone, never by cart state.
  */
 export function V5Frame({ notices, children }: V5FrameProps): JSX.Element {
-  const tier = useViewportTier();
+  const shortfall = viewportShortfall(useViewportTier());
   const { state: connectionState } = useConnectionState();
   const { pathname } = useLocation();
   const nav = isActiveSaleRoute(pathname) ? 'slim' : 'panel';
+  const mainRef = useRef<HTMLElement>(null);
+  useFocusOnReturn(shortfall !== null, () => mainRef.current);
 
-  if (tier === 'too-small') {
+  if (shortfall !== null) {
     return (
       <div className="v5-frame v5-frame--too-small" data-testid="v5-frame" dir="rtl" lang="ar">
-        <ScreenTooSmall />
+        <ScreenTooSmall shortfall={shortfall} />
       </div>
     );
   }
@@ -66,7 +74,9 @@ export function V5Frame({ notices, children }: V5FrameProps): JSX.Element {
               {notices}
             </div>
           )}
-          <main className="v5-frame__main">{children}</main>
+          <main ref={mainRef} className="v5-frame__main" tabIndex={-1}>
+            {children}
+          </main>
         </div>
         <V5Navigation />
       </DialogHost>

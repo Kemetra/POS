@@ -36,9 +36,11 @@ function stubViewport(expanded: boolean) {
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => ({
-      matches: expanded
-        ? query.includes('min-width: 1280px') || query.includes('min-width: 1024px')
-        : query.includes('min-width: 1024px') && !query.includes('min-width: 1280px'),
+      matches:
+        query.includes('min-height') ||
+        (expanded
+          ? query.includes('min-width: 1280px') || query.includes('min-width: 1024px')
+          : query.includes('min-width: 1024px') && !query.includes('min-width: 1280px')),
       media: query,
       onchange: null,
       addListener: vi.fn(),
@@ -100,7 +102,9 @@ describe('StuckShiftBadge (T080)', () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn((query: string) => ({
-        matches: query.includes('min-width: 1024px') && !query.includes('min-width: 1280px'),
+        matches:
+          query.includes('min-height') ||
+          (query.includes('min-width: 1024px') && !query.includes('min-width: 1280px')),
         media: query,
         onchange: null,
         addListener: vi.fn(),

@@ -57,6 +57,15 @@
   min-block-size: 0;
 }
 
+/*
+ * RT-313: <main> takes focus by script when the too-small notice gives way
+ * (tabIndex -1, never a Tab stop). It is not a control, and the frame's ring
+ * would frame the whole workspace.
+ */
+.v5-frame .v5-frame__main:focus {
+  outline: none;
+}
+
 /* ── Navigation ─────────────────────────────────────────────────────────── */
 
 .v5-frame__nav {

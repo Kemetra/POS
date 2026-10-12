@@ -87,7 +87,7 @@ beforeEach(() => {
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => ({
-      matches: query.includes('1280'),
+      matches: query.includes('1280') || query.includes('min-height'),
       media: query,
       onchange: null,
       addListener: vi.fn(),

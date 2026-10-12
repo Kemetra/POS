@@ -4,6 +4,20 @@
  * the global tokens from styles/tailwind.css directly.
  */
 
+/*
+ * RT-313 — SupportedViewport's own box, the focus target when the guard stops
+ * blocking. It fills #root like the screen it replaces did, so a screen sized
+ * with a percentage (sign-in's `min-block-size: 100%`) or with 100vh lays out
+ * as before. It is not a control: a focus ring would frame the whole screen.
+ */
+.v5-supported-viewport {
+  block-size: 100%;
+}
+
+.v5-supported-viewport:focus {
+  outline: none;
+}
+
 .v5-route-state {
   display: grid;
   place-items: center;

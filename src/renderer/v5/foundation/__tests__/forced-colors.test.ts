@@ -128,3 +128,48 @@ describe('forced colors — Checkout (RT-243 W1-C)', () => {
     },
   );
 });
+
+/**
+ * RT-313 — the height notice and the scrolling dialog in a contrast theme.
+ * The notice's variant is carried by its text alone, so nothing in it may opt
+ * out of forced colors; the dialog's pinned action row must stay an opaque
+ * fill (forced to Canvas), or scrolled content would show through it.
+ */
+const globalCss = read('../../../styles/tailwind.css');
+const dialogCss = read('../dialog.css');
+
+/** Every rule body for selectors starting with `prefix`, outside or inside media blocks. */
+function rulesStartingWith(css: string, prefix: string): string[] {
+  return css
+    .split('}')
+    .map((rule) => rule.split('{'))
+    .filter(([selectors]) =>
+      (selectors ?? '').split(',').some((sel) => sel.trim().startsWith(prefix)),
+    )
+    .map(([, body]) => body ?? '');
+}
+
+describe('forced colors — viewport notice and dialog (RT-313)', () => {
+  it('no ScreenTooSmall rule opts out of forced colors', () => {
+    const rules = rulesStartingWith(globalCss, '.screen-too-small');
+    expect(rules.length).toBeGreaterThan(0);
+    for (const body of rules) expect(body).not.toMatch(/forced-color-adjust/);
+  });
+
+  it('the notice card has a real border, which survives when its shadow is dropped', () => {
+    const card = rulesStartingWith(globalCss, '.screen-too-small__card').join('\n');
+    expect(card).toMatch(/border:\s*1px solid/);
+  });
+
+  it('the pinned action row is an opaque fill and never opts out of forced colors', () => {
+    const row = ruleFor(dialogCss, '.v5-dialog > div:last-child');
+    expect(row).toMatch(/background:\s*var\(--color-surface\)/);
+    expect(dialogCss).not.toMatch(/forced-color-adjust/);
+  });
+
+  it('the dialog panel keeps its 2px CanvasText edge', () => {
+    expect(ruleFor(forcedColorsCss(dialogCss), '.v5-dialog')).toMatch(
+      /border:\s*2px solid CanvasText/,
+    );
+  });
+});

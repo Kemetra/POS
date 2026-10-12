@@ -1,27 +1,41 @@
 /**
- * RT-241 — a matchMedia stand-in with real boundary semantics for the two tier
- * queries `useViewportTier` reads, driven by an effective CSS width. Like a
- * real MediaQueryList, `change` fires only for a query whose match flips.
+ * RT-241 — a matchMedia stand-in with real boundary semantics for the tier
+ * queries `useViewportTier` reads, driven by an effective CSS width and
+ * (RT-313) height. Like a real MediaQueryList, `change` fires only for a query
+ * whose match flips.
  */
 import { act } from '@testing-library/react';
 import { vi } from 'vitest';
 
-const QUERIES = ['(min-width: 1280px)', '(min-width: 1024px)'] as const;
+const QUERIES = [
+  '(min-width: 1280px)',
+  '(min-width: 1024px)',
+  '(min-height: 768px)',
+  '(min-height: 600px)',
+] as const;
+
+/** The full-reference height (RT-312 D1): the default, so width-only tests stay width-only. */
+const DEFAULT_HEIGHT = 800;
 
 let width = 1280;
+let height = DEFAULT_HEIGHT;
 const listeners = new Map<string, Array<() => void>>();
 
-function matches(query: string, at: number): boolean {
-  const min = Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? '0');
-  return at >= min;
+function matches(query: string, atWidth: number, atHeight: number): boolean {
+  const minWidth = /min-width:\s*(\d+)px/.exec(query)?.[1];
+  if (minWidth !== undefined) return atWidth >= Number(minWidth);
+  const minHeight = /min-height:\s*(\d+)px/.exec(query)?.[1];
+  if (minHeight !== undefined) return atHeight >= Number(minHeight);
+  return false;
 }
 
-export function installViewport(initialWidth: number): void {
+export function installViewport(initialWidth: number, initialHeight = DEFAULT_HEIGHT): void {
   width = initialWidth;
+  height = initialHeight;
   listeners.clear();
   vi.stubGlobal('matchMedia', (query: string) => ({
     get matches() {
-      return matches(query, width);
+      return matches(query, width, height);
     },
     media: query,
     onchange: null,
@@ -40,13 +54,17 @@ export function installViewport(initialWidth: number): void {
   }));
 }
 
-/** Resize to `next` CSS px; dispatches `change` only to queries that flip. */
-export function resizeTo(next: number): void {
-  const before = QUERIES.map((q) => matches(q, width));
-  width = next;
+/**
+ * Resize to `nextWidth` × `nextHeight` CSS px (height unchanged when omitted);
+ * dispatches `change` only to queries that flip.
+ */
+export function resizeTo(nextWidth: number, nextHeight = height): void {
+  const before = QUERIES.map((q) => matches(q, width, height));
+  width = nextWidth;
+  height = nextHeight;
   act(() => {
     QUERIES.forEach((q, i) => {
-      if (matches(q, width) !== before[i]) {
+      if (matches(q, width, height) !== before[i]) {
         (listeners.get(q) ?? []).forEach((cb) => {
           cb();
         });

@@ -746,6 +746,13 @@ body {
     background-color: var(--color-background);
   }
 
+  /* RT-313: MainContent takes focus by script when the too-small notice gives
+     way (tabIndex -1, never a Tab stop). It is not a control, and a ring would
+     frame the whole workspace. */
+  .app-shell__content:focus {
+    outline: none;
+  }
+
   /* ── Top Bar Sub-regions (T049 S3) ──────────────────────────────────── */
 
   .top-bar__left {
@@ -1207,12 +1214,15 @@ body {
 
   /* ── Screen Too Small ────────────────────────────────────────────────── */
 
+  /* RT-313: the notice now shows on short viewports (height < 600px). It grows
+     past the viewport instead of clipping, and `safe` centring keeps an
+     overflowing card's top reachable by scrolling. */
   .screen-too-small {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    block-size: 100dvh;
+    justify-content: safe center;
+    min-block-size: 100dvh;
     padding: var(--space-5);
     background-color: var(--color-background);
   }

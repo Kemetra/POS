@@ -19,7 +19,10 @@ beforeEach(() => {
       // happy-dom has no real MediaQueryList constructor; cast is required in tests.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       return {
-        matches: query.includes('min-width: 1280px') || query.includes('min-width: 1024px'),
+        matches:
+          query.includes('min-width: 1280px') ||
+          query.includes('min-width: 1024px') ||
+          query.includes('min-height'),
         media: query,
         onchange: null,
         addListener: vi.fn(),
