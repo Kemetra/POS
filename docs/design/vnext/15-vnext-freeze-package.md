@@ -441,7 +441,7 @@ Every implementation slice:
 | **D-N1** | Sale number display / quotability | S14, returns lookup | Short display form + recent-sales list for returns |
 | **D-P1** | External-card decline / UNKNOWN input | S11, S12 trigger | Outcome selector on card entry (approved / declined / not sure) under RT-10 |
 | **D-P2** | One-step vs two-step cash commit | W1-C variant | Keep two-step (today); revisit after W1-C |
-| **D-M1** | Manager → Cashiers PIN-status read | G-3, M2–M4 | Add a read model; then design the surface. Proposed in [19](19-d-m1-cashier-pin-status.md) (RT-251) |
+| ~~**D-M1**~~ | ~~Manager → Cashiers PIN-status read~~ | G-3, M2–M4 | **Closed by RT-251** (owner-approved 2026-10-12): the read contract, matrix and copy are in [19](19-d-m1-cashier-pin-status.md). Planning is done; what remains is an Implementation slice (main-process read + IPC, renderer, tests, §A4 re-check), not a Lane C decision |
 | **RT-113 / 114 / 116 S4–S6 / 158 / 28 / 161** | existing contracts | S5, S6, S15–S19, M-O*, M-A*, M-H* | Unchanged owners; their UI slices follow their contracts |
 
 **Not proposed:** a big-bang rewrite; any slice touching IPC/DB/API/payment/sync/ERP without its
