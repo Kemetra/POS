@@ -12,8 +12,7 @@ import type { PairingOutcome } from '../../../shared/pairing-types';
  * references (RT-246, docs/design/vnext/18-g1-entry-screens.md §6 items 4 and
  * 8). The nine failure outcomes map to distinct strings; `success` reuses the
  * "other" copy, because the form navigates before it could ever render. The
- * two "Check again" strings below have no approved Arabic yet and stay
- * English, rendered as `lang="en"` by `RevocationRecheck`.
+ * two "Check again" results use the Arabic the owner approved on 2026-10-12.
  *
  * Security: nothing in this module reads the `pairing_code` or any
  * device-side identity. Copy is fixed and includes no user-supplied
@@ -87,15 +86,19 @@ export const TERMINAL_ALREADY_PAIRED_MESSAGE = 'هذا الجهاز مربوط �
  */
 export const EMPTY_INPUT_MESSAGE = 'أدخل رمز الربط.';
 
+/** RT-244 — the "Check again" action and its in-flight label (approved 2026-10-12). */
+export const RECHECK_LABEL = 'تحقق مرة أخرى';
+export const RECHECK_PENDING_LABEL = 'جارٍ التحقق…';
+
 /**
  * RT-215 10897-A — the "Check again" on a device-revoked terminal: the server
  * still refuses the device credential (401). Recovery stays a new pairing code.
  */
 export const RECHECK_STILL_REVOKED_MESSAGE =
-  'Still revoked — the server still refuses this terminal. Enter a new pairing code from the admin portal.';
+  'ما زالت الصلاحية موقوفة. أدخل رمز ربط جديدًا من لوحة الإدارة.';
 
 /** RT-215 10897-A — the "Check again" got no answer (network, server error): still revoked. */
-export const RECHECK_UNREACHABLE_MESSAGE = 'Couldn’t reach the server — try again.';
+export const RECHECK_UNREACHABLE_MESSAGE = 'تعذّر الوصول إلى الخادم. حاول مرة أخرى.';
 
 /**
  * Resolve a `PairingOutcome` to its operator-facing message.

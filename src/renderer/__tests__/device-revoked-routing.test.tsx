@@ -57,7 +57,7 @@ function makeBridge(status: PairingStatus): Bridge {
 }
 
 const RECOVERY_COPY =
-  'This terminal’s access was revoked. Unsent sales are kept on this terminal. Enter a new pairing code from the admin portal to continue.';
+  'تم إيقاف صلاحية هذا الجهاز. المبيعات التي لم تُرسَل محفوظة على الجهاز. أدخل رمز ربط جديدًا من لوحة الإدارة للمتابعة.';
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/');
