@@ -69,6 +69,19 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-424: the Manager → Cashiers harness, same DEV-only contract (the real
+  // CashiersScreen in the real V5Frame against an in-memory operator bridge).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/cashiers-proof')
+) {
+  void import('./v5/cashiers/dev/CashiersProof').then(({ CashiersProof }) => {
+    root.render(
+      <React.StrictMode>
+        <CashiersProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();
