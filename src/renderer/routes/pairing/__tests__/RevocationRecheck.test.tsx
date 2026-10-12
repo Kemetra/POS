@@ -5,7 +5,12 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import { PairingScreen } from '../PairingScreen';
 import { RECHECK_COOLDOWN_MS } from '../RevocationRecheck';
-import { RECHECK_STILL_REVOKED_MESSAGE, RECHECK_UNREACHABLE_MESSAGE } from '../messages';
+import {
+  RECHECK_LABEL,
+  RECHECK_PENDING_LABEL,
+  RECHECK_STILL_REVOKED_MESSAGE,
+  RECHECK_UNREACHABLE_MESSAGE,
+} from '../messages';
 import type { PairingBridgeAPI } from '../../../../shared/bridge-api';
 import type { PairingInvalidReason, PairingRecheckResult } from '../../../../shared/pairing-types';
 
@@ -35,7 +40,7 @@ function renderPairing(bridge: PairingBridgeAPI, invalidReason?: PairingInvalidR
   );
 }
 
-const checkAgain = (): HTMLElement => screen.getByRole('button', { name: 'Check again' });
+const checkAgain = (): HTMLElement => screen.getByRole('button', { name: RECHECK_LABEL });
 
 afterEach(() => {
   cleanup();
@@ -61,12 +66,12 @@ describe('RT-215 10897-A — "Check again" on /pairing', () => {
       makeBridge(() => Promise.resolve({ outcome: 'cleared' })),
       reason,
     );
-    expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: RECHECK_LABEL })).not.toBeInTheDocument();
   });
 
   it('is NOT shown when the bridge has no recheck (older preload / test fakes)', () => {
     renderPairing(makeBridge(), 'device_revoked');
-    expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: RECHECK_LABEL })).not.toBeInTheDocument();
   });
 
   it('cleared: leaves /pairing for /paired (as a successful pairing does)', async () => {
@@ -114,9 +119,9 @@ describe('RT-215 10897-A — "Check again" on /pairing', () => {
     );
     renderPairing(makeBridge(recheck), 'device_revoked');
     fireEvent.click(checkAgain());
-    fireEvent.click(screen.getByRole('button', { name: 'Checking…' }));
+    fireEvent.click(screen.getByRole('button', { name: RECHECK_PENDING_LABEL }));
     expect(recheck).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Checking…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: RECHECK_PENDING_LABEL })).toBeDisabled();
 
     await act(async () => {
       settle({ outcome: 'still_revoked' });
@@ -130,5 +135,12 @@ describe('RT-215 10897-A — "Check again" on /pairing', () => {
       vi.advanceTimersByTime(RECHECK_COOLDOWN_MS);
     });
     expect(checkAgain()).toBeEnabled();
+  });
+});
+
+describe('RT-244 — the approved "Check again" copy', () => {
+  it('pins the button labels to the owner-approved Arabic', () => {
+    expect(RECHECK_LABEL).toBe('تحقق مرة أخرى');
+    expect(RECHECK_PENDING_LABEL).toBe('جارٍ التحقق…');
   });
 });

@@ -1,7 +1,12 @@
 import { useEffect, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { RECHECK_STILL_REVOKED_MESSAGE, RECHECK_UNREACHABLE_MESSAGE } from './messages';
+import {
+  RECHECK_LABEL,
+  RECHECK_PENDING_LABEL,
+  RECHECK_STILL_REVOKED_MESSAGE,
+  RECHECK_UNREACHABLE_MESSAGE,
+} from './messages';
 import type { PairingBridgeAPI } from '../../../shared/bridge-api';
 import type { PairingRecheckOutcome } from '../../../shared/pairing-types';
 
@@ -65,10 +70,9 @@ export function RevocationRecheck(props: { pairing: PairingBridgeAPI }): JSX.Ele
     setMessage(MESSAGE[outcome]);
   }
 
-  // RT-244 PR2: a secondary action under the commit. The copy has no approved
-  // Arabic yet, so it stays English, marked `lang="en"`.
+  // RT-244: a secondary action under the commit, in the approved Arabic.
   return (
-    <div className="v5-entry__recheck" lang="en">
+    <div className="v5-entry__recheck">
       <button
         type="button"
         className="v5-entry__btn v5-entry__commit-secondary"
@@ -77,10 +81,10 @@ export function RevocationRecheck(props: { pairing: PairingBridgeAPI }): JSX.Ele
           void check();
         }}
       >
-        {checking ? 'Checking…' : 'Check again'}
+        {checking ? RECHECK_PENDING_LABEL : RECHECK_LABEL}
       </button>
       {message !== null ? (
-        <p role="status" dir="ltr" data-testid="recheck-message">
+        <p role="status" data-testid="recheck-message">
           {message}
         </p>
       ) : null}

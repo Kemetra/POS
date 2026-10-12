@@ -163,9 +163,7 @@ describe('PairingScreen — InvalidStateBanner (T069)', () => {
         <PairingScreen pairing={makeBridge()} invalidReason="missing_token" />
       </MemoryRouter>,
     );
-    expect(
-      screen.getByText('This terminal needs to be paired again. The secure token is missing.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('يجب ربط الجهاز مرة أخرى. مفتاح الأمان مفقود.')).toBeInTheDocument();
   });
 
   it('renders the orphaned_row banner message when reason is "orphaned_row"', () => {
@@ -175,9 +173,7 @@ describe('PairingScreen — InvalidStateBanner (T069)', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(
-        'This terminal needs to be paired again. Local assignment data is incomplete.',
-      ),
+      screen.getByText('يجب ربط الجهاز مرة أخرى. بيانات الربط المحفوظة ناقصة.'),
     ).toBeInTheDocument();
   });
 
@@ -188,7 +184,7 @@ describe('PairingScreen — InvalidStateBanner (T069)', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText('This terminal needs to be paired again. Secure token recovery failed.'),
+      screen.getByText('يجب ربط الجهاز مرة أخرى. تعذّر استرجاع مفتاح الأمان.'),
     ).toBeInTheDocument();
   });
 
@@ -257,10 +253,25 @@ describe('PairingScreen — the G-1 pairing card (RT-244 PR2)', () => {
     );
   });
 
-  it('keeps the unapproved invalid-state and "Check again" copy marked as English', () => {
+  it('shows the revoked notice in Arabic, keeping the unsent-sales guarantee', () => {
     renderScreen('device_revoked');
     const banner = screen.getByTestId('invalid-state-banner');
     expect(banner).toHaveAttribute('data-tone', 'warning');
-    expect(banner.querySelector('[lang="en"]')).toHaveAttribute('dir', 'ltr');
+    // RT-24 / RT-138 L6: the operator is told unsent sales stay on the terminal.
+    expect(banner).toHaveTextContent('المبيعات التي لم تُرسَل محفوظة على الجهاز.');
+    expect(document.querySelector('[data-testid="route-pairing"] [lang="en"]')).toBeNull();
+  });
+});
+
+describe('PairingScreen — the inconsistent-pairing notice (RT-306, RT-244 copy)', () => {
+  it('says the last pairing did not finish', () => {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        <PairingScreen pairing={makeBridge()} invalidReason="inconsistent" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('invalid-state-banner')).toHaveTextContent(
+      'يجب ربط الجهاز مرة أخرى. آخر عملية ربط لم تكتمل.',
+    );
   });
 });
