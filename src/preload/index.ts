@@ -51,6 +51,7 @@ import {
   type PairingSubmitResult,
 } from '../shared/pairing-types';
 import {
+  CASHIER_PIN_STATUS_IPC_CHANNELS,
   OPERATOR_IPC_CHANNELS,
   RESUME_STATE_IPC_CHANNELS,
   REAUTH_IPC_CHANNELS,
@@ -134,7 +135,7 @@ const operator: OperatorBridgeAPI = {
     ) as Promise<ListBranchRosterResponse>,
   listCashierPinStatus: () =>
     ipcRenderer.invoke(
-      OPERATOR_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS,
+      CASHIER_PIN_STATUS_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS,
     ) as Promise<ListCashierPinStatusResponse>,
   confirmTakeover: (req: ConfirmTakeoverRequest) =>
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM, req) as Promise<

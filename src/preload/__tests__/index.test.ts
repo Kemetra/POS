@@ -6,6 +6,7 @@ import {
   type PairingSubmitResult,
 } from '../../shared/pairing-types';
 import {
+  CASHIER_PIN_STATUS_IPC_CHANNELS,
   OPERATOR_IPC_CHANNELS,
   REAUTH_IPC_CHANNELS,
   RESUME_STATE_IPC_CHANNELS,
@@ -217,7 +218,9 @@ describe('preload bridge', () => {
       kind: 'cashiers',
       cashiers: [],
     });
-    expect(ipcRendererInvoke).toHaveBeenCalledWith(OPERATOR_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS);
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(
+      CASHIER_PIN_STATUS_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS,
+    );
   });
 
   it('operator S5 methods invoke the documented IPC channels', async () => {

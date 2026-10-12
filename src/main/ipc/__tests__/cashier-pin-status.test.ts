@@ -7,7 +7,7 @@ import {
   LOCKED_ALLOWED_CHANNELS,
   SessionLockedError,
 } from '../session-lock-guard.js';
-import { OPERATOR_IPC_CHANNELS } from '../../../shared/operator/channels.js';
+import { CASHIER_PIN_STATUS_IPC_CHANNELS } from '../../../shared/operator/channels.js';
 import type { ListCashierPinStatusResponse } from '../../../shared/bridge-api.js';
 
 /**
@@ -47,7 +47,7 @@ describe('RT-424 registerCashierPinStatusHandler', () => {
     });
 
     await expect(
-      fake.invoke(OPERATOR_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS, {
+      fake.invoke(CASHIER_PIN_STATUS_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS, {
         tenant_id: 'forged',
         terminal_id: 'forged',
       }),
@@ -62,7 +62,9 @@ describe('RT-424 registerCashierPinStatusHandler', () => {
         listCashierPinStatus: () => Promise.reject(new Error('boom: secret')),
       },
     });
-    await expect(fake.invoke(OPERATOR_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS)).resolves.toEqual({
+    await expect(
+      fake.invoke(CASHIER_PIN_STATUS_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS),
+    ).resolves.toEqual({
       kind: 'refused',
       category: 'invalid_input',
     });
@@ -71,7 +73,9 @@ describe('RT-424 registerCashierPinStatusHandler', () => {
 
 describe('RT-424 operator:list-cashier-pin-status behind the session lock guard', () => {
   it('is not on the locked-session allowlist', () => {
-    expect(LOCKED_ALLOWED_CHANNELS.has(OPERATOR_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS)).toBe(false);
+    expect(
+      LOCKED_ALLOWED_CHANNELS.has(CASHIER_PIN_STATUS_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS),
+    ).toBe(false);
   });
 
   it('is refused while the session is locked and never runs the handler', async () => {
@@ -80,9 +84,9 @@ describe('RT-424 operator:list-cashier-pin-status behind the session lock guard'
     const guarded = createSessionLockGuardedIpcMain(fake.ipcMain as IpcMain, () => true);
     registerCashierPinStatusHandler(guarded, { cashierPinStatusHandler: { listCashierPinStatus } });
 
-    await expect(fake.invoke(OPERATOR_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS)).rejects.toBeInstanceOf(
-      SessionLockedError,
-    );
+    await expect(
+      fake.invoke(CASHIER_PIN_STATUS_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS),
+    ).rejects.toBeInstanceOf(SessionLockedError);
     expect(listCashierPinStatus).not.toHaveBeenCalled();
   });
 });

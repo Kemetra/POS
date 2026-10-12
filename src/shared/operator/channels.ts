@@ -16,8 +16,6 @@ export const OPERATOR_IPC_CHANNELS = {
   EMIT_AUDIT_EVENT_SMOKE: 'operator:_emit-audit-event-smoke',
   /** T070b — list cashiers on the terminal's paired branch. */
   LIST_BRANCH_ROSTER: 'operator:list-branch-roster',
-  /** RT-424 (D-M1) — manager/admin: the roster with each cashier's PIN state on this terminal. */
-  LIST_CASHIER_PIN_STATUS: 'operator:list-cashier-pin-status',
   /** T070 — confirm a pending takeover via capability token. */
   TAKEOVER_CONFIRM: 'operator:takeover-confirm',
   /** T071 — cancel a pending takeover; pure local discard. */
@@ -68,6 +66,16 @@ export const RESUME_STATE_IPC_CHANNELS = {
 export const REAUTH_IPC_CHANNELS = {
   /** Same-operator credential check; stores the fresh JWT main-side only. */
   REAUTHENTICATE: 'operator:reauthenticate',
+} as const;
+
+/**
+ * RT-424 (D-M1) — the manager's Cashiers screen read: the roster with each
+ * cashier's PIN state on this terminal. Its own registrar
+ * (`ipc/cashier-pin-status.ts`); not on the locked-session allowlist (refused
+ * while locked).
+ */
+export const CASHIER_PIN_STATUS_IPC_CHANNELS = {
+  LIST_CASHIER_PIN_STATUS: 'operator:list-cashier-pin-status',
 } as const;
 
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

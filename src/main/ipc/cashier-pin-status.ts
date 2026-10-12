@@ -1,6 +1,6 @@
 import type { IpcMain } from 'electron';
 
-import { OPERATOR_IPC_CHANNELS } from '../../shared/operator/channels.js';
+import { CASHIER_PIN_STATUS_IPC_CHANNELS } from '../../shared/operator/channels.js';
 import type { ListCashierPinStatusResponse } from '../../shared/bridge-api.js';
 
 /**
@@ -20,7 +20,7 @@ export function registerCashierPinStatusHandler(
   deps: CashierPinStatusIpcDeps,
 ): void {
   ipcMain.handle(
-    OPERATOR_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS,
+    CASHIER_PIN_STATUS_IPC_CHANNELS.LIST_CASHIER_PIN_STATUS,
     async (): Promise<ListCashierPinStatusResponse> => {
       try {
         return await deps.cashierPinStatusHandler.listCashierPinStatus();
