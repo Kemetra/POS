@@ -467,7 +467,7 @@ Kept at Electron's default, with reasons:
 | `--remote-debugging-pipe` | Process kept running | Exited; refusal logged |
 | Copy of the shipped folder, exe **renamed** `electron.exe`, `--remote-debugging-port` | (probed during RT-164) CDP reachable, pairing page open | Not reachable; exited; refusal logged |
 | **Stock** `electron.exe` + the shipped `app.asar`, `--remote-debugging-port` | (probed during RT-164) CDP reachable, pairing page open | Not reachable; exited; refusal logged |
-| Normal launch | Started; DB migrated; `app:ready` | Same. The window's accessibility tree shows the pairing screen ("Enter the pairing code…", "Pair terminal"), so the renderer, preload bridge and IPC all work |
+| Normal launch | Started; DB migrated; `app:ready` | Same. The window's accessibility tree shows the pairing screen («ربط الجهاز», «أدخل رمز الربط الظاهر في لوحة الإدارة.»; English before RT-244), so the renderer, preload bridge and IPC all work |
 
 The two rename rows exist because Electron's `app.isPackaged` comes from the
 exe **file name**. The first guard used it alone, and both probes got past it.

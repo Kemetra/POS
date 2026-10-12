@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type SyntheticEvent, type JSX } from 'reac
 import { useNavigate } from 'react-router-dom';
 
 import { messageFor, EMPTY_INPUT_MESSAGE } from './messages';
+import { PAIRING_COPY } from '../../v5/entry/entry-copy';
+import { RefusalNotice } from '../../v5/entry/RefusalNotice';
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 
 /**
@@ -24,10 +26,12 @@ import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-
  *      - `submitting` — gates re-entry (a second Enter while the first
  *        call is still pending is dropped) and disables the submit
  *        button.
- *      - `statusMessage` — the operator-facing message rendered in a
- *        `role="status"` region. `null` when the form is idle; the
- *        empty-input validation copy on a no-content submit (T045);
- *        the outcome's message family on a non-success result (T043).
+ *      - `statusMessage` — the operator-facing message rendered in the
+ *        always-mounted `role="status"` slot (RT-244). `null` when the
+ *        form is idle, so the slot is empty; the empty-input
+ *        validation copy on a no-content submit (T045); the outcome's
+ *        message family on a non-success result (T043), or the
+ *        generic copy when the submit throws.
  *      - `disabledUntil` (T057, US5) — epoch-ms timestamp when the
  *        rate-limit window expires. `null` means "no rate limit
  *        active". A `useEffect` schedules a single `setTimeout` to
@@ -75,13 +79,23 @@ export interface PairingFormProps {
    * from `window.api.pairing`.
    */
   pairing?: PairingBridgeAPI;
+  /** The card heading that names the form; without it the form names itself. */
+  labelledBy?: string;
+  /** The card hint, announced with the field. */
+  hintId?: string;
 }
+
+const STATUS_ID = 'pairing-status';
 
 export function PairingForm(props: PairingFormProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [disabledUntil, setDisabledUntil] = useState<number | null>(null);
+  // Set while a submit that has not navigated away is in flight: the field was
+  // disabled while it ran, which drops focus to <body>, so it takes focus back
+  // once re-enabled and a scanner operator can scan the next code (RT-244 PR2).
+  const refocusAfterSubmit = useRef(false);
   const navigate = useNavigate();
 
   const pairing = props.pairing ?? readBridge();
@@ -101,6 +115,15 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
       clearTimeout(timer);
     };
   }, [disabledUntil]);
+
+  useEffect(() => {
+    if (submitting || !refocusAfterSubmit.current) return;
+    refocusAfterSubmit.current = false;
+    // Only reclaim focus the disabled field lost; never pull it away from a
+    // control the operator moved to while the submit ran.
+    const active = document.activeElement;
+    if (active === null || active === document.body) inputRef.current?.focus();
+  }, [submitting]);
 
   // Compute fresh on every render. `disabledUntil` is the epoch-ms
   // expiry; `Date.now() < disabledUntil` is the active window. The
@@ -124,9 +147,13 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
     // Clear any prior message so a stale failure copy does not visually
     // stack with the in-flight state.
     setStatusMessage(null);
+    // Set before the await so a thrown submit refocuses too; only success,
+    // which navigates away, clears it.
+    refocusAfterSubmit.current = true;
     try {
       const result = await pairing.submit(code);
       if (result.outcome === 'success') {
+        refocusAfterSubmit.current = false;
         void navigate('/paired', { replace: true });
         return;
       }
@@ -146,6 +173,11 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
       // unknown_error). The form re-enables and stays editable so the
       // operator can retry.
       setStatusMessage(messageFor(result.outcome));
+    } catch {
+      // The bridge maps every failure to an outcome; a rejection means the
+      // main handler threw (IPC). Show the generic copy so the operator can
+      // retry, and never echo the thrown value (Constitution VII).
+      setStatusMessage(messageFor('unknown_error'));
     } finally {
       setSubmitting(false);
     }
@@ -156,18 +188,30 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
     void performSubmit();
   }
 
+  const formName =
+    props.labelledBy !== undefined
+      ? { 'aria-labelledby': props.labelledBy }
+      : { 'aria-label': PAIRING_COPY.title };
+  const describedBy = [props.hintId, STATUS_ID].filter((id) => id !== undefined).join(' ');
+
+  // RT-244 PR2 (G-1 «Pairing»): one free-text code field (mono, LTR; the code
+  // length is server-defined, so it is not segmented), a status slot that stays
+  // mounted so the live region is in place before the first message, and the
+  // full-width commit.
   return (
-    <form className="pairing-form" onSubmit={onSubmit} aria-label="Pair terminal">
-      <div className="pairing-screen__field">
-        <label htmlFor="pairing-code">Pairing code</label>
+    <form className="v5-entry__card-form" onSubmit={onSubmit} noValidate {...formName}>
+      <div className="v5-entry__field">
+        <label htmlFor="pairing-code">{PAIRING_COPY.field}</label>
         <input
           id="pairing-code"
-          className="pairing-form__code-input"
+          className="v5-entry__input v5-entry__code-input"
           ref={inputRef}
+          dir="ltr"
           type="text"
           autoComplete="off"
           spellCheck={false}
           autoFocus
+          aria-describedby={describedBy}
           // T057: input is gated by `submitting` only. While rate-limited,
           // the operator may correct a typo so they're ready to retry the
           // moment the timer expires. Only the submit BUTTON gates on
@@ -175,20 +219,18 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
           disabled={submitting}
         />
       </div>
-      <div className="pairing-screen__actions">
-        <button
-          type="submit"
-          className="btn btn--primary btn--lg pairing-form__submit"
-          disabled={submitting || isRateLimited}
-        >
-          {submitting ? 'Pairing…' : 'Pair terminal'}
-        </button>
+      <div className="v5-entry__slot" id={STATUS_ID} role="status">
+        {statusMessage !== null ? (
+          <RefusalNotice testId="pairing-message">{statusMessage}</RefusalNotice>
+        ) : null}
       </div>
-      {statusMessage !== null ? (
-        <p role="status" data-testid="pairing-message">
-          {statusMessage}
-        </p>
-      ) : null}
+      <button
+        type="submit"
+        className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+        disabled={submitting || isRateLimited}
+      >
+        {submitting ? PAIRING_COPY.submitting : PAIRING_COPY.submit}
+      </button>
     </form>
   );
 }

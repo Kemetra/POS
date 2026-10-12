@@ -103,3 +103,28 @@ describe('RT-244 entry.css — Windows contrast themes', () => {
     expect(forced).toMatch(/\.v5-entry__btn--primary\s*\{[^}]*border:\s*2px solid ButtonText/);
   });
 });
+
+describe('RT-244 PR2 entry.css — the Ready and pairing card', () => {
+  it('holds one card of about 440px, padded 32/28px by density', () => {
+    expect(ruleBody(css, '.v5-entry__card')).toMatch(/inline-size:\s*min\(440px,\s*100%\)/);
+    expect(pxVar(comfortable, 'entry-card-pad')).toBe(32);
+    expect(pxVar(compact, 'entry-card-pad')).toBe(28);
+  });
+
+  it('centres the card safely, so an oversized card scrolls from its top (RT-313)', () => {
+    expect(ruleBody(css, '.v5-entry__center')).toMatch(/place-items:\s*safe center/);
+    expect(ruleBody(css, '.v5-entry__center')).toMatch(/overflow-y:\s*auto/);
+  });
+
+  it('sets the pairing code in the mono token, LTR-aligned by the shared field rule', () => {
+    expect(ruleBody(css, '.v5-entry__code-input')).toMatch(
+      /font-family:\s*var\(--font-family-mono\)/,
+    );
+    expect(ruleBody(css, ".v5-entry__input[dir='ltr']")).toMatch(/text-align:\s*left/);
+  });
+
+  it('keeps the card, its icon and its fact visible under forced colours', () => {
+    expect(forced).toMatch(/\.v5-entry__card\s*\{[^}]*border-color:\s*CanvasText/);
+    expect(forced).toMatch(/\.v5-entry__facts\s*\{[^}]*border:\s*1px solid CanvasText/);
+  });
+});

@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import type {
   ListBranchRosterResponse,
@@ -8,7 +8,10 @@ import type {
   SignInResponse,
 } from '../../../../shared/bridge-api';
 import type { RefusalCategory } from '../../../../shared/audit/event-shape';
+import type { PairingOutcome } from '../../../../shared/pairing-types';
 import { SignInRoute } from '../../../routes/sign-in';
+import { PairedScreen } from '../../../routes/paired/PairedScreen';
+import { PairingScreen } from '../../../routes/pairing/PairingScreen';
 import { SupportedViewport } from '../../foundation/SupportedViewport';
 
 /**
@@ -24,7 +27,9 @@ import { SupportedViewport } from '../../foundation/SupportedViewport';
  *
  * Query (after the hash): `roster` = typical | long | offline | refused | empty
  * (default typical); `signin` = a refusal category every cashier sign-in returns
- * (default invalid_input).
+ * (default invalid_input); `screen` = sign-in | ready | pairing | revoked
+ * (default sign-in; RT-244 PR2); `pair` = the outcome every pairing submit
+ * returns (default invalid_code).
  */
 
 const TYPICAL = [
@@ -54,17 +59,46 @@ const LONG = [
 
 const REFUSALS: ReadonlyArray<RefusalCategory> = ['invalid_input', 'rate_limited', 'no_connection'];
 
+const SCREENS = {
+  'sign-in': '/sign-in',
+  ready: '/paired',
+  pairing: '/pairing',
+  revoked: '/pairing',
+};
+type ProofScreen = keyof typeof SCREENS;
+
+const PAIR_OUTCOMES: ReadonlyArray<PairingOutcome> = [
+  'invalid_code',
+  'expired_code',
+  'already_paired',
+  'branch_mismatch',
+  'rate_limited',
+  'network_error',
+  'unknown_error',
+  'session_active',
+  'terminal_already_paired',
+];
+
 interface HarnessParams {
   readonly roster: string;
   readonly signin: RefusalCategory;
+  readonly screen: ProofScreen;
+  readonly pair: PairingOutcome;
+}
+
+function oneOf<T extends string>(value: string | null, allowed: ReadonlyArray<T>, fallback: T): T {
+  return value !== null && (allowed as ReadonlyArray<string>).includes(value)
+    ? (value as T)
+    : fallback;
 }
 
 export function readSignInProofParams(): HarnessParams {
   const params = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
-  const signin = params.get('signin') as RefusalCategory | null;
   return {
     roster: params.get('roster') ?? 'typical',
-    signin: signin !== null && REFUSALS.includes(signin) ? signin : 'invalid_input',
+    signin: oneOf(params.get('signin'), REFUSALS, 'invalid_input'),
+    screen: oneOf(params.get('screen'), Object.keys(SCREENS) as ProofScreen[], 'sign-in'),
+    pair: oneOf(params.get('pair'), PAIR_OUTCOMES, 'invalid_code'),
   };
 }
 
@@ -119,25 +153,51 @@ export function makeProofOperator(params: HarnessParams): OperatorBridgeAPI {
   };
 }
 
-const PROOF_PAIRING: PairingBridgeAPI = {
-  getStatus: () =>
-    Promise.resolve({
-      kind: 'paired',
-      tenant_id: 'proof-tenant',
-      branch_id: 'proof-branch',
-      terminal_id: 'proof-terminal',
-      terminal_label: 'POS-03',
-      paired_at: 1735689600,
-    }),
-  submit: () => Promise.reject(new Error('the sign-in proof does not pair')),
-} as unknown as PairingBridgeAPI;
+/** A paired terminal whose every pairing submit returns `pair` (never success). */
+export function makeProofPairing(params: HarnessParams): PairingBridgeAPI {
+  return {
+    getStatus: () =>
+      Promise.resolve({
+        kind: 'paired',
+        tenant_id: 'proof-tenant',
+        branch_id: 'proof-branch',
+        terminal_id: 'proof-terminal',
+        terminal_label: 'POS-03',
+        paired_at: 1735689600,
+      }),
+    submit: () =>
+      Promise.resolve(
+        params.pair === 'rate_limited'
+          ? { outcome: 'rate_limited', retry_after_s: 30 }
+          : { outcome: params.pair },
+      ),
+    recheckRevocation: () => Promise.resolve({ outcome: 'still_revoked' }),
+  } as unknown as PairingBridgeAPI;
+}
 
 export function SignInProof(): JSX.Element {
   const params = readSignInProofParams();
+  const pairing = makeProofPairing(params);
   return (
-    <MemoryRouter initialEntries={['/sign-in']}>
+    <MemoryRouter initialEntries={[SCREENS[params.screen]]}>
       <SupportedViewport>
-        <SignInRoute operator={makeProofOperator(params)} pairing={PROOF_PAIRING} />
+        <Routes>
+          <Route
+            path="/sign-in"
+            element={<SignInRoute operator={makeProofOperator(params)} pairing={pairing} />}
+          />
+          <Route path="/paired" element={<PairedScreen pairing={pairing} />} />
+          <Route
+            path="/pairing"
+            element={
+              params.screen === 'revoked' ? (
+                <PairingScreen pairing={pairing} invalidReason="device_revoked" />
+              ) : (
+                <PairingScreen pairing={pairing} />
+              )
+            }
+          />
+        </Routes>
       </SupportedViewport>
     </MemoryRouter>
   );

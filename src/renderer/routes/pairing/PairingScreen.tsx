@@ -3,7 +3,8 @@ import type { JSX } from 'react';
 import { PairingForm } from './PairingForm';
 import { InvalidStateBanner } from './InvalidStateBanner';
 import { RevocationRecheck } from './RevocationRecheck';
-import { CenterStage } from '../../shell/regions/CenterStage';
+import { EntryCardIcon, EntryCardScreen } from '../../v5/entry/EntryCard';
+import { PAIRING_COPY } from '../../v5/entry/entry-copy';
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 import type { PairingStatus } from '../../../shared/pairing-types';
 
@@ -52,20 +53,26 @@ export function PairingScreen(props: PairingScreenProps): JSX.Element {
   // RT-215 10897-A — "Check again" only while the terminal is device-revoked.
   const recheckVia =
     props.invalidReason === 'device_revoked' ? recheckBridge(props.pairing) : undefined;
+  // RT-244 PR2 (G-1 «Pairing»): one centred card — the heading and hint, the
+  // invalid-state notice when the router names a reason, the form, and the
+  // "Check again" while device-revoked.
   return (
-    <CenterStage>
-      <main className="pairing-screen__root" data-testid="route-pairing" {...reasonAttr}>
-        {props.invalidReason !== undefined && <InvalidStateBanner reason={props.invalidReason} />}
-        <div className="pairing-screen__card">
-          <div className="pairing-screen__brand">
-            <h1>POS Pulse</h1>
-            <p>Enter the pairing code shown in the admin portal.</p>
-          </div>
-          <PairingForm {...formProps} />
-          {recheckVia !== undefined && <RevocationRecheck pairing={recheckVia} />}
+    <EntryCardScreen rootProps={{ 'data-testid': 'route-pairing', ...reasonAttr }}>
+      <div className="v5-entry__card">
+        <EntryCardIcon name="link" />
+        <div className="v5-entry__card-head">
+          <h1 id="pairing-title" className="v5-entry__card-title">
+            {PAIRING_COPY.title}
+          </h1>
+          <p id="pairing-hint" className="v5-entry__card-hint">
+            {PAIRING_COPY.hint}
+          </p>
         </div>
-      </main>
-    </CenterStage>
+        {props.invalidReason !== undefined && <InvalidStateBanner reason={props.invalidReason} />}
+        <PairingForm {...formProps} labelledBy="pairing-title" hintId="pairing-hint" />
+        {recheckVia !== undefined && <RevocationRecheck pairing={recheckVia} />}
+      </div>
+    </EntryCardScreen>
   );
 }
 

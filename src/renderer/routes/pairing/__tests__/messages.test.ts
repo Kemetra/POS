@@ -59,11 +59,12 @@ describe('messageFor — US5 outcome (T057)', () => {
     expect(messageFor('rate_limited')).toBe(RATE_LIMITED_MESSAGE);
   });
 
-  it('RATE_LIMITED_MESSAGE matches the /too many attempts/i family copy', () => {
+  it('RATE_LIMITED_MESSAGE opens with the «محاولات كثيرة» family copy', () => {
     // Pin the action-oriented family so a future copy edit cannot
-    // silently drop the operator-recognisable phrase. Same regex used
-    // in PairingForm.test.tsx (T056).
-    expect(RATE_LIMITED_MESSAGE).toMatch(/too many attempts/i);
+    // silently drop the operator-recognisable phrase. Same pattern used
+    // in PairingForm.test.tsx (T056); RT-244 keeps it equal to the sign-in
+    // lockout family.
+    expect(RATE_LIMITED_MESSAGE).toMatch(/^محاولات كثيرة/);
   });
 });
 
@@ -74,18 +75,21 @@ describe('messageFor — T074 friendly copy for network_error / unknown_error', 
     expect(msg).not.toBe(GENERIC_FAILURE_MESSAGE);
   });
 
-  it('NETWORK_ERROR_MESSAGE contains /no connection/i or /check.*network/i action hint', () => {
-    expect(NETWORK_ERROR_MESSAGE).toMatch(/no connection|check.*network/i);
+  it('NETWORK_ERROR_MESSAGE names the missing connection and the network check', () => {
+    expect(NETWORK_ERROR_MESSAGE).toMatch(/لا يوجد اتصال/);
+    expect(NETWORK_ERROR_MESSAGE).toMatch(/تحقق من الشبكة/);
   });
 
-  it('unknown_error -> UNKNOWN_ERROR_MESSAGE (not GENERIC_FAILURE_MESSAGE)', () => {
-    const msg = messageFor('unknown_error');
-    expect(msg).toBe(UNKNOWN_ERROR_MESSAGE);
-    expect(msg).not.toBe(GENERIC_FAILURE_MESSAGE);
+  it('unknown_error -> UNKNOWN_ERROR_MESSAGE, which the never-rendered success arm reuses', () => {
+    // RT-244: the approved copy has one "other" string, so the success arm
+    // (the form navigates before it could render) reuses it instead of a
+    // string no operator would ever see.
+    expect(messageFor('unknown_error')).toBe(UNKNOWN_ERROR_MESSAGE);
+    expect(GENERIC_FAILURE_MESSAGE).toBe(UNKNOWN_ERROR_MESSAGE);
   });
 
-  it('UNKNOWN_ERROR_MESSAGE contains /try again/i action hint', () => {
-    expect(UNKNOWN_ERROR_MESSAGE).toMatch(/try again/i);
+  it('UNKNOWN_ERROR_MESSAGE invites a retry', () => {
+    expect(UNKNOWN_ERROR_MESSAGE).toMatch(/حاول مرة أخرى/);
   });
 
   it('NETWORK_ERROR_MESSAGE is distinct from UNKNOWN_ERROR_MESSAGE', () => {
@@ -194,21 +198,20 @@ describe('messages dictionary — distinct constants', () => {
     }
   });
 
-  it('all eleven message constants are pairwise distinct', () => {
+  it('the ten message constants an operator can see are pairwise distinct', () => {
     const set = new Set([
       INVALID_CODE_MESSAGE,
       EXPIRED_CODE_MESSAGE,
       ALREADY_PAIRED_MESSAGE,
       BRANCH_MISMATCH_MESSAGE,
       RATE_LIMITED_MESSAGE,
-      GENERIC_FAILURE_MESSAGE,
       NETWORK_ERROR_MESSAGE,
       UNKNOWN_ERROR_MESSAGE,
       EMPTY_INPUT_MESSAGE,
       SESSION_ACTIVE_MESSAGE,
       TERMINAL_ALREADY_PAIRED_MESSAGE,
     ]);
-    expect(set.size).toBe(11);
+    expect(set.size).toBe(10);
   });
 
   it('every PairingOutcome maps to a non-empty message (totality)', () => {
@@ -235,7 +238,7 @@ describe('messages dictionary — distinct constants', () => {
 describe('RT-215 review F3 — session_active', () => {
   it('maps to the finish-and-sign-out copy', () => {
     expect(messageFor('session_active')).toBe(SESSION_ACTIVE_MESSAGE);
-    expect(SESSION_ACTIVE_MESSAGE).toMatch(/sign out/i);
+    expect(SESSION_ACTIVE_MESSAGE).toMatch(/سجّل الخروج/);
   });
 });
 

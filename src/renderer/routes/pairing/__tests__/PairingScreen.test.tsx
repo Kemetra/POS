@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import { PairingScreen } from '../PairingScreen';
+import { PAIRING_COPY } from '../../../v5/entry/entry-copy';
 import type { PairingBridgeAPI } from '../../../../shared/bridge-api';
 
 /**
@@ -218,5 +219,48 @@ describe('PairingScreen — InvalidStateBanner (T069)', () => {
     // The total on the route must still be exactly 1 (form's pairing-code input).
     const inputs = document.querySelectorAll('input');
     expect(inputs).toHaveLength(1);
+  });
+});
+
+describe('PairingScreen — the G-1 pairing card (RT-244 PR2)', () => {
+  function renderScreen(invalidReason?: 'device_revoked'): void {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        {invalidReason !== undefined ? (
+          <PairingScreen pairing={makeBridge()} invalidReason={invalidReason} />
+        ) : (
+          <PairingScreen pairing={makeBridge()} />
+        )}
+      </MemoryRouter>,
+    );
+  }
+
+  it('is an Arabic RTL card whose heading names the form', () => {
+    renderScreen();
+    const root = screen.getByTestId('route-pairing');
+    expect(root).toHaveAttribute('dir', 'rtl');
+    expect(root).toHaveAttribute('lang', 'ar');
+    expect(screen.getByRole('heading', { level: 1, name: PAIRING_COPY.title })).toBeInTheDocument();
+    expect(screen.getByRole('form', { name: PAIRING_COPY.title })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: PAIRING_COPY.submit })).toBeInTheDocument();
+  });
+
+  it('the code field is LTR, labelled, and described by the hint and the status slot', () => {
+    renderScreen();
+    const input = screen.getByRole('textbox', { name: PAIRING_COPY.field });
+    expect(input).toHaveAttribute('dir', 'ltr');
+    expect(input).toHaveAccessibleDescription(expect.stringContaining(PAIRING_COPY.hint));
+    // The live region is mounted before the first message, so it is announced.
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(input.getAttribute('aria-describedby')?.split(' ')).toContain(
+      screen.getByRole('status').id,
+    );
+  });
+
+  it('keeps the unapproved invalid-state and "Check again" copy marked as English', () => {
+    renderScreen('device_revoked');
+    const banner = screen.getByTestId('invalid-state-banner');
+    expect(banner).toHaveAttribute('data-tone', 'warning');
+    expect(banner.querySelector('[lang="en"]')).toHaveAttribute('dir', 'ltr');
   });
 });

@@ -18,6 +18,7 @@
   --entry-key: 64px;
   --entry-commit: 60px;
   --entry-auth-col: 340px;
+  --entry-card-pad: 32px;
 
   display: flex;
   flex-direction: column;
@@ -40,6 +41,7 @@
     --entry-key: 56px;
     --entry-commit: 56px;
     --entry-auth-col: 304px;
+    --entry-card-pad: 28px;
   }
 }
 
@@ -531,6 +533,108 @@
   text-align: left;
 }
 
+/* ── Ready and pairing: one centred card of about 440px (G-1) ──── */
+.v5-entry__center {
+  display: grid;
+  flex: 1;
+  /* safe: a card taller than the stage (the revoked card at the 600px floor,
+     RT-313) starts at the top, so its heading stays reachable by scrolling */
+  place-items: safe center;
+  min-block-size: 0;
+  padding: var(--entry-gutter);
+  overflow-y: auto;
+}
+
+.v5-entry__card,
+.v5-entry__card-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.v5-entry__card {
+  inline-size: min(440px, 100%);
+  padding: var(--entry-card-pad);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-entry__card-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 48px;
+  block-size: 48px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.v5-entry__card-head {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.v5-entry__card-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+.v5-entry__card-hint {
+  color: var(--color-text-muted);
+}
+
+/* the Ready card's one fact: the terminal label (admin free text, in <bdi>) */
+.v5-entry__facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px var(--space-4);
+  margin: 0;
+  padding: var(--space-3) 14px;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-elevated);
+}
+
+.v5-entry__facts dt {
+  color: var(--color-text-muted);
+}
+
+.v5-entry__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* the pairing code: one free-text field (its length is server-defined), mono, LTR */
+.v5-entry__code-input {
+  block-size: 56px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.12em;
+}
+
+.v5-entry__slot {
+  min-block-size: 24px;
+}
+
+.v5-entry__recheck {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.v5-entry__commit-secondary {
+  inline-size: 100%;
+  min-block-size: 48px;
+}
+
+/* unavailable while a check runs and through its cooldown: sunken, muted ink */
+.v5-entry__commit-secondary:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
 /* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
 @media (forced-colors: active) {
   .v5-entry__panel,
@@ -539,8 +643,14 @@
   .v5-entry__key,
   .v5-entry__dots,
   .v5-entry__input,
-  .v5-entry__prompt {
+  .v5-entry__prompt,
+  .v5-entry__card {
     border-color: CanvasText;
+  }
+
+  .v5-entry__card-icon,
+  .v5-entry__facts {
+    border: 1px solid CanvasText;
   }
 
   /* Selected keeps the system highlight. forced-color-adjust: none, or the text's
@@ -579,6 +689,7 @@
 
   .v5-entry__btn--primary:disabled,
   .v5-entry__btn--primary[aria-disabled='true'],
+  .v5-entry__commit-secondary:disabled,
   .v5-entry__keypad[aria-disabled='true'] .v5-entry__key,
   .v5-entry__key:disabled {
     border-color: GrayText;

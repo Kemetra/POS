@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+import { READY_COPY } from '../../../v5/entry/entry-copy';
 import { PairedScreen } from '../PairedScreen';
 import type { PairingBridgeAPI } from '../../../../shared/bridge-api';
 import type { PairingStatus } from '../../../../shared/pairing-types';
@@ -64,7 +65,7 @@ describe('PairedScreen continue-to-dashboard (T053)', () => {
     const bridge = makeBridge();
     renderWithRouter(bridge);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: READY_COPY.continue })).toBeInTheDocument(),
     );
   });
 
@@ -81,9 +82,9 @@ describe('PairedScreen continue-to-dashboard (T053)', () => {
     const bridge = makeBridge();
     renderWithRouter(bridge);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: READY_COPY.continue })).toBeInTheDocument(),
     );
-    await user.click(screen.getByRole('button', { name: /^continue$/i }));
+    await user.click(screen.getByRole('button', { name: READY_COPY.continue }));
     await waitFor(() => expect(screen.getByTestId('route-app-dashboard')).toBeInTheDocument());
   });
 
@@ -95,9 +96,9 @@ describe('PairedScreen continue-to-dashboard (T053)', () => {
     const lsSpy = vi.spyOn(window, 'localStorage', 'get');
     renderWithRouter(bridge);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: READY_COPY.continue })).toBeInTheDocument(),
     );
-    await user.click(screen.getByRole('button', { name: /^continue$/i }));
+    await user.click(screen.getByRole('button', { name: READY_COPY.continue }));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(lsSpy).not.toHaveBeenCalled();
     lsSpy.mockRestore();
