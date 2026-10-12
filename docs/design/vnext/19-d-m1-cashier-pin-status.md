@@ -112,6 +112,14 @@ locked out*. It does **not** promise that sign-in will succeed. Online admission
 stored hash (safeStorage) and the pairing epoch can still refuse. The copy says no more than
 that.
 
+**Loading and re-reading.**
+- On the first load, the panel shows the muted line «جارٍ تحميل القائمة…» and no rows.
+- On a re-read, the rows that are already shown stay. Every row action stays disabled under the
+  shared pending guard until the answer arrives, and then the rows are replaced in one step.
+- If the session locks or signs out while the read is in flight, main re-checks the session after
+  the roster await, as provision does (RT-358), and answers `not_signed_in`. A lock never shows
+  stale rows to the next person.
+
 **Freshness: no polling.** A lock ends on its own after 5 minutes, so a «مقفل» badge can go stale
 while the screen is open. The screen re-reads:
 - after every action, success or refusal;
@@ -136,6 +144,9 @@ channel, and the preload key-list and contract tests.
 | M6 | Session expired (provision only, RT-247) | the shipped M-A3 notice | «تسجيل الدخول» | — | «حفظ» |
 
 **Empty roster:** «لا يوجد كاشير مسجّل في هذا الفرع.», the same fact as on sign-in.
+
+**Change PIN on a locked row** also clears the lock, because reset sets `lockout_until = NULL`.
+The success copy is M-K2b, and the re-read then shows the row as «جاهز».
 
 **One action at a time:** while a call is pending, every row action is disabled. This keeps
 today's shared pending guard.
@@ -163,7 +174,10 @@ today's shared pending guard.
 | ID | Where | Arabic | Tone | Status |
 |---|---|---|---|---|
 | M-K0 | Screen title | «إدارة الكاشير» | — | the link label already ships |
-| M-K1 | Roster unreachable (M1) | «تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.» + button «إعادة المحاولة» | warning | **choose, §7 D4** |
+| M-K0b | Under the title | «الرقم السري لكل كاشير على الجهاز ‹الجهاز›» (the terminal label in `<bdi>`, as the entry strip shows it today) | — | proposed |
+| M-K0c | List heading | «الكاشير في هذا الفرع» · «‹n› كاشير» | — | proposed (the heading matches sign-in) |
+| M-K0d | First load | «جارٍ تحميل القائمة…» | neutral | proposed |
+| M-K1 | Roster unreachable (M1) | «تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.» + button «إعادة المحاولة» | warning | **approved (D4, 2026-10-12)** |
 | M-K1b | Roster refused, other cause | «تعذّر تحميل قائمة الكاشير.» + «إعادة المحاولة» | warning | proposed (matches sign-in) |
 | M-K2 | First PIN set | «تم تعيين الرقم السري لـ ‹الاسم›.» | success | **in 15** |
 | M-K2b | PIN changed | «تم تغيير الرقم السري لـ ‹الاسم›.» | success | proposed |
@@ -181,16 +195,22 @@ today's shared pending guard.
 `‹الاسم›` is the roster `display_name`. It is admin free text, so it sits in `<bdi>`. No string
 interpolates a PIN, an id or a refusal category.
 
-## 6. The references to draw after approval (G-3)
+## 6. The G-3 references (in this PR, PROPOSED)
 
-Ten states, each at 1024 and 1280, light and forced colours. They are drawn in the manager frame
-as it is on `main` today: the slim nav, plus the RT-407 compact height checked at 1024×600.
+There are ten states, each at 1024×768 and 1280×800, in light and forced colours.
+- They are in [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html).
+- They are drawn in the manager frame as it is on `main` today: the labelled nav panel, 208 px at
+  1280 and 140 px at 1024. There is no current nav entry, because the screen opens from the
+  Dashboard link.
+- The references are fixed-size pages, so the 1024×600 floor (RT-313 / RT-407) is **not** drawn.
+  The implementation slice checks it in the real frame: the list scrolls inside the panel and
+  the dialog scrolls inside its scrim.
 
 1. The list, mixed: `no_pin`, `ready` and `locked` rows.
 2. A long list (18 rows), so the list scrolls and the header stays in view.
 3. M5 first PIN, empty.
 4. M5 with a mismatch (M-K3).
-5. M5 change PIN (if D1 is accepted).
+5. M5 change PIN (D1).
 6. Success notice (M-K2) with the row now «جاهز».
 7. Unlock done (M-K2c) with the row now «جاهز».
 8. M1 roster unreachable.
@@ -221,6 +241,12 @@ and captures checked for fit, the 12 px and 44 px floors, axe and names that wra
 
 ## 8. Delivery
 
-This PR is docs-only: this brief, plus a row in [15](15-vnext-freeze-package.md) pointing at it.
-After the owner approves, a second docs PR adds the G-3 references. Implementation is a separate
-Jira slice: main read and IPC, the renderer screen, and tests, with the §A4 re-check.
+This PR is docs-only:
+- this brief;
+- the G-3 references and their tools (`tools/gen_g3.py`, `tools/capture_g3.cjs`);
+- pointers in [15](15-vnext-freeze-package.md), the README and the visual-acceptance index.
+
+It merges after the owner approves the references and the proposed copy (D5).
+
+Implementation is a separate Jira slice: the main read and IPC, the renderer screen, and tests,
+with the §A4 re-check.
