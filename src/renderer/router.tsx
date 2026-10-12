@@ -280,7 +280,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
               element: (
                 <OperatorRouteGuard allow={['manager', 'admin']}>
                   {props.operator !== undefined ? (
-                    <CashierManagement operator={props.operator} />
+                    <CashierManagement operator={props.operator} pairing={props.pairing} />
                   ) : (
                     <Navigate to="dashboard" replace />
                   )}

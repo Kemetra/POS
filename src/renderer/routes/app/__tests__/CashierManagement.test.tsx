@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
@@ -10,19 +10,30 @@ import {
   type OperatorSessionView,
 } from '../../../stores/operator-session-store.js';
 import { OperatorRouteGuard } from '../../operator-route-guard.js';
+import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config.js';
+import {
+  CASHIERS_COPY,
+  PIN_STATE_LABEL,
+  lockedUntilText,
+} from '../../../v5/cashiers/cashiers-copy.js';
+import type {
+  CashierPinStatus,
+  ListCashierPinStatusResponse,
+  PairingBridgeAPI,
+} from '../../../../shared/bridge-api.js';
 
 /**
- * T078 — cashier management surface at /app/manager/cashiers.
+ * T078 → RT-424 (D-M1, doc 19 §3–§5) — the manager's Cashiers screen at
+ * /app/manager/cashiers, rebuilt on the G-3 references.
  *
- * Security invariants (PR-1):
- *   - No PIN value, PIN hash, or sealed material ever renders in the DOM.
- *   - Error surfaces are generic only (no cashier id, no credential detail).
- *   - Bridge calls carry only allowed arguments — no PIN on unlock.
- *
- * Role gate (AD-1 secondary):
- *   - cashier → redirect to /sign-in.
- *   - manager / admin → content renders.
- *   - signedOut → redirect to /sign-in.
+ *   - Role gate (AD-1 secondary): cashier / signed-out → /sign-in.
+ *   - The list is `listCashierPinStatus`; each row shows a text badge and only
+ *     the actions its state allows (hidden, not disabled — UX-05).
+ *   - M5: two PIN fields, 4–6 digits, mismatch / wrong length refused in the
+ *     renderer before any call.
+ *   - Re-read on mount, after every action and on «إعادة المحاولة».
+ *   - One pending guard for every call (RT-235 review).
+ *   - PR-1: no PIN, roster id or refusal category ever reaches the DOM.
  */
 
 const MANAGER_SESSION: OperatorSessionView = {
@@ -51,8 +62,22 @@ const ADMIN_SESSION: OperatorSessionView = {
   role: 'admin',
 };
 
+const LOCKED_UNTIL = '2026-10-12T14:35:00.000Z';
+const AMAL: CashierPinStatus = { id: 'cash-1', display_name: 'أمل', pin: 'no_pin' };
+const BASMA: CashierPinStatus = { id: 'cash-2', display_name: 'بسمة', pin: 'ready' };
+const DALIA: CashierPinStatus = {
+  id: 'cash-3',
+  display_name: 'داليا',
+  pin: 'locked',
+  locked_until: LOCKED_UNTIL,
+};
+
+function listed(...cashiers: CashierPinStatus[]): ListCashierPinStatusResponse {
+  return { kind: 'cashiers', cashiers };
+}
+
 type BridgeStub = {
-  listBranchRoster: ReturnType<typeof vi.fn>;
+  listCashierPinStatus: ReturnType<typeof vi.fn>;
   resetCashierPin: ReturnType<typeof vi.fn>;
   provisionCashierPin: ReturnType<typeof vi.fn>;
   unlockCashier: ReturnType<typeof vi.fn>;
@@ -60,13 +85,7 @@ type BridgeStub = {
 
 function makeBridge(overrides: Partial<BridgeStub> = {}): BridgeStub {
   return {
-    listBranchRoster: vi.fn().mockResolvedValue({
-      kind: 'roster',
-      cashiers: [
-        { id: 'cash-1', display_name: 'Alice Cashier', role: 'cashier' },
-        { id: 'cash-2', display_name: 'Bob Cashier', role: 'cashier' },
-      ],
-    }),
+    listCashierPinStatus: vi.fn().mockResolvedValue(listed(AMAL, BASMA, DALIA)),
     resetCashierPin: vi.fn().mockResolvedValue({ kind: 'pin_reset', audit_event_id: 'evt-1' }),
     provisionCashierPin: vi
       .fn()
@@ -76,7 +95,24 @@ function makeBridge(overrides: Partial<BridgeStub> = {}): BridgeStub {
   };
 }
 
-function renderAt(session: OperatorSessionView | null, bridge: BridgeStub) {
+function pairedAs(label: string): PairingBridgeAPI {
+  return {
+    getStatus: vi.fn().mockResolvedValue({
+      kind: 'paired',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      terminal_id: 'term-1',
+      terminal_label: label,
+      paired_at: 0,
+    }),
+  } as unknown as PairingBridgeAPI;
+}
+
+function renderAt(
+  session: OperatorSessionView | null,
+  bridge: BridgeStub,
+  pairing?: PairingBridgeAPI,
+) {
   if (session) {
     useOperatorSessionStore.getState().beginSignIn();
     useOperatorSessionStore.getState().resolveSignedIn(session);
@@ -88,7 +124,10 @@ function renderAt(session: OperatorSessionView | null, bridge: BridgeStub) {
         path: '/app/manager/cashiers',
         element: (
           <OperatorRouteGuard allow={['manager', 'admin']}>
-            <CashierManagement operator={bridge as never} />
+            <CashierManagement
+              operator={bridge as never}
+              {...(pairing === undefined ? {} : { pairing })}
+            />
           </OperatorRouteGuard>
         ),
       },
@@ -100,11 +139,50 @@ function renderAt(session: OperatorSessionView | null, bridge: BridgeStub) {
   return render(<RouterProvider router={router} />);
 }
 
-/** Click the first button matching name and assert it exists. */
-async function clickFirst(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
-  const btns = screen.getAllByRole('button', { name });
-  expect(btns.length).toBeGreaterThan(0);
-  await user.click(btns[0] as HTMLElement);
+/** Wait for the list and return the row of the named cashier. */
+async function rowOf(name: string): Promise<HTMLElement> {
+  const nameNode = await screen.findByText(name);
+  const row = nameNode.closest('li');
+  if (row === null) throw new Error(`no row for ${name}`);
+  return row;
+}
+
+function buttonNames(row: HTMLElement): string[] {
+  return within(row)
+    .queryAllByRole('button')
+    .map((b) => b.textContent);
+}
+
+async function openDialog(
+  user: ReturnType<typeof userEvent.setup>,
+  cashier: string,
+  action: string,
+): Promise<HTMLElement> {
+  await user.click(within(await rowOf(cashier)).getByRole('button', { name: action }));
+  return screen.getByTestId('pin-dialog');
+}
+
+async function typePins(
+  user: ReturnType<typeof userEvent.setup>,
+  first: string,
+  second: string,
+): Promise<void> {
+  await user.type(screen.getByLabelText(CASHIERS_COPY.newPinLabel), first);
+  await user.type(screen.getByLabelText(CASHIERS_COPY.confirmPinLabel), second);
+}
+
+function deferred(): { promise: Promise<unknown>; settle: (v: unknown) => void } {
+  let settle: (v: unknown) => void = () => undefined;
+  const promise = new Promise((resolve) => {
+    settle = resolve;
+  });
+  return { promise, settle };
+}
+
+function rowButtons(): HTMLElement[] {
+  return screen
+    .getAllByTestId('cashier-row')
+    .flatMap((row) => within(row).queryAllByRole('button'));
 }
 
 afterEach(() => {
@@ -113,471 +191,532 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('CashierManagement (T078)', () => {
-  describe('role gate (AD-1 secondary — UX layer)', () => {
-    it('redirects signedOut to /sign-in', () => {
-      renderAt(null, makeBridge());
-      expect(screen.getByTestId('sign-in-page')).toBeInTheDocument();
-      expect(screen.queryByTestId('cashier-management')).not.toBeInTheDocument();
-    });
-
-    it('redirects cashier role to /sign-in', () => {
-      renderAt(CASHIER_SESSION, makeBridge());
-      expect(screen.getByTestId('sign-in-page')).toBeInTheDocument();
-      expect(screen.queryByTestId('cashier-management')).not.toBeInTheDocument();
-    });
-
-    it('renders surface for manager role', async () => {
-      renderAt(MANAGER_SESSION, makeBridge());
-      await waitFor(() => expect(screen.getByTestId('cashier-management')).toBeInTheDocument());
-    });
-
-    it('renders surface for admin role', async () => {
-      renderAt(ADMIN_SESSION, makeBridge());
-      await waitFor(() => expect(screen.getByTestId('cashier-management')).toBeInTheDocument());
-    });
+describe('CashierManagement — role gate (AD-1 secondary, UX layer)', () => {
+  it('redirects signedOut to /sign-in', () => {
+    renderAt(null, makeBridge());
+    expect(screen.getByTestId('sign-in-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('cashier-management')).not.toBeInTheDocument();
   });
 
-  describe('touch-target floor (DESIGN.md 44px — primitive-bypass audit P1)', () => {
-    it('row action buttons carry the .btn--md class (44px floor via primitive styling)', async () => {
-      renderAt(MANAGER_SESSION, makeBridge());
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      // Reset PIN + Unlock for two cashiers = 4 row buttons; each must use the
-      // shared button class so it inherits the 44px floor (was bare <button>).
-      for (const name of [/set first pin/i, /reset pin/i, /unlock/i]) {
-        for (const btn of screen.getAllByRole('button', { name })) {
-          expect(btn).toHaveClass('btn');
-          expect(btn).toHaveClass('btn--md');
-        }
-      }
-    });
+  it('redirects cashier role to /sign-in', () => {
+    renderAt(CASHIER_SESSION, makeBridge());
+    expect(screen.getByTestId('sign-in-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('cashier-management')).not.toBeInTheDocument();
   });
 
-  describe('roster display', () => {
-    it('calls listBranchRoster on mount', async () => {
-      const bridge = makeBridge();
-      renderAt(MANAGER_SESSION, bridge);
-      await waitFor(() => {
-        expect(bridge.listBranchRoster).toHaveBeenCalledOnce();
-      });
-    });
+  it.each([
+    ['manager', MANAGER_SESSION],
+    ['admin', ADMIN_SESSION],
+  ])('renders for %s', async (_role, session) => {
+    renderAt(session, makeBridge());
+    expect(await screen.findByTestId('cashier-management')).toBeInTheDocument();
+  });
+});
 
-    it('renders cashier display names from roster', async () => {
-      renderAt(MANAGER_SESSION, makeBridge());
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-        expect(screen.getByText('Bob Cashier')).toBeInTheDocument();
-      });
-    });
+describe('CashierManagement — the list (RT-424 doc 19 §3)', () => {
+  it('reads listCashierPinStatus once on mount, showing M-K0d until it lands', async () => {
+    const pending = deferred();
+    const bridge = makeBridge({ listCashierPinStatus: vi.fn(() => pending.promise) });
+    renderAt(MANAGER_SESSION, bridge);
+    expect(await screen.findByText(CASHIERS_COPY.loading)).toBeInTheDocument();
+    expect(screen.queryByTestId('cashier-row')).not.toBeInTheDocument();
 
-    it('never renders cashier id in DOM (PR-1 minimum disclosure)', async () => {
-      renderAt(MANAGER_SESSION, makeBridge());
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      const html = document.body.innerHTML;
-      expect(html).not.toContain('cash-1');
-      expect(html).not.toContain('cash-2');
-    });
-
-    it('shows generic error message on roster refusal (no category detail in DOM)', async () => {
-      const bridge = makeBridge({
-        listBranchRoster: vi.fn().mockResolvedValue({
-          kind: 'refused',
-          category: 'role_mismatch',
-        }),
-      });
-      renderAt(MANAGER_SESSION, bridge);
-      await waitFor(() =>
-        expect(screen.getByTestId('cashier-management-error')).toBeInTheDocument(),
-      );
-      expect(document.body.innerHTML).not.toContain('role_mismatch');
-    });
+    pending.settle(listed(AMAL));
+    expect(await screen.findByText('أمل')).toBeInTheDocument();
+    expect(screen.queryByText(CASHIERS_COPY.loading)).not.toBeInTheDocument();
+    expect(bridge.listCashierPinStatus).toHaveBeenCalledOnce();
+    expect(bridge.listCashierPinStatus).toHaveBeenCalledWith();
   });
 
-  describe('Reset PIN action (T072 bridge)', () => {
-    it('calls resetCashierPin with event_id, target_cashier_id, new_pin', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge();
-      renderAt(MANAGER_SESSION, bridge);
-
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-
-      await clickFirst(user, /reset pin/i);
-
-      const pinInput = await screen.findByLabelText(/new pin/i);
-      await user.type(pinInput, '1234');
-      await user.click(screen.getByRole('button', { name: /confirm reset/i }));
-
-      await waitFor(() => {
-        expect(bridge.resetCashierPin).toHaveBeenCalledOnce();
-      });
-
-      const calls = bridge.resetCashierPin.mock.calls as Array<Array<Record<string, unknown>>>;
-      expect(calls.length).toBeGreaterThan(0);
-      const call = calls[0]?.[0] ?? {};
-      expect(typeof call['event_id']).toBe('string');
-      expect((call['event_id'] as string).length).toBeGreaterThan(0);
-      expect(call['target_cashier_id']).toBe('cash-1');
-      expect(call['new_pin']).toBe('1234');
-    });
-
-    it('PIN value never appears in DOM at any point', async () => {
-      const user = userEvent.setup();
-      renderAt(MANAGER_SESSION, makeBridge());
-
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /reset pin/i);
-
-      const pinInput = await screen.findByLabelText(/new pin/i);
-      await user.type(pinInput, '5678');
-
-      expect(pinInput).toHaveAttribute('type', 'password');
-    });
-
-    it('shows generic success message on pin_reset (no cashier id in DOM)', async () => {
-      const user = userEvent.setup();
-      renderAt(MANAGER_SESSION, makeBridge());
-
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /reset pin/i);
-      const pinInput = await screen.findByLabelText(/new pin/i);
-      await user.type(pinInput, '4321');
-      await user.click(screen.getByRole('button', { name: /confirm reset/i }));
-
-      await waitFor(() => expect(screen.getByTestId('action-success')).toBeInTheDocument());
-      expect(document.body.innerHTML).not.toContain('cash-1');
-    });
-
-    it('shows generic error message on refused (no category in DOM)', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge({
-        resetCashierPin: vi.fn().mockResolvedValue({ kind: 'refused', category: 'invalid_input' }),
-      });
-      renderAt(MANAGER_SESSION, bridge);
-
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /reset pin/i);
-      const pinInput = await screen.findByLabelText(/new pin/i);
-      await user.type(pinInput, '0000');
-      await user.click(screen.getByRole('button', { name: /confirm reset/i }));
-
-      await waitFor(() => expect(screen.getByTestId('action-error')).toBeInTheDocument());
-      expect(document.body.innerHTML).not.toContain('invalid_input');
-    });
+  it('shows the Arabic title, list heading and count', async () => {
+    renderAt(MANAGER_SESSION, makeBridge());
+    await rowOf('أمل');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(CASHIERS_COPY.title);
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(CASHIERS_COPY.listHeading);
+    expect(screen.getByText('3 كاشير')).toBeInTheDocument();
   });
 
-  describe('Set first PIN action (RT-235 — 019 provisionCashierPin bridge)', () => {
-    async function openSetFirstPin(
-      user: ReturnType<typeof userEvent.setup>,
-      bridge: BridgeStub,
-    ): Promise<HTMLElement> {
-      renderAt(MANAGER_SESSION, bridge);
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /set first pin/i);
-      return screen.findByLabelText(/initial pin/i);
+  it('names the terminal in the subtitle when the pairing bridge gives a label', async () => {
+    renderAt(MANAGER_SESSION, makeBridge(), pairedAs('POS-03'));
+    await rowOf('أمل');
+    const subtitle = await screen.findByText(CASHIERS_COPY.subtitle, { exact: false });
+    expect(subtitle).toHaveTextContent('POS-03');
+    expect(within(subtitle).getByText('POS-03').tagName).toBe('BDI');
+  });
+
+  it('state → action matrix: only the actions that fit each state are rendered', async () => {
+    renderAt(MANAGER_SESSION, makeBridge());
+    expect(buttonNames(await rowOf('أمل'))).toEqual([CASHIERS_COPY.setFirstPin]);
+    expect(buttonNames(await rowOf('بسمة'))).toEqual([CASHIERS_COPY.changePin]);
+    expect(buttonNames(await rowOf('داليا'))).toEqual([
+      CASHIERS_COPY.unlock,
+      CASHIERS_COPY.changePin,
+    ]);
+  });
+
+  it('badges carry text (never colour alone); a lock shows its absolute end time', async () => {
+    renderAt(MANAGER_SESSION, makeBridge());
+    expect(within(await rowOf('أمل')).getByTestId('pin-status')).toHaveTextContent(
+      PIN_STATE_LABEL.no_pin,
+    );
+    expect(within(await rowOf('بسمة')).getByTestId('pin-status')).toHaveTextContent(
+      PIN_STATE_LABEL.ready,
+    );
+    const locked = within(await rowOf('داليا')).getByTestId('pin-status');
+    expect(locked).toHaveTextContent(PIN_STATE_LABEL.locked);
+    const time = within(locked).getByText(lockedUntilText(LOCKED_UNTIL));
+    expect(time.tagName).toBe('TIME');
+    expect(time).toHaveAttribute('datetime', LOCKED_UNTIL);
+  });
+
+  it('never renders a roster id (PR-1 minimum disclosure)', async () => {
+    renderAt(MANAGER_SESSION, makeBridge());
+    await rowOf('أمل');
+    const html = document.body.innerHTML;
+    for (const id of ['cash-1', 'cash-2', 'cash-3']) expect(html).not.toContain(id);
+  });
+
+  it('an empty roster is a fact, not a fault', async () => {
+    renderAt(
+      MANAGER_SESSION,
+      makeBridge({ listCashierPinStatus: vi.fn().mockResolvedValue(listed()) }),
+    );
+    expect(await screen.findByText(CASHIERS_COPY.empty)).toBeInTheDocument();
+    expect(screen.getByText('0 كاشير')).toBeInTheDocument();
+    expect(screen.queryByTestId('cashier-management-error')).not.toBeInTheDocument();
+  });
+
+  it('M1: unreachable roster → M-K1 and «إعادة المحاولة», no rows, no category', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge({
+      listCashierPinStatus: vi
+        .fn()
+        .mockResolvedValueOnce({ kind: 'refused', category: 'no_connection' })
+        .mockResolvedValueOnce(listed(AMAL)),
+    });
+    renderAt(MANAGER_SESSION, bridge);
+    const error = await screen.findByTestId('cashier-management-error');
+    expect(error).toHaveTextContent(CASHIERS_COPY.rosterOffline);
+    expect(screen.queryByTestId('cashier-row')).not.toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain('no_connection');
+
+    await user.click(within(error).getByRole('button', { name: CASHIERS_COPY.retry }));
+    expect(await rowOf('أمل')).toBeInTheDocument();
+    expect(bridge.listCashierPinStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('M1: any other refusal → M-K1b (no connection hint), no category in the DOM', async () => {
+    renderAt(
+      MANAGER_SESSION,
+      makeBridge({
+        listCashierPinStatus: vi
+          .fn()
+          .mockResolvedValue({ kind: 'refused', category: 'role_mismatch' }),
+      }),
+    );
+    const error = await screen.findByTestId('cashier-management-error');
+    expect(error).toHaveTextContent(CASHIERS_COPY.rosterRefused);
+    expect(error).not.toHaveTextContent(CASHIERS_COPY.rosterOffline);
+    expect(document.body.innerHTML).not.toContain('role_mismatch');
+  });
+
+  it('a bridge without the read, or a throwing read, shows M-K1b rather than nothing', async () => {
+    renderAt(
+      MANAGER_SESSION,
+      makeBridge({ listCashierPinStatus: vi.fn().mockRejectedValue(new Error('boom')) }),
+    );
+    expect(await screen.findByTestId('cashier-management-error')).toHaveTextContent(
+      CASHIERS_COPY.rosterRefused,
+    );
+  });
+
+  it('has no axe violations with rows of every state', async () => {
+    const { container } = renderAt(MANAGER_SESSION, makeBridge(), pairedAs('POS-03'));
+    await rowOf('داليا');
+    await expectNoAxeViolations(container);
+  });
+});
+
+describe('CashierManagement — first PIN (M2 → M5, 019 provisionCashierPin)', () => {
+  it('the dialog names the cashier; «حفظ» is disabled until both fields hold 4 digits', async () => {
+    const user = userEvent.setup();
+    renderAt(MANAGER_SESSION, makeBridge());
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    expect(within(screen.getByRole('dialog')).getByRole('heading')).toHaveTextContent(
+      'تعيين أول رقم سري لـ أمل',
+    );
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByLabelText(CASHIERS_COPY.newPinLabel)).toHaveFocus();
+    const save = screen.getByRole('button', { name: CASHIERS_COPY.save });
+    expect(save).toBeDisabled();
+    await typePins(user, '4729', '472');
+    expect(save).toBeDisabled();
+    await user.type(screen.getByLabelText(CASHIERS_COPY.confirmPinLabel), '9');
+    expect(save).toBeEnabled();
+  });
+
+  it('both PIN fields are password, numeric, LTR and take digits only (max 6)', async () => {
+    const user = userEvent.setup();
+    renderAt(MANAGER_SESSION, makeBridge());
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    for (const label of [CASHIERS_COPY.newPinLabel, CASHIERS_COPY.confirmPinLabel]) {
+      const input = screen.getByLabelText(label);
+      expect(input).toHaveAttribute('type', 'password');
+      expect(input).toHaveAttribute('inputmode', 'numeric');
+      expect(input).toHaveAttribute('dir', 'ltr');
     }
+    const first = screen.getByLabelText(CASHIERS_COPY.newPinLabel);
+    await user.type(first, '12a3b4567');
+    expect(first).toHaveValue('123456');
+  });
 
-    it('offers a Set first PIN button for every rostered cashier', async () => {
-      renderAt(MANAGER_SESSION, makeBridge());
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      expect(screen.getAllByRole('button', { name: /set first pin/i })).toHaveLength(2);
+  it('a mismatch → M-K3, both fields cleared, focus back on the first, no call', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge();
+    renderAt(MANAGER_SESSION, bridge);
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    await typePins(user, '4729', '4728');
+    await user.click(screen.getByRole('button', { name: CASHIERS_COPY.save }));
+
+    expect(screen.getByTestId('pin-dialog-message')).toHaveTextContent(CASHIERS_COPY.mismatch);
+    expect(screen.getByLabelText(CASHIERS_COPY.newPinLabel)).toHaveValue('');
+    expect(screen.getByLabelText(CASHIERS_COPY.confirmPinLabel)).toHaveValue('');
+    expect(screen.getByLabelText(CASHIERS_COPY.newPinLabel)).toHaveFocus();
+    expect(screen.getByLabelText(CASHIERS_COPY.newPinLabel)).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(bridge.provisionCashierPin).not.toHaveBeenCalled();
+  });
+
+  it('Enter with a short PIN → M-K4, fields cleared, no call', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge();
+    renderAt(MANAGER_SESSION, bridge);
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    await typePins(user, '472', '472{Enter}');
+
+    expect(screen.getByTestId('pin-dialog-message')).toHaveTextContent(CASHIERS_COPY.wrongLength);
+    expect(screen.getByLabelText(CASHIERS_COPY.newPinLabel)).toHaveValue('');
+    expect(bridge.provisionCashierPin).not.toHaveBeenCalled();
+  });
+
+  it('success → provision with the roster id and PIN only, M-K2, dialog closed, list re-read', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge();
+    bridge.listCashierPinStatus
+      .mockResolvedValueOnce(listed(AMAL, BASMA, DALIA))
+      .mockResolvedValueOnce(listed({ ...AMAL, pin: 'ready' }, BASMA, DALIA));
+    renderAt(MANAGER_SESSION, bridge);
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    await typePins(user, '4729', '4729');
+    await user.click(screen.getByRole('button', { name: CASHIERS_COPY.save }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('action-success')).toHaveTextContent(
+        'تم تعيين الرقم السري لـ أمل.',
+      ),
+    );
+    expect(bridge.provisionCashierPin).toHaveBeenCalledWith({
+      event_id: expect.any(String) as string,
+      target_cashier_id: 'cash-1',
+      initial_pin: '4729',
     });
+    expect(screen.queryByTestId('pin-dialog')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        within(screen.getAllByTestId('cashier-row')[0] as HTMLElement).getByTestId('pin-status'),
+      ).toHaveTextContent(PIN_STATE_LABEL.ready),
+    );
+    expect(bridge.listCashierPinStatus).toHaveBeenCalledTimes(2);
+    expect(document.body.innerHTML).not.toContain('4729');
+  });
 
-    it('calls provisionCashierPin with event_id, the roster id as target_cashier_id and initial_pin only', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge();
-      const pinInput = await openSetFirstPin(user, bridge);
-      await user.type(pinInput, '4729');
-      await user.click(screen.getByRole('button', { name: /save pin/i }));
-
-      await waitFor(() => {
-        expect(bridge.provisionCashierPin).toHaveBeenCalledOnce();
-      });
-      const call =
-        (bridge.provisionCashierPin.mock.calls as Array<Array<Record<string, unknown>>>)[0]?.[0] ??
-        {};
-      expect(typeof call['event_id']).toBe('string');
-      expect((call['event_id'] as string).length).toBeGreaterThan(0);
-      expect(call['target_cashier_id']).toBe('cash-1');
-      expect(call['initial_pin']).toBe('4729');
-      expect(Object.keys(call).sort()).toEqual(['event_id', 'initial_pin', 'target_cashier_id']);
+  it('not_ready → M-K10 inside the dialog, which stays open; no category in the DOM', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge({
+      provisionCashierPin: vi.fn().mockResolvedValue({ kind: 'refused', category: 'not_ready' }),
     });
+    renderAt(MANAGER_SESSION, bridge);
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    await typePins(user, '4729', '4729');
+    await user.click(screen.getByRole('button', { name: CASHIERS_COPY.save }));
 
-    it('collects the PIN in a password field and never renders it, then closes the dialog on success', async () => {
-      const user = userEvent.setup();
-      const pinInput = await openSetFirstPin(user, makeBridge());
-      expect(pinInput).toHaveAttribute('type', 'password');
-      await user.type(pinInput, '4729');
-      await user.click(screen.getByRole('button', { name: /save pin/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId('pin-dialog-message')).toHaveTextContent(CASHIERS_COPY.notReady),
+    );
+    expect(screen.getByTestId('pin-dialog')).toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain('not_ready');
+  });
 
-      await waitFor(() =>
-        expect(screen.getByTestId('action-success')).toHaveTextContent(/first pin set/i),
-      );
-      expect(screen.queryByRole('dialog', { name: /set first pin/i })).not.toBeInTheDocument();
-      expect(document.body.innerHTML).not.toContain('4729');
-      expect(document.body.innerHTML).not.toContain('cash-1');
-    });
-
-    it('state_invalid → tells the manager the cashier already has a PIN and to use Reset PIN (no category in DOM)', async () => {
+  it.each(['state_invalid', 'invalid_input', 'no_connection'])(
+    '%s → M-K9 generic failure, dialog closed, list re-read, no category in the DOM',
+    async (category) => {
       const user = userEvent.setup();
       const bridge = makeBridge({
-        provisionCashierPin: vi
-          .fn()
-          .mockResolvedValue({ kind: 'refused', category: 'state_invalid' }),
-      });
-      const pinInput = await openSetFirstPin(user, bridge);
-      await user.type(pinInput, '4729');
-      await user.click(screen.getByRole('button', { name: /save pin/i }));
-
-      const msg = await screen.findByTestId('action-error');
-      expect(msg).toHaveTextContent(/already has a pin/i);
-      expect(msg).toHaveTextContent(/reset pin/i);
-      expect(document.body.innerHTML).not.toContain('state_invalid');
-    });
-
-    it('not_ready → truthful "cannot be activated yet" state, not a generic failure (no category in DOM)', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge({
-        provisionCashierPin: vi.fn().mockResolvedValue({ kind: 'refused', category: 'not_ready' }),
-      });
-      const pinInput = await openSetFirstPin(user, bridge);
-      await user.type(pinInput, '4729');
-      await user.click(screen.getByRole('button', { name: /save pin/i }));
-
-      const msg = await screen.findByTestId('action-error');
-      expect(msg).toHaveTextContent(/can.?t be activated yet/i);
-      expect(document.body.innerHTML).not.toContain('not_ready');
-    });
-
-    it('any other refusal → generic error (no category in DOM)', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge({
-        provisionCashierPin: vi
-          .fn()
-          .mockResolvedValue({ kind: 'refused', category: 'no_connection' }),
-      });
-      const pinInput = await openSetFirstPin(user, bridge);
-      await user.type(pinInput, '4729');
-      await user.click(screen.getByRole('button', { name: /save pin/i }));
-
-      const msg = await screen.findByTestId('action-error');
-      expect(msg).toHaveTextContent(/could not be completed/i);
-      expect(document.body.innerHTML).not.toContain('no_connection');
-    });
-
-    it('RT-235 review: a second Save while the first call is in flight is ignored (one request, success not overwritten)', async () => {
-      const user = userEvent.setup();
-      let settle: (value: unknown) => void = () => undefined;
-      const bridge = makeBridge({
-        provisionCashierPin: vi.fn(
-          () =>
-            new Promise((resolve) => {
-              settle = resolve;
-            }),
-        ),
-      });
-      const pinInput = await openSetFirstPin(user, bridge);
-      await user.type(pinInput, '4729');
-      const save = screen.getByRole('button', { name: /save pin/i });
-
-      await user.click(save);
-      await user.click(save);
-
-      expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
-      expect(save).toBeDisabled();
-
-      settle({ kind: 'pin_provisioned', audit_event_id: 'evt-3' });
-      await waitFor(() =>
-        expect(screen.getByTestId('action-success')).toHaveTextContent(/first pin set/i),
-      );
-      expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
-    });
-
-    it('RT-235 review: while provisioning is in flight Cancel, Escape and every row action are blocked, so a stale response cannot overwrite a newer action', async () => {
-      const user = userEvent.setup();
-      let settle: (value: unknown) => void = () => undefined;
-      const bridge = makeBridge({
-        provisionCashierPin: vi.fn(
-          () =>
-            new Promise((resolve) => {
-              settle = resolve;
-            }),
-        ),
-      });
-      const pinInput = await openSetFirstPin(user, bridge);
-      await user.type(pinInput, '4729');
-      await user.click(screen.getByRole('button', { name: /save pin/i }));
-
-      expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
-      for (const name of [/set first pin/i, /reset pin/i, /unlock/i]) {
-        for (const btn of screen.getAllByRole('button', { name })) {
-          // The open dialog's own label is not a button; every row action is.
-          expect(btn).toBeDisabled();
-        }
-      }
-      await user.keyboard('{Escape}');
-      expect(screen.getByRole('dialog', { name: /set first pin/i })).toBeInTheDocument();
-
-      settle({ kind: 'pin_provisioned', audit_event_id: 'evt-3' });
-      await waitFor(() =>
-        expect(screen.getByTestId('action-success')).toHaveTextContent(/first pin set/i),
-      );
-      // Idle again: the row actions work.
-      expect(screen.getAllByRole('button', { name: /reset pin/i })[0]).toBeEnabled();
-    });
-
-    it('RT-235 review: an in-flight Unlock or Reset PIN blocks Set first PIN (one shared pending guard across all three actions)', async () => {
-      const user = userEvent.setup();
-      let settleUnlock: (value: unknown) => void = () => undefined;
-      const bridge = makeBridge({
-        unlockCashier: vi.fn(
-          () =>
-            new Promise((resolve) => {
-              settleUnlock = resolve;
-            }),
-        ),
+        provisionCashierPin: vi.fn().mockResolvedValue({ kind: 'refused', category }),
       });
       renderAt(MANAGER_SESSION, bridge);
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
+      await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+      await typePins(user, '4729', '4729');
+      await user.click(screen.getByRole('button', { name: CASHIERS_COPY.save }));
 
-      await clickFirst(user, /unlock/i);
-
-      for (const name of [/set first pin/i, /reset pin/i, /unlock/i]) {
-        for (const btn of screen.getAllByRole('button', { name })) {
-          expect(btn).toBeDisabled();
-        }
-      }
-
-      settleUnlock({ kind: 'unlocked', audit_event_id: 'evt-2' });
-      await waitFor(() => expect(screen.getByTestId('action-success')).toBeInTheDocument());
-      for (const btn of screen.getAllByRole('button', { name: /set first pin/i })) {
-        expect(btn).toBeEnabled();
-      }
-    });
-
-    it('RT-235 review: an in-flight Reset PIN confirm blocks the other actions', async () => {
-      const user = userEvent.setup();
-      let settleReset: (value: unknown) => void = () => undefined;
-      const bridge = makeBridge({
-        resetCashierPin: vi.fn(
-          () =>
-            new Promise((resolve) => {
-              settleReset = resolve;
-            }),
-        ),
-      });
-      renderAt(MANAGER_SESSION, bridge);
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /reset pin/i);
-      await user.type(await screen.findByLabelText(/new pin/i), '1234');
-      await user.click(screen.getByRole('button', { name: /confirm reset/i }));
-
-      for (const btn of screen.getAllByRole('button', { name: /set first pin|unlock/i })) {
-        expect(btn).toBeDisabled();
-      }
-      settleReset({ kind: 'pin_reset', audit_event_id: 'evt-1' });
       await waitFor(() =>
-        expect(screen.getByTestId('action-success')).toHaveTextContent(/pin reset/i),
+        expect(screen.getByTestId('action-error')).toHaveTextContent(CASHIERS_COPY.genericFailure),
       );
+      expect(screen.queryByTestId('pin-dialog')).not.toBeInTheDocument();
+      expect(bridge.listCashierPinStatus).toHaveBeenCalledTimes(2);
+      expect(document.body.innerHTML).not.toContain(category);
+    },
+  );
+
+  it('Escape and «إلغاء» close the dialog without calling the bridge', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge();
+    renderAt(MANAGER_SESSION, bridge);
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('pin-dialog')).not.toBeInTheDocument();
+
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    await user.click(screen.getByRole('button', { name: CASHIERS_COPY.cancel }));
+    expect(screen.queryByTestId('pin-dialog')).not.toBeInTheDocument();
+    expect(bridge.provisionCashierPin).not.toHaveBeenCalled();
+  });
+
+  it('the screen behind an open dialog is inert', async () => {
+    const user = userEvent.setup();
+    renderAt(MANAGER_SESSION, makeBridge());
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    expect(screen.getByTestId('cashier-management')).toHaveAttribute('inert');
+    await user.keyboard('{Escape}');
+    expect(screen.getByTestId('cashier-management')).not.toHaveAttribute('inert');
+  });
+});
+
+describe('CashierManagement — change PIN (M3/M4 → M5, resetCashierPin)', () => {
+  it('success → reset with the roster id and the new PIN, M-K2b, list re-read', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge();
+    renderAt(MANAGER_SESSION, bridge);
+    await openDialog(user, 'بسمة', CASHIERS_COPY.changePin);
+    expect(within(screen.getByRole('dialog')).getByRole('heading')).toHaveTextContent(
+      'تغيير الرقم السري لـ بسمة',
+    );
+    await typePins(user, '908172', '908172');
+    await user.click(screen.getByRole('button', { name: CASHIERS_COPY.save }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('action-success')).toHaveTextContent(
+        'تم تغيير الرقم السري لـ بسمة.',
+      ),
+    );
+    expect(bridge.resetCashierPin).toHaveBeenCalledWith({
+      event_id: expect.any(String) as string,
+      target_cashier_id: 'cash-2',
+      new_pin: '908172',
     });
+    expect(bridge.listCashierPinStatus).toHaveBeenCalledTimes(2);
+    expect(document.body.innerHTML).not.toContain('908172');
+  });
 
-    it('Escape and Cancel close the dialog without calling the bridge', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge();
-      await openSetFirstPin(user, bridge);
-      await user.keyboard('{Escape}');
-      expect(screen.queryByRole('dialog', { name: /set first pin/i })).not.toBeInTheDocument();
-
-      await clickFirst(user, /set first pin/i);
-      await user.click(screen.getByRole('button', { name: /cancel/i }));
-      expect(screen.queryByRole('dialog', { name: /set first pin/i })).not.toBeInTheDocument();
-      expect(bridge.provisionCashierPin).not.toHaveBeenCalled();
+  it('is offered on a locked row too (it also clears the lock)', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge();
+    renderAt(MANAGER_SESSION, bridge);
+    await openDialog(user, 'داليا', CASHIERS_COPY.changePin);
+    await typePins(user, '1234', '1234');
+    await user.click(screen.getByRole('button', { name: CASHIERS_COPY.save }));
+    await waitFor(() => {
+      expect(bridge.resetCashierPin).toHaveBeenCalledOnce();
     });
   });
 
-  describe('Unlock action (T073 bridge)', () => {
-    it('calls unlockCashier with event_id and target_cashier_id only (no PIN field)', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge();
-      renderAt(MANAGER_SESSION, bridge);
+  it('a refusal → M-K9, no category in the DOM', async () => {
+    const user = userEvent.setup();
+    renderAt(
+      MANAGER_SESSION,
+      makeBridge({
+        resetCashierPin: vi.fn().mockResolvedValue({ kind: 'refused', category: 'invalid_input' }),
+      }),
+    );
+    await openDialog(user, 'بسمة', CASHIERS_COPY.changePin);
+    await typePins(user, '1234', '1234');
+    await user.click(screen.getByRole('button', { name: CASHIERS_COPY.save }));
+    await waitFor(() =>
+      expect(screen.getByTestId('action-error')).toHaveTextContent(CASHIERS_COPY.genericFailure),
+    );
+    expect(document.body.innerHTML).not.toContain('invalid_input');
+  });
+});
 
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /unlock/i);
+describe('CashierManagement — unlock (M4, unlockCashier)', () => {
+  it('sends event_id and the roster id only (no PIN), shows M-K2c and re-reads', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge();
+    bridge.listCashierPinStatus
+      .mockResolvedValueOnce(listed(AMAL, BASMA, DALIA))
+      .mockResolvedValueOnce(
+        listed(AMAL, BASMA, { id: DALIA.id, display_name: DALIA.display_name, pin: 'ready' }),
+      );
+    renderAt(MANAGER_SESSION, bridge);
+    await user.click(
+      within(await rowOf('داليا')).getByRole('button', { name: CASHIERS_COPY.unlock }),
+    );
 
-      await waitFor(() => {
-        expect(bridge.unlockCashier).toHaveBeenCalledOnce();
-      });
-      const calls = bridge.unlockCashier.mock.calls as Array<Array<Record<string, unknown>>>;
-      expect(calls.length).toBeGreaterThan(0);
-      const call = calls[0]?.[0] ?? {};
-      expect(typeof call['event_id']).toBe('string');
-      expect(call['target_cashier_id']).toBe('cash-1');
-      expect('new_pin' in call).toBe(false);
-      expect('pin' in call).toBe(false);
-    });
+    await waitFor(() =>
+      expect(screen.getByTestId('action-success')).toHaveTextContent('تم فك القفل عن داليا.'),
+    );
+    const req = bridge.unlockCashier.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(Object.keys(req).sort()).toEqual(['event_id', 'target_cashier_id']);
+    expect(req['target_cashier_id']).toBe('cash-3');
+    await waitFor(() =>
+      expect(
+        within(screen.getAllByTestId('cashier-row')[2] as HTMLElement).getByTestId('pin-status'),
+      ).toHaveTextContent(PIN_STATE_LABEL.ready),
+    );
+    expect(bridge.listCashierPinStatus).toHaveBeenCalledTimes(2);
+  });
 
-    it('shows generic success message on unlocked', async () => {
-      const user = userEvent.setup();
-      renderAt(MANAGER_SESSION, makeBridge());
-
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /unlock/i);
-
-      await waitFor(() => expect(screen.getByTestId('action-success')).toBeInTheDocument());
-    });
-
-    it('state_invalid refusal treated as success (already unlocked, no-op)', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge({
+  it('state_invalid (the lock already ended) reads as unlocked', async () => {
+    const user = userEvent.setup();
+    renderAt(
+      MANAGER_SESSION,
+      makeBridge({
         unlockCashier: vi.fn().mockResolvedValue({ kind: 'refused', category: 'state_invalid' }),
-      });
-      renderAt(MANAGER_SESSION, bridge);
+      }),
+    );
+    await user.click(
+      within(await rowOf('داليا')).getByRole('button', { name: CASHIERS_COPY.unlock }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('action-success')).toHaveTextContent('تم فك القفل عن داليا.'),
+    );
+  });
 
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /unlock/i);
-
-      await waitFor(() => expect(screen.getByTestId('action-success')).toBeInTheDocument());
-    });
-
-    it('generic error message on other refusal (no category in DOM)', async () => {
-      const user = userEvent.setup();
-      const bridge = makeBridge({
+  it('another refusal → M-K9, no category in the DOM', async () => {
+    const user = userEvent.setup();
+    renderAt(
+      MANAGER_SESSION,
+      makeBridge({
         unlockCashier: vi.fn().mockResolvedValue({ kind: 'refused', category: 'role_mismatch' }),
-      });
-      renderAt(MANAGER_SESSION, bridge);
+      }),
+    );
+    await user.click(
+      within(await rowOf('داليا')).getByRole('button', { name: CASHIERS_COPY.unlock }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('action-error')).toHaveTextContent(CASHIERS_COPY.genericFailure),
+    );
+    expect(document.body.innerHTML).not.toContain('role_mismatch');
+  });
+});
 
-      await waitFor(() => {
-        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
-      });
-      await clickFirst(user, /unlock/i);
-
-      await waitFor(() => expect(screen.getByTestId('action-error')).toBeInTheDocument());
-      expect(document.body.innerHTML).not.toContain('role_mismatch');
+describe('CashierManagement — a rejected bridge call (e.g. refused while locked)', () => {
+  it('reads as M-K9, releases the pending guard and re-reads', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge({
+      unlockCashier: vi.fn().mockRejectedValue(new Error('session_locked')),
     });
+    renderAt(MANAGER_SESSION, bridge);
+    await user.click(
+      within(await rowOf('داليا')).getByRole('button', { name: CASHIERS_COPY.unlock }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('action-error')).toHaveTextContent(CASHIERS_COPY.genericFailure);
+    });
+    await waitFor(() => {
+      for (const btn of rowButtons()) expect(btn).toBeEnabled();
+    });
+    expect(bridge.listCashierPinStatus).toHaveBeenCalledTimes(2);
+    expect(document.body.innerHTML).not.toContain('session_locked');
+  });
+});
+
+describe('CashierManagement — one pending guard and the re-read (RT-235 review, doc 19 §2)', () => {
+  it('a second «حفظ» while the first call is in flight is ignored; Cancel and Escape are blocked', async () => {
+    const user = userEvent.setup();
+    const call = deferred();
+    const bridge = makeBridge({ provisionCashierPin: vi.fn(() => call.promise) });
+    renderAt(MANAGER_SESSION, bridge);
+    await openDialog(user, 'أمل', CASHIERS_COPY.setFirstPin);
+    await typePins(user, '4729', '4729');
+    const save = screen.getByRole('button', { name: CASHIERS_COPY.save });
+    await user.click(save);
+    await user.click(save);
+
+    expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
+    expect(save).toBeDisabled();
+    expect(screen.getByRole('button', { name: CASHIERS_COPY.cancel })).toBeDisabled();
+    for (const btn of rowButtons()) expect(btn).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(screen.getByTestId('pin-dialog')).toBeInTheDocument();
+
+    call.settle({ kind: 'pin_provisioned', audit_event_id: 'evt-3' });
+    await waitFor(() => expect(screen.getByTestId('action-success')).toBeInTheDocument());
+    await waitFor(() => {
+      for (const btn of rowButtons()) expect(btn).toBeEnabled();
+    });
+    expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
+  });
+
+  it('an in-flight unlock disables every row action until it and its re-read land', async () => {
+    const user = userEvent.setup();
+    const call = deferred();
+    const bridge = makeBridge({ unlockCashier: vi.fn(() => call.promise) });
+    renderAt(MANAGER_SESSION, bridge);
+    await user.click(
+      within(await rowOf('داليا')).getByRole('button', { name: CASHIERS_COPY.unlock }),
+    );
+    for (const btn of rowButtons()) expect(btn).toBeDisabled();
+
+    call.settle({ kind: 'unlocked', audit_event_id: 'evt-2' });
+    await waitFor(() => {
+      for (const btn of rowButtons()) expect(btn).toBeEnabled();
+    });
+  });
+
+  it('during a re-read the loaded rows stay, with their actions disabled, then are replaced in one step', async () => {
+    const user = userEvent.setup();
+    const reread = deferred();
+    const bridge = makeBridge();
+    bridge.listCashierPinStatus
+      .mockResolvedValueOnce(listed(AMAL, BASMA, DALIA))
+      .mockReturnValueOnce(reread.promise);
+    renderAt(MANAGER_SESSION, bridge);
+    await user.click(
+      within(await rowOf('داليا')).getByRole('button', { name: CASHIERS_COPY.unlock }),
+    );
+
+    await waitFor(() => {
+      expect(bridge.listCashierPinStatus).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.getAllByTestId('cashier-row')).toHaveLength(3);
+    for (const btn of rowButtons()) expect(btn).toBeDisabled();
+
+    reread.settle(listed(BASMA));
+    await waitFor(() => {
+      expect(screen.getAllByTestId('cashier-row')).toHaveLength(1);
+    });
+    for (const btn of rowButtons()) expect(btn).toBeEnabled();
+  });
+
+  it('a failed re-read after an action shows M1, not stale badges', async () => {
+    const user = userEvent.setup();
+    const bridge = makeBridge();
+    bridge.listCashierPinStatus
+      .mockResolvedValueOnce(listed(AMAL, BASMA, DALIA))
+      .mockResolvedValueOnce({ kind: 'refused', category: 'no_connection' });
+    renderAt(MANAGER_SESSION, bridge);
+    await user.click(
+      within(await rowOf('داليا')).getByRole('button', { name: CASHIERS_COPY.unlock }),
+    );
+
+    expect(await screen.findByTestId('cashier-management-error')).toHaveTextContent(
+      CASHIERS_COPY.rosterOffline,
+    );
+    expect(screen.queryByTestId('cashier-row')).not.toBeInTheDocument();
+    // The action's own outcome is still reported.
+    expect(screen.getByTestId('action-success')).toBeInTheDocument();
   });
 });

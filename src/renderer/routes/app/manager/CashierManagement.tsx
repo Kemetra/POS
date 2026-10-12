@@ -1,360 +1,428 @@
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
+  CashierPinStatus,
+  ListCashierPinStatusResponse,
   OperatorBridgeAPI,
-  BranchRosterCashier,
-  ProvisionCashierPinRequest,
-  ProvisionCashierPinResponse,
-  ResetCashierPinRequest,
-  UnlockCashierRequest,
+  PairingBridgeAPI,
 } from '../../../../shared/bridge-api.js';
-import type { OperatorRefusal, RefusalCategory } from '../../../../shared/audit/event-shape.js';
-import { SIGN_IN_REFUSAL_COPY } from '../../../ui/operator/messages.js';
-import { Workspace } from '../../../shell/regions/Workspace.js';
-import { ReauthDialog, ReauthRequiredNotice } from '../../../ui/operator/ReauthDialog.js';
+import type { RefusalCategory } from '../../../../shared/audit/event-shape.js';
+import { REAUTH_COPY, SIGN_IN_REFUSAL_COPY } from '../../../ui/operator/messages.js';
+import { ReauthDialog } from '../../../ui/operator/ReauthDialog.js';
+import { ToneIcon, type Tone } from '../../../v5/foundation/ToneIcon.js';
+import '../../../v5/foundation/messages.css';
+import { useTerminalLabel } from '../../../v5/entry/EntryStrip.js';
+import { CashierRow, type RowAction } from '../../../v5/cashiers/CashierRow.js';
+import { PinDialog } from '../../../v5/cashiers/PinDialog.js';
+import {
+  CASHIERS_COPY,
+  SUCCESS_SENTENCE,
+  cashierCount,
+  type NamedSentence,
+} from '../../../v5/cashiers/cashiers-copy.js';
+import '../../../v5/cashiers/cashiers.css';
 
 /**
- * T078 — Manager/admin cashier management surface.
+ * T078 → RT-424 (D-M1) — the manager's Cashiers screen at /app/manager/cashiers,
+ * rebuilt on the owner-approved G-3 references (doc 19 §3–§6). Manager and
+ * admin only: main's `requireRole` is the trust gate (AD-1); the route guard is
+ * the UX layer.
  *
- * Route: /app/manager/cashiers  — manager and admin only (AD-1 primary
- * enforced by requireRole in main-process bridge; OperatorRouteGuard is
- * the secondary UX layer here).
+ * - The list comes from `listCashierPinStatus` (doc 19 §2): each cashier with
+ *   its PIN state on THIS terminal. Each row offers only the actions its state
+ *   allows (M1–M6); the rest are not rendered (UX-05).
+ * - Re-read, never polled: on mount, after every action (success or refusal)
+ *   and on «إعادة المحاولة». A lock ends on its own after 5 minutes, so a
+ *   «مقفل» badge would otherwise go stale. Rows already shown stay until the
+ *   answer lands, then are replaced in one step; a refused read shows M1.
+ * - One pending guard for every call (reads included): while one is in flight,
+ *   every row action and the dialog's buttons are disabled, so a late answer
+ *   can never overwrite a newer action (RT-235 review).
+ * - RT-358 (M6): a first PIN refused `reauth_required` shows M-A3 with the
+ *   single action «تسجيل الدخول». The typed PIN is kept in state; after a
+ *   re-auth it is submitted again exactly once, and on cancel it is dropped.
+ *   A refusal right after a re-auth never prompts again.
  *
- * PR-1 / FR-006 compliance:
- *   - Cashier ids never render in the DOM (minimum disclosure).
- *   - PIN is collected in type="password" input, consumed once, never stored.
- *   - Error messages are generic; refusal categories never reach the DOM.
- *   - unlockCashier request carries no PIN field.
- *
- * RT-235 — first-PIN provisioning (019): a cashier with no PIN record on this
- * terminal cannot sign in, and Reset PIN refuses when no record exists. "Set
- * first PIN" is the manager/admin entry point to `provisionCashierPin`. The
- * request names the cashier by the roster `id` only; the provider-neutral
- * `user_id` stays main-side. Two refusals get a truthful message (a PIN
- * already exists / the cashier is not ready, 019 FR-5 / FR-11); the refusal
- * category itself never reaches the DOM.
- *
- * RT-358 (RT-247 D-A1) — when the manager's sign-in has expired, Save PIN is
- * refused `reauth_required`: the Arabic notice offers only «تسجيل الدخول»,
- * which opens the re-auth dialog on this surface. The typed PIN stays in this
- * component's state meanwhile; on success it is submitted again exactly once,
- * on cancel it is cleared. A second `reauth_required` right after a re-auth is
- * a plain error, never a new prompt (main fails closed on the marked retry).
+ * PR-1: a PIN never renders, the roster id never renders, a refusal category
+ * never renders. Unlock carries no PIN.
  */
+
+type OperatorDeps = Pick<
+  OperatorBridgeAPI,
+  | 'listCashierPinStatus'
+  | 'resetCashierPin'
+  | 'provisionCashierPin'
+  | 'unlockCashier'
+  | 'reauthenticate'
+>;
 
 interface Props {
-  operator: Pick<
-    OperatorBridgeAPI,
-    | 'listBranchRoster'
-    | 'resetCashierPin'
-    | 'provisionCashierPin'
-    | 'unlockCashier'
-    | 'reauthenticate'
-  >;
+  operator: OperatorDeps;
+  /** The paired terminal's label for the subtitle (M-K0b). Decorative: optional. */
+  pairing?: PairingBridgeAPI;
 }
 
-type ActionState =
-  | { kind: 'idle' }
-  | { kind: 'resetPin'; cashier: BranchRosterCashier; pin: string }
-  | { kind: 'setFirstPin'; cashier: BranchRosterCashier; pin: string }
-  | { kind: 'reauthRequired'; cashier: BranchRosterCashier; pin: string; dialogOpen: boolean }
-  | { kind: 'success'; message: string }
-  | { kind: 'error'; message?: string };
+type ListState =
+  | { kind: 'loading' }
+  | { kind: 'loaded'; cashiers: CashierPinStatus[] }
+  | { kind: 'failed'; offline: boolean };
 
-const PIN_ALREADY_SET_MESSAGE = 'This cashier already has a PIN. Use Reset PIN to change it.';
-const CASHIER_NOT_READY_MESSAGE = "This cashier can't be activated yet.";
+type Notice =
+  | { kind: 'none' }
+  | { kind: 'success'; sentence: NamedSentence; name: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'reauth'; cashier: CashierPinStatus; pin: string; dialogOpen: boolean };
+
+type DialogState =
+  | { kind: 'closed' }
+  | {
+      kind: 'open';
+      mode: 'first' | 'change';
+      cashier: CashierPinStatus;
+      inlineMessage?: string;
+    };
+
+const READ_REFUSED: ListCashierPinStatusResponse = { kind: 'refused', category: 'invalid_input' };
+const NONE: Notice = { kind: 'none' };
+const CLOSED: DialogState = { kind: 'closed' };
+
+function readList(operator: OperatorDeps): Promise<ListCashierPinStatusResponse> {
+  if (operator.listCashierPinStatus === undefined) return Promise.resolve(READ_REFUSED);
+  return operator.listCashierPinStatus().catch(() => READ_REFUSED);
+}
+
+function listStateOf(res: ListCashierPinStatusResponse): ListState {
+  if (res.kind === 'cashiers') return { kind: 'loaded', cashiers: res.cashiers };
+  return { kind: 'failed', offline: res.category === 'no_connection' };
+}
+
+function success(sentence: NamedSentence, name: string): Notice {
+  return { kind: 'success', sentence, name };
+}
+
+const GENERIC_FAILURE: Notice = { kind: 'error', message: CASHIERS_COPY.genericFailure };
 
 /**
- * The surface state for a provisioning answer. RT-358: `reauth_required`
- * prompts once; any refusal right after a re-auth uses the Arabic sign-in copy
- * (never the English generic retry, never a second prompt).
+ * A call that rejects (the lock guard refuses a locked session by throwing)
+ * reads as a refusal, so the screen shows M-K9 instead of nothing.
  */
-function firstPinOutcome(
-  res: ProvisionCashierPinResponse | OperatorRefusal,
-  ctx: { cashier: BranchRosterCashier; pin: string; afterReauth: boolean },
-): ActionState {
-  if (res.kind === 'pin_provisioned') return { kind: 'success', message: 'First PIN set.' };
-  // After a re-auth, `state_invalid` may also mean the session locked or was
-  // latched before the retry ran, so it gets the neutral sign-in copy, never
-  // the create-only "already has a PIN" message.
-  if (ctx.afterReauth) return { kind: 'error', message: refusalAfterReauth(res.category) };
-  if (res.category === 'state_invalid') return { kind: 'error', message: PIN_ALREADY_SET_MESSAGE };
-  if (res.category === 'not_ready') return { kind: 'error', message: CASHIER_NOT_READY_MESSAGE };
-  if (res.category === 'reauth_required') {
-    return { kind: 'reauthRequired', cashier: ctx.cashier, pin: ctx.pin, dialogOpen: false };
-  }
-  return { kind: 'error' };
+const CALL_FAILED = { kind: 'refused', category: 'invalid_input' } as const;
+
+function settled<T>(call: () => Promise<T>): Promise<T | typeof CALL_FAILED> {
+  return call().catch(() => CALL_FAILED);
 }
 
 /** A refusal right after a re-auth: never a new prompt, so `reauth_required` reads as signed out. */
-function refusalAfterReauth(category: RefusalCategory): string {
-  return SIGN_IN_REFUSAL_COPY[category === 'reauth_required' ? 'not_signed_in' : category];
+function refusalAfterReauth(category: RefusalCategory): Notice {
+  return {
+    kind: 'error',
+    message: SIGN_IN_REFUSAL_COPY[category === 'reauth_required' ? 'not_signed_in' : category],
+  };
 }
 
-export function CashierManagement({ operator }: Props): JSX.Element {
-  const [cashiers, setCashiers] = useState<BranchRosterCashier[] | null>(null);
-  const [rosterError, setRosterError] = useState(false);
-  const [action, setAction] = useState<ActionState>({ kind: 'idle' });
-  // One pending guard shared by Unlock, Reset PIN and Set first PIN. Each handler
-  // ends with an unconditional `setAction`, so a response that lands after the
-  // manager started another action would overwrite it; and first-PIN
-  // provisioning is create-only, so a second in-flight Save would race the first
-  // and replace its success with `state_invalid`. While any call is in flight the
-  // ref blocks re-entry and Escape synchronously, and the state disables every
-  // row action plus the open dialog's buttons.
+export function CashierManagement({ operator, pairing }: Props): JSX.Element {
+  const terminalLabel = useTerminalLabel(pairing);
+  const [list, setList] = useState<ListState>({ kind: 'loading' });
+  const [notice, setNotice] = useState<Notice>(NONE);
+  const [dialog, setDialog] = useState<DialogState>(CLOSED);
   const pendingRef = useRef(false);
   const [pending, setPending] = useState(false);
 
-  async function runExclusive<T>(call: () => Promise<T>): Promise<T | undefined> {
-    if (pendingRef.current) return undefined;
+  const runExclusive = useCallback(async (call: () => Promise<void>): Promise<void> => {
+    if (pendingRef.current) return;
     pendingRef.current = true;
     setPending(true);
     try {
-      return await call();
+      await call();
     } finally {
       pendingRef.current = false;
       setPending(false);
     }
-  }
+  }, []);
 
-  useEffect(() => {
-    void operator.listBranchRoster().then((res) => {
-      if (res.kind === 'roster') {
-        setCashiers(res.cashiers);
-      } else {
-        setRosterError(true);
-      }
-    });
+  /** The re-read every path ends with. Rows stay until the answer lands. */
+  const reload = useCallback(async (): Promise<void> => {
+    setList(listStateOf(await readList(operator)));
   }, [operator]);
 
-  // Escape closes the Reset-PIN / Set-first-PIN dialog (WCAG 2.1.1), mirroring
-  // its Cancel button (setAction idle). Only active while a dialog is open.
   useEffect(() => {
-    if (action.kind !== 'resetPin' && action.kind !== 'setFirstPin') return;
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !pendingRef.current) {
-        setAction({ kind: 'idle' });
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [action.kind]);
+    void runExclusive(reload);
+  }, [runExclusive, reload]);
 
-  async function handleUnlock(cashier: BranchRosterCashier): Promise<void> {
-    const req: UnlockCashierRequest = {
-      event_id: crypto.randomUUID(),
-      target_cashier_id: cashier.id,
-    };
-    const res = await runExclusive(() => operator.unlockCashier(req));
-    if (res === undefined) return;
-    const isSuccessOrNoOp = res.kind === 'unlocked' || res.category === 'state_invalid';
-    if (isSuccessOrNoOp) {
-      setAction({ kind: 'success', message: 'Cashier unlocked.' });
-    } else {
-      setAction({ kind: 'error' });
+  function handleRowAction(action: RowAction, cashier: CashierPinStatus): void {
+    if (pendingRef.current) return;
+    setNotice(NONE);
+    if (action === 'unlock') {
+      void unlock(cashier);
+      return;
     }
+    setDialog({ kind: 'open', mode: action, cashier });
   }
 
-  async function handleResetPinConfirm(): Promise<void> {
-    if (action.kind !== 'resetPin') return;
-    const req: ResetCashierPinRequest = {
-      event_id: crypto.randomUUID(),
-      target_cashier_id: action.cashier.id,
-      new_pin: action.pin,
-    };
-    const res = await runExclusive(() => operator.resetCashierPin(req));
-    if (res === undefined) return;
-    if (res.kind === 'pin_reset') {
-      setAction({ kind: 'success', message: 'PIN reset.' });
-    } else {
-      setAction({ kind: 'error' });
-    }
+  async function unlock(cashier: CashierPinStatus): Promise<void> {
+    await runExclusive(async () => {
+      const res = await settled(() =>
+        operator.unlockCashier({ event_id: crypto.randomUUID(), target_cashier_id: cashier.id }),
+      );
+      // An already-expired lock answers state_invalid: that is unlocked too.
+      const done = res.kind === 'unlocked' || res.category === 'state_invalid';
+      setNotice(done ? success(SUCCESS_SENTENCE.unlock, cashier.display_name) : GENERIC_FAILURE);
+      await reload();
+    });
   }
 
-  async function submitFirstPin(
-    cashier: BranchRosterCashier,
+  async function changePin(cashier: CashierPinStatus, pin: string): Promise<void> {
+    await runExclusive(async () => {
+      const res = await settled(() =>
+        operator.resetCashierPin({
+          event_id: crypto.randomUUID(),
+          target_cashier_id: cashier.id,
+          new_pin: pin,
+        }),
+      );
+      setDialog(CLOSED);
+      setNotice(
+        res.kind === 'pin_reset'
+          ? success(SUCCESS_SENTENCE.change, cashier.display_name)
+          : GENERIC_FAILURE,
+      );
+      await reload();
+    });
+  }
+
+  async function firstPin(
+    cashier: CashierPinStatus,
     pin: string,
     afterReauth: boolean,
   ): Promise<void> {
-    const req: ProvisionCashierPinRequest = {
-      event_id: crypto.randomUUID(),
-      target_cashier_id: cashier.id,
-      initial_pin: pin,
-    };
-    const res = await runExclusive(() => operator.provisionCashierPin(req));
-    if (res === undefined) return;
-    setAction(firstPinOutcome(res, { cashier, pin, afterReauth }));
+    await runExclusive(async () => {
+      const res = await settled(() =>
+        operator.provisionCashierPin({
+          event_id: crypto.randomUUID(),
+          target_cashier_id: cashier.id,
+          initial_pin: pin,
+        }),
+      );
+      if (res.kind === 'pin_provisioned') {
+        setDialog(CLOSED);
+        setNotice(success(SUCCESS_SENTENCE.first, cashier.display_name));
+      } else if (afterReauth) {
+        setNotice(refusalAfterReauth(res.category));
+      } else if (res.category === 'not_ready') {
+        // M-K10 stays inside the dialog.
+        setDialog({ kind: 'open', mode: 'first', cashier, inlineMessage: CASHIERS_COPY.notReady });
+      } else if (res.category === 'reauth_required') {
+        setDialog(CLOSED);
+        setNotice({ kind: 'reauth', cashier, pin, dialogOpen: false });
+      } else {
+        setDialog(CLOSED);
+        setNotice(GENERIC_FAILURE);
+      }
+      await reload();
+    });
   }
 
-  function handleSetFirstPinConfirm(): void {
-    if (action.kind !== 'setFirstPin') return;
-    void submitFirstPin(action.cashier, action.pin, false);
+  function handleSave(pin: string): void {
+    if (dialog.kind !== 'open') return;
+    if (dialog.mode === 'first') void firstPin(dialog.cashier, pin, false);
+    else void changePin(dialog.cashier, pin);
   }
 
   /** RT-358 — the re-auth worked: submit the same PIN again, once. */
   function handleReauthenticated(): void {
-    if (action.kind !== 'reauthRequired') return;
-    const { cashier, pin } = action;
-    setAction({ ...action, dialogOpen: false });
-    void submitFirstPin(cashier, pin, true);
+    if (notice.kind !== 'reauth') return;
+    const { cashier, pin } = notice;
+    setNotice(NONE);
+    void firstPin(cashier, pin, true);
   }
 
-  function handlePinChange(e: React.ChangeEvent<HTMLInputElement>): void {
-    if (action.kind === 'resetPin' || action.kind === 'setFirstPin') {
-      setAction({ ...action, pin: e.target.value });
-    }
-  }
+  const reauthDialogOpen = notice.kind === 'reauth' && notice.dialogOpen;
+  const modalOpen = dialog.kind === 'open' || reauthDialogOpen;
 
   return (
-    <Workspace title="Cashier Management">
-      <div data-testid="cashier-management">
-        {rosterError && (
-          <p data-testid="cashier-management-error" role="alert">
-            Unable to load cashier list. Please try again.
-          </p>
-        )}
+    <>
+      <div
+        className="v5-cashiers"
+        data-testid="cashier-management"
+        dir="rtl"
+        lang="ar"
+        inert={modalOpen ? true : undefined}
+      >
+        <div className="v5-cashiers__head">
+          <h1>{CASHIERS_COPY.title}</h1>
+          {terminalLabel !== undefined && terminalLabel.length > 0 && (
+            <p>
+              {CASHIERS_COPY.subtitle}{' '}
+              <b>
+                <bdi>{terminalLabel}</bdi>
+              </b>
+            </p>
+          )}
+        </div>
 
-        {cashiers !== null && cashiers.length === 0 && <p>No cashiers on this branch.</p>}
+        <ScreenNotice
+          notice={notice}
+          pending={pending}
+          onSignIn={() => {
+            if (notice.kind === 'reauth') setNotice({ ...notice, dialogOpen: true });
+          }}
+        />
 
-        {cashiers !== null && cashiers.length > 0 && (
-          <ul aria-label="Cashier list">
-            {cashiers.map((c) => (
-              <li key={c.id}>
-                <span>{c.display_name}</span>
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--md"
-                  disabled={pending}
-                  onClick={() => {
-                    setAction({ kind: 'setFirstPin', cashier: c, pin: '' });
-                  }}
-                >
-                  Set first PIN
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--md"
-                  disabled={pending}
-                  onClick={() => {
-                    setAction({ kind: 'resetPin', cashier: c, pin: '' });
-                  }}
-                >
-                  Reset PIN
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--md"
-                  disabled={pending}
-                  onClick={() => {
-                    void handleUnlock(c);
-                  }}
-                >
-                  Unlock
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {action.kind === 'resetPin' && (
-          <div role="dialog" aria-label="Reset PIN">
-            <label htmlFor="new-pin-input">New PIN</label>
-            <input
-              id="new-pin-input"
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              value={action.pin}
-              onChange={handlePinChange}
-            />
-            <button
-              type="button"
-              className="btn btn--primary btn--md"
-              disabled={pending}
-              onClick={() => {
-                void handleResetPinConfirm();
-              }}
-            >
-              Confirm Reset
-            </button>
-            <button
-              type="button"
-              className="btn btn--ghost btn--md"
-              disabled={pending}
-              onClick={() => {
-                setAction({ kind: 'idle' });
-              }}
-            >
-              Cancel
-            </button>
+        <section className="v5-cashiers__panel" aria-labelledby="cashiers-list-h">
+          <div className="v5-cashiers__panel-head">
+            <h2 id="cashiers-list-h">{CASHIERS_COPY.listHeading}</h2>
+            {list.kind === 'loaded' && (
+              <span className="v5-cashiers__count">{cashierCount(list.cashiers.length)}</span>
+            )}
           </div>
-        )}
-
-        {action.kind === 'setFirstPin' && (
-          <div role="dialog" aria-label="Set first PIN">
-            <label htmlFor="initial-pin-input">Initial PIN</label>
-            <input
-              id="initial-pin-input"
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              value={action.pin}
-              onChange={handlePinChange}
-            />
-            <button
-              type="button"
-              className="btn btn--primary btn--md"
-              disabled={pending}
-              onClick={handleSetFirstPinConfirm}
-            >
-              Save PIN
-            </button>
-            <button
-              type="button"
-              className="btn btn--ghost btn--md"
-              disabled={pending}
-              onClick={() => {
-                setAction({ kind: 'idle' });
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-
-        {/* Hidden while the PIN retry after a re-auth is in flight: one prompt only. */}
-        {action.kind === 'reauthRequired' && !pending && (
-          <ReauthRequiredNotice
-            onSignIn={() => {
-              setAction({ ...action, dialogOpen: true });
+          <ListBody
+            list={list}
+            pending={pending}
+            onRetry={() => {
+              void runExclusive(reload);
             }}
+            onAction={handleRowAction}
           />
-        )}
-
-        {action.kind === 'reauthRequired' && action.dialogOpen && (
-          <ReauthDialog
-            operator={operator}
-            onReauthenticated={handleReauthenticated}
-            onCancel={() => {
-              setAction({ kind: 'idle' });
-            }}
-          />
-        )}
-
-        {action.kind === 'success' && (
-          <p data-testid="action-success" role="status">
-            {action.message}
-          </p>
-        )}
-
-        {action.kind === 'error' && (
-          <p data-testid="action-error" role="alert">
-            {action.message ?? 'Action could not be completed. Please try again.'}
-          </p>
-        )}
+        </section>
       </div>
-    </Workspace>
+
+      {dialog.kind === 'open' && (
+        <PinDialog
+          mode={dialog.mode}
+          cashierName={dialog.cashier.display_name}
+          pending={pending}
+          {...(dialog.inlineMessage === undefined ? {} : { inlineMessage: dialog.inlineMessage })}
+          onSave={handleSave}
+          onCancel={() => {
+            if (!pendingRef.current) setDialog(CLOSED);
+          }}
+        />
+      )}
+
+      {reauthDialogOpen && (
+        <ReauthDialog
+          operator={operator}
+          onReauthenticated={handleReauthenticated}
+          onCancel={() => {
+            setNotice(NONE);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function NoticeBox({
+  tone,
+  role,
+  testId,
+  children,
+}: {
+  tone: Tone;
+  role: 'status' | 'alert';
+  testId: string;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div className="v5-notice" data-tone={tone} role={role} data-testid={testId}>
+      <ToneIcon tone={tone} />
+      {children}
+    </div>
+  );
+}
+
+function ScreenNotice({
+  notice,
+  pending,
+  onSignIn,
+}: {
+  notice: Notice;
+  pending: boolean;
+  onSignIn: () => void;
+}): JSX.Element | null {
+  switch (notice.kind) {
+    case 'none':
+      return null;
+    case 'success':
+      return (
+        <NoticeBox tone="success" role="status" testId="action-success">
+          <p>
+            {notice.sentence.before}
+            <bdi>{notice.name}</bdi>
+            {notice.sentence.after}
+          </p>
+        </NoticeBox>
+      );
+    case 'error':
+      return (
+        <NoticeBox tone="danger" role="alert" testId="action-error">
+          <p>{notice.message}</p>
+        </NoticeBox>
+      );
+    case 'reauth':
+      // Hidden while the PIN retry after a re-auth is in flight: one prompt only.
+      if (pending || notice.dialogOpen) return null;
+      return (
+        <NoticeBox tone="warning" role="alert" testId="reauth-required">
+          <p>{SIGN_IN_REFUSAL_COPY.reauth_required}</p>
+          <button
+            type="button"
+            className="v5-cashiers-btn v5-cashiers-btn--primary"
+            onClick={onSignIn}
+          >
+            {REAUTH_COPY.action}
+          </button>
+        </NoticeBox>
+      );
+  }
+}
+
+function ListBody({
+  list,
+  pending,
+  onRetry,
+  onAction,
+}: {
+  list: ListState;
+  pending: boolean;
+  onRetry: () => void;
+  onAction: (action: RowAction, cashier: CashierPinStatus) => void;
+}): JSX.Element {
+  if (list.kind === 'loading') {
+    return (
+      <div className="v5-cashiers__state">
+        <p className="v5-cashiers__loading" role="status">
+          {CASHIERS_COPY.loading}
+        </p>
+      </div>
+    );
+  }
+  if (list.kind === 'failed') {
+    return (
+      <div className="v5-cashiers__state">
+        <NoticeBox tone="warning" role="alert" testId="cashier-management-error">
+          <p>{list.offline ? CASHIERS_COPY.rosterOffline : CASHIERS_COPY.rosterRefused}</p>
+          <button type="button" className="v5-cashiers-btn" disabled={pending} onClick={onRetry}>
+            {CASHIERS_COPY.retry}
+          </button>
+        </NoticeBox>
+      </div>
+    );
+  }
+  if (list.cashiers.length === 0) {
+    return (
+      <div className="v5-cashiers__state">
+        <div className="v5-notice" data-tone="neutral" role="status">
+          <p>{CASHIERS_COPY.empty}</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <ul className="v5-cashiers__rows" aria-labelledby="cashiers-list-h">
+      {list.cashiers.map((c) => (
+        <CashierRow key={c.id} cashier={c} disabled={pending} onAction={onAction} />
+      ))}
+    </ul>
   );
 }

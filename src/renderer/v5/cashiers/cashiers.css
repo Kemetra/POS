@@ -1,0 +1,409 @@
+/*
+ * RT-424 (D-M1) — the Manager → Cashiers screen.
+ * Visual authority: the owner-approved G-3 references (RT-251),
+ * docs/design/vnext/visual-acceptance/G3-Cashiers/. Every colour, radius and type
+ * size resolves to a shipped token from styles/tailwind.css; the few raw px sizes
+ * are the G-3 reference geometry (row height, status and action columns, the
+ * initial disc). Scoped under .v5-cashiers so it never restyles a legacy screen.
+ */
+
+.v5-cashiers {
+  /* comfortable (≥1280) */
+  --cashiers-pad: 20px;
+  --cashiers-row: 60px;
+  --cashiers-target: 44px;
+  --cashiers-status-col: 190px;
+  --cashiers-act-1: 176px;
+  --cashiers-act-2: 160px;
+  --cashiers-initial: 34px;
+  --cashiers-name: 15px;
+  --cashiers-btn-pad: var(--space-4);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  block-size: 100%;
+  min-block-size: 0;
+  padding: var(--cashiers-pad);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+/* 1024–1279px: the POS floor tier (compact). */
+@media (max-width: 1279px) {
+  .v5-cashiers {
+    --cashiers-pad: var(--space-4);
+    --cashiers-row: 56px;
+    --cashiers-status-col: 168px;
+    --cashiers-act-1: 160px;
+    --cashiers-act-2: 150px;
+    --cashiers-initial: 30px;
+    --cashiers-name: var(--font-size-sm);
+    --cashiers-btn-pad: var(--space-3);
+  }
+}
+
+.v5-cashiers *,
+.v5-cashiers *::before,
+.v5-cashiers *::after,
+.v5-cashiers-dialog *,
+.v5-cashiers-dialog *::before,
+.v5-cashiers-dialog *::after {
+  box-sizing: border-box;
+}
+
+.v5-cashiers :where(h1, h2, p, ul),
+.v5-cashiers-dialog :where(h2, p) {
+  margin: 0;
+}
+
+.v5-cashiers :where(button, input),
+.v5-cashiers-dialog :where(button, input) {
+  font: inherit;
+  color: inherit;
+}
+
+.v5-cashiers :where(button, input):focus-visible,
+.v5-cashiers-dialog :where(button, input):focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.v5-cashiers .v5-ltr,
+.v5-cashiers-dialog .v5-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ── head ──────────────────────────────────────────────────────── */
+.v5-cashiers__head {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.v5-cashiers__head h1 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+.v5-cashiers__head p {
+  color: var(--color-text-muted);
+}
+
+.v5-cashiers__head p b {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ── notices (v5 Notice anatomy: tone glyph + one sentence) ────── */
+.v5-cashiers .v5-notice {
+  flex: none;
+  align-items: center;
+}
+
+.v5-cashiers .v5-notice p {
+  flex: 1 1 auto;
+}
+
+.v5-cashiers .v5-notice[data-tone='neutral'] {
+  background: var(--color-surface-elevated);
+}
+
+/* ── the list panel ────────────────────────────────────────────── */
+.v5-cashiers__panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-cashiers__panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: 52px;
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-cashiers__panel-head h2 {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-cashiers__count {
+  color: var(--color-text-muted);
+}
+
+.v5-cashiers__state {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: center;
+  justify-items: center;
+  padding: var(--space-5);
+}
+
+.v5-cashiers__state .v5-notice {
+  inline-size: min(520px, 100%);
+}
+
+.v5-cashiers__loading {
+  color: var(--color-text-muted);
+}
+
+/* The list scrolls inside the panel; the head stays in view (G-3 item 2). */
+.v5-cashiers__rows {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-cashiers__row {
+  display: grid;
+  grid-template-columns:
+    auto minmax(0, 1fr) var(--cashiers-status-col)
+    calc(var(--cashiers-act-1) + var(--cashiers-act-2) + var(--space-2));
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--cashiers-row);
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-cashiers__row:last-child {
+  border-block-end: 0;
+}
+
+.v5-cashiers__initial {
+  display: grid;
+  place-items: center;
+  inline-size: var(--cashiers-initial);
+  block-size: var(--cashiers-initial);
+  border-radius: 50%;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold);
+}
+
+/* A name wraps and the row grows; it is never cut, so two cashiers cannot look alike. */
+.v5-cashiers__name {
+  font-size: var(--cashiers-name);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* ── status badge: each state has its own glyph, never colour alone (UX-02) ── */
+.v5-cashiers__status {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-block-size: 30px;
+  padding: 2px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.v5-cashiers__status time {
+  font-weight: var(--font-weight-regular);
+}
+
+.v5-cashiers__status[data-pin='no_pin'] {
+  border-color: var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+}
+
+.v5-cashiers__status[data-pin='ready'] {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.v5-cashiers__status[data-pin='locked'] {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.v5-cashiers__glyph {
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── row actions: a stable primary slot and a stable secondary slot ── */
+.v5-cashiers__actions {
+  display: grid;
+  grid-template-columns: var(--cashiers-act-1) var(--cashiers-act-2);
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.v5-cashiers__act-primary .v5-cashiers-btn {
+  inline-size: 100%;
+}
+
+.v5-cashiers__act-secondary {
+  display: flex;
+}
+
+/* ── buttons (shared with the dialog) ──────────────────────────── */
+.v5-cashiers-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--cashiers-target, 44px);
+  padding-inline: var(--cashiers-btn-pad, var(--space-4));
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-cashiers-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-primary-emphasis);
+}
+
+.v5-cashiers-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-cashiers-btn:disabled {
+  cursor: not-allowed;
+}
+
+.v5-cashiers-btn--primary:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
+.v5-cashiers-btn:not(.v5-cashiers-btn--primary):disabled {
+  opacity: 0.55;
+}
+
+/* ── the PIN dialog (M5) — inside the one v5 Dialog panel ─────── */
+/* The panel convention (dialog.css): title, then a form whose last <div> is the
+   pinned action row. */
+.v5-cashiers-dialog__title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+}
+
+.v5-cashiers-dialog,
+.v5-cashiers-dialog__fields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.v5-cashiers-dialog__hint {
+  color: var(--color-text-muted);
+}
+
+.v5-cashiers-dialog__field {
+  display: grid;
+  gap: 6px;
+}
+
+.v5-cashiers-dialog__field label {
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-cashiers-dialog__pin {
+  block-size: 48px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-family-mono);
+  font-size: 22px;
+  letter-spacing: 0.3em;
+}
+
+.v5-cashiers-dialog__pin[aria-invalid='true'] {
+  border: 2px solid var(--color-warning);
+}
+
+/* The message slot keeps its height, so a message never shifts the actions. */
+.v5-cashiers-dialog__slot {
+  min-block-size: 40px;
+}
+
+.v5-cashiers-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.v5-cashiers-dialog__actions .v5-cashiers-btn {
+  min-inline-size: 104px;
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .v5-cashiers__panel,
+  .v5-cashiers-btn,
+  .v5-cashiers-dialog__pin,
+  .v5-cashiers__status,
+  .v5-cashiers__initial {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-cashiers-btn--primary {
+    border: 2px solid ButtonText;
+  }
+
+  .v5-cashiers-btn--primary:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
+  .v5-cashiers-btn--ghost {
+    border-color: ButtonText;
+  }
+
+  .v5-cashiers-dialog__pin[aria-invalid='true'],
+  .v5-cashiers__status[data-pin='locked'] {
+    border: 2px solid CanvasText;
+  }
+
+  .v5-cashiers :where(button, input):focus-visible,
+  .v5-cashiers-dialog :where(button, input):focus-visible {
+    outline-color: Highlight;
+  }
+}

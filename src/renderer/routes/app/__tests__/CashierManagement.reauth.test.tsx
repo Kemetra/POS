@@ -7,10 +7,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { CashierManagement } from '../manager/CashierManagement.js';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store.js';
 import { REAUTH_COPY, SIGN_IN_REFUSAL_COPY } from '../../../ui/operator/messages.js';
+import { CASHIERS_COPY } from '../../../v5/cashiers/cashiers-copy.js';
 
 /**
- * RT-358 (RT-247 plan §2.5) — «Set first PIN» after the manager's sign-in
- * expired:
+ * RT-358 (RT-247 plan §2.5), on the RT-424 G-3 screen (M6) — «تعيين أول رقم
+ * سري» after the manager's sign-in expired:
  *   • `reauth_required` shows the Arabic notice with only «تسجيل الدخول» —
  *     no «حاول مرة أخرى», no English, never the raw category;
  *   • the re-auth dialog opens on the same surface; on success the SAME PIN is
@@ -18,7 +19,7 @@ import { REAUTH_COPY, SIGN_IN_REFUSAL_COPY } from '../../../ui/operator/messages
  *   • a second `reauth_required` right after a re-auth never prompts again.
  */
 
-const CASHIER = { id: 'cash-1', display_name: 'Alice Cashier', role: 'cashier' as const };
+const CASHIER = { id: 'cash-1', display_name: 'Alice Cashier', pin: 'no_pin' as const };
 const REAUTH_REQUIRED = { kind: 'refused', category: 'reauth_required' } as const;
 
 function signInManager(): void {
@@ -40,7 +41,7 @@ function makeBridge(
 ) {
   const queue = [...provisionAnswers];
   return {
-    listBranchRoster: vi.fn().mockResolvedValue({ kind: 'roster', cashiers: [CASHIER] }),
+    listCashierPinStatus: vi.fn().mockResolvedValue({ kind: 'cashiers', cashiers: [CASHIER] }),
     resetCashierPin: vi.fn(),
     unlockCashier: vi.fn(),
     provisionCashierPin: vi.fn(() =>
@@ -51,9 +52,10 @@ function makeBridge(
 }
 
 async function submitFirstPin(user: ReturnType<typeof userEvent.setup>, pin = '4729') {
-  await user.click(await screen.findByRole('button', { name: 'Set first PIN' }));
-  await user.type(screen.getByLabelText('Initial PIN'), pin);
-  await user.click(screen.getByRole('button', { name: 'Save PIN' }));
+  await user.click(await screen.findByRole('button', { name: CASHIERS_COPY.setFirstPin }));
+  await user.type(screen.getByLabelText(CASHIERS_COPY.newPinLabel), pin);
+  await user.type(screen.getByLabelText(CASHIERS_COPY.confirmPinLabel), pin);
+  await user.click(screen.getByRole('button', { name: CASHIERS_COPY.save }));
 }
 
 async function reauthenticate(user: ReturnType<typeof userEvent.setup>) {
@@ -120,10 +122,11 @@ describe('RT-358 CashierManagement — re-auth required on «Set first PIN»', (
     await user.click(screen.getByRole('button', { name: REAUTH_COPY.cancel }));
 
     expect(screen.queryByTestId('reauth-required')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Initial PIN')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(CASHIERS_COPY.newPinLabel)).not.toBeInTheDocument();
     expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole('button', { name: 'Set first PIN' }));
-    expect(screen.getByLabelText('Initial PIN')).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: CASHIERS_COPY.setFirstPin }));
+    expect(screen.getByLabelText(CASHIERS_COPY.newPinLabel)).toHaveValue('');
+    expect(screen.getByLabelText(CASHIERS_COPY.confirmPinLabel)).toHaveValue('');
   });
 
   it('a second reauth_required right after a re-auth does not prompt again', async () => {
@@ -141,15 +144,17 @@ describe('RT-358 CashierManagement — re-auth required on «Set first PIN»', (
       SIGN_IN_REFUSAL_COPY.not_signed_in,
     );
     expect(screen.queryByTestId('reauth-required')).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/Action could not be completed|try again/i);
+    expect(document.body.textContent).not.toMatch(
+      /Action could not be completed|try again|تعذّر تنفيذ العملية/i,
+    );
   });
 
   // A refusal on the retry right after a re-auth uses the Arabic sign-in copy:
   // never the English generic error, and never "already has a PIN" for a
   // state_invalid that may come from a lock or latch before the retry ran.
   it.each([
-    ['state_invalid', /already has a PIN|Action could not be completed/],
-    ['no_connection', /Action could not be completed/],
+    ['state_invalid', /already has a PIN|تعذّر تنفيذ العملية/],
+    ['no_connection', /Action could not be completed|تعذّر تنفيذ العملية/],
   ] as const)(
     'a %s right after a re-auth uses the Arabic sign-in copy',
     async (category, absent) => {
