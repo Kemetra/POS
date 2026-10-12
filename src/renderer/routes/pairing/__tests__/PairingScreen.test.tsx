@@ -262,3 +262,16 @@ describe('PairingScreen — the G-1 pairing card (RT-244 PR2)', () => {
     expect(document.querySelector('[data-testid="route-pairing"] [lang="en"]')).toBeNull();
   });
 });
+
+describe('PairingScreen — the inconsistent-pairing notice (RT-306, RT-244 copy)', () => {
+  it('says the last pairing did not finish', () => {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        <PairingScreen pairing={makeBridge()} invalidReason="inconsistent" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('invalid-state-banner')).toHaveTextContent(
+      'يجب ربط الجهاز مرة أخرى. آخر عملية ربط لم تكتمل.',
+    );
+  });
+});

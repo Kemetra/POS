@@ -137,3 +137,10 @@ describe('RT-215 10897-A — "Check again" on /pairing', () => {
     expect(checkAgain()).toBeEnabled();
   });
 });
+
+describe('RT-244 — the approved "Check again" copy', () => {
+  it('pins the button labels to the owner-approved Arabic', () => {
+    expect(RECHECK_LABEL).toBe('تحقق مرة أخرى');
+    expect(RECHECK_PENDING_LABEL).toBe('جارٍ التحقق…');
+  });
+});
