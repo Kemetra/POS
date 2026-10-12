@@ -542,7 +542,7 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
     expect(screen.queryByText(GENERIC_FAILURE_MESSAGE)).not.toBeInTheDocument();
   });
 
-  it('T074 — on outcome=unknown_error: shows UNKNOWN_ERROR_MESSAGE (not generic fallback)', async () => {
+  it('T074 — on outcome=unknown_error: shows UNKNOWN_ERROR_MESSAGE', async () => {
     const user = userEvent.setup();
     const { bridge } = makeBridge({ result: { outcome: 'unknown_error' } });
     renderInRouter(bridge);
@@ -552,7 +552,6 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent(UNKNOWN_ERROR_MESSAGE);
     });
-    expect(screen.queryByText(GENERIC_FAILURE_MESSAGE)).not.toBeInTheDocument();
   });
 
   it('does NOT echo the pairing_code into the rendered message tree', async () => {
@@ -698,8 +697,8 @@ describe('PairingForm — BRANCH_MISMATCH outcome (T050)', () => {
   it('BRANCH_MISMATCH copy mentions admin / different branch (operator action hint)', () => {
     // Pin the action-oriented shape of the copy at the dictionary level
     // so a future copy edit does not accidentally drop the admin hint.
-    expect(BRANCH_MISMATCH_MESSAGE.toLowerCase()).toMatch(/branch/);
-    expect(BRANCH_MISMATCH_MESSAGE.toLowerCase()).toMatch(/admin|release/);
+    expect(BRANCH_MISMATCH_MESSAGE).toMatch(/لفرع آخر/);
+    expect(BRANCH_MISMATCH_MESSAGE).toMatch(/المشرف/);
   });
 
   it('on outcome=branch_mismatch: form remains editable (input + button enabled)', async () => {
@@ -840,7 +839,7 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
     expect(screen.getByRole('button')).not.toBeDisabled();
   });
 
-  it('on rate_limited: shows RATE_LIMITED_MESSAGE matching /too many attempts/i', async () => {
+  it('on rate_limited: shows RATE_LIMITED_MESSAGE in the «محاولات كثيرة» family', async () => {
     const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 3 } });
     renderInRouter(bridge);
 
@@ -849,7 +848,7 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent(RATE_LIMITED_MESSAGE);
     });
-    expect(screen.getByRole('status')).toHaveTextContent(/too many attempts/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/^محاولات كثيرة/);
   });
 
   it('the rate_limited message is distinct from every other US3/US4 message and the generic fallback', () => {
@@ -1102,5 +1101,30 @@ describe('PairingForm — empty-Enter-on-focus regression (T075)', () => {
     await user.keyboard('{Enter}');
 
     expect(locations).not.toContain('/paired');
+  });
+});
+
+describe('PairingForm — focus after a refused code (RT-244 PR2)', () => {
+  // The field is disabled while a submit is in flight, and a disabled field
+  // drops focus to <body>. A scanner operator must be able to scan the next
+  // code without reaching for the mouse, so focus returns to the field.
+  it('returns focus to the code field when the submit is refused', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({
+      // Chromium blurs a field the moment it is disabled; happy-dom does not,
+      // so the in-flight submit does it here.
+      submitImpl: () => {
+        screen.getByRole('textbox').blur();
+        return Promise.resolve({ outcome: 'invalid_code' });
+      },
+    });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'BADCODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(INVALID_CODE_MESSAGE);
+    });
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
   });
 });

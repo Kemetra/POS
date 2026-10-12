@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
+import { READY_COPY } from '../../../v5/entry/entry-copy';
 import { PairedScreen } from '../PairedScreen';
 import type { PairingBridgeAPI } from '../../../../shared/bridge-api';
 import type { PairingStatus } from '../../../../shared/pairing-types';
@@ -99,7 +100,7 @@ describe('PairedScreen — happy path (T032)', () => {
     });
   });
 
-  it('renders the S4 visual contract: PAIRED pill, H1 Ready, identifier-free body copy, Continue CTA', async () => {
+  it('renders the G-1 Ready card: the M-F1 sentence, the terminal fact and «متابعة»', async () => {
     const { bridge } = makeBridge();
     renderInRouter(bridge);
 
@@ -107,13 +108,11 @@ describe('PairedScreen — happy path (T032)', () => {
       expect(screen.getByTestId('route-paired')).toBeInTheDocument();
     });
 
-    // S4 visual contract (T065): visible elements the operator reads.
-    expect(screen.getByRole('heading', { name: /^ready$/i })).toBeInTheDocument();
-    expect(screen.getByText(/PAIRED/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/Connected\. Choose Continue to open the dashboard\./i),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument();
+    // RT-244 PR2 (G-1 «Ready», M-F1): the visible elements the operator reads.
+    expect(screen.getByRole('heading', { level: 1, name: READY_COPY.title })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: READY_COPY.title })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: READY_COPY.continue })).toHaveFocus();
+    expect(screen.queryByText(/PAIRED|Ready|Continue/)).not.toBeInTheDocument();
   });
 
   it('preserves the data-testid="route-paired" attribute (router test compatibility)', async () => {
@@ -196,15 +195,20 @@ describe('PairedScreen — minimum disclosure (F-2)', () => {
     expect(root.textContent).not.toContain(PAIRED_STATUS.branch_id);
   });
 
-  it('does not interpolate terminal_label into the body copy', async () => {
+  it('shows terminal_label only as the card fact, isolated, never inside a sentence', async () => {
     const { bridge } = makeBridge();
     renderInRouter(bridge);
     await waitFor(() => {
       expect(screen.getByTestId('route-paired')).toBeInTheDocument();
     });
-    const body = screen.getByTestId('route-paired').querySelector('.paired-screen__body');
-    // terminal_label is kept only as a DOM attribute, not in visible text.
-    expect(body?.textContent).not.toContain(PAIRED_STATUS.terminal_label);
+    // G-1 «Ready» (owner-approved): the label is admin free text, the one fact
+    // shown, in <bdi> so a Latin label cannot reorder the Arabic around it.
+    expect(screen.getByRole('heading', { level: 1 }).textContent).not.toContain(
+      PAIRED_STATUS.terminal_label,
+    );
+    const fact = screen.getByText(PAIRED_STATUS.terminal_label);
+    expect(fact.tagName).toBe('BDI');
+    expect(fact.closest('dd')?.previousElementSibling?.textContent).toBe(READY_COPY.terminal);
   });
 });
 

@@ -65,11 +65,13 @@ export function RevocationRecheck(props: { pairing: PairingBridgeAPI }): JSX.Ele
     setMessage(MESSAGE[outcome]);
   }
 
+  // RT-244 PR2: a secondary action under the commit. The copy has no approved
+  // Arabic yet, so it stays English, marked `lang="en"`.
   return (
-    <div className="pairing-screen__actions">
+    <div className="v5-entry__recheck" lang="en">
       <button
         type="button"
-        className="btn btn--secondary btn--lg"
+        className="v5-entry__btn v5-entry__commit-secondary"
         disabled={checking || coolingDown}
         onClick={() => {
           void check();
@@ -78,7 +80,7 @@ export function RevocationRecheck(props: { pairing: PairingBridgeAPI }): JSX.Ele
         {checking ? 'Checking…' : 'Check again'}
       </button>
       {message !== null ? (
-        <p role="status" data-testid="recheck-message">
+        <p role="status" dir="ltr" data-testid="recheck-message">
           {message}
         </p>
       ) : null}

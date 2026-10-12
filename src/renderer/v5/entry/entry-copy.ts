@@ -32,6 +32,25 @@ export const SIGN_IN_COPY = Object.freeze({
 });
 
 /**
+ * RT-244 PR2 — the Ready card (M-F1) and the pairing card (G-1 §6 item 4), as
+ * approved with the G-1 references. The pairing outcome copy lives in
+ * routes/pairing/messages.ts.
+ */
+export const READY_COPY = Object.freeze({
+  title: 'الجهاز مرتبط وجاهز.',
+  terminal: 'الجهاز',
+  continue: 'متابعة',
+});
+
+export const PAIRING_COPY = Object.freeze({
+  title: 'ربط الجهاز',
+  hint: 'أدخل رمز الربط الظاهر في لوحة الإدارة.',
+  field: 'رمز الربط',
+  submit: 'ربط الجهاز',
+  submitting: 'جارٍ الربط…',
+});
+
+/**
  * The roster tile's badge: the first letter of the name. Two letters
  * (`slice(0, 2)`) break Arabic letter joining.
  */

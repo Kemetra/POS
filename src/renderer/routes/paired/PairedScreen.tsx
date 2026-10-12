@@ -1,7 +1,8 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { CenterStage } from '../../shell/regions/CenterStage';
+import { EntryCardIcon, EntryCardScreen } from '../../v5/entry/EntryCard';
+import { READY_COPY } from '../../v5/entry/entry-copy';
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 import type { PairingStatus } from '../../../shared/pairing-types';
 
@@ -82,33 +83,38 @@ export function PairedScreen(props: PairedScreenProps): JSX.Element {
   }
 
   const { status } = state;
-  // data-terminal-label is a human-friendly label, not a backend identifier — intentionally retained.
+  // RT-244 PR2 (G-1 «Ready»): the M-F1 sentence, the terminal label as the one
+  // fact, one commit. A neutral state, not a success colour. The label is admin
+  // free text, so it is isolated in <bdi>. data-terminal-label is a
+  // human-friendly label, not a backend identifier — intentionally retained.
   return (
-    <CenterStage>
-      <main
-        className="paired-screen__root"
-        data-testid="route-paired"
-        data-terminal-label={status.terminal_label}
-      >
-        <div className="paired-screen__card">
-          <div className="paired-screen__check-circle" aria-hidden="true" />
-          <div className="paired-screen__badge">PAIRED</div>
-          <h1>Ready</h1>
-          <p className="paired-screen__body">Connected. Choose Continue to open the dashboard.</p>
-          {/* T054 — O2 resolution: Continue navigates to /app/dashboard.
-              Boot router gate is NOT modified. No IPC / bridge call. */}
-          <div className="paired-screen__actions">
-            <button
-              type="button"
-              className="btn btn--primary btn--md"
-              onClick={() => void navigate('/app/dashboard')}
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      </main>
-    </CenterStage>
+    <EntryCardScreen
+      rootProps={{ 'data-testid': 'route-paired', 'data-terminal-label': status.terminal_label }}
+    >
+      <section className="v5-entry__card" aria-labelledby="ready-title">
+        <EntryCardIcon name="terminal" />
+        <h1 id="ready-title" className="v5-entry__card-title">
+          {READY_COPY.title}
+        </h1>
+        <dl className="v5-entry__facts">
+          <dt>{READY_COPY.terminal}</dt>
+          <dd>
+            <bdi>{status.terminal_label}</bdi>
+          </dd>
+        </dl>
+        {/* T054 — O2 resolution: Continue navigates to /app/dashboard.
+            Boot router gate is NOT modified. No IPC / bridge call. */}
+        <button
+          type="button"
+          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+          data-testid="paired-continue"
+          autoFocus
+          onClick={() => void navigate('/app/dashboard')}
+        >
+          {READY_COPY.continue}
+        </button>
+      </section>
+    </EntryCardScreen>
   );
 }
 

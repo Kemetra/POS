@@ -70,6 +70,22 @@ const REBUILT_SCREENS: ReadonlyArray<{
     file: 'ui/operator/ManagerAdminSignInForm.tsx',
     retired: ['sign-in-form'],
   },
+  // RT-244 PR2: pairing and Ready moved onto the v5 entry card.
+  {
+    screen: 'pairing',
+    file: 'routes/pairing/PairingScreen.tsx',
+    retired: ['pairing-screen'],
+  },
+  {
+    screen: 'pairing › code form',
+    file: 'routes/pairing/PairingForm.tsx',
+    retired: ['pairing-form', 'pairing-screen'],
+  },
+  {
+    screen: 'Ready',
+    file: 'routes/paired/PairedScreen.tsx',
+    retired: ['paired-screen'],
+  },
 ];
 
 /** Strip block comments so prose naming a retired class is not a violation. */

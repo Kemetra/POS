@@ -176,7 +176,11 @@ describe('supported-viewport height floor outside the frame (RT-313)', () => {
     const ready = await screen.findByTestId('route-paired');
     const box = ready.closest('.v5-supported-viewport');
     expect(box).not.toBeNull();
-    expect(document.activeElement).toBe(box);
+    // RT-244 PR2: Ready autofocuses its one commit («متابعة»), so focus lands
+    // there on remount, still inside the guard and never on <body>.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(box?.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toHaveAttribute('data-testid', 'paired-continue');
     // Programmatically focusable, but not a Tab stop.
     expect(box).toHaveAttribute('tabindex', '-1');
   });

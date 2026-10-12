@@ -1,6 +1,8 @@
 import type { JSX } from 'react';
 
 import type { PairingStatus } from '../../../shared/pairing-types';
+import { ToneIcon } from '../../v5/foundation/ToneIcon';
+import '../../v5/foundation/messages.css';
 
 type InvalidReason = Extract<PairingStatus, { kind: 'invalid' }>['reason'];
 
@@ -22,10 +24,18 @@ interface InvalidStateBannerProps {
   reason: InvalidReason;
 }
 
+/**
+ * RT-244 PR2 — the v5 warning notice inside the pairing card. These strings
+ * have no approved Arabic yet, so they stay English, marked `lang="en"` and
+ * LTR inside the Arabic card so they are read and laid out as English.
+ */
 export function InvalidStateBanner({ reason }: InvalidStateBannerProps): JSX.Element {
   return (
-    <div role="alert" data-testid="invalid-state-banner">
-      {MESSAGES[reason]}
+    <div role="alert" className="v5-notice" data-tone="warning" data-testid="invalid-state-banner">
+      <ToneIcon tone="warning" />
+      <span className="v5-notice__text" lang="en" dir="ltr">
+        {MESSAGES[reason]}
+      </span>
     </div>
   );
 }

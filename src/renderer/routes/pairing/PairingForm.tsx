@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type SyntheticEvent, type JSX } from 'reac
 import { useNavigate } from 'react-router-dom';
 
 import { messageFor, EMPTY_INPUT_MESSAGE } from './messages';
+import { PAIRING_COPY } from '../../v5/entry/entry-copy';
+import { RefusalNotice } from '../../v5/entry/RefusalNotice';
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 
 /**
@@ -75,13 +77,23 @@ export interface PairingFormProps {
    * from `window.api.pairing`.
    */
   pairing?: PairingBridgeAPI;
+  /** The card heading that names the form; without it the form names itself. */
+  labelledBy?: string;
+  /** The card hint, announced with the field. */
+  hintId?: string;
 }
+
+const STATUS_ID = 'pairing-status';
 
 export function PairingForm(props: PairingFormProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [disabledUntil, setDisabledUntil] = useState<number | null>(null);
+  // Set when a submit ends without navigating: the field was disabled while it
+  // ran, which drops focus to <body>, so it takes focus back once re-enabled
+  // and a scanner operator can scan the next code (RT-244 PR2).
+  const refocusAfterSubmit = useRef(false);
   const navigate = useNavigate();
 
   const pairing = props.pairing ?? readBridge();
@@ -101,6 +113,12 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
       clearTimeout(timer);
     };
   }, [disabledUntil]);
+
+  useEffect(() => {
+    if (submitting || !refocusAfterSubmit.current) return;
+    refocusAfterSubmit.current = false;
+    inputRef.current?.focus();
+  }, [submitting]);
 
   // Compute fresh on every render. `disabledUntil` is the epoch-ms
   // expiry; `Date.now() < disabledUntil` is the active window. The
@@ -130,6 +148,7 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
         void navigate('/paired', { replace: true });
         return;
       }
+      refocusAfterSubmit.current = true;
       if (result.outcome === 'rate_limited') {
         // T057 — start the disabled-window. The retry_after_s value
         // is the authoritative wait time (already parsed and clamped
@@ -156,18 +175,30 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
     void performSubmit();
   }
 
+  const formName =
+    props.labelledBy !== undefined
+      ? { 'aria-labelledby': props.labelledBy }
+      : { 'aria-label': PAIRING_COPY.title };
+  const describedBy = [props.hintId, STATUS_ID].filter((id) => id !== undefined).join(' ');
+
+  // RT-244 PR2 (G-1 «Pairing»): one free-text code field (mono, LTR; the code
+  // length is server-defined, so it is not segmented), a status slot that stays
+  // mounted so the live region is in place before the first message, and the
+  // full-width commit.
   return (
-    <form className="pairing-form" onSubmit={onSubmit} aria-label="Pair terminal">
-      <div className="pairing-screen__field">
-        <label htmlFor="pairing-code">Pairing code</label>
+    <form className="v5-entry__card-form" onSubmit={onSubmit} noValidate {...formName}>
+      <div className="v5-entry__field">
+        <label htmlFor="pairing-code">{PAIRING_COPY.field}</label>
         <input
           id="pairing-code"
-          className="pairing-form__code-input"
+          className="v5-entry__input v5-entry__code-input"
           ref={inputRef}
+          dir="ltr"
           type="text"
           autoComplete="off"
           spellCheck={false}
           autoFocus
+          aria-describedby={describedBy}
           // T057: input is gated by `submitting` only. While rate-limited,
           // the operator may correct a typo so they're ready to retry the
           // moment the timer expires. Only the submit BUTTON gates on
@@ -175,20 +206,18 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
           disabled={submitting}
         />
       </div>
-      <div className="pairing-screen__actions">
-        <button
-          type="submit"
-          className="btn btn--primary btn--lg pairing-form__submit"
-          disabled={submitting || isRateLimited}
-        >
-          {submitting ? 'Pairing…' : 'Pair terminal'}
-        </button>
+      <div className="v5-entry__slot" id={STATUS_ID} role="status">
+        {statusMessage !== null ? (
+          <RefusalNotice testId="pairing-message">{statusMessage}</RefusalNotice>
+        ) : null}
       </div>
-      {statusMessage !== null ? (
-        <p role="status" data-testid="pairing-message">
-          {statusMessage}
-        </p>
-      ) : null}
+      <button
+        type="submit"
+        className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+        disabled={submitting || isRateLimited}
+      >
+        {submitting ? PAIRING_COPY.submitting : PAIRING_COPY.submit}
+      </button>
     </form>
   );
 }
