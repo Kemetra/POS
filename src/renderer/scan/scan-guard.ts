@@ -26,7 +26,8 @@ import {
  *   1. a money / PIN / card-reference field  → restore it, notice M-S5;
  *   2. a modal dialog is open                 → restore the field, notice M-S6;
  *   3. a button, row, the page body, the search or a note field → restore the
- *      field (the search field is cleared) and hand the code to the scan owner;
+ *      field (the search field is cleared) and hand the code to the scan owner
+ *      (M-S1 instead while the owner's screen is suspended, RT-412);
  *   4. any other text field                   → not claimed at all (see `judge`).
  *
  * Everything the guard needs from the browser arrives through `ScanGuardDeps`
@@ -65,6 +66,12 @@ export interface ScanGuard {
   /** Register the single scan owner. Returns an unregister that ignores a replaced owner. */
   setOwner(owner: ScanOwner): () => void;
   registerSurface(kind: RefuseKind, surface: RefuseSurface): () => void;
+  /**
+   * RT-412 — withhold scans from the owner while its screen is blocked (the
+   * in-surface fit notice covers it). A burst that would be routed is refused
+   * with M-S1 instead. Returns the release; suspensions nest.
+   */
+  suspend(): () => void;
 }
 
 interface FieldSnapshot {
@@ -137,6 +144,7 @@ export function createScanGuard(deps: ScanGuardDeps): ScanGuard {
   let run: RunState = null;
   let snapshot: RunSnapshot = EMPTY_SNAPSHOT;
   let owner: ScanOwner | null = null;
+  let suspensions = 0;
   const surfaces: SurfaceRegistry = new Map();
 
   function reset(): void {
@@ -151,7 +159,7 @@ export function createScanGuard(deps: ScanGuardDeps): ScanGuard {
 
   function route(code: string, snap: RunSnapshot, clearField: boolean): void {
     restoreAll(snap, clearField);
-    if (owner === null) deps.notify(SCAN_UNAVAILABLE_MESSAGE);
+    if (owner === null || suspensions > 0) deps.notify(SCAN_UNAVAILABLE_MESSAGE);
     else owner(code);
   }
 
@@ -210,5 +218,15 @@ export function createScanGuard(deps: ScanGuardDeps): ScanGuard {
     };
   }
 
-  return { handleKeyDown, setOwner, registerSurface };
+  function suspend(): () => void {
+    suspensions += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      suspensions -= 1;
+    };
+  }
+
+  return { handleKeyDown, setOwner, registerSurface, suspend };
 }

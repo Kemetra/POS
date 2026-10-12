@@ -75,9 +75,10 @@ function CartRegion(props: Props): JSX.Element {
         role="region"
         aria-label="بنود السلة"
         tabIndex={0}
+        data-fit-rows="4"
         onKeyDown={moveRowFocus}
       >
-        <div className="v5-sale-cart-columns" aria-hidden="true">
+        <div className="v5-sale-cart-columns" aria-hidden="true" data-fit-exclude>
           <span>#</span>
           <span>الصنف</span>
           <span>الكمية</span>
@@ -138,12 +139,12 @@ function MoneyColumn(props: Props): JSX.Element {
           <dd dir="ltr">{formatHumanCount(props.itemCount)}</dd>
         </div>
       </dl>
-      <div className="v5-sale-money-commit">
+      <div className="v5-sale-money-commit" data-fit="pinned">
         <CartTotals {...props} />
         <CartActions {...props} />
       </div>
       {props.canVoid && (
-        <div className="v5-sale-money-secondary">
+        <div className="v5-sale-money-secondary" data-fit="pinned">
           <VoidControl onVoid={props.onVoid} />
         </div>
       )}

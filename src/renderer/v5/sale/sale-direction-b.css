@@ -229,8 +229,16 @@
   text-align: center;
 }
 
+/*
+ * RT-412: one row size, read by the in-surface fit guard as well as by the
+ * rows, so the guard's "at least 4 rows" is measured in the rows drawn here.
+ */
+.v5-live-sale .v5-sale-cart-table {
+  --v5-fit-row-size: 60px;
+}
+
 .v5-live-sale .v5-sale-cart-line {
-  min-block-size: 60px;
+  min-block-size: var(--v5-fit-row-size);
   padding-block: var(--space-1);
 }
 
@@ -388,8 +396,11 @@
     display: none;
   }
 
+  .v5-live-sale .v5-sale-cart-table {
+    --v5-fit-row-size: 52px;
+  }
+
   .v5-live-sale .v5-sale-cart-line {
-    min-block-size: 52px;
     padding-block: 2px;
   }
 

@@ -55,6 +55,11 @@ export function useRefuseSurface(kind: RefuseKind, surface: RefuseSurface): void
   useEffect(() => getScanGuard().registerSurface(kind, surface), [kind, surface]);
 }
 
+/** RT-412 — while `active`, a burst is refused (M-S1) instead of reaching the scan owner. */
+export function useScanSuspended(active: boolean): void {
+  useEffect(() => (active ? getScanGuard().suspend() : undefined), [active]);
+}
+
 /** Installs the window listener once, and renders the notice. Mount at the app root. */
 export function ScanGuardHost(): JSX.Element | null {
   const message = useScanNoticeStore((s) => s.message);
