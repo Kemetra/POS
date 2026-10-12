@@ -390,7 +390,8 @@ its states at **1024×768 and 1280×800**, light and `forced-colors`, and compar
   reference: K28/K29).
 - **G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون
   رقم سري» truthfully. The read contract, the state → action matrix and the copy are proposed in
-  [19](19-d-m1-cashier-pin-status.md) (RT-251, awaiting the owner).
+  [19](19-d-m1-cashier-pin-status.md) (RT-251). The brief is approved; the references in
+  [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html) await the owner.
 - **G-4** Restart re-attach (S19).
 - **G-5** Undo notice (A1).
 

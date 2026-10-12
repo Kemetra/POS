@@ -1,8 +1,12 @@
-# 19 — D-M1: cashier PIN-status read and the Manager → Cashiers surface (PROPOSED)
+# 19 — D-M1: cashier PIN-status read and the Manager → Cashiers surface (BRIEF APPROVED)
 
-> **Status: PROPOSED.** This brief is waiting for the owner's decisions in §7. The G-3 references
-> (§6) are drawn only after the brief is approved. This is the RT-246 pattern: the brief first,
-> then the references.
+> **Status: BRIEF APPROVED, REFERENCES PROPOSED.**
+>
+> - **Brief:** on 2026-10-12 the owner approved this brief and decisions D1, D3 and D4 as
+>   recommended («موافق على الاقتراحات التلاتة، ابدأ ارسم»). D2 was withdrawn (§2 rule 9).
+> - **References:** the G-3 references (§6) are drawn and wait for the owner's approval, along
+>   with the copy marked "proposed" in §5 (D5). They are in
+>   [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html).
 >
 > - **Jira:** **RT-251** (Work Mode: **Planning**; no implementation here). It closes decision
 >   **D-M1** and gap **G-3** in [15](15-vnext-freeze-package.md) §6–§7.
@@ -198,14 +202,14 @@ and captures checked for fit, the 12 px and 44 px floors, axe and names that wra
 
 ## 7. Decisions for the owner
 
-- **D1 — Keep «تغيير الرقم السري» for a ready or locked cashier?** Reset ships today, but the M3
+- **D1 — APPROVED 2026-10-12 as recommended. Keep «تغيير الرقم السري» for a ready or locked cashier?** Reset ships today, but the M3
   and M4 rows in 15 do not list it. Dropping it would take away a working action: a cashier who
   forgot their PIN. **Recommendation: keep it as a secondary action**, named «تغيير الرقم السري».
 - **D2 — Withdrawn.** A fourth "not activated" badge cannot occur; see §2 rule 9. Provision's
   `not_ready` stays an inline refusal (M-K10).
-- **D3 — The lock end time:** show «حتى ‹HH:MM›» beside «مقفل», or just «مقفل»? **Recommendation:
+- **D3 — APPROVED 2026-10-12 as recommended. The lock end time:** show «حتى ‹HH:MM›» beside «مقفل», or just «مقفل»? **Recommendation:
   show it.** It is an absolute time, and it tells the manager that waiting also works.
-- **D4 — Roster-unreachable wording.** Three versions exist:
+- **D4 — APPROVED 2026-10-12 as recommended. Roster-unreachable wording.** Three versions exist:
   - the M1 row: «… — تحقق من الاتصال»;
   - M-K1: «… تحقق من الاتصال ثم أعد المحاولة.»;
   - the shipped sign-in string: «تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.».
@@ -213,7 +217,7 @@ and captures checked for fit, the 12 px and 44 px floors, axe and names that wra
   **Recommendation: the sign-in string, plus a «إعادة المحاولة» button.** There is one string per
   fact, and the button carries the retry. Sign-in has no retry; this screen does, because the
   manager is already signed in and a re-read is safe.
-- **D5 — The copy in §5** marked "proposed".
+- **D5 — The copy in §5** marked "proposed". It waits for the owner with the references.
 
 ## 8. Delivery
 
