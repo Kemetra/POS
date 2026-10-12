@@ -64,10 +64,16 @@ fs.mkdirSync(outDir, { recursive: true });
           const dialog = document.querySelector('[role="dialog"], [role="alertdialog"]');
           const focusable =
             'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"]), [contenteditable]';
-          const live = (n) => !n.closest('[inert]');
+          // Reachable by Tab: not inert, not disabled, not tabindex -1, and rendered and visible.
+          const live = (n) =>
+            !n.closest('[inert]') &&
+            !n.disabled &&
+            n.tabIndex >= 0 &&
+            n.getClientRects().length > 0 &&
+            getComputedStyle(n).visibility !== 'hidden';
           const all = [...document.querySelectorAll('.rt')].flatMap((rt) => [...rt.querySelectorAll(focusable)]);
           const leaks = dialog ? all.filter((n) => !dialog.contains(n) && live(n)).length : 0;
-          const deadDialog = dialog ? !live(dialog) || !all.some((n) => dialog.contains(n) && live(n)) : false;
+          const deadDialog = dialog ? !!dialog.closest('[inert]') || !all.some((n) => dialog.contains(n) && live(n)) : false;
           return { out, spill, scroll, small, targets, wrapped, clipped, leaks, deadDialog };
         });
         let axe = null;
