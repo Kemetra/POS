@@ -1,4 +1,4 @@
-"""Generate the RT-251 G-3 Manager -> Cashiers reference HTML files (PROPOSED, for owner review).
+"""Generate the RT-251 G-3 Manager -> Cashiers reference HTML files (FROZEN, owner-approved 2026-10-12).
 
 Brief: docs/design/vnext/19-d-m1-cashier-pin-status.md (owner-approved D1, D3, D4 on 2026-10-12).
 
@@ -73,7 +73,7 @@ def page(title: str, width: int, body: str, label: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PROPOSED · RT-251 G-3 · {title} · {width}×{height}</title>
+<title>FROZEN · RT-251 G-3 · {title} · {width}×{height}</title>
 <link rel="stylesheet" href="g3.css">
 </head>
 <body>

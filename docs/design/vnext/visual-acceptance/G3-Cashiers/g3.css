@@ -1,5 +1,5 @@
 /*
- * RT-251 G-3 Manager → Cashiers references (PROPOSED, for owner review).
+ * RT-251 G-3 Manager → Cashiers references (visual FROZEN, owner-approved 2026-10-12).
  * Tokens are the shipped light :root values from src/renderer/styles/tailwind.css, as recorded
  * in docs/DESIGN.md. The frame mirrors src/renderer/v5/frame/frame.css on main: the labelled
  * nav panel on the inline end, 208px at 1280 and 140px at 1024, with a 12/8px gutter.

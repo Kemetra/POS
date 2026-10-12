@@ -1,11 +1,11 @@
-# 19 — D-M1: cashier PIN-status read and the Manager → Cashiers surface (BRIEF APPROVED)
+# 19 — D-M1: cashier PIN-status read and the Manager → Cashiers surface (APPROVED)
 
-> **Status: BRIEF APPROVED, REFERENCES PROPOSED.**
+> **Status: APPROVED.** The references are visual FROZEN / behaviour PENDING the implementation slice.
 >
 > - **Brief:** on 2026-10-12 the owner approved this brief and decisions D1, D3 and D4 as
 >   recommended («موافق على الاقتراحات التلاتة، ابدأ ارسم»). D2 was withdrawn (§2 rule 9).
-> - **References:** the G-3 references (§6) are drawn and wait for the owner's approval, along
->   with the copy marked "proposed" in §5 (D5). They are in
+> - **References and copy:** later the same day the owner approved the G-3 references and every
+>   string marked "proposed" in §5 (D5): «موافق على الشكل والنصوص». They are in
 >   [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html).
 >
 > - **Jira:** **RT-251** (Work Mode: **Planning**; no implementation here). It closes decision
@@ -195,7 +195,7 @@ today's shared pending guard.
 `‹الاسم›` is the roster `display_name`. It is admin free text, so it sits in `<bdi>`. No string
 interpolates a PIN, an id or a refusal category.
 
-## 6. The G-3 references (in this PR, PROPOSED)
+## 6. The G-3 references (APPROVED 2026-10-12)
 
 There are ten states, each at 1024×768 and 1280×800, in light and forced colours.
 - They are in [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html).
@@ -237,7 +237,7 @@ and captures checked for fit, the 12 px and 44 px floors, axe and names that wra
   **Recommendation: the sign-in string, plus a «إعادة المحاولة» button.** There is one string per
   fact, and the button carries the retry. Sign-in has no retry; this screen does, because the
   manager is already signed in and a re-read is safe.
-- **D5 — The copy in §5** marked "proposed". It waits for the owner with the references.
+- **D5 — APPROVED 2026-10-12. The copy in §5** marked "proposed", approved with the references.
 
 ## 8. Delivery
 
@@ -246,7 +246,7 @@ This PR is docs-only:
 - the G-3 references and their tools (`tools/gen_g3.py`, `tools/capture_g3.cjs`);
 - pointers in [15](15-vnext-freeze-package.md), the README and the visual-acceptance index.
 
-It merges after the owner approves the references and the proposed copy (D5).
+The owner approved the references and the copy (D5) on 2026-10-12.
 
 Implementation is a separate Jira slice: the main read and IPC, the renderer screen, and tests,
 with the §A4 re-check.
