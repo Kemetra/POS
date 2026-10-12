@@ -630,6 +630,89 @@ describe('RT-424 CashiersScreen — M6 session expired (RT-358)', () => {
   });
 });
 
+describe('RT-424 CashiersScreen — focus never falls to <body>', () => {
+  it('after a successful «إعادة المحاولة», focus moves to the list heading', async () => {
+    const bridge = makeBridge({
+      reads: [{ kind: 'refused', category: 'no_connection' }, cashiers(...ROSTER)],
+    });
+    const user = userEvent.setup();
+    renderScreen(bridge);
+    const notice = await screen.findByTestId('cashier-management-error');
+    await user.click(within(notice).getByRole('button', { name: C.retry }));
+    await screen.findAllByTestId('cashier-row');
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 2, name: C.listHeading })).toHaveFocus();
+    });
+  });
+
+  it('after cancelling the re-auth, focus moves to that cashier’s row action', async () => {
+    const bridge = makeBridge({ provision: [{ kind: 'refused', category: 'reauth_required' }] });
+    const user = userEvent.setup();
+    renderScreen(bridge);
+    await openFirstPin(user);
+    await typePins(user, '4729', '4729');
+    await user.click(screen.getByRole('button', { name: C.save }));
+    await user.click(await screen.findByRole('button', { name: REAUTH_COPY.action }));
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(
+        within(rowOf(AHMED.display_name)).getByRole('button', { name: C.action.first_pin }),
+      ).toHaveFocus();
+    });
+  });
+});
+
+describe('RT-424 CashiersScreen — M6 retry details (ported from RT-358)', () => {
+  const REAUTH_REQUIRED = { kind: 'refused', category: 'reauth_required' } as const;
+
+  async function reachReauthDialog(user: ReturnType<typeof userEvent.setup>) {
+    await openFirstPin(user);
+    await typePins(user, '4729', '4729');
+    await user.click(screen.getByRole('button', { name: C.save }));
+    await user.click(await screen.findByRole('button', { name: REAUTH_COPY.action }));
+    await user.type(screen.getByTestId('reauth-identifier'), 'mgr@example.test');
+    await user.type(screen.getByTestId('reauth-password'), 'pw');
+  }
+
+  it('while the PIN retry after a re-auth is in flight, no «تسجيل الدخول» is offered', async () => {
+    const gate = deferred<unknown>();
+    const bridge = makeBridge({ provision: [REAUTH_REQUIRED] });
+    const user = userEvent.setup();
+    renderScreen(bridge);
+    await reachReauthDialog(user);
+    bridge.provisionCashierPin.mockImplementationOnce(() => gate.promise);
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: REAUTH_COPY.submit }),
+    );
+    await waitFor(() => {
+      expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByTestId('reauth-required')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: REAUTH_COPY.action })).not.toBeInTheDocument();
+    await act(async () => {
+      gate.resolve({ kind: 'pin_provisioned', audit_event_id: 'e' });
+      await gate.promise;
+    });
+    expect(await screen.findByTestId('action-success')).toBeInTheDocument();
+  });
+
+  it('a refused re-auth keeps the dialog open and sends no PIN again', async () => {
+    const bridge = makeBridge({
+      provision: [REAUTH_REQUIRED],
+      reauth: { kind: 'refused', category: 'invalid_input' },
+    });
+    const user = userEvent.setup();
+    renderScreen(bridge);
+    await reachReauthDialog(user);
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: REAUTH_COPY.submit }),
+    );
+    expect(await screen.findByTestId('reauth-refusal')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(bridge.provisionCashierPin).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('RT-424 CashiersScreen — accessibility', () => {
   it('has no axe violations on the list, in the dialog and on the M1 state', async () => {
     const user = userEvent.setup();

@@ -59,8 +59,11 @@
   flex: none;
 }
 
+/* Empty, the live region stays in the accessibility tree (a region that was
+   just display:none often does not announce); the negative margin cancels the
+   column gap so the layout matches G-3. */
 .v5-cashiers-outcome:empty {
-  display: none;
+  margin-block-end: calc(-1 * var(--space-3));
 }
 
 /* The list panel takes the rest of the height; its rows scroll inside it. */

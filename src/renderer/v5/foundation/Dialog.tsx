@@ -65,6 +65,17 @@ export function DialogHost({ children }: { children: ReactNode }): JSX.Element {
   );
 }
 
+/**
+ * Is a DialogHost already in scope? A dialog that may render both inside the
+ * v5 frame (which has one) and under the legacy AppShell (which has none)
+ * adds its own host only in the second case. A nested host inside the frame
+ * would portal into `<main>`, whose layout containment makes it the
+ * containing block of the fixed backdrop: the scrim would miss the nav.
+ */
+export function useHasDialogHost(): boolean {
+  return useContext(DialogHostContext) !== null;
+}
+
 const FOCUSABLE = [
   'a[href]',
   'button:not([disabled])',

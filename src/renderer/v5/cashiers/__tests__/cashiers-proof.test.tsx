@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
+import { REAUTH_COPY } from '../../../ui/operator/messages';
 import { CASHIERS_COPY as C } from '../cashiers-copy';
 import {
   CashiersProof,
@@ -110,6 +111,27 @@ describe('RT-424 CashiersProof — the in-memory bridge', () => {
 });
 
 describe('RT-424 CashiersProof — the page', () => {
+  // Review #1: the re-auth dialog must use the FRAME's DialogHost. A nested
+  // host would portal into <main>, whose layout containment makes it the
+  // backdrop's containing block, so the scrim would miss the nav.
+  it('M6: the re-auth dialog renders outside <main>, in the frame’s dialog host', async () => {
+    window.location.hash = '#/dev/cashiers-proof?provision=reauth';
+    const user = userEvent.setup();
+    render(<CashiersProof />);
+    const rows = await screen.findAllByTestId('cashier-row');
+    await user.click(
+      within(rows[1] as HTMLElement).getByRole('button', { name: C.action.first_pin }),
+    );
+    await user.type(screen.getByLabelText(C.newPin), '4729');
+    await user.type(screen.getByLabelText(C.confirmPin), '4729');
+    await user.click(screen.getByRole('button', { name: C.save }));
+    await user.click(await screen.findByRole('button', { name: REAUTH_COPY.action }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.closest('main')).toBeNull();
+    expect(dialog.closest('[data-testid="v5-frame"]')).not.toBeNull();
+    expect(document.querySelectorAll('.v5-dialog-host')).toHaveLength(1);
+  });
+
   it('renders the real screen inside the v5 frame as a manager', async () => {
     window.location.hash = '#/dev/cashiers-proof';
     const user = userEvent.setup();

@@ -187,6 +187,8 @@ export function CashiersScreen({ operator, pairing }: Props): JSX.Element {
         rowRef={focus.rowRef}
         onAction={onAction}
         onRetry={() => {
+          // The retry button goes when the rows arrive: focus the list heading then.
+          focus.target(null);
           void reload();
         }}
       />
@@ -210,6 +212,8 @@ export function CashiersScreen({ operator, pairing }: Props): JSX.Element {
             void onReauthenticated();
           }}
           onCancel={() => {
+            // The «تسجيل الدخول» opener goes with the notice: focus that cashier's row.
+            focus.now(outcome.cashier.id);
             setOutcome(null);
           }}
         />
@@ -374,34 +378,43 @@ function PanelState({ children }: { children: ReactNode }): JSX.Element {
 
 /**
  * After an action, the re-read may remove the button that had focus (a
- * first-PIN row becomes «جاهز»). Once the read lands, focus that cashier's
- * first enabled action, else the list heading, but only when focus was lost
- * (it sits on <body>): a manager who moved on keeps their place.
+ * first-PIN row becomes «جاهز»), and a retry or a cancelled re-auth removes
+ * its own button. Once the read lands (or at once, for `now`), focus that
+ * cashier's first enabled action, else the list heading, but only when focus
+ * was lost (it sits on <body>): a manager who moved on keeps their place.
+ * A `null` target means the heading.
  */
 function useFocusAfterRead(
   reading: boolean,
   landed: number,
 ): {
-  target: (id: string) => void;
+  target: (id: string | null) => void;
+  now: (id: string) => void;
   rowRef: (id: string, el: HTMLLIElement | null) => void;
   headingRef: (el: HTMLHeadingElement | null) => void;
 } {
   const rows = useRef(new Map<string, HTMLLIElement>());
   const heading = useRef<HTMLHeadingElement | null>(null);
-  const pendingTarget = useRef<string | null>(null);
+  const pendingTarget = useRef<{ id: string | null } | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const id = pendingTarget.current;
-    if (reading || id === null) return;
+    const target = pendingTarget.current;
+    if (reading || target === null) return;
     pendingTarget.current = null;
     if (!focusWasLost()) return;
-    const button = rows.current.get(id)?.querySelector<HTMLButtonElement>('button:not([disabled])');
+    const row = target.id === null ? undefined : rows.current.get(target.id);
+    const button = row?.querySelector<HTMLButtonElement>('button:not([disabled])');
     (button ?? heading.current)?.focus();
-  }, [reading, landed]);
+  }, [reading, landed, tick]);
 
   return {
     target: (id) => {
-      pendingTarget.current = id;
+      pendingTarget.current = { id };
+    },
+    now: (id) => {
+      pendingTarget.current = { id };
+      setTick((n) => n + 1);
     },
     rowRef: (id, el) => {
       if (el === null) rows.current.delete(id);
