@@ -53,11 +53,28 @@ fs.mkdirSync(outDir, { recursive: true });
             const r = n.getBoundingClientRect();
             return r.width > 0 && (r.height < 44 || r.width < 44);
           }).length;
-          // Names wrap to two lines (information); a name clamped past two lines is a failure.
+          // A name that wraps is information; a name that is cut is a failure.
           const names = [...document.querySelectorAll('.name')];
           const wrapped = names.filter((n) => n.clientHeight > parseFloat(getComputedStyle(n).lineHeight) * 1.5).length;
-          const clamped = names.filter((n) => n.scrollHeight > n.clientHeight + 3).length;
-          return { out, spill, scroll, small, targets, wrapped, clamped };
+          // Cut either way: a clamp (vertical) or an ellipsis (sideways).
+          const clipped = names.filter(
+            (n) => n.scrollHeight > n.clientHeight + 3 || n.scrollWidth > n.clientWidth + 1,
+          ).length;
+          // Behind a dialog, nothing outside it may take focus, and the dialog itself must not be inert.
+          const dialog = document.querySelector('[role="dialog"], [role="alertdialog"]');
+          const focusable =
+            'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"]), [contenteditable]';
+          // Reachable by Tab: not inert, not disabled, not tabindex -1, and rendered and visible.
+          const live = (n) =>
+            !n.closest('[inert]') &&
+            !n.disabled &&
+            n.tabIndex >= 0 &&
+            n.getClientRects().length > 0 &&
+            getComputedStyle(n).visibility !== 'hidden';
+          const all = [...document.querySelectorAll('.rt')].flatMap((rt) => [...rt.querySelectorAll(focusable)]);
+          const leaks = dialog ? all.filter((n) => !dialog.contains(n) && live(n)).length : 0;
+          const deadDialog = dialog ? !!dialog.closest('[inert]') || !all.some((n) => dialog.contains(n) && live(n)) : false;
+          return { out, spill, scroll, small, targets, wrapped, clipped, leaks, deadDialog };
         });
         let axe = null;
         if (axePath) {
@@ -74,7 +91,9 @@ fs.mkdirSync(outDir, { recursive: true });
         if (fit.spill) failed.push(`${fit.spill} row(s) spill horizontally`);
         if (fit.small) failed.push(`${fit.small} text node(s) below 12px`);
         if (fit.targets) failed.push(`${fit.targets} control(s) below 44x44`);
-        if (fit.clamped) failed.push(`${fit.clamped} name(s) clamped`);
+        if (fit.clipped) failed.push(`${fit.clipped} name(s) clipped`);
+        if (fit.leaks) failed.push(`${fit.leaks} control(s) focusable behind the dialog`);
+        if (fit.deadDialog) failed.push('the dialog itself is inert or has no reachable control');
         if (axe && axe.length) failed.push(`axe: ${axe.join(', ')}`);
         if (failed.length) {
           failures.push(`${f}: ${failed.join('; ')}`);

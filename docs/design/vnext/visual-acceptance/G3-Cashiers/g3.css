@@ -266,15 +266,13 @@ body {
   inline-size: 30px;
   block-size: 30px;
 }
-/* a name wraps to two lines, never ellipsizes: two cashiers must not look alike (G-1 rule) */
+/* a name wraps and the row grows; it is never cut, so two cashiers cannot look alike
+   (stricter than G-1, which clamps at two lines) */
 .name {
-  display: -webkit-box;
-  overflow: hidden;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 .w1024 .name {
   font-size: 14px;
