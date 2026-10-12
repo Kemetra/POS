@@ -389,7 +389,8 @@ its states at **1024×768 and 1280×800**, light and `forced-colors`, and compar
 - **G-2** Shift open / close / status (RT-17 shipped V5 screens, which are the de-facto
   reference: K28/K29).
 - **G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون
-  رقم سري» truthfully.
+  رقم سري» truthfully. The read contract, the state → action matrix and the copy are proposed in
+  [19](19-d-m1-cashier-pin-status.md) (RT-251, awaiting the owner).
 - **G-4** Restart re-attach (S19).
 - **G-5** Undo notice (A1).
 
@@ -442,7 +443,7 @@ Every implementation slice:
 | **D-N1** | Sale number display / quotability | S14, returns lookup | Short display form + recent-sales list for returns |
 | **D-P1** | External-card decline / UNKNOWN input | S11, S12 trigger | Outcome selector on card entry (approved / declined / not sure) under RT-10 |
 | **D-P2** | One-step vs two-step cash commit | W1-C variant | Keep two-step (today); revisit after W1-C |
-| **D-M1** | Manager → Cashiers PIN-status read | G-3, M2–M4 | Add a read model; then design the surface |
+| **D-M1** | Manager → Cashiers PIN-status read | G-3, M2–M4 | Add a read model; then design the surface. Proposed in [19](19-d-m1-cashier-pin-status.md) (RT-251) |
 | **RT-113 / 114 / 116 S4–S6 / 158 / 28 / 161** | existing contracts | S5, S6, S15–S19, M-O*, M-A*, M-H* | Unchanged owners; their UI slices follow their contracts |
 
 **Not proposed:** a big-bang rewrite; any slice touching IPC/DB/API/payment/sync/ERP without its
