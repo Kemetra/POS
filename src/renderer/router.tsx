@@ -24,7 +24,7 @@ import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { CatalogueDiagnostics } from './routes/app/CatalogueDiagnostics';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
 import { CheckoutRoute } from './routes/app/checkout/CheckoutRoute';
-import { CashierManagement } from './routes/app/manager/CashierManagement';
+import { CashiersScreen } from './v5/cashiers/CashiersScreen';
 import { StuckShiftSurface } from './ui/operator/ForcedCloseSurface';
 import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
@@ -235,6 +235,21 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
                 </OperatorRouteGuard>
               ),
             },
+            // RT-424 (RT-251 doc 19, G-3) — Manager → Cashiers in the v5 manager
+            // frame (UX-09). Opened from the Dashboard link; manager/admin only
+            // here (secondary) and in main (`requireRole`, AD-1).
+            {
+              path: 'manager/cashiers',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  {props.operator !== undefined ? (
+                    <CashiersScreen operator={props.operator} pairing={props.pairing} />
+                  ) : (
+                    <Navigate to="/app/dashboard" replace />
+                  )}
+                </OperatorRouteGuard>
+              ),
+            },
           ],
         },
         {
@@ -275,18 +290,6 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             { path: 'inventory', element: <InventoryPlaceholder /> },
             { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
             { path: 'settings', element: <SettingsHelpPlaceholder /> },
-            {
-              path: 'manager/cashiers',
-              element: (
-                <OperatorRouteGuard allow={['manager', 'admin']}>
-                  {props.operator !== undefined ? (
-                    <CashierManagement operator={props.operator} />
-                  ) : (
-                    <Navigate to="dashboard" replace />
-                  )}
-                </OperatorRouteGuard>
-              ),
-            },
             {
               path: 'manager/stuck-shifts',
               element: (
