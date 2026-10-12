@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RT-251 G-3 · إدارة الكاشير · مرجع مقترح</title>
+<style>
+  :root { --primary:#0f766e; --text:#0f1d2e; --muted:#53647a; --border:#d8dfe7; --bg:#f7f9fa; --surface:#fff; }
+  body { margin:0; padding:32px; background:var(--bg); color:var(--text); font-family:'Dubai','Segoe UI',Tahoma,Arial,sans-serif; font-size:15px; line-height:1.7; }
+  main { max-inline-size:1180px; margin-inline:auto; display:grid; gap:28px; }
+  h1 { margin:0; font-size:26px; } h2 { margin:0 0 8px; font-size:19px; }
+  .status { display:inline-block; padding:2px 12px; border:1px solid #a35a00; border-radius:999px; background:#fdf1e0; color:#7d4500; font-weight:700; }
+  section { padding:20px 24px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+  table { inline-size:100%; border-collapse:collapse; }
+  th, td { padding:8px 10px; border-block-end:1px solid var(--border); text-align:start; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .ltr { direction:ltr; unicode-bidi:isolate; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:13px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; }
+  figure { margin:0; display:grid; gap:6px; }
+  figure img { inline-size:100%; border:1px solid var(--border); border-radius:8px; }
+  figcaption { color:var(--muted); font-size:13px; }
+  a { color:var(--primary); }
+  ul { margin:0; padding-inline-start:20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>إدارة الكاشير (G-3): حالة الرقم السري لكل كاشير</h1>
+    <p><span class="status">معتمد من المالك (<span class="ltr">2026-10-12</span>)</span> · Jira <span class="ltr">RT-251</span> (D-M1) · الملخص:
+      <a href="../../19-d-m1-cashier-pin-status.md"><span class="ltr">19-d-m1-cashier-pin-status.md</span></a></p>
+    <p>وافق المالك يوم <span class="ltr">2026-10-12</span> على الملخص وعلى القرارات D1 و D3 و D4. ثم وافق في اليوم نفسه على هذه
+      المراجع وعلى كل النصوص المقترحة («موافق على الشكل والنصوص»).</p>
+  </header>
+
+  <section>
+    <h2>الحالات العشر (1024 × 768 و 1280 × 800، فاتح وتباين عالٍ)</h2>
+    <div class="grid">
+      <figure><img src="captures/G3-List-1280-light.png" alt=""><figcaption>1 · القائمة: بدون رقم سري، جاهز، مقفل</figcaption></figure>
+      <figure><img src="captures/G3-ListLong-1024-light.png" alt=""><figcaption>2 · قائمة طويلة (18): القائمة تتحرك والعنوان ثابت</figcaption></figure>
+      <figure><img src="captures/G3-FirstPin-1280-light.png" alt=""><figcaption>3 · تعيين أول رقم سري أثناء الكتابة: «حفظ» معطّل</figcaption></figure>
+      <figure><img src="captures/G3-Mismatch-1024-light.png" alt=""><figcaption>4 · الرقمان غير متطابقين</figcaption></figure>
+      <figure><img src="captures/G3-ChangePin-1280-light.png" alt=""><figcaption>5 · تغيير الرقم السري (D1): الحقلان مكتملان فـ«حفظ» متاح</figcaption></figure>
+      <figure><img src="captures/G3-SetDone-1280-light.png" alt=""><figcaption>6 · تم تعيين الرقم السري، والصف أصبح «جاهز»</figcaption></figure>
+      <figure><img src="captures/G3-UnlockDone-1024-light.png" alt=""><figcaption>7 · تم فك القفل، والصف أصبح «جاهز»</figcaption></figure>
+      <figure><img src="captures/G3-Unreachable-1024-light.png" alt=""><figcaption>8 · تعذّر تحميل القائمة + إعادة المحاولة (D4)</figcaption></figure>
+      <figure><img src="captures/G3-Empty-1280-light.png" alt=""><figcaption>9 · لا يوجد كاشير مسجّل</figcaption></figure>
+      <figure><img src="captures/G3-Reauth-1280-forced.png" alt=""><figcaption>10 · انتهت جلسة الدخول (M6، تباين عالٍ)</figcaption></figure>
+    </div>
+    <p>كل الملفات في هذا المجلد: <code>G3-&lt;State&gt;-1024.html</code> و <code>-1280.html</code>، والصور في
+      <code>captures/</code>.</p>
+  </section>
+
+  <section>
+    <h2>ماذا يتغير عن الشاشة الحالية (RT-235)</h2>
+    <ul>
+      <li>كل النصوص عربية. اليوم كلها إنجليزية.</li>
+      <li>يظهر أمام كل كاشير وسم بحالته على هذا الجهاز. لكل حالة رمز خاص بها، فلا يعتمد معناها على اللون وحده.</li>
+      <li>يظهر لكل حالة الزر الذي يصلح لها فقط، بدل الأزرار الثلاثة في كل صف:
+        <ul>
+          <li>«تعيين أول رقم سري» لمن ليس له رقم.</li>
+          <li>«فك القفل» للمقفل.</li>
+          <li>«تغيير الرقم السري» لمن له رقم، وهو قرار D1.</li>
+        </ul>
+      </li>
+      <li>الأزرار في عمودين ثابتين، فتأتي على خط واحد في كل الصفوف.</li>
+      <li>يظهر بجانب «مقفل» وقت انتهاء القفل، مثل «حتى <span class="ltr">14:35</span>». هذا قرار D3، والقفل ينتهي وحده بعد 5 دقائق.</li>
+      <li>الرقم السري يُكتب مرتين للتأكيد، من 4 إلى 6 أرقام. زر «حفظ» معطّل حتى يكتمل الحقلان.</li>
+      <li>الاسم يلتف إلى سطرين ولا يُقص، حتى لا يتشابه كاشيران.</li>
+      <li>الشاشة تقرأ القائمة من جديد بعد كل عملية وعند «إعادة المحاولة». لا يوجد تحديث تلقائي متكرر.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>النصوص (للموافقة)</h2>
+    <table>
+      <thead><tr><th>المكان</th><th>النص</th><th>الحالة</th></tr></thead>
+      <tbody>
+        <tr><td>عنوان الشاشة</td><td>«إدارة الكاشير» · «الرقم السري لكل كاشير على الجهاز ‹الجهاز›»</td><td>العنوان يُعرض اليوم؛ السطر الثاني مقترح</td></tr>
+        <tr><td>عنوان القائمة</td><td>«الكاشير في هذا الفرع» · «‹n› كاشير»</td><td>مقترح (نفس عنوان شاشة الدخول)</td></tr>
+        <tr><td>الوسوم</td><td>«بدون رقم سري» · «جاهز» · «مقفل» + «حتى ‹HH:MM›»</td><td>الوسوم في 15؛ الوقت بقرار D3</td></tr>
+        <tr><td>الأزرار</td><td>«تعيين أول رقم سري» · «فك القفل» · «تغيير الرقم السري» · «حفظ» · «إلغاء» · «إعادة المحاولة»</td><td>الأول والثاني في 15؛ الباقي مقترح</td></tr>
+        <tr><td>نافذة الرقم السري</td><td>«تعيين أول رقم سري لـ ‹الاسم›» / «تغيير الرقم السري لـ ‹الاسم›» · «من 4 إلى 6 أرقام.» · «الرقم السري الجديد» · «تأكيد الرقم السري»</td><td>مقترح</td></tr>
+        <tr><td>عدم التطابق</td><td>«الرقمان غير متطابقين.»</td><td>في 15 (M-K3)</td></tr>
+        <tr><td>طول غير صحيح</td><td>«الرقم السري من 4 إلى 6 أرقام.»</td><td>مقترح</td></tr>
+        <tr><td>نجاح</td><td>«تم تعيين الرقم السري لـ ‹الاسم›.» · «تم تغيير الرقم السري لـ ‹الاسم›.» · «تم فك القفل عن ‹الاسم›.»</td><td>الأول في 15 (M-K2)؛ الباقي مقترح</td></tr>
+        <tr><td>تعذّر التحميل</td><td>«تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.» + «إعادة المحاولة»</td><td>معتمد (D4)</td></tr>
+        <tr><td>أول تحميل</td><td>«جارٍ تحميل القائمة…»</td><td>مقترح (بدون صورة؛ عند إعادة القراءة تبقى الصفوف والأزرار معطّلة)</td></tr>
+        <tr><td>القائمة فارغة</td><td>«لا يوجد كاشير مسجّل في هذا الفرع.»</td><td>نفس نص شاشة الدخول</td></tr>
+        <tr><td>تعذّر التفعيل (داخل النافذة)</td><td>«لا يمكن تفعيل هذا الكاشير الآن. تواصل مع المشرف.»</td><td>مقترح</td></tr>
+        <tr><td>فشل عام</td><td>«تعذّر تنفيذ العملية. حاول مرة أخرى.»</td><td>مقترح</td></tr>
+        <tr><td>انتهاء الجلسة (M6)</td><td>«انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.» + «تسجيل الدخول»</td><td>معتمد (RT-247)</td></tr>
+      </tbody>
+    </table>
+    <p>‹الاسم› و ‹الجهاز› نص حر يكتبه المشرف، فيُعرض داخل <code>&lt;bdi&gt;</code>. لا يحمل أي نص رقمًا سريًا ولا معرّفًا.</p>
+  </section>
+
+  <section>
+    <h2>ملاحظات للمراجعة</h2>
+    <ul>
+      <li>شاشة الكاشير ليس لها عنصر في القائمة الجانبية اليوم، وتُفتح من رابط في لوحة المتابعة. لذلك لا يظهر أي عنصر محددًا في المرجع. إضافة عنصر للقائمة خارج نطاق هذه التذكرة.</li>
+      <li>حد الارتفاع <span class="ltr">1024×600</span> غير مرسوم، لأن المراجع صفحات بحجم ثابت. يُفحص في البرنامج الحقيقي عند التنفيذ: القائمة تتحرك داخل اللوحة، والنافذة تتحرك داخل الخلفية.</li>
+      <li>«تغيير الرقم السري» لكاشير مقفل يفك القفل أيضًا، فيصبح الصف «جاهز» بعد الحفظ.</li>
+      <li>«جاهز» يعني فقط أن الرقم السري موجود على هذا الجهاز وغير مقفل. لا يضمن نجاح الدخول، فقد يُرفض الدخول لأسباب أخرى مثل عدم الاتصال.</li>
+      <li>الفحص الآلي لكل حالة، على العرضين وبالوضع الفاتح:
+        <ul>
+          <li>كل شيء داخل الإطار، ولا يخرج صف عن عرضه.</li>
+          <li>لا نص أصغر من <span class="ltr">12px</span>، ولا زر أصغر من <span class="ltr">44×44</span>.</li>
+          <li>axe: صفر مخالفات.</li>
+          <li>كل اسم يظهر كاملًا في سطرين على الأكثر.</li>
+        </ul>
+      </li>
+      <li>صور وضع التباين العالي محاكاة Chromium (<code>forcedColors: 'active'</code>)، وليست سمة Windows الحقيقية.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

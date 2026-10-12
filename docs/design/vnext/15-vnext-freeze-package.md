@@ -356,7 +356,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-L1 | Locked | «الطرفية مقفلة. أدخل الرقم السري للمتابعة.» | neutral |
 | M-L2 | Sign-out with an open cart | Until held-cart re-attach ships (RT-116 S4): «البيع الحالي لن يظهر بعد تسجيل الخروج. هل تريد تسجيل الخروج؟». After it ships: «سيُحفظ البيع الحالي على هذا الجهاز. هل تريد تسجيل الخروج؟» · «البقاء مسجّلاً» (default) / «تسجيل الخروج» | warning |
 | **Manager → Cashiers** | | | |
-| M-K1 | Roster unreachable | «تعذّر تحميل قائمة الكاشير. تحقق من الاتصال ثم أعد المحاولة.» | warning |
+| M-K1 | Roster unreachable | «تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.» with a «إعادة المحاولة» button (owner decision D4 in [19](19-d-m1-cashier-pin-status.md), 2026-10-12; it was «… تحقق من الاتصال ثم أعد المحاولة.») | warning |
 | M-K2 | First PIN set | «تم تعيين الرقم السري لـ ‹الاسم›.» | success |
 | M-K3 | PIN mismatch | «الرقمان غير متطابقين.» | warning |
 | **Frame** | | | |
@@ -389,7 +389,10 @@ its states at **1024×768 and 1280×800**, light and `forced-colors`, and compar
 - **G-2** Shift open / close / status (RT-17 shipped V5 screens, which are the de-facto
   reference: K28/K29).
 - **G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون
-  رقم سري» truthfully.
+  رقم سري» truthfully. The read contract, the state → action matrix and the copy are proposed in
+  [19](19-d-m1-cashier-pin-status.md) (RT-251). The brief, the references in
+  [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html) and the copy are
+  owner-approved (2026-10-12).
 - **G-4** Restart re-attach (S19).
 - **G-5** Undo notice (A1).
 
@@ -442,7 +445,7 @@ Every implementation slice:
 | **D-N1** | Sale number display / quotability | S14, returns lookup | Short display form + recent-sales list for returns |
 | **D-P1** | External-card decline / UNKNOWN input | S11, S12 trigger | Outcome selector on card entry (approved / declined / not sure) under RT-10 |
 | **D-P2** | One-step vs two-step cash commit | W1-C variant | Keep two-step (today); revisit after W1-C |
-| **D-M1** | Manager → Cashiers PIN-status read | G-3, M2–M4 | Add a read model; then design the surface |
+| **D-M1** | Manager → Cashiers PIN-status read | G-3, M2–M4 | Add a read model; then design the surface. Proposed in [19](19-d-m1-cashier-pin-status.md) (RT-251) |
 | **RT-113 / 114 / 116 S4–S6 / 158 / 28 / 161** | existing contracts | S5, S6, S15–S19, M-O*, M-A*, M-H* | Unchanged owners; their UI slices follow their contracts |
 
 **Not proposed:** a big-bang rewrite; any slice touching IPC/DB/API/payment/sync/ERP without its
