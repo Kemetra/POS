@@ -120,7 +120,7 @@ Manager → Cashiers (M-states, manager surface; RT-235 behaviour ✅, VNext pre
 | # | State | Primary | Blocked | Status | Evidence |
 |---|---|---|---|---|---|
 | M1 | Roster loading / unreachable | retry | all row actions | «تعذّر تحميل قائمة الكاشير — تحقق من الاتصال» | backend stopped |
-| M2 | Cashier with **no PIN on this terminal** | «تعيين أول رقم سري» | unlock, reset | badge «بدون رقم سري» | needs D-M1 (a status read exists? see §6 G-3) |
+| M2 | Cashier with **no PIN on this terminal** | «تعيين أول رقم سري» | unlock, reset | badge «بدون رقم سري» | `no_pin` from the D-M1 status read ([19](19-d-m1-cashier-pin-status.md) §2–§3, RT-251) |
 | M3 | Cashier with a PIN | — | «تعيين أول رقم سري» | badge «جاهز» | — |
 | M4 | Cashier locked out | «فك القفل» | — | badge «مقفل» | — |
 | M5 | Setting PIN (entry + confirm) | «حفظ» | — | two fields, digits only, **4–6** (the cashier PIN rule: `PIN_RE` in `pin-management.ts`; 6–8 is the separate manager-PIN rule) | mismatch refused inline |
