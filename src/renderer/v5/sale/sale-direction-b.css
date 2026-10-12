@@ -11,7 +11,8 @@
  *   └──────────────────────────────┘└ void ─┘
  *
  * Comfortable (workspace > 1120px): money column 320px, 60px rows.
- * Compact (≤ 1120px, a 1024 window): money column 280px, 52px rows.
+ * Compact (≤ 1120px, a 1024 window; or, RT-407 D12, a viewport under 768px
+ * high, marked by frame.css): money column 280px, 52px rows.
  */
 
 .v5-visually-hidden {
@@ -289,7 +290,14 @@
   background: var(--color-surface);
 }
 
+/*
+ * RT-407 (RT-312 D14, boundary B5): on a short screen the column gives way from
+ * the top. The title and the total, commit and void never shrink; the counts
+ * are the only part that shrinks and then scrolls, so the commit and the void
+ * are never the first thing clipped.
+ */
 .v5-sale-money-title {
+  flex: none;
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
@@ -299,6 +307,7 @@
 /* Totals and the commit sit together at the foot: the total is read right above the action. */
 .v5-sale-money-commit {
   display: flex;
+  flex: none;
   flex-direction: column;
   gap: var(--space-2);
   margin-block-start: auto;
@@ -306,6 +315,7 @@
 
 /* The void is a separate region, at least 16px from the commit (DESIGN.md touch targets). */
 .v5-sale-money-secondary {
+  flex: none;
   padding-block-start: var(--space-4);
   border-block-start: 1px solid var(--color-border);
 }
@@ -316,8 +326,12 @@
 
 .v5-sale-money-counts {
   display: grid;
+  flex: 0 1 auto;
+  align-content: start;
   gap: var(--space-1);
+  min-block-size: 0;
   margin: 0;
+  overflow-y: auto;
 }
 
 .v5-sale-money-counts > div {
@@ -352,9 +366,9 @@
   align-self: flex-end;
 }
 
-/* ── Compact (a 1024 window) ───────────────────────────────────────────── */
+/* ── Compact (a 1024 window, or under 768px high: RT-407 D12) ─────────── */
 
-@container v5-screen (max-width: 1120px) {
+@container v5-screen (max-width: 1120px) or style(--v5-screen-height: compact) {
   .v5-live-sale .v5-sale-workstation {
     --v5-money-column: 280px;
     gap: var(--space-2);

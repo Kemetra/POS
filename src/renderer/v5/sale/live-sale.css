@@ -91,7 +91,7 @@
  * the viewport (the v5-screen container). The Direction B grid, its compact
  * tracks and the money column live in sale-direction-b.css (RT-242).
  */
-@container v5-screen (max-width: 1120px) {
+@container v5-screen (max-width: 1120px) or style(--v5-screen-height: compact) {
   .v5-live-titlebar {
     padding-inline: var(--space-3);
   }

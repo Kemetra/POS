@@ -9,8 +9,9 @@
  *   │ subtotal       ││                        ││ actions      │
  *   └────────────────┘└────────────────────────┘└──────────────┘
  *
- *   Compact (≤ 1120px, a 1024 window): the summary is a one-line strip on
- *   top with «عرض الأصناف»; tender panel fluid; money column 296px.
+ *   Compact (≤ 1120px, a 1024 window; or, RT-407 D12, a viewport under 768px
+ *   high, marked by frame.css): the summary is a one-line strip on top with
+ *   «عرض الأصناف»; tender panel fluid; money column 296px.
  *
  * The money column is the Sale's (same place, 320px comfortable): the amount
  * due and the actions are rows of their own outside the scrolling middle, so
@@ -553,10 +554,24 @@
   container: v5-ledger / inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* due · recorded change · scrolling middle · actions. Rows are placed by name,
+     so with no change recorded its row is empty and the middle keeps the 1fr. */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: 'due' 'change' 'middle' 'actions';
+}
+
+/*
+ * RT-407 (RT-312 D13): main's recorded change, pinned under the amount due.
+ * Only the recorded tender lines below it scroll on a short screen. Large and
+ * neutral (M-P5), as before.
+ */
+.v5-ledger__change {
+  grid-area: change;
+  padding: var(--space-2) var(--space-4) 0;
 }
 
 .v5-ledger__due {
+  grid-area: due;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -595,6 +610,7 @@
 }
 
 .v5-ledger__middle {
+  grid-area: middle;
   min-block-size: 0;
   overflow-y: auto;
 }
@@ -664,6 +680,7 @@
  * one state stays empty; neither slot ever holds the other's consequence (A2).
  */
 .v5-ledger__actions {
+  grid-area: actions;
   padding: var(--space-3) var(--space-4) var(--space-4);
   border-block-start: 1px solid var(--color-border);
 }
@@ -716,9 +733,9 @@
   padding-block: 0;
 }
 
-/* ── Compact (a 1024 window) ───────────────────────────────────────────── */
+/* ── Compact (a 1024 window, or under 768px high: RT-407 D12) ─────────── */
 
-@container v5-screen (max-width: 1120px) {
+@container v5-screen (max-width: 1120px) or style(--v5-screen-height: compact) {
   .v5-checkout {
     --v5-money-column: 296px;
   }
@@ -856,7 +873,8 @@
     padding: var(--space-2) var(--space-3);
   }
 
-  .v5-ledger-draft {
+  .v5-ledger-draft,
+  .v5-ledger__change {
     padding: var(--space-2) var(--space-3) 0;
   }
 

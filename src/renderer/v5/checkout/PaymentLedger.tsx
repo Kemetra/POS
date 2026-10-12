@@ -12,14 +12,16 @@ import type { CashDraft } from './cash-draft';
  * commit without anything moving.
  *
  *   ┌ amount due (hero) ┐  pinned
+ *   │ change to hand back│  pinned once recorded (RT-407 D13)
  *   │ recorded money     │  scrolls if it must
- *   │ change to hand back│
  *   ├ actions (slots)    ┤  pinned
  *   └────────────────────┘
  *
- * The amount due and the actions are separate grid rows outside the scrolling
- * middle, so neither can be scrolled away (08 I-3) and nothing sticky ever sits
- * over a focused control.
+ * The amount due, the recorded change and the actions are separate grid rows
+ * outside the scrolling middle, so none can be scrolled away (08 I-3) and
+ * nothing sticky ever sits over a focused control. RT-407 (RT-312 D13): on a
+ * short screen only the recorded tender lines scroll; the change to hand back
+ * stays in view under the amount due.
  *
  * Recorded money (RT-243 F1, RT-241 packaged report 11249): the payment
  * projection's applied lines, one row per tender method in the order it was
@@ -109,10 +111,7 @@ function DraftPreview(props: { draft: CashDraft }): JSX.Element {
   );
 }
 
-function RecordedMoney(props: {
-  lines: readonly TenderLineRendererView[];
-  changeDueMinor: number;
-}): JSX.Element | null {
+function RecordedMoney(props: { lines: readonly TenderLineRendererView[] }): JSX.Element | null {
   if (props.lines.length === 0) return null;
   return (
     <div
@@ -134,14 +133,20 @@ function RecordedMoney(props: {
           </li>
         ))}
       </ul>
-      {props.changeDueMinor > 0 && (
-        <p className="v5-ledger-row v5-ledger-row--change" data-testid="payment-ledger-change">
-          الباقي للعميل{' '}
-          <span className="v5-ledger-row__amount" dir="ltr">
-            {formatHumanMoney(props.changeDueMinor)}
-          </span>
-        </p>
-      )}
+    </div>
+  );
+}
+
+/** Main's change over the recorded lines (M-P5), in its pinned row under the amount due. */
+function RecordedChange(props: { changeDueMinor: number }): JSX.Element {
+  return (
+    <div className="v5-ledger__change">
+      <p className="v5-ledger-row v5-ledger-row--change" data-testid="payment-ledger-change">
+        الباقي للعميل{' '}
+        <span className="v5-ledger-row__amount" dir="ltr">
+          {formatHumanMoney(props.changeDueMinor)}
+        </span>
+      </p>
     </div>
   );
 }
@@ -184,9 +189,10 @@ export function PaymentLedger({
         </span>
         <HeroAmount minor={dueMinor} testId={testIds.due} />
       </div>
+      {lines.length > 0 && changeDueMinor > 0 && <RecordedChange changeDueMinor={changeDueMinor} />}
       <div className="v5-ledger__middle">
         {draft !== null && <DraftPreview draft={draft} />}
-        <RecordedMoney lines={lines} changeDueMinor={changeDueMinor} />
+        <RecordedMoney lines={lines} />
       </div>
       {actions !== undefined && <div className="v5-ledger__actions">{actions}</div>}
     </section>
