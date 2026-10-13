@@ -39,3 +39,11 @@ files:
   # resolveMigrationsDir -> app.getAppPath()/migrations in the packaged app.
   # Without this the packaged exe crashes ENOENT on startup.
   - migrations/**
+# Apache-2.0 §4: ship the license and NOTICE with every distributed build.
+# They sit next to the exe; .txt keeps them clear of Electron's own
+# LICENSE.electron.txt.
+extraFiles:
+  - from: LICENSE
+    to: LICENSE.txt
+  - from: NOTICE
+    to: NOTICE.txt

@@ -11,7 +11,7 @@
   <a href="src/shared/bridge-api.ts"><img alt="Bridge: typed only" src="https://img.shields.io/badge/bridge-typed%20only-60a5fa?labelColor=0a0f24&style=flat-square"></a>
   <a href="migrations"><img alt="Local state: durable" src="https://img.shields.io/badge/local%20state-durable-34d399?labelColor=0a0f24&style=flat-square"></a>
   <a href=".specify/memory/constitution.md"><img alt="Cards: no capture" src="https://img.shields.io/badge/cards-no%20capture-f87171?labelColor=0a0f24&style=flat-square"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-34d399?labelColor=0a0f24&style=flat-square"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-34d399?labelColor=0a0f24&style=flat-square"></a>
 </p>
 
 <p align="center">
