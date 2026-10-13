@@ -74,6 +74,7 @@ import type {
   CartSnapshotRequest,
   CartSnapshotResponse,
 } from './cart/bridge-types.js';
+import type { CartParkBridgeAPI } from './cart/park-types.js';
 
 /**
  * T048 — `operator.emitAuditEvent` bridge surface.
@@ -970,6 +971,13 @@ export interface CartBridgeAPI {
    * `CartBridgeAPI` in the legacy test suites compiling unchanged.
    */
   snapshot?(req: CartSnapshotRequest): Promise<CartSnapshotResponse>;
+  /**
+   * RT-440 (PK-2, spec 024 §3) — Park v1: park the current sale, list the
+   * operator's parked sales, preview and resume one. Main-authoritative.
+   * Optional on the TYPE only (the `snapshot?` precedent): the production
+   * preload always wires it; PK-3 is its first caller.
+   */
+  parked?: CartParkBridgeAPI;
 }
 
 declare global {

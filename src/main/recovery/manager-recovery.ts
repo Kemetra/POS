@@ -170,12 +170,6 @@ type All<T> = { all(...params: unknown[]): T[] };
 
 const LIVE = `('applying', 'applied', 'reversal_pending')`;
 
-/** Spec 024: `carts.parked_at` exists once PK-2's migration has run. */
-function parkedColumn(db: DatabaseHandle): string {
-  const cols = (db.prepare(`PRAGMA table_info(carts)`) as All<{ name: string }>).all();
-  return cols.some((c) => c.name === 'parked_at') ? 'parked_at IS NOT NULL' : '0';
-}
-
 class RecoveryRefused extends Error {
   constructor(readonly reason: RecoveryRefusalReason) {
     super(reason);
@@ -311,7 +305,7 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
       db.prepare(
         `SELECT c.cart_id, c.tenant_id, c.branch_id, c.terminal_id, c.owning_operator_id,
                 c.operator_session_id, c.state, c.cart_subtotal_minor, c.last_action_id,
-                c.updated_at, ${parkedColumn(db)} AS parked
+                c.updated_at, c.parked_at IS NOT NULL AS parked
            FROM carts c
           WHERE c.terminal_id = ? AND c.operator_session_id <> ?
             AND c.state IN ('editing', 'discount_pending_attribution', 'frozen_handed_off')

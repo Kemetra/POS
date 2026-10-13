@@ -31,6 +31,10 @@ import { registerAppConfigHandler } from './ipc/app-config.js';
 import { registerPairingHandlers } from './ipc/pairing.js';
 import { registerOperatorHandlers } from './ipc/operator.js';
 import { registerCartHandlers } from './ipc/cart.js';
+import { registerCartParkHandlers } from './ipc/cart-park.js';
+import { createParkResume } from './cart/park/park-resume.js';
+import { bindParkStore } from './cart/park/park-store.js';
+import { createCataloguePriceLookup } from './cart/park/resume-diff.js';
 import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
 import { bindCartStore } from './cart/cart-store.js';
 import { createHeldCarts, registerHeldCartLifecycle } from './cart/held-carts.js';
@@ -1392,6 +1396,23 @@ singleInstanceReady
       approvals: managerApprovals,
     });
     registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
+
+    // RT-440 (PK-2, spec 024) — Park v1: `cart:park` / `listParked` /
+    // `previewResume` / `resume`. Local only, offline; resume re-prices from
+    // the local catalogue read model. `cart:` channels, so the lock, recovery
+    // and sale-boundary guards cover them.
+    registerCartParkHandlers(guardedIpcMain, {
+      parkResume: createParkResume({
+        db,
+        store: bindParkStore(db),
+        cartStore: bindCartStore(db),
+        getCurrentSession: () => operatorSessionManager.getCurrent(),
+        getTerminalId: () => pairingStore.getCurrentTerminalId(),
+        auditEmitter,
+        prices: createCataloguePriceLookup(createProductRepo(db)),
+        logger: mainLogger,
+      }),
+    });
 
     // 009 + 010 — wire the `catalogue.*` IPC surface. Registered unconditionally
     // (same as cart): the handlers are session-gated and refuse with no session,

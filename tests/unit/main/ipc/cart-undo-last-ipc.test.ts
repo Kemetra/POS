@@ -105,6 +105,7 @@ describe('cart:undoLast while the session is locked', () => {
     '0009_cart_action_outbox.sql',
     '0010_cart_lines.sql',
     '0011_cart_line_discount_placeholders.sql',
+    '0050_carts_park.sql',
     '0037_cart_action_outbox_return_to_sale.sql',
     '0045_cart_action_outbox_line_restore.sql',
   ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));

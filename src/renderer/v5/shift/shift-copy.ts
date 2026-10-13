@@ -22,6 +22,9 @@ const REFUSAL_COPY: Readonly<Record<ShiftCashupRefusal, string>> = Object.freeze
   clock_regressed: 'ساعة الجهاز أقدم من آخر عملية وردية مسجَّلة. صحّح الوقت ثم حاول.',
   drawer_activity_pending:
     'على هذا الجهاز صرف مرتجع أو بيع لم يكتمل بعد. أكمله ثم حاول مجددًا. لم يُسجَّل شيء.',
+  // RT-440: the count itself is shown by PK-3 (RT-445); this line names no amount.
+  parked_sales_present:
+    'توجد مبيعات معلّقة على هذا الجهاز. استأنفها أو اطلب من المدير إلغاءها ثم أغلق الوردية.',
   pay_out_not_accepted: 'لم يُقبل السحب، ولم يُسجَّل شيء. راجع المدير.',
   variance_approval_required: 'العدّ يحتاج موافقة مدير قبل إغلاق الوردية.',
   approver_invalid: 'لم تُقبل موافقة المدير. تحقّق من اسم المدير ورقمه السري.',

@@ -92,6 +92,7 @@ const SERVICE_REFUSALS: Readonly<Record<ShiftCashupRefusalReason, ShiftCashupRef
   variance_approval_required: 'variance_approval_required',
   clock_regressed: 'clock_regressed',
   drawer_activity_pending: 'drawer_activity_pending',
+  parked_sales_present: 'parked_sales_present',
   approver_invalid: 'approver_invalid',
   approver_locked: 'approver_locked',
   approver_is_closer: 'approver_is_closer',
@@ -145,6 +146,11 @@ function classify(error: unknown): Classified | null {
   return null;
 }
 
+/** RT-440: the blocking count of a `parked_sales_present` refusal. */
+function parkedCountOf(error: unknown): number | undefined {
+  return error instanceof ShiftCashupRefusedError ? error.parkedCount : undefined;
+}
+
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : typeof error;
 }
@@ -188,7 +194,10 @@ export function createShiftCashupBridge(deps: ShiftCashupBridgeDeps): ShiftCashu
       return { kind: 'refused', reason: 'unavailable' };
     }
     logger.info({ op, reason: known.internal }, SHIFT_CASHUP_REFUSED_LOG);
-    return { kind: 'refused', reason: known.refusal };
+    const parkedCount = parkedCountOf(error);
+    return parkedCount === undefined
+      ? { kind: 'refused', reason: known.refusal }
+      : { kind: 'refused', reason: known.refusal, parkedCount };
   }
 
   async function attempt<T>(

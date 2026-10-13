@@ -156,6 +156,8 @@ export type ShiftCashupRefusalReason =
   | 'variance_approval_required'
   | 'clock_regressed'
   | 'drawer_activity_pending'
+  // RT-440 (spec 024 K4, OP-2): parked sales block the cash session's close.
+  | 'parked_sales_present'
   | 'approver_invalid'
   | 'approver_locked'
   | 'approver_is_closer'
@@ -166,11 +168,14 @@ export type ShiftCashupRefusalReason =
 /** A call the service refuses before recording anything. */
 export class ShiftCashupRefusedError extends Error {
   readonly reason: ShiftCashupRefusalReason;
+  /** `parked_sales_present` only: how many parked sales block the close. */
+  readonly parkedCount: number | undefined;
 
-  constructor(reason: ShiftCashupRefusalReason) {
+  constructor(reason: ShiftCashupRefusalReason, parkedCount?: number) {
     super(`shift cash-up refused: ${reason}`);
     this.name = 'ShiftCashupRefusedError';
     this.reason = reason;
+    this.parkedCount = parkedCount;
   }
 }
 
@@ -465,6 +470,15 @@ function requireDrawerSettled(input: { sources: ShiftCashupSources; scope: Shift
   if (pending.refundPayouts + pending.unfinalizedSales > 0) refuse('drawer_activity_pending');
 }
 
+/**
+ * RT-440 (spec 024 K4, OP-2): the close is refused while any sale is parked on
+ * the terminal, whoever parked it. The refusal carries the count only.
+ */
+function requireNoParkedSales(input: { sources: ShiftCashupSources; scope: ShiftScope }): void {
+  const parked = input.sources.parkedSales(input.scope);
+  if (parked > 0) throw new ShiftCashupRefusedError('parked_sales_present', parked);
+}
+
 function closeFactOf(parts: CloseParts): ShiftCloseFact {
   const { open, cashup } = parts;
   const varianceMinor = parts.countedCashMinor - cashup.expectedCashMinor;
@@ -597,6 +611,7 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     const closedAt = deps.now();
     const open = openShiftAt({ scope, now: closedAt });
     requireDrawerSettled({ sources: deps.sources, scope });
+    requireNoParkedSales({ sources: deps.sources, scope });
     const cashup = cashupOf({ scope, open, until: closedAt });
     const varianceMinor = input.countedCashMinor - cashup.expectedCashMinor;
     return { open, closedAt, cashup, varianceMinor };

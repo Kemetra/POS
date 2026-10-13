@@ -637,8 +637,7 @@ describe('recovery.listHeld — what it lists', () => {
     ]);
   });
 
-  it('flags a parked cart once PK-2’s parked_at column exists (spec 024 §4.3)', () => {
-    raw.run(`ALTER TABLE carts ADD COLUMN parked_at TEXT`);
+  it('flags a parked cart (spec 024 §4.3; migration 0050)', () => {
     insertCart('cart-parked', 'editing');
     raw.run(`UPDATE carts SET parked_at = ? WHERE cart_id = 'cart-parked'`, [NOW]);
     const view = recovery.listHeld();

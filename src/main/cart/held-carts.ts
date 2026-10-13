@@ -56,6 +56,12 @@ const OPEN_SALE = `NOT EXISTS (
 // `state <> 'cancelled'` matches the partial owner-key index (0046), so SQLite can use it.
 const OWNER_KEY = `tenant_id = ? AND branch_id = ? AND terminal_id = ? AND owning_operator_id = ?
             AND state <> 'cancelled'`;
+/**
+ * RT-440 (spec 024 K5, RT-116 §3.1 / §3.3 as amended) — a parked cart is never
+ * re-attached, never held or audited at a session end, and never counted by
+ * `getResumeState`. It is reached only through `cart.listParked` / `cart.resume`.
+ */
+const NOT_PARKED = `parked_at IS NULL`;
 const NEWEST_FIRST = `ORDER BY created_at DESC, rowid DESC`;
 
 interface CartRef {
@@ -111,7 +117,7 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
       db.prepare(
         `SELECT ${CART_REF} FROM carts
           WHERE ${OWNER_KEY} AND operator_session_id <> ? AND state IN ${SESSION_END_STATES}
-            AND ${OPEN_SALE}
+            AND ${OPEN_SALE} AND ${NOT_PARKED}
           ${NEWEST_FIRST}`,
       ) as Rows<CartRef>
     ).all(...ownerKey(session, terminal_id), session.id);
@@ -120,7 +126,7 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
     (
       db.prepare(
         `SELECT ${CART_REF} FROM carts
-          WHERE operator_session_id = ? AND state IN ${SESSION_END_STATES}`,
+          WHERE operator_session_id = ? AND state IN ${SESSION_END_STATES} AND ${NOT_PARKED}`,
       ) as Rows<CartRef>
     ).all(session_id);
 
@@ -259,6 +265,7 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
       db.prepare(
         `SELECT cart_id FROM carts
           WHERE operator_session_id = ? AND state IN ${HELD_STATES} AND ${OPEN_SALE}
+            AND ${NOT_PARKED}
           ${NEWEST_FIRST} LIMIT 1`,
       ) as Row<{ cart_id: string }>
     ).get(session_id);
@@ -270,7 +277,7 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
       db.prepare(
         `SELECT COUNT(*) AS n FROM carts
           WHERE ${OWNER_KEY} AND operator_session_id <> ? AND state IN ${HELD_STATES}
-            AND ${OPEN_SALE}`,
+            AND ${OPEN_SALE} AND ${NOT_PARKED}`,
       ) as Row<{ n: number }>
     ).get(...ownerKey(session, terminal_id), session.id);
     return row?.n ?? 0;

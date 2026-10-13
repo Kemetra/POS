@@ -40,6 +40,7 @@ const MIGRATIONS = [
   '0009_cart_action_outbox.sql',
   '0010_cart_lines.sql',
   '0011_cart_line_discount_placeholders.sql',
+  '0050_carts_park.sql',
   '0012_create_payment_attempts.sql',
   '0013_payment_attempts_partial_unique_started.sql',
   '0014_create_payment_tender_lines.sql',

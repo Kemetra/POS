@@ -56,6 +56,12 @@ export const AUDIT_ACTION_CATEGORIES = [
   'cart.held_cancelled_by_manager',
   'payment.recovery_completed',
   'payment.recovery_cancelled',
+  // RT-440 (PK-2, spec 024 K6) — Park v1. Local only (RT-160 D-2). Payloads
+  // carry ids, counts and closed values: NEVER the park label. Open-set at
+  // the SQL layer (0004); recorded in migration 0050's header.
+  'cart.parked',
+  'cart.resumed',
+  'cart.park_refused',
   // RT-26 — Checkout Back: a handed-off cart with no tender activity returns
   // to `editing` (envelope invalidated). Open-set at the SQL layer (0004).
   'cart.return_to_sale',

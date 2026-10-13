@@ -400,6 +400,30 @@ function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefus
   return { kind: 'refused', reason };
 }
 
+interface LockableCart {
+  state: string;
+  /** Undefined on a row read before migration 0050. */
+  parked_at?: string | null;
+}
+
+/**
+ * Why a cart that passed the ownership gate still cannot change: it is
+ * handing off (T088), or parked — RT-440 (spec 024 K5): a parked cart changes
+ * only through `cart.resume`.
+ */
+function lockedCartRefusal(cart: LockableCart): CartRefusalReason | null {
+  if ((cart.state as CartState) === CartState.handing_off) return 'frozen';
+  return cart.parked_at === undefined || cart.parked_at === null ? null : 'cart_parked';
+}
+
+/** Why a (non-replay) pre-handoff void cannot proceed, or null. */
+function voidRefusal(cart: LockableCart): CartRefusalReason | null {
+  const state = cart.state as CartState;
+  if (state === CartState.frozen_handed_off) return 'frozen';
+  if (state === CartState.cancelled) return 'closed';
+  return lockedCartRefusal(cart) === 'cart_parked' ? 'cart_parked' : null;
+}
+
 type StoredCart = NonNullable<ReturnType<CartStore['getCart']>>;
 
 /** Successful shared-gate payload for a mutating cart handler. */
@@ -1161,9 +1185,8 @@ export class CartBridgeHandlers {
     }
 
     // Terminal states (after idempotency so replays work on closed carts).
-    const cartState = cart.state as CartState;
-    if (cartState === CartState.frozen_handed_off) return refuse('frozen');
-    if (cartState === CartState.cancelled) return refuse('closed');
+    const closed = voidRefusal(cart);
+    if (closed !== null) return refuse(closed);
 
     const now = this.clock().toISOString();
     store.cancelCartAndOutbox(
@@ -1575,8 +1598,10 @@ export class CartBridgeHandlers {
     });
     if (mutabilityGate.kind !== 'ok') return refuse(mutabilityGate.reason);
 
-    // T088 freeze guard: defence-in-depth — requireMutable doesn't block handing_off.
-    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+    // T088 freeze guard: defence-in-depth — requireMutable doesn't block
+    // handing_off. RT-440: nor a parked cart.
+    const locked = lockedCartRefusal(cart);
+    if (locked !== null) return refuse(locked);
 
     // Step 5 — per_line_versions staleness check.
     for (const { line_id, version } of req.per_line_versions) {
@@ -1842,7 +1867,8 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
-    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+    const locked = lockedCartRefusal(cart);
+    if (locked !== null) return refuse(locked);
 
     return { kind: 'ok', session, store, cart };
   }
