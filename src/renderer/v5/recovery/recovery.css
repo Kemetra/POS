@@ -12,6 +12,12 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* A name in the facts list: the body face, so Arabic letters stay joined. */
+.v5-shift-facts .v5-recovery-text {
+  font-family: inherit;
+  font-variant-numeric: normal;
+}
+
 .v5-recovery-list {
   display: grid;
   gap: var(--space-2);

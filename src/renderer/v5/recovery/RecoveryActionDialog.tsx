@@ -1,25 +1,29 @@
-import { useEffect, useId, useRef, useState, type JSX } from 'react';
+import { useEffect, useId, useRef, useState, type JSX, type ReactNode } from 'react';
 
 import type { ManagerActionKind } from '../../../shared/operator/manager-action-kinds';
 import type { ManagerApprover } from '../../../shared/operator/manager-approval';
-import type {
-  RecoveryHeldCartView,
-  RecoveryStuckAttemptView,
-} from '../../../shared/operator/recovery';
+import type { RecoveryStuckAttemptView } from '../../../shared/operator/recovery';
 import { MANAGER_PIN_PATTERN } from '../../../shared/shift-cashup/types';
 import { formatCheckoutMoney } from '../../ui/payments/format-checkout-money';
-import { parseCurrencyToMinor } from '../../ui/payments/parse-currency-to-minor';
 import { Dialog } from '../foundation/Dialog';
+import { dismissUnlessBusy, useSingleFlight } from '../shift/shift-bridge';
 import { ShiftAlert } from '../shift/ShiftScreen';
 import { normalizeDigits } from '../shift/shift-format';
+import {
+  NO_EXTRAS,
+  RECOVERY_ACTION_KIND,
+  RECOVERY_ACTION_TITLE,
+  performRecoveryAction,
+  recoveryExtrasReady,
+  recoverySubjectOf,
+  type RecoveryAction,
+  type RecoveryExtras,
+} from './recovery-actions';
 import { RECOVERY_COPY, recoveryRefusalMessage } from './recovery-copy';
 import type { RecoveryBridges } from './RecoveryScreen';
 import '../sale/live-sale.css';
 
-export type RecoveryAction =
-  | { kind: 'complete'; stuck: RecoveryStuckAttemptView }
-  | { kind: 'cancel_attempt'; stuck: RecoveryStuckAttemptView }
-  | { kind: 'cancel_cart'; cart: RecoveryHeldCartView };
+export type { RecoveryAction } from './recovery-actions';
 
 interface Props {
   action: RecoveryAction;
@@ -29,38 +33,32 @@ interface Props {
   onDone: (message: string) => void;
 }
 
-const KIND: Record<RecoveryAction['kind'], ManagerActionKind> = {
-  complete: 'recovery.complete_attempt',
-  cancel_attempt: 'recovery.cancel_attempt',
-  cancel_cart: 'recovery.cancel_held_cart',
-};
+/**
+ * The signed-in manager as the approver of `kind`. A refused read keeps its
+ * reason (a locked or ended session is not "you have no PIN").
+ */
+type Approver =
+  | { kind: 'loading' }
+  | { kind: 'ready'; approver: ManagerApprover | null }
+  | { kind: 'refused'; message: string };
 
-const TITLE: Record<RecoveryAction['kind'], string> = {
-  complete: RECOVERY_COPY.complete,
-  cancel_attempt: RECOVERY_COPY.cancelPayment,
-  cancel_cart: RECOVERY_COPY.cancelSale,
-};
-
-function subjectOf(action: RecoveryAction): string {
-  return action.kind === 'cancel_cart' ? action.cart.cart_id : action.stuck.payment_attempt_id;
-}
-
-type Approver = { kind: 'loading' } | { kind: 'ready'; approver: ManagerApprover | null };
-
-function useSelf(bridges: RecoveryBridges, kind: ManagerActionKind): Approver {
+function useRecoveryApprover(bridges: RecoveryBridges, kind: ManagerActionKind): Approver {
   const [state, setState] = useState<Approver>({ kind: 'loading' });
   useEffect(() => {
     let live = true;
+    const settle = (next: Approver): void => {
+      if (live) setState(next);
+    };
     bridges.approval.listApprovers({ action_kind: kind }).then(
       (answer) => {
-        if (!live) return;
-        setState({
-          kind: 'ready',
-          approver: answer.kind === 'approvers' ? (answer.approvers[0] ?? null) : null,
-        });
+        settle(
+          answer.kind === 'approvers'
+            ? { kind: 'ready', approver: answer.approvers[0] ?? null }
+            : { kind: 'refused', message: recoveryRefusalMessage(answer.reason) },
+        );
       },
       () => {
-        if (live) setState({ kind: 'ready', approver: null });
+        settle({ kind: 'refused', message: RECOVERY_COPY.unavailable });
       },
     );
     return () => {
@@ -70,204 +68,219 @@ function useSelf(bridges: RecoveryBridges, kind: ManagerActionKind): Approver {
   return state;
 }
 
-/** What the action itself needs besides the approval: cash, or confirmations. */
-interface Extras {
-  cash: string;
-  cashReturned: boolean;
-  cardVoided: boolean;
+/**
+ * Ask main for an approval of this exact action with the manager's PIN, then
+ * spend it on the action. A refused approval never reaches the action.
+ */
+function useRecoverySubmit(props: Props): {
+  busy: boolean;
+  error: string | null;
+  submit: (approver: ManagerApprover, pin: string, extras: RecoveryExtras) => void;
+} {
+  const { busy, run } = useSingleFlight();
+  const [error, setError] = useState<string | null>(null);
+  const submit = (approver: ManagerApprover, pin: string, extras: RecoveryExtras): void => {
+    setError(null);
+    run(async () => {
+      try {
+        const granted = await props.bridges.approval.request({
+          action_kind: RECOVERY_ACTION_KIND[props.action.kind],
+          subject_ref: recoverySubjectOf(props.action),
+          reason_code: 'manager_recovery',
+          approver_ref: approver.approver_ref,
+          pin,
+        });
+        if (granted.kind !== 'approved') {
+          setError(recoveryRefusalMessage(granted.reason));
+          return;
+        }
+        const { recovery } = props.bridges;
+        const result = await performRecoveryAction(
+          recovery,
+          props.action,
+          granted.approval_id,
+          extras,
+        );
+        if (result.ok) props.onDone(result.message);
+        else setError(recoveryRefusalMessage(result.reason));
+      } catch {
+        setError(RECOVERY_COPY.unavailable);
+      }
+    });
+  };
+  return { busy, error, submit };
 }
 
-function extrasReady(action: RecoveryAction, extras: Extras): boolean {
-  if (action.kind === 'complete') {
-    const { remaining_minor } = action.stuck;
-    if (remaining_minor === 0) return true;
-    const cash = parseCurrencyToMinor(normalizeDigits(extras.cash));
-    return cash !== null && cash >= remaining_minor;
-  }
-  if (action.kind === 'cancel_attempt') {
-    const { cash_minor, card_minor } = action.stuck;
-    return (cash_minor === 0 || extras.cashReturned) && (card_minor === 0 || extras.cardVoided);
-  }
-  return true;
+function CashField(props: {
+  stuck: RecoveryStuckAttemptView;
+  value: string;
+  onChange: (value: string) => void;
+}): JSX.Element {
+  const cashId = useId();
+  return (
+    <div className="v5-shift-fields">
+      <p>
+        {RECOVERY_COPY.remaining}:{' '}
+        <bdi className="v5-shift-money">{formatCheckoutMoney(props.stuck.remaining_minor)}</bdi>
+      </p>
+      <label htmlFor={cashId}>{RECOVERY_COPY.cashReceived}</label>
+      <input
+        id={cashId}
+        className="v5-shift-input v5-ltr"
+        inputMode="decimal"
+        autoComplete="off"
+        value={props.value}
+        onChange={(event) => {
+          props.onChange(event.target.value);
+        }}
+      />
+    </div>
+  );
 }
 
-async function perform(
-  props: Props,
-  approval_id: string,
-  extras: Extras,
-): Promise<{ ok: true; message: string } | { ok: false; reason: string }> {
-  const { action, bridges } = props;
-  if (action.kind === 'complete') {
-    const parsed = parseCurrencyToMinor(normalizeDigits(extras.cash));
-    const cash = action.stuck.remaining_minor > 0 && parsed !== null ? parsed : undefined;
-    const answer = await bridges.recovery.completeAttempt({
-      payment_attempt_id: action.stuck.payment_attempt_id,
-      approval_id,
-      ...(cash === undefined ? {} : { cash_received_minor: cash }),
-    });
-    if (answer.kind !== 'completed') return { ok: false, reason: answer.reason };
-    const change =
-      answer.change_due_minor > 0
-        ? ` ${RECOVERY_COPY.change}: ${formatCheckoutMoney(answer.change_due_minor)}`
-        : '';
-    return { ok: true, message: `${RECOVERY_COPY.completed}${change}` };
+function Confirm(props: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <label>
+      <input
+        type="checkbox"
+        checked={props.checked}
+        onChange={(event) => {
+          props.onChange(event.target.checked);
+        }}
+      />
+      {/* One flex item: the label's gap must not split the text around the amount. */}
+      <span>{props.children}</span>
+    </label>
+  );
+}
+
+/** §5.2: live cash and card tender each need their confirmation first. */
+function TenderConfirms(props: {
+  stuck: RecoveryStuckAttemptView;
+  extras: RecoveryExtras;
+  onChange: (extras: RecoveryExtras) => void;
+}): JSX.Element {
+  const { stuck, extras } = props;
+  return (
+    <fieldset className="v5-recovery-confirms">
+      {stuck.cash_minor > 0 && (
+        <Confirm
+          checked={extras.cashReturned}
+          onChange={(cashReturned) => {
+            props.onChange({ ...extras, cashReturned });
+          }}
+        >
+          {RECOVERY_COPY.confirmCash} (<bdi>{formatCheckoutMoney(stuck.cash_minor)}</bdi>)
+        </Confirm>
+      )}
+      {stuck.card_minor > 0 && (
+        <Confirm
+          checked={extras.cardVoided}
+          onChange={(cardVoided) => {
+            props.onChange({ ...extras, cardVoided });
+          }}
+        >
+          {RECOVERY_COPY.confirmCard}
+        </Confirm>
+      )}
+    </fieldset>
+  );
+}
+
+function ActionExtras(props: {
+  action: RecoveryAction;
+  extras: RecoveryExtras;
+  onChange: (extras: RecoveryExtras) => void;
+}): JSX.Element | null {
+  const { action, extras } = props;
+  if (action.kind === 'complete' && action.stuck.remaining_minor > 0) {
+    return (
+      <CashField
+        stuck={action.stuck}
+        value={extras.cash}
+        onChange={(cash) => {
+          props.onChange({ ...extras, cash });
+        }}
+      />
+    );
   }
   if (action.kind === 'cancel_attempt') {
-    const answer = await bridges.recovery.cancelAttempt({
-      payment_attempt_id: action.stuck.payment_attempt_id,
-      approval_id,
-      ...(action.stuck.cash_minor > 0 ? { cash_returned_confirmed: extras.cashReturned } : {}),
-      ...(action.stuck.card_minor > 0
-        ? { card_void_confirmed_on_terminal: extras.cardVoided }
-        : {}),
-    });
-    return answer.kind === 'cancelled'
-      ? { ok: true, message: RECOVERY_COPY.cancelledPayment }
-      : { ok: false, reason: answer.reason };
+    return <TenderConfirms stuck={action.stuck} extras={extras} onChange={props.onChange} />;
   }
-  const answer = await bridges.recovery.cancelHeldCart({
-    cart_id: action.cart.cart_id,
-    approval_id,
-  });
-  return answer.kind === 'cancelled'
-    ? { ok: true, message: RECOVERY_COPY.cancelledSale }
-    : { ok: false, reason: answer.reason };
+  return null;
+}
+
+/** The manager's own PIN: masked, held only until the press, never stored or logged. */
+function PinField(props: {
+  approver: ManagerApprover;
+  value: string;
+  onChange: (value: string) => void;
+}): JSX.Element {
+  const pinId = useId();
+  return (
+    <div className="v5-shift-fields">
+      <p>{RECOVERY_COPY.approvalBody}</p>
+      <label htmlFor={pinId}>
+        {RECOVERY_COPY.pinLabel} — <bdi>{props.approver.display_name}</bdi>
+      </label>
+      <input
+        id={pinId}
+        className="v5-shift-input v5-ltr"
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={8}
+        value={props.value}
+        onChange={(event) => {
+          props.onChange(event.target.value);
+        }}
+      />
+    </div>
+  );
+}
+
+function ApproverState({ state }: { state: Approver }): JSX.Element | null {
+  if (state.kind === 'loading') return <p role="status">{RECOVERY_COPY.loading}</p>;
+  if (state.kind === 'refused') return <ShiftAlert message={state.message} />;
+  if (state.approver === null) return <ShiftAlert message={RECOVERY_COPY.noPin} />;
+  return null;
 }
 
 /**
  * RT-441 — one recovery action, confirmed with the signed-in manager's own
  * PIN (RT-114: an approval bound to this subject and its amount, consumed by
- * the action in main). The PIN is masked, held only until the press, then
- * cleared; it is never stored or logged.
+ * the action in main).
  */
 export function RecoveryActionDialog(props: Props): JSX.Element {
   const { action } = props;
-  const kind = KIND[action.kind];
-  const self = useSelf(props.bridges, kind);
-  const pinId = useId();
-  const cashId = useId();
+  const state = useRecoveryApprover(props.bridges, RECOVERY_ACTION_KIND[action.kind]);
+  const { busy, error, submit } = useRecoverySubmit(props);
   const backRef = useRef<HTMLButtonElement>(null);
   const [pin, setPin] = useState('');
-  const [extras, setExtras] = useState<Extras>({
-    cash: '',
-    cashReturned: false,
-    cardVoided: false,
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const approver = self.kind === 'ready' ? self.approver : null;
-  const ready =
-    approver !== null &&
-    MANAGER_PIN_PATTERN.test(normalizeDigits(pin)) &&
-    extrasReady(action, extras);
+  const [extras, setExtras] = useState<RecoveryExtras>(NO_EXTRAS);
+  const approver = state.kind === 'ready' ? state.approver : null;
+  const pinValid = MANAGER_PIN_PATTERN.test(normalizeDigits(pin));
+  const ready = approver !== null && pinValid && recoveryExtrasReady(action, extras);
+  const dismiss = dismissUnlessBusy(busy, props.onDismiss);
+  const title = RECOVERY_ACTION_TITLE[action.kind];
 
-  const dismiss = (): void => {
-    if (!busy) props.onDismiss();
-  };
-
-  const submit = async (): Promise<void> => {
-    if (approver === null || busy) return;
+  const press = (): void => {
+    if (approver === null) return;
     const managerPin = normalizeDigits(pin);
     setPin('');
-    setError(null);
-    setBusy(true);
-    try {
-      const granted = await props.bridges.approval.request({
-        action_kind: kind,
-        subject_ref: subjectOf(action),
-        reason_code: 'manager_recovery',
-        approver_ref: approver.approver_ref,
-        pin: managerPin,
-      });
-      if (granted.kind !== 'approved') {
-        setError(recoveryRefusalMessage(granted.reason));
-        return;
-      }
-      const result = await perform(props, granted.approval_id, extras);
-      if (result.ok) props.onDone(result.message);
-      else setError(recoveryRefusalMessage(result.reason));
-    } catch {
-      setError(RECOVERY_COPY.unavailable);
-    } finally {
-      setBusy(false);
-    }
+    submit(approver, managerPin, extras);
   };
 
   return (
-    <Dialog label={TITLE[action.kind]} onCancel={dismiss} initialFocusRef={backRef}>
-      <h2 className="v5-live-dialog-title">{TITLE[action.kind]}</h2>
-      {action.kind === 'complete' && action.stuck.remaining_minor > 0 && (
-        <div className="v5-shift-fields">
-          <p>
-            {RECOVERY_COPY.remaining}:{' '}
-            <bdi className="v5-shift-money">
-              {formatCheckoutMoney(action.stuck.remaining_minor)}
-            </bdi>
-          </p>
-          <label htmlFor={cashId}>{RECOVERY_COPY.cashReceived}</label>
-          <input
-            id={cashId}
-            className="v5-shift-input v5-ltr"
-            inputMode="decimal"
-            autoComplete="off"
-            value={extras.cash}
-            onChange={(event) => {
-              setExtras({ ...extras, cash: event.target.value });
-            }}
-          />
-        </div>
-      )}
-      {action.kind === 'cancel_attempt' && (
-        <fieldset className="v5-recovery-confirms">
-          {action.stuck.cash_minor > 0 && (
-            <label>
-              <input
-                type="checkbox"
-                checked={extras.cashReturned}
-                onChange={(event) => {
-                  setExtras({ ...extras, cashReturned: event.target.checked });
-                }}
-              />
-              {RECOVERY_COPY.confirmCash} (<bdi>{formatCheckoutMoney(action.stuck.cash_minor)}</bdi>
-              )
-            </label>
-          )}
-          {action.stuck.card_minor > 0 && (
-            <label>
-              <input
-                type="checkbox"
-                checked={extras.cardVoided}
-                onChange={(event) => {
-                  setExtras({ ...extras, cardVoided: event.target.checked });
-                }}
-              />
-              {RECOVERY_COPY.confirmCard}
-            </label>
-          )}
-        </fieldset>
-      )}
-      {self.kind === 'loading' && <p role="status">{RECOVERY_COPY.loading}</p>}
-      {self.kind === 'ready' && approver === null && <ShiftAlert message={RECOVERY_COPY.noPin} />}
-      {approver !== null && (
-        <div className="v5-shift-fields">
-          <p>{RECOVERY_COPY.approvalBody}</p>
-          <label htmlFor={pinId}>
-            {RECOVERY_COPY.pinLabel} — <bdi>{approver.display_name}</bdi>
-          </label>
-          <input
-            id={pinId}
-            className="v5-shift-input v5-ltr"
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={8}
-            value={pin}
-            onChange={(event) => {
-              setPin(event.target.value);
-            }}
-          />
-        </div>
-      )}
+    <Dialog label={title} onCancel={dismiss} initialFocusRef={backRef}>
+      <h2 className="v5-live-dialog-title">{title}</h2>
+      <ActionExtras action={action} extras={extras} onChange={setExtras} />
+      <ApproverState state={state} />
+      {approver !== null && <PinField approver={approver} value={pin} onChange={setPin} />}
       <ShiftAlert message={error} />
       <div>
         <button
@@ -283,7 +296,7 @@ export function RecoveryActionDialog(props: Props): JSX.Element {
           type="button"
           className="v5-live-btn v5-live-btn--primary"
           disabled={!ready || busy}
-          onClick={() => void submit()}
+          onClick={press}
         >
           {RECOVERY_COPY.approve}
         </button>

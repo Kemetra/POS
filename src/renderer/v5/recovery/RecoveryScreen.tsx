@@ -169,11 +169,13 @@ function HeldBody(props: {
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }): JSX.Element {
+/** One fact; `text` sets a word (a name) in the body face, not the tabular one. */
+function Fact(props: { label: string; value: string; text?: boolean }): JSX.Element {
+  const { label, value } = props;
   return (
     <div className="v5-shift-fact">
       <dt>{label}</dt>
-      <dd>
+      <dd className={props.text === true ? 'v5-recovery-text' : undefined}>
         <bdi>{value}</bdi>
       </dd>
     </div>
@@ -194,7 +196,7 @@ function StuckPanel(props: {
       ) : (
         <>
           <dl className="v5-shift-facts">
-            <Fact label={RECOVERY_COPY.owner} value={props.nameOf(stuck.owning_operator_id)} />
+            <Fact label={RECOVERY_COPY.owner} value={props.nameOf(stuck.owning_operator_id)} text />
             <Fact label={RECOVERY_COPY.lines} value={String(stuck.line_count)} />
             <Fact label={RECOVERY_COPY.total} value={formatCheckoutMoney(stuck.total_minor)} />
             {stuck.cash_minor > 0 && (
