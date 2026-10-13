@@ -82,6 +82,9 @@ export const REFUSAL_REASONS = [
   'attempt_fully_tendered',
   // RT-437 (D-F2): a cash amount above max(cash cap, remaining) — `cash-bound.ts`.
   'cash_amount_out_of_range',
+  // RT-441 (RT-116 §5.2): force-fail refused — the attempt holds live tender;
+  // manager recovery reverses or completes it instead.
+  'recovery_required',
   'internal_error',
   // Idempotency (R-10).
   'idempotency_payload_mismatch',

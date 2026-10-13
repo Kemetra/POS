@@ -30,7 +30,12 @@ import { unsealPinMaterial } from './pin-seal.js';
 import { verifyPinWithWindow, rowMatchesScope, type PinScope } from './pin-lockout.js';
 import type { PinRow } from './pin-credential.js';
 import { ProtoSessionStore } from './takeover-handler.js';
-import { admissionRefusal, type SessionAdmission } from './session-admission.js';
+import {
+  admissionRefusal,
+  admissionVerdict,
+  recoveryFieldsOf,
+  type SessionAdmission,
+} from './session-admission.js';
 import {
   capturePairingEpoch,
   epochToRecord,
@@ -164,6 +169,7 @@ export class SignInHandler {
     // RT-444 — refused before any backend session exists.
     const notAdmitted = admissionRefusal(this.deps.sessionAdmission, 'check', {
       operator_id: exchange.operator_id,
+      role: exchange.role,
     });
     if (notAdmitted !== null) return notAdmitted;
 
@@ -229,16 +235,17 @@ export class SignInHandler {
     }
 
     // RT-444 — re-check, and end a locked session, right before create().
-    const refusedAtCreate = admissionRefusal(this.deps.sessionAdmission, 'admit', {
+    const verdict = admissionVerdict(this.deps.sessionAdmission, 'admit', {
       operator_id: backend.operator.id,
+      role: backend.operator.role,
     });
-    if (refusedAtCreate !== null) {
+    if (verdict.kind === 'refused') {
       signOutAbandonedSession(
         this.deps.backend,
         { session_id: backend.operator_session.id, jwt: exchange.jwt },
         this.deps.logger,
       );
-      return refusedAtCreate;
+      return verdict.refusal;
     }
 
     // 4. Create local in-memory session. S3 makes this durable.
@@ -252,6 +259,8 @@ export class SignInHandler {
       started_at: backend.operator_session.issued_at,
       // RT-17 slice 4 part 2: kept main-side for the manager PIN enrolment.
       manager_user_id: backend.operator.user_id,
+      // RT-441: admitted in recovery mode for a stuck payment.
+      ...recoveryFieldsOf(verdict),
     });
     // 016 (review HIGH) — two credential seams, contract-correct:
     //
@@ -460,7 +469,7 @@ export class CashierSignInHandler {
     const pinRefusal = await this.verifyPinAndUpdateLockout(req.pin, pinRow, scope);
     if (pinRefusal !== null) return pinRefusal;
     // RT-444 — after the PIN (an unverified person learns nothing), before admission.
-    const candidate = { operator_id: req.cashier_clerk_user_id };
+    const candidate = { operator_id: req.cashier_clerk_user_id, role: 'cashier' as const };
     const notAdmitted = admissionRefusal(this.deps.sessionAdmission, 'check', candidate);
     if (notAdmitted !== null) return notAdmitted;
 

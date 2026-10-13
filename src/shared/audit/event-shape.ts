@@ -50,6 +50,12 @@ export const AUDIT_ACTION_CATEGORIES = [
   // RT-352 (RT-116 §7.3) — a draft cart outlives its session (RT-115 D3.2).
   'cart.held_on_session_end',
   'cart.reattached',
+  // RT-441 (RT-116 §5.2, §7.3) — manager recovery, dual-attributed: the
+  // original operator acts, the approving manager is `approving_supervisor_id`.
+  // Main-only (a renderer cannot forge them).
+  'cart.held_cancelled_by_manager',
+  'payment.recovery_completed',
+  'payment.recovery_cancelled',
   // RT-26 — Checkout Back: a handed-off cart with no tender activity returns
   // to `editing` (envelope invalidated). Open-set at the SQL layer (0004).
   'cart.return_to_sale',

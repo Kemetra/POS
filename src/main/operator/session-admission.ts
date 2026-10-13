@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
 
 import type { AuditEvent, OperatorRefusal } from '../../shared/audit/event-shape.js';
+import type { Role } from '../../shared/operator/role.js';
 import type { DatabaseHandle } from '../db/client.js';
 import type { BackendClient } from './backend-client.js';
 import { signOutAbandonedSession } from './pairing-epoch.js';
@@ -24,11 +25,13 @@ import type { SessionManager } from './session-manager.js';
  * The rule (§4 table), with U the operator signing in on this terminal T:
  *
  *   • T holds a `started` attempt with live tender (RT-116 M7: a line in
- *     `applying | applied | reversal_pending`) that U did not start → refused
- *     `terminal_has_unresolved_payment`, whatever U's role. That covers both
- *     the locked session of another operator with live tender and a stuck
- *     attempt left by an ended session. A manager is refused too until
- *     manager recovery (RT-441) admits one in recovery mode.
+ *     `applying | applied | reversal_pending`) that U did not start:
+ *       – a cashier → refused `terminal_has_unresolved_payment`;
+ *       – a manager / admin → admitted IN RECOVERY MODE only (RT-441, §5.1):
+ *         the session carries `recovery_of`, and every call but recovery is
+ *         refused until that payment is completed or cancelled.
+ *     That covers both the locked session of another operator with live
+ *     tender and a stuck attempt left by an ended session.
  *   • otherwise → admitted: held carts and a zero-funds attempt never block,
  *     and U's own unresolved payment never blocks U.
  *   • an ACTIVE session on T → refused `state_invalid`. Sign-in is reachable
@@ -43,9 +46,13 @@ import type { SessionManager } from './session-manager.js';
 export interface AdmissionCandidate {
   /** The operator signing in: the same id the session will carry (M2). */
   operator_id: string;
+  /** RT-441: a manager / admin is admitted in recovery mode, a cashier refused. */
+  role: Role;
 }
 
-export type AdmissionVerdict = { kind: 'admitted' } | { kind: 'refused'; refusal: OperatorRefusal };
+export type AdmissionVerdict =
+  | { kind: 'admitted'; recovery_of?: string }
+  | { kind: 'refused'; refusal: OperatorRefusal };
 
 export interface SessionAdmission {
   /** Read-only: would `candidate` be admitted now? */
@@ -69,6 +76,7 @@ export interface SessionAdmissionDeps {
 }
 
 interface UnresolvedAttempt {
+  payment_attempt_id: string;
   tenant_id: string;
   branch_id: string;
   terminal_id: string;
@@ -92,7 +100,7 @@ export function createSessionAdmission(deps: SessionAdmissionDeps): SessionAdmis
   // M6: at most one `started` attempt per terminal.
   const unresolvedStmt = (): Get<UnresolvedAttempt> =>
     db.prepare(
-      `SELECT a.tenant_id, a.branch_id, a.terminal_id, a.acting_operator_id
+      `SELECT a.payment_attempt_id, a.tenant_id, a.branch_id, a.terminal_id, a.acting_operator_id
          FROM payment_attempts a
         WHERE a.terminal_id = ? AND a.state = 'started'
           AND EXISTS (
@@ -137,6 +145,10 @@ export function createSessionAdmission(deps: SessionAdmissionDeps): SessionAdmis
     if (attempt === undefined || attempt.acting_operator_id === candidate.operator_id) {
       return ADMITTED;
     }
+    if (candidate.role === 'manager' || candidate.role === 'admin') {
+      logger?.info({ event: 'operator.admission.recovery_mode' }, 'admitted in recovery mode');
+      return { kind: 'admitted', recovery_of: attempt.payment_attempt_id };
+    }
     logger?.info({ event: 'operator.admission.refused', stage: 'unresolved_payment' }, 'refused');
     auditRefusal(attempt, candidate);
     return refused('terminal_has_unresolved_payment');
@@ -163,9 +175,24 @@ export function admissionRefusal(
   step: 'check' | 'admit',
   candidate: AdmissionCandidate,
 ): OperatorRefusal | null {
-  if (admission === undefined) return null;
-  const verdict = admission[step](candidate);
+  const verdict = admissionVerdict(admission, step, candidate);
   return verdict.kind === 'refused' ? verdict.refusal : null;
+}
+
+/** The full verdict, for `admit` right before `create()` (RT-441 `recovery_of`). */
+export function admissionVerdict(
+  admission: SessionAdmission | undefined,
+  step: 'check' | 'admit',
+  candidate: AdmissionCandidate,
+): AdmissionVerdict {
+  return admission === undefined ? ADMITTED : admission[step](candidate);
+}
+
+/** `create()` input fields for an admitted verdict (recovery mode, or nothing). */
+export function recoveryFieldsOf(verdict: AdmissionVerdict): { recovery_of?: string } {
+  return verdict.kind === 'admitted' && verdict.recovery_of !== undefined
+    ? { recovery_of: verdict.recovery_of }
+    : {};
 }
 
 export interface SupersededSessionSignOutDeps {

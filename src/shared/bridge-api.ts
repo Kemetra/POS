@@ -14,6 +14,7 @@ import type { ForcedCloseReason } from './audit/payload-schemas.js';
 import type { ReturnsBridgeAPI } from './returns/types.js';
 import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
 import type { ManagerApprovalBridgeAPI } from './operator/manager-approval.js';
+import type { RecoveryBridgeAPI } from './operator/recovery.js';
 
 export type {
   ReturnJournalView,
@@ -849,6 +850,12 @@ export interface PreloadBridgeAPI {
    * back. Refused while the session is locked.
    */
   approval?: ManagerApprovalBridgeAPI;
+  /**
+   * RT-441 (RT-116 §5): manager recovery (`recovery.*`) — clear this
+   * terminal's stuck payment or another operator's held sale. Manager / admin
+   * only, each action with its own approval; totals and opaque ids only.
+   */
+  recovery?: RecoveryBridgeAPI;
 }
 
 /**

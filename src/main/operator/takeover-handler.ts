@@ -17,7 +17,12 @@ import type { SessionManager } from './session-manager.js';
 import type { JwtHolder } from './jwt-holder.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { PairingStore } from '../pairing/store.js';
-import { admissionRefusal, type SessionAdmission } from './session-admission.js';
+import {
+  admissionRefusal,
+  admissionVerdict,
+  recoveryFieldsOf,
+  type SessionAdmission,
+} from './session-admission.js';
 import {
   admitCashierOnline,
   endAdmissionTracked,
@@ -228,6 +233,7 @@ export class TakeoverHandler {
     // so the operator can retry once the payment is resolved.
     const notAdmitted = admissionRefusal(this.deps.sessionAdmission, 'check', {
       operator_id: proto.operator_id,
+      role: proto.role,
     });
     if (notAdmitted !== null) {
       this.log('refused', 'admission');
@@ -289,10 +295,11 @@ export class TakeoverHandler {
     }
 
     // RT-444 — re-check, and end a locked session, right before create().
-    const refusedAtCreate = admissionRefusal(this.deps.sessionAdmission, 'admit', {
+    const verdict = admissionVerdict(this.deps.sessionAdmission, 'admit', {
       operator_id: backendResult.operator.id,
+      role: backendResult.operator.role,
     });
-    if (refusedAtCreate !== null) {
+    if (verdict.kind === 'refused') {
       this.deps.protoStore.delete(proto.pending_takeover_id);
       this.log('refused', 'admission_at_create');
       signOutAbandonedSession(
@@ -300,7 +307,7 @@ export class TakeoverHandler {
         { session_id: backendResult.operator_session.id, jwt: proto.jwt },
         this.deps.logger,
       );
-      return refusedAtCreate;
+      return verdict.refusal;
     }
 
     // backend returned signed_in — create local session
@@ -314,6 +321,8 @@ export class TakeoverHandler {
       started_at: backendResult.operator_session.issued_at,
       // RT-17 slice 4 part 2: kept main-side for the manager PIN enrolment.
       manager_user_id: backendResult.operator.user_id,
+      // RT-441: admitted in recovery mode for a stuck payment.
+      ...recoveryFieldsOf(verdict),
     });
 
     // 016 (review HIGH) — two credential seams, contract-correct. A takeover
@@ -402,6 +411,7 @@ export class TakeoverHandler {
     // RT-444 — re-check, and end a locked session, right before create().
     const refusedAtCreate = admissionRefusal(this.deps.sessionAdmission, 'admit', {
       operator_id: proto.operator_id,
+      role: 'cashier',
     });
     if (refusedAtCreate !== null) {
       this.deps.protoStore.delete(proto.pending_takeover_id);

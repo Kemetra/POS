@@ -139,6 +139,10 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'manager_approval.refused',
   // RT-444 (RT-116 §4) — emitted only by the sign-in admission guard.
   'operator.signin.refused_unresolved_payment',
+  // RT-441 (RT-116 §5.2) — emitted only by manager recovery.
+  'cart.held_cancelled_by_manager',
+  'payment.recovery_completed',
+  'payment.recovery_cancelled',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {

@@ -4,6 +4,13 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
+import { createRecoveryModeGuardedIpcMain } from './ipc/recovery-mode-guard.js';
+import { registerRecoveryHandlers } from './ipc/recovery.js';
+import {
+  createManagerRecovery,
+  createRecoveryPaymentPort,
+  type ManagerRecovery,
+} from './recovery/manager-recovery.js';
 import { createSaleBoundaryIpcMain } from './ipc/sale-boundary-guard.js';
 import { registerSessionLockHandlers } from './ipc/session-lock.js';
 import { registerResumeStateHandler } from './ipc/resume-state.js';
@@ -727,10 +734,16 @@ singleInstanceReady
     // session that lost its authority has reached its safe point (one choke
     // point; bound to the keeper once it is built below).
     const saleBoundaryProbe: { recheck: () => void } = { recheck: () => undefined };
+    // RT-441 (RT-116 §5.1) — a recovery-mode session may not sell: every
+    // cart / payments / tender / vouchers / returns call is refused.
+    const recoveryModeProbe: { active: () => boolean } = { active: () => false };
     const guardedIpcMain = createSaleBoundaryIpcMain(
-      createSessionLockGuardedIpcMain(
-        createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
-        () => sessionLockProbe.isLocked(),
+      createRecoveryModeGuardedIpcMain(
+        createSessionLockGuardedIpcMain(
+          createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
+          () => sessionLockProbe.isLocked(),
+        ),
+        () => recoveryModeProbe.active(),
       ),
       () => {
         saleBoundaryProbe.recheck();
@@ -796,6 +809,7 @@ singleInstanceReady
     const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);
     const operatorSessionManager = new SessionManager();
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
+    recoveryModeProbe.active = () => operatorSessionManager.getCurrent()?.recovery_of !== undefined;
     // RT-444 (RT-116 S3, §4) — ONE sign-in admission guard for every path
     // (manager, cashier PIN, both takeover confirms). It refuses another
     // operator while this terminal holds unresolved payment, and ends a locked
@@ -962,6 +976,7 @@ singleInstanceReady
         logger: mainLogger,
       }),
     });
+    const recoveryRef: { current: ManagerRecovery | null } = { current: null };
     const managerApprovals = createManagerApprovalService({
       db,
       getSession: () => operatorSessionManager.getCurrent(),
@@ -970,6 +985,13 @@ singleInstanceReady
       managerPins,
       resolvers: {
         'cart.cancel_post_handoff': postHandoffCancelApprovalResolver(bindCartStore(db)),
+        // RT-441 — manager recovery (bound below, once the payment path exists).
+        'recovery.complete_attempt': (input) =>
+          recoveryRef.current?.resolvers.completeAttempt(input) ?? null,
+        'recovery.cancel_attempt': (input) =>
+          recoveryRef.current?.resolvers.cancelAttempt(input) ?? null,
+        'recovery.cancel_held_cart': (input) =>
+          recoveryRef.current?.resolvers.cancelHeldCart(input) ?? null,
       },
       auditEmitter,
       now: () => new Date().toISOString(),
@@ -1536,6 +1558,8 @@ singleInstanceReady
     const paymentsForceFail = createPaymentsForceFailHandler({
       ...paymentsWriteDeps,
       paymentAttemptFsm,
+      // RT-441 — restricted: an attempt holding live tender goes to recovery.
+      attemptHasLiveTender: bindAttemptHasLiveTender(db),
     });
 
     registerPaymentsHandlers(guardedIpcMain, {
@@ -1549,6 +1573,36 @@ singleInstanceReady
       tenderRead,
       paymentsForceFail,
     });
+
+    // RT-441 (RT-116 S6, §5) — manager recovery. Its payment calls run the
+    // same handlers under a recovery-scoped session (the stuck attempt's own
+    // session id), set only for the duration of one call after the approval
+    // is consumed; normal calls keep their own session gate.
+    const managerRecovery = createManagerRecovery({
+      db,
+      getSession: () => operatorSessionManager.getCurrent(),
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      approvals: managerApprovals,
+      cartStore: bindCartStore(db),
+      payments: createRecoveryPaymentPort((getCurrentSession) => {
+        const scoped = { ...paymentsWriteDeps, getCurrentSession };
+        return {
+          apply: createTenderApplyHandler({
+            ...scoped,
+            tenderLineFsm,
+            uuid: paymentsUuid,
+            logger: mainLogger,
+          }),
+          confirm: createPaymentsConfirmHandler({ ...scoped, paymentAttemptFsm }),
+          cancel: createPaymentsCancelHandler({ ...scoped, paymentAttemptFsm }),
+        };
+      }),
+      auditEmitter,
+      endRecoverySession: () => operatorSignOutHandler.signOut(),
+      logger: mainLogger,
+    });
+    recoveryRef.current = managerRecovery;
+    registerRecoveryHandlers(guardedIpcMain, { recovery: managerRecovery, logger: mainLogger });
 
     // RT-442 (RT-116 S5, §9) — the #380 session-end / sign-in reversal sweep
     // is retired: no session end ever reverses tender. A zero-funds attempt is

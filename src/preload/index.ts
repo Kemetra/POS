@@ -8,6 +8,7 @@ import { salesSync } from './sales-sync.js';
 import { returns } from './returns.js';
 import { shiftCashup } from './shift-cashup.js';
 import { approval } from './manager-approval.js';
+import { recovery } from './recovery.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -205,6 +206,8 @@ const api: PreloadBridgeAPI = {
   // RT-443 (MA-2) — approval.* (listApprovers / request). Main checks the
   // session and the manager's PIN; only an opaque approval_id comes back.
   approval,
+  // RT-441 (RT-116 §5) — recovery.* (manager / admin; each action approved).
+  recovery,
 };
 
 contextBridge.exposeInMainWorld('api', api);

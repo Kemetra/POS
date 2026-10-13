@@ -45,4 +45,11 @@ describe('main/index.ts wires the RT-444 admission guard', () => {
   it('signs a superseded manager session out of the backend', () => {
     expect(source).toMatch(/registerSupersededSessionSignOut\(\{/);
   });
+
+  it('RT-441: wraps every handler in the recovery-mode guard and registers recovery', () => {
+    expect(source).toMatch(/createRecoveryModeGuardedIpcMain\(/);
+    expect(source).toMatch(/recoveryModeProbe\.active = \(\) =>/);
+    expect(source).toMatch(/registerRecoveryHandlers\(guardedIpcMain/);
+    expect(source).toContain('attemptHasLiveTender: bindAttemptHasLiveTender(db),');
+  });
 });

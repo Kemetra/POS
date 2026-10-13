@@ -149,6 +149,11 @@ function lockedOwner(): Harness {
   return h;
 }
 
+/** The role each test operator signs in with. */
+function who(operator_id: string): { operator_id: string; role: 'cashier' | 'manager' } {
+  return { operator_id, role: operator_id === MANAGER ? 'manager' : 'cashier' };
+}
+
 const CANDIDATES = [
   ['another cashier', OTHER_CASHIER],
   ['another manager', MANAGER],
@@ -157,7 +162,7 @@ const CANDIDATES = [
 describe('RT-444 §4 — terminal holds nothing', () => {
   it.each([['the owner', OWNER], ...CANDIDATES])('admits %s', (_label, operator_id) => {
     const h = harness();
-    expect(h.admission.admit({ operator_id })).toEqual({ kind: 'admitted' });
+    expect(h.admission.admit(who(operator_id))).toEqual({ kind: 'admitted' });
     expect(h.ends).toEqual([]);
   });
 });
@@ -167,7 +172,7 @@ describe('RT-444 §4 — held carts only, or zero funds', () => {
     'held drafts never block: admits %s',
     (_label, operator_id) => {
       insertCart('held-1', 'dead-session');
-      expect(harness().admission.admit({ operator_id })).toEqual({ kind: 'admitted' });
+      expect(harness().admission.admit(who(operator_id))).toEqual({ kind: 'admitted' });
     },
   );
 
@@ -175,7 +180,7 @@ describe('RT-444 §4 — held carts only, or zero funds', () => {
     'a started attempt with no tender is not live tender: admits %s',
     (_label, operator_id) => {
       insertStartedAttempt('dead-session', null);
-      expect(harness().admission.admit({ operator_id })).toEqual({ kind: 'admitted' });
+      expect(harness().admission.admit(who(operator_id))).toEqual({ kind: 'admitted' });
     },
   );
 
@@ -183,7 +188,7 @@ describe('RT-444 §4 — held carts only, or zero funds', () => {
     'a %s line is not live tender: admits another cashier',
     (state) => {
       insertStartedAttempt('dead-session', state);
-      const verdict = harness().admission.admit({ operator_id: OTHER_CASHIER });
+      const verdict = harness().admission.admit(who(OTHER_CASHIER));
       expect(verdict).toEqual({ kind: 'admitted' });
     },
   );
@@ -197,7 +202,7 @@ describe('RT-444 §4 — locked session of another operator, no live tender', ()
       const locked = h.sm.getCurrent();
       insertCart('draft-1', locked?.id ?? '');
 
-      expect(h.admission.admit({ operator_id })).toEqual({ kind: 'admitted' });
+      expect(h.admission.admit(who(operator_id))).toEqual({ kind: 'admitted' });
       expect(h.ends).toEqual([{ session_id: locked?.id, cause: 'superseded_at_lock' }]);
       expect(h.sm.getCurrent()).toBeNull();
       expect(h.sm.getLastEndCause()).toBe('superseded_at_lock');
@@ -206,7 +211,7 @@ describe('RT-444 §4 — locked session of another operator, no live tender', ()
 
   it('the read-only check never ends the locked session', () => {
     const h = lockedOwner();
-    expect(h.admission.check({ operator_id: OTHER_CASHIER })).toEqual({ kind: 'admitted' });
+    expect(h.admission.check(who(OTHER_CASHIER))).toEqual({ kind: 'admitted' });
     expect(h.ends).toEqual([]);
     expect(h.sm.getCurrent()?.lock_state).toBe('locked');
   });
@@ -217,7 +222,7 @@ describe('RT-444 §4 — locked session of another operator, no live tender', ()
     h.sm.onEnded((_r, cause) => order.push(`ended:${String(cause)}`));
     h.sm.onStarted((r) => order.push(`started:${r.operator_id}`));
 
-    h.admission.admit({ operator_id: OTHER_CASHIER });
+    h.admission.admit(who(OTHER_CASHIER));
     h.sm.create({ ...ownerSession(), operator_id: OTHER_CASHIER });
 
     expect(order).toEqual(['ended:superseded_at_lock', `started:${OTHER_CASHIER}`]);
@@ -225,12 +230,12 @@ describe('RT-444 §4 — locked session of another operator, no live tender', ()
 });
 
 describe('RT-444 §4 — locked session of another operator WITH live tender', () => {
-  it.each(CANDIDATES)('refuses %s and leaves the locked session untouched', (_l, operator_id) => {
+  it('refuses another cashier and leaves the locked session untouched', () => {
     const h = lockedOwner();
     const locked = h.sm.getCurrent();
     insertStartedAttempt(locked?.id ?? '', 'applied');
 
-    expect(h.admission.admit({ operator_id })).toEqual({
+    expect(h.admission.admit(who(OTHER_CASHIER))).toEqual({
       kind: 'refused',
       refusal: { kind: 'refused', category: 'terminal_has_unresolved_payment' },
     });
@@ -239,28 +244,46 @@ describe('RT-444 §4 — locked session of another operator WITH live tender', (
     expect(h.sm.getCurrent()?.lock_state).toBe('locked');
   });
 
+  it('RT-441: admits another manager in recovery mode for that payment, ending the lock first', () => {
+    const h = lockedOwner();
+    const locked = h.sm.getCurrent();
+    insertStartedAttempt(locked?.id ?? '', 'applied');
+
+    expect(h.admission.admit(who(MANAGER))).toEqual({ kind: 'admitted', recovery_of: 'att-1' });
+    expect(h.ends).toEqual([{ session_id: locked?.id, cause: 'superseded_at_lock' }]);
+    expect(h.audit).toEqual([]);
+  });
+
   it.each(['applying', 'applied', 'reversal_pending'])('%s counts as live tender', (state) => {
     const h = lockedOwner();
     insertStartedAttempt(h.sm.getCurrent()?.id ?? '', state);
-    expect(h.admission.check({ operator_id: OTHER_CASHIER }).kind).toBe('refused');
+    expect(h.admission.check(who(OTHER_CASHIER)).kind).toBe('refused');
   });
 });
 
 describe('RT-444 §4 — stuck attempt (its session already ended)', () => {
   it('admits the owner (re-attach and resume are S5)', () => {
     insertStartedAttempt('dead-session', 'applied');
-    expect(harness().admission.admit({ operator_id: OWNER })).toEqual({ kind: 'admitted' });
+    expect(harness().admission.admit(who(OWNER))).toEqual({ kind: 'admitted' });
   });
 
-  it.each(CANDIDATES)('refuses %s', (_label, operator_id) => {
+  it('refuses another cashier', () => {
     insertStartedAttempt('dead-session', 'applied');
-    expect(harness().admission.admit({ operator_id }).kind).toBe('refused');
+    expect(harness().admission.admit(who(OTHER_CASHIER)).kind).toBe('refused');
+  });
+
+  it('RT-441: admits another manager in recovery mode only', () => {
+    insertStartedAttempt('dead-session', 'applied');
+    expect(harness().admission.admit(who(MANAGER))).toEqual({
+      kind: 'admitted',
+      recovery_of: 'att-1',
+    });
   });
 
   it('the owner signing in over their own locked session is admitted; the session ends first', () => {
     const h = lockedOwner();
     insertStartedAttempt(h.sm.getCurrent()?.id ?? '', 'applied');
-    expect(h.admission.admit({ operator_id: OWNER })).toEqual({ kind: 'admitted' });
+    expect(h.admission.admit(who(OWNER))).toEqual({ kind: 'admitted' });
     expect(h.ends.map((e) => e.cause)).toEqual(['superseded_at_lock']);
   });
 });
@@ -269,7 +292,7 @@ describe('RT-444 — an ACTIVE session is never silently replaced (M15)', () => 
   it('refuses state_invalid and ends nothing', () => {
     const h = harness();
     h.sm.create(ownerSession());
-    expect(h.admission.admit({ operator_id: OTHER_CASHIER })).toEqual({
+    expect(h.admission.admit(who(OTHER_CASHIER))).toEqual({
       kind: 'refused',
       refusal: { kind: 'refused', category: 'state_invalid' },
     });
@@ -282,7 +305,7 @@ describe('RT-444 — the refusal discloses nothing (FR-013)', () => {
   it('audits operator.signin.refused_unresolved_payment with an empty payload', () => {
     const h = lockedOwner();
     insertStartedAttempt(h.sm.getCurrent()?.id ?? '', 'applied');
-    h.admission.check({ operator_id: OTHER_CASHIER });
+    h.admission.check(who(OTHER_CASHIER));
 
     expect(h.audit).toEqual([
       {
@@ -304,7 +327,7 @@ describe('RT-444 — the refusal discloses nothing (FR-013)', () => {
   it('names neither the owner nor the amount in the response or the log', () => {
     const h = lockedOwner();
     insertStartedAttempt(h.sm.getCurrent()?.id ?? '', 'applied');
-    const verdict = h.admission.admit({ operator_id: OTHER_CASHIER });
+    const verdict = h.admission.admit(who(OTHER_CASHIER));
     const said = JSON.stringify([verdict, h.logs]);
     for (const secret of [OWNER, SECRET_NAME, String(AMOUNT), '1,234.50', 'att-1']) {
       expect(said).not.toContain(secret);
@@ -324,7 +347,7 @@ describe('RT-444 — the refusal discloses nothing (FR-013)', () => {
         },
       },
     });
-    expect(admission.admit({ operator_id: OTHER_CASHIER }).kind).toBe('refused');
+    expect(admission.admit(who(OTHER_CASHIER)).kind).toBe('refused');
   });
 });
 
@@ -337,18 +360,18 @@ describe('RT-444 — unpaired terminal and the call-site seam', () => {
       resolveTerminalId: () => null,
       auditEmitter: { emit: vi.fn() },
     });
-    expect(admission.check({ operator_id: OTHER_CASHIER })).toEqual({ kind: 'admitted' });
+    expect(admission.check(who(OTHER_CASHIER))).toEqual({ kind: 'admitted' });
   });
 
   it('admissionRefusal returns the refusal, null when admitted, null without a guard', () => {
     insertStartedAttempt('dead-session', 'applied');
     const { admission } = harness();
-    expect(admissionRefusal(admission, 'check', { operator_id: OTHER_CASHIER })).toEqual({
+    expect(admissionRefusal(admission, 'check', who(OTHER_CASHIER))).toEqual({
       kind: 'refused',
       category: 'terminal_has_unresolved_payment',
     });
-    expect(admissionRefusal(admission, 'check', { operator_id: OWNER })).toBeNull();
-    expect(admissionRefusal(undefined, 'admit', { operator_id: OTHER_CASHIER })).toBeNull();
+    expect(admissionRefusal(admission, 'check', who(OWNER))).toBeNull();
+    expect(admissionRefusal(undefined, 'admit', who(OTHER_CASHIER))).toBeNull();
   });
 });
 

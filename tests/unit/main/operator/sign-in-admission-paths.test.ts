@@ -353,3 +353,39 @@ describe('RT-444 — a refusal at create cleans up what the network call made', 
     },
   );
 });
+
+describe('RT-441 — a manager is admitted in recovery mode over a stuck payment', () => {
+  /** The real guard over a terminal holding another operator's live tender. */
+  function stuckGuard(sm: SessionManager): SessionAdmission {
+    return createSessionAdmission({
+      db: stubDb({
+        payment_attempt_id: 'att-stuck',
+        tenant_id: 't1',
+        branch_id: 'b1',
+        terminal_id: 'term-1',
+        acting_operator_id: LOCKED_OPERATOR,
+      }),
+      sessionManager: sm,
+      resolveTerminalId: () => 'term-1',
+      auditEmitter: { emit: vi.fn() },
+    });
+  }
+
+  it.each<Path>(['manager sign-in', 'manager takeover'])(
+    '%s: the new session carries recovery_of, after the locked one ended',
+    async (path) => {
+      const { sm, order } = lockedTerminal();
+      const { res } = await run(path, sm, stuckGuard(sm));
+      expect(res.kind).toBe('signed_in');
+      expect(sm.getCurrent()?.recovery_of).toBe('att-stuck');
+      expect(order[0]).toBe(`ended:${LOCKED_OPERATOR}:superseded_at_lock`);
+    },
+  );
+
+  it.each<Path>(['cashier sign-in', 'cashier takeover'])('%s: still refused', async (path) => {
+    const { sm, lockedId } = lockedTerminal();
+    const { res } = await run(path, sm, stuckGuard(sm));
+    expect(res).toEqual({ kind: 'refused', category: 'terminal_has_unresolved_payment' });
+    expect(sm.getCurrent()?.id).toBe(lockedId);
+  });
+});
