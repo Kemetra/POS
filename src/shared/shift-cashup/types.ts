@@ -77,6 +77,8 @@ export const SHIFT_CASHUP_REFUSALS = [
   'current_pin_required',
   'current_pin_invalid',
   'current_pin_locked',
+  // RT-438: revoking a manager PIN found no active record for that handle here.
+  'manager_not_found',
   // The till cannot compute the cash-up from its own records.
   'cashup_unavailable',
   'unavailable',
@@ -165,6 +167,17 @@ export interface ShiftManagerPinEnrollRequest {
 
 export type ShiftManagerPinEnrollResponse = { kind: 'enrolled' } | ShiftCashupRefused;
 
+/**
+ * RT-438 (RT-114 C4) — revoke a manager PIN on this terminal: the signed-in
+ * manager's own when `managerRef` is omitted, else the listed manager's. Main
+ * checks the online manager session, the step-up and the scope.
+ */
+export interface ShiftManagerPinRevokeRequest {
+  managerRef?: string;
+}
+
+export type ShiftManagerPinRevokeResponse = { kind: 'revoked' } | ShiftCashupRefused;
+
 /** An approver a close may name: the opaque handle and the display name. */
 export interface ShiftEnrolledManager {
   managerRef: string;
@@ -183,4 +196,5 @@ export interface ShiftCashupBridgeAPI {
   status(): Promise<ShiftStatusResponse>;
   enrollManagerPin(req: ShiftManagerPinEnrollRequest): Promise<ShiftManagerPinEnrollResponse>;
   listEnrolledManagers(): Promise<ShiftEnrolledManagersResponse>;
+  revokeManagerPin(req: ShiftManagerPinRevokeRequest): Promise<ShiftManagerPinRevokeResponse>;
 }

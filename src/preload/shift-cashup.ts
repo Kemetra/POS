@@ -8,6 +8,8 @@ import type {
   ShiftEnrolledManagersResponse,
   ShiftManagerPinEnrollRequest,
   ShiftManagerPinEnrollResponse,
+  ShiftManagerPinRevokeRequest,
+  ShiftManagerPinRevokeResponse,
   ShiftMovementRequest,
   ShiftMovementResponse,
   ShiftOpenRequest,
@@ -47,4 +49,9 @@ export const shiftCashup: ShiftCashupBridgeAPI = {
     ipcRenderer.invoke(
       SHIFT_CASHUP_IPC_CHANNELS.LIST_ENROLLED_MANAGERS,
     ) as Promise<ShiftEnrolledManagersResponse>,
+  revokeManagerPin: (req: ShiftManagerPinRevokeRequest) =>
+    ipcRenderer.invoke(
+      SHIFT_CASHUP_IPC_CHANNELS.REVOKE_MANAGER_PIN,
+      req,
+    ) as Promise<ShiftManagerPinRevokeResponse>,
 };

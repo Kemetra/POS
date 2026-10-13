@@ -44,6 +44,7 @@ import {
   type ShiftCloseApprover,
   type ShiftCloseRequest,
   type ShiftManagerPinEnrollRequest,
+  type ShiftManagerPinRevokeRequest,
   type ShiftMovementReasonCode,
   type ShiftMovementRequest,
   type ShiftOpenRequest,
@@ -62,7 +63,10 @@ import {
   type ManagerOnlineRefreshDeps,
   type ManagerPinEnrollmentDeps,
 } from '../operator/manager-pin-enrollment.js';
-import { createManagerPinStore } from '../operator/manager-pin-store.js';
+import {
+  createManagerPinStore,
+  type ManagerCredentialEvent,
+} from '../operator/manager-pin-store.js';
 import type { OperatorSessionRecord } from '../operator/session-manager.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
 
@@ -74,6 +78,7 @@ const MOVEMENT_KEYS = ['amountMinor', 'reasonCode', 'note'] as const;
 const CLOSE_KEYS = ['countedCashMinor', 'approver'] as const;
 const APPROVER_KEYS = ['managerRef', 'managerPin'] as const;
 const ENROL_KEYS = ['managerPin', 'currentPin'] as const;
+const REVOKE_KEYS = ['managerRef'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return false;
@@ -169,6 +174,14 @@ export function readEnrollRequest(value: unknown): ShiftManagerPinEnrollRequest 
   return isManagerPin(currentPin) ? { managerPin, currentPin } : null;
 }
 
+/** RT-438: `{}` (the manager's own) or `{ managerRef }` exactly, or null. */
+export function readRevokeRequest(value: unknown): ShiftManagerPinRevokeRequest | null {
+  if (!isClosedShape(value, REVOKE_KEYS)) return null;
+  const { managerRef } = value;
+  if (managerRef === undefined) return {};
+  return isManagerRef(managerRef) ? { managerRef } : null;
+}
+
 /** `status` and `listEnrolledManagers` accept no payload (undefined or `{}`). */
 function isEmptyPayload(value: unknown): boolean {
   return value === undefined || isClosedShape(value, []);
@@ -188,8 +201,16 @@ export interface ShiftCashupIpcDeps {
 
 export function registerShiftCashupHandlers(ipcMain: IpcMain, deps: ShiftCashupIpcDeps): void {
   const { bridge } = deps;
-  const { OPEN, PAY_IN, PAY_OUT, CLOSE, STATUS, ENROLL_MANAGER_PIN, LIST_ENROLLED_MANAGERS } =
-    SHIFT_CASHUP_IPC_CHANNELS;
+  const {
+    OPEN,
+    PAY_IN,
+    PAY_OUT,
+    CLOSE,
+    STATUS,
+    ENROLL_MANAGER_PIN,
+    LIST_ENROLLED_MANAGERS,
+    REVOKE_MANAGER_PIN,
+  } = SHIFT_CASHUP_IPC_CHANNELS;
   ipcMain.handle(
     OPEN,
     validated(readOpenRequest, (req) => bridge.open(req)),
@@ -216,6 +237,10 @@ export function registerShiftCashupHandlers(ipcMain: IpcMain, deps: ShiftCashupI
   ipcMain.handle(LIST_ENROLLED_MANAGERS, (_event, request: unknown) =>
     isEmptyPayload(request) ? bridge.listEnrolledManagers() : INVALID,
   );
+  ipcMain.handle(
+    REVOKE_MANAGER_PIN,
+    validated(readRevokeRequest, (req) => bridge.revokeManagerPin(req)),
+  );
 }
 
 export interface RegisterShiftCashupIpcDeps
@@ -232,12 +257,20 @@ export interface RegisterShiftCashupIpcDeps
   /** `OperatorSessionManager.onStarted`: called with each new session. */
   onSessionStarted: (listener: (record: OperatorSessionRecord) => void) => void;
   logger: ShiftCashupBridgeLogger;
+  /** RT-438: manager PIN lifecycle facts, for the audit trail. */
+  onManagerCredentialEvent?: (event: ManagerCredentialEvent) => void;
 }
 
 /** The flag gate (see the module header). */
 export function registerShiftCashupIpc(deps: RegisterShiftCashupIpcDeps): void {
   if (!deps.enabled) return;
-  const managerPins = createManagerPinStore({ db: deps.db, safeStorage: deps.safeStorage });
+  const managerPins = createManagerPinStore({
+    db: deps.db,
+    safeStorage: deps.safeStorage,
+    ...(deps.onManagerCredentialEvent === undefined
+      ? {}
+      : { onEvent: deps.onManagerCredentialEvent }),
+  });
   const service = composeShiftCashupService({ ...deps, managerPins });
   const enrollment = createManagerPinEnrollment({ ...deps, store: managerPins });
   const bridge = createShiftCashupBridge({ service, enrollment, logger: deps.logger });

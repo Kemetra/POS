@@ -118,6 +118,7 @@ import {
   startShiftSync,
 } from './shift-cashup/compose-shift-cashup.js';
 import { registerShiftCashupIpc } from './ipc/shift-cashup.js';
+import { createManagerCredentialAudit } from './operator/manager-credential-audit.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
 import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
@@ -2126,6 +2127,16 @@ singleInstanceReady
       safeStorage,
       now: () => new Date().toISOString(),
       logger: mainLogger,
+      onManagerCredentialEvent: createManagerCredentialAudit({
+        auditEmitter,
+        currentActor: () => {
+          const current = operatorSessionManager.getCurrent();
+          return current === null
+            ? null
+            : { operatorId: current.operator_id, sessionId: current.id };
+        },
+        logger: mainLogger,
+      }),
     });
 
     createWindow();

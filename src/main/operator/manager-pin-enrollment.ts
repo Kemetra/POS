@@ -58,7 +58,9 @@ export type ManagerPinRefusalReason =
   | 'pin_too_weak'
   | 'current_pin_required'
   | 'current_pin_invalid'
-  | 'current_pin_locked';
+  | 'current_pin_locked'
+  // RT-438: no active record for that handle (or the manager's own) here.
+  | 'manager_not_found';
 
 /** An enrolment refused before anything was written. Names the reason only. */
 export class ManagerPinRefusedError extends Error {
@@ -139,13 +141,19 @@ export interface ManagerPinEnrollmentDeps {
   pairedScope: () => Promise<ManagerPinScope | null>;
   /** `PairingStore.getPairingEpoch` — null while unpaired or revoked. */
   pairingEpoch: () => string | null;
-  store: Pick<ManagerPinStore, 'seal' | 'enrol'>;
+  store: Pick<ManagerPinStore, 'seal' | 'enrol' | 'revoke'>;
   /** ISO-8601 instants. */
   now: () => string;
 }
 
 export interface ManagerPinEnrollment {
   enroll(input: { managerPin: string; currentPin?: string }): Promise<void>;
+  /**
+   * RT-438 (RT-114 C4) — revoke a manager PIN on this terminal: the signed-in
+   * manager's own (no handle), or another manager's by its listed handle. Same
+   * admission as `enroll` (online manager / admin, step-up, usable pairing).
+   */
+  revoke(input: { managerRef?: string }): Promise<void>;
 }
 
 /** An admitted manager: the session, its captured users.id and sign-in time. */
@@ -247,6 +255,22 @@ export function createManagerPinEnrollment(deps: ManagerPinEnrollmentDeps): Mana
         guard,
       });
       if (outcome.kind !== 'enrolled') refuse(STORE_REFUSALS[outcome.kind]);
+    },
+
+    async revoke(input) {
+      const admitted = admit();
+      const { epoch, scope } = await pairingOf(admitted.manager);
+      recheck({ admitted, epoch });
+      const outcome = await deps.store.revoke({
+        scope,
+        target:
+          input.managerRef === undefined
+            ? { userId: admitted.userId }
+            : { managerRef: input.managerRef },
+        requesterUserId: admitted.userId,
+        now: deps.now(),
+      });
+      if (outcome.kind === 'not_found') refuse('manager_not_found');
     },
   };
 }

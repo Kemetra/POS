@@ -36,6 +36,7 @@ const REFUSAL_COPY: Readonly<Record<ShiftCashupRefusal, string>> = Object.freeze
   current_pin_required: 'لديك رقم سري محفوظ على هذا الجهاز. أدخل الرقم الحالي لتغييره.',
   current_pin_invalid: 'الرقم السري الحالي غير صحيح.',
   current_pin_locked: 'الرقم السري الحالي مقفل مؤقتًا بعد محاولات خاطئة. حاول بعد بضع دقائق.',
+  manager_not_found: 'لا يوجد رقم سري مفعّل لهذا المدير على هذا الجهاز.',
   cashup_unavailable: 'تعذّر حساب الوردية من سجلات هذا الجهاز، ولم يُسجَّل شيء. راجع الدعم.',
   unavailable: 'تعذّر تنفيذ الطلب على هذا الجهاز. حاول مرة أخرى.',
 });

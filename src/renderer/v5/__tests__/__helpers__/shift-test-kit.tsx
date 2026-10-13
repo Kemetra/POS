@@ -68,6 +68,9 @@ export function fakeShiftBridge(status: ShiftStatusView = statusView()): FakeShi
     listEnrolledManagers: vi.fn<ShiftCashupBridgeAPI['listEnrolledManagers']>(() =>
       Promise.resolve({ kind: 'managers', managers: [...MANAGERS] }),
     ),
+    revokeManagerPin: vi.fn<ShiftCashupBridgeAPI['revokeManagerPin']>(() =>
+      Promise.resolve({ kind: 'revoked' }),
+    ),
   };
 }
 

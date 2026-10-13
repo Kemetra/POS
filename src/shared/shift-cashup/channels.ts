@@ -18,6 +18,8 @@ export const SHIFT_CASHUP_IPC_CHANNELS = {
   ENROLL_MANAGER_PIN: 'shiftCashup:enrollManagerPin',
   // Review round 1: the approvers a close may name (handles and names only).
   LIST_ENROLLED_MANAGERS: 'shiftCashup:listEnrolledManagers',
+  // RT-438: a signed-in manager revokes a manager PIN (their own or another's).
+  REVOKE_MANAGER_PIN: 'shiftCashup:revokeManagerPin',
 } as const;
 
 export type ShiftCashupIpcChannel =

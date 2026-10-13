@@ -389,6 +389,9 @@ const VERDICT_REFUSALS = {
   invalid: 'approver_invalid',
   locked: 'approver_locked',
   expired: 'approver_expired',
+  // RT-438: a disabled or revoked record, like an expired one, approves
+  // nothing until the manager enrols again online (the bridge says `approver_invalid`).
+  revoked: 'approver_expired',
 } as const;
 
 /** The verified manager's users.id, or the refusal of the verdict. */

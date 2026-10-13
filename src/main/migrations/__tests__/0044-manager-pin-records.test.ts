@@ -103,7 +103,9 @@ describe('0044 — manager PIN records (RT-17 slice 4 part 2, [GATED] 10943)', (
   });
 
   it('has the scope, the ids, the name, the sealed secret, the lockout state and two stamps only', () => {
-    expect(columns('manager_pin_records')).toEqual([
+    // RT-438: 0047 appends the lifecycle columns after these (its own test);
+    // 0044's are these twelve, in this order.
+    expect(columns('manager_pin_records').slice(0, 12)).toEqual([
       'tenant_id',
       'branch_id',
       'terminal_id',

@@ -159,6 +159,8 @@ describe('verifyApprover — keyed, and only when the close needs it', () => {
     ['a wrong PIN or unknown manager', { kind: 'invalid' }, 'approver_invalid'],
     ['a record under lockout', { kind: 'locked' }, 'approver_locked'],
     ['an expired record (no online sign-in for 30 days)', { kind: 'expired' }, 'approver_expired'],
+    // RT-438: disabled by repeated lockouts, or revoked.
+    ['a disabled or revoked record', { kind: 'revoked' }, 'approver_expired'],
     ['the closing cashier', { kind: 'verified', userId: USER }, 'approver_is_closer'],
   ])('refuses %s and counts it for the shift', async (_name, verdict, reason) => {
     openShift();
