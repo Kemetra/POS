@@ -2,7 +2,7 @@
   "name": "pos-pulse",
   "version": "0.1.0",
   "description": "POS terminal for the SmartDataPulse pharmacy platform",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "dist/main/index.js",
   "engines": {
