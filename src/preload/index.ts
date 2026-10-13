@@ -8,6 +8,7 @@ import { salesSync } from './sales-sync.js';
 import { returns } from './returns.js';
 import { shiftCashup } from './shift-cashup.js';
 import { approval } from './manager-approval.js';
+import { recovery } from './recovery.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -180,8 +181,7 @@ const api: PreloadBridgeAPI = {
   cart,
   // 006-payments-tender — payments.* + tender.* (Slice 3 / T142) +
   // vouchers.* (Wave 4 / §A4-B authorisation 2026-05-25).
-  // payments.discardOnSessionEnd is internal; payments.forceFail is
-  // still gated and intentionally NOT exposed.
+  // payments.forceFail is still gated and intentionally NOT exposed.
   payments,
   tender,
   vouchers,
@@ -206,6 +206,8 @@ const api: PreloadBridgeAPI = {
   // RT-443 (MA-2) — approval.* (listApprovers / request). Main checks the
   // session and the manager's PIN; only an opaque approval_id comes back.
   approval,
+  // RT-441 (RT-116 §5) — recovery.* (manager / admin; each action approved).
+  recovery,
 };
 
 contextBridge.exposeInMainWorld('api', api);

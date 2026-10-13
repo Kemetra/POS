@@ -20,6 +20,7 @@ import {
   type HeldCarts,
 } from '../../../../src/main/cart/held-carts.js';
 import { SessionManager } from '../../../../src/main/operator/session-manager.js';
+import { createHeldAttempts } from '../../../../src/main/payments/held-attempts.js';
 import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
 import type { AuditEvent } from '../../../../src/shared/audit/event-shape.js';
 import { makeSqlJsHandle } from './__helpers__/sql-js-handle.js';
@@ -30,6 +31,10 @@ const MIGRATIONS = [
   '0009_cart_action_outbox.sql',
   '0010_cart_lines.sql',
   '0011_cart_line_discount_placeholders.sql',
+  // RT-442 — a frozen cart's sale is read from the payment record.
+  '0012_create_payment_attempts.sql',
+  '0013_payment_attempts_partial_unique_started.sql',
+  '0014_create_payment_tender_lines.sql',
   '0046_carts_owner_key_index.sql',
 ].map((f) => readFileSync(path.resolve(__dirname0, '../../../../migrations', f), 'utf8'));
 
@@ -59,6 +64,13 @@ function bootTerminal(): Terminal {
     auditEmitter: { emit },
     resolveTerminalId: () => terminalId,
     clock: () => new Date('2026-10-10T12:00:00.000Z'),
+    attempts: createHeldAttempts({
+      db: handle,
+      paymentAttemptFsm: { cancel: vi.fn(() => ({ kind: 'ok' }) as never) },
+      auditEmitter: { emitPaymentCancelled: vi.fn(), emitRaw: vi.fn() },
+      uuid: () => crypto.randomUUID(),
+      clock: () => new Date('2026-10-10T12:00:00.000Z'),
+    }),
   });
   registerHeldCartLifecycle({ sessionManager: sessions, heldCarts: held });
   return { sessions, held, emit };
@@ -210,16 +222,36 @@ describe('RT-352 — held draft cart re-attaches for its owner', () => {
     });
   });
 
-  it('leaves a frozen (handed-off or settled) cart untouched at end and sign-in', async () => {
+  it('leaves a settled sale’s frozen cart untouched at end and sign-in (RT-442)', async () => {
     const t = bootTerminal();
     const owner = signIn(t, 'cashier-1');
     const cart = await openCart(t, 'frozen_handed_off');
+    db.run(
+      `INSERT INTO payment_attempts (payment_attempt_id, tenant_id, branch_id, terminal_id,
+         acting_operator_id, operator_session_id, envelope_handoff_action_id, envelope_cart_id,
+         envelope_subtotal_minor, state, started_at, settled_at, last_action_id)
+       VALUES ('att-paid', 'tenant-1', 'branch-1', ?, 'cashier-1', ?, 'h1', ?, 100, 'settled',
+         '2026-10-10T11:00:00.000Z', '2026-10-10T11:01:00.000Z', 'a')`,
+      [TERMINAL, owner.id, cart],
+    );
     t.sessions.end('signed_out');
     const session = signIn(t, 'cashier-1');
 
     expect(cartRow(cart)).toEqual({ state: 'frozen_handed_off', operator_session_id: owner.id });
     expect(t.held.getResumeState(session).cart_id).toBeNull();
     expect(t.emit).not.toHaveBeenCalled();
+  });
+
+  it('holds an open sale’s frozen cart and re-attaches it for its owner (RT-442)', async () => {
+    const t = bootTerminal();
+    signIn(t, 'cashier-1');
+    const cart = await openCart(t, 'frozen_handed_off');
+    t.sessions.end('signed_out');
+    const session = signIn(t, 'cashier-1');
+
+    expect(cartRow(cart)).toEqual({ state: 'frozen_handed_off', operator_session_id: session.id });
+    expect(t.held.getResumeState(session).cart_id).toBe(cart);
+    expect(categories(t)).toEqual(['cart.held_on_session_end', 'cart.reattached']);
   });
 
   it('does nothing on an unpaired terminal', async () => {

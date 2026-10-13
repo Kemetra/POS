@@ -53,6 +53,12 @@ export const APPROVAL_POLICY_VERSION = 'rt114-2026-10-07';
 export interface ApprovalSubject {
   version: string;
   amountMinor: number | null;
+  /**
+   * RT-441 (RT-116 §5.3) — a recovery subject's original operator: the
+   * approval is recorded as requested on their behalf, and approved by the
+   * manager who is signed in. Absent for a cashier's own request.
+   */
+  requesterOperatorId?: string;
 }
 
 /** Main's view of one kind's subject for this session, or null when not approvable. */
@@ -71,7 +77,8 @@ export interface ConsumeApprovalInput {
   subjectRef: string;
   /** The subject as read inside the action's transaction. */
   subject: ApprovalSubject;
-  session: Pick<OperatorSessionRecord, 'operator_id' | 'tenant_id' | 'branch_id'>;
+  session: Pick<OperatorSessionRecord, 'operator_id' | 'tenant_id' | 'branch_id'> &
+    Partial<Pick<OperatorSessionRecord, 'manager_user_id'>>;
 }
 
 export type ConsumeApprovalOutcome =
@@ -148,9 +155,54 @@ function requesterUserIdOf(session: OperatorSessionRecord): string | null {
   return (session.user_id ?? session.manager_user_id ?? null)?.toLowerCase() ?? null;
 }
 
-/** C6: who may ask. A manager / admin acts directly, except the self-unlock. */
+/** RT-441 (RT-116 §5.2) — the manager recovery kinds. */
+const RECOVERY_KINDS: ReadonlySet<ManagerActionKind> = new Set([
+  'recovery.complete_attempt',
+  'recovery.cancel_attempt',
+  'recovery.cancel_held_cart',
+]);
+
+export function isRecoveryKind(kind: ManagerActionKind): boolean {
+  return RECOVERY_KINDS.has(kind);
+}
+
+function isManagerSession(session: OperatorSessionRecord): boolean {
+  return session.role === 'manager' || session.role === 'admin';
+}
+
+/**
+ * C6: who may ask. A cashier asks for a manager's approval; a manager / admin
+ * acts directly, except the self-unlock and (RT-441) recovery, where the
+ * signed-in manager approves an action on another operator's sale.
+ */
 function mayRequest(session: OperatorSessionRecord, kind: ManagerActionKind): boolean {
+  if (isRecoveryKind(kind)) return isManagerSession(session);
   return kind === 'session.self_unlock' || session.role === 'cashier';
+}
+
+/**
+ * Four-eyes (C6). A cashier's approver is never the cashier. A recovery
+ * approval is the signed-in manager's own PIN — the person at the terminal —
+ * on another operator's sale (the resolver guarantees the owner is someone
+ * else), so the approver must BE the session's manager.
+ */
+function approverAllowed(
+  kind: ManagerActionKind,
+  session: OperatorSessionRecord,
+  approverUserId: string,
+): boolean {
+  if (isRecoveryKind(kind)) {
+    return approverUserId === session.manager_user_id?.toLowerCase();
+  }
+  return kind === 'session.self_unlock' || approverUserId !== requesterUserIdOf(session);
+}
+
+/** The requester's user id as recorded: none for a recovery (on another's behalf). */
+function recordedRequesterUserId(
+  kind: ManagerActionKind,
+  session: OperatorSessionRecord,
+): string | null {
+  return isRecoveryKind(kind) ? null : requesterUserIdOf(session);
 }
 
 export function createManagerApprovalService(
@@ -212,10 +264,16 @@ export function createManagerApprovalService(
     listApprovers(input) {
       const admitted = admit(input.actionKind);
       if (admitted.kind !== 'ok') return admitted;
+      // RT-441: a recovery approval is the signed-in manager's own PIN.
+      const self = isRecoveryKind(input.actionKind) ? admitted.session.manager_user_id : undefined;
+      if (isRecoveryKind(input.actionKind) && self === undefined) {
+        return { kind: 'approvers', approvers: [] };
+      }
       const managers = deps.managerPins.list({
         scope: admitted.scope,
         now: deps.now(),
         policy: credentialPolicyFor(input.actionKind),
+        ...(self === undefined ? {} : { userId: self }),
       });
       return {
         kind: 'approvers',
@@ -285,8 +343,8 @@ export function createManagerApprovalService(
 
   /**
    * Steps 4 and 5: the approver's user id when the PIN verifies and the
-   * approver is not the requester (four-eyes; the self-unlock is exempt),
-   * otherwise null.
+   * approver is allowed (four-eyes; the self-unlock is exempt; a recovery
+   * approver is the signed-in manager), otherwise null.
    */
   async function verifyApprover(
     input: ManagerApprovalRequest,
@@ -303,8 +361,7 @@ export function createManagerApprovalService(
       actor: { operatorId: session.operator_id, sessionId: session.id },
     });
     if (verdict.kind !== 'verified') return null;
-    if (input.action_kind === 'session.self_unlock') return verdict.userId;
-    return verdict.userId === requesterUserIdOf(session) ? null : verdict.userId;
+    return approverAllowed(input.action_kind, session, verdict.userId) ? verdict.userId : null;
   }
 
   /** Step 6: after the PIN's await, a different or locked session, or a moved subject. */
@@ -340,8 +397,8 @@ export function createManagerApprovalService(
       before.amountMinor,
       input.reason_code,
       input.reason_note ?? null,
-      session.operator_id,
-      requesterUserIdOf(session),
+      before.requesterOperatorId ?? session.operator_id,
+      recordedRequesterUserId(input.action_kind, session),
       grant.approverUserId,
       APPROVAL_POLICY_VERSION,
       issuedAt,
@@ -360,7 +417,15 @@ export function createManagerApprovalService(
       row.tenant_id === input.session.tenant_id,
       row.branch_id === input.session.branch_id,
       row.terminal_id === deps.currentTerminalId(),
-      row.requester_operator_id === input.session.operator_id,
+      row.requester_operator_id ===
+        (input.subject.requesterOperatorId ?? input.session.operator_id),
+      usedByItsApprover(row, input),
     ].every(Boolean);
+  }
+
+  /** RT-441: a recovery approval is used only by the manager who gave it. */
+  function usedByItsApprover(row: ApprovalRow, input: ConsumeApprovalInput): boolean {
+    if (!isRecoveryKind(input.actionKind)) return true;
+    return row.approver_user_id === input.session.manager_user_id?.toLowerCase();
   }
 }

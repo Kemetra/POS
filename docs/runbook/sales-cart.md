@@ -98,16 +98,47 @@ a session; it locks it (RT-117), and a lock leaves the cart untouched.
 - `editing` / `discount_pending_attribution` cart → kept as it is. Audit
   `cart.held_on_session_end` (`cart_id`, `operator_session_id`, `end_cause`).
 - `empty` cart → cancelled with `cancellation_reason = 'session_ended'`, no audit (nothing to lose).
-- `frozen_handed_off` cart → untouched (payment-side recovery is RT-116 S5).
+- `frozen_handed_off` cart whose sale is open → held, frozen. Its payment attempt follows the
+  payments runbook §5a (RT-442): a zero-funds attempt is closed, a live-tender one is held as the
+  stuck attempt. A settled sale's cart is untouched.
 
 **At sign-in** (every admitted sign-in, so it also covers a restart, which fires no session end):
 main matches the owner key `(tenant_id, branch_id, terminal_id, owning_operator_id)`, closes the
-operator's empty carts from earlier sessions, and re-binds the newest held draft to the new
-session. Audit `cart.reattached` (`cart_id`, `from_operator_session_id`, `to_operator_session_id`).
+operator's empty carts from earlier sessions, and re-binds the operator's stuck attempt and its
+cart (RT-442) or, when there is none, the newest held cart (a draft or an open frozen cart) to the
+new session. Audit `cart.reattached` (`cart_id`, `from_operator_session_id`, `to_operator_session_id`).
 The renderer reads `operator.getResumeState()` and opens the Sale screen on that cart. Further
 drafts stay held and are counted in `other_held_cart_count`.
 
 `cart.discarded_on_session_end` stays in the audit catalogue but is no longer emitted.
+
+---
+
+## Sign-in on a locked or blocked terminal (RT-444, RT-116 S3)
+
+**Another operator at a locked terminal.** The lock screen offers «دخول موظف آخر». The sign-in
+screen opens under a notice that the terminal is still locked for someone else, with
+«الرجوع لشاشة القفل». Main decides, on every sign-in path (manager, cashier PIN, both takeover
+confirms):
+
+- **Admitted:** main ends the locked session **first** (`end_cause = superseded_at_lock`), so its
+  draft is held (above), and then creates the new session. A manager session that ends this way
+  also signs out of Backend-Core, best-effort.
+- **Refused `terminal_has_unresolved_payment`:** this terminal holds a started payment with live
+  tender (`applying` / `applied` / `reversal_pending`) that the signing-in operator did not start.
+  This covers another operator's locked session mid-payment, and a payment left by a session
+  that already ended (for example after a restart). It applies to managers too, until manager
+  recovery (RT-441). The locked session is untouched. The message names neither the other
+  operator nor any amount. Audit `operator.signin.refused_unresolved_payment` with an empty
+  payload.
+
+The operator who started the payment is always admitted.
+
+**Sign-out with live tender:** main refuses `payment_in_progress` and keeps the session. The
+operator completes or cancels the payment first.
+
+**Signing in while another session is active** (not locked): refused `state_invalid`. A sign-in
+never silently replaces a live session.
 
 ---
 

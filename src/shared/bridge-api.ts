@@ -14,6 +14,7 @@ import type { ForcedCloseReason } from './audit/payload-schemas.js';
 import type { ReturnsBridgeAPI } from './returns/types.js';
 import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
 import type { ManagerApprovalBridgeAPI } from './operator/manager-approval.js';
+import type { RecoveryBridgeAPI } from './operator/recovery.js';
 
 export type {
   ReturnJournalView,
@@ -233,11 +234,18 @@ export interface SessionStateEvent {
  * only: no line items, names or amounts.
  */
 export interface ResumeStateView {
-  /** The draft cart re-attached to the current session at sign-in, if any. */
+  /**
+   * The cart re-attached to the current session at sign-in, if any: a draft,
+   * or (RT-442) a handed-off cart whose sale is still open.
+   */
   cart_id: string | null;
-  /** Reserved for the stuck-attempt slice (RT-116 S5); always null today. */
-  payment_attempt_id: null;
-  /** Further drafts this operator holds on this terminal that were not re-attached. */
+  /**
+   * RT-442 (RT-116 S5) — the started payment attempt bound to this session:
+   * the stuck attempt re-attached at sign-in. Checkout resumes it; an opaque
+   * id, nothing about its tender.
+   */
+  payment_attempt_id: string | null;
+  /** Further held carts this operator has on this terminal that were not re-attached. */
   other_held_cart_count: number;
 }
 
@@ -431,9 +439,11 @@ export type SignInRequest = ManagerAdminSignInRequest | CashierSignInRequest;
 
 export type SignInResponse = SignInSuccessResponse | TakeoverRequiredResponse | OperatorRefusal;
 
-export interface SignOutResponse {
-  kind: 'signed_out';
-}
+/**
+ * RT-444 (RT-116 §3.4) — sign-out is refused `payment_in_progress` while the
+ * session holds a started payment with live tender. The session stays.
+ */
+export type SignOutResponse = { kind: 'signed_out' } | OperatorRefusal;
 
 /**
  * T070b — bridge view of a single cashier on the branch roster.
@@ -840,6 +850,12 @@ export interface PreloadBridgeAPI {
    * back. Refused while the session is locked.
    */
   approval?: ManagerApprovalBridgeAPI;
+  /**
+   * RT-441 (RT-116 §5): manager recovery (`recovery.*`) — clear this
+   * terminal's stuck payment or another operator's held sale. Manager / admin
+   * only, each action with its own approval; totals and opaque ids only.
+   */
+  recovery?: RecoveryBridgeAPI;
 }
 
 /**

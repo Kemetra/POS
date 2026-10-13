@@ -222,4 +222,42 @@ describe('SignOutHandler — RT-358 option A: skip the backend call for an expir
     await handler.signOut();
     expect(calls).toHaveLength(1);
   });
+
+  describe('RT-444 (RT-116 §3.4) — refused while the session holds live tender', () => {
+    it('refuses payment_in_progress and tears nothing down', async () => {
+      const sessionManager = makeFilledManager();
+      const calls: unknown[] = [];
+      const clearJwt = vi.fn();
+      const sessionHasLiveTender = vi.fn(() => true);
+      const handler = new SignOutHandler({
+        backend: fakeBackend({ kind: 'signed_out' }, calls),
+        sessionManager,
+        jwtFor: () => 'eyJ.fake.jwt',
+        clearJwt,
+        sessionHasLiveTender,
+      });
+      const before = sessionManager.getCurrent();
+
+      expect(await handler.signOut()).toEqual({
+        kind: 'refused',
+        category: 'payment_in_progress',
+      });
+      expect(sessionHasLiveTender).toHaveBeenCalledWith(before?.id);
+      expect(sessionManager.getCurrent()).toBe(before);
+      expect(clearJwt).not.toHaveBeenCalled();
+      expect(calls).toHaveLength(0);
+    });
+
+    it('signs out as before without live tender', async () => {
+      const sessionManager = makeFilledManager();
+      const handler = new SignOutHandler({
+        backend: fakeBackend({ kind: 'signed_out' }),
+        sessionManager,
+        jwtFor: () => 'eyJ.fake.jwt',
+        sessionHasLiveTender: () => false,
+      });
+      expect(await handler.signOut()).toEqual({ kind: 'signed_out' });
+      expect(sessionManager.getCurrent()).toBeNull();
+    });
+  });
 });

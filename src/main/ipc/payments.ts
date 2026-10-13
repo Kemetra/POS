@@ -13,9 +13,8 @@
  * RefusalReason enum; `invalid_input` is the appropriate generic
  * envelope for "renderer sent something we can't parse".
  *
- * `payments.discardOnSessionEnd` is INTERNAL and is NOT registered
- * here. The main-process bootstrap calls it directly when the operator
- * session ends; the renderer cannot trigger it.
+ * RT-442 (RT-116 S5): the internal `payments.discardOnSessionEnd` is
+ * deleted; no session end reverses tender. It was never registered here.
  */
 
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';

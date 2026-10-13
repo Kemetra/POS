@@ -82,6 +82,9 @@ export const REFUSAL_REASONS = [
   'attempt_fully_tendered',
   // RT-437 (D-F2): a cash amount above max(cash cap, remaining) — `cash-bound.ts`.
   'cash_amount_out_of_range',
+  // RT-441 (RT-116 §5.2): force-fail refused — the attempt holds live tender;
+  // manager recovery reverses or completes it instead.
+  'recovery_required',
   'internal_error',
   // Idempotency (R-10).
   'idempotency_payload_mismatch',
@@ -120,6 +123,10 @@ export const PAYMENT_AUDIT_CATEGORIES = [
   'tender.reversed',
   // Slice 4 only — typed here for the audit-emitter; emission is gated.
   'tender.reversal_pending',
+  // RT-442 (RT-116 S5, §3.1 / §3.3) — an attempt holding live tender outlives
+  // its session as the terminal's stuck attempt, and re-attaches for its owner.
+  'payment.held_on_session_end',
+  'payment.reattached',
 ] as const;
 export type PaymentAuditCategory = (typeof PAYMENT_AUDIT_CATEGORIES)[number];
 

@@ -181,6 +181,8 @@ export interface ManagerPinStore {
     scope: ManagerPinScope;
     now: string;
     policy?: ManagerCredentialPolicy;
+    /** RT-441: only this manager's record (the signed-in manager, for recovery). */
+    userId?: string;
   }): EnrolledManager[];
   /** RT-438: revoke a record in scope; a record already revoked or disabled is `not_found`. */
   revoke(input: RevokeManagerPinInput): Promise<RevokeManagerPinOutcome>;
@@ -525,6 +527,7 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       const rows = (db.prepare(SELECT_SCOPE) as All).all(...scopeParams(input.scope));
       return rows
         .filter((row) => isActive(row) && isCurrent(row, input.now, policy))
+        .filter((row) => input.userId === undefined || row.user_id === input.userId.toLowerCase())
         .map((row) => ({ managerRef: row.manager_ref, displayName: row.display_name }));
     },
 

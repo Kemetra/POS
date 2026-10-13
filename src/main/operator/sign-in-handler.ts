@@ -20,6 +20,7 @@ import type { SafeStorageLike } from '../secrets/safe-storage.js';
 import type { PairingStore } from '../pairing/store.js';
 import {
   admitCashierOnline,
+  endAdmissionTracked,
   mintAdmissionKey,
   refusalForAdmission,
   refuseLostSession,
@@ -29,6 +30,12 @@ import { unsealPinMaterial } from './pin-seal.js';
 import { verifyPinWithWindow, rowMatchesScope, type PinScope } from './pin-lockout.js';
 import type { PinRow } from './pin-credential.js';
 import { ProtoSessionStore } from './takeover-handler.js';
+import {
+  admissionRefusal,
+  admissionVerdict,
+  recoveryFieldsOf,
+  type SessionAdmission,
+} from './session-admission.js';
 import {
   capturePairingEpoch,
   epochToRecord,
@@ -106,6 +113,13 @@ export interface SignInHandlerDeps {
    * refused instead of completing. Production wires it; tests may omit.
    */
   pairingEpoch?: PairingEpochReader;
+  /**
+   * RT-444 (RT-116 S3, §4) — the sign-in admission guard: checked before the
+   * network call and again right before the session is created, where it ends
+   * a locked session explicitly (`superseded_at_lock`). Production wires it;
+   * tests may omit.
+   */
+  sessionAdmission?: SessionAdmission;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -152,6 +166,12 @@ export class SignInHandler {
       this.logRefusal('invalid_input', 'clerk');
       return REFUSE_INVALID;
     }
+    // RT-444 — refused before any backend session exists.
+    const notAdmitted = admissionRefusal(this.deps.sessionAdmission, 'check', {
+      operator_id: exchange.operator_id,
+      role: exchange.role,
+    });
+    if (notAdmitted !== null) return notAdmitted;
 
     // 2. Backend sign-in — JWT in Authorization header; body carries
     //    NO credential material (Wave 1 path b). The role-eligibility,
@@ -214,6 +234,20 @@ export class SignInHandler {
       return REFUSE_INVALID;
     }
 
+    // RT-444 — re-check, and end a locked session, right before create().
+    const verdict = admissionVerdict(this.deps.sessionAdmission, 'admit', {
+      operator_id: backend.operator.id,
+      role: backend.operator.role,
+    });
+    if (verdict.kind === 'refused') {
+      signOutAbandonedSession(
+        this.deps.backend,
+        { session_id: backend.operator_session.id, jwt: exchange.jwt },
+        this.deps.logger,
+      );
+      return verdict.refusal;
+    }
+
     // 4. Create local in-memory session. S3 makes this durable.
     const record = this.deps.sessionManager.create({
       operator_id: backend.operator.id,
@@ -225,6 +259,8 @@ export class SignInHandler {
       started_at: backend.operator_session.issued_at,
       // RT-17 slice 4 part 2: kept main-side for the manager PIN enrolment.
       manager_user_id: backend.operator.user_id,
+      // RT-441: admitted in recovery mode for a stuck payment.
+      ...recoveryFieldsOf(verdict),
     });
     // 016 (review HIGH) — two credential seams, contract-correct:
     //
@@ -351,6 +387,13 @@ export interface CashierSignInHandlerDeps {
    * refused instead of completing. Production wires it; tests may omit.
    */
   pairingEpoch?: PairingEpochReader;
+  /**
+   * RT-444 (RT-116 S3, §4) — the sign-in admission guard: checked before the
+   * network call and again right before the session is created, where it ends
+   * a locked session explicitly (`superseded_at_lock`). Production wires it;
+   * tests may omit.
+   */
+  sessionAdmission?: SessionAdmission;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -425,6 +468,10 @@ export class CashierSignInHandler {
     // 5. Verify PIN — verifyPinWithWindow handles PR-3 expired-lockout reset
     const pinRefusal = await this.verifyPinAndUpdateLockout(req.pin, pinRow, scope);
     if (pinRefusal !== null) return pinRefusal;
+    // RT-444 — after the PIN (an unverified person learns nothing), before admission.
+    const candidate = { operator_id: req.cashier_clerk_user_id, role: 'cashier' as const };
+    const notAdmitted = admissionRefusal(this.deps.sessionAdmission, 'check', candidate);
+    if (notAdmitted !== null) return notAdmitted;
 
     // 6. RT-113 P2 — online admission (10763 D2). The PIN never leaves the
     //    device: this call is the device's attestation that it verified it.
@@ -467,6 +514,18 @@ export class CashierSignInHandler {
     if (!pairingEpochHolds(pairing)) {
       this.logRefusal('invalid_input', 'pairing_changed');
       return REFUSE_INVALID;
+    }
+    // RT-444 — re-check, and end a locked session, right before create().
+    const refusedAtCreate = admissionRefusal(this.deps.sessionAdmission, 'admit', candidate);
+    if (refusedAtCreate !== null) {
+      // Do not leave the admission live on the server for a session never made.
+      void endAdmissionTracked(
+        this.deps.admission,
+        admission.admission_id,
+        admission.admission_generation,
+        user_id,
+      );
+      return refusedAtCreate;
     }
 
     // 7. Admitted — create the local in-memory session. Cashier sessions hold

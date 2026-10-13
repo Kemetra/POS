@@ -1,0 +1,73 @@
+/*
+ * RT-441 — Manager → المبيعات المعلقة. Built on the shift screen's panels
+ * (tokens only, DESIGN.md): a hairline list of held sales, one tag per state,
+ * logical properties only.
+ */
+
+.v5-recovery-mode {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A name in the facts list: the body face, so Arabic letters stay joined. */
+.v5-shift-facts .v5-recovery-text {
+  font-family: inherit;
+  font-variant-numeric: normal;
+}
+
+.v5-recovery-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-recovery-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.v5-recovery-row__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.v5-recovery-row__sum {
+  display: grid;
+  justify-items: end;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.v5-recovery-tag {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.v5-recovery-confirms {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.v5-recovery-confirms label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+}

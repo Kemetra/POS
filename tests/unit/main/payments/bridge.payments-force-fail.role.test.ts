@@ -167,3 +167,38 @@ describe('T240 — payments.forceFail role gate', () => {
     expect(fsm.forceFail).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('RT-441 — payments.forceFail is restricted (RT-116 §5.2, M10)', () => {
+  it('refuses recovery_required when the attempt holds live tender, and changes nothing', async () => {
+    const { fsm, auditEmitter, attemptsRepo, idempotency, clock, session } = setup('manager');
+    const handler = createPaymentsForceFailHandler({
+      getCurrentSession: () => session,
+      attemptsRepo,
+      paymentAttemptFsm: fsm,
+      idempotency,
+      auditEmitter,
+      clock,
+      attemptHasLiveTender: () => true,
+    });
+    await expect(handler(validRequest())).resolves.toEqual({
+      kind: 'refused',
+      reason: 'recovery_required',
+    });
+    expect(fsm.forceFail).not.toHaveBeenCalled();
+    expect(auditEmitter.captured).toHaveLength(0);
+  });
+
+  it('still force-fails an attempt with no live tender', async () => {
+    const { fsm, attemptsRepo, idempotency, auditEmitter, clock, session } = setup('manager');
+    const handler = createPaymentsForceFailHandler({
+      getCurrentSession: () => session,
+      attemptsRepo,
+      paymentAttemptFsm: fsm,
+      idempotency,
+      auditEmitter,
+      clock,
+      attemptHasLiveTender: () => false,
+    });
+    await expect(handler(validRequest())).resolves.toMatchObject({ kind: 'ok' });
+  });
+});

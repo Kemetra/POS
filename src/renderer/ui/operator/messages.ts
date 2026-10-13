@@ -35,6 +35,11 @@ export const SIGN_IN_REFUSAL_COPY: Readonly<Record<RefusalCategory, string>> = O
   // RT-358 (RT-247 D-A1, UX-12, owner decision 2026-10-07) — the manager's
   // sign-in expired. The only action offered is «تسجيل الدخول», never a retry.
   reauth_required: 'انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.',
+  // RT-444 (RT-116 §4) — names neither the other operator nor any amount (FR-013).
+  terminal_has_unresolved_payment:
+    'على هذه الطرفية دفع غير مكتمل لموظف آخر. لا يمكن الدخول حتى يعود صاحبه ويكمله.',
+  // RT-444 (RT-116 §3.4) — sign-out while the session holds live tender.
+  payment_in_progress: 'يوجد دفع جارٍ. أكمل الدفع أو ألغِه قبل تسجيل الخروج.',
 });
 
 export const EMPTY_INPUT_MESSAGE = 'أدخل بيانات الدخول للمتابعة.';

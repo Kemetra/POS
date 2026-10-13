@@ -1273,6 +1273,39 @@ body {
     margin: 0;
   }
 
+  /* RT-444 — another operator signs in on a locked terminal. A slim notice
+     above the sign-in screen: the lock is still held, and the way back. */
+  .session-lock-switch {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline: 0;
+    z-index: 90;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-block-end: 1px solid var(--color-border);
+    background: var(--color-surface-elevated);
+    font-size: var(--font-size-sm);
+  }
+
+  .session-lock-switch p {
+    margin: 0;
+  }
+
+  .session-lock-switch button {
+    min-block-size: 44px;
+    padding-inline: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+    cursor: pointer;
+  }
+
   /* ── Dialog (T033) ───────────────────────────────────────────────────── */
 
   .dialog-overlay {

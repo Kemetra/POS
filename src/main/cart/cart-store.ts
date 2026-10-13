@@ -143,7 +143,12 @@ export interface SoftRemoveCartLineInput {
 export interface CancelCartInput {
   cart_id: string;
   cancelled_at: string;
-  cancellation_reason: 'cashier_voided' | 'manager_voided_post_handoff' | 'session_ended';
+  cancellation_reason:
+    | 'cashier_voided'
+    | 'manager_voided_post_handoff'
+    | 'session_ended'
+    // RT-441 (RT-116 §5.2, migration 0049) — a manager cancelled a held draft.
+    | 'manager_cancelled_held';
   last_action_id: string;
   updated_at: string;
 }

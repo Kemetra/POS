@@ -82,6 +82,19 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-441: the Manager → المبيعات المعلقة harness, same DEV-only contract (the
+  // real RecoveryScreen in the real V5Frame against in-memory bridges).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/recovery-proof')
+) {
+  void import('./v5/recovery/dev/RecoveryProof').then(({ RecoveryProof }) => {
+    root.render(
+      <React.StrictMode>
+        <RecoveryProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();

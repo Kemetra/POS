@@ -41,6 +41,13 @@ export interface PaymentsForceFailHandlerDeps {
   idempotency: IdempotencyHelper;
   auditEmitter: Pick<PaymentAuditEmitter, 'emitRaw'>;
   clock: () => Date;
+  /**
+   * RT-441 (RT-116 §5.2, M10) — force-fail leaves applied tender on a
+   * `force_failed` attempt, so it is RESTRICTED to attempts holding no live
+   * tender. One with live tender is cleared by `recovery.cancelAttempt`
+   * (explicit reversal) or `recovery.completeAttempt`. Production wires it.
+   */
+  attemptHasLiveTender?: (payment_attempt_id: string) => boolean;
 }
 
 export type PaymentsForceFailHandler = (
@@ -124,6 +131,9 @@ export function createPaymentsForceFailHandler(
 
     if (row.state !== 'started') {
       return await Promise.resolve({ kind: 'refused', reason: 'attempt_terminal' });
+    }
+    if (deps.attemptHasLiveTender?.(req.payment_attempt_id) === true) {
+      return await Promise.resolve({ kind: 'refused', reason: 'recovery_required' });
     }
 
     const fsmOutcome = paymentAttemptFsm.forceFail({

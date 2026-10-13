@@ -4,6 +4,13 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
+import { createRecoveryModeGuardedIpcMain } from './ipc/recovery-mode-guard.js';
+import { registerRecoveryHandlers } from './ipc/recovery.js';
+import {
+  createManagerRecovery,
+  createRecoveryPaymentPort,
+  type ManagerRecovery,
+} from './recovery/manager-recovery.js';
 import { createSaleBoundaryIpcMain } from './ipc/sale-boundary-guard.js';
 import { registerSessionLockHandlers } from './ipc/session-lock.js';
 import { registerResumeStateHandler } from './ipc/resume-state.js';
@@ -27,6 +34,7 @@ import { registerCartHandlers } from './ipc/cart.js';
 import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
 import { bindCartStore } from './cart/cart-store.js';
 import { createHeldCarts, registerHeldCartLifecycle } from './cart/held-carts.js';
+import { createHeldAttempts } from './payments/held-attempts.js';
 // 009-product-search-and-barcode-lookup S4 (T043) — production R7 resolver.
 import { createProductRepo } from './catalogue/product-repo.js';
 import { createCatalogueResolver } from './catalogue/resolve-item-ref.js';
@@ -42,6 +50,7 @@ import { registerCatalogueHandlers } from './ipc/catalogue.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
 import {
   bindAttemptHasLiveTender,
+  bindSessionHasLiveTender,
   bindCartPaymentStatus,
   bindPaymentAttemptsRepository,
 } from './payments/repositories/payment-attempts.repository.js';
@@ -62,8 +71,6 @@ import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel
 import { createPaymentsForceFailHandler } from './payments/handlers/payments-force-fail.js';
 import { createPaymentsSubscribeHandler } from './payments/handlers/payments-subscribe.js';
 import { createPaymentsReadHandler } from './payments/handlers/payments-read.js';
-import { createPaymentsDiscardOnSessionEndHandler } from './payments/handlers/payments-discard-on-session-end.js';
-import { createStuckAttemptSweeper } from './payments/sweep-stuck-attempt.js';
 import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
 import { createTenderReverseHandler } from './payments/handlers/tender-reverse.js';
 import { createTenderReadHandler } from './payments/handlers/tender-read.js';
@@ -180,6 +187,10 @@ import { createBackendClient } from './operator/backend-client.js';
 import { SessionManager } from './operator/session-manager.js';
 import { CashierSignInHandler, SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
+import {
+  createSessionAdmission,
+  registerSupersededSessionSignOut,
+} from './operator/session-admission.js';
 import { createCashierAdmissionClient } from './operator/cashier-admission-client.js';
 import type { CashierAdmissionDeps } from './operator/cashier-admission.js';
 import { CashierAdmissionKeeper } from './operator/cashier-admission-keeper.js';
@@ -723,10 +734,16 @@ singleInstanceReady
     // session that lost its authority has reached its safe point (one choke
     // point; bound to the keeper once it is built below).
     const saleBoundaryProbe: { recheck: () => void } = { recheck: () => undefined };
+    // RT-441 (RT-116 §5.1) — a recovery-mode session may not sell: every
+    // cart / payments / tender / vouchers / returns call is refused.
+    const recoveryModeProbe: { active: () => boolean } = { active: () => false };
     const guardedIpcMain = createSaleBoundaryIpcMain(
-      createSessionLockGuardedIpcMain(
-        createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
-        () => sessionLockProbe.isLocked(),
+      createRecoveryModeGuardedIpcMain(
+        createSessionLockGuardedIpcMain(
+          createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin()),
+          () => sessionLockProbe.isLocked(),
+        ),
+        () => recoveryModeProbe.active(),
       ),
       () => {
         saleBoundaryProbe.recheck();
@@ -792,6 +809,23 @@ singleInstanceReady
     const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);
     const operatorSessionManager = new SessionManager();
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
+    recoveryModeProbe.active = () => operatorSessionManager.getCurrent()?.recovery_of !== undefined;
+    // RT-444 (RT-116 S3, §4) — ONE sign-in admission guard for every path
+    // (manager, cashier PIN, both takeover confirms). It refuses another
+    // operator while this terminal holds unresolved payment, and ends a locked
+    // session explicitly (`superseded_at_lock`) before the new one is created.
+    // The audit emitter is built below; the guard only emits on a sign-in.
+    const sessionAdmission = createSessionAdmission({
+      db,
+      sessionManager: operatorSessionManager,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      auditEmitter: {
+        emit: (event) => {
+          auditEmitter.emit(event);
+        },
+      },
+      logger: mainLogger,
+    });
     const apiBaseUrl = resolveApiBaseUrl();
     const operatorBackend = createBackendClient({
       baseUrl: apiBaseUrl,
@@ -815,6 +849,7 @@ singleInstanceReady
       // (read from SecretStore via the pairingStore). The backend
       // verifies it server-side. The token is NEVER logged.
       deviceTokenAttestation,
+      sessionAdmission,
       logger: mainLogger,
     });
     // RT-215 — the ONE device-401 detector. Every device-bearer client below
@@ -878,6 +913,7 @@ singleInstanceReady
       pairingStore,
       protoStore: operatorProtoStore,
       secretStore,
+      sessionAdmission,
       logger: mainLogger,
     });
     const operatorSignOutHandler = new SignOutHandler({
@@ -896,6 +932,19 @@ singleInstanceReady
       // just re-authenticated (its fresh mark bypasses the clock check).
       hasFreshReauthMark: (sessionId) =>
         operatorJwtHolder.hasFreshMark(sessionId, performance.now()),
+      // RT-444 (RT-116 §3.4) — refused while the session holds live tender.
+      sessionHasLiveTender: bindSessionHasLiveTender(db),
+      logger: mainLogger,
+    });
+    // RT-444 (RT-116 §3.3) — a superseded manager session signs out of the backend too.
+    registerSupersededSessionSignOut({
+      sessionManager: operatorSessionManager,
+      backend: operatorBackend,
+      jwtFor: (sessionId) => operatorJwtHolder.get(sessionId),
+      clearCredentials: (sessionId) => {
+        operatorJwtHolder.clear(sessionId);
+        operatorEnvelopeHolder.clear(sessionId);
+      },
       logger: mainLogger,
     });
     const operatorRosterHandler = new RosterHandler({
@@ -927,6 +976,7 @@ singleInstanceReady
         logger: mainLogger,
       }),
     });
+    const recoveryRef: { current: ManagerRecovery | null } = { current: null };
     const managerApprovals = createManagerApprovalService({
       db,
       getSession: () => operatorSessionManager.getCurrent(),
@@ -935,6 +985,13 @@ singleInstanceReady
       managerPins,
       resolvers: {
         'cart.cancel_post_handoff': postHandoffCancelApprovalResolver(bindCartStore(db)),
+        // RT-441 — manager recovery (bound below, once the payment path exists).
+        'recovery.complete_attempt': (input) =>
+          recoveryRef.current?.resolvers.completeAttempt(input) ?? null,
+        'recovery.cancel_attempt': (input) =>
+          recoveryRef.current?.resolvers.cancelAttempt(input) ?? null,
+        'recovery.cancel_held_cart': (input) =>
+          recoveryRef.current?.resolvers.cancelHeldCart(input) ?? null,
       },
       auditEmitter,
       now: () => new Date().toISOString(),
@@ -1023,6 +1080,24 @@ singleInstanceReady
       cartStore: bindCartStore(db),
       auditEmitter,
       resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      // RT-442 (RT-116 S5) — the payment side of a held frozen cart. The FSM and
+      // payment audit are built below; this runs only at a sign-in or session end.
+      attempts: createHeldAttempts({
+        db,
+        paymentAttemptFsm: {
+          cancel: (input) => paymentAttemptFsm.cancel(input),
+        },
+        auditEmitter: {
+          emitPaymentCancelled: (input) => {
+            paymentAuditEmitter.emitPaymentCancelled(input);
+          },
+          emitRaw: (event) => {
+            paymentAuditEmitter.emitRaw(event);
+          },
+        },
+        uuid: () => randomUUID(),
+        clock: () => new Date(),
+      }),
     });
     registerHeldCartLifecycle({
       sessionManager: operatorSessionManager,
@@ -1159,6 +1234,7 @@ singleInstanceReady
       deviceTokenAttestation,
       // RT-113 P2 — the cashier takeover is an admission with takeover:true.
       cashierAdmission,
+      sessionAdmission,
       logger: mainLogger,
     });
 
@@ -1241,9 +1317,7 @@ singleInstanceReady
     // 006-payments-tender Slice 3 (T142 + F-002/F-003/F-004) — wire the
     // payments.* + tender.* bridge surface. The 8 handler factories share
     // the three S3a repositories, both FSMs, and a single idempotency
-    // helper + audit-emitter pair. payments.discardOnSessionEnd is
-    // instantiated but NOT registered on ipcMain — it's an internal
-    // handler called by the operator-session-end signal.
+    // helper + audit-emitter pair.
     const paymentsAttemptsRepo = bindPaymentAttemptsRepository(db);
     const paymentsLinesRepo = bindPaymentTenderLinesRepository(db);
     const paymentsOutboxRepo = bindPaymentActionOutboxRepository(db);
@@ -1484,6 +1558,8 @@ singleInstanceReady
     const paymentsForceFail = createPaymentsForceFailHandler({
       ...paymentsWriteDeps,
       paymentAttemptFsm,
+      // RT-441 — restricted: an attempt holding live tender goes to recovery.
+      attemptHasLiveTender: bindAttemptHasLiveTender(db),
     });
 
     registerPaymentsHandlers(guardedIpcMain, {
@@ -1498,41 +1574,40 @@ singleInstanceReady
       paymentsForceFail,
     });
 
-    // #380 (F-007 part b) — orphan-attempt recovery. A stuck `started` payment
-    // attempt blocks every future sale on the terminal. The discard handler
-    // (LIFO-reverse + fail + audit) existed but was never wired to any signal.
-    // Wire it to the session lifecycle: clean session-END discards a live
-    // orphan; sign-in (session-START) recovers the CRASH case where end() never
-    // ran. Both resolve the REAL terminal_id (F-007 part a) and reuse the same
-    // idempotent discard. Fired role-agnostically — the brick is terminal-
-    // scoped and blocks every operator at the terminal.
-    const paymentsDiscardOnSessionEnd = createPaymentsDiscardOnSessionEndHandler({
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
-      paymentAttemptFsm,
-      tenderLineFsm,
-      auditEmitter: paymentAuditEmitter,
-      uuid: paymentsUuid,
-      clock: paymentsClock,
-    });
-    const sweepStuckAttempt = createStuckAttemptSweeper({
-      attemptsRepo: paymentsAttemptsRepo,
-      discard: paymentsDiscardOnSessionEnd,
+    // RT-441 (RT-116 S6, §5) — manager recovery. Its payment calls run the
+    // same handlers under a recovery-scoped session (the stuck attempt's own
+    // session id), set only for the duration of one call after the approval
+    // is consumed; normal calls keep their own session gate.
+    const managerRecovery = createManagerRecovery({
+      db,
+      getSession: () => operatorSessionManager.getCurrent(),
       resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
-      // RT-117 — never auto-reverse an attempt that holds live tender.
-      attemptHasLiveTender: bindAttemptHasLiveTender(db),
-      logError: (err, ctx) => {
-        mainLogger.error({ err, ...ctx }, 'stuck_attempt_sweep:failed');
-      },
+      approvals: managerApprovals,
+      cartStore: bindCartStore(db),
+      payments: createRecoveryPaymentPort((getCurrentSession) => {
+        const scoped = { ...paymentsWriteDeps, getCurrentSession };
+        return {
+          apply: createTenderApplyHandler({
+            ...scoped,
+            tenderLineFsm,
+            uuid: paymentsUuid,
+            logger: mainLogger,
+          }),
+          confirm: createPaymentsConfirmHandler({ ...scoped, paymentAttemptFsm }),
+          cancel: createPaymentsCancelHandler({ ...scoped, paymentAttemptFsm }),
+        };
+      }),
+      auditEmitter,
+      endRecoverySession: () => operatorSignOutHandler.signOut(),
+      logger: mainLogger,
     });
-    // Sync lifecycle hooks → fire-and-forget the async sweep. The SessionManager
-    // wrappers swallow subscriber throws, so the sweeper logs its own failures.
-    operatorSessionManager.onEnded(() => {
-      void sweepStuckAttempt();
-    });
-    operatorSessionManager.onStarted(() => {
-      void sweepStuckAttempt();
-    });
+    recoveryRef.current = managerRecovery;
+    registerRecoveryHandlers(guardedIpcMain, { recovery: managerRecovery, logger: mainLogger });
+
+    // RT-442 (RT-116 S5, §9) — the #380 session-end / sign-in reversal sweep
+    // is retired: no session end ever reverses tender. A zero-funds attempt is
+    // closed and a live-tender attempt is held for its owner by the held-cart
+    // lifecycle (`payments/held-attempts.ts`); nothing runs at boot (§6).
 
     // 006 T271 — deferred-reversal resolver bootstrap.
     //

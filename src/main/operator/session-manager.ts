@@ -105,6 +105,12 @@ export interface OperatorSessionRecord {
    * safe point. Main-only. The first cause wins.
    */
   authority_latch?: AuthorityLatchCause;
+  /**
+   * RT-441 (RT-116 §5.1) — a manager / admin admitted to clear this terminal's
+   * stuck payment: the attempt's id. While set, every other cart / payment /
+   * tender call is refused (`recovery-mode-guard.ts`). Main-only.
+   */
+  recovery_of?: string;
 }
 
 export interface CreateSessionInput {
@@ -122,6 +128,8 @@ export interface CreateSessionInput {
    * Kept only on a manager / admin session (see `manager_user_id`).
    */
   manager_user_id?: string;
+  /** RT-441 — admitted in recovery mode for this stuck attempt. */
+  recovery_of?: string;
 }
 
 type SessionEndCallback = (
@@ -191,6 +199,9 @@ export class SessionManager {
       locked_at: null,
     };
     Object.assign(record, managerFieldsOf(input));
+    if (input.recovery_of !== undefined && input.role !== 'cashier') {
+      record.recovery_of = input.recovery_of;
+    }
     if (input.cashier_admission !== undefined) {
       const a = input.cashier_admission;
       record.user_id = a.user_id;

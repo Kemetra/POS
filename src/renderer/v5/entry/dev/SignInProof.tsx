@@ -13,6 +13,7 @@ import { SignInRoute } from '../../../routes/sign-in';
 import { PairedScreen } from '../../../routes/paired/PairedScreen';
 import { PairingScreen } from '../../../routes/pairing/PairingScreen';
 import { SupportedViewport } from '../../foundation/SupportedViewport';
+import { SessionLockGate } from '../../../session/SessionLockGate';
 
 /**
  * RT-244 W1-D — DEV-ONLY sign-in harness (`#/dev/sign-in-proof`), the same
@@ -30,6 +31,11 @@ import { SupportedViewport } from '../../foundation/SupportedViewport';
  * (default invalid_input); `screen` = sign-in | ready | pairing | revoked
  * (default sign-in; RT-244 PR2); `pair` = the outcome every pairing submit
  * returns (default invalid_code).
+ *
+ * RT-444: `screen=locked` puts the sign-in screen behind a locked session (the
+ * real `SessionLockGate`), so the lock's «دخول موظف آخر» and the notice over
+ * the sign-in screen can be captured; `signin=terminal_has_unresolved_payment`
+ * shows the admission refusal.
  */
 
 const TYPICAL = [
@@ -57,10 +63,16 @@ const LONG = [
   'آية رضا',
 ];
 
-const REFUSALS: ReadonlyArray<RefusalCategory> = ['invalid_input', 'rate_limited', 'no_connection'];
+const REFUSALS: ReadonlyArray<RefusalCategory> = [
+  'invalid_input',
+  'rate_limited',
+  'no_connection',
+  'terminal_has_unresolved_payment',
+];
 
 const SCREENS = {
   'sign-in': '/sign-in',
+  locked: '/sign-in',
   ready: '/paired',
   pairing: '/pairing',
   revoked: '/pairing',
@@ -142,13 +154,23 @@ export function makeProofOperator(params: HarnessParams): OperatorBridgeAPI {
     dismissShiftClosedNotice: () => Promise.resolve(),
     unlockSession: refusedOperatorCall,
     getLockState: () =>
-      Promise.resolve({
-        state: 'active' as const,
-        locked_at: null,
-        role: null,
-        display_name: null,
-        summary: null,
-      }),
+      Promise.resolve(
+        params.screen === 'locked'
+          ? {
+              state: 'locked' as const,
+              locked_at: '2026-10-13T14:40:00.000Z',
+              role: 'cashier' as const,
+              display_name: 'منى عبد الرحمن',
+              summary: null,
+            }
+          : {
+              state: 'active' as const,
+              locked_at: null,
+              role: null,
+              display_name: null,
+              summary: null,
+            },
+      ),
     onSessionStateChanged: () => () => undefined,
   };
 }
@@ -178,26 +200,31 @@ export function makeProofPairing(params: HarnessParams): PairingBridgeAPI {
 export function SignInProof(): JSX.Element {
   const params = readSignInProofParams();
   const pairing = makeProofPairing(params);
+  const operator = makeProofOperator(params);
+  const routes = (
+    <Routes>
+      <Route path="/sign-in" element={<SignInRoute operator={operator} pairing={pairing} />} />
+      <Route path="/paired" element={<PairedScreen pairing={pairing} />} />
+      <Route
+        path="/pairing"
+        element={
+          params.screen === 'revoked' ? (
+            <PairingScreen pairing={pairing} invalidReason="device_revoked" />
+          ) : (
+            <PairingScreen pairing={pairing} />
+          )
+        }
+      />
+    </Routes>
+  );
   return (
     <MemoryRouter initialEntries={[SCREENS[params.screen]]}>
       <SupportedViewport>
-        <Routes>
-          <Route
-            path="/sign-in"
-            element={<SignInRoute operator={makeProofOperator(params)} pairing={pairing} />}
-          />
-          <Route path="/paired" element={<PairedScreen pairing={pairing} />} />
-          <Route
-            path="/pairing"
-            element={
-              params.screen === 'revoked' ? (
-                <PairingScreen pairing={pairing} invalidReason="device_revoked" />
-              ) : (
-                <PairingScreen pairing={pairing} />
-              )
-            }
-          />
-        </Routes>
+        {params.screen === 'locked' ? (
+          <SessionLockGate operator={operator}>{routes}</SessionLockGate>
+        ) : (
+          routes
+        )}
       </SupportedViewport>
     </MemoryRouter>
   );

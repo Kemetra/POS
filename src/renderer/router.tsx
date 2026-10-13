@@ -25,6 +25,7 @@ import { CatalogueDiagnostics } from './routes/app/CatalogueDiagnostics';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
 import { CheckoutRoute } from './routes/app/checkout/CheckoutRoute';
 import { CashiersScreen } from './v5/cashiers/CashiersScreen';
+import { RecoveryRoute } from './v5/recovery/RecoveryRoute';
 import { StuckShiftSurface } from './ui/operator/ForcedCloseSurface';
 import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
@@ -247,6 +248,16 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
                   ) : (
                     <Navigate to="/app/dashboard" replace />
                   )}
+                </OperatorRouteGuard>
+              ),
+            },
+            // RT-441 (RT-116 §5) — Manager → المبيعات المعلقة: the stuck payment
+            // and other operators' held sales. Manager/admin only here and in main.
+            {
+              path: 'manager/recovery',
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  <RecoveryRoute />
                 </OperatorRouteGuard>
               ),
             },

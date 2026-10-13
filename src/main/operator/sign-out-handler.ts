@@ -41,6 +41,12 @@ export interface SignOutHandlerDeps {
   clearJwt?: (backendSessionId: string) => void;
   /** RT-358 — whether the held JWT carries a fresh re-auth mark (read, not consumed). */
   hasFreshReauthMark?: (backendSessionId: string) => boolean;
+  /**
+   * RT-444 (RT-116 §3.4) — true while the session owns a `started` payment
+   * attempt with live tender. Sign-out is then refused `payment_in_progress`
+   * and nothing is torn down. Production wires it; tests may omit.
+   */
+  sessionHasLiveTender?: (operator_session_id: string) => boolean;
   /** RT-358 — wall clock (ms) for the JWT `exp` check. Tests inject. */
   nowMs?: () => number;
   logger?: Logger;
@@ -55,6 +61,13 @@ export class SignOutHandler {
       // Idempotent no-op (client may double-tap sign-out).
       this.deps.logger?.info({ event: 'operator.sign_out.noop' }, 'sign-out no-op');
       return Promise.resolve({ kind: 'signed_out' });
+    }
+    if (this.deps.sessionHasLiveTender?.(current.id) === true) {
+      this.deps.logger?.info(
+        { event: 'operator.sign_out.refused', stage: 'payment_in_progress' },
+        'sign-out refused',
+      );
+      return Promise.resolve({ kind: 'refused', category: 'payment_in_progress' });
     }
 
     const backendSessionId = current.backend_session_id;

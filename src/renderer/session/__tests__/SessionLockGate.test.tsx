@@ -371,6 +371,81 @@ describe('RT-117 SessionLockGate', () => {
     useOperatorSessionStore.getState().reset();
   });
 
+  describe('RT-444 — another operator signs in from the lock', () => {
+    const SWITCH = 'دخول موظف آخر';
+    const BACK = 'الرجوع لشاشة القفل';
+
+    function signedIn(): void {
+      useOperatorSessionStore.getState().reset();
+      useOperatorSessionStore.getState().hydrateSignedIn({
+        id: 's-locked',
+        operator_id: 'user_clerk_1',
+        display_name: 'Cashier One',
+        role: 'cashier',
+        tenant_id: 't1',
+        branch_id: 'b1',
+        started_at: '2026-10-04T10:00:00.000Z',
+      });
+    }
+
+    async function switchFromLock() {
+      signedIn();
+      const op = fakeOperator(LOCKED_CASHIER);
+      render(
+        <SessionLockGate operator={op.api}>
+          <Counter />
+        </SessionLockGate>,
+      );
+      await screen.findByRole('dialog');
+      await userEvent.setup().click(screen.getByRole('button', { name: SWITCH }));
+      return op;
+    }
+
+    it('leaves the locked session in the renderer only; main is not asked to sign out', async () => {
+      const op = await switchFromLock();
+      expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('الجهاز ما زال مقفلًا لموظف آخر');
+      expect(op.api.unlockSession).not.toHaveBeenCalled();
+      useOperatorSessionStore.getState().reset();
+    });
+
+    it('main ending the locked session never discards the sign-in that superseded it', async () => {
+      const op = await switchFromLock();
+      useOperatorSessionStore.getState().beginSignIn();
+      op.push({ state: 'ended' }); // superseded_at_lock, before the sign-in answers
+      useOperatorSessionStore.getState().resolveSignedIn({
+        id: 's-new',
+        operator_id: 'user_clerk_2',
+        display_name: 'Cashier Two',
+        role: 'cashier',
+        tenant_id: 't1',
+        branch_id: 'b1',
+        started_at: '2026-10-04T10:05:00.000Z',
+      });
+      expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      useOperatorSessionStore.getState().reset();
+    });
+
+    it('the way back returns to the lock screen, still locked in main', async () => {
+      await switchFromLock();
+      await userEvent.setup().click(screen.getByRole('button', { name: BACK }));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      useOperatorSessionStore.getState().reset();
+    });
+
+    it('an unlock by the original operator ends the switch', async () => {
+      const op = await switchFromLock();
+      op.push({ state: 'active' });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      useOperatorSessionStore.getState().reset();
+    });
+  });
+
   it('unsubscribes from the push on unmount', async () => {
     const op = fakeOperator(ACTIVE);
     const { unmount } = render(

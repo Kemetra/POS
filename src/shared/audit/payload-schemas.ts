@@ -98,6 +98,39 @@ export interface OperatorSessionUnlockedPayload {
   locked_duration_ms: number;
 }
 
+/**
+ * `operator.signin.refused_unresolved_payment` (RT-444, RT-116 §4) — empty on
+ * purpose: the refusal names neither the other operator nor any amount
+ * (FR-013). The event's own attribution records who was refused, where.
+ */
+export type OperatorSigninRefusedUnresolvedPaymentPayload = Record<string, never>;
+
+// ─── manager recovery (RT-441, RT-116 §5.2) ─────────────────────────────────
+
+/** `cart.held_cancelled_by_manager` — ids and closed values only; never a label. */
+export interface CartHeldCancelledByManagerPayload {
+  cart_id: string;
+  approval_id: string;
+  kind: 'draft' | 'handed_off';
+  parked: boolean;
+}
+
+/** `payment.recovery_completed` — the stuck sale was finished by a manager. */
+export interface PaymentRecoveryCompletedPayload {
+  payment_attempt_id: string;
+  cart_id: string;
+  approval_id: string;
+}
+
+/** `payment.recovery_cancelled` — the stuck sale was reversed by a manager. */
+export interface PaymentRecoveryCancelledPayload {
+  payment_attempt_id: string;
+  cart_id: string;
+  approval_id: string;
+  cash_returned_confirmed: boolean;
+  card_void_confirmed_on_terminal: boolean;
+}
+
 // ─── operator.offline_grant.invalidated (RT-113 P1.2) ────────────────────────
 
 /**
@@ -532,6 +565,8 @@ export type AuditPayloadMap = {
   // RT-117 (RT-116 §7.3)
   'operator.session.locked': OperatorSessionLockedPayload;
   'operator.session.unlocked': OperatorSessionUnlockedPayload;
+  // RT-444 (RT-116 §4)
+  'operator.signin.refused_unresolved_payment': OperatorSigninRefusedUnresolvedPaymentPayload;
   // RT-113 P1.2 (OD10)
   'operator.offline_grant.invalidated': OperatorOfflineGrantInvalidatedPayload;
   'cashier.pin.reset': CashierPinResetPayload;
@@ -545,6 +580,10 @@ export type AuditPayloadMap = {
   // RT-352
   'cart.held_on_session_end': CartHeldOnSessionEndPayload;
   'cart.reattached': CartReattachedPayload;
+  // RT-441
+  'cart.held_cancelled_by_manager': CartHeldCancelledByManagerPayload;
+  'payment.recovery_completed': PaymentRecoveryCompletedPayload;
+  'payment.recovery_cancelled': PaymentRecoveryCancelledPayload;
   // RT-26
   'cart.return_to_sale': CartReturnToSalePayload;
   // 008-sale-finalization-and-receipts (AD-9 / Slice 1c T093 — shaped;

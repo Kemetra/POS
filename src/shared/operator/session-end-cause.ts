@@ -10,4 +10,7 @@ export type SessionEndCause =
   | 'inactivity_timeout'
   | 'superseded_by_takeover'
   | 'terminal_session_terminated'
-  | 'account_disabled_mid_session';
+  | 'account_disabled_mid_session'
+  // RT-444 (RT-116 S3, §2.2) — a different operator's admitted sign-in ended
+  // the locked session explicitly, before the new session was created.
+  | 'superseded_at_lock';
