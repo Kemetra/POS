@@ -80,6 +80,8 @@ export const REFUSAL_REASONS = [
   'tender_underpaid',
   // RT-339: a cash apply on an attempt with nothing left to pay.
   'attempt_fully_tendered',
+  // RT-437 (D-F2): a cash amount above max(cash cap, remaining) — `cash-bound.ts`.
+  'cash_amount_out_of_range',
   'internal_error',
   // Idempotency (R-10).
   'idempotency_payload_mismatch',

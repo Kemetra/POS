@@ -328,6 +328,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-P26 | Settle refused by main's role, owner or tenant check: no retry from this session can succeed and the read-back would be refused too (RT-340; owner-approved 2026-10-10). Never «try again» | «لا يمكن إتمام هذا الدفع من هذه الجلسة. اطلب من المدير مراجعته.» | neutral (payment refusal line) |
 | M-P27 | Payment started but the read after it failed or was refused: nothing is recorded on it yet, so M-P15 would be untrue. No apply or settle until the retry reads main (RT-341; owner-approved 2026-10-10). Never «تعذّر بدء» | «بدأت عملية الدفع، لكن تعذّر تحديث حالتها. اضغط «إعادة المحاولة».» | warning |
 | M-P28 | Settle refused because main has no operator session (it ended): the way on is to sign in again, not a manager (RT-340; owner-approved 2026-10-10, split out of M-P26). Never «try again» | «انتهت الجلسة. سجّل الدخول من جديد ثم أكمل الدفع.» | neutral (payment refusal line) |
+| M-P29 | Cash amount above the cash limit: above max(EGP 100,000, the balance still owed), so it is scanner or typing digits, not cash received (RT-437 / D-F2; owner-approved 2026-10-12, RT-248). Shown by the pre-check and on main's `cash_amount_out_of_range`; the amount stays in the field. Never «try again» | «المبلغ أكبر من الحد المسموح للنقدية. راجع المبلغ.» | warning |
 | **Completion and receipt** | | | |
 | M-C1 | Completed | «اكتمل البيع» · «رقم البيع ‹no›» ⏳ D-N1 · «الباقي للعميل ‹amount›» | success (proven only) |
 | M-C2 | Receipt sent (OS-print) | «أُرسل الإيصال للطابعة» | info |
