@@ -49,7 +49,7 @@ export function isStale(parkedAt: string, now: Date): boolean {
 /** R-7: a stable digest of a request's fields, in a fixed key order. */
 export function hashRequest(fields: Record<string, string | boolean | null>): string {
   const ordered = Object.keys(fields)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .map((key) => [key, fields[key]]);
   return createHash('sha256').update(JSON.stringify(ordered)).digest('hex');
 }

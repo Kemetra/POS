@@ -7,10 +7,7 @@
 import { vi } from 'vitest';
 import type { Database as SqlJsDatabase } from 'sql.js';
 
-import {
-  freshGrantDb,
-  initGrantSql,
-} from '../../../../../src/main/operator/__tests__/__helpers__/offline-grant-fixture.js';
+import { freshGrantDb } from '../../../../../src/main/operator/__tests__/__helpers__/offline-grant-fixture.js';
 import { makeSqlJsHandle } from '../../../../unit/main/cart/__helpers__/sql-js-handle.js';
 import {
   CartBridgeHandlers,
@@ -75,7 +72,7 @@ export interface ParkWorld {
   cartWith(resolver: ItemRefResolver): CartBridgeHandlers;
 }
 
-export const initParkSql = initGrantSql;
+export { initGrantSql as initParkSql } from '../../../../../src/main/operator/__tests__/__helpers__/offline-grant-fixture.js';
 
 const FIXTURE_PRICES: Record<string, number> = { [PARA]: 150, [IBUP]: 200, [AMOX]: 450 };
 

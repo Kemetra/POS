@@ -210,6 +210,60 @@ describe('cart.resume — price changes and unavailable lines need acceptance', 
     });
   });
 
+  it('drops the discount placeholders of a removed line, so handoff carries no orphan', async () => {
+    const cart = await parkedSale([PARA, IBUP]);
+    const gone = row<{ line_id: string }>(
+      w,
+      `SELECT line_id FROM cart_lines WHERE cart_id = ? AND item_ref = ?`,
+      [cart, IBUP],
+    )?.line_id;
+    const kept = row<{ line_id: string }>(
+      w,
+      `SELECT line_id FROM cart_lines WHERE cart_id = ? AND item_ref = ?`,
+      [cart, PARA],
+    )?.line_id;
+    for (const [id, line] of [
+      ['ph-gone', gone],
+      ['ph-kept', kept],
+    ]) {
+      w.raw.run(
+        `INSERT INTO cart_line_discount_placeholders (placeholder_id, cart_id, line_id,
+           placeholder_kind, requires_manager_attribution, attribution_operator_id, created_at)
+         VALUES (?, ?, ?, 'percent_5', 0, NULL, ?)`,
+        [id ?? '', cart, line ?? '', T0],
+      );
+    }
+    w.catalogue.set(IBUP, { kind: 'gone' });
+    const req = resumeReq(cart, { accept_changes: true });
+    expect(w.parks.resume(req)).toMatchObject({ kind: 'resumed' });
+
+    expect(
+      rows(w, `SELECT placeholder_id FROM cart_line_discount_placeholders WHERE cart_id = ?`, [
+        cart,
+      ]),
+    ).toEqual([{ placeholder_id: 'ph-kept' }]);
+    expect(
+      rows(w, `SELECT action_kind FROM cart_action_outbox WHERE action_id = ?`, [
+        `${req.idempotency_key}:remove:${gone ?? ''}:placeholder:ph-gone`,
+      ]),
+    ).toEqual([{ action_kind: 'cart.discount_placeholder.remove' }]);
+    const versions = rows<{ line_id: string; version: number }>(
+      w,
+      `SELECT line_id, version FROM cart_lines WHERE cart_id = ? AND removed_at IS NULL`,
+      [cart],
+    );
+    const handoff = await w.cart.handoff({
+      cart_id: cart,
+      per_line_versions: versions,
+      idempotency_key: 'k-handoff',
+    });
+    if (handoff.kind !== 'ok') throw new Error(`handoff refused: ${handoff.reason}`);
+    const lineIds = handoff.envelope.lines.map((l) => l.line_id);
+    for (const ph of handoff.envelope.discount_placeholders) {
+      expect(lineIds).toContain(ph.line_id);
+    }
+  });
+
   it('refuses catalogue_unavailable and removes nothing (an outage is not a removal)', async () => {
     const cart = await parkedSale([PARA, IBUP]);
     const req = resumeReq(cart, { accept_changes: true });

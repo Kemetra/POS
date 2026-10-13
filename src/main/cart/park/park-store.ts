@@ -133,6 +133,28 @@ export function bindParkStore(db: DatabaseHandle): ParkStore {
     );
   }
 
+  /**
+   * A removed line takes its discount placeholders with it: the handoff
+   * envelope carries every placeholder of the cart, and no Undo can bring the
+   * line back across a resume (R-3), so one left behind would be an orphan.
+   */
+  function removeLinePlaceholders(write: ResumeLineWrite): void {
+    const placeholders = (
+      db.prepare(
+        `SELECT placeholder_id FROM cart_line_discount_placeholders
+          WHERE cart_id = ? AND line_id = ?`,
+      ) as All<{ placeholder_id: string }>
+    ).all(write.cart_id, write.line_id);
+    for (const { placeholder_id } of placeholders) {
+      run(`DELETE FROM cart_line_discount_placeholders WHERE placeholder_id = ?`, placeholder_id);
+      writeOutbox(
+        { ...write, action_id: `${write.action_id}:placeholder:${placeholder_id}` },
+        'cart.discount_placeholder.remove',
+        { cart_id: write.cart_id, placeholder_id },
+      );
+    }
+  }
+
   return {
     getCart: (cart_id) =>
       (db.prepare(`SELECT ${CART_COLUMNS} FROM carts WHERE cart_id = ?`) as Get<ParkCartRow>).get(
@@ -265,6 +287,7 @@ export function bindParkStore(db: DatabaseHandle): ParkStore {
         write.cart_id,
       );
       writeOutbox(write, 'cart.line.remove', { reason: 'unavailable_on_resume' });
+      removeLinePlaceholders(write);
     },
 
     settleTotals(input) {
