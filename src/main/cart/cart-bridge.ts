@@ -38,13 +38,22 @@ import { CartState } from '../../shared/cart/cart-state.js';
 import type { CartRefusalReason } from '../../shared/cart/refusal.js';
 import { computeLineSubtotal, LineSubtotalError } from './line-subtotal.js';
 import { requireOperatorSession } from './require-operator-session.js';
-import type { CartStore, InsertDiscountPlaceholderInput, InsertOutboxInput } from './cart-store.js';
+import type {
+  CartRow,
+  CartStore,
+  InsertDiscountPlaceholderInput,
+  InsertOutboxInput,
+} from './cart-store.js';
 import { AuditEmitter } from '../audit/audit-emitter.js';
 import { buildPaymentIntentEnvelope } from './handoff-envelope-builder.js';
 import { freezeEnvelope } from '../../shared/cart/handoff-envelope.js';
 import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope.js';
 import type { CartPaymentStatus } from '../payments/repositories/payment-attempts.repository.js';
 import type { ReleaseCheckoutPayment } from '../payments/checkout-return-guard.js';
+import type {
+  ApprovalSubject,
+  ManagerApprovalService,
+} from '../operator/manager-approval-service.js';
 
 /**
  * 005-sales-cart S2 — `cart.*` bridge handlers (T025/T026 from S1 +
@@ -224,6 +233,13 @@ export interface CartBridgeHandlersDeps {
    */
   releaseCheckoutPayment?: ReleaseCheckoutPayment;
   /**
+   * RT-443 (MA-2) — consumes the manager approval a cashier's post-handoff
+   * cancel carries, inside the cancel's own transaction. Without it a cashier's
+   * cancel is refused `manager_attribution_required` (a manager or admin
+   * cancels directly).
+   */
+  approvals?: Pick<ManagerApprovalService, 'consume'>;
+  /**
    * RT-26 — READ-ONLY twin of `releaseCheckoutPayment`
    * (`bindCheckoutReturnAllowed`): the same payments proof, no writes. Backs
    * `cart.returnToSaleEligibility`, which FAILS CLOSED (`not_implemented`)
@@ -250,7 +266,7 @@ function rendererEnvelope(envelope: PaymentIntentEnvelope): Readonly<PaymentInte
 }
 
 /** Parses a persisted envelope; null when absent or unreadable (never throws). */
-function parseEnvelope(json: string | null): PaymentIntentEnvelope | null {
+export function parseEnvelope(json: string | null): PaymentIntentEnvelope | null {
   if (json === null) return null;
   try {
     const parsed: unknown = JSON.parse(json);
@@ -264,19 +280,34 @@ function parseEnvelope(json: string | null): PaymentIntentEnvelope | null {
 }
 
 /**
- * Who approves a post-handoff cancel: a manager or admin approves their own;
- * a cashier needs a manager's attribution. `null` means attribution is
- * required and missing (the only case a cashier can reach via the bridge,
- * which drops attribution).
+ * RT-443 (MA-2) — the post-handoff cancel's subject as an approval binds it:
+ * the cart of this session's tenant and branch, still `frozen_handed_off` on
+ * a readable persisted envelope; its version is that envelope's handoff and
+ * its amount the cart subtotal. Null when not approvable.
  */
-function postHandoffApprover(
-  session: Pick<OperatorSessionRecord, 'role' | 'operator_id'>,
-  attributionOperatorId: string | undefined,
-): string | null {
-  if (session.role === 'manager' || session.role === 'admin') return session.operator_id;
-  return attributionOperatorId !== undefined && attributionOperatorId !== ''
-    ? attributionOperatorId
-    : null;
+export function postHandoffApprovalSubject(
+  cart: CartRow | undefined,
+  session: Pick<OperatorSessionRecord, 'tenant_id' | 'branch_id'>,
+): ApprovalSubject | null {
+  if (cart === undefined) return null;
+  if (cart.tenant_id !== session.tenant_id || cart.branch_id !== session.branch_id) return null;
+  if ((cart.state as CartState) !== CartState.frozen_handed_off) return null;
+  const envelope = parseEnvelope(cart.handoff_envelope_json);
+  if (envelope === null) return null;
+  return {
+    version: `handoff:${envelope.handoff_action_id}`,
+    amountMinor: cart.cart_subtotal_minor,
+  };
+}
+
+/** RT-443: a cashier's approval did not hold; thrown to roll the cancel back. */
+class CancelApprovalRefused extends Error {
+  readonly reason: 'approval_invalid' | 'approval_stale';
+
+  constructor(reason: 'approval_invalid' | 'approval_stale') {
+    super(reason);
+    this.reason = reason;
+  }
 }
 
 /**
@@ -1171,8 +1202,8 @@ export class CartBridgeHandlers {
   async cancelPostHandoff(req: {
     cart_id: string;
     handoff_action_id: string;
-    attribution_operator_id?: string;
     idempotency_key: string;
+    approval_id?: string;
   }): Promise<{ kind: 'ok' } | { kind: 'refused'; reason: CartRefusalReason }> {
     const session = this.deps.getCurrentSession();
     if (session === null) return refuse('no_session');
@@ -1195,9 +1226,19 @@ export class CartBridgeHandlers {
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
 
-    // Cashier must supply attribution; manager/admin may act directly.
-    const approvingSupervisorId = postHandoffApprover(session, req.attribution_operator_id);
-    if (approvingSupervisorId === null) return refuse('manager_attribution_required');
+    // A manager / admin cancels directly (RT-114 C6); a cashier needs a
+    // main-verified manager approval (RT-443), consumed in the transaction.
+    const isManager = session.role === 'manager' || session.role === 'admin';
+    const approvals = this.deps.approvals;
+    const approvalId = req.approval_id;
+    if (!isManager && (approvals === undefined || approvalId === undefined)) {
+      return refuse('manager_attribution_required');
+    }
+    // The approver is recorded by users.id, the identity a consumed approval
+    // carries; a manager session without one keeps its operator id.
+    let approvingSupervisorId: string | null = isManager
+      ? (session.manager_user_id?.toLowerCase() ?? session.operator_id)
+      : null;
 
     // Without the payments record main cannot tell a paid sale from an unpaid
     // handoff, so refuse rather than guess.
@@ -1220,52 +1261,77 @@ export class CartBridgeHandlers {
     const now = this.clock().toISOString();
     const event_id = randomUUID();
 
-    const cancelled = store.cancelFrozenCartAndOutbox(
-      {
-        cart_id: req.cart_id,
-        cancelled_at: now,
-        cancellation_reason: 'manager_voided_post_handoff',
-        last_action_id: req.idempotency_key,
-        updated_at: now,
-      },
-      {
-        action_id: req.idempotency_key,
-        cart_id: req.cart_id,
-        line_id: null,
-        action_kind: 'cart.cancel.post_handoff',
-        acting_operator_id: session.operator_id,
-        attribution_operator_id: req.attribution_operator_id ?? null,
-        operator_session_id: session.id,
-        payload_json: JSON.stringify(
-          scrubPayloadForOutbox({
-            cart_id: req.cart_id,
-            handoff_action_id: req.handoff_action_id,
-          }),
-        ),
-        applied_at: now,
-      },
-      // Inside the transaction: a started, settled or force-failed payment
-      // closes the sale to cancellation.
-      () => paymentStatus(req.cart_id) === 'none',
-      () => {
-        this.deps.auditEmitter?.emit({
-          event_id,
-          tenant_id: cart.tenant_id,
-          branch_id: cart.branch_id,
-          originating_terminal_id: cart.terminal_id,
-          acting_operator_id: cart.owning_operator_id,
-          session_id: session.id,
-          shift_id: null,
-          action_category: 'cart.cancel.post_handoff',
-          created_at: now,
-          approving_supervisor_id: approvingSupervisorId,
-          payload: {
-            cart_id: req.cart_id,
-            handoff_action_id: req.handoff_action_id,
-          },
-        });
-      },
-    );
+    let cancelled: boolean;
+    try {
+      cancelled = store.cancelFrozenCartAndOutbox(
+        {
+          cart_id: req.cart_id,
+          cancelled_at: now,
+          cancellation_reason: 'manager_voided_post_handoff',
+          last_action_id: req.idempotency_key,
+          updated_at: now,
+        },
+        {
+          action_id: req.idempotency_key,
+          cart_id: req.cart_id,
+          line_id: null,
+          action_kind: 'cart.cancel.post_handoff',
+          acting_operator_id: session.operator_id,
+          attribution_operator_id: null,
+          operator_session_id: session.id,
+          payload_json: JSON.stringify(
+            scrubPayloadForOutbox({
+              cart_id: req.cart_id,
+              handoff_action_id: req.handoff_action_id,
+            }),
+          ),
+          applied_at: now,
+        },
+        // Inside the transaction: a started, settled or force-failed payment
+        // closes the sale to cancellation.
+        () => paymentStatus(req.cart_id) === 'none',
+        () => {
+          if (!isManager && approvals !== undefined && approvalId !== undefined) {
+            // RT-443: consume against the cart as it stood before this cancel
+            // (`cart`, read above; the conditional UPDATE proved it was still
+            // frozen). A refusal throws and rolls the whole cancel back.
+            const consumed = approvals.consume({
+              approvalId,
+              actionKind: 'cart.cancel_post_handoff',
+              subjectRef: req.cart_id,
+              subject: postHandoffApprovalSubject(cart, session) ?? {
+                version: '',
+                amountMinor: null,
+              },
+              session,
+            });
+            if (consumed.kind === 'refused') throw new CancelApprovalRefused(consumed.reason);
+            approvingSupervisorId = consumed.approverUserId;
+          }
+          this.deps.auditEmitter?.emit({
+            event_id,
+            tenant_id: cart.tenant_id,
+            branch_id: cart.branch_id,
+            originating_terminal_id: cart.terminal_id,
+            acting_operator_id: cart.owning_operator_id,
+            session_id: session.id,
+            shift_id: null,
+            action_category: 'cart.cancel.post_handoff',
+            created_at: now,
+            approving_supervisor_id: approvingSupervisorId,
+            payload: {
+              cart_id: req.cart_id,
+              handoff_action_id: req.handoff_action_id,
+              ...(isManager || approvalId === undefined ? {} : { approval_id: approvalId }),
+            },
+          });
+        },
+      );
+    } catch (err) {
+      // RT-443: the approval did not hold; the transaction rolled back.
+      if (err instanceof CancelApprovalRefused) return refuse(err.reason);
+      throw err;
+    }
     return cancelled ? { kind: 'ok' } : refuse('closed');
   }
 

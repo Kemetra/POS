@@ -198,7 +198,7 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
     expect(spy.mock.calls[0]?.[0]).not.toHaveProperty('attribution_operator_id');
   });
 
-  it('DISCOUNT_PLACEHOLDERS_REMOVE forwards with attribution optional', async () => {
+  it('DISCOUNT_PLACEHOLDERS_REMOVE forwards the contract fields and drops attribution (RT-443 C10)', async () => {
     const { ipcMain, handlers } = mkIpc();
     const bridge = new CartBridgeHandlers({
       getCurrentSession: () => null,
@@ -214,7 +214,8 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
       attribution_operator_id: 'mgr',
       idempotency_key: 'k',
     });
-    expect(spy).toHaveBeenCalled();
+    expect(spy).toHaveBeenCalledWith({ cart_id: 'c', placeholder_id: 'p', idempotency_key: 'k' });
+    expect(spy.mock.calls[0]?.[0]).not.toHaveProperty('attribution_operator_id');
   });
 
   it('HANDOFF forwards array of per_line_versions', async () => {

@@ -103,6 +103,7 @@ function handlersFor(opts: { isPackaged: boolean; withProductionResolver: boolea
     // Required by the factory since RT-26 Checkout Back; never reached here.
     releaseCheckoutPayment: () => ({ kind: 'blocked' }),
     checkoutReturnAllowed: () => false,
+    approvals: { consume: () => ({ kind: 'refused', reason: 'approval_invalid' }) },
     ...(productionResolver !== undefined ? { productionResolver } : {}),
   });
 }

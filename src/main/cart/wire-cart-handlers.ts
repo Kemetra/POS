@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import type { ManagerApprovalService } from '../operator/manager-approval-service.js';
 
 import { CartBridgeHandlers, type ItemRefResolver } from './cart-bridge.js';
 import { bindCartStore } from './cart-store.js';
@@ -53,6 +54,12 @@ export interface CartHandlersDeps {
   releaseCheckoutPayment: ReleaseCheckoutPayment;
   /** RT-26 — read-only twin of the guard (`bindCheckoutReturnAllowed`); required. */
   checkoutReturnAllowed: (req: { cart_id: string; handoff_action_id: string }) => boolean;
+  /**
+   * RT-443 (MA-2) — consumes a cashier's manager approval inside the
+   * post-handoff cancel. Required: without it no cashier could cancel after
+   * handoff, which is the approved path.
+   */
+  approvals: Pick<ManagerApprovalService, 'consume'>;
 }
 
 /**
@@ -103,6 +110,7 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
     cartPaymentStatus: deps.cartPaymentStatus,
     releaseCheckoutPayment: deps.releaseCheckoutPayment,
     checkoutReturnAllowed: deps.checkoutReturnAllowed,
+    approvals: deps.approvals,
   };
 
   // Only attach `resolveItemRef` when one was resolved — omitting it lets

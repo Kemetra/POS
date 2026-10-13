@@ -23,7 +23,15 @@ export type CartRefusalReason =
    * eligible last action (a later mutation, handoff, or changed line state).
    * Generic: the renderer only dismisses its Undo affordance.
    */
-  | 'undo_not_available';
+  | 'undo_not_available'
+  /**
+   * RT-443 (MA-2) — `cart.cancelPostHandoff` by a cashier: the manager approval
+   * named is unknown, used, expired, for another action or requester
+   * (`approval_invalid`), or the cart changed since it was approved
+   * (`approval_stale`). Nothing was cancelled; ask for a new approval.
+   */
+  | 'approval_invalid'
+  | 'approval_stale';
 
 export interface CartRefusal {
   readonly kind: 'refused';

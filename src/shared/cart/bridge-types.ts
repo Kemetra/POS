@@ -103,7 +103,6 @@ export type CartDiscountPlaceholdersAddResponse =
 export interface CartDiscountPlaceholdersRemoveRequest {
   readonly cart_id: string;
   readonly placeholder_id: string;
-  readonly attribution_operator_id?: string;
   readonly idempotency_key: string;
 }
 
@@ -136,6 +135,12 @@ export interface CartCancelPostHandoffRequest {
   readonly cart_id: string;
   readonly handoff_action_id: string;
   readonly idempotency_key: string;
+  /**
+   * RT-443 (MA-2) — a cashier's cancel carries the manager approval granted
+   * for it (`approval.request`, kind `cart.cancel_post_handoff`); a manager or
+   * admin cancels directly and sends none.
+   */
+  readonly approval_id?: string;
 }
 
 export type CartCancelPostHandoffResponse = { readonly kind: 'ok' } | CartRefusal;

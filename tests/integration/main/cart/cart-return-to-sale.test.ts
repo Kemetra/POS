@@ -262,6 +262,7 @@ function buildStack(session: OperatorSessionRecord = operator({ id: 'sess-1' }))
     productionResolver: resolver,
     cartPaymentStatus: bindCartPaymentStatus(handle),
     checkoutReturnAllowed: bindCheckoutReturnAllowed(handle),
+    approvals: { consume: () => ({ kind: 'refused', reason: 'approval_invalid' }) },
     releaseCheckoutPayment: bindCheckoutReturnGuard({
       db: handle,
       paymentAttemptFsm: core.paymentAttemptFsm,
@@ -774,6 +775,7 @@ function withCashierClock(s: Stack, clock: () => Date): Stack {
     clock,
     cartPaymentStatus: bindCartPaymentStatus(s.handle),
     checkoutReturnAllowed: bindCheckoutReturnAllowed(s.handle),
+    approvals: { consume: () => ({ kind: 'refused', reason: 'approval_invalid' }) },
     releaseCheckoutPayment: bindCheckoutReturnGuard({
       db: s.handle,
       paymentAttemptFsm: s.paymentAttemptFsm,
@@ -963,6 +965,7 @@ describe('RT-26 cart.returnToSale — replay, stale and gates', () => {
       isPackaged: true,
       cartPaymentStatus: bindCartPaymentStatus(s.handle),
       checkoutReturnAllowed: bindCheckoutReturnAllowed(s.handle),
+      approvals: { consume: () => ({ kind: 'refused', reason: 'approval_invalid' }) },
       releaseCheckoutPayment: bindCheckoutReturnGuard({
         db: s.handle,
         paymentAttemptFsm: s.paymentAttemptFsm,

@@ -134,6 +134,9 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'manager_credential.revoked',
   'manager_credential.locked_out',
   'manager_credential.disabled',
+  // RT-443 (MA-2) — approvals, emitted only by the approval service.
+  'manager_approval.granted',
+  'manager_approval.refused',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {

@@ -7,6 +7,7 @@ import { catalogue } from './catalogue.js';
 import { salesSync } from './sales-sync.js';
 import { returns } from './returns.js';
 import { shiftCashup } from './shift-cashup.js';
+import { approval } from './manager-approval.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -202,6 +203,9 @@ const api: PreloadBridgeAPI = {
   // Registered in main only with the shift cash-up flag on; gated there on the
   // flag and the operator session.
   shiftCashup,
+  // RT-443 (MA-2) — approval.* (listApprovers / request). Main checks the
+  // session and the manager's PIN; only an opaque approval_id comes back.
+  approval,
 };
 
 contextBridge.exposeInMainWorld('api', api);
