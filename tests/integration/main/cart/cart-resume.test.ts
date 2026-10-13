@@ -200,8 +200,9 @@ describe('cart.resume — price changes and unavailable lines need acceptance', 
     expect(
       rows(
         w,
-        `SELECT action_kind FROM cart_action_outbox WHERE action_id LIKE ? ORDER BY action_kind`,
-        [`${req.idempotency_key}:%`],
+        `SELECT action_kind FROM cart_action_outbox
+          WHERE cart_id = ? AND payload_json LIKE '%_on_resume%' ORDER BY action_kind`,
+        [cart],
       ),
     ).toEqual([{ action_kind: 'cart.line.remove' }, { action_kind: 'cart.line.update' }]);
     expect(w.audit.find((e) => e.action_category === 'cart.resumed')?.payload).toMatchObject({
@@ -243,8 +244,8 @@ describe('cart.resume — price changes and unavailable lines need acceptance', 
       ]),
     ).toEqual([{ placeholder_id: 'ph-kept' }]);
     expect(
-      rows(w, `SELECT action_kind FROM cart_action_outbox WHERE action_id = ?`, [
-        `${req.idempotency_key}:remove:${gone ?? ''}:placeholder:ph-gone`,
+      rows(w, `SELECT action_kind FROM cart_action_outbox WHERE payload_json LIKE ?`, [
+        '%"placeholder_id":"ph-gone"%',
       ]),
     ).toEqual([{ action_kind: 'cart.discount_placeholder.remove' }]);
     const versions = rows<{ line_id: string; version: number }>(
@@ -430,6 +431,40 @@ describe('one idempotency namespace with the cart bridge (R-7)', () => {
   });
 });
 
+describe('resume line writes never collide with a cart key (Codex review on #662)', () => {
+  it('resumes even when an earlier cart action used a key shaped like a derived id', async () => {
+    const cart = await parkedSale([PARA, IBUP]);
+    const lineOf = (item: string): string =>
+      row<{ line_id: string }>(
+        w,
+        `SELECT line_id FROM cart_lines WHERE cart_id = ? AND item_ref = ?`,
+        [cart, item],
+      )?.line_id ?? '';
+    const key = 'k-resume';
+    const other = await openSale(w, []);
+    for (const crafted of [`${key}:reprice:${lineOf(PARA)}`, `${key}:remove:${lineOf(IBUP)}`]) {
+      const added = await w.cart.linesAdd({
+        cart_id: other,
+        item_ref: crafted.includes('reprice') ? AMOX : PARA,
+        quantity: 1,
+        idempotency_key: crafted,
+      });
+      expect(added.kind).toBe('ok');
+    }
+    w.catalogue.set(PARA, { kind: 'price', unit_price_minor: 175 });
+    w.catalogue.set(IBUP, { kind: 'gone' });
+    w.parks.park({ cart_id: other, idempotency_key: 'k-park-other' });
+
+    expect(w.parks.resume(resumeReq(cart, { accept_changes: true, idempotency_key: key }))).toEqual(
+      { kind: 'resumed', cart_id: cart },
+    );
+    expect(linesOf(cart).map((l) => [l.item_ref, l.unit_price_minor, l.removed])).toEqual([
+      [IBUP, 200, 1],
+      [PARA, 175, 0],
+    ]);
+  });
+});
+
 describe('no Undo across a park (R-3)', () => {
   it('refuses Undo of a pre-park line after park and after resume, and of a re-price', async () => {
     const cart = await openSale(w, [PARA]);
@@ -456,9 +491,9 @@ describe('no Undo across a park (R-3)', () => {
     expect(await undo('k-pre-park')).toEqual({ kind: 'refused', reason: 'undo_not_available' });
     const reprice = row<{ action_id: string }>(
       w,
-      `SELECT action_id FROM cart_action_outbox WHERE action_id LIKE ?`,
-      [`${req.idempotency_key}:reprice:%`],
+      `SELECT action_id FROM cart_action_outbox WHERE payload_json LIKE '%reprice_on_resume%'`,
     )?.action_id;
+    expect(reprice).toBeDefined();
     expect(await undo(reprice ?? '')).toEqual({ kind: 'refused', reason: 'undo_not_available' });
     expect(await undo(req.idempotency_key)).toEqual({
       kind: 'refused',

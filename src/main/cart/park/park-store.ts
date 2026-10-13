@@ -6,6 +6,8 @@
  * The park label is read only for the owner's own list (§3.2); no statement
  * here copies it anywhere else.
  */
+import { randomUUID } from 'node:crypto';
+
 import type { DatabaseHandle } from '../../db/client.js';
 
 export interface ParkScope {
@@ -147,11 +149,10 @@ export function bindParkStore(db: DatabaseHandle): ParkStore {
     ).all(write.cart_id, write.line_id);
     for (const { placeholder_id } of placeholders) {
       run(`DELETE FROM cart_line_discount_placeholders WHERE placeholder_id = ?`, placeholder_id);
-      writeOutbox(
-        { ...write, action_id: `${write.action_id}:placeholder:${placeholder_id}` },
-        'cart.discount_placeholder.remove',
-        { cart_id: write.cart_id, placeholder_id },
-      );
+      writeOutbox({ ...write, action_id: randomUUID() }, 'cart.discount_placeholder.remove', {
+        cart_id: write.cart_id,
+        placeholder_id,
+      });
     }
   }
 
