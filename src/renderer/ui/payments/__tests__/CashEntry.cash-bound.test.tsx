@@ -115,3 +115,38 @@ describe('RT-437 — the ledger never previews an out-of-range amount', () => {
     expect(onDraftChange).toHaveBeenLastCalledWith(2000);
   });
 });
+
+describe("RT-437 — main's refusal holds until the amount is edited (Codex P2 #652)", () => {
+  it('keeps confirm off and the ledger preview empty after main refuses an amount the pre-check allowed', async () => {
+    const tenderApply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>(() =>
+      Promise.resolve({ kind: 'refused', reason: 'cash_amount_out_of_range' }),
+    );
+    const onDraftChange = vi.fn<(minor: number | null) => void>();
+    // This screen still believes 200,000 is owed; main's newer balance is smaller.
+    render(
+      <CashEntry
+        remainingBalanceMinor={20_000_000}
+        paymentAttemptId="pa-1"
+        tenderApply={tenderApply}
+        onApplied={vi.fn()}
+        onDraftChange={onDraftChange}
+      />,
+    );
+    const input = screen.getByTestId('cash-entry-amount-input');
+    const confirm = screen.getByTestId('cash-entry-confirm');
+    fireEvent.change(input, { target: { value: '150000' } });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    await waitFor(() => {
+      expect(screen.getByTestId('cash-entry-out-of-range')).toBeInTheDocument();
+    });
+    expect(confirm).toBeDisabled();
+    expect(onDraftChange).toHaveBeenLastCalledWith(null);
+    fireEvent.click(confirm);
+    expect(tenderApply).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(input, { target: { value: '100' } });
+    expect(confirm).toBeEnabled();
+    expect(onDraftChange).toHaveBeenLastCalledWith(10_000);
+  });
+});

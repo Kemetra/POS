@@ -117,12 +117,15 @@ export function CashEntry({
   // applies remain allowed because they happen while remaining is still > 0.
   // RT-437 (D-F2) — the same pure rule main enforces: above max(cash cap,
   // remaining) the amount is scanner or typing digits, never cash received.
-  // Main stays the authority; this only keeps the apply off and says why.
+  // Main stays the authority: once it refused this amount (its balance can be
+  // newer than this screen's), the amount stays refused until it is edited,
+  // so the apply stays off and the ledger does not preview it (Codex P2 #652).
   const isOutOfRange =
-    isBridged &&
-    isRemainingValid &&
-    amountAppliedMinor !== null &&
-    !isCashAmountWithinBound(amountAppliedMinor, remainingBalanceMinor, 'EGP');
+    outOfRangeRefused ||
+    (isBridged &&
+      isRemainingValid &&
+      amountAppliedMinor !== null &&
+      !isCashAmountWithinBound(amountAppliedMinor, remainingBalanceMinor, 'EGP'));
   const canConfirm = isBridged
     ? isPositive && isRemainingValid && remainingBalanceMinor > 0 && !isOutOfRange
     : isSufficient;
@@ -219,10 +222,8 @@ export function CashEntry({
           inputMode="numeric"
           dir="ltr"
           autoComplete="off"
-          aria-invalid={isOutOfRange || outOfRangeRefused ? 'true' : undefined}
-          aria-describedby={
-            isOutOfRange || outOfRangeRefused ? 'cash-entry-out-of-range' : undefined
-          }
+          aria-invalid={isOutOfRange ? 'true' : undefined}
+          aria-describedby={isOutOfRange ? 'cash-entry-out-of-range' : undefined}
           value={rawInput}
           onChange={(e) => {
             const next = normalizeNumericInput(e.target.value);
@@ -236,7 +237,7 @@ export function CashEntry({
 
       {/* RT-437 (M-P29) — under the amount it is about, so the cashier corrects
           the figure in place. Never «try again». */}
-      {(isOutOfRange || outOfRangeRefused) && (
+      {isOutOfRange && (
         <div id="cash-entry-out-of-range">
           <Notice tone="warning" testId="cash-entry-out-of-range">
             المبلغ أكبر من الحد المسموح للنقدية. راجع المبلغ.
