@@ -31,7 +31,12 @@ export type CartRefusalReason =
    * (`approval_stale`). Nothing was cancelled; ask for a new approval.
    */
   | 'approval_invalid'
-  | 'approval_stale';
+  | 'approval_stale'
+  /**
+   * RT-440 (spec 024 K5) — the cart is parked: it changes only through
+   * `cart.resume`. Every other cart mutation refuses it.
+   */
+  | 'cart_parked';
 
 export interface CartRefusal {
   readonly kind: 'refused';

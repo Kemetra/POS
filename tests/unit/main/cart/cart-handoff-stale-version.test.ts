@@ -23,6 +23,7 @@ const MIGRATIONS = [
   '0009_cart_action_outbox.sql',
   '0010_cart_lines.sql',
   '0011_cart_line_discount_placeholders.sql',
+  '0050_carts_park.sql',
 ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;

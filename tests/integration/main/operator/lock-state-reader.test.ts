@@ -42,6 +42,7 @@ const MIGRATIONS = [
   '0009_cart_action_outbox.sql',
   '0010_cart_lines.sql',
   '0011_cart_line_discount_placeholders.sql',
+  '0050_carts_park.sql',
   '0012_create_payment_attempts.sql',
   '0013_payment_attempts_partial_unique_started.sql',
   '0014_create_payment_tender_lines.sql',
@@ -544,5 +545,41 @@ describe('Codex P1 4179918798 — end to end: a latched session does not strand 
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('RT-440 (spec 024 K2) — a parked sale is neither the current sale nor unsafe', () => {
+  function parkedDraft(sid: string): void {
+    insertCart({ cart_id: 'cart-parked', session_id: sid, state: 'editing', subtotal: 2000 });
+    insertLine({ line_id: 'lp', cart_id: 'cart-parked', subtotal: 2000 });
+    db.run(`UPDATE carts SET parked_at = ? WHERE cart_id = 'cart-parked'`, [NOW]);
+  }
+
+  it('does not summarize a parked sale on the lock screen', () => {
+    const sm = signedIn();
+    parkedDraft(sm.getCurrent()?.id ?? '');
+    sm.lock('2026-10-01T10:10:00.000Z');
+    expect(reader(sm)().summary).toBeNull();
+  });
+
+  it('summarizes the current sale, not the newer parked one', () => {
+    const sm = signedIn();
+    const sid = sm.getCurrent()?.id ?? '';
+    insertCart({
+      cart_id: 'cart-open',
+      session_id: sid,
+      state: 'editing',
+      subtotal: 300,
+      created_at: '2026-10-01T09:00:00.000Z',
+    });
+    insertLine({ line_id: 'lo', cart_id: 'cart-open', subtotal: 300 });
+    parkedDraft(sid);
+    expect(reader(sm)().summary).toMatchObject({ line_count: 1, total_minor: 300 });
+  });
+
+  it('lets a latched session reach its safe point with only parked sales', () => {
+    const sm = signedIn();
+    parkedDraft(sm.getCurrent()?.id ?? '');
+    expect(probe(sm)()).toBe(true);
   });
 });

@@ -54,6 +54,9 @@ export const SHIFT_CASHUP_REFUSALS = [
   'shift_not_open',
   'clock_regressed',
   'drawer_activity_pending',
+  // RT-440 (spec 024 K4, OP-2): parked sales exist on this terminal; resume
+  // or cancel them first. `parkedCount` says how many (nothing else).
+  'parked_sales_present',
   // Generic on purpose: never says why, so it reveals no bound on the
   // hidden expected cash (10941 item 3).
   'pay_out_not_accepted',
@@ -88,6 +91,8 @@ export type ShiftCashupRefusal = (typeof SHIFT_CASHUP_REFUSALS)[number];
 export interface ShiftCashupRefused {
   kind: 'refused';
   reason: ShiftCashupRefusal;
+  /** `parked_sales_present` only: how many parked sales block the close. */
+  parkedCount?: number;
 }
 
 export interface ShiftOpenRequest {

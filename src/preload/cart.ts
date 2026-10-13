@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron';
 
 import type { CartBridgeAPI } from '../shared/bridge-api.js';
-import { CART_IPC_CHANNELS } from '../shared/cart/channels.js';
+import { CART_IPC_CHANNELS, CART_PARK_IPC_CHANNELS } from '../shared/cart/channels.js';
 import type {
   CartCreateRequest,
   CartLinesAddRequest,
@@ -19,6 +19,11 @@ import type {
   CartSubscribeRequest,
   CartSnapshotRequest,
 } from '../shared/cart/bridge-types.js';
+import type {
+  CartParkRequest,
+  CartPreviewResumeRequest,
+  CartResumeRequest,
+} from '../shared/cart/park-types.js';
 
 /**
  * 005-sales-cart Phase 2 — preload cart stub.
@@ -70,4 +75,13 @@ export const cart: CartBridgeAPI = {
   subscribe: (req: CartSubscribeRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.SUBSCRIBE, req),
 
   snapshot: (req: CartSnapshotRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.SNAPSHOT, req),
+
+  // RT-440 (PK-2, spec 024 §3) — Park v1.
+  parked: {
+    park: (req: CartParkRequest) => ipcRenderer.invoke(CART_PARK_IPC_CHANNELS.PARK, req),
+    listParked: () => ipcRenderer.invoke(CART_PARK_IPC_CHANNELS.LIST_PARKED),
+    previewResume: (req: CartPreviewResumeRequest) =>
+      ipcRenderer.invoke(CART_PARK_IPC_CHANNELS.PREVIEW_RESUME, req),
+    resume: (req: CartResumeRequest) => ipcRenderer.invoke(CART_PARK_IPC_CHANNELS.RESUME, req),
+  },
 };

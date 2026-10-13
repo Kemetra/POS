@@ -32,9 +32,11 @@ type Get<T> = { get(...params: unknown[]): T | undefined };
 
 /**
  * SQL predicate on cart `c`: an OPEN sale with something to preserve. Not
- * cancelled (a void), not settled, and at least one active line.
+ * cancelled (a void), not settled, and at least one active line. RT-440: not
+ * parked either — a parked sale is already durably saved (spec 024 K2), so it
+ * is neither the lock screen's current sale nor something a safe point waits on.
  */
-const OPEN_CART_WITH_LINES = `c.state <> 'cancelled'
+const OPEN_CART_WITH_LINES = `c.state <> 'cancelled' AND c.parked_at IS NULL
           AND NOT EXISTS (
             SELECT 1 FROM payment_attempts a
              WHERE a.envelope_cart_id = c.cart_id AND a.state = 'settled'

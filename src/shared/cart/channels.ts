@@ -31,4 +31,16 @@ export const CART_IPC_CHANNELS = {
   UNDO_LAST: 'cart:undoLast',
 } as const;
 
+/**
+ * RT-440 (PK-2, spec 024 §3) — Park v1, registered by `ipc/cart-park.ts`. All
+ * four are `cart:*`, so the central guards cover them: refused while the
+ * session is locked, refused in recovery mode, re-checked at the sale boundary.
+ */
+export const CART_PARK_IPC_CHANNELS = {
+  PARK: 'cart:park',
+  LIST_PARKED: 'cart:listParked',
+  PREVIEW_RESUME: 'cart:previewResume',
+  RESUME: 'cart:resume',
+} as const;
+
 export type CartIpcChannel = (typeof CART_IPC_CHANNELS)[keyof typeof CART_IPC_CHANNELS];

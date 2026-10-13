@@ -115,6 +115,28 @@ export interface CartHeldCancelledByManagerPayload {
   parked: boolean;
 }
 
+/** `cart.parked` (RT-440, spec 024 K6) — ids and counts; never the label text. */
+export interface CartParkedPayload {
+  cart_id: string;
+  line_count: number;
+  total_minor: number;
+  has_label: boolean;
+}
+
+/** `cart.resumed` (RT-440, spec 024 K6). `current_cart` says what happened to the current sale. */
+export interface CartResumedPayload {
+  cart_id: string;
+  parked_for_ms: number;
+  price_changes_accepted: number;
+  removed_unavailable: number;
+  current_cart: 'none' | 'parked';
+}
+
+/** `cart.park_refused` (RT-440, spec 024 K6) — the closed reason only. */
+export interface CartParkRefusedPayload {
+  reason: 'not_parkable' | 'park_limit_reached' | 'wrong_owner' | 'invalid_label';
+}
+
 /** `payment.recovery_completed` — the stuck sale was finished by a manager. */
 export interface PaymentRecoveryCompletedPayload {
   payment_attempt_id: string;
@@ -582,6 +604,10 @@ export type AuditPayloadMap = {
   'cart.reattached': CartReattachedPayload;
   // RT-441
   'cart.held_cancelled_by_manager': CartHeldCancelledByManagerPayload;
+  // RT-440 (PK-2)
+  'cart.parked': CartParkedPayload;
+  'cart.resumed': CartResumedPayload;
+  'cart.park_refused': CartParkRefusedPayload;
   'payment.recovery_completed': PaymentRecoveryCompletedPayload;
   'payment.recovery_cancelled': PaymentRecoveryCancelledPayload;
   // RT-26

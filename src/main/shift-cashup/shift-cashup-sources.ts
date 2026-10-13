@@ -65,6 +65,11 @@ export interface ShiftCashupSources {
   /** The `closedAt` of the scope's latest local close; null when none. */
   lastClosedAt(scope: ShiftScope): string | null;
   pendingDrawerActivity(scope: ShiftScope): PendingDrawerActivity;
+  /**
+   * RT-440 (spec 024 K4, OP-2) — parked sales on the scope's terminal, whoever
+   * parked them. A count only: no owner, label or amount.
+   */
+  parkedSales(scope: ShiftScope): number;
 }
 
 interface PrepareAll<Row> {
@@ -117,6 +122,11 @@ const PENDING_PAYOUTS_SQL = `
   FROM return_payouts p JOIN return_journal j ON j.return_id = p.return_id
   WHERE j.tenant_id = ? AND j.branch_id = ? AND j.terminal_id = ? AND p.paid_at IS NULL`;
 
+const PARKED_SALES_SQL = `
+  SELECT COUNT(*) AS n FROM carts
+  WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ?
+    AND parked_at IS NOT NULL AND state = 'editing'`;
+
 const UNFINALIZED_SALES_SQL = `
   SELECT COUNT(*) AS n FROM audit_events WHERE ${UNFINALIZED_SETTLEMENT_FILTER}`;
 
@@ -152,5 +162,6 @@ export function createShiftCashupSources(db: DatabaseHandle): ShiftCashupSources
       refundPayouts: count(PENDING_PAYOUTS_SQL, scopeParams(scope)),
       unfinalizedSales: count(UNFINALIZED_SALES_SQL, [scope.terminalId]),
     }),
+    parkedSales: (scope) => count(PARKED_SALES_SQL, scopeParams(scope)),
   };
 }

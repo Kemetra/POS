@@ -43,6 +43,7 @@ const PREREQ_MIGRATIONS = [
   '0009_cart_action_outbox.sql',
   '0010_cart_lines.sql',
   '0011_cart_line_discount_placeholders.sql',
+  '0050_carts_park.sql',
 ];
 
 const S3A_MIGRATIONS = [

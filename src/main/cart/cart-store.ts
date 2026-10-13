@@ -49,6 +49,13 @@ export interface CartRow {
   cancellation_reason: string | null;
   handoff_envelope_json: string | null;
   last_action_id: string | null;
+  /**
+   * RT-440 (migration 0050, spec 024 K5) — set while the cart is parked.
+   * Optional on the type: rows read before 0050 runs have no such column.
+   */
+  parked_at?: string | null;
+  /** RT-440 — the optional local label of a parked cart. Never logged or synced. */
+  park_label?: string | null;
 }
 
 export interface CartLineRow {
@@ -312,7 +319,10 @@ export interface CartStore {
    * cart's persisted envelope instead (immune to a clock step).
    */
   findLatestHandoffActionId(cart_id: string): string | undefined;
-  /** Returns the active (non-terminal) draft cart owned by the given session, if any. */
+  /**
+   * Returns the active (non-terminal) draft cart owned by the given session,
+   * if any. RT-440: never a parked cart (spec 024 K5).
+   */
   findDraftCartBySession(operator_session_id: string): CartRow | undefined;
   /** Returns all non-removed cart lines for the given cart. */
   getActiveLines(cart_id: string): CartLineRow[];
@@ -331,10 +341,12 @@ const CANCEL_CART_SQL = `UPDATE carts
 
 /**
  * RT-347 — commit-time twin of the bridge's mutability gate
- * (`requireOperatorSession` + the `handing_off` freeze).
+ * (`requireOperatorSession` + the `handing_off` freeze). RT-440: a cart parked
+ * while the add awaited the item resolver is not mutable either.
  */
 const MUTABLE_CART_GUARD_SQL = `SELECT 1 AS ok FROM carts
-    WHERE cart_id = ? AND state NOT IN ('handing_off', 'frozen_handed_off', 'cancelled')`;
+    WHERE cart_id = ? AND state NOT IN ('handing_off', 'frozen_handed_off', 'cancelled')
+      AND parked_at IS NULL`;
 
 export function bindCartStore(db: DatabaseHandle): CartStore {
   const insertCart = db.prepare(
@@ -465,7 +477,7 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
   const findDraftCartBySessionStmt = db.prepare(
     `SELECT * FROM carts
       WHERE operator_session_id = ?
-        AND state NOT IN ('cancelled', 'frozen_handed_off')
+        AND state NOT IN ('cancelled', 'frozen_handed_off') AND parked_at IS NULL
       ORDER BY created_at DESC LIMIT 1`,
   ) as PrepareGet<CartRow>;
   const insertDiscountPlaceholder = db.prepare(

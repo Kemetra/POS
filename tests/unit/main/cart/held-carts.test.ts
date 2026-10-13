@@ -31,6 +31,7 @@ const MIGRATIONS = [
   '0009_cart_action_outbox.sql',
   '0010_cart_lines.sql',
   '0011_cart_line_discount_placeholders.sql',
+  '0050_carts_park.sql',
   // RT-442 — a frozen cart's sale is read from the payment record.
   '0012_create_payment_attempts.sql',
   '0013_payment_attempts_partial_unique_started.sql',
@@ -340,5 +341,53 @@ describe('RT-352 — registerHeldCartLifecycle', () => {
       'held_cart.reattach.failed',
       'held_cart.hold.failed',
     ]);
+  });
+});
+
+describe('RT-440 (spec 024 K5; RT-116 §3.1 / §3.3 as amended) — parked carts are skipped', () => {
+  const park = (cart_id: string): void => {
+    db.run(`UPDATE carts SET parked_at = '2026-10-10T11:00:00.000Z' WHERE cart_id = ?`, [cart_id]);
+  };
+
+  it('never re-attaches a parked cart; the newest NON-parked draft re-attaches', async () => {
+    const t = bootTerminal();
+    signIn(t, 'cashier-1');
+    const draft = await openCart(t, 'editing');
+    const parked = await openCart(t, 'editing'); // newer
+    park(parked);
+    t.sessions.end('signed_out');
+    const next = signIn(t, 'cashier-1');
+
+    expect(cartRow(draft).operator_session_id).toBe(next.id);
+    expect(cartRow(parked).operator_session_id).not.toBe(next.id);
+    expect(t.held.getResumeState(next)).toEqual({
+      cart_id: draft,
+      payment_attempt_id: null,
+      other_held_cart_count: 0,
+    });
+  });
+
+  it('leaves a parked cart unchanged and unaudited at a session end', async () => {
+    const t = bootTerminal();
+    signIn(t, 'cashier-1');
+    const parked = await openCart(t, 'editing');
+    park(parked);
+    t.sessions.end('signed_out');
+    expect(categories(t)).not.toContain('cart.held_on_session_end');
+    expect(cartRow(parked).state).toBe('editing');
+  });
+
+  it('never counts a parked cart in getResumeState, current or other', async () => {
+    const t = bootTerminal();
+    const first = signIn(t, 'cashier-1');
+    park(await openCart(t, 'editing'));
+    expect(t.held.getResumeState(first).cart_id).toBeNull();
+    t.sessions.end('signed_out');
+    const next = signIn(t, 'cashier-1');
+    expect(t.held.getResumeState(next)).toEqual({
+      cart_id: null,
+      payment_attempt_id: null,
+      other_held_cart_count: 0,
+    });
   });
 });
