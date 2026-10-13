@@ -154,6 +154,31 @@ jobs:
       - name: Test with coverage
         run: npm test -- --coverage
 
+      # RT-462 — non-blocking Codecov upload of the lcov report the step above
+      # already produced (no second test run). Informational only: this step
+      # can never fail the job, so the `ci` aggregate and the per-file coverage
+      # thresholds remain the sole gates. Skipped for fork PRs, which cannot
+      # read CODECOV_TOKEN. Unit-test coverage is not packaged/hardware/E2E
+      # evidence.
+      - name: Check coverage report exists
+        if: success() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        shell: bash
+        run: |
+          if [ ! -f coverage/lcov.info ]; then
+            echo "::warning::coverage/lcov.info not found; Codecov upload will have nothing to send."
+          fi
+
+      - name: Upload coverage to Codecov
+        if: success() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: false
+
   package:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
