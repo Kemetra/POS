@@ -235,21 +235,8 @@ export function createManagerApprovalService(
       const before = resolve(kind, input.subject_ref, session);
       if (before === null) return refused('approval_invalid');
 
-      const verdict = await deps.managerPins.verify({
-        scope,
-        managerRef: input.approver_ref,
-        pin: input.pin,
-        now: deps.now(),
-        policy: credentialPolicyFor(kind),
-        // RT-438 review: the requesting session, captured before the PIN work.
-        actor: { operatorId: session.operator_id, sessionId: session.id },
-      });
-      const requesterUserId = requesterUserIdOf(session);
-      const sameAsRequester =
-        verdict.kind === 'verified' &&
-        kind !== 'session.self_unlock' &&
-        verdict.userId === requesterUserId;
-      if (verdict.kind !== 'verified' || sameAsRequester) {
+      const approverUserId = await verifyApprover(input, session, scope);
+      if (approverUserId === null) {
         audit({
           session,
           scope,
@@ -259,39 +246,14 @@ export function createManagerApprovalService(
         });
         return refused('approval_unavailable');
       }
+      if (movedDuringVerify(input, session, before)) return refused('approval_stale');
 
-      // Step 6: the PIN check awaited; nothing may have moved meanwhile.
-      const live = deps.getSession();
-      const after = live === null ? null : resolve(kind, input.subject_ref, live);
-      if (live?.id !== session.id || deps.isSessionLocked() || !sameSubject(before, after)) {
-        return refused('approval_stale');
-      }
-
-      const approvalId = newId().toLowerCase();
-      const issuedAt = deps.now();
-      (deps.db.prepare(INSERT) as Run).run(
-        approvalId,
-        scope.tenantId,
-        scope.branchId,
-        scope.terminalId,
-        kind,
-        input.subject_ref,
-        before.version,
-        before.amountMinor,
-        input.reason_code,
-        input.reason_note ?? null,
-        session.operator_id,
-        requesterUserId,
-        verdict.userId,
-        APPROVAL_POLICY_VERSION,
-        issuedAt,
-        new Date(Date.parse(issuedAt) + ttlMs).toISOString(),
-      );
+      const approvalId = insertApproval({ input, session, scope, before, approverUserId });
       audit({
         session,
         scope,
         category: 'manager_approval.granted',
-        approverUserId: verdict.userId,
+        approverUserId,
         payload: {
           approval_id: approvalId,
           action_kind: kind,
@@ -304,25 +266,15 @@ export function createManagerApprovalService(
 
     consume(input) {
       const row = (deps.db.prepare(SELECT) as Get).get(input.approvalId);
-      const terminalId = deps.currentTerminalId();
       const now = deps.now();
-      const valid =
-        row !== undefined &&
-        row.consumed_at === null &&
-        Date.parse(now) <= Date.parse(row.expires_at) &&
-        row.action_kind === input.actionKind &&
-        row.subject_ref === input.subjectRef &&
-        row.tenant_id === input.session.tenant_id &&
-        row.branch_id === input.session.branch_id &&
-        row.terminal_id === terminalId &&
-        row.requester_operator_id === input.session.operator_id;
-      if (!valid) return refused('approval_invalid') as ConsumeApprovalOutcome;
-      const current: ApprovalSubject = input.subject;
+      if (row === undefined || !isUsable(row, input, now)) {
+        return refused('approval_invalid') as ConsumeApprovalOutcome;
+      }
       const approved: ApprovalSubject = {
         version: row.subject_version,
         amountMinor: row.amount_minor,
       };
-      if (!sameSubject(approved, current)) {
+      if (!sameSubject(approved, input.subject)) {
         return refused('approval_stale') as ConsumeApprovalOutcome;
       }
       const { changes } = (deps.db.prepare(CONSUME) as Run).run(now, input.approvalId);
@@ -330,4 +282,85 @@ export function createManagerApprovalService(
       return { kind: 'consumed', approverUserId: row.approver_user_id };
     },
   };
+
+  /**
+   * Steps 4 and 5: the approver's user id when the PIN verifies and the
+   * approver is not the requester (four-eyes; the self-unlock is exempt),
+   * otherwise null.
+   */
+  async function verifyApprover(
+    input: ManagerApprovalRequest,
+    session: OperatorSessionRecord,
+    scope: ManagerPinScope,
+  ): Promise<string | null> {
+    const verdict = await deps.managerPins.verify({
+      scope,
+      managerRef: input.approver_ref,
+      pin: input.pin,
+      now: deps.now(),
+      policy: credentialPolicyFor(input.action_kind),
+      // RT-438 review: the requesting session, captured before the PIN work.
+      actor: { operatorId: session.operator_id, sessionId: session.id },
+    });
+    if (verdict.kind !== 'verified') return null;
+    if (input.action_kind === 'session.self_unlock') return verdict.userId;
+    return verdict.userId === requesterUserIdOf(session) ? null : verdict.userId;
+  }
+
+  /** Step 6: after the PIN's await, a different or locked session, or a moved subject. */
+  function movedDuringVerify(
+    input: ManagerApprovalRequest,
+    session: OperatorSessionRecord,
+    before: ApprovalSubject,
+  ): boolean {
+    const live = deps.getSession();
+    if (live?.id !== session.id || deps.isSessionLocked()) return true;
+    return !sameSubject(before, resolve(input.action_kind, input.subject_ref, live));
+  }
+
+  /** Step 7: the approval row, bound to the subject's version and amount. */
+  function insertApproval(grant: {
+    input: ManagerApprovalRequest;
+    session: OperatorSessionRecord;
+    scope: ManagerPinScope;
+    before: ApprovalSubject;
+    approverUserId: string;
+  }): string {
+    const { input, session, scope, before } = grant;
+    const approvalId = newId().toLowerCase();
+    const issuedAt = deps.now();
+    (deps.db.prepare(INSERT) as Run).run(
+      approvalId,
+      scope.tenantId,
+      scope.branchId,
+      scope.terminalId,
+      input.action_kind,
+      input.subject_ref,
+      before.version,
+      before.amountMinor,
+      input.reason_code,
+      input.reason_note ?? null,
+      session.operator_id,
+      requesterUserIdOf(session),
+      grant.approverUserId,
+      APPROVAL_POLICY_VERSION,
+      issuedAt,
+      new Date(Date.parse(issuedAt) + ttlMs).toISOString(),
+    );
+    return approvalId;
+  }
+
+  /** Unconsumed, unexpired, and bound to this kind, subject, terminal and requester. */
+  function isUsable(row: ApprovalRow, input: ConsumeApprovalInput, now: string): boolean {
+    return [
+      row.consumed_at === null,
+      Date.parse(now) <= Date.parse(row.expires_at),
+      row.action_kind === input.actionKind,
+      row.subject_ref === input.subjectRef,
+      row.tenant_id === input.session.tenant_id,
+      row.branch_id === input.session.branch_id,
+      row.terminal_id === deps.currentTerminalId(),
+      row.requester_operator_id === input.session.operator_id,
+    ].every(Boolean);
+  }
 }

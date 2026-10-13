@@ -43,9 +43,13 @@ const REQUEST_KEYS = [
   'pin',
 ] as const;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  return !Array.isArray(value);
+}
+
 function isClosedShape(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-  return Object.keys(value).every((key) => keys.includes(key));
+  return isRecord(value) && Object.keys(value).every((key) => keys.includes(key));
 }
 
 function isString(value: unknown, pattern: RegExp): value is string {
@@ -67,21 +71,26 @@ function readNote(value: unknown): { reason_note?: string } | null {
   return { reason_note: value };
 }
 
+/** The request's required fields, each with its check. */
+const REQUIRED_FIELDS: Readonly<Record<string, (value: unknown) => boolean>> = {
+  action_kind: isManagerActionKind,
+  subject_ref: (value) => isString(value, SUBJECT_REF_PATTERN),
+  reason_code: (value) => isString(value, APPROVAL_REASON_CODE_PATTERN),
+  approver_ref: (value) => isString(value, MANAGER_REF_PATTERN),
+  pin: (value) => isString(value, MANAGER_PIN_PATTERN),
+};
+
+function hasRequiredFields(value: Record<string, unknown>): boolean {
+  return Object.entries(REQUIRED_FIELDS).every(([key, check]) => check(value[key]));
+}
+
 /** The approval request's closed shape, or null. */
 export function readApprovalRequest(value: unknown): ManagerApprovalRequest | null {
-  if (!isClosedShape(value, REQUEST_KEYS)) return null;
-  const { action_kind, subject_ref, reason_code, approver_ref, pin } = value;
+  if (!isClosedShape(value, REQUEST_KEYS) || !hasRequiredFields(value)) return null;
   const note = readNote(value['reason_note']);
-  if (
-    note === null ||
-    !isManagerActionKind(action_kind) ||
-    !isString(subject_ref, SUBJECT_REF_PATTERN) ||
-    !isString(reason_code, APPROVAL_REASON_CODE_PATTERN) ||
-    !isString(approver_ref, MANAGER_REF_PATTERN) ||
-    !isString(pin, MANAGER_PIN_PATTERN)
-  ) {
-    return null;
-  }
+  if (note === null) return null;
+  const { action_kind, subject_ref, reason_code, approver_ref, pin } =
+    value as unknown as ManagerApprovalRequest;
   return { action_kind, subject_ref, reason_code, approver_ref, pin, ...note };
 }
 
