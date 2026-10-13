@@ -888,15 +888,18 @@ describe('cart.undoLast — race, restart', () => {
 
   it('restart: eligibility is lineage-based (no in-memory state), and the snapshot exposes no action ids', async () => {
     const f = await fixture();
-    await add(f, 'a-1');
+    // Sentinel uses characters outside [0-9a-f-], so it can never occur by
+    // chance inside the snapshot's random UUIDs (cart_id, line_id).
+    const actionId = 'ACTION-SENTINEL-1';
+    await add(f, actionId);
     const snap = await f.handlers.snapshot({ cart_id: f.cart_id });
-    expect(JSON.stringify(snap)).not.toContain('a-1');
+    expect(JSON.stringify(snap)).not.toContain(actionId);
     // A fresh handlers instance over the same DB (main restarted).
     const restarted = f.make();
     expect(
       await restarted.undoLast({
         cart_id: f.cart_id,
-        target_action_id: 'a-1',
+        target_action_id: actionId,
         idempotency_key: 'u-1',
       }),
     ).toMatchObject({ kind: 'ok', effect: 'removed' });
