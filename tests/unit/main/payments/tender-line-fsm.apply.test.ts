@@ -601,3 +601,109 @@ describe('RT-339 — a cash apply with nothing owed is refused, and nothing is w
     expect(lines.findByAttempt('pa-1')).toHaveLength(2);
   });
 });
+
+describe('RT-437 (D-F2) — cash above max(cap, remaining) is refused, and nothing is written', () => {
+  const CAP = 10_000_000; // EGP 100,000.00
+
+  function cash(fsm: ReturnType<typeof buildFsm>['fsm'], id: string, amount: number) {
+    return fsm.apply({
+      tender_line_id: id,
+      payment_attempt_id: 'pa-1',
+      tender_type: 'cash',
+      amount_applied_minor: amount,
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:02.000Z',
+      action_id: `apply-${id}`,
+    });
+  }
+
+  it('accepts cash at the cap on a small balance, with the overage as change', () => {
+    const { fsm, attempts, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = cash(fsm, 'tl-1', CAP);
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok') expect(result.change_due_minor).toBe(CAP - 1500);
+  });
+
+  it('refuses cap + 1 as cash_amount_out_of_range: no line, no outbox row', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    expect(cash(fsm, 'tl-1', CAP + 1)).toEqual({
+      kind: 'refused',
+      reason: 'cash_amount_out_of_range',
+    });
+    expect(lines.findByAttempt('pa-1')).toHaveLength(0);
+    expect(outbox.findByActionId('apply-tl-1')).toBeUndefined();
+  });
+
+  it('refuses the F-02 amount (13 barcode digits read as major units)', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    expect(cash(fsm, 'tl-1', 622_100_000_001_100)).toEqual({
+      kind: 'refused',
+      reason: 'cash_amount_out_of_range',
+    });
+    expect(lines.findByAttempt('pa-1')).toHaveLength(0);
+  });
+
+  it('accepts a balance above the cap paid exactly, and refuses any overpay on it', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 15_000_000);
+    expect(cash(fsm, 'tl-1', 15_000_001)).toEqual({
+      kind: 'refused',
+      reason: 'cash_amount_out_of_range',
+    });
+    expect(lines.findByAttempt('pa-1')).toHaveLength(0);
+    const exact = cash(fsm, 'tl-2', 15_000_000);
+    expect(exact.kind).toBe('ok');
+    if (exact.kind === 'ok') expect(exact.change_due_minor).toBeUndefined();
+  });
+
+  it('uses the balance still owed, not the subtotal: 150,000 sale, 149,999 on card, 150,000 cash refused', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 15_000_000);
+    const card = fsm.apply({
+      tender_line_id: 'tl-card',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'external_card_terminal',
+      amount_applied_minor: 14_999_900,
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-card',
+    });
+    expect(card.kind).toBe('ok');
+    expect(cash(fsm, 'tl-2', 15_000_000)).toEqual({
+      kind: 'refused',
+      reason: 'cash_amount_out_of_range',
+    });
+    expect(lines.findByAttempt('pa-1').map((l) => l.tender_line_id)).toEqual(['tl-card']);
+  });
+
+  it('a retry of a refused key is evaluated again and refused again (nothing was recorded)', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    expect(cash(fsm, 'tl-1', CAP + 1).kind).toBe('refused');
+    expect(cash(fsm, 'tl-1', CAP + 1)).toEqual({
+      kind: 'refused',
+      reason: 'cash_amount_out_of_range',
+    });
+    expect(lines.findByAttempt('pa-1')).toHaveLength(0);
+    // The same key with a corrected amount then applies.
+    expect(cash(fsm, 'tl-1', 2000).kind).toBe('ok');
+  });
+
+  it('does not touch card or voucher: a card above the cap but equal to the balance applies', () => {
+    const { fsm, attempts, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 15_000_000);
+    const card = fsm.apply({
+      tender_line_id: 'tl-card',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'external_card_terminal',
+      amount_applied_minor: 15_000_000,
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-card',
+    });
+    expect(card.kind).toBe('ok');
+  });
+});

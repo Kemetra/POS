@@ -27,6 +27,8 @@
  *     and emitter (redacted there).
  */
 
+import type { Logger } from 'pino';
+
 import { tenderApplyActionPayload } from '../action-payload.js';
 import { requireOperatorSession } from '../require-operator-session.js';
 import type { OperatorSessionForPayments } from '../require-operator-session.js';
@@ -57,6 +59,8 @@ export interface TenderApplyHandlerDeps {
   validateVoucher?: (input: ValidateVoucherInput) => Promise<ValidateVoucherOutcome>;
   uuid: () => string;
   clock: () => Date;
+  /** RT-437 — one `warn` line per out-of-range cash refusal; never the amount. */
+  logger?: Pick<Logger, 'warn'>;
 }
 
 export type TenderApplyHandler = (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
@@ -72,6 +76,7 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     validateVoucher,
     uuid,
     clock,
+    logger,
   } = deps;
 
   return async function tenderApply(req): Promise<TenderApplyResponse> {
@@ -246,6 +251,18 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
           originating_terminal_id: attempt.terminal_id,
           session_id: session.operator_session_id,
         });
+      }
+      // RT-437 (D-F2) — nothing was recorded, so there is no tender event to
+      // audit (owner decision 4). One log line, with the attempt id and never
+      // the amount.
+      if (fsmOutcome.reason === 'cash_amount_out_of_range') {
+        logger?.warn(
+          {
+            event: 'tender.apply.cash_out_of_range',
+            payment_attempt_id: req.payment_attempt_id,
+          },
+          'tender.apply refused: cash amount out of range',
+        );
       }
       return await Promise.resolve({ kind: 'refused', reason: fsmOutcome.reason });
     }

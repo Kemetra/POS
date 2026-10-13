@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 
 import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
+import { isCashAmountWithinBound } from '../../../shared/payments/cash-bound.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
@@ -82,6 +83,8 @@ export function CashEntry({
   const [rawInput, setRawInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [nothingOwed, setNothingOwed] = useState<boolean>(false);
+  // RT-437: the amount main refused as out of range (null when none).
+  const [refusedAmountMinor, setRefusedAmountMinor] = useState<number | null>(null);
   const [isApplying, setIsApplying] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -92,20 +95,6 @@ export function CashEntry({
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
-
-  // The ledger previews what is in the field; the latest callback is kept in a
-  // ref so a new function identity from the parent does not re-report.
-  const draftRef = useRef(onDraftChange);
-  draftRef.current = onDraftChange;
-  useEffect(() => {
-    draftRef.current?.(amountAppliedMinor);
-  }, [amountAppliedMinor]);
-  useEffect(
-    () => () => {
-      draftRef.current?.(null);
-    },
-    [],
-  );
 
   const isRemainingValid =
     Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0;
@@ -127,14 +116,45 @@ export function CashEntry({
   // (remaining == 0), applying more cash only piles all-change lines — the
   // cashier must use "Confirm payment" (settle) instead. Split-tender partial
   // applies remain allowed because they happen while remaining is still > 0.
+  // RT-437 (D-F2) — the same pure rule main enforces: above max(cash cap,
+  // remaining) the amount is scanner or typing digits, never cash received.
+  // Main stays the authority: while the field still holds the amount main
+  // refused (its balance can be newer than this screen's), the apply stays off
+  // and the ledger does not preview it. The refusal is tied to the amount it
+  // answered, so an edit made while it was in flight is never marked refused
+  // (Codex P2 ×2 on #652).
+  const isOutOfRange =
+    (refusedAmountMinor !== null && refusedAmountMinor === amountAppliedMinor) ||
+    (isBridged &&
+      isRemainingValid &&
+      amountAppliedMinor !== null &&
+      !isCashAmountWithinBound(amountAppliedMinor, remainingBalanceMinor, 'EGP'));
   const canConfirm = isBridged
-    ? isPositive && isRemainingValid && remainingBalanceMinor > 0
+    ? isPositive && isRemainingValid && remainingBalanceMinor > 0 && !isOutOfRange
     : isSufficient;
+
+  // The ledger previews what is in the field; the latest callback is kept in a
+  // ref so a new function identity from the parent does not re-report. An
+  // out-of-range amount (RT-437) is never previewed: its "change" is barcode
+  // digits, the F-02 figure the cashier must not be shown.
+  const previewMinor = isOutOfRange ? null : amountAppliedMinor;
+  const draftRef = useRef(onDraftChange);
+  draftRef.current = onDraftChange;
+  useEffect(() => {
+    draftRef.current?.(previewMinor);
+  }, [previewMinor]);
+  useEffect(
+    () => () => {
+      draftRef.current?.(null);
+    },
+    [],
+  );
 
   function setAmount(next: string): void {
     setRawInput(next);
     setBridgeRefusal(false);
     setNothingOwed(false);
+    setRefusedAmountMinor(null);
   }
 
   async function handleConfirm(): Promise<void> {
@@ -155,6 +175,11 @@ export function CashEntry({
         });
         if (response.kind === 'ok') {
           onApplied?.(response);
+        } else if (response.reason === 'cash_amount_out_of_range') {
+          // RT-437 (M-P29) — retrying the same amount can never help: keep it
+          // in the field for correction and give the field focus back.
+          setRefusedAmountMinor(amountAppliedMinor);
+          inputRef.current?.focus();
         } else if (response.reason === 'attempt_fully_tendered') {
           // Retrying can never help here, so this is not the generic line.
           setNothingOwed(true);
@@ -200,6 +225,8 @@ export function CashEntry({
           inputMode="numeric"
           dir="ltr"
           autoComplete="off"
+          aria-invalid={isOutOfRange ? 'true' : undefined}
+          aria-describedby={isOutOfRange ? 'cash-entry-out-of-range' : undefined}
           value={rawInput}
           onChange={(e) => {
             const next = normalizeNumericInput(e.target.value);
@@ -210,6 +237,16 @@ export function CashEntry({
           }}
         />
       </div>
+
+      {/* RT-437 (M-P29) — under the amount it is about, so the cashier corrects
+          the figure in place. Never «try again». */}
+      {isOutOfRange && (
+        <div id="cash-entry-out-of-range">
+          <Notice tone="warning" testId="cash-entry-out-of-range">
+            المبلغ أكبر من الحد المسموح للنقدية. راجع المبلغ.
+          </Notice>
+        </div>
+      )}
 
       {/* One group of chips; each SETS the amount (VN-B2), written back as the
           field's own string so the field stays the one source of truth. */}

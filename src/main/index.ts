@@ -1438,6 +1438,7 @@ singleInstanceReady
       ...paymentsWriteDeps,
       tenderLineFsm,
       uuid: paymentsUuid,
+      logger: mainLogger,
     });
     const tenderReverse = createTenderReverseHandler({
       ...paymentsWriteDeps,

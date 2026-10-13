@@ -38,6 +38,11 @@ import {
 } from '../action-payload.js';
 import type { RefusalReason, TenderType } from '../../../shared/payments/types.js';
 import { isLegalTenderLineTransition } from '../../../shared/payments/fsm-types.js';
+import { isCashAmountWithinBound } from '../../../shared/payments/cash-bound.js';
+import type { CurrencyCode } from '../../../shared/money.js';
+
+/** Attempts carry no currency column; the product is EGP-only (`money.ts`). */
+const ATTEMPT_CURRENCY: CurrencyCode = 'EGP';
 
 // ── External-reference regex (data-model §"PaymentTenderLine" Invariant 3) ──
 
@@ -438,6 +443,17 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
         // no outbox entry, no audit.
         if (input.tender_type === 'cash' && remaining <= 0) {
           return { kind: 'refused', reason: 'attempt_fully_tendered' };
+        }
+
+        // RT-437 (D-F2) — a cash amount above max(cap, remaining) is an input
+        // error (scanned or typed barcode digits, F-02), never change to hand
+        // back. Refused before any write, like RT-339: no line, no outbox, no
+        // audit, so a retry under the same key is evaluated again.
+        if (
+          input.tender_type === 'cash' &&
+          !isCashAmountWithinBound(input.amount_applied_minor, remaining, ATTEMPT_CURRENCY)
+        ) {
+          return { kind: 'refused', reason: 'cash_amount_out_of_range' };
         }
 
         // cash: may overpay; change_due_minor handles the overage.
