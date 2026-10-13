@@ -93,6 +93,9 @@ describe('audit/event-shape — OperatorRefusal envelope (NFR-003 / PR-2)', () =
       'not_ready',
       // RT-358 (RT-247 D-A1) — the manager's held sign-in JWT expired: sign in again in place.
       'reauth_required',
+      // RT-444 (RT-116 §4 / §3.4) — sign-in and sign-out refusals; non-disclosing.
+      'terminal_has_unresolved_payment',
+      'payment_in_progress',
     ]);
   });
 

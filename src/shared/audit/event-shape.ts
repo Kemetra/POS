@@ -27,6 +27,10 @@ export const AUDIT_ACTION_CATEGORIES = [
   // same-operator unlock. Neither ends the session.
   'operator.session.locked',
   'operator.session.unlocked',
+  // RT-444 (RT-116 §4, §7.3) — a sign-in refused because this terminal holds
+  // another operator's unresolved payment. Payload empty: it names neither
+  // that operator nor any amount (FR-013).
+  'operator.signin.refused_unresolved_payment',
   // RT-113 P1.2 (OD10) — an offline grant was invalidated or purged. One event
   // per grant, attributed to that grant's operator; payload `{reason}` only.
   // Main-only (a renderer cannot forge it). Open-set at the SQL layer (0004).
@@ -183,6 +187,13 @@ export type Fr025MandatoryAttribute = (typeof FR025_MANDATORY_ATTRIBUTES)[number
  * has expired (or an `operator-identity` route answered 401): the session is
  * still valid locally, and signing in again in place will let the action
  * continue. Never offered as a generic retry.
+ *
+ * `terminal_has_unresolved_payment` (RT-444, RT-116 §4) — sign-in refused:
+ * this terminal holds another operator's payment with live tender. It names
+ * neither that operator nor any amount (FR-013).
+ *
+ * `payment_in_progress` (RT-444, RT-116 §3.4) — sign-out refused: the current
+ * session holds a started payment with live tender.
  */
 export const REFUSAL_CATEGORIES = [
   'invalid_input',
@@ -193,6 +204,8 @@ export const REFUSAL_CATEGORIES = [
   'state_invalid',
   'not_ready',
   'reauth_required',
+  'terminal_has_unresolved_payment',
+  'payment_in_progress',
 ] as const;
 export type RefusalCategory = (typeof REFUSAL_CATEGORIES)[number];
 

@@ -31,6 +31,12 @@ export interface LockScreenProps {
   view: LockStateView;
   unlock: (req: UnlockSessionRequest) => Promise<UnlockSessionResponse>;
   onUnlocked: () => void;
+  /**
+   * RT-444 (RT-116 §4) — another operator signs in on this terminal. The lock
+   * stays in main; the sign-in either ends it (`superseded_at_lock`) or is
+   * refused, and the original operator can still come back and unlock.
+   */
+  onSwitchOperator?: () => void;
 }
 
 /** 004 cashier PIN format — same bounds as the sign-in PinPad (4–6 digits). */
@@ -42,7 +48,12 @@ function refusalMessage(category: RefusalCategory): string {
   return 'تعذّر فتح القفل. تحقّق من البيانات وحاول مرة أخرى.';
 }
 
-export function LockScreen({ view, unlock, onUnlocked }: LockScreenProps): JSX.Element {
+export function LockScreen({
+  view,
+  unlock,
+  onUnlocked,
+  onSwitchOperator,
+}: LockScreenProps): JSX.Element {
   const titleId = useId();
   const descId = useId();
   const errId = useId();
@@ -235,6 +246,11 @@ export function LockScreen({ view, unlock, onUnlocked }: LockScreenProps): JSX.E
             <Button intent="primary" type="submit" loading={busy}>
               فتح القفل
             </Button>
+            {onSwitchOperator !== undefined && (
+              <Button intent="secondary" type="button" disabled={busy} onClick={onSwitchOperator}>
+                دخول موظف آخر
+              </Button>
+            )}
           </div>
         </form>
       </div>

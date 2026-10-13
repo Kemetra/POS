@@ -27,6 +27,14 @@ import { LockScreen } from './LockScreen';
  * once signed out. An `ended` push during an in-flight sign-in or takeover
  * confirm is recorded against that attempt, so its late `signed_in` is
  * discarded (Codex P2 4179701431).
+ *
+ * RT-444 (RT-116 §4) — «دخول موظف آخر» on the lock. The renderer leaves the
+ * locked session (the route guard shows sign-in) while main keeps it locked;
+ * a slim notice offers the way back to the lock. Main decides the sign-in:
+ * it ends the locked session first (`superseded_at_lock`), and that `ended`
+ * push must not discard the sign-in it belongs to, so while switching it only
+ * clears the switch. An unlock by the original operator (`active`) also ends
+ * the switch; the sign-in route then re-enters that session with its cart.
  */
 
 export type SessionLockOperator = Pick<
@@ -41,6 +49,12 @@ export interface SessionLockGateProps {
 
 export function SessionLockGate({ operator, children }: SessionLockGateProps): JSX.Element {
   const [lockView, setLockView] = useState<LockStateView | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const switchingRef = useRef(false);
+  const setSwitch = useCallback((on: boolean): void => {
+    switchingRef.current = on;
+    setSwitching(on);
+  }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -59,12 +73,24 @@ export function SessionLockGate({ operator, children }: SessionLockGateProps): J
         return;
       }
       setLockView(null);
-      if (event.state === 'ended') useOperatorSessionStore.getState().sessionEndedByMain();
+      const wasSwitching = switchingRef.current;
+      setSwitch(false);
+      // While switching, the store already left the locked session.
+      if (event.state === 'ended' && !wasSwitching) {
+        useOperatorSessionStore.getState().sessionEndedByMain();
+      }
     });
     return unsubscribe;
-  }, [operator, refresh]);
+  }, [operator, refresh, setSwitch]);
 
-  const locked = lockView !== null;
+  const switchOperator = useCallback((): void => {
+    setSwitch(true);
+    const store = useOperatorSessionStore.getState();
+    store.beginSignOut();
+    store.resolveSignedOut();
+  }, [setSwitch]);
+
+  const locked = lockView !== null && !switching;
 
   // RT-239 rule 6: the Sale stays mounted under the lock, so its own mount focus
   // never runs again. When the lock closes, the scan owner takes focus back
@@ -83,13 +109,27 @@ export function SessionLockGate({ operator, children }: SessionLockGateProps): J
       >
         {children}
       </div>
-      {lockView !== null && (
+      {lockView !== null && switching && (
+        <div className="session-lock-switch" role="status">
+          <p>الجهاز ما زال مقفلًا لموظف آخر. سجّل دخولك، أو ارجع لشاشة القفل ليفتحه صاحبه.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSwitch(false);
+            }}
+          >
+            الرجوع لشاشة القفل
+          </button>
+        </div>
+      )}
+      {locked && (
         <LockScreen
           view={lockView}
           unlock={(req) => operator.unlockSession(req)}
           onUnlocked={() => {
             setLockView(null);
           }}
+          onSwitchOperator={switchOperator}
         />
       )}
     </>

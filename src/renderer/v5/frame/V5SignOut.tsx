@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX, type RefObject } from 'react';
-import type { PreloadBridgeAPI } from '../../../shared/bridge-api';
+import type { PreloadBridgeAPI, SignOutResponse } from '../../../shared/bridge-api';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { signOutBlock, usePaymentStore } from '../../stores/payment-store';
 
@@ -7,9 +7,11 @@ const SIGN_OUT_ERROR = 'تعذّر تسجيل الخروج — حاول مرة �
 const PAYMENT_OPEN_HINT = 'أكمل الدفع أو ألغِه أولاً';
 // RT-298 — a force-failed attempt with live tender: only a manager can move on.
 const PAYMENT_HELD_HINT = 'اطلب من المدير مراجعة الدفع أولاً';
+// RT-444 (RT-116 §3.4) — main refused: the session holds a payment with live tender.
+const PAYMENT_IN_PROGRESS = 'يوجد دفع جارٍ. أكمل الدفع أو ألغِه قبل تسجيل الخروج.';
 const HINT_ID = 'v5-sign-out-hint';
 
-function signOutThroughMain(): Promise<unknown> {
+function signOutThroughMain(): Promise<SignOutResponse> {
   const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
   if (!api?.operator) return Promise.reject(new Error('operator bridge unavailable'));
   return api.operator.signOut();
@@ -65,7 +67,15 @@ function useSignOutFlow(): SignOutFlow {
     setBusy(true);
     setError(null);
     try {
-      await signOutThroughMain();
+      const response = await signOutThroughMain();
+      if (response.kind === 'refused') {
+        // Main kept the session; the renderer stays signed in.
+        setError(
+          response.category === 'payment_in_progress' ? PAYMENT_IN_PROGRESS : SIGN_OUT_ERROR,
+        );
+        setBusy(false);
+        return;
+      }
       const store = useOperatorSessionStore.getState();
       store.beginSignOut();
       store.resolveSignedOut();

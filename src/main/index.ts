@@ -42,6 +42,7 @@ import { registerCatalogueHandlers } from './ipc/catalogue.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
 import {
   bindAttemptHasLiveTender,
+  bindSessionHasLiveTender,
   bindCartPaymentStatus,
   bindPaymentAttemptsRepository,
 } from './payments/repositories/payment-attempts.repository.js';
@@ -180,6 +181,10 @@ import { createBackendClient } from './operator/backend-client.js';
 import { SessionManager } from './operator/session-manager.js';
 import { CashierSignInHandler, SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
+import {
+  createSessionAdmission,
+  registerSupersededSessionSignOut,
+} from './operator/session-admission.js';
 import { createCashierAdmissionClient } from './operator/cashier-admission-client.js';
 import type { CashierAdmissionDeps } from './operator/cashier-admission.js';
 import { CashierAdmissionKeeper } from './operator/cashier-admission-keeper.js';
@@ -792,6 +797,22 @@ singleInstanceReady
     const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);
     const operatorSessionManager = new SessionManager();
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
+    // RT-444 (RT-116 S3, §4) — ONE sign-in admission guard for every path
+    // (manager, cashier PIN, both takeover confirms). It refuses another
+    // operator while this terminal holds unresolved payment, and ends a locked
+    // session explicitly (`superseded_at_lock`) before the new one is created.
+    // The audit emitter is built below; the guard only emits on a sign-in.
+    const sessionAdmission = createSessionAdmission({
+      db,
+      sessionManager: operatorSessionManager,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      auditEmitter: {
+        emit: (event) => {
+          auditEmitter.emit(event);
+        },
+      },
+      logger: mainLogger,
+    });
     const apiBaseUrl = resolveApiBaseUrl();
     const operatorBackend = createBackendClient({
       baseUrl: apiBaseUrl,
@@ -815,6 +836,7 @@ singleInstanceReady
       // (read from SecretStore via the pairingStore). The backend
       // verifies it server-side. The token is NEVER logged.
       deviceTokenAttestation,
+      sessionAdmission,
       logger: mainLogger,
     });
     // RT-215 — the ONE device-401 detector. Every device-bearer client below
@@ -878,6 +900,7 @@ singleInstanceReady
       pairingStore,
       protoStore: operatorProtoStore,
       secretStore,
+      sessionAdmission,
       logger: mainLogger,
     });
     const operatorSignOutHandler = new SignOutHandler({
@@ -896,6 +919,19 @@ singleInstanceReady
       // just re-authenticated (its fresh mark bypasses the clock check).
       hasFreshReauthMark: (sessionId) =>
         operatorJwtHolder.hasFreshMark(sessionId, performance.now()),
+      // RT-444 (RT-116 §3.4) — refused while the session holds live tender.
+      sessionHasLiveTender: bindSessionHasLiveTender(db),
+      logger: mainLogger,
+    });
+    // RT-444 (RT-116 §3.3) — a superseded manager session signs out of the backend too.
+    registerSupersededSessionSignOut({
+      sessionManager: operatorSessionManager,
+      backend: operatorBackend,
+      jwtFor: (sessionId) => operatorJwtHolder.get(sessionId),
+      clearCredentials: (sessionId) => {
+        operatorJwtHolder.clear(sessionId);
+        operatorEnvelopeHolder.clear(sessionId);
+      },
       logger: mainLogger,
     });
     const operatorRosterHandler = new RosterHandler({
@@ -1159,6 +1195,7 @@ singleInstanceReady
       deviceTokenAttestation,
       // RT-113 P2 — the cashier takeover is an admission with takeover:true.
       cashierAdmission,
+      sessionAdmission,
       logger: mainLogger,
     });
 

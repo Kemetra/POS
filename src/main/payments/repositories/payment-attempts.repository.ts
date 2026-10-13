@@ -287,6 +287,25 @@ export function bindAttemptHasLiveTender(
 }
 
 /**
+ * RT-444 (RT-116 §3.4) — read-only: does this operator session own a `started`
+ * attempt with live tender (M7)? Sign-out is refused while it does.
+ */
+export function bindSessionHasLiveTender(
+  db: DatabaseHandle,
+): (operator_session_id: string) => boolean {
+  const stmt = db.prepare(
+    `SELECT 1 AS live FROM payment_attempts a
+      WHERE a.operator_session_id = ? AND a.state = 'started'
+        AND EXISTS (
+          SELECT 1 FROM payment_tender_lines l
+           WHERE l.payment_attempt_id = a.payment_attempt_id AND l.state IN ${LIVE_TENDER_STATES}
+        )
+      LIMIT 1`,
+  ) as PrepareGet<{ live: 1 }>;
+  return (operator_session_id) => stmt.get(operator_session_id) !== undefined;
+}
+
+/**
  * Read-only: does this cart have a force-failed attempt that still holds live
  * tender? Force-fail changes only the attempt state; its applied tender stays,
  * so money may already have been taken for the cart.

@@ -111,6 +111,34 @@ drafts stay held and are counted in `other_held_cart_count`.
 
 ---
 
+## Sign-in on a locked or blocked terminal (RT-444, RT-116 S3)
+
+**Another operator at a locked terminal.** The lock screen offers «دخول موظف آخر». The sign-in
+screen opens under a notice that the terminal is still locked for someone else, with
+«الرجوع لشاشة القفل». Main decides, on every sign-in path (manager, cashier PIN, both takeover
+confirms):
+
+- **Admitted:** main ends the locked session **first** (`end_cause = superseded_at_lock`), so its
+  draft is held (above), and then creates the new session. A manager session that ends this way
+  also signs out of Backend-Core, best-effort.
+- **Refused `terminal_has_unresolved_payment`:** this terminal holds a started payment with live
+  tender (`applying` / `applied` / `reversal_pending`) that the signing-in operator did not start.
+  This covers another operator's locked session mid-payment, and a payment left by a session
+  that already ended (for example after a restart). It applies to managers too, until manager
+  recovery (RT-441). The locked session is untouched. The message names neither the other
+  operator nor any amount. Audit `operator.signin.refused_unresolved_payment` with an empty
+  payload.
+
+The operator who started the payment is always admitted.
+
+**Sign-out with live tender:** main refuses `payment_in_progress` and keeps the session. The
+operator completes or cancels the payment first.
+
+**Signing in while another session is active** (not locked): refused `state_invalid`. A sign-in
+never silently replaces a live session.
+
+---
+
 ## Cart handoff to payment (T086)
 
 ### Normal handoff flow

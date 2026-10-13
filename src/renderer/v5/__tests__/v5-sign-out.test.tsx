@@ -222,4 +222,23 @@ describe('V5 sign-out', () => {
     expect(rule, 'sign-out button rule').not.toBeNull();
     expect(rule?.[1] ?? '').toMatch(/min-block-size:\s*var\(--v5-target\)/);
   });
+
+  it('RT-444 — main refuses payment_in_progress: stays signed in and says why', async () => {
+    signIn();
+    const signOut = stubBridge(() =>
+      Promise.resolve({ kind: 'refused', category: 'payment_in_progress' }),
+    );
+    renderFrame();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: SIGN_OUT }));
+    await user.click(screen.getByRole('button', { name: CONFIRM }));
+
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'يوجد دفع جارٍ. أكمل الدفع أو ألغِه قبل تسجيل الخروج.',
+    );
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+    expect(screen.getByRole('button', { name: CONFIRM })).toBeEnabled();
+  });
 });

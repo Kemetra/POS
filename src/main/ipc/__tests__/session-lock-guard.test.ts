@@ -77,10 +77,8 @@ describe('RT-117 createSessionLockGuardedIpcMain', () => {
     'receipts:reprint',
     'catalogue:search',
     'some-future:namespace',
-    OPERATOR_IPC_CHANNELS.SIGN_IN,
+    // RT-116 §2.2 — ending a locked session takes a credential.
     OPERATOR_IPC_CHANNELS.SIGN_OUT,
-    OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM,
-    OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL,
     OPERATOR_IPC_CHANNELS.RESET_CASHIER_PIN,
     OPERATOR_IPC_CHANNELS.UNLOCK_CASHIER,
     OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT,
@@ -105,6 +103,11 @@ describe('RT-117 createSessionLockGuardedIpcMain', () => {
     'app:version',
     'app:log',
     'app:config',
+    // RT-444 (S3) — through the §4 admission guard only.
+    OPERATOR_IPC_CHANNELS.SIGN_IN,
+    OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM,
+    OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL,
+    OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
   ])('serves allowlisted %s while locked', async (channel) => {
     const fake = fakeIpcMain();
     const guarded = createSessionLockGuardedIpcMain(fake.ipcMain, () => true);
@@ -113,7 +116,7 @@ describe('RT-117 createSessionLockGuardedIpcMain', () => {
     await expect(fake.invoke(channel)).resolves.toBe('ran');
   });
 
-  it('the allowlist is exactly the RT-116 §2.5 S1 set', () => {
+  it('the allowlist is exactly the RT-116 §2.5 set, with the S3 sign-in paths', () => {
     expect([...LOCKED_ALLOWED_CHANNELS].sort()).toEqual(
       [
         SESSION_LOCK_IPC_CHANNELS.GET_LOCK_STATE,
@@ -125,6 +128,10 @@ describe('RT-117 createSessionLockGuardedIpcMain', () => {
         'app:version',
         'app:log',
         'app:config',
+        OPERATOR_IPC_CHANNELS.SIGN_IN,
+        OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM,
+        OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL,
+        OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
       ].sort(),
     );
   });

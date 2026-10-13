@@ -431,9 +431,11 @@ export type SignInRequest = ManagerAdminSignInRequest | CashierSignInRequest;
 
 export type SignInResponse = SignInSuccessResponse | TakeoverRequiredResponse | OperatorRefusal;
 
-export interface SignOutResponse {
-  kind: 'signed_out';
-}
+/**
+ * RT-444 (RT-116 §3.4) — sign-out is refused `payment_in_progress` while the
+ * session holds a started payment with live tender. The session stays.
+ */
+export type SignOutResponse = { kind: 'signed_out' } | OperatorRefusal;
 
 /**
  * T070b — bridge view of a single cashier on the branch roster.

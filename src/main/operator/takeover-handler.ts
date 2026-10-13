@@ -17,8 +17,10 @@ import type { SessionManager } from './session-manager.js';
 import type { JwtHolder } from './jwt-holder.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { PairingStore } from '../pairing/store.js';
+import { admissionRefusal, type SessionAdmission } from './session-admission.js';
 import {
   admitCashierOnline,
+  endAdmissionTracked,
   mintAdmissionKey,
   refusalForAdmission,
   refuseLostSession,
@@ -143,6 +145,13 @@ export interface TakeoverHandlerDeps {
    * refused instead of completing. Production wires it; tests may omit.
    */
   pairingEpoch?: PairingEpochReader;
+  /**
+   * RT-444 (RT-116 S3, §4) — the sign-in admission guard: checked before the
+   * confirm's network call and again right before the session is created,
+   * where it ends a locked session explicitly (`superseded_at_lock`).
+   * Production wires it; tests may omit.
+   */
+  sessionAdmission?: SessionAdmission;
   logger?: Logger;
 }
 
@@ -215,6 +224,16 @@ export class TakeoverHandler {
       return REFUSE_INVALID;
     }
 
+    // RT-444 — refused before the confirm reaches the backend. The proto stays,
+    // so the operator can retry once the payment is resolved.
+    const notAdmitted = admissionRefusal(this.deps.sessionAdmission, 'check', {
+      operator_id: proto.operator_id,
+    });
+    if (notAdmitted !== null) {
+      this.log('refused', 'admission');
+      return notAdmitted;
+    }
+
     if (proto.role === 'cashier') {
       return this.confirmCashierTakeover(proto, pairing);
     }
@@ -267,6 +286,21 @@ export class TakeoverHandler {
         this.deps.logger,
       );
       return REFUSE_INVALID;
+    }
+
+    // RT-444 — re-check, and end a locked session, right before create().
+    const refusedAtCreate = admissionRefusal(this.deps.sessionAdmission, 'admit', {
+      operator_id: backendResult.operator.id,
+    });
+    if (refusedAtCreate !== null) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'admission_at_create');
+      signOutAbandonedSession(
+        this.deps.backend,
+        { session_id: backendResult.operator_session.id, jwt: proto.jwt },
+        this.deps.logger,
+      );
+      return refusedAtCreate;
     }
 
     // backend returned signed_in — create local session
@@ -364,6 +398,22 @@ export class TakeoverHandler {
       this.deps.protoStore.delete(proto.pending_takeover_id);
       this.log('refused', 'pairing_changed');
       return REFUSE_INVALID;
+    }
+    // RT-444 — re-check, and end a locked session, right before create().
+    const refusedAtCreate = admissionRefusal(this.deps.sessionAdmission, 'admit', {
+      operator_id: proto.operator_id,
+    });
+    if (refusedAtCreate !== null) {
+      this.deps.protoStore.delete(proto.pending_takeover_id);
+      this.log('refused', 'admission_at_create');
+      // Do not leave the admission live on the server for a session never made.
+      void endAdmissionTracked(
+        admissionDeps,
+        admission.admission_id,
+        admission.admission_generation,
+        user_id,
+      );
+      return refusedAtCreate;
     }
 
     const event_id = randomUUID();

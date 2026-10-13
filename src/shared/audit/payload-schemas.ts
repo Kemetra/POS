@@ -98,6 +98,13 @@ export interface OperatorSessionUnlockedPayload {
   locked_duration_ms: number;
 }
 
+/**
+ * `operator.signin.refused_unresolved_payment` (RT-444, RT-116 §4) — empty on
+ * purpose: the refusal names neither the other operator nor any amount
+ * (FR-013). The event's own attribution records who was refused, where.
+ */
+export type OperatorSigninRefusedUnresolvedPaymentPayload = Record<string, never>;
+
 // ─── operator.offline_grant.invalidated (RT-113 P1.2) ────────────────────────
 
 /**
@@ -532,6 +539,8 @@ export type AuditPayloadMap = {
   // RT-117 (RT-116 §7.3)
   'operator.session.locked': OperatorSessionLockedPayload;
   'operator.session.unlocked': OperatorSessionUnlockedPayload;
+  // RT-444 (RT-116 §4)
+  'operator.signin.refused_unresolved_payment': OperatorSigninRefusedUnresolvedPaymentPayload;
   // RT-113 P1.2 (OD10)
   'operator.offline_grant.invalidated': OperatorOfflineGrantInvalidatedPayload;
   'cashier.pin.reset': CashierPinResetPayload;
