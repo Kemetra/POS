@@ -43,6 +43,7 @@ import {
   createManagerRecovery,
   createRecoveryPaymentPort,
   type ManagerRecovery,
+  type ManagerRecoveryDeps,
 } from '../../../../src/main/recovery/manager-recovery.js';
 import type { AuditEvent } from '../../../../src/shared/audit/event-shape.js';
 import type { ManagerActionKind } from '../../../../src/shared/operator/manager-action-kinds.js';
@@ -150,11 +151,7 @@ beforeAll(async () => {
   await initGrantSql();
 });
 
-beforeEach(async () => {
-  raw = freshGrantDb();
-  const db = handleFor(raw);
-  audit = [];
-  endRecoverySession = vi.fn<() => Promise<unknown>>(() => Promise.resolve());
+async function enrolManagers(db: ReturnType<typeof handleFor>): Promise<void> {
   pins = createManagerPinStore({ db, safeStorage: aeadSafeStorage() });
   for (const m of [MANAGER, OTHER_MANAGER]) {
     await pins.enrol({
@@ -167,8 +164,10 @@ beforeEach(async () => {
       guard: () => undefined,
     });
   }
-  stack = paymentStack(db);
-  // The cashier's sale: a frozen cart, a started attempt, 5,000 in cash.
+}
+
+/** The cashier's sale: a frozen cart, a started attempt, 5,000 in cash. */
+async function seedStuckSale(): Promise<void> {
   cashierScope = {
     role: 'cashier',
     operator_id: CASHIER_OP,
@@ -196,35 +195,65 @@ beforeEach(async () => {
     idempotency_key: 'k-pay',
   });
   if (paid.kind !== 'ok') throw new Error('apply refused');
+}
 
-  current = manager({ recovery_of: attemptId });
-  const ref: { current: ManagerRecovery | null } = { current: null };
+let handle: ReturnType<typeof handleFor>;
+const recoveryRef: { current: ManagerRecovery | null } = { current: null };
+
+/** The recovery service over the real stack; a test may swap a dependency. */
+function buildRecovery(over: Partial<ManagerRecoveryDeps> = {}): ManagerRecovery {
+  const built = createManagerRecovery({
+    db: handle,
+    getSession: () => current,
+    resolveTerminalId: () => TERMINAL,
+    approvals,
+    cartStore: bindCartStore(handle),
+    payments: createRecoveryPaymentPort((get) => stack.build(get)),
+    auditEmitter: { emit: (e) => audit.push(e) },
+    endRecoverySession,
+    clock: () => new Date(NOW),
+    ...over,
+  });
+  recoveryRef.current = built;
+  return built;
+}
+
+function wireApprovals(): void {
+  const via =
+    (
+      pick: (
+        r: ManagerRecovery,
+      ) => ManagerRecovery['resolvers'][keyof ManagerRecovery['resolvers']],
+    ) =>
+    (i: Parameters<ManagerRecovery['resolvers']['completeAttempt']>[0]) =>
+      recoveryRef.current === null ? null : pick(recoveryRef.current)(i);
   approvals = createManagerApprovalService({
-    db,
+    db: handle,
     getSession: () => current,
     isSessionLocked: () => false,
     currentTerminalId: () => TERMINAL,
     managerPins: pins,
     resolvers: {
-      'recovery.complete_attempt': (i) => ref.current?.resolvers.completeAttempt(i) ?? null,
-      'recovery.cancel_attempt': (i) => ref.current?.resolvers.cancelAttempt(i) ?? null,
-      'recovery.cancel_held_cart': (i) => ref.current?.resolvers.cancelHeldCart(i) ?? null,
+      'recovery.complete_attempt': via((r) => r.resolvers.completeAttempt),
+      'recovery.cancel_attempt': via((r) => r.resolvers.cancelAttempt),
+      'recovery.cancel_held_cart': via((r) => r.resolvers.cancelHeldCart),
     },
     auditEmitter: { emit: (e) => audit.push(e) },
     now: () => NOW,
   });
-  recovery = createManagerRecovery({
-    db,
-    getSession: () => current,
-    resolveTerminalId: () => TERMINAL,
-    approvals,
-    cartStore: bindCartStore(db),
-    payments: createRecoveryPaymentPort((get) => stack.build(get)),
-    auditEmitter: { emit: (e) => audit.push(e) },
-    endRecoverySession,
-    clock: () => new Date(NOW),
-  });
-  ref.current = recovery;
+}
+
+beforeEach(async () => {
+  raw = freshGrantDb();
+  handle = handleFor(raw);
+  audit = [];
+  endRecoverySession = vi.fn<() => Promise<unknown>>(() => Promise.resolve());
+  await enrolManagers(handle);
+  stack = paymentStack(handle);
+  await seedStuckSale();
+  current = manager({ recovery_of: attemptId });
+  wireApprovals();
+  recovery = buildRecovery();
 });
 
 afterEach(() => {
@@ -252,6 +281,29 @@ async function approve(
   });
   if (outcome.kind !== 'approved') throw new Error(`not approved: ${outcome.reason}`);
   return outcome.approvalId;
+}
+
+/** 15,000 cash for the 10,000 remainder (5,000 change), or the cash-returned confirmation. */
+const PAYING = { cash_received_minor: TOTAL };
+const RETURNED = { cash_returned_confirmed: true };
+const ATTEMPT_KIND = {
+  complete: 'recovery.complete_attempt',
+  cancel: 'recovery.cancel_attempt',
+} as const;
+
+/** Approve the stuck attempt (for `kind`, default the action's own), then run the action. */
+async function runAttempt(
+  action: 'complete' | 'cancel',
+  opts: {
+    service?: ManagerRecovery;
+    kind?: ManagerActionKind;
+    extra?: { cash_received_minor?: number; cash_returned_confirmed?: boolean };
+  } = {},
+): Promise<unknown> {
+  const service = opts.service ?? recovery;
+  const approval_id = await approve(opts.kind ?? ATTEMPT_KIND[action], attemptId);
+  const req = { payment_attempt_id: attemptId, approval_id, ...opts.extra };
+  return action === 'complete' ? service.completeAttempt(req) : service.cancelAttempt(req);
 }
 
 const value = (sql: string, params: unknown[] = []): unknown =>
@@ -332,13 +384,8 @@ describe('recovery.completeAttempt', () => {
   });
 
   it('an approval for another action does not complete it', async () => {
-    const id = await approve('recovery.cancel_attempt', attemptId);
     await expect(
-      recovery.completeAttempt({
-        payment_attempt_id: attemptId,
-        approval_id: id,
-        cash_received_minor: TOTAL - PAID,
-      }),
+      runAttempt('complete', { kind: 'recovery.cancel_attempt', extra: PAYING }),
     ).resolves.toEqual({ kind: 'refused', reason: 'approval_invalid' });
   });
 
@@ -424,13 +471,8 @@ describe('recovery.cancelAttempt', () => {
   });
 
   it('needs an approval bound to this attempt', async () => {
-    const id = await approve('recovery.complete_attempt', attemptId);
     await expect(
-      recovery.cancelAttempt({
-        payment_attempt_id: attemptId,
-        approval_id: id,
-        cash_returned_confirmed: true,
-      }),
+      runAttempt('cancel', { kind: 'recovery.complete_attempt', extra: RETURNED }),
     ).resolves.toEqual({ kind: 'refused', reason: 'approval_invalid' });
   });
 
@@ -504,5 +546,296 @@ describe('recovery.cancelHeldCart', () => {
     expect(
       recovery.cancelHeldCart({ cart_id: 'cart-stuck', approval_id: UNKNOWN_APPROVAL }),
     ).toEqual({ kind: 'refused', reason: 'not_found' });
+  });
+});
+
+const refusedWith = (reason: string) => ({ kind: 'refused', reason });
+
+async function payByCard(amount: number): Promise<void> {
+  const paid = await stack
+    .build(() => cashierScope)
+    .apply({
+      payment_attempt_id: attemptId,
+      tender_type: 'external_card_terminal',
+      amount_applied_minor: amount,
+      external_reference: 'A1B2C3',
+      idempotency_key: 'k-card',
+    });
+  if (paid.kind !== 'ok') throw new Error(`card refused: ${JSON.stringify(paid)}`);
+}
+
+const realPort = () => createRecoveryPaymentPort((get) => stack.build(get));
+const quietLogger = () => ({ info: vi.fn(), error: vi.fn() });
+
+describe('recovery — who may recover', () => {
+  it.each<[string, () => OperatorSessionRecord | null, string]>([
+    ['signed out', () => null, 'no_session'],
+    ['locked', () => manager({ lock_state: 'locked' }), 'session_locked'],
+    ['a cashier', () => manager({ role: 'cashier' }), 'role_mismatch'],
+  ])('refuses every action when %s', async (_label, session, reason) => {
+    insertCart('cart-held', 'editing');
+    current = session();
+    expect(recovery.listHeld()).toEqual(refusedWith(reason));
+    await expect(
+      recovery.completeAttempt({ payment_attempt_id: attemptId, approval_id: UNKNOWN_APPROVAL }),
+    ).resolves.toEqual(refusedWith(reason));
+    await expect(
+      recovery.cancelAttempt({ payment_attempt_id: attemptId, approval_id: UNKNOWN_APPROVAL }),
+    ).resolves.toEqual(refusedWith(reason));
+    expect(
+      recovery.cancelHeldCart({ cart_id: 'cart-held', approval_id: UNKNOWN_APPROVAL }),
+    ).toEqual(refusedWith(reason));
+  });
+
+  it('serves an admin', () => {
+    current = manager({ role: 'admin' });
+    expect(recovery.listHeld()).toMatchObject({ kind: 'held' });
+  });
+
+  it('refuses on an unpaired terminal, and resolves no approval subject there', () => {
+    insertCart('cart-held', 'editing');
+    const unpaired = buildRecovery({ resolveTerminalId: () => null });
+    expect(unpaired.listHeld()).toEqual(refusedWith('no_session'));
+    const session = manager();
+    expect(unpaired.resolvers.completeAttempt({ subjectRef: attemptId, session })).toBeNull();
+    expect(unpaired.resolvers.cancelHeldCart({ subjectRef: 'cart-held', session })).toBeNull();
+  });
+
+  it('never lets an operator recover their own sale from a new session', async () => {
+    insertCart('cart-held', 'editing');
+    const session = manager({ operator_id: CASHIER_OP, recovery_of: undefined });
+    current = session;
+    expect(recovery.resolvers.completeAttempt({ subjectRef: attemptId, session })).toBeNull();
+    expect(recovery.resolvers.cancelHeldCart({ subjectRef: 'cart-held', session })).toBeNull();
+    await expect(
+      recovery.completeAttempt({
+        payment_attempt_id: attemptId,
+        approval_id: UNKNOWN_APPROVAL,
+        cash_received_minor: TOTAL,
+      }),
+    ).resolves.toEqual(refusedWith('not_found'));
+    expect(
+      recovery.cancelHeldCart({ cart_id: 'cart-held', approval_id: UNKNOWN_APPROVAL }),
+    ).toEqual(refusedWith('not_found'));
+  });
+});
+
+describe('recovery.listHeld — what it lists', () => {
+  it('lists no stuck payment once it is resolved, and a handed-off cart as handed off', async () => {
+    const id = await approve('recovery.cancel_attempt', attemptId);
+    await recovery.cancelAttempt({
+      payment_attempt_id: attemptId,
+      approval_id: id,
+      cash_returned_confirmed: true,
+    });
+    insertCart('cart-frozen', 'frozen_handed_off');
+    const view = recovery.listHeld();
+    expect(view).toMatchObject({ kind: 'held', stuck: null });
+    expect(view.kind === 'held' && view.held.map((h) => [h.cart_id, h.kind])).toContainEqual([
+      'cart-frozen',
+      'handed_off',
+    ]);
+  });
+
+  it('flags a parked cart once PK-2’s parked_at column exists (spec 024 §4.3)', () => {
+    raw.run(`ALTER TABLE carts ADD COLUMN parked_at TEXT`);
+    insertCart('cart-parked', 'editing');
+    raw.run(`UPDATE carts SET parked_at = ? WHERE cart_id = 'cart-parked'`, [NOW]);
+    const view = recovery.listHeld();
+    expect(view.kind === 'held' && view.held).toEqual([
+      expect.objectContaining({ cart_id: 'cart-parked', parked: true }),
+    ]);
+  });
+
+  it('shows card tender as card, and uses the real clock by default', async () => {
+    await payByCard(2_000);
+    const unclocked = buildRecovery({ clock: undefined });
+    const view = unclocked.listHeld();
+    expect(view.kind === 'held' && view.stuck).toMatchObject({
+      cash_minor: PAID,
+      card_minor: 2_000,
+      remaining_minor: TOTAL - PAID - 2_000,
+    });
+  });
+});
+
+describe('recovery.completeAttempt — refusals and failures', () => {
+  it('refuses an attempt that is not this terminal’s stuck attempt', async () => {
+    await expect(
+      recovery.completeAttempt({ payment_attempt_id: 'other', approval_id: UNKNOWN_APPROVAL }),
+    ).resolves.toEqual(refusedWith('not_found'));
+  });
+
+  it('refuses no cash at all when something remains', async () => {
+    const id = await approve('recovery.complete_attempt', attemptId);
+    await expect(
+      recovery.completeAttempt({ payment_attempt_id: attemptId, approval_id: id }),
+    ).resolves.toEqual(refusedWith('cash_insufficient'));
+  });
+
+  it.each([
+    ['the cash apply', 'apply', 'complete', PAYING],
+    ['the confirm', 'confirm', 'complete', PAYING],
+    ['the cancel', 'cancel', 'cancel', RETURNED],
+  ] as const)('answers payment_refused when %s is refused', async (_label, step, action, extra) => {
+    const refusal = () =>
+      Promise.resolve({ kind: 'refused' as const, reason: 'no_session' as const });
+    const service = buildRecovery({ payments: { ...realPort(), [step]: refusal } });
+    await expect(runAttempt(action, { service, extra })).resolves.toEqual(
+      refusedWith('payment_refused'),
+    );
+    expect(attemptState()).toBe('started');
+  });
+
+  interface Fault {
+    label: string;
+    faulty: (logger: ReturnType<typeof quietLogger>) => Partial<ManagerRecoveryDeps>;
+    answer: unknown;
+    logged: unknown;
+    message: string;
+  }
+  it.each<Fault>([
+    {
+      label: 'a payment call throws',
+      faulty: (logger) => ({
+        logger,
+        payments: { ...realPort(), apply: () => Promise.reject(new Error('disk full')) },
+      }),
+      answer: refusedWith('recovery_unavailable'),
+      logged: expect.anything(),
+      message: 'recovery.failed',
+    },
+    {
+      label: 'ending the recovery session fails',
+      faulty: (logger) => ({
+        logger,
+        endRecoverySession: () => Promise.reject(new Error('backend down')),
+      }),
+      answer: { kind: 'completed', change_due_minor: 5_000 },
+      logged: expect.anything(),
+      message: 'recovery.end_session_failed',
+    },
+    {
+      label: 'the audit sink throws',
+      faulty: (logger) => ({
+        logger,
+        auditEmitter: {
+          emit: () => {
+            throw new Error('sink down');
+          },
+        },
+      }),
+      answer: { kind: 'completed', change_due_minor: 5_000 },
+      logged: { err: expect.any(Error) as unknown, category: 'payment.recovery_completed' },
+      message: 'recovery.audit_failed',
+    },
+  ])('logs it when $label', async ({ faulty, answer, logged, message }) => {
+    const logger = quietLogger();
+    const service = buildRecovery(faulty(logger));
+    await expect(runAttempt('complete', { service, extra: PAYING })).resolves.toEqual(answer);
+    expect(logger.error).toHaveBeenCalledWith(logged, message);
+  });
+
+  it('runs one action at a time', async () => {
+    const real = realPort();
+    let release: () => void = () => undefined;
+    const slow = buildRecovery({
+      payments: {
+        ...real,
+        apply: (scope, req) =>
+          new Promise((resolve) => {
+            release = () => {
+              resolve(real.apply(scope, req));
+            };
+          }),
+      },
+    });
+    const id = await approve('recovery.complete_attempt', attemptId);
+    const first = slow.completeAttempt({
+      payment_attempt_id: attemptId,
+      approval_id: id,
+      cash_received_minor: TOTAL,
+    });
+    await expect(
+      slow.cancelAttempt({ payment_attempt_id: attemptId, approval_id: UNKNOWN_APPROVAL }),
+    ).resolves.toEqual(refusedWith('recovery_unavailable'));
+    release();
+    await expect(first).resolves.toMatchObject({ kind: 'completed' });
+  });
+
+  it('completes a fully tendered attempt with no cash, outside recovery mode', async () => {
+    const rest = await stack
+      .build(() => cashierScope)
+      .apply({
+        payment_attempt_id: attemptId,
+        tender_type: 'cash',
+        amount_applied_minor: TOTAL - PAID,
+        idempotency_key: 'k-rest',
+      });
+    expect(rest.kind).toBe('ok');
+    current = manager({ recovery_of: undefined });
+    const id = await approve('recovery.complete_attempt', attemptId);
+    await expect(
+      recovery.completeAttempt({ payment_attempt_id: attemptId, approval_id: id }),
+    ).resolves.toEqual({ kind: 'completed', change_due_minor: 0 });
+    expect(attemptState()).toBe('settled');
+    expect(endRecoverySession).not.toHaveBeenCalled();
+  });
+});
+
+describe('recovery.cancelAttempt — confirmations and failures', () => {
+  it('needs the card-void confirmation when card is live', async () => {
+    await payByCard(2_000);
+    const id = await approve('recovery.cancel_attempt', attemptId);
+    await expect(
+      recovery.cancelAttempt({
+        payment_attempt_id: attemptId,
+        approval_id: id,
+        cash_returned_confirmed: true,
+      }),
+    ).resolves.toEqual(refusedWith('confirmation_required'));
+    await expect(
+      recovery.cancelAttempt({
+        payment_attempt_id: attemptId,
+        approval_id: id,
+        cash_returned_confirmed: true,
+        card_void_confirmed_on_terminal: true,
+      }),
+    ).resolves.toEqual({ kind: 'cancelled' });
+  });
+});
+
+describe('recovery.cancelHeldCart — failures', () => {
+  it('versions a cart with no last action by its update time', async () => {
+    insertCart('cart-held', 'editing');
+    raw.run(`UPDATE carts SET last_action_id = NULL WHERE cart_id = 'cart-held'`);
+    const id = await approve('recovery.cancel_held_cart', 'cart-held');
+    expect(recovery.cancelHeldCart({ cart_id: 'cart-held', approval_id: id })).toEqual({
+      kind: 'cancelled',
+    });
+  });
+
+  it('rolls back and answers recovery_unavailable when the cart write throws', async () => {
+    insertCart('cart-held', 'editing');
+    const logger = quietLogger();
+    const failing = buildRecovery({
+      logger,
+      cartStore: {
+        cancelCartAndOutbox: () => {
+          throw new Error('constraint');
+        },
+      },
+    });
+    const id = await approve('recovery.cancel_held_cart', 'cart-held');
+    expect(failing.cancelHeldCart({ cart_id: 'cart-held', approval_id: id })).toEqual(
+      refusedWith('recovery_unavailable'),
+    );
+    expect(
+      value('SELECT consumed_at FROM manager_approvals WHERE approval_id = ?', [id]),
+    ).toBeNull();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.anything(),
+      'recovery.cancel_held_cart_failed',
+    );
   });
 });

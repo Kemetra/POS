@@ -87,6 +87,14 @@ type Get<T> = { get(...params: unknown[]): T | undefined };
 
 const ADMITTED: AdmissionVerdict = { kind: 'admitted' };
 
+/** The attempt's own operator signs back in to finish it. */
+const ownsAttempt = (attempt: UnresolvedAttempt, candidate: AdmissionCandidate): boolean =>
+  attempt.acting_operator_id === candidate.operator_id;
+
+/** RT-441: a manager or admin is admitted past it, in recovery mode. */
+const mayRecover = (candidate: AdmissionCandidate): boolean =>
+  candidate.role === 'manager' || candidate.role === 'admin';
+
 const refused = (category: OperatorRefusal['category']): AdmissionVerdict => ({
   kind: 'refused',
   refusal: { kind: 'refused', category },
@@ -136,20 +144,22 @@ export function createSessionAdmission(deps: SessionAdmissionDeps): SessionAdmis
     }
   }
 
+  const info = (fields: Record<string, string>, msg: string): void => {
+    logger?.info(fields, msg);
+  };
+
   function evaluate(candidate: AdmissionCandidate): AdmissionVerdict {
     if (sessionManager.getCurrent()?.lock_state === 'active') {
-      logger?.info({ event: 'operator.admission.refused', stage: 'session_active' }, 'refused');
+      info({ event: 'operator.admission.refused', stage: 'session_active' }, 'refused');
       return refused('state_invalid');
     }
     const attempt = unresolvedAttempt();
-    if (attempt === undefined || attempt.acting_operator_id === candidate.operator_id) {
-      return ADMITTED;
-    }
-    if (candidate.role === 'manager' || candidate.role === 'admin') {
-      logger?.info({ event: 'operator.admission.recovery_mode' }, 'admitted in recovery mode');
+    if (attempt === undefined || ownsAttempt(attempt, candidate)) return ADMITTED;
+    if (mayRecover(candidate)) {
+      info({ event: 'operator.admission.recovery_mode' }, 'admitted in recovery mode');
       return { kind: 'admitted', recovery_of: attempt.payment_attempt_id };
     }
-    logger?.info({ event: 'operator.admission.refused', stage: 'unresolved_payment' }, 'refused');
+    info({ event: 'operator.admission.refused', stage: 'unresolved_payment' }, 'refused');
     auditRefusal(attempt, candidate);
     return refused('terminal_has_unresolved_payment');
   }

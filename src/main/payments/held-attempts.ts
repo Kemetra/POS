@@ -103,44 +103,47 @@ export function createHeldAttempts(deps: HeldAttemptsDeps): HeldAttempts {
   const { db, paymentAttemptFsm, auditEmitter, uuid } = deps;
   const now = (): string => deps.clock().toISOString();
 
-  const startedForCart = (cart_id: string, session_id: string): AttemptRow | undefined =>
+  const startedForCart = (cart_id: string, session: { id: string }): AttemptRow | undefined =>
     (
       db.prepare(
         `SELECT ${ATTEMPT_COLUMNS} FROM payment_attempts a
           WHERE a.envelope_cart_id = ? AND a.operator_session_id = ? AND a.state = 'started'
           LIMIT 1`,
       ) as Get<AttemptRow>
-    ).get(cart_id, session_id);
+    ).get(cart_id, session.id);
 
-  const hasLive = (payment_attempt_id: string): boolean =>
+  const hasLive = (row: AttemptRow): boolean =>
     (
       db.prepare(
         `SELECT 1 AS live FROM payment_tender_lines
           WHERE payment_attempt_id = ? AND state IN ${LIVE} LIMIT 1`,
       ) as Get<{ live: 1 }>
-    ).get(payment_attempt_id) !== undefined;
+    ).get(row.payment_attempt_id) !== undefined;
 
-  const liveLines = (payment_attempt_id: string): LineRow[] =>
+  const liveLines = (row: AttemptRow): LineRow[] =>
     (
       db.prepare(
         `SELECT tender_type, amount_applied_minor, state FROM payment_tender_lines
           WHERE payment_attempt_id = ? AND state IN ${LIVE} ORDER BY apply_order`,
       ) as All<LineRow>
-    ).all(payment_attempt_id);
+    ).all(row.payment_attempt_id);
 
-  /** The attempt's own attribution: its scope and the operator who started it. */
-  function context(row: AttemptRow, session_id: string) {
+  /**
+   * The attempt's own attribution: its scope, its session and the operator who
+   * started it. Every caller holds the row as bound to that session.
+   */
+  function context(row: AttemptRow) {
     return {
       tenant_id: row.tenant_id,
       branch_id: row.branch_id,
       originating_terminal_id: row.terminal_id,
-      session_id,
+      session_id: row.operator_session_id,
       attribution_operator_id: row.acting_operator_id,
     };
   }
 
   /** Z2: nothing to reverse, so the attempt is simply closed. */
-  function closeNoFunds(row: AttemptRow, session_id: string): void {
+  function closeNoFunds(row: AttemptRow): void {
     const at = now();
     const outcome = paymentAttemptFsm.cancel({
       payment_attempt_id: row.payment_attempt_id,
@@ -149,7 +152,7 @@ export function createHeldAttempts(deps: HeldAttemptsDeps): HeldAttempts {
     });
     if (outcome.kind !== 'ok') return;
     auditEmitter.emitPaymentCancelled({
-      ...context(row, session_id),
+      ...context(row),
       payment_attempt_id: row.payment_attempt_id,
       cart_id: row.envelope_cart_id,
       handoff_action_id: row.envelope_handoff_action_id,
@@ -158,9 +161,9 @@ export function createHeldAttempts(deps: HeldAttemptsDeps): HeldAttempts {
     });
   }
 
-  function holdLive(row: AttemptRow, session_id: string, cause: SessionEndCause | undefined) {
+  function holdLive(row: AttemptRow, cause: SessionEndCause | undefined) {
     auditEmitter.emitRaw({
-      ...context(row, session_id),
+      ...context(row),
       created_at: now(),
       action_category: 'payment.held_on_session_end',
       payment_attempt_id: row.payment_attempt_id,
@@ -168,7 +171,7 @@ export function createHeldAttempts(deps: HeldAttemptsDeps): HeldAttempts {
         payment_attempt_id: row.payment_attempt_id,
         cart_id: row.envelope_cart_id,
         end_cause: cause ?? null,
-        tender: liveLines(row.payment_attempt_id).map((l) => ({
+        tender: liveLines(row).map((l) => ({
           tender_type: l.tender_type,
           amount_applied_minor: l.amount_applied_minor,
           state: l.state,
@@ -191,10 +194,10 @@ export function createHeldAttempts(deps: HeldAttemptsDeps): HeldAttempts {
   return {
     onFrozenCartSessionEnd({ cart_id, session, cause }) {
       if (isSettled(cart_id)) return 'settled';
-      const started = startedForCart(cart_id, session.id);
+      const started = startedForCart(cart_id, session);
       if (started === undefined) return 'open';
-      if (hasLive(started.payment_attempt_id)) holdLive(started, session.id, cause);
-      else closeNoFunds(started, session.id);
+      if (hasLive(started)) holdLive(started, cause);
+      else closeNoFunds(started);
       return 'open';
     },
 
@@ -206,7 +209,7 @@ export function createHeldAttempts(deps: HeldAttemptsDeps): HeldAttempts {
               AND NOT ${HAS_LIVE}`,
         ) as All<AttemptRow>
       ).all(terminal_id, session.id);
-      for (const row of rows) closeNoFunds(row, row.operator_session_id);
+      for (const row of rows) closeNoFunds(row);
     },
 
     findStuck({ terminal_id, session }) {
@@ -242,7 +245,7 @@ export function createHeldAttempts(deps: HeldAttemptsDeps): HeldAttempts {
       ).get(stuck.payment_attempt_id);
       if (row === undefined) return;
       auditEmitter.emitRaw({
-        ...context(row, session.id),
+        ...context(row),
         created_at: now(),
         action_category: 'payment.reattached',
         payment_attempt_id: row.payment_attempt_id,

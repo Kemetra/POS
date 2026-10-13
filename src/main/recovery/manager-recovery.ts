@@ -185,23 +185,94 @@ class RecoveryRefused extends Error {
 
 const refused = (reason: RecoveryRefusalReason): RecoveryRefusal => ({ kind: 'refused', reason });
 
+/** A manager / admin session on this paired terminal, as `manager()` admits it. */
+interface Admitted {
+  session: OperatorSessionRecord;
+  terminal_id: string;
+}
+
+/** The input an MA-2 subject resolver receives. */
+interface SubjectInput {
+  subjectRef: string;
+  session: OperatorSessionRecord;
+}
+
+function admissionRefusal(session: OperatorSessionRecord | null): RecoveryRefusalReason | null {
+  if (session === null) return 'no_session';
+  if (session.lock_state === 'locked') return 'session_locked';
+  const isManager = session.role === 'manager' || session.role === 'admin';
+  return isManager ? null : 'role_mismatch';
+}
+
+/** §5.2: live cash or card tender needs its confirmation before anything is spent. */
+function confirmationMissing(
+  liveTypes: ReadonlySet<string>,
+  req: RecoveryCancelAttemptRequest,
+): boolean {
+  const cashUnconfirmed = liveTypes.has('cash') && req.cash_returned_confirmed !== true;
+  const cardUnconfirmed =
+    liveTypes.has('external_card_terminal') && req.card_void_confirmed_on_terminal !== true;
+  return cashUnconfirmed || cardUnconfirmed;
+}
+
+type CartCancellation = Parameters<CartStore['cancelCartAndOutbox']>;
+
+/**
+ * The cart write of a manager cancel: `manager_cancelled_held` for a draft,
+ * `manager_voided_post_handoff` for a handed-off cart. The original operator
+ * acts; the manager is the attribution.
+ */
+function heldCancellation(
+  row: HeldRow,
+  session: OperatorSessionRecord,
+  stamp: { approval_id: string; at: string; action_id: string },
+): CartCancellation {
+  const frozen = row.state === 'frozen_handed_off';
+  const { approval_id, at, action_id } = stamp;
+  return [
+    {
+      cart_id: row.cart_id,
+      cancelled_at: at,
+      cancellation_reason: frozen ? 'manager_voided_post_handoff' : 'manager_cancelled_held',
+      last_action_id: action_id,
+      updated_at: at,
+    },
+    {
+      action_id,
+      cart_id: row.cart_id,
+      line_id: null,
+      action_kind: frozen ? 'cart.cancel.post_handoff' : 'cart.void',
+      acting_operator_id: row.owning_operator_id,
+      attribution_operator_id: session.operator_id,
+      operator_session_id: row.operator_session_id,
+      payload_json: JSON.stringify({ cart_id: row.cart_id, approval_id, recovery: true }),
+      applied_at: at,
+    },
+  ];
+}
+
 export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecovery {
   const { db } = deps;
   const now = (): string => (deps.clock?.() ?? new Date()).toISOString();
   let busy = false;
 
   /** A live, unlocked manager / admin session on a paired terminal. */
-  function manager(): { session: OperatorSessionRecord; terminal_id: string } | RecoveryRefusal {
+  function manager(): Admitted | RecoveryRefusal {
     const session = deps.getSession();
-    if (session === null) return refused('no_session');
-    if (session.lock_state === 'locked') return refused('session_locked');
-    if (session.role !== 'manager' && session.role !== 'admin') return refused('role_mismatch');
+    const reason = admissionRefusal(session);
+    if (reason !== null || session === null) return refused(reason ?? 'no_session');
     const terminal_id = deps.resolveTerminalId();
     if (terminal_id === null) return refused('no_session');
     return { session, terminal_id };
   }
 
-  const stuckRow = (terminal_id: string, session_id: string): StuckRow | undefined =>
+  /** The terminal named on a resolver call, for the session asking. */
+  function admittedFor(session: OperatorSessionRecord): Admitted | null {
+    const terminal_id = deps.resolveTerminalId();
+    return terminal_id === null ? null : { session, terminal_id };
+  }
+
+  const stuckRow = (at: Admitted): StuckRow | undefined =>
     (
       db.prepare(
         `SELECT a.payment_attempt_id, a.tenant_id, a.branch_id, a.terminal_id,
@@ -213,15 +284,15 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
                          WHERE l.payment_attempt_id = a.payment_attempt_id AND l.state IN ${LIVE})
           LIMIT 1`,
       ) as Get<StuckRow>
-    ).get(terminal_id, session_id);
+    ).get(at.terminal_id, at.session.id);
 
-  const liveLines = (payment_attempt_id: string): LiveLine[] =>
+  const liveLines = (row: Pick<StuckRow, 'payment_attempt_id'>): LiveLine[] =>
     (
       db.prepare(
         `SELECT tender_type, amount_applied_minor FROM payment_tender_lines
           WHERE payment_attempt_id = ? AND state IN ${LIVE}`,
       ) as All<LiveLine>
-    ).all(payment_attempt_id);
+    ).all(row.payment_attempt_id);
 
   const lineCount = (cart_id: string): number =>
     (
@@ -235,7 +306,7 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
    * cart whose sale is open (not settled, no open attempt, no force-failed
    * live tender). The stuck attempt's cart is listed as the stuck payment.
    */
-  const heldRows = (terminal_id: string, session_id: string, cart_id?: string): HeldRow[] =>
+  const heldRows = (at: Admitted, cart_id?: string): HeldRow[] =>
     (
       db.prepare(
         `SELECT c.cart_id, c.tenant_id, c.branch_id, c.terminal_id, c.owning_operator_id,
@@ -255,10 +326,17 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
                                AND l.state IN ${LIVE}))))
           ORDER BY c.updated_at DESC, c.rowid DESC`,
       ) as All<HeldRow>
-    ).all(...[terminal_id, session_id, ...(cart_id === undefined ? [] : [cart_id])]);
+    ).all(...[at.terminal_id, at.session.id, ...(cart_id === undefined ? [] : [cart_id])]);
+
+  /** Another operator's held cart (never the asker's own), or null. */
+  function othersHeldCart(at: Admitted, cart_id: string): HeldRow | null {
+    const [row] = heldRows(at, cart_id);
+    if (row === undefined || row.owning_operator_id === at.session.operator_id) return null;
+    return row;
+  }
 
   function stuckView(row: StuckRow): RecoveryStuckAttemptView {
-    const lines = liveLines(row.payment_attempt_id);
+    const lines = liveLines(row);
     const sum = (type: string): number =>
       lines.filter((l) => l.tender_type === type).reduce((n, l) => n + l.amount_applied_minor, 0);
     const paid = lines.reduce((n, l) => n + l.amount_applied_minor, 0);
@@ -290,17 +368,20 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
 
   // ── Approval subjects (MA-2 resolvers) ──────────────────────────────────
 
+  /** The stuck attempt named by `subjectRef`, if it is another operator's. */
+  function othersStuckAttempt(input: SubjectInput): StuckRow | null {
+    const at = admittedFor(input.session);
+    const row = at === null ? undefined : stuckRow(at);
+    if (row?.payment_attempt_id !== input.subjectRef) return null;
+    return row.acting_operator_id === input.session.operator_id ? null : row;
+  }
+
   function attemptSubject(
-    subjectRef: string,
-    session: OperatorSessionRecord,
+    input: SubjectInput,
     amount: (row: StuckRow) => number,
   ): ApprovalSubject | null {
-    const terminal_id = deps.resolveTerminalId();
-    if (terminal_id === null) return null;
-    const row = stuckRow(terminal_id, session.id);
-    if (row?.payment_attempt_id !== subjectRef || row.acting_operator_id === session.operator_id) {
-      return null;
-    }
+    const row = othersStuckAttempt(input);
+    if (row === null) return null;
     return {
       version: attemptVersion(row),
       amountMinor: amount(row),
@@ -327,13 +408,12 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
   }
 
   const liveTotal = (row: StuckRow): number =>
-    liveLines(row.payment_attempt_id).reduce((n, l) => n + l.amount_applied_minor, 0);
+    liveLines(row).reduce((n, l) => n + l.amount_applied_minor, 0);
 
-  function cartSubject(subjectRef: string, session: OperatorSessionRecord): ApprovalSubject | null {
-    const terminal_id = deps.resolveTerminalId();
-    if (terminal_id === null) return null;
-    const [row] = heldRows(terminal_id, session.id, subjectRef);
-    if (row === undefined || row.owning_operator_id === session.operator_id) return null;
+  function cartSubject(input: SubjectInput): ApprovalSubject | null {
+    const at = admittedFor(input.session);
+    const row = at === null ? null : othersHeldCart(at, input.subjectRef);
+    if (row === null) return null;
     return {
       version: `cart:${row.last_action_id ?? row.updated_at}`,
       amountMinor: row.cart_subtotal_minor,
@@ -342,27 +422,10 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
   }
 
   const resolvers = {
-    completeAttempt: ({
-      subjectRef,
-      session,
-    }: {
-      subjectRef: string;
-      session: OperatorSessionRecord;
-    }) => attemptSubject(subjectRef, session, (row) => row.envelope_subtotal_minor),
-    cancelAttempt: ({
-      subjectRef,
-      session,
-    }: {
-      subjectRef: string;
-      session: OperatorSessionRecord;
-    }) => attemptSubject(subjectRef, session, liveTotal),
-    cancelHeldCart: ({
-      subjectRef,
-      session,
-    }: {
-      subjectRef: string;
-      session: OperatorSessionRecord;
-    }) => cartSubject(subjectRef, session),
+    completeAttempt: (input: SubjectInput) =>
+      attemptSubject(input, (row) => row.envelope_subtotal_minor),
+    cancelAttempt: (input: SubjectInput) => attemptSubject(input, liveTotal),
+    cancelHeldCart: (input: SubjectInput) => cartSubject(input),
   };
 
   // ── Shared steps ─────────────────────────────────────────────────────────
@@ -403,10 +466,11 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
     req: { payment_attempt_id: string; approval_id: string },
     session: OperatorSessionRecord,
   ): string {
+    const input = { subjectRef: req.payment_attempt_id, session };
     const subject =
       kind === 'recovery.complete_attempt'
-        ? resolvers.completeAttempt({ subjectRef: req.payment_attempt_id, session })
-        : resolvers.cancelAttempt({ subjectRef: req.payment_attempt_id, session });
+        ? resolvers.completeAttempt(input)
+        : resolvers.cancelAttempt(input);
     if (subject === null) throw new RecoveryRefused('not_found');
     const outcome = db.transaction(() =>
       deps.approvals.consume({
@@ -434,8 +498,8 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
     };
   }
 
-  async function finishRecovery(session: OperatorSessionRecord, attempt_id: string) {
-    if (session.recovery_of !== attempt_id) return;
+  async function finishRecovery(session: OperatorSessionRecord, row: StuckRow): Promise<void> {
+    if (session.recovery_of !== row.payment_attempt_id) return;
     try {
       await deps.endRecoverySession();
     } catch (err) {
@@ -443,29 +507,148 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
     }
   }
 
-  /** One recovery action at a time; any refusal thrown inside becomes the answer. */
+  /** A refusal thrown inside becomes the answer; anything else is logged. */
+  function refusalOf(err: unknown, logAs: string): RecoveryRefusal {
+    if (err instanceof RecoveryRefused) return refused(err.reason);
+    deps.logger?.error({ err }, logAs);
+    return refused('recovery_unavailable');
+  }
+
+  /** One recovery action at a time. */
   async function guarded<T>(run: () => Promise<T>): Promise<T | RecoveryRefusal> {
     if (busy) return refused('recovery_unavailable');
     busy = true;
     try {
       return await run();
     } catch (err) {
-      if (err instanceof RecoveryRefused) return refused(err.reason);
-      deps.logger?.error({ err }, 'recovery.failed');
-      return refused('recovery_unavailable');
+      return refusalOf(err, 'recovery.failed');
     } finally {
       busy = false;
     }
   }
 
-  function stuckFor(
-    payment_attempt_id: string,
-  ): { session: OperatorSessionRecord; row: StuckRow } | RecoveryRefusal {
+  function stuckFor(req: {
+    payment_attempt_id: string;
+  }): { session: OperatorSessionRecord; row: StuckRow } | RecoveryRefusal {
     const admitted = manager();
     if ('kind' in admitted) return admitted;
-    const row = stuckRow(admitted.terminal_id, admitted.session.id);
-    if (row?.payment_attempt_id !== payment_attempt_id) return refused('not_found');
+    const row = stuckRow(admitted);
+    if (row?.payment_attempt_id !== req.payment_attempt_id) return refused('not_found');
     return { session: admitted.session, row };
+  }
+
+  /** Collect the remaining cash, if any; the change due, or a refusal. */
+  async function collectRemaining(
+    row: StuckRow,
+    session: OperatorSessionRecord,
+    req: RecoveryCompleteAttemptRequest,
+    remaining_minor: number,
+  ): Promise<number | RecoveryRefusal> {
+    if (remaining_minor === 0) return 0;
+    const applied = await deps.payments.apply(scopeFor(row, session), {
+      payment_attempt_id: row.payment_attempt_id,
+      tender_type: 'cash',
+      amount_applied_minor: req.cash_received_minor ?? 0,
+      idempotency_key: `${req.approval_id}:apply`,
+    });
+    if (applied.kind !== 'ok') return refused('payment_refused');
+    return applied.change_due_minor ?? 0;
+  }
+
+  async function completeStuck(
+    row: StuckRow,
+    session: OperatorSessionRecord,
+    req: RecoveryCompleteAttemptRequest,
+  ): Promise<RecoveryCompleteAttemptResponse> {
+    const { remaining_minor } = stuckView(row);
+    const cash = req.cash_received_minor ?? 0;
+    if (remaining_minor > 0 && cash < remaining_minor) return refused('cash_insufficient');
+    const approver = consumeForAttempt('recovery.complete_attempt', req, session);
+    const change = await collectRemaining(row, session, req, remaining_minor);
+    if (typeof change !== 'number') return change;
+    const confirmed = await deps.payments.confirm(scopeFor(row, session), {
+      payment_attempt_id: row.payment_attempt_id,
+      idempotency_key: `${req.approval_id}:confirm`,
+    });
+    if (confirmed.kind !== 'ok') return refused('payment_refused');
+    audit({
+      category: 'payment.recovery_completed',
+      scope: row,
+      original_operator_id: row.acting_operator_id,
+      session,
+      approver_user_id: approver,
+      payload: {
+        payment_attempt_id: row.payment_attempt_id,
+        cart_id: row.envelope_cart_id,
+        approval_id: req.approval_id,
+      },
+    });
+    await finishRecovery(session, row);
+    return { kind: 'completed', change_due_minor: change };
+  }
+
+  async function cancelStuck(
+    row: StuckRow,
+    session: OperatorSessionRecord,
+    req: RecoveryCancelAttemptRequest,
+  ): Promise<RecoveryCancelAttemptResponse> {
+    const liveTypes = new Set(liveLines(row).map((l) => l.tender_type));
+    if (confirmationMissing(liveTypes, req)) return refused('confirmation_required');
+    const approver = consumeForAttempt('recovery.cancel_attempt', req, session);
+    const cancelled = await deps.payments.cancel(scopeFor(row, session), {
+      payment_attempt_id: row.payment_attempt_id,
+      idempotency_key: `${req.approval_id}:cancel`,
+    });
+    if (cancelled.kind !== 'ok') return refused('payment_refused');
+    audit({
+      category: 'payment.recovery_cancelled',
+      scope: row,
+      original_operator_id: row.acting_operator_id,
+      session,
+      approver_user_id: approver,
+      payload: {
+        payment_attempt_id: row.payment_attempt_id,
+        cart_id: row.envelope_cart_id,
+        approval_id: req.approval_id,
+        cash_returned_confirmed: req.cash_returned_confirmed === true,
+        card_void_confirmed_on_terminal: req.card_void_confirmed_on_terminal === true,
+      },
+    });
+    await finishRecovery(session, row);
+    return { kind: 'cancelled' };
+  }
+
+  /** The cancel and its approval commit together, inside the caller's transaction. */
+  function cancelHeldInTransaction(
+    row: HeldRow,
+    session: OperatorSessionRecord,
+    req: RecoveryCancelHeldCartRequest,
+  ): void {
+    const subject = cartSubject({ subjectRef: req.cart_id, session });
+    if (subject === null) throw new RecoveryRefused('not_found');
+    const consumed = deps.approvals.consume({
+      approvalId: req.approval_id,
+      actionKind: 'recovery.cancel_held_cart',
+      subjectRef: req.cart_id,
+      subject,
+      session,
+    });
+    if (consumed.kind === 'refused') throw new RecoveryRefused(consumed.reason);
+    const stamp = { approval_id: req.approval_id, at: now(), action_id: randomUUID() };
+    deps.cartStore.cancelCartAndOutbox(...heldCancellation(row, session, stamp));
+    audit({
+      category: 'cart.held_cancelled_by_manager',
+      scope: row,
+      original_operator_id: row.owning_operator_id,
+      session,
+      approver_user_id: consumed.approverUserId,
+      payload: {
+        cart_id: row.cart_id,
+        approval_id: req.approval_id,
+        kind: row.state === 'frozen_handed_off' ? 'handed_off' : 'draft',
+        parked: row.parked === 1,
+      },
+    });
   }
 
   return {
@@ -474,163 +657,40 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
     listHeld() {
       const admitted = manager();
       if ('kind' in admitted) return admitted;
-      const { session, terminal_id } = admitted;
-      const stuck = stuckRow(terminal_id, session.id);
+      const stuck = stuckRow(admitted);
       return {
         kind: 'held',
-        recovery_mode: session.recovery_of !== undefined,
+        recovery_mode: admitted.session.recovery_of !== undefined,
         stuck: stuck === undefined ? null : stuckView(stuck),
-        held: heldRows(terminal_id, session.id).map(heldView),
+        held: heldRows(admitted).map(heldView),
       };
     },
 
     completeAttempt(req) {
       return guarded(async () => {
-        const found = stuckFor(req.payment_attempt_id);
-        if ('kind' in found) return found;
-        const { session, row } = found;
-        const { remaining_minor } = stuckView(row);
-        const cash = req.cash_received_minor ?? 0;
-        if (remaining_minor > 0 && cash < remaining_minor) return refused('cash_insufficient');
-        const approver = consumeForAttempt('recovery.complete_attempt', req, session);
-        const scope = scopeFor(row, session);
-        let change = 0;
-        if (remaining_minor > 0) {
-          const applied = await deps.payments.apply(scope, {
-            payment_attempt_id: row.payment_attempt_id,
-            tender_type: 'cash',
-            amount_applied_minor: cash,
-            idempotency_key: `${req.approval_id}:apply`,
-          });
-          if (applied.kind !== 'ok') return refused('payment_refused');
-          change = applied.change_due_minor ?? 0;
-        }
-        const confirmed = await deps.payments.confirm(scope, {
-          payment_attempt_id: row.payment_attempt_id,
-          idempotency_key: `${req.approval_id}:confirm`,
-        });
-        if (confirmed.kind !== 'ok') return refused('payment_refused');
-        audit({
-          category: 'payment.recovery_completed',
-          scope: row,
-          original_operator_id: row.acting_operator_id,
-          session,
-          approver_user_id: approver,
-          payload: {
-            payment_attempt_id: row.payment_attempt_id,
-            cart_id: row.envelope_cart_id,
-            approval_id: req.approval_id,
-          },
-        });
-        await finishRecovery(session, row.payment_attempt_id);
-        return { kind: 'completed' as const, change_due_minor: change };
+        const found = stuckFor(req);
+        return 'kind' in found ? found : completeStuck(found.row, found.session, req);
       });
     },
 
     cancelAttempt(req) {
       return guarded(async () => {
-        const found = stuckFor(req.payment_attempt_id);
-        if ('kind' in found) return found;
-        const { session, row } = found;
-        const types = new Set(liveLines(row.payment_attempt_id).map((l) => l.tender_type));
-        if (
-          (types.has('cash') && req.cash_returned_confirmed !== true) ||
-          (types.has('external_card_terminal') && req.card_void_confirmed_on_terminal !== true)
-        ) {
-          return refused('confirmation_required');
-        }
-        const approver = consumeForAttempt('recovery.cancel_attempt', req, session);
-        const cancelled = await deps.payments.cancel(scopeFor(row, session), {
-          payment_attempt_id: row.payment_attempt_id,
-          idempotency_key: `${req.approval_id}:cancel`,
-        });
-        if (cancelled.kind !== 'ok') return refused('payment_refused');
-        audit({
-          category: 'payment.recovery_cancelled',
-          scope: row,
-          original_operator_id: row.acting_operator_id,
-          session,
-          approver_user_id: approver,
-          payload: {
-            payment_attempt_id: row.payment_attempt_id,
-            cart_id: row.envelope_cart_id,
-            approval_id: req.approval_id,
-            cash_returned_confirmed: req.cash_returned_confirmed === true,
-            card_void_confirmed_on_terminal: req.card_void_confirmed_on_terminal === true,
-          },
-        });
-        await finishRecovery(session, row.payment_attempt_id);
-        return { kind: 'cancelled' as const };
+        const found = stuckFor(req);
+        return 'kind' in found ? found : cancelStuck(found.row, found.session, req);
       });
     },
 
     cancelHeldCart(req) {
       const admitted = manager();
       if ('kind' in admitted) return admitted;
-      const { session, terminal_id } = admitted;
-      const [row] = heldRows(terminal_id, session.id, req.cart_id);
-      if (row === undefined || row.owning_operator_id === session.operator_id) {
-        return refused('not_found');
-      }
-      const frozen = row.state === 'frozen_handed_off';
+      const row = othersHeldCart(admitted, req.cart_id);
+      if (row === null) return refused('not_found');
       try {
         db.transaction(() => {
-          const subject = cartSubject(req.cart_id, session);
-          if (subject === null) throw new RecoveryRefused('not_found');
-          const consumed = deps.approvals.consume({
-            approvalId: req.approval_id,
-            actionKind: 'recovery.cancel_held_cart',
-            subjectRef: req.cart_id,
-            subject,
-            session,
-          });
-          if (consumed.kind === 'refused') throw new RecoveryRefused(consumed.reason);
-          const at = now();
-          const action_id = randomUUID();
-          deps.cartStore.cancelCartAndOutbox(
-            {
-              cart_id: row.cart_id,
-              cancelled_at: at,
-              cancellation_reason: frozen
-                ? 'manager_voided_post_handoff'
-                : 'manager_cancelled_held',
-              last_action_id: action_id,
-              updated_at: at,
-            },
-            {
-              action_id,
-              cart_id: row.cart_id,
-              line_id: null,
-              action_kind: frozen ? 'cart.cancel.post_handoff' : 'cart.void',
-              acting_operator_id: row.owning_operator_id,
-              attribution_operator_id: session.operator_id,
-              operator_session_id: row.operator_session_id,
-              payload_json: JSON.stringify({
-                cart_id: row.cart_id,
-                approval_id: req.approval_id,
-                recovery: true,
-              }),
-              applied_at: at,
-            },
-          );
-          audit({
-            category: 'cart.held_cancelled_by_manager',
-            scope: row,
-            original_operator_id: row.owning_operator_id,
-            session,
-            approver_user_id: consumed.approverUserId,
-            payload: {
-              cart_id: row.cart_id,
-              approval_id: req.approval_id,
-              kind: frozen ? 'handed_off' : 'draft',
-              parked: row.parked === 1,
-            },
-          });
+          cancelHeldInTransaction(row, admitted.session, req);
         })();
       } catch (err) {
-        if (err instanceof RecoveryRefused) return refused(err.reason);
-        deps.logger?.error({ err }, 'recovery.cancel_held_cart_failed');
-        return refused('recovery_unavailable');
+        return refusalOf(err, 'recovery.cancel_held_cart_failed');
       }
       return { kind: 'cancelled' };
     },
