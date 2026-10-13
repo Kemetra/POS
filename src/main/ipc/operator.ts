@@ -137,6 +137,8 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   // RT-443 (MA-2) — approvals, emitted only by the approval service.
   'manager_approval.granted',
   'manager_approval.refused',
+  // RT-444 (RT-116 §4) — emitted only by the sign-in admission guard.
+  'operator.signin.refused_unresolved_payment',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {
