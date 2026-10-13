@@ -2129,12 +2129,6 @@ singleInstanceReady
       logger: mainLogger,
       onManagerCredentialEvent: createManagerCredentialAudit({
         auditEmitter,
-        currentActor: () => {
-          const current = operatorSessionManager.getCurrent();
-          return current === null
-            ? null
-            : { operatorId: current.operator_id, sessionId: current.id };
-        },
         logger: mainLogger,
       }),
     });

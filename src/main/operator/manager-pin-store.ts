@@ -72,6 +72,16 @@ export const MANAGER_PIN_DISABLE_AFTER_LOCKOUTS = 3;
 export type ManagerPinRevokeReason = 'self' | 'other_manager' | 'ineligible';
 
 /** RT-438 — a lifecycle fact for the audit trail: ids only, never a PIN or a hash. */
+/**
+ * RT-438 (review) — the operator session that started a credential operation,
+ * captured by the caller BEFORE any async PIN work: the audit names who
+ * acted, never whichever session is current when the event lands.
+ */
+export interface CredentialActor {
+  operatorId: string;
+  sessionId: string;
+}
+
 export interface ManagerCredentialEvent {
   kind: 'enrolled' | 'revoked' | 'locked_out' | 'disabled';
   scope: ManagerPinScope;
@@ -79,6 +89,8 @@ export interface ManagerCredentialEvent {
   managerRef: string;
   at: string;
   revokeReason?: ManagerPinRevokeReason;
+  /** Who started the operation; absent for a system one (the system actor). */
+  actor?: CredentialActor;
 }
 
 /** Where a manager PIN is enrolled and verified: the paired terminal. */
@@ -114,6 +126,8 @@ export interface EnrolManagerPinInput {
   now: string;
   /** The manager's online sign-in instant (the record's `last_online_at`). */
   onlineAt: string;
+  /** The session enrolling, for the audit. */
+  actor?: CredentialActor;
   /** Runs synchronously right before the write; a throw writes nothing. */
   guard: () => void;
 }
@@ -131,6 +145,8 @@ export interface VerifyManagerPinInput {
   now: string;
   /** RT-438: the window to check; the RT-17 variance's when omitted. */
   policy?: ManagerCredentialPolicy;
+  /** The session presenting the PIN, for the audit of a lockout. */
+  actor?: CredentialActor;
 }
 
 /**
@@ -143,6 +159,13 @@ export interface RevokeManagerPinInput {
   target: { managerRef: string } | { userId: string };
   requesterUserId: string | null;
   now: string;
+  /** The session revoking, for the audit. */
+  actor?: CredentialActor;
+  /**
+   * Runs synchronously right before the write, after any earlier queued PIN
+   * work has settled; a throw writes nothing (as for `enrol`).
+   */
+  guard?: () => void;
 }
 
 export type RevokeManagerPinOutcome =
@@ -197,6 +220,7 @@ interface Attempt {
   row: StoredRow;
   pin: string;
   now: string;
+  actor: CredentialActor | undefined;
 }
 
 const COLUMNS = `user_id, manager_ref, display_name, pin_hash, pin_salt,
@@ -283,7 +307,12 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
 
   function report(
     kind: ManagerCredentialEvent['kind'],
-    input: { scope: ManagerPinScope; row: Pick<StoredRow, 'user_id' | 'manager_ref'>; at: string },
+    input: {
+      scope: ManagerPinScope;
+      row: Pick<StoredRow, 'user_id' | 'manager_ref'>;
+      at: string;
+      actor: CredentialActor | undefined;
+    },
     revokeReason?: ManagerPinRevokeReason,
   ): void {
     deps.onEvent?.({
@@ -293,6 +322,7 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       managerRef: input.row.manager_ref,
       at: input.at,
       ...(revokeReason === undefined ? {} : { revokeReason }),
+      ...(input.actor === undefined ? {} : { actor: input.actor }),
     });
   }
   let queue: Promise<unknown> = Promise.resolve();
@@ -358,8 +388,9 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       lockouts,
       disabledAt: disables ? input.now : null,
     });
-    if (startsLockout) report('locked_out', { scope: input.scope, row: input.row, at: input.now });
-    if (disables) report('disabled', { scope: input.scope, row: input.row, at: input.now });
+    const fact = { scope: input.scope, row: input.row, at: input.now, actor: input.actor };
+    if (startsLockout) report('locked_out', fact);
+    if (disables) report('disabled', fact);
   }
 
   /**
@@ -385,7 +416,10 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
     if (!isCurrent(row, input.now, input.policy ?? SHIFT_VARIANCE_POLICY)) {
       return { kind: 'expired' };
     }
-    return verdictOf(row, await attempt({ scope, row, pin: input.pin, now: input.now }));
+    return verdictOf(
+      row,
+      await attempt({ scope, row, pin: input.pin, now: input.now, actor: input.actor }),
+    );
   }
 
   /** P2-2: a replacement needs the record's current PIN. Null when it may go ahead. */
@@ -394,6 +428,7 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
     row: StoredRow;
     currentPin: string | undefined;
     now: string;
+    actor: CredentialActor | undefined;
   }): Promise<EnrolManagerPinOutcome | null> {
     // RT-438: a disabled or revoked record is re-enrolled without its old PIN;
     // the manager is signed in online with the step-up (the caller's guard).
@@ -405,6 +440,7 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       row: input.row,
       pin: currentPin,
       now: input.now,
+      actor: input.actor,
     });
     if (result === null) return { kind: 'current_pin_invalid' };
     return result.kind === 'match' ? null : CURRENT_PIN_REFUSAL[result.kind];
@@ -422,6 +458,7 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
             row: existing,
             currentPin: input.currentPin,
             now: input.now,
+            actor: input.actor,
           });
     if (refusal !== null) return refusal;
     input.guard();
@@ -436,7 +473,9 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       input.onlineAt,
     );
     const enrolled = (db.prepare(SELECT_BY_USER) as Get).get(...scopeParams(scope), userId);
-    if (enrolled !== undefined) report('enrolled', { scope, row: enrolled, at: input.now });
+    if (enrolled !== undefined) {
+      report('enrolled', { scope, row: enrolled, at: input.now, actor: input.actor });
+    }
     return { kind: 'enrolled' };
   }
 
@@ -464,7 +503,7 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       row.manager_ref,
     );
     if (changes !== 1) return { kind: 'not_found' };
-    report('revoked', { scope, row, at: input.now }, reason);
+    report('revoked', { scope, row, at: input.now, actor: input.actor }, reason);
     return { kind: 'revoked', reason };
   }
 
@@ -490,7 +529,12 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
     },
 
     revoke(input) {
-      return serialised(() => Promise.resolve(revokeOne(input)));
+      // Review (Codex P2 / CodeRabbit): the guard runs after earlier queued
+      // PIN work has settled, right before the write.
+      return serialised(() => {
+        input.guard?.();
+        return Promise.resolve(revokeOne(input));
+      });
     },
 
     touchOnline(input) {

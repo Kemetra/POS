@@ -1,7 +1,7 @@
 /**
  * RT-438 (MA-1) — manager PIN lifecycle facts become local audit events:
- * the right category, the live session as actor (the system actor without
- * one), the record's handle (and revoke reason) as the whole payload, and an
+ * the right category, the session that started the operation as actor (the
+ * system actor without one), the record's handle (and revoke reason) as the whole payload, and an
  * audit failure logged rather than thrown.
  */
 import { describe, expect, it, vi } from 'vitest';
@@ -15,21 +15,25 @@ const REF = '7f3c1e2a-0b4d-4c5e-8f60-0000000000aa';
 const USER = '0190f5a2-3b4c-7d8e-9f01-00000000000a';
 const AT = '2026-10-13T08:00:00.000Z';
 
+const ACTOR = { operatorId: 'op-1', sessionId: 'sess-1' };
+
 function event(over: Partial<ManagerCredentialEvent> = {}): ManagerCredentialEvent {
-  return { kind: 'enrolled', scope: SCOPE, userId: USER, managerRef: REF, at: AT, ...over };
+  return {
+    kind: 'enrolled',
+    scope: SCOPE,
+    userId: USER,
+    managerRef: REF,
+    at: AT,
+    actor: ACTOR,
+    ...over,
+  };
 }
 
-function setup(
-  actor: { operatorId: string; sessionId: string } | null = {
-    operatorId: 'op-1',
-    sessionId: 'sess-1',
-  },
-) {
+function setup() {
   const emitted: AuditEvent[] = [];
   const logger = { error: vi.fn() };
   const audit = createManagerCredentialAudit({
     auditEmitter: { emit: (e) => emitted.push(e) },
-    currentActor: () => actor,
     logger,
   });
   return { audit, emitted, logger };
@@ -71,9 +75,11 @@ describe('RT-438 — manager credential audit', () => {
     expect(JSON.stringify(emitted)).not.toContain(USER);
   });
 
-  it('falls back to the system actor without a live session', () => {
-    const { audit, emitted } = setup(null);
-    audit(event({ kind: 'locked_out' }));
+  it('falls back to the system actor when the operation names none', () => {
+    const { audit, emitted } = setup();
+    const systemEvent = event({ kind: 'locked_out' });
+    delete systemEvent.actor;
+    audit(systemEvent);
     expect(emitted[0]).toMatchObject({
       acting_operator_id: SYSTEM_DEVICE_ACTOR_ID,
       session_id: null,
@@ -88,7 +94,6 @@ describe('RT-438 — manager credential audit', () => {
           throw new Error('disk full');
         },
       },
-      currentActor: () => null,
       logger,
     });
     expect(() => {

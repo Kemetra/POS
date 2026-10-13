@@ -30,6 +30,7 @@ import {
 } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
 import type { VerifiedApprover } from '../shift-cashup-service.js';
 import {
+  CASHIER_SESSION_ID,
   CLOSED_AT,
   MANAGER,
   MANAGER_PIN,
@@ -110,7 +111,14 @@ describe('verifyApprover — keyed, and only when the close needs it', () => {
     openShift();
     const approver = await approval(FLOAT - 75);
     expect(harness.state.verifyCalls).toEqual([
-      { scope: SCOPE, managerRef: MANAGER_REF, pin: MANAGER_PIN, now: CLOSED_AT },
+      {
+        scope: SCOPE,
+        managerRef: MANAGER_REF,
+        pin: MANAGER_PIN,
+        now: CLOSED_AT,
+        // Review (Codex P2): the closer who presented the PIN, for a lockout audit.
+        actor: { operatorId: 'op-cashier-1', sessionId: CASHIER_SESSION_ID },
+      },
     ]);
     const closed = harness.service.closeShift({ countedCashMinor: FLOAT - 75, approver });
     expect(closed.varianceMinor).toBe(-75);

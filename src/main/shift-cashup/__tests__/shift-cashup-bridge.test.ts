@@ -35,6 +35,7 @@ import {
   MANAGER,
   MANAGER_PIN,
   MANAGER_REF,
+  CASHIER_SESSION_ID,
   OPENED_AT,
   cashLine,
   factCounts,
@@ -162,7 +163,14 @@ describe('a non-zero variance closes with a verified manager PIN (part 2, 10943)
       varianceMinor: 40,
     });
     expect(harness.state.verifyCalls).toEqual([
-      { scope: SCOPE, managerRef: MANAGER_REF, pin: MANAGER_PIN, now: CLOSED_AT },
+      {
+        scope: SCOPE,
+        managerRef: MANAGER_REF,
+        pin: MANAGER_PIN,
+        now: CLOSED_AT,
+        // Review (Codex P2): the closer who presented the PIN, for a lockout audit.
+        actor: { operatorId: 'op-cashier-1', sessionId: CASHIER_SESSION_ID },
+      },
     ]);
     expect(storedBody(db, 2)).toMatchObject({ varianceApprovedByUserId: MANAGER });
     expect(JSON.stringify(answer)).not.toContain(MANAGER);

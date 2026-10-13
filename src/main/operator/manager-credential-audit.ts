@@ -2,9 +2,11 @@
  * RT-438 (MA-1, RT-114 §4) — the manager PIN lifecycle into the local audit
  * trail: `manager_credential.enrolled | revoked | locked_out | disabled`.
  *
- * The actor is the live operator session (the manager who enrolled or
- * revoked, or whoever tried the PIN that locked it); with none, the system
- * actor. The payload is the record's opaque handle (and the closed revoke
+ * The actor is the operator session that STARTED the operation (the manager
+ * who enrolled or revoked, or whoever tried the PIN that locked it), captured
+ * before its async PIN work and carried on the event; without one, the system
+ * actor. Never the session that happens to be current when the event lands
+ * (review, Codex P2). The payload is the record's opaque handle (and the closed revoke
  * reason): never a PIN, a hash, a seal or a users.id.
  *
  * An audit failure is logged and never undoes or blocks the credential change
@@ -20,8 +22,6 @@ import type { ManagerCredentialEvent } from './manager-pin-store.js';
 
 export interface ManagerCredentialAuditDeps {
   auditEmitter: Pick<AuditEmitter, 'emit'>;
-  /** The live session's operator and session ids, or null without one. */
-  currentActor: () => { operatorId: string; sessionId: string } | null;
   logger?: Pick<Logger, 'error'>;
 }
 
@@ -37,7 +37,7 @@ export function createManagerCredentialAudit(
 ): (event: ManagerCredentialEvent) => void {
   return (event) => {
     try {
-      const actor = deps.currentActor();
+      const { actor } = event;
       deps.auditEmitter.emit({
         event_id: randomUUID(),
         tenant_id: event.scope.tenantId,

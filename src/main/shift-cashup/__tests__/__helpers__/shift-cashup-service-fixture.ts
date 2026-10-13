@@ -40,6 +40,7 @@ export const CASHIER_SESSION_ID = 'sess-cashier-1';
 export function cashierSession(scope: ShiftScope = SCOPE): ShiftCashupSession {
   return {
     operator_session_id: CASHIER_SESSION_ID,
+    operator_id: 'op-cashier-1',
     tenant_id: scope.tenantId,
     branch_id: scope.branchId,
     terminal_id: scope.terminalId,
@@ -51,6 +52,7 @@ export function cashierSession(scope: ShiftScope = SCOPE): ShiftCashupSession {
 export function managerSession(): ShiftCashupSession {
   return {
     operator_session_id: 'sess-manager-1',
+    operator_id: 'op-manager-1',
     tenant_id: SCOPE.tenantId,
     branch_id: SCOPE.branchId,
     terminal_id: SCOPE.terminalId,

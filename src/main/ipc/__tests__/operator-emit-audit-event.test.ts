@@ -516,6 +516,28 @@ describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', 
       expect(emit).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    'manager_credential.enrolled',
+    'manager_credential.revoked',
+    'manager_credential.locked_out',
+    'manager_credential.disabled',
+  ])(
+    'RT-438: refuses a renderer-forged %s (a credential-store fact) and never emits it',
+    async (action_category) => {
+      const emit = vi.fn();
+      const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });
+
+      const res = await emitAuditEvent(FAKE_EVENT, {
+        ...VALID_REQUEST,
+        action_category,
+        payload: { manager_ref: 'forged' },
+      });
+
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+      expect(emit).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('operator:emit-audit-event — no T051 lifecycle behavior', () => {

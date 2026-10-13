@@ -129,6 +129,11 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'operator.offline_grant.invalidated',
   'pairing.device_revoked',
   'pairing.device_revoked_cleared',
+  // RT-438 (MA-1) — manager PIN lifecycle, emitted only by the credential store.
+  'manager_credential.enrolled',
+  'manager_credential.revoked',
+  'manager_credential.locked_out',
+  'manager_credential.disabled',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {

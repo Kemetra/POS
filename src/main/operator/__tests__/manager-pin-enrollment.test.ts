@@ -56,6 +56,7 @@ const NOW = '2026-10-06T08:00:00.000Z';
 function manager(over: Partial<ManagerIdentity> = {}): ManagerIdentity {
   return {
     operatorSessionId: 'sess-mgr-1',
+    operatorId: 'op-mgr-1',
     role: 'manager',
     userId: MANAGER_USER,
     displayName: 'Mona Manager',
@@ -431,6 +432,7 @@ describe('managerIdentityOf — the live session as enrolment sees it', () => {
       });
       expect(managerIdentityOf(record)).toEqual({
         operatorSessionId: record.id,
+        operatorId: 'clerk-mgr',
         role: 'manager',
         userId: MANAGER_USER,
         displayName: 'Mona Manager',
@@ -461,6 +463,7 @@ describe('managerIdentityOf — the live session as enrolment sees it', () => {
     });
     expect(managerIdentityOf(record)).toEqual({
       operatorSessionId: record.id,
+      operatorId: 'clerk-c',
       role: 'cashier',
       displayName: 'Cashier',
       tenantId: 't1',

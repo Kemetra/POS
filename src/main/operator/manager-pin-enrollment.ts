@@ -41,7 +41,7 @@
  */
 import { MANAGER_PIN_PATTERN } from '../../shared/shift-cashup/types.js';
 import type { Role } from '../../shared/operator/role.js';
-import type { ManagerPinScope, ManagerPinStore } from './manager-pin-store.js';
+import type { CredentialActor, ManagerPinScope, ManagerPinStore } from './manager-pin-store.js';
 import type { OperatorSessionRecord } from './session-manager.js';
 
 /** Enrolment is allowed this long after the manager's online sign-in. */
@@ -76,6 +76,8 @@ export class ManagerPinRefusedError extends Error {
 /** The live operator session as the enrolment needs it (main-only). */
 export interface ManagerIdentity {
   operatorSessionId: string;
+  /** The session's operator id (audit attribution). */
+  operatorId: string;
   role: Role;
   /** The `users.id` captured from a manager / admin online sign-in. */
   userId?: string;
@@ -86,12 +88,18 @@ export interface ManagerIdentity {
   branchId: string;
 }
 
+/** The audit actor of an admitted manager's credential operation. */
+function actorOf(manager: ManagerIdentity): CredentialActor {
+  return { operatorId: manager.operatorId, sessionId: manager.operatorSessionId };
+}
+
 /** `ManagerIdentity` of the live session, or null without one. */
 export function managerIdentityOf(record: OperatorSessionRecord | null): ManagerIdentity | null {
   if (record === null) return null;
   const { manager_user_id: userId, manager_signed_in_at: signedInAt } = record;
   return {
     operatorSessionId: record.id,
+    operatorId: record.operator_id,
     role: record.role,
     ...(userId === undefined ? {} : { userId }),
     displayName: record.display_name,
@@ -252,6 +260,7 @@ export function createManagerPinEnrollment(deps: ManagerPinEnrollmentDeps): Mana
         ...(input.currentPin === undefined ? {} : { currentPin: input.currentPin }),
         now: deps.now(),
         onlineAt: admitted.signedInAt,
+        actor: actorOf(admitted.manager),
         guard,
       });
       if (outcome.kind !== 'enrolled') refuse(STORE_REFUSALS[outcome.kind]);
@@ -260,7 +269,10 @@ export function createManagerPinEnrollment(deps: ManagerPinEnrollmentDeps): Mana
     async revoke(input) {
       const admitted = admit();
       const { epoch, scope } = await pairingOf(admitted.manager);
-      recheck({ admitted, epoch });
+      const guard = (): void => {
+        recheck({ admitted, epoch });
+      };
+      guard();
       const outcome = await deps.store.revoke({
         scope,
         target:
@@ -269,6 +281,8 @@ export function createManagerPinEnrollment(deps: ManagerPinEnrollmentDeps): Mana
             : { managerRef: input.managerRef },
         requesterUserId: admitted.userId,
         now: deps.now(),
+        actor: actorOf(admitted.manager),
+        guard,
       });
       if (outcome.kind === 'not_found') refuse('manager_not_found');
     },

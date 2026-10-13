@@ -193,6 +193,21 @@ describe('disable after repeated lockouts (RT-114 C3)', () => {
     });
   });
 
+  it('names the session that presented the PIN, captured before the PIN work (review)', async () => {
+    await enrol(A);
+    events = [];
+    primeLockout(A.userId, 0);
+    const actor = { operatorId: 'op-cashier-a', sessionId: 'sess-a' };
+    await store.verify({
+      scope: SCOPE,
+      managerRef: refOf(A.userId),
+      pin: WRONG,
+      now: NOW,
+      actor,
+    });
+    expect(events).toEqual([expect.objectContaining({ kind: 'locked_out', actor })]);
+  });
+
   it('a disabled record is re-enrolled online without the old PIN, keeping its handle and clearing the state', async () => {
     await enrol(A);
     const ref = refOf(A.userId);
@@ -317,6 +332,44 @@ describe('revoke (RT-114 C4)', () => {
     await expect(verify({ userId: A.userId, pin: '97531086' })).resolves.toMatchObject({
       kind: 'verified',
     });
+  });
+});
+
+describe('revoke runs its guard after queued PIN work (review)', () => {
+  it('a guard that fails once the queue drains revokes nothing', async () => {
+    await enrol(A);
+    let sessionStillValid = true;
+    const pending = verify(A, { pin: WRONG }); // in flight: Argon2 work
+    const revoked = store.revoke({
+      scope: SCOPE,
+      target: { userId: A.userId },
+      requesterUserId: A.userId,
+      now: NOW,
+      guard: () => {
+        if (!sessionStillValid) throw new Error('no_session');
+      },
+    });
+    sessionStillValid = false; // the manager signs out while the verify runs
+    await pending;
+    await expect(revoked).rejects.toThrow('no_session');
+    expect(value(A.userId, 'revoked_at')).toBeNull();
+  });
+
+  it('a passing guard revokes and the event names the revoking session', async () => {
+    await enrol(A);
+    events = [];
+    const actor = { operatorId: 'op-mgr-a', sessionId: 'sess-mgr-a' };
+    await expect(
+      store.revoke({
+        scope: SCOPE,
+        target: { userId: A.userId },
+        requesterUserId: A.userId,
+        now: NOW,
+        actor,
+        guard: () => undefined,
+      }),
+    ).resolves.toEqual({ kind: 'revoked', reason: 'self' });
+    expect(events).toEqual([expect.objectContaining({ kind: 'revoked', actor })]);
   });
 });
 
