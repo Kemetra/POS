@@ -7,9 +7,11 @@
  * transaction: close / park the current, unpark, reprice, soft-remove,
  * totals, the idempotency row and `cart.resumed`.
  *
- * R-3: every line write gets its own derived action id, and the cart's
- * `last_action_id` is set to the resume key LAST, so no Undo reaches across
- * the resume (the key is in no outbox row).
+ * R-3: every line write gets its own fresh action id (never derived from the
+ * resume key: a renderer-chosen cart key could equal a derived one and turn a
+ * resume into a primary-key failure), and the cart's `last_action_id` is set
+ * to the resume key LAST, so no Undo reaches across the resume (the key is in
+ * no outbox row).
  */
 import { randomUUID } from 'node:crypto';
 
@@ -115,13 +117,13 @@ function applyResume(
     deps.store.reprice({
       ...base,
       line_id: change.line_id,
-      action_id: `${key}:reprice:${change.line_id}`,
+      action_id: randomUUID(),
       unit_price_minor: change.new_unit_minor,
       subtotal_minor: change.new_subtotal_minor,
     });
   }
   for (const line_id of diff.unavailable) {
-    deps.store.softRemove({ ...base, line_id, action_id: `${key}:remove:${line_id}` });
+    deps.store.softRemove({ ...base, line_id, action_id: randomUUID() });
   }
   deps.store.settleTotals({ cart_id, key, at: when });
 }
