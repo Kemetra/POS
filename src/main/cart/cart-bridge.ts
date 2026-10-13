@@ -1234,7 +1234,11 @@ export class CartBridgeHandlers {
     if (!isManager && (approvals === undefined || approvalId === undefined)) {
       return refuse('manager_attribution_required');
     }
-    let approvingSupervisorId: string | null = isManager ? session.operator_id : null;
+    // The approver is recorded by users.id, the identity a consumed approval
+    // carries; a manager session without one keeps its operator id.
+    let approvingSupervisorId: string | null = isManager
+      ? (session.manager_user_id?.toLowerCase() ?? session.operator_id)
+      : null;
 
     // Without the payments record main cannot tell a paid sale from an unpaid
     // handoff, so refuse rather than guess.

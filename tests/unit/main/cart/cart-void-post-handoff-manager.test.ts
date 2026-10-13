@@ -294,6 +294,22 @@ describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED 
     expect(emittedEvent.payload['handoff_action_id']).toBe('handoff-action-t057');
   });
 
+  it('records the manager by users.id, the same identity a cashier approval records (RT-443)', async () => {
+    if (!hasCancelPostHandoff(f.handlers)) {
+      expect(true).toBe(false);
+      return;
+    }
+    // getCurrentSession returns this same record.
+    f.managerSession.manager_user_id = 'USER-MGR-1';
+    await callCancel(f.handlers, {
+      cart_id: f.cart_id,
+      handoff_action_id: 'handoff-action-t057',
+      idempotency_key: 'cancel-posthandoff-t057-user-id',
+    });
+    const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
+    expect(emittedEvent.approving_supervisor_id).toBe('user-mgr-1');
+  });
+
   it('refuses without manager attribution (cashier cannot cancel post-handoff)', async () => {
     if (!hasCancelPostHandoff(f.handlers)) {
       expect(true).toBe(false);
