@@ -13,6 +13,7 @@ import type { OperatorRefusal } from './audit/event-shape.js';
 import type { ForcedCloseReason } from './audit/payload-schemas.js';
 import type { ReturnsBridgeAPI } from './returns/types.js';
 import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
+import type { ManagerApprovalBridgeAPI } from './operator/manager-approval.js';
 
 export type {
   ReturnJournalView,
@@ -830,6 +831,15 @@ export interface PreloadBridgeAPI {
    * Optional for the same staged-wiring reason as the namespaces above.
    */
   shiftCashup?: ShiftCashupBridgeAPI;
+
+  /**
+   * RT-443 (MA-2): credential-backed manager approvals (`approval.*`). The
+   * renderer names an approver by the opaque handle from `listApprovers` and
+   * carries that manager's PIN inward; main answers an opaque single-use
+   * `approval_id` that the action then carries. No approver identity crosses
+   * back. Refused while the session is locked.
+   */
+  approval?: ManagerApprovalBridgeAPI;
 }
 
 /**

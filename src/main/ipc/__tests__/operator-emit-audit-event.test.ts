@@ -522,8 +522,11 @@ describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', 
     'manager_credential.revoked',
     'manager_credential.locked_out',
     'manager_credential.disabled',
+    // RT-443 (MA-2)
+    'manager_approval.granted',
+    'manager_approval.refused',
   ])(
-    'RT-438: refuses a renderer-forged %s (a credential-store fact) and never emits it',
+    'RT-438 / RT-443: refuses a renderer-forged %s (a main-only fact) and never emits it',
     async (action_category) => {
       const emit = vi.fn();
       const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });

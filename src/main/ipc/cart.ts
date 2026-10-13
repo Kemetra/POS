@@ -193,16 +193,13 @@ function asDiscountRemoveReq(value: unknown): CartDiscountPlaceholdersRemoveRequ
   ) {
     return null;
   }
-  const req: CartDiscountPlaceholdersRemoveRequest = {
+  // RT-443 (MA-2, RT-114 C10): a FRESH object with only the contract fields;
+  // a renderer-supplied `attribution_operator_id` is dropped like everywhere else.
+  return {
     cart_id: v['cart_id'],
     placeholder_id: v['placeholder_id'],
     idempotency_key: v['idempotency_key'],
   };
-  if (typeof v['attribution_operator_id'] === 'string') {
-    (req as { attribution_operator_id?: string }).attribution_operator_id =
-      v['attribution_operator_id'];
-  }
-  return req;
 }
 
 /**
@@ -221,11 +218,13 @@ function asVoidReq(value: unknown): CartVoidRequest | null {
 }
 
 /**
- * Post-handoff cancel. Builds a FRESH object with only the three request
- * fields: `attribution_operator_id` is deliberately dropped, so a cashier can
- * never borrow a manager's authority through this bridge (main then refuses a
- * cashier with `manager_attribution_required`), and no renderer-supplied
- * identity reaches the handler. Every field must be a bounded id.
+ * Post-handoff cancel. Builds a FRESH object with only the request fields:
+ * `attribution_operator_id` is deliberately dropped, so a cashier can never
+ * borrow a manager's authority through this bridge, and no renderer-supplied
+ * identity reaches the handler. RT-443 (MA-2): a cashier carries an
+ * `approval_id` from `approval.request` instead, which main verifies and
+ * consumes; without one main refuses `manager_attribution_required`. Every
+ * field must be a bounded id.
  */
 function asCancelPostHandoffReq(value: unknown): CartCancelPostHandoffRequest | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -236,7 +235,14 @@ function asCancelPostHandoffReq(value: unknown): CartCancelPostHandoffRequest | 
   if (!isBoundedId(cartId) || !isBoundedId(handoffActionId) || !isBoundedId(idempotencyKey)) {
     return null;
   }
-  return { cart_id: cartId, handoff_action_id: handoffActionId, idempotency_key: idempotencyKey };
+  const req = {
+    cart_id: cartId,
+    handoff_action_id: handoffActionId,
+    idempotency_key: idempotencyKey,
+  };
+  const approvalId = v['approval_id'];
+  if (approvalId === undefined) return req;
+  return isBoundedId(approvalId) ? { ...req, approval_id: approvalId } : null;
 }
 
 /** RT-26 — the same bounded-identifier request shape as `cart:cancelPostHandoff`. */

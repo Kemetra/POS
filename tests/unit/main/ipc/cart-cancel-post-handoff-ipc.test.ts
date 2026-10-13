@@ -76,3 +76,23 @@ describe('cart:cancelPostHandoff IPC', () => {
     expect(w.cancel).toHaveBeenCalledWith(VALID);
   });
 });
+
+describe('cart:cancelPostHandoff IPC — RT-443 approval_id', () => {
+  it('forwards a bounded approval_id beside the three fields', async () => {
+    const w = wire();
+    await w.invoke({ ...VALID, approval_id: 'approval-1' });
+    expect(w.cancel).toHaveBeenCalledWith({ ...VALID, approval_id: 'approval-1' });
+  });
+
+  it.each([[''], [7], [null], ['x'.repeat(257)]])(
+    'refuses a malformed approval_id %j without calling the handler',
+    async (approvalId) => {
+      const w = wire();
+      expect(await w.invoke({ ...VALID, approval_id: approvalId })).toEqual({
+        kind: 'refused',
+        reason: 'no_session',
+      });
+      expect(w.cancel).not.toHaveBeenCalled();
+    },
+  );
+});

@@ -215,6 +215,8 @@ export interface CartCancelPostHandoffPayload {
   cart_id: string;
   /** UUID of the prior `cart.handoff_to_payment` outbox row this cancel reverses. */
   handoff_action_id: string;
+  /** RT-443 (MA-2): the consumed manager approval, on a cashier's cancel. */
+  approval_id?: string;
 }
 
 /**
@@ -495,6 +497,22 @@ export interface ManagerCredentialRevokedPayload extends ManagerCredentialPayloa
   reason: 'self' | 'other_manager' | 'ineligible';
 }
 
+// ─── manager_approval.* (RT-443, MA-2) ─────────────────────────────────────
+
+/** `manager_approval.granted` — the approval and what it is for. */
+export interface ManagerApprovalGrantedPayload {
+  approval_id: string;
+  action_kind: string;
+  subject_ref: string;
+  reason_code: string;
+}
+
+/** `manager_approval.refused` — what was asked; never why (C3), never a PIN. */
+export interface ManagerApprovalRefusedPayload {
+  action_kind: string;
+  subject_ref: string;
+}
+
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────
 
 /**
@@ -562,6 +580,9 @@ export type AuditPayloadMap = {
   'manager_credential.revoked': ManagerCredentialRevokedPayload;
   'manager_credential.locked_out': ManagerCredentialPayload;
   'manager_credential.disabled': ManagerCredentialPayload;
+  // RT-443
+  'manager_approval.granted': ManagerApprovalGrantedPayload;
+  'manager_approval.refused': ManagerApprovalRefusedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

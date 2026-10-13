@@ -119,6 +119,10 @@ import {
 } from './shift-cashup/compose-shift-cashup.js';
 import { registerShiftCashupIpc } from './ipc/shift-cashup.js';
 import { createManagerCredentialAudit } from './operator/manager-credential-audit.js';
+import { createManagerPinStore } from './operator/manager-pin-store.js';
+import { createManagerApprovalService } from './operator/manager-approval-service.js';
+import { registerManagerApprovalHandlers } from './ipc/manager-approval.js';
+import { postHandoffCancelApprovalResolver } from './cart/post-handoff-approval.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
 import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
@@ -911,6 +915,35 @@ singleInstanceReady
     const auditEventsStore = bindAuditEventsStoreDb(db);
     const auditEmitter = new AuditEmitter(auditEventsStore);
 
+    // RT-438 / RT-443 (MA-1 / MA-2) — the terminal's one manager PIN store
+    // (RT-17's records, sealed with safeStorage; lifecycle audited) and the
+    // approval service that verifies it for a manager-approved action. One
+    // instance, so every attempt on a record is serialised in one queue.
+    const managerPins = createManagerPinStore({
+      db,
+      safeStorage,
+      onEvent: createManagerCredentialAudit({
+        auditEmitter,
+        logger: mainLogger,
+      }),
+    });
+    const managerApprovals = createManagerApprovalService({
+      db,
+      getSession: () => operatorSessionManager.getCurrent(),
+      isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
+      currentTerminalId: () => pairingStore.getCurrentTerminalId(),
+      managerPins,
+      resolvers: {
+        'cart.cancel_post_handoff': postHandoffCancelApprovalResolver(bindCartStore(db)),
+      },
+      auditEmitter,
+      now: () => new Date().toISOString(),
+    });
+    registerManagerApprovalHandlers(guardedIpcMain, {
+      service: managerApprovals,
+      logger: mainLogger,
+    });
+
     // RT-117 (RT-116 S1) — inactivity LOCK of the existing session.
     //   • push: main tells the renderer the moment the session locks/unlocks/
     //     ends (state only — no ids, names or credentials);
@@ -1281,6 +1314,8 @@ singleInstanceReady
       releaseCheckoutPayment,
       // RT-26 — read-only twin for Checkout's Back eligibility (no writes).
       checkoutReturnAllowed: bindCheckoutReturnAllowed(db),
+      // RT-443 — a cashier's post-handoff cancel consumes a manager approval.
+      approvals: managerApprovals,
     });
     registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
 
@@ -2127,10 +2162,8 @@ singleInstanceReady
       safeStorage,
       now: () => new Date().toISOString(),
       logger: mainLogger,
-      onManagerCredentialEvent: createManagerCredentialAudit({
-        auditEmitter,
-        logger: mainLogger,
-      }),
+      // RT-443: the one store, shared with the approval service (audited there).
+      managerPins,
     });
 
     createWindow();

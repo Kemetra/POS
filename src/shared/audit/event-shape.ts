@@ -92,6 +92,12 @@ export const AUDIT_ACTION_CATEGORIES = [
   'manager_credential.revoked',
   'manager_credential.locked_out',
   'manager_credential.disabled',
+  // RT-443 (MA-2, RT-114 §4) — a manager approval granted, or refused (wrong
+  // PIN, unknown / locked / expired / revoked approver, or the requester).
+  // Local only; `approving_supervisor_id` is the approver's users.id on a
+  // grant. Payload ids and closed codes only; never a PIN.
+  'manager_approval.granted',
+  'manager_approval.refused',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 

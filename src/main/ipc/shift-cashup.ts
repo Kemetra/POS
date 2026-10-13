@@ -66,6 +66,7 @@ import {
 import {
   createManagerPinStore,
   type ManagerCredentialEvent,
+  type ManagerPinStore,
 } from '../operator/manager-pin-store.js';
 import type { OperatorSessionRecord } from '../operator/session-manager.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
@@ -259,18 +260,26 @@ export interface RegisterShiftCashupIpcDeps
   logger: ShiftCashupBridgeLogger;
   /** RT-438: manager PIN lifecycle facts, for the audit trail. */
   onManagerCredentialEvent?: (event: ManagerCredentialEvent) => void;
+  /**
+   * RT-443: the terminal's one manager PIN store, shared with the approval
+   * service so every attempt on a record is serialised in one queue. When
+   * omitted (tests), one is created here.
+   */
+  managerPins?: ManagerPinStore;
 }
 
 /** The flag gate (see the module header). */
 export function registerShiftCashupIpc(deps: RegisterShiftCashupIpcDeps): void {
   if (!deps.enabled) return;
-  const managerPins = createManagerPinStore({
-    db: deps.db,
-    safeStorage: deps.safeStorage,
-    ...(deps.onManagerCredentialEvent === undefined
-      ? {}
-      : { onEvent: deps.onManagerCredentialEvent }),
-  });
+  const managerPins =
+    deps.managerPins ??
+    createManagerPinStore({
+      db: deps.db,
+      safeStorage: deps.safeStorage,
+      ...(deps.onManagerCredentialEvent === undefined
+        ? {}
+        : { onEvent: deps.onManagerCredentialEvent }),
+    });
   const service = composeShiftCashupService({ ...deps, managerPins });
   const enrollment = createManagerPinEnrollment({ ...deps, store: managerPins });
   const bridge = createShiftCashupBridge({ service, enrollment, logger: deps.logger });

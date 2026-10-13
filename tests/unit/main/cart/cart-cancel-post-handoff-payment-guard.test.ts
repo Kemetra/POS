@@ -111,6 +111,7 @@ async function frozenCartUnderManager(
     cartPaymentStatus: guard,
     releaseCheckoutPayment: () => ({ kind: 'blocked' }),
     checkoutReturnAllowed: () => false,
+    approvals: { consume: () => ({ kind: 'refused', reason: 'approval_invalid' }) },
   });
   return { db, cartId: created.cart_id, handlers, emit, guard };
 }
