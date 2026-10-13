@@ -177,7 +177,7 @@ export class ShiftCashupRefusedError extends Error {
 /** The session scope the service needs (`resolveSessionScope`'s result). */
 export type ShiftCashupSession = Pick<
   OperatorSessionForPayments,
-  'operator_session_id' | 'tenant_id' | 'branch_id' | 'terminal_id' | 'user_id'
+  'operator_session_id' | 'operator_id' | 'tenant_id' | 'branch_id' | 'terminal_id' | 'user_id'
 >;
 
 export interface OpenShiftInput {
@@ -389,6 +389,9 @@ const VERDICT_REFUSALS = {
   invalid: 'approver_invalid',
   locked: 'approver_locked',
   expired: 'approver_expired',
+  // RT-438: a disabled or revoked record, like an expired one, approves
+  // nothing until the manager enrols again online (the bridge says `approver_invalid`).
+  revoked: 'approver_expired',
 } as const;
 
 /** The verified manager's users.id, or the refusal of the verdict. */
@@ -740,6 +743,8 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
         managerRef: input.managerRef,
         pin: input.managerPin,
         now: plan.closedAt,
+        // Review (Codex P2): the closer who presented the PIN, captured now.
+        actor: { operatorId: admitted.operator_id, sessionId: admitted.operator_session_id },
       });
       const live = recheckSession({ admitted, epoch });
       const checked = approverIdOf({ verdict, closerUserId });

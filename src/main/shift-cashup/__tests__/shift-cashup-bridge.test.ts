@@ -35,6 +35,7 @@ import {
   MANAGER,
   MANAGER_PIN,
   MANAGER_REF,
+  CASHIER_SESSION_ID,
   OPENED_AT,
   cashLine,
   factCounts,
@@ -60,6 +61,7 @@ type LogFn = (payload: Record<string, unknown>, message: string) => void;
 let logger: { info: Mock<LogFn>; warn: Mock<LogFn> };
 let bridge: ShiftCashupBridgeAPI;
 let enroll: Mock<(input: { managerPin: string; currentPin?: string }) => Promise<void>>;
+let revoke: Mock<(input: { managerRef?: string }) => Promise<void>>;
 
 beforeAll(async () => {
   await initSalesSyncSql();
@@ -70,7 +72,12 @@ beforeEach(() => {
   harness = serviceHarness(db);
   logger = { info: vi.fn<LogFn>(), warn: vi.fn<LogFn>() };
   enroll = vi.fn(() => Promise.resolve());
-  bridge = createShiftCashupBridge({ service: harness.service, enrollment: { enroll }, logger });
+  revoke = vi.fn(() => Promise.resolve());
+  bridge = createShiftCashupBridge({
+    service: harness.service,
+    enrollment: { enroll, revoke },
+    logger,
+  });
 });
 
 afterEach(() => {
@@ -156,7 +163,14 @@ describe('a non-zero variance closes with a verified manager PIN (part 2, 10943)
       varianceMinor: 40,
     });
     expect(harness.state.verifyCalls).toEqual([
-      { scope: SCOPE, managerRef: MANAGER_REF, pin: MANAGER_PIN, now: CLOSED_AT },
+      {
+        scope: SCOPE,
+        managerRef: MANAGER_REF,
+        pin: MANAGER_PIN,
+        now: CLOSED_AT,
+        // Review (Codex P2): the closer who presented the PIN, for a lockout audit.
+        actor: { operatorId: 'op-cashier-1', sessionId: CASHIER_SESSION_ID },
+      },
     ]);
     expect(storedBody(db, 2)).toMatchObject({ varianceApprovedByUserId: MANAGER });
     expect(JSON.stringify(answer)).not.toContain(MANAGER);
@@ -415,7 +429,7 @@ describe('refusal mapping', () => {
         throw thrown;
       },
     } as unknown as ShiftCashupService;
-    return createShiftCashupBridge({ service, enrollment: { enroll }, logger });
+    return createShiftCashupBridge({ service, enrollment: { enroll, revoke }, logger });
   }
 
   it.each<[string, unknown, string]>([
@@ -433,6 +447,39 @@ describe('refusal mapping', () => {
     const bridgeOverRepair = failingWith(new ShiftCashupStateError('not_dead_lettered'));
     await expect(bridgeOverRepair.open({ openingFloatMinor: 1 })).resolves.toEqual(
       refused('unavailable'),
+    );
+  });
+});
+
+describe('revokeManagerPin (RT-438)', () => {
+  const REF = '7f3c1e2a-0b4d-4c5e-8f60-0000000000aa';
+
+  it('revokes their own record without a handle, and another manager’s by handle', async () => {
+    await expect(bridge.revokeManagerPin({})).resolves.toStrictEqual({ kind: 'revoked' });
+    expect(revoke).toHaveBeenLastCalledWith({});
+    await bridge.revokeManagerPin({ managerRef: REF });
+    expect(revoke).toHaveBeenLastCalledWith({ managerRef: REF });
+  });
+
+  it('passes nothing smuggled in beside the handle', async () => {
+    await bridge.revokeManagerPin({ managerRef: REF, userId: MANAGER } as never);
+    expect(revoke).toHaveBeenLastCalledWith({ managerRef: REF });
+  });
+
+  it.each<[ManagerPinRefusalReason, string]>([
+    ['feature_disabled', 'feature_disabled'],
+    ['no_session', 'no_session'],
+    ['session_locked', 'session_locked'],
+    ['not_manager', 'not_manager'],
+    ['no_manager_identity', 'not_manager'],
+    ['reauth_required', 'reauth_required'],
+    ['manager_not_found', 'manager_not_found'],
+  ])('answers the refusal %s as %s (logged precisely)', async (reason, answer) => {
+    revoke.mockRejectedValueOnce(new ManagerPinRefusedError(reason));
+    await expect(bridge.revokeManagerPin({})).resolves.toEqual(refused(answer));
+    expect(logger.info).toHaveBeenCalledWith(
+      { op: 'revokeManagerPin', reason },
+      SHIFT_CASHUP_REFUSED_LOG,
     );
   });
 });

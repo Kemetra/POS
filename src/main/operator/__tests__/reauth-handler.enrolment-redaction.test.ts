@@ -80,7 +80,7 @@ describe('RT-358 Q1 = no — re-auth never reopens the manager-PIN enrolment ste
       isSessionLocked: () => sm.isLocked(),
       pairedScope: () => Promise.resolve({ tenantId: 't1', branchId: 'b1', terminalId: 'term-1' }),
       pairingEpoch: () => 'epoch-1',
-      store: { seal, enrol: vi.fn() },
+      store: { seal, enrol: vi.fn(), revoke: vi.fn() },
       now: () => now,
     });
 

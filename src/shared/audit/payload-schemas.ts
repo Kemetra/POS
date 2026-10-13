@@ -480,6 +480,21 @@ export interface PairingDeviceRevokedClearedPayload {
   source: 're_pair' | 'recheck';
 }
 
+// ─── manager_credential.* (RT-438, MA-1) ────────────────────────────────────
+
+/**
+ * The manager PIN record's opaque handle only: never the PIN, its hash or
+ * seal, and never the manager's users.id (the handle stands for it locally).
+ */
+export interface ManagerCredentialPayload {
+  manager_ref: string;
+}
+
+/** `manager_credential.revoked` — plus the closed reason (0047). */
+export interface ManagerCredentialRevokedPayload extends ManagerCredentialPayload {
+  reason: 'self' | 'other_manager' | 'ineligible';
+}
+
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────
 
 /**
@@ -542,6 +557,11 @@ export type AuditPayloadMap = {
   // RT-215
   'pairing.device_revoked': PairingDeviceRevokedPayload;
   'pairing.device_revoked_cleared': PairingDeviceRevokedClearedPayload;
+  // RT-438
+  'manager_credential.enrolled': ManagerCredentialPayload;
+  'manager_credential.revoked': ManagerCredentialRevokedPayload;
+  'manager_credential.locked_out': ManagerCredentialPayload;
+  'manager_credential.disabled': ManagerCredentialPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

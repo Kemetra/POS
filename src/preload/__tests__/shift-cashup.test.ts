@@ -41,6 +41,12 @@ describe('preload shiftCashup bridge', () => {
       SHIFT_CASHUP_IPC_CHANNELS.ENROLL_MANAGER_PIN,
       { managerPin: '246810', currentPin: '13572468' },
     ],
+    // RT-438
+    [
+      'revokeManagerPin',
+      SHIFT_CASHUP_IPC_CHANNELS.REVOKE_MANAGER_PIN,
+      { managerRef: '7f3c1e2a-0b4d-4c5e-8f60-0000000000aa' },
+    ],
   ] as const)('%s invokes its channel with the request', async (member, channel, arg) => {
     const { shiftCashup } = await import('../shift-cashup');
     const call = shiftCashup[member] as (a: unknown) => Promise<unknown>;
@@ -75,6 +81,7 @@ describe('preload shiftCashup bridge', () => {
       'open',
       'payIn',
       'payOut',
+      'revokeManagerPin',
       'status',
     ]);
   });

@@ -41,7 +41,7 @@
  */
 import { MANAGER_PIN_PATTERN } from '../../shared/shift-cashup/types.js';
 import type { Role } from '../../shared/operator/role.js';
-import type { ManagerPinScope, ManagerPinStore } from './manager-pin-store.js';
+import type { CredentialActor, ManagerPinScope, ManagerPinStore } from './manager-pin-store.js';
 import type { OperatorSessionRecord } from './session-manager.js';
 
 /** Enrolment is allowed this long after the manager's online sign-in. */
@@ -58,7 +58,9 @@ export type ManagerPinRefusalReason =
   | 'pin_too_weak'
   | 'current_pin_required'
   | 'current_pin_invalid'
-  | 'current_pin_locked';
+  | 'current_pin_locked'
+  // RT-438: no active record for that handle (or the manager's own) here.
+  | 'manager_not_found';
 
 /** An enrolment refused before anything was written. Names the reason only. */
 export class ManagerPinRefusedError extends Error {
@@ -74,6 +76,8 @@ export class ManagerPinRefusedError extends Error {
 /** The live operator session as the enrolment needs it (main-only). */
 export interface ManagerIdentity {
   operatorSessionId: string;
+  /** The session's operator id (audit attribution). */
+  operatorId: string;
   role: Role;
   /** The `users.id` captured from a manager / admin online sign-in. */
   userId?: string;
@@ -84,12 +88,18 @@ export interface ManagerIdentity {
   branchId: string;
 }
 
+/** The audit actor of an admitted manager's credential operation. */
+function actorOf(manager: ManagerIdentity): CredentialActor {
+  return { operatorId: manager.operatorId, sessionId: manager.operatorSessionId };
+}
+
 /** `ManagerIdentity` of the live session, or null without one. */
 export function managerIdentityOf(record: OperatorSessionRecord | null): ManagerIdentity | null {
   if (record === null) return null;
   const { manager_user_id: userId, manager_signed_in_at: signedInAt } = record;
   return {
     operatorSessionId: record.id,
+    operatorId: record.operator_id,
     role: record.role,
     ...(userId === undefined ? {} : { userId }),
     displayName: record.display_name,
@@ -139,13 +149,19 @@ export interface ManagerPinEnrollmentDeps {
   pairedScope: () => Promise<ManagerPinScope | null>;
   /** `PairingStore.getPairingEpoch` — null while unpaired or revoked. */
   pairingEpoch: () => string | null;
-  store: Pick<ManagerPinStore, 'seal' | 'enrol'>;
+  store: Pick<ManagerPinStore, 'seal' | 'enrol' | 'revoke'>;
   /** ISO-8601 instants. */
   now: () => string;
 }
 
 export interface ManagerPinEnrollment {
   enroll(input: { managerPin: string; currentPin?: string }): Promise<void>;
+  /**
+   * RT-438 (RT-114 C4) — revoke a manager PIN on this terminal: the signed-in
+   * manager's own (no handle), or another manager's by its listed handle. Same
+   * admission as `enroll` (online manager / admin, step-up, usable pairing).
+   */
+  revoke(input: { managerRef?: string }): Promise<void>;
 }
 
 /** An admitted manager: the session, its captured users.id and sign-in time. */
@@ -244,9 +260,31 @@ export function createManagerPinEnrollment(deps: ManagerPinEnrollmentDeps): Mana
         ...(input.currentPin === undefined ? {} : { currentPin: input.currentPin }),
         now: deps.now(),
         onlineAt: admitted.signedInAt,
+        actor: actorOf(admitted.manager),
         guard,
       });
       if (outcome.kind !== 'enrolled') refuse(STORE_REFUSALS[outcome.kind]);
+    },
+
+    async revoke(input) {
+      const admitted = admit();
+      const { epoch, scope } = await pairingOf(admitted.manager);
+      const guard = (): void => {
+        recheck({ admitted, epoch });
+      };
+      guard();
+      const outcome = await deps.store.revoke({
+        scope,
+        target:
+          input.managerRef === undefined
+            ? { userId: admitted.userId }
+            : { managerRef: input.managerRef },
+        requesterUserId: admitted.userId,
+        now: deps.now(),
+        actor: actorOf(admitted.manager),
+        guard,
+      });
+      if (outcome.kind === 'not_found') refuse('manager_not_found');
     },
   };
 }

@@ -30,6 +30,7 @@ import {
 } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
 import type { VerifiedApprover } from '../shift-cashup-service.js';
 import {
+  CASHIER_SESSION_ID,
   CLOSED_AT,
   MANAGER,
   MANAGER_PIN,
@@ -110,7 +111,14 @@ describe('verifyApprover — keyed, and only when the close needs it', () => {
     openShift();
     const approver = await approval(FLOAT - 75);
     expect(harness.state.verifyCalls).toEqual([
-      { scope: SCOPE, managerRef: MANAGER_REF, pin: MANAGER_PIN, now: CLOSED_AT },
+      {
+        scope: SCOPE,
+        managerRef: MANAGER_REF,
+        pin: MANAGER_PIN,
+        now: CLOSED_AT,
+        // Review (Codex P2): the closer who presented the PIN, for a lockout audit.
+        actor: { operatorId: 'op-cashier-1', sessionId: CASHIER_SESSION_ID },
+      },
     ]);
     const closed = harness.service.closeShift({ countedCashMinor: FLOAT - 75, approver });
     expect(closed.varianceMinor).toBe(-75);
@@ -159,6 +167,8 @@ describe('verifyApprover — keyed, and only when the close needs it', () => {
     ['a wrong PIN or unknown manager', { kind: 'invalid' }, 'approver_invalid'],
     ['a record under lockout', { kind: 'locked' }, 'approver_locked'],
     ['an expired record (no online sign-in for 30 days)', { kind: 'expired' }, 'approver_expired'],
+    // RT-438: disabled by repeated lockouts, or revoked.
+    ['a disabled or revoked record', { kind: 'revoked' }, 'approver_expired'],
     ['the closing cashier', { kind: 'verified', userId: USER }, 'approver_is_closer'],
   ])('refuses %s and counts it for the shift', async (_name, verdict, reason) => {
     openShift();

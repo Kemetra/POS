@@ -35,8 +35,16 @@ import type { OperatorSessionRecord } from '../../operator/session-manager.js';
 
 type Listener = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
-const { OPEN, PAY_IN, PAY_OUT, CLOSE, STATUS, ENROLL_MANAGER_PIN, LIST_ENROLLED_MANAGERS } =
-  SHIFT_CASHUP_IPC_CHANNELS;
+const {
+  OPEN,
+  PAY_IN,
+  PAY_OUT,
+  CLOSE,
+  STATUS,
+  ENROLL_MANAGER_PIN,
+  LIST_ENROLLED_MANAGERS,
+  REVOKE_MANAGER_PIN,
+} = SHIFT_CASHUP_IPC_CHANNELS;
 const REF = '7f3c1e2a-0b4d-4c5e-8f60-0000000000aa';
 const APPROVER = { managerRef: REF, managerPin: '246810' };
 const CHANNELS = Object.values(SHIFT_CASHUP_IPC_CHANNELS);
@@ -66,6 +74,7 @@ function setup(locked = false) {
     status: vi.fn(() => Promise.resolve({ kind: 'status' })),
     enrollManagerPin: vi.fn(() => Promise.resolve({ kind: 'enrolled' })),
     listEnrolledManagers: vi.fn(() => Promise.resolve({ kind: 'managers', managers: [] })),
+    revokeManagerPin: vi.fn(() => Promise.resolve({ kind: 'revoked' })),
   };
   registerShiftCashupHandlers(
     createSessionLockGuardedIpcMain(fake.ipcMain, () => locked),
@@ -78,7 +87,7 @@ const NOTE_MAX = 'n'.repeat(SHIFT_NOTE_MAX_LENGTH);
 const MOVEMENT = { amountMinor: 1, reasonCode: 'bank_drop' };
 
 describe('shiftCashup IPC registration', () => {
-  it('registers exactly the seven channels, none on the lock allowlist', () => {
+  it('registers exactly the eight channels, none on the lock allowlist', () => {
     const { handlers } = setup();
     expect([...handlers.keys()].sort()).toEqual([...CHANNELS].sort());
     for (const channel of CHANNELS) expect(LOCKED_ALLOWED_CHANNELS.has(channel)).toBe(false);
@@ -115,6 +124,9 @@ describe('valid payloads reach the bridge unchanged', () => {
     [ENROLL_MANAGER_PIN, 'enrollManagerPin', { managerPin: '246810' }],
     [ENROLL_MANAGER_PIN, 'enrollManagerPin', { managerPin: '00000000' }],
     [ENROLL_MANAGER_PIN, 'enrollManagerPin', { managerPin: '246810', currentPin: '13572468' }],
+    // RT-438: their own (no handle) or a listed manager's.
+    [REVOKE_MANAGER_PIN, 'revokeManagerPin', {}],
+    [REVOKE_MANAGER_PIN, 'revokeManagerPin', { managerRef: REF }],
   ])('%s → %s(%j)', async (channel, member, payload) => {
     const { invoke, bridge } = setup();
     await invoke(channel, payload);
@@ -202,6 +214,13 @@ describe('anything outside the closed shapes is invalid_input, before the bridge
     [ENROLL_MANAGER_PIN, { managerPin: '246810', currentPin: '1234' }],
     [ENROLL_MANAGER_PIN, { managerPin: '246810', currentPin: 246810 }],
     [ENROLL_MANAGER_PIN, { currentPin: '246810' }],
+    // RT-438
+    ...NOT_RECORDS.map((p): [string, unknown] => [REVOKE_MANAGER_PIN, p]),
+    [REVOKE_MANAGER_PIN, { managerRef: REF.toUpperCase() }],
+    [REVOKE_MANAGER_PIN, { managerRef: 'mgr-1' }],
+    [REVOKE_MANAGER_PIN, { managerRef: 7 }],
+    [REVOKE_MANAGER_PIN, { managerRef: REF, userId: 'u-2' }],
+    [REVOKE_MANAGER_PIN, { userId: 'u-2' }],
     [LIST_ENROLLED_MANAGERS, { scope: 'all' }],
     [LIST_ENROLLED_MANAGERS, null],
     [STATUS, { scope: 'all' }],

@@ -56,6 +56,7 @@ const NOW = '2026-10-06T08:00:00.000Z';
 function manager(over: Partial<ManagerIdentity> = {}): ManagerIdentity {
   return {
     operatorSessionId: 'sess-mgr-1',
+    operatorId: 'op-mgr-1',
     role: 'manager',
     userId: MANAGER_USER,
     displayName: 'Mona Manager',
@@ -122,7 +123,11 @@ beforeEach(() => {
       return state.pairedScope;
     },
     pairingEpoch: () => state.epoch,
-    store: { seal, enrol: (input) => store.enrol(input) },
+    store: {
+      seal,
+      enrol: (input) => store.enrol(input),
+      revoke: (input) => store.revoke(input),
+    },
     now: () => state.clock,
   });
 });
@@ -388,6 +393,7 @@ describe('re-checked after the awaits, before the write', () => {
       pairingEpoch: () => state.epoch,
       store: {
         seal: (pin) => store.seal(pin),
+        revoke: (input) => store.revoke(input),
         enrol: (input) =>
           enrol({
             ...input,
@@ -426,6 +432,7 @@ describe('managerIdentityOf — the live session as enrolment sees it', () => {
       });
       expect(managerIdentityOf(record)).toEqual({
         operatorSessionId: record.id,
+        operatorId: 'clerk-mgr',
         role: 'manager',
         userId: MANAGER_USER,
         displayName: 'Mona Manager',
@@ -456,6 +463,7 @@ describe('managerIdentityOf — the live session as enrolment sees it', () => {
     });
     expect(managerIdentityOf(record)).toEqual({
       operatorSessionId: record.id,
+      operatorId: 'clerk-c',
       role: 'cashier',
       displayName: 'Cashier',
       tenantId: 't1',
@@ -507,5 +515,93 @@ describe('createManagerOnlineRefresh — an online manager sign-in refreshes the
     const record = signIn({ id: MANAGER_USER });
     createManagerOnlineRefresh({ store, currentTerminalId: () => 'term-1' })(record);
     expect(records()[0]?.[8]).toBe(record.manager_signed_in_at);
+  });
+});
+
+describe('RT-438 — a signed-in manager revokes a manager PIN (RT-114 C4)', () => {
+  const OTHER_USER = '0190f5a2-3b4c-7d8e-9f01-00000000000b';
+
+  function reason(): unknown {
+    return raw.exec('SELECT revoke_reason FROM manager_pin_records WHERE user_id = ?', [
+      MANAGER_USER,
+    ])[0]?.values[0]?.[0];
+  }
+
+  it('revokes their own record without a handle: it no longer verifies or lists', async () => {
+    await enrollment.enroll({ managerPin: PIN });
+    const [listed] = store.list({ scope: SCOPE, now: NOW });
+    await enrollment.revoke({});
+    expect(reason()).toBe('self');
+    expect(store.list({ scope: SCOPE, now: NOW })).toEqual([]);
+    await expect(
+      store.verify({ scope: SCOPE, managerRef: listed?.managerRef ?? '', pin: PIN, now: NOW }),
+    ).resolves.toEqual({ kind: 'revoked' });
+  });
+
+  it("revokes another manager's record by its listed handle", async () => {
+    await enrollment.enroll({ managerPin: PIN });
+    const [listed] = store.list({ scope: SCOPE, now: NOW });
+    state.manager = manager({ userId: OTHER_USER, operatorSessionId: 'sess-mgr-2' });
+    await enrollment.revoke({ managerRef: listed?.managerRef ?? '' });
+    expect(reason()).toBe('other_manager');
+  });
+
+  it('refuses manager_not_found for an unknown handle or when there is nothing to revoke', async () => {
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal('manager_not_found'));
+    await enrollment.enroll({ managerPin: PIN });
+    await expect(
+      enrollment.revoke({ managerRef: '7f3c1e2a-0b4d-4c5e-8f60-000000000999' }),
+    ).rejects.toThrow(refusal('manager_not_found'));
+    await enrollment.revoke({});
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal('manager_not_found'));
+  });
+
+  it.each([
+    ['the flag is off', { enabled: false }, 'feature_disabled'],
+    ['there is no session', { manager: null }, 'no_session'],
+    ['the session is locked', { locked: true }, 'session_locked'],
+  ] as const)('refuses when %s, revoking nothing', async (_label, over, expected) => {
+    await enrollment.enroll({ managerPin: PIN });
+    Object.assign(state, over);
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal(expected));
+    expect(reason()).toBeNull();
+  });
+
+  it('refuses a cashier, a manager without an online identity, and a closed step-up', async () => {
+    await enrollment.enroll({ managerPin: PIN });
+    state.manager = manager({ role: 'cashier' });
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal('not_manager'));
+    state.manager = managerWithoutId();
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal('no_manager_identity'));
+    state.manager = manager();
+    state.clock = new Date(Date.parse(SIGNED_IN_AT) + MANAGER_ENROL_STEP_UP_MS + 1).toISOString();
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal('reauth_required'));
+    expect(reason()).toBeNull();
+  });
+
+  it('refuses when the pairing is unusable or another tenant’s', async () => {
+    await enrollment.enroll({ managerPin: PIN });
+    state.epoch = null;
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal('no_session'));
+    state.epoch = 'epoch-1';
+    state.pairedScope = { ...SCOPE, tenantId: 'other' };
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal('no_session'));
+    expect(reason()).toBeNull();
+  });
+
+  it('refuses when the session changes while the pairing is read', async () => {
+    await enrollment.enroll({ managerPin: PIN });
+    state.duringPairedScopeRead = () => {
+      state.manager = manager({ operatorSessionId: 'sess-other' });
+    };
+    await expect(enrollment.revoke({})).rejects.toThrow(refusal('no_session'));
+    expect(reason()).toBeNull();
+  });
+
+  it('a revoked manager enrols again online without the old PIN', async () => {
+    await enrollment.enroll({ managerPin: PIN });
+    await enrollment.revoke({});
+    await enrollment.enroll({ managerPin: NEW_PIN });
+    await expect(verify(NEW_PIN)).resolves.toMatchObject({ kind: 'verified' });
   });
 });

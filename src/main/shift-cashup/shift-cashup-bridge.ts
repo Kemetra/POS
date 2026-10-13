@@ -113,6 +113,7 @@ const ENROLMENT_REFUSALS: Readonly<Record<ManagerPinRefusalReason, ShiftCashupRe
   current_pin_required: 'current_pin_required',
   current_pin_invalid: 'current_pin_invalid',
   current_pin_locked: 'current_pin_locked',
+  manager_not_found: 'manager_not_found',
 };
 
 /** A known refusal: the precise (logged) reason and the renderer's. */
@@ -252,6 +253,11 @@ export function createShiftCashupBridge(deps: ShiftCashupBridgeDeps): ShiftCashu
           ...(currentPin === undefined ? {} : { currentPin }),
         });
         return { kind: 'enrolled' as const };
+      }),
+    revokeManagerPin: (req) =>
+      attempt('revokeManagerPin', async () => {
+        await enrollment.revoke(req.managerRef === undefined ? {} : { managerRef: req.managerRef });
+        return { kind: 'revoked' as const };
       }),
     listEnrolledManagers: () =>
       attempt('listEnrolledManagers', () => ({

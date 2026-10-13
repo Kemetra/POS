@@ -84,6 +84,14 @@ export const AUDIT_ACTION_CATEGORIES = [
   // header.
   'pairing.device_revoked',
   'pairing.device_revoked_cleared',
+  // RT-438 (MA-1, RT-114 §4) — the terminal's manager PIN lifecycle. Local
+  // only. Payload ids only (`manager_ref`, and the closed revoke reason):
+  // never a PIN, a hash, a seal or a users.id. Open-set at the SQL layer
+  // (0004); recorded in migration 0047's header.
+  'manager_credential.enrolled',
+  'manager_credential.revoked',
+  'manager_credential.locked_out',
+  'manager_credential.disabled',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 
@@ -96,7 +104,8 @@ export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
  *
  * It cannot collide with a real operator id: those are provider subjects
  * (Clerk `user_<base62>`) or `users.id` UUIDs, neither of which can contain a
- * `:`. Used ONLY by the `pairing.device_revoked*` categories.
+ * `:`. Used by the `pairing.device_revoked*` categories, and (RT-438) as the
+ * fallback actor of a `manager_credential.*` event with no live session.
  */
 export const SYSTEM_DEVICE_ACTOR_ID = 'system:device' as const;
 
