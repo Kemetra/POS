@@ -1,0 +1,13 @@
+# RT-462 — Codecov is informational only. The required gate stays the `ci`
+# aggregate check plus the per-file Vitest coverage thresholds in
+# vitest.config.ts; nothing here may block a merge.
+comment: false
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
