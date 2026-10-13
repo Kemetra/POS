@@ -9,6 +9,7 @@ import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { DatabaseHandle } from '../db/client.js';
 import type { OperatorSessionRecord, SessionManager } from '../operator/session-manager.js';
 import type { CartStore } from './cart-store.js';
+import type { HeldAttempts } from '../payments/held-attempts.js';
 
 /**
  * RT-352 (RT-116 S4a, §3.1 / §3.3) — a draft cart outlives its session.
@@ -24,17 +25,34 @@ import type { CartStore } from './cart-store.js';
  * a restart (contract §6). The `onEnded` side is best-effort: it closes an
  * empty cart and audits the hold.
  *
- * Scope: `editing` / `discount_pending_attribution` drafts. `handing_off` is
- * never persisted by main. Frozen carts are left alone: a settled sale's cart
- * also stays `frozen_handed_off`, so resuming one needs the payment check
- * that the stuck-attempt slice (S5) owns.
+ * Scope: `editing` / `discount_pending_attribution` drafts and, since RT-442
+ * (S5), `frozen_handed_off` carts whose sale is not settled. `handing_off` is
+ * never persisted by main. A settled sale's cart also stays
+ * `frozen_handed_off`; it is never held or re-attached (008 owns it). A frozen
+ * cart whose force-failed attempt still holds live tender is left for manager
+ * recovery (RT-116 S6).
+ *
+ * RT-442 — the payment side (`payments/held-attempts.ts`): at a session end a
+ * frozen cart's zero-funds attempt is closed and a live-tender attempt becomes
+ * the stuck attempt; at sign-in the owner's stuck attempt and its cart
+ * re-attach FIRST, whatever their age; otherwise the newest held cart does.
  *
  * Re-binding `operator_session_id` is the mechanism. The cart ownership
  * check (`cart.operator_session_id === session.id`) is unchanged.
  */
 
-const HELD_STATES = `('editing', 'discount_pending_attribution')`;
-const SESSION_END_STATES = `('empty', 'editing', 'discount_pending_attribution')`;
+const HELD_STATES = `('editing', 'discount_pending_attribution', 'frozen_handed_off')`;
+const SESSION_END_STATES = `('empty', 'editing', 'discount_pending_attribution', 'frozen_handed_off')`;
+/** RT-442: a frozen cart is held only while its sale is open (not settled, not in recovery). */
+const OPEN_SALE = `NOT EXISTS (
+              SELECT 1 FROM payment_attempts a
+               WHERE a.envelope_cart_id = carts.cart_id
+                 AND (a.state = 'settled'
+                      OR (a.state = 'force_failed' AND EXISTS (
+                            SELECT 1 FROM payment_tender_lines l
+                             WHERE l.payment_attempt_id = a.payment_attempt_id
+                               AND l.state IN ('applying', 'applied', 'reversal_pending'))))
+            )`;
 // `state <> 'cancelled'` matches the partial owner-key index (0046), so SQLite can use it.
 const OWNER_KEY = `tenant_id = ? AND branch_id = ? AND terminal_id = ? AND owning_operator_id = ?
             AND state <> 'cancelled'`;
@@ -59,6 +77,8 @@ export interface HeldCartsDeps {
   db: DatabaseHandle;
   cartStore: Pick<CartStore, 'cancelCartAndOutbox'>;
   auditEmitter: Pick<AuditEmitter, 'emit'>;
+  /** RT-442 (S5) — the payment side of a held frozen cart. */
+  attempts: HeldAttempts;
   /** The pairing row's real terminal_id, or null when unpaired. */
   resolveTerminalId: () => string | null;
   clock?: () => Date;
@@ -83,7 +103,7 @@ function ownerKey(session: OperatorSessionRecord, terminal_id: string): string[]
 }
 
 export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
-  const { db, cartStore, auditEmitter, resolveTerminalId } = deps;
+  const { db, cartStore, auditEmitter, resolveTerminalId, attempts } = deps;
   const now = (): string => (deps.clock?.() ?? new Date()).toISOString();
 
   const ownerCarts = (session: OperatorSessionRecord, terminal_id: string): CartRef[] =>
@@ -91,6 +111,7 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
       db.prepare(
         `SELECT ${CART_REF} FROM carts
           WHERE ${OWNER_KEY} AND operator_session_id <> ? AND state IN ${SESSION_END_STATES}
+            AND ${OPEN_SALE}
           ${NEWEST_FIRST}`,
       ) as Rows<CartRef>
     ).all(...ownerKey(session, terminal_id), session.id);
@@ -153,6 +174,9 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
     );
   }
 
+  const cartRef = (cart_id: string): CartRef | undefined =>
+    (db.prepare(`SELECT ${CART_REF} FROM carts WHERE cart_id = ?`) as Row<CartRef>).get(cart_id);
+
   function reattach(cart: CartRef, session: OperatorSessionRecord): void {
     const { changes } = (
       db.prepare(
@@ -168,14 +192,27 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
     });
   }
 
+  /** §3.1: the owner's stuck attempt and its cart re-attach first, whatever their age. */
+  function reattachStuck(session: OperatorSessionRecord, terminal_id: string): boolean {
+    const stuck = attempts.findStuck({ terminal_id, session });
+    if (stuck === undefined) return false;
+    attempts.reattach(stuck, session, terminal_id);
+    const cart = cartRef(stuck.cart_id);
+    if (cart !== undefined && cart.operator_session_id !== session.id) reattach(cart, session);
+    return true;
+  }
+
   function reattachOnSignIn(session: OperatorSessionRecord): void {
     const terminal_id = resolveTerminalId();
     if (terminal_id === null) return;
+    // §6: a restart fires no session end, so the zero-funds close runs here too.
+    attempts.closeZeroFunds({ terminal_id, session });
     db.transaction(() => {
       const carts = ownerCarts(session, terminal_id);
       for (const cart of carts.filter((c) => c.state === 'empty')) {
         closeEmpty(cart, session.operator_id);
       }
+      if (reattachStuck(session, terminal_id)) return;
       const newest = carts.find((c) => c.state !== 'empty');
       if (newest !== undefined) reattach(newest, session);
     })();
@@ -185,8 +222,25 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
     session: OperatorSessionRecord,
     cause: SessionEndCause | undefined,
   ): void {
+    const carts = sessionCarts(session.id);
+    // The payment side first: each FSM call commits on its own.
+    const settled = new Set(
+      carts
+        .filter((cart) => cart.state === 'frozen_handed_off')
+        .filter(
+          (cart) =>
+            attempts.onFrozenCartSessionEnd({
+              cart_id: cart.cart_id,
+              session,
+              cause,
+              terminal_id: cart.terminal_id,
+            }) === 'settled',
+        )
+        .map((cart) => cart.cart_id),
+    );
     db.transaction(() => {
-      for (const cart of sessionCarts(session.id)) {
+      for (const cart of carts) {
+        if (settled.has(cart.cart_id)) continue;
         if (cart.state === 'empty') {
           closeEmpty(cart, session.operator_id);
           continue;
@@ -204,7 +258,8 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
     (
       db.prepare(
         `SELECT cart_id FROM carts
-          WHERE operator_session_id = ? AND state IN ${HELD_STATES} ${NEWEST_FIRST} LIMIT 1`,
+          WHERE operator_session_id = ? AND state IN ${HELD_STATES} AND ${OPEN_SALE}
+          ${NEWEST_FIRST} LIMIT 1`,
       ) as Row<{ cart_id: string }>
     ).get(session_id);
 
@@ -214,7 +269,8 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
     const row = (
       db.prepare(
         `SELECT COUNT(*) AS n FROM carts
-          WHERE ${OWNER_KEY} AND operator_session_id <> ? AND state IN ${HELD_STATES}`,
+          WHERE ${OWNER_KEY} AND operator_session_id <> ? AND state IN ${HELD_STATES}
+            AND ${OPEN_SALE}`,
       ) as Row<{ n: number }>
     ).get(...ownerKey(session, terminal_id), session.id);
     return row?.n ?? 0;
@@ -224,7 +280,7 @@ export function createHeldCarts(deps: HeldCartsDeps): HeldCarts {
     if (session === null) return NOTHING_TO_RESUME;
     return {
       cart_id: currentDraft(session.id)?.cart_id ?? null,
-      payment_attempt_id: null,
+      payment_attempt_id: attempts.startedFor(session.id),
       other_held_cart_count: otherHeldCount(session),
     };
   }

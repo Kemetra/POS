@@ -40,9 +40,8 @@ import {
  * renderer-side type checks are secondary UX defence only.
  *
  * Security (Constitution §VII / contracts/bridge-api.md):
- *   • `payments.discardOnSessionEnd` is INTERNAL to the main process
- *     and is intentionally absent from this surface. The renderer
- *     MUST NOT be able to trigger session-end discard for an attempt.
+ *   • RT-442: the internal `payments.discardOnSessionEnd` is deleted (no
+ *     session end reverses tender); it was never on this surface.
  *   • `payments.forceFail` is Slice 4 (still gated) and intentionally
  *     absent.
  *   • `vouchers.validate` is Wave 4 (§A4-B authorisation 2026-05-25);

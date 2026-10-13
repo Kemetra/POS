@@ -92,6 +92,11 @@ export interface EmitPaymentCancelledInput extends BaseAuditContext {
   cart_id: string;
   handoff_action_id: string;
   cancelled_at: string;
+  /**
+   * RT-442 (RT-116 §3.3, Z2) — set when no one asked: the attempt's session
+   * ended while it held no live tender, so it was closed to free the slot.
+   */
+  cause?: 'session_ended_no_funds';
 }
 
 export interface EmitPaymentFailedInput extends BaseAuditContext {
@@ -362,6 +367,7 @@ export function createPaymentAuditEmitter(
           handoff_action_id: input.handoff_action_id,
           cancelled_at: input.cancelled_at,
           attribution_operator_id: input.attribution_operator_id,
+          ...(input.cause === undefined ? {} : { cause: input.cause }),
         },
       });
     },

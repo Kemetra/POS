@@ -110,6 +110,32 @@ function discardStaleAttemptForOtherCart(
 }
 
 /**
+ * RT-442 (RT-116 S5, §3.1) — the owner returns to a held sale: their stuck
+ * attempt was re-bound to this session at sign-in, and Checkout starts again
+ * from the same envelope. Hand back THAT attempt (the renderer then reads its
+ * tender) instead of refusing `attempt_already_started_on_terminal`. Only the
+ * exact same envelope, on an attempt this session already owns: nothing about
+ * ownership (M5) is relaxed.
+ */
+function resumableAttempt(
+  deps: Pick<PaymentsStartHandlerDeps, 'attemptsRepo'>,
+  session: { terminal_id: string; operator_session_id: string },
+  req: PaymentsStartRequest,
+): string | null {
+  const open = deps.attemptsRepo.findStartedByTerminal(session.terminal_id);
+  if (
+    open === undefined ||
+    open.operator_session_id !== session.operator_session_id ||
+    open.envelope_cart_id !== req.envelope_cart_id ||
+    open.envelope_handoff_action_id !== req.envelope_handoff_action_id ||
+    open.envelope_subtotal_minor !== req.envelope_subtotal_minor
+  ) {
+    return null;
+  }
+  return open.payment_attempt_id;
+}
+
+/**
  * Bridge-boundary input check. The contract types envelope_version as the
  * literal 'v1', so another value can only come from an out-of-contract caller;
  * cast through `unknown` so the check is not optimised away. The subtotal must
@@ -214,6 +240,12 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
     });
     if (eligibility.kind === 'refused') {
       return await Promise.resolve({ kind: 'refused', reason: eligibility.reason });
+    }
+
+    // 3a'. RT-442 — resume this session's own open attempt for this envelope.
+    const resumed = resumableAttempt(deps, session, req);
+    if (resumed !== null) {
+      return await Promise.resolve({ kind: 'ok', payment_attempt_id: resumed });
     }
 
     // 3b. Stale-attempt recovery (see discardStaleAttemptForOtherCart).

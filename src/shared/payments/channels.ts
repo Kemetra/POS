@@ -10,8 +10,8 @@
  * Wave 4 adds `vouchers:validate` under §A4-B clearance (2026-05-25).
  * `payments.forceFail` is still gated and intentionally absent.
  *
- * Note: `payments.discardOnSessionEnd` is internal to the main process
- * and NEVER exposed via contextBridge. It does not appear here.
+ * RT-442 (RT-116 S5): the internal `payments.discardOnSessionEnd` is deleted;
+ * no session end reverses tender. It never had a channel.
  */
 
 export const PAYMENTS_IPC_CHANNELS = {

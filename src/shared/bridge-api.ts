@@ -233,11 +233,18 @@ export interface SessionStateEvent {
  * only: no line items, names or amounts.
  */
 export interface ResumeStateView {
-  /** The draft cart re-attached to the current session at sign-in, if any. */
+  /**
+   * The cart re-attached to the current session at sign-in, if any: a draft,
+   * or (RT-442) a handed-off cart whose sale is still open.
+   */
   cart_id: string | null;
-  /** Reserved for the stuck-attempt slice (RT-116 S5); always null today. */
-  payment_attempt_id: null;
-  /** Further drafts this operator holds on this terminal that were not re-attached. */
+  /**
+   * RT-442 (RT-116 S5) — the started payment attempt bound to this session:
+   * the stuck attempt re-attached at sign-in. Checkout resumes it; an opaque
+   * id, nothing about its tender.
+   */
+  payment_attempt_id: string | null;
+  /** Further held carts this operator has on this terminal that were not re-attached. */
   other_held_cart_count: number;
 }
 

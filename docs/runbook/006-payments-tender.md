@@ -198,6 +198,33 @@ This is structural, not policy-based: even a programming mistake in the renderer
 
 ---
 
+## 5a. A payment outlives its session (RT-442, RT-116 S5)
+
+No session end ever reverses a tender line: not sign-out, takeover, revocation, a superseding
+sign-in at the lock, or an app restart.
+
+- **Live tender** (a line `applying`, `applied` or `reversal_pending`): the attempt stays `started`
+  and becomes this terminal's **stuck attempt**. Audit `payment.held_on_session_end` with the
+  tender types and amounts. The cart is held, frozen.
+- **No live tender:** the attempt is `cancelled` (nothing to reverse). Audit `payment.cancelled`
+  with `cause: 'session_ended_no_funds'`. This frees the terminal for the next checkout. After a
+  restart, which fires no session end, the same close runs at the next sign-in.
+- **Settled:** untouched; finalization owns it.
+
+**When the owner signs in again** on this terminal, the stuck attempt and its cart re-attach to
+the new session first, whatever their age (`payment.reattached`, `cart.reattached`). The Sale
+screen opens on the frozen cart; Continue to Checkout resumes the **same** attempt, with the tender
+already taken shown.
+
+**Anyone else** is refused sign-in on this terminal while the stuck attempt exists
+(`terminal_has_unresolved_payment`, RT-444). Until manager recovery ships (RT-441), only the owner
+can finish or cancel that sale.
+
+The internal `payments.discardOnSessionEnd` and the #380 session-end / sign-in sweep are deleted.
+Nothing payment-related runs at boot.
+
+---
+
 ## 6. Ops — deferred-reversal resolver
 
 The resolver retries `vouchers.reverse` for voucher lines stuck in `state='reversal_pending'`. It runs at three triggers:

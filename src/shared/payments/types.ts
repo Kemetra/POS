@@ -120,6 +120,10 @@ export const PAYMENT_AUDIT_CATEGORIES = [
   'tender.reversed',
   // Slice 4 only — typed here for the audit-emitter; emission is gated.
   'tender.reversal_pending',
+  // RT-442 (RT-116 S5, §3.1 / §3.3) — an attempt holding live tender outlives
+  // its session as the terminal's stuck attempt, and re-attaches for its owner.
+  'payment.held_on_session_end',
+  'payment.reattached',
 ] as const;
 export type PaymentAuditCategory = (typeof PAYMENT_AUDIT_CATEGORIES)[number];
 

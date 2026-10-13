@@ -180,8 +180,7 @@ const api: PreloadBridgeAPI = {
   cart,
   // 006-payments-tender — payments.* + tender.* (Slice 3 / T142) +
   // vouchers.* (Wave 4 / §A4-B authorisation 2026-05-25).
-  // payments.discardOnSessionEnd is internal; payments.forceFail is
-  // still gated and intentionally NOT exposed.
+  // payments.forceFail is still gated and intentionally NOT exposed.
   payments,
   tender,
   vouchers,

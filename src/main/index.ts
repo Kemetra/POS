@@ -27,6 +27,7 @@ import { registerCartHandlers } from './ipc/cart.js';
 import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
 import { bindCartStore } from './cart/cart-store.js';
 import { createHeldCarts, registerHeldCartLifecycle } from './cart/held-carts.js';
+import { createHeldAttempts } from './payments/held-attempts.js';
 // 009-product-search-and-barcode-lookup S4 (T043) — production R7 resolver.
 import { createProductRepo } from './catalogue/product-repo.js';
 import { createCatalogueResolver } from './catalogue/resolve-item-ref.js';
@@ -63,8 +64,6 @@ import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel
 import { createPaymentsForceFailHandler } from './payments/handlers/payments-force-fail.js';
 import { createPaymentsSubscribeHandler } from './payments/handlers/payments-subscribe.js';
 import { createPaymentsReadHandler } from './payments/handlers/payments-read.js';
-import { createPaymentsDiscardOnSessionEndHandler } from './payments/handlers/payments-discard-on-session-end.js';
-import { createStuckAttemptSweeper } from './payments/sweep-stuck-attempt.js';
 import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
 import { createTenderReverseHandler } from './payments/handlers/tender-reverse.js';
 import { createTenderReadHandler } from './payments/handlers/tender-read.js';
@@ -1059,6 +1058,24 @@ singleInstanceReady
       cartStore: bindCartStore(db),
       auditEmitter,
       resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      // RT-442 (RT-116 S5) — the payment side of a held frozen cart. The FSM and
+      // payment audit are built below; this runs only at a sign-in or session end.
+      attempts: createHeldAttempts({
+        db,
+        paymentAttemptFsm: {
+          cancel: (input) => paymentAttemptFsm.cancel(input),
+        },
+        auditEmitter: {
+          emitPaymentCancelled: (input) => {
+            paymentAuditEmitter.emitPaymentCancelled(input);
+          },
+          emitRaw: (event) => {
+            paymentAuditEmitter.emitRaw(event);
+          },
+        },
+        uuid: () => randomUUID(),
+        clock: () => new Date(),
+      }),
     });
     registerHeldCartLifecycle({
       sessionManager: operatorSessionManager,
@@ -1278,9 +1295,7 @@ singleInstanceReady
     // 006-payments-tender Slice 3 (T142 + F-002/F-003/F-004) — wire the
     // payments.* + tender.* bridge surface. The 8 handler factories share
     // the three S3a repositories, both FSMs, and a single idempotency
-    // helper + audit-emitter pair. payments.discardOnSessionEnd is
-    // instantiated but NOT registered on ipcMain — it's an internal
-    // handler called by the operator-session-end signal.
+    // helper + audit-emitter pair.
     const paymentsAttemptsRepo = bindPaymentAttemptsRepository(db);
     const paymentsLinesRepo = bindPaymentTenderLinesRepository(db);
     const paymentsOutboxRepo = bindPaymentActionOutboxRepository(db);
@@ -1535,41 +1550,10 @@ singleInstanceReady
       paymentsForceFail,
     });
 
-    // #380 (F-007 part b) — orphan-attempt recovery. A stuck `started` payment
-    // attempt blocks every future sale on the terminal. The discard handler
-    // (LIFO-reverse + fail + audit) existed but was never wired to any signal.
-    // Wire it to the session lifecycle: clean session-END discards a live
-    // orphan; sign-in (session-START) recovers the CRASH case where end() never
-    // ran. Both resolve the REAL terminal_id (F-007 part a) and reuse the same
-    // idempotent discard. Fired role-agnostically — the brick is terminal-
-    // scoped and blocks every operator at the terminal.
-    const paymentsDiscardOnSessionEnd = createPaymentsDiscardOnSessionEndHandler({
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
-      paymentAttemptFsm,
-      tenderLineFsm,
-      auditEmitter: paymentAuditEmitter,
-      uuid: paymentsUuid,
-      clock: paymentsClock,
-    });
-    const sweepStuckAttempt = createStuckAttemptSweeper({
-      attemptsRepo: paymentsAttemptsRepo,
-      discard: paymentsDiscardOnSessionEnd,
-      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
-      // RT-117 — never auto-reverse an attempt that holds live tender.
-      attemptHasLiveTender: bindAttemptHasLiveTender(db),
-      logError: (err, ctx) => {
-        mainLogger.error({ err, ...ctx }, 'stuck_attempt_sweep:failed');
-      },
-    });
-    // Sync lifecycle hooks → fire-and-forget the async sweep. The SessionManager
-    // wrappers swallow subscriber throws, so the sweeper logs its own failures.
-    operatorSessionManager.onEnded(() => {
-      void sweepStuckAttempt();
-    });
-    operatorSessionManager.onStarted(() => {
-      void sweepStuckAttempt();
-    });
+    // RT-442 (RT-116 S5, §9) — the #380 session-end / sign-in reversal sweep
+    // is retired: no session end ever reverses tender. A zero-funds attempt is
+    // closed and a live-tender attempt is held for its owner by the held-cart
+    // lifecycle (`payments/held-attempts.ts`); nothing runs at boot (§6).
 
     // 006 T271 — deferred-reversal resolver bootstrap.
     //
