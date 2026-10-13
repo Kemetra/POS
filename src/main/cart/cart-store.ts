@@ -331,6 +331,12 @@ export interface CartStore {
   getCart(cart_id: string): CartRow | undefined;
   getLine(cart_id: string, line_id: string): CartLineRow | undefined;
   findActiveLineByItemRef(cart_id: string, item_ref: string): CartLineRow | undefined;
+  /**
+   * The action recorded under `action_id`. RT-440: a key `cart.park` /
+   * `cart.resume` recorded in `cart_park_actions` answers too, with its kind
+   * (and no line or payload), so every cart handler's replay check refuses it
+   * `idempotency_payload_mismatch` like any other key of a different action.
+   */
   getOutboxRow(action_id: string): OutboxRow | undefined;
 }
 
@@ -344,6 +350,15 @@ const CANCEL_CART_SQL = `UPDATE carts
  * (`requireOperatorSession` + the `handing_off` freeze). RT-440: a cart parked
  * while the add awaited the item resolver is not mutable either.
  */
+/** RT-440 (R-7): one idempotency namespace across the outbox and park / resume. */
+const RECORDED_ACTION_SQL = `SELECT action_id, cart_id, line_id, action_kind, acting_operator_id,
+         attribution_operator_id, operator_session_id, payload_json, applied_at, synced_at
+    FROM cart_action_outbox WHERE action_id = ?
+  UNION ALL
+  SELECT idempotency_key, cart_id, NULL, action_kind, '', NULL, '', '{}', applied_at, NULL
+    FROM cart_park_actions WHERE idempotency_key = ?
+  LIMIT 1`;
+
 const MUTABLE_CART_GUARD_SQL = `SELECT 1 AS ok FROM carts
     WHERE cart_id = ? AND state NOT IN ('handing_off', 'frozen_handed_off', 'cancelled')
       AND parked_at IS NULL`;
@@ -445,9 +460,7 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
   const findActiveLineStmt = db.prepare(
     `SELECT * FROM cart_lines WHERE cart_id = ? AND item_ref = ? AND removed_at IS NULL LIMIT 1`,
   ) as PrepareGet<CartLineRow>;
-  const getOutboxStmt = db.prepare(
-    `SELECT * FROM cart_action_outbox WHERE action_id = ?`,
-  ) as PrepareGet<OutboxRow>;
+  const getOutboxStmt = db.prepare(RECORDED_ACTION_SQL) as PrepareGet<OutboxRow>;
   const subtotalStmt = db.prepare(
     `SELECT COALESCE(SUM(line_subtotal_minor), 0) AS total
        FROM cart_lines
@@ -786,7 +799,7 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
     },
 
     getOutboxRow(action_id): OutboxRow | undefined {
-      return getOutboxStmt.get(action_id);
+      return getOutboxStmt.get(action_id, action_id);
     },
   };
 }

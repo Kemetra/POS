@@ -405,6 +405,31 @@ describe('cart.resume — other refusals', () => {
   });
 });
 
+describe('one idempotency namespace with the cart bridge (R-7)', () => {
+  it('refuses a cart call that reuses a park or resume key', async () => {
+    const cart = await openSale(w, [PARA]);
+    const parkKey = parkCart(w, cart);
+    const req = resumeReq(cart);
+    w.parks.resume(req);
+    const mismatch = { kind: 'refused', reason: 'idempotency_payload_mismatch' };
+
+    expect(
+      await w.cart.linesAdd({
+        cart_id: cart,
+        item_ref: IBUP,
+        quantity: 1,
+        idempotency_key: req.idempotency_key,
+      }),
+    ).toEqual(mismatch);
+    expect(await w.cart.void({ cart_id: cart, idempotency_key: parkKey })).toEqual(mismatch);
+    expect(await w.cart.create({ idempotency_key: parkKey })).toEqual(mismatch);
+    expect(
+      rows(w, `SELECT 1 FROM cart_lines WHERE cart_id = ? AND item_ref = ?`, [cart, IBUP]),
+    ).toEqual([]);
+    expect(cartOf(cart)?.state).toBe('editing');
+  });
+});
+
 describe('no Undo across a park (R-3)', () => {
   it('refuses Undo of a pre-park line after park and after resume, and of a re-price', async () => {
     const cart = await openSale(w, [PARA]);
