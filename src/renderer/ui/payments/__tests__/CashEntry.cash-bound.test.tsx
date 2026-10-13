@@ -150,3 +150,38 @@ describe("RT-437 — main's refusal holds until the amount is edited (Codex P2 #
     expect(onDraftChange).toHaveBeenLastCalledWith(10_000);
   });
 });
+
+describe('RT-437 — a refusal answers the amount it was sent for (Codex P2 #652)', () => {
+  it('an amount edited while the refusal was in flight is not marked refused', async () => {
+    let answer: (r: TenderApplyResponse) => void = () => undefined;
+    const tenderApply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const onDraftChange = vi.fn<(minor: number | null) => void>();
+    render(
+      <CashEntry
+        remainingBalanceMinor={20_000_000}
+        paymentAttemptId="pa-1"
+        tenderApply={tenderApply}
+        onApplied={vi.fn()}
+        onDraftChange={onDraftChange}
+      />,
+    );
+    const input = screen.getByTestId('cash-entry-amount-input');
+    const confirm = screen.getByTestId('cash-entry-confirm');
+    fireEvent.change(input, { target: { value: '150000' } });
+    fireEvent.click(confirm);
+    // The cashier corrects the amount before main answers.
+    fireEvent.change(input, { target: { value: '100' } });
+    answer({ kind: 'refused', reason: 'cash_amount_out_of_range' });
+    await waitFor(() => {
+      expect(confirm).toBeEnabled();
+    });
+    expect(screen.queryByTestId('cash-entry-out-of-range')).toBeNull();
+    expect(input).not.toHaveAttribute('aria-invalid');
+    expect(onDraftChange).toHaveBeenLastCalledWith(10_000);
+  });
+});

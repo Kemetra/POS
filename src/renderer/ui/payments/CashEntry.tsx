@@ -83,7 +83,8 @@ export function CashEntry({
   const [rawInput, setRawInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [nothingOwed, setNothingOwed] = useState<boolean>(false);
-  const [outOfRangeRefused, setOutOfRangeRefused] = useState<boolean>(false);
+  // RT-437: the amount main refused as out of range (null when none).
+  const [refusedAmountMinor, setRefusedAmountMinor] = useState<number | null>(null);
   const [isApplying, setIsApplying] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -117,11 +118,13 @@ export function CashEntry({
   // applies remain allowed because they happen while remaining is still > 0.
   // RT-437 (D-F2) — the same pure rule main enforces: above max(cash cap,
   // remaining) the amount is scanner or typing digits, never cash received.
-  // Main stays the authority: once it refused this amount (its balance can be
-  // newer than this screen's), the amount stays refused until it is edited,
-  // so the apply stays off and the ledger does not preview it (Codex P2 #652).
+  // Main stays the authority: while the field still holds the amount main
+  // refused (its balance can be newer than this screen's), the apply stays off
+  // and the ledger does not preview it. The refusal is tied to the amount it
+  // answered, so an edit made while it was in flight is never marked refused
+  // (Codex P2 ×2 on #652).
   const isOutOfRange =
-    outOfRangeRefused ||
+    (refusedAmountMinor !== null && refusedAmountMinor === amountAppliedMinor) ||
     (isBridged &&
       isRemainingValid &&
       amountAppliedMinor !== null &&
@@ -151,7 +154,7 @@ export function CashEntry({
     setRawInput(next);
     setBridgeRefusal(false);
     setNothingOwed(false);
-    setOutOfRangeRefused(false);
+    setRefusedAmountMinor(null);
   }
 
   async function handleConfirm(): Promise<void> {
@@ -175,7 +178,7 @@ export function CashEntry({
         } else if (response.reason === 'cash_amount_out_of_range') {
           // RT-437 (M-P29) — retrying the same amount can never help: keep it
           // in the field for correction and give the field focus back.
-          setOutOfRangeRefused(true);
+          setRefusedAmountMinor(amountAppliedMinor);
           inputRef.current?.focus();
         } else if (response.reason === 'attempt_fully_tendered') {
           // Retrying can never help here, so this is not the generic line.
