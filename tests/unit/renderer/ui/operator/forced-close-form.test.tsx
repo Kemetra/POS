@@ -8,6 +8,7 @@ import {
   FORCED_CLOSE_REASONS,
   type ForcedCloseReason,
 } from '../../../../../src/shared/audit/payload-schemas.js';
+import { STUCK_SHIFTS_COPY } from '../../../../../src/renderer/v5/manager/stuck-shifts/stuck-shifts-copy.js';
 
 /**
  * 004-operator-session T084 — ForcedCloseForm reason picker tests.
@@ -22,7 +23,13 @@ import {
  *     never the annotation text.
  *   - No financial fields are present in the submit payload.
  *   - No financial or PII fields are rendered.
+ *
+ * RT-502 (VN-S10 S10-5): the form is the v5 dialog's Arabic form, re-exported
+ * from `ui/operator`. The commit is «إغلاق الوردية»; each reason is labelled
+ * in Arabic while its radio value stays the enum member.
  */
+
+const COMMIT = { name: STUCK_SHIFTS_COPY.close };
 
 afterEach(() => {
   cleanup();
@@ -32,14 +39,14 @@ function setup(
   onSubmit?: (payload: { forced_close_reason: ForcedCloseReason; annotation?: string }) => void,
 ) {
   const handler = onSubmit ?? vi.fn();
-  render(<ForcedCloseForm onSubmit={handler} />);
+  render(<ForcedCloseForm onSubmit={handler} onCancel={vi.fn()} />);
   return { onSubmit: handler };
 }
 
 describe('ForcedCloseForm — initial state', () => {
   it('submit button is disabled before any reason is selected', () => {
     setup();
-    const btn = screen.getByRole('button', { name: /confirm|force.?close|submit/i });
+    const btn = screen.getByRole('button', COMMIT);
     expect(btn).toBeDisabled();
   });
 
@@ -53,6 +60,15 @@ describe('ForcedCloseForm — initial state', () => {
     setup();
     for (const reason of FORCED_CLOSE_REASONS) {
       expect(screen.getByDisplayValue(reason)).toBeInTheDocument();
+    }
+  });
+
+  it('labels each reason in Arabic; the radio value stays the enum member', () => {
+    setup();
+    for (const reason of FORCED_CLOSE_REASONS) {
+      expect(
+        screen.getByRole('radio', { name: STUCK_SHIFTS_COPY.reasons[reason] }),
+      ).toHaveAttribute('value', reason);
     }
   });
 
@@ -71,7 +87,7 @@ describe('ForcedCloseForm — reason selection enables submit', () => {
       const user = userEvent.setup({ delay: null });
       setup();
       await user.click(screen.getByDisplayValue(reason));
-      const btn = screen.getByRole('button', { name: /confirm|force.?close|submit/i });
+      const btn = screen.getByRole('button', COMMIT);
       expect(btn).toBeEnabled();
     });
   }
@@ -82,7 +98,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('cashier_no_show'));
-    await user.click(screen.getByRole('button', { name: /confirm|force.?close|submit/i }));
+    await user.click(screen.getByRole('button', COMMIT));
     expect(onSubmit).toHaveBeenCalledOnce();
     const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
       forced_close_reason: ForcedCloseReason;
@@ -97,7 +113,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     await user.click(screen.getByDisplayValue('other'));
     const annotationInput = screen.getByRole('textbox');
     await user.type(annotationInput, 'Cashier left early without notice');
-    await user.click(screen.getByRole('button', { name: /confirm|force.?close|submit/i }));
+    await user.click(screen.getByRole('button', COMMIT));
     expect(onSubmit).toHaveBeenCalledOnce();
     const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
       forced_close_reason: ForcedCloseReason;
@@ -112,7 +128,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('terminal_failure'));
-    await user.click(screen.getByRole('button', { name: /confirm|force.?close|submit/i }));
+    await user.click(screen.getByRole('button', COMMIT));
     const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
       forced_close_reason: ForcedCloseReason;
       annotation?: string;
@@ -125,7 +141,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('cashier_illness'));
-    await user.click(screen.getByRole('button', { name: /confirm|force.?close|submit/i }));
+    await user.click(screen.getByRole('button', COMMIT));
     const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<
       string,
       unknown
@@ -171,7 +187,7 @@ describe('ForcedCloseForm — forbidden rendered content', () => {
 
   FINANCIAL_FORBIDDEN.forEach((pattern) => {
     it(`does not render financial label matching ${String(pattern)}`, () => {
-      const { container } = render(<ForcedCloseForm onSubmit={vi.fn()} />);
+      const { container } = render(<ForcedCloseForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
       expect(container.textContent).not.toMatch(pattern);
     });
   });
