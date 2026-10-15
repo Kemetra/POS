@@ -232,9 +232,15 @@
 /*
  * RT-412: one row size, read by the in-surface fit guard as well as by the
  * rows, so the guard's "at least 4 rows" is measured in the rows drawn here.
+ *
+ * RT-479: the list fills the cart region, so its row space is the height the
+ * cart received, not the height of the lines drawn so far. Sized to its
+ * content, an empty cart (column labels + the empty message, 85px) never held
+ * 4 rows and the guard covered the Sale at every window size.
  */
 .v5-live-sale .v5-sale-cart-table {
   --v5-fit-row-size: 60px;
+  flex: 1 1 auto;
 }
 
 .v5-live-sale .v5-sale-cart-line {
