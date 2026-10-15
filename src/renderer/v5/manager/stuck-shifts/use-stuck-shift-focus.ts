@@ -32,10 +32,14 @@ function focusWasLost(): boolean {
   return active === null || active === document.body || !active.isConnected;
 }
 
+/**
+ * The row now at `index`, only when one exists there. Never the row before it:
+ * after the final row closes, focusing the previous shift's close button would
+ * leave the manager one key away from closing a different shift.
+ */
 function rowAt(list: HTMLUListElement | null, index: number): Element | undefined {
   if (list === null || index < 0) return undefined;
-  const rows = list.children;
-  return rows.length === 0 ? undefined : rows[Math.min(index, rows.length - 1)];
+  return list.children.item(index) ?? undefined;
 }
 
 function rowButton(row: Element | undefined): HTMLButtonElement | null {
