@@ -357,6 +357,22 @@ describe('RT-502 forced-close dialog — answers', () => {
     });
   });
 
+  it('success on the final row of a longer list: focus lands on the list heading, never on another shift’s close button', async () => {
+    const bridge = makeBridge([LIST(AHMED, YASMIN)]);
+    const user = await renderList(bridge);
+    const dialog = await openDialog(user, 'shift-2');
+    await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+    await user.click(commitIn(dialog));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('stuck-shift-card-shift-2')).toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 2, name: COPY.listHeading })).toHaveFocus();
+    });
+    expect(closeButtonOf('shift-1')).not.toHaveFocus();
+  });
+
   it('success on the last shift: the empty state', async () => {
     const user = await renderList(makeBridge([LIST(AHMED)]));
     const dialog = await openDialog(user);
