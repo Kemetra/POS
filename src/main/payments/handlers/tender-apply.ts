@@ -44,6 +44,7 @@ import type {
 } from '../voucher-authority-client/validate.js';
 
 import { applyVoucherLine } from './apply-voucher-line.js';
+import { priorLineOutcome } from './prior-line-outcome.js';
 
 export interface TenderApplyHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
@@ -75,27 +76,19 @@ type FsmApplied = Extract<ReturnType<TenderLineFsm['apply']>, { kind: 'ok' }>;
  * `internal_error` when the line is gone or never reached either outcome.
  */
 function replayResponse(prior: LineRow | undefined): TenderApplyResponse {
-  if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
+  const outcome = priorLineOutcome(prior);
+  if (outcome.kind === 'applied') {
     const response: TenderApplyResponse = {
       kind: 'ok',
-      tender_line_id: prior.tender_line_id,
-      applied_at: prior.applied_at,
+      tender_line_id: outcome.line.tender_line_id,
+      applied_at: outcome.line.applied_at,
     };
-    if (prior.change_due_minor !== null) {
-      response.change_due_minor = prior.change_due_minor;
+    if (outcome.line.change_due_minor !== null) {
+      response.change_due_minor = outcome.line.change_due_minor;
     }
     return response;
   }
-  // Replay of a refused-line attempt: the original outcome was a refusal;
-  // reconstruct via the persisted refusal_reason (which the FSM stamped).
-  if (prior !== undefined && prior.state === 'refused' && prior.refusal_reason !== null) {
-    return {
-      kind: 'refused',
-      // refusal_reason column is a string-typed CHECK; the FSM only writes
-      // RefusalReason values into it.
-      reason: prior.refusal_reason as TenderApplyResponse extends { reason: infer R } ? R : never,
-    };
-  }
+  if (outcome.kind === 'refused') return { kind: 'refused', reason: outcome.reason };
   return { kind: 'refused', reason: 'internal_error' };
 }
 

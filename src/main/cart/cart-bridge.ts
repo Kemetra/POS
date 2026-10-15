@@ -440,6 +440,24 @@ interface MutableCartContext {
   cart: StoredCart;
 }
 
+/** Role, tenant-isolation and ownership gate every cart handler applies (no mutability check). */
+function ownershipRefusal(
+  session: OperatorSessionRecord,
+  cart: StoredCart,
+): CartRefusalReason | null {
+  const gate = requireOperatorSession({
+    session,
+    allowedRoles: ['cashier', 'manager', 'admin'],
+    cart: {
+      operator_session_id: cart.operator_session_id,
+      tenant_id: cart.tenant_id,
+      branch_id: cart.branch_id,
+      state: cart.state as CartState,
+    },
+  });
+  return gate.kind === 'ok' ? null : gate.reason;
+}
+
 /** The answer to a replayed `cart.handoff` key: the persisted envelope, or a refusal. */
 function handoffReplayResponse(
   store: CartStore,
@@ -1215,17 +1233,8 @@ export class CartBridgeHandlers {
     const cart = store.getCart(req.cart_id);
     if (cart === undefined) return refuse('wrong_owner');
 
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
+    const denied = ownershipRefusal(session, cart);
+    if (denied !== null) return refuse(denied);
 
     // Idempotency check before terminal state — replaying after cancel succeeds.
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -1284,17 +1293,8 @@ export class CartBridgeHandlers {
     const cart = store.getCart(req.cart_id);
     if (cart === undefined) return refuse('wrong_owner');
 
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
+    const denied = ownershipRefusal(session, cart);
+    if (denied !== null) return refuse(denied);
 
     // A manager / admin cancels directly (RT-114 C6); a cashier needs a
     // main-verified manager approval (RT-443), consumed in the transaction.
@@ -1573,17 +1573,8 @@ export class CartBridgeHandlers {
     const cart = store.getCart(cart_id);
     if (cart === undefined) return refuse('wrong_owner');
 
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
+    const denied = ownershipRefusal(session, cart);
+    if (denied !== null) return refuse(denied);
     return { kind: 'ok', session, store, cart };
   }
 
@@ -1622,17 +1613,8 @@ export class CartBridgeHandlers {
 
     // Step 2 — ownership, role, tenant isolation (without requireMutable — idempotency
     // replay must be allowed even for already-frozen carts, so we defer the mutable guard).
-    const ownershipGate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-    });
-    if (ownershipGate.kind !== 'ok') return refuse(ownershipGate.reason);
+    const denied = ownershipRefusal(session, cart);
+    if (denied !== null) return refuse(denied);
 
     // Step 3 — idempotency replay (before mutable guard so frozen carts can replay).
     const replay = store.getOutboxRow(req.idempotency_key);

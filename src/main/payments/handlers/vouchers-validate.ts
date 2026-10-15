@@ -40,6 +40,7 @@ import type {
 } from '../voucher-authority-client/validate.js';
 
 import { applyVoucherLine } from './apply-voucher-line.js';
+import { priorLineOutcome } from './prior-line-outcome.js';
 
 export interface VouchersValidateHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
@@ -61,22 +62,16 @@ type LineRow = ReturnType<PaymentTenderLinesRepository['findByAttempt']>[number]
 
 /** The answer to a replayed voucher-validate key, rebuilt from the persisted line. */
 function replayResponse(prior: LineRow | undefined): VouchersValidateResponse {
-  if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
+  const outcome = priorLineOutcome(prior);
+  if (outcome.kind === 'applied') {
     return {
       kind: 'ok',
-      tender_line_id: prior.tender_line_id,
-      applied_amount_minor: prior.amount_applied_minor,
-      applied_at: prior.applied_at,
+      tender_line_id: outcome.line.tender_line_id,
+      applied_amount_minor: outcome.line.amount_applied_minor,
+      applied_at: outcome.line.applied_at,
     };
   }
-  if (prior !== undefined && prior.state === 'refused' && prior.refusal_reason !== null) {
-    return {
-      kind: 'refused',
-      reason: prior.refusal_reason as VouchersValidateResponse extends { reason: infer R }
-        ? R
-        : never,
-    };
-  }
+  if (outcome.kind === 'refused') return { kind: 'refused', reason: outcome.reason };
   return { kind: 'refused', reason: 'internal_error' };
 }
 

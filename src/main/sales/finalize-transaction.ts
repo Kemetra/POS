@@ -46,7 +46,8 @@ import type { SaleNumberAllocator } from './sale-number-allocator.js';
 import type { SaleAuditEmitter } from './audit-emitter.js';
 import type { SalesTenderType, SaleFinalizationRefusalReason } from '../../shared/sales/types.js';
 import type { LineSnapshot } from '../../shared/cart/handoff-envelope.js';
-import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
+import { findForbiddenKey } from '../audit/find-forbidden-key.js';
+import { redactTenderLine } from './redact-tender-line.js';
 
 // ─── Narrow better-sqlite3 surface (mirrors repositories) ───────────────────
 
@@ -187,51 +188,15 @@ const FINALIZE_FORBIDDEN_KEYS = new Set<string>([
   'pin_record_id',
 ]);
 
-function findForbiddenKey(node: unknown): string | null {
-  if (Array.isArray(node)) return findForbiddenKeyInArray(node);
-  if (node !== null && typeof node === 'object') return findForbiddenKeyInObject(node);
-  return null;
-}
-
-function findForbiddenKeyInArray(items: readonly unknown[]): string | null {
-  for (const item of items) {
-    const hit = findForbiddenKey(item);
-    if (hit !== null) return hit;
-  }
-  return null;
-}
-
-function findForbiddenKeyInObject(obj: object): string | null {
-  for (const key of Object.keys(obj)) {
-    if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) return key;
-    if (FINALIZE_FORBIDDEN_KEYS.has(key)) return key;
-    const hit = findForbiddenKey((obj as Record<string, unknown>)[key]);
-    if (hit !== null) return hit;
-  }
-  return null;
-}
-
 /** The tender summary as persisted on the sale: card references masked, no secrets. */
 function buildRedactedTenderLinesSummary(input: FinalizeInput): Array<Record<string, unknown>> {
-  return input.tender_lines_summary.map((line) => {
-    const out: Record<string, unknown> = {
-      tender_type: line.tender_type,
-      amount_applied_minor: line.amount_applied_minor,
-    };
-    if (line.tender_type === 'cash' && line.change_due_minor !== undefined) {
-      out.change_due_minor = line.change_due_minor;
-    }
-    if (line.tender_type === 'external_card_terminal' && line.external_reference !== undefined) {
-      out.external_reference = '*****';
-    }
-    if (
-      line.tender_type === 'internal_voucher' &&
-      line.voucher_authority_redemption_id !== undefined
-    ) {
-      out.voucher_authority_redemption_id = line.voucher_authority_redemption_id;
-    }
-    return out;
-  });
+  return input.tender_lines_summary.map((line) => ({
+    ...redactTenderLine(line),
+    ...(line.tender_type === 'internal_voucher' &&
+    line.voucher_authority_redemption_id !== undefined
+      ? { voucher_authority_redemption_id: line.voucher_authority_redemption_id }
+      : {}),
+  }));
 }
 
 // ─── 006 read shapes (narrow projections used by the refusal guard) ────────
@@ -306,7 +271,7 @@ export function bindFinalizeTransaction(
       return 'reversal_pending_line';
     }
     // Step 3 — Forbidden-field scan.
-    if (findForbiddenKey(input.tender_lines_summary) !== null) {
+    if (findForbiddenKey(input.tender_lines_summary, FINALIZE_FORBIDDEN_KEYS) !== null) {
       return 'forbidden_field_in_tender_summary';
     }
     return null;
