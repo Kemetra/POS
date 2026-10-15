@@ -45,24 +45,30 @@ export function requireOperatorSession(opts: RequireSessionOpts): RequireSession
   }
 
   if (cart !== null && cart !== undefined) {
-    if (cart.tenant_id !== session.tenant_id || cart.branch_id !== session.branch_id) {
-      return { kind: 'refused', reason: 'tenant_isolation' };
-    }
-
-    // Cashiers may only access their own cart; managers/admins may cross.
-    if (session.role === 'cashier' && cart.operator_session_id !== session.id) {
-      return { kind: 'refused', reason: 'wrong_owner' };
-    }
-
-    if (requireMutable === true) {
-      if (cart.state === CartState.frozen_handed_off) {
-        return { kind: 'refused', reason: 'frozen' };
-      }
-      if (cart.state === CartState.cancelled) {
-        return { kind: 'refused', reason: 'closed' };
-      }
-    }
+    const reason = cartRefusalReason(session, cart, requireMutable === true);
+    if (reason !== null) return { kind: 'refused', reason };
   }
 
   return { kind: 'ok', session };
+}
+
+/** Why `session` may not act on `cart` (isolation, ownership, mutability), else `null`. */
+function cartRefusalReason(
+  session: OperatorSessionRecord,
+  cart: CartSnapshot,
+  requireMutable: boolean,
+): CartRefusalReason | null {
+  if (cart.tenant_id !== session.tenant_id || cart.branch_id !== session.branch_id) {
+    return 'tenant_isolation';
+  }
+
+  // Cashiers may only access their own cart; managers/admins may cross.
+  if (session.role === 'cashier' && cart.operator_session_id !== session.id) {
+    return 'wrong_owner';
+  }
+
+  if (!requireMutable) return null;
+  if (cart.state === CartState.frozen_handed_off) return 'frozen';
+  if (cart.state === CartState.cancelled) return 'closed';
+  return null;
 }

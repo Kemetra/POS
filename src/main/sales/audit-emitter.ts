@@ -217,29 +217,47 @@ export interface SaleAuditEmitter {
   emitRaw(event: SaleRawAuditEvent): void;
 }
 
+/** First forbidden key (global or sales-specific) anywhere in `node`, else `null`. */
+function findForbiddenKey(node: unknown): string | null {
+  if (Array.isArray(node)) return findForbiddenKeyInArray(node);
+  if (node !== null && typeof node === 'object') return findForbiddenKeyInObject(node);
+  return null;
+}
+
+function findForbiddenKeyInArray(items: readonly unknown[]): string | null {
+  for (const item of items) {
+    const hit = findForbiddenKey(item);
+    if (hit !== null) return hit;
+  }
+  return null;
+}
+
+function findForbiddenKeyInObject(obj: object): string | null {
+  for (const key of Object.keys(obj)) {
+    if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) return key;
+    if (SALES_FORBIDDEN_KEYS.has(key)) return key;
+    const hit = findForbiddenKey((obj as Record<string, unknown>)[key]);
+    if (hit !== null) return hit;
+  }
+  return null;
+}
+
+function redactedTenderLine(line: EmitSaleTenderLine): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    tender_type: line.tender_type,
+    amount_applied_minor: line.amount_applied_minor,
+  };
+  if (line.tender_type === 'cash' && line.change_due_minor !== undefined) {
+    out.change_due_minor = line.change_due_minor;
+  }
+  if (line.tender_type === 'external_card_terminal' && line.external_reference !== undefined) {
+    out.external_reference = '*****';
+  }
+  return out;
+}
+
 export function createSaleAuditEmitter(deps: SaleAuditEmitterDependencies): SaleAuditEmitter {
   const { sink } = deps;
-
-  function findForbiddenKey(node: unknown): string | null {
-    if (Array.isArray(node)) {
-      for (const item of node) {
-        const hit = findForbiddenKey(item);
-        if (hit !== null) return hit;
-      }
-      return null;
-    }
-    if (node !== null && typeof node === 'object') {
-      for (const key of Object.keys(node)) {
-        if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) {
-          return key;
-        }
-        if (SALES_FORBIDDEN_KEYS.has(key)) return key;
-        const hit = findForbiddenKey((node as Record<string, unknown>)[key]);
-        if (hit !== null) return hit;
-      }
-    }
-    return null;
-  }
 
   function emit(event: SaleAuditEvent): void {
     const forbidden = findForbiddenKey(event.payload);
@@ -247,20 +265,6 @@ export function createSaleAuditEmitter(deps: SaleAuditEmitterDependencies): Sale
       throw new ForbiddenSaleAuditKeyError(forbidden);
     }
     sink.write(event);
-  }
-
-  function redactedTenderLine(line: EmitSaleTenderLine): Record<string, unknown> {
-    const out: Record<string, unknown> = {
-      tender_type: line.tender_type,
-      amount_applied_minor: line.amount_applied_minor,
-    };
-    if (line.tender_type === 'cash' && line.change_due_minor !== undefined) {
-      out.change_due_minor = line.change_due_minor;
-    }
-    if (line.tender_type === 'external_card_terminal' && line.external_reference !== undefined) {
-      out.external_reference = '*****';
-    }
-    return out;
   }
 
   return {

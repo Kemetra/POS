@@ -57,6 +57,29 @@ export type VouchersValidateHandler = (
   req: VouchersValidateRequest,
 ) => Promise<VouchersValidateResponse>;
 
+type LineRow = ReturnType<PaymentTenderLinesRepository['findByAttempt']>[number];
+
+/** The answer to a replayed voucher-validate key, rebuilt from the persisted line. */
+function replayResponse(prior: LineRow | undefined): VouchersValidateResponse {
+  if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
+    return {
+      kind: 'ok',
+      tender_line_id: prior.tender_line_id,
+      applied_amount_minor: prior.amount_applied_minor,
+      applied_at: prior.applied_at,
+    };
+  }
+  if (prior !== undefined && prior.state === 'refused' && prior.refusal_reason !== null) {
+    return {
+      kind: 'refused',
+      reason: prior.refusal_reason as VouchersValidateResponse extends { reason: infer R }
+        ? R
+        : never,
+    };
+  }
+  return { kind: 'refused', reason: 'internal_error' };
+}
+
 export function createVouchersValidateHandler(
   deps: VouchersValidateHandlerDeps,
 ): VouchersValidateHandler {
@@ -131,23 +154,7 @@ export function createVouchersValidateHandler(
       // and `state` move on once the line is reversed (RT-304 review).
       const lines = linesRepo.findByAttempt(req.payment_attempt_id);
       const prior = lines.find((l) => l.tender_line_id === reservation.tender_line_id);
-      if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
-        return {
-          kind: 'ok',
-          tender_line_id: prior.tender_line_id,
-          applied_amount_minor: prior.amount_applied_minor,
-          applied_at: prior.applied_at,
-        };
-      }
-      if (prior !== undefined && prior.state === 'refused' && prior.refusal_reason !== null) {
-        return {
-          kind: 'refused',
-          reason: prior.refusal_reason as VouchersValidateResponse extends { reason: infer R }
-            ? R
-            : never,
-        };
-      }
-      return { kind: 'refused', reason: 'internal_error' };
+      return replayResponse(prior);
     }
 
     // Compute remaining balance main-side (R-7; cap enforcement is V-A's

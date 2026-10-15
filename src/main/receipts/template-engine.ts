@@ -89,21 +89,20 @@ export function utcStamp(iso: string): string {
 /** Word-wrap to 42 columns with a 4-column hanging indent on continuations. */
 export function wrap(text: string, indent = 4): string[] {
   if (text.length <= COLS) return [text];
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let current = '';
   const pad = ' '.repeat(indent);
-  for (const word of words) {
+  const lines: string[] = [];
+  const indentFor = (): string => (lines.length === 0 ? '' : pad);
+  let current = '';
+  for (const word of text.split(' ')) {
     const candidate = current === '' ? word : `${current} ${word}`;
-    const prefix = lines.length === 0 ? '' : pad;
-    if ((prefix + candidate).length > COLS && current !== '') {
-      lines.push((lines.length === 0 ? '' : pad) + current);
+    if ((indentFor() + candidate).length > COLS && current !== '') {
+      lines.push(indentFor() + current);
       current = word;
     } else {
       current = candidate;
     }
   }
-  if (current !== '') lines.push((lines.length === 0 ? '' : pad) + current);
+  if (current !== '') lines.push(indentFor() + current);
   return lines;
 }
 

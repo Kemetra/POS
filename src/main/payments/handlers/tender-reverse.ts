@@ -51,6 +51,67 @@ export interface TenderReverseHandlerDeps {
 
 export type TenderReverseHandler = (req: TenderReverseRequest) => Promise<TenderReverseResponse>;
 
+type LineRow = NonNullable<ReturnType<PaymentTenderLinesRepository['findByLineId']>>;
+type AttemptRow = NonNullable<ReturnType<PaymentAttemptsRepository['findById']>>;
+
+/** The identity/scope fields shared by every voucher-reversal audit event. */
+function voucherAuditBase(
+  req: TenderReverseRequest,
+  line: LineRow,
+  attempt: AttemptRow,
+  session: OperatorSessionForPayments,
+) {
+  return {
+    tender_line_id: req.tender_line_id,
+    payment_attempt_id: line.payment_attempt_id,
+    tender_type: 'internal_voucher' as const,
+    attribution_operator_id: session.operator_id,
+    tenant_id: attempt.tenant_id,
+    branch_id: attempt.branch_id,
+    originating_terminal_id: attempt.terminal_id,
+    session_id: session.operator_session_id,
+  };
+}
+
+/** The answer to a replayed `tender.reverse` key, rebuilt from the persisted line. */
+function replayResponse(
+  line: LineRow,
+  idempotencyKey: string,
+  reservationCreatedAt: string,
+): TenderReverseResponse {
+  // A voucher reversal answered `reversal_pending` and was later settled
+  // by the deferred resolver (a different action): the line now reads
+  // `reversed` and its `last_action_id` is the resolver's, but the original
+  // answer was the pending one, stamped at the outbox row's `created_at`
+  // (`markReversalPending` records `reversal_pending_since` there).
+  // A voucher line reversed by THIS key keeps this key as `last_action_id`.
+  if (
+    line.tender_type === 'internal_voucher' &&
+    line.state === 'reversed' &&
+    line.last_action_id !== idempotencyKey
+  ) {
+    return {
+      kind: 'ok',
+      reversed_at: reservationCreatedAt,
+      state: 'reversal_pending',
+    };
+  }
+  // A line whose authority reversal is still pending carries
+  // `reversal_pending_since`, not `reversed_at` (RT-304 review).
+  const replayAt =
+    line.state === 'reversal_pending' ? line.reversal_pending_since : line.reversed_at;
+  if ((line.state === 'reversed' || line.state === 'reversal_pending') && replayAt !== null) {
+    return {
+      kind: 'ok',
+      reversed_at: replayAt,
+      state: line.state,
+    };
+  }
+  // Replay-but-no-reverse: line is still applied → outbox row exists
+  // but FSM call didn't transition the state. Refuse generically.
+  return { kind: 'refused', reason: 'internal_error' };
+}
+
 export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): TenderReverseHandler {
   const {
     getCurrentSession,
@@ -62,6 +123,101 @@ export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): Tend
     reverseVoucher,
     clock,
   } = deps;
+
+  /** The authority is unreachable: park the line as `reversal_pending` for the deferred resolver. */
+  function markVoucherReversalPending(ctx: {
+    req: TenderReverseRequest;
+    line: LineRow;
+    session: OperatorSessionForPayments;
+    now: string;
+    audit: ReturnType<typeof voucherAuditBase>;
+  }): TenderReverseResponse {
+    const { req, line, session, now, audit } = ctx;
+    const pendOutcome = tenderLineFsm.markReversalPending({
+      tender_line_id: req.tender_line_id,
+      payment_attempt_id: line.payment_attempt_id,
+      reversal_pending_since: now,
+      attribution_operator_id: session.operator_id,
+      action_id: req.idempotency_key,
+    });
+    if (pendOutcome.kind === 'refused') {
+      return { kind: 'refused', reason: pendOutcome.reason };
+    }
+    auditEmitter.emitTenderReversalPending({
+      ...audit,
+      reversal_pending_since: pendOutcome.reversal_pending_since,
+    });
+    return {
+      kind: 'ok',
+      reversed_at: pendOutcome.reversal_pending_since,
+      state: 'reversal_pending',
+    };
+  }
+
+  /**
+   * Voucher reverse (T262). Calls V-A `vouchers.reverse` BEFORE the FSM (HTTP
+   * cannot live inside `db.transaction()`):
+   *   • success           → fsm.confirmReversed → tender.reversed
+   *   • authority_unreach → fsm.markReversalPending → tender.reversal_pending
+   *   • refusal           → forward the closed-set refusal envelope
+   */
+  async function reverseVoucherLine(ctx: {
+    req: TenderReverseRequest;
+    line: LineRow;
+    attempt: AttemptRow;
+    session: OperatorSessionForPayments;
+    now: string;
+  }): Promise<TenderReverseResponse> {
+    const { req, line, attempt, session, now } = ctx;
+    if (reverseVoucher === undefined) {
+      return { kind: 'refused', reason: 'tender_not_yet_supported' };
+    }
+    if (line.voucher_authority_redemption_id === null) {
+      // Defence — an `applied` voucher line without a redemption_id
+      // hasn't been confirmed yet; reverse is a no-op against V-A.
+      return { kind: 'refused', reason: 'line_not_applied' };
+    }
+    const outcome = await reverseVoucher({
+      redemption_id: line.voucher_authority_redemption_id,
+    });
+    if (outcome.kind === 'refused') {
+      // Map V-A reverse closed-set codes to the bridge-facing closed
+      // refusal subset for `tender.reverse`. `redemption_not_found`
+      // is exposed verbatim (it's a legitimate cashier-visible
+      // refusal); other V-A codes (validation_failure, idempotency,
+      // tenant/branch mismatch, etc.) collapse to `line_not_applied`
+      // because they are out-of-band for the cashier-facing reverse
+      // surface. F-A4B-003 8→1 refusal-copy mapping continues to
+      // apply at the renderer.
+      return { kind: 'refused', reason: mapReverseRefusal(outcome.reason) };
+    }
+    const audit = voucherAuditBase(req, line, attempt, session);
+    if (outcome.kind === 'authority_unreachable') {
+      return markVoucherReversalPending({ req, line, session, now, audit });
+    }
+    // V-A reversed.
+    const confirmOutcome = tenderLineFsm.confirmReversed({
+      tender_line_id: req.tender_line_id,
+      payment_attempt_id: line.payment_attempt_id,
+      reversed_at: now,
+      attribution_operator_id: session.operator_id,
+      action_id: req.idempotency_key,
+    });
+    if (confirmOutcome.kind === 'refused') {
+      return { kind: 'refused', reason: confirmOutcome.reason };
+    }
+    auditEmitter.emitTenderReversed({
+      ...audit,
+      reversed_at: confirmOutcome.reversed_at,
+      // Voucher reverse never needs manual void — the authority owns it.
+      manual_void_required: false,
+    });
+    return {
+      kind: 'ok',
+      reversed_at: confirmOutcome.reversed_at,
+      state: 'reversed',
+    };
+  }
 
   return async function tenderReverse(req): Promise<TenderReverseResponse> {
     const session = getCurrentSession();
@@ -121,37 +277,9 @@ export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): Tend
     }
 
     if (reservation.kind === 'replay') {
-      // A voucher reversal answered `reversal_pending` and was later settled
-      // by the deferred resolver (a different action): the line now reads
-      // `reversed` and its `last_action_id` is the resolver's, but the original
-      // answer was the pending one, stamped at the outbox row's `created_at`
-      // (`markReversalPending` records `reversal_pending_since` there).
-      // A voucher line reversed by THIS key keeps this key as `last_action_id`.
-      if (
-        line.tender_type === 'internal_voucher' &&
-        line.state === 'reversed' &&
-        line.last_action_id !== req.idempotency_key
-      ) {
-        return await Promise.resolve({
-          kind: 'ok',
-          reversed_at: reservation.created_at,
-          state: 'reversal_pending',
-        });
-      }
-      // A line whose authority reversal is still pending carries
-      // `reversal_pending_since`, not `reversed_at` (RT-304 review).
-      const replayAt =
-        line.state === 'reversal_pending' ? line.reversal_pending_since : line.reversed_at;
-      if ((line.state === 'reversed' || line.state === 'reversal_pending') && replayAt !== null) {
-        return await Promise.resolve({
-          kind: 'ok',
-          reversed_at: replayAt,
-          state: line.state,
-        });
-      }
-      // Replay-but-no-reverse: line is still applied → outbox row exists
-      // but FSM call didn't transition the state. Refuse generically.
-      return await Promise.resolve({ kind: 'refused', reason: 'internal_error' });
+      return await Promise.resolve(
+        replayResponse(line, req.idempotency_key, reservation.created_at),
+      );
     }
 
     // Wave 4 — voucher reverse branch (T262). Call V-A `vouchers.reverse`
@@ -160,85 +288,7 @@ export function createTenderReverseHandler(deps: TenderReverseHandlerDeps): Tend
     //   • authority_unreach → fsm.markReversalPending → tender.reversal_pending
     //   • refusal           → forward the closed-set refusal envelope
     if (line.tender_type === 'internal_voucher') {
-      if (reverseVoucher === undefined) {
-        return { kind: 'refused', reason: 'tender_not_yet_supported' };
-      }
-      if (line.voucher_authority_redemption_id === null) {
-        // Defence — an `applied` voucher line without a redemption_id
-        // hasn't been confirmed yet; reverse is a no-op against V-A.
-        return { kind: 'refused', reason: 'line_not_applied' };
-      }
-      const outcome = await reverseVoucher({
-        redemption_id: line.voucher_authority_redemption_id,
-      });
-      if (outcome.kind === 'refused') {
-        // Map V-A reverse closed-set codes to the bridge-facing closed
-        // refusal subset for `tender.reverse`. `redemption_not_found`
-        // is exposed verbatim (it's a legitimate cashier-visible
-        // refusal); other V-A codes (validation_failure, idempotency,
-        // tenant/branch mismatch, etc.) collapse to `line_not_applied`
-        // because they are out-of-band for the cashier-facing reverse
-        // surface. F-A4B-003 8→1 refusal-copy mapping continues to
-        // apply at the renderer.
-        return { kind: 'refused', reason: mapReverseRefusal(outcome.reason) };
-      }
-      if (outcome.kind === 'authority_unreachable') {
-        const pendOutcome = tenderLineFsm.markReversalPending({
-          tender_line_id: req.tender_line_id,
-          payment_attempt_id: line.payment_attempt_id,
-          reversal_pending_since: now,
-          attribution_operator_id: session.operator_id,
-          action_id: req.idempotency_key,
-        });
-        if (pendOutcome.kind === 'refused') {
-          return { kind: 'refused', reason: pendOutcome.reason };
-        }
-        auditEmitter.emitTenderReversalPending({
-          tender_line_id: req.tender_line_id,
-          payment_attempt_id: line.payment_attempt_id,
-          tender_type: 'internal_voucher',
-          reversal_pending_since: pendOutcome.reversal_pending_since,
-          attribution_operator_id: session.operator_id,
-          tenant_id: attempt.tenant_id,
-          branch_id: attempt.branch_id,
-          originating_terminal_id: attempt.terminal_id,
-          session_id: session.operator_session_id,
-        });
-        return {
-          kind: 'ok',
-          reversed_at: pendOutcome.reversal_pending_since,
-          state: 'reversal_pending',
-        };
-      }
-      // V-A reversed.
-      const confirmOutcome = tenderLineFsm.confirmReversed({
-        tender_line_id: req.tender_line_id,
-        payment_attempt_id: line.payment_attempt_id,
-        reversed_at: now,
-        attribution_operator_id: session.operator_id,
-        action_id: req.idempotency_key,
-      });
-      if (confirmOutcome.kind === 'refused') {
-        return { kind: 'refused', reason: confirmOutcome.reason };
-      }
-      auditEmitter.emitTenderReversed({
-        tender_line_id: req.tender_line_id,
-        payment_attempt_id: line.payment_attempt_id,
-        tender_type: 'internal_voucher',
-        reversed_at: confirmOutcome.reversed_at,
-        attribution_operator_id: session.operator_id,
-        tenant_id: attempt.tenant_id,
-        branch_id: attempt.branch_id,
-        originating_terminal_id: attempt.terminal_id,
-        session_id: session.operator_session_id,
-        // Voucher reverse never needs manual void — the authority owns it.
-        manual_void_required: false,
-      });
-      return {
-        kind: 'ok',
-        reversed_at: confirmOutcome.reversed_at,
-        state: 'reversed',
-      };
+      return reverseVoucherLine({ req, line, attempt, session, now });
     }
 
     const fsmOutcome = tenderLineFsm.reverse({

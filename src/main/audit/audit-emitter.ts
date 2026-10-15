@@ -72,24 +72,25 @@ export class ForbiddenPayloadKeyError extends Error {
  * never themselves forbidden keys. Only string object keys are checked.
  */
 function findForbiddenKey(node: unknown): string | null {
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const hit = findForbiddenKey(item);
-      if (hit !== null) return hit;
-    }
-    return null;
-  }
+  if (Array.isArray(node)) return findForbiddenKeyInArray(node);
+  if (node !== null && typeof node === 'object') return findForbiddenKeyInObject(node);
+  return null;
+}
 
-  if (node !== null && typeof node === 'object') {
-    for (const key of Object.keys(node)) {
-      if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) {
-        return key;
-      }
-      const hit = findForbiddenKey((node as Record<string, unknown>)[key]);
-      if (hit !== null) return hit;
-    }
+function findForbiddenKeyInArray(items: readonly unknown[]): string | null {
+  for (const item of items) {
+    const hit = findForbiddenKey(item);
+    if (hit !== null) return hit;
   }
+  return null;
+}
 
+function findForbiddenKeyInObject(obj: object): string | null {
+  for (const key of Object.keys(obj)) {
+    if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) return key;
+    const hit = findForbiddenKey((obj as Record<string, unknown>)[key]);
+    if (hit !== null) return hit;
+  }
   return null;
 }
 
