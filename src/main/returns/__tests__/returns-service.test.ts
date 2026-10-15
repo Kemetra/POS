@@ -551,6 +551,20 @@ describe('RT-530 — a sale with a live void is not returnable', () => {
     },
   );
 
+  it('a void journaled while the sale is being read refuses the submit: no return is journaled or sent', async () => {
+    setupServing(saleBody());
+    h.backend.onRead = () => {
+      journalVoid('pending');
+    };
+    await expect(h.service.submit(ONE_A)).resolves.toEqual({
+      kind: 'refused',
+      reason: 'sale_voided',
+      ret: null,
+    });
+    expect(journalCount()).toBe(0);
+    expect(h.backend.returnCalls()).toHaveLength(0);
+  });
+
   it('a refused void frees the sale: the lookup goes on to the live read', async () => {
     setupServing(saleBody());
     journalVoid('refused');

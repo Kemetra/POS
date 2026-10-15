@@ -27,7 +27,11 @@ import {
   createSaleVoidClient,
   type CreateSaleVoidClientDeps,
 } from './sale-void-client.js';
-import { createSaleVoidRepository, type SaleVoidRepository } from './sale-void-repository.js';
+import {
+  createSaleVoidRepository,
+  type SaleVoidRepository,
+  type VoidScope,
+} from './sale-void-repository.js';
 import { toVoidSender, toVoidSession } from './sale-void-session.js';
 import { createSaleVoidService, type SaleVoidService } from './sale-void-service.js';
 import { createSaleVoidSync, type SaleVoidSync } from './sale-void-sync.js';
@@ -98,16 +102,22 @@ export function composeSaleVoid(deps: ComposeSaleVoidDeps): ComposedSaleVoid {
   const hasLiveReturn = db.prepare(LIVE_RETURN_SQL) as Row1;
   const audit = createSaleVoidAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
 
-  /** The selling cashier's `users.id` from the sale's own settled event, when provable. */
+  /**
+   * The selling cashier's `users.id` from the sale's own settled event, when
+   * provable. The resolver never throws: a failed lookup holds the sale (no
+   * `device` route), and Backend-Core still refuses the seller as approver.
+   */
   function sellerUserIdOf(sale: SaleRow): string | undefined {
-    try {
-      const route = sellers.resolve([sale], sale.terminal_id).get(sale.sale_id);
-      return route?.kind === 'device' ? route.operatorUserId.toLowerCase() : undefined;
-    } catch {
-      // The lookup failed: Backend-Core still refuses the seller as approver.
-      return undefined;
-    }
+    const route = sellers.resolve([sale], sale.terminal_id).get(sale.sale_id);
+    return route?.kind === 'device' ? route.operatorUserId.toLowerCase() : undefined;
   }
+
+  /** The sale's stored Backend-Core reference, or null while it has not synced. */
+  const saleRefOf = (scope: VoidScope, saleId: string): string | null =>
+    saleRefs.findServerSaleRefBySaleId(
+      { tenantId: scope.tenantId, branchId: scope.branchId },
+      saleId,
+    );
 
   const currentSender = () => {
     const session = deps.getSession();
@@ -130,11 +140,7 @@ export function composeSaleVoid(deps: ComposeSaleVoidDeps): ComposedSaleVoid {
     hasLiveReturn: (saleId) => hasLiveReturn.get(saleId) !== undefined,
     approvals: deps.approvals,
     sellerUserIdOf,
-    saleRef: (scope, saleId) =>
-      saleRefs.findServerSaleRefBySaleId(
-        { tenantId: scope.tenantId, branchId: scope.branchId },
-        saleId,
-      ),
+    saleRef: saleRefOf,
     currentSender,
     audit,
     now,
@@ -148,11 +154,7 @@ export function composeSaleVoid(deps: ComposeSaleVoidDeps): ComposedSaleVoid {
   const sync = createSaleVoidSync({
     repo,
     client: createSaleVoidClient(deps.http),
-    saleRef: (scope, saleId) =>
-      saleRefs.findServerSaleRefBySaleId(
-        { tenantId: scope.tenantId, branchId: scope.branchId },
-        saleId,
-      ),
+    saleRef: saleRefOf,
     audit,
     currentSender,
     transaction: (fn) => db.transaction(fn)(),

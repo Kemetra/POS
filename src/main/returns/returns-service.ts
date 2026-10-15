@@ -316,9 +316,12 @@ class ReturnsService implements ReturnsCoreAPI {
     if (lost !== null) return { ...lost, ret: null };
     if (priced.kind !== 'ok') return { ...priced, ret: null };
     const saleId = priced.sale.row.sale_id;
-    if (this.deps.repo.hasUnresolvedForSale(saleId)) {
+    // Re-checked synchronously right before the journal insert: a void or a
+    // return journaled while the sale was being read wins, with nothing written.
+    const conflict = this.journalConflict(saleId);
+    if (conflict !== null) {
       const ids: Ids = { saleId, saleRef: priced.sale.saleRef };
-      return { ...this.refuse(actor, 'submit', 'unresolved_return_exists', ids), ret: null };
+      return { ...this.refuse(actor, 'submit', conflict, ids), ret: null };
     }
     const entry = this.journal(actor, priced.sale, priced.quote, req.lines);
     // Choke point (b) runs inside the dispatcher, immediately before the POST.
@@ -339,6 +342,13 @@ class ReturnsService implements ReturnsCoreAPI {
     const lost = latchedRecheck(this.deps, actor);
     if (lost === null) return toSubmitResponse(outcome);
     return { kind: 'refused', reason: lost, ret: null } as const;
+  }
+
+  /** Why the sale cannot take a new return right now (RT-530 void, AC8 unresolved return). */
+  private journalConflict(saleId: string): ReturnsRefusalReason | null {
+    if (this.deps.voids?.blocksReturn(saleId) === true) return 'sale_voided';
+    if (this.deps.repo.hasUnresolvedForSale(saleId)) return 'unresolved_return_exists';
+    return null;
   }
 
   /**

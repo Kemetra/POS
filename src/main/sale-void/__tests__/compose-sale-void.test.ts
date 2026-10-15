@@ -25,8 +25,10 @@ import { createSaleSyncStateRepo } from '../../sales-sync/sale-sync-state-repo.j
 import type { AuditEvent } from '../../../shared/audit/event-shape.js';
 import {
   composeSaleVoid,
+  deviceLocalDay,
   scheduleSaleVoidSync,
   type ComposedSaleVoid,
+  type ComposeSaleVoidDeps,
 } from '../compose-sale-void.js';
 
 const TERMINAL = 'term-1';
@@ -65,6 +67,7 @@ let raw: SqlJsDatabase;
 let pins: ManagerPinStore;
 let approvals: ManagerApprovalService;
 let domain: ComposedSaleVoid;
+let deps: ComposeSaleVoidDeps;
 let current: OperatorSessionRecord | null;
 let envelopes: Record<string, string>;
 let clock: string;
@@ -119,7 +122,7 @@ beforeEach(async () => {
     auditEmitter: emitter,
     now: () => clock,
   });
-  domain = composeSaleVoid({
+  deps = {
     db,
     http: {
       baseUrl: 'https://api.example.test',
@@ -142,7 +145,8 @@ beforeEach(async () => {
     logger: { warn: () => undefined, error: () => undefined },
     now: () => clock,
     localDayOf: (iso) => iso.slice(0, 10),
-  });
+  };
+  domain = composeSaleVoid(deps);
   ref.domain = domain;
   seedSale(raw, { sale_id: 'sale-1', tender_lines_summary_json: TENDERS });
 });
@@ -310,6 +314,62 @@ describe('a void flows from the approval to Backend-Core under the requester env
     expect(posted[1]?.body).toEqual(posted[0]?.body);
     expect(posted[1]?.headers['Idempotency-Key']).toBe(posted[0]?.headers['Idempotency-Key']);
     await expect(listed()).resolves.toMatchObject({ voids: [{ state: 'confirmed' }] });
+  });
+});
+
+describe('the composition defaults and failure paths', () => {
+  it('dates the void on the device-local day and the default currency when none is given', async () => {
+    const { localDayOf: pinnedDay, ...defaults } = deps;
+    expect(pinnedDay).toBeDefined(); // the other tests pin a day; this one drops it
+    domain = composeSaleVoid(defaults);
+    ref.domain = domain;
+    markSaleSynced();
+    await expect(monaRequestsVoid()).resolves.toMatchObject({ kind: 'requested' });
+    const requested = audit.find((e) => e.action_category === 'sale.void.requested');
+    expect(requested?.payload).toMatchObject({
+      business_date: deviceLocalDay(T0),
+      currency_code: 'EGP',
+    });
+  });
+
+  it('a failing seller lookup does not block the request (Backend-Core still refuses a seller approver)', async () => {
+    raw.run('DROP TABLE audit_events');
+    await expect(monaRequestsVoid()).resolves.toMatchObject({ kind: 'requested' });
+  });
+
+  it('logs a send pass that rejects unexpectedly, and keeps the schedule', async () => {
+    vi.useFakeTimers();
+    try {
+      const error = vi.fn();
+      const tick = vi.fn(() => Promise.reject(new Error('boom')));
+      const stop = scheduleSaleVoidSync({
+        sync: { tick, drain: () => Promise.resolve() },
+        stopDomain: () => undefined,
+        intervalMs: 5_000,
+        drainTimeoutMs: 1_000,
+        logger: { error },
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(tick).toHaveBeenCalledTimes(2);
+      expect(error).toHaveBeenCalledWith(
+        { err: expect.any(Error) as unknown },
+        'sale_void_sync:tick_unexpected',
+      );
+      await stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('deviceLocalDay', () => {
+  it('is the calendar day of the instant in the device timezone', () => {
+    expect(deviceLocalDay(new Date(2026, 5, 7, 23, 30).toISOString())).toBe('2026-06-07');
+    expect(deviceLocalDay(new Date(2026, 11, 31, 0, 5).toISOString())).toBe('2026-12-31');
+  });
+
+  it('marks an unreadable instant so it never matches a real day', () => {
+    expect(deviceLocalDay('not-a-date')).toBe('invalid:not-a-date');
   });
 });
 
