@@ -1,52 +1,23 @@
 /**
- * T043 — SettingsHelpPlaceholder with US3 state-variant support.
+ * RT-503 (VN-S10 S10-6) — Settings: an honest Arabic notice that nothing can be
+ * changed on this terminal (G-6 state 13). No theme toggle (owner decision
+ * D-10-3: dark is maintained, not offered; the theme store stays), no
+ * «coming soon» rows, no fake connection row, no dev `?state=` gallery.
  *
- * In dev builds, reads `?state=` from the URL and renders the matching state
- * primitive. Production builds tree-shake the dev branch via the
- * `import.meta.env.DEV` guard.
- *
- * NOTE: No density toggle is exposed in this pane (Clarifications §1 —
- * density toggle is guarded out of this feature).
+ * Navigation-only: no fetch, no IPC, no persistence.
  */
 import type { JSX } from 'react';
-import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
-import { ScreenSection } from '../../v5/foundation/ScreenSection';
-import { SettingsSkeleton } from './SettingsSkeleton';
 
-function resolveDevState(): string {
-  const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
-  if (metaEnv?.DEV && typeof window !== 'undefined') {
-    return new URLSearchParams(window.location.search).get('state') ?? '';
-  }
-  return '';
-}
+import { ScreenSection } from '../../v5/foundation/ScreenSection';
+import { HonestNotice } from '../../v5/manager/honest/HonestNotice';
+import { HONEST_COPY } from '../../v5/manager/honest/honest-copy';
 
 export function SettingsHelpPlaceholder(): JSX.Element {
-  const devState = resolveDevState();
-
-  if (devState === 'loading') {
-    return <LoadingState message="Loading Settings / Help…" />;
-  }
-  if (devState === 'empty') {
-    return (
-      <EmptyState
-        heading="No settings available"
-        description="No configurable settings are available at this time."
-      />
-    );
-  }
-  if (devState === 'error') {
-    return (
-      <ErrorState
-        heading="Settings unavailable"
-        description="Could not load settings. Please try again."
-      />
-    );
-  }
-
   return (
-    <ScreenSection title="Settings / Help">
-      <SettingsSkeleton />
+    <ScreenSection title={HONEST_COPY.settings.title}>
+      <div className="v5-honest-state">
+        <HonestNotice notice={HONEST_COPY.settings.notice} />
+      </div>
     </ScreenSection>
   );
 }

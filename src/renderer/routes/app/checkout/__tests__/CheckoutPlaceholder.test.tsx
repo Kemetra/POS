@@ -1,96 +1,92 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup, within } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, cleanup, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import { CheckoutPlaceholder } from '../CheckoutPlaceholder';
-import { reservedSlotIds } from '../reserved-slot-ids';
 import { expectNoAxeViolations } from '../../../../ui/primitives/__tests__/axe-config';
 
 afterEach(cleanup);
+afterEach(() => vi.unstubAllGlobals());
 
 /**
- * T050 — CheckoutPlaceholder: asserts all eleven reserved slots render
- * in the documented order with the correct body text, no input controls,
- * and no value-bearing data attributes.
+ * RT-503 (VN-S10 S10-6, G-6 «الدفع غير مفعّل») — `/app/checkout` while the
+ * payments flag is off: an Arabic notice in a ScreenSection and the way back to
+ * the Sale. It replaces the 003-era reservation of eleven tender slots; it
+ * carries no payment logic, IPC, persistence or printing.
  */
-describe('CheckoutPlaceholder (T050)', () => {
-  it('renders all eleven reserved slot ids', () => {
-    render(
-      <MemoryRouter>
-        <CheckoutPlaceholder />
-      </MemoryRouter>,
+
+function renderPlaceholder(): ReturnType<typeof render> {
+  return render(
+    <MemoryRouter>
+      <CheckoutPlaceholder />
+    </MemoryRouter>,
+  );
+}
+
+describe('CheckoutPlaceholder (payments flag off)', () => {
+  it('titles the page «الدفع» with the honest neutral notice', () => {
+    renderPlaceholder();
+    expect(screen.getByRole('heading', { level: 1, name: 'الدفع' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('الدفع غير مفعّل على هذا الجهاز.');
+  });
+
+  it('offers «العودة إلى البيع», a link to /app/cart', () => {
+    renderPlaceholder();
+    expect(screen.getByRole('link', { name: 'العودة إلى البيع' })).toHaveAttribute(
+      'href',
+      '/app/cart',
     );
-    for (const slotId of reservedSlotIds) {
-      const el = document.querySelector(`[data-slot-id="${slotId}"]`);
-      expect(el).not.toBeNull();
+  });
+
+  it('reserves no tender slot and shows no English copy', () => {
+    const { container } = renderPlaceholder();
+    expect(container.querySelector('[data-slot-id]')).toBeNull();
+    expect(container.textContent).not.toMatch(/[A-Za-z]/);
+  });
+
+  // Boundary kept from the retired reserved-slot guard: no IPC, persistence or
+  // printing, on mount or when the way back is used.
+  it('makes zero fetch, storage and print calls on mount and on a click of the way back', async () => {
+    const fetchMock = vi.fn();
+    const printMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('print', printMock);
+    const localStorageSpy = vi.spyOn(window, 'localStorage', 'get');
+    const sessionStorageSpy = vi.spyOn(window, 'sessionStorage', 'get');
+    try {
+      renderPlaceholder();
+      await userEvent.click(screen.getByRole('link', { name: 'العودة إلى البيع' }));
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(printMock).not.toHaveBeenCalled();
+      expect(localStorageSpy).not.toHaveBeenCalled();
+      expect(sessionStorageSpy).not.toHaveBeenCalled();
+    } finally {
+      localStorageSpy.mockRestore();
+      sessionStorageSpy.mockRestore();
     }
   });
 
-  it('slots appear in documented order: six tenders → four totals → receipt.breakdown last', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <CheckoutPlaceholder />
-      </MemoryRouter>,
+  it('does not read window.api on mount', () => {
+    const api = new Proxy(
+      {},
+      {
+        get: () => {
+          throw new Error('window.api touched');
+        },
+      },
     );
-    const slots = container.querySelectorAll('[data-slot-id]');
-    const renderedIds = Array.from(slots).map((el) => el.getAttribute('data-slot-id'));
-    expect(renderedIds).toStrictEqual([...reservedSlotIds]);
-  });
-
-  it('each slot body equals the literal reserved string', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <CheckoutPlaceholder />
-      </MemoryRouter>,
-    );
-    const slots = container.querySelectorAll('[data-slot-id]');
-    for (const slot of Array.from(slots)) {
-      const body = slot.querySelector('[data-slot-body]');
-      expect(body).not.toBeNull();
-      // Safe: the preceding assertion guarantees body is non-null before this line.
-      if (body !== null) {
-        expect(body.textContent).toBe('Reserved for 005-checkout-payments');
-      }
+    (window as unknown as { api: unknown }).api = api;
+    try {
+      expect(() => renderPlaceholder()).not.toThrow();
+    } finally {
+      delete (window as unknown as { api?: unknown }).api;
     }
   });
 
-  it('no input controls inside any slot', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <CheckoutPlaceholder />
-      </MemoryRouter>,
-    );
-    const slots = container.querySelectorAll('[data-slot-id]');
-    for (const slot of Array.from(slots)) {
-      expect(within(slot as HTMLElement).queryAllByRole('button')).toHaveLength(0);
-      expect(within(slot as HTMLElement).queryAllByRole('textbox')).toHaveLength(0);
-      expect(within(slot as HTMLElement).queryAllByRole('spinbutton')).toHaveLength(0);
-      expect((slot as HTMLElement).querySelectorAll('[contenteditable]')).toHaveLength(0);
-    }
-  });
-
-  it('no slot DOM node carries amount/currency/value data attributes', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <CheckoutPlaceholder />
-      </MemoryRouter>,
-    );
-    const slots = container.querySelectorAll('[data-slot-id]');
-    for (const slot of Array.from(slots)) {
-      const el = slot as HTMLElement;
-      expect(el.dataset['amount']).toBeUndefined();
-      expect(el.dataset['currency']).toBeUndefined();
-      expect(el.dataset['value']).toBeUndefined();
-    }
-  });
-
-  it('passes axe accessibility check', async () => {
-    const { container } = render(
-      <MemoryRouter>
-        <CheckoutPlaceholder />
-      </MemoryRouter>,
-    );
+  it('is axe-clean', async () => {
+    const { container } = renderPlaceholder();
     await expectNoAxeViolations(container);
   });
 });

@@ -1,59 +1,41 @@
 /**
- * T043 — InventoryPlaceholder with US3 state-variant support.
+ * RT-503 (VN-S10 S10-6) — Inventory: an honest Arabic notice (inventory
+ * management is not available on this terminal) and the way to the read-only
+ * catalogue check (G-6 state 11). It implies no inventory management; the dev
+ * `?state=` gallery is gone.
  *
- * In dev builds, reads `?state=` from the URL and renders the matching state
- * primitive. Production builds tree-shake the dev branch via the
- * `import.meta.env.DEV` guard.
- *
- * NOTE: Default state carries the mandatory "navigation only" message
- * (FR-13) — inventory management is not available at this terminal.
+ * Navigation-only: no fetch, no IPC, no persistence.
  */
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
-import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
-import { ScreenSection } from '../../v5/foundation/ScreenSection';
 
-function resolveDevState(): string {
-  const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
-  if (metaEnv?.DEV && typeof window !== 'undefined') {
-    return new URLSearchParams(window.location.search).get('state') ?? '';
-  }
-  return '';
-}
+import { ScreenSection } from '../../v5/foundation/ScreenSection';
+import { SearchGlyph } from '../../v5/manager/honest/SearchGlyph';
+import { HonestNotice } from '../../v5/manager/honest/HonestNotice';
+import { HONEST_COPY, MANAGER_PATHS } from '../../v5/manager/honest/honest-copy';
 
 export function InventoryPlaceholder(): JSX.Element {
-  const devState = resolveDevState();
-
-  if (devState === 'loading') {
-    return <LoadingState message="Loading Inventory…" />;
-  }
-  if (devState === 'empty') {
-    return (
-      <EmptyState
-        heading="No inventory items"
-        description="There are no inventory items to display."
-      />
-    );
-  }
-  if (devState === 'error') {
-    return (
-      <ErrorState
-        heading="Inventory unavailable"
-        description="Could not load inventory data. Please try again."
-      />
-    );
-  }
-
+  const copy = HONEST_COPY.inventory;
   return (
-    <ScreenSection title="Inventory">
-      <section className="placeholder-pane">
-        <p>Navigation only — inventory management is not available at this terminal.</p>
-        <p>
-          <Link to="/app/inventory/diagnostics" data-testid="inventory-diagnostics-link">
-            Catalogue Diagnostics
-          </Link>
-        </p>
-      </section>
+    <ScreenSection title={copy.title}>
+      <div className="v5-honest-state">
+        <HonestNotice notice={copy.notice} />
+        <ul className="v5-manager-tiles">
+          <li>
+            <Link
+              className="v5-manager-tile"
+              to={MANAGER_PATHS.diagnostics}
+              data-testid="inventory-diagnostics-link"
+            >
+              <span className="v5-manager-tile__glyph" aria-hidden="true">
+                <SearchGlyph />
+              </span>
+              <span className="v5-manager-tile__title">{copy.diagnosticsTitle}</span>
+              <span className="v5-manager-tile__hint">{copy.diagnosticsHint}</span>
+            </Link>
+          </li>
+        </ul>
+      </div>
     </ScreenSection>
   );
 }

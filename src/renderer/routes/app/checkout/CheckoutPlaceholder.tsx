@@ -1,57 +1,28 @@
 import type { JSX } from 'react';
 
-import { ReservedTenderRow } from './ReservedTenderRow';
-import { ReservedTotalsRow } from './ReservedTotalsRow';
-import { Workspace } from '../../../shell/regions/Workspace';
+import { ScreenSection } from '../../../v5/foundation/ScreenSection';
+import { HonestNotice } from '../../../v5/manager/honest/HonestNotice';
+import { HONEST_COPY, MANAGER_PATHS } from '../../../v5/manager/honest/honest-copy';
 
 /**
- * T052 — CheckoutPlaceholder
+ * RT-503 (VN-S10 S10-6) — `/app/checkout` while the `payments` flag is off
+ * (fail-closed default): an Arabic notice inside the frame and the way back to
+ * the Sale. It replaces the 003-era reservation of eleven tender slots, which
+ * implied a payment surface that is not there. The flag behaviour is unchanged.
  *
- * US6: Visually reserves the eleven payment-tender slots for future
- * feature 005-checkout-payments. Layout capacity only — zero values,
- * zero callbacks, zero side-effects.
- *
- * Slot order (fixed per contracts/shell-routes.ts + T049):
- *   1. tender.cash        — Cash
- *   2. tender.card        — Card
- *   3. tender.bank-transfer — Bank Transfer
- *   4. tender.voucher     — Gift Voucher
- *   5. tender.insurance   — Insurance
- *   6. tender.split       — Split Tender
- *   7. totals.amount-due  — Amount Due
- *   8. totals.amount-paid — Amount Paid
- *   9. totals.remaining   — Remaining Balance
- *  10. totals.change-due  — Change Due
- *  11. receipt.breakdown  — Receipt Breakdown
- *
- * Hard non-implementation list (003 scope):
- *   No payment logic, totals math, IPC, API, persistence, or printing.
- *   See contracts/shell-routes.ts §"Payment-tender visual reservation".
+ * No payment logic, IPC, persistence or printing.
  */
 export function CheckoutPlaceholder(): JSX.Element {
+  const copy = HONEST_COPY.checkoutOff;
   return (
-    <Workspace title="Checkout">
-      <section className="checkout-placeholder" aria-labelledby="checkout-heading">
-        <h1 id="checkout-heading">Checkout</h1>
-        <p>Payment tender slots are reserved for feature 005-checkout-payments.</p>
-
-        {/* Six payment-tender rows */}
-        <ReservedTenderRow slotId="tender.cash" label="Cash" />
-        <ReservedTenderRow slotId="tender.card" label="Card" />
-        <ReservedTenderRow slotId="tender.bank-transfer" label="Bank Transfer" />
-        <ReservedTenderRow slotId="tender.voucher" label="Gift Voucher" />
-        <ReservedTenderRow slotId="tender.insurance" label="Insurance" />
-        <ReservedTenderRow slotId="tender.split" label="Split Tender" />
-
-        {/* Four totals / amount fields */}
-        <ReservedTotalsRow slotId="totals.amount-due" label="Amount Due" />
-        <ReservedTotalsRow slotId="totals.amount-paid" label="Amount Paid" />
-        <ReservedTotalsRow slotId="totals.remaining" label="Remaining Balance" />
-        <ReservedTotalsRow slotId="totals.change-due" label="Change Due" />
-
-        {/* Receipt breakdown — last slot, keeps receipt prefix (Plan §"Note B") */}
-        <ReservedTotalsRow slotId="receipt.breakdown" label="Receipt Breakdown" />
-      </section>
-    </Workspace>
+    <ScreenSection title={copy.title}>
+      <div className="v5-honest-state">
+        <HonestNotice
+          notice={copy.notice}
+          action={{ label: copy.action, to: MANAGER_PATHS.cart }}
+          testId="checkout-payments-off-notice"
+        />
+      </div>
+    </ScreenSection>
   );
 }

@@ -94,7 +94,7 @@ describe('navigation test (T038)', () => {
     renderApp();
     await user.click(screen.getByRole('link', { name: 'Inventory' }));
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /inventory/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'المخزون' })).toBeInTheDocument(),
     );
   });
 
@@ -103,7 +103,7 @@ describe('navigation test (T038)', () => {
     renderApp();
     await user.click(screen.getByRole('link', { name: /settings/i }));
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /settings/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'الإعدادات' })).toBeInTheDocument(),
     );
   });
 

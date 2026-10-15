@@ -102,12 +102,10 @@ const REBUILT_SCREENS: ReadonlyArray<{
     sharedRulesRemain: true,
   },
   // RT-500 (VN-S10 S10-3): the Sales lookup moved onto the G-6 references.
-  // `placeholder-pane` is still defined for Audit and Inventory.
   {
     screen: 'Sales lookup',
     file: 'routes/app/SalesWorkspace.tsx',
     retired: ['placeholder-pane'],
-    sharedRulesRemain: true,
   },
   // Its own retired prefix has no rule left in tailwind.css, so the orphan check stays on.
   {
@@ -143,6 +141,33 @@ const REBUILT_SCREENS: ReadonlyArray<{
     screen: 'manager › stuck shifts › forced-close dialog',
     file: 'v5/manager/stuck-shifts/ForcedCloseDialog.tsx',
     retired: [],
+  },
+  // RT-503 (VN-S10 S10-6): the honest manager pages moved onto the v5 frame.
+  // They were the last users of `placeholder-pane`, so its rules are deleted.
+  {
+    screen: 'audit',
+    file: 'routes/app/AuditPlaceholder.tsx',
+    retired: ['placeholder-pane'],
+  },
+  {
+    screen: 'inventory',
+    file: 'routes/app/InventoryPlaceholder.tsx',
+    retired: ['placeholder-pane'],
+  },
+  {
+    screen: 'catalogue diagnostics',
+    file: 'routes/app/CatalogueDiagnostics.tsx',
+    retired: ['catalogue-diagnostics', 'diagnostics-section', 'diagnostics-badge'],
+  },
+  {
+    screen: 'settings',
+    file: 'routes/app/SettingsHelpPlaceholder.tsx',
+    retired: ['settings-section', 'settings-skeleton'],
+  },
+  {
+    screen: 'checkout (payments off)',
+    file: 'routes/app/checkout/CheckoutPlaceholder.tsx',
+    retired: ['checkout-placeholder', 'reserved-slot'],
   },
 ];
 

@@ -32,6 +32,8 @@ const DEFAULTS: OneFrameProofParams = {
   shift: 'off',
   list: 'ok',
   close: 'refused',
+  payments: 'on',
+  search: 'none',
 };
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -111,6 +113,29 @@ describe('OneFrameProof — parameters', () => {
     });
     window.location.hash = '#/dev/one-frame-proof?list=nope&close=nope';
     expect(readOneFrameProofParams()).toMatchObject({ list: 'ok', close: 'refused' });
+  });
+
+  it('RT-503: reads payments and search, and ignores unknown values', () => {
+    window.location.hash = '#/dev/one-frame-proof?payments=off&search=results';
+    expect(readOneFrameProofParams()).toMatchObject({ payments: 'off', search: 'results' });
+    window.location.hash = '#/dev/one-frame-proof?payments=nope&search=nope';
+    expect(readOneFrameProofParams()).toMatchObject({ payments: 'on', search: 'none' });
+  });
+
+  it('RT-503: payments=off hydrates the payments flag off when the harness renders', async () => {
+    window.location.hash = '#/dev/one-frame-proof?payments=off';
+    render(<OneFrameProof />);
+    await screen.findByTestId('v5-frame');
+    expect(useFeatureFlagsStore.getState().payments).toBe(false);
+  });
+
+  it('RT-503: search=results answers twelve items, search=none answers not found', async () => {
+    installWindowApi({ ...DEFAULTS, search: 'results' });
+    const results = (await windowApi().catalogue?.search?.()) as { kind: string; items: unknown[] };
+    expect(results.kind).toBe('results');
+    expect(results.items).toHaveLength(12);
+    installWindowApi(DEFAULTS);
+    expect(await windowApi().catalogue?.search?.()).toEqual({ kind: 'not_found' });
   });
 
   it('ignores unknown values and any path outside /app', () => {

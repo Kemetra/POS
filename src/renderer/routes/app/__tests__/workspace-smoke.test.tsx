@@ -38,7 +38,7 @@ afterEach(() => {
  * RT-498 (VN-S10 S10-1): the screens that moved into the one v5 frame now wrap
  * their content in `ScreenSection` (data-testid="v5-screen-section") instead of
  * the legacy `Workspace` (data-testid="workspace"). CheckoutPlaceholder still
- * uses the legacy `Workspace`; S10-6 moves it.
+ * RT-503 (VN-S10 S10-6): CheckoutPlaceholder moved to `ScreenSection` as well.
  */
 
 function renderInRouter(Component: React.ComponentType): ReturnType<typeof render> {
@@ -70,10 +70,9 @@ describe('Screen wrapper smoke tests (T070a, RT-498)', () => {
     expect(screen.getByTestId('v5-screen-section')).toBeInTheDocument();
   });
 
-  // S10-6 moves CheckoutPlaceholder to ScreenSection; until then it keeps the legacy Workspace.
-  it('CheckoutPlaceholder renders inside a Workspace', () => {
+  it('CheckoutPlaceholder renders inside a ScreenSection', () => {
     renderInRouter(CheckoutPlaceholder);
-    expect(screen.getByTestId('workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('v5-screen-section')).toBeInTheDocument();
   });
 
   it('each placeholder contains exactly one screen wrapper', () => {
@@ -82,6 +81,7 @@ describe('Screen wrapper smoke tests (T070a, RT-498)', () => {
       SalesWorkspace,
       InventoryPlaceholder,
       SettingsHelpPlaceholder,
+      CheckoutPlaceholder,
     ] as const;
     for (const Component of sectionScreens) {
       const { container, unmount } = render(
@@ -92,14 +92,5 @@ describe('Screen wrapper smoke tests (T070a, RT-498)', () => {
       expect(container.querySelectorAll('[data-testid="v5-screen-section"]')).toHaveLength(1);
       unmount();
     }
-
-    // CheckoutPlaceholder is still on the legacy Workspace (S10-6 moves it).
-    const { container, unmount } = render(
-      <MemoryRouter>
-        <CheckoutPlaceholder />
-      </MemoryRouter>,
-    );
-    expect(container.querySelectorAll('[data-testid="workspace"]')).toHaveLength(1);
-    unmount();
   });
 });

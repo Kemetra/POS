@@ -1,0 +1,692 @@
+[
+  {
+    "key": "audit",
+    "route": "/app/audit",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt503-audit-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "سجل المراجعة"
+    ],
+    "current": [
+      "سجل المراجعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "audit",
+    "route": "/app/audit",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt503-audit-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "سجل المراجعة"
+    ],
+    "current": [
+      "سجل المراجعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "audit",
+    "route": "/app/audit",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt503-audit-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "سجل المراجعة"
+    ],
+    "current": [
+      "سجل المراجعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a[current]:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a[current]:سجل المراجعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "audit",
+    "route": "/app/audit",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt503-audit-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "سجل المراجعة"
+    ],
+    "current": [
+      "سجل المراجعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "inventory",
+    "route": "/app/inventory",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt503-inventory-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المخزون"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "inventory",
+    "route": "/app/inventory",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt503-inventory-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المخزون"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "inventory",
+    "route": "/app/inventory",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt503-inventory-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المخزون"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:فحص الكتالوجحالة كتالوج الأصناف على هذا ",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a[current]:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:فحص الكتالوجحالة كتالوج الأصناف على هذا ",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "inventory",
+    "route": "/app/inventory",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt503-inventory-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المخزون"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "diagnostics",
+    "route": "/app/inventory/diagnostics",
+    "role": "manager",
+    "extra": "search=results",
+    "typed": "بنادول",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt503-diagnostics-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "فحص الكتالوج"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "diagnostics",
+    "route": "/app/inventory/diagnostics",
+    "role": "manager",
+    "extra": "search=results",
+    "typed": "بنادول",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt503-diagnostics-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "فحص الكتالوج"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "diagnostics",
+    "route": "/app/inventory/diagnostics",
+    "role": "manager",
+    "extra": "search=results",
+    "typed": "بنادول",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt503-diagnostics-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "فحص الكتالوج"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a[current]:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "button:تحديث الآن",
+      "input:",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "diagnostics",
+    "route": "/app/inventory/diagnostics",
+    "role": "manager",
+    "extra": "search=results",
+    "typed": "بنادول",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt503-diagnostics-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "فحص الكتالوج"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "settings",
+    "route": "/app/settings",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt503-settings-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الإعدادات"
+    ],
+    "current": [
+      "الإعدادات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "settings",
+    "route": "/app/settings",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt503-settings-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الإعدادات"
+    ],
+    "current": [
+      "الإعدادات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "settings",
+    "route": "/app/settings",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt503-settings-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الإعدادات"
+    ],
+    "current": [
+      "الإعدادات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a[current]:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "settings",
+    "route": "/app/settings",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt503-settings-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الإعدادات"
+    ],
+    "current": [
+      "الإعدادات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "force-fail",
+    "route": "/app/manager/force-fail",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt503-force-fail-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "إنهاء دفع معلّق"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "force-fail",
+    "route": "/app/manager/force-fail",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt503-force-fail-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "إنهاء دفع معلّق"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "force-fail",
+    "route": "/app/manager/force-fail",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt503-force-fail-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "إنهاء دفع معلّق"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:المبيعات المعلقة",
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:المبيعات المعلقة",
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "force-fail",
+    "route": "/app/manager/force-fail",
+    "role": "manager",
+    "extra": "",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt503-force-fail-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "إنهاء دفع معلّق"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "checkout-off",
+    "route": "/app/checkout",
+    "role": "cashier",
+    "extra": "payments=off",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt503-checkout-off-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الدفع"
+    ],
+    "current": [
+      "نقطة البيع"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "checkout-off",
+    "route": "/app/checkout",
+    "role": "cashier",
+    "extra": "payments=off",
+    "typed": null,
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt503-checkout-off-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الدفع"
+    ],
+    "current": [
+      "نقطة البيع"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "checkout-off",
+    "route": "/app/checkout",
+    "role": "cashier",
+    "extra": "payments=off",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt503-checkout-off-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الدفع"
+    ],
+    "current": [
+      "نقطة البيع"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:العودة إلى البيع",
+      "a[current]:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:العودة إلى البيع",
+      "a[current]:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:العودة إلى البيع",
+      "a[current]:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:العودة إلى البيع",
+      "a[current]:نقطة البيع"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "checkout-off",
+    "route": "/app/checkout",
+    "role": "cashier",
+    "extra": "payments=off",
+    "typed": null,
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt503-checkout-off-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الدفع"
+    ],
+    "current": [
+      "نقطة البيع"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  }
+]

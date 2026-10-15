@@ -37,13 +37,13 @@ describe('SalesWorkspace (T037)', () => {
 });
 
 describe('InventoryPlaceholder (T037)', () => {
-  it('shows "navigation only" message', () => {
+  it('shows the honest Arabic «not available on this device» notice', () => {
     render(
       <MemoryRouter>
         <InventoryPlaceholder />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/navigation only/i)).toBeInTheDocument();
+    expect(screen.getByText('إدارة المخزون غير متاحة على هذا الجهاز.')).toBeInTheDocument();
   });
 
   it('zero fetch calls on mount', () => {
@@ -65,7 +65,7 @@ describe('SettingsHelpPlaceholder (T037)', () => {
         <SettingsHelpPlaceholder />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: /settings/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'الإعدادات' })).toBeInTheDocument();
     // Clarifications §1: no density toggle
     expect(screen.queryByRole('checkbox', { name: /density/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /density/i })).not.toBeInTheDocument();

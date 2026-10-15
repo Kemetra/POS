@@ -4,36 +4,48 @@ import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import { AuditPlaceholder } from '../AuditPlaceholder';
+import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
 
 /**
- * POS v3.5 Slice 1 — thin "coming soon" placeholder for the Audit nav entry
- * (a later display slice). Same contract as the other placeholders (T037):
- * renders default state, no fetch/IPC/persistence on mount. (The Returns
- * placeholder was replaced by the RT-15 S3 return flow.)
+ * RT-503 (VN-S10 S10-6, G-6 state 10) — the Audit nav entry says, honestly and
+ * in Arabic, that the audit log is not shown on this terminal. It implies no
+ * log exists, and makes no fetch/IPC/persistence call.
  */
 
 afterEach(cleanup);
 afterEach(() => vi.unstubAllGlobals());
 
+function renderAudit(): ReturnType<typeof render> {
+  return render(
+    <MemoryRouter>
+      <AuditPlaceholder />
+    </MemoryRouter>,
+  );
+}
+
 describe('AuditPlaceholder', () => {
-  it('renders the Audit heading and coming-soon copy', () => {
-    render(
-      <MemoryRouter>
-        <AuditPlaceholder />
-      </MemoryRouter>,
-    );
-    expect(screen.getByRole('heading', { name: /audit/i })).toBeInTheDocument();
-    expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
+  it('titles the page «سجل المراجعة» with the honest neutral notice', () => {
+    renderAudit();
+    expect(screen.getByRole('heading', { level: 1, name: 'سجل المراجعة' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('سجل المراجعة لا يُعرض على هذا الجهاز.');
+  });
+
+  it('shows no English copy, no «Coming soon», and no link or button', () => {
+    const { container } = renderAudit();
+    expect(container.textContent).not.toMatch(/[A-Za-z]/);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('makes zero fetch calls on mount', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    render(
-      <MemoryRouter>
-        <AuditPlaceholder />
-      </MemoryRouter>,
-    );
+    renderAudit();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('is axe-clean', async () => {
+    const { container } = renderAudit();
+    await expectNoAxeViolations(container);
   });
 });
