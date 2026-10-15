@@ -247,6 +247,115 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
     };
   }
 
+  /**
+   * Persist a `refused`-state line + its outbox entry, so the action is
+   * recorded and replayable, and answer with that refusal.
+   */
+  function persistRefusedLine(
+    input: ApplyTenderLineInput,
+    apply_order: number,
+    refused: {
+      amount_applied_minor: number;
+      external_reference: string | null;
+      reason: RefusalReason;
+    },
+  ): ApplyOutcome {
+    lines.insert({
+      tender_line_id: input.tender_line_id,
+      payment_attempt_id: input.payment_attempt_id,
+      tender_type: input.tender_type,
+      amount_applied_minor: refused.amount_applied_minor,
+      state: 'refused',
+      change_due_minor: null,
+      external_reference: refused.external_reference,
+      voucher_redemption_intent_token: null,
+      voucher_authority_redemption_id: null,
+      applied_at: null,
+      refused_at: input.applied_at,
+      reversed_at: null,
+      reversal_pending_since: null,
+      refusal_reason: refused.reason,
+      attribution_operator_id: input.attribution_operator_id,
+      apply_order,
+      last_action_id: input.action_id,
+    });
+    writeApplyOutbox('tender.apply', input);
+    return { kind: 'refused', reason: refused.reason };
+  }
+
+  /**
+   * Voucher apply: authority refusals persist a refused-state row (mirrors the
+   * external_card_terminal overpayment refusal); validated outcomes persist an
+   * applied row with the V-A `redemption_intent_token` set main-side only.
+   */
+  function applyVoucherOutcome(
+    input: ApplyTenderLineInput,
+    outcome: ApplyTenderLineInput['voucher_outcome'],
+    remaining: number,
+    apply_order: number,
+  ): ApplyOutcome {
+    if (outcome === undefined) {
+      // Unreachable — pre-checked above; keep for type-narrowing.
+      return { kind: 'refused', reason: 'internal_error' };
+    }
+    const refusedWith = (
+      reason: RefusalReason,
+      amount_applied_minor: number = input.amount_applied_minor,
+    ): ApplyOutcome =>
+      persistRefusedLine(input, apply_order, {
+        amount_applied_minor,
+        external_reference: null,
+        reason,
+      });
+
+    if (outcome.kind === 'refused') return refusedWith(outcome.reason);
+    // CR-2 — Defence-in-depth safe-integer guard on the
+    // authority-returned monetary value (Constitution §P9 / §II).
+    // The OpenAPI schema declares `type: integer, minimum: 0` but
+    // schema validation is upstream of this path; a malformed V-A
+    // response must NOT corrupt local money state. Persist a
+    // refused row + outbox entry (mirrors the non_cash_overpayment_
+    // refused shape) so the action is recorded and replayable.
+    if (!Number.isSafeInteger(outcome.applied_amount_minor) || outcome.applied_amount_minor < 0) {
+      return refusedWith('internal_error');
+    }
+    // Voucher overpayment cap is enforced authority-side (R-7) —
+    // V-A returns the authority-confirmed `applied_amount_minor`
+    // which we trust over the caller's pre-call estimate.
+    // RT-304 — the line persists `outcome.applied_amount_minor`, but the
+    // outbox hash covers the requested `input.amount_applied_minor`.
+    if (outcome.applied_amount_minor > remaining) {
+      return refusedWith('non_cash_overpayment_refused', outcome.applied_amount_minor);
+    }
+    lines.insert({
+      tender_line_id: input.tender_line_id,
+      payment_attempt_id: input.payment_attempt_id,
+      tender_type: 'internal_voucher',
+      amount_applied_minor: outcome.applied_amount_minor,
+      state: 'applied',
+      change_due_minor: null,
+      external_reference: null,
+      voucher_redemption_intent_token: outcome.redemption_intent_token,
+      voucher_authority_redemption_id: null,
+      applied_at: input.applied_at,
+      refused_at: null,
+      reversed_at: null,
+      reversal_pending_since: null,
+      refusal_reason: null,
+      attribution_operator_id: input.attribution_operator_id,
+      apply_order,
+      last_action_id: input.action_id,
+    });
+    // RT-304 — the line persists `outcome.applied_amount_minor`, but the
+    // outbox hash covers the requested `input.amount_applied_minor`.
+    writeApplyOutbox('tender.apply', input);
+    return {
+      kind: 'ok',
+      tender_line_id: input.tender_line_id,
+      applied_at: input.applied_at,
+    };
+  }
+
   return {
     apply(input: ApplyTenderLineInput): ApplyOutcome {
       // Defensive amount guard (data-model §"PaymentTenderLine" Invariant 2 /
@@ -286,154 +395,21 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
 
       const txn = db.transaction((): ApplyOutcome => {
         // Wave 4 voucher branch — persist the line per the resolved V-A
-        // outcome the bridge handler threaded in. Authority refusals
-        // persist a refused-state row (mirrors external_card_terminal
-        // overpayment refusal); validated outcomes persist an applied
-        // row with the V-A `redemption_intent_token` set main-side only.
+        // outcome the bridge handler threaded in.
         if (input.tender_type === 'internal_voucher') {
-          const outcome = input.voucher_outcome;
-          if (outcome === undefined) {
-            // Unreachable — pre-checked above; keep for type-narrowing.
-            return { kind: 'refused', reason: 'internal_error' };
-          }
-          if (outcome.kind === 'refused') {
-            lines.insert({
-              tender_line_id: input.tender_line_id,
-              payment_attempt_id: input.payment_attempt_id,
-              tender_type: 'internal_voucher',
-              amount_applied_minor: input.amount_applied_minor,
-              state: 'refused',
-              change_due_minor: null,
-              external_reference: null,
-              voucher_redemption_intent_token: null,
-              voucher_authority_redemption_id: null,
-              applied_at: null,
-              refused_at: input.applied_at,
-              reversed_at: null,
-              reversal_pending_since: null,
-              refusal_reason: outcome.reason,
-              attribution_operator_id: input.attribution_operator_id,
-              apply_order,
-              last_action_id: input.action_id,
-            });
-            writeApplyOutbox('tender.apply', input);
-            return { kind: 'refused', reason: outcome.reason };
-          }
-          // CR-2 — Defence-in-depth safe-integer guard on the
-          // authority-returned monetary value (Constitution §P9 / §II).
-          // The OpenAPI schema declares `type: integer, minimum: 0` but
-          // schema validation is upstream of this path; a malformed V-A
-          // response must NOT corrupt local money state. Persist a
-          // refused row + outbox entry (mirrors the non_cash_overpayment_
-          // refused shape) so the action is recorded and replayable.
-          if (
-            !Number.isSafeInteger(outcome.applied_amount_minor) ||
-            outcome.applied_amount_minor < 0
-          ) {
-            lines.insert({
-              tender_line_id: input.tender_line_id,
-              payment_attempt_id: input.payment_attempt_id,
-              tender_type: 'internal_voucher',
-              amount_applied_minor: input.amount_applied_minor,
-              state: 'refused',
-              change_due_minor: null,
-              external_reference: null,
-              voucher_redemption_intent_token: null,
-              voucher_authority_redemption_id: null,
-              applied_at: null,
-              refused_at: input.applied_at,
-              reversed_at: null,
-              reversal_pending_since: null,
-              refusal_reason: 'internal_error',
-              attribution_operator_id: input.attribution_operator_id,
-              apply_order,
-              last_action_id: input.action_id,
-            });
-            writeApplyOutbox('tender.apply', input);
-            return { kind: 'refused', reason: 'internal_error' };
-          }
-          // Voucher overpayment cap is enforced authority-side (R-7) —
-          // V-A returns the authority-confirmed `applied_amount_minor`
-          // which we trust over the caller's pre-call estimate.
-          if (outcome.applied_amount_minor > remaining) {
-            lines.insert({
-              tender_line_id: input.tender_line_id,
-              payment_attempt_id: input.payment_attempt_id,
-              tender_type: 'internal_voucher',
-              amount_applied_minor: outcome.applied_amount_minor,
-              state: 'refused',
-              change_due_minor: null,
-              external_reference: null,
-              voucher_redemption_intent_token: null,
-              voucher_authority_redemption_id: null,
-              applied_at: null,
-              refused_at: input.applied_at,
-              reversed_at: null,
-              reversal_pending_since: null,
-              refusal_reason: 'non_cash_overpayment_refused',
-              attribution_operator_id: input.attribution_operator_id,
-              apply_order,
-              last_action_id: input.action_id,
-            });
-            // RT-304 — the line persists `outcome.applied_amount_minor`, but the
-            // outbox hash covers the requested `input.amount_applied_minor`.
-            writeApplyOutbox('tender.apply', input);
-            return { kind: 'refused', reason: 'non_cash_overpayment_refused' };
-          }
-          lines.insert({
-            tender_line_id: input.tender_line_id,
-            payment_attempt_id: input.payment_attempt_id,
-            tender_type: 'internal_voucher',
-            amount_applied_minor: outcome.applied_amount_minor,
-            state: 'applied',
-            change_due_minor: null,
-            external_reference: null,
-            voucher_redemption_intent_token: outcome.redemption_intent_token,
-            voucher_authority_redemption_id: null,
-            applied_at: input.applied_at,
-            refused_at: null,
-            reversed_at: null,
-            reversal_pending_since: null,
-            refusal_reason: null,
-            attribution_operator_id: input.attribution_operator_id,
-            apply_order,
-            last_action_id: input.action_id,
-          });
-          // RT-304 — the line persists `outcome.applied_amount_minor`, but the
-          // outbox hash covers the requested `input.amount_applied_minor`.
-          writeApplyOutbox('tender.apply', input);
-          return {
-            kind: 'ok',
-            tender_line_id: input.tender_line_id,
-            applied_at: input.applied_at,
-          };
+          return applyVoucherOutcome(input, input.voucher_outcome, remaining, apply_order);
         }
 
         // external_card_terminal exact-only.
-        if (input.tender_type === 'external_card_terminal') {
-          if (input.amount_applied_minor > remaining) {
-            lines.insert({
-              tender_line_id: input.tender_line_id,
-              payment_attempt_id: input.payment_attempt_id,
-              tender_type: 'external_card_terminal',
-              amount_applied_minor: input.amount_applied_minor,
-              state: 'refused',
-              change_due_minor: null,
-              external_reference: input.external_reference ?? null,
-              voucher_redemption_intent_token: null,
-              voucher_authority_redemption_id: null,
-              applied_at: null,
-              refused_at: input.applied_at,
-              reversed_at: null,
-              reversal_pending_since: null,
-              refusal_reason: 'non_cash_overpayment_refused',
-              attribution_operator_id: input.attribution_operator_id,
-              apply_order,
-              last_action_id: input.action_id,
-            });
-            writeApplyOutbox('tender.apply', input);
-            return { kind: 'refused', reason: 'non_cash_overpayment_refused' };
-          }
+        if (
+          input.tender_type === 'external_card_terminal' &&
+          input.amount_applied_minor > remaining
+        ) {
+          return persistRefusedLine(input, apply_order, {
+            amount_applied_minor: input.amount_applied_minor,
+            external_reference: input.external_reference ?? null,
+            reason: 'non_cash_overpayment_refused',
+          });
         }
 
         // RT-339 — cash with nothing left to pay is never recorded. It can only

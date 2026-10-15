@@ -6,8 +6,8 @@ import { describe, it, expect } from 'vitest';
  * Dialog-Escape static guard (whole-UI a11y audit — primitive-bypass P1 #5).
  *
  * WCAG 2.1.1: a modal dialog must be dismissible by keyboard (Escape). The
- * design system ships a `Dialog` primitive (`primitives/Dialog/Dialog.tsx`)
- * that handles Escape; but several surfaces hand-roll `role="dialog"` divs
+ * design system ships a `Dialog` (`v5/foundation/Dialog.tsx`) that handles
+ * Escape (RT-504 retired the older `primitives/Dialog`); but several surfaces hand-roll `role="dialog"` divs
  * instead of using it, and the audit found three that shipped with NO Escape
  * handler (ForcedCloseSurface, TakeoverPrompt, CashierManagement Reset-PIN) —
  * a keyboard trap in cashier-critical flows.
@@ -68,7 +68,7 @@ describe('dialog-escape static guard (a11y audit P1 #5)', () => {
     expect(
       violations,
       `Hand-rolled role="dialog" without an Escape handler (keyboard trap, WCAG 2.1.1).\n` +
-        `Add an Escape→close keydown handler (see primitives/Dialog/Dialog.tsx) or use the ` +
+        `Add an Escape→close keydown handler (see v5/foundation/Dialog.tsx) or use the ` +
         `Dialog primitive:\n${violations.join('\n')}`,
     ).toEqual([]);
   });

@@ -276,7 +276,7 @@ four status roles held strictly to status surfaces.
 ### Named Rules
 **The Commit-Teal Rule.** Filled teal appears on at most one control per region, plus selected-state washes. Large teal fills are allowed for the primary commit — the v3.5 One-Accent Rule is superseded.
 
-**The No-Accent Rule.** There is no separate accent role. Selection is `primary-soft` fill + `primary` ink + a 2px inline-start bar + `aria-current`. The legacy `--color-accent` (equal to primary today) and the dark `--color-rail*` tokens exist only for legacy surfaces until VN-S10 retires them; new work never uses them.
+**The No-Accent Rule.** There is no separate accent role. Selection is `primary-soft` fill + `primary` ink + a 2px inline-start bar + `aria-current`.
 
 **The Status-Containment Rule.** Status colours appear only on status surfaces: banner, indicator, badge, outcome panel, destructive button. Never as decoration, hover accent or brand fill.
 
@@ -428,7 +428,6 @@ State-change only, from the shipped motion tokens: 80ms press, 150ms row flash a
 
 ### Don't:
 - **Don't** use the superseded v3.5 system — navy `#1f4e7a`, Inter, dark default, the One-Accent Rule, the dark command rail — for new work.
-- **Don't** use `--color-accent` or `--color-rail*` on new surfaces; they exist only until the legacy shell is retired (VN-S10).
 - **Don't** offer the dark theme or a theme toggle on cashier surfaces in the pilot.
 - **Don't** show success colour, a check icon or a success word before the underlying fact is persisted.
 - **Don't** call an UNKNOWN payment a decline, or a local sale "posted".

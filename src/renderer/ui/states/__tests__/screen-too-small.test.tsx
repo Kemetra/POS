@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
-import { ScreenTooSmall } from '../index';
+import { ScreenTooSmall } from '../ScreenTooSmall';
 import { expectNoAxeViolations } from '../../primitives/__tests__/axe-config';
 
 afterEach(cleanup);
