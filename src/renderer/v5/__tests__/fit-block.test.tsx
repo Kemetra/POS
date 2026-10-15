@@ -63,7 +63,7 @@ describe('CSS the guard relies on (tripwires)', () => {
 
   it('one row size, 60px comfortable and 52px compact, read by both the rows and the guard', () => {
     expect(saleCss).toMatch(
-      /\.v5-live-sale \.v5-sale-cart-table\s*\{\s*--v5-fit-row-size:\s*60px;?\s*\}/,
+      /\.v5-live-sale \.v5-sale-cart-table\s*\{[^}]*--v5-fit-row-size:\s*60px;?[^}]*\}/,
     );
     expect(saleCss).toMatch(
       /\.v5-live-sale \.v5-sale-cart-line\s*\{\s*min-block-size:\s*var\(--v5-fit-row-size\)/,
@@ -75,6 +75,19 @@ describe('CSS the guard relies on (tripwires)', () => {
     expect(compact).toMatch(/\.v5-sale-cart-table\s*\{\s*--v5-fit-row-size:\s*52px;?\s*\}/);
     // No fixed row height left behind to drift from the guard's number.
     expect(saleCss).not.toMatch(/\.v5-sale-cart-line\s*\{[^}]*min-block-size:\s*\d+px/);
+  });
+
+  /*
+   * RT-479: the guard counts the cart list's own height as its row space. Sized
+   * to its content, an empty or short cart (column labels + the empty message,
+   * 85px) never holds 4 rows, so the Sale was blocked at every window size. The
+   * list fills the cart region instead, whatever the number of lines.
+   */
+  it('the cart list fills the cart region, so its row space never depends on the lines drawn', () => {
+    const rules = saleCss.match(/\.v5-live-sale \.v5-sale-cart-table\s*\{[^}]*\}/g) ?? [];
+    expect(rules.some((rule) => /flex:\s*1 1 auto/.test(rule))).toBe(true);
+    // Nothing (the compact composition included) gives the list a fixed or content height back.
+    expect(rules.join('')).not.toMatch(/flex:\s*(0|none)|(^|[\s;{])(block-size|height):/);
   });
 });
 
