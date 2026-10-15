@@ -1,9 +1,5 @@
 import { useState, useEffect, useCallback, type JSX } from 'react';
 
-import {
-  FORCED_CLOSE_REASONS,
-  type ForcedCloseReason,
-} from '../../../shared/audit/payload-schemas.js';
 import type {
   OperatorBridgeAPI,
   StuckShiftSummary,
@@ -11,16 +7,21 @@ import type {
 } from '../../../shared/bridge-api.js';
 import { ReauthDialog, ReauthRequiredNotice } from './ReauthDialog.js';
 import { SIGN_IN_REFUSAL_COPY } from './messages.js';
-
-// ─── Duration formatting ──────────────────────────────────────────────────────
-
-function formatDuration(minutes: number): string {
-  if (minutes < 1) return '< 1 min';
-  if (minutes < 60) return `${String(minutes)} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h)} h ${String(m)} min`;
-}
+import {
+  ForcedCloseDialog,
+  type ForcedCloseFormSubmitPayload,
+  type ForcedCloseRefusal,
+} from '../../v5/manager/stuck-shifts/ForcedCloseDialog.js';
+import { displayNameOf } from '../../v5/manager/stuck-shifts/stuck-shifts-model.js';
+import {
+  StuckShiftList,
+  StuckShiftsEmpty,
+  StuckShiftsLoading,
+  StuckShiftsPage,
+  StuckShiftsState,
+  StuckShiftsUnreachable,
+} from '../../v5/manager/stuck-shifts/StuckShiftsScreen.js';
+import { useStuckShiftFocus } from '../../v5/manager/stuck-shifts/use-stuck-shift-focus.js';
 
 // ─── ForcedCloseSurface (T083 — read-only summary row) ────────────────────────
 
@@ -57,84 +58,15 @@ export function ForcedCloseSurface({
   );
 }
 
-// ─── ForcedCloseForm ──────────────────────────────────────────────────────────
+// ─── ForcedCloseForm (T084) ───────────────────────────────────────────────────
 
-export interface ForcedCloseFormSubmitPayload {
-  forced_close_reason: ForcedCloseReason;
-  annotation?: string;
-}
-
-export interface ForcedCloseFormProps {
-  onSubmit: (payload: ForcedCloseFormSubmitPayload) => void;
-  onCancel: () => void;
-  submitting?: boolean;
-}
-
-/**
- * 004-operator-session T084 — forced-close reason picker form.
- *
- * - Submit is disabled until a reason radio is selected.
- * - Exactly the five FORCED_CLOSE_REASONS values are offered.
- * - Free-text annotation captured in payload.annotation only;
- *   payload.forced_close_reason contains only the enum value.
- * - No financial or PII fields.
- */
-export function ForcedCloseForm({
-  onSubmit,
-  onCancel,
-  submitting,
-}: ForcedCloseFormProps): JSX.Element {
-  const [reason, setReason] = useState<ForcedCloseReason | null>(null);
-  const [annotation, setAnnotation] = useState('');
-
-  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>): void {
-    e.preventDefault();
-    /* v8 ignore next 1 */
-    if (reason == null) return;
-    onSubmit(
-      annotation ? { forced_close_reason: reason, annotation } : { forced_close_reason: reason },
-    );
-  }
-
-  return (
-    <form data-testid="forced-close-form" onSubmit={handleSubmit}>
-      <fieldset>
-        <legend>Reason for forced close</legend>
-        {FORCED_CLOSE_REASONS.map((r) => (
-          <label key={r}>
-            <input
-              type="radio"
-              name="forced_close_reason"
-              value={r}
-              checked={reason === r}
-              onChange={() => {
-                setReason(r);
-              }}
-            />
-            {r}
-          </label>
-        ))}
-      </fieldset>
-
-      <label htmlFor="forced-close-annotation">Annotation (optional)</label>
-      <textarea
-        id="forced-close-annotation"
-        value={annotation}
-        maxLength={500}
-        onChange={(e) => {
-          setAnnotation(e.target.value);
-        }}
-      />
-
-      <button type="submit" disabled={reason == null || submitting}>
-        Confirm forced close
-      </button>
-      <button type="button" onClick={onCancel} disabled={submitting}>
-        Cancel
-      </button>
-    </form>
-  );
-}
+// RT-502 (VN-S10 S10-5): the reason picker moved to the v5 forced-close dialog
+// (Arabic reasons, same payload). Re-exported so existing imports keep working.
+export { ForcedCloseForm } from '../../v5/manager/stuck-shifts/ForcedCloseDialog.js';
+export type {
+  ForcedCloseFormProps,
+  ForcedCloseFormSubmitPayload,
+} from '../../v5/manager/stuck-shifts/ForcedCloseDialog.js';
 
 // ─── StuckShiftSurface (T090 — orchestrated container) ───────────────────────
 
@@ -168,7 +100,13 @@ function surfaceOf(res: ListStuckShiftsResponse, afterReauth: boolean): SurfaceS
 
 type DialogState =
   | { kind: 'idle' }
-  | { kind: 'open'; shift: StuckShiftSummary; submitting: boolean; submitError: boolean };
+  | {
+      kind: 'open';
+      shift: StuckShiftSummary;
+      submitting: boolean;
+      /** RT-502: which refusal the dialog shows; `null` before any answer. */
+      refusal: ForcedCloseRefusal | null;
+    };
 
 /**
  * 004-operator-session T090 — manager/admin forced-close recovery surface.
@@ -176,13 +114,20 @@ type DialogState =
  * Fetches stuck shifts on mount, renders loading/empty/error/list states,
  * and manages the forced-close dialog lifecycle.
  *
+ * RT-502 (VN-S10 S10-5): the state, both bridge calls and the refusal
+ * branches stay here unchanged; the presentation is the v5 screen and dialog
+ * in `v5/manager/stuck-shifts/` (G-6 Stuck*). The RT-358 re-auth notice and
+ * dialog render exactly as before.
+ *
  * FR-024 blind-close discipline: no financial fields rendered.
  * FR-013 minimum-disclosure: only display-safe shift fields shown.
- * Card-stack layout (div rows, not table).
  */
 export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Element {
   const [surface, setSurface] = useState<SurfaceState>({ kind: 'loading' });
   const [dialog, setDialog] = useState<DialogState>({ kind: 'idle' });
+  const focus = useStuckShiftFocus(surface.kind !== 'loading');
+  const { afterClose } = focus;
+  const openShiftId = dialog.kind === 'open' ? dialog.shift.shift_id : null;
 
   const fetchShifts = useCallback(
     async (afterReauth = false): Promise<void> => {
@@ -197,28 +142,39 @@ export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Ele
     void fetchShifts();
   }, [fetchShifts]);
 
+  /** Cancel (button or Esc) and success: close, then put focus back on the list. */
+  const closeDialog = useCallback(
+    (shiftId: string): void => {
+      afterClose(shiftId);
+      setDialog({ kind: 'idle' });
+    },
+    [afterClose],
+  );
+
   // Escape closes the force-close dialog (WCAG 2.1.1) when open, mirroring its
   // Cancel button (setDialog idle). Only active while the dialog is open so it
   // doesn't swallow Escape elsewhere on the surface. Not submitting-guarded:
   // cancelling a dialog mid-submit is the same as clicking Cancel.
+  // RT-502: the v5 Dialog handles Esc while focus is inside it and stops the
+  // key there; this listener still covers focus lost to <body> mid-submit.
   useEffect(() => {
-    if (dialog.kind !== 'open') return;
+    if (openShiftId === null) return;
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
-        setDialog({ kind: 'idle' });
+        closeDialog(openShiftId);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [dialog.kind]);
+  }, [openShiftId, closeDialog]);
 
   async function handleSubmit(
     shift: StuckShiftSummary,
     payload: ForcedCloseFormSubmitPayload,
   ): Promise<void> {
-    setDialog({ kind: 'open', shift, submitting: true, submitError: false });
+    setDialog({ kind: 'open', shift, submitting: true, refusal: null });
 
     const res = await operator.forceCloseShift({
       event_id: crypto.randomUUID(),
@@ -228,58 +184,50 @@ export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Ele
     });
 
     if (res.kind === 'forced_closed') {
-      setDialog({ kind: 'idle' });
+      closeDialog(shift.shift_id);
       setSurface((prev) => {
         if (prev.kind !== 'list') return prev;
         const remaining = prev.shifts.filter((s) => s.shift_id !== shift.shift_id);
         return remaining.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: remaining };
       });
     } else if (res.category === 'state_invalid') {
-      setDialog({ kind: 'open', shift, submitting: false, submitError: true });
+      setDialog({ kind: 'open', shift, submitting: false, refusal: 'changed' });
       void fetchShifts();
     } else {
-      setDialog({ kind: 'open', shift, submitting: false, submitError: true });
+      setDialog({ kind: 'open', shift, submitting: false, refusal: 'failed' });
     }
   }
 
   return (
-    <div data-testid="stuck-shift-surface">
-      {surface.kind === 'loading' && (
-        <div data-testid="stuck-shift-surface-loading" aria-busy="true">
-          Loading stuck shifts…
-        </div>
-      )}
+    <StuckShiftsPage>
+      {surface.kind === 'loading' && <StuckShiftsLoading />}
 
-      {surface.kind === 'empty' && (
-        <div data-testid="stuck-shift-surface-empty">No stuck shifts found.</div>
-      )}
+      {surface.kind === 'empty' && <StuckShiftsEmpty focus={focus} />}
 
       {surface.kind === 'error' && (
-        <div data-testid="stuck-shift-surface-error" role="alert">
-          <p>Unable to load stuck shifts. Please try again.</p>
-          <button
-            type="button"
-            onClick={() => {
-              void fetchShifts();
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {surface.kind === 'reauth' && (
-        <ReauthRequiredNotice
-          onSignIn={() => {
-            setSurface({ kind: 'reauth', dialogOpen: true });
+        <StuckShiftsUnreachable
+          onRetry={() => {
+            void fetchShifts();
           }}
         />
       )}
 
+      {surface.kind === 'reauth' && (
+        <StuckShiftsState>
+          <ReauthRequiredNotice
+            onSignIn={() => {
+              setSurface({ kind: 'reauth', dialogOpen: true });
+            }}
+          />
+        </StuckShiftsState>
+      )}
+
       {surface.kind === 'reauthFailed' && (
-        <p data-testid="stuck-shift-surface-reauth-failed" role="alert" dir="rtl" lang="ar">
-          {surface.message}
-        </p>
+        <StuckShiftsState>
+          <p data-testid="stuck-shift-surface-reauth-failed" role="alert" dir="rtl" lang="ar">
+            {surface.message}
+          </p>
+        </StuckShiftsState>
       )}
 
       {surface.kind === 'reauth' && surface.dialogOpen && (
@@ -295,48 +243,28 @@ export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Ele
       )}
 
       {surface.kind === 'list' && (
-        <div data-testid="stuck-shift-list">
-          {surface.shifts.map((shift) => (
-            <div
-              key={shift.shift_id}
-              data-testid={`stuck-shift-card-${shift.shift_id}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                setDialog({ kind: 'open', shift, submitting: false, submitError: false });
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setDialog({ kind: 'open', shift, submitting: false, submitError: false });
-                }
-              }}
-            >
-              <div>{shift.cashier_display_name || 'Cashier ···'}</div>
-              <div>{shift.terminal_label}</div>
-              <div>{formatDuration(shift.duration_minutes)}</div>
-            </div>
-          ))}
-        </div>
+        <StuckShiftList
+          shifts={surface.shifts}
+          focus={focus}
+          onClose={(shift) => {
+            setDialog({ kind: 'open', shift, submitting: false, refusal: null });
+          }}
+        />
       )}
 
       {dialog.kind === 'open' && (
-        <div role="dialog" aria-modal="true" aria-label="Force close shift">
-          {dialog.submitError && (
-            <p data-testid="stuck-shift-submit-error" role="alert">
-              This shift could not be force-closed. The list has been refreshed.
-            </p>
-          )}
-          <ForcedCloseForm
-            onSubmit={(payload) => {
-              void handleSubmit(dialog.shift, payload);
-            }}
-            onCancel={() => {
-              setDialog({ kind: 'idle' });
-            }}
-            submitting={dialog.submitting}
-          />
-        </div>
+        <ForcedCloseDialog
+          name={displayNameOf(dialog.shift.cashier_display_name)}
+          submitting={dialog.submitting}
+          refusal={dialog.refusal}
+          onSubmit={(payload) => {
+            void handleSubmit(dialog.shift, payload);
+          }}
+          onCancel={() => {
+            closeDialog(dialog.shift.shift_id);
+          }}
+        />
       )}
-    </div>
+    </StuckShiftsPage>
   );
 }

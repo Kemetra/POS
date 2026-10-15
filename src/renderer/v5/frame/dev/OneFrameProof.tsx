@@ -1,6 +1,8 @@
 import type { JSX } from 'react';
 
+import type { OperatorRefusal } from '../../../../shared/audit/event-shape';
 import type {
+  ForceCloseShiftResponse,
   ListStuckShiftsResponse,
   ReceiptsBridgeAPI,
   SalesFindByNumberResponse,
@@ -39,6 +41,12 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store'
  * preview fakes answer; default ok);
  * `shift` = on | off (RT-499: the shift-cashup flag, which decides the manager
  * home's «حالة الوردية» card; default off).
+ *
+ * RT-502 (VN-S10 S10-5) adds, for the stuck-shifts captures: `list` = ok |
+ * unreachable (`unreachable` answers a `no_connection` refusal; default ok);
+ * `close` = refused | state_invalid | ok (what `forceCloseShift` answers:
+ * `invalid_input`, `state_invalid` or `forced_closed`; default refused, as
+ * before). `shifts=some` now holds three shifts, one with a very long name.
  */
 
 export interface OneFrameProofParams {
@@ -50,6 +58,8 @@ export interface OneFrameProofParams {
   sale: 'missing' | 'found' | 'noprint';
   reprint: 'ok' | 'fail';
   shift: 'on' | 'off';
+  list: 'ok' | 'unreachable';
+  close: 'refused' | 'state_invalid' | 'ok';
 }
 
 function oneOf<T extends string>(raw: string | null, allowed: readonly T[], fallback: T): T {
@@ -68,6 +78,8 @@ export function readOneFrameProofParams(): OneFrameProofParams {
     sale: oneOf(params.get('sale'), ['missing', 'found', 'noprint'], 'missing'),
     reprint: oneOf(params.get('reprint'), ['ok', 'fail'], 'ok'),
     shift: oneOf(params.get('shift'), ['on', 'off'], 'off'),
+    list: oneOf(params.get('list'), ['ok', 'unreachable'], 'ok'),
+    close: oneOf(params.get('close'), ['refused', 'state_invalid', 'ok'], 'refused'),
   };
 }
 
@@ -80,8 +92,9 @@ const PAIRED: Extract<PairingStatus, { kind: 'paired' }> = {
   paired_at: 1_735_689_600,
 };
 
-function stuckShifts(shifts: OneFrameProofParams['shifts']): ListStuckShiftsResponse {
-  if (shifts === 'none') return { kind: 'stuck_shifts', shifts: [] };
+function stuckShifts(params: OneFrameProofParams): ListStuckShiftsResponse {
+  if (params.list === 'unreachable') return { kind: 'refused', category: 'no_connection' };
+  if (params.shifts === 'none') return { kind: 'stuck_shifts', shifts: [] };
   return {
     kind: 'stuck_shifts',
     shifts: [
@@ -98,6 +111,14 @@ function stuckShifts(shifts: OneFrameProofParams['shifts']): ListStuckShiftsResp
         terminal_label: 'POS-03',
         opened_at: '2026-10-15T08:05:00Z',
         duration_minutes: 65,
+      },
+      {
+        // RT-502: a very long name, so the never-clipped rule is visible.
+        shift_id: 'shift-3',
+        cashier_display_name: 'عبد الرحمن مصطفى السيد عبد الفتاح الشناوي',
+        terminal_label: 'POS-02',
+        opened_at: '2026-10-15T09:25:00Z',
+        duration_minutes: 45,
       },
     ],
   };
@@ -165,6 +186,16 @@ function receiptsBridge(reprint: OneFrameProofParams['reprint']): ReceiptsBridge
   } as unknown as ReceiptsBridgeAPI;
 }
 
+function forceCloseAnswer(
+  close: OneFrameProofParams['close'],
+): ForceCloseShiftResponse | OperatorRefusal {
+  if (close === 'ok') return { kind: 'forced_closed', audit_event_id: 'proof-event' };
+  return {
+    kind: 'refused',
+    category: close === 'state_invalid' ? 'state_invalid' : 'invalid_input',
+  };
+}
+
 function refused<T>(): () => Promise<T> {
   return () => Promise.resolve({ kind: 'refused', category: 'invalid_input' } as T);
 }
@@ -183,8 +214,8 @@ export function operatorBridge(params: OneFrameProofParams): OperatorBridgeAPI {
     resetCashierPin: refused(),
     provisionCashierPin: refused(),
     unlockCashier: refused(),
-    forceCloseShift: refused(),
-    listStuckShifts: () => Promise.resolve(stuckShifts(params.shifts)),
+    forceCloseShift: () => Promise.resolve(forceCloseAnswer(params.close)),
+    listStuckShifts: () => Promise.resolve(stuckShifts(params)),
     dismissShiftClosedNotice: () => Promise.resolve(),
   } as unknown as OperatorBridgeAPI;
 }

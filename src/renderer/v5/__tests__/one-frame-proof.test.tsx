@@ -30,6 +30,8 @@ const DEFAULTS: OneFrameProofParams = {
   sale: 'missing',
   reprint: 'ok',
   shift: 'off',
+  list: 'ok',
+  close: 'refused',
 };
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -52,7 +54,7 @@ afterEach(() => {
 });
 
 describe('OneFrameProof — parameters', () => {
-  it('defaults to a manager on the dashboard with no banner and two stuck shifts', () => {
+  it('defaults to a manager on the dashboard with no banner and the stuck shifts listed', () => {
     window.location.hash = '#/dev/one-frame-proof';
     expect(readOneFrameProofParams()).toEqual(DEFAULTS);
   });
@@ -101,6 +103,16 @@ describe('OneFrameProof — parameters', () => {
     expect(useFeatureFlagsStore.getState().shiftCashup).toBe(true);
   });
 
+  it('RT-502: reads list and close, and ignores unknown values', () => {
+    window.location.hash = '#/dev/one-frame-proof?list=unreachable&close=state_invalid';
+    expect(readOneFrameProofParams()).toMatchObject({
+      list: 'unreachable',
+      close: 'state_invalid',
+    });
+    window.location.hash = '#/dev/one-frame-proof?list=nope&close=nope';
+    expect(readOneFrameProofParams()).toMatchObject({ list: 'ok', close: 'refused' });
+  });
+
   it('ignores unknown values and any path outside /app', () => {
     window.location.hash = '#/dev/one-frame-proof?path=%2Fpairing&role=root&banner=x&shifts=x';
     expect(readOneFrameProofParams()).toEqual(DEFAULTS);
@@ -132,14 +144,29 @@ describe('OneFrameProof — the in-memory returns bridge (RT-501)', () => {
 });
 
 describe('OneFrameProof — the in-memory bridges', () => {
-  it('the operator bridge lists two stuck shifts, or none', async () => {
+  it('the operator bridge lists three stuck shifts, none, or cannot be reached', async () => {
     const some = await operatorBridge(DEFAULTS).listStuckShifts();
     expect(some.kind === 'stuck_shifts' && some.shifts.map((s) => s.shift_id)).toEqual([
       'shift-1',
       'shift-2',
+      'shift-3',
     ]);
     const none = await operatorBridge({ ...DEFAULTS, shifts: 'none' }).listStuckShifts();
     expect(none).toEqual({ kind: 'stuck_shifts', shifts: [] });
+    const unreachable = await operatorBridge({
+      ...DEFAULTS,
+      list: 'unreachable',
+    }).listStuckShifts();
+    expect(unreachable).toEqual({ kind: 'refused', category: 'no_connection' });
+  });
+
+  it.each([
+    ['refused', { kind: 'refused', category: 'invalid_input' }],
+    ['state_invalid', { kind: 'refused', category: 'state_invalid' }],
+    ['ok', { kind: 'forced_closed', audit_event_id: 'proof-event' }],
+  ] as const)('RT-502: close=%s drives what forceCloseShift answers', async (close, answer) => {
+    const bridge = operatorBridge({ ...DEFAULTS, close }) as unknown as Record<string, AnyFn>;
+    expect(await (bridge.forceCloseShift as AnyFn)()).toEqual(answer);
   });
 
   it('every other operator call answers without throwing', async () => {

@@ -1,0 +1,329 @@
+/*
+ * RT-502 (VN-S10 S10-5) — stuck shifts and the forced-close dialog on the
+ * frozen G-6 references (docs/design/vnext/visual-acceptance/G6-Manager/g6.css:
+ * .row.shift, .dialog.wide, .choices, .choice, .textarea, .btn-danger), in v5
+ * tokens. Two tiers like the frame: comfortable at 1280+, the floor tier below.
+ */
+
+/* The route's ScreenSection body grows, so the list panel can take the rest of
+   the height and its rows scroll inside it (G-6: the panel reaches the foot). */
+.v5-screen-section__body:has(> .v5-stuck) {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.v5-stuck {
+  --stuck-row: 60px;
+  --stuck-initial: 34px;
+  --stuck-terminal-col: 120px;
+  --stuck-since-col: 220px;
+  --stuck-btn-pad: var(--space-4);
+
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+@media (max-width: 1279px) {
+  .v5-stuck {
+    --stuck-row: 56px;
+    --stuck-initial: 30px;
+    --stuck-terminal-col: 96px;
+    --stuck-since-col: 190px;
+    --stuck-btn-pad: var(--space-3);
+  }
+}
+
+.v5-stuck-sub {
+  flex: none;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* ── loading, empty, unreachable, re-auth: one honest notice under the sub-line ── */
+.v5-stuck-state {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.v5-stuck-state:focus {
+  outline: none;
+}
+
+.v5-stuck-state .v5-notice {
+  inline-size: min(560px, 100%);
+}
+
+.v5-stuck-muted {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* G-6 draws "no stuck shifts" as a neutral notice: the info glyph, muted, no tone colour. */
+.v5-stuck-neutral .v5-notice {
+  --tone-ink: var(--color-text-muted);
+  --tone-soft: var(--color-surface-elevated);
+
+  border-color: var(--color-border);
+}
+
+/* ── the list panel ─────────────────────────────────────────────── */
+.v5-stuck-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pane);
+  background: var(--color-surface);
+}
+
+.v5-stuck-panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-block-size: 52px;
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-stuck-panel-head h2 {
+  margin: 0;
+  font-size: var(--type-section);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-stuck-rows {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* name · terminal · open for · action. The name column takes the rest and wraps. */
+.v5-stuck-row {
+  display: grid;
+  grid-template-columns:
+    auto minmax(0, 1fr) var(--stuck-terminal-col) var(--stuck-since-col)
+    auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--stuck-row);
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-stuck-row:last-child {
+  border-block-end: 0;
+}
+
+.v5-stuck-initial {
+  display: grid;
+  place-items: center;
+  inline-size: var(--stuck-initial);
+  block-size: var(--stuck-initial);
+  border-radius: 50%;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold);
+}
+
+/* A name wraps and the row grows; it is never cut, so two cashiers cannot look alike. */
+.v5-stuck-name {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.v5-stuck-terminal {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-family-mono);
+  overflow-wrap: anywhere;
+}
+
+.v5-stuck-since {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 1279px) {
+  .v5-stuck-name {
+    font-size: 14px;
+  }
+}
+
+/* ── buttons ────────────────────────────────────────────────────── */
+.v5-stuck-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--v5-target, 44px);
+  min-inline-size: 44px;
+  padding-inline: var(--stuck-btn-pad, var(--space-4));
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-stuck-btn:disabled {
+  cursor: not-allowed;
+}
+
+.v5-stuck-btn:not(.v5-stuck-btn--danger):disabled {
+  opacity: 0.55;
+}
+
+.v5-stuck-btn--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-danger-on);
+}
+
+/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
+.v5-stuck-btn--danger:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
+/* ── the forced-close dialog (inside the one v5 Dialog panel) ───── */
+.v5-dialog:has(.v5-stuck-form) {
+  inline-size: min(480px, calc(100% - var(--space-5)));
+  gap: var(--space-4);
+}
+
+.v5-stuck-dialog-title {
+  margin: 0;
+  font-size: var(--font-size-lg, 18px);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.375;
+}
+
+.v5-stuck-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.v5-stuck-choices {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.v5-stuck-choices legend {
+  margin-block-end: 6px;
+  padding: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The whole line is the target (44px), not only the radio. The base `label`
+   rule (tailwind.css) adds a 4px foot margin and semibold weight; G-6 has neither. */
+.v5-stuck-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: var(--v5-target, 44px);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  cursor: pointer;
+}
+
+.v5-stuck-choice input {
+  flex: none;
+  inline-size: 20px;
+  block-size: 20px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.v5-stuck-choice:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.v5-stuck-choice input:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.v5-stuck-field {
+  display: grid;
+  gap: 6px;
+}
+
+.v5-stuck-field label {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Scoped by the form: the Dialog panel also carries .v5-live-dialog, whose
+   textarea rule (live-sale.css, 100px) would otherwise win. */
+.v5-stuck-form .v5-stuck-textarea {
+  min-block-size: 72px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+/* Always mounted, so the message announces and the layout does not jump. */
+.v5-stuck-slot {
+  min-block-size: 40px;
+}
+
+.v5-stuck-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.v5-stuck-dialog-actions .v5-stuck-btn {
+  min-inline-size: 104px;
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .v5-stuck-panel,
+  .v5-stuck-btn,
+  .v5-stuck-initial,
+  .v5-stuck-choice,
+  .v5-stuck-textarea {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-stuck-btn--danger {
+    border: 2px solid ButtonText;
+  }
+
+  .v5-stuck-btn--danger:disabled {
+    border: 1px solid GrayText;
+    color: GrayText;
+  }
+
+  .v5-stuck-choice:has(input:checked) {
+    border: 2px solid Highlight;
+  }
+}
