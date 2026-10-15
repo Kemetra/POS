@@ -44,11 +44,21 @@ export const v5NavEntries: ReadonlyArray<V5NavEntry> = shellNavEntries.map((entr
 }));
 
 /**
- * Is this entry the current one? Prefix match like NavLink, plus the Sale
- * entry stays current through checkout: one sale, one place in the nav.
+ * RT-498 (VN-S10, D-10-5) — the manager sub-screens the dashboard links to.
+ * They have no nav entry of their own, so the dashboard entry stays current
+ * on them. The cashier's own shift screen (`/app/shift`) is not one of them.
+ */
+const DASHBOARD_HUB_PATHS: ReadonlyArray<string> = ['/app/manager', '/app/shift/manager'];
+
+/**
+ * Is this entry the current one? Prefix match like NavLink, plus: the Sale
+ * entry stays current through checkout (one sale, one place in the nav), and
+ * the dashboard entry stays current on its manager sub-screens.
  */
 export function isNavEntryCurrent(entry: V5NavEntry, pathname: string): boolean {
-  return entry.id === 'cart' ? isActiveSaleRoute(pathname) : onPath(pathname, entry.path);
+  if (entry.id === 'cart') return isActiveSaleRoute(pathname);
+  if (onPath(pathname, entry.path)) return true;
+  return entry.id === 'dashboard' && DASHBOARD_HUB_PATHS.some((path) => onPath(pathname, path));
 }
 
 /**

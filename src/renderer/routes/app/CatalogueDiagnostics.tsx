@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 
-import { Workspace } from '../../shell/regions/Workspace';
+import { ScreenSection } from '../../v5/foundation/ScreenSection';
 import type {
   CatalogueBridgeAPI,
   CatalogueCountsResponse,
@@ -167,7 +167,7 @@ export function CatalogueDiagnostics(props: CatalogueDiagnosticsProps): JSX.Elem
       : null;
 
   return (
-    <Workspace title="Catalogue Diagnostics">
+    <ScreenSection title="Catalogue Diagnostics">
       <div className="catalogue-diagnostics" data-testid="catalogue-diagnostics">
         <section data-testid="diagnostics-pairing">
           <h2>Terminal</h2>
@@ -249,6 +249,6 @@ export function CatalogueDiagnostics(props: CatalogueDiagnosticsProps): JSX.Elem
           </div>
         </section>
       </div>
-    </Workspace>
+    </ScreenSection>
   );
 }

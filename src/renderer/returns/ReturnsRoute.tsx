@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import type { Role } from '../../shared/operator/role.js';
 import type { ReturnsBridgeAPI } from '../../shared/returns/types.js';
-import { Workspace } from '../shell/regions/Workspace';
+import { ScreenSection } from '../v5/foundation/ScreenSection';
 import { useFeatureFlagsStore } from '../stores/feature-flags-store.js';
 import {
   useOperatorSessionStore,
@@ -56,7 +56,7 @@ export function ReturnsRoute({ bridge, sessionEvents }: ReturnsRouteProps): JSX.
   const blocked = gateMessage(session, enabled, api);
 
   return (
-    <Workspace title="المرتجعات">
+    <ScreenSection title="المرتجعات">
       <div className="rt-returns">
         {blocked !== null || api === null ? (
           <p className="rt-returns__policy" role="status">
@@ -66,6 +66,6 @@ export function ReturnsRoute({ bridge, sessionEvents }: ReturnsRouteProps): JSX.
           <ReturnsScreen key={session.id} bridge={api} sessionEvents={events} />
         )}
       </div>
-    </Workspace>
+    </ScreenSection>
   );
 }

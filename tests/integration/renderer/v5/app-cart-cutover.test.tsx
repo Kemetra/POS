@@ -16,8 +16,9 @@ import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-fl
 /**
  * 023 Slice G — `/app/cart` cutover. The production Sale route is the v5
  * frame around the live Sale adapter, and `/app/checkout` sits in the same
- * frame so the chrome never changes mid-sale. Every other `/app/*` screen
- * stays on the legacy AppShell. Driven through the REAL AppRouter so the
+ * frame so the chrome never changes mid-sale. RT-498: every other `/app/*`
+ * screen renders in that same frame too (the legacy AppShell is no longer
+ * routed). Driven through the REAL AppRouter so the
  * operator guard, feature flags, cart/catalogue bridges and the unchanged
  * checkout surface are exercised. (Formerly the DEV `/v5/sale` preview test.)
  */
@@ -346,12 +347,12 @@ describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
   });
 
-  it('keeps every other /app screen on the legacy AppShell', async () => {
+  it('renders every other /app screen in the same v5 frame (RT-498)', async () => {
     useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
     useOperatorSessionStore.getState().hydrateSignedIn({ ...CASHIER_SESSION, role: 'manager' });
     renderAt('/app/dashboard');
-    expect(await screen.findByTestId('app-shell')).toBeInTheDocument();
-    expect(screen.queryByTestId('v5-frame')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('v5-frame')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
   });
 
   it('the v5 Sale entry links to the production route, not a preview', async () => {

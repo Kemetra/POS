@@ -256,7 +256,7 @@ describe('AppRouter + /sign-in (T022)', () => {
       />,
     );
 
-    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('v5-frame')).toBeInTheDocument());
     expect(screen.getAllByText('Section unavailable').length).toBeGreaterThan(0);
     // Cashier is blocked → the dashboard skeleton must NOT render.
     expect(screen.queryByTestId('dashboard-skeleton')).not.toBeInTheDocument();

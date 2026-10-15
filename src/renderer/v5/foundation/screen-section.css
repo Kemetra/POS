@@ -1,0 +1,38 @@
+/*
+ * RT-498 (VN-S10 S10-1) — a screen inside the v5 frame (ScreenSection).
+ * Same head and padding as the G-3/G-6 references: comfortable at 1280+, the
+ * floor tier below 1280. The frame's <main> clips, so the section scrolls.
+ */
+
+.v5-screen-section {
+  --screen-section-pad: var(--space-5);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow-y: auto;
+  padding: var(--screen-section-pad);
+}
+
+@media (max-width: 1279px) {
+  .v5-screen-section {
+    --screen-section-pad: var(--space-4);
+  }
+}
+
+.v5-screen-section__title {
+  flex: none;
+  margin: 0;
+  font-size: var(--type-screen-title);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.375;
+}
+
+.v5-screen-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}

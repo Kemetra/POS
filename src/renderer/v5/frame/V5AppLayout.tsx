@@ -4,9 +4,10 @@ import { V5Frame } from './V5Frame';
 import { V5OperationalNotices } from './V5OperationalNotices';
 
 /**
- * 023 Slice G — the layout route for the cashier's sale loop. `/app/cart` and
+ * 023 Slice G — the layout route for the cashier's sale loop: `/app/cart` and
  * `/app/checkout` render inside one v5 frame, so the chrome never changes
- * mid-sale. Every other `/app/*` screen keeps the legacy AppShell.
+ * mid-sale. RT-498 (VN-S10 S10-1): it is now the one layout for every `/app/*`
+ * screen; the legacy AppShell is no longer routed.
  */
 export function V5AppLayout(): JSX.Element {
   return (

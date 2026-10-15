@@ -24,6 +24,8 @@ import {
  *   - Accessible shell routes (/app/sales, /app/cart, /app/checkout,
  *     /app/inventory, /app/settings, /app/dashboard) do NOT trigger the inner
  *     guard and remain reachable by a signed-in cashier.
+ *   - RT-498: every reachable /app/* screen renders inside the one v5 frame
+ *     (`v5-frame`); the legacy `app-shell` is no longer routed anywhere.
  *   - The cashier session in the store is preserved after the guard fires
  *     (the guard is a UX-only redirect, not a session termination — AD-1).
  *
@@ -334,7 +336,8 @@ describe('SC-003 path 13 — /app/sales (✅ cashier)', () => {
   it('cashier reaches /app/sales without redirect', async () => {
     await renderAsCashier('/app/sales');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
     });
   });
@@ -366,7 +369,8 @@ describe('SC-003 path 16 — /app/inventory (✅ cashier)', () => {
   it('cashier reaches /app/inventory without redirect', async () => {
     await renderAsCashier('/app/inventory');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
     });
   });
@@ -376,7 +380,8 @@ describe('SC-003 path 17 — /app/settings (🔒 cashier)', () => {
   it('cashier reaches /app/settings without route-guard redirect', async () => {
     await renderAsCashier('/app/settings');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
     });
   });
@@ -402,7 +407,8 @@ describe('SC-003 path 19 — /app/dashboard (⛔ cashier — shows unavailable s
   it('cashier reaches /app/dashboard without route-guard redirect; sees unavailable surface', async () => {
     await renderAsCashier('/app/dashboard');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
       // DashboardRoute itself renders an ErrorState for cashier role (not a route-guard redirect).
       expect(screen.getByText(/this section is not available for your role/i)).toBeInTheDocument();
@@ -430,7 +436,8 @@ describe('SC-003 path 21 — /app index route (cashier)', () => {
     // /app has { index: true, element: <Navigate to="dashboard"> } so it redirects to
     // /app/dashboard which renders the "Section unavailable" surface for cashier.
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
     });
   });
@@ -524,7 +531,8 @@ describe('SC-003 path 29 — /app/returns (✅ manager)', () => {
   it('manager reaches /app/returns without redirect; the flow is gated off by default', async () => {
     await renderAsSession(MANAGER_SESSION, '/app/returns');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
       expect(screen.getByText('المرتجعات غير مفعّلة على هذا الجهاز.')).toBeInTheDocument();
     });
@@ -535,7 +543,8 @@ describe('SC-003 path 30 — /app/audit (✅ manager)', () => {
   it('manager reaches /app/audit without redirect; placeholder shown', async () => {
     await renderAsSession(MANAGER_SESSION, '/app/audit');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
       expect(screen.getByText(/audit log view is not yet available/i)).toBeInTheDocument();
     });
@@ -546,7 +555,8 @@ describe('SC-003 path 31 — /app/returns (✅ admin)', () => {
   it('admin reaches /app/returns without redirect; the flow is gated off by default', async () => {
     await renderAsSession({ ...MANAGER_SESSION, id: 'sess-admin', role: 'admin' }, '/app/returns');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
       expect(screen.getByText('المرتجعات غير مفعّلة على هذا الجهاز.')).toBeInTheDocument();
     });
@@ -557,7 +567,8 @@ describe('SC-003 path 32 — /app/audit (✅ admin)', () => {
   it('admin reaches /app/audit without redirect; placeholder shown', async () => {
     await renderAsSession({ ...MANAGER_SESSION, id: 'sess-admin', role: 'admin' }, '/app/audit');
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
       expect(screen.getByText(/audit log view is not yet available/i)).toBeInTheDocument();
     });

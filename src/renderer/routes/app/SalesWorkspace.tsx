@@ -7,7 +7,7 @@
  */
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
-import { Workspace } from '../../shell/regions/Workspace';
+import { ScreenSection } from '../../v5/foundation/ScreenSection';
 import { FindSaleReceipt } from '../../ui/receipts/FindSaleReceipt';
 
 function resolveDevState(): string {
@@ -39,12 +39,12 @@ export function SalesWorkspace(): JSX.Element {
   }
 
   return (
-    <Workspace title="Sales">
+    <ScreenSection title="Sales">
       <section className="placeholder-pane">
         {/* T451 — receipt-affordance slot: find a finalized sale + reprint its
             receipt. The fuller sale-search / recent-sale UI is 005's territory. */}
         <FindSaleReceipt />
       </section>
-    </Workspace>
+    </ScreenSection>
   );
 }

@@ -1,7 +1,8 @@
-import { useRef, type JSX, type ReactNode } from 'react';
+import { useEffect, useRef, type JSX, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CONNECTION_BANNER_MESSAGES, useConnectionState } from '../../connection/connection-state';
 import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
+import type { ConnectionState } from '../../ui/tokens/connection-state';
 import { ScreenTooSmall } from '../../ui/states/ScreenTooSmall';
 import { useFocusOnReturn } from '../../viewport/useFocusOnReturn';
 import { useViewportTier, viewportShortfall } from '../../viewport/useViewportTier';
@@ -42,10 +43,28 @@ interface V5FrameProps {
  * RT-242 (VN-S12): on an active-sale route the nav is the slim rail
  * (`data-nav="slim"`), elsewhere the labelled panel — decided by the route
  * alone, never by cart state.
+ *
+ * RT-498 (VN-S10 S10-1, D-10-7): the `?conn=` dev toggle the legacy AppShell
+ * carried lives here now, so the connection banner stays exercisable until a
+ * real signal exists (VN-S6). Dev builds only; the module is imported lazily
+ * so a production build never ships it.
  */
+function useDevConnectionToggle(setConnectionState: (state: ConnectionState) => void): void {
+  useEffect(() => {
+    const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
+    if (!metaEnv?.DEV) return;
+    void import('../../connection/dev-toggles').then(({ getDevToggles }) => {
+      setConnectionState(getDevToggles().conn);
+    });
+    // Once on mount: URL search params are static per page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
 export function V5Frame({ notices, children }: V5FrameProps): JSX.Element {
   const shortfall = viewportShortfall(useViewportTier());
-  const { state: connectionState } = useConnectionState();
+  const { state: connectionState, setState: setConnectionState } = useConnectionState();
+  useDevConnectionToggle(setConnectionState);
   const { pathname } = useLocation();
   const nav = isActiveSaleRoute(pathname) ? 'slim' : 'panel';
   const mainRef = useRef<HTMLElement>(null);

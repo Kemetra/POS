@@ -9,14 +9,14 @@
  * Navigation-only: no fetch, no IPC, no persistence, no audit-log read.
  */
 import type { JSX } from 'react';
-import { Workspace } from '../../shell/regions/Workspace';
+import { ScreenSection } from '../../v5/foundation/ScreenSection';
 
 export function AuditPlaceholder(): JSX.Element {
   return (
-    <Workspace title="Audit">
+    <ScreenSection title="Audit">
       <section className="placeholder-pane">
         <p>The audit log view is not yet available at this terminal. Coming soon.</p>
       </section>
-    </Workspace>
+    </ScreenSection>
   );
 }
