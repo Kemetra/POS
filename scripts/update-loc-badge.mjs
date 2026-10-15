@@ -103,6 +103,18 @@ function countLinesInFile(filePath) {
   }
 }
 
+function isCountedFile(entry, fullPath) {
+  if (EXCLUDED_FILENAMES.has(entry.name)) return false;
+  if (isExcludedPath(fullPath)) return false;
+  const ext = path.extname(entry.name).toLowerCase();
+  if (BINARY_EXTENSIONS.has(ext)) return false;
+  return SOURCE_EXTENSIONS.has(ext);
+}
+
+function isWalkedDirectory(entry, fullPath) {
+  return !EXCLUDED_DIRS.has(entry.name) && !isExcludedPath(fullPath);
+}
+
 function walkAndCount(dir) {
   let total = 0;
 
@@ -117,15 +129,8 @@ function walkAndCount(dir) {
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      if (EXCLUDED_DIRS.has(entry.name)) continue;
-      if (isExcludedPath(fullPath)) continue;
-      total += walkAndCount(fullPath);
-    } else if (entry.isFile()) {
-      if (EXCLUDED_FILENAMES.has(entry.name)) continue;
-      if (isExcludedPath(fullPath)) continue;
-      const ext = path.extname(entry.name).toLowerCase();
-      if (BINARY_EXTENSIONS.has(ext)) continue;
-      if (!SOURCE_EXTENSIONS.has(ext)) continue;
+      if (isWalkedDirectory(entry, fullPath)) total += walkAndCount(fullPath);
+    } else if (entry.isFile() && isCountedFile(entry, fullPath)) {
       total += countLinesInFile(fullPath);
     }
   }

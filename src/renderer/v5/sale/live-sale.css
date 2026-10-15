@@ -155,6 +155,8 @@
 .v5-live-void {
   border-color: var(--color-danger-soft);
   color: var(--color-danger-emphasis);
+  background: var(--color-surface);
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Line actions stay a 44px hit area but read as quiet text, not boxed chrome. */
@@ -371,11 +373,6 @@
 .v5-live-cart-state[data-tone='neutral'] {
   background: var(--color-surface-sunken);
   color: var(--color-text);
-}
-
-.v5-live-void {
-  background: var(--color-surface);
-  font-weight: var(--font-weight-semibold);
 }
 
 /* Discovery: typed search first, the scanner target second and unmistakably different. */

@@ -227,13 +227,23 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** CSS `text-align` per band alignment (rtl bands sit on the right edge). */
+const HTML_TEXT_ALIGN: Record<BandAlign, 'left' | 'center' | 'right'> = {
+  ltr: 'left',
+  center: 'center',
+  rtl: 'right',
+};
+
+/** ESC/POS `ESC a n` argument per band alignment (0 left, 1 center, 2 right). */
+const ESCPOS_ALIGN: Record<BandAlign, number> = { ltr: 0x00, center: 0x01, rtl: 0x02 };
+
 function toHtml(bands: Band[]): string {
   const rows = bands.map((band) => {
     if (band.kind === 'rule') {
       return `<div class="rule">${band.char.repeat(COLS)}</div>`;
     }
     const dir = band.align === 'rtl' ? 'rtl' : 'ltr';
-    const align = band.align === 'center' ? 'center' : band.align === 'rtl' ? 'right' : 'left';
+    const align = HTML_TEXT_ALIGN[band.align];
     const weight = band.emphasis === true ? ' receipt-emph' : '';
     return `<div class="band${weight}" dir="${dir}" style="text-align: ${align}">${escapeHtml(band.text)}</div>`;
   });
@@ -267,8 +277,7 @@ function toEscPos(bands: Band[]): Uint8Array {
       continue;
     }
     // Alignment: ESC a n  (0 left, 1 center, 2 right).
-    const a = band.align === 'center' ? 0x01 : band.align === 'rtl' ? 0x02 : 0x00;
-    push([ESC, 0x61, a]);
+    push([ESC, 0x61, ESCPOS_ALIGN[band.align]]);
     // Emphasis: ESC E n (double-strike/bold).
     if (band.emphasis === true) push([ESC, 0x45, 0x01]);
     pushText(band.text);

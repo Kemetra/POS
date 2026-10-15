@@ -218,6 +218,92 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
     role: c.role,
   }));
 
+  // Cashier-panel live-region content: alert XOR spinner (Note 1 invariant).
+  const cashierFeedback = (): JSX.Element | null => {
+    if (isSigningIn) {
+      return (
+        <span className="v5-entry__status" data-testid="cashier-sign-in-spinner">
+          {SIGN_IN_COPY.signingIn}
+        </span>
+      );
+    }
+    if (cashierError !== undefined) {
+      return (
+        <RefusalNotice testId="cashier-sign-in-error" id="cashier-sign-in-error">
+          {cashierError}
+        </RefusalNotice>
+      );
+    }
+    return null;
+  };
+
+  const renderAuthPanel = (): JSX.Element => {
+    if (mode === 'manager') {
+      return (
+        <AuthPanel
+          head={
+            <>
+              <div className="v5-entry__auth-who">
+                <AuthHeading>{SIGN_IN_COPY.managerHeading}</AuthHeading>
+              </div>
+              <BackButton
+                testId="sign-in-manager-back"
+                disabled={isSigningIn}
+                onClick={() => {
+                  switchMode('cashier');
+                }}
+              />
+            </>
+          }
+        >
+          <ManagerAdminSignInForm operator={operator} />
+        </AuthPanel>
+      );
+    }
+    if (selectedCashier === undefined) {
+      return (
+        <AuthPanel head={<AuthHeading>{SIGN_IN_COPY.pinHeading}</AuthHeading>}>
+          <div className="v5-entry__auth-body">
+            <PinPadPreview prompt={pinPromptFor(rosterState)} />
+          </div>
+        </AuthPanel>
+      );
+    }
+    return (
+      <AuthPanel
+        head={
+          <>
+            <PickedCashier name={selectedCashier.display_name} />
+            <BackButton testId="cashier-pin-cancel" disabled={isSigningIn} onClick={clearCashier} />
+          </>
+        }
+      >
+        <div
+          className="v5-entry__auth-body"
+          data-testid="pin-section"
+          data-error={cashierError !== undefined || undefined}
+        >
+          <PinPad
+            value={pin}
+            onChange={handlePinChange}
+            onSubmit={handleCashierSubmit}
+            disabled={isSigningIn}
+            error={cashierError !== undefined}
+            submitLabel={SIGN_IN_COPY.submit}
+            autoFocus
+            {...(cashierError !== undefined ? { describedBy: 'cashier-sign-in-error' } : {})}
+            feedback={
+              // Note 1 invariant — alert XOR spinner, one live region.
+              <div role="status" aria-live="polite">
+                {cashierFeedback()}
+              </div>
+            }
+          />
+        </div>
+      </AuthPanel>
+    );
+  };
+
   return (
     <main data-testid="route-sign-in" className="v5-entry" dir="rtl" lang="ar">
       <EntryStrip {...(terminalLabel !== undefined ? { terminalLabel } : {})} />
@@ -243,76 +329,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
           }
         />
 
-        {mode === 'manager' ? (
-          <AuthPanel
-            head={
-              <>
-                <div className="v5-entry__auth-who">
-                  <AuthHeading>{SIGN_IN_COPY.managerHeading}</AuthHeading>
-                </div>
-                <BackButton
-                  testId="sign-in-manager-back"
-                  disabled={isSigningIn}
-                  onClick={() => {
-                    switchMode('cashier');
-                  }}
-                />
-              </>
-            }
-          >
-            <ManagerAdminSignInForm operator={operator} />
-          </AuthPanel>
-        ) : selectedCashier === undefined ? (
-          <AuthPanel head={<AuthHeading>{SIGN_IN_COPY.pinHeading}</AuthHeading>}>
-            <div className="v5-entry__auth-body">
-              <PinPadPreview prompt={pinPromptFor(rosterState)} />
-            </div>
-          </AuthPanel>
-        ) : (
-          <AuthPanel
-            head={
-              <>
-                <PickedCashier name={selectedCashier.display_name} />
-                <BackButton
-                  testId="cashier-pin-cancel"
-                  disabled={isSigningIn}
-                  onClick={clearCashier}
-                />
-              </>
-            }
-          >
-            <div
-              className="v5-entry__auth-body"
-              data-testid="pin-section"
-              data-error={cashierError !== undefined || undefined}
-            >
-              <PinPad
-                value={pin}
-                onChange={handlePinChange}
-                onSubmit={handleCashierSubmit}
-                disabled={isSigningIn}
-                error={cashierError !== undefined}
-                submitLabel={SIGN_IN_COPY.submit}
-                autoFocus
-                {...(cashierError !== undefined ? { describedBy: 'cashier-sign-in-error' } : {})}
-                feedback={
-                  // Note 1 invariant — alert XOR spinner, one live region.
-                  <div role="status" aria-live="polite">
-                    {isSigningIn ? (
-                      <span className="v5-entry__status" data-testid="cashier-sign-in-spinner">
-                        {SIGN_IN_COPY.signingIn}
-                      </span>
-                    ) : cashierError !== undefined ? (
-                      <RefusalNotice testId="cashier-sign-in-error" id="cashier-sign-in-error">
-                        {cashierError}
-                      </RefusalNotice>
-                    ) : null}
-                  </div>
-                }
-              />
-            </div>
-          </AuthPanel>
-        )}
+        {renderAuthPanel()}
       </div>
     </main>
   );

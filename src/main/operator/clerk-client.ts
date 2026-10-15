@@ -79,12 +79,8 @@ export interface CreateClerkExchangerDeps {
  * keep it out of error messages by convention.
  */
 export function decodeFrontendApiBaseUrl(publishableKey: string): string | null {
-  const prefix = publishableKey.startsWith('pk_test_')
-    ? 'pk_test_'
-    : publishableKey.startsWith('pk_live_')
-      ? 'pk_live_'
-      : null;
-  if (prefix === null) return null;
+  const prefix = ['pk_test_', 'pk_live_'].find((p) => publishableKey.startsWith(p));
+  if (prefix === undefined) return null;
   const encoded = publishableKey.slice(prefix.length);
   // Some keys carry a literal `$` AFTER the base64 (older Clerk form); tolerate
   // that by stripping a trailing `$` on the encoded value too.

@@ -1276,6 +1276,10 @@ body {
     color: var(--color-warning-emphasis);
     flex-shrink: 0;
     animation: printer-failure-banner-enter 160ms cubic-bezier(0.22, 1, 0.36, 1);
+    /* Print failures remain persistent, distinct, and actionable. */
+    flex-wrap: wrap;
+    border-inline-start: var(--space-1) solid var(--color-warning);
+    border-block-end-color: var(--color-border);
   }
 
   .printer-failure-banner__icon {
@@ -1304,6 +1308,7 @@ body {
     display: flex;
     gap: var(--space-2);
     flex-shrink: 0;
+    flex-wrap: wrap;
   }
 
   @keyframes printer-failure-banner-enter {
@@ -1615,6 +1620,9 @@ body {
     font-size: var(--font-size-md);
     font-weight: var(--font-weight-bold);
     border-radius: var(--radius-control);
+    background-color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary-on);
   }
 
   .payment-surface__cancel:hover:not(:disabled) {
@@ -1700,12 +1708,6 @@ body {
       background-color var(--duration-2) var(--ease-out),
       border-color var(--duration-2) var(--ease-out),
       color var(--duration-2) var(--ease-out);
-  }
-
-  .payment-surface__confirm {
-    background-color: var(--color-primary);
-    border: 1px solid var(--color-primary);
-    color: var(--color-primary-on);
   }
 
   .payment-surface__confirm:hover:not(:disabled):not([aria-disabled='true']) {
@@ -3114,17 +3116,6 @@ body {
   .v4-feedback__error {
     color: var(--color-danger-emphasis);
     font-weight: var(--font-weight-medium);
-  }
-
-  /* Print failures remain persistent, distinct, and actionable. */
-  .printer-failure-banner {
-    flex-wrap: wrap;
-    border-inline-start: var(--space-1) solid var(--color-warning);
-    border-block-end-color: var(--color-border);
-  }
-
-  .printer-failure-banner__actions {
-    flex-wrap: wrap;
   }
 
   .printer-failure-banner__actions .btn {

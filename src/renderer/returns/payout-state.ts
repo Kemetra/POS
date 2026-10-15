@@ -91,11 +91,16 @@ export interface PayoutState {
   readonly reprint: ReprintResult | null;
 }
 
+/** The payout's kick state as the shared rule sees it; an in-flight kick wins over the stored one. */
+function kickStateOf(p: ReturnJournalView['payout']): PayoutKickState {
+  if (p === null) return 'none';
+  return p.kickPending ? 'in_flight' : p.kick;
+}
+
 /** A journal row as the shared payout rule sees it. */
 function factsOf(ret: ReturnJournalView): PayoutFacts {
   const p = ret.payout;
-  const kick: PayoutKickState = p === null ? 'none' : p.kickPending ? 'in_flight' : p.kick;
-  return { state: ret.state, started: p !== null, kick };
+  return { state: ret.state, started: p !== null, kick: kickStateOf(p) };
 }
 
 /**

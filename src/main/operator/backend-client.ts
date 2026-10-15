@@ -432,18 +432,18 @@ function parseRosterCashier(entry: unknown): BackendRosterCashier | null {
   return cashier;
 }
 
+type ListRefusal = { kind: 'unauthenticated' } | { kind: 'forbidden' } | { kind: 'refused' };
+
 /** RT-214: a non-2xx roster answer. 401/403 are told apart; the rest collapse (PR-2). */
-function rosterRefusal(status: number): BackendRosterResponse {
+function rosterRefusal(status: number): ListRefusal {
   if (status === 401) return { kind: 'unauthenticated' };
   if (status === 403) return { kind: 'forbidden' };
   return { kind: 'refused' };
 }
 
-/** RT-358: a non-2xx stuck-shifts answer, classified like the roster's (RT-214). */
-function stuckShiftsRefusal(status: number): BackendStuckShiftsResponse {
-  if (status === 401) return { kind: 'unauthenticated' };
-  if (status === 403) return { kind: 'forbidden' };
-  return { kind: 'refused' };
+/** RT-358: a non-2xx stuck-shifts answer, classified exactly like the roster's (RT-214). */
+function stuckShiftsRefusal(status: number): ListRefusal {
+  return rosterRefusal(status);
 }
 
 function interpretRosterResponse(parsed: unknown): BackendRosterResponse {

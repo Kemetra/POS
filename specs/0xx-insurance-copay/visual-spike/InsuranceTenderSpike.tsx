@@ -409,6 +409,16 @@ interface RowProps {
   coverageNote?: string;
 }
 
+function rowValueColor({
+  success,
+  muted,
+  positive,
+}: Pick<RowProps, 'success' | 'muted' | 'positive'>): string {
+  if (success) return v('--color-success');
+  if (muted) return v('--color-text-muted');
+  return positive ? v('--color-success') : 'inherit';
+}
+
 function Row({
   label,
   value,
@@ -419,13 +429,7 @@ function Row({
   ariaLive,
   coverageNote,
 }: RowProps): JSX.Element {
-  const valueColor = success
-    ? v('--color-success')
-    : muted
-      ? v('--color-text-muted')
-      : positive
-        ? v('--color-success')
-        : 'inherit';
+  const valueColor = rowValueColor({ success, muted, positive });
   return (
     <div
       style={{

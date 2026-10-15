@@ -278,7 +278,9 @@ describe('022 US1-R3 — sign-in PIN track fits its keypad', () => {
   // form). The task-flow rule is unchanged: the roster comes first in the DOM.
   it('keeps the DOM ordered by task flow, not by paint order', () => {
     const route = readFileSync(resolve(__dirname, '../../routes/sign-in.tsx'), 'utf-8');
-    const order = ['<RosterPanel', '<AuthPanel'].map((c) => route.indexOf(c));
+    // The `AuthPanel` markup lives in `renderAuthPanel`, defined above the
+    // returned tree; its call site is where it lands in the DOM.
+    const order = ['<RosterPanel', '{renderAuthPanel()}'].map((c) => route.indexOf(c));
     expect(order.every((i) => i > -1)).toBe(true);
     // Ascending source positions: a cashier is chosen BEFORE the PIN is typed,
     // and keyboard traversal must follow that, whatever the paint order is.

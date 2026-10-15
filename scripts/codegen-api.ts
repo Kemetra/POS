@@ -120,19 +120,18 @@ export async function generateApiTypes(options: GenerateApiTypesOptions): Promis
   return finalText;
 }
 
+function parseSourceFlag(sourceFlag: string | undefined): CodegenSource {
+  if (sourceFlag === '--source=live') return 'live';
+  if (sourceFlag === '--source=local' || sourceFlag === undefined) return 'local';
+  console.error(
+    `[codegen-api] invalid --source flag: ${sourceFlag}. Expected --source=local or --source=live.`,
+  );
+  return process.exit(2);
+}
+
 async function main(argv: string[]): Promise<void> {
   const sourceFlag = argv.find((a) => a.startsWith('--source='));
-  const source: CodegenSource =
-    sourceFlag === '--source=live'
-      ? 'live'
-      : sourceFlag === '--source=local' || sourceFlag === undefined
-        ? 'local'
-        : (() => {
-            console.error(
-              `[codegen-api] invalid --source flag: ${sourceFlag}. Expected --source=local or --source=live.`,
-            );
-            process.exit(2);
-          })();
+  const source = parseSourceFlag(sourceFlag);
 
   console.log(
     `[codegen-api] generating ${path.relative(REPO_ROOT, DEFAULT_OUT_PATH)} from source=${source}`,

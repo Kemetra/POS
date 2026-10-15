@@ -86,6 +86,33 @@ interface Args {
   readDownRuns: number;
 }
 
+/** Integer-valued flags → the `Args` field each one sets. */
+const INT_FLAGS = {
+  '--rows': 'rows',
+  '--samples': 'samples',
+  '--warmup': 'warmup',
+  '--read-down-runs': 'readDownRuns',
+} as const;
+
+/** Boolean switches → the `Args` field each one turns on. */
+const SWITCH_FLAGS = {
+  '--measure': 'measure',
+  '--keep': 'keep',
+  '--read-down': 'readDown',
+} as const;
+
+function assertInteger(flag: string, value: number, min: 0 | 1): void {
+  if (Number.isInteger(value) && value >= min) return;
+  throw new Error(`${flag} must be a ${min === 1 ? 'positive' : 'non-negative'} integer`);
+}
+
+function assertValidArgs(a: Args): void {
+  assertInteger('--rows', a.rows, 1);
+  assertInteger('--samples', a.samples, 1);
+  assertInteger('--warmup', a.warmup, 0);
+  assertInteger('--read-down-runs', a.readDownRuns, 1);
+}
+
 function parseArgs(argv: string[]): Args {
   const a: Args = {
     rows: 50_000,
@@ -118,26 +145,17 @@ function parseArgs(argv: string[]): Args {
       return v;
     };
 
-    if (flag === '--rows') a.rows = Number.parseInt(next(), 10);
-    else if (flag === '--out') a.out = path.resolve(next());
-    else if (flag === '--samples') a.samples = Number.parseInt(next(), 10);
-    else if (flag === '--warmup') a.warmup = Number.parseInt(next(), 10);
-    else if (flag === '--measure') a.measure = true;
-    else if (flag === '--keep') a.keep = true;
-    else if (flag === '--read-down') a.readDown = true;
-    else if (flag === '--read-down-runs') a.readDownRuns = Number.parseInt(next(), 10);
+    if (flag === '--out') a.out = path.resolve(next());
+    else if (Object.hasOwn(INT_FLAGS, flag))
+      a[INT_FLAGS[flag as keyof typeof INT_FLAGS]] = Number.parseInt(next(), 10);
+    else if (Object.hasOwn(SWITCH_FLAGS, flag))
+      a[SWITCH_FLAGS[flag as keyof typeof SWITCH_FLAGS]] = true;
     // Hard error on a genuinely unknown flag. Do NOT silently ignore: a typo'd
     // flag silently falling back to the default (e.g. 50k rows when you meant
     // something else) would corrupt the perf evidence without warning.
     else throw new Error(`unknown flag: ${token}`);
   }
-  if (!Number.isInteger(a.rows) || a.rows < 1) throw new Error('--rows must be a positive integer');
-  if (!Number.isInteger(a.samples) || a.samples < 1)
-    throw new Error('--samples must be a positive integer');
-  if (!Number.isInteger(a.warmup) || a.warmup < 0)
-    throw new Error('--warmup must be a non-negative integer');
-  if (!Number.isInteger(a.readDownRuns) || a.readDownRuns < 1)
-    throw new Error('--read-down-runs must be a positive integer');
+  assertValidArgs(a);
   return a;
 }
 
