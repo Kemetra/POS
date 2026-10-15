@@ -28,88 +28,88 @@ function setSearch(search: string) {
   });
 }
 
-describe('useDevToggles — ?state= parsing (T041)', () => {
+describe('dev-toggles — ?state= parsing (T041)', () => {
   afterEach(() => {
     setSearch('');
   });
 
   it('returns "loading" for ?state=loading', async () => {
     setSearch('?state=loading');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().state).toBe('loading');
   });
 
   it('returns "empty" for ?state=empty', async () => {
     setSearch('?state=empty');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().state).toBe('empty');
   });
 
   it('returns "error" for ?state=error', async () => {
     setSearch('?state=error');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().state).toBe('error');
   });
 
   it('returns "default" when ?state is absent', async () => {
     setSearch('');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().state).toBe('default');
   });
 
   it('returns "default" for unknown ?state value', async () => {
     setSearch('?state=bogus');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().state).toBe('default');
   });
 });
 
-describe('useDevToggles — hook delegates to getDevToggles (T041)', () => {
+describe('dev-toggles — hook delegates to getDevToggles (T041)', () => {
   afterEach(() => {
     setSearch('');
   });
 
   it('useDevToggles() returns the same result as getDevToggles()', async () => {
     setSearch('?state=empty&conn=offline');
-    const { getDevToggles, useDevToggles } = await import('../useDevToggles');
+    const { getDevToggles, useDevToggles } = await import('../dev-toggles');
     expect(useDevToggles()).toEqual(getDevToggles());
     expect(useDevToggles().state).toBe('empty');
     expect(useDevToggles().conn).toBe('offline');
   });
 });
 
-describe('useDevToggles — ?conn= parsing (T041)', () => {
+describe('dev-toggles — ?conn= parsing (T041)', () => {
   afterEach(() => {
     setSearch('');
   });
 
   it('returns "degraded" for ?conn=degraded', async () => {
     setSearch('?conn=degraded');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().conn).toBe('degraded');
   });
 
   it('returns "offline" for ?conn=offline', async () => {
     setSearch('?conn=offline');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().conn).toBe('offline');
   });
 
   it('returns "syncing" for ?conn=syncing', async () => {
     setSearch('?conn=syncing');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().conn).toBe('syncing');
   });
 
   it('returns "online" when ?conn is absent', async () => {
     setSearch('');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().conn).toBe('online');
   });
 
   it('returns "online" for unknown ?conn value', async () => {
     setSearch('?conn=bogus');
-    const { getDevToggles } = await import('../useDevToggles');
+    const { getDevToggles } = await import('../dev-toggles');
     expect(getDevToggles().conn).toBe('online');
   });
 });

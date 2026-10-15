@@ -95,9 +95,10 @@ export function ReauthDialog({
     if (!submitting) void submit();
   };
 
-  // Its own DialogHost only where none exists: the legacy AppShell routes have
-  // none, and the fallback portal (document.body) would sit outside the lock's
-  // inert, concealed subtree — the dialog would float over the lock screen.
+  // Its own DialogHost only where none exists: a render outside the v5 frame
+  // (RT-504: no production route is outside it; standalone renders and unit
+  // tests) would otherwise portal to document.body, outside the lock's inert,
+  // concealed subtree — the dialog would float over the lock screen.
   // Inside the v5 frame (RT-424 Cashiers) it uses the frame's host, so the
   // backdrop covers the nav too.
   const dialog = (

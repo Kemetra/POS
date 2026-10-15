@@ -93,13 +93,12 @@ const REBUILT_SCREENS: ReadonlyArray<{
     retired: ['paired-screen'],
   },
   // RT-501 (VN-S10 S10-4): Returns moved off the legacy `Workspace` wrapper into
-  // the V5 frame (`ScreenSection`). `.workspace*` stays defined in tailwind.css
-  // until S10-Z deletes it with the last route that still renders `Workspace`.
+  // the V5 frame (`ScreenSection`). RT-504 (S10-Z) deleted `.workspace*` from
+  // tailwind.css, so the orphan-rule check now runs for this row.
   {
     screen: 'returns',
     file: 'returns/ReturnsRoute.tsx',
     retired: ['workspace'],
-    sharedRulesRemain: true,
   },
   // RT-500 (VN-S10 S10-3): the Sales lookup moved onto the G-6 references.
   {
