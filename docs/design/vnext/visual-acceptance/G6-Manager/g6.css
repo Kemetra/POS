@@ -1,0 +1,776 @@
+/*
+ * RT-478 S10-R — G-6 manager/admin surfaces references (visual FROZEN, owner-approved 2026-10-15).
+ * Base copied from the owner-approved G-3 sheet (g3.css, RT-251) so both packs share one frame;
+ * the G-6 additions are at the end of this file.
+ * Tokens are the shipped light :root values from src/renderer/styles/tailwind.css, as recorded
+ * in docs/DESIGN.md. The frame mirrors src/renderer/v5/frame/frame.css on main: the labelled
+ * nav panel on the inline end, 208px at 1280 and 140px at 1024, with a 12/8px gutter.
+ * No external fonts: Dubai ships with Windows 10/11 and is the product face (OD-2).
+ */
+:root {
+  --primary: #0f766e;
+  --primary-emphasis: #0b5b55;
+  --primary-soft: #e6f4f1;
+  --background: #f7f9fa;
+  --surface: #ffffff;
+  --surface-elevated: #f3f6fa;
+  --surface-sunken: #eef2f6;
+  --text: #0f1d2e;
+  --text-muted: #53647a;
+  --border: #d8dfe7;
+  --border-soft: #e7ecf2;
+  --border-strong: #6f7b89;
+  --scrim: rgba(8, 14, 24, 0.55);
+  --success: #15774d;
+  --success-soft: #e7f5ee;
+  --warning: #a35a00;
+  --warning-soft: #fdf1e0;
+  --danger: #b3261e;
+  --danger-soft: #fbe9e7;
+  --shadow-overlay: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+  --font: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+
+  /* comfortable (1280) */
+  --nav: 208px;
+  --gutter: 12px;
+  --pad: 20px;
+  --row: 60px;
+  --target: 44px;
+  --status-col: 190px;
+  --act-1: 176px;
+  --act-2: 160px;
+}
+
+html {
+  background: var(--surface-sunken);
+}
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: var(--font);
+}
+
+/* ── the captured frame ─────────────────────────────────────────── */
+.rt {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--nav);
+  overflow: hidden;
+  margin-inline: auto;
+  background: var(--background);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+.rt *,
+.rt *::before,
+.rt *::after {
+  box-sizing: border-box;
+}
+.rt h1,
+.rt h2,
+.rt p,
+.rt ul {
+  margin: 0;
+}
+:where(.rt) button,
+:where(.rt) input {
+  font: inherit;
+  color: inherit;
+}
+.w1280 {
+  inline-size: 1280px;
+  block-size: 800px;
+}
+.w1024 {
+  inline-size: 1024px;
+  block-size: 768px;
+  --nav: 140px;
+  --gutter: 8px;
+  --pad: 16px;
+  --row: 56px;
+  --status-col: 168px;
+  --act-1: 160px;
+  --act-2: 150px;
+}
+
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.icon {
+  flex: none;
+  inline-size: 20px;
+  block-size: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── nav panel (v5/frame) ───────────────────────────────────────── */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-block-size: 0;
+  padding: 12px var(--gutter);
+  border-inline-start: 1px solid var(--border);
+  background: var(--surface);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: var(--target);
+  padding-inline: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.brand i {
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-style: normal;
+}
+.links {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  list-style: none;
+}
+.links a {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--target);
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.operator {
+  display: grid;
+  gap: 2px;
+  margin-block-start: auto;
+  padding: 12px 8px 0;
+  border-block-start: 1px solid var(--border);
+}
+.operator b {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.operator span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.operator button {
+  min-block-size: var(--target);
+  margin-block-start: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+/* ── the screen ─────────────────────────────────────────────────── */
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding: var(--pad);
+}
+.screen-head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.screen-head h1 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.375;
+}
+.screen-head p {
+  color: var(--text-muted);
+}
+.screen-head p b {
+  color: var(--text);
+  font-weight: 600;
+}
+.panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: 52px;
+  padding: 8px 16px;
+  border-block-end: 1px solid var(--border-soft);
+}
+.panel-head h2 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.panel-head .count {
+  color: var(--text-muted);
+}
+.rows {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) var(--status-col) calc(var(--act-1) + var(--act-2) + 8px);
+  align-items: center;
+  gap: 12px;
+  min-block-size: var(--row);
+  padding: 8px 16px;
+  border-block-end: 1px solid var(--border-soft);
+}
+.row:last-child {
+  border-block-end: 0;
+}
+.initial {
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.w1024 .initial {
+  inline-size: 30px;
+  block-size: 30px;
+}
+/* a name wraps and the row grows; it is never cut, so two cashiers cannot look alike
+   (stricter than G-1, which clamps at two lines) */
+.name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.w1024 .name {
+  font-size: 14px;
+}
+
+/* status: each tone has its own glyph, so a state never rests on colour alone */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 30px;
+  padding: 2px 10px;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status .icon {
+  inline-size: 16px;
+  block-size: 16px;
+}
+.status-none {
+  border-color: var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-muted);
+}
+.status-ready {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+.status-locked {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.status time {
+  font-weight: 400;
+}
+.status {
+  justify-self: start;
+}
+.actions {
+  display: grid;
+  grid-template-columns: var(--act-1) var(--act-2);
+  gap: 8px;
+  min-inline-size: 0;
+}
+.act-primary .btn {
+  inline-size: 100%;
+}
+.act-secondary {
+  display: flex;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-block-size: var(--target);
+  padding-inline: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.w1024 .btn {
+  padding-inline: 12px;
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--primary-emphasis);
+}
+.btn-primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:disabled {
+  border-color: var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.btn:disabled {
+  cursor: not-allowed;
+}
+.focus {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* notices (v5 Notice anatomy: glyph + one sentence) */
+.notice {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.notice p {
+  flex: 1 1 auto;
+}
+.notice-success {
+  border-color: var(--success);
+  background: var(--success-soft);
+}
+.notice-success > .icon {
+  color: var(--success);
+}
+.notice-warning {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+}
+.notice-warning > .icon {
+  color: var(--warning);
+}
+.notice-neutral {
+  background: var(--surface-elevated);
+}
+.notice-neutral > .icon {
+  color: var(--text-muted);
+}
+.notice-danger {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.notice-danger > .icon {
+  color: var(--danger);
+}
+.panel-state {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: center;
+  justify-items: center;
+  padding: 24px;
+}
+.panel-state .notice {
+  inline-size: min(520px, 100%);
+}
+
+/* ── dialog (M5, M6) ────────────────────────────────────────────── */
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: safe center;
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--scrim);
+}
+.dialog {
+  display: grid;
+  gap: 16px;
+  inline-size: 440px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-overlay);
+}
+.dialog h2 {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.375;
+}
+.dialog .hint {
+  color: var(--text-muted);
+}
+.dialog form,
+.fields {
+  display: grid;
+  gap: 12px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field label {
+  font-weight: 600;
+}
+.input {
+  block-size: 48px;
+  padding-inline: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 16px;
+}
+.input.pin {
+  direction: ltr;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 22px;
+  letter-spacing: 0.3em;
+}
+.input[aria-invalid='true'] {
+  border: 2px solid var(--warning);
+}
+.slot {
+  min-block-size: 40px;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.dialog-actions .btn {
+  min-inline-size: 104px;
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .panel,
+  .btn,
+  .input,
+  .notice,
+  .status,
+  .dialog,
+  .initial {
+    border: 1px solid CanvasText;
+  }
+  .btn-primary {
+    border: 2px solid ButtonText;
+  }
+  .btn-primary:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+  .btn-ghost {
+    border-color: ButtonText;
+  }
+  .input[aria-invalid='true'],
+  .notice-warning,
+  .notice-danger,
+  .status-locked {
+    border: 2px solid CanvasText;
+  }
+  .brand i {
+    border: 2px solid CanvasText;
+  }
+  .focus {
+    outline-color: Highlight;
+  }
+}
+
+/* ══ G-6 additions ════════════════════════════════════════════════ */
+
+/* The current nav entry, as shipped (frame.css .v5-frame__link--active): soft tint + weight. */
+.links a[aria-current='page'] {
+  background: var(--primary-soft);
+  color: var(--primary-emphasis);
+  font-weight: 700;
+}
+
+.screen-head .sub {
+  flex-basis: 100%;
+}
+
+/* ── manager home: one link card per manager screen ─────────────── */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: start;
+  padding: 0;
+  list-style: none;
+}
+.tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  min-block-size: 96px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+.tile .glyph {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary-emphasis);
+}
+.tile b {
+  font-size: 16px;
+  font-weight: 700;
+}
+.tile span {
+  color: var(--text-muted);
+}
+.w1024 .tile {
+  min-block-size: 88px;
+  padding: 12px;
+}
+
+/* ── a page whose only content is an honest notice ──────────────── */
+.page-state {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.page-state .notice {
+  inline-size: min(560px, 100%);
+}
+
+/* ── forms inside a panel ───────────────────────────────────────── */
+.panel.hug {
+  flex: none;
+}
+.panel-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.lookup {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lookup .field {
+  flex: 0 1 320px;
+}
+.input.code {
+  direction: ltr;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 16px;
+}
+.result {
+  display: grid;
+  gap: 8px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--border-soft);
+}
+.result .ref {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+}
+.result .meta {
+  color: var(--text-muted);
+}
+.result .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── diagnostics: four panels in a 2×2 grid ─────────────────────── */
+.grid-2 {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: start;
+  min-block-size: 0;
+}
+.grid-2 .panel {
+  flex: none;
+}
+.facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+}
+.facts dt {
+  color: var(--text-muted);
+}
+.facts dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.facts dd.id {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
+}
+.num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── stuck shifts: name · terminal · open for · action ──────────── */
+.row.shift {
+  grid-template-columns: auto minmax(0, 1fr) 120px 220px auto;
+}
+.w1024 .row.shift {
+  grid-template-columns: auto minmax(0, 1fr) 96px 190px auto;
+}
+.row .terminal {
+  font-family: var(--mono);
+}
+.row .since {
+  color: var(--text-muted);
+}
+
+/* ── the forced-close dialog ────────────────────────────────────── */
+.dialog.wide {
+  inline-size: 480px;
+}
+.choices {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choices legend {
+  margin-block-end: 6px;
+  padding: 0;
+  font-weight: 600;
+}
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 44px;
+  padding-inline: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.choice input {
+  inline-size: 20px;
+  block-size: 20px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+.choice.checked {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.textarea {
+  min-block-size: 72px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  font: inherit;
+  resize: vertical;
+}
+.btn-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
+.btn-danger:disabled {
+  border-color: var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+@media (forced-colors: active) {
+  .btn-danger:disabled {
+    border: 1px solid GrayText;
+    color: GrayText;
+  }
+  .links a[aria-current='page'] {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+  .tile,
+  .choice,
+  .textarea {
+    border: 1px solid CanvasText;
+  }
+  .tile .glyph {
+    border: 1px solid CanvasText;
+  }
+  .choice.checked {
+    border: 2px solid Highlight;
+  }
+  .btn-danger {
+    border: 2px solid ButtonText;
+  }
+}

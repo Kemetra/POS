@@ -393,6 +393,7 @@ its states at **1024×768 and 1280×800**, light and `forced-colors`, and compar
 - ~~**G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون رقم سري» truthfully.~~ **Closed by RT-251**: the read contract, the state → action matrix and the copy are in [19](19-d-m1-cashier-pin-status.md), and the references are in [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html) (owner-approved 2026-10-12). Behaviour stays PENDING the implementation slice.
 - **G-4** Restart re-attach (S19).
 - **G-5** Undo notice (A1).
+- ~~**G-6** Manager/admin surfaces in the V5 frame (VN-S10, [23](23-vn-s10-manager-surfaces-shell-retirement.md)): manager home, sales lookup, returns, audit, inventory, catalogue diagnostics, settings, stuck shifts.~~ **Closed by RT-478 S10-R**: the references and copy are in [`visual-acceptance/G6-Manager/`](visual-acceptance/G6-Manager/G6-Spec.html) (owner-approved 2026-10-15). Behaviour stays as on `main`; each surface ships in its own S10 slice.
 
 ---
 
