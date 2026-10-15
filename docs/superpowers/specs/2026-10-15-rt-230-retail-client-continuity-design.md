@@ -249,7 +249,7 @@ The cashier path is **already fenced server-side** (F7). Two gaps remain.
 
 **Recommendation: (a), with (b) available as a store policy switch.** Most Egyptian pharmacy sales are cash, so a cashless-only continuity mode would rarely help.
 
-**Moving the cash at handback:** until internal transfers exist (Shift & Cash deferred), physical cash moves from the pouch to the till through a pay-out of the blind-counted pouch amount on the phone's shift, **recorded while that shift is still open**, plus a pay-in on the till's shift after the cashier is back on the till. A cash movement is accepted only on an open shift (`shift_not_open` locally, `shift_closed` from Backend-Core). Both use a structured reason. Whether a dedicated reason code is needed is decision C9.
+**Moving the cash at handback:** until internal transfers exist (Shift & Cash deferred), physical cash moves from the pouch to the till by closing the phone's shift on its blind count, then recording a pay-in of the counted amount on the till's open shift once the cashier is back on the till. There is no pay-out on the phone. A pay-out cannot exceed expected cash, so an over pouch could not be moved, and paying out the expected amount would hide the variance. A cash movement is accepted only on an open shift (`shift_not_open` locally, `shift_closed` from Backend-Core), and the till's shift is open. The pay-in uses a structured reason. Whether a dedicated reason code is needed is decision C9.
 
 **The dead till's shift:**
 - It stays open, and no fact is fabricated.
@@ -284,12 +284,12 @@ The cashier path is **already fenced server-side** (F7). Two gaps remain.
 ### D-B9 — Recovery and handback
 
 The ordered handback:
-1. On the phone, while its shift is still open: blind-count the pouch. Expected cash stays hidden from the cashier.
-2. Record a pay-out of **the counted amount** (not the expected amount) with the structured reason, and move that cash to the till.
-3. Close the now-empty phone shift with a count of 0. Any difference between the counted pouch and expected cash stays on the phone shift as its variance. It never turns into phantom cash at the till.
+1. On the phone: blind-count the pouch and **close the phone's shift with that count**, as in any normal close. Variance = counted − expected is recorded faithfully, whether it is short or over.
+2. **No pay-out on the phone.** A pay-out of the counted amount would be refused whenever the pouch is over (`pay_out_exceeds_drawer_cash`, `src/main/shift-cashup/shift-cashup-service.ts`). A pay-out of the expected amount would hide the overage.
+3. Physically move the counted cash to the till. Removing cash from a closed location is the same situation as a closed drawer emptied to the safe today. The paired out/in record is the deferred internal-transfer capability, so the interim record is the till-side pay-in (step 6).
 4. The cashier signs in on the till with `takeover: true`. The phone gets `active_elsewhere` on its next heartbeat.
 5. The till discards any dead draft cart.
-6. On the till's open shift, record a pay-in of the same counted amount with the structured reason.
+6. On the till's open shift, record a pay-in of the counted amount, with a structured reason that names the closed continuity session (C9).
 7. The till drains its outbox.
 8. Close or continue the till's own shift.
 9. Review the operator-visible items:
@@ -347,10 +347,10 @@ sequenceDiagram
     T->>T: Unclean-boot rule: no offline-grant use until online reconcile (D-B3)
     T->>BC: drain outbox. Pre-takeover sales are inside T's window and accepted, if within the 7-day cap (F6)
     T->>BC: a cashier sale stamped more than 120 s after the takeover: 403 cashier_claim_refused, dead-letter (F7). Inside the grace it is accepted
-    C->>P: End continuity: blind count of the pouch, pay-out of the counted amount (shift still open), close P's shift at 0
+    C->>P: End continuity: blind count of the pouch, close P's shift with that count (variance recorded)
     C->>T: Sign in (PIN), admission takeover=true
     BC-->>P: next heartbeat returns active_elsewhere, P locks
-    C->>T: Discard dead draft cart. Pay-in with reason on T's open shift. Continue or close T's shift
+    C->>T: Discard dead draft cart. Pay-in of the counted pouch amount, with a reason naming P's closed session, on T's open shift. Continue or close T's shift
     BC-->>C: Review list: refused sales (C14 repair), candidate duplicates (6.3), shift exceptions
 ```
 
@@ -404,7 +404,7 @@ Mitigation for the last row:
 | C6 | **A fence state "continuity active for device T"** that the manager-envelope capture path refuses, and that the returning till can read. | Closes F8, and the narrow form of D-B3 Gap 2. | Recommended. | No |
 | C7 | **Device binding for a browser client** (WebAuthn or DPoP style). | Track A only. A browser cannot hold a device token. | Defer with A1. | Related to G1/G2 |
 | C8 | **Online catalogue lookup and search** for clients that cannot hold a full snapshot. | Thin web, and possibly the phone. | Decide after the RT-231 tech gate. The phone may just use the existing read-down snapshot. | Possibly |
-| C9 | **Reason code for moving continuity cash**, until internal transfers exist. | D-B5 handback. | Reuse an existing pay-in/pay-out reason if one fits. Otherwise add one, which is a small contract change. | No |
+| C9 | **Reason code for the till pay-in of continuity cash**, naming the closed continuity session, until internal transfers exist. | D-B5 handback. | Reuse an existing pay-in/pay-out reason if one fits. Otherwise add one, which is a small contract change. | No |
 | C10 | **Forced seal and recovery count from outside the dead device** (Admin Console or Manager Mobile, manager envelope). | S7. The POS builds no forced close today (F11). | Needed before continuity is production-ready. | Overlaps RT-18 and RT-231 manager actions |
 | C11 | **A digital receipt view** (link or QR, scoped by token). | D-B7, later. | Defer. | No |
 | C12 | **Fiscal identity for continuity devices.** | RT-295 1164/1165/1180–1182. | Continuity is disabled in fiscal-enabled stores until RT-295 decides. | No |
@@ -460,12 +460,13 @@ Mitigation for the last row:
 - **GO-1:** Stage 0 lab evidence shows no lost or duplicated *replays*, F7 fencing working, and both shifts closing with honest counts.
 - **GO-2:** the owner has ruled on every D-B decision and on A1.
 - **GO-3:** a manager-authorized repair (C14) for dead-lettered cashier sales is designed, approved and works end to end.
-- **GO-4:** C5 (candidate-duplicate review) and C10 (forced seal outside the device) are designed and approved.
+- **GO-4:** C5 (candidate-duplicate review) and C10 (forced seal outside the device) are designed and approved. C5 is shown in a lab to surface a grace-window till sale paired with its re-ring.
 - **GO-5:** fiscal position (C12) recorded. Continuity is disabled in fiscal stores until RT-295.
 - **GO-6:** the RT-231 technology gate is passed, and secure PIN-record storage has a security review (R5).
 
 **No-go triggers:**
-- Stage 0 shows that a stale till can capture a cashier sale **beyond the documented 120 s grace** after a takeover, or that a sale inside the grace escapes the candidate-duplicate review. A sale inside the grace being accepted is expected and is not a trigger.
+- Stage 0 shows that a stale till can capture a cashier sale **beyond the documented 120 s grace** after a takeover. A sale inside the grace being accepted is expected and is not a trigger. Stage 0 tests only the admission boundary.
+- After C5 exists (Stage 2), a grace-window sale escapes the candidate-duplicate review.
 - Any design requires reusing the till's credential.
 - Any design needs offline phone selling before RT-280.
 
@@ -499,7 +500,7 @@ None of these is a pilot blocker.
 | D-B6 | Tenders | Cash and `card_external` only |
 | D-B7 | Receipts | On-screen `saleRef`. Digital receipt later. |
 | D-B8 | Connectivity | Connected-first, with a durable unknown-outcome record |
-| D-B9 | Handback | The ordered handback in §6: blind count, pay-out of the counted amount on the phone's open shift, close it at 0, take over on the till, then pay-in |
+| D-B9 | Handback | The ordered handback in §6: close the phone shift on its blind count, take over on the till, then pay in the counted amount at the till |
 | D-B10 | Security | Store-owned devices, secure storage, immediate revoke |
 
 ## 13. Next safe action
