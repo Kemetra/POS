@@ -394,6 +394,7 @@ automatically.
     - `src/main/payments/action-payload.ts`: outcome in the hash, resolve payload;
     - `src/main/payments/audit-emitter.ts`;
     - `src/main/payments/repositories/payment-action-outbox.repository.ts`: kind union;
+    - `src/main/payments/repositories/payment-tender-lines.repository.ts`: an `applying → applied` update that also sets `external_reference`. Today `updateToApplied` writes only `state`, `applied_at` and `last_action_id`, so a reference given at resolution would be dropped silently;
     - preload and IPC registration.
 - Create: `migrations/00NN_payment_action_outbox_resolve_outcome.sql`, a rebuild that re-creates the 0016 trigger.
 
@@ -411,8 +412,8 @@ automatically.
 - `confirm_refused_while_unknown` (G2) and `cancel_refused_while_unknown` (G3): the line stays `applying` and the attempt stays `started`.
 - `reverse_refused_on_applying_line` (G4): `line_not_applied`.
 - `reverse_other_line_refused_while_unknown` (G1b): an applied cash line next to an UNKNOWN card line → `card_outcome_unresolved`, and the cash line stays `applied`.
-- `resolve_approved`: `applying → applied`, `applied_at` set, optional reference regex-checked; then confirm settles; the finalize summary contains the card line.
-- `resolve_declined`: `applying → refused` with `card_declined_after_unknown`; remaining equals the envelope again; a new card apply is allowed.
+- `resolve_approved`: `applying → applied`, `applied_at` set, optional reference regex-checked and **persisted on the line in the same transaction**. Then confirm settles. The finalize summary contains the card line, **with `external_reference` equal to the value entered at resolution**, and with no reference when none was given.
+- `resolve_declined`: `applying → refused` with `card_declined_after_unknown`. Remaining returns to its **pre-apply value**: the envelope minus any earlier applied lines. Cover a card-only case and a cash-then-UNKNOWN split. A new card apply is allowed.
 - `resolve_refused_on_non_applying_line`; `resolve_refused_wrong_owner`; `resolve_idempotent_replay`; `resolve_payload_mismatch`.
 - `apply_replay_reconstructs_unknown_and_declined` (F9):
     - a replay while the line is `applying` → `card_outcome_unknown`;
@@ -434,7 +435,7 @@ automatically.
     - `src/renderer/ui/payments/ExternalCardTerminalEntry.tsx`: the outcome selector;
     - `src/renderer/ui/payments/PaymentSurface.tsx`: route `card_declined` → S11 and `card_outcome_unknown` or any `applying` card line → S12;
     - the payment store or projection that derives the UNKNOWN flag from `payments.read`;
-    - `docs/design/vnext/15-vnext-freeze-package.md` §5: rows M-P8 (final) and M-P19…M-P23.
+    - `docs/design/vnext/15-vnext-freeze-package.md` §5: rows M-P8 (final) and M-P19…M-P24.
 - Create: `src/renderer/ui/payments/CardOutcomeUnknownPanel.tsx` (S12).
 
 **Consumes:** the P1-A interfaces.
@@ -462,6 +463,7 @@ automatically.
 - Modify:
     - `src/main/recovery/manager-recovery.ts`: G5 pre-consume check; `stuckView` splits `card_unknown_minor` out of `card_minor`; `confirmationMissing` accepts `card_outcome_unverifiable`; `cancelStuck` closes UNKNOWN lines before `payments.cancel`;
     - the shared recovery request type: `card_outcome_unverifiable?: boolean`;
+    - `src/shared/audit/payload-schemas.ts`: `PaymentRecoveryCancelledPayload` gains `card_outcome_unverifiable: boolean` and `reconciliation_required: boolean`, with coverage in `src/shared/audit/__tests__/payload-schemas.test.ts`. The P1-A audit categories (`tender.outcome_unknown`, `tender.outcome_resolved`) get their payload types in the same file if it is the canonical catalogue for them;
     - the recovery renderer confirmations: M-P23.
 
 **Consumes:** `closeUnknownInTransaction` (P1-A).
@@ -471,7 +473,7 @@ automatically.
 **Tests:**
 - `complete_refused_before_approval_consumed`: `card_outcome_unresolved`; the approval row still has `consumed_at` null.
 - `cancel_unknown_with_void_attested`: line `refused` with `card_unknown_void_attested`; attempt `cancelled`; `tender.outcome_resolved` plus `payment.recovery_cancelled` dual-attributed; the terminal is free.
-- `cancel_unknown_unverifiable`: `card_unknown_unverifiable`; `reconciliation_required: true` in the payload.
+- `cancel_unknown_unverifiable`: `card_unknown_unverifiable`; `reconciliation_required: true` in the payload, which type-checks against the extended `PaymentRecoveryCancelledPayload`.
 - `cancel_unknown_without_confirmation` → `confirmation_required`; no change.
 - `cancel_unknown_plus_cash_needs_both`.
 - `stuck_view_separates_unknown_card`.
