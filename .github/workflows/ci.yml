@@ -121,8 +121,10 @@ jobs:
       # tests/contract/backend-core/. It runs first so a cross-repo contract
       # break fails within the first minute. It also runs in the `test` job
       # as part of the full suite, so this step can never be the only gate.
+      # `npm test` is `vitest run --passWithNoTests` from the locked devDependency,
+      # so nothing is fetched on demand (RT-506, Sonar S6505/S8543).
       - name: Backend-Core contract conformance
-        run: npx vitest run tests/contract/backend-core --passWithNoTests
+        run: npm test -- tests/contract/backend-core
 
       - name: Verify OpenAPI codegen drift
         run: npm run codegen:verify
