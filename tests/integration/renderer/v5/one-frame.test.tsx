@@ -21,7 +21,7 @@ import {
 
 /** Former AppShell routes, the screen heading each shows, and the nav entry marked current. */
 const FORMER_SHELL_ROUTES: ReadonlyArray<{ path: string; heading: RegExp; current: string }> = [
-  { path: '/app/dashboard', heading: /dashboard/i, current: 'لوحة المتابعة' },
+  { path: '/app/dashboard', heading: /لوحة المتابعة/, current: 'لوحة المتابعة' },
   { path: '/app/sales', heading: /^المبيعات$/, current: 'المبيعات' },
   { path: '/app/returns', heading: /المرتجعات/, current: 'المرتجعات' },
   { path: '/app/audit', heading: /audit/i, current: 'سجل المراجعة' },
@@ -97,7 +97,7 @@ describe('one frame — every former AppShell route renders in the v5 frame', ()
     renderAppAt('/app');
     const main = within(await frame()).getByRole('main');
     expect(
-      await within(main).findByRole('heading', { level: 1, name: /dashboard/i }),
+      await within(main).findByRole('heading', { level: 1, name: /لوحة المتابعة/ }),
     ).toBeInTheDocument();
   });
 
@@ -106,7 +106,7 @@ describe('one frame — every former AppShell route renders in the v5 frame', ()
     renderAppAt('/app/dashboard');
     const v5 = await frame();
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
-    expect(within(v5).getAllByText('Section unavailable').length).toBeGreaterThan(0);
+    expect(within(v5).getByText('لوحة المتابعة متاحة للمدير فقط.')).toBeInTheDocument();
     const nav = within(v5).getByRole('navigation', { name: 'التنقل الرئيسي' });
     expect(
       within(nav)
@@ -124,7 +124,7 @@ describe('one frame — every former AppShell route renders in the v5 frame', ()
     await user.click(within(nav).getByRole('link', { name: 'لوحة المتابعة' }));
     const main = within(v5).getByRole('main');
     expect(
-      await within(main).findByRole('heading', { level: 1, name: /dashboard/i }),
+      await within(main).findByRole('heading', { level: 1, name: /لوحة المتابعة/ }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('v5-frame')).toBe(v5);
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();

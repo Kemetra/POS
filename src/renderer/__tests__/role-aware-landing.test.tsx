@@ -119,11 +119,10 @@ describe('022 T051 — FR-45: direct /app/dashboard navigation is STILL refused 
     // The existing role check is untouched: the cashier is refused, exactly as
     // before. If this ever starts passing a cashier through, the landing
     // correction has leaked into ACCESS CONTROL — which FR-47 forbids.
-    // (`getAllBy` because the copy appears twice by design: the Workspace
-    // title and the ErrorState heading.)
-    expect(screen.getAllByText('Section unavailable').length).toBeGreaterThan(0);
-    // And the cashier must NOT have been handed the dashboard content.
-    expect(screen.queryByTestId('dashboard-placeholder')).not.toBeInTheDocument();
+    // RT-499: the refusal is Arabic now («لوحة المتابعة متاحة للمدير فقط.»).
+    expect(screen.getByText('لوحة المتابعة متاحة للمدير فقط.')).toBeInTheDocument();
+    // And the cashier must NOT have been handed the manager home's cards.
+    expect(screen.queryByTestId('dashboard-cashier-management-link')).not.toBeInTheDocument();
   });
 
   it('a manager rendering DashboardRoute directly is NOT refused', () => {
@@ -135,7 +134,8 @@ describe('022 T051 — FR-45: direct /app/dashboard navigation is STILL refused 
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.queryByText('Section unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByText('لوحة المتابعة متاحة للمدير فقط.')).not.toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-cashier-management-link')).toBeInTheDocument();
   });
 
   it('a signed-out visitor to DashboardRoute is sent to sign-in (unchanged)', () => {

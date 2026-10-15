@@ -29,6 +29,7 @@ const DEFAULTS: OneFrameProofParams = {
   returns: 'off',
   sale: 'missing',
   reprint: 'ok',
+  shift: 'off',
 };
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -84,6 +85,20 @@ describe('OneFrameProof — parameters', () => {
     });
     window.location.hash = '#/dev/one-frame-proof?sale=nope&reprint=nope';
     expect(readOneFrameProofParams()).toMatchObject({ sale: 'missing', reprint: 'ok' });
+  });
+
+  it('RT-499: reads shift=on, and defaults it to off', () => {
+    window.location.hash = '#/dev/one-frame-proof?shift=on';
+    expect(readOneFrameProofParams().shift).toBe('on');
+    window.location.hash = '#/dev/one-frame-proof?shift=nope';
+    expect(readOneFrameProofParams().shift).toBe('off');
+  });
+
+  it('RT-499: shift=on hydrates the shift-cashup flag when the harness renders', async () => {
+    window.location.hash = '#/dev/one-frame-proof?shift=on';
+    render(<OneFrameProof />);
+    await screen.findByTestId('v5-frame');
+    expect(useFeatureFlagsStore.getState().shiftCashup).toBe(true);
   });
 
   it('ignores unknown values and any path outside /app', () => {

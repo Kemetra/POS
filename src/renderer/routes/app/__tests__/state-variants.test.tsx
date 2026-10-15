@@ -8,7 +8,8 @@ import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-conf
 /**
  * T042 — Cross-product state-variant tests (US3).
  *
- * Tests 5 panes × 4 variants = 20 combinations.
+ * Tests the panes that still carry the dev `?state=` gallery × 4 variants.
+ * RT-499 (D-10-4): the dashboard is the manager home and no longer has the gallery.
  * Each combination asserts the correct primitive renders (LoadingState /
  * EmptyState / ErrorState) or default content.
  *
@@ -33,19 +34,13 @@ function setSearch(search: string) {
 // component's module resolves the DEV toggle (module is already loaded after
 // first import, but we rely on the hook reading window.location at call time).
 async function importPanes() {
-  const [
-    { DashboardPlaceholder },
-    { SalesWorkspace },
-    { InventoryPlaceholder },
-    { SettingsHelpPlaceholder },
-  ] = await Promise.all([
-    import('../DashboardPlaceholder'),
-    import('../SalesWorkspace'),
-    import('../InventoryPlaceholder'),
-    import('../SettingsHelpPlaceholder'),
-  ]);
+  const [{ SalesWorkspace }, { InventoryPlaceholder }, { SettingsHelpPlaceholder }] =
+    await Promise.all([
+      import('../SalesWorkspace'),
+      import('../InventoryPlaceholder'),
+      import('../SettingsHelpPlaceholder'),
+    ]);
   return {
-    DashboardPlaceholder,
     SalesWorkspace,
     InventoryPlaceholder,
     SettingsHelpPlaceholder,
@@ -56,7 +51,6 @@ type Pane = Awaited<ReturnType<typeof importPanes>>;
 type PaneName = keyof Pane;
 
 const PANE_NAMES: PaneName[] = [
-  'DashboardPlaceholder',
   'SalesWorkspace',
   'InventoryPlaceholder',
   'SettingsHelpPlaceholder',

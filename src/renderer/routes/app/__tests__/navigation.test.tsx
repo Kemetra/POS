@@ -5,7 +5,8 @@ import '@testing-library/jest-dom/vitest';
 import { MemoryRouter, Route, Routes, Navigate } from 'react-router-dom';
 
 import { AppShell } from '../../../shell/AppShell';
-import { DashboardPlaceholder } from '../DashboardPlaceholder';
+import { useOperatorSessionStore } from '../../../stores/operator-session-store';
+import { DashboardRoute } from '../DashboardRoute';
 import { SalesWorkspace } from '../SalesWorkspace';
 import { InventoryPlaceholder } from '../InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
@@ -13,6 +14,16 @@ import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 afterEach(cleanup);
 
 beforeEach(() => {
+  // RT-499: the dashboard route is the manager home, so it needs a signed-in manager.
+  useOperatorSessionStore.getState().hydrateSignedIn({
+    id: 'sess-mgr',
+    operator_id: 'op-mgr',
+    display_name: 'سارة عبد الحميد',
+    role: 'manager',
+    tenant_id: 't1',
+    branch_id: 'b1',
+    started_at: '2026-10-15T07:00:00.000Z',
+  });
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => {
@@ -37,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  useOperatorSessionStore.getState().reset();
 });
 
 function renderApp(initialPath = '/app/dashboard') {
@@ -45,7 +57,7 @@ function renderApp(initialPath = '/app/dashboard') {
       <Routes>
         <Route path="/app" element={<AppShell />}>
           <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPlaceholder />} />
+          <Route path="dashboard" element={<DashboardRoute />} />
           <Route path="sales" element={<SalesWorkspace />} />
           <Route path="inventory" element={<InventoryPlaceholder />} />
           <Route path="settings" element={<SettingsHelpPlaceholder />} />
@@ -95,12 +107,12 @@ describe('navigation test (T038)', () => {
     );
   });
 
-  it('clicking Dashboard nav entry shows DashboardPlaceholder', async () => {
+  it('clicking Dashboard nav entry shows the manager home', async () => {
     const user = userEvent.setup();
     renderApp('/app/sales');
     await user.click(screen.getByRole('link', { name: 'Dashboard' }));
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /dashboard/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'لوحة المتابعة' })).toBeInTheDocument(),
     );
   });
 });

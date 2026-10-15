@@ -115,6 +115,19 @@ const REBUILT_SCREENS: ReadonlyArray<{
     file: 'v5/manager/sales/ReprintAffordance.tsx',
     retired: ['receipt-reprint'],
   },
+  // RT-499 (VN-S10 S10-2): the dashboard became the G-6 manager home; the v3.5
+  // skeleton, its workspace header and the demo stat strip are gone.
+  {
+    screen: 'dashboard (manager home)',
+    file: 'routes/app/DashboardRoute.tsx',
+    retired: [
+      'dashboard-card',
+      'dashboard-skeleton',
+      'dashboard-demo-banner',
+      'ws-head',
+      'stat-strip',
+    ],
+  },
 ];
 
 /** Strip block comments so prose naming a retired class is not a violation. */

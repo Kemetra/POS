@@ -44,6 +44,12 @@ const PATHS = {
   // RT-424 — Manager → Cashiers (G-3): the «بدون رقم سري» badge and «إعادة المحاولة».
   dash: 'M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.5 12h7',
   retry: 'M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5',
+  // RT-499 — the manager home cards (G-6); the title beside each carries the meaning.
+  'manager-shift': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
+  'manager-cashiers':
+    'M9 12.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 19c.8-3.3 3.2-5 6-5s5.2 1.7 6 5M16 5.5a3.5 3.5 0 0 1 0 7M18 14c1.6.6 2.6 2.4 3 5',
+  'manager-held': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM10 9v6M14 9v6',
+  'manager-stuck': 'M8 5h8a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3ZM9 12h6',
   'nav-settings':
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4z',
 } as const;
