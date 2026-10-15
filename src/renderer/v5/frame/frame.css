@@ -50,7 +50,11 @@
   min-block-size: 0;
   overflow: hidden;
   container: v5-screen / inline-size;
-  /* RT-412: <main> is the containing block of the in-surface fit notice. */
+  /*
+   * RT-412: <main> is the containing block of the in-surface fit notice, which
+   * covers the screen when it cannot show its must-see elements. The guard's
+   * wrapper is `display: contents`, so the screen is still <main>'s flex item.
+   */
   position: relative;
 }
 
@@ -59,12 +63,6 @@
   flex: 1 1 auto;
   min-block-size: 0;
 }
-
-/*
- * RT-412: the fit notice (positioned against <main>, above) covers the screen
- * when it cannot show its must-see elements. The guard's wrapper is
- * `display: contents`, so the screen is still <main>'s flex item.
- */
 
 /*
  * RT-407 (RT-312 D12): the compact composition is chosen by height as well as
