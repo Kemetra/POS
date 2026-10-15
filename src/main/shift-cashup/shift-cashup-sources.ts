@@ -30,12 +30,19 @@
  *                       open) but not completed (`paid_at IS NULL`);
  *   • unfinalizedSales  `payment.settled` audits of the terminal that the 008
  *                       finalize listener has not turned into a sale yet —
- *                       the listener's own pending-set filter.
+ *                       the listener's own pending-set filter — PLUS (RT-496)
+ *                       the terminal's settled attempts stranded with no such
+ *                       audit and no sale (`STRANDED_SETTLEMENT_FILTER`; the
+ *                       two sets are disjoint). Either way money was taken
+ *                       and is not a sale yet, so the close is held; an
+ *                       unattributable strand holds it until it is resolved
+ *                       by hand.
  *
  * Instants are compared as instants (`julianday`), never as strings.
  */
 import type { DatabaseHandle } from '../db/client.js';
 import { UNFINALIZED_SETTLEMENT_FILTER } from '../sales/finalize-listener.js';
+import { STRANDED_SETTLEMENT_FILTER } from '../payments/settled-audit-reconciler.js';
 import type { CashupRefund, CashupSale } from './shift-cashup-calculator.js';
 import type { ShiftScope } from './shift-cashup-repo.js';
 
@@ -130,6 +137,9 @@ const PARKED_SALES_SQL = `
 const UNFINALIZED_SALES_SQL = `
   SELECT COUNT(*) AS n FROM audit_events WHERE ${UNFINALIZED_SETTLEMENT_FILTER}`;
 
+const STRANDED_SETTLEMENTS_SQL = `
+  SELECT COUNT(*) AS n FROM payment_attempts a WHERE ${STRANDED_SETTLEMENT_FILTER}`;
+
 function scopeParams(scope: ShiftScope): string[] {
   return [scope.tenantId, scope.branchId, scope.terminalId];
 }
@@ -160,7 +170,9 @@ export function createShiftCashupSources(db: DatabaseHandle): ShiftCashupSources
     lastClosedAt,
     pendingDrawerActivity: (scope) => ({
       refundPayouts: count(PENDING_PAYOUTS_SQL, scopeParams(scope)),
-      unfinalizedSales: count(UNFINALIZED_SALES_SQL, [scope.terminalId]),
+      unfinalizedSales:
+        count(UNFINALIZED_SALES_SQL, [scope.terminalId]) +
+        count(STRANDED_SETTLEMENTS_SQL, scopeParams(scope)),
     }),
     parkedSales: (scope) => count(PARKED_SALES_SQL, scopeParams(scope)),
   };

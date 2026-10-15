@@ -1,0 +1,34 @@
+-- RT-496 (RT-481 follow-up) — `payment_attempts.selling_operator_display_name`:
+-- the selling operator's display name, frozen on the attempt row in the same
+-- transaction that settles it and writes its `payment.settled` audit.
+--
+-- [GATED] approval: the owner approved one additive, nullable SQLite migration
+-- for this column on 2026-10-15 (Jira RT-496, comment 11908 and the issue's
+-- "Owner decision — APPROVED" section).
+--
+-- ## Why
+--
+-- 008's finalize reads the selling operator's name only from the
+-- `payment.settled` audit payload; nothing else durable holds it. A settled
+-- attempt that lost its audit (RT-481) could not be healed without guessing
+-- the name. With this column a settlement carries its own attribution, so the
+-- startup reconciler (`settled-audit-reconciler.ts`) can re-emit a missing
+-- audit from durable data only. The stable operator id stays where it was
+-- (`acting_operator_id`).
+--
+-- ## Shape
+--
+-- Nullable, no default and no CHECK. Rows settled before this migration keep
+-- NULL: they have no trustworthy attribution, and the reconciler flags them
+-- for manual review instead of inventing a name. No CHECK, so a settlement can
+-- never fail on this column. `ALTER TABLE ... ADD COLUMN` needs no rebuild,
+-- and every existing CHECK and index on the table is unchanged. A later
+-- `payment_attempts` rebuild MUST carry this column in its explicit column
+-- list.
+--
+-- ## Rollback
+--
+-- Nothing else reads the column. Rebuild `payment_attempts` without it (0019
+-- is the rebuild template), keeping 0013's partial unique index.
+
+ALTER TABLE payment_attempts ADD COLUMN selling_operator_display_name TEXT NULL;

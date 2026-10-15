@@ -54,6 +54,7 @@ import {
 import { bindCartPaymentEligibility } from '../../../../src/main/payments/cart-payment-eligibility.js';
 import { createPaymentsStartHandler } from '../../../../src/main/payments/handlers/payments-start.js';
 import { createPaymentsConfirmHandler } from '../../../../src/main/payments/handlers/payments-confirm.js';
+import { realSettlementDeps } from '../../../unit/main/payments/__fixtures__/real-settlement-deps.js';
 import { createPaymentsCancelHandler } from '../../../../src/main/payments/handlers/payments-cancel.js';
 import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
 import type { OperatorSessionForPayments } from '../../../../src/main/payments/require-operator-session.js';
@@ -231,7 +232,17 @@ function buildPaymentHandlers(
       checkCartForPayment: bindCartPaymentEligibility(handle),
       attemptHasLiveTender: bindAttemptHasLiveTender(handle),
     }),
-    confirm: createPaymentsConfirmHandler({ ...writeDeps, paymentAttemptFsm }),
+    confirm: createPaymentsConfirmHandler({
+      ...writeDeps,
+      ...realSettlementDeps({
+        db: handle,
+        paymentAttemptFsm,
+        attempts: core.attempts,
+        lines: core.lines,
+        auditEmitter: core.paymentAuditEmitter,
+      }),
+      paymentAttemptFsm,
+    }),
     cancel: createPaymentsCancelHandler({ ...writeDeps, paymentAttemptFsm }),
     apply: createTenderApplyHandler({ ...writeDeps, tenderLineFsm, uuid }),
   };

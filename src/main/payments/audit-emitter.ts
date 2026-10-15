@@ -75,6 +75,12 @@ export interface EmitPaymentSettledInput extends BaseAuditContext {
    */
   selling_user_id?: string;
   tender_lines: readonly EmitTenderLineBreakdown[];
+  /**
+   * RT-496 — set only when the startup reconciler re-emits the audit of a
+   * settled attempt that lost it (`settled-audit-reconciler.ts`): the instant
+   * of the heal. Absent on every audit written by the settle itself.
+   */
+  reconciled_at?: string;
 }
 
 export interface EmitTenderLineBreakdown {
@@ -252,6 +258,13 @@ export function deriveAttributionOperatorId(source: AttributionSource): string {
 
 export interface PaymentAuditEmitter {
   emitPaymentSettled(input: EmitPaymentSettledInput): void;
+  /**
+   * RT-496 — the validated `payment.settled` event, not yet written. Throws
+   * `ForbiddenPaymentAuditKeyError` like every emit, so a caller builds it
+   * before opening the settle transaction and writes it inside with
+   * `emitRaw`: the settlement and its audit then commit or roll back together.
+   */
+  buildPaymentSettled(input: EmitPaymentSettledInput): PaymentAuditEvent;
   emitPaymentCancelled(input: EmitPaymentCancelledInput): void;
   emitPaymentFailed(input: EmitPaymentFailedInput): void;
   emitTenderApplied(input: EmitTenderAppliedInput): void;
@@ -301,11 +314,7 @@ export function createPaymentAuditEmitter(
   }
 
   function emit(event: PaymentAuditEvent): void {
-    const forbidden = findForbiddenKey(event.payload);
-    if (forbidden !== null) {
-      throw new ForbiddenPaymentAuditKeyError(forbidden);
-    }
-    sink.write(event);
+    sink.write(validated(event));
   }
 
   function redactedLineBreakdown(line: EmitTenderLineBreakdown): Record<string, unknown> {
@@ -325,31 +334,44 @@ export function createPaymentAuditEmitter(
     return out;
   }
 
+  function validated(event: PaymentAuditEvent): PaymentAuditEvent {
+    const forbidden = findForbiddenKey(event.payload);
+    if (forbidden !== null) {
+      throw new ForbiddenPaymentAuditKeyError(forbidden);
+    }
+    return event;
+  }
+
+  function buildPaymentSettled(input: EmitPaymentSettledInput): PaymentAuditEvent {
+    return validated({
+      action_category: 'payment.settled',
+      payment_attempt_id: input.payment_attempt_id,
+      attribution_operator_id: input.attribution_operator_id,
+      tenant_id: input.tenant_id,
+      branch_id: input.branch_id,
+      originating_terminal_id: input.originating_terminal_id,
+      session_id: input.session_id,
+      created_at: input.settled_at,
+      payload: {
+        payment_attempt_id: input.payment_attempt_id,
+        cart_id: input.cart_id,
+        handoff_action_id: input.handoff_action_id,
+        settled_at: input.settled_at,
+        attribution_operator_id: input.attribution_operator_id,
+        selling_operator_display_name: input.selling_operator_display_name,
+        ...(input.selling_user_id === undefined ? {} : { selling_user_id: input.selling_user_id }),
+        tender_lines: input.tender_lines.map(redactedLineBreakdown),
+        ...(input.reconciled_at === undefined ? {} : { reconciled_at: input.reconciled_at }),
+      },
+    });
+  }
+
   return {
     emitPaymentSettled(input: EmitPaymentSettledInput): void {
-      emit({
-        action_category: 'payment.settled',
-        payment_attempt_id: input.payment_attempt_id,
-        attribution_operator_id: input.attribution_operator_id,
-        tenant_id: input.tenant_id,
-        branch_id: input.branch_id,
-        originating_terminal_id: input.originating_terminal_id,
-        session_id: input.session_id,
-        created_at: input.settled_at,
-        payload: {
-          payment_attempt_id: input.payment_attempt_id,
-          cart_id: input.cart_id,
-          handoff_action_id: input.handoff_action_id,
-          settled_at: input.settled_at,
-          attribution_operator_id: input.attribution_operator_id,
-          selling_operator_display_name: input.selling_operator_display_name,
-          ...(input.selling_user_id === undefined
-            ? {}
-            : { selling_user_id: input.selling_user_id }),
-          tender_lines: input.tender_lines.map(redactedLineBreakdown),
-        },
-      });
+      sink.write(buildPaymentSettled(input));
     },
+
+    buildPaymentSettled,
 
     emitPaymentCancelled(input: EmitPaymentCancelledInput): void {
       emit({

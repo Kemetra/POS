@@ -36,6 +36,7 @@ import { createIdempotencyHelper } from '../../../../src/main/payments/idempoten
 import { createPaymentsStartHandler } from '../../../../src/main/payments/handlers/payments-start.js';
 import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
 import { createPaymentsConfirmHandler } from '../../../../src/main/payments/handlers/payments-confirm.js';
+import { realSettlementDeps } from '../../../unit/main/payments/__fixtures__/real-settlement-deps.js';
 import { createPaymentsCancelHandler } from '../../../../src/main/payments/handlers/payments-cancel.js';
 import { createPaymentAuditEmitter } from '../../../../src/main/payments/audit-emitter.js';
 import type { OperatorSessionForPayments } from '../../../../src/main/payments/require-operator-session.js';
@@ -112,7 +113,18 @@ function paymentStack(db: ReturnType<typeof handleFor>) {
       attemptHasLiveTender: () => false,
     }),
     apply: createTenderApplyHandler({ ...shared, getCurrentSession, tenderLineFsm, uuid }),
-    confirm: createPaymentsConfirmHandler({ ...shared, getCurrentSession, paymentAttemptFsm }),
+    confirm: createPaymentsConfirmHandler({
+      ...shared,
+      ...realSettlementDeps({
+        db,
+        paymentAttemptFsm,
+        attempts,
+        lines,
+        auditEmitter: shared.auditEmitter,
+      }),
+      getCurrentSession,
+      paymentAttemptFsm,
+    }),
     cancel: createPaymentsCancelHandler({ ...shared, getCurrentSession, paymentAttemptFsm }),
   });
   return { build };

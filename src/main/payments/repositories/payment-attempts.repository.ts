@@ -74,6 +74,12 @@ export interface PaymentAttemptRow {
   failure_reason: PaymentFailureReason | null;
   force_fail_attribution_operator_id: string | null;
   last_action_id: string;
+  /**
+   * RT-496 (migration 0051) — the selling operator's display name, frozen in
+   * the settle transaction. NULL until settled, and NULL on rows settled
+   * before 0051 (no trustworthy attribution; never back-filled).
+   */
+  selling_operator_display_name: string | null;
 }
 
 export interface InsertPaymentAttemptInput {
@@ -135,6 +141,15 @@ export interface PaymentAttemptsRepository {
   updateState(input: UpdatePaymentAttemptStateInput): void;
   findById(payment_attempt_id: string): PaymentAttemptRow | undefined;
   findStartedByTerminal(terminal_id: string): PaymentAttemptRow | undefined;
+  /**
+   * RT-496 — freeze the selling operator's display name on a settled row.
+   * Caller contract: run inside the settle transaction, after the FSM's
+   * `started → settled` update. Writes once: an already-set name is kept.
+   */
+  recordSellingOperatorDisplayName(input: {
+    payment_attempt_id: string;
+    selling_operator_display_name: string;
+  }): void;
 }
 
 export function bindPaymentAttemptsRepository(db: DatabaseHandle): PaymentAttemptsRepository {
@@ -182,6 +197,10 @@ export function bindPaymentAttemptsRepository(db: DatabaseHandle): PaymentAttemp
   const findStartedByTerminalStmt = db.prepare(
     `SELECT * FROM payment_attempts WHERE terminal_id=? AND state='started' LIMIT 1`,
   ) as PrepareGet<PaymentAttemptRow>;
+
+  // Lazy: the column arrives with 0051, and callers that bind this repository
+  // over an older schema (FSM-only tests) never record a name.
+  let recordDisplayNameStmt: PrepareRun | null = null;
 
   return {
     insert(input: InsertPaymentAttemptInput): void {
@@ -234,6 +253,16 @@ export function bindPaymentAttemptsRepository(db: DatabaseHandle): PaymentAttemp
 
     findStartedByTerminal(terminal_id: string): PaymentAttemptRow | undefined {
       return findStartedByTerminalStmt.get(terminal_id) ?? undefined;
+    },
+
+    recordSellingOperatorDisplayName(input): void {
+      recordDisplayNameStmt ??= db.prepare(
+        `UPDATE payment_attempts
+            SET selling_operator_display_name=?
+          WHERE payment_attempt_id=? AND state='settled'
+            AND selling_operator_display_name IS NULL`,
+      ) as PrepareRun;
+      recordDisplayNameStmt.run(input.selling_operator_display_name, input.payment_attempt_id);
     },
   };
 }

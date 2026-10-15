@@ -56,6 +56,8 @@ import type {
   PaymentAuditEvent,
 } from '../../../../../src/main/payments/audit-emitter.js';
 import type { PaymentAttemptRow } from '../../../../../src/main/payments/repositories/payment-attempts.repository.js';
+import type { SettlementCommitter } from '../../../../../src/main/payments/settlement-commit.js';
+import type { SettledAuditReconciler } from '../../../../../src/main/payments/settled-audit-reconciler.js';
 import type { PaymentTenderLineRow } from '../../../../../src/main/payments/repositories/payment-tender-lines.repository.js';
 
 // ── Session source ──────────────────────────────────────────────────────────
@@ -105,6 +107,7 @@ export function makeAttemptRow(overrides: Partial<PaymentAttemptRow> = {}): Paym
     failure_reason: null,
     force_fail_attribution_operator_id: null,
     last_action_id: 'start-pa-1',
+    selling_operator_display_name: null,
     ...overrides,
   };
 }
@@ -364,28 +367,65 @@ export function makeIdempotencyHelperDouble(
   });
 }
 
+// ── Settlement doubles (RT-496) ─────────────────────────────────────────────
+
+/**
+ * `payments.confirm`'s RT-496 dependencies for handler unit tests: the
+ * committer drives the FSM double then the audit double in the order the real
+ * committer uses (atomicity itself is covered by rt496-atomic-settlement.test.ts
+ * on a real database); the reconciler double reports nothing to heal.
+ */
+export function makeSettlementDeps(
+  fsm: Pick<PaymentAttemptFsm, 'confirm'>,
+  auditEmitter: Pick<PaymentAuditEmitter, 'emitPaymentSettled'>,
+): {
+  settlement: SettlementCommitter;
+  settledAuditReconciler: { healAttempt: Mock<SettledAuditReconciler['healAttempt']> };
+} {
+  return {
+    settlement: {
+      commit: (confirm, settled): ConfirmOutcome => {
+        const outcome = fsm.confirm(confirm);
+        if (outcome.kind === 'ok') auditEmitter.emitPaymentSettled(settled);
+        return outcome;
+      },
+    },
+    settledAuditReconciler: {
+      healAttempt: vi.fn<SettledAuditReconciler['healAttempt']>(() => 'not_stranded'),
+    },
+  };
+}
+
 // ── Audit emitter double (captures every emitted event) ─────────────────────
 
 export interface AuditEmitterDouble extends PaymentAuditEmitter {
   readonly captured: readonly PaymentAuditEvent[];
 }
 
+/** The `payment.settled` event the doubles capture: the raw input as its payload. */
+function settledEventOf(
+  input: Parameters<PaymentAuditEmitter['emitPaymentSettled']>[0],
+): PaymentAuditEvent {
+  return {
+    action_category: 'payment.settled',
+    payment_attempt_id: input.payment_attempt_id,
+    attribution_operator_id: input.attribution_operator_id,
+    tenant_id: input.tenant_id,
+    branch_id: input.branch_id,
+    originating_terminal_id: input.originating_terminal_id,
+    session_id: input.session_id,
+    created_at: input.settled_at,
+    payload: { ...input },
+  };
+}
+
 export function makeAuditEmitterDouble(): AuditEmitterDouble {
   const captured: PaymentAuditEvent[] = [];
   const emitter: PaymentAuditEmitter = {
     emitPaymentSettled: vi.fn<PaymentAuditEmitter['emitPaymentSettled']>((input): void => {
-      captured.push({
-        action_category: 'payment.settled',
-        payment_attempt_id: input.payment_attempt_id,
-        attribution_operator_id: input.attribution_operator_id,
-        tenant_id: input.tenant_id,
-        branch_id: input.branch_id,
-        originating_terminal_id: input.originating_terminal_id,
-        session_id: input.session_id,
-        created_at: input.settled_at,
-        payload: { ...input },
-      });
+      captured.push(settledEventOf(input));
     }),
+    buildPaymentSettled: vi.fn<PaymentAuditEmitter['buildPaymentSettled']>(settledEventOf),
     emitPaymentCancelled: vi.fn<PaymentAuditEmitter['emitPaymentCancelled']>((input): void => {
       captured.push({
         action_category: 'payment.cancelled',
