@@ -16,9 +16,6 @@ export const primaryEmphasis = 'var(--color-primary-emphasis)';
 export const primarySoft = 'var(--color-primary-soft)';
 export const primaryOn = 'var(--color-primary-on)';
 
-/* Accent */
-export const accent = 'var(--color-accent)';
-
 /* Success */
 export const success = 'var(--color-success)';
 export const successEmphasis = 'var(--color-success-emphasis)';
@@ -47,12 +44,6 @@ export const infoOn = 'var(--color-info-on)';
 export const neutral = 'var(--color-neutral)';
 export const neutralEmphasis = 'var(--color-neutral-emphasis)';
 export const neutralOn = 'var(--color-neutral-on)';
-
-/* Dark rail */
-export const rail = 'var(--color-rail)';
-export const railHover = 'var(--color-rail-hover)';
-export const railText = 'var(--color-rail-text)';
-export const railTextDim = 'var(--color-rail-text-dim)';
 
 /* Borders / rules */
 export const border = 'var(--color-border)';

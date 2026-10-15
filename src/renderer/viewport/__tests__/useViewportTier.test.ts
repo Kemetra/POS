@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 import { useViewportTier, viewportShortfall, type Viewport } from '../useViewportTier';
-import { installViewport, resizeTo } from '../../../v5/__tests__/__helpers__/viewport-bands';
+import { installViewport, resizeTo } from '../../v5/__tests__/__helpers__/viewport-bands';
 
 /**
  * T025 — useViewportTier boundary tests. RT-313 adds the height band

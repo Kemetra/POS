@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-import { useConnectionState, useConnectionStateStore } from '../useConnectionState';
-import { connectionState } from '../../../ui/tokens/connection-state';
+import { useConnectionState, useConnectionStateStore } from '../connection-state';
+import { connectionState } from '../../ui/tokens/connection-state';
 
 beforeEach(() => {
   useConnectionStateStore.setState({ state: 'online' });
