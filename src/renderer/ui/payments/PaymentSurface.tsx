@@ -538,6 +538,13 @@ function resolveBridge(testBridge: ResolvedBridge | undefined): ResolvedBridge |
   };
 }
 
+/** The status line shown for a tender selection when no payment bridge is wired (Slice 1). */
+const TENDER_SELECTED_COPY: Record<TenderKind, string> = {
+  cash: 'تم اختيار النقد',
+  external_card_terminal: 'تم اختيار جهاز الشبكة',
+  internal_voucher: 'تم اختيار القسيمة',
+};
+
 /**
  * RT-412 (RT-312 D2) — covered by the in-surface fit notice, never shown
  * clipped, when the amount due, the recorded change, the commit or the cancel
@@ -1149,9 +1156,17 @@ function PaymentSurfaceBody({
     if (event.repeat || tooSoon) event.preventDefault();
   }
 
-  function handleCommitClick(payable: boolean): void {
-    if (payable) void handleConfirm();
-    else void rereadAttempt();
+  function commitClickHandler(): void {
+    if (fullyTendered) handleSettleClick();
+    else handleRereadClick();
+  }
+
+  function handleSettleClick(): void {
+    void handleConfirm();
+  }
+
+  function handleRereadClick(): void {
+    void rereadAttempt();
   }
 
   /** M-P13 when a card line was touched or a card apply was attempted. Sticky for this handoff. */
@@ -1549,6 +1564,80 @@ function PaymentSurfaceBody({
     void handleCancel();
   }
 
+  /** Retry the post-apply / post-start read that failed, through the same copy decision as before. */
+  function retryFailedRead(): void {
+    if (readAfter === 'start') {
+      void readAfterStart(paymentAttemptId);
+    } else if (readAfter === 'confirm' && paymentAttemptId !== null) {
+      const pending = usePaymentStore.getState().confirmReadPending;
+      const reason = pending?.attemptId === paymentAttemptId ? pending.reason : null;
+      void reconcileAfterConfirm(paymentAttemptId, reason);
+    } else {
+      void handleLineApplied();
+    }
+  }
+
+  /**
+   * The action bar's primary slot. RT-298: while a cancel is open nothing here
+   * may move the attempt on, the post-apply read retry included (Codex P2, #576).
+   */
+  function commitControl(): JSX.Element | null {
+    if (cancelOpen) return null;
+    if (afterApply === 'failed') {
+      return (
+        <button
+          type="button"
+          className="checkout-commit"
+          data-testid="payment-surface-reread"
+          onClick={retryFailedRead}
+        >
+          إعادة المحاولة
+        </button>
+      );
+    }
+    if (!showSettle) return null;
+    return (
+      <button
+        type="button"
+        className="payment-surface__confirm checkout-commit"
+        data-testid="payment-surface-confirm"
+        disabled={isConfirming}
+        aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
+        aria-describedby={fullyTendered ? undefined : 'payment-commit-reason'}
+        onKeyDown={guardCommitKey}
+        onClick={commitClickHandler}
+      >
+        تأكيد الدفع
+      </button>
+    );
+  }
+
+  /** The line under the primary action: why a re-read is offered, or why settle is not yet. */
+  function commitReason(): JSX.Element | null {
+    if (cancelOpen) return null;
+    if (afterApply === 'failed') {
+      return (
+        <p
+          className="checkout-actions__reason"
+          data-testid="payment-surface-reread-notice"
+          role="status"
+        >
+          {readAfter === 'start' ? START_READ_FAILED_COPY : TENDER_READ_FAILED_COPY}
+        </p>
+      );
+    }
+    if (!showSettle || fullyTendered) return null;
+    return (
+      <p
+        id="payment-commit-reason"
+        className="checkout-actions__reason"
+        data-testid="payment-surface-commit-reason"
+      >
+        المبلغ أقل من المستحق
+      </p>
+    );
+  }
+
   /*
    * RT-238 — the pinned action bar (15 §4 A2). Cancel lives in the start slot,
    * the primary/commit in the end slot, and neither slot is ever filled by an
@@ -1576,59 +1665,8 @@ function PaymentSurfaceBody({
         }
         // RT-298: while a cancel is open nothing here may move the attempt
         // on, the post-apply read retry included (Codex P2, #576).
-        commit={
-          cancelOpen ? null : afterApply === 'failed' ? (
-            <button
-              type="button"
-              className="checkout-commit"
-              data-testid="payment-surface-reread"
-              onClick={() => {
-                if (readAfter === 'start') void readAfterStart(paymentAttemptId);
-                else if (readAfter === 'confirm' && paymentAttemptId !== null) {
-                  const pending = usePaymentStore.getState().confirmReadPending;
-                  const reason = pending?.attemptId === paymentAttemptId ? pending.reason : null;
-                  void reconcileAfterConfirm(paymentAttemptId, reason);
-                } else void handleLineApplied();
-              }}
-            >
-              إعادة المحاولة
-            </button>
-          ) : showSettle ? (
-            <button
-              type="button"
-              className="payment-surface__confirm checkout-commit"
-              data-testid="payment-surface-confirm"
-              disabled={isConfirming}
-              aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
-              aria-describedby={fullyTendered ? undefined : 'payment-commit-reason'}
-              onKeyDown={guardCommitKey}
-              onClick={() => {
-                handleCommitClick(fullyTendered);
-              }}
-            >
-              تأكيد الدفع
-            </button>
-          ) : null
-        }
-        reason={
-          cancelOpen ? null : afterApply === 'failed' ? (
-            <p
-              className="checkout-actions__reason"
-              data-testid="payment-surface-reread-notice"
-              role="status"
-            >
-              {readAfter === 'start' ? START_READ_FAILED_COPY : TENDER_READ_FAILED_COPY}
-            </p>
-          ) : showSettle && !fullyTendered ? (
-            <p
-              id="payment-commit-reason"
-              className="checkout-actions__reason"
-              data-testid="payment-surface-commit-reason"
-            >
-              المبلغ أقل من المستحق
-            </p>
-          ) : null
-        }
+        commit={commitControl()}
+        reason={commitReason()}
         notices={notices}
       />
     );
@@ -1804,11 +1842,7 @@ function PaymentSurfaceBody({
             role="status"
             aria-live="polite"
           >
-            {selectedTender === 'cash'
-              ? 'تم اختيار النقد'
-              : selectedTender === 'external_card_terminal'
-                ? 'تم اختيار جهاز الشبكة'
-                : 'تم اختيار القسيمة'}
+            {TENDER_SELECTED_COPY[selectedTender]}
           </div>
         )}
 
