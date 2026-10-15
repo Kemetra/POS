@@ -320,7 +320,9 @@ Clarifications session 2026-05-10 / FR-052) all hold.
   MUST remain crisp and legible at all three Windows display-scale
   values across the two designed viewport bands, with no clipped
   characters, missing focus rings, or off-grid pixel rounding on
-  borders.
+  borders. 150 % is qualified by NFR-012 (amended 2026-10-15,
+  RT-312 D8/D15): not supported for the pilot, and otherwise only
+  where the effective CSS viewport is at least 1024 × 600.
 - **Reduced-motion users**: any motion introduced by the recovery (e.g.
   spinner rotation, modal fade-in, rail expand transition) MUST honour
   the user's `prefers-reduced-motion` preference. A reduced-motion
@@ -717,10 +719,22 @@ Clarifications session 2026-05-10)*
   source-scope guard inherited from `003` (forbidden allowlist)
   MUST hold.
 - **NFR-012 (Windows display scaling)**: The recovered visuals
-  MUST render correctly at Windows display scaling 100 %, 125 %,
-  and 150 % across the two designed viewport bands (≥ 1280 px
-  and 1024–1279 px). No clipped characters, no missing focus
-  rings, no off-grid border rounding.
+  MUST render correctly at Windows display scaling 100 % and
+  125 % across the two designed viewport bands (≥ 1280 px and
+  1024–1279 px). 150 % is **not supported for the pilot**
+  (RT-312 D8); beyond the pilot it MAY be supported **only where
+  the effective CSS viewport is at least 1024 × 600**, and at
+  heights 600–767 only once that compact band is verified on
+  pilot hardware. Below 1024 wide or 600 high the width or
+  height notice applies instead. No clipped
+  characters, no missing focus rings, no off-grid border
+  rounding. *Amended 2026-10-15 (Jira RT-312 D15, owner-approved
+  2026-10-12): a 1920 × 1080 panel at 150 % yields about
+  1280 × 623 CSS px, so "150 % must work" could not hold
+  unconditionally. The display/scaling policy is recorded in
+  constitution v1.7.0 § Hardware (Display row) and the
+  Confluence page "POS display and scaling support policy
+  (RT-312)".*
 - **NFR-013 (test-first preservation)**: The visual recovery MUST
   preserve the `003` ≥ 90 % coverage gate on `src/renderer/ui/`
   and `src/renderer/shell/`. Any primitive amended by the
@@ -934,7 +948,8 @@ implementation slices. They are deferred to later features.
   mandatory acceptance widths for the recovery are the two
   designed viewport bands inherited from `003`: ≥ 1280 px
   (primary) and 1024 × 768 (icon-only sample), at Windows
-  display scaling 100 / 125 / 150 %. Below 1024 px the
+  display scaling 100 / 125 / 150 % (150 % only as NFR-012
+  allows). Below 1024 px the
   "screen too small" fallback from `003` is preserved
   unchanged. Final width matrix is confirmed during
   `/speckit-clarify`.

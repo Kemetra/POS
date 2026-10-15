@@ -246,7 +246,7 @@ implementing slice can cite them by name:
 | IX. Reference, Not Inheritance | **PASS** | Load-bearing for 007. Claude Design and Figma Make are reference-only (FR-034 / FR-035 / FR-051). Repo wins disagreements. |
 | Platform Integration | **PASS** | No new hosts; no new endpoints; no new IPC. |
 | Security | **PASS** | No new attack surface. CSP / contextIsolation / sandbox / nodeIntegration unchanged. PIN dot-only rule preserved (CD `04-security-and-visibility.md` §A). |
-| Hardware Matrix | **PASS** | Touchscreen cashier monitor preserved by 44 × 44 px floor. Windows display scaling 100 / 125 / 150 % preserved (NFR-012). |
+| Hardware Matrix | **PASS** | Touchscreen cashier monitor preserved by 44 × 44 px floor. Windows display scaling 100 / 125 % preserved; 150 % not supported for the pilot, and beyond it only where the effective viewport is ≥ 1024 × 600 with the 600–767 band verified (NFR-012, amended 2026-10-15 per RT-312 D8/D15). |
 | Domain — Pharmacy POS | **N/A** | Pharmacy-domain entities out of scope. |
 
 **Initial gate result: PASS.** No violations, no waivers required.

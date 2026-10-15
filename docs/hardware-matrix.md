@@ -9,7 +9,7 @@ devices is preferable to advertising broad compatibility that the team cannot gu
 
 This document is a **reproduction**, not a redefinition. The authoritative source is
 [`.specify/memory/constitution.md`](../.specify/memory/constitution.md) § Hardware (constitution
-v1.3.0; scope originally established at v1.2.0). Any conflict between this file and the
+v1.7.0; scope originally established at v1.2.0; Display row added at v1.7.0). Any conflict between this file and the
 constitution is resolved in favor of the constitution. Expanding either the In-Scope or
 Out-of-Scope list requires a constitution amendment — see [How to update this doc](#how-to-update-this-doc).
 
@@ -20,7 +20,7 @@ follow.
 
 ## In Scope (MVP)
 
-The four categories below are the only hardware surfaces POS-Pulse is built to support during
+The five categories below are the only hardware surfaces POS-Pulse is built to support during
 the MVP. A device that is not listed here is not supported.
 
 ### Workstation
@@ -67,6 +67,43 @@ MUST NOT block the receipt print, and it MUST NOT auto-dismiss.
 | Model | Transport | Driver / firmware | Tested in feature | Known caveats |
 |:------|:----------|:------------------|:------------------|:--------------|
 | _DEFERRED from 008 MVP_ — **APG VBS320 (Vasario)** | RJ-12 to printer (DK1 pulse) | Driven via the printer's DK1 ESC/POS command; no native USB driver required | 008 (committed at T006 2026-05-26) — **drawer hardware validation deferred out of 008 by owner decision 2026-05-30** | **Owner decision 2026-05-30 (Ahmed): 008 MVP will NOT block on cash-drawer hardware; drawer / DK1 hardware validation is deferred to a future hardware/peripheral spec.** The drawer-kick *code* (`drawer-kick.ts`, `DrawerFailureBanner`, `drawer_events` table) stays — built, 100% covered, merged; only the physical-drawer hardware bring-up defers. No cash-drawer model was observed on the 008 bench. See coordination.md §"Owner decision — 008 §A5 hardware target (2026-05-30)". |
+
+### Display
+
+Support is judged by the **effective CSS viewport** of the maximized POS window, not by the
+physical panel size. Owner-approved policy: Jira RT-312 decisions D1–D8 and D15, summarised on
+the Confluence page "POS display and scaling support policy (RT-312)".
+
+| Effective CSS viewport | Status | Behaviour |
+|:-----------------------|:-------|:----------|
+| width < 1024 | Blocked | Width notice. |
+| height < 600 | Blocked | Height notice (RT-313). |
+| height 600–767 (width ≥ 1024) | Compact-height band — **supported only after verification on pilot hardware** | Sale and Checkout use the compact composition; amount due, commit, cancel and change stay visible, otherwise an in-surface notice blocks (RT-407, RT-412). |
+| ≥ 1024 × 768 | Full reference | Normal composition. |
+
+Rules at every size: never auto-zoom; page zoom is locked at 0 and reset on every launch; the
+native menu bar is removed (RT-314).
+
+**Pilot standard:** 1920×1080 panel, Windows Scale **100 %**, window maximized (≈ 1920×1009
+with the menu bar removed; 983 with it). **125 %** is supported only with the menu bar removed
+(≈ 1536×793). **150 %** is **not supported for the pilot** (≈ 1280×649 with the menu removed;
+623 with it). All figures are calculated, not measured. A 1366×768 panel runs at 100 % only, and
+only once the 600–767 band is verified.
+
+Calculated (not measured) maximized viewports, as published in the policy page — CSS height ≈
+panel height ÷ scale − 71 − 26 (menu bar). RT-314 has since removed the menu bar, which adds
+back about 26 px to every height below.
+
+| Panel | 100 % | 125 % | 150 % |
+|:------|:------|:------|:------|
+| 1920×1080 | 1920×983 | 1536×767 (≈ 793 without the menu) | 1280×623 (bench client 1265×609) — not supported for the pilot |
+| 1366×768 | 1366×671 | 1093×517 | blocked (911 wide) |
+| 1280×1024 | 1280×927 | 1024×722 | blocked |
+| 1024×768 | 1024×671 | blocked | blocked |
+
+| Model | Native resolution | Windows Scale | Tested in feature | Known caveats |
+|:------|:------------------|:--------------|:------------------|:--------------|
+| _None tested yet — the pilot display model is to be recorded during the site survey (RT-312 D8)_ |  |  |  |  |
 
 ## Out of Scope (MVP)
 
@@ -132,7 +169,8 @@ First entries land in `002-terminal-pairing` and the hardware-driver features th
 
 ## Source of truth
 
-This file reproduces constitution v1.3.0 § Hardware (scope originally established at v1.2.0).
+This file reproduces constitution v1.7.0 § Hardware (scope originally established at v1.2.0;
+Display row added at v1.7.0).
 The authoritative source is [`.specify/memory/constitution.md`](../.specify/memory/constitution.md)
 § Hardware. If a contributor reads this file and finds it inconsistent with the constitution,
 the constitution wins; the inconsistency is a defect in this file and MUST be fixed in the

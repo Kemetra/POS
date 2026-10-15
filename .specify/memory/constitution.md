@@ -1,6 +1,63 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.6.0 → 1.7.0
+Bump rationale: MINOR — materially expanded guidance in Additional Constraints → Hardware:
+  the MVP matrix gains a **Display** row (effective-viewport support policy). No Roman-numeral
+  Core Principle or P1–P18 principle is added, removed or redefined.
+
+  Why this update is needed:
+  - Jira RT-312 (POS F2 viewport/scaling) found that the hardware matrix had no display row,
+    while spec 007 NFR-012 required 150 % Windows scaling to work — which a 1920×1080 panel
+    cannot meet (≈ 1280×623 CSS px). Owner decisions D1–D8 (2026-10-08 / 2026-10-12) set the
+    600 px height floor, the 600–767 compact band, the pilot standard (1920×1080 @ 100 %,
+    maximized) and "150 % not supported for the pilot". D15 (owner-approved 2026-10-12)
+    asked for this display row plus the NFR-012 rewording, in one docs PR.
+  - The implementation already shipped on `main`: RT-314 (#635, menu removed + zoom lock),
+    RT-313 (#636, height guard + notice copy + scrollable dialogs), RT-407 (#637,
+    compact-height composition), RT-412 (#651, in-surface fit notice).
+  - Durable policy page: Confluence RETAIL "POS display and scaling support policy (RT-312)".
+
+  Modified sections:
+  - Additional Constraints → Hardware (MVP Matrix): new **Display** row in the In-scope table.
+  - Governance footer: version and Last Amended.
+  - All other sections → unchanged.
+
+  Added sections: none. Removed sections: none.
+  Modified principles: none.
+
+  Templates requiring updates:
+  - ✅ `.specify/templates/plan-template.md` / `spec-template.md` / `tasks-template.md` — no
+    changes required.
+  - ✅ `docs/hardware-matrix.md` — reproduction gains a Display section (rule: the supported
+    list MUST be reproduced there).
+  - ✅ `specs/007-pos-visual-system/spec.md` NFR-012 reworded (150 % not supported for the
+    pilot; beyond it only where the effective viewport ≥ 1024×600, 600–767 band once verified);
+    its plan.md Constitution Check row aligned; the dependent 150 % clauses (spec Edge Cases
+    high-DPI bullet, assumption A5, `contracts/screenshot-acceptance.md`, `quickstart.md`)
+    carry the same qualification, as do spec 003's high-DPI edge case, NFR-3 and its monitor
+    assumption.
+  - ✅ `README.md`, `CLAUDE.md`, `docs/maestro/README.md` — version references updated to v1.7.0.
+
+  Follow-up TODOs (open):
+  - ⏳ PILOT_DISPLAY_MODEL — the actual pilot display model and native resolution are still
+    to be recorded during the site survey (RT-312 D8); add it as a tested row in
+    `docs/hardware-matrix.md` when known.
+  - ⏳ COMPACT_BAND_VERIFICATION — the 600–767 band stays "supported only after verification
+    on pilot hardware" until a packaged measurement on pilot hardware is recorded.
+  - Carried from v1.6.0: ⏳ UPDATER_IMPLEMENTATION, ⏳ FLEET_VERSION_CONTRACT (unchanged).
+
+  Resolved TODOs (this revision): none.
+
+  Compatibility ledger:
+  - No code changes. The row restates behaviour already on `main` (RT-313/314/407/412).
+  - Spec 007 NFR-012 is narrowed, not widened: 100 % and 125 % are unchanged; 150 % is not
+    supported for the pilot (D8), and beyond the pilot it may hold only where the effective
+    viewport is ≥ 1024×600, with heights 600–767 still conditional on pilot-hardware
+    verification.
+
+History (prior revisions retained for reference):
+
 Version change: 1.5.1 → 1.6.0
 Bump rationale: MINOR — a Tech Stack substitution within an existing category (update feed
   host → provider-neutral origin; installer kind named) plus materially changed guidance in
@@ -1103,6 +1160,7 @@ is **Out of scope** until a future amendment.
 | Barcode scanner     | **Keyboard-wedge** (HID) only. Scanners present as keyboards; no SDK integration.      |
 | Receipt printer     | Local print adapter (system printer queue). **ESC/POS direct path preferred** when the connected printer supports it; otherwise fall back to the OS print path. |
 | Cash drawer         | **Optional**, opened via the receipt printer's kick command (DK1/DK2 ESC/POS pulse).   |
+| Display             | Support is judged by the **effective CSS viewport** of the maximized POS window, not the panel size. **Pilot standard:** 1920×1080 panel, Windows Scale **100 %**, window maximized (≈ 1920×1009, calculated with the menu bar removed). **125 %** is supported only with the native menu bar removed (≈ 1536×793). **150 %** is **not supported for the pilot** (≈ 1280×649 on 1920×1080 even without the menu). Width **< 1024** or height **< 600** CSS px is blocked with a notice; height **600–767** is a compact-height band, supported only after verification on pilot hardware; **≥ 1024×768** is the full reference. Never auto-zoom; page zoom is locked at 0. |
 
 **Out of scope (MVP) — explicitly NOT supported until a future amendment:**
 
@@ -1409,6 +1467,6 @@ feature) when 003 closes.
 
 ---
 
-**Version:** 1.6.0
+**Version:** 1.7.0
 **Ratified:** 2026-05-01
-**Last Amended:** 2026-10-09
+**Last Amended:** 2026-10-15
