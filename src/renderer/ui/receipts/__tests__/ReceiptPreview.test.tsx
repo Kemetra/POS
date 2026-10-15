@@ -47,7 +47,7 @@ describe('ReceiptPreview (Phase 5 wiring coverage)', () => {
     // A never-resolving bridge keeps it in loading.
     const pending = { preview: vi.fn(() => new Promise(() => {})) } as unknown as ReceiptsBridgeAPI;
     render(<ReceiptPreview saleId="sale-1" onClose={() => {}} _testBridge={pending} />);
-    expect(screen.getByText(/Preparing preview/i)).toBeInTheDocument();
+    expect(screen.getByText('جارٍ التحضير')).toBeInTheDocument();
   });
 
   it('renders the slip HTML once the preview resolves ok', async () => {
@@ -58,14 +58,14 @@ describe('ReceiptPreview (Phase 5 wiring coverage)', () => {
         _testBridge={okBridge('<div>RECEIPT BODY</div>')}
       />,
     );
-    const slip = await screen.findByRole('img', { name: /sale sale-42/i });
+    const slip = await screen.findByRole('img', { name: 'معاينة الإيصال للعملية رقم sale-42' });
     expect(slip).toBeInTheDocument();
     expect(slip).toContainHTML('RECEIPT BODY');
   });
 
   it('shows the error state when the preview is refused', async () => {
     render(<ReceiptPreview saleId="sale-1" onClose={() => {}} _testBridge={refusedBridge()} />);
-    expect(await screen.findByRole('alert')).toHaveTextContent(/cannot be previewed/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent('تعذّرت معاينة الإيصال');
   });
 
   it('shows the error state when the bridge rejects', async () => {
@@ -82,7 +82,7 @@ describe('ReceiptPreview (Phase 5 wiring coverage)', () => {
   it('invokes onClose when the close button is clicked', () => {
     const onClose = vi.fn();
     render(<ReceiptPreview saleId="sale-1" onClose={onClose} _testBridge={okBridge('<p>x</p>')} />);
-    fireEvent.click(screen.getByRole('button', { name: /Close preview/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'إغلاق المعاينة' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -104,7 +104,7 @@ describe('ReceiptPreview (Phase 5 wiring coverage)', () => {
     render(
       <ReceiptPreview saleId="sale-1" onClose={() => {}} _testBridge={okBridge('<p>x</p>')} />,
     );
-    const zoom = screen.getByRole('button', { name: /Zoom/i });
+    const zoom = screen.getByRole('button', { name: 'زر التكبير' });
     expect(zoom).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(zoom);
     expect(zoom).toHaveAttribute('aria-pressed', 'true');
@@ -114,6 +114,6 @@ describe('ReceiptPreview (Phase 5 wiring coverage)', () => {
     render(
       <ReceiptPreview saleId="sale-1" onClose={() => {}} _testBridge={okBridge('<p>x</p>')} />,
     );
-    expect(screen.getByRole('button', { name: /Print/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'طباعة' })).toBeDisabled();
   });
 });

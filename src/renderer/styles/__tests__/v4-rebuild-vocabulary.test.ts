@@ -101,6 +101,20 @@ const REBUILT_SCREENS: ReadonlyArray<{
     retired: ['workspace'],
     sharedRulesRemain: true,
   },
+  // RT-500 (VN-S10 S10-3): the Sales lookup moved onto the G-6 references.
+  // `placeholder-pane` is still defined for Audit and Inventory.
+  {
+    screen: 'Sales lookup',
+    file: 'routes/app/SalesWorkspace.tsx',
+    retired: ['placeholder-pane'],
+    sharedRulesRemain: true,
+  },
+  // Its own retired prefix has no rule left in tailwind.css, so the orphan check stays on.
+  {
+    screen: 'Sales lookup › reprint',
+    file: 'v5/manager/sales/ReprintAffordance.tsx',
+    retired: ['receipt-reprint'],
+  },
 ];
 
 /** Strip block comments so prose naming a retired class is not a violation. */

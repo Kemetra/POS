@@ -3650,11 +3650,4 @@ body {
   .printer-failure-banner__actions .btn {
     min-block-size: 44px;
   }
-
-  .receipt-reprint__failure {
-    margin: 0;
-    color: var(--color-warning-emphasis);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-  }
 }

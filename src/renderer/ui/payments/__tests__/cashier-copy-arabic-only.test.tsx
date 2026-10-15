@@ -21,7 +21,7 @@ import { OperatorBadge } from '../../operator/OperatorBadge.js';
 import { DrawerNoticeBanner, DrawerNoticeInline } from '../../receipts/DrawerNotice.js';
 import { useDrawerNoticeStore } from '../../receipts/drawer-notice-store.js';
 import { PrinterFailureBanner } from '../../receipts/PrinterFailureBanner.js';
-import { ReprintAffordance } from '../../receipts/ReprintAffordance.js';
+import { ReprintAffordance } from '../../../v5/manager/sales/ReprintAffordance.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
 import { TenderPicker } from '../../../v5/checkout/TenderPicker.js';

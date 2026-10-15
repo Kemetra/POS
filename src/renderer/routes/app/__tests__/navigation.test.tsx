@@ -64,7 +64,7 @@ describe('navigation test (T038)', () => {
     renderApp();
     await user.click(screen.getByRole('link', { name: 'Sales' }));
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /sales/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { level: 1, name: 'المبيعات' })).toBeInTheDocument(),
     );
   });
 

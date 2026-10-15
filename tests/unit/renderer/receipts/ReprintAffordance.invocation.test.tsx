@@ -11,12 +11,14 @@
  *   - A refusal / rejection does not crash; the button re-enables.
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
-import { ReprintAffordance } from '../../../../src/renderer/ui/receipts/ReprintAffordance.js';
+import { ReprintAffordance } from '../../../../src/renderer/v5/manager/sales/ReprintAffordance.js';
 import type { ReceiptsBridgeAPI } from '../../../../src/shared/bridge-api.js';
 
 function okBridge(): ReceiptsBridgeAPI {
@@ -96,8 +98,16 @@ describe('T431 — ReprintAffordance invocation', () => {
       />,
     );
     const button = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
-    // min-h / min-w utility classes encode the 44px floor (FR-068).
-    expect(button.className).toMatch(/min-(h|w)-/);
+    // The v5 button class encodes the 44px floor (FR-068); jsdom cannot lay it
+    // out, so assert the class and that the stylesheet declares the floor on it.
+    expect(button).toHaveClass('v5-sales-btn');
+    const css = readFileSync(
+      resolve(__dirname, '../../../../src/renderer/v5/manager/sales/sales.css'),
+      'utf-8',
+    );
+    const rule = /\.v5-sales-btn\s*\{[^}]*\}/.exec(css)?.[0] ?? '';
+    expect(rule).toMatch(/min-block-size:\s*var\(--v5-target,\s*44px\)/);
+    expect(rule).toMatch(/min-inline-size:\s*44px/);
   });
 
   it('recovers (no crash, button re-enabled) when reprint rejects', async () => {

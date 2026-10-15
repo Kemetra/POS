@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
-import { ReprintAffordance } from '../../../../src/renderer/ui/receipts/ReprintAffordance.js';
+import { ReprintAffordance } from '../../../../src/renderer/v5/manager/sales/ReprintAffordance.js';
 import type { ReceiptsBridgeAPI } from '../../../../src/shared/bridge-api.js';
 
 function okBridge(): ReceiptsBridgeAPI {

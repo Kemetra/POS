@@ -22,7 +22,7 @@ import {
 /** Former AppShell routes, the screen heading each shows, and the nav entry marked current. */
 const FORMER_SHELL_ROUTES: ReadonlyArray<{ path: string; heading: RegExp; current: string }> = [
   { path: '/app/dashboard', heading: /dashboard/i, current: 'لوحة المتابعة' },
-  { path: '/app/sales', heading: /sales/i, current: 'المبيعات' },
+  { path: '/app/sales', heading: /^المبيعات$/, current: 'المبيعات' },
   { path: '/app/returns', heading: /المرتجعات/, current: 'المرتجعات' },
   { path: '/app/audit', heading: /audit/i, current: 'سجل المراجعة' },
   { path: '/app/inventory', heading: /inventory/i, current: 'المخزون' },

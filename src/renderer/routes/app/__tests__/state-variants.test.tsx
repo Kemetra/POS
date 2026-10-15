@@ -62,6 +62,10 @@ const PANE_NAMES: PaneName[] = [
   'SettingsHelpPlaceholder',
 ];
 
+// RT-500 (S10-3): the Sales lookup left the dev `?state=` gallery with its
+// English loading/empty/error variants, so only its default state is crossed.
+const STATE_PANE_NAMES = PANE_NAMES.filter((name) => name !== 'SalesWorkspace');
+
 function renderPane(Component: React.ComponentType) {
   return render(
     <MemoryRouter>
@@ -128,7 +132,7 @@ describe('US3 state-variant cross-product — loading state (T042)', () => {
     setSearch('');
   });
 
-  it.each(PANE_NAMES)('%s — loading state renders role="status"', async (paneName) => {
+  it.each(STATE_PANE_NAMES)('%s — loading state renders role="status"', async (paneName) => {
     const panes = await importPanes();
     const Component = panes[paneName];
     const spies = setupSideEffectSpies();
@@ -153,7 +157,7 @@ describe('US3 state-variant cross-product — empty state (T042)', () => {
     setSearch('');
   });
 
-  it.each(PANE_NAMES)('%s — empty state renders heading + description', async (paneName) => {
+  it.each(STATE_PANE_NAMES)('%s — empty state renders heading + description', async (paneName) => {
     const panes = await importPanes();
     const Component = panes[paneName];
     const spies = setupSideEffectSpies();
@@ -182,7 +186,7 @@ describe('US3 state-variant cross-product — error state (T042)', () => {
     setSearch('');
   });
 
-  it.each(PANE_NAMES)('%s — error state renders heading + description', async (paneName) => {
+  it.each(STATE_PANE_NAMES)('%s — error state renders heading + description', async (paneName) => {
     const panes = await importPanes();
     const Component = panes[paneName];
     const spies = setupSideEffectSpies();
