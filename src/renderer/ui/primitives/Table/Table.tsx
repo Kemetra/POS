@@ -36,7 +36,7 @@ export function Table<Row extends Record<string, unknown>>({
         {state === 'loading' && (
           <tr>
             <td colSpan={columns.length}>
-              <span role="status">Loading…</span>
+              <output>Loading…</output>
             </td>
           </tr>
         )}

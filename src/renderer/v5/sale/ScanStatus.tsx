@@ -29,11 +29,11 @@ export function ScanStatus(props: { available: boolean }): JSX.Element {
   if (!props.available) kind = 'unavailable';
   else if (dialogOpen) kind = 'dialog';
   return (
-    <p className="v5-live-scan-status" role="status" data-state={kind} data-testid="scan-status">
+    <output className="v5-live-scan-status" data-state={kind} data-testid="scan-status">
       <span aria-hidden="true" className="v5-live-scan-status-icon">
         <V5Icon name="scan" />
       </span>
       <span>{COPY[kind]}</span>
-    </p>
+    </output>
   );
 }

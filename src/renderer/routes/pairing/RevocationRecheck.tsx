@@ -83,11 +83,7 @@ export function RevocationRecheck(props: { pairing: PairingBridgeAPI }): JSX.Ele
       >
         {checking ? RECHECK_PENDING_LABEL : RECHECK_LABEL}
       </button>
-      {message !== null ? (
-        <p role="status" data-testid="recheck-message">
-          {message}
-        </p>
-      ) : null}
+      {message !== null ? <output data-testid="recheck-message">{message}</output> : null}
     </div>
   );
 }

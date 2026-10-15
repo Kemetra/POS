@@ -50,14 +50,9 @@ export function StuckShiftsState({
 export function StuckShiftsLoading(): JSX.Element {
   return (
     <StuckShiftsState>
-      <p
-        className="v5-stuck-muted"
-        role="status"
-        aria-busy="true"
-        data-testid="stuck-shift-surface-loading"
-      >
+      <output className="v5-stuck-muted" aria-busy="true" data-testid="stuck-shift-surface-loading">
         {COPY.loading}
-      </p>
+      </output>
     </StuckShiftsState>
   );
 }

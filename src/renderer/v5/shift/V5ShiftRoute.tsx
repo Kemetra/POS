@@ -125,11 +125,7 @@ function ShiftOutcome({ outcome }: { outcome: Outcome }): JSX.Element {
   }
   if (outcome.kind === 'recorded') {
     const text = outcome.movement === 'payIn' ? SHIFT_COPY.recordedIn : SHIFT_COPY.recordedOut;
-    return (
-      <p className="v5-shift-outcome" role="status">
-        {text}
-      </p>
-    );
+    return <output className="v5-shift-outcome">{text}</output>;
   }
   const { varianceMinor, currencyCode } = outcome.closed;
   return (

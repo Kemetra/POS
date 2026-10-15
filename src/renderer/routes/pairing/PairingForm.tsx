@@ -219,11 +219,11 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
           disabled={submitting}
         />
       </div>
-      <div className="v5-entry__slot" id={STATUS_ID} role="status">
+      <output className="v5-entry__slot" id={STATUS_ID}>
         {statusMessage !== null ? (
           <RefusalNotice testId="pairing-message">{statusMessage}</RefusalNotice>
         ) : null}
-      </div>
+      </output>
       <button
         type="submit"
         className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"

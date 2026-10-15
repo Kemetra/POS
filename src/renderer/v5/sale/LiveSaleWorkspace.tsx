@@ -128,9 +128,7 @@ function CartHydrationState(props: { failed: boolean; onRetry: () => void }): JS
   if (!props.failed) {
     return (
       <div className="v5-live-state">
-        <p role="status" className="v5-live-message">
-          جارٍ تحميل السلة الحالية…
-        </p>
+        <output className="v5-live-message">جارٍ تحميل السلة الحالية…</output>
       </div>
     );
   }
