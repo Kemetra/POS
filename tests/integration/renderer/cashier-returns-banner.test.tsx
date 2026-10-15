@@ -8,7 +8,7 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { registerOperatorHandlers } from '../../../src/main/ipc/operator.js';
 import { OPERATOR_IPC_CHANNELS } from '../../../src/shared/operator/channels.js';
 import { ShiftClosedBanner } from '../../../src/renderer/ui/operator/ShiftClosedBanner.js';
-import { AppShell } from '../../../src/renderer/shell/AppShell.js';
+import { V5AppLayout } from '../../../src/renderer/v5/frame/V5AppLayout.js';
 import { SalesWorkspace } from '../../../src/renderer/routes/app/SalesWorkspace.js';
 import { useOperatorSessionStore } from '../../../src/renderer/stores/operator-session-store.js';
 import type { OperatorSessionView } from '../../../src/renderer/stores/operator-session-store.js';
@@ -253,11 +253,11 @@ function stubDismissBridgeCall(): ReturnType<typeof vi.fn> {
   return fn;
 }
 
-function renderAllowedShellRoute(): void {
+function renderAllowedFrameRoute(): void {
   render(
     <MemoryRouter initialEntries={['/app/sales']}>
       <Routes>
-        <Route element={<AppShell />}>
+        <Route element={<V5AppLayout />}>
           <Route path="/app/sales" element={<SalesWorkspace />} />
         </Route>
       </Routes>
@@ -316,15 +316,15 @@ describe('ShiftClosedBanner — component', () => {
   });
 });
 
-// ── AppShell — cashier-reachable banner integration ────────────────────────
+// ── V5 frame — cashier-reachable banner integration ────────────────────────
 
-describe('AppShell — banner from store', () => {
+describe('V5 frame — banner from store', () => {
   it('renders banner when signedIn state has forced_close_notice', () => {
     stubDismissBridgeCall();
     // Manually transition store to signingIn then resolveSignedIn with notice
     useOperatorSessionStore.getState().beginSignIn();
     useOperatorSessionStore.getState().resolveSignedIn(SESSION_VIEW, { closed_at: CLOSED_AT });
-    renderAllowedShellRoute();
+    renderAllowedFrameRoute();
     expect(screen.getByTestId('shift-closed-banner')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'المبيعات' })).toBeInTheDocument();
   });
@@ -333,7 +333,7 @@ describe('AppShell — banner from store', () => {
     stubDismissBridgeCall();
     useOperatorSessionStore.getState().beginSignIn();
     useOperatorSessionStore.getState().resolveSignedIn(SESSION_VIEW);
-    renderAllowedShellRoute();
+    renderAllowedFrameRoute();
     expect(screen.queryByTestId('shift-closed-banner')).not.toBeInTheDocument();
   });
 
@@ -342,7 +342,7 @@ describe('AppShell — banner from store', () => {
     const user = userEvent.setup();
     useOperatorSessionStore.getState().beginSignIn();
     useOperatorSessionStore.getState().resolveSignedIn(SESSION_VIEW, { closed_at: CLOSED_AT });
-    renderAllowedShellRoute();
+    renderAllowedFrameRoute();
     expect(screen.getByTestId('shift-closed-banner')).toBeInTheDocument();
     await user.click(screen.getByTestId('shift-closed-banner-dismiss'));
     expect(screen.queryByTestId('shift-closed-banner')).not.toBeInTheDocument();

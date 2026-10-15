@@ -312,6 +312,33 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
     }
   });
 
+  // RT-504: ported from `AppShell.printer-failure-banner.test.tsx` (T291).
+  it('renders no printer banner and no drawer notice when the projection has no failure (both null)', async () => {
+    const subscribe = vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok',
+        banner_state: { printer_failure: null, drawer_failure: null },
+      }),
+    );
+    (window as unknown as { api?: unknown }).api = {
+      sales: { subscribe, unsubscribe: vi.fn(() => Promise.resolve()) },
+      receipts: { reprint: vi.fn(), manualOverride: vi.fn() },
+    };
+    signIn('cashier');
+    try {
+      const { container } = render(<V5OperationalNotices />);
+      await waitFor(() => {
+        expect(subscribe).toHaveBeenCalledWith({ topic: 'banner_state' });
+      });
+      expect(screen.queryByText('فشل طباعة الإيصال')).toBeNull();
+      expect(screen.queryByTestId('printer-failure-banner')).toBeNull();
+      expect(screen.queryByTestId('drawer-notice')).toBeNull();
+      expect(container).toBeEmptyDOMElement();
+    } finally {
+      delete (window as unknown as { api?: unknown }).api;
+    }
+  });
+
   it('renders nothing when there is no notice and no bridge, signed in or out', () => {
     const signedOut = render(<V5OperationalNotices />);
     expect(signedOut.container).toBeEmptyDOMElement();
@@ -419,6 +446,15 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
     signIn('cashier');
     renderFrame();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  // RT-504: ported from `AppShell.layout.test.tsx` (RT-240, I-7). Nothing
+  // measures the connection, so a green «Online» would claim an unproven state.
+  it('renders no connection pill', () => {
+    signIn('cashier');
+    const { container } = renderFrame();
+    expect(container.querySelector('[data-connection-state]')).toBeNull();
+    expect(screen.queryByText('Online')).toBeNull();
   });
 });
 
