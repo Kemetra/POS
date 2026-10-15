@@ -1,0 +1,63 @@
+/*
+ * RT-530 — the v5 sale void screen and notices. Tokens only (DESIGN.md): the
+ * list rows share the shift panels hairline surface, status colour only on the
+ * refused row and the banner, logical properties only.
+ */
+
+.v5-void {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.v5-void-text {
+  font-family: inherit;
+}
+
+.v5-void-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-void-row {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-void-row[data-attention='true'] {
+  border-color: var(--color-danger, currentColor);
+}
+
+.v5-void-row p {
+  margin: 0;
+}
+
+.v5-void-row__head {
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-void-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.v5-void-banner p {
+  margin: 0;
+}
+
+.v5-void-link {
+  margin: 0;
+  padding-inline: var(--space-4);
+}

@@ -566,6 +566,47 @@ export interface ManagerApprovalGrantedPayload {
   reason_code: string;
 }
 
+// ─── RT-530 — manager-approved sale void ──────────────────────────────────
+//
+// The requesting operator is the envelope's `acting_operator_id`, the terminal
+// its `originating_terminal_id`, the approving manager its
+// `approving_supervisor_id` (users.id). Payloads carry the sale, the bound
+// amount, the approval and policy and closed codes; never a PIN or envelope.
+
+/** `sale.void.requested` — the approval was consumed and the void journaled. */
+export interface SaleVoidRequestedPayload {
+  void_id: string;
+  sale_id: string;
+  amount_minor: number;
+  currency_code: string;
+  business_date: string;
+  approval_id: string;
+  policy_version: string;
+  approved_at: string;
+  requester_user_id: string;
+}
+
+/** `sale.void.confirmed` — Backend-Core recorded the void (a replay counts). */
+export interface SaleVoidConfirmedPayload {
+  void_id: string;
+  sale_id: string;
+  void_ref: string;
+  amount_minor: number;
+  currency_code: string;
+  replayed: boolean;
+}
+
+/** `sale.void.refused` — Backend-Core refused the void; terminal, visible to staff. */
+export interface SaleVoidRefusedPayload {
+  void_id: string;
+  sale_id: string;
+  reason: string;
+  amount_minor: number;
+  currency_code: string;
+  approval_id: string;
+  policy_version: string;
+}
+
 /** `manager_approval.refused` — what was asked; never why (C3), never a PIN. */
 export interface ManagerApprovalRefusedPayload {
   action_kind: string;
@@ -652,6 +693,10 @@ export type AuditPayloadMap = {
   // RT-443
   'manager_approval.granted': ManagerApprovalGrantedPayload;
   'manager_approval.refused': ManagerApprovalRefusedPayload;
+  // RT-530
+  'sale.void.requested': SaleVoidRequestedPayload;
+  'sale.void.confirmed': SaleVoidConfirmedPayload;
+  'sale.void.refused': SaleVoidRefusedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

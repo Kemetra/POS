@@ -83,3 +83,22 @@ describe('feature-flags-store — shiftCashup (RT-17 slice 4, default off)', () 
     expect(useFeatureFlagsStore.getState().shiftCashup).toBe(false);
   });
 });
+
+describe('feature-flags-store — saleVoid (RT-530, default off)', () => {
+  it('defaults saleVoid to false (fail-closed)', () => {
+    expect(useFeatureFlagsStore.getState().saleVoid).toBe(false);
+  });
+
+  it('hydrates saleVoid only from an explicit true', () => {
+    useFeatureFlagsStore.getState().hydrate({ saleVoid: 'yes' as unknown as boolean });
+    expect(useFeatureFlagsStore.getState().saleVoid).toBe(false);
+    useFeatureFlagsStore.getState().hydrate({ saleVoid: true });
+    expect(useFeatureFlagsStore.getState().saleVoid).toBe(true);
+  });
+
+  it('reset restores saleVoid to false', () => {
+    useFeatureFlagsStore.getState().hydrate({ saleVoid: true });
+    useFeatureFlagsStore.getState().reset();
+    expect(useFeatureFlagsStore.getState().saleVoid).toBe(false);
+  });
+});

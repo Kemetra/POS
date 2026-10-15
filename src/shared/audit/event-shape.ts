@@ -114,6 +114,15 @@ export const AUDIT_ACTION_CATEGORIES = [
   // grant. Payload ids and closed codes only; never a PIN.
   'manager_approval.granted',
   'manager_approval.refused',
+  // RT-530 — a finalized sale voided with a bound manager approval. Local
+  // journal events: requested (the approval consumed, the void queued, the
+  // approver in `approving_supervisor_id`), confirmed (Backend-Core recorded
+  // it) and refused (Backend-Core refused it: terminal). Payload ids, minor
+  // units and closed codes only; never a PIN or an envelope. Open-set at the
+  // SQL layer (0004); recorded in migration 0054 header.
+  'sale.void.requested',
+  'sale.void.confirmed',
+  'sale.void.refused',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 

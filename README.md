@@ -121,6 +121,7 @@ The terminal is well past the foundation slices. As of the baseline below, `main
 | Sale capture-up: outbox, drain engine, idempotent retry, dead-letter | Implemented and wired in the composition root; live end-to-end validation is tracked separately | n/a | [`011`](specs/011-sale-sync-capture-up) |
 | Returns (manager/admin, `/app/returns`) | Implemented | `POS_PULSE_FEATURE_RETURNS` | tracked in Jira RT |
 | Shift cash-up (open, pay-in/out, blind-count close, manager approval) and its sync | Implemented | `POS_PULSE_FEATURE_SHIFT_CASHUP` | tracked in Jira RT |
+| Manager-approved void of a finalized sale (`/app/void`, offline queue, same business day) | Implemented | `POS_PULSE_FEATURE_SALE_VOID` | RT-530; needs Backend-Core `sales.yaml` 1.8.0-draft |
 | Dashboard, audit, inventory, and settings screens | Navigation placeholders only | n/a | n/a |
 | Local audit events | Implemented locally; the audit sync module exists but is not wired into the app | n/a | [`004`](specs/004-operator-session) |
 | Egyptian VAT and fiscal receipt | Not implemented | n/a | [`012`](specs/012-vat-fiscal-receipt) (seed only) |

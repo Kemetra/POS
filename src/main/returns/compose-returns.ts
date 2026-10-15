@@ -12,6 +12,7 @@ import type { DatabaseHandle } from '../db/client.js';
 import type { DrawerKickTransport } from '../drawer/drawer-kick-transport.js';
 import type { PrintPipeline } from '../receipts/print-pipeline.js';
 import { bindSalesRepository } from '../sales/repositories/sales.repository.js';
+import { createSaleVoidRepository } from '../sale-void/sale-void-repository.js';
 import { DEFAULT_CURRENCY_CODE } from '../sales-sync/create-sale-sync-client.js';
 import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import { createReturnsAudit, type ReturnsAuditSink } from './returns-audit.js';
@@ -100,6 +101,8 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const views = viewsWithPayouts(payouts, now);
   const sales = bindSalesRepository(deps.db);
   const audit = createReturnsAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
+  // RT-530: a sale with a live void (requested, sent or confirmed) is not returnable.
+  const saleVoids = createSaleVoidRepository(deps.db);
   const authorizer = createReturnsAuthorizer({
     isEnabled: deps.isEnabled,
     getSession: deps.getSession,
@@ -122,6 +125,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
     captureCurrencyCode: deps.captureCurrencyCode ?? DEFAULT_CURRENCY_CODE,
     sales,
     saleRefs: createSaleSyncStateRepo(deps.db),
+    voids: { blocksReturn: (saleId) => saleVoids.liveForSale(saleId) !== null },
     client,
     repo,
     dispatcher,

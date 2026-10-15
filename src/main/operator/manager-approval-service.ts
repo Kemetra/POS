@@ -59,6 +59,13 @@ export interface ApprovalSubject {
    * manager who is signed in. Absent for a cashier's own request.
    */
   requesterOperatorId?: string;
+  /**
+   * RT-530 — a sale void's selling operator, as a lower-case `users.id`, when
+   * the terminal can prove it (a cashier sale's `selling_user_id`). The approver
+   * is never this person (owner decision 4); Backend-Core re-checks it against
+   * `sales.created_by`.
+   */
+  sellerUserId?: string;
 }
 
 /** Main's view of one kind's subject for this session, or null when not approvable. */
@@ -66,6 +73,16 @@ export type ApprovalSubjectResolver = (input: {
   subjectRef: string;
   session: OperatorSessionRecord;
 }) => ApprovalSubject | null;
+
+/** RT-530 — what a consumed approval proved, read back to bind a void's evidence. */
+export interface ApprovalEvidence {
+  approverUserId: string;
+  /** The requester's `users.id` as recorded; null for a recovery approval. */
+  requesterUserId: string | null;
+  policyVersion: string;
+  /** When the approval was granted (the terminal clock). */
+  issuedAt: string;
+}
 
 export type ApprovalRequestOutcome =
   | { kind: 'approved'; approvalId: string }
@@ -94,6 +111,8 @@ export interface ManagerApprovalService {
   request(input: ManagerApprovalRequest): Promise<ApprovalRequestOutcome>;
   /** Synchronous: call it inside the action's own SQLite transaction. */
   consume(input: ConsumeApprovalInput): ConsumeApprovalOutcome;
+  /** RT-530: the evidence of a granted approval (read inside the consuming transaction). */
+  evidence(approvalId: string): ApprovalEvidence | null;
 }
 
 export interface ManagerApprovalServiceDeps {
@@ -120,6 +139,9 @@ interface ApprovalRow {
   amount_minor: number | null;
   requester_operator_id: string;
   approver_user_id: string;
+  requester_user_id: string | null;
+  policy_version: string;
+  issued_at: string;
   expires_at: string;
   consumed_at: string | null;
 }
@@ -136,7 +158,8 @@ const INSERT = `
 
 const SELECT = `
   SELECT tenant_id, branch_id, terminal_id, action_kind, subject_ref, subject_version,
-         amount_minor, requester_operator_id, approver_user_id, expires_at, consumed_at
+         amount_minor, requester_operator_id, approver_user_id, requester_user_id, policy_version,
+         issued_at, expires_at, consumed_at
     FROM manager_approvals WHERE approval_id = ?`;
 
 const CONSUME = `UPDATE manager_approvals SET consumed_at = ?
@@ -173,9 +196,12 @@ function isManagerSession(session: OperatorSessionRecord): boolean {
 /**
  * C6: who may ask. A cashier asks for a manager's approval; a manager / admin
  * acts directly, except the self-unlock and (RT-441) recovery, where the
- * signed-in manager approves an action on another operator's sale.
+ * signed-in manager approves an action on another operator's sale, and
+ * (RT-530) a sale void, which ANY operator needs a different manager's
+ * approval for (owner decision 4: no self-void).
  */
 function mayRequest(session: OperatorSessionRecord, kind: ManagerActionKind): boolean {
+  if (kind === 'sale.void') return true;
   if (isRecoveryKind(kind)) return isManagerSession(session);
   return kind === 'session.self_unlock' || session.role === 'cashier';
 }
@@ -190,10 +216,12 @@ function approverAllowed(
   kind: ManagerActionKind,
   session: OperatorSessionRecord,
   approverUserId: string,
+  sellerUserId: string | undefined,
 ): boolean {
   if (isRecoveryKind(kind)) {
     return approverUserId === session.manager_user_id?.toLowerCase();
   }
+  if (kind === 'sale.void' && approverUserId === sellerUserId) return false;
   return kind === 'session.self_unlock' || approverUserId !== requesterUserIdOf(session);
 }
 
@@ -293,7 +321,7 @@ export function createManagerApprovalService(
       const before = resolve(kind, input.subject_ref, session);
       if (before === null) return refused('approval_invalid');
 
-      const approverUserId = await verifyApprover(input, session, scope);
+      const approverUserId = await verifyApprover(input, session, scope, before.sellerUserId);
       if (approverUserId === null) {
         audit({
           session,
@@ -339,6 +367,17 @@ export function createManagerApprovalService(
       if (changes !== 1) return refused('approval_invalid') as ConsumeApprovalOutcome;
       return { kind: 'consumed', approverUserId: row.approver_user_id };
     },
+
+    evidence(approvalId) {
+      const row = (deps.db.prepare(SELECT) as Get).get(approvalId);
+      if (row === undefined) return null;
+      return {
+        approverUserId: row.approver_user_id,
+        requesterUserId: row.requester_user_id,
+        policyVersion: row.policy_version,
+        issuedAt: row.issued_at,
+      };
+    },
   };
 
   /**
@@ -350,6 +389,7 @@ export function createManagerApprovalService(
     input: ManagerApprovalRequest,
     session: OperatorSessionRecord,
     scope: ManagerPinScope,
+    sellerUserId: string | undefined,
   ): Promise<string | null> {
     const verdict = await deps.managerPins.verify({
       scope,
@@ -361,7 +401,8 @@ export function createManagerApprovalService(
       actor: { operatorId: session.operator_id, sessionId: session.id },
     });
     if (verdict.kind !== 'verified') return null;
-    return approverAllowed(input.action_kind, session, verdict.userId) ? verdict.userId : null;
+    const allowed = approverAllowed(input.action_kind, session, verdict.userId, sellerUserId);
+    return allowed ? verdict.userId : null;
   }
 
   /** Step 6: after the PIN's await, a different or locked session, or a moved subject. */

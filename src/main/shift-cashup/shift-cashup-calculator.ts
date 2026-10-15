@@ -21,6 +21,12 @@
  *   • a refund: the server-confirmed `return_total_minor` the RT-15 payout paid
  *     from this drawer, and its server return reference (`return_ref`), which
  *     the close reports in `cashRefundReturnRefs`.
+ *   • a void (RT-530): a finalized sale voided with a manager approval. The
+ *     sale's net cash goes back to the customer like a cash refund, so it is
+ *     counted in `cashRefundsTotalMinor` (the close's refund total) in the
+ *     window the void was REQUESTED, whatever shift sold it; it names no
+ *     return, so it adds no `cashRefundReturnRefs` entry. The server records
+ *     the close totals verbatim and checks only the arithmetic invariant.
  *
  * A source that cannot be read faithfully is refused (`ShiftCashupSourceError`)
  * rather than guessed: an unreadable tender summary, a refund amount that is
@@ -73,6 +79,8 @@ export interface CashupInput {
   payOutTotalMinor: number;
   sales: readonly CashupSale[];
   refunds: readonly CashupRefund[];
+  /** RT-530: the sales voided in the window (each counted once, as a cash refund). */
+  voids?: readonly CashupSale[];
 }
 
 /** The computed cash-up of a window (the close adds the counted cash). */
@@ -152,6 +160,18 @@ function saleCash(sale: CashupSale): bigint {
   );
 }
 
+/**
+ * RT-530: the net drawer cash of ONE sale's frozen tender summary (a void of
+ * that sale takes it back out of the drawer). Refused like any unreadable
+ * source: throws `ShiftCashupSourceError`.
+ */
+export function saleNetCashMinor(tenderLinesSummaryJson: string): number {
+  const cash = saleCash({ tenderLinesSummaryJson });
+  if (cash > BigInt(Number.MAX_SAFE_INTEGER))
+    throw new ShiftCashupSourceError('total_out_of_range');
+  return Number(cash);
+}
+
 function refundAmount(refund: CashupRefund, currencyCode: string): bigint {
   if (!isSafeNonNegative(refund.amountMinor)) {
     throw new ShiftCashupSourceError('invalid_refund');
@@ -178,10 +198,12 @@ function within(max: number, total: bigint): number {
 /** The cash-up of one window. Pure; see the module header. */
 export function computeCashup(input: CashupInput): Cashup {
   const cashSales = input.sales.reduce<bigint>((sum, sale) => sum + saleCash(sale), 0n);
-  const cashRefunds = input.refunds.reduce<bigint>(
+  const returnedCash = input.refunds.reduce<bigint>(
     (sum, refund) => sum + refundAmount(refund, input.currencyCode),
     0n,
   );
+  const voidedCash = (input.voids ?? []).reduce<bigint>((sum, sale) => sum + saleCash(sale), 0n);
+  const cashRefunds = returnedCash + voidedCash;
   const expected =
     BigInt(input.openingFloatMinor) +
     cashSales -

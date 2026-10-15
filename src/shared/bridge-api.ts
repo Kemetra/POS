@@ -15,6 +15,7 @@ import type { ReturnsBridgeAPI } from './returns/types.js';
 import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
 import type { ManagerApprovalBridgeAPI } from './operator/manager-approval.js';
 import type { RecoveryBridgeAPI } from './operator/recovery.js';
+import type { SaleVoidBridgeAPI } from './sale-void/types.js';
 
 export type {
   ReturnJournalView,
@@ -857,6 +858,12 @@ export interface PreloadBridgeAPI {
    * only, each action with its own approval; totals and opaque ids only.
    */
   recovery?: RecoveryBridgeAPI;
+  /**
+   * RT-530: manager-approved sale void (`saleVoid.*`) — find a finalized sale,
+   * void it with a bound manager approval, and see the queued voids (and any
+   * Backend-Core refused). Totals, ids and closed codes only.
+   */
+  saleVoid?: SaleVoidBridgeAPI;
 }
 
 /**

@@ -593,6 +593,7 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
       payOutTotalMinor: open.payOutTotalMinor,
       sales: deps.sources.salesIn(query),
       refunds: deps.sources.refundsIn(query),
+      voids: deps.sources.voidsIn(query),
     });
   }
 

@@ -25,6 +25,7 @@ import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
 import { CheckoutRoute } from './routes/app/checkout/CheckoutRoute';
 import { CashiersScreen } from './v5/cashiers/CashiersScreen';
 import { RecoveryRoute } from './v5/recovery/RecoveryRoute';
+import { VoidRoute } from './v5/void/VoidRoute';
 import { StuckShiftSurface } from './ui/operator/ForcedCloseSurface';
 import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
@@ -273,6 +274,11 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             { index: true, element: <AppIndexRedirect /> },
             { path: 'dashboard', element: <DashboardRoute /> },
             { path: 'sales', element: <SalesWorkspace /> },
+            // RT-530 — «إلغاء بيع»: void a finalized sale with another manager
+            // PIN, and the queued voids. Any signed-in operator; the route leaves
+            // for /app while POS_PULSE_FEATURE_SALE_VOID is off, and main
+            // re-checks the flag and the session on every call.
+            { path: 'void', element: <VoidRoute /> },
             // PR #434 FIX 1 — gate BOTH to manager/admin (owner decision). The
             // role-visibility-matrix marks the Audit surface ⛔ cashier, and a
             // signed-in cashier must NOT reach either. Same nested guard

@@ -97,5 +97,16 @@ export interface AppConfig {
      * started. Stays off until the slice 4 UI and verification are done.
      */
     shiftCashup?: boolean;
+    /**
+     * RT-530 — enables the manager-approved void of a finalized sale
+     * (`saleVoid.*`, the void screen and the queued-void notices).
+     *
+     * Defaults to `false`. Flip via `POS_PULSE_FEATURE_SALE_VOID` in main.
+     * Fail-closed: with it off every `saleVoid.*` call is refused
+     * `feature_disabled` and nothing is journaled or sent. Turn it on only
+     * after Backend-Core's `sales.yaml` 1.8.0-draft void enforcement is
+     * deployed: a void without it is refused by an older server.
+     */
+    saleVoid?: boolean;
   };
 }

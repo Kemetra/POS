@@ -74,6 +74,13 @@ export interface ReturnsServiceDeps {
   readonly authorizer: ReturnsAuthorizer;
   readonly sales: Pick<SalesRepository, 'findByNumber'>;
   readonly saleRefs: Pick<SaleSyncStateRepo, 'findServerSaleRefBySaleId'>;
+  /**
+   * RT-530: a sale with a live void (requested, sent or confirmed) is not
+   * returnable here, whatever Backend-Core has recorded so far: a return would
+   * make the void a 409. Absent: no void guard (the server's own `voided` still
+   * refuses a confirmed one).
+   */
+  readonly voids?: { readonly blocksReturn: (saleId: string) => boolean };
   readonly client: Pick<ReturnsClient, 'readSale'>;
   readonly repo: ReturnsRepository;
   readonly dispatcher: ReturnsDispatcher;
@@ -199,6 +206,8 @@ class ReturnsService implements ReturnsCoreAPI {
       terminal_id: terminalId,
     });
     if (row === null) return 'sale_not_found';
+    // RT-530: a live void takes the sale out of the return flow before any network call.
+    if (this.deps.voids?.blocksReturn(row.sale_id) === true) return 'sale_voided';
     // D-c: a contradicting local tender refuses before any network call.
     if (localTenderEvidence(row) === 'non_cash') return 'card_tender_blocked';
     return row;
