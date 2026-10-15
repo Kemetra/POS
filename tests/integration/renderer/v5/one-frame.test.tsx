@@ -4,7 +4,8 @@
  * through the REAL AppRouter: one <main>, one primary nav, the screen as a
  * labelled region, and no legacy shell anywhere. Route guards are unchanged
  * (cashier-route-enumeration.test.tsx keeps proving them). Content is not
- * recomposed here; S10-2 … S10-6 do that per surface.
+ * recomposed here; S10-2 … S10-6 do that per surface (RT-503 / S10-6 did the
+ * honest pages: audit, inventory, diagnostics, settings, force-fail).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
@@ -24,10 +25,10 @@ const FORMER_SHELL_ROUTES: ReadonlyArray<{ path: string; heading: RegExp; curren
   { path: '/app/dashboard', heading: /لوحة المتابعة/, current: 'لوحة المتابعة' },
   { path: '/app/sales', heading: /^المبيعات$/, current: 'المبيعات' },
   { path: '/app/returns', heading: /المرتجعات/, current: 'المرتجعات' },
-  { path: '/app/audit', heading: /audit/i, current: 'سجل المراجعة' },
-  { path: '/app/inventory', heading: /inventory/i, current: 'المخزون' },
-  { path: '/app/inventory/diagnostics', heading: /catalogue diagnostics/i, current: 'المخزون' },
-  { path: '/app/settings', heading: /settings/i, current: 'الإعدادات' },
+  { path: '/app/audit', heading: /سجل المراجعة/, current: 'سجل المراجعة' },
+  { path: '/app/inventory', heading: /المخزون/, current: 'المخزون' },
+  { path: '/app/inventory/diagnostics', heading: /فحص الكتالوج/, current: 'المخزون' },
+  { path: '/app/settings', heading: /الإعدادات/, current: 'الإعدادات' },
   { path: '/app/manager/stuck-shifts', heading: /الورديات العالقة/, current: 'لوحة المتابعة' },
   { path: '/app/manager/force-fail', heading: /إنهاء دفع معلّق/, current: 'لوحة المتابعة' },
 ];
@@ -129,4 +130,63 @@ describe('one frame — every former AppShell route renders in the v5 frame', ()
     expect(screen.getByTestId('v5-frame')).toBe(v5);
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
   });
+});
+
+describe('RT-503 (S10-6) — the honest pages in the real router', () => {
+  it('force-fail: «إنهاء دفع معلّق», the neutral notice and a link to «المبيعات المعلقة»', async () => {
+    signInAs('manager');
+    renderAppAt('/app/manager/force-fail');
+    const main = within(await frame()).getByRole('main');
+    expect(
+      await within(main).findByRole('heading', { level: 1, name: 'إنهاء دفع معلّق' }),
+    ).toBeInTheDocument();
+    const notice = within(main).getByTestId('manager-force-fail-route-placeholder');
+    expect(notice).toHaveTextContent('هذه الصفحة تُفتح من دفع معلّق فقط.');
+    expect(within(notice).getByRole('link', { name: 'المبيعات المعلقة' })).toHaveAttribute(
+      'href',
+      '/app/manager/recovery',
+    );
+    expect(main.textContent).not.toMatch(/[A-Za-z]/);
+  });
+
+  it('force-fail is still manager/admin only: a cashier never sees the notice', async () => {
+    signInAs('cashier');
+    renderAppAt('/app/manager/force-fail');
+    await frame();
+    expect(screen.queryByTestId('manager-force-fail-route-placeholder')).not.toBeInTheDocument();
+  });
+
+  it('inventory links to the diagnostics page, which keeps the one frame', async () => {
+    const user = userEvent.setup();
+    signInAs('manager');
+    renderAppAt('/app/inventory');
+    const v5 = await frame();
+    await user.click(await within(v5).findByRole('link', { name: /فحص الكتالوج/ }));
+    const main = within(v5).getByRole('main');
+    expect(
+      await within(main).findByRole('heading', { level: 1, name: 'فحص الكتالوج' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('v5-frame')).toBe(v5);
+  });
+
+  it('settings offers no control and no theme toggle', async () => {
+    signInAs('manager');
+    renderAppAt('/app/settings');
+    const main = within(await frame()).getByRole('main');
+    expect(
+      await within(main).findByRole('heading', { level: 1, name: 'الإعدادات' }),
+    ).toBeInTheDocument();
+    expect(within(main).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it.each(['/app/audit', '/app/inventory', '/app/inventory/diagnostics', '/app/settings'])(
+    '%s shows no «Coming soon»',
+    async (path) => {
+      signInAs('manager');
+      renderAppAt(path);
+      const main = within(await frame()).getByRole('main');
+      await within(main).findByRole('heading', { level: 1 });
+      expect(main.textContent).not.toMatch(/coming soon/i);
+    },
+  );
 });

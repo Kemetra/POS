@@ -547,7 +547,7 @@ describe('SC-003 path 30 — /app/audit (✅ manager)', () => {
       expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
       expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
-      expect(screen.getByText(/audit log view is not yet available/i)).toBeInTheDocument();
+      expect(screen.getByText('سجل المراجعة لا يُعرض على هذا الجهاز.')).toBeInTheDocument();
     });
   });
 });
@@ -571,7 +571,7 @@ describe('SC-003 path 32 — /app/audit (✅ admin)', () => {
       expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
       expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
-      expect(screen.getByText(/audit log view is not yet available/i)).toBeInTheDocument();
+      expect(screen.getByText('سجل المراجعة لا يُعرض على هذا الجهاز.')).toBeInTheDocument();
     });
   });
 });

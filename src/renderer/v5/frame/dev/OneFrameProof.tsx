@@ -47,6 +47,10 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store'
  * `close` = refused | state_invalid | ok (what `forceCloseShift` answers:
  * `invalid_input`, `state_invalid` or `forced_closed`; default refused, as
  * before). `shifts=some` now holds three shifts, one with a very long name.
+ *
+ * `payments` = on | off (the payments feature flag, so `/app/checkout`
+ * can show its flag-off notice; default on); `search` = none | results (what
+ * the diagnostics search answers: not found, or twelve items; default none).
  */
 
 export interface OneFrameProofParams {
@@ -60,6 +64,8 @@ export interface OneFrameProofParams {
   shift: 'on' | 'off';
   list: 'ok' | 'unreachable';
   close: 'refused' | 'state_invalid' | 'ok';
+  payments: 'on' | 'off';
+  search: 'none' | 'results';
 }
 
 function oneOf<T extends string>(raw: string | null, allowed: readonly T[], fallback: T): T {
@@ -80,6 +86,8 @@ export function readOneFrameProofParams(): OneFrameProofParams {
     shift: oneOf(params.get('shift'), ['on', 'off'], 'off'),
     list: oneOf(params.get('list'), ['ok', 'unreachable'], 'ok'),
     close: oneOf(params.get('close'), ['refused', 'state_invalid', 'ok'], 'refused'),
+    payments: oneOf(params.get('payments'), ['on', 'off'], 'on'),
+    search: oneOf(params.get('search'), ['none', 'results'], 'none'),
   };
 }
 
@@ -246,6 +254,19 @@ const returnsBridge: ReturnsBridgeAPI = {
   reprintSlip: () => Promise.resolve({ kind: 'refused', reason: 'return_not_found' }),
 };
 
+const PROOF_SEARCH_HITS = 12;
+
+function catalogueSearch(search: OneFrameProofParams['search']): unknown {
+  if (search === 'none') return { kind: 'not_found' };
+  return {
+    kind: 'results',
+    items: Array.from({ length: PROOF_SEARCH_HITS }, (_, i) => ({
+      product_id: `proof-${String(i)}`,
+    })),
+    truncated: false,
+  };
+}
+
 /** The read-only bridges the moved screens touch on mount, in memory. */
 export function installWindowApi(params: OneFrameProofParams): void {
   (window as unknown as { api?: unknown }).api = {
@@ -256,7 +277,7 @@ export function installWindowApi(params: OneFrameProofParams): void {
       freshness: () =>
         Promise.resolve({ kind: 'ok', last_success_at: '2026-10-15T09:42:00Z', is_empty: false }),
       refresh: () => Promise.resolve({ kind: 'started' }),
-      search: () => Promise.resolve({ kind: 'not_found' }),
+      search: () => Promise.resolve(catalogueSearch(params.search)),
     },
     receipts: receiptsBridge(params.reprint),
     sales: {
@@ -278,7 +299,7 @@ export function OneFrameProof(): JSX.Element {
   installWindowApi(params);
   useFeatureFlagsStore.getState().hydrate({
     cart: true,
-    payments: true,
+    payments: params.payments === 'on',
     productSearch: true,
     returns: params.returns === 'on',
     ...(params.shift === 'on' ? { shiftCashup: true } : {}),

@@ -36,6 +36,7 @@ import { ErrorScreen } from './v5/foundation/ErrorScreen';
 import { RouteLoading } from './v5/foundation/RouteLoading';
 import { SupportedViewport } from './v5/foundation/SupportedViewport';
 import { ScreenSection } from './v5/foundation/ScreenSection';
+import { ForceFailNotice } from './v5/manager/honest/ForceFailNotice';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -391,13 +392,11 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
  * guard test (precedent: `manager/cashiers` + `manager/stuck-shifts`).
  */
 function ManagerForceFailRoutePlaceholder(): JSX.Element {
-  // RT-498 (VN-S10 S10-1): a section inside the v5 frame, which owns the one
-  // <main>. The text is unchanged; S10-6 replaces it with the G-6 notice.
+  // RT-503 (VN-S10 S10-6): a section inside the v5 frame, which owns the one
+  // <main>, with the G-6 neutral notice and the way to «المبيعات المعلقة».
   return (
     <ScreenSection title="إنهاء دفع معلّق">
-      <p data-testid="manager-force-fail-route-placeholder">
-        Navigate here with a payment attempt to force-fail.
-      </p>
+      <ForceFailNotice />
     </ScreenSection>
   );
 }

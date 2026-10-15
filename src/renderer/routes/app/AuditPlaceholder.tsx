@@ -1,22 +1,21 @@
 /**
- * POS v3.5 Slice 1 — AuditPlaceholder (thin "coming soon" pane).
- *
- * The Audit surface is a later display slice (a chronological, append-only
- * audit log of every accountable action — see prototype README §8). Until that
- * slice lands, the nav entry routes here to a thin placeholder so the 7-entry
- * rail is fully reachable without implying functionality.
+ * RT-503 (VN-S10 S10-6) — the Audit screen says, honestly and in Arabic, that
+ * the audit log is not shown on this terminal (G-6 state 10). It implies no log
+ * exists.
  *
  * Navigation-only: no fetch, no IPC, no persistence, no audit-log read.
  */
 import type { JSX } from 'react';
 import { ScreenSection } from '../../v5/foundation/ScreenSection';
+import { HonestNotice } from '../../v5/manager/honest/HonestNotice';
+import { HONEST_COPY } from '../../v5/manager/honest/honest-copy';
 
 export function AuditPlaceholder(): JSX.Element {
   return (
-    <ScreenSection title="Audit">
-      <section className="placeholder-pane">
-        <p>The audit log view is not yet available at this terminal. Coming soon.</p>
-      </section>
+    <ScreenSection title={HONEST_COPY.audit.title}>
+      <div className="v5-honest-state">
+        <HonestNotice notice={HONEST_COPY.audit.notice} />
+      </div>
     </ScreenSection>
   );
 }

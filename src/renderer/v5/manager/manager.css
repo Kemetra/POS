@@ -1,0 +1,248 @@
+/*
+ * RT-503 (VN-S10 S10-6) — the honest manager pages on the frozen G-6 references
+ * (docs/design/vnext/visual-acceptance/G6-Manager/g6.css), in v5 tokens: an
+ * honest notice, a link tile, the read-only diagnostics panels. Two tiers like
+ * the frame: comfortable at 1280+, the floor tier below 1280.
+ */
+
+/* A page whose only content is an honest notice (and, on Inventory, a link tile). */
+.v5-honest-state {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.v5-honest-state .v5-notice {
+  align-items: center;
+  inline-size: min(560px, 100%);
+}
+
+/* The notice is neutral, not informational: grey rule, muted glyph (G-6 notice-neutral). */
+.v5-honest-state .v5-notice[data-tone='info'] {
+  --tone-ink: var(--color-border);
+  --tone-soft: var(--color-surface-elevated);
+}
+
+.v5-honest-state .v5-tone-icon {
+  color: var(--color-text-muted);
+}
+
+.v5-manager-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-manager-btn:focus-visible,
+.v5-manager-tile:focus-visible,
+.v5-manager-input:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── link tile (Inventory → فحص الكتالوج) ───────────────────────── */
+.v5-manager-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-content: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-manager-tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  min-block-size: 96px;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.v5-manager-tile__glyph {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+.v5-manager-tile__title {
+  font-size: var(--type-section);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-manager-tile__hint {
+  color: var(--color-text-muted);
+}
+
+/* ── diagnostics: sub-line and the 2×2 panel grid ───────────────── */
+.v5-manager-sub {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.v5-diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-content: start;
+  min-block-size: 0;
+}
+
+.v5-manager-panel {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-manager-panel__head {
+  display: flex;
+  align-items: center;
+  min-block-size: 52px;
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-manager-panel__head h2 {
+  margin: 0;
+  font-size: var(--type-section);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-manager-panel__body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.v5-manager-panel__body p {
+  margin: 0;
+}
+
+.v5-manager-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px var(--space-4);
+  margin: 0;
+}
+
+.v5-manager-facts dt {
+  color: var(--color-text-muted);
+}
+
+.v5-manager-facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.v5-manager-facts dd.v5-manager-id,
+.v5-manager-id {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-family-mono);
+  font-size: 13px;
+  font-weight: var(--font-weight-regular);
+}
+
+.v5-manager-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.v5-manager-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.v5-manager-field {
+  display: grid;
+  gap: 6px;
+}
+
+.v5-manager-field label {
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-manager-input {
+  block-size: 48px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 16px;
+}
+
+@media (max-width: 1279px) {
+  .v5-manager-tile {
+    min-block-size: 88px;
+    padding: var(--space-3);
+  }
+
+  .v5-manager-btn {
+    padding-inline: var(--space-3);
+  }
+}
+
+@media (forced-colors: active) {
+  .v5-honest-state .v5-notice,
+  .v5-manager-btn,
+  .v5-manager-tile,
+  .v5-manager-panel,
+  .v5-manager-input {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-manager-tile__glyph {
+    border: 1px solid CanvasText;
+    color: CanvasText;
+  }
+
+  /* An anchor would take the system link colour; the action is a button. */
+  .v5-manager-btn {
+    color: ButtonText;
+  }
+
+  .v5-manager-tile,
+  .v5-manager-tile__title,
+  .v5-manager-tile__hint {
+    color: CanvasText;
+  }
+
+  .v5-manager-btn:focus-visible,
+  .v5-manager-tile:focus-visible,
+  .v5-manager-input:focus-visible {
+    outline-color: Highlight;
+  }
+}

@@ -56,9 +56,9 @@ const PANE_NAMES: PaneName[] = [
   'SettingsHelpPlaceholder',
 ];
 
-// RT-500 (S10-3): the Sales lookup left the dev `?state=` gallery with its
-// English loading/empty/error variants, so only its default state is crossed.
-const STATE_PANE_NAMES = PANE_NAMES.filter((name) => name !== 'SalesWorkspace');
+// RT-500 (S10-3) and RT-503 (S10-6): Sales, Inventory and Settings left the dev
+// `?state=` gallery with its English loading / empty / error variants, so only
+// their default state is crossed.
 
 function renderPane(Component: React.ComponentType) {
   return render(
@@ -109,88 +109,6 @@ describe('US3 state-variant cross-product — default state (T042)', () => {
     // Each pane must have at least a heading in its default state
     const headings = screen.getAllByRole('heading');
     expect(headings.length).toBeGreaterThan(0);
-
-    assertNoSideEffects(spies);
-    await expectNoAxeViolations(container);
-  });
-});
-
-describe('US3 state-variant cross-product — loading state (T042)', () => {
-  beforeEach(() => {
-    setSearch('?state=loading');
-  });
-  afterEach(() => {
-    cleanup();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-    setSearch('');
-  });
-
-  it.each(STATE_PANE_NAMES)('%s — loading state renders role="status"', async (paneName) => {
-    const panes = await importPanes();
-    const Component = panes[paneName];
-    const spies = setupSideEffectSpies();
-    const { container } = renderPane(Component);
-
-    // LoadingState uses role="status" per task spec T012
-    expect(screen.getByRole('status')).toBeInTheDocument();
-
-    assertNoSideEffects(spies);
-    await expectNoAxeViolations(container);
-  });
-});
-
-describe('US3 state-variant cross-product — empty state (T042)', () => {
-  beforeEach(() => {
-    setSearch('?state=empty');
-  });
-  afterEach(() => {
-    cleanup();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-    setSearch('');
-  });
-
-  it.each(STATE_PANE_NAMES)('%s — empty state renders heading + description', async (paneName) => {
-    const panes = await importPanes();
-    const Component = panes[paneName];
-    const spies = setupSideEffectSpies();
-    const { container } = renderPane(Component);
-
-    // EmptyState uses a heading + paragraph structure (no role="status")
-    const heading = screen.getByRole('heading');
-    expect(heading).toBeInTheDocument();
-    // Must have at least a paragraph / description text
-    const paragraphs = container.querySelectorAll('p');
-    expect(paragraphs.length).toBeGreaterThan(0);
-
-    assertNoSideEffects(spies);
-    await expectNoAxeViolations(container);
-  });
-});
-
-describe('US3 state-variant cross-product — error state (T042)', () => {
-  beforeEach(() => {
-    setSearch('?state=error');
-  });
-  afterEach(() => {
-    cleanup();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-    setSearch('');
-  });
-
-  it.each(STATE_PANE_NAMES)('%s — error state renders heading + description', async (paneName) => {
-    const panes = await importPanes();
-    const Component = panes[paneName];
-    const spies = setupSideEffectSpies();
-    const { container } = renderPane(Component);
-
-    // ErrorState uses a heading + paragraph structure (no role="status")
-    const heading = screen.getByRole('heading');
-    expect(heading).toBeInTheDocument();
-    const paragraphs = container.querySelectorAll('p');
-    expect(paragraphs.length).toBeGreaterThan(0);
 
     assertNoSideEffects(spies);
     await expectNoAxeViolations(container);

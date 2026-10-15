@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
 import { ScreenSection } from '../../v5/foundation/ScreenSection';
+import { DIAGNOSTICS_COPY } from '../../v5/manager/diagnostics/diagnostics-copy';
+import { searchMessage } from '../../v5/manager/diagnostics/diagnostics-model';
+import {
+  CountsPanel,
+  DevicePanel,
+  SearchPanel,
+  SyncPanel,
+} from '../../v5/manager/diagnostics/DiagnosticsPanels';
 import type {
   CatalogueBridgeAPI,
   CatalogueCountsResponse,
@@ -72,23 +80,20 @@ function readBridge(): DiagnosticsBridge {
   };
 }
 
-function formatFreshness(f: CatalogueFreshnessResponse | null): string {
-  if (f === null) return '…';
-  if (f.kind === 'refused') return 'unavailable';
-  if (f.last_success_at === null) return 'never synced';
-  return f.is_empty ? `synced (empty) — ${f.last_success_at}` : `synced — ${f.last_success_at}`;
-}
-
 export function CatalogueDiagnostics(props: CatalogueDiagnosticsProps): JSX.Element {
   // Local handle is intentionally NOT named `bridge`: the T007b no-backend guard
   // forbids any `bridge.<namespace>` identifier access in renderer route/ui code
   // (only `pairing` is allowlisted). These are already narrowed flat method refs.
-  const calls = props.bridge ?? readBridge();
+  // Resolved once per injected bridge. Rebuilt on every render, the handles would
+  // re-run the mount effect each time, and every answer (a new object) would
+  // trigger the next render: an endless read loop against the bridge.
+  const injected = props.bridge;
+  const calls = useMemo(() => injected ?? readBridge(), [injected]);
 
   const [pairing, setPairing] = useState<PairingStatus | null>(null);
   const [counts, setCounts] = useState<CatalogueCountsResponse | null>(null);
   const [freshness, setFreshness] = useState<CatalogueFreshnessResponse | null>(null);
-  const [refreshStatus, setRefreshStatus] = useState<string>('');
+  const [refreshKind, setRefreshKind] = useState<CatalogueRefreshResponse['kind'] | null>(null);
   const [query, setQuery] = useState<string>('');
   const [searchResult, setSearchResult] = useState<CatalogueSearchResponse | null>(null);
 
@@ -135,7 +140,7 @@ export function CatalogueDiagnostics(props: CatalogueDiagnosticsProps): JSX.Elem
     }
     // Honest status only — never claim completion (P9-2). The promote's effect
     // surfaces on the next freshness/counts read, which we kick off non-blocking.
-    setRefreshStatus(res.kind);
+    setRefreshKind(res.kind);
     void loadFreshness();
     void loadCounts();
   }, [calls, loadCounts, loadFreshness]);
@@ -167,87 +172,21 @@ export function CatalogueDiagnostics(props: CatalogueDiagnosticsProps): JSX.Elem
       : null;
 
   return (
-    <ScreenSection title="Catalogue Diagnostics">
-      <div className="catalogue-diagnostics" data-testid="catalogue-diagnostics">
-        <section data-testid="diagnostics-pairing">
-          <h2>Terminal</h2>
-          {pairedFields === null ? (
-            <p>Not paired.</p>
-          ) : (
-            <dl>
-              <dt>Tenant</dt>
-              <dd>{pairedFields.tenant_id}</dd>
-              <dt>Store</dt>
-              <dd>{pairedFields.branch_id}</dd>
-              <dt>Terminal</dt>
-              <dd>{pairedFields.terminal_id}</dd>
-              <dt>Label</dt>
-              <dd>{pairedFields.terminal_label}</dd>
-            </dl>
-          )}
-        </section>
-
-        <section data-testid="diagnostics-sync">
-          <h2>Catalogue sync</h2>
-          <p>
-            <span data-testid="diagnostics-sync-state">{formatFreshness(freshness)}</span>
-          </p>
-          <button type="button" data-testid="diagnostics-refresh" onClick={() => void onRefresh()}>
-            Refresh
-          </button>
-          {refreshStatus !== '' && (
-            <span data-testid="diagnostics-refresh-status">{refreshStatus}</span>
-          )}
-        </section>
-
-        <section data-testid="diagnostics-counts">
-          <h2>Local read model</h2>
-          {counts === null || counts.kind === 'refused' ? (
-            <p>unavailable</p>
-          ) : (
-            <ul>
-              <li>Products: {counts.products}</li>
-              <li>Barcodes/aliases: {counts.barcodes}</li>
-            </ul>
-          )}
-        </section>
-
-        {/*
-          POS v3.5 Phase 4 — stock / expiry / availability are part of the
-          v3.5 inventory design but have no renderer-facing data source yet
-          (deferred to POS-013, G2-gated). Surfaced as an honest coming-soon
-          section — never a fabricated figure.
-        */}
-        <section
-          className="diagnostics-section--coming-soon"
-          data-testid="diagnostics-stock-coming-soon"
-          data-functional="false"
-        >
-          <h2>
-            Stock &amp; expiry
-            <span className="diagnostics-badge">Coming soon</span>
-          </h2>
-          <p>On-hand stock, batch expiry, and availability arrive with the inventory contract.</p>
-        </section>
-
-        <section data-testid="diagnostics-search">
-          <h2>Search local catalogue (read-only)</h2>
-          <input
-            type="search"
-            aria-label="Search local catalogue"
-            value={query}
-            onChange={(e) => void onSearch(e.target.value)}
-          />
-          <div data-testid="diagnostics-search-results">
-            {searchResult === null
-              ? null
-              : searchResult.kind === 'results'
-                ? `${String(searchResult.items.length)} match(es)`
-                : searchResult.kind === 'not_found'
-                  ? 'no matches'
-                  : 'unavailable'}
-          </div>
-        </section>
+    <ScreenSection title={DIAGNOSTICS_COPY.title}>
+      <p className="v5-manager-sub">{DIAGNOSTICS_COPY.sub}</p>
+      <div className="v5-diagnostics-grid" data-testid="catalogue-diagnostics">
+        <DevicePanel paired={pairedFields} />
+        <SyncPanel
+          freshness={freshness}
+          refreshKind={refreshKind}
+          onRefresh={() => void onRefresh()}
+        />
+        <CountsPanel counts={counts} />
+        <SearchPanel
+          query={query}
+          onQueryChange={(q) => void onSearch(q)}
+          message={searchMessage(searchResult)}
+        />
       </div>
     </ScreenSection>
   );

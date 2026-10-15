@@ -337,7 +337,7 @@ describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
     await expectNoAxeViolations(screen.getByTestId('v5-frame'));
   });
 
-  it('respects the payments flag at checkout: off → the reserved placeholder, still in the frame', async () => {
+  it('respects the payments flag at checkout: off → the Arabic notice and a way back, still in the frame', async () => {
     signInCashier({ cart: true, payments: false, productSearch: true });
     renderAt('/app/checkout');
     await waitFor(() => {
@@ -345,6 +345,14 @@ describe('/app/cart — v5 frame + live Sale (023 Slice G cutover)', () => {
     });
     expect(screen.queryByTestId('payment-surface')).not.toBeInTheDocument();
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 1, name: 'الدفع' })).toBeInTheDocument();
+    expect(screen.getByText('الدفع غير مفعّل على هذا الجهاز.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'العودة إلى البيع' })).toHaveAttribute(
+      'href',
+      '/app/cart',
+    );
+    expect(document.querySelector('[data-slot-id]')).toBeNull();
   });
 
   it('renders every other /app screen in the same v5 frame (RT-498)', async () => {

@@ -26,8 +26,8 @@ import { useFeatureFlagsStore } from '../../../../../src/renderer/stores/feature
  *   1. navigate to /app/checkout, and
  *   2. mount the live PaymentSurface (data-testid="payment-surface").
  *
- * It also asserts the flag-OFF fallback: /app/checkout renders the reserved
- * CheckoutPlaceholder, not PaymentSurface.
+ * It also asserts the flag-OFF fallback: /app/checkout renders the Arabic
+ * CheckoutPlaceholder notice (RT-503), not PaymentSurface.
  */
 
 const MANAGER_SESSION = {
@@ -386,7 +386,7 @@ describe('cart → checkout wiring (006 mount)', () => {
     expect(screen.getByText(/لا توجد أصناف في السلة/)).toBeInTheDocument();
   });
 
-  it('checkout route falls back to the reserved placeholder when payments flag is off', async () => {
+  it('checkout route falls back to the Arabic notice when payments flag is off', async () => {
     useFeatureFlagsStore.getState().hydrate({ cart: true, payments: false });
     useOperatorSessionStore.getState().hydrateSignedIn(MANAGER_SESSION);
 
@@ -399,7 +399,7 @@ describe('cart → checkout wiring (006 mount)', () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByText(/reserved for feature 005-checkout-payments/i)).toBeInTheDocument(),
+      expect(screen.getByText('الدفع غير مفعّل على هذا الجهاز.')).toBeInTheDocument(),
     );
     expect(screen.queryByTestId('payment-surface')).not.toBeInTheDocument();
   });
