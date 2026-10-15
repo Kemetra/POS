@@ -85,12 +85,14 @@ export function createSettlementCommitter(deps: SettlementCommitterDeps): Settle
       const event = auditEmitter.buildPaymentSettled(settled);
       const txn = db.transaction((): ConfirmOutcome => {
         const outcome = paymentAttemptFsm.confirm(confirm);
-        if (outcome.kind === 'refused') return outcome;
-        attemptsRepo.recordSellingOperatorDisplayName({
-          payment_attempt_id: confirm.payment_attempt_id,
-          selling_operator_display_name: settled.selling_operator_display_name,
-        });
-        auditEmitter.emitRaw(event);
+        // A refusal wrote nothing, so it passes through with nothing added.
+        if (outcome.kind === 'ok') {
+          attemptsRepo.recordSellingOperatorDisplayName({
+            payment_attempt_id: confirm.payment_attempt_id,
+            selling_operator_display_name: settled.selling_operator_display_name,
+          });
+          auditEmitter.emitRaw(event);
+        }
         return outcome;
       });
       return txn();
