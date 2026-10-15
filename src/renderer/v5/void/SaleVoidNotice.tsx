@@ -63,7 +63,8 @@ export function SaleVoidNotice({ bridge, refreshMs = 15_000 }: Props): JSX.Eleme
   const enabled = useFeatureFlagsStore((s) => s.saleVoid);
   const signedIn = useOperatorSessionStore((s) => s.state.kind === 'signedIn');
   const api = bridge === undefined ? windowBridge() : bridge;
-  if (api === null || !(enabled && signedIn)) return null;
+  if (!enabled || !signedIn) return null;
+  if (api === null) return null;
   return <RoutedNotice bridge={api} refreshMs={refreshMs} />;
 }
 

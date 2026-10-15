@@ -358,8 +358,14 @@ export function createSaleVoidService(deps: SaleVoidServiceDeps): SaleVoidServic
     async list(): Promise<SaleVoidListResponse> {
       const admitted = admit();
       if (admitted.kind !== 'ok') return admitted;
-      const rows = deps.repo.listRecent(admitted.session.scope, SALE_VOID_LIST_LIMIT);
-      return { kind: 'list', voids: rows.map(journalView) };
+      const scope = admitted.session.scope;
+      const recent = deps.repo.listRecent(scope, SALE_VOID_LIST_LIMIT);
+      // A refusal stays visible until acknowledged, however many newer voids exist.
+      const listed = new Set(recent.map((row) => row.voidId));
+      const olderRefused = deps.repo
+        .listUnacknowledgedRefused(scope)
+        .filter((row) => !listed.has(row.voidId));
+      return { kind: 'list', voids: [...recent, ...olderRefused].map(journalView) };
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await

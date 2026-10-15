@@ -92,6 +92,10 @@ function isDue(entry: VoidEntry, nowMs: number, policy: BackoffPolicy): boolean 
 
 const sameUser = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
+/** Same tenant, branch and terminal: a re-paired or moved session is another sender. */
+const sameScope = (a: VoidScope, b: VoidScope): boolean =>
+  a.tenantId === b.tenantId && a.branchId === b.branchId && a.terminalId === b.terminalId;
+
 type Tally = { confirmed: number; refused: number; unresolved: number };
 
 export function createSaleVoidSync(deps: SaleVoidSyncDeps): SaleVoidSync {
@@ -112,60 +116,52 @@ export function createSaleVoidSync(deps: SaleVoidSyncDeps): SaleVoidSync {
     });
   }
 
-  function applyRecorded(
+  /** Commit one terminal transition with its audit; count it only when it changed the row. */
+  function settle(
     entry: VoidEntry,
-    outcome: Extract<RecordVoidOutcome, { kind: 'recorded' }>,
+    counter: 'confirmed' | 'refused',
+    transition: () => boolean,
+    audit: (fresh: VoidEntry) => void,
     tally: Tally,
   ): void {
-    const changed = commit(
-      entry,
-      () =>
-        deps.repo.markConfirmed({
-          voidId: entry.voidId,
-          voidRef: outcome.eventRef,
-          now: deps.now(),
-        }),
-      (fresh) => {
-        deps.audit.confirmed(fresh, outcome.replayed);
-      },
-    );
-    if (changed) tally.confirmed += 1;
-  }
-
-  function applyRefused(
-    entry: VoidEntry,
-    outcome: Extract<RecordVoidOutcome, { kind: 'refused' }>,
-    tally: Tally,
-  ): void {
-    const changed = commit(
-      entry,
-      () =>
-        deps.repo.markRefused({ voidId: entry.voidId, reason: outcome.reason, now: deps.now() }),
-      (fresh) => {
-        deps.audit.refused(fresh);
-      },
-    );
-    if (changed) tally.refused += 1;
+    if (commit(entry, transition, audit)) tally[counter] += 1;
   }
 
   /** Apply one answer: the guarded transition and its audit, atomically. */
   function apply(entry: VoidEntry, outcome: RecordVoidOutcome, tally: Tally): void {
+    const { voidId } = entry;
     if (outcome.kind === 'recorded') {
-      applyRecorded(entry, outcome, tally);
+      settle(
+        entry,
+        'confirmed',
+        () => deps.repo.markConfirmed({ voidId, voidRef: outcome.eventRef, now: deps.now() }),
+        (fresh) => {
+          deps.audit.confirmed(fresh, outcome.replayed);
+        },
+        tally,
+      );
       return;
     }
     if (outcome.kind === 'refused') {
-      applyRefused(entry, outcome, tally);
+      settle(
+        entry,
+        'refused',
+        () => deps.repo.markRefused({ voidId, reason: outcome.reason, now: deps.now() }),
+        (fresh) => {
+          deps.audit.refused(fresh);
+        },
+        tally,
+      );
       return;
     }
     deps.repo.markUnknown({ voidId: entry.voidId, now: deps.now(), category: outcome.category });
     tally.unresolved += 1;
   }
 
-  /** The sender must still be the row's requester right before its POST. */
+  /** The sender must still be the row's requester, in the row's own scope, right before its POST. */
   function senderFor(entry: VoidEntry): VoidSender | null {
     const sender = deps.currentSender();
-    if (sender === null) return null;
+    if (sender === null || !sameScope(sender.scope, entry.scope)) return null;
     return sameUser(sender.operatorUserId, entry.requesterUserId) ? sender : null;
   }
 

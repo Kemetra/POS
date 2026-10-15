@@ -257,6 +257,28 @@ describe('single flight, ordering and shutdown', () => {
     expect(repo.read('v2')).toMatchObject({ state: 'pending', attemptCount: 0 });
   });
 
+  it('stops the pass when the same requester moves to another terminal scope mid-pass', async () => {
+    seedSale(db, { sale_id: 'sale-2' });
+    repo.insert(
+      newVoidEntry(2, {
+        saleId: 'sale-2',
+        approvalId: '0190f5a2-7b3c-7d4e-8f90-0000000000a2',
+        now: '2026-06-07T10:07:00.000Z',
+      }),
+    );
+    client.recordVoid.mockImplementation(() => {
+      sender = {
+        scope: { ...SCOPE, terminalId: 'term-2' },
+        operatorUserId: REQUESTER_USER,
+        envelope: 'envelope-of-the-requester-on-term-2',
+      };
+      return Promise.resolve(outcome);
+    });
+    await sync.tick();
+    expect(client.recordVoid).toHaveBeenCalledTimes(1);
+    expect(repo.read('v2')).toMatchObject({ state: 'pending', attemptCount: 0 });
+  });
+
   it('a send in flight at shutdown writes nothing when it settles', async () => {
     client.recordVoid.mockImplementationOnce(() => {
       stopped = true;

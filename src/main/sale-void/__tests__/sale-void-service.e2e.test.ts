@@ -38,7 +38,12 @@ import {
   type SaleVoidRepository,
 } from '../sale-void-repository.js';
 import { toVoidSender, toVoidSession } from '../sale-void-session.js';
-import { createSaleVoidService, type SaleVoidService } from '../sale-void-service.js';
+import {
+  createSaleVoidService,
+  SALE_VOID_LIST_LIMIT,
+  type SaleVoidService,
+} from '../sale-void-service.js';
+import { newVoidEntry } from './__helpers__/sale-void-fixture.js';
 
 const TERMINAL = 'term-1';
 const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: TERMINAL };
@@ -487,5 +492,29 @@ describe('lookup, list and acknowledge', () => {
       kind: 'refused',
       reason: 'invalid_input',
     });
+  });
+
+  it('keeps an older unacknowledged refusal listed beyond the recent limit', async () => {
+    await request('sale-1', await approvedId());
+    const refused = journal.listRecent(SCOPE, 1)[0];
+    if (refused === undefined) throw new Error('journaled void missing');
+    journal.markRefused({ voidId: refused.voidId, reason: 'void_self_approval', now: clock });
+    for (let n = 1; n <= SALE_VOID_LIST_LIMIT; n += 1) {
+      seedSale(raw, { sale_id: `bulk-${String(n)}` });
+      journal.insert(
+        newVoidEntry(n, {
+          voidId: `bulk-v${String(n)}`,
+          saleId: `bulk-${String(n)}`,
+          externalId: `pos-pulse-void:0190f5a2-7b3c-7d4e-8f91-${String(n).padStart(12, '0')}`,
+          approvalId: `0190f5a2-7b3c-7d4e-8f90-${String(n + 500).padStart(12, '0')}`,
+          now: `2026-06-07T11:${String(n % 60).padStart(2, '0')}:00.000Z`,
+        }),
+      );
+    }
+    const listed = await voids.list();
+    if (listed.kind !== 'list') throw new Error(`expected a list, got ${listed.kind}`);
+    expect(listed.voids.filter((v) => v.needs_attention).map((v) => v.void_id)).toEqual([
+      refused.voidId,
+    ]);
   });
 });
