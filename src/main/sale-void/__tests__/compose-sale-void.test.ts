@@ -3,7 +3,7 @@
  * and back, with a fake `fetch`: a void is requested with a real approval, held
  * until its sale has synced and its REQUESTER is signed in online, sent under
  * that requester's own envelope only (never another operator's, never a device
- * bearer), and a refusal after the business day changed stays visible.
+ * bearer), and a refusal by Backend-Core (for example its business day) stays visible.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Database as SqlJsDatabase } from 'sql.js';
@@ -269,7 +269,7 @@ describe('a void flows from the approval to Backend-Core under the requester env
     }
   });
 
-  it('after the business day changed the server refuses: a visible terminal refusal, never retried or dropped', async () => {
+  it('when Backend-Core refuses it for its business day, the refusal is visible and terminal, never retried or dropped', async () => {
     markSaleSynced();
     await monaRequestsVoid();
     clock = '2026-06-08T09:00:00.000Z';

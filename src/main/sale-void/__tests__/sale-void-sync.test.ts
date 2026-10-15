@@ -176,7 +176,7 @@ describe('what the server answers', () => {
     expect(repo.listUnacknowledgedRefused(SCOPE).map((e) => e.voidId)).toEqual(['v1']);
   });
 
-  it('a void that expired with the business day is a visible terminal refusal, not a drop', async () => {
+  it('a void refused for its business day is a visible terminal refusal, not a drop', async () => {
     outcome = { kind: 'refused', reason: 'void_outside_business_day' };
     clock = '2026-06-08T09:00:00.000Z';
     await sync.tick();
