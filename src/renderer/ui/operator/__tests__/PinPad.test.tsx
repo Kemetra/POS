@@ -337,7 +337,7 @@ describe('PinPadPreview — the PIN column before a cashier is picked', () => {
     render(<PinPadPreview prompt="اختر اسمك" />);
     expect(screen.getByTestId('pin-awaiting-selection')).toHaveTextContent('اختر اسمك');
     const keys = screen.getByTestId('pin-pad-preview').querySelectorAll('button');
-    expect(keys.length).toBe(12);
+    expect(keys).toHaveLength(12);
     for (const key of Array.from(keys)) expect(key).toBeDisabled();
   });
 

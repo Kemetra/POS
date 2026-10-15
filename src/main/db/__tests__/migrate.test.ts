@@ -741,6 +741,6 @@ describe('migration 0003_terminal_assignment', () => {
     const execCountBefore = execLog.length;
     runMigrations({ db: fakeDb, files: [file] });
     expect(applied.map((r) => r.name)).toEqual([MIGRATION_NAME]);
-    expect(execLog.length).toBe(execCountBefore);
+    expect(execLog).toHaveLength(execCountBefore);
   });
 });

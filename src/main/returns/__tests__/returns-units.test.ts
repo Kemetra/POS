@@ -118,12 +118,12 @@ describe('returnability and quoting', () => {
   });
 
   it('shows a null unit price when it is not whole minor units', () => {
-    expect(viewLines(wire({ lines: [saleLine({ unitPrice: '3.3333' })] }))[0]?.unitPriceMinor).toBe(
-      null,
-    );
-    expect(viewLines(wire({ lines: [saleLine({ unitPrice: 'n/a' })] }))[0]?.unitPriceMinor).toBe(
-      null,
-    );
+    expect(
+      viewLines(wire({ lines: [saleLine({ unitPrice: '3.3333' })] }))[0]?.unitPriceMinor,
+    ).toBeNull();
+    expect(
+      viewLines(wire({ lines: [saleLine({ unitPrice: 'n/a' })] }))[0]?.unitPriceMinor,
+    ).toBeNull();
   });
 
   it('refuses locally when returned + q would exceed the sold quantity (P2-3)', () => {

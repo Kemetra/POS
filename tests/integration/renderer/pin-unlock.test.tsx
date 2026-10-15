@@ -273,7 +273,7 @@ describe('T062 — operator:unlock-cashier IPC (manager unlock integration)', ()
     });
     await handler.unlockCashier({ event_id: randomUUID(), target_cashier_id: CASHIER_ID });
     // UPDATE must have been called with 0 for failed_attempt_count and NULL for lockout_until
-    expect(runCalls.length).toBe(1);
+    expect(runCalls).toHaveLength(1);
     expect(runCalls[0]).toContain(0); // failed_attempt_count = 0
     expect(runCalls[0]).toContain(null); // lockout_until = NULL
   });

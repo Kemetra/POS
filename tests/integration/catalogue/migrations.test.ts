@@ -577,7 +577,11 @@ describe('T020 — 009 S2 migrations (products / product_barcodes)', () => {
   });
 
   describe('DEFAULT values', () => {
-    it('active defaults to 1 (sellable) when omitted', () => {
+    it.each([
+      { column: 'active', expected: 1, note: '1 (sellable)' },
+      { column: 'controlled_substance', expected: 0, note: '0' },
+      { column: 'prescription_required', expected: 0, note: '0' },
+    ])('$column defaults to $note when omitted', ({ column, expected }) => {
       const db = freshDb();
       db.run(
         `INSERT INTO products
@@ -587,38 +591,8 @@ describe('T020 — 009 S2 migrations (products / product_barcodes)', () => {
                  'بنادول', 'بنادول', 100, 'standard', 'v1',
                  '2026-05-31T00:00:00.000Z', '2026-05-31T00:00:00.000Z')`,
       );
-      const r = db.exec("SELECT active FROM products WHERE product_id = 'p-def'");
-      expect(Number(r[0]?.values[0]?.[0])).toBe(1);
-      db.close();
-    });
-
-    it('controlled_substance defaults to 0 when omitted', () => {
-      const db = freshDb();
-      db.run(
-        `INSERT INTO products
-           (product_id, tenant_id, sku, sku_norm, name_ar, name_fold,
-            price_minor, tax_category, row_version, created_at, updated_at)
-         VALUES ('p-def', 'tenant-1', 'SKU-1', 'sku-1',
-                 'بنادول', 'بنادول', 100, 'standard', 'v1',
-                 '2026-05-31T00:00:00.000Z', '2026-05-31T00:00:00.000Z')`,
-      );
-      const r = db.exec("SELECT controlled_substance FROM products WHERE product_id = 'p-def'");
-      expect(Number(r[0]?.values[0]?.[0])).toBe(0);
-      db.close();
-    });
-
-    it('prescription_required defaults to 0 when omitted', () => {
-      const db = freshDb();
-      db.run(
-        `INSERT INTO products
-           (product_id, tenant_id, sku, sku_norm, name_ar, name_fold,
-            price_minor, tax_category, row_version, created_at, updated_at)
-         VALUES ('p-def', 'tenant-1', 'SKU-1', 'sku-1',
-                 'بنادول', 'بنادول', 100, 'standard', 'v1',
-                 '2026-05-31T00:00:00.000Z', '2026-05-31T00:00:00.000Z')`,
-      );
-      const r = db.exec("SELECT prescription_required FROM products WHERE product_id = 'p-def'");
-      expect(Number(r[0]?.values[0]?.[0])).toBe(0);
+      const r = db.exec(`SELECT ${column} FROM products WHERE product_id = 'p-def'`);
+      expect(Number(r[0]?.values[0]?.[0])).toBe(expected);
       db.close();
     });
   });

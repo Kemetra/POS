@@ -167,35 +167,17 @@ describe('PinManagementHandler.resetCashierPin', () => {
     expect(result).toMatchObject({ kind: 'refused', category: 'not_signed_in' });
   });
 
-  it('refuses with invalid_input when new_pin is too short (3 digits)', async () => {
+  it.each([
+    { name: 'is too short (3 digits)', new_pin: '123' },
+    { name: 'is too long (7 digits)', new_pin: '1234567' },
+    { name: 'contains non-digits', new_pin: '12ab' },
+  ])('refuses with invalid_input when new_pin $name', async ({ new_pin }) => {
     const deps = makeDeps();
     const handler = new PinManagementHandler(deps);
     const result = await handler.resetCashierPin({
       event_id: randomUUID(),
       target_cashier_id: CASHIER_ID,
-      new_pin: '123',
-    });
-    expect(result).toMatchObject({ kind: 'refused', category: 'invalid_input' });
-  });
-
-  it('refuses with invalid_input when new_pin is too long (7 digits)', async () => {
-    const deps = makeDeps();
-    const handler = new PinManagementHandler(deps);
-    const result = await handler.resetCashierPin({
-      event_id: randomUUID(),
-      target_cashier_id: CASHIER_ID,
-      new_pin: '1234567',
-    });
-    expect(result).toMatchObject({ kind: 'refused', category: 'invalid_input' });
-  });
-
-  it('refuses with invalid_input when new_pin contains non-digits', async () => {
-    const deps = makeDeps();
-    const handler = new PinManagementHandler(deps);
-    const result = await handler.resetCashierPin({
-      event_id: randomUUID(),
-      target_cashier_id: CASHIER_ID,
-      new_pin: '12ab',
+      new_pin,
     });
     expect(result).toMatchObject({ kind: 'refused', category: 'invalid_input' });
   });

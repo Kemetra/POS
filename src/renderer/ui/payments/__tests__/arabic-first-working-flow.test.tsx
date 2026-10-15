@@ -481,25 +481,22 @@ describe('T076 assertion self-check — detects each class of English gap', () =
     }).toThrow(/e\.g\./);
   });
 
-  it('accepts a bare Latin format token with no English prose around it', () => {
+  it.each([
+    {
+      name: 'accepts a bare Latin format token with no English prose around it',
+      html: '<input placeholder="VCH-000" />',
+    },
+    {
+      name: 'accepts a bilingual string (Arabic + Latin)',
+      html: '<span aria-label="نقدي — Cash">نقدي</span>',
+    },
+    {
+      name: 'accepts a formatted amount carrying the EGP code (RT-23)',
+      html: '<span dir="ltr">15.00 EGP</span>',
+    },
+  ])('$name', ({ html }) => {
     const el = document.createElement('div');
-    el.innerHTML = '<input placeholder="VCH-000" />';
-    expect(() => {
-      expectNoEnglishOnlyStrings(el, 'fixture');
-    }).not.toThrow();
-  });
-
-  it('accepts a bilingual string (Arabic + Latin)', () => {
-    const el = document.createElement('div');
-    el.innerHTML = '<span aria-label="نقدي — Cash">نقدي</span>';
-    expect(() => {
-      expectNoEnglishOnlyStrings(el, 'fixture');
-    }).not.toThrow();
-  });
-
-  it('accepts a formatted amount carrying the EGP code (RT-23)', () => {
-    const el = document.createElement('div');
-    el.innerHTML = '<span dir="ltr">15.00 EGP</span>';
+    el.innerHTML = html;
     expect(() => {
       expectNoEnglishOnlyStrings(el, 'fixture');
     }).not.toThrow();

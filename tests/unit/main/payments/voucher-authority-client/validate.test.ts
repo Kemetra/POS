@@ -143,52 +143,23 @@ describe('validateVoucher — closed-set refusal mapping', () => {
 });
 
 describe('validateVoucher — transport-tier outcomes', () => {
-  it('network failure → { kind: "authority_unreachable" }', async () => {
-    const { fetchImpl } = captureFetch(new Error('ECONNREFUSED'));
-    const result = await validateVoucher(VALIDATE_INPUT, {
-      baseUrl: BASE_URL,
-      fetch: fetchImpl,
-      logger: makeLogger(),
-      idempotencyKey: FAKE_IDEMPOTENCY_KEY,
-    });
-    expect(result).toEqual({ kind: 'authority_unreachable' });
-  });
-
-  it('5xx → { kind: "authority_unreachable" }', async () => {
-    const { fetchImpl } = captureFetch(bareResponse(503));
-    const result = await validateVoucher(VALIDATE_INPUT, {
-      baseUrl: BASE_URL,
-      fetch: fetchImpl,
-      logger: makeLogger(),
-      idempotencyKey: FAKE_IDEMPOTENCY_KEY,
-    });
-    expect(result).toEqual({ kind: 'authority_unreachable' });
-  });
-
-  it('401 → { kind: "authority_unreachable" }', async () => {
-    const { fetchImpl } = captureFetch(bareResponse(401));
-    const result = await validateVoucher(VALIDATE_INPUT, {
-      baseUrl: BASE_URL,
-      fetch: fetchImpl,
-      logger: makeLogger(),
-      idempotencyKey: FAKE_IDEMPOTENCY_KEY,
-    });
-    expect(result).toEqual({ kind: 'authority_unreachable' });
-  });
-
-  it('425 Too Early (in-flight idempotency) → { kind: "authority_unreachable" }', async () => {
-    const { fetchImpl } = captureFetch(bareResponse(425));
-    const result = await validateVoucher(VALIDATE_INPUT, {
-      baseUrl: BASE_URL,
-      fetch: fetchImpl,
-      logger: makeLogger(),
-      idempotencyKey: FAKE_IDEMPOTENCY_KEY,
-    });
-    expect(result).toEqual({ kind: 'authority_unreachable' });
-  });
-
-  it('200 with malformed body (garbage JSON) → { kind: "authority_unreachable" }', async () => {
-    const { fetchImpl } = captureFetch(new Response('garbage', { status: 200 }));
+  it.each<{ name: string; response: () => Response | Error }>([
+    {
+      name: 'network failure → { kind: "authority_unreachable" }',
+      response: () => new Error('ECONNREFUSED'),
+    },
+    { name: '5xx → { kind: "authority_unreachable" }', response: () => bareResponse(503) },
+    { name: '401 → { kind: "authority_unreachable" }', response: () => bareResponse(401) },
+    {
+      name: '425 Too Early (in-flight idempotency) → { kind: "authority_unreachable" }',
+      response: () => bareResponse(425),
+    },
+    {
+      name: '200 with malformed body (garbage JSON) → { kind: "authority_unreachable" }',
+      response: () => new Response('garbage', { status: 200 }),
+    },
+  ])('$name', async ({ response }) => {
+    const { fetchImpl } = captureFetch(response());
     const result = await validateVoucher(VALIDATE_INPUT, {
       baseUrl: BASE_URL,
       fetch: fetchImpl,

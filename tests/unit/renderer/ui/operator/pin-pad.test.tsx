@@ -39,23 +39,16 @@ afterEach(() => {
 // ─── 1. aria-disabled per digit count ────────────────────────────────────────
 
 describe('T060 — PinPad aria-disabled per digit count', () => {
-  it('is "true" at 0 digits (empty)', () => {
-    renderPinPad('');
-    expect(screen.getByTestId('pin-pad-enter')).toHaveAttribute('aria-disabled', 'true');
-  });
-
-  it('is "true" at 1 digit', () => {
-    renderPinPad('1');
-    expect(screen.getByTestId('pin-pad-enter')).toHaveAttribute('aria-disabled', 'true');
-  });
-
-  it('is "true" at 2 digits', () => {
-    renderPinPad('12');
-    expect(screen.getByTestId('pin-pad-enter')).toHaveAttribute('aria-disabled', 'true');
-  });
-
-  it(`is "true" at ${String(PIN_MIN_LENGTH - 1)} digits (one below minimum)`, () => {
-    renderPinPad('1'.repeat(PIN_MIN_LENGTH - 1));
+  it.each([
+    { title: '0 digits (empty)', pin: '' },
+    { title: '1 digit', pin: '1' },
+    { title: '2 digits', pin: '12' },
+    {
+      title: `${String(PIN_MIN_LENGTH - 1)} digits (one below minimum)`,
+      pin: '1'.repeat(PIN_MIN_LENGTH - 1),
+    },
+  ])('is "true" at $title', ({ pin }) => {
+    renderPinPad(pin);
     expect(screen.getByTestId('pin-pad-enter')).toHaveAttribute('aria-disabled', 'true');
   });
 

@@ -69,36 +69,33 @@ describe('T034 — catalogue.search wired to the repo', () => {
     db.close();
   });
 
-  it('returns too_short for a single-character query (min 2, FR-16)', async () => {
+  it.each([
+    {
+      name: 'returns too_short for a single-character query (min 2, FR-16)',
+      query: 'a',
+      seed: { product_id: 'p-1', name_en: 'Aspirin' },
+    },
+    {
+      name: 'returns too_short for an empty query',
+      query: '',
+      seed: { product_id: 'p-1', name_en: 'Aspirin' },
+    },
+    {
+      name: 'returns too_short for a whitespace-only query (normalizes to empty)',
+      query: '   ',
+      seed: { product_id: 'p-1', name_en: 'Aspirin' },
+    },
+    {
+      // A lone harakat (combining mark) is stripped by normalize() → empty.
+      name: 'returns too_short for a diacritic-only query (normalizes below 2 chars)',
+      query: 'ـً',
+      seed: { product_id: 'p-1', name_ar: 'بنادول' },
+    },
+  ])('$name', async ({ query, seed }) => {
     const db = freshCatalogueDb();
-    seedProduct(db, { product_id: 'p-1', name_en: 'Aspirin' });
+    seedProduct(db, seed);
 
-    expect((await bridgeFor(db).search({ query: 'a' })).kind).toBe('too_short');
-    db.close();
-  });
-
-  it('returns too_short for an empty query', async () => {
-    const db = freshCatalogueDb();
-    seedProduct(db, { product_id: 'p-1', name_en: 'Aspirin' });
-
-    expect((await bridgeFor(db).search({ query: '' })).kind).toBe('too_short');
-    db.close();
-  });
-
-  it('returns too_short for a whitespace-only query (normalizes to empty)', async () => {
-    const db = freshCatalogueDb();
-    seedProduct(db, { product_id: 'p-1', name_en: 'Aspirin' });
-
-    expect((await bridgeFor(db).search({ query: '   ' })).kind).toBe('too_short');
-    db.close();
-  });
-
-  it('returns too_short for a diacritic-only query (normalizes below 2 chars)', async () => {
-    const db = freshCatalogueDb();
-    seedProduct(db, { product_id: 'p-1', name_ar: 'بنادول' });
-
-    // A lone harakat (combining mark) is stripped by normalize() → empty.
-    expect((await bridgeFor(db).search({ query: 'ـً' })).kind).toBe('too_short');
+    expect((await bridgeFor(db).search({ query })).kind).toBe('too_short');
     db.close();
   });
 

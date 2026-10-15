@@ -125,106 +125,42 @@ describe('Sentry pairing breadcrumbs — T064', () => {
 
   // ── per-outcome: one breadcrumb per submit ─────────────────────────────────
 
-  it('success: adds exactly one breadcrumb with category="pairing"', async () => {
-    const service = createPairingService({
-      store: makeStore(),
-      network: makeNetwork({ type: 'success' }),
-      pairingLog: makeFakePairingLog(),
-      clock: () => new Date('2026-05-04T12:00:00.000Z'),
-    });
-    await service.submit('CODE');
-
-    expect(addBreadcrumbMock).toHaveBeenCalledTimes(1);
-    expect(getFirstBreadcrumb(addBreadcrumbMock)['category']).toBe('pairing');
-  });
-
-  it('invalid_code: adds exactly one breadcrumb with category="pairing"', async () => {
-    const service = createPairingService({
-      store: makeStore(),
-      network: makeNetwork({ type: 'failure', status: 400, code: 'INVALID_CODE' }),
-      pairingLog: makeFakePairingLog(),
-      clock: () => new Date('2026-05-04T12:00:00.000Z'),
-    });
-    await service.submit('CODE');
-
-    expect(addBreadcrumbMock).toHaveBeenCalledTimes(1);
-    expect(getFirstBreadcrumb(addBreadcrumbMock)['category']).toBe('pairing');
-  });
-
-  it('expired_code: adds exactly one breadcrumb with category="pairing"', async () => {
-    const service = createPairingService({
-      store: makeStore(),
-      network: makeNetwork({ type: 'failure', status: 410, code: 'EXPIRED_CODE' }),
-      pairingLog: makeFakePairingLog(),
-      clock: () => new Date('2026-05-04T12:00:00.000Z'),
-    });
-    await service.submit('CODE');
-
-    expect(addBreadcrumbMock).toHaveBeenCalledTimes(1);
-    expect(getFirstBreadcrumb(addBreadcrumbMock)['category']).toBe('pairing');
-  });
-
-  it('already_paired: adds exactly one breadcrumb with category="pairing"', async () => {
-    const service = createPairingService({
-      store: makeStore(),
-      network: makeNetwork({ type: 'failure', status: 409, code: 'ALREADY_PAIRED' }),
-      pairingLog: makeFakePairingLog(),
-      clock: () => new Date('2026-05-04T12:00:00.000Z'),
-    });
-    await service.submit('CODE');
-
-    expect(addBreadcrumbMock).toHaveBeenCalledTimes(1);
-    expect(getFirstBreadcrumb(addBreadcrumbMock)['category']).toBe('pairing');
-  });
-
-  it('branch_mismatch: adds exactly one breadcrumb with category="pairing"', async () => {
-    const service = createPairingService({
-      store: makeStore(),
-      network: makeNetwork({ type: 'failure', status: 409, code: 'BRANCH_MISMATCH' }),
-      pairingLog: makeFakePairingLog(),
-      clock: () => new Date('2026-05-04T12:00:00.000Z'),
-    });
-    await service.submit('CODE');
-
-    expect(addBreadcrumbMock).toHaveBeenCalledTimes(1);
-    expect(getFirstBreadcrumb(addBreadcrumbMock)['category']).toBe('pairing');
-  });
-
-  it('rate_limited: adds exactly one breadcrumb with category="pairing"', async () => {
-    const service = createPairingService({
-      store: makeStore(),
-      network: makeNetwork({
+  it.each<{ name: string; result: Parameters<typeof makeNetwork>[0] }>([
+    { name: 'success', result: { type: 'success' } },
+    {
+      name: 'invalid_code',
+      result: { type: 'failure', status: 400, code: 'INVALID_CODE' },
+    },
+    {
+      name: 'expired_code',
+      result: { type: 'failure', status: 410, code: 'EXPIRED_CODE' },
+    },
+    {
+      name: 'already_paired',
+      result: { type: 'failure', status: 409, code: 'ALREADY_PAIRED' },
+    },
+    {
+      name: 'branch_mismatch',
+      result: { type: 'failure', status: 409, code: 'BRANCH_MISMATCH' },
+    },
+    {
+      name: 'rate_limited',
+      result: {
         type: 'failure',
         status: 429,
         code: 'RATE_LIMITED',
         retry_after_s: 30,
-      }),
-      pairingLog: makeFakePairingLog(),
-      clock: () => new Date('2026-05-04T12:00:00.000Z'),
-    });
-    await service.submit('CODE');
-
-    expect(addBreadcrumbMock).toHaveBeenCalledTimes(1);
-    expect(getFirstBreadcrumb(addBreadcrumbMock)['category']).toBe('pairing');
-  });
-
-  it('network_error: adds exactly one breadcrumb with category="pairing"', async () => {
+      },
+    },
+    { name: 'network_error', result: { type: 'transport', timed_out: false } },
+    {
+      name: 'unknown_error',
+      result: { type: 'failure', status: 500, code: 'UNKNOWN_BACKEND_ERROR' },
+    },
+  ])('$name: adds exactly one breadcrumb with category="pairing"', async ({ result }) => {
     const service = createPairingService({
       store: makeStore(),
-      network: makeNetwork({ type: 'transport', timed_out: false }),
-      pairingLog: makeFakePairingLog(),
-      clock: () => new Date('2026-05-04T12:00:00.000Z'),
-    });
-    await service.submit('CODE');
-
-    expect(addBreadcrumbMock).toHaveBeenCalledTimes(1);
-    expect(getFirstBreadcrumb(addBreadcrumbMock)['category']).toBe('pairing');
-  });
-
-  it('unknown_error: adds exactly one breadcrumb with category="pairing"', async () => {
-    const service = createPairingService({
-      store: makeStore(),
-      network: makeNetwork({ type: 'failure', status: 500, code: 'UNKNOWN_BACKEND_ERROR' }),
+      network: makeNetwork(result),
       pairingLog: makeFakePairingLog(),
       clock: () => new Date('2026-05-04T12:00:00.000Z'),
     });

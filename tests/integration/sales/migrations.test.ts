@@ -207,33 +207,15 @@ function insertSale(
 
 describe('T027 — 008 Slice 1a migrations', () => {
   describe('schema presence', () => {
-    it('creates sales table', () => {
+    it.each([
+      'sales',
+      'print_events',
+      'drawer_events',
+      'sale_sync_outbox',
+      'sale_number_sequences',
+    ])('creates %s table', (table) => {
       const db = freshDb();
-      expect(tableExists(db, 'sales')).toBe(true);
-      db.close();
-    });
-
-    it('creates print_events table', () => {
-      const db = freshDb();
-      expect(tableExists(db, 'print_events')).toBe(true);
-      db.close();
-    });
-
-    it('creates drawer_events table', () => {
-      const db = freshDb();
-      expect(tableExists(db, 'drawer_events')).toBe(true);
-      db.close();
-    });
-
-    it('creates sale_sync_outbox table', () => {
-      const db = freshDb();
-      expect(tableExists(db, 'sale_sync_outbox')).toBe(true);
-      db.close();
-    });
-
-    it('creates sale_number_sequences table', () => {
-      const db = freshDb();
-      expect(tableExists(db, 'sale_number_sequences')).toBe(true);
+      expect(tableExists(db, table)).toBe(true);
       db.close();
     });
 

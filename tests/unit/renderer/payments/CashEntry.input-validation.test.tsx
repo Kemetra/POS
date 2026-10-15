@@ -46,12 +46,6 @@ describe('<CashEntry> — input only accepts non-negative integer minor units', 
     expect(input.value).not.toMatch(/^-/);
   });
 
-  it('accepts a 2-decimal currency keystroke (decimal point is now valid)', () => {
-    const { input } = setup();
-    fireEvent.change(input, { target: { value: '125.50' } });
-    expect(input.value).toBe('125.50');
-  });
-
   it('rejects more than 2 decimal places (no rounding)', () => {
     const { input } = setup();
     fireEvent.change(input, { target: { value: '125.555' } });
@@ -59,16 +53,18 @@ describe('<CashEntry> — input only accepts non-negative integer minor units', 
     expect(input.value).not.toBe('125.555');
   });
 
-  it('rejects alphabetic input', () => {
+  it.each([
+    {
+      title: 'accepts a 2-decimal currency keystroke (decimal point is now valid)',
+      typed: '125.50',
+      expected: '125.50',
+    },
+    { title: 'rejects alphabetic input', typed: 'abc', expected: '' },
+    { title: 'accepts a valid currency keystroke', typed: '150.00', expected: '150.00' },
+  ])('$title', ({ typed, expected }) => {
     const { input } = setup();
-    fireEvent.change(input, { target: { value: 'abc' } });
-    expect(input.value).toBe('');
-  });
-
-  it('accepts a valid currency keystroke', () => {
-    const { input } = setup();
-    fireEvent.change(input, { target: { value: '150.00' } });
-    expect(input.value).toBe('150.00');
+    fireEvent.change(input, { target: { value: typed } });
+    expect(input.value).toBe(expected);
   });
 
   it('keeps the value empty until a valid integer is entered', () => {

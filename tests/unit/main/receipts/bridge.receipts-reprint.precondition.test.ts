@@ -126,7 +126,7 @@ describe('T401 — receipts.reprint precondition: not_yet_printed', () => {
     expect(res.kind).toBe('refused');
     if (res.kind === 'refused') expect(res.reason).toBe('not_yet_printed');
     // No reprint row written, no audit emitted.
-    expect(bindPrintEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1').length).toBe(0);
+    expect(bindPrintEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1')).toHaveLength(0);
     expect(events.find((e) => e.action_category === 'sale.receipt.reprinted')).toBeUndefined();
   });
 

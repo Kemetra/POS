@@ -124,9 +124,9 @@ describe('T504 — manualOverride idempotency (already-overridden no-op)', () =>
     }
 
     const rows = bindPrintEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1');
-    expect(rows.filter((r) => r.outcome === 'manual_override').length).toBe(1);
+    expect(rows.filter((r) => r.outcome === 'manual_override')).toHaveLength(1);
     // Only one audit event emitted across the two calls.
-    expect(events.filter((e) => e.action_category === 'sale.receipt.manual_override').length).toBe(
+    expect(events.filter((e) => e.action_category === 'sale.receipt.manual_override')).toHaveLength(
       1,
     );
   });

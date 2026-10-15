@@ -75,25 +75,30 @@ afterEach(() => {
 });
 
 describe('022 T050 — role-aware /app index resolution (FR-44)', () => {
-  it('sends a CASHIER to /app/cart — the till, not a rejection', () => {
-    signInAs('cashier');
+  it.each([
+    {
+      name: 'sends a CASHIER to /app/cart — the till, not a rejection',
+      role: 'cashier' as const,
+      landed: 'landed-cart',
+      notLanded: 'landed-dashboard',
+    },
+    {
+      name: 'sends a MANAGER to /app/dashboard (unchanged)',
+      role: 'manager' as const,
+      landed: 'landed-dashboard',
+      notLanded: 'landed-cart',
+    },
+    {
+      name: 'sends an ADMIN to /app/dashboard (unchanged)',
+      role: 'admin' as const,
+      landed: 'landed-dashboard',
+      notLanded: 'landed-cart',
+    },
+  ])('$name', ({ role, landed, notLanded }) => {
+    signInAs(role);
     renderAppIndex();
-    expect(screen.getByTestId('landed-cart')).toBeInTheDocument();
-    expect(screen.queryByTestId('landed-dashboard')).not.toBeInTheDocument();
-  });
-
-  it('sends a MANAGER to /app/dashboard (unchanged)', () => {
-    signInAs('manager');
-    renderAppIndex();
-    expect(screen.getByTestId('landed-dashboard')).toBeInTheDocument();
-    expect(screen.queryByTestId('landed-cart')).not.toBeInTheDocument();
-  });
-
-  it('sends an ADMIN to /app/dashboard (unchanged)', () => {
-    signInAs('admin');
-    renderAppIndex();
-    expect(screen.getByTestId('landed-dashboard')).toBeInTheDocument();
-    expect(screen.queryByTestId('landed-cart')).not.toBeInTheDocument();
+    expect(screen.getByTestId(landed)).toBeInTheDocument();
+    expect(screen.queryByTestId(notLanded)).not.toBeInTheDocument();
   });
 
   it('falls back to the dashboard path when no session is present', () => {
