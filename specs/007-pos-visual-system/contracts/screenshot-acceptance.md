@@ -38,7 +38,7 @@ Every contact sheet covers, at minimum, these two viewports:
 
 | Viewport | Use | Display scaling tested |
 |:--|:--|:--|
-| **1280 × 800** | Primary cashier monitor (≥ 1280 px expanded rail) | 100 % (default), 125 %, 150 % |
+| **1280 × 800** | Primary cashier monitor (≥ 1280 px expanded rail) | 100 % (default), 125 %, 150 % (150 % only as spec NFR-012 allows: not a pilot configuration) |
 | **1024 × 768** | Secondary supported viewport (icon-only rail) | 100 % (default) |
 
 Viewports below 1024 px are NOT a target production viewport and are
@@ -46,7 +46,7 @@ covered by the `ScreenTooSmall` fallback in the shell. No mobile
 hamburger drawer is ever rendered.
 
 If a slice changes a layout that responds to Windows display scaling,
-the contact sheet additionally covers 125 % and 150 % at 1280 × 800.
+the contact sheet additionally covers 125 % and 150 % at 1280 × 800 (150 % only as NFR-012 allows: not a pilot configuration, and only where the effective viewport is ≥ 1024 × 600).
 Otherwise the 100 % capture is sufficient.
 
 ---

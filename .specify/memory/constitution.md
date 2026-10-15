@@ -33,7 +33,9 @@ Bump rationale: MINOR — materially expanded guidance in Additional Constraints
     list MUST be reproduced there).
   - ✅ `specs/007-pos-visual-system/spec.md` NFR-012 reworded (150 % not supported for the
     pilot; beyond it only where the effective viewport ≥ 1024×600, 600–767 band once verified);
-    its plan.md Constitution Check row aligned.
+    its plan.md Constitution Check row aligned; the dependent 150 % clauses (spec Edge Cases
+    high-DPI bullet, assumption A5, `contracts/screenshot-acceptance.md`, `quickstart.md`)
+    carry the same qualification.
   - ✅ `README.md`, `CLAUDE.md`, `docs/maestro/README.md` — version references updated to v1.7.0.
 
   Follow-up TODOs (open):
@@ -1157,7 +1159,7 @@ is **Out of scope** until a future amendment.
 | Barcode scanner     | **Keyboard-wedge** (HID) only. Scanners present as keyboards; no SDK integration.      |
 | Receipt printer     | Local print adapter (system printer queue). **ESC/POS direct path preferred** when the connected printer supports it; otherwise fall back to the OS print path. |
 | Cash drawer         | **Optional**, opened via the receipt printer's kick command (DK1/DK2 ESC/POS pulse).   |
-| Display             | Support is judged by the **effective CSS viewport** of the maximized POS window, not the panel size. **Pilot standard:** 1920×1080 panel, Windows Scale **100 %**, window maximized (≈ 1920×983). **125 %** is supported only with the native menu bar removed (≈ 1536×793). **150 %** is **not supported for the pilot** (≈ 1280×623 on 1920×1080). Width **< 1024** or height **< 600** CSS px is blocked with a notice; height **600–767** is a compact-height band, supported only after verification on pilot hardware; **≥ 1024×768** is the full reference. Never auto-zoom; page zoom is locked at 0. |
+| Display             | Support is judged by the **effective CSS viewport** of the maximized POS window, not the panel size. **Pilot standard:** 1920×1080 panel, Windows Scale **100 %**, window maximized (≈ 1920×1009, calculated with the menu bar removed). **125 %** is supported only with the native menu bar removed (≈ 1536×793). **150 %** is **not supported for the pilot** (≈ 1280×649 on 1920×1080 even without the menu). Width **< 1024** or height **< 600** CSS px is blocked with a notice; height **600–767** is a compact-height band, supported only after verification on pilot hardware; **≥ 1024×768** is the full reference. Never auto-zoom; page zoom is locked at 0. |
 
 **Out of scope (MVP) — explicitly NOT supported until a future amendment:**
 

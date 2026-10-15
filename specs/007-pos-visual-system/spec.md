@@ -320,7 +320,9 @@ Clarifications session 2026-05-10 / FR-052) all hold.
   MUST remain crisp and legible at all three Windows display-scale
   values across the two designed viewport bands, with no clipped
   characters, missing focus rings, or off-grid pixel rounding on
-  borders.
+  borders. 150 % is qualified by NFR-012 (amended 2026-10-15,
+  RT-312 D8/D15): not supported for the pilot, and otherwise only
+  where the effective CSS viewport is at least 1024 × 600.
 - **Reduced-motion users**: any motion introduced by the recovery (e.g.
   spinner rotation, modal fade-in, rail expand transition) MUST honour
   the user's `prefers-reduced-motion` preference. A reduced-motion
@@ -946,7 +948,8 @@ implementation slices. They are deferred to later features.
   mandatory acceptance widths for the recovery are the two
   designed viewport bands inherited from `003`: ≥ 1280 px
   (primary) and 1024 × 768 (icon-only sample), at Windows
-  display scaling 100 / 125 / 150 %. Below 1024 px the
+  display scaling 100 / 125 / 150 % (150 % only as NFR-012
+  allows). Below 1024 px the
   "screen too small" fallback from `003` is preserved
   unchanged. Final width matrix is confirmed during
   `/speckit-clarify`.

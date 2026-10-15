@@ -138,7 +138,8 @@ S6 contract finalisation) attaches:
 
 - **A contact sheet** of the surfaces the slice touches, at 1280 × 800
   + 1024 × 768 viewports, at Windows display scaling 100 % (and 125 / 150 %
-  if the slice changes any layout that responds to scaling).
+  if the slice changes any layout that responds to scaling; 150 % only as
+  spec NFR-012 allows).
 - **Reviewer sign-off** recorded in the PR description.
 - **Per-PR forbidden-content discipline:**
   - No PII, no Clerk JWT, no `device_token`, no PIN value, no PIN hash,

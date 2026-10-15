@@ -84,9 +84,10 @@ the Confluence page "POS display and scaling support policy (RT-312)".
 Rules at every size: never auto-zoom; page zoom is locked at 0 and reset on every launch; the
 native menu bar is removed (RT-314).
 
-**Pilot standard:** 1920×1080 panel, Windows Scale **100 %**, window maximized (≈ 1920×983).
-**125 %** is supported only with the menu bar removed (≈ 1536×793). **150 %** is **not
-supported for the pilot** (≈ 1280×623 on 1920×1080). A 1366×768 panel runs at 100 % only, and
+**Pilot standard:** 1920×1080 panel, Windows Scale **100 %**, window maximized (≈ 1920×1009
+with the menu bar removed; 983 with it). **125 %** is supported only with the menu bar removed
+(≈ 1536×793). **150 %** is **not supported for the pilot** (≈ 1280×649 with the menu removed;
+623 with it). All figures are calculated, not measured. A 1366×768 panel runs at 100 % only, and
 only once the 600–767 band is verified.
 
 Calculated (not measured) maximized viewports, as published in the policy page — CSS height ≈
