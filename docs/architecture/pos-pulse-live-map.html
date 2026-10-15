@@ -227,6 +227,14 @@
         document.getElementById("fallback").style.display = "grid";
         document.body.classList.add("is-ready");
       }
+      const EDGE_COLORS = [0x22d6f6, 0xd4ad55, 0x8b5cf6];
+
+      function nodeGeometry(THREE, kind) {
+        if (kind === "runtime") return new THREE.CylinderGeometry(0.7, 0.82, 1.55, 7);
+        if (kind === "governance" || kind === "security") return new THREE.OctahedronGeometry(0.72, 0);
+        return new THREE.BoxGeometry(1.48, 0.72, 1.1);
+      }
+
       function labelSprite(THREE, text, color) {
         const canvas = document.createElement("canvas");
         canvas.width = 640;
@@ -326,11 +334,7 @@
           const coords = positions[node.id] ?? [0, 0.7, (nodeIndex % 5) - 2];
           group.position.set(...coords);
           group.userData.node = node;
-          const geometry = node.kind === "runtime"
-            ? new THREE.CylinderGeometry(0.7, 0.82, 1.55, 7)
-            : node.kind === "governance" || node.kind === "security"
-              ? new THREE.OctahedronGeometry(0.72, 0)
-              : new THREE.BoxGeometry(1.48, 0.72, 1.1);
+          const geometry = nodeGeometry(THREE, node.kind);
           const mesh = new THREE.Mesh(
             geometry,
             new THREE.MeshStandardMaterial({ color, roughness: 0.42, metalness: 0.24, emissive: color, emissiveIntensity: 0.12 }),
@@ -360,7 +364,7 @@
           const mid = start.clone().lerp(end, 0.5);
           mid.y += 0.56 + (index % 3) * 0.12;
           const curve = new THREE.CatmullRomCurve3([start, mid, end]);
-          const color = index % 3 === 0 ? 0x22d6f6 : index % 3 === 1 ? 0xd4ad55 : 0x8b5cf6;
+          const color = EDGE_COLORS[index % EDGE_COLORS.length];
           root.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.025, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.48 })));
           const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.105, 18, 18), new THREE.MeshBasicMaterial({ color }));
           root.add(pulse);

@@ -124,7 +124,14 @@ function asPaymentsStartReq(value: unknown): PaymentsStartRequest | null {
   };
 }
 
-function asPaymentsConfirmReq(value: unknown): PaymentsConfirmRequest | null {
+/**
+ * Shared shape guard for the attempt-scoped, idempotent actions
+ * (`payments.confirm` / `payments.cancel` / `payments.forceFail`) — the three
+ * requests are the same `{ payment_attempt_id, idempotency_key }` pair.
+ */
+function asAttemptActionReq(
+  value: unknown,
+): (PaymentsConfirmRequest & PaymentsCancelRequest & PaymentsForceFailRequest) | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (typeof v['payment_attempt_id'] !== 'string' || typeof v['idempotency_key'] !== 'string') {
@@ -136,38 +143,8 @@ function asPaymentsConfirmReq(value: unknown): PaymentsConfirmRequest | null {
   };
 }
 
-function asPaymentsCancelReq(value: unknown): PaymentsCancelRequest | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v['payment_attempt_id'] !== 'string' || typeof v['idempotency_key'] !== 'string') {
-    return null;
-  }
-  return {
-    payment_attempt_id: v['payment_attempt_id'],
-    idempotency_key: v['idempotency_key'],
-  };
-}
-
-function asPaymentsForceFailReq(value: unknown): PaymentsForceFailRequest | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v['payment_attempt_id'] !== 'string' || typeof v['idempotency_key'] !== 'string') {
-    return null;
-  }
-  return {
-    payment_attempt_id: v['payment_attempt_id'],
-    idempotency_key: v['idempotency_key'],
-  };
-}
-
-function asPaymentsSubscribeReq(value: unknown): PaymentsSubscribeRequest | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v['payment_attempt_id'] !== 'string') return null;
-  return { payment_attempt_id: v['payment_attempt_id'] };
-}
-
-function asPaymentsReadReq(value: unknown): PaymentsReadRequest | null {
+/** Shared shape guard for the read-only attempt requests (`payments.read` / `payments.subscribe`). */
+function asAttemptIdReq(value: unknown): (PaymentsReadRequest & PaymentsSubscribeRequest) | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (typeof v['payment_attempt_id'] !== 'string') return null;
@@ -264,7 +241,7 @@ export function registerPaymentsHandlers(ipcMain: IpcMain, deps: PaymentsIpcDeps
   ipcMain.handle(
     PAYMENTS_IPC_CHANNELS.CONFIRM,
     async (_event: IpcMainInvokeEvent, request: unknown): Promise<PaymentsConfirmResponse> => {
-      const req = asPaymentsConfirmReq(request);
+      const req = asAttemptActionReq(request);
       if (req === null) return refuseInvalid();
       return deps.paymentsConfirm(req);
     },
@@ -273,7 +250,7 @@ export function registerPaymentsHandlers(ipcMain: IpcMain, deps: PaymentsIpcDeps
   ipcMain.handle(
     PAYMENTS_IPC_CHANNELS.CANCEL,
     async (_event: IpcMainInvokeEvent, request: unknown): Promise<PaymentsCancelResponse> => {
-      const req = asPaymentsCancelReq(request);
+      const req = asAttemptActionReq(request);
       if (req === null) return refuseInvalid();
       return deps.paymentsCancel(req);
     },
@@ -282,7 +259,7 @@ export function registerPaymentsHandlers(ipcMain: IpcMain, deps: PaymentsIpcDeps
   ipcMain.handle(
     PAYMENTS_IPC_CHANNELS.SUBSCRIBE,
     async (_event: IpcMainInvokeEvent, request: unknown): Promise<PaymentsSubscribeResponse> => {
-      const req = asPaymentsSubscribeReq(request);
+      const req = asAttemptIdReq(request);
       if (req === null) return refuseInvalid();
       return deps.paymentsSubscribe(req);
     },
@@ -291,7 +268,7 @@ export function registerPaymentsHandlers(ipcMain: IpcMain, deps: PaymentsIpcDeps
   ipcMain.handle(
     PAYMENTS_IPC_CHANNELS.READ,
     async (_event: IpcMainInvokeEvent, request: unknown): Promise<PaymentsReadResponse> => {
-      const req = asPaymentsReadReq(request);
+      const req = asAttemptIdReq(request);
       if (req === null) return refuseInvalid();
       return deps.paymentsRead(req);
     },
@@ -346,7 +323,7 @@ export function registerPaymentsHandlers(ipcMain: IpcMain, deps: PaymentsIpcDeps
     ipcMain.handle(
       PAYMENTS_IPC_CHANNELS.FORCE_FAIL,
       async (_event: IpcMainInvokeEvent, request: unknown): Promise<PaymentsForceFailResponse> => {
-        const req = asPaymentsForceFailReq(request);
+        const req = asAttemptActionReq(request);
         if (req === null) return refuseInvalid();
         return handler(req);
       },

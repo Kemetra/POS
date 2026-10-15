@@ -56,6 +56,12 @@ const LONG: Row[] = [
   ['آية رضا', 'no_pin'],
 ];
 
+/** Row set per proof `list` param; any other value falls back to TYPICAL. */
+const ROWS_BY_LIST: Partial<Record<CashiersProofParams['list'], Row[]>> = {
+  long: LONG,
+  empty: [],
+};
+
 export interface CashiersProofParams {
   list: 'typical' | 'long' | 'offline' | 'refused' | 'empty';
   provision: 'ok' | 'not_ready' | 'reauth';
@@ -81,7 +87,7 @@ function lockEnd(): string {
 }
 
 function seed(list: CashiersProofParams['list']): CashierPinStatus[] {
-  const rows = list === 'long' ? LONG : list === 'empty' ? [] : TYPICAL;
+  const rows = ROWS_BY_LIST[list] ?? TYPICAL;
   return rows.map(([display_name, pin], i) => ({
     id: `proof-cashier-${String(i)}`,
     display_name,

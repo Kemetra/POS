@@ -114,10 +114,16 @@ export function readSignInProofParams(): HarnessParams {
   };
 }
 
+function rosterNames(kind: string): readonly string[] {
+  if (kind === 'empty') return [];
+  if (kind === 'long') return LONG;
+  return TYPICAL;
+}
+
 function rosterFor(kind: string): ListBranchRosterResponse {
   if (kind === 'offline') return { kind: 'refused', category: 'no_connection' };
   if (kind === 'refused') return { kind: 'refused', category: 'invalid_input' };
-  const names = kind === 'empty' ? [] : kind === 'long' ? LONG : TYPICAL;
+  const names = rosterNames(kind);
   return {
     kind: 'roster',
     source: 'online',

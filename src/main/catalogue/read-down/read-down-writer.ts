@@ -293,7 +293,7 @@ export function createReadDownWriter(deps: CreateReadDownWriterDeps): ReadDownWr
         outcome: 'failed',
       });
     } catch {
-      // swallow — the run is already failing; do not overwrite its cause.
+      // swallow — the run/fetch is already failing; do not overwrite its cause.
     }
   }
 
@@ -374,21 +374,5 @@ export function createReadDownWriter(deps: CreateReadDownWriterDeps): ReadDownWr
     }
   }
 
-  function recordFetchFailure(input: RecordFetchFailureInput): void {
-    // Transport failure recorded by the driver (the writer's `run()` never saw
-    // these rows). Same semantics as a writer-side failure: advance the attempt
-    // clock + outcome, leave `last_success_at` untouched (SC-10). Best-effort.
-    try {
-      syncStateRepo.recordAttempt({
-        tenantId: input.tenantId,
-        branchId: input.branchId,
-        lastAttemptAt: input.now,
-        outcome: 'failed',
-      });
-    } catch {
-      // swallow — the fetch already failed; do not mask its cause.
-    }
-  }
-
-  return { run, recordFetchFailure };
+  return { run, recordFetchFailure: recordFailure };
 }

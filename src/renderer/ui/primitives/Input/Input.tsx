@@ -2,6 +2,12 @@ import { useId, type JSX, type ChangeEvent } from 'react';
 
 type InputVariant = 'text' | 'password' | 'numeric';
 
+const INPUT_TYPE: Record<InputVariant, 'text' | 'password' | 'number'> = {
+  text: 'text',
+  password: 'password',
+  numeric: 'number',
+};
+
 interface InputProps {
   variant: InputVariant;
   label: string;
@@ -28,7 +34,7 @@ export function Input({
   const errId = errorMessage ? `${id}-err` : undefined;
   const describedBy = [descId, errId].filter(Boolean).join(' ') || undefined;
 
-  const inputType = variant === 'password' ? 'password' : variant === 'numeric' ? 'number' : 'text';
+  const inputType = INPUT_TYPE[variant];
 
   return (
     <div className="input-field">

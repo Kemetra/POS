@@ -54,7 +54,7 @@ describe('CSS the guard relies on (tripwires)', () => {
   });
 
   it('<main> is the notice containing block; the notice covers it, opaque', () => {
-    expect(frameCss).toMatch(/\.v5-frame__main\s*\{\s*position:\s*relative;?\s*\}/);
+    expect(frameCss).toMatch(/\.v5-frame__main\s*\{[^}]*position:\s*relative;/);
     const notice = /\.v5-frame \.v5-fit-block\s*\{([^}]*)\}/.exec(guardCss)?.[1] ?? '';
     expect(notice).toMatch(/position:\s*absolute/);
     expect(notice).toMatch(/inset:\s*0/);

@@ -32,8 +32,11 @@ export const MAX_RETRY_AFTER_MS = 5 * 60 * 1_000;
 
 const DELAY_SECONDS = /^\d+$/;
 /** RFC 9110 §5.6.7 IMF-fixdate, e.g. `Sun, 06 Nov 1994 08:49:37 GMT`. Case-sensitive. */
-const IMF_FIXDATE =
-  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+const WEEKDAY = '(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)';
+const MONTH = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)';
+const IMF_FIXDATE = new RegExp(
+  String.raw`^${WEEKDAY}, \d{2} ${MONTH} \d{4} \d{2}:\d{2}:\d{2} GMT$`,
+);
 
 function clamp(ms: number): number {
   return Math.min(Math.max(ms, 0), MAX_RETRY_AFTER_MS);

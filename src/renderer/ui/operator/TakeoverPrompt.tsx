@@ -95,6 +95,30 @@ export function TakeoverPrompt({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Live-region content: spinner while confirming, else the retry error.
+  const feedback = (): JSX.Element | null => {
+    if (confirming) {
+      return (
+        <span className="takeover-prompt__spinner" data-testid="takeover-prompt-spinner">
+          Signing in…
+        </span>
+      );
+    }
+    if (retryError !== undefined) {
+      return (
+        <span
+          role="alert"
+          className="takeover-prompt__error"
+          data-testid="takeover-prompt-error"
+          data-category="no_connection"
+        >
+          {retryError}
+        </span>
+      );
+    }
+    return null;
+  };
+
   return (
     <div
       role="dialog"
@@ -116,20 +140,7 @@ export function TakeoverPrompt({
         </p>
 
         <div className="takeover-prompt__feedback" role="status" aria-live="polite">
-          {confirming ? (
-            <span className="takeover-prompt__spinner" data-testid="takeover-prompt-spinner">
-              Signing in…
-            </span>
-          ) : retryError !== undefined ? (
-            <span
-              role="alert"
-              className="takeover-prompt__error"
-              data-testid="takeover-prompt-error"
-              data-category="no_connection"
-            >
-              {retryError}
-            </span>
-          ) : null}
+          {feedback()}
         </div>
 
         <div className="takeover-prompt__actions">

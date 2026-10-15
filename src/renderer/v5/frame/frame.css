@@ -50,21 +50,18 @@
   min-block-size: 0;
   overflow: hidden;
   container: v5-screen / inline-size;
+  /*
+   * RT-412: <main> is the containing block of the in-surface fit notice, which
+   * covers the screen when it cannot show its must-see elements. The guard's
+   * wrapper is `display: contents`, so the screen is still <main>'s flex item.
+   */
+  position: relative;
 }
 
 .v5-frame__main > *,
 .v5-frame__main > .v5-fit-guard > * {
   flex: 1 1 auto;
   min-block-size: 0;
-}
-
-/*
- * RT-412: <main> is the containing block of the in-surface fit notice, which
- * covers the screen when it cannot show its must-see elements. The guard's
- * wrapper is `display: contents`, so the screen is still <main>'s flex item.
- */
-.v5-frame__main {
-  position: relative;
 }
 
 /*

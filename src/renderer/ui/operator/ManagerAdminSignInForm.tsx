@@ -117,6 +117,28 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
     void runSignIn(identifier, password);
   };
 
+  // Live-region content: spinner, else the refusal, else the empty-input hint.
+  const feedback = (): JSX.Element | null => {
+    if (isSubmitting) {
+      return (
+        <span className="v5-entry__status" data-testid="sign-in-spinner">
+          جارٍ تسجيل الدخول…
+        </span>
+      );
+    }
+    if (refusalCategory !== undefined) {
+      return (
+        <RefusalNotice testId="sign-in-refusal" category={refusalCategory}>
+          {SIGN_IN_REFUSAL_COPY[refusalCategory]}
+        </RefusalNotice>
+      );
+    }
+    if (emptyInputShown) {
+      return <RefusalNotice testId="sign-in-empty-input">{EMPTY_INPUT_MESSAGE}</RefusalNotice>;
+    }
+    return null;
+  };
+
   return (
     // RT-244 (G-1 references): the form fills the sign-in screen's inline-end
     // column; its commit sits at the bottom. Identifier and password are LTR.
@@ -170,17 +192,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
       </div>
 
       <div className="v5-entry__feedback" role="status" aria-live="polite">
-        {isSubmitting ? (
-          <span className="v5-entry__status" data-testid="sign-in-spinner">
-            جارٍ تسجيل الدخول…
-          </span>
-        ) : refusalCategory !== undefined ? (
-          <RefusalNotice testId="sign-in-refusal" category={refusalCategory}>
-            {SIGN_IN_REFUSAL_COPY[refusalCategory]}
-          </RefusalNotice>
-        ) : emptyInputShown ? (
-          <RefusalNotice testId="sign-in-empty-input">{EMPTY_INPUT_MESSAGE}</RefusalNotice>
-        ) : null}
+        {feedback()}
       </div>
 
       <div className="v5-entry__auth-actions">
