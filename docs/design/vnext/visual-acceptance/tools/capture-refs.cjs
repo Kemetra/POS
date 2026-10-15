@@ -2,11 +2,12 @@
 // Each pack keeps a thin tools/capture_gN.cjs that calls captureRefs() with its own prefix and
 // frame selectors. No path is read from the command line: the pack folder comes from the caller's
 // own location. Needs playwright-core and axe-core from the repo's node_modules, and an installed
-// Chromium.
+// Chromium. When playwright-core is not resolvable from the repo's
+// node_modules, set the PLAYWRIGHT_CORE environment variable to a playwright-core folder.
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
-const { chromium } = require('playwright-core');
+const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 
 const AXE_PATH = require.resolve('axe-core/axe.min.js', { paths: [__dirname] });
 const SIZES = { 1024: 768, 1280: 800 };

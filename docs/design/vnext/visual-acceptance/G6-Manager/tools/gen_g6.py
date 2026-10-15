@@ -82,12 +82,16 @@ class View:
     inert: bool = False
 
 
+def aria_current(key: str, view: View) -> str:
+    return ' aria-current="page"' if key == view.current else ""
+
+
 def nav(view: View) -> str:
     i = " inert" if view.inert else ""
     who = MANAGER if view.role == "manager" else CASHIER
     entries = [e for e in NAV if view.role != "cashier" or e[0] in CASHIER_NAV]
     links = "".join(
-        f'<li><a href="#"{" aria-current=\"page\"" if key == view.current else ""}>{label}</a></li>'
+        f'<li><a href="#"{aria_current(key, view)}>{label}</a></li>'
         for key, label in entries
     )
     return (
@@ -343,13 +347,17 @@ CLOSE_PHASES = {
 }
 
 
+def focus_class(i: int, focused: int | None) -> str:
+    return ' class="focus"' if i == focused else ""
+
+
 def close_dialog(phase: str) -> str:
     name = SHIFTS[0][0]
     checked, focused, text = CLOSE_PHASES[phase]
     choices = "".join(
         f'<label class="choice{" checked" if i == checked else ""}">'
         f'<input type="radio" name="reason" value="{key}"{" checked" if i == checked else ""}'
-        f'{" class=\"focus\"" if i == focused else ""}>{label}</label>'
+        f'{focus_class(i, focused)}>{label}</label>'
         for i, (key, label) in enumerate(REASONS)
     )
     msg = notice("warning", text) if text else ""
