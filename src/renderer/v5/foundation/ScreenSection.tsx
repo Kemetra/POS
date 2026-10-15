@@ -3,8 +3,8 @@ import './screen-section.css';
 
 interface ScreenSectionProps {
   /** The screen's one <h1>; it also names the region. */
-  title: string;
-  children: ReactNode;
+  readonly title: string;
+  readonly children: ReactNode;
 }
 
 /**
