@@ -67,6 +67,24 @@ describe('Dialog (T018)', () => {
     expect(onAction).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the same title id across rerenders', () => {
+    const { rerender } = render(
+      <Dialog open title="Stable dialog" description="Details" onOpenChange={() => {}}>
+        Content
+      </Dialog>,
+    );
+    const before = screen.getByRole('dialog').getAttribute('aria-labelledby');
+    rerender(
+      <Dialog open title="Stable dialog" description="Details" onOpenChange={() => {}}>
+        Content again
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('aria-labelledby')).toBe(before);
+    expect(dialog).toHaveAccessibleName('Stable dialog');
+    expect(dialog).toHaveAccessibleDescription('Details');
+  });
+
   it('focuses the dialog on open', () => {
     render(
       <Dialog open title="Focus dialog" onOpenChange={() => {}}>

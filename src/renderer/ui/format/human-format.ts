@@ -17,6 +17,14 @@
 const DASH = '—';
 const LOCALE = 'ar-EG-u-nu-latn';
 
+/** `1234567` → `1,234,567`, without a backtracking regex. */
+function groupThousands(digits: string): string {
+  const head = digits.length % 3 || 3;
+  const groups = [digits.slice(0, head)];
+  for (let i = head; i < digits.length; i += 3) groups.push(digits.slice(i, i + 3));
+  return groups.join(',');
+}
+
 /**
  * Integer minor units → `1,250.00 EGP`. Integer arithmetic only (no floats), so
  * large amounts never pick up binary-float noise. A non-safe integer renders as
@@ -28,7 +36,7 @@ export function formatHumanMoney(minor: number): string {
   const abs = Math.abs(minor);
   const major = Math.trunc(abs / 100);
   const cents = abs - major * 100;
-  const grouped = String(major).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const grouped = groupThousands(String(major));
   return `${sign}${grouped}.${String(cents).padStart(2, '0')} EGP`;
 }
 

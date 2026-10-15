@@ -14,7 +14,7 @@
 //   • Numerals: Arabic-Indic ٠–٩ → Latin 0–9
 //   • Whitespace: trim + collapse internal runs to a single space
 
-const ARABIC_INDIC_ZERO = 0x0660; // ٠ … ٩ (U+0660–U+0669)
+const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩'; // U+0660–U+0669, index = value
 
 /**
  * Fold an Arabic / English / mixed string to its canonical search form.
@@ -43,7 +43,7 @@ export function normalize(input: string): string {
   out = out.toLowerCase();
 
   // 6. Fold Arabic-Indic digits ٠–٩ to Latin 0–9.
-  out = out.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - ARABIC_INDIC_ZERO));
+  out = out.replace(/[٠-٩]/g, (d) => String(ARABIC_INDIC_DIGITS.indexOf(d)));
 
   // 7. Trim and collapse internal whitespace runs to a single space.
   out = out.replace(/\s+/g, ' ').trim();

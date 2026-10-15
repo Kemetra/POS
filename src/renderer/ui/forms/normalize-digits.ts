@@ -11,11 +11,14 @@
  * silently reinterpreted.
  */
 
+const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩'; // U+0660–U+0669, index = value
+const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹'; // U+06F0–U+06F9, index = value
+
 /** Arabic-Indic and Persian digits → ASCII. Does not trim. */
 export function mapDigits(raw: string): string {
   return raw
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+    .replace(/[٠-٩]/g, (d) => String(ARABIC_INDIC_DIGITS.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String(PERSIAN_DIGITS.indexOf(d)));
 }
 
 /** Arabic-Indic (U+0660..) and Persian (U+06F0..) digits → ASCII; trims. */

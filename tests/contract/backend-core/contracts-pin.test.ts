@@ -52,6 +52,17 @@ describe('contracts PIN', () => {
     expect(() => parseRepinArgs(['--add', '--ref'])).toThrow(/--add needs a value/);
   });
 
+  it('reads a value after any run of spaces or tabs, keeping inner spaces', () => {
+    const text = `repo:\t  R\ncommit:   ${SHA}\nsource:  packages/x  y\nfile:  a.yaml ${SHA}\n`;
+    expect(parsePin(text)).toEqual({
+      repo: 'R',
+      commit: SHA,
+      source: 'packages/x  y',
+      files: [{ path: 'a.yaml', blobSha: SHA }],
+    });
+    expect(() => parsePin(`repo:R\n${valid}`)).toThrow(/unparseable line/);
+  });
+
   it('hashes like git hash-object', () => {
     // `printf 'hello\n' | git hash-object --stdin`
     expect(gitBlobSha(new TextEncoder().encode('hello\n'))).toBe(

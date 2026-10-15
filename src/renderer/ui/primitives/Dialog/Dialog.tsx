@@ -1,4 +1,4 @@
-import { useEffect, useRef, type JSX, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type JSX, type ReactNode } from 'react';
 
 type DialogVariant = 'default' | 'confirm' | 'destructive';
 
@@ -29,7 +29,7 @@ export function Dialog({
   secondaryAction,
 }: DialogProps): JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const titleId = `dialog-title-${Math.random().toString(36).slice(2)}`;
+  const titleId = `dialog-title-${useId()}`;
 
   useEffect(() => {
     if (!open) return;

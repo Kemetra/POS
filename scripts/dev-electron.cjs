@@ -1,12 +1,20 @@
 'use strict';
 
-const { execSync, spawnSync, execFileSync } = require('child_process');
+const { spawnSync, execFileSync } = require('child_process');
 const waitOn = require('wait-on');
 const path = require('path');
 const fs = require('fs');
 
 const ROOT = path.join(__dirname, '..');
 const DEV_PORT = 5173;
+
+// Run a package's CLI from this repo's node_modules with the current Node binary,
+// so no command is looked up on PATH.
+function runLocalBin(pkg, bin, args) {
+  const manifestPath = require.resolve(`${pkg}/package.json`, { paths: [ROOT] });
+  const binPath = path.join(path.dirname(manifestPath), require(manifestPath).bin[bin]);
+  execFileSync(process.execPath, [binPath, ...args], { stdio: 'inherit', cwd: ROOT });
+}
 
 // Remove stale JS + map files from a dist subdirectory — never touches source files.
 function cleanDistDir(dir) {
@@ -52,7 +60,7 @@ waitOn(
     // loudly rather than launching Electron with a wrong renderer.
     try {
       const result = execFileSync(
-        'node',
+        process.execPath,
         [
           '-e',
           `require('http').get('http://localhost:${DEV_PORT}/', (r) => { process.stdout.write(JSON.stringify(r.headers)); r.resume(); }).on('error', () => process.stdout.write('{}'));`,
@@ -82,9 +90,9 @@ waitOn(
     // inlines all local shared modules so sandbox require() restrictions
     // cannot prevent contextBridge.exposeInMainWorld from running.
     console.log('[dev-electron] Bundling preload (Vite CJS)...');
-    execSync('npx vite build --config vite.config.preload.ts', { stdio: 'inherit', cwd: ROOT });
+    runLocalBin('vite', 'vite', ['build', '--config', 'vite.config.preload.ts']);
     console.log('[dev-electron] Compiling main process (ESM)...');
-    execSync('npx tsc -p tsconfig.main.json', { stdio: 'inherit', cwd: ROOT });
+    runLocalBin('typescript', 'tsc', ['-p', 'tsconfig.main.json']);
 
     console.log('[dev-electron] Launching Electron...');
     const electronBin = require('electron');

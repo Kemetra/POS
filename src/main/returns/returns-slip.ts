@@ -24,7 +24,7 @@ import type { JournalEntry } from './returns-repository.js';
 export const SLIP_LINE_NAME_MAX = 120;
 
 /** Control characters and bidi embeddings/overrides/isolates (no reordering tricks). */
-const UNPRINTABLE = /[\p{Cc}‪-‮⁦-⁩]/gu;
+const UNPRINTABLE = /[\p{Cc}\u202A-\u202E\u2066-\u2069]/gu;
 
 /** A server line name made safe to print, or null when nothing printable remains. */
 export function slipLineName(raw: string): string | null {

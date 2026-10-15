@@ -129,6 +129,7 @@ import type {
   ManagerPinStore,
   ManagerPinVerdict,
 } from '../operator/manager-pin-store.js';
+import { compareCodeUnits } from '../../shared/compare-code-units.js';
 import type { OperatorSessionForPayments } from '../payments/require-operator-session.js';
 import { maxShiftAmountMinor } from './shift-amount-bound.js';
 import { computeCashup, type Cashup } from './shift-cashup-calculator.js';
@@ -424,7 +425,7 @@ function cashupRevisionOf(plan: Pick<ClosePlan, 'open' | 'cashup'>): string {
     cashup.cashSalesTotalMinor,
     cashup.cashRefundsTotalMinor,
     cashup.saleCount,
-    [...cashup.cashRefundReturnRefs].sort(),
+    [...cashup.cashRefundReturnRefs].sort(compareCodeUnits),
   ]);
 }
 
