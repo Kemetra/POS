@@ -31,8 +31,9 @@ Bump rationale: MINOR — materially expanded guidance in Additional Constraints
     changes required.
   - ✅ `docs/hardware-matrix.md` — reproduction gains a Display section (rule: the supported
     list MUST be reproduced there).
-  - ✅ `specs/007-pos-visual-system/spec.md` NFR-012 reworded ("150 % only where the effective
-    viewport ≥ 1024×600"); its plan.md Constitution Check row aligned.
+  - ✅ `specs/007-pos-visual-system/spec.md` NFR-012 reworded (150 % not supported for the
+    pilot; beyond it only where the effective viewport ≥ 1024×600, 600–767 band once verified);
+    its plan.md Constitution Check row aligned.
   - ✅ `README.md`, `CLAUDE.md`, `docs/maestro/README.md` — version references updated to v1.7.0.
 
   Follow-up TODOs (open):
@@ -47,8 +48,10 @@ Bump rationale: MINOR — materially expanded guidance in Additional Constraints
 
   Compatibility ledger:
   - No code changes. The row restates behaviour already on `main` (RT-313/314/407/412).
-  - Spec 007 NFR-012 is narrowed, not widened: 100 % and 125 % are unchanged; 150 % now holds
-    only where the effective viewport is ≥ 1024×600.
+  - Spec 007 NFR-012 is narrowed, not widened: 100 % and 125 % are unchanged; 150 % is not
+    supported for the pilot (D8), and beyond the pilot it may hold only where the effective
+    viewport is ≥ 1024×600, with heights 600–767 still conditional on pilot-hardware
+    verification.
 
 History (prior revisions retained for reference):
 

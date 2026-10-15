@@ -719,9 +719,12 @@ Clarifications session 2026-05-10)*
 - **NFR-012 (Windows display scaling)**: The recovered visuals
   MUST render correctly at Windows display scaling 100 % and
   125 % across the two designed viewport bands (≥ 1280 px and
-  1024–1279 px), and at 150 % **only where the effective CSS
-  viewport is at least 1024 × 600**; below that floor the
-  width or height notice applies instead. No clipped
+  1024–1279 px). 150 % is **not supported for the pilot**
+  (RT-312 D8); beyond the pilot it MAY be supported **only where
+  the effective CSS viewport is at least 1024 × 600**, and at
+  heights 600–767 only once that compact band is verified on
+  pilot hardware. Below 1024 wide or 600 high the width or
+  height notice applies instead. No clipped
   characters, no missing focus rings, no off-grid border
   rounding. *Amended 2026-10-15 (Jira RT-312 D15, owner-approved
   2026-10-12): a 1920 × 1080 panel at 150 % yields about
