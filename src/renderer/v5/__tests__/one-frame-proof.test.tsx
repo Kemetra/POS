@@ -25,6 +25,7 @@ const DEFAULTS: OneFrameProofParams = {
   role: 'manager',
   banner: 'none',
   shifts: 'some',
+  returns: 'off',
 };
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -55,7 +56,8 @@ describe('OneFrameProof — parameters', () => {
   it('reads path, role, banner and shifts', () => {
     window.location.hash =
       '#/dev/one-frame-proof?path=%2Fapp%2Fmanager%2Fstuck-shifts&role=cashier&banner=printer&shifts=none';
-    expect(readOneFrameProofParams()).toEqual({
+    // Only the params this URL sets: later slices add params of their own.
+    expect(readOneFrameProofParams()).toMatchObject({
       path: '/app/manager/stuck-shifts',
       role: 'cashier',
       banner: 'printer',
@@ -63,9 +65,40 @@ describe('OneFrameProof — parameters', () => {
     });
   });
 
+  it('RT-501: reads returns=on, and defaults it to off', () => {
+    window.location.hash = '#/dev/one-frame-proof?returns=on';
+    expect(readOneFrameProofParams().returns).toBe('on');
+    window.location.hash = '#/dev/one-frame-proof?returns=nope';
+    expect(readOneFrameProofParams().returns).toBe('off');
+  });
+
   it('ignores unknown values and any path outside /app', () => {
     window.location.hash = '#/dev/one-frame-proof?path=%2Fpairing&role=root&banner=x&shifts=x';
     expect(readOneFrameProofParams()).toEqual(DEFAULTS);
+  });
+});
+
+describe('OneFrameProof — the in-memory returns bridge (RT-501)', () => {
+  it('returns=off installs no returns namespace', () => {
+    installWindowApi(DEFAULTS);
+    expect(windowApi().returns).toBeUndefined();
+  });
+
+  it('returns=on installs a returns namespace whose every call answers', async () => {
+    installWindowApi({ ...DEFAULTS, returns: 'on' });
+    const returns = windowApi().returns ?? {};
+    for (const [name, fn] of Object.entries(returns)) {
+      await expect(Promise.resolve(fn()), `returns.${name}`).resolves.toBeDefined();
+    }
+    expect(await returns.list?.()).toEqual({ kind: 'ok', returns: [] });
+    expect(await returns.lookup?.()).toEqual({ kind: 'refused', reason: 'sale_not_found' });
+  });
+
+  it('returns=on hydrates the returns flag when the harness renders', async () => {
+    window.location.hash = '#/dev/one-frame-proof?path=%2Fapp%2Freturns&returns=on';
+    render(<OneFrameProof />);
+    await screen.findByTestId('v5-frame');
+    expect(useFeatureFlagsStore.getState().returns).toBe(true);
   });
 });
 

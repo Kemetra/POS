@@ -1,0 +1,431 @@
+[
+  {
+    "key": "returns-flag-off",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "off",
+    "action": null,
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt501-returns-flag-off-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "16px",
+    "returnsBox": {
+      "w": 852,
+      "mainW": 884,
+      "left": 16,
+      "right": 16
+    },
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-off",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "off",
+    "action": null,
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt501-returns-flag-off-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "16px",
+    "returnsBox": {
+      "w": 852,
+      "mainW": 884,
+      "left": 16,
+      "right": 16
+    },
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-off",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "off",
+    "action": null,
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt501-returns-flag-off-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "24px",
+    "returnsBox": {
+      "w": 1024,
+      "mainW": 1072,
+      "left": 24,
+      "right": 24
+    },
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a[current]:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a[current]:المرتجعات",
+      "a:سجل المراجعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-off",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "off",
+    "action": null,
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt501-returns-flag-off-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "24px",
+    "returnsBox": {
+      "w": 1024,
+      "mainW": 1072,
+      "left": 24,
+      "right": 24
+    },
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-on",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "on",
+    "action": null,
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt501-returns-flag-on-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "16px",
+    "returnsBox": {
+      "w": 852,
+      "mainW": 884,
+      "left": 16,
+      "right": 16
+    },
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-on",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "on",
+    "action": null,
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt501-returns-flag-on-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "16px",
+    "returnsBox": {
+      "w": 852,
+      "mainW": 884,
+      "left": 16,
+      "right": 16
+    },
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-on",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "on",
+    "action": null,
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt501-returns-flag-on-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "24px",
+    "returnsBox": {
+      "w": 1024,
+      "mainW": 1072,
+      "left": 24,
+      "right": 24
+    },
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "button:بحث",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a[current]:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "input:",
+      "button:بحث",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-on",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "on",
+    "action": null,
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt501-returns-flag-on-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "24px",
+    "returnsBox": {
+      "w": 1024,
+      "mainW": 1072,
+      "left": 24,
+      "right": 24
+    },
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-on-not-found",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "on",
+    "action": "not-found",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt501-returns-flag-on-not-found-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "16px",
+    "returnsBox": {
+      "w": 852,
+      "mainW": 884,
+      "left": 16,
+      "right": 16
+    },
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-on-not-found",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "on",
+    "action": "not-found",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt501-returns-flag-on-not-found-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "16px",
+    "returnsBox": {
+      "w": 852,
+      "mainW": 884,
+      "left": 16,
+      "right": 16
+    },
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-on-not-found",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "on",
+    "action": "not-found",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt501-returns-flag-on-not-found-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "24px",
+    "returnsBox": {
+      "w": 1024,
+      "mainW": 1072,
+      "left": 24,
+      "right": 24
+    },
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a[current]:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "input:",
+      "button:بحث",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns-flag-on-not-found",
+    "route": "/app/returns",
+    "role": "manager",
+    "returns": "on",
+    "action": "not-found",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt501-returns-flag-on-not-found-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "sectionPad": "24px",
+    "returnsBox": {
+      "w": 1024,
+      "mainW": 1072,
+      "left": 24,
+      "right": 24
+    },
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  }
+]
