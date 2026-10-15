@@ -336,9 +336,7 @@ function ListBody({
   if (list.kind === 'loading') {
     return (
       <PanelState>
-        <p className="v5-cashiers-muted" role="status">
-          {CASHIERS_COPY.loading}
-        </p>
+        <output className="v5-cashiers-muted">{CASHIERS_COPY.loading}</output>
       </PanelState>
     );
   }

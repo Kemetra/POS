@@ -244,7 +244,7 @@ function PinField(props: {
 }
 
 function ApproverState({ state }: { state: Approver }): JSX.Element | null {
-  if (state.kind === 'loading') return <p role="status">{RECOVERY_COPY.loading}</p>;
+  if (state.kind === 'loading') return <output>{RECOVERY_COPY.loading}</output>;
   if (state.kind === 'refused') return <ShiftAlert message={state.message} />;
   if (state.approver === null) return <ShiftAlert message={RECOVERY_COPY.noPin} />;
   return null;

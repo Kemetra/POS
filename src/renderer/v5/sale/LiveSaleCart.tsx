@@ -238,11 +238,7 @@ function CartActions(props: Props): JSX.Element {
           {props.handoffError}
         </p>
       )}
-      {props.voided === true && (
-        <p role="status" className="v5-live-notice">
-          تم إلغاء البيع.
-        </p>
-      )}
+      {props.voided === true && <output className="v5-live-notice">تم إلغاء البيع.</output>}
       <PrimaryAction {...props} />
     </div>
   );
@@ -252,9 +248,7 @@ function PrimaryAction(props: Props): JSX.Element {
   if (props.paid === true)
     return (
       <>
-        <p role="status" className="v5-live-notice v5-live-notice--success">
-          تم الدفع لهذه السلة.
-        </p>
+        <output className="v5-live-notice v5-live-notice--success">تم الدفع لهذه السلة.</output>
         <button type="button" className="v5-sale-checkout" onClick={props.onNewSale}>
           بيع جديد
         </button>

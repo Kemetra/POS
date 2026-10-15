@@ -310,9 +310,9 @@ export function FitGuard({ surface, children }: FitGuardProps): JSX.Element {
       </div>
       {/* Always mounted, so a change is announced. Filled only when focus stayed
           on a banner or the navigation; otherwise focus reads the heading. */}
-      <p className="v5-fit-guard__live" role="status" data-testid="fit-block-live">
+      <output className="v5-fit-guard__live" data-testid="fit-block-live">
         {announce ? HEADING[surface] : ''}
-      </p>
+      </output>
       {blocked && (
         <section
           ref={noticeRef}

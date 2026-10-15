@@ -16,10 +16,10 @@ export function RouteLoading(): JSX.Element {
       dir="rtl"
       lang="ar"
     >
-      <p className="v5-route-state__status" role="status">
+      <output className="v5-route-state__status">
         <span className="v5-route-state__spinner" aria-hidden="true" />
         جارٍ التحميل…
-      </p>
+      </output>
     </main>
   );
 }

@@ -370,7 +370,8 @@ describe('focus', () => {
   it('stays on a banner the cashier is using, and the notice is announced instead (Codex P2 on #651)', () => {
     render(<Frame banner />);
     const live = screen.getByTestId('fit-block-live');
-    expect(live).toHaveAttribute('role', 'status');
+    // <output> carries the implicit status role (RT-515).
+    expect(live.tagName).toBe('OUTPUT');
     expect(live).toBeEmptyDOMElement();
     const banner = screen.getByRole('button', { name: 'تم' });
     act(() => {

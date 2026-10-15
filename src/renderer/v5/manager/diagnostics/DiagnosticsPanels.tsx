@@ -117,9 +117,9 @@ export function SyncPanel(props: SyncPanelProps): JSX.Element {
           {copy.refresh}
         </button>
       </div>
-      <p role="status" data-testid="diagnostics-refresh-status">
+      <output data-testid="diagnostics-refresh-status">
         {props.refreshKind === null ? '' : refreshMessage(props.refreshKind)}
-      </p>
+      </output>
     </Panel>
   );
 }
@@ -173,9 +173,9 @@ export function SearchPanel(props: SearchPanelProps): JSX.Element {
           }}
         />
       </div>
-      <p role="status" data-testid="diagnostics-search-results">
+      <output data-testid="diagnostics-search-results">
         {props.message === null ? '' : withNumbers(props.message)}
-      </p>
+      </output>
     </Panel>
   );
 }

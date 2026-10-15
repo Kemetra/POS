@@ -443,15 +443,14 @@ function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
   // RT-243 W1-C: the V5 Notice treatment (tone border, tint, tone icon), so the
   // M-P13 danger reads as danger by shape too, never by colour alone.
   return (
-    <p
+    <output
       className="v5-checkout__back-reason"
       data-testid="payment-surface-back-blocked"
       data-tone={tone}
-      role="status"
     >
       <ToneIcon tone={tone} />
       <span>{BACK_REASON_COPY[props.back.reason]}</span>
-    </p>
+    </output>
   );
 }
 
@@ -1617,13 +1616,9 @@ function PaymentSurfaceBody({
     if (cancelOpen) return null;
     if (afterApply === 'failed') {
       return (
-        <p
-          className="checkout-actions__reason"
-          data-testid="payment-surface-reread-notice"
-          role="status"
-        >
+        <output className="checkout-actions__reason" data-testid="payment-surface-reread-notice">
           {readAfter === 'start' ? START_READ_FAILED_COPY : TENDER_READ_FAILED_COPY}
-        </p>
+        </output>
       );
     }
     if (!showSettle || fullyTendered) return null;

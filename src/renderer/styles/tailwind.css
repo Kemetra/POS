@@ -356,6 +356,18 @@ body {
 
 /* ─── @layer components ─────────────────────────────────────────────────── */
 
+/*
+ * RT-515: live-region messages use the native <output> element (implicit
+ * role="status") instead of role="status" on a <p>/<div>. <output> is inline by
+ * default; every replaced element was a block, so keep it one. A class that sets
+ * its own display (the inline-block spinners) still wins, being outside `base`.
+ */
+@layer base {
+  output {
+    display: block;
+  }
+}
+
 @layer components {
   /* ── Button ─────────────────────────────────────────────────────────── */
 

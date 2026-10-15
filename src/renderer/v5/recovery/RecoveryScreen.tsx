@@ -110,11 +110,7 @@ export function RecoveryScreen({ bridges }: { bridges: RecoveryBridges }): JSX.E
       <div className="v5-shift-titlebar">
         <h1 id="recovery-title">{RECOVERY_COPY.title}</h1>
       </div>
-      {outcome !== null && (
-        <p className="v5-shift-outcome" role="status">
-          {outcome}
-        </p>
-      )}
+      {outcome !== null && <output className="v5-shift-outcome">{outcome}</output>}
       <HeldBody held={held} nameOf={nameOf} onAction={open} />
       {action !== null && (
         <RecoveryActionDialog
@@ -141,11 +137,7 @@ function HeldBody(props: {
 }): JSX.Element {
   const { held } = props;
   if (held.kind === 'loading') {
-    return (
-      <p className="v5-shift-message" role="status">
-        {RECOVERY_COPY.loading}
-      </p>
-    );
+    return <output className="v5-shift-message">{RECOVERY_COPY.loading}</output>;
   }
   if (held.kind === 'refused') {
     return (

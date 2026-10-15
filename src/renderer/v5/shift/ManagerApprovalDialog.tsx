@@ -140,7 +140,7 @@ function ManagerChoice(props: {
   onSelect: (managerRef: string) => void;
 }): JSX.Element {
   const { managers } = props;
-  if (managers.kind === 'loading') return <p role="status">{SHIFT_COPY.loadingManagers}</p>;
+  if (managers.kind === 'loading') return <output>{SHIFT_COPY.loadingManagers}</output>;
   if (managers.kind === 'refused') return <ShiftAlert message={managers.message} />;
   if (managers.managers.length === 0) return <p>{SHIFT_COPY.noManagers}</p>;
   return (
