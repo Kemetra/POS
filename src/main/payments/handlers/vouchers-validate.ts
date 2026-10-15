@@ -39,7 +39,8 @@ import type {
   ValidateVoucherOutcome,
 } from '../voucher-authority-client/validate.js';
 
-import { applyVoucherLine } from './apply-voucher-line.js';
+import { applyVoucherForRequest } from './apply-voucher-line.js';
+import { priorLineOutcome } from './prior-line-outcome.js';
 
 export interface VouchersValidateHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
@@ -56,6 +57,23 @@ export interface VouchersValidateHandlerDeps {
 export type VouchersValidateHandler = (
   req: VouchersValidateRequest,
 ) => Promise<VouchersValidateResponse>;
+
+type LineRow = ReturnType<PaymentTenderLinesRepository['findByAttempt']>[number];
+
+/** The answer to a replayed voucher-validate key, rebuilt from the persisted line. */
+function replayResponse(prior: LineRow | undefined): VouchersValidateResponse {
+  const outcome = priorLineOutcome(prior);
+  if (outcome.kind === 'applied') {
+    return {
+      kind: 'ok',
+      tender_line_id: outcome.line.tender_line_id,
+      applied_amount_minor: outcome.line.amount_applied_minor,
+      applied_at: outcome.line.applied_at,
+    };
+  }
+  if (outcome.kind === 'refused') return { kind: 'refused', reason: outcome.reason };
+  return { kind: 'refused', reason: 'internal_error' };
+}
 
 export function createVouchersValidateHandler(
   deps: VouchersValidateHandlerDeps,
@@ -131,54 +149,19 @@ export function createVouchersValidateHandler(
       // and `state` move on once the line is reversed (RT-304 review).
       const lines = linesRepo.findByAttempt(req.payment_attempt_id);
       const prior = lines.find((l) => l.tender_line_id === reservation.tender_line_id);
-      if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
-        return {
-          kind: 'ok',
-          tender_line_id: prior.tender_line_id,
-          applied_amount_minor: prior.amount_applied_minor,
-          applied_at: prior.applied_at,
-        };
-      }
-      if (prior !== undefined && prior.state === 'refused' && prior.refusal_reason !== null) {
-        return {
-          kind: 'refused',
-          reason: prior.refusal_reason as VouchersValidateResponse extends { reason: infer R }
-            ? R
-            : never,
-        };
-      }
-      return { kind: 'refused', reason: 'internal_error' };
+      return replayResponse(prior);
     }
 
-    // Compute remaining balance main-side (R-7; cap enforcement is V-A's
-    // job — POS sends the local view so V-A can refuse with
-    // `non_cash_overpayment_refused` when the cashier's input exceeds
-    // either the authoritative voucher balance OR the remaining
-    // attempt-side balance, whichever is smaller).
-    const existing = linesRepo.findByAttempt(req.payment_attempt_id);
-    let appliedNetSum = 0;
-    for (const line of existing) {
-      if (line.state !== 'applied') continue;
-      appliedNetSum += line.amount_applied_minor - (line.change_due_minor ?? 0);
-    }
-    const remaining_balance_minor = attempt.envelope_subtotal_minor - appliedNetSum;
-
-    const outcome = await applyVoucherLine(
+    const outcome = await applyVoucherForRequest(
+      req,
       {
         session,
         attempt,
         tender_line_id,
-        voucher_code: req.voucher_code,
-        amount_applied_minor: req.amount_applied_minor,
-        remaining_balance_minor,
-        applied_at: now,
-        action_id: req.idempotency_key,
+        now,
+        existingLines: linesRepo.findByAttempt(req.payment_attempt_id),
       },
-      {
-        validateVoucher,
-        tenderLineFsm,
-        auditEmitter,
-      },
+      { validateVoucher, tenderLineFsm, auditEmitter },
     );
 
     if (outcome.kind === 'refused') {
