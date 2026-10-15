@@ -214,6 +214,21 @@ describe('what the server answers', () => {
     expect(client.recordVoid).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ['an unreadable last attempt time', `UPDATE sale_void_journal SET last_attempt_at = 'garbage'`],
+    [
+      'a clock that went backwards',
+      `UPDATE sale_void_journal SET last_attempt_at = '2026-06-07T13:00:00.000Z'`,
+    ],
+  ])('an unknown row is never stuck behind %s: it is re-sent', async (_label, skew) => {
+    outcome = { kind: 'unknown', category: 'server_error' };
+    await sync.tick();
+    db.run(skew);
+    clock = '2026-06-07T12:00:00.100Z';
+    await sync.tick();
+    expect(client.recordVoid).toHaveBeenCalledTimes(2);
+  });
+
   it('a second confirmation of the same void writes no second audit event', async () => {
     await sync.tick();
     db.run(`UPDATE sale_void_journal SET state = state WHERE void_id = 'v1'`);

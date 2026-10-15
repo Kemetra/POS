@@ -48,7 +48,10 @@ beforeEach(() => {
   audit = createSaleVoidAudit({
     sink: { emit: (e) => events.push(e) },
     now: () => NOW,
-    newEventId: () => `evt-${String((n += 1))}`,
+    newEventId: () => {
+      n += 1;
+      return `evt-${String(n)}`;
+    },
   });
 });
 

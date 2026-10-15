@@ -280,9 +280,9 @@ function HistoryRow(props: {
         {VOID_COPY.requestedAt}: <bdi>{formatShiftTime(entry.requested_at)}</bdi>
       </p>
       {entry.waiting_for !== null && (
-        <p className="v5-void-row__waiting" role="status">
+        <output className="v5-void-row__waiting">
           {voidWaitingMessage(entry.waiting_for, entry.requester_display_name)}
-        </p>
+        </output>
       )}
       {entry.refusal_reason !== null && (
         <ShiftAlert message={voidRefusalMessage(entry.refusal_reason)} />

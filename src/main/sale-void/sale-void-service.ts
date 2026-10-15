@@ -109,6 +109,21 @@ class ApprovalRefused extends Error {
 
 type Ineligible = SaleVoidSaleView['ineligible'];
 
+/** Net cash of the sale, or null when its tender summary cannot be read faithfully. */
+function cashOf(sale: SaleRow): number | null {
+  try {
+    return saleNetCashMinor(sale.tender_lines_summary_json);
+  } catch {
+    return null;
+  }
+}
+
+/** A session that could never send the void is refused before an approval is spent. */
+function canEverSend(session: VoidSession): boolean {
+  if (session.userId === null) return false;
+  return session.role !== 'cashier' || session.hasEnvelope;
+}
+
 export function createSaleVoidService(deps: SaleVoidServiceDeps): SaleVoidService {
   /** The admission gate: flag, live unlocked session, not shutting down. */
   function admit(): { kind: 'ok'; session: VoidSession } | Refusal {
@@ -131,15 +146,6 @@ export function createSaleVoidService(deps: SaleVoidServiceDeps): SaleVoidServic
     if (deps.repo.liveForSale(sale.sale_id) !== null) return 'already_voided';
     if (deps.hasLiveReturn(sale.sale_id)) return 'has_return';
     return null;
-  }
-
-  /** Net cash of the sale, or null when its tender summary cannot be read faithfully. */
-  function cashOf(sale: SaleRow): number | null {
-    try {
-      return saleNetCashMinor(sale.tender_lines_summary_json);
-    } catch {
-      return null;
-    }
   }
 
   function saleView(sale: SaleRow): SaleVoidSaleView {
@@ -199,12 +205,6 @@ export function createSaleVoidService(deps: SaleVoidServiceDeps): SaleVoidServic
       return null;
     }
     return ineligibleReason(sale) === null ? subjectOf(sale) : null;
-  }
-
-  /** A session that could never send the void is refused before an approval is spent. */
-  function canEverSend(session: VoidSession): boolean {
-    if (session.userId === null) return false;
-    return session.role !== 'cashier' || session.hasEnvelope;
   }
 
   /**

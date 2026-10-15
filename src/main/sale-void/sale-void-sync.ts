@@ -87,7 +87,9 @@ export interface SaleVoidSync {
 function isDue(entry: VoidEntry, nowMs: number, policy: BackoffPolicy): boolean {
   if (entry.state !== 'unknown' || entry.lastAttemptAt === null) return true;
   const waited = nowMs - Date.parse(entry.lastAttemptAt);
-  return waited < 0 || !(waited < backoffMs(policy, entry.attemptCount));
+  // An unreadable time or a clock that went backwards never holds a row.
+  if (Number.isNaN(waited) || waited < 0) return true;
+  return waited >= backoffMs(policy, entry.attemptCount);
 }
 
 const sameUser = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();

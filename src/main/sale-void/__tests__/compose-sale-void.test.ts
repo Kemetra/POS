@@ -332,9 +332,13 @@ describe('the composition defaults and failure paths', () => {
     });
   });
 
-  it('a failing seller lookup does not block the request (Backend-Core still refuses a seller approver)', async () => {
+  it('a failing seller lookup is logged and does not block the request (Backend-Core still refuses a seller approver)', async () => {
+    const warn = vi.fn();
+    domain = composeSaleVoid({ ...deps, logger: { warn, error: () => undefined } });
+    ref.domain = domain;
     raw.run('DROP TABLE audit_events');
     await expect(monaRequestsVoid()).resolves.toMatchObject({ kind: 'requested' });
+    expect(warn).toHaveBeenCalledWith({}, 'sale_void:seller_lookup_failed');
   });
 
   it('logs a send pass that rejects unexpectedly, and keeps the schedule', async () => {

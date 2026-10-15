@@ -98,7 +98,12 @@ export function composeSaleVoid(deps: ComposeSaleVoidDeps): ComposedSaleVoid {
   const repo = createSaleVoidRepository(db);
   const sales = bindSalesRepository(db);
   const saleRefs = createSaleSyncStateRepo(db);
-  const sellers = createSellingUserIdResolver({ db });
+  const sellers = createSellingUserIdResolver({
+    db,
+    onLookupFailed: () => {
+      deps.logger.warn({}, 'sale_void:seller_lookup_failed');
+    },
+  });
   const hasLiveReturn = db.prepare(LIVE_RETURN_SQL) as Row1;
   const audit = createSaleVoidAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
 
