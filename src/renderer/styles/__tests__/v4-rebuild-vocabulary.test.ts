@@ -115,6 +115,35 @@ const REBUILT_SCREENS: ReadonlyArray<{
     file: 'v5/manager/sales/ReprintAffordance.tsx',
     retired: ['receipt-reprint'],
   },
+  // RT-499 (VN-S10 S10-2): the dashboard became the G-6 manager home; the v3.5
+  // skeleton, its workspace header and the demo stat strip are gone.
+  {
+    screen: 'dashboard (manager home)',
+    file: 'routes/app/DashboardRoute.tsx',
+    retired: [
+      'dashboard-card',
+      'dashboard-skeleton',
+      'dashboard-demo-banner',
+      'ws-head',
+      'stat-strip',
+    ],
+  },
+  // RT-502 (VN-S10 S10-5): stuck shifts and forced close. The entry,
+  // `StuckShiftSurface` in `ui/operator/ForcedCloseSurface.tsx`, keeps the state
+  // and the bridge calls and renders these two v5 files. The old markup was
+  // unstyled (bare divs, a role="button" card, no class at all), so there is no
+  // screen-geometry prefix to retire: `retired` is honestly empty, and the rows
+  // pin that the screen and its dialog now compose from the v5 vocabulary.
+  {
+    screen: 'manager › stuck shifts',
+    file: 'v5/manager/stuck-shifts/StuckShiftsScreen.tsx',
+    retired: [],
+  },
+  {
+    screen: 'manager › stuck shifts › forced-close dialog',
+    file: 'v5/manager/stuck-shifts/ForcedCloseDialog.tsx',
+    retired: [],
+  },
 ];
 
 /** Strip block comments so prose naming a retired class is not a violation. */

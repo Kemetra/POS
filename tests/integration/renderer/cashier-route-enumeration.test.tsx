@@ -403,15 +403,16 @@ describe('SC-003 path 18 — cashier session preserved after stuck-shifts redire
   });
 });
 
-describe('SC-003 path 19 — /app/dashboard (⛔ cashier — shows unavailable surface)', () => {
-  it('cashier reaches /app/dashboard without route-guard redirect; sees unavailable surface', async () => {
+describe('SC-003 path 19 — /app/dashboard (⛔ cashier — shows the manager-only refusal)', () => {
+  it('cashier reaches /app/dashboard without route-guard redirect; sees the Arabic refusal', async () => {
     await renderAsCashier('/app/dashboard');
     await waitFor(() => {
       expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
       expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
-      // DashboardRoute itself renders an ErrorState for cashier role (not a route-guard redirect).
-      expect(screen.getByText(/this section is not available for your role/i)).toBeInTheDocument();
+      // DashboardRoute itself renders the refusal for cashier role (not a route-guard redirect).
+      expect(screen.getByText('لوحة المتابعة متاحة للمدير فقط.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'العودة إلى البيع' })).toBeInTheDocument();
     });
   });
 });
@@ -434,7 +435,7 @@ describe('SC-003 path 21 — /app index route (cashier)', () => {
   it('cashier reaches /app without route-guard redirect (outer guard only)', async () => {
     await renderAsCashier('/app');
     // /app has { index: true, element: <Navigate to="dashboard"> } so it redirects to
-    // /app/dashboard which renders the "Section unavailable" surface for cashier.
+    // /app/dashboard which renders the «لوحة المتابعة متاحة للمدير فقط.» refusal for cashier.
     await waitFor(() => {
       expect(screen.getByTestId('v5-frame')).toBeInTheDocument();
       expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();

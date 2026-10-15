@@ -4,6 +4,10 @@
  * the measurement is stubbed so the guard's behaviour can be driven: what it
  * covers, what it says, which keys and scans still reach the screen, and where
  * focus goes.
+ *
+ * RT-479: the guard only ever blocks inside the 600–767px compact-height band
+ * (RT-312 D2); a full-height window shows the screen whatever the measurement
+ * says. So the block cases run at a band height (700px) unless they say otherwise.
  */
 import { act, cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
@@ -14,6 +18,7 @@ import { getScanGuard, resetScanGuardForTests } from '../../../scan/ScanGuardHos
 import { SCAN_UNAVAILABLE_MESSAGE } from '../../../scan/scan-messages';
 import { useScanNoticeStore } from '../../../scan/scan-notice-store';
 import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { installViewport, resizeTo, settleTier } from '../../__tests__/__helpers__/viewport-bands';
 import { FitGuard } from '../FitGuard';
 
 const measured = vi.hoisted(() => ({ fits: true }));
@@ -28,6 +33,7 @@ let resizeCallbacks: Array<() => void> = [];
 beforeEach(() => {
   measured.fits = true;
   resizeCallbacks = [];
+  installViewport(1280, 700);
   resetScanGuardForTests();
   vi.stubGlobal(
     'ResizeObserver',
@@ -60,13 +66,29 @@ function remeasure(fits: boolean): void {
   });
 }
 
-function Frame(props: { surface?: 'sale' | 'checkout'; banner?: boolean }): JSX.Element {
+function Frame(props: {
+  surface?: 'sale' | 'checkout';
+  banner?: boolean;
+  quiet?: boolean;
+}): JSX.Element {
+  const notices = props.banner === true || props.quiet === true;
   return (
     <div className="v5-frame">
       <div className="v5-frame__body">
-        {props.banner === true && (
+        {notices && (
           <div className="v5-frame__notices">
-            <button type="button">تم</button>
+            {/* An operational banner announces itself (StatusBanner, Banner, the shift gate…). */}
+            {props.banner === true && (
+              <div role="status" className="v5-banner" data-testid="test-banner">
+                <button type="button">تم</button>
+              </div>
+            )}
+            {/* RT-479: the quiet way to the shift screens is a link, not a banner. */}
+            {props.quiet === true && (
+              <p className="v5-shift-notice" data-testid="test-quiet">
+                <a href="#/app/shift/manager">حالة الوردية</a>
+              </p>
+            )}
           </div>
         )}
         <main className="v5-frame__main" tabIndex={-1}>
@@ -81,14 +103,23 @@ function Frame(props: { surface?: 'sale' | 'checkout'; banner?: boolean }): JSX.
   );
 }
 
-/** A banner takes height above <main> (the test DOM lays nothing out). */
-function giveBannerHeight(): void {
-  const notices = document.querySelector('.v5-frame__notices');
-  if (notices === null) throw new Error('no banner area');
-  Object.defineProperty(notices, 'getBoundingClientRect', {
-    value: () => ({ top: 0, bottom: 62, height: 62, left: 0, right: 0, width: 0, x: 0, y: 0 }),
-  });
+/** A notice takes height above <main> (the test DOM lays nothing out). */
+function giveHeight(testId: string, height: number): void {
+  for (const el of [document.querySelector('.v5-frame__notices'), screen.getByTestId(testId)]) {
+    Object.defineProperty(el, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 0, bottom: height, height, left: 0, right: 0, width: 0, x: 0, y: 0 }),
+    });
+  }
 }
+
+function giveBannerHeight(): void {
+  giveHeight('test-banner', 62);
+}
+
+const HEIGHT_ACTION = 'كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.';
+const BANNER_ACTION =
+  'تعامل مع أحد التنبيهات أعلاه، أو كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.';
 
 const guardBox = (): HTMLElement => document.querySelector('.v5-fit-guard') as HTMLElement;
 
@@ -130,17 +161,35 @@ describe('does not fit: the screen is covered, never shown clipped', () => {
     render(<Frame banner />);
     giveBannerHeight();
     remeasure(false);
-    expect(screen.getByTestId('fit-block').querySelector('p')).toHaveTextContent(
-      'تعامل مع أحد التنبيهات أعلاه، أو كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.',
-    );
+    expect(screen.getByTestId('fit-block').querySelector('p')).toHaveTextContent(BANNER_ACTION);
   });
 
   it('with no banner, it gives the M-F2 height action (no banner to point at)', () => {
     render(<Frame />);
     remeasure(false);
-    expect(screen.getByTestId('fit-block').querySelector('p')).toHaveTextContent(
-      'كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.',
-    );
+    expect(screen.getByTestId('fit-block').querySelector('p')).toHaveTextContent(HEIGHT_ACTION);
+  });
+
+  it('RT-479: the quiet shift link above <main> is not a banner, so the height action shows', () => {
+    render(<Frame quiet />);
+    giveHeight('test-quiet', 33);
+    remeasure(false);
+    expect(screen.getByTestId('fit-block').querySelector('p')).toHaveTextContent(HEIGHT_ACTION);
+    expect(screen.getByTestId('fit-block')).not.toHaveTextContent('تعامل مع أحد التنبيهات');
+  });
+
+  it('RT-479: a banner next to the quiet link still points at the banner', () => {
+    render(<Frame banner quiet />);
+    giveHeight('test-quiet', 33);
+    giveBannerHeight();
+    remeasure(false);
+    expect(screen.getByTestId('fit-block').querySelector('p')).toHaveTextContent(BANNER_ACTION);
+  });
+
+  it('RT-479: a banner that takes no height (nothing shown) is not counted', () => {
+    render(<Frame banner />);
+    remeasure(false);
+    expect(screen.getByTestId('fit-block').querySelector('p')).toHaveTextContent(HEIGHT_ACTION);
   });
 
   it('the percentages are Western digits in LTR isolates', () => {
@@ -157,6 +206,51 @@ describe('does not fit: the screen is covered, never shown clipped', () => {
     render(<Frame banner />);
     remeasure(false);
     await expectNoAxeViolations(document.body);
+  });
+});
+
+describe('RT-479: the guard blocks only in the 600–767px compact-height band', () => {
+  it.each([768, 800, 1080, 1369, 1392])(
+    'a %ipx-high window never blocks, even when the measurement says it does not fit',
+    (height) => {
+      installViewport(1280, height);
+      render(<Frame surface="sale" banner />);
+      remeasure(false);
+      expect(screen.queryByTestId('fit-block')).toBeNull();
+      expect(guardBox()).not.toHaveAttribute('inert');
+      expect(screen.getByTestId('fit-block-live')).toBeEmptyDOMElement();
+    },
+  );
+
+  it.each([600, 700, 767])('a %ipx-high window blocks when it does not fit', (height) => {
+    installViewport(1280, height);
+    render(<Frame surface="sale" />);
+    remeasure(false);
+    expect(screen.getByTestId('fit-block')).toBeInTheDocument();
+    expect(guardBox()).toHaveAttribute('inert');
+  });
+
+  it('growing out of the band clears the block, shrinking back into it blocks again', async () => {
+    render(<Frame surface="sale" />);
+    remeasure(false);
+    expect(screen.getByTestId('fit-block')).toBeInTheDocument();
+    resizeTo(1280, 1080);
+    await settleTier();
+    expect(screen.queryByTestId('fit-block')).toBeNull();
+    expect(guardBox()).not.toHaveAttribute('inert');
+    resizeTo(1280, 700);
+    await settleTier();
+    expect(screen.getByTestId('fit-block')).toBeInTheDocument();
+  });
+
+  it('keys reach a full-height screen whatever the measurement says', () => {
+    installViewport(1280, 1080);
+    render(<Frame />);
+    const seen: string[] = [];
+    window.addEventListener('keydown', (e) => seen.push(e.key));
+    remeasure(false);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(seen).toEqual(['Escape']);
   });
 });
 

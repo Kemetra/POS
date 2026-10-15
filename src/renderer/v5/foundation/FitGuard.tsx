@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useScanSuspended } from '../../scan/ScanGuardHost';
 import { HeightAction } from '../../ui/states/ScreenTooSmall';
+import { useViewportTier } from '../../viewport/useViewportTier';
 import { fitObservationTargets, surfaceFits } from './fit-measure';
 import { ToneIcon } from './ToneIcon';
 import './fit-guard.css';
@@ -46,12 +47,24 @@ interface Fit {
 
 const FITS: Fit = { fits: true, banners: false };
 
+/** An operational banner announces itself; a quiet link (the shift notice) does not. */
+const BANNER = '[role="status"], [role="alert"]';
+
+/**
+ * RT-479: a shown banner above <main>. Only a live region counts: the quiet
+ * way to the shift screens («حالة الوردية») also sits above <main>, but there
+ * is nothing on it to deal with, so the notice must not point at it.
+ */
 function hasFrameBanners(main: Element): boolean {
   const body = main.parentElement;
   if (body === null) return false;
-  return Array.from(body.children).some(
-    (child) => child !== main && child.getBoundingClientRect().height > 0,
-  );
+  return Array.from(body.children)
+    .filter((child) => child !== main)
+    .flatMap((child) => [
+      ...(child.matches(BANNER) ? [child] : []),
+      ...Array.from(child.querySelectorAll(BANNER)),
+    ])
+    .some((banner) => banner.getBoundingClientRect().height > 0);
 }
 
 /** Observe exactly `next`: stop observing what left it, start on what is new. */
@@ -259,6 +272,10 @@ interface FitGuardProps {
  * not usable as drawn, so it is covered by this notice instead of being shown
  * clipped.
  *
+ * RT-479: it blocks only in that band. A full-height window (768px and up) is
+ * the reference the screens are drawn for, and is never covered, whatever the
+ * measurement says; below 600px the frame shows its own notice instead.
+ *
  * The trigger is measured, not a fixed threshold: the screen marks what must
  * stay visible (`data-fit`, see fit-measure.ts), and the guard checks it
  * against the height the screen actually received, so banners appearing or
@@ -279,7 +296,8 @@ export function FitGuard({ surface, children }: FitGuardProps): JSX.Element {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const headingId = useId();
   const { fits, banners } = useSurfaceFit(rootRef);
-  const blocked = !fits;
+  const inBand = useViewportTier().height === 'compact-height';
+  const blocked = inBand && !fits;
 
   useScanSuspended(blocked);
   useBlockedKeys(blocked, [rootRef, noticeRef]);

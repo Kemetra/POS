@@ -1944,8 +1944,7 @@ body {
    * whose data/contract is absent carry an honest "Coming soon" badge and a
    * recessive, non-interactive treatment. Recreated against POS-Pulse tokens.
    */
-  .settings-skeleton,
-  .dashboard-skeleton {
+  .settings-skeleton {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
@@ -1953,14 +1952,7 @@ body {
     max-inline-size: 720px;
   }
 
-  .dashboard-skeleton {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    max-inline-size: none;
-  }
-
-  .settings-section,
-  .dashboard-card {
+  .settings-section {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
@@ -1970,8 +1962,7 @@ body {
     border-radius: var(--radius-card);
   }
 
-  .settings-section__title,
-  .dashboard-card__title {
+  .settings-section__title {
     display: flex;
     align-items: center;
     gap: var(--space-2);
@@ -1981,21 +1972,18 @@ body {
     color: var(--color-text);
   }
 
-  .settings-section__hint,
-  .dashboard-card__hint {
+  .settings-section__hint {
     margin: 0;
     color: var(--color-text-muted);
   }
 
   /* Coming-soon (presentational-only) treatment — recessive, never alarming. */
   .settings-section--coming-soon,
-  .dashboard-card--coming-soon,
   .diagnostics-section--coming-soon {
     background-color: var(--color-surface-elevated);
   }
 
   .settings-section__badge,
-  .dashboard-card__badge,
   .diagnostics-badge {
     display: inline-block;
     margin-inline-start: var(--space-2);
@@ -2016,13 +2004,6 @@ body {
     background-color: var(--color-surface-sunken);
     color: var(--color-text-muted);
     cursor: not-allowed;
-  }
-
-  .dashboard-card__head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
   }
 
   /* ── ShiftClosedBanner (T091) ──────────────────────────────────────────── */
@@ -2869,286 +2850,6 @@ body {
     color: var(--color-text-muted);
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-   * POS v3.5 Slice 5 — Dashboard surface.
-   *
-   * Recreated against POS-Pulse tokens from the v3.5 design reference
-   * (`docs/design/pos-v3.5/design-reference/kit.css` — workspace header, stat
-   * strip, sparkline, top-item rows, definition rows, panel/grid). Behavior-free
-   * style port only. Consumed by <DashboardView>; the DEMO banner marks the
-   * dev-only sample-data preview (production renders the honest skeleton).
-   * ─────────────────────────────────────────────────────────────────────────*/
-
-  /* workspace pad + header (kit.css 651-661) */
-  .workspace-pad {
-    padding: var(--space-6) var(--space-7);
-    overflow-y: auto;
-  }
-  .ws-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--space-4);
-    flex-wrap: wrap;
-    margin-block-end: var(--space-4);
-  }
-  .ws-head__titles {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .ws-head__title {
-    font-size: var(--font-size-xl);
-    font-weight: var(--font-weight-bold);
-    letter-spacing: -0.01em;
-    margin: 0;
-    color: var(--color-text);
-  }
-  .ws-head__title small {
-    font-weight: var(--font-weight-regular);
-    color: var(--color-text-muted);
-    font-size: var(--font-size-md);
-    margin-inline-start: 10px;
-  }
-  .ws-head__sub {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-    margin: 0;
-  }
-  .ws-head__actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-
-  /* grids (kit.css 673-675) */
-  .ws-grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-4);
-  }
-  .ws-grid-3 {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-4);
-  }
-  @media (max-width: 1180px) {
-    .ws-grid-3 {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-  @media (max-width: 820px) {
-    .ws-grid-2,
-    .ws-grid-3 {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  /* panel / surface card (kit.css 678-707) */
-  .panel {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-card);
-    padding: var(--space-5);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-  /* NOTE: the prototype kit.css forks `.panel`/`.stat-strip` per dark theme with a
-   * subtle top-highlight gradient. POS-Pulse forbids `[data-theme=dark] .class`
-   * component forks (theme-contract invariant, ADR-0004 — dark is token-only), so
-   * that cosmetic gradient is intentionally dropped; base tokens carry the theme. */
-  .panel__head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-  .panel__title {
-    font-size: var(--font-size-md);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-    margin: 0;
-  }
-  .panel__title small {
-    display: block;
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-regular);
-    color: var(--color-text-muted);
-  }
-
-  /* definition rows (kit.css 709-724) */
-  .def-rows {
-    display: flex;
-    flex-direction: column;
-  }
-  .def-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding-block: var(--space-2);
-    border-block-end: 1px solid var(--color-border-soft);
-    font-size: var(--font-size-sm);
-  }
-  .def-row:last-child {
-    border-block-end: none;
-  }
-  .def-row__k {
-    color: var(--color-text-muted);
-  }
-  .def-row__v {
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-  }
-  .def-row__v.mono {
-    font-family: var(--font-family-mono);
-    font-variant-numeric: tabular-nums;
-  }
-  .def-row--gold .def-row__v {
-    color: var(--color-primary-emphasis);
-  }
-
-  /* stat strip (kit.css 727-747) */
-  .stat-strip {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-card);
-    overflow: hidden;
-    margin-block-end: var(--space-5);
-  }
-  .stat-cell {
-    padding: var(--space-4) var(--space-5);
-    border-inline-start: 1px solid var(--color-border-soft);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .stat-cell:first-child {
-    border-inline-start: none;
-  }
-  .stat-cell__k {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-  }
-  .stat-cell__v {
-    font-family: var(--font-family-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: 1.5rem;
-    font-weight: var(--font-weight-bold);
-    color: var(--color-text);
-    letter-spacing: -0.01em;
-  }
-  .stat-cell--gold .stat-cell__v {
-    color: var(--color-primary-emphasis);
-  }
-  @media (max-width: 1180px) {
-    .stat-strip {
-      grid-template-columns: 1fr 1fr;
-    }
-    .stat-cell:nth-child(odd) {
-      border-inline-start: none;
-    }
-  }
-
-  /* sparkline (kit.css 1504-1522) */
-  .spark {
-    display: flex;
-    align-items: flex-end;
-    gap: 6px;
-    block-size: 88px;
-    padding-block-start: var(--space-2);
-  }
-  .spark__col {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-  .spark__bar {
-    inline-size: 100%;
-    border-radius: 4px 4px 0 0;
-    background: var(--color-primary-soft);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
-    border-block-end: none;
-    min-block-size: 3px;
-    transition: block-size var(--duration-3) var(--ease-out);
-  }
-  .spark__bar--peak {
-    background: var(--color-primary);
-    border-color: var(--color-primary);
-  }
-  .spark__t {
-    font-family: var(--font-family-mono);
-    font-size: 0.625rem;
-    color: var(--color-text-muted);
-  }
-
-  /* top-item rows (kit.css 1524-1530) */
-  .top-item-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding-block: var(--space-2);
-    border-block-end: 1px solid var(--color-border-soft);
-  }
-  .top-item-row:last-child {
-    border-block-end: none;
-  }
-  .top-item-row__rank {
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-text-muted);
-    inline-size: 18px;
-    flex-shrink: 0;
-  }
-  .top-item-row__name {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .top-item-row__n {
-    margin-inline-start: auto;
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-  }
-  .top-item-row__bar {
-    block-size: 4px;
-    border-radius: var(--radius-pill);
-    background: var(--color-primary);
-    opacity: 0.75;
-  }
-
-  /* DEMO banner — dev-only sample-data marker (NOT a kit.css class; Slice 5).
-   * Loud by design: a pilot must never mistake the demo dashboard for real data. */
-  .dashboard-demo-banner {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
-    margin-block-end: var(--space-4);
-    border: 1px dashed var(--color-warning, var(--color-primary));
-    border-radius: var(--radius-control);
-    background: color-mix(in srgb, var(--color-warning, var(--color-primary)) 14%, transparent);
-    color: var(--color-warning-emphasis, var(--color-primary-emphasis));
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: 0.01em;
-  }
   /* ── v4 screen scaffold ──────────────────────────────────────────────────
    * A screen is: an optional header band, then a column track region. Screens
    * declare their track shape with a `--v4-cols` custom property rather than a

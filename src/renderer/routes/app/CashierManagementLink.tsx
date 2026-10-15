@@ -1,7 +1,8 @@
 import type { JSX } from 'react';
-import { Link } from 'react-router-dom';
 
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
+import { HOME_COPY } from '../../v5/manager/home/home-copy';
+import { ManagerTile } from '../../v5/manager/home/ManagerTile';
 
 const CASHIER_MANAGEMENT_PATH = '/app/manager/cashiers';
 const MANAGER_ROLES: ReadonlySet<string> = new Set(['manager', 'admin']);
@@ -25,8 +26,12 @@ export function CashierManagementLink(): JSX.Element | null {
   );
   if (!isManagerRole(role)) return null;
   return (
-    <p data-testid="dashboard-cashier-management-link">
-      <Link to={CASHIER_MANAGEMENT_PATH}>{CASHIER_MANAGEMENT_LINK_LABEL}</Link>
-    </p>
+    <ManagerTile
+      to={CASHIER_MANAGEMENT_PATH}
+      icon="manager-cashiers"
+      title={CASHIER_MANAGEMENT_LINK_LABEL}
+      description={HOME_COPY.cashiers.description}
+      testId="dashboard-cashier-management-link"
+    />
   );
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -8,6 +8,7 @@ import type {
   OperatorBridgeAPI,
   ListStuckShiftsResponse,
 } from '../../../../../src/shared/bridge-api.js';
+import { STUCK_SHIFTS_COPY as COPY } from '../../../../../src/renderer/v5/manager/stuck-shifts/stuck-shifts-copy.js';
 
 /**
  * 004-operator-session T090 — StuckShiftSurface orchestration tests.
@@ -25,7 +26,24 @@ import type {
  *  - On state_invalid: error message shown and list refetched.
  *  - FR-024 blind-close: no financial fields in DOM.
  *  - FR-013 minimum-disclosure: no identity/credential fields in DOM.
+ *
+ * RT-502 (VN-S10 S10-5): ported to the v5 screen. Same calls, refusal
+ * branches and refetch counts; the copy is the frozen G-6 Arabic, each card
+ * holds a real «إغلاق الوردية» button (it replaces the role="button" card),
+ * and the dialog's commit and Cancel are «إغلاق الوردية» / «إلغاء».
  */
+
+/** The «إغلاق الوردية» button inside a shift's card. */
+function cardButton(shiftId: string): HTMLElement {
+  return within(screen.getByTestId(`stuck-shift-card-${shiftId}`)).getByRole('button', {
+    name: COPY.close,
+  });
+}
+
+/** A button of the dialog itself (the row buttons share the commit's name). */
+function dialogButton(name: string): HTMLElement {
+  return within(screen.getByRole('dialog')).getByRole('button', { name });
+}
 
 const SHIFT_0 = {
   shift_id: 'shift-111',
@@ -122,7 +140,7 @@ describe('StuckShiftSurface — error state', () => {
 
     await waitFor(() => screen.getByTestId('stuck-shift-surface-error'));
 
-    const retryBtn = screen.getByRole('button', { name: /retry/i });
+    const retryBtn = screen.getByRole('button', { name: COPY.retry });
     await userEvent.click(retryBtn);
 
     expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
@@ -170,7 +188,7 @@ describe('StuckShiftSurface — card list rendering', () => {
 // ─── Display name fallback ────────────────────────────────────────────────────
 
 describe('StuckShiftSurface — null display_name fallback', () => {
-  it('renders "Cashier ···" when display_name is null', async () => {
+  it('renders «كاشير بلا اسم» when display_name is null', async () => {
     const shifts = [
       {
         shift_id: 'shift-null',
@@ -184,11 +202,11 @@ describe('StuckShiftSurface — null display_name fallback', () => {
     render(<StuckShiftSurface operator={op} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Cashier ···')).toBeInTheDocument();
+      expect(screen.getByText(COPY.unnamed)).toBeInTheDocument();
     });
   });
 
-  it('renders "Cashier ···" when display_name is empty string', async () => {
+  it('renders «كاشير بلا اسم» when display_name is empty string', async () => {
     const shifts = [
       {
         shift_id: 'shift-empty',
@@ -202,7 +220,7 @@ describe('StuckShiftSurface — null display_name fallback', () => {
     render(<StuckShiftSurface operator={op} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Cashier ···')).toBeInTheDocument();
+      expect(screen.getByText(COPY.unnamed)).toBeInTheDocument();
     });
   });
 });
@@ -224,33 +242,33 @@ describe('StuckShiftSurface — duration formatting', () => {
     await waitFor(() => screen.getByText('Test'));
   }
 
-  it('formats duration < 1 as "< 1 min"', async () => {
+  it('formats duration < 1 as «أقل من دقيقة»', async () => {
     await renderWithDuration(0);
-    expect(screen.getByText(/< 1 min/)).toBeInTheDocument();
+    expect(screen.getByText('مفتوحة منذ أقل من دقيقة')).toBeInTheDocument();
     cleanup();
   });
 
-  it('formats duration 47 as "47 min"', async () => {
+  it('formats duration 47 as «47 دقيقة»', async () => {
     await renderWithDuration(47);
-    expect(screen.getByText(/47 min/)).toBeInTheDocument();
+    expect(screen.getByText('مفتوحة منذ 47 دقيقة')).toBeInTheDocument();
     cleanup();
   });
 
-  it('formats duration 60 as "1 h 0 min"', async () => {
+  it('formats duration 60 as «ساعة»', async () => {
     await renderWithDuration(60);
-    expect(screen.getByText(/1 h 0 min/)).toBeInTheDocument();
+    expect(screen.getByText('مفتوحة منذ ساعة')).toBeInTheDocument();
     cleanup();
   });
 
-  it('formats duration 90 as "1 h 30 min"', async () => {
+  it('formats duration 90 as «ساعة و30 دقيقة»', async () => {
     await renderWithDuration(90);
-    expect(screen.getByText(/1 h 30 min/)).toBeInTheDocument();
+    expect(screen.getByText('مفتوحة منذ ساعة و30 دقيقة')).toBeInTheDocument();
     cleanup();
   });
 
-  it('formats duration 125 as "2 h 5 min"', async () => {
+  it('formats duration 125 as «ساعتين و5 دقائق»', async () => {
     await renderWithDuration(125);
-    expect(screen.getByText(/2 h 5 min/)).toBeInTheDocument();
+    expect(screen.getByText('مفتوحة منذ ساعتين و5 دقائق')).toBeInTheDocument();
     cleanup();
   });
 });
@@ -264,8 +282,7 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    const card = screen.getByTestId('stuck-shift-card-shift-111');
-    await userEvent.click(card);
+    await userEvent.click(cardButton('shift-111'));
 
     expect(screen.getByTestId('forced-close-form')).toBeInTheDocument();
   });
@@ -276,10 +293,10 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    await userEvent.click(screen.getByTestId('stuck-shift-card-shift-111'));
+    await userEvent.click(cardButton('shift-111'));
     expect(screen.getByTestId('forced-close-form')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    await userEvent.click(dialogButton(COPY.cancel));
 
     expect(screen.queryByTestId('forced-close-form')).toBeNull();
     expect(op.forceCloseShift).not.toHaveBeenCalled();
@@ -291,14 +308,14 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    await userEvent.click(screen.getByTestId('stuck-shift-card-shift-111'));
+    await userEvent.click(cardButton('shift-111'));
 
     // Select a reason
-    const radioInput = screen.getByRole('radio', { name: /takeover_supersession/i });
+    const radioInput = screen.getByRole('radio', { name: COPY.reasons.takeover_supersession });
     await userEvent.click(radioInput);
 
     // Submit
-    await userEvent.click(screen.getByRole('button', { name: /confirm forced close/i }));
+    await userEvent.click(dialogButton(COPY.close));
 
     await waitFor(() => {
       expect(op.forceCloseShift).toHaveBeenCalledOnce();
@@ -321,9 +338,9 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    await userEvent.click(screen.getByTestId('stuck-shift-card-shift-111'));
-    await userEvent.click(screen.getByRole('radio', { name: /cashier_no_show/i }));
-    await userEvent.click(screen.getByRole('button', { name: /confirm forced close/i }));
+    await userEvent.click(cardButton('shift-111'));
+    await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+    await userEvent.click(dialogButton(COPY.close));
 
     await waitFor(() => {
       // Dialog gone
@@ -343,12 +360,12 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    await userEvent.click(screen.getByTestId('stuck-shift-card-shift-111'));
-    await userEvent.click(screen.getByRole('radio', { name: /takeover_supersession/i }));
-    await userEvent.click(screen.getByRole('button', { name: /confirm forced close/i }));
+    await userEvent.click(cardButton('shift-111'));
+    await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.takeover_supersession }));
+    await userEvent.click(dialogButton(COPY.close));
 
     await waitFor(() => {
-      expect(screen.getByTestId('stuck-shift-submit-error')).toBeInTheDocument();
+      expect(screen.getByTestId('stuck-shift-submit-error')).toHaveTextContent(COPY.changed);
     });
     // Refetch should have been called (initial + refetch = 2)
     expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
@@ -363,12 +380,12 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    await userEvent.click(screen.getByTestId('stuck-shift-card-shift-111'));
-    await userEvent.click(screen.getByRole('radio', { name: /takeover_supersession/i }));
-    await userEvent.click(screen.getByRole('button', { name: /confirm forced close/i }));
+    await userEvent.click(cardButton('shift-111'));
+    await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.takeover_supersession }));
+    await userEvent.click(dialogButton(COPY.close));
 
     await waitFor(() => {
-      expect(screen.getByTestId('stuck-shift-submit-error')).toBeInTheDocument();
+      expect(screen.getByTestId('stuck-shift-submit-error')).toHaveTextContent(COPY.failed);
     });
     // Generic refusal must NOT trigger a refetch — only state_invalid does
     expect(op.listStuckShifts).toHaveBeenCalledTimes(1);
@@ -377,14 +394,15 @@ describe('StuckShiftSurface — dialog flow', () => {
 
 // ─── Keyboard navigation ──────────────────────────────────────────────────────
 
-describe('StuckShiftSurface — keyboard navigation on cards', () => {
+describe('StuckShiftSurface — keyboard navigation on cards (a real button)', () => {
   it('pressing Enter on a card opens the forced-close dialog', async () => {
     const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
     render(<StuckShiftSurface operator={op} />);
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    fireEvent.keyDown(screen.getByTestId('stuck-shift-card-shift-111'), { key: 'Enter' });
+    cardButton('shift-111').focus();
+    await userEvent.keyboard('{Enter}');
 
     expect(screen.getByTestId('forced-close-form')).toBeInTheDocument();
   });
@@ -395,7 +413,8 @@ describe('StuckShiftSurface — keyboard navigation on cards', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    fireEvent.keyDown(screen.getByTestId('stuck-shift-card-shift-111'), { key: ' ' });
+    cardButton('shift-111').focus();
+    await userEvent.keyboard(' ');
 
     expect(screen.getByTestId('forced-close-form')).toBeInTheDocument();
   });
@@ -406,7 +425,8 @@ describe('StuckShiftSurface — keyboard navigation on cards', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    fireEvent.keyDown(screen.getByTestId('stuck-shift-card-shift-111'), { key: 'Tab' });
+    cardButton('shift-111').focus();
+    await userEvent.keyboard('{Tab}');
 
     expect(screen.queryByTestId('forced-close-form')).toBeNull();
   });
@@ -478,9 +498,9 @@ describe('ForcedCloseForm — annotation maxLength', () => {
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
 
-    await userEvent.click(screen.getByTestId('stuck-shift-card-shift-111'));
+    await userEvent.click(cardButton('shift-111'));
 
-    const textarea = screen.getByRole('textbox', { name: /annotation/i });
+    const textarea = screen.getByRole('textbox', { name: COPY.note });
     expect(textarea).toHaveAttribute('maxLength', '500');
   });
 });

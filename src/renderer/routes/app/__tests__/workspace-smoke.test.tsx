@@ -1,15 +1,32 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
-import { DashboardPlaceholder } from '../DashboardPlaceholder';
+import { useOperatorSessionStore } from '../../../stores/operator-session-store';
+import { DashboardRoute } from '../DashboardRoute';
 import { SalesWorkspace } from '../SalesWorkspace';
 import { InventoryPlaceholder } from '../InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 import { CheckoutPlaceholder } from '../checkout/CheckoutPlaceholder';
 
-afterEach(cleanup);
+beforeEach(() => {
+  // RT-499: the dashboard route is the manager home, so it needs a signed-in manager.
+  useOperatorSessionStore.getState().hydrateSignedIn({
+    id: 'sess-mgr',
+    operator_id: 'op-mgr',
+    display_name: 'سارة عبد الحميد',
+    role: 'manager',
+    tenant_id: 't1',
+    branch_id: 'b1',
+    started_at: '2026-10-15T07:00:00.000Z',
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  useOperatorSessionStore.getState().reset();
+});
 
 /**
  * T070a — Screen wrapper smoke tests.
@@ -33,8 +50,8 @@ function renderInRouter(Component: React.ComponentType): ReturnType<typeof rende
 }
 
 describe('Screen wrapper smoke tests (T070a, RT-498)', () => {
-  it('DashboardPlaceholder renders inside a ScreenSection', () => {
-    renderInRouter(DashboardPlaceholder);
+  it('DashboardRoute renders inside a ScreenSection', () => {
+    renderInRouter(DashboardRoute);
     expect(screen.getByTestId('v5-screen-section')).toBeInTheDocument();
   });
 
@@ -61,7 +78,7 @@ describe('Screen wrapper smoke tests (T070a, RT-498)', () => {
 
   it('each placeholder contains exactly one screen wrapper', () => {
     const sectionScreens = [
-      DashboardPlaceholder,
+      DashboardRoute,
       SalesWorkspace,
       InventoryPlaceholder,
       SettingsHelpPlaceholder,

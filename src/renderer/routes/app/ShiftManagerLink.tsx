@@ -1,10 +1,10 @@
 import type { JSX } from 'react';
-import { Link } from 'react-router-dom';
 
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
+import { HOME_COPY } from '../../v5/manager/home/home-copy';
+import { ManagerTile } from '../../v5/manager/home/ManagerTile';
 import { SHIFT_COPY } from '../../v5/shift/shift-copy';
-import '../../v5/shift/shift.css';
 
 const MANAGER_PATH = '/app/shift/manager';
 const MANAGER_ROLES: ReadonlySet<string> = new Set(['manager', 'admin']);
@@ -27,8 +27,12 @@ export function ShiftManagerLink(): JSX.Element | null {
   );
   if (!enabled || !isManagerRole(role)) return null;
   return (
-    <p className="v5-shift-notice" data-testid="dashboard-shift-link">
-      <Link to={MANAGER_PATH}>{SHIFT_COPY.managerLink}</Link>
-    </p>
+    <ManagerTile
+      to={MANAGER_PATH}
+      icon="manager-shift"
+      title={SHIFT_COPY.managerLink}
+      description={HOME_COPY.shift.description}
+      testId="dashboard-shift-link"
+    />
   );
 }
