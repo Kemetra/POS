@@ -22,6 +22,19 @@
  * A kick failure records nothing paid (`drawer_failed`); the payout stays
  * started for `retry_drawer` or `manual`.
  *
+ * ## No drawer (RT-531)
+ *
+ * The cash drawer is optional. A kick answered `no_drawer_configured` means
+ * "this terminal has no drawer" (owner decision 2026-10-15, Q3 Option A: no new
+ * setting): the answer proves the kick never reached hardware, so the payout
+ * completes from the pay-out action alone as method `no_drawer`, with no
+ * attestation step. The kick outcome is still persisted and audited first. A
+ * configured drawer that fails (`printer_dk_failure`, `os_error`, `timeout`) is
+ * unchanged: it answers `drawer_failed`, is never kicked again, and only the
+ * attested `manual` payout completes it. Both `start` and `retry_drawer` take
+ * this path, so a no-drawer completion lost between the kick and the commit is
+ * finished by a retry.
+ *
  * ## Authorization
  *
  * Admitted with the RT-197 immutable snapshot (manager/admin, flag on,
@@ -94,6 +107,9 @@ class SlipTotalMismatch extends Error {
     super('returns-payout: slip lines do not add up to the refund');
   }
 }
+
+/** The transport's answer for a terminal with no cash drawer (RT-531: optional). */
+const NO_DRAWER_CONFIGURED = 'no_drawer_configured';
 
 /** The failure reason a slip that does not add up is recorded with. */
 const SLIP_TOTAL_MISMATCH = 'slip_total_mismatch';
@@ -193,13 +209,13 @@ const NOT_COMPLETED: Readonly<Record<Exclude<CompleteResult, 'completed'>, Retur
  */
 export function kickResultOf(kick: ReturnDrawerOutcome): KickResult {
   if (kick.ok) return 'opened';
-  return kick.reason === 'no_drawer_configured' ? 'failed_before_send' : 'unknown';
+  return kick.reason === NO_DRAWER_CONFIGURED ? 'failed_before_send' : 'unknown';
 }
 
 /** The drawer audit of a kick: opened, or why not and what that proves. */
 function drawerAuditOf(kick: ReturnDrawerOutcome): DrawerAuditOutcome {
   if (kick.ok) return kick;
-  const kickOutcome = kick.reason === 'no_drawer_configured' ? 'failed_before_send' : 'unknown';
+  const kickOutcome = kick.reason === NO_DRAWER_CONFIGURED ? 'failed_before_send' : 'unknown';
   return { ok: false, reason: kick.reason, kickOutcome };
 }
 
@@ -487,10 +503,10 @@ class ReturnsPayoutService implements ReturnsPayoutAPI {
   private async afterKick(actor: AuthSnapshot, entry: JournalEntry, kick: ReturnDrawerOutcome) {
     if (this.deps.isStopped()) return { ...SHUTTING_DOWN, ret: null };
     this.persistKick(actor, entry, kick);
-    if (!kick.ok) {
-      return { kind: 'drawer_failed', ret: this.viewOf(entry), reason: kick.reason } as const;
-    }
-    return this.commit(actor, entry, 'drawer');
+    if (kick.ok) return this.commit(actor, entry, 'drawer');
+    // RT-531: no drawer on this terminal is not a failure to attest around.
+    if (kick.reason === NO_DRAWER_CONFIGURED) return this.commit(actor, entry, 'no_drawer');
+    return { kind: 'drawer_failed', ret: this.viewOf(entry), reason: kick.reason } as const;
   }
 
   /** The kick's outcome and its audit, in one transaction. */

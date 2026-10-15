@@ -1,10 +1,11 @@
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import { expectNoAxeViolations } from '../../primitives/__tests__/axe-config';
-import { DrawerNoticeBanner, DrawerNoticeInline } from '../DrawerNotice';
+import { DrawerNoticeBanner, DrawerNoticeInline, useDrawerNoticeFeed } from '../DrawerNotice';
 import { useDrawerNoticeStore } from '../drawer-notice-store';
 
 /**
@@ -118,5 +119,77 @@ describe('DrawerNoticeInline (inside cash completion)', () => {
     );
     expect(screen.queryByTestId('drawer-notice')).not.toBeInTheDocument();
     expect(screen.queryByTestId('drawer-notice-inline')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * RT-531 (the cash drawer is optional): the notice is fed only by the main
+ * process's banner projection. A cash sale on a terminal with NO drawer is a
+ * suppressed drawer event, which main never projects as a drawer failure, so
+ * neither the status-area notice nor the inline line ever appears. A configured
+ * drawer that fails is still projected, and still shows.
+ */
+describe('RT-531: no notice without a drawer', () => {
+  type Projection = { sale_id: string; last_successful_open_at: string | null } | null;
+
+  function Harness(): ReactElement {
+    useDrawerNoticeFeed();
+    return (
+      <>
+        <DrawerNoticeBanner now={NOW} onManualOverride={vi.fn()} />
+        <DrawerNoticeInline />
+      </>
+    );
+  }
+
+  function stubSales(projections: Projection[]): void {
+    let i = 0;
+    const subscribe = vi.fn(() => {
+      const drawer_failure = projections[Math.min(i, projections.length - 1)] ?? null;
+      i += 1;
+      return Promise.resolve({
+        kind: 'ok',
+        banner_state: { printer_failure: null, drawer_failure },
+      });
+    });
+    vi.stubGlobal('api', { sales: { subscribe } });
+  }
+
+  async function polls(times: number): Promise<void> {
+    for (let n = 0; n < times; n += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+    }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('a cash sale with no drawer (projection stays clean) never shows a notice', async () => {
+    stubSales([null, null, null, null]);
+    render(<Harness />);
+    await polls(3);
+    expect(screen.queryByTestId('drawer-notice')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('drawer-notice-inline')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'إيصال يدوي' })).not.toBeInTheDocument();
+  });
+
+  it('a configured drawer that fails is still projected: both notices show', async () => {
+    stubSales([null, { sale_id: 'sale-cfg', last_successful_open_at: '2026-10-08T09:58:00.000Z' }]);
+    render(<Harness />);
+    await polls(2);
+    expect(screen.getByTestId('drawer-notice')).toHaveTextContent(
+      'لم يُفتح درج النقود. افتحه يدويًا.',
+    );
+    expect(screen.getByTestId('drawer-notice-inline')).toBeInTheDocument();
+    // The manual receipt (إيصال يدوي) stays wired for the failed sale.
+    expect(screen.getByRole('button', { name: 'إيصال يدوي' })).toBeInTheDocument();
   });
 });

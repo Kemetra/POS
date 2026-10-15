@@ -109,6 +109,29 @@ describe('afterPayout', () => {
     });
   });
 
+  it('RT-531: a no_drawer payout is paid straight from the first action, with no attestation step', () => {
+    const noDrawer = journal({
+      state: 'paid_out',
+      payout: { ...PAID, method: 'no_drawer' as const, kick: 'failed_before_send' as const },
+    });
+    const res: ReturnsPayoutResponse = {
+      kind: 'paid_out',
+      ret: noDrawer,
+      method: 'no_drawer',
+      slip: 'printed',
+    };
+    const next = afterPayout(state(), res);
+    expect(next.phase).toEqual({ kind: 'paid', slip: 'printed', method: 'no_drawer' });
+    // Nothing to attest: a paid panel offers no manual step to ask for.
+    expect(askManual(next)).toBe(next);
+    // The journal row alone reads the same, with the explicit value.
+    expect(initialPayout(noDrawer).phase).toEqual({
+      kind: 'paid',
+      slip: null,
+      method: 'no_drawer',
+    });
+  });
+
   it('R1: drawer_failed is never paid; it keeps the reason', () => {
     const res: ReturnsPayoutResponse = {
       kind: 'drawer_failed',

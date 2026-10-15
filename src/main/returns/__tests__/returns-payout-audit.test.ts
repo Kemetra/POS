@@ -125,6 +125,21 @@ describe('payout audit events (U1)', () => {
     });
   });
 
+  it('RT-531: paid_out carries the explicit no_drawer method (the kick outcome is its own event)', () => {
+    const { audit, stored } = auditWithStore();
+    audit.drawer(PAYER, ENTRY, {
+      ok: false,
+      reason: 'no_drawer_configured',
+      kickOutcome: 'failed_before_send',
+    });
+    audit.paidOut(PAYER, ENTRY, 'no_drawer');
+    expect(stored[0]?.payload).toMatchObject({
+      failure_reason: 'no_drawer_configured',
+      kick_outcome: 'failed_before_send',
+    });
+    expect(stored[1]?.payload).toMatchObject({ method: 'no_drawer', tender: 'cash' });
+  });
+
   it('records why the drawer or the slip failed', () => {
     const { audit, stored } = auditWithStore();
     audit.drawer(PAYER, ENTRY, { ok: false, reason: 'timeout', kickOutcome: 'unknown' });

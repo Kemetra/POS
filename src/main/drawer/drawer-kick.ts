@@ -19,6 +19,9 @@
  *   • prior row already exists      → no-op (FR-053 double-kick suppression;
  *                                     covers reprint + retry-after-partial-open).
  *   • cash-inclusive first print    → kick → `opened` | `failed` row + audit.
+ *   • …and the kick answers `no_drawer_configured` (RT-531: the cash drawer is
+ *     optional; this terminal has none) → `suppressed` / `no_drawer_configured`
+ *     row + `sale.drawer.suppressed` audit — never `failed`, so no notice.
  *   • cashless first print          → `suppressed` / `cashless_tender_mix` row
  *                                     + `sale.drawer.suppressed` audit; NO kick.
  *
@@ -30,6 +33,7 @@
 import type {
   DrawerEventsRepository,
   DrawerEventFailureReason,
+  DrawerEventSuppressionReason,
 } from '../sales/repositories/drawer-events.repository.js';
 import type { DrawerKickTransport } from './drawer-kick-transport.js';
 import type { SaleAuditEmitter } from '../sales/audit-emitter.js';
@@ -148,11 +152,16 @@ export function createDrawerKickDispatcher(deps: DrawerKickDependencies): Drawer
   // Extracted so the public method stays under the function-length ceiling and
   // the three terminal triples (insert + emit + log) don't repeat inline.
 
-  function recordSuppressed(ctx: DrawerKickContext, base: BaseDrawerRow, created_at: string): void {
+  function recordSuppressed(
+    ctx: DrawerKickContext,
+    base: BaseDrawerRow,
+    created_at: string,
+    suppression_reason: DrawerEventSuppressionReason,
+  ): void {
     drawerEventsRepo.insert({
       ...base,
       outcome: 'suppressed',
-      suppression_reason: 'cashless_tender_mix',
+      suppression_reason,
       failure_reason: null,
       last_successful_open_at_for_terminal: null,
     });
@@ -162,11 +171,11 @@ export function createDrawerKickDispatcher(deps: DrawerKickDependencies): Drawer
       {
         sale_id: ctx.sale_id,
         drawer_event_id: base.drawer_event_id,
-        suppression_reason: 'cashless_tender_mix',
+        suppression_reason,
       },
       created_at,
     );
-    logger.info({ msg: 'sale.drawer.suppressed', sale_id: ctx.sale_id });
+    logger.info({ msg: 'sale.drawer.suppressed', sale_id: ctx.sale_id, suppression_reason });
   }
 
   function recordOpened(ctx: DrawerKickContext, base: BaseDrawerRow, created_at: string): void {
@@ -253,7 +262,7 @@ export function createDrawerKickDispatcher(deps: DrawerKickDependencies): Drawer
 
       // Cashless first print → suppressed; no kick (FR-042).
       if (!hasCashTender(ctx.tender_lines_summary_json)) {
-        recordSuppressed(ctx, base, created_at);
+        recordSuppressed(ctx, base, created_at, 'cashless_tender_mix');
         return;
       }
 
@@ -271,6 +280,16 @@ export function createDrawerKickDispatcher(deps: DrawerKickDependencies): Drawer
 
       if (result.ok) {
         recordOpened(ctx, base, created_at);
+        return;
+      }
+      // RT-531 (owner decision 2026-10-15, Q3 Option A): a transport that
+      // answers `no_drawer_configured` means this terminal has no drawer. That
+      // is not a fault to warn about: still exactly one row for the sale
+      // (FR-053), recorded `suppressed`, so the projector raises no notice.
+      // A configured drawer that fails (printer_dk_failure, os_error) stays
+      // `failed`, with its warning.
+      if (result.failure_reason === 'no_drawer_configured') {
+        recordSuppressed(ctx, base, created_at, 'no_drawer_configured');
         return;
       }
       recordFailed(ctx, base, created_at, result.failure_reason);

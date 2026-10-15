@@ -1764,10 +1764,13 @@ singleInstanceReady
     // 008 Slice 4 drawer port, hoisted (RT-15 S4) so the sale drawer-kick
     // dispatcher and the return payout share ONE drawer transport. The real
     // DK1/DK2 transport is the §A3 hardware bring-up (T200), deferred: until
-    // then this honest STUB reports `no_drawer_configured` — a cash sale
-    // records a `failed` drawer row, and a return payout answers
-    // `drawer_failed` (nothing paid is recorded; the manager may then attest a
-    // manual payout). Never a faked "opened" (PRODUCT.md Principle 3).
+    // then this honest STUB reports `no_drawer_configured`. RT-531 (owner
+    // decision 2026-10-15): the cash drawer is optional, and that answer means
+    // "this terminal has no drawer" — a cash sale records a `suppressed` drawer
+    // row (no notice) and a return payout completes as `no_drawer` (no manual
+    // attestation). Never a faked "opened" (PRODUCT.md Principle 3). A real
+    // transport that answers `printer_dk_failure` / `os_error` / `timeout` is a
+    // configured drawer that failed: it still warns and keeps the attestation.
     const drawerKickTransport: DrawerKickTransport = {
       kick: () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' }),
     };
@@ -1847,10 +1850,10 @@ singleInstanceReady
       // DK1/DK2 transport (node-thermal-printer `openCashDrawer` ↔ the Epson's
       // DRAWER port driving the APG VBS320) is the §A3 HARDWARE bring-up (T200),
       // deferred — same posture as the print transport above. Until then an
-      // honest STUB reports `no_drawer_configured`, so a cash sale records a
-      // clean `failed` drawer row + raises the drawer-failure banner while the
-      // Sale stays durable — no fake "opened" is recorded (PRODUCT.md
-      // Principle 3). T200 swaps the shared `drawerKickTransport` (hoisted above,
+      // honest STUB reports `no_drawer_configured`, which (RT-531) the
+      // dispatcher records as a `suppressed` drawer row — no drawer-failure
+      // notice — while the Sale stays durable; no fake "opened" is recorded
+      // (PRODUCT.md Principle 3). T200 swaps the shared `drawerKickTransport` (hoisted above,
       // also used by the RT-15 S4 return payout) for the real one; nothing else
       // changes.
       const drawerKickDispatcher = createDrawerKickDispatcher({

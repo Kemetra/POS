@@ -48,6 +48,21 @@ function kickRecord(returnId: string): unknown[] | undefined {
 
 const UNSAFE_RETRY = { kind: 'refused', reason: 'drawer_retry_unsafe' };
 
+/**
+ * A kick that provably never left, with nothing paid: no drawer answered, and
+ * the till locked before the commit. (RT-531: with no drawer the commit
+ * normally follows at once, as `no_drawer`; this is that completion lost.)
+ */
+async function kickThatNeverLeft(returnId: string): Promise<void> {
+  h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+  h.drawer.onKick = () => {
+    h.state.locked = true;
+  };
+  await h.service.payout({ returnId, action: 'start' });
+  h.drawer.onKick = null;
+  h.state.locked = false;
+}
+
 describe('P1: no second kick after the till knows the drawer opened', () => {
   it.each<[string, (x: ReturnsHarness) => void, (x: ReturnsHarness) => void]>([
     ['a lock', (x) => (x.state.locked = true), (x) => (x.state.locked = false)],
@@ -119,8 +134,7 @@ describe('P1: no second kick after the till knows the drawer opened', () => {
 describe('P1 + reviewer P2-1: only a kick that provably never left may be retried', () => {
   it('no drawer configured is failed_before_send: a retry kicks again', async () => {
     const returnId = await confirmedReturn(h.service);
-    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
-    await h.service.payout({ returnId, action: 'start' });
+    await kickThatNeverLeft(returnId);
     expect(kickRecord(returnId)).toEqual(['failed_before_send', 1]);
     h.drawer.answer = () => Promise.resolve({ ok: true });
     expect(await h.service.payout({ returnId, action: 'retry_drawer' })).toMatchObject({
@@ -163,8 +177,7 @@ describe('P1 + reviewer P2-1: only a kick that provably never left may be retrie
 
   it('each drawer audit says what is known about the kick', async () => {
     const returnId = await confirmedReturn(h.service);
-    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
-    await h.service.payout({ returnId, action: 'start' });
+    await kickThatNeverLeft(returnId);
     h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'os_error' });
     await h.service.payout({ returnId, action: 'retry_drawer' });
     const drawer = h.audits.filter((a) => a.action_category === 'sale.return.drawer_failed');

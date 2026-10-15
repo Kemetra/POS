@@ -254,8 +254,15 @@ describe('the claim is a guarded insert', () => {
 
   it("Codex P2 (c21d7e2): losing the race to another instance's kick is drawer_kick_in_progress", async () => {
     const returnId = await confirmedReturn(h.service);
+    // A kick that never left, nothing paid (RT-531: no drawer would otherwise
+    // have been paid out as no_drawer at once): the till locks before the commit.
     h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+    h.drawer.onKick = () => {
+      h.state.locked = true;
+    };
     await h.service.payout({ returnId, action: 'start' });
+    h.drawer.onKick = null;
+    h.state.locked = false;
     // The other instance starts a retry kick between this one's checks and its commit.
     const payouts = racingAfterRead((p, id) => p.markSending({ returnId: id, now: NOW }));
     const res = await serviceOver({ payouts, now: () => NOW }).payout({

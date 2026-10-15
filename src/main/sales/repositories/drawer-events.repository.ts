@@ -31,7 +31,13 @@ interface PrepareGet<Row> {
 // ── Closed enums (mirror data-model.md §"Entity: DrawerEvent" + migration 0023) ──
 
 export type DrawerEventOutcome = 'opened' | 'suppressed' | 'failed';
-export type DrawerEventSuppressionReason = 'cashless_tender_mix';
+export type DrawerEventSuppressionReason = 'cashless_tender_mix' | 'no_drawer_configured';
+/**
+ * `no_drawer_configured` stays in the failure union for the historical rows the
+ * pre-RT-531 stub wrote (the table is append-only). It is also what the transport
+ * answers for a terminal with no drawer; the dispatcher turns THAT answer into a
+ * `suppressed` row (RT-531), so a new `failed` row never carries it.
+ */
 export type DrawerEventFailureReason = 'printer_dk_failure' | 'os_error' | 'no_drawer_configured';
 
 export interface DrawerEventRow {

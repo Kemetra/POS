@@ -1,6 +1,10 @@
 import type { JSX, Ref } from 'react';
 
-import type { ReturnJournalView, ReturnsBridgeAPI } from '../../shared/returns/types.js';
+import type {
+  ReturnJournalView,
+  ReturnPayoutMethod,
+  ReturnsBridgeAPI,
+} from '../../shared/returns/types.js';
 import type { PayoutPhase } from './payout-state.js';
 import { formatReturnMoney, formatReturnTime } from './returns-format.js';
 import {
@@ -43,9 +47,16 @@ function toneOf(state: Payout['state']): Tone {
   return slipFailed || reprintNotPrinted ? 'warning' : TONES[state.phase.kind];
 }
 
+/** How the cash left the till, in words (RT-531: a no-drawer terminal never says "the drawer is open"). */
+const PAID_HOW: Readonly<Record<ReturnPayoutMethod, string>> = {
+  drawer: PAYOUT_COPY.paidDrawer,
+  manual: PAYOUT_COPY.paidManual,
+  no_drawer: PAYOUT_COPY.paidNoDrawer,
+};
+
 function paidLines(phase: Extract<PayoutPhase, { kind: 'paid' }>): string[] {
   if (phase.slip === null) return [PAYOUT_COPY.paidEarlier];
-  const how = phase.method === 'manual' ? PAYOUT_COPY.paidManual : PAYOUT_COPY.paidDrawer;
+  const how = PAID_HOW[phase.method ?? 'drawer'];
   const slip = phase.slip === 'printed' ? PAYOUT_COPY.slipPrinted : PAYOUT_COPY.slipFailed;
   return [PAYOUT_COPY.paid, how, slip];
 }

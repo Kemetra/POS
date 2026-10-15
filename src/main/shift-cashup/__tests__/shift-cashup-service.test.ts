@@ -325,6 +325,24 @@ describe('closeShift — the cash-up', () => {
     expect(storedBody(db, 2)['cashRefundReturnRefs']).toEqual(counted ? [REF] : []);
   });
 
+  it.each<['manual' | 'drawer' | 'no_drawer']>([['manual'], ['drawer'], ['no_drawer']])(
+    'RT-531: a %s refund payout is cash that left the drawer, counted the same',
+    (method) => {
+      openShift();
+      seedRefund(db, {
+        returnId: 'r-m',
+        returnRef: REF,
+        amountMinor: 1_000,
+        paidAt: OPENED_AT,
+        method,
+      });
+      const closed = service.closeShift({ countedCashMinor: FLOAT - 1_000 });
+      expect(closed.cashRefundsTotalMinor).toBe(1_000);
+      expect(closed.expectedCashMinor).toBe(FLOAT - 1_000);
+      expect(storedBody(db, 2)['cashRefundReturnRefs']).toEqual([REF]);
+    },
+  );
+
   it('ignores another terminal’s sales and refunds', () => {
     openShift();
     const scope = OTHER_TERMINAL;
