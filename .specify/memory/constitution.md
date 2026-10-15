@@ -35,7 +35,8 @@ Bump rationale: MINOR — materially expanded guidance in Additional Constraints
     pilot; beyond it only where the effective viewport ≥ 1024×600, 600–767 band once verified);
     its plan.md Constitution Check row aligned; the dependent 150 % clauses (spec Edge Cases
     high-DPI bullet, assumption A5, `contracts/screenshot-acceptance.md`, `quickstart.md`)
-    carry the same qualification.
+    carry the same qualification, as do spec 003's high-DPI edge case, NFR-3 and its monitor
+    assumption.
   - ✅ `README.md`, `CLAUDE.md`, `docs/maestro/README.md` — version references updated to v1.7.0.
 
   Follow-up TODOs (open):
