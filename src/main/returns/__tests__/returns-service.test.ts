@@ -10,6 +10,9 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ReturnsRefusalReason } from '../../../shared/returns/types.js';
+import { createSaleVoidRepository } from '../../sale-void/sale-void-repository.js';
+import { newVoidEntry } from '../../sale-void/__tests__/__helpers__/sale-void-fixture.js';
+import { handleFor } from '../../sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
 import type { Role } from '../../../shared/operator/role.js';
 import {
   CARD_SUMMARY,
@@ -18,6 +21,7 @@ import {
   LINE_B,
   RETURN_REF,
   SALE_NUMBER,
+  SCOPE,
   SALE_REF,
   categories,
   errorBody,
@@ -521,5 +525,50 @@ describe('list', () => {
   it('is refused for a cashier', async () => {
     h.state.role = 'cashier';
     await expect(h.service.list()).resolves.toEqual({ kind: 'refused', reason: 'role_denied' });
+  });
+});
+
+describe('RT-530 — a sale with a live void is not returnable', () => {
+  function journalVoid(state: 'pending' | 'confirmed' | 'refused'): void {
+    const repo = createSaleVoidRepository(handleFor(h.db));
+    repo.insert(newVoidEntry(1, { scope: SCOPE, saleId: 'sale-1', saleNumber: SALE_NUMBER }));
+    if (state === 'confirmed') repo.markConfirmed({ voidId: 'v1', voidRef: 'evt-1', now: 't' });
+    if (state === 'refused')
+      repo.markRefused({ voidId: 'v1', reason: 'void_self_approval', now: 't' });
+  }
+
+  it.each(['pending', 'confirmed'] as const)(
+    'refuses the lookup with sale_voided while the void is %s, before any network call, audited',
+    async (state) => {
+      setupServing(saleBody());
+      journalVoid(state);
+      await expect(h.service.lookup({ saleNumber: SALE_NUMBER })).resolves.toEqual({
+        kind: 'refused',
+        reason: 'sale_voided',
+      });
+      expect(h.backend.calls).toHaveLength(0);
+      expect(categories(h.audits)).toEqual(['sale.return.refused']);
+    },
+  );
+
+  it('a void journaled while the sale is being read refuses the submit: no return is journaled or sent', async () => {
+    setupServing(saleBody());
+    h.backend.onRead = () => {
+      journalVoid('pending');
+    };
+    await expect(h.service.submit(ONE_A)).resolves.toEqual({
+      kind: 'refused',
+      reason: 'sale_voided',
+      ret: null,
+    });
+    expect(journalCount()).toBe(0);
+    expect(h.backend.returnCalls()).toHaveLength(0);
+  });
+
+  it('a refused void frees the sale: the lookup goes on to the live read', async () => {
+    setupServing(saleBody());
+    journalVoid('refused');
+    const answer = await h.service.lookup({ saleNumber: SALE_NUMBER });
+    expect(answer.kind).toBe('ok');
   });
 });

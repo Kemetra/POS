@@ -25,6 +25,7 @@ import { createReadDownClient } from '../../../src/main/catalogue/read-down/read
 import { createSaleSyncClient } from '../../../src/main/sales-sync/create-sale-sync-client.js';
 import type { CaptureSalePayload } from '../../../src/main/sales-sync/capture-payload.js';
 import { createReturnsClient } from '../../../src/main/returns/returns-client.js';
+import { createSaleVoidClient } from '../../../src/main/sale-void/sale-void-client.js';
 import type { QueuedShiftFact } from '../../../src/main/shift-cashup/shift-cashup-repo.js';
 import type { ShiftFactKind } from '../../../src/main/shift-cashup/shift-wire.js';
 import { createShiftSyncClient } from '../../../src/main/shift-cashup/shift-sync-client.js';
@@ -125,6 +126,8 @@ const backendClient = (fetch: FetchLike): ReturnType<typeof createBackendClient>
   createBackendClient({ baseUrl: BASE_URL, fetch });
 const returnsClient = (fetch: FetchLike): ReturnType<typeof createReturnsClient> =>
   createReturnsClient({ baseUrl: BASE_URL, fetch });
+const saleVoidClient = (fetch: FetchLike): ReturnType<typeof createSaleVoidClient> =>
+  createSaleVoidClient({ baseUrl: BASE_URL, fetch });
 const readDownClient = (fetch: FetchLike): ReturnType<typeof createReadDownClient> =>
   createReadDownClient({
     baseUrl: BASE_URL,
@@ -182,6 +185,8 @@ export const CLIENT_MODULES: readonly ClientModule[] = [
     surface: saleSyncClient,
   },
   { module: 'src/main/returns/returns-client.ts', fetchCallSites: 1, surface: returnsClient },
+  // RT-530: the sale void, under the requester's own operator envelope only.
+  { module: 'src/main/sale-void/sale-void-client.ts', fetchCallSites: 1, surface: saleVoidClient },
   { module: SHIFT_SYNC_CLIENT, fetchCallSites: 1, surface: shiftSyncClient },
   { module: `${VOUCHER_DIR}/validate.ts`, fetchCallSites: 1 },
   { module: `${VOUCHER_DIR}/redeem.ts`, fetchCallSites: 1 },
@@ -355,6 +360,25 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
           bodyJson: '{}',
           idempotencyKey: 'pos-pulse-return:contract-conformance',
           resend: false,
+        },
+        SENTINEL['operator-envelope'],
+      ),
+  },
+  // RT-530: the queued sale void. The envelope is the requester's own (the
+  // server binds `approval.requesterUserId` to it); there is no device path.
+  {
+    id: 'saleVoidClient.recordVoid',
+    module: 'src/main/sale-void/sale-void-client.ts',
+    method: 'post',
+    pathTemplate: '/api/pos/v1/sales/{saleRef}/void',
+    wiring:
+      'compose-sale-void.ts: the signed-in requester envelope (operatorEnvelopeHolder), sent only while the requester is the signed-in operator',
+    invoke: (fetch) =>
+      saleVoidClient(fetch).recordVoid(
+        {
+          saleRef: SALE_REF,
+          bodyJson: '{}',
+          idempotencyKey: 'pos-pulse-void:contract-conformance',
         },
         SENTINEL['operator-envelope'],
       ),

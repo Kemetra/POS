@@ -9,6 +9,7 @@ import { returns } from './returns.js';
 import { shiftCashup } from './shift-cashup.js';
 import { approval } from './manager-approval.js';
 import { recovery } from './recovery.js';
+import { saleVoid } from './sale-void.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -208,6 +209,9 @@ const api: PreloadBridgeAPI = {
   approval,
   // RT-441 (RT-116 §5) — recovery.* (manager / admin; each action approved).
   recovery,
+  // RT-530 — saleVoid.* (lookup / request / list / acknowledge). Gated in main on
+  // the feature flag and the session; the request spends a manager approval.
+  saleVoid,
 };
 
 contextBridge.exposeInMainWorld('api', api);

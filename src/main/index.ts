@@ -6,6 +6,13 @@ import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
 import { createRecoveryModeGuardedIpcMain } from './ipc/recovery-mode-guard.js';
 import { registerRecoveryHandlers } from './ipc/recovery.js';
+import { registerSaleVoidHandlers } from './ipc/sale-void.js';
+import {
+  composeSaleVoid,
+  SALE_VOID_DRAIN_TIMEOUT_MS,
+  scheduleSaleVoidSync,
+  type ComposedSaleVoid,
+} from './sale-void/compose-sale-void.js';
 import {
   createManagerRecovery,
   createRecoveryPaymentPort,
@@ -983,6 +990,8 @@ singleInstanceReady
       }),
     });
     const recoveryRef: { current: ManagerRecovery | null } = { current: null };
+    // RT-530 — the sale void's approval subject, bound below once the domain exists.
+    const saleVoidRef: { current: ComposedSaleVoid | null } = { current: null };
     const managerApprovals = createManagerApprovalService({
       db,
       getSession: () => operatorSessionManager.getCurrent(),
@@ -991,6 +1000,8 @@ singleInstanceReady
       managerPins,
       resolvers: {
         'cart.cancel_post_handoff': postHandoffCancelApprovalResolver(bindCartStore(db)),
+        // RT-530 — a finalized sale's void: bound to the sale, its total and its requester.
+        'sale.void': (input) => saleVoidRef.current?.service.approvalSubject(input) ?? null,
         // RT-441 — manager recovery (bound below, once the payment path exists).
         'recovery.complete_attempt': (input) =>
           recoveryRef.current?.resolvers.completeAttempt(input) ?? null,
@@ -2208,6 +2219,55 @@ singleInstanceReady
     // (startup + interval) re-sends `pending` / `unknown` returns with the
     // identical request; it is scheduled with the flag on and resolves pairing +
     // operator live on every tick.
+    // ── RT-530 — manager-approved void of a finalized sale ──
+    //
+    // The `saleVoid:*` handlers are registered UNCONDITIONALLY (the renderer
+    // gets a typed `feature_disabled` refusal, never "no handler"); the service
+    // re-reads `POS_PULSE_FEATURE_SALE_VOID` per call (default off). A request
+    // spends a single-use RT-114 manager approval and journals the void; the
+    // send engine posts it later under the REQUESTER's own operator envelope
+    // only (the same in-process envelope reader sale sync uses), once the sale
+    // has synced. No device bearer is involved.
+    const saleVoidDomain = composeSaleVoid({
+      db,
+      http: {
+        baseUrl: resolveApiBaseUrl(),
+        fetch: globalThis.fetch.bind(globalThis),
+      },
+      getOperatorEnvelope: createSaleSyncTokenReader(
+        operatorSessionManager,
+        operatorEnvelopeHolder,
+      ),
+      getSession: () => operatorSessionManager.getCurrent(),
+      getTerminalId: () => pairingStore.getCurrentTerminalId(),
+      isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
+      isEnabled: () => parseFeatureFlags(process.env).saleVoid,
+      approvals: managerApprovals,
+      auditSink: auditEmitter,
+      logger: mainLogger,
+      now: () => new Date().toISOString(),
+    });
+    saleVoidRef.current = saleVoidDomain;
+    registerSaleVoidHandlers(guardedIpcMain, {
+      service: saleVoidDomain.service,
+      logger: mainLogger,
+    });
+    if (parseFeatureFlags(process.env).saleVoid) {
+      // Each pass resolves its sender live (the signed-in operator and their
+      // envelope), so a requester who signs in later is picked up without a restart.
+      const SALE_VOID_SEND_INTERVAL_MS = 5_000;
+      const stopSaleVoidSync = scheduleSaleVoidSync({
+        sync: saleVoidDomain.sync,
+        stopDomain: saleVoidDomain.stop,
+        intervalMs: SALE_VOID_SEND_INTERVAL_MS,
+        drainTimeoutMs: SALE_VOID_DRAIN_TIMEOUT_MS,
+        logger: mainLogger,
+      });
+      workerRegistry.register('sale-void interval', () => {
+        void stopSaleVoidSync();
+      });
+    }
+
     const returnsDomain = composeReturns({
       db,
       http: {

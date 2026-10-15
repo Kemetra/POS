@@ -84,7 +84,7 @@ export class TenderNotSendableError extends Error {
   }
 }
 
-const SOURCE_SYSTEM = 'pos-pulse' as const;
+export const SOURCE_SYSTEM = 'pos-pulse' as const;
 
 /** The frozen line snapshot shape persisted in `sales.lines_json` (008 T028a). */
 interface PersistedLineSnapshot {

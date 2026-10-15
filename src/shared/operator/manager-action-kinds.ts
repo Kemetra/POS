@@ -10,6 +10,9 @@
  */
 export const MANAGER_ACTION_KINDS = [
   'cart.cancel_post_handoff',
+  // RT-530 — voiding a finalized sale: a bound approval, four-eyes against the
+  // requester AND the sale's selling operator, same business day only.
+  'sale.void',
   'cart.discount.manual',
   'shift.pay_in',
   'shift.pay_out',
