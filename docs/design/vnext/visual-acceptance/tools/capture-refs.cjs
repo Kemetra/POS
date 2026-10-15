@@ -74,7 +74,10 @@ function failuresOf(fit, axe) {
   return failed;
 }
 
-/** Screenshots one reference in one mode; in light mode also returns its check result. */
+/**
+ * Screenshots one reference in one mode and returns its check result. The checks run in both
+ * modes: forced-colors CSS can change borders and sizes, so a light pass proves nothing for it.
+ */
 async function captureOne(browser, file, mode, opts) {
   const w = file.includes('-1024') ? 1024 : 1280;
   const ctx = await browser.newContext({ viewport: { width: w + 48, height: SIZES[w] + 48 }, deviceScaleFactor: 1 });
@@ -84,10 +87,12 @@ async function captureOne(browser, file, mode, opts) {
     await page.goto(pathToFileURL(path.join(opts.packDir, file)).href);
     const el = await page.$('.rt');
     await el.screenshot({ path: path.join(opts.packDir, 'captures', file.replace('.html', `-${mode}.png`)) });
-    if (mode !== 'light') return null;
     const fit = await page.evaluate(pageChecks, opts.selectors);
     const axe = await runAxe(page);
-    return { line: `${file}: ${JSON.stringify({ ...fit, axe })}`, failed: failuresOf(fit, axe) };
+    return {
+      line: `${file} [${mode}]: ${JSON.stringify({ ...fit, axe })}`,
+      failed: failuresOf(fit, axe),
+    };
   } finally {
     await ctx.close();
   }
@@ -108,9 +113,8 @@ async function captureRefs({ packDir, prefix, selectors }) {
     for (const file of files) {
       for (const mode of ['light', 'forced']) {
         const result = await captureOne(browser, file, mode, { packDir, selectors });
-        if (result === null) continue;
         report.push(result.line);
-        if (result.failed.length) failures.push(`${file}: ${result.failed.join('; ')}`);
+        if (result.failed.length) failures.push(`${file} [${mode}]: ${result.failed.join('; ')}`);
       }
     }
   } finally {

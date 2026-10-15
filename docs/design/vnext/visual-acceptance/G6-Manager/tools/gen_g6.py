@@ -325,8 +325,11 @@ def shift_row(name: str, terminal: str, since: str, focus: bool = False) -> str:
     )
 
 
-def shift_list(focus_index: int | None = 0) -> str:
-    rows = "".join(shift_row(*s, focus=i == focus_index) for i, s in enumerate(SHIFTS))
+def shift_list(
+    focus_index: int | None = 0, shifts: list[tuple[str, str, str]] | None = None
+) -> str:
+    listed = SHIFTS if shifts is None else shifts
+    rows = "".join(shift_row(*s, focus=i == focus_index) for i, s in enumerate(listed))
     return panel("الورديات المفتوحة", f'<ul class="rows" aria-labelledby="open-h">{rows}</ul>', "open-h")
 
 
@@ -392,7 +395,10 @@ def state_stuck_confirm(w: int) -> str:
 
 
 def state_stuck_changed(w: int) -> str:
-    return stuck(shift_list(None), inert=True) + close_dialog("changed")
+    # state_invalid: main keeps the dialog open and refetches the list
+    # (ForcedCloseSurface). The shift can no longer be closed, so it is no
+    # longer open: the refreshed list behind the dialog no longer shows it.
+    return stuck(shift_list(None, SHIFTS[1:]), inert=True) + close_dialog("changed")
 
 
 def state_stuck_failed(w: int) -> str:
