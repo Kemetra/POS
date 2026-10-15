@@ -2,17 +2,14 @@
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
-// Needs playwright-core and an installed Chromium. Point PLAYWRIGHT_CORE at a playwright-core
-// folder if it is not resolvable from here. Usage: node capture_g6.cjs <G6 folder> [axe.min.js]
-const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
+// Needs playwright-core, axe-core (both resolved from the repo's node_modules) and an installed
+// Chromium. Usage: node capture_g6.cjs   (no arguments: the pack folder is this script's parent,
+// so no path is taken from the command line).
+const { chromium } = require('playwright-core');
 
-if (!process.argv[2]) {
-  console.error('usage: node capture_g6.cjs <G6-Manager folder> [axe.min.js]');
-  process.exit(2);
-}
-const dir = path.resolve(process.argv[2]);
+const dir = path.resolve(__dirname, '..');
 const outDir = path.join(dir, 'captures');
-const axePath = process.argv[3];
+const axePath = require.resolve('axe-core/axe.min.js', { paths: [__dirname] });
 fs.mkdirSync(outDir, { recursive: true });
 
 (async () => {

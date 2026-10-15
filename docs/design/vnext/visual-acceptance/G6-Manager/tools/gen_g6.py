@@ -6,7 +6,7 @@ D-10-1 ... D-10-8 as recommended). Same frame and generator pattern as G-3 (gen_
 Every surface keeps the behaviour it has on main@91d080ef. Nothing here adds data, a call or a
 capability; English stubs and «Coming soon» become honest Arabic states.
 
-Usage: python -I gen_g6.py <G6-Manager folder>
+Usage: python -I gen_g6.py   (writes into this script's parent folder, G6-Manager/)
 """
 
 from __future__ import annotations
@@ -433,10 +433,10 @@ STATES = [
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        sys.exit("usage: python -I gen_g6.py <G6-Manager folder>")
-    out = Path(sys.argv[1])
-    out.mkdir(parents=True, exist_ok=True)
+    # The pack folder is this script's parent: no path is taken from the command line.
+    if len(sys.argv) != 1:
+        sys.exit("usage: python -I gen_g6.py")
+    out = Path(__file__).resolve().parent.parent
     for key, title, fn in STATES:
         for w in (1024, 1280):
             (out / f"G6-{key}-{w}.html").write_text(page(title, w, fn(w), f"G6-{key}"), encoding="utf-8")
