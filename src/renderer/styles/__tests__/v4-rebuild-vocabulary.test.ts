@@ -55,6 +55,12 @@ const REBUILT_SCREENS: ReadonlyArray<{
   readonly screen: string;
   readonly file: string;
   readonly retired: ReadonlyArray<string>;
+  /**
+   * The retired prefix is still defined in `tailwind.css` because other,
+   * not-yet-moved screens share it. The orphan-rule check is then skipped for
+   * this row; the stylesheet rule is deleted with the last screen that uses it.
+   */
+  readonly sharedRulesRemain?: boolean;
 }> = [
   {
     screen: 'sign-in',
@@ -86,11 +92,28 @@ const REBUILT_SCREENS: ReadonlyArray<{
     file: 'routes/paired/PairedScreen.tsx',
     retired: ['paired-screen'],
   },
+  // RT-501 (VN-S10 S10-4): Returns moved off the legacy `Workspace` wrapper into
+  // the V5 frame (`ScreenSection`). `.workspace*` stays defined in tailwind.css
+  // until S10-Z deletes it with the last route that still renders `Workspace`.
+  {
+    screen: 'returns',
+    file: 'returns/ReturnsRoute.tsx',
+    retired: ['workspace'],
+    sharedRulesRemain: true,
+  },
 ];
 
 /** Strip block comments so prose naming a retired class is not a violation. */
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+}
+
+/**
+ * A screen composes from the shared layer either by naming a `.v4-*` / `.v5-*`
+ * class itself or by rendering a v5 foundation component (e.g. `ScreenSection`).
+ */
+function importsV5Foundation(source: string): boolean {
+  return /from\s+'(?:\.\.?\/)+v5\/foundation\//.test(stripComments(source));
 }
 
 /** Every class token appearing in a `className="..."` literal. */
@@ -105,7 +128,7 @@ function classNamesIn(source: string): ReadonlySet<string> {
 }
 
 describe('022 hard reset — rebuilt screens use the v4 vocabulary', () => {
-  for (const { screen, file, retired } of REBUILT_SCREENS) {
+  for (const { screen, file, retired, sharedRulesRemain } of REBUILT_SCREENS) {
     describe(screen, () => {
       const path = resolve(ROOT, file);
 
@@ -132,23 +155,27 @@ describe('022 hard reset — rebuilt screens use the v4 vocabulary', () => {
       it('composes from a shared layout layer (v4 or its v5 successor)', () => {
         const used = classNamesIn(readFileSync(path, 'utf-8'));
         const shared = [...used].filter((cls) => cls.startsWith('v4-') || cls.startsWith('v5-'));
+        const viaFoundation = importsV5Foundation(readFileSync(path, 'utf-8'));
         expect(
-          shared.length,
-          `${file} references no \`.v4-*\` or \`.v5-*\` class, so it is not rebuilt onto ` +
-            'a shared layout vocabulary.',
-        ).toBeGreaterThan(0);
+          shared.length > 0 || viaFoundation,
+          `${file} references no \`.v4-*\` or \`.v5-*\` class and renders no v5 foundation ` +
+            'component, so it is not rebuilt onto a shared layout vocabulary.',
+        ).toBe(true);
       });
 
-      it('leaves no orphan rules for the retired classes in the stylesheet', () => {
-        const orphans = retired.filter((prefix) =>
-          new RegExp(`^\\s*\\.${prefix}(__[a-z-]+)?[\\s,{:]`, 'm').test(stripComments(CSS)),
-        );
-        expect(
-          orphans,
-          `tailwind.css still defines retired geometry: ${orphans.join(', ')}.\n` +
-            'Dead screen CSS is how a superseded layout returns — delete it with the screen.',
-        ).toEqual([]);
-      });
+      it.skipIf(sharedRulesRemain === true)(
+        'leaves no orphan rules for the retired classes in the stylesheet',
+        () => {
+          const orphans = retired.filter((prefix) =>
+            new RegExp(`^\\s*\\.${prefix}(__[a-z-]+)?[\\s,{:]`, 'm').test(stripComments(CSS)),
+          );
+          expect(
+            orphans,
+            `tailwind.css still defines retired geometry: ${orphans.join(', ')}.\n` +
+              'Dead screen CSS is how a superseded layout returns — delete it with the screen.',
+          ).toEqual([]);
+        },
+      );
     });
   }
 });

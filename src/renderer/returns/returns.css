@@ -6,12 +6,15 @@
  * commit per region, status colour only on the outcome panel and the state
  * badges, 44px targets, a 2px outline focus ring. Every rule is scoped under
  * .rt-returns so nothing here can restyle another screen.
+ *
+ * RT-501 (VN-S10 S10-4): inside the V5 frame. ScreenSection owns the screen's
+ * padding, <h1> and scrolling, so .rt-returns is only the panel stack: no outer
+ * padding, width cap, scroll container or page background of its own.
  */
 
 .rt-returns {
   display: grid;
   gap: var(--space-4);
-  max-inline-size: 960px;
   color: var(--color-text);
   font-family: var(--font-family-sans);
 }

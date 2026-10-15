@@ -5,6 +5,7 @@ import type {
   OperatorBridgeAPI,
   PairingBridgeAPI,
 } from '../../../../shared/bridge-api';
+import type { ReturnsBridgeAPI } from '../../../../shared/returns/types';
 import type { PairingStatus } from '../../../../shared/pairing-types';
 import type { Role } from '../../../../shared/operator/role';
 import type { BannerState } from '../../../../shared/sales/types';
@@ -26,7 +27,10 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store'
  * Query (after the hash): `path` = any `/app/...` route (default
  * `/app/dashboard`); `role` = manager | admin | cashier (default manager);
  * `banner` = none | printer (a printer failure for the D-10-6 notice; default
- * none); `shifts` = some | none (what `listStuckShifts` answers; default some).
+ * none); `shifts` = some | none (what `listStuckShifts` answers; default some);
+ * `returns` = off | on (RT-501: `on` hydrates the returns flag and installs an
+ * in-memory `window.api.returns`, so `/app/returns` shows the sale lookup and an
+ * empty history instead of the flag-off policy message; default off).
  */
 
 export interface OneFrameProofParams {
@@ -34,6 +38,7 @@ export interface OneFrameProofParams {
   role: Role;
   banner: 'none' | 'printer';
   shifts: 'some' | 'none';
+  returns: 'off' | 'on';
 }
 
 function oneOf<T extends string>(raw: string | null, allowed: readonly T[], fallback: T): T {
@@ -48,6 +53,7 @@ export function readOneFrameProofParams(): OneFrameProofParams {
     role: oneOf<Role>(params.get('role'), ['manager', 'admin', 'cashier'], 'manager'),
     banner: oneOf(params.get('banner'), ['none', 'printer'], 'none'),
     shifts: oneOf(params.get('shifts'), ['some', 'none'], 'some'),
+    returns: oneOf(params.get('returns'), ['off', 'on'], 'off'),
   };
 }
 
@@ -122,10 +128,22 @@ function bannerState(banner: OneFrameProofParams['banner']): BannerState {
   };
 }
 
+/** RT-501: a returns namespace with an empty journal and no sale to find. */
+const returnsBridge: ReturnsBridgeAPI = {
+  lookup: () => Promise.resolve({ kind: 'refused', reason: 'sale_not_found' }),
+  quote: () => Promise.resolve({ kind: 'refused', reason: 'sale_not_found' }),
+  submit: () => Promise.resolve({ kind: 'refused', reason: 'sale_not_found', ret: null }),
+  resolve: () => Promise.resolve({ kind: 'ok', confirmed: 0, refused: 0, unresolved: 0 }),
+  list: () => Promise.resolve({ kind: 'ok', returns: [] }),
+  payout: () => Promise.resolve({ kind: 'refused', reason: 'return_not_found', ret: null }),
+  reprintSlip: () => Promise.resolve({ kind: 'refused', reason: 'return_not_found' }),
+};
+
 /** The read-only bridges the moved screens touch on mount, in memory. */
 export function installWindowApi(params: OneFrameProofParams): void {
   (window as unknown as { api?: unknown }).api = {
     pairing: pairingBridge,
+    ...(params.returns === 'on' ? { returns: returnsBridge } : {}),
     catalogue: {
       counts: () => Promise.resolve({ kind: 'ok', products: 12_480, barcodes: 15_902 }),
       freshness: () =>
@@ -150,7 +168,12 @@ export function installWindowApi(params: OneFrameProofParams): void {
 export function OneFrameProof(): JSX.Element {
   const params = readOneFrameProofParams();
   installWindowApi(params);
-  useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+  useFeatureFlagsStore.getState().hydrate({
+    cart: true,
+    payments: true,
+    productSearch: true,
+    returns: params.returns === 'on',
+  });
   useOperatorSessionStore.getState().hydrateSignedIn({
     id: `proof-${params.role}`,
     operator_id: `op-${params.role}`,
