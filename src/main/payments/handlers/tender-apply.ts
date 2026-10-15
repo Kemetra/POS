@@ -43,7 +43,7 @@ import type {
   ValidateVoucherOutcome,
 } from '../voucher-authority-client/validate.js';
 
-import { applyVoucherLine } from './apply-voucher-line.js';
+import { applyVoucherForRequest } from './apply-voucher-line.js';
 import { priorLineOutcome } from './prior-line-outcome.js';
 
 export interface TenderApplyHandlerDeps {
@@ -153,30 +153,16 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     if (req.voucher_code === undefined || req.voucher_code === '') {
       return { kind: 'refused', reason: 'invalid_input' };
     }
-    // Compute remaining_balance_minor main-side (R-7).
-    const existing = linesRepo.findByAttempt(req.payment_attempt_id);
-    let appliedNetSum = 0;
-    for (const line of existing) {
-      if (line.state !== 'applied') continue;
-      appliedNetSum += line.amount_applied_minor - (line.change_due_minor ?? 0);
-    }
-    const remaining_balance_minor = attempt.envelope_subtotal_minor - appliedNetSum;
-    const outcome = await applyVoucherLine(
+    const outcome = await applyVoucherForRequest(
+      { ...req, voucher_code: req.voucher_code },
       {
         session,
         attempt,
         tender_line_id,
-        voucher_code: req.voucher_code,
-        amount_applied_minor: req.amount_applied_minor,
-        remaining_balance_minor,
-        applied_at: now,
-        action_id: req.idempotency_key,
+        now,
+        existingLines: linesRepo.findByAttempt(req.payment_attempt_id),
       },
-      {
-        validateVoucher,
-        tenderLineFsm,
-        auditEmitter,
-      },
+      { validateVoucher, tenderLineFsm, auditEmitter },
     );
     if (outcome.kind === 'refused') {
       return { kind: 'refused', reason: outcome.reason };

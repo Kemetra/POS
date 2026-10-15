@@ -1216,25 +1216,38 @@ export class CartBridgeHandlers {
   // ── cart.void ───────────────────────────────────────────────────────
 
   /**
+   * The gate shared by the void and handoff handlers: a signed-in session, a
+   * cart store (or the in-memory guard's answer), an existing cart, and the
+   * role / tenant-isolation / ownership check — in that order.
+   */
+  private resolveOwnedCart(
+    cartId: string,
+  ):
+    | { kind: 'ok'; session: OperatorSessionRecord; store: CartStore; cart: StoredCart }
+    | { kind: 'refused'; reason: CartRefusalReason } {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    const store = this.deps.cartStore;
+    if (store === undefined) return this.gateMutatingInMem(cartId) ?? refuse('not_implemented');
+
+    const cart = store.getCart(cartId);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const denied = ownershipRefusal(session, cart);
+    if (denied !== null) return refuse(denied);
+    return { kind: 'ok', session, store, cart };
+  }
+
+  /**
    * T067 — Pre-handoff void (any role, no audit).
    * Post-handoff cancel is `cancelPostHandoff` below.
    */
   // eslint-disable-next-line @typescript-eslint/require-await
   async void(req: CartVoidRequest): Promise<CartVoidResponse> {
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    const denied = ownershipRefusal(session, cart);
-    if (denied !== null) return refuse(denied);
+    const owned = this.resolveOwnedCart(req.cart_id);
+    if (owned.kind !== 'ok') return owned;
+    const { session, store, cart } = owned;
 
     // Idempotency check before terminal state — replaying after cancel succeeds.
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -1598,23 +1611,12 @@ export class CartBridgeHandlers {
    */
   // eslint-disable-next-line @typescript-eslint/require-await
   async handoff(req: CartHandoffRequest): Promise<CartHandoffResponse> {
-    // Step 1 — session gate.
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    // Step 2 — ownership, role, tenant isolation (without requireMutable — idempotency
-    // replay must be allowed even for already-frozen carts, so we defer the mutable guard).
-    const denied = ownershipRefusal(session, cart);
-    if (denied !== null) return refuse(denied);
+    // Steps 1-2 — session gate, then ownership, role and tenant isolation (without
+    // requireMutable — idempotency replay must be allowed even for already-frozen
+    // carts, so the mutable guard is deferred).
+    const owned = this.resolveOwnedCart(req.cart_id);
+    if (owned.kind !== 'ok') return owned;
+    const { session, store, cart } = owned;
 
     // Step 3 — idempotency replay (before mutable guard so frozen carts can replay).
     const replay = store.getOutboxRow(req.idempotency_key);
