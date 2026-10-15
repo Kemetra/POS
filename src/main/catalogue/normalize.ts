@@ -43,7 +43,9 @@ export function normalize(input: string): string {
   out = out.toLowerCase();
 
   // 6. Fold Arabic-Indic digits ٠–٩ to Latin 0–9.
-  out = out.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - ARABIC_INDIC_ZERO));
+  out = out.replace(/[٠-٩]/g, (d) =>
+    String((d.codePointAt(0) ?? ARABIC_INDIC_ZERO) - ARABIC_INDIC_ZERO),
+  );
 
   // 7. Trim and collapse internal whitespace runs to a single space.
   out = out.replace(/\s+/g, ' ').trim();

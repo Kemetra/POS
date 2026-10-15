@@ -19,8 +19,8 @@ export function formatReturnMoney(minor: number, currencyCode: string): string {
 export function normalizeSaleNumber(raw: string): string {
   return raw
     .trim()
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+    .replace(/[٠-٩]/g, (d) => String((d.codePointAt(0) ?? 0x0660) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String((d.codePointAt(0) ?? 0x06f0) - 0x06f0));
 }
 
 /** Absolute local time with Western digits (the pinned DESIGN.md locale). */

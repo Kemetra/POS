@@ -121,7 +121,7 @@ const FIELD_READERS: Readonly<Record<string, (draft: PinDraft, field: PinField) 
   },
 };
 
-const PIN_LINE = /^([a-z]+):\s+(.+)$/;
+const PIN_LINE = /^([a-z]+):\s+(\S.*)$/;
 
 /** A `key: value` field, or null for a blank / comment line. */
 function parseField(raw: string): PinField | null {

@@ -24,6 +24,7 @@
  * recordReturn confirmation: exactly the lines the journal asked to return,
  * with the same whole quantities, none twice (in `returns-dispatch`).
  */
+import { compareCodeUnits } from '../../shared/compare-code-units.js';
 import { exponentFor } from '../sales-sync/create-sale-sync-client.js';
 import { amount4ToMinor, parseAmount4, parseWholeQuantity } from './returns-money.js';
 import type { JournalLine } from './returns-repository.js';
@@ -74,8 +75,8 @@ function snapshotKeys(linesJson: string): string[] | null {
 
 function sameMultiset(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;
-  const sortedB = [...b].sort();
-  return [...a].sort().every((key, i) => key === sortedB[i]);
+  const sortedB = [...b].sort(compareCodeUnits);
+  return [...a].sort(compareCodeUnits).every((key, i) => key === sortedB[i]);
 }
 
 function hasUniqueRefs(refs: readonly string[]): boolean {

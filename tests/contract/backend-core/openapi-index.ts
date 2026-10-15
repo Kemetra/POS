@@ -279,7 +279,7 @@ export interface PathPair {
 }
 
 const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
-const PARAM = /\{[^}]+\}/g;
+const PARAM = /\{[^{}]+\}/g;
 
 /** True when `concrete` is an instance of `template`. */
 export function pathMatchesTemplate(pair: PathPair): boolean {

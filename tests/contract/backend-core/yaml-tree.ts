@@ -30,9 +30,9 @@ export interface YamlNode {
   readonly children: YamlNode[];
 }
 
-const KEY_VALUE = /^("[^"]*"|'[^']*'|[^\s:#][^:#]*?):(?:\s+(.*))?$/;
+const KEY_VALUE = /^("[^"]*"|'[^']*'|[^\s:#][^:#]*?):(?:\s(.*))?$/;
 const QUOTED = /^(["'])(.*)\1$/;
-const TRAILING_COMMENT = /\s+#.*$/;
+const TRAILING_COMMENT = /\s#.*$/;
 
 const unquote = (scalar: { readonly raw: string }): string => {
   const trimmed = scalar.raw.trim();
@@ -58,7 +58,7 @@ function toNode(line: YamlLine): YamlNode {
   const body = item ? line.text.slice(2).trim() : line.text;
   const match = KEY_VALUE.exec(body);
   if (match === null) return { line, item, key: null, value: body, children: [] };
-  const rawValue = (match[2] ?? '').replace(TRAILING_COMMENT, '');
+  const rawValue = (match[2] ?? '').trimStart().replace(TRAILING_COMMENT, '');
   return {
     line,
     item,

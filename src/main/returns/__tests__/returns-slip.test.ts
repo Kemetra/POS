@@ -272,9 +272,9 @@ describe('slip line names (S6)', () => {
     ['keeps a plain name', 'Panadol 500mg', 'Panadol 500mg'],
     ['keeps Arabic with joiners', 'بانادول‌ ٥٠٠', 'بانادول‌ ٥٠٠'],
     ['strips control characters', 'Pana\u0007dol\n500', 'Panadol500'],
-    ['strips bidi overrides', '‮loadnaP‬', 'loadnaP'],
+    ['strips bidi overrides', '\u202EloadnaP\u202C', 'loadnaP'],
     ['trims', '  Panadol  ', 'Panadol'],
-    ['is null when nothing printable is left', '\u0000 ‮', null],
+    ['is null when nothing printable is left', '\u0000 \u202E', null],
   ])('%s', (_label, raw, expected) => {
     expect(slipLineName(raw)).toBe(expected);
   });

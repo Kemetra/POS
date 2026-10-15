@@ -3,6 +3,7 @@
  * Pure apart from the client under test, so the judgement itself is unit-tested
  * (`conformance.test.ts`) on fixture contracts.
  */
+import { compareCodeUnits } from '../../../src/shared/compare-code-units.js';
 import { SENTINEL, type ClientCall, type FetchLike } from './client-registry.js';
 import type { ContractOperation, CredentialKind } from './openapi-index.js';
 
@@ -83,7 +84,7 @@ export function sentCredential(request: { readonly headers: Headers }): SentCred
 
 /** Sorted, so the same accepted set always yields the same identity. */
 export function canonicalCredentials(kinds: Iterable<CredentialKind>): CredentialKind[] {
-  return [...kinds].sort();
+  return [...kinds].sort(compareCodeUnits);
 }
 
 function contractOperation(

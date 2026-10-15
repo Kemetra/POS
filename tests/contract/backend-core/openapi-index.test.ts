@@ -3,7 +3,7 @@
  * it understands and fail loudly on what it does not.
  */
 import { describe, expect, it } from 'vitest';
-import { indexContract, matchOperation } from './openapi-index.js';
+import { indexContract, matchOperation, pathMatchesTemplate } from './openapi-index.js';
 
 const SCHEMES = `components:
   securitySchemes:
@@ -120,5 +120,23 @@ describe('indexContract', () => {
     expect(matchOperation(ops, { method: 'get', path: '/s/roster' })?.operationId).toBe('roster');
     expect(matchOperation(ops, { method: 'get', path: '/s/123' })?.operationId).toBe('one');
     expect(matchOperation(ops, { method: 'post', path: '/s/123' })).toBeNull();
+  });
+});
+
+describe('pathMatchesTemplate', () => {
+  it.each([
+    ['/api/pos/v1/sales/{saleId}', '/api/pos/v1/sales/abc-1', true],
+    ['/api/pos/v1/sales/{saleId}/lines/{lineId}', '/api/pos/v1/sales/a/lines/b', true],
+    ['/api/pos/v1/sales/{saleId}', '/api/pos/v1/sales/a/b', false],
+    ['/api/pos/v1/sales/{saleId}', '/api/pos/v1/sales/', false],
+    ['/api/pos/v1/catalog.snapshot', '/api/pos/v1/catalogXsnapshot', false],
+  ])('%s vs %s -> %s', (template, concrete, expected) => {
+    expect(pathMatchesTemplate({ template, concrete })).toBe(expected);
+  });
+
+  it('treats an unclosed brace as a literal', () => {
+    const template = `/x/${'{'.repeat(2000)}`;
+    expect(pathMatchesTemplate({ template, concrete: template })).toBe(true);
+    expect(pathMatchesTemplate({ template, concrete: '/x/1' })).toBe(false);
   });
 });

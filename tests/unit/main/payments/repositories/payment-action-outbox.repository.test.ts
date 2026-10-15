@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
+import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -116,6 +117,12 @@ describe('T113 — payment_action_outbox repository', () => {
       const h1 = computeActionPayloadHash({ amount_applied_minor: 1500, tender_type: 'cash' });
       const h2 = computeActionPayloadHash({ tender_type: 'cash', amount_applied_minor: 1500 });
       expect(h1).toBe(h2);
+    });
+
+    it('orders keys by code unit, not by locale, so stored hashes stay stable', () => {
+      const canonical = '{"B":2,"_x":3,"a":1}';
+      const expected = createHash('sha256').update(canonical, 'utf8').digest('hex');
+      expect(computeActionPayloadHash({ a: 1, _x: 3, B: 2 })).toBe(expected);
     });
 
     it('returns different hashes when any field value changes', () => {

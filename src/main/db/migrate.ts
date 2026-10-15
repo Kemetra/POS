@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 
+import { compareCodeUnits } from '../../shared/compare-code-units.js';
 import type { DatabaseHandle } from './client.js';
 
 /**
@@ -148,7 +149,7 @@ export function runMigrations(options: RunMigrationsOptions): void {
   // Step 2b (RT-320): refuse a DB that a newer build has migrated, before
   // touching anything.
   const known = new Set(files.map((f) => f.name));
-  const unknown = [...applied].filter((name) => !known.has(name)).sort();
+  const unknown = [...applied].filter((name) => !known.has(name)).sort(compareCodeUnits);
   if (unknown.length > 0) throw new SchemaAheadError(unknown);
 
   const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name));

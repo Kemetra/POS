@@ -23,6 +23,7 @@
 
 import { createHash } from 'crypto';
 
+import { compareCodeUnits } from '../../../shared/compare-code-units.js';
 import type { DatabaseHandle } from '../../db/client.js';
 
 interface PrepareRun {
@@ -144,7 +145,7 @@ function canonicalise(value: unknown, seen: WeakSet<object>): string {
   seen.add(obj);
   const keys = Object.keys(obj)
     .filter((k) => obj[k] !== undefined)
-    .sort();
+    .sort(compareCodeUnits);
   const entries = keys.map((k) => `${JSON.stringify(k)}:${canonicalise(obj[k], seen)}`);
   seen.delete(obj);
   return `{${entries.join(',')}}`;
