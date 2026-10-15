@@ -81,29 +81,50 @@ const UNPROCESSABLE_CODES: ReadonlySet<string> = new Set([
   'void_outside_business_day',
 ]);
 
+/** A status whose refusal does not depend on the answer's `error.code`. */
+const FIXED_REFUSALS: Readonly<Record<number, ServerVoidRefusal>> = {
+  400: 'validation_error',
+  404: 'sale_not_found',
+};
+
+/**
+ * A status whose refusal is the answer's own `error.code` when it is one of
+ * `codes`, else `otherwise` (null: the answer proves nothing).
+ */
+interface CodedRefusals {
+  readonly codes: ReadonlySet<string>;
+  readonly otherwise: ServerVoidRefusal | null;
+}
+
+const CODED_REFUSALS: Readonly<Record<number, CodedRefusals>> = {
+  403: { codes: FORBIDDEN_CODES, otherwise: null },
+  409: { codes: new Set(['already_reversed']), otherwise: 'conflict' },
+  422: { codes: UNPROCESSABLE_CODES, otherwise: 'validation_error' },
+};
+
 /** A refusal for a non-2xx answer, or null when the answer proves nothing. */
 export function classifyVoidRefusal(status: number, code: string | null): ServerVoidRefusal | null {
-  if (status === 400) return 'validation_error';
-  if (status === 404) return 'sale_not_found';
-  if (status === 409) return code === 'already_reversed' ? 'already_reversed' : 'conflict';
-  if (status === 403 && code !== null && FORBIDDEN_CODES.has(code)) {
-    return code as ServerVoidRefusal;
-  }
-  if (status === 422) {
-    return code !== null && UNPROCESSABLE_CODES.has(code)
-      ? (code as ServerVoidRefusal)
-      : 'validation_error';
-  }
-  return null;
+  const fixed = FIXED_REFUSALS[status];
+  if (fixed !== undefined) return fixed;
+  const coded = CODED_REFUSALS[status];
+  if (coded === undefined) return null;
+  return code !== null && coded.codes.has(code) ? (code as ServerVoidRefusal) : coded.otherwise;
 }
+
+function asRecord(json: unknown): Record<string, unknown> | null {
+  return typeof json === 'object' && json !== null ? (json as Record<string, unknown>) : null;
+}
+
+const sameRef = (a: unknown, b: string): boolean =>
+  typeof a === 'string' && a.toLowerCase() === b.toLowerCase();
 
 /** The void event reference when the answer is this sale's `void` terminal event. */
 function readEventRef(json: unknown, saleRef: string): string | null {
-  if (typeof json !== 'object' || json === null) return null;
-  const body = json as Record<string, unknown>;
-  const { kind, eventRef, saleRef: answered } = body;
-  if (kind !== 'void' || typeof eventRef !== 'string' || typeof answered !== 'string') return null;
-  return isUuid(eventRef) && answered.toLowerCase() === saleRef.toLowerCase() ? eventRef : null;
+  const body = asRecord(json);
+  if (body === null || body['kind'] !== 'void') return null;
+  const eventRef = body['eventRef'];
+  const named = typeof eventRef === 'string' && isUuid(eventRef);
+  return named && sameRef(body['saleRef'], saleRef) ? eventRef : null;
 }
 
 function toOutcome(answer: HttpAnswer, saleRef: string): RecordVoidOutcome {

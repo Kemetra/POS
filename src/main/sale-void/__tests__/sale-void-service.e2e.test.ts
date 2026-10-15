@@ -102,21 +102,25 @@ beforeAll(async () => {
   await initGrantSql();
 });
 
-beforeEach(async () => {
-  raw = freshGrantDb();
-  const db = handleFor(raw);
-  audit = [];
-  clock = T0;
-  locked = false;
-  enabled = true;
-  envelope = 'env';
-  sellers = {};
-  returnedSales = new Set();
-  ids = 0;
-  failInsert = false;
-  current = session('manager', 'mona');
-  const emitter = { emit: (e: AuditEvent) => audit.push(e) };
-  pins = createManagerPinStore({ db, safeStorage: aeadSafeStorage() });
+/** The journal as the service sees it; `failInsert` makes the write fail after the approval is spent. */
+function failableJournal(repo: SaleVoidRepository): SaleVoidRepository {
+  return new Proxy(repo, {
+    get(target, prop) {
+      if (prop === 'insertFrom' && failInsert) {
+        return (build: () => NewVoidEntry) => {
+          target.insertFrom(() => {
+            build();
+            throw new Error('disk full');
+          });
+        };
+      }
+      const value: unknown = Reflect.get(target, prop);
+      return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
+    },
+  });
+}
+
+async function enrolManagers(): Promise<void> {
   for (const m of [MONA, OMAR]) {
     await pins.enrol({
       scope: SCOPE,
@@ -128,38 +132,28 @@ beforeEach(async () => {
       guard: () => undefined,
     });
   }
-  journal = createSaleVoidRepository(db);
-  const ref: { service: SaleVoidService | null } = { service: null };
-  approvals = createManagerApprovalService({
-    db,
-    getSession: () => current,
-    isSessionLocked: () => locked,
-    currentTerminalId: () => TERMINAL,
-    managerPins: pins,
-    resolvers: { 'sale.void': (input) => ref.service?.approvalSubject(input) ?? null },
-    auditEmitter: emitter,
-    now: () => clock,
-  });
-  voids = createSaleVoidService({
+}
+
+function resetState(): void {
+  audit = [];
+  clock = T0;
+  locked = false;
+  enabled = true;
+  envelope = 'env';
+  sellers = {};
+  returnedSales = new Set();
+  ids = 0;
+  failInsert = false;
+  current = session('manager', 'mona');
+}
+
+function composeVoidService(db: ReturnType<typeof handleFor>, emitter: AuditSink): SaleVoidService {
+  return createSaleVoidService({
     isEnabled: () => enabled,
     getSession: () => (current === null ? null : toVoidSession(current, TERMINAL, envelope)),
     isSessionLocked: () => locked,
     sales: bindSalesRepository(db),
-    repo: new Proxy(journal, {
-      get(target, prop) {
-        if (prop === 'insertFrom' && failInsert) {
-          // The approval is spent inside `build`; the write then fails.
-          return (build: () => NewVoidEntry) => {
-            target.insertFrom(() => {
-              build();
-              throw new Error('disk full');
-            });
-          };
-        }
-        const value: unknown = Reflect.get(target, prop);
-        return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
-      },
-    }),
+    repo: failableJournal(journal),
     hasLiveReturn: (saleId) => returnedSales.has(saleId),
     approvals,
     sellerUserIdOf: (sale) => sellers[sale.sale_id],
@@ -178,6 +172,32 @@ beforeEach(async () => {
     captureCurrencyCode: 'EGP',
     isStopped: () => false,
   });
+}
+
+interface AuditSink {
+  emit: (event: AuditEvent) => void;
+}
+
+beforeEach(async () => {
+  raw = freshGrantDb();
+  const db = handleFor(raw);
+  resetState();
+  const emitter: AuditSink = { emit: (e) => audit.push(e) };
+  pins = createManagerPinStore({ db, safeStorage: aeadSafeStorage() });
+  await enrolManagers();
+  journal = createSaleVoidRepository(db);
+  const ref: { service: SaleVoidService | null } = { service: null };
+  approvals = createManagerApprovalService({
+    db,
+    getSession: () => current,
+    isSessionLocked: () => locked,
+    currentTerminalId: () => TERMINAL,
+    managerPins: pins,
+    resolvers: { 'sale.void': (input) => ref.service?.approvalSubject(input) ?? null },
+    auditEmitter: emitter,
+    now: () => clock,
+  });
+  voids = composeVoidService(db, emitter);
   ref.service = voids;
   seedSale(raw, { sale_id: 'sale-1', tender_lines_summary_json: TENDERS_CASH_1500 });
   seedSale(raw, { sale_id: 'sale-2', tender_lines_summary_json: TENDERS_CARD });

@@ -294,25 +294,40 @@ export function createSaleVoidService(deps: SaleVoidServiceDeps): SaleVoidServic
     return same ? { kind: 'requested', void: journalView(existing) } : refuse('approval_invalid');
   }
 
-  function requestAdmitted(session: VoidSession, req: SaleVoidRequest): SaleVoidRequestResponse {
-    if (!canEverSend(session)) return refuse('no_operator_envelope');
-    const userId = session.userId;
-    if (userId === null) return refuse('no_operator_envelope');
-    const sale = deps.sales.readById(req.sale_id);
-    if (sale === null || !inScope(sale, session.scope)) return refuse('sale_not_found');
-    const replay = replayOf(req.approval_id, sale, userId);
-    if (replay !== null) return replay;
-    const ineligible = ineligibleReason(sale);
-    if (ineligible !== null) return refuse(ineligible);
-    const cashMinor = cashOf(sale);
+  /** The sale of this terminal a request names, or why there is none. */
+  function saleOf(session: VoidSession, saleId: string): SaleRow | Refusal {
+    const sale = deps.sales.readById(saleId);
+    return sale !== null && inScope(sale, session.scope) ? sale : refuse('sale_not_found');
+  }
+
+  /** Journal the void: spend the approval, or answer why it did not hold. */
+  function journalRequested(input: {
+    sale: SaleRow;
+    session: VoidSession;
+    approvalId: string;
+    userId: string;
+  }): SaleVoidRequestResponse {
+    const cashMinor = cashOf(input.sale);
     if (cashMinor === null) return refuse('void_unavailable');
     try {
-      const entry = journal({ sale, session, approvalId: req.approval_id, cashMinor, userId });
+      const entry = journal({ ...input, cashMinor });
       return { kind: 'requested', void: journalView(entry) };
     } catch (err) {
       if (err instanceof ApprovalRefused) return refuse(err.reason);
       throw err;
     }
+  }
+
+  function requestAdmitted(session: VoidSession, req: SaleVoidRequest): SaleVoidRequestResponse {
+    const userId = session.userId;
+    if (userId === null || !canEverSend(session)) return refuse('no_operator_envelope');
+    const sale = saleOf(session, req.sale_id);
+    if ('kind' in sale) return sale;
+    const replay = replayOf(req.approval_id, sale, userId);
+    if (replay !== null) return replay;
+    const ineligible = ineligibleReason(sale);
+    if (ineligible !== null) return refuse(ineligible);
+    return journalRequested({ sale, session, approvalId: req.approval_id, userId });
   }
 
   /* The bridge methods are async so an unexpected throw is a rejected promise, never a sync throw. */

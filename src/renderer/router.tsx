@@ -72,6 +72,21 @@ import type { PairingStatus } from '../shared/pairing-types';
  * routing conflicts in packaged builds.
  */
 
+/**
+ * The /app screens with no role guard of their own: Sales, Inventory (and its
+ * diagnostics), Settings and — RT-530 — «إلغاء بيع», a void of a finalized sale
+ * with another manager's PIN. Any signed-in operator reaches the last one; the
+ * route leaves for /app while POS_PULSE_FEATURE_SALE_VOID is off, and main
+ * re-checks the flag and the session on every call.
+ */
+const SECONDARY_ROUTES: RouteObject[] = [
+  { path: 'sales', element: <SalesWorkspace /> },
+  { path: 'inventory', element: <InventoryPlaceholder /> },
+  { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
+  { path: 'settings', element: <SettingsHelpPlaceholder /> },
+  { path: 'void', element: <VoidRoute /> },
+];
+
 export interface AppRouterProps {
   pairing: PairingBridgeAPI;
   /**
@@ -273,12 +288,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             // every allow list and every flag are untouched (FR-45/FR-47).
             { index: true, element: <AppIndexRedirect /> },
             { path: 'dashboard', element: <DashboardRoute /> },
-            { path: 'sales', element: <SalesWorkspace /> },
-            // RT-530 — «إلغاء بيع»: void a finalized sale with another manager
-            // PIN, and the queued voids. Any signed-in operator; the route leaves
-            // for /app while POS_PULSE_FEATURE_SALE_VOID is off, and main
-            // re-checks the flag and the session on every call.
-            { path: 'void', element: <VoidRoute /> },
+            ...SECONDARY_ROUTES,
             // PR #434 FIX 1 — gate BOTH to manager/admin (owner decision). The
             // role-visibility-matrix marks the Audit surface ⛔ cashier, and a
             // signed-in cashier must NOT reach either. Same nested guard
@@ -303,9 +313,6 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
                 </OperatorRouteGuard>
               ),
             },
-            { path: 'inventory', element: <InventoryPlaceholder /> },
-            { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
-            { path: 'settings', element: <SettingsHelpPlaceholder /> },
             {
               path: 'manager/stuck-shifts',
               element: (

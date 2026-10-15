@@ -50,6 +50,7 @@ export function toVoidSender(
   envelope: string | null,
 ): VoidSender | null {
   const operatorUserId = operatorUserIdOf(record);
-  if (operatorUserId === null || envelope === null || envelope.length === 0) return null;
+  if (operatorUserId === null) return null;
+  if (envelope === null || envelope.length === 0) return null;
   return { scope: scopeOf(record, terminalId), operatorUserId, envelope };
 }

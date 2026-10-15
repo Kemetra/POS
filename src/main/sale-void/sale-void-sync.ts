@@ -98,34 +98,67 @@ export function createSaleVoidSync(deps: SaleVoidSyncDeps): SaleVoidSync {
   const policy = deps.backoff ?? SALE_SYNC_BACKOFF_POLICY;
   let running: Promise<SaleVoidSyncSummary> | null = null;
 
-  /** Apply one answer: the guarded transition and its audit, atomically. */
-  function apply(entry: VoidEntry, outcome: RecordVoidOutcome, tally: Tally): void {
-    const now = deps.now();
-    if (outcome.kind === 'recorded') {
-      const changed = deps.transaction(() => {
-        const ok = deps.repo.markConfirmed({
+  /** One guarded transition and its audit event, in ONE transaction; true when it changed the row. */
+  function commit(
+    entry: VoidEntry,
+    transition: () => boolean,
+    audit: (fresh: VoidEntry) => void,
+  ): boolean {
+    return deps.transaction(() => {
+      const changed = transition();
+      const fresh = deps.repo.read(entry.voidId);
+      if (changed && fresh !== null) audit(fresh);
+      return changed;
+    });
+  }
+
+  function applyRecorded(
+    entry: VoidEntry,
+    outcome: Extract<RecordVoidOutcome, { kind: 'recorded' }>,
+    tally: Tally,
+  ): void {
+    const changed = commit(
+      entry,
+      () =>
+        deps.repo.markConfirmed({
           voidId: entry.voidId,
           voidRef: outcome.eventRef,
-          now,
-        });
-        const fresh = deps.repo.read(entry.voidId);
-        if (ok && fresh !== null) deps.audit.confirmed(fresh, outcome.replayed);
-        return ok;
-      });
-      if (changed) tally.confirmed += 1;
+          now: deps.now(),
+        }),
+      (fresh) => {
+        deps.audit.confirmed(fresh, outcome.replayed);
+      },
+    );
+    if (changed) tally.confirmed += 1;
+  }
+
+  function applyRefused(
+    entry: VoidEntry,
+    outcome: Extract<RecordVoidOutcome, { kind: 'refused' }>,
+    tally: Tally,
+  ): void {
+    const changed = commit(
+      entry,
+      () =>
+        deps.repo.markRefused({ voidId: entry.voidId, reason: outcome.reason, now: deps.now() }),
+      (fresh) => {
+        deps.audit.refused(fresh);
+      },
+    );
+    if (changed) tally.refused += 1;
+  }
+
+  /** Apply one answer: the guarded transition and its audit, atomically. */
+  function apply(entry: VoidEntry, outcome: RecordVoidOutcome, tally: Tally): void {
+    if (outcome.kind === 'recorded') {
+      applyRecorded(entry, outcome, tally);
       return;
     }
     if (outcome.kind === 'refused') {
-      const changed = deps.transaction(() => {
-        const ok = deps.repo.markRefused({ voidId: entry.voidId, reason: outcome.reason, now });
-        const fresh = deps.repo.read(entry.voidId);
-        if (ok && fresh !== null) deps.audit.refused(fresh);
-        return ok;
-      });
-      if (changed) tally.refused += 1;
+      applyRefused(entry, outcome, tally);
       return;
     }
-    deps.repo.markUnknown({ voidId: entry.voidId, now, category: outcome.category });
+    deps.repo.markUnknown({ voidId: entry.voidId, now: deps.now(), category: outcome.category });
     tally.unresolved += 1;
   }
 
