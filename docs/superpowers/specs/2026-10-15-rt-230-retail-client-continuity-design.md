@@ -226,7 +226,7 @@ The cashier path is **already fenced server-side** (F7). Two gaps remain.
     - (a) after an **unclean shutdown**, the POS suspends offline-grant use until one online reconcile succeeds;
     - (b) accept refusal and the manager-authorized repair (C14);
     - (c) do nothing.
-  - **Recommendation: (a).** It needs no Backend-Core contract change, because the POS already knows it rebooted dirty (boot recovery runs). However, it **amends an owner-decided RT-113 behaviour**, offline continuation on a valid grant. It therefore needs an explicit owner ruling as an RT-113 amendment. An agent must not quietly redefine it.
+  - **Recommendation: (a).** It needs no Backend-Core contract change. However, **the POS does not know today that its last shutdown was unclean.** The boot recovery scans run on every launch, and there is no persisted clean-shutdown or dirty-boot marker on the baseline. The rule therefore needs a new, reliable lifecycle signal: a marker set at start, cleared on an orderly quit, and read at the next boot. Without it, the rule would either suspend grants after every restart or never fire. However, it **amends an owner-decided RT-113 behaviour**, offline continuation on a valid grant. It therefore needs an explicit owner ruling as an RT-113 amendment. An agent must not quietly redefine it.
   - **Trade-off:** a till that loses power while the whole store is offline, with no continuity device, also loses offline selling after the reboot. The owner must weigh this (Risk R2). A narrower form: suspend only when the store has a continuity device enrolled, which requires the till to know that (C6).
 
 ### D-B4 — Sale state across devices
@@ -284,6 +284,7 @@ The cashier path is **already fenced server-side** (F7). Two gaps remain.
 ### D-B9 — Recovery and handback
 
 The ordered handback:
+0. **End continuity before counting.** The phone locks selling locally, in the same step as "end continuity", and ends its own cashier admission on the server with the existing admission `end`. A closed shift alone does not stop selling, because the current client treats a missing open shift as advisory. A phone sale after this point is blocked locally. Server-side it is refused once beyond the 120 s grace (F6), so no sale can land after the pouch is counted.
 1. On the phone: blind-count the pouch and **close the phone's shift with that count**, as in any normal close. Variance = counted − expected is recorded faithfully, whether it is short or over.
 2. **No pay-out on the phone.** A pay-out of the counted amount would be refused whenever the pouch is over (`pay_out_exceeds_drawer_cash`, `src/main/shift-cashup/shift-cashup-service.ts`). A pay-out of the expected amount would hide the overage.
 3. Physically move the counted cash to the till. Removing cash from a closed location is the same situation as a closed drawer emptied to the safe today. The paired out/in record is the deferred internal-transfer capability, so the interim record is the till-side pay-in (step 6).
@@ -347,7 +348,7 @@ sequenceDiagram
     T->>T: Unclean-boot rule: no offline-grant use until online reconcile (D-B3)
     T->>BC: drain outbox. Pre-takeover sales are inside T's window and accepted, if within the 7-day cap (F6)
     T->>BC: a cashier sale stamped more than 120 s after the takeover: 403 cashier_claim_refused, dead-letter (F7). Inside the grace it is accepted
-    C->>P: End continuity: blind count of the pouch, close P's shift with that count (variance recorded)
+    C->>P: End continuity: lock selling and end P's admission, then blind count of the pouch, close P's shift with that count (variance recorded)
     C->>T: Sign in (PIN), admission takeover=true
     BC-->>P: next heartbeat returns active_elsewhere, P locks
     C->>T: Discard dead draft cart. Pay-in of the counted pouch amount, with a reason naming P's closed session, on T's open shift. Continue or close T's shift
@@ -450,11 +451,11 @@ Mitigation for the last row:
 - C1 and C13 are aligned with RT-231.
 
 **Stage 2 — contracts.**
-- C2, C5, C6, C10 and C14 (the minimum set), each as its own gated item. C14 may span POS and Backend-Core.
+- C1 (device class plus enrollment, list and revoke routes, shared with RT-231 G3), C2, C5, C6, C10 and C14 (the minimum set), each as its own gated item. C14 may span POS and Backend-Core.
 
 **Stage 3 — mobile continuity PoC.**
 - Inside the RT-231 PoC, after its technology gate: connected-first selling, the durable submission record and the handback.
-- Starts only once GO-3 (C14 repair working end to end) and GO-4 hold.
+- Starts only once GO-3 (C14 repair working end to end) and GO-4 hold, **and C1 is live**: a phone can be enrolled and revoked through supported routes.
 
 **Go criteria** (all must hold before any continuity implementation goes beyond Stage 0):
 - **GO-1:** Stage 0 lab evidence shows no lost or duplicated *replays*, F7 fencing working, and both shifts closing with honest counts.
@@ -479,7 +480,7 @@ Mitigation for the last row:
 3. **Planning (BC):** C6 continuity fence state and manager-path refusal, plus C2 `sourceSystem` binding.
 4. **Planning (BC + Admin Console):** C5 candidate-duplicate review projection and surface.
 5. **Planning (BC + Admin Console):** C10 forced seal and recovery count for a dead device's shift. Coordinate with RT-18 and RT-236.
-6. **Planning (POS):** the D-B3 unclean-boot offline-grant suspension rule, as an **RT-113 amendment** that needs an owner ruling before any implementation.
+6. **Planning (POS):** the D-B3 unclean-boot offline-grant suspension rule, as an **RT-113 amendment** that needs an owner ruling before any implementation. It includes a new persisted clean-shutdown / dirty-boot marker, because none exists today.
 7. **Decision record (Docs):** A1 thin-web go/no-go once RT-229 reports.
 8. **Planning (POS + BC):** C14 manager-authorized repair for refused cashier sales. Coordinate with RT-225.
 
