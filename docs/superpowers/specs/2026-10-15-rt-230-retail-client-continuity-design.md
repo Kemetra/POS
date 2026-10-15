@@ -6,7 +6,7 @@
 - RT-231 owns the mobile product architecture. This package supplies its Cashier Continuity decisions.
 - RT-280 owns the Store Authority Lease.
 - RT-295 owns Fiscal Device identity and the fiscal outbox.
-- RT-113 (offline cashier continuation) and RT-224/RT-225 (device-path cashier sale capture and its repair) are both Done.
+- RT-113 (offline cashier continuation) and RT-224 (device-path cashier sale capture) are Done. RT-225 (`admissionCheckAt` plus a support reset for `cashier_claim_refused`) is In Review.
 - RT-229 measures low-spec hardware.
 
 **Baselines verified for this plan (2026-10-15):**
@@ -20,7 +20,7 @@
 
 ## 0. Summary
 
-1. **The cheapest safe continuity path needs no new client.** A second Retail Terminal that is already paired, such as a spare laptop on battery, can carry on today. It uses the existing cashier-admission **takeover**. It opens its own shift, so its own cash location. Its sales are captured through its own outbox. The dead till's later cashier sales are already **fenced by the server's admission-window check**. Stage 0 proves the failover semantics on this setup in the lab before any phone or web client is built.
+1. **The cheapest safe continuity path needs no new client.** A second Retail Terminal that is already paired, such as a spare laptop on battery, can carry on today. It uses the existing cashier-admission **takeover**. It opens its own shift, so its own cash location. Its sales are captured through its own outbox. The dead till's later cashier sales are already **fenced by the server's admission-window check**, except for a 120 s grace after the takeover (F7). Stage 0 proves the failover semantics on this setup in the lab before any phone or web client is built.
 2. **Mobile continuity, if it is built, is connected-first.** It runs as a capability inside the RT-231 mobile app. The phone is its **own enrolled device** with its own credential, admission, shift and Cash Location. It never takes over the dead till's drawer. Bounded-offline phone selling waits for RT-280.
 3. **Exactly-once covers replays, not re-rings.** The existing idempotency (`(tenant, sourceSystem, externalId)` plus `Idempotency-Key`) collapses retries of *the same* sale. It cannot detect a sale the dead till finalized locally that the cashier then **re-rings** on the phone, because those are two sales with two ids. The design therefore depends on three things:
    - **fresh sales only** on the continuity client, with no cart moving across devices;
@@ -69,7 +69,7 @@ Each fact below was read on the baselines above. The design reuses these mechani
 | F4 | `sourceSystem` is a free string (1–100 characters). It is **not bound to the calling credential** (zod `z.string()`), and the schema calls it "not body-assignable authority". | BC `catalog/sales/dto/capture-sale-request.dto.ts:129` |
 | F5 | **The single-active rule for cashiers** allows at most one live admission per `(tenant, store, user)`. If another device holds it, a cashier sign-in gets `active_elsewhere`, unless the request is an online `takeover: true`. A takeover ends the other device's admission and is rate-limited and audited. `reconcile_offline` never supersedes a live admission: the server wins. | BC `pos-cashier-admissions.openapi.yaml` 1.1.0-draft |
 | F6 | **Device-path cashier capture** (RT-224) uses the device bearer plus `operatorUserId`. A sale is accepted only if an admission row for **the same device and user** has a window that covers `admissionCheckAt ?? occurredAt`: `created_at − 120 s ≤ t < LEAST(ended_at, expires_at) + 120 s`. Ended and expired rows still count *inside* their windows. **Back-dating cap:** the covering window must have ended at most `MAX_WINDOW_AGE_SECONDS` = **7 days** before the server's now. | BC `catalog/sales/operator-attribution.ts` header |
-| F7 | One consequence of F5 and F6 is that **fencing already exists on the cashier path**. After a takeover, the till's admission has `ended_at` set. Any later cashier sale from that till falls outside every window and is refused with 403 `cashier_claim_refused`. The POS then dead-letters it, and RT-225's repair path applies. Sales from *before* the takeover are still accepted. | F5 + F6 |
+| F7 | One consequence of F5 and F6 is that **fencing already exists on the cashier path**. After a takeover, the till's admission has `ended_at` set. A later cashier sale from that till is refused with 403 `cashier_claim_refused` **only when its check time is more than 120 s after `ended_at`**. A sale stamped inside that 120 s grace is still accepted, so the fence is not hard at the takeover instant. A refused sale is dead-lettered by the POS. **RT-225 cannot repair it**: its support reset (`src/main/sales-sync/cashier-claim-refused-reset.ts`) re-sends the same device-path submission, which is outside the window and is refused again. POS has a manager-envelope repair for shift facts (`buildEnvelopeRepairRequest`), but none for sales. Such a sale needs the manager-authorized repair path (C14), which does not exist yet. Sales from *before* the takeover are still accepted. | F5 + F6 |
 | F8 | **The manager-envelope path has no admission window.** A stale manager or admin sale from a returning till is *not* fenced by F7. | BC `sales.yaml` (`operatorAuthorization` path); POS `current.md` §6 |
 | F9 | **Offline grant (RT-113):** a sealed, per-terminal proof of an earlier online admission. Limits: at most 72 h (server default 24 h), at most 8 uses, a clock high-water mark, and a pairing epoch. It is local to the device and cannot move to another device. | POS `src/main/operator/offline-grant-store.ts` |
 | F10 | Cashier PIN records are **per terminal**, keyed by `(tenant, branch, terminal, user_id)`. A manager provisions them on that terminal (spec 019, RT-235). A new device has no PIN for any cashier until one is provisioned there. | POS spec 017/019; `pin-management.ts` |
@@ -95,11 +95,11 @@ Each fact below was read on the baselines above. The design reuses these mechani
 |---|---|---|---|
 | S1 | The till loses power **between sales**. Store internet works, or the alternate device has cellular. | Up | The cashier continues on the alternate device, and no sale is lost or duplicated. |
 | S2 | The till loses power **mid-cart**, before payment. | Up | The cart is not moved. The alternate device starts a fresh sale, and the dead cart is discarded when the till returns. |
-| S3 | The till loses power **after settlement but before finalization**, so payment was taken. | Up | On return, boot recovery finalizes the sale with `admissionCheckAt` = settled time, which is inside the old window, so it is accepted **if the till returns within 7 days of that window ending** (F6 cap). After that the sale is refused and goes to RT-225 repair. If the cashier re-rang it on the alternate device, that pair is a **candidate duplicate** (§6.3). |
+| S3 | The till loses power **after settlement but before finalization**, so payment was taken. | Up | On return, boot recovery finalizes the sale with `admissionCheckAt` = settled time, which is inside the old window, so it is accepted **if the till returns within 7 days of that window ending** (F6 cap). After that the sale is refused and needs the manager-authorized repair path (C14), which does not exist yet. If the cashier re-rang it on the alternate device, that pair is a **candidate duplicate** (§6.3). |
 | S4 | The till loses power **after finalization but before the sale synced**. | Up | The sale syncs when the till returns (its `occurredAt` is inside the old window), subject to the same 7-day cap. A re-ring is again a candidate duplicate. |
-| S5 | The till returns **while continuity is active** and is online. | Up | The till sees `active_elsewhere` on its next heartbeat and locks. Its cashier sales after the takeover would be refused (F7). There is an explicit handback. |
-| S6 | The till returns **while the store is offline**. The power cut also took the router down. | Down at till | The till might run on its offline grant (F9). Any cashier sale it makes is refused when it syncs (F7). It dead-letters, needs repair and is visible to operators. This is a **gap to close** (D-B3, Risk R2). |
-| S7 | The till **never returns** because the hardware is dead. | n/a | The till's open shift needs a manager-driven forced seal with the count *unknown*. Its unsynced outbox is lost unless the disk can be recovered. Sales from a recovered disk that arrive more than 7 days after the window ended are refused (F6 cap) and need RT-225 repair. Its device is revoked and re-enrolled (F13). |
+| S5 | The till returns **while continuity is active** and is online. | Up | The till sees `active_elsewhere` on its next heartbeat and locks. Its cashier sales from more than 120 s after the takeover would be refused (F7). There is an explicit handback. |
+| S6 | The till returns **while the store is offline**. The power cut also took the router down. | Down at till | The till might run on its offline grant (F9). Any cashier sale it makes outside the 120 s grace is refused when it syncs (F7). It dead-letters, is visible to operators and needs the manager-authorized repair path (C14), which does not exist yet. This is a **gap to close** (D-B3, Risk R2). |
+| S7 | The till **never returns** because the hardware is dead. | n/a | The till's open shift needs a manager-driven forced seal with the count *unknown*. Its unsynced outbox is lost unless the disk can be recovered. Sales from a recovered disk that arrive more than 7 days after the window ended are refused (F6 cap) and need the manager-authorized repair path (C14), which does not exist yet. Its device is revoked and re-enrolled (F13). |
 | S8 | The alternate device **crashes or loses signal between POST and response**. | Flaky | The same `externalId` and the same body must be retried. A fresh id would create a second sale. |
 | S9 | The continuity device is **lost or stolen**. | Any | Revoke it immediately, which ends its sessions. Its continuity shift becomes a cash exception, and the count is unknown. |
 | S10 | A store has **no alternate device enrolled** when the outage happens. | Any | Continuity is not available. The fallback is a paper record and later entry (§10, D-B9). Enrolling during an outage is not a supported path. |
@@ -215,13 +215,16 @@ Each block uses an ADR shape: **Decision**, options, **recommendation**, rationa
 
 The cashier path is **already fenced server-side** (F7). Two gaps remain.
 
+- **Gap 0, the 120 s grace after a takeover (F7).** A stale till sale stamped inside the grace is accepted.
+  - Options: (a) review it, by extending the candidate-duplicate scan to takeover + 120 s (§6.3); (b) a hard server fence that removes the grace for an admission ended by a takeover (part of C6).
+  - Recommendation: (a) now; decide (b) with C6. Stage 0 tests the boundary.
 - **Gap 1, the manager-envelope path (F8).** A manager or admin sale from a returning till has no admission window.
   - Recommendation: give continuity mode a **"continuity active for till T" device fence state** (C6). The manager-envelope path refuses that device's sales while the fence is up. Alternatively, the policy is that a manager never sells on a fenced till until handback.
   - The server fence is preferred. It is a contract decision.
 - **Gap 2, a returning till that is offline (S6).** The till can resume on its offline grant (F9) and ring sales that are certain to be refused later.
   - Options:
     - (a) after an **unclean shutdown**, the POS suspends offline-grant use until one online reconcile succeeds;
-    - (b) accept refusal and the RT-225 repair;
+    - (b) accept refusal and the manager-authorized repair (C14);
     - (c) do nothing.
   - **Recommendation: (a).** It needs no Backend-Core contract change, because the POS already knows it rebooted dirty (boot recovery runs). However, it **amends an owner-decided RT-113 behaviour**, offline continuation on a valid grant. It therefore needs an explicit owner ruling as an RT-113 amendment. An agent must not quietly redefine it.
   - **Trade-off:** a till that loses power while the whole store is offline, with no continuity device, also loses offline selling after the reboot. The owner must weigh this (Risk R2). A narrower form: suspend only when the store has a continuity device enrolled, which requires the till to know that (C6).
@@ -246,7 +249,7 @@ The cashier path is **already fenced server-side** (F7). Two gaps remain.
 
 **Recommendation: (a), with (b) available as a store policy switch.** Most Egyptian pharmacy sales are cash, so a cashless-only continuity mode would rarely help.
 
-**Moving the cash at handback:** until internal transfers exist (Shift & Cash deferred), physical cash moves from the pouch to the till through a pay-out on the phone's shift plus a pay-in on the till's shift. Both use a structured reason. Whether a dedicated reason code is needed is decision C9.
+**Moving the cash at handback:** until internal transfers exist (Shift & Cash deferred), physical cash moves from the pouch to the till through a pay-out on the phone's shift, **recorded while that shift is still open**, plus a pay-in on the till's shift after the cashier is back on the till. A cash movement is accepted only on an open shift (`shift_not_open` locally, `shift_closed` from Backend-Core). Both use a structured reason. Whether a dedicated reason code is needed is decision C9.
 
 **The dead till's shift:**
 - It stays open, and no fact is fabricated.
@@ -281,14 +284,15 @@ The cashier path is **already fenced server-side** (F7). Two gaps remain.
 ### D-B9 — Recovery and handback
 
 The ordered handback:
-1. The cashier ends continuity on the phone: blind count, then close the phone's shift.
-2. Move cash with the pay-out/pay-in pair.
+1. On the phone, while its shift is still open: record the pay-out of the pouch cash with the structured reason.
+2. Blind count on the phone, then close the phone's shift. The expected cash now reflects the pay-out.
 3. The cashier signs in on the till with `takeover: true`. The phone gets `active_elsewhere` on its next heartbeat.
 4. The till discards any dead draft cart.
-5. The till drains its outbox.
-6. Close or continue the till's own shift.
-7. Review the operator-visible items:
-   - dead-lettered `cashier_claim_refused` sales from the till (F7), which go through the RT-225 repair;
+5. On the till's open shift, record the pay-in of the same cash with the structured reason.
+6. The till drains its outbox.
+7. Close or continue the till's own shift.
+8. Review the operator-visible items:
+   - dead-lettered `cashier_claim_refused` sales from the till (F7), which need the manager-authorized repair path (C14), which does not exist yet;
    - **candidate duplicates** (§6.3);
    - shift exceptions.
 
@@ -341,12 +345,12 @@ sequenceDiagram
     Note over T: Power back. Boot recovery finalizes settled sales (admissionCheckAt = settled_at)
     T->>T: Unclean-boot rule: no offline-grant use until online reconcile (D-B3)
     T->>BC: drain outbox. Pre-takeover sales are inside T's window and accepted, if within the 7-day cap (F6)
-    T->>BC: any post-takeover cashier sale is outside the window: 403 cashier_claim_refused, dead-letter (F7)
-    C->>P: End continuity: blind count, close P's shift, pay-out with reason
+    T->>BC: a cashier sale stamped more than 120 s after the takeover: 403 cashier_claim_refused, dead-letter (F7). Inside the grace it is accepted
+    C->>P: End continuity: pay-out with reason (shift still open), blind count, close P's shift
     C->>T: Sign in (PIN), admission takeover=true
     BC-->>P: next heartbeat returns active_elsewhere, P locks
-    C->>T: Discard dead draft cart. Pay-in with reason. Continue or close T's shift
-    BC-->>C: Review list: refused sales (RT-225 repair), candidate duplicates (6.3), shift exceptions
+    C->>T: Discard dead draft cart. Pay-in with reason on T's open shift. Continue or close T's shift
+    BC-->>C: Review list: refused sales (C14 repair), candidate duplicates (6.3), shift exceptions
 ```
 
 ### 6.3 The sale and idempotency model, stated honestly
@@ -356,13 +360,13 @@ sequenceDiagram
 | A retry of the same sale from the same device (timeout, crash, 425) | `(tenant, sourceSystem, externalId)` plus `Idempotency-Key` (F3), and a durable `externalId` written before the POST (D-B8) | **Covered** by existing semantics. |
 | The same body sent twice under a new key | Provenance replay, 200 (F3) | **Covered.** |
 | A changed body under the same id | 409 divergence, dead-letter (F3) | **Covered** (fails closed). |
-| A stale till ringing new cashier sales after the takeover | Admission window (F6/F7) | **Fenced.** The sales dead-letter, are visible to operators and go through RT-225 repair. |
+| A stale till ringing new cashier sales after the takeover | Admission window (F6/F7) | **Fenced beyond 120 s.** Those sales dead-letter, are visible to operators and need the C14 repair. Inside the grace they are accepted and are reviewed as candidates (below). |
 | A stale till ringing manager sales after the takeover | Nothing today (F8) | **Gap:** C6. |
 | **A sale finalized on the dead till that the cashier re-rang on the phone** | Nothing can catch it: two real sales with two ids | **A business duplicate. Mitigated, not prevented.** |
 
 Mitigation for the last row:
 1. The handoff prompt (D-B4).
-2. A **review list of candidate duplicates at recovery** (C5). It pairs each till sale with `occurredAt` in the window [takeover − N min, takeover] with any continuity sale in [takeover, takeover + N min] that has the same cashier, the same store, the same total and the same multiset of lines.
+2. A **review list of candidate duplicates at recovery** (C5). It pairs each till sale with `occurredAt` in the window [takeover − N min, takeover + 120 s] with any continuity sale in [takeover, takeover + N min] that has the same cashier, the same store, the same total and the same multiset of lines.
 3. The list is for operator review only and **never auto-voids**. A manager resolves a pair through the existing void or return flow, with audit.
 
 **"Exactly-once" is claimed only for the first four rows.**
@@ -404,6 +408,7 @@ Mitigation for the last row:
 | C11 | **A digital receipt view** (link or QR, scoped by token). | D-B7, later. | Defer. | No |
 | C12 | **Fiscal identity for continuity devices.** | RT-295 1164/1165/1180–1182. | Continuity is disabled in fiscal-enabled stores until RT-295 decides. | No |
 | C13 | **Human credential for native mobile** (G1/G2). | Needed only if continuity uses human auth rather than device-path PIN. | Follow RT-231's decision. D-B2(a) avoids it for cashier selling. | **Yes, G1/G2.** |
+| C14 | **Manager-authorized repair for refused cashier sales.** It covers sales outside the window, after the 7-day cap, or from a fenced till: a manager-envelope re-send of the stored sale, like the shift-fact repair, or a Backend-Core repair or import route. It must stay explicit and audited, and it must pass the C6 fence as a flagged repair, not as plain manager capture. | F7: RT-225's reset cannot authorize these. Without it, sales that were paid stay dead-lettered permanently. | Required before continuity is enabled. | No |
 
 ---
 
@@ -416,7 +421,7 @@ Mitigation for the last row:
 | R3 | A manager sale on a returning till is not fenced (F8). | Medium | C6, or a policy of no manager selling on a fenced till. |
 | R4 | No continuity device is enrolled when the outage happens (S10). | Medium | An enrollment checklist at store onboarding. Paper fallback. |
 | R5 | A non-Electron client re-implements PIN storage weakly. | High | RT-231 technology gate. Security review. Fallback to C3. |
-| R6 | Dead-lettered refused sales pile up without anyone repairing them. | Medium | The RT-225 repair path must be live before continuity is enabled (go criterion GO-3). |
+| R6 | Dead-lettered refused sales pile up without anyone repairing them. | High | The manager-authorized repair (C14) must be live before continuity is enabled (go criterion GO-3). RT-225's reset is not enough. |
 | R7 | Cash split across two Cash Locations confuses the cash-up. | Medium | Structured transfer reason (C9). Reports show both sessions. |
 | R8 | Fiscal non-compliance if the phone issues sales in a fiscal store. | High | C12: disabled until RT-295. |
 | R9 | A lost phone carries an open continuity shift with cash. | Medium | Immediate revoke (D-B10). Exception with the count unknown. |
@@ -433,7 +438,7 @@ Mitigation for the last row:
   - take over on B;
   - sell, including cash into B's own shift;
   - restore T online and offline;
-  - observe T's refused sales (F7) and the RT-225 repair;
+  - observe T's refused sales (F7), including one sale just inside the 120 s grace (accepted) and one just beyond it (refused);
   - hand back;
   - close both shifts.
 - **Proves:** that the existing contracts deliver fencing, attribution and the cash split.
@@ -452,7 +457,7 @@ Mitigation for the last row:
 **Go criteria** (all must hold before any continuity implementation goes beyond Stage 0):
 - **GO-1:** Stage 0 lab evidence shows no lost or duplicated *replays*, F7 fencing working, and both shifts closing with honest counts.
 - **GO-2:** the owner has ruled on every D-B decision and on A1.
-- **GO-3:** the RT-225 repair path for dead-lettered cashier sales works end to end.
+- **GO-3:** a manager-authorized repair (C14) for dead-lettered cashier sales is designed, approved and works end to end.
 - **GO-4:** C5 (candidate-duplicate review) and C10 (forced seal outside the device) are designed and approved.
 - **GO-5:** fiscal position (C12) recorded. Continuity is disabled in fiscal stores until RT-295.
 - **GO-6:** the RT-231 technology gate is passed, and secure PIN-record storage has a security review (R5).
@@ -473,6 +478,7 @@ Mitigation for the last row:
 5. **Planning (BC + Admin Console):** C10 forced seal and recovery count for a dead device's shift. Coordinate with RT-18 and RT-236.
 6. **Planning (POS):** the D-B3 unclean-boot offline-grant suspension rule, as an **RT-113 amendment** that needs an owner ruling before any implementation.
 7. **Decision record (Docs):** A1 thin-web go/no-go once RT-229 reports.
+8. **Planning (POS + BC):** C14 manager-authorized repair for refused cashier sales. Coordinate with RT-225.
 
 None of these is a pilot blocker.
 
@@ -485,13 +491,13 @@ None of these is a pilot blocker.
 | A1 | Thin/web client | Defer until RT-229. If evidence justifies it, start with back-office sale entry. |
 | D-B1 | Continuity device identity | Its own enrolled device, before any outage |
 | D-B2 | Cashier handoff | Local PIN on a pre-provisioned device, then the existing `takeover: true` |
-| D-B3 | Fencing the stale till | Server cashier fence (exists) + C6 for manager sales + unclean-boot grant suspension (narrow form, if C6). **RT-113 amendment: owner ruling required.** |
+| D-B3 | Fencing the stale till | Server cashier fence (exists, with a 120 s grace) + C6 for manager sales + unclean-boot grant suspension (narrow form, if C6). **RT-113 amendment: owner ruling required.** |
 | D-B4 | Cart across devices | Fresh sales only, plus the handoff prompt |
 | D-B5 | Cash | The device's own shift as a continuity Cash Location, float 0, with cashless as a store switch |
 | D-B6 | Tenders | Cash and `card_external` only |
 | D-B7 | Receipts | On-screen `saleRef`. Digital receipt later. |
 | D-B8 | Connectivity | Connected-first, with a durable unknown-outcome record |
-| D-B9 | Handback | The ordered handback in §6 |
+| D-B9 | Handback | The ordered handback in §6: pay-out on the phone's open shift, then close it, then take over on the till, then pay-in |
 | D-B10 | Security | Store-owned devices, secure storage, immediate revoke |
 
 ## 13. Next safe action
