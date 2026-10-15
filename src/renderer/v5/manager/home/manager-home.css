@@ -1,0 +1,120 @@
+/*
+ * RT-499 (VN-S10 S10-2) — the manager home on the frozen G-6 references
+ * (docs/design/vnext/visual-acceptance/G6-Manager/g6.css, "G-6 additions"),
+ * in v5 tokens. Two tiers like the frame: comfortable at 1280+, the floor tier below.
+ */
+
+.v5-manager-home__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-content: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-manager-tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  min-block-size: 96px;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+@media (max-width: 1279px) {
+  .v5-manager-tile {
+    min-block-size: 88px;
+    padding: var(--space-3);
+  }
+}
+
+.v5-manager-tile__glyph {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+.v5-manager-tile__title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-manager-tile__line {
+  color: var(--color-text-muted);
+}
+
+/* ── a page whose only content is an honest notice ──────────────── */
+.v5-manager-state {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.v5-manager-state .v5-notice {
+  inline-size: min(560px, 100%);
+  align-items: center;
+  /* G-6 draws this notice neutral: an elevated surface and a muted glyph. */
+  --tone-ink: var(--color-border);
+  --tone-soft: var(--color-surface-elevated);
+}
+
+.v5-manager-state .v5-tone-icon {
+  color: var(--color-text-muted);
+}
+
+.v5-manager-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--v5-target, 44px);
+  min-inline-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (max-width: 1279px) {
+  .v5-manager-btn {
+    padding-inline: var(--space-3);
+  }
+}
+
+.v5-manager-btn--primary,
+.v5-manager-state .v5-notice__action .v5-manager-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .v5-manager-tile,
+  .v5-manager-tile__glyph,
+  .v5-manager-btn {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-manager-btn--primary {
+    border: 2px solid ButtonText;
+  }
+}

@@ -1,8 +1,10 @@
 import { useEffect, type JSX } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import type { RecoveryListHeldResponse } from '../../../shared/operator/recovery';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
+import { HOME_COPY } from '../../v5/manager/home/home-copy';
+import { ManagerTile } from '../../v5/manager/home/ManagerTile';
 import { windowRecoveryBridges } from '../../v5/recovery/RecoveryScreen';
 import { RECOVERY_COPY } from '../../v5/recovery/recovery-copy';
 
@@ -48,8 +50,12 @@ export function RecoveryLink(): JSX.Element | null {
   useRecoveryModeRedirect(isManager);
   if (!isManager) return null;
   return (
-    <p data-testid="dashboard-recovery-link">
-      <Link to={RECOVERY_PATH}>{RECOVERY_COPY.link}</Link>
-    </p>
+    <ManagerTile
+      to={RECOVERY_PATH}
+      icon="manager-held"
+      title={RECOVERY_COPY.link}
+      description={HOME_COPY.recovery.description}
+      testId="dashboard-recovery-link"
+    />
   );
 }

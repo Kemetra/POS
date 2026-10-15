@@ -36,7 +36,9 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store'
  * `sale` = missing | found | noprint (what `sales.findByNumber` answers: no
  * such sale, a sale whose latest print succeeded, or one that never printed;
  * default missing); `reprint` = ok | fail (what the receipts reprint and
- * preview fakes answer; default ok).
+ * preview fakes answer; default ok);
+ * `shift` = on | off (RT-499: the shift-cashup flag, which decides the manager
+ * home's «حالة الوردية» card; default off).
  */
 
 export interface OneFrameProofParams {
@@ -47,6 +49,7 @@ export interface OneFrameProofParams {
   returns: 'off' | 'on';
   sale: 'missing' | 'found' | 'noprint';
   reprint: 'ok' | 'fail';
+  shift: 'on' | 'off';
 }
 
 function oneOf<T extends string>(raw: string | null, allowed: readonly T[], fallback: T): T {
@@ -64,6 +67,7 @@ export function readOneFrameProofParams(): OneFrameProofParams {
     returns: oneOf(params.get('returns'), ['off', 'on'], 'off'),
     sale: oneOf(params.get('sale'), ['missing', 'found', 'noprint'], 'missing'),
     reprint: oneOf(params.get('reprint'), ['ok', 'fail'], 'ok'),
+    shift: oneOf(params.get('shift'), ['on', 'off'], 'off'),
   };
 }
 
@@ -246,6 +250,7 @@ export function OneFrameProof(): JSX.Element {
     payments: true,
     productSearch: true,
     returns: params.returns === 'on',
+    ...(params.shift === 'on' ? { shiftCashup: true } : {}),
   });
   useOperatorSessionStore.getState().hydrateSignedIn({
     id: `proof-${params.role}`,

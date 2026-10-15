@@ -1,0 +1,327 @@
+[
+  {
+    "key": "home-shift-on",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt499-home-shift-on-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "home-shift-on",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt499-home-shift-on-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "home-shift-on",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt499-home-shift-on-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:حالة الورديةحالة وردية هذا الجهاز.",
+      "a:إدارة الكاشيرالرقم السري لكل كاشير على ه",
+      "a:المبيعات المعلقةدفع معلّق، أو مبيعات محف",
+      "a:الورديات العالقةورديات بقيت مفتوحة ويجب ",
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:حالة الورديةحالة وردية هذا الجهاز."
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "home-shift-on",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt499-home-shift-on-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "home-shift-off",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt499-home-shift-off-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "home-shift-off",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt499-home-shift-off-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "home-shift-off",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt499-home-shift-off-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:إدارة الكاشيرالرقم السري لكل كاشير على ه",
+      "a:المبيعات المعلقةدفع معلّق، أو مبيعات محف",
+      "a:الورديات العالقةورديات بقيت مفتوحة ويجب ",
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:إدارة الكاشيرالرقم السري لكل كاشير على ه",
+      "a:المبيعات المعلقةدفع معلّق، أو مبيعات محف"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "home-shift-off",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt499-home-shift-off-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "cashier-refusal",
+    "route": "/app/dashboard",
+    "role": "cashier",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt499-cashier-refusal-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "cashier-refusal",
+    "route": "/app/dashboard",
+    "role": "cashier",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt499-cashier-refusal-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "cashier-refusal",
+    "route": "/app/dashboard",
+    "role": "cashier",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt499-cashier-refusal-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "button:العودة إلى البيع",
+      "a:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "button:العودة إلى البيع",
+      "a:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "button:العودة إلى البيع",
+      "a:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "button:العودة إلى البيع",
+      "a:نقطة البيع"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "cashier-refusal",
+    "route": "/app/dashboard",
+    "role": "cashier",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt499-cashier-refusal-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "لوحة المتابعة"
+    ],
+    "current": [],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  }
+]
