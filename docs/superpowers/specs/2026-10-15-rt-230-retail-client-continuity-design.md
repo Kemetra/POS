@@ -203,7 +203,7 @@ Each block uses an ADR shape: **Decision**, options, **recommendation**, rationa
   - (b) a new server-side "continuity session" type that a manager pre-authorizes;
   - (c) a manager signs in on the phone and attests the cashier.
 - **Recommendation: (a)**, with two conditions:
-  - PINs are **pre-provisioned on the continuity device** by a manager through the existing provisioning path (F10). There is therefore no new credential type.
+  - PINs are **pre-provisioned on the continuity device** by a manager, so the handoff itself needs no new credential type. **That provisioning path does not exist for a phone yet.** Today's `provisionCashierPin` is Electron-local: it needs a current manager or admin session on that terminal and writes that terminal's local database (F10). A phone needs a mobile provisioning workflow in which a manager authenticates on the phone and creates its first cashier PIN records: through C13 (a human credential for native mobile) or another manager-authorized enrollment path. It is a prerequisite for Stage 3.
   - Enrolling the device counts as the store's authorization of it as a continuity device.
 - **Rationale:** the takeover is already serialized, rate-limited and audited (F5). It ends the till's admission, which is exactly the fence F7 relies on.
 - **Consequences:**
@@ -280,6 +280,7 @@ The cashier path is **already fenced server-side** (F7). Two gaps remain.
   - "Connected-first" still needs a **small durable store for submissions whose result is unknown**. The client writes `externalId` and the exact body *before* the first POST, and it retries with the same key until it gets 201, 200 or a definite refusal (S8, F3).
   - The client mints `externalId` once when the sale is created: UUIDv7, namespaced, with a `sourceSystem` per client class (C2).
   - Because no lookup by provenance exists (F12), this durable record is **required, not optional**. The alternative is a new read (C4).
+  - **The same durable-before-POST rule applies to every shift fact** (open, cash movement, close) and to the admission `end`. The client decides each fact's natural id, body and Idempotency-Key once, stores them, and replays exactly those bytes after a crash or a lost response. This is the Electron POS pattern in `src/main/shift-cashup/shift-wire.ts`. Minting a new id after a restart could return `shift_already_open`, or leave the client unable to tell whether the handback close landed.
 
 ### D-B9 — Recovery and handback
 
@@ -409,7 +410,7 @@ Mitigation for the last row:
 | C10 | **Forced seal and recovery count from outside the dead device** (Admin Console or Manager Mobile, manager envelope). | S7. The POS builds no forced close today (F11). | Needed before continuity is production-ready. | Overlaps RT-18 and RT-231 manager actions |
 | C11 | **A digital receipt view** (link or QR, scoped by token). | D-B7, later. | Defer. | No |
 | C12 | **Fiscal identity for continuity devices.** | RT-295 1164/1165/1180–1182. | Continuity is disabled in fiscal-enabled stores until RT-295 decides. | No |
-| C13 | **Human credential for native mobile** (G1/G2). | Needed only if continuity uses human auth rather than device-path PIN. | Follow RT-231's decision. D-B2(a) avoids it for cashier selling. | **Yes, G1/G2.** |
+| C13 | **Human credential for native mobile** (G1/G2), or another manager-authorized enrollment path. | Cashier selling on the device path does not need it. However, **a manager must authenticate on the phone to provision its first cashier PINs** (D-B2), and no such path exists today. | Required for Stage 3. Follow RT-231's decision on the mechanism. | **Yes, G1/G2.** |
 | C14 | **Manager-authorized repair for refused cashier sales.** It covers sales outside the window, after the 7-day cap, or from a fenced till: a manager-envelope re-send of the stored sale, like the shift-fact repair, or a Backend-Core repair or import route. It must stay explicit and audited, and it must pass the C6 fence as a flagged repair, not as plain manager capture. | F7: RT-225's reset cannot authorize these. Without it, sales that were paid stay dead-lettered permanently. | Required before continuity is enabled. | No |
 
 ---
@@ -455,7 +456,7 @@ Mitigation for the last row:
 
 **Stage 3 — mobile continuity PoC.**
 - Inside the RT-231 PoC, after its technology gate: connected-first selling, the durable submission record and the handback.
-- Starts only once GO-3 (C14 repair working end to end) and GO-4 hold, **and C1 is live**: a phone can be enrolled and revoked through supported routes.
+- Starts only once GO-3 (C14 repair working end to end) and GO-4 hold, **C1 is live** (a phone can be enrolled and revoked through supported routes), and **a mobile PIN-provisioning path exists** (C13 or another manager-authorized enrollment path).
 
 **Go criteria** (all must hold before any continuity implementation goes beyond Stage 0):
 - **GO-1:** Stage 0 lab evidence shows no lost or duplicated *replays*, F7 fencing working, and both shifts closing with honest counts.
@@ -494,13 +495,13 @@ None of these is a pilot blocker.
 |---|---|---|
 | A1 | Thin/web client | Defer until RT-229. If evidence justifies it, start with back-office sale entry. |
 | D-B1 | Continuity device identity | Its own enrolled device, before any outage |
-| D-B2 | Cashier handoff | Local PIN on a pre-provisioned device, then the existing `takeover: true` |
+| D-B2 | Cashier handoff | Local PIN on a pre-provisioned device, then the existing `takeover: true`. Needs a mobile PIN-provisioning path (C13), which does not exist yet. |
 | D-B3 | Fencing the stale till | Server cashier fence (exists, with a 120 s grace) + C6 for manager sales + unclean-boot grant suspension (narrow form, if C6). **RT-113 amendment: owner ruling required.** |
 | D-B4 | Cart across devices | Fresh sales only, plus the handoff prompt |
 | D-B5 | Cash | The device's own shift as a continuity Cash Location, float 0, with cashless as a store switch |
 | D-B6 | Tenders | Cash and `card_external` only |
 | D-B7 | Receipts | On-screen `saleRef`. Digital receipt later. |
-| D-B8 | Connectivity | Connected-first, with a durable unknown-outcome record |
+| D-B8 | Connectivity | Connected-first, with a durable unknown-outcome record for every sale, shift fact and admission end |
 | D-B9 | Handback | The ordered handback in §6: close the phone shift on its blind count, take over on the till, then pay in the counted amount at the till |
 | D-B10 | Security | Store-owned devices, secure storage, immediate revoke |
 
