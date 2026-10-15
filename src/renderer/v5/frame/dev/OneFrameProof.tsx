@@ -87,7 +87,7 @@ function refused<T>(): () => Promise<T> {
   return () => Promise.resolve({ kind: 'refused', category: 'invalid_input' } as T);
 }
 
-function operatorBridge(params: OneFrameProofParams): OperatorBridgeAPI {
+export function operatorBridge(params: OneFrameProofParams): OperatorBridgeAPI {
   return {
     signIn: refused(),
     signOut: () => Promise.resolve({ kind: 'signed_out' as const }),
@@ -107,7 +107,7 @@ function operatorBridge(params: OneFrameProofParams): OperatorBridgeAPI {
   } as unknown as OperatorBridgeAPI;
 }
 
-const pairingBridge: PairingBridgeAPI = {
+export const pairingBridge: PairingBridgeAPI = {
   getStatus: () => Promise.resolve(PAIRED),
   submit: () => Promise.reject(new Error('not used in the harness')),
 };
@@ -123,7 +123,7 @@ function bannerState(banner: OneFrameProofParams['banner']): BannerState {
 }
 
 /** The read-only bridges the moved screens touch on mount, in memory. */
-function installWindowApi(params: OneFrameProofParams): void {
+export function installWindowApi(params: OneFrameProofParams): void {
   (window as unknown as { api?: unknown }).api = {
     pairing: pairingBridge,
     catalogue: {
