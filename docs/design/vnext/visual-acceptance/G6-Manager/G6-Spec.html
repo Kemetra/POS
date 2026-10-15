@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RT-478 G-6 · شاشات المدير · مرجع مقترح</title>
+<style>
+  :root { --primary:#0f766e; --text:#0f1d2e; --muted:#53647a; --border:#d8dfe7; --bg:#f7f9fa; --surface:#fff; }
+  body { margin:0; padding:32px; background:var(--bg); color:var(--text); font-family:'Dubai','Segoe UI',Tahoma,Arial,sans-serif; font-size:15px; line-height:1.7; }
+  main { max-inline-size:1180px; margin-inline:auto; display:grid; gap:28px; }
+  h1 { margin:0; font-size:26px; } h2 { margin:0 0 8px; font-size:19px; }
+  .status { display:inline-block; padding:2px 12px; border:1px solid #a35a00; border-radius:999px; background:#fdf1e0; color:#7d4500; font-weight:700; }
+  section { padding:20px 24px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+  table { inline-size:100%; border-collapse:collapse; }
+  th, td { padding:8px 10px; border-block-end:1px solid var(--border); text-align:start; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .ltr { direction:ltr; unicode-bidi:isolate; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:13px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; }
+  figure { margin:0; display:grid; gap:6px; }
+  figure img { inline-size:100%; border:1px solid var(--border); border-radius:8px; }
+  figcaption { color:var(--muted); font-size:13px; }
+  a { color:var(--primary); }
+  ul { margin:0; padding-inline-start:20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>شاشات المدير (G-6): كل شاشات المدير داخل الإطار الجديد</h1>
+    <p><span class="status">معتمد من المالك (<span class="ltr">2026-10-15</span>)</span> · Jira <span class="ltr">RT-478</span> (VN-S10، الشريحة S10-R) · الخطة:
+      <a href="../../23-vn-s10-manager-surfaces-shell-retirement.md"><span class="ltr">23-vn-s10-manager-surfaces-shell-retirement.md</span></a></p>
+    <p>وافق المالك يوم <span class="ltr">2026-10-15</span> على الخطة وعلى كل التوصيات D-10-1 حتى D-10-8. ثم وافق في اليوم نفسه على هذه
+      المراجع وعلى كل النصوص المقترحة كما هي. بهذا تُغلق الفجوة G-6، والشكل هنا FROZEN لشرائح التنفيذ S10-1 حتى S10-6.</p>
+  </header>
+
+  <section>
+    <h2>الحالات الإحدى والعشرون (1024 × 768 و 1280 × 800، فاتح وتباين عالٍ)</h2>
+    <div class="grid">
+      <figure><img src="captures/G6-Home-1280-light.png" alt=""><figcaption>1 · لوحة المتابعة: أربع بطاقات، منها «الورديات العالقة» (D-10-2)</figcaption></figure>
+      <figure><img src="captures/G6-HomeNoShift-1024-light.png" alt=""><figcaption>2 · إدارة الوردية غير مفعّلة: لا تظهر بطاقة «حالة الوردية»</figcaption></figure>
+      <figure><img src="captures/G6-CashierRefused-1024-light.png" alt=""><figcaption>3 · كاشير فتح لوحة المتابعة مباشرة: للمدير فقط + العودة إلى البيع</figcaption></figure>
+      <figure><img src="captures/G6-Sales-1280-light.png" alt=""><figcaption>4 · المبيعات: البحث عن بيع برقمه</figcaption></figure>
+      <figure><img src="captures/G6-SalesFound-1024-light.png" alt=""><figcaption>5 · تم العثور على البيع: معاينة الإيصال وإعادة طباعته</figcaption></figure>
+      <figure><img src="captures/G6-SalesNotFound-1280-light.png" alt=""><figcaption>6 · لم يُعثر على بيع بهذا الرقم</figcaption></figure>
+      <figure><img src="captures/G6-SalesReprintSent-1280-light.png" alt=""><figcaption>7 · أُرسل الإيصال للطابعة (وليس «طُبع»)</figcaption></figure>
+      <figure><img src="captures/G6-SalesReprintFailed-1024-light.png" alt=""><figcaption>8 · تعذّرت إعادة الطباعة</figcaption></figure>
+      <figure><img src="captures/G6-Returns-1280-light.png" alt=""><figcaption>9 · المرتجعات: مكانها داخل الإطار فقط. المحتوى المرسوم بديل توضيحي، والشاشة تبقى كما شحنها RT-15</figcaption></figure>
+      <figure><img src="captures/G6-Audit-1024-light.png" alt=""><figcaption>10 · سجل المراجعة: حالة صادقة بدل «Coming soon»</figcaption></figure>
+      <figure><img src="captures/G6-Inventory-1280-light.png" alt=""><figcaption>11 · المخزون: حالة صادقة + الطريق إلى فحص الكتالوج</figcaption></figure>
+      <figure><img src="captures/G6-Diagnostics-1024-light.png" alt=""><figcaption>12 · فحص الكتالوج: الجهاز، المزامنة، البيانات المحلية، البحث</figcaption></figure>
+      <figure><img src="captures/G6-Settings-1280-light.png" alt=""><figcaption>13 · الإعدادات: بدون زر الثيم (D-10-3)</figcaption></figure>
+      <figure><img src="captures/G6-StuckList-1024-light.png" alt=""><figcaption>14 · الورديات العالقة: زر «إغلاق الوردية» في كل صف</figcaption></figure>
+      <figure><img src="captures/G6-StuckOpen-1024-light.png" alt=""><figcaption>15 · نافذة الإغلاق عند فتحها: لم يُختر سبب، فزر الإغلاق معطّل</figcaption></figure>
+      <figure><img src="captures/G6-StuckConfirm-1280-light.png" alt=""><figcaption>16 · السبب مختار: زر الإغلاق متاح. الملاحظة اختيارية</figcaption></figure>
+      <figure><img src="captures/G6-StuckChanged-1280-light.png" alt=""><figcaption>17 · تغيّرت حالة الوردية: النافذة تبقى، والقائمة تُحدَّث</figcaption></figure>
+      <figure><img src="captures/G6-StuckFailed-1024-light.png" alt=""><figcaption>18 · تعذّر الإغلاق لسبب آخر: لا تحديث للقائمة</figcaption></figure>
+      <figure><img src="captures/G6-StuckEmpty-1280-light.png" alt=""><figcaption>19 · لا توجد ورديات عالقة</figcaption></figure>
+      <figure><img src="captures/G6-StuckUnreachable-1024-forced.png" alt=""><figcaption>20 · تعذّر التحميل + إعادة المحاولة (تباين عالٍ)</figcaption></figure>
+      <figure><img src="captures/G6-ForceFail-1280-light.png" alt=""><figcaption>21 · الصفحة المخفية لإنهاء دفع معلّق: توجيه إلى «المبيعات المعلقة»</figcaption></figure>
+    </div>
+    <p>كل الملفات في هذا المجلد: <code>G6-&lt;State&gt;-1024.html</code> و <code>-1280.html</code>، والصور في
+      <code>captures/</code>. المولّد: <code>tools/gen_g6.py</code>، والفحص: <code>tools/capture_g6.cjs</code>.</p>
+  </section>
+
+  <section>
+    <h2>ماذا يتغير عن اليوم</h2>
+    <ul>
+      <li>كل شاشات المدير تظهر داخل الإطار الجديد نفسه، بالقائمة الجانبية الفاتحة. لا يرجع المدير أبدًا للإطار القديم الغامق.</li>
+      <li>كل النصوص عربية. لا «Coming soon» ولا نص إنجليزي، إلا الأرقام والمعرّفات مثل <span class="ltr">POS-03</span>.</li>
+      <li>العنصر الحالي في القائمة يظهر محددًا. شاشات <span class="ltr">manager/*</span> تحدد «لوحة المتابعة» (D-10-5)، وفحص الكتالوج يحدد «المخزون».</li>
+      <li>لوحة المتابعة صارت بطاقات للشاشات الموجودة فقط، بلا أي أرقام، لأنه لا يوجد مصدر بيانات لها بعد (D-10-4).</li>
+      <li>الورديات العالقة صار لها مدخل لأول مرة: بطاقة في لوحة المتابعة (D-10-2). كل صف له زر واضح بدل الصف القابل للضغط.</li>
+      <li>أسباب الإغلاق الخمسة تظهر بالعربي. لا تُعرض أي مبالغ في الشاشة ولا في النافذة (قاعدة الإغلاق الأعمى، FR-024).</li>
+      <li>زر الثيم يختفي من الإعدادات (OD-4، D-10-3).</li>
+      <li>المرتجعات لا تتغير إلا إطارها.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>النصوص (للموافقة)</h2>
+    <table>
+      <thead><tr><th>المكان</th><th>النص</th><th>الحالة</th></tr></thead>
+      <tbody>
+        <tr><td>عناوين الشاشات</td><td>«لوحة المتابعة» · «المبيعات» · «المرتجعات» · «سجل المراجعة» · «المخزون» · «الإعدادات»</td><td>مُعتمدة (عقد القائمة، shell-routes)</td></tr>
+        <tr><td>عناوين جديدة</td><td>«فحص الكتالوج» · «الورديات العالقة» · «إنهاء دفع معلّق»</td><td>مقترح</td></tr>
+        <tr><td>بطاقات لوحة المتابعة</td><td>«حالة الوردية» · «إدارة الكاشير» · «المبيعات المعلقة»</td><td>تُعرض اليوم كروابط</td></tr>
+        <tr><td>بطاقة جديدة</td><td>«الورديات العالقة»</td><td>مقترح (D-10-2)</td></tr>
+        <tr><td>وصف البطاقات</td><td>«حالة وردية هذا الجهاز.» · «الرقم السري لكل كاشير على هذا الجهاز.» · «دفع معلّق، أو مبيعات محفوظة لموظفين آخرين.» · «ورديات بقيت مفتوحة ويجب إغلاقها.»</td><td>مقترح</td></tr>
+        <tr><td>كاشير على لوحة المتابعة</td><td>«لوحة المتابعة متاحة للمدير فقط.» + «العودة إلى البيع»</td><td>مقترح (اليوم: «Section unavailable»)</td></tr>
+        <tr><td>البحث عن بيع</td><td>«البحث عن بيع» · «رقم البيع» · «بحث»</td><td>نفس نصوص المرتجعات (RT-15)</td></tr>
+        <tr><td>نتيجة البحث</td><td>«معاينة الإيصال» · «إعادة طباعة الإيصال»</td><td>الثاني يُعرض اليوم؛ الأول مقترح (اليوم «Preview receipt»)</td></tr>
+        <tr><td>لم يُعثر عليه</td><td>«لم يُعثر على بيع بهذا الرقم.»</td><td>مقترح (اليوم «Sale not found.»)</td></tr>
+        <tr><td>إعادة الطباعة</td><td>«أُرسل الإيصال للطابعة.» · «تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.»</td><td>الأول من 15 (N-09، جديد هنا)؛ الثاني يُعرض اليوم</td></tr>
+        <tr><td>المرتجعات</td><td>كل النصوص كما هي</td><td>RT-15، بلا تغيير</td></tr>
+        <tr><td>سجل المراجعة</td><td>«سجل المراجعة لا يُعرض على هذا الجهاز.»</td><td>مقترح</td></tr>
+        <tr><td>المخزون</td><td>«إدارة المخزون غير متاحة على هذا الجهاز.» · بطاقة «فحص الكتالوج»: «حالة كتالوج الأصناف على هذا الجهاز، والبحث فيه.»</td><td>مقترح</td></tr>
+        <tr><td>فحص الكتالوج</td><td>«للقراءة فقط. لا يغيّر شيئًا في الكتالوج.» · «هذا الجهاز»: «المستأجر» «الفرع» «الجهاز» «اسم الجهاز» · «مزامنة الكتالوج»: «آخر تحديث» + «تحديث الآن» · «البيانات المحلية»: «الأصناف» «الباركود والأسماء البديلة» · «بحث في الكتالوج المحلي»: «ابحث بالاسم أو الباركود» · «‹n› نتيجة»</td><td>مقترح (اليوم إنجليزي)</td></tr>
+        <tr><td>حالات المزامنة</td><td>«لم يُحدَّث بعد» · «غير متاح» · «حُدِّث ولا توجد أصناف»</td><td>مقترح، بدون صورة (بدل never synced / unavailable / synced (empty))</td></tr>
+        <tr><td>الإعدادات</td><td>«لا توجد إعدادات يمكن تغييرها على هذا الجهاز.»</td><td>مقترح</td></tr>
+        <tr><td>الورديات العالقة</td><td>«وردية بقيت مفتوحة لكاشير لم يُغلقها. لا تُعرض أي مبالغ.» · «الورديات المفتوحة» · «مفتوحة منذ ‹مدة›» · «إغلاق الوردية»</td><td>مقترح</td></tr>
+        <tr><td>المدة</td><td>«45 دقيقة» · «ساعة و5 دقائق» · «3 ساعات و10 دقائق»</td><td>قواعد الجمع العربية (RT-258)</td></tr>
+        <tr><td>نافذة الإغلاق</td><td>«إغلاق وردية ‹الاسم›» · «السبب» · «ملاحظة (اختياري)» · «إلغاء» · «إغلاق الوردية»</td><td>مقترح</td></tr>
+        <tr><td>الأسباب</td><td>«دخل موظف آخر على الجهاز» · «الكاشير غير موجود» · «الكاشير مريض» · «عطل في الجهاز» · «سبب آخر»</td><td>مقترح (اليوم قيم إنجليزية خام)</td></tr>
+        <tr><td>رفض الإغلاق، والوردية تغيّرت (<span class="ltr">state_invalid</span>)</td><td>«تغيّرت حالة هذه الوردية. تم تحديث القائمة.»</td><td>مقترح. هنا فقط يعيد البرنامج قراءة القائمة</td></tr>
+        <tr><td>رفض الإغلاق لأي سبب آخر</td><td>«تعذّر إغلاق هذه الوردية. حاول مرة أخرى.»</td><td>مقترح. النص الحالي يقول إن القائمة حُدِّثت في كل الحالات، وهذا غير صحيح هنا</td></tr>
+        <tr><td>الورديات العالقة: نصوص بدون صورة</td><td>«جارٍ تحميل الورديات…» · «كاشير بلا اسم» (عندما يكون الاسم فارغًا) · «أقل من دقيقة»</td><td>مقترح (اليوم «Loading stuck shifts…» · «Cashier ···» · «&lt; 1 min»)</td></tr>
+        <tr><td>البحث عن بيع: أثناء البحث</td><td>«جارٍ البحث…» على الزر، والزر معطّل</td><td>مقترح (اليوم «Finding…»)</td></tr>
+        <tr><td>معاينة الإيصال</td><td>العنوان «معاينة الإيصال» · زر «إغلاق» · اسم زر الإغلاق للقارئ «إغلاق المعاينة»</td><td>اليوم بلغتين («معاينة الإيصال — Receipt preview»)؛ يُحذف الجزء الإنجليزي</td></tr>
+        <tr><td>فحص الكتالوج: زر التحديث</td><td>«بدأ التحديث.» · «التحديث جارٍ بالفعل.» · «تعذّر بدء التحديث.»</td><td>مقترح (اليوم تُعرض القيمة الخام <span class="ltr">started / already_running / refused</span>). لا يقول أبدًا إن التحديث اكتمل</td></tr>
+        <tr><td>فحص الكتالوج: البحث والجهاز</td><td>«لا توجد نتائج» · «غير متاح» · «الجهاز غير مقترن.»</td><td>مقترح (اليوم «no matches» · «unavailable» · «Not paired.»). البحث يبدأ من حرفين</td></tr>
+        <tr><td>القائمة فارغة / تعذّر التحميل</td><td>«لا توجد ورديات عالقة.» · «تعذّر تحميل الورديات العالقة. تحقق من الاتصال.» + «إعادة المحاولة»</td><td>مقترح (على نمط G-3 D4)</td></tr>
+        <tr><td>انتهاء الجلسة</td><td>«انتهت جلسة الدخول. سجّل الدخول مرة أخرى للمتابعة.» + «تسجيل الدخول»</td><td>معتمد (RT-247)، بدون صورة هنا (نفس G3-Reauth)</td></tr>
+        <tr><td>الصفحة المخفية</td><td>«هذه الصفحة تُفتح من دفع معلّق فقط.» + «المبيعات المعلقة»</td><td>مقترح (اليوم نص إنجليزي)</td></tr>
+        <tr><td>الدفع غير مفعّل (Checkout)</td><td>«الدفع غير مفعّل على هذا الجهاز.» + «العودة إلى البيع»</td><td>مقترح، بدون صورة (يظهر فقط عند إيقاف علم الدفع). يستخدم نفس شكل الحالة 21 داخل إطار البيع النحيف (S10-6)</td></tr>
+      </tbody>
+    </table>
+    <p>‹الاسم› نص حر، فيُعرض داخل <code>&lt;bdi&gt;</code>. المعرّفات ورقم البيع والأرقام والأوقات معزولة من اليسار لليمين، بأرقام غربية.</p>
+  </section>
+
+  <section>
+    <h2>ملاحظات للمراجعة</h2>
+    <ul>
+      <li>لا تضيف أي شاشة بيانات أو استدعاءً أو صلاحية. كل شاشة تعرض ما تعرضه اليوم، بلغة وتصميم جديدين.</li>
+      <li>تنبيهات الطابعة والدرج والوردية تظهر فوق شاشات المدير كما في شاشات البيع، وأزرارها تعمل (D-10-6). لم تُرسم هنا لأنها مرسومة في مراجع البيع.</li>
+      <li>إعادة الطباعة تظهر فقط لبيع سبقت طباعته بنجاح، كما اليوم (AD-10).</li>
+      <li>قائمة «آخر المبيعات» والرقم المختصر للبيع ليسا هنا. هما من RT-249 (D-N1).</li>
+      <li>الصورتان بحجم ثابت، فحد الارتفاع <span class="ltr">1024×600</span> غير مرسوم. يُفحص في البرنامج الحقيقي عند التنفيذ.</li>
+      <li>الفحص الآلي لكل حالة، على العرضين وبالوضع الفاتح:
+        <ul>
+          <li>كل شيء داخل الإطار، ولا يخرج صف عن عرضه.</li>
+          <li>لا نص أصغر من <span class="ltr">12px</span>، ولا زر أصغر من <span class="ltr">44×44</span>. زر الاختيار يُقاس بسطره كاملًا.</li>
+          <li>axe: صفر مخالفات.</li>
+          <li>كل اسم يظهر كاملًا ولا يُقص.</li>
+          <li>وراء نافذة الإغلاق، لا يمكن الوصول بالـ Tab لأي عنصر خارجها، ولا حتى القائمة الجانبية.</li>
+        </ul>
+      </li>
+      <li>صور وضع التباين العالي محاكاة Chromium (<code>forcedColors: 'active'</code>)، وليست سمة Windows الحقيقية.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

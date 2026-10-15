@@ -2,7 +2,9 @@
 
 > **Status: APPROVED by the owner on 2026-10-15** (in session): the plan as written, and every
 > recommended answer in §6 (D-10-1 … D-10-8). No implementation here. Each slice in §7 becomes its
-> own Jira issue. The first is S10-R (the G-6 references).
+> own Jira issue. **S10-R is done:** the G-6 references and copy in
+> [`visual-acceptance/G6-Manager/`](visual-acceptance/G6-Manager/G6-Spec.html) were owner-approved
+> as is on 2026-10-15, so S10-1 can start.
 >
 > - **Jira:** **RT-478** (Work Mode: **Planning**), parent RT-6, cross-cutting RT-106. It plans
 >   slice **VN-S10** from [09](09-implementation-slices.md) and rows 26–31 of
