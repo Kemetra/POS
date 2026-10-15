@@ -20,7 +20,8 @@ describe('SalesWorkspace (T037)', () => {
         <SalesWorkspace />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: /sales/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'المبيعات' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'البحث عن بيع' })).toBeInTheDocument();
   });
 
   it('zero fetch calls on mount', () => {

@@ -5,7 +5,8 @@
  * tests, so the harness meets the per-file coverage floor.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
@@ -26,6 +27,8 @@ const DEFAULTS: OneFrameProofParams = {
   banner: 'none',
   shifts: 'some',
   returns: 'off',
+  sale: 'missing',
+  reprint: 'ok',
 };
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -70,6 +73,17 @@ describe('OneFrameProof — parameters', () => {
     expect(readOneFrameProofParams().returns).toBe('on');
     window.location.hash = '#/dev/one-frame-proof?returns=nope';
     expect(readOneFrameProofParams().returns).toBe('off');
+  });
+
+  it('RT-500: reads sale and reprint, and ignores unknown values', () => {
+    window.location.hash = '#/dev/one-frame-proof?path=/app/sales&sale=noprint&reprint=fail';
+    expect(readOneFrameProofParams()).toMatchObject({
+      path: '/app/sales',
+      sale: 'noprint',
+      reprint: 'fail',
+    });
+    window.location.hash = '#/dev/one-frame-proof?sale=nope&reprint=nope';
+    expect(readOneFrameProofParams()).toMatchObject({ sale: 'missing', reprint: 'ok' });
   });
 
   it('ignores unknown values and any path outside /app', () => {
@@ -186,5 +200,48 @@ describe('OneFrameProof — renders the real router in the one frame', () => {
         .getAllByRole('link')
         .map((l) => l.textContent),
     ).toEqual(['نقطة البيع']);
+  });
+});
+
+describe('OneFrameProof — the Sales fakes (RT-500)', () => {
+  async function lookup(query: string): Promise<HTMLElement> {
+    window.location.hash = `#/dev/one-frame-proof?path=/app/sales&${query}`;
+    render(<OneFrameProof />);
+    const main = within(await screen.findByTestId('v5-frame')).getByRole('main');
+    await userEvent.type(
+      await within(main).findByRole('textbox', { name: 'رقم البيع' }),
+      'TERM-01-2026-10-15-000042{Enter}',
+    );
+    return main;
+  }
+
+  it('sale=missing answers «لم يُعثر على بيع بهذا الرقم.»', async () => {
+    const main = await lookup('sale=missing');
+    expect(await within(main).findByText('لم يُعثر على بيع بهذا الرقم.')).toBeInTheDocument();
+  });
+
+  it('sale=found shows the sale, and reprint=ok shows the sent notice', async () => {
+    const main = await lookup('sale=found&reprint=ok');
+    expect(await within(main).findByText('منى عبد الرحمن')).toBeInTheDocument();
+    await userEvent.click(within(main).getByRole('button', { name: 'إعادة طباعة الإيصال' }));
+    expect(await within(main).findByText('أُرسل الإيصال للطابعة.')).toBeInTheDocument();
+  });
+
+  it('reprint=fail shows the warning', async () => {
+    const main = await lookup('sale=found&reprint=fail');
+    await userEvent.click(await within(main).findByRole('button', { name: 'إعادة طباعة الإيصال' }));
+    await waitFor(() => {
+      expect(
+        within(main).getByText('تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('sale=noprint offers the preview but no reprint (AD-10)', async () => {
+    const main = await lookup('sale=noprint');
+    expect(await within(main).findByRole('button', { name: 'معاينة الإيصال' })).toBeInTheDocument();
+    expect(
+      within(main).queryByRole('button', { name: 'إعادة طباعة الإيصال' }),
+    ).not.toBeInTheDocument();
   });
 });

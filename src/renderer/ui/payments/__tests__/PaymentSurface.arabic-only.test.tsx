@@ -26,7 +26,7 @@ import { usePaymentStore } from '../../../stores/payment-store.js';
 import { DrawerNoticeBanner } from '../../receipts/DrawerNotice.js';
 import { useDrawerNoticeStore } from '../../receipts/drawer-notice-store.js';
 import { PrinterFailureBanner } from '../../receipts/PrinterFailureBanner.js';
-import { ReprintAffordance } from '../../receipts/ReprintAffordance.js';
+import { ReprintAffordance } from '../../../v5/manager/sales/ReprintAffordance.js';
 import { PaymentSurface } from '../PaymentSurface.js';
 import { latinLeaks } from './latin-leaks.js';
 

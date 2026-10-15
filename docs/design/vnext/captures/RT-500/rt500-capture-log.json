@@ -1,0 +1,2266 @@
+[
+  {
+    "key": "empty",
+    "g6": "G6-Sales",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt500-empty-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 165
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 612,
+        "y": 160,
+        "w": 51,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": true,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 915,
+        "y": 40,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 132,
+        "y": 80,
+        "w": 852,
+        "h": 162
+      },
+      "panelHead": {
+        "x": 133,
+        "y": 81,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 647,
+        "y": 177,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 588,
+        "y": 181,
+        "w": 51,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 140,
+        "h": 768
+      }
+    }
+  },
+  {
+    "key": "empty",
+    "g6": "G6-Sales",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt500-empty-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 165
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 610,
+        "y": 160,
+        "w": 53,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": true,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "empty",
+    "g6": "G6-Sales",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt500-empty-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 165
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 852,
+        "y": 168,
+        "w": 59,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": true,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 1167,
+        "y": 44,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 204,
+        "y": 84,
+        "w": 1032,
+        "h": 162
+      },
+      "panelHead": {
+        "x": 205,
+        "y": 85,
+        "w": 1030,
+        "h": 52
+      },
+      "input": {
+        "x": 899,
+        "y": 181,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 832,
+        "y": 185,
+        "w": 59,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 208,
+        "h": 800
+      }
+    }
+  },
+  {
+    "key": "empty",
+    "g6": "G6-Sales",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt500-empty-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 165
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 850,
+        "y": 168,
+        "w": 61,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": true,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "found",
+    "g6": "G6-SalesFound",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt500-found-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 295
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 612,
+        "y": 160,
+        "w": 51,
+        "h": 44
+      },
+      "ref": {
+        "x": 173,
+        "y": 229,
+        "w": 818,
+        "h": 24
+      },
+      "meta": {
+        "x": 173,
+        "y": 261,
+        "w": 818,
+        "h": 21
+      },
+      "preview": {
+        "x": 888,
+        "y": 290,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 750,
+        "y": 290,
+        "w": 130,
+        "h": 44
+      },
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 915,
+        "y": 40,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 132,
+        "y": 80,
+        "w": 852,
+        "h": 295
+      },
+      "panelHead": {
+        "x": 133,
+        "y": 81,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 647,
+        "y": 177,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 588,
+        "y": 181,
+        "w": 51,
+        "h": 44
+      },
+      "ref": {
+        "x": 149,
+        "y": 250,
+        "w": 818,
+        "h": 26
+      },
+      "meta": {
+        "x": 149,
+        "y": 283,
+        "w": 818,
+        "h": 22
+      },
+      "preview": {
+        "x": 864,
+        "y": 314,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 726,
+        "y": 314,
+        "w": 130,
+        "h": 44
+      },
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 140,
+        "h": 768
+      }
+    }
+  },
+  {
+    "key": "found",
+    "g6": "G6-SalesFound",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt500-found-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 295
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 610,
+        "y": 160,
+        "w": 53,
+        "h": 44
+      },
+      "ref": {
+        "x": 173,
+        "y": 229,
+        "w": 818,
+        "h": 24
+      },
+      "meta": {
+        "x": 173,
+        "y": 261,
+        "w": 818,
+        "h": 21
+      },
+      "preview": {
+        "x": 888,
+        "y": 290,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 750,
+        "y": 290,
+        "w": 130,
+        "h": 44
+      },
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "found",
+    "g6": "G6-SalesFound",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt500-found-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 295
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 852,
+        "y": 168,
+        "w": 59,
+        "h": 44
+      },
+      "ref": {
+        "x": 249,
+        "y": 237,
+        "w": 990,
+        "h": 24
+      },
+      "meta": {
+        "x": 249,
+        "y": 269,
+        "w": 990,
+        "h": 21
+      },
+      "preview": {
+        "x": 1128,
+        "y": 298,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 982,
+        "y": 298,
+        "w": 138,
+        "h": 44
+      },
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 1167,
+        "y": 44,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 204,
+        "y": 84,
+        "w": 1032,
+        "h": 295
+      },
+      "panelHead": {
+        "x": 205,
+        "y": 85,
+        "w": 1030,
+        "h": 52
+      },
+      "input": {
+        "x": 899,
+        "y": 181,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 832,
+        "y": 185,
+        "w": 59,
+        "h": 44
+      },
+      "ref": {
+        "x": 221,
+        "y": 254,
+        "w": 998,
+        "h": 26
+      },
+      "meta": {
+        "x": 221,
+        "y": 287,
+        "w": 998,
+        "h": 22
+      },
+      "preview": {
+        "x": 1108,
+        "y": 318,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 962,
+        "y": 318,
+        "w": 138,
+        "h": 44
+      },
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 208,
+        "h": 800
+      }
+    }
+  },
+  {
+    "key": "found",
+    "g6": "G6-SalesFound",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt500-found-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 295
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 850,
+        "y": 168,
+        "w": 61,
+        "h": 44
+      },
+      "ref": {
+        "x": 249,
+        "y": 237,
+        "w": 990,
+        "h": 24
+      },
+      "meta": {
+        "x": 249,
+        "y": 269,
+        "w": 990,
+        "h": 21
+      },
+      "preview": {
+        "x": 1128,
+        "y": 298,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 982,
+        "y": 298,
+        "w": 138,
+        "h": 44
+      },
+      "notice": null,
+      "noticeText": null,
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "notfound",
+    "g6": "G6-SalesNotFound",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt500-notfound-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 216
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 612,
+        "y": 160,
+        "w": 51,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": {
+        "x": 173,
+        "y": 216,
+        "w": 818,
+        "h": 39
+      },
+      "noticeText": "لم يُعثر على بيع بهذا الرقم.",
+      "inputFocused": true,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 915,
+        "y": 40,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 132,
+        "y": 80,
+        "w": 852,
+        "h": 215
+      },
+      "panelHead": {
+        "x": 133,
+        "y": 81,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 647,
+        "y": 177,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 588,
+        "y": 181,
+        "w": 51,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": {
+        "x": 149,
+        "y": 237,
+        "w": 818,
+        "h": 40
+      },
+      "noticeText": "لم يُعثر على بيع بهذا الرقم.",
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 140,
+        "h": 768
+      }
+    }
+  },
+  {
+    "key": "notfound",
+    "g6": "G6-SalesNotFound",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt500-notfound-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 216
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 610,
+        "y": 160,
+        "w": 53,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": {
+        "x": 173,
+        "y": 216,
+        "w": 818,
+        "h": 39
+      },
+      "noticeText": "لم يُعثر على بيع بهذا الرقم.",
+      "inputFocused": true,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "notfound",
+    "g6": "G6-SalesNotFound",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt500-notfound-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 216
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 852,
+        "y": 168,
+        "w": 59,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": {
+        "x": 249,
+        "y": 224,
+        "w": 990,
+        "h": 39
+      },
+      "noticeText": "لم يُعثر على بيع بهذا الرقم.",
+      "inputFocused": true,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 1167,
+        "y": 44,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 204,
+        "y": 84,
+        "w": 1032,
+        "h": 215
+      },
+      "panelHead": {
+        "x": 205,
+        "y": 85,
+        "w": 1030,
+        "h": 52
+      },
+      "input": {
+        "x": 899,
+        "y": 181,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 832,
+        "y": 185,
+        "w": 59,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": {
+        "x": 221,
+        "y": 241,
+        "w": 998,
+        "h": 40
+      },
+      "noticeText": "لم يُعثر على بيع بهذا الرقم.",
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 208,
+        "h": 800
+      }
+    }
+  },
+  {
+    "key": "notfound",
+    "g6": "G6-SalesNotFound",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt500-notfound-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 216
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 850,
+        "y": 168,
+        "w": 61,
+        "h": 44
+      },
+      "ref": null,
+      "meta": null,
+      "preview": null,
+      "reprint": null,
+      "notice": {
+        "x": 249,
+        "y": 224,
+        "w": 990,
+        "h": 39
+      },
+      "noticeText": "لم يُعثر على بيع بهذا الرقم.",
+      "inputFocused": true,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "reprint-sent",
+    "g6": "G6-SalesReprintSent",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt500-reprint-sent-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 342
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 612,
+        "y": 160,
+        "w": 51,
+        "h": 44
+      },
+      "ref": {
+        "x": 173,
+        "y": 229,
+        "w": 818,
+        "h": 24
+      },
+      "meta": {
+        "x": 173,
+        "y": 261,
+        "w": 818,
+        "h": 21
+      },
+      "preview": {
+        "x": 888,
+        "y": 290,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 750,
+        "y": 290,
+        "w": 130,
+        "h": 44
+      },
+      "notice": {
+        "x": 173,
+        "y": 342,
+        "w": 818,
+        "h": 39
+      },
+      "noticeText": "أُرسل الإيصال للطابعة.",
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 915,
+        "y": 40,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 132,
+        "y": 80,
+        "w": 852,
+        "h": 344
+      },
+      "panelHead": {
+        "x": 133,
+        "y": 81,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 647,
+        "y": 177,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 588,
+        "y": 181,
+        "w": 51,
+        "h": 44
+      },
+      "ref": {
+        "x": 149,
+        "y": 250,
+        "w": 818,
+        "h": 26
+      },
+      "meta": {
+        "x": 149,
+        "y": 283,
+        "w": 818,
+        "h": 22
+      },
+      "preview": {
+        "x": 864,
+        "y": 314,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 726,
+        "y": 314,
+        "w": 130,
+        "h": 44
+      },
+      "notice": {
+        "x": 149,
+        "y": 366,
+        "w": 818,
+        "h": 40
+      },
+      "noticeText": "أُرسل الإيصال للطابعة.",
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 140,
+        "h": 768
+      }
+    }
+  },
+  {
+    "key": "reprint-sent",
+    "g6": "G6-SalesReprintSent",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt500-reprint-sent-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 342
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 610,
+        "y": 160,
+        "w": 53,
+        "h": 44
+      },
+      "ref": {
+        "x": 173,
+        "y": 229,
+        "w": 818,
+        "h": 24
+      },
+      "meta": {
+        "x": 173,
+        "y": 261,
+        "w": 818,
+        "h": 21
+      },
+      "preview": {
+        "x": 888,
+        "y": 290,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 750,
+        "y": 290,
+        "w": 130,
+        "h": 44
+      },
+      "notice": {
+        "x": 173,
+        "y": 342,
+        "w": 818,
+        "h": 39
+      },
+      "noticeText": "أُرسل الإيصال للطابعة.",
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "reprint-sent",
+    "g6": "G6-SalesReprintSent",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt500-reprint-sent-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 342
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 852,
+        "y": 168,
+        "w": 59,
+        "h": 44
+      },
+      "ref": {
+        "x": 249,
+        "y": 237,
+        "w": 990,
+        "h": 24
+      },
+      "meta": {
+        "x": 249,
+        "y": 269,
+        "w": 990,
+        "h": 21
+      },
+      "preview": {
+        "x": 1128,
+        "y": 298,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 982,
+        "y": 298,
+        "w": 138,
+        "h": 44
+      },
+      "notice": {
+        "x": 249,
+        "y": 350,
+        "w": 990,
+        "h": 39
+      },
+      "noticeText": "أُرسل الإيصال للطابعة.",
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 1167,
+        "y": 44,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 204,
+        "y": 84,
+        "w": 1032,
+        "h": 344
+      },
+      "panelHead": {
+        "x": 205,
+        "y": 85,
+        "w": 1030,
+        "h": 52
+      },
+      "input": {
+        "x": 899,
+        "y": 181,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 832,
+        "y": 185,
+        "w": 59,
+        "h": 44
+      },
+      "ref": {
+        "x": 221,
+        "y": 254,
+        "w": 998,
+        "h": 26
+      },
+      "meta": {
+        "x": 221,
+        "y": 287,
+        "w": 998,
+        "h": 22
+      },
+      "preview": {
+        "x": 1108,
+        "y": 318,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 962,
+        "y": 318,
+        "w": 138,
+        "h": 44
+      },
+      "notice": {
+        "x": 221,
+        "y": 370,
+        "w": 998,
+        "h": 40
+      },
+      "noticeText": "أُرسل الإيصال للطابعة.",
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 208,
+        "h": 800
+      }
+    }
+  },
+  {
+    "key": "reprint-sent",
+    "g6": "G6-SalesReprintSent",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt500-reprint-sent-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 342
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 850,
+        "y": 168,
+        "w": 61,
+        "h": 44
+      },
+      "ref": {
+        "x": 249,
+        "y": 237,
+        "w": 990,
+        "h": 24
+      },
+      "meta": {
+        "x": 249,
+        "y": 269,
+        "w": 990,
+        "h": 21
+      },
+      "preview": {
+        "x": 1128,
+        "y": 298,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 982,
+        "y": 298,
+        "w": 138,
+        "h": 44
+      },
+      "notice": {
+        "x": 249,
+        "y": 350,
+        "w": 990,
+        "h": 39
+      },
+      "noticeText": "أُرسل الإيصال للطابعة.",
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "reprint-failed",
+    "g6": "G6-SalesReprintFailed",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt500-reprint-failed-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 342
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 612,
+        "y": 160,
+        "w": 51,
+        "h": 44
+      },
+      "ref": {
+        "x": 173,
+        "y": 229,
+        "w": 818,
+        "h": 24
+      },
+      "meta": {
+        "x": 173,
+        "y": 261,
+        "w": 818,
+        "h": 21
+      },
+      "preview": {
+        "x": 888,
+        "y": 290,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 750,
+        "y": 290,
+        "w": 130,
+        "h": 44
+      },
+      "notice": {
+        "x": 173,
+        "y": 342,
+        "w": 818,
+        "h": 39
+      },
+      "noticeText": "تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.",
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 915,
+        "y": 40,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 132,
+        "y": 80,
+        "w": 852,
+        "h": 344
+      },
+      "panelHead": {
+        "x": 133,
+        "y": 81,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 647,
+        "y": 177,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 588,
+        "y": 181,
+        "w": 51,
+        "h": 44
+      },
+      "ref": {
+        "x": 149,
+        "y": 250,
+        "w": 818,
+        "h": 26
+      },
+      "meta": {
+        "x": 149,
+        "y": 283,
+        "w": 818,
+        "h": 22
+      },
+      "preview": {
+        "x": 864,
+        "y": 314,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 726,
+        "y": 314,
+        "w": 130,
+        "h": 44
+      },
+      "notice": {
+        "x": 149,
+        "y": 366,
+        "w": 818,
+        "h": 40
+      },
+      "noticeText": "تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.",
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 140,
+        "h": 768
+      }
+    }
+  },
+  {
+    "key": "reprint-failed",
+    "g6": "G6-SalesReprintFailed",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt500-reprint-failed-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 156,
+        "y": 16,
+        "w": 852,
+        "h": 28
+      },
+      "panel": {
+        "x": 156,
+        "y": 56,
+        "w": 852,
+        "h": 342
+      },
+      "panelHead": {
+        "x": 157,
+        "y": 57,
+        "w": 850,
+        "h": 52
+      },
+      "input": {
+        "x": 671,
+        "y": 156,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 610,
+        "y": 160,
+        "w": 53,
+        "h": 44
+      },
+      "ref": {
+        "x": 173,
+        "y": 229,
+        "w": 818,
+        "h": 24
+      },
+      "meta": {
+        "x": 173,
+        "y": 261,
+        "w": 818,
+        "h": 21
+      },
+      "preview": {
+        "x": 888,
+        "y": 290,
+        "w": 103,
+        "h": 44
+      },
+      "reprint": {
+        "x": 750,
+        "y": 290,
+        "w": 130,
+        "h": 44
+      },
+      "notice": {
+        "x": 173,
+        "y": 342,
+        "w": 818,
+        "h": 39
+      },
+      "noticeText": "تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.",
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 768
+      }
+    },
+    "ok": true
+  },
+  {
+    "key": "reprint-failed",
+    "g6": "G6-SalesReprintFailed",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt500-reprint-failed-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 342
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 852,
+        "y": 168,
+        "w": 59,
+        "h": 44
+      },
+      "ref": {
+        "x": 249,
+        "y": 237,
+        "w": 990,
+        "h": 24
+      },
+      "meta": {
+        "x": 249,
+        "y": 269,
+        "w": 990,
+        "h": 21
+      },
+      "preview": {
+        "x": 1128,
+        "y": 298,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 982,
+        "y": 298,
+        "w": 138,
+        "h": 44
+      },
+      "notice": {
+        "x": 249,
+        "y": 350,
+        "w": 990,
+        "h": 39
+      },
+      "noticeText": "تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.",
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true,
+    "g6Geometry": {
+      "h1": {
+        "x": 1167,
+        "y": 44,
+        "w": 69,
+        "h": 28
+      },
+      "panel": {
+        "x": 204,
+        "y": 84,
+        "w": 1032,
+        "h": 344
+      },
+      "panelHead": {
+        "x": 205,
+        "y": 85,
+        "w": 1030,
+        "h": 52
+      },
+      "input": {
+        "x": 899,
+        "y": 181,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 832,
+        "y": 185,
+        "w": 59,
+        "h": 44
+      },
+      "ref": {
+        "x": 221,
+        "y": 254,
+        "w": 998,
+        "h": 26
+      },
+      "meta": {
+        "x": 221,
+        "y": 287,
+        "w": 998,
+        "h": 22
+      },
+      "preview": {
+        "x": 1108,
+        "y": 318,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 962,
+        "y": 318,
+        "w": 138,
+        "h": 44
+      },
+      "notice": {
+        "x": 221,
+        "y": 370,
+        "w": 998,
+        "h": 40
+      },
+      "noticeText": "تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.",
+      "inputFocused": false,
+      "nav": {
+        "x": -24,
+        "y": 24,
+        "w": 208,
+        "h": 800
+      }
+    }
+  },
+  {
+    "key": "reprint-failed",
+    "g6": "G6-SalesReprintFailed",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt500-reprint-failed-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المبيعات"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "latinText": [
+      "TERM"
+    ],
+    "axe": [],
+    "errors": [],
+    "geometry": {
+      "h1": {
+        "x": 232,
+        "y": 24,
+        "w": 1024,
+        "h": 28
+      },
+      "panel": {
+        "x": 232,
+        "y": 64,
+        "w": 1024,
+        "h": 342
+      },
+      "panelHead": {
+        "x": 233,
+        "y": 65,
+        "w": 1022,
+        "h": 52
+      },
+      "input": {
+        "x": 919,
+        "y": 164,
+        "w": 320,
+        "h": 48
+      },
+      "search": {
+        "x": 850,
+        "y": 168,
+        "w": 61,
+        "h": 44
+      },
+      "ref": {
+        "x": 249,
+        "y": 237,
+        "w": 990,
+        "h": 24
+      },
+      "meta": {
+        "x": 249,
+        "y": 269,
+        "w": 990,
+        "h": 21
+      },
+      "preview": {
+        "x": 1128,
+        "y": 298,
+        "w": 111,
+        "h": 44
+      },
+      "reprint": {
+        "x": 982,
+        "y": 298,
+        "w": 138,
+        "h": 44
+      },
+      "notice": {
+        "x": 249,
+        "y": 350,
+        "w": 990,
+        "h": 39
+      },
+      "noticeText": "تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.",
+      "inputFocused": false,
+      "nav": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 800
+      }
+    },
+    "ok": true
+  }
+]

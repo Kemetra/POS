@@ -71,11 +71,11 @@ describe('T150 — ReceiptPreview renders the HTML preview', () => {
     await waitFor(() => expect(screen.getByRole('img')).toBeInTheDocument());
   });
 
-  it('shows a bilingual title and a close affordance ≥44×44', async () => {
+  it('shows an Arabic-only title and a close affordance', async () => {
     render(<ReceiptPreview saleId="sale-1" onClose={() => {}} _testBridge={okBridge()} />);
-    await screen.findByText(/Receipt preview/i);
-    const close = screen.getByRole('button', { name: /close preview/i });
-    expect(close).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'معاينة الإيصال' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'إغلاق المعاينة' })).toBeInTheDocument();
+    expect(screen.queryByText(/Receipt preview|Close preview/i)).not.toBeInTheDocument();
   });
 
   it('shows the error state when the bridge refuses', async () => {
@@ -94,7 +94,7 @@ describe('T151 — ReceiptPreview is non-blocking + dismissible without side-eff
   it('calls onClose when the close button is clicked (no confirm)', async () => {
     const onClose = vi.fn();
     render(<ReceiptPreview saleId="sale-1" onClose={onClose} _testBridge={okBridge()} />);
-    const close = await screen.findByRole('button', { name: /close preview/i });
+    const close = await screen.findByRole('button', { name: 'إغلاق المعاينة' });
     await userEvent.click(close);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -177,7 +177,7 @@ describe('ReceiptPreview — interaction + resilience', () => {
     render(<ReceiptPreview saleId="sale-1" onClose={() => {}} _testBridge={okBridge()} />);
     // Wait for the ready state so the slip (role=img) renders with its style.
     const slip = await screen.findByRole('img');
-    const zoom = screen.getByRole('button', { name: /zoom/i });
+    const zoom = screen.getByRole('button', { name: 'زر التكبير' });
     expect(zoom).toHaveAttribute('aria-pressed', 'false');
     expect(slip).toHaveStyle({ inlineSize: '80mm' });
     await userEvent.click(zoom);
@@ -191,7 +191,7 @@ describe('ReceiptPreview — interaction + resilience', () => {
 
   it('renders a disabled Print button (printing lands in Slice 3)', async () => {
     render(<ReceiptPreview saleId="sale-1" onClose={() => {}} _testBridge={okBridge()} />);
-    const print = await screen.findByRole('button', { name: /print/i });
+    const print = await screen.findByRole('button', { name: 'طباعة' });
     expect(print).toBeDisabled();
   });
 
@@ -220,12 +220,9 @@ describe('ReceiptPreview — interaction + resilience', () => {
   it('closes via the footer Close (ghost) button', async () => {
     const onClose = vi.fn();
     render(<ReceiptPreview saleId="sale-1" onClose={onClose} _testBridge={okBridge()} />);
-    const closes = await screen.findAllByRole('button', { name: /close|إغلاق/i });
-    // The footer ghost "Close" is the last close-labelled control.
-    const footerClose = closes.at(-1);
-    expect(footerClose).toBeDefined();
-    await userEvent.click(footerClose as HTMLElement);
-    expect(onClose).toHaveBeenCalled();
+    // The footer ghost button is named «إغلاق»; the title band's is «إغلاق المعاينة».
+    await userEvent.click(await screen.findByRole('button', { name: 'إغلاق' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 

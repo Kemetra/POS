@@ -3,7 +3,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 
 import { ReprintAffordance } from '../ReprintAffordance';
-import type { ReceiptsBridgeAPI, ReceiptsReprintResponse } from '../../../../shared/bridge-api.js';
+import type { ReceiptsBridgeAPI, ReceiptsReprintResponse } from '../../../../../shared/bridge-api';
 
 afterEach(cleanup);
 afterEach(() => vi.unstubAllGlobals());
@@ -68,7 +68,9 @@ describe('ReprintAffordance (Phase 5 chain coverage)', () => {
   it('surfaces an inline failure when the reprint is refused', async () => {
     render(<ReprintAffordance sale={printedSale} _testReceiptsBridge={refusedReprintBridge()} />);
     fireEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
-    expect(await screen.findByRole('status')).toHaveTextContent(/تعذّرت إعادة طباعة الإيصال/);
+    const notice = await screen.findByRole('status');
+    expect(notice).toHaveTextContent('تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.');
+    expect(notice).toHaveAttribute('data-tone', 'warning');
   });
 
   it('surfaces an inline failure when the reprint IPC rejects', async () => {
@@ -95,5 +97,59 @@ describe('ReprintAffordance (Phase 5 chain coverage)', () => {
     await waitFor(() => {
       expect(uuid).toHaveBeenCalled();
     });
+  });
+
+  it('shows the neutral «أُرسل الإيصال للطابعة.» when the reprint is accepted, never «طُبع»', async () => {
+    const { container } = render(
+      <ReprintAffordance sale={printedSale} _testReceiptsBridge={okReprintBridge()} />,
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
+    const notice = await screen.findByRole('status');
+    expect(notice).toHaveTextContent('أُرسل الإيصال للطابعة.');
+    expect(notice).toHaveAttribute('data-tone', 'info');
+    expect(container).not.toHaveTextContent('طُبع');
+  });
+
+  it('sends one call while a reprint is in flight, and shows the busy label', async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    const reprint = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+    );
+    render(
+      <ReprintAffordance
+        sale={printedSale}
+        _testReceiptsBridge={{ reprint } as unknown as ReceiptsBridgeAPI}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    const busy = await screen.findByRole('button', { name: 'جارٍ إعادة الطباعة…' });
+    expect(busy).toBeDisabled();
+    expect(reprint).toHaveBeenCalledTimes(1);
+    settle({ kind: 'ok' });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' })).toBeEnabled();
+    });
+  });
+
+  it('clears the previous notice while the next reprint runs', async () => {
+    const answers: unknown[] = [{ kind: 'refused', reason: 'printer_unavailable' }, { kind: 'ok' }];
+    const reprint = vi.fn(() => Promise.resolve(answers.shift()));
+    render(
+      <ReprintAffordance
+        sale={printedSale}
+        _testReceiptsBridge={{ reprint } as unknown as ReceiptsBridgeAPI}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
+    expect(await screen.findByTestId('reprint-failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'إعادة طباعة الإيصال' }));
+    expect(await screen.findByTestId('reprint-sent')).toBeInTheDocument();
+    expect(screen.queryByTestId('reprint-failed')).not.toBeInTheDocument();
   });
 });

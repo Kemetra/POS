@@ -326,7 +326,7 @@ describe('AppShell — banner from store', () => {
     useOperatorSessionStore.getState().resolveSignedIn(SESSION_VIEW, { closed_at: CLOSED_AT });
     renderAllowedShellRoute();
     expect(screen.getByTestId('shift-closed-banner')).toBeInTheDocument();
-    expect(screen.getByText('Sales')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'المبيعات' })).toBeInTheDocument();
   });
 
   it('does not render banner when signedIn state has no notice', () => {

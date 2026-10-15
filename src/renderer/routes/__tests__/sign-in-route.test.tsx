@@ -308,7 +308,9 @@ describe('AppRouter + /sign-in (T022)', () => {
       />,
     );
 
-    await waitFor(() => expect(screen.getByText('Sales')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1, name: 'المبيعات' })).toBeInTheDocument(),
+    );
     expect(screen.getByTestId('shift-closed-banner')).toBeInTheDocument();
     expect(screen.getByTestId('shift-closed-banner').textContent.toLowerCase()).not.toContain(
       'variance',

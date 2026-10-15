@@ -2,6 +2,8 @@ import type { JSX } from 'react';
 
 import type {
   ListStuckShiftsResponse,
+  ReceiptsBridgeAPI,
+  SalesFindByNumberResponse,
   OperatorBridgeAPI,
   PairingBridgeAPI,
 } from '../../../../shared/bridge-api';
@@ -30,7 +32,11 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store'
  * none); `shifts` = some | none (what `listStuckShifts` answers; default some);
  * `returns` = off | on (RT-501: `on` hydrates the returns flag and installs an
  * in-memory `window.api.returns`, so `/app/returns` shows the sale lookup and an
- * empty history instead of the flag-off policy message; default off).
+ * empty history instead of the flag-off policy message; default off);
+ * `sale` = missing | found | noprint (what `sales.findByNumber` answers: no
+ * such sale, a sale whose latest print succeeded, or one that never printed;
+ * default missing); `reprint` = ok | fail (what the receipts reprint and
+ * preview fakes answer; default ok).
  */
 
 export interface OneFrameProofParams {
@@ -39,6 +45,8 @@ export interface OneFrameProofParams {
   banner: 'none' | 'printer';
   shifts: 'some' | 'none';
   returns: 'off' | 'on';
+  sale: 'missing' | 'found' | 'noprint';
+  reprint: 'ok' | 'fail';
 }
 
 function oneOf<T extends string>(raw: string | null, allowed: readonly T[], fallback: T): T {
@@ -54,6 +62,8 @@ export function readOneFrameProofParams(): OneFrameProofParams {
     banner: oneOf(params.get('banner'), ['none', 'printer'], 'none'),
     shifts: oneOf(params.get('shifts'), ['some', 'none'], 'some'),
     returns: oneOf(params.get('returns'), ['off', 'on'], 'off'),
+    sale: oneOf(params.get('sale'), ['missing', 'found', 'noprint'], 'missing'),
+    reprint: oneOf(params.get('reprint'), ['ok', 'fail'], 'ok'),
   };
 }
 
@@ -87,6 +97,68 @@ function stuckShifts(shifts: OneFrameProofParams['shifts']): ListStuckShiftsResp
       },
     ],
   };
+}
+
+/** The G-6 sale: its number, who sold it and where. */
+function findAnswer(sale: OneFrameProofParams['sale']): SalesFindByNumberResponse {
+  if (sale === 'missing') return { kind: 'refused', reason: 'sale_not_found' };
+  return {
+    kind: 'ok',
+    sale: {
+      sale_id: 'sale-proof-1',
+      sale_number: 'TERM-01-2026-10-15-000042',
+      receipt_number: 'TERM-01-2026-10-15-000042',
+      tenant_id: PAIRED.tenant_id,
+      branch_id: PAIRED.branch_id,
+      terminal_id: PAIRED.terminal_id,
+      terminal_label: 'POS-03',
+      selling_operator_id: 'op-mona',
+      selling_operator_display_name: 'منى عبد الرحمن',
+      subtotal_minor: 12_500,
+      total_tax_minor: 0,
+      total_change_due_minor: 0,
+      tender_lines_summary: [],
+      finalized_at: '2026-10-15T10:00:00Z',
+      latest_print_event: {
+        print_event_id: 'pe-proof-1',
+        outcome: sale === 'found' ? 'success' : 'failure',
+        purpose: 'first_print',
+        printed_at: '2026-10-15T10:00:05Z',
+      },
+    },
+  } as unknown as SalesFindByNumberResponse;
+}
+
+const PREVIEW_HTML =
+  '<div dir="ltr" style="text-align:center"><p><b>POS Pulse</b></p><p>TERM-01-2026-10-15-000042</p><p>POS-03</p></div>';
+
+/** The receipts fakes: `reprint=fail` refuses the reprint and the preview. */
+function receiptsBridge(reprint: OneFrameProofParams['reprint']): ReceiptsBridgeAPI {
+  const fail = reprint === 'fail';
+  return {
+    reprint: () =>
+      Promise.resolve(
+        fail
+          ? { kind: 'refused', reason: 'printer_unavailable' }
+          : {
+              kind: 'ok',
+              print_event_id: 'pe-proof-2',
+              duplicate_copy_sequence_number: 1,
+              reprinted_at: '2026-10-15T10:05:00Z',
+              render_path: 'escpos_direct',
+            },
+      ),
+    preview: () =>
+      Promise.resolve(
+        fail
+          ? { kind: 'refused', reason: 'sale_not_found' }
+          : {
+              kind: 'ok',
+              preview: { html: PREVIEW_HTML, width_chars: 42, bilingual_locale: 'ar-EG-RTL' },
+            },
+      ),
+    retryPrint: () => Promise.resolve({ kind: 'refused', reason: 'printer_unavailable' }),
+  } as unknown as ReceiptsBridgeAPI;
 }
 
 function refused<T>(): () => Promise<T> {
@@ -151,9 +223,10 @@ export function installWindowApi(params: OneFrameProofParams): void {
       refresh: () => Promise.resolve({ kind: 'started' }),
       search: () => Promise.resolve({ kind: 'not_found' }),
     },
+    receipts: receiptsBridge(params.reprint),
     sales: {
       read: () => Promise.resolve({ kind: 'not_found' }),
-      findByNumber: () => Promise.resolve({ kind: 'not_found' }),
+      findByNumber: () => Promise.resolve(findAnswer(params.sale)),
       subscribe: () =>
         Promise.resolve({
           kind: 'ok',

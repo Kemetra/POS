@@ -186,12 +186,12 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
             outline: 'none',
           }}
         >
-          معاينة الإيصال — Receipt preview
+          معاينة الإيصال
         </h2>
         <button
           type="button"
           onClick={onClose}
-          aria-label="إغلاق المعاينة — Close preview"
+          aria-label="إغلاق المعاينة"
           style={{
             ...ghostBtn,
             marginInlineStart: 0,
@@ -206,9 +206,7 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
 
       <div style={canvasRegionStyle}>
         {state.phase === 'loading' && (
-          <p style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>
-            جارٍ التحضير — Preparing preview
-          </p>
+          <p style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>جارٍ التحضير</p>
         )}
         {state.phase === 'error' && (
           <div
@@ -220,13 +218,13 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
               borderRadius: 'var(--radius-control)',
             }}
           >
-            تعذّرت معاينة الإيصال — This receipt cannot be previewed.
+            تعذّرت معاينة الإيصال
           </div>
         )}
         {state.phase === 'ready' && (
           <div
             role="img"
-            aria-label={`معاينة الإيصال للعملية رقم ${saleId} — Receipt preview for sale ${saleId}`}
+            aria-label={`معاينة الإيصال للعملية رقم ${saleId}`}
             style={slipStyle}
             // The HTML is the main-process engine's minimised output; the trust
             // boundary is main, and the engine never emits sensitive fields
@@ -237,8 +235,8 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
       </div>
 
       <div style={footerStyle}>
-        <button type="button" style={primaryBtn} disabled title="Printing lands in Slice 3">
-          طباعة — Print
+        <button type="button" style={primaryBtn} disabled>
+          طباعة
         </button>
         <button
           type="button"
@@ -248,10 +246,10 @@ export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewP
             setZoomed((z) => !z);
           }}
         >
-          زر التكبير — Zoom 2×
+          زر التكبير
         </button>
         <button type="button" style={ghostBtn} onClick={onClose}>
-          إغلاق — Close
+          إغلاق
         </button>
       </div>
     </section>

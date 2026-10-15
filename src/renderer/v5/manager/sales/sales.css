@@ -1,0 +1,185 @@
+/*
+ * RT-500 (VN-S10 S10-3) — Sales lookup on the frozen G-6 references
+ * (docs/design/vnext/visual-acceptance/G6-Manager/g6.css: .panel.hug,
+ * .panel-body, .lookup, .result, .input.code), in v5 tokens. Two tiers like
+ * the frame: comfortable at 1280+, the floor tier below 1280.
+ */
+
+/* The panel hugs its content (G-6 .panel.hug); the screen section scrolls. */
+.v5-sales-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-block-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pane);
+  background: var(--color-surface);
+}
+
+.v5-sales-panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-block-size: 52px;
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-sales-panel-head h2 {
+  margin: 0;
+  font-size: var(--type-section);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-sales-panel-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+/* ── the lookup form ─────────────────────────────────────────────── */
+.v5-sales-lookup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.v5-sales-field {
+  display: grid;
+  flex: 0 1 320px;
+  gap: 6px;
+}
+
+.v5-sales-field label {
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-sales-input {
+  inline-size: 100%;
+  block-size: 48px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 16px;
+}
+
+/* A sale number is a code: LTR, mono, left-aligned inside the RTL page. */
+.v5-sales-input--code {
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-family-mono);
+}
+
+/* ── buttons ─────────────────────────────────────────────────────── */
+.v5-sales-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--v5-target, 44px);
+  min-inline-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (max-width: 1279px) {
+  .v5-sales-btn {
+    padding-inline: var(--space-3);
+  }
+}
+
+.v5-sales-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-sales-btn:disabled {
+  cursor: not-allowed;
+}
+
+.v5-sales-btn--primary:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
+.v5-sales-btn:not(.v5-sales-btn--primary):disabled {
+  opacity: 0.55;
+}
+
+/* ── the found sale ──────────────────────────────────────────────── */
+.v5-sales-result {
+  display: grid;
+  gap: var(--space-2);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-soft);
+}
+
+.v5-sales-result p {
+  margin: 0;
+}
+
+.v5-sales-ref {
+  font-family: var(--font-family-mono);
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-sales-meta {
+  color: var(--color-text-muted);
+}
+
+.v5-sales-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The reprint outcome takes a full row under the buttons. */
+.v5-sales-notice-row {
+  flex: 1 0 100%;
+}
+
+/*
+ * G-6 shows the two neutral messages (not found, sent to the printer) in the
+ * elevated surface with a muted glyph, not the info blue: neither is a pending
+ * or recorded state, and «أُرسل» must not read as a proof.
+ */
+.v5-sales-panel .v5-notice[data-tone='info'] {
+  border-color: var(--color-border);
+  background: var(--color-surface-elevated);
+}
+
+.v5-sales-panel .v5-notice[data-tone='info'] .v5-tone-icon {
+  color: var(--color-text-muted);
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .v5-sales-panel,
+  .v5-sales-btn,
+  .v5-sales-input {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-sales-btn--primary {
+    border: 2px solid ButtonText;
+  }
+
+  .v5-sales-btn--primary:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+}
