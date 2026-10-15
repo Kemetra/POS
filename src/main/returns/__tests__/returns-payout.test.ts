@@ -155,7 +155,8 @@ describe('X: exactly once', () => {
 
   it('X4: start on a payout that was already started never kicks again', async () => {
     const returnId = await confirmedReturn(h.service);
-    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+    // RT-531: a no-drawer answer completes the payout; a configured drawer that fails does not.
+    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'os_error' });
     await h.service.payout({ returnId, action: 'start' });
     h.drawer.answer = () => Promise.resolve({ ok: true });
     const res = await h.service.payout({ returnId, action: 'start' });
@@ -224,11 +225,11 @@ describe('C: crash ordering', () => {
 
   it('C2: a failed kick records no payout; a manual payout then completes it without a kick', async () => {
     const returnId = await confirmedReturn(h.service);
-    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'printer_dk_failure' });
     const failed = await h.service.payout({ returnId, action: 'start' });
     expect(failed).toMatchObject({
       kind: 'drawer_failed',
-      reason: 'no_drawer_configured',
+      reason: 'printer_dk_failure',
       ret: { state: 'confirmed', payout: { paidAt: null } },
     });
     expect(h.repo.read(returnId)?.state).toBe('confirmed');
@@ -298,7 +299,9 @@ describe('M: money', () => {
 });
 
 describe('D: drawer', () => {
-  it.each(['no_drawer_configured', 'printer_dk_failure', 'os_error'] as const)(
+  // RT-531: `no_drawer_configured` is not here: it pays out as `no_drawer`
+  // (returns-payout-no-drawer.test.ts).
+  it.each(['printer_dk_failure', 'os_error'] as const)(
     'D1: a %s kick records no paid_out and audits why',
     async (failure_reason) => {
       const returnId = await confirmedReturn(h.service);
@@ -335,8 +338,15 @@ describe('D: drawer', () => {
 
   it('D2: retry_drawer after a kick that never left opens the drawer and pays out', async () => {
     const returnId = await confirmedReturn(h.service);
+    // The kick never left (no drawer), and the till locked before the commit
+    // (RT-531: otherwise it would have been paid out as no_drawer).
     h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+    h.drawer.onKick = () => {
+      h.state.locked = true;
+    };
     await h.service.payout({ returnId, action: 'start' });
+    h.drawer.onKick = null;
+    h.state.locked = false;
     h.drawer.answer = () => Promise.resolve({ ok: true });
     expect(await h.service.payout({ returnId, action: 'retry_drawer' })).toMatchObject({
       kind: 'paid_out',

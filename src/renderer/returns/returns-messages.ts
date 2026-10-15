@@ -90,6 +90,8 @@ export const PAYOUT_COPY = Object.freeze({
   paid: 'سُجّل صرف المبلغ نقدًا.',
   paidDrawer: 'الدرج مفتوح: سلّم العميل المبلغ.',
   paidManual: 'سُجّل أنك سلّمت العميل المبلغ يدويًا.',
+  // RT-531: no cash drawer on this terminal; nothing to attest, nothing was opened.
+  paidNoDrawer: 'لا يوجد درج نقود موصول بهذا الجهاز: سلّم العميل المبلغ.',
   paidEarlier: 'صُرف نقد هذا المرتجع من قبل.',
   slipPrinted: 'طُبع إيصال المرتجع.',
   slipFailed: 'لم يُطبع إيصال المرتجع. الصرف مسجَّل، ويمكنك طباعة نسخة.',

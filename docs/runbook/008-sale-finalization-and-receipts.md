@@ -28,7 +28,7 @@ branch on `drawer_events.outcome` before treating it as an incident.
 ```sql
 -- What happened to the drawer for this sale?
 SELECT outcome,                 -- 'opened' | 'suppressed' | 'failed'
-       suppression_reason,      -- 'cashless_tender_mix' (only when suppressed)
+       suppression_reason,      -- 'cashless_tender_mix'|'no_drawer_configured' (only when suppressed)
        failure_reason,          -- 'printer_dk_failure'|'os_error'|'no_drawer_configured' (only when failed)
        last_successful_open_at_for_terminal,
        triggering_print_event_id,
@@ -43,14 +43,17 @@ FR-053 double-kick suppression). Interpret the result:
 | `outcome` | Meaning | Action |
 |:--|:--|:--|
 | `opened` | Drawer kicked successfully. | Not a fault — nothing to do. |
-| `suppressed` | **Working as designed.** `suppression_reason='cashless_tender_mix'` — the sale was paid by card/voucher (no cash leg), so 008 deliberately did **not** kick the drawer. | **Stop. This is correct.** A card-only sale is *supposed* to print a receipt and leave the drawer shut. Do not chase this. |
+| `suppressed` | **Working as designed.** `suppression_reason='cashless_tender_mix'` — the sale was paid by card/voucher (no cash leg), so 008 deliberately did **not** kick the drawer. `suppression_reason='no_drawer_configured'` (RT-531) — a cash sale on a terminal with no cash drawer (the drawer is optional): no notice is shown. | **Stop. This is correct.** A card-only sale is *supposed* to print a receipt and leave the drawer shut, and a terminal with no drawer has nothing to open. Do not chase this. |
 | `failed` | A real fault. See `failure_reason`. | Diagnose below. |
 | _(no row at all)_ | Finalize never reached the drawer step — receipt may have printed but the finalize listener short-circuited, or the feature flag is off (see §Rollback). | Check `print_events` for the sale and the `saleFinalization` flag state. |
 
 If `outcome='failed'`, read `failure_reason`:
 
-- `no_drawer_configured` — terminal has no drawer wired/configured. Expected on a
-  card-only or scanner-only lane; only a fault if that terminal *should* have a drawer.
+- `no_drawer_configured` — **historical rows only.** Before RT-531 a terminal with no
+  drawer recorded every cash sale as `failed` with this reason; since RT-531 it is
+  recorded `suppressed` (see above) and neither the notice nor the projector surface
+  these old rows. A real transport that is configured but fails answers one of the
+  reasons below.
 - `printer_dk_failure` — the drawer is kicked via the printer's DK1 pulse; the
   printer reported the kick failed. Check printer connectivity/paper first (the
   receipt printing while the kick failing points at the kick line, not the link).

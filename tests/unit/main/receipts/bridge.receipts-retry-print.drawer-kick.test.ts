@@ -44,6 +44,7 @@ const MIGRATIONS = [
   '0022_create_print_events.sql',
   '0023_create_drawer_events.sql',
   '0028_extend_sales_with_lines_json.sql',
+  '0052_drawer_events_suppression_no_drawer.sql',
 ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;
@@ -181,7 +182,7 @@ describe('T352 retry seam — drawer-kick chains on retry success', () => {
     expect(events.some((e) => e.action_category === 'sale.drawer.opened')).toBe(true);
   });
 
-  it('cash sale: a successful Retry whose drawer is unconfigured writes a failed row + banner anchor', async () => {
+  it('cash sale: a successful Retry on a terminal with no drawer writes a suppressed row, no failure (RT-531)', async () => {
     seedCashSale(db);
     seedFailedPrint(db, 'pe-failed-1');
     const { bridge, events } = makeBridge(db, {
@@ -190,12 +191,31 @@ describe('T352 retry seam — drawer-kick chains on retry success', () => {
     });
 
     const res = await bridge.retryPrint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'idem-1' });
+    expect(res.kind).toBe('ok');
+    if (res.kind === 'ok') expect(res.outcome).toBe('success');
+    const drawerRow = bindDrawerEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1');
+    expect(drawerRow?.outcome).toBe('suppressed');
+    expect(drawerRow?.suppression_reason).toBe('no_drawer_configured');
+    expect(drawerRow?.failure_reason).toBeNull();
+    expect(events.some((e) => e.action_category === 'sale.drawer.suppressed')).toBe(true);
+    expect(events.some((e) => e.action_category === 'sale.drawer.failed')).toBe(false);
+  });
+
+  it('cash sale: a successful Retry whose configured drawer fails still writes a failed row + banner anchor', async () => {
+    seedCashSale(db);
+    seedFailedPrint(db, 'pe-failed-1');
+    const { bridge, events } = makeBridge(db, {
+      ok: false,
+      failure_reason: 'printer_dk_failure',
+    });
+
+    const res = await bridge.retryPrint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'idem-1' });
     // The print retry still succeeds — the drawer fault does NOT refuse it.
     expect(res.kind).toBe('ok');
     if (res.kind === 'ok') expect(res.outcome).toBe('success');
     const drawerRow = bindDrawerEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1');
     expect(drawerRow?.outcome).toBe('failed');
-    expect(drawerRow?.failure_reason).toBe('no_drawer_configured');
+    expect(drawerRow?.failure_reason).toBe('printer_dk_failure');
     expect(events.some((e) => e.action_category === 'sale.drawer.failed')).toBe(true);
   });
 

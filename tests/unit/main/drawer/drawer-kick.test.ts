@@ -187,7 +187,7 @@ describe('drawer-kick dispatcher — T310 gating + T321 ack (cash-inclusive)', (
 
   it('failed row carries null last_successful_open_at when the terminal never opened before', async () => {
     const h = harness({
-      kickResult: { ok: false, failure_reason: 'no_drawer_configured' },
+      kickResult: { ok: false, failure_reason: 'printer_dk_failure' },
       lastOpen: null,
     });
     await h.dispatcher.dispatchOnFirstPrintSuccess(ctx());
@@ -200,6 +200,82 @@ describe('drawer-kick dispatcher — T310 gating + T321 ack (cash-inclusive)', (
     await expect(h.dispatcher.dispatchOnFirstPrintSuccess(ctx())).resolves.toBeUndefined();
     expect(h.inserted[0]).toMatchObject({ outcome: 'failed', failure_reason: 'os_error' });
     expect(h.audits[0].action_category).toBe('sale.drawer.failed');
+  });
+});
+
+describe('drawer-kick dispatcher — RT-531 no drawer configured (cash drawer is optional)', () => {
+  const NO_DRAWER: DrawerKickResult = { ok: false, failure_reason: 'no_drawer_configured' };
+
+  it('writes ONE suppressed/no_drawer_configured row (never failed) + sale.drawer.suppressed', async () => {
+    const h = harness({ kickResult: NO_DRAWER });
+    await h.dispatcher.dispatchOnFirstPrintSuccess(ctx());
+    expect(h.kick).toHaveBeenCalledTimes(1);
+    expect(h.inserted).toHaveLength(1);
+    expect(h.inserted[0]).toMatchObject({
+      sale_id: 'sale-1',
+      outcome: 'suppressed',
+      suppression_reason: 'no_drawer_configured',
+      failure_reason: null,
+      last_successful_open_at_for_terminal: null,
+      triggering_print_event_id: 'pe-1',
+      terminal_id: 'terminal-1',
+    });
+    expect(h.audits).toHaveLength(1);
+    expect(h.audits[0].action_category).toBe('sale.drawer.suppressed');
+    expect(h.audits[0].payload).toMatchObject({
+      sale_id: 'sale-1',
+      drawer_event_id: h.inserted[0].drawer_event_id,
+      suppression_reason: 'no_drawer_configured',
+    });
+  });
+
+  it('never raises a failure for it: no failed audit, no last-open lookup', async () => {
+    const h = harness({ kickResult: NO_DRAWER, lastOpen: '2026-05-27T08:30:00.000Z' });
+    await h.dispatcher.dispatchOnFirstPrintSuccess(ctx());
+    expect(h.audits.map((a) => a.action_category)).not.toContain('sale.drawer.failed');
+    expect(h.inserted[0].last_successful_open_at_for_terminal).toBeNull();
+  });
+
+  it('keeps one row per sale (FR-053): a repeat after the suppressed row is a no-op', async () => {
+    const h = harness({ kickResult: NO_DRAWER });
+    await h.dispatcher.dispatchOnFirstPrintSuccess(ctx());
+    const [row] = h.inserted;
+    const again = harness({
+      kickResult: NO_DRAWER,
+      existingRow: { ...(row as DrawerEventRow) },
+    });
+    await again.dispatcher.dispatchOnFirstPrintSuccess(ctx());
+    expect(again.kick).not.toHaveBeenCalled();
+    expect(again.inserted).toHaveLength(0);
+    expect(again.audits).toHaveLength(0);
+  });
+
+  it.each(['printer_dk_failure', 'os_error'] as const)(
+    'a configured drawer that fails (%s) is still a failed row + sale.drawer.failed',
+    async (failure_reason) => {
+      const h = harness({
+        kickResult: { ok: false, failure_reason },
+        lastOpen: '2026-05-27T08:30:00.000Z',
+      });
+      await h.dispatcher.dispatchOnFirstPrintSuccess(ctx());
+      expect(h.inserted).toHaveLength(1);
+      expect(h.inserted[0]).toMatchObject({
+        outcome: 'failed',
+        suppression_reason: null,
+        failure_reason,
+        last_successful_open_at_for_terminal: '2026-05-27T08:30:00.000Z',
+      });
+      expect(h.audits[0].action_category).toBe('sale.drawer.failed');
+    },
+  );
+
+  it('a cashless sale is still suppressed as cashless_tender_mix, without a kick', async () => {
+    const h = harness({ kickResult: NO_DRAWER });
+    await h.dispatcher.dispatchOnFirstPrintSuccess(
+      ctx({ tender_lines_summary_json: CASHLESS_SUMMARY }),
+    );
+    expect(h.kick).not.toHaveBeenCalled();
+    expect(h.inserted[0]).toMatchObject({ suppression_reason: 'cashless_tender_mix' });
   });
 });
 

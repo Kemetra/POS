@@ -481,8 +481,11 @@ export interface SaleReturnDrawerOpenedPayload {
 
 /**
  * `sale.return.drawer_failed` — the drawer did not report opened; nothing was
- * paid out. `kick_outcome` says what is known: `failed_before_send` (provably
- * never reached the drawer) or `unknown` (timeout / fault: may have opened).
+ * paid out by the kick. `kick_outcome` says what is known: `failed_before_send`
+ * (provably never reached the drawer) or `unknown` (timeout / fault: may have
+ * opened). RT-531: with `failure_reason: 'no_drawer_configured'` the terminal has
+ * no drawer; the payout is then completed as `no_drawer` (`sale.return.paid_out`
+ * follows) and the kick outcome recorded here is the audit of that answer.
  */
 export interface SaleReturnDrawerFailedPayload {
   return_id: string;
@@ -499,7 +502,8 @@ export interface SaleReturnPaidOutPayload {
   return_ref: string;
   payout_minor: number;
   currency_code: string;
-  method: 'drawer' | 'manual';
+  /** RT-531: `no_drawer` = paid on a terminal with no cash drawer (no attestation). */
+  method: 'drawer' | 'manual' | 'no_drawer';
   tender: 'cash';
 }
 

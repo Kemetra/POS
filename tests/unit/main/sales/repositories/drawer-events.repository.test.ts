@@ -27,6 +27,7 @@ const MIGRATIONS = [
   '0021_sales_append_only_trigger.sql',
   '0022_create_print_events.sql',
   '0023_create_drawer_events.sql',
+  '0052_drawer_events_suppression_no_drawer.sql',
 ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;
@@ -176,6 +177,31 @@ describe('T083 — drawer_events repository: findLastSuccessfulOpenForTerminal',
         outcome: 'suppressed',
         suppression_reason: 'cashless_tender_mix',
       }),
+    );
+    expect(repo.findLastSuccessfulOpenForTerminal('terminal-1')).toBeNull();
+  });
+});
+
+describe('RT-531 — drawer_events repository: no drawer configured', () => {
+  it('stores a suppressed row with reason no_drawer_configured', () => {
+    const repo = bindDrawerEventsRepository(makeSqlJsHandle(db));
+    repo.insert(
+      buildDrawerEvent({
+        outcome: 'suppressed',
+        suppression_reason: 'no_drawer_configured',
+      }),
+    );
+    expect(repo.readBySale('sale-1')).toMatchObject({
+      outcome: 'suppressed',
+      suppression_reason: 'no_drawer_configured',
+      failure_reason: null,
+    });
+  });
+
+  it('a no_drawer_configured suppression is not a successful open', () => {
+    const repo = bindDrawerEventsRepository(makeSqlJsHandle(db));
+    repo.insert(
+      buildDrawerEvent({ outcome: 'suppressed', suppression_reason: 'no_drawer_configured' }),
     );
     expect(repo.findLastSuccessfulOpenForTerminal('terminal-1')).toBeNull();
   });

@@ -3,6 +3,12 @@
  * enforces it (`payoutRefusal`) and the renderer offers only what it allows
  * (the payout panel), so the two cannot drift (Codex P1 on a55ae8e: never
  * offer a manual attestation while a drawer kick may still open the drawer).
+ *
+ * RT-531 (the cash drawer is optional): a kick answered `no_drawer_configured`
+ * is recorded `failed_before_send` and main completes the payout as `no_drawer`
+ * in the same step, so the rule needs no new state: `failed_before_send` stays
+ * the one retryable kick, and a configured drawer's `unknown` kick stays
+ * manual-only. The renderer never offers `no_drawer`; only main records it.
  */
 import type {
   ReturnPayoutAction,

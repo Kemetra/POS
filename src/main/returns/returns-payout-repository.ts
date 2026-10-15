@@ -96,8 +96,10 @@ export interface ReturnPayoutsRepository {
   recordKick(input: { readonly returnId: string; readonly outcome: KickResult }): boolean;
   /**
    * Complete a started, unpaid payout and move the header to `paid_out`. A
-   * `drawer` completion needs a drawer that opened; a kick still `sending`
-   * within the lease holds it. Else why not. Run inside a transaction.
+   * `drawer` completion needs a drawer that opened; a `no_drawer` completion
+   * (RT-531) needs a kick that provably never reached the hardware
+   * (`failed_before_send`); a kick still `sending` within the lease holds it.
+   * Else why not. Run inside a transaction.
    */
   complete(input: CompletePayoutInput): CompleteResult;
   /** Write the slip facts of a return's lines (inside the journal insert). */
@@ -214,7 +216,9 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
       `UPDATE return_payouts SET paid_operator_id = ?, paid_operator_name = ?,
          paid_session_id = ?, paid_at = ?, method = ?
        WHERE return_id = ? AND paid_at IS NULL
-         AND (? = 'manual' OR kick_outcome = 'opened')
+         AND (? = 'manual'
+           OR (? = 'drawer' AND kick_outcome = 'opened')
+           OR (? = 'no_drawer' AND kick_outcome = 'failed_before_send'))
          AND NOT (kick_outcome IS 'sending' AND ${KICK_HELD})`,
     ).run(
       input.operatorId,
@@ -223,6 +227,8 @@ class SqlReturnPayoutsRepository implements ReturnPayoutsRepository {
       input.now,
       input.method,
       input.returnId,
+      input.method,
+      input.method,
       input.method,
       input.now,
       -RETURN_KICK_LEASE_MS,

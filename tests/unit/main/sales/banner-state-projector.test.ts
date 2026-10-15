@@ -26,6 +26,7 @@ const MIGRATIONS = [
   '0022_create_print_events.sql',
   '0023_create_drawer_events.sql',
   '0028_extend_sales_with_lines_json.sql',
+  '0052_drawer_events_suppression_no_drawer.sql',
 ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;
@@ -291,6 +292,62 @@ describe('banner-state projector — per-sale, no silent masking', () => {
     );
     expect(projector(db).projectBannerState(SCOPE).drawer_failure?.sale_id).toBe('sale-1');
   });
+
+  it('RT-531: a suppressed/no_drawer_configured row (no drawer) raises NO drawer_failure', () => {
+    seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
+    printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-1', 'sale-1', 'suppressed', 'no_drawer_configured', NULL,
+         NULL, 'pe-1', 'terminal-1', '2026-05-27T10:00:06.000Z')`,
+    );
+    expect(projector(db).projectBannerState(SCOPE).drawer_failure).toBeNull();
+  });
+
+  it('RT-531: a LEGACY failed/no_drawer_configured row (stub era) never shows the notice', () => {
+    // Before RT-531 the stub wrote `failed` for every cash sale on a terminal
+    // with no drawer. drawer_events is append-only, and a drawerless terminal
+    // never produces the later `opened` that clears it, so the projector must
+    // not surface those historical rows after the upgrade.
+    seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
+    printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-1', 'sale-1', 'failed', NULL, 'no_drawer_configured',
+         NULL, 'pe-1', 'terminal-1', '2026-05-27T10:00:06.000Z')`,
+    );
+    expect(projector(db).projectBannerState(SCOPE).drawer_failure).toBeNull();
+  });
+
+  it.each(['printer_dk_failure', 'os_error'] as const)(
+    'RT-531: a configured drawer failing (%s) is still surfaced, over an older legacy row',
+    (failure_reason) => {
+      seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
+      printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
+      db.run(
+        `INSERT INTO drawer_events (
+           drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+           last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+         ) VALUES ('de-1', 'sale-1', 'failed', NULL, 'no_drawer_configured',
+           NULL, 'pe-1', 'terminal-1', '2026-05-27T10:00:06.000Z')`,
+      );
+      seedSale(db, 'sale-2', '2026-05-27T10:10:00.000Z');
+      printEvent(db, 'pe-2', 'sale-2', 'success', '2026-05-27T10:10:05.000Z');
+      db.run(
+        `INSERT INTO drawer_events (
+           drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+           last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+         ) VALUES ('de-2', 'sale-2', 'failed', NULL, ?,
+           NULL, 'pe-2', 'terminal-1', '2026-05-27T10:10:06.000Z')`,
+        [failure_reason],
+      );
+      expect(projector(db).projectBannerState(SCOPE).drawer_failure?.sale_id).toBe('sale-2');
+    },
+  );
 
   it('tenant-isolation: a drawer failure on another terminal is NOT surfaced', () => {
     seedSale(db, 'sale-other', '2026-05-27T10:00:00.000Z', { terminal_id: 'terminal-2' });
