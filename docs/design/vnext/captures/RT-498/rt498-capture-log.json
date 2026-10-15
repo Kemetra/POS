@@ -1,0 +1,1215 @@
+[
+  {
+    "key": "dashboard",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-dashboard-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Dashboard"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-dashboard-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Dashboard"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-dashboard-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Dashboard"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:إدارة الكاشير",
+      "a:المبيعات المعلقة",
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:إدارة الكاشير",
+      "a:المبيعات المعلقة",
+      "a[current]:لوحة المتابعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-dashboard-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Dashboard"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard-printer-banner",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "printer",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-dashboard-printer-banner-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Dashboard"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard-printer-banner",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "printer",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-dashboard-printer-banner-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Dashboard"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard-printer-banner",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "printer",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-dashboard-printer-banner-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Dashboard"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "button:إعادة المحاولة",
+      "button:إيصال يدوي",
+      "a:إدارة الكاشير",
+      "a:المبيعات المعلقة",
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "button:إعادة المحاولة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard-printer-banner",
+    "route": "/app/dashboard",
+    "role": "manager",
+    "banner": "printer",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-dashboard-printer-banner-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Dashboard"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard-cashier",
+    "route": "/app/dashboard",
+    "role": "cashier",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-dashboard-cashier-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Section unavailable"
+    ],
+    "current": [],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard-cashier",
+    "route": "/app/dashboard",
+    "role": "cashier",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-dashboard-cashier-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Section unavailable"
+    ],
+    "current": [],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard-cashier",
+    "route": "/app/dashboard",
+    "role": "cashier",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-dashboard-cashier-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Section unavailable"
+    ],
+    "current": [],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:نقطة البيع",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:نقطة البيع",
+      "button:تسجيل الخروج"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "dashboard-cashier",
+    "route": "/app/dashboard",
+    "role": "cashier",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-dashboard-cashier-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Section unavailable"
+    ],
+    "current": [],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "sales",
+    "route": "/app/sales",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-sales-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Sales"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "sales",
+    "route": "/app/sales",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-sales-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Sales"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "sales",
+    "route": "/app/sales",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-sales-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Sales"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "input:",
+      "button:Find sale",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a[current]:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "input:",
+      "button:Find sale",
+      "a:لوحة المتابعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "sales",
+    "route": "/app/sales",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-sales-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Sales"
+    ],
+    "current": [
+      "المبيعات"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns",
+    "route": "/app/returns",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-returns-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns",
+    "route": "/app/returns",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-returns-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns",
+    "route": "/app/returns",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-returns-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a[current]:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a[current]:المرتجعات",
+      "a:سجل المراجعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "returns",
+    "route": "/app/returns",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-returns-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "المرتجعات"
+    ],
+    "current": [
+      "المرتجعات"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "audit",
+    "route": "/app/audit",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-audit-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Audit"
+    ],
+    "current": [
+      "سجل المراجعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "audit",
+    "route": "/app/audit",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-audit-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Audit"
+    ],
+    "current": [
+      "سجل المراجعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "audit",
+    "route": "/app/audit",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-audit-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Audit"
+    ],
+    "current": [
+      "سجل المراجعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a[current]:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a[current]:سجل المراجعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "audit",
+    "route": "/app/audit",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-audit-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Audit"
+    ],
+    "current": [
+      "سجل المراجعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "inventory",
+    "route": "/app/inventory",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-inventory-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Inventory"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "inventory",
+    "route": "/app/inventory",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-inventory-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Inventory"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "inventory",
+    "route": "/app/inventory",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-inventory-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Inventory"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a:Catalogue Diagnostics",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a[current]:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a:Catalogue Diagnostics",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "inventory",
+    "route": "/app/inventory",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-inventory-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Inventory"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "diagnostics",
+    "route": "/app/inventory/diagnostics",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-diagnostics-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Catalogue Diagnostics"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "diagnostics",
+    "route": "/app/inventory/diagnostics",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-diagnostics-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Catalogue Diagnostics"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "diagnostics",
+    "route": "/app/inventory/diagnostics",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-diagnostics-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Catalogue Diagnostics"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "button:Refresh",
+      "input:Search local catalogue",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a[current]:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "button:Refresh",
+      "input:Search local catalogue",
+      "a:لوحة المتابعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "diagnostics",
+    "route": "/app/inventory/diagnostics",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-diagnostics-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Catalogue Diagnostics"
+    ],
+    "current": [
+      "المخزون"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "settings",
+    "route": "/app/settings",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-settings-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Settings / Help"
+    ],
+    "current": [
+      "الإعدادات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "settings",
+    "route": "/app/settings",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-settings-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Settings / Help"
+    ],
+    "current": [
+      "الإعدادات"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "settings",
+    "route": "/app/settings",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-settings-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Settings / Help"
+    ],
+    "current": [
+      "الإعدادات"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "button:Switch to dark theme",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a[current]:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "button:Switch to dark theme",
+      "a:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "settings",
+    "route": "/app/settings",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-settings-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "Settings / Help"
+    ],
+    "current": [
+      "الإعدادات"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "stuck-shifts",
+    "route": "/app/manager/stuck-shifts",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-stuck-shifts-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الورديات العالقة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "stuck-shifts",
+    "route": "/app/manager/stuck-shifts",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-stuck-shifts-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الورديات العالقة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "stuck-shifts",
+    "route": "/app/manager/stuck-shifts",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-stuck-shifts-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الورديات العالقة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "div:أحمد سميرPOS-013 h 10 min",
+      "div:ياسمين خالدPOS-031 h 5 min",
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "div:أحمد سميرPOS-013 h 10 min",
+      "div:ياسمين خالدPOS-031 h 5 min",
+      "a[current]:لوحة المتابعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "stuck-shifts",
+    "route": "/app/manager/stuck-shifts",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-stuck-shifts-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "الورديات العالقة"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "force-fail",
+    "route": "/app/manager/force-fail",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "light",
+    "file": "rt498-force-fail-1024x768.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "إنهاء دفع معلّق"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "force-fail",
+    "route": "/app/manager/force-fail",
+    "role": "manager",
+    "banner": "none",
+    "size": "1024x768",
+    "mode": "forced",
+    "file": "rt498-force-fail-1024x768-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "إنهاء دفع معلّق"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "force-fail",
+    "route": "/app/manager/force-fail",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "light",
+    "file": "rt498-force-fail-1280x800.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "إنهاء دفع معلّق"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": [],
+    "tabs": [
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة",
+      "a:المخزون",
+      "a:الإعدادات",
+      "button:تسجيل الخروج",
+      "(body)",
+      "a[current]:لوحة المتابعة",
+      "a:نقطة البيع",
+      "a:المبيعات",
+      "a:المرتجعات",
+      "a:سجل المراجعة"
+    ],
+    "errors": [],
+    "ok": true
+  },
+  {
+    "key": "force-fail",
+    "route": "/app/manager/force-fail",
+    "role": "manager",
+    "banner": "none",
+    "size": "1280x800",
+    "mode": "forced",
+    "file": "rt498-force-fail-1280x800-forced.png",
+    "frames": 1,
+    "shells": 0,
+    "mains": 1,
+    "sections": 1,
+    "h1": [
+      "إنهاء دفع معلّق"
+    ],
+    "current": [
+      "لوحة المتابعة"
+    ],
+    "overflowX": false,
+    "axe": null,
+    "tabs": null,
+    "errors": [],
+    "ok": true
+  }
+]

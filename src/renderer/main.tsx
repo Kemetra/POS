@@ -95,6 +95,19 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-498 (VN-S10 S10-1): the one-frame harness, same DEV-only contract (the
+  // real AppRouter at any /app path against in-memory bridges).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/one-frame-proof')
+) {
+  void import('./v5/frame/dev/OneFrameProof').then(({ OneFrameProof }) => {
+    root.render(
+      <React.StrictMode>
+        <OneFrameProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();

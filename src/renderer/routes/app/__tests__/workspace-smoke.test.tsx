@@ -12,11 +12,16 @@ import { CheckoutPlaceholder } from '../checkout/CheckoutPlaceholder';
 afterEach(cleanup);
 
 /**
- * T070a — Workspace smoke tests.
+ * T070a — Screen wrapper smoke tests.
  *
  * Each placeholder is rendered in isolation and asserted to contain exactly
- * one Workspace ancestor (data-testid="workspace"). Layout-primitive
- * consumption only — no business logic, no AppShell needed.
+ * one screen wrapper. Layout-primitive consumption only — no business logic,
+ * no frame needed.
+ *
+ * RT-498 (VN-S10 S10-1): the screens that moved into the one v5 frame now wrap
+ * their content in `ScreenSection` (data-testid="v5-screen-section") instead of
+ * the legacy `Workspace` (data-testid="workspace"). CheckoutPlaceholder still
+ * uses the legacy `Workspace`; S10-6 moves it.
  */
 
 function renderInRouter(Component: React.ComponentType): ReturnType<typeof render> {
@@ -27,48 +32,57 @@ function renderInRouter(Component: React.ComponentType): ReturnType<typeof rende
   );
 }
 
-describe('Workspace smoke tests (T070a)', () => {
-  it('DashboardPlaceholder renders inside a Workspace', () => {
+describe('Screen wrapper smoke tests (T070a, RT-498)', () => {
+  it('DashboardPlaceholder renders inside a ScreenSection', () => {
     renderInRouter(DashboardPlaceholder);
-    expect(screen.getByTestId('workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('v5-screen-section')).toBeInTheDocument();
   });
 
-  it('SalesWorkspace renders inside a Workspace', () => {
+  it('SalesWorkspace renders inside a ScreenSection', () => {
     renderInRouter(SalesWorkspace);
-    expect(screen.getByTestId('workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('v5-screen-section')).toBeInTheDocument();
   });
 
-  it('InventoryPlaceholder renders inside a Workspace', () => {
+  it('InventoryPlaceholder renders inside a ScreenSection', () => {
     renderInRouter(InventoryPlaceholder);
-    expect(screen.getByTestId('workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('v5-screen-section')).toBeInTheDocument();
   });
 
-  it('SettingsHelpPlaceholder renders inside a Workspace', () => {
+  it('SettingsHelpPlaceholder renders inside a ScreenSection', () => {
     renderInRouter(SettingsHelpPlaceholder);
-    expect(screen.getByTestId('workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('v5-screen-section')).toBeInTheDocument();
   });
 
+  // S10-6 moves CheckoutPlaceholder to ScreenSection; until then it keeps the legacy Workspace.
   it('CheckoutPlaceholder renders inside a Workspace', () => {
     renderInRouter(CheckoutPlaceholder);
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
   });
 
-  it('each placeholder contains exactly one Workspace', () => {
-    const components = [
+  it('each placeholder contains exactly one screen wrapper', () => {
+    const sectionScreens = [
       DashboardPlaceholder,
       SalesWorkspace,
       InventoryPlaceholder,
       SettingsHelpPlaceholder,
-      CheckoutPlaceholder,
     ] as const;
-    for (const Component of components) {
+    for (const Component of sectionScreens) {
       const { container, unmount } = render(
         <MemoryRouter>
           <Component />
         </MemoryRouter>,
       );
-      expect(container.querySelectorAll('[data-testid="workspace"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[data-testid="v5-screen-section"]')).toHaveLength(1);
       unmount();
     }
+
+    // CheckoutPlaceholder is still on the legacy Workspace (S10-6 moves it).
+    const { container, unmount } = render(
+      <MemoryRouter>
+        <CheckoutPlaceholder />
+      </MemoryRouter>,
+    );
+    expect(container.querySelectorAll('[data-testid="workspace"]')).toHaveLength(1);
+    unmount();
   });
 });

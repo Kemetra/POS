@@ -22,7 +22,7 @@
 import { Suspense, lazy, type JSX } from 'react';
 
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
-import { Workspace } from '../../shell/regions/Workspace';
+import { ScreenSection } from '../../v5/foundation/ScreenSection';
 import { DashboardSkeleton } from './DashboardSkeleton';
 import { CashierManagementLink } from './CashierManagementLink';
 import { RecoveryLink } from './RecoveryLink';
@@ -47,12 +47,12 @@ function readQueryParam(name: string): string {
 
 function HonestDashboard(): JSX.Element {
   return (
-    <Workspace title="Dashboard">
+    <ScreenSection title="Dashboard">
       <ShiftManagerLink />
       <CashierManagementLink />
       <RecoveryLink />
       <DashboardSkeleton />
-    </Workspace>
+    </ScreenSection>
   );
 }
 

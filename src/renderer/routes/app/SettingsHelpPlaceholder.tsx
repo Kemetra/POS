@@ -10,7 +10,7 @@
  */
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
-import { Workspace } from '../../shell/regions/Workspace';
+import { ScreenSection } from '../../v5/foundation/ScreenSection';
 import { SettingsSkeleton } from './SettingsSkeleton';
 
 function resolveDevState(): string {
@@ -45,8 +45,8 @@ export function SettingsHelpPlaceholder(): JSX.Element {
   }
 
   return (
-    <Workspace title="Settings / Help">
+    <ScreenSection title="Settings / Help">
       <SettingsSkeleton />
-    </Workspace>
+    </ScreenSection>
   );
 }

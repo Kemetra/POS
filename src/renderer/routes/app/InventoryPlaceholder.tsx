@@ -11,7 +11,7 @@
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
-import { Workspace } from '../../shell/regions/Workspace';
+import { ScreenSection } from '../../v5/foundation/ScreenSection';
 
 function resolveDevState(): string {
   const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
@@ -45,7 +45,7 @@ export function InventoryPlaceholder(): JSX.Element {
   }
 
   return (
-    <Workspace title="Inventory">
+    <ScreenSection title="Inventory">
       <section className="placeholder-pane">
         <p>Navigation only — inventory management is not available at this terminal.</p>
         <p>
@@ -54,6 +54,6 @@ export function InventoryPlaceholder(): JSX.Element {
           </Link>
         </p>
       </section>
-    </Workspace>
+    </ScreenSection>
   );
 }

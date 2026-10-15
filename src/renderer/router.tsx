@@ -14,7 +14,6 @@ import {
   usePairingPushRelay,
 } from './routes/pairing/PairingRecoveryListener';
 import { PairedScreen } from './routes/paired/PairedScreen';
-import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
 import { AppIndexRedirect } from './routes/app/AppIndexRedirect';
 import { SalesWorkspace } from './routes/app/SalesWorkspace';
@@ -36,6 +35,7 @@ import { V5ShiftManagerRoute } from './v5/shift/V5ShiftManagerRoute';
 import { ErrorScreen } from './v5/foundation/ErrorScreen';
 import { RouteLoading } from './v5/foundation/RouteLoading';
 import { SupportedViewport } from './v5/foundation/SupportedViewport';
+import { ScreenSection } from './v5/foundation/ScreenSection';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -181,10 +181,9 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       <Navigate to={boot.startPath} replace />
     );
 
-  // 023 Slice G — one operator guard for all of /app. Under it, two layouts:
-  // the v5 frame for the cashier's sale loop (cart + checkout) and the legacy
-  // AppShell for every other screen. The legacy Sale components stay in the
-  // tree as the rollback source (revert this composition between sales).
+  // 023 Slice G — one operator guard for all of /app. RT-498 (VN-S10 S10-1):
+  // under it, one layout — the v5 frame — for every /app screen. The legacy
+  // AppShell is no longer routed; it stays in the tree until S10-Z deletes it.
   const guardedApp =
     props.operator !== undefined ? (
       <OperatorRouteGuard>
@@ -261,11 +260,10 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
                 </OperatorRouteGuard>
               ),
             },
-          ],
-        },
-        {
-          element: <AppShell />,
-          children: [
+            // RT-498 (VN-S10 S10-1, D-10-1) — the screens below sat in the
+            // legacy AppShell until now. They render in the same v5 frame with
+            // their content unchanged; S10-2 … S10-6 recompose each surface.
+            //
             // 022 US1 / FR-44 — role-aware landing. A cashier lands on the till
             // (/app/cart) instead of /app/dashboard, which rejects the cashier
             // role and made an ERROR STATE the first screen of a shift.
@@ -306,7 +304,9 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
               element: (
                 <OperatorRouteGuard allow={['manager', 'admin']}>
                   {props.operator !== undefined ? (
-                    <StuckShiftSurface operator={props.operator} />
+                    <ScreenSection title="الورديات العالقة">
+                      <StuckShiftSurface operator={props.operator} />
+                    </ScreenSection>
                   ) : (
                     <Navigate to="dashboard" replace />
                   )}
@@ -391,10 +391,14 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
  * guard test (precedent: `manager/cashiers` + `manager/stuck-shifts`).
  */
 function ManagerForceFailRoutePlaceholder(): JSX.Element {
+  // RT-498 (VN-S10 S10-1): a section inside the v5 frame, which owns the one
+  // <main>. The text is unchanged; S10-6 replaces it with the G-6 notice.
   return (
-    <main data-testid="manager-force-fail-route-placeholder">
-      Navigate here with a payment attempt to force-fail.
-    </main>
+    <ScreenSection title="إنهاء دفع معلّق">
+      <p data-testid="manager-force-fail-route-placeholder">
+        Navigate here with a payment attempt to force-fail.
+      </p>
+    </ScreenSection>
   );
 }
 
