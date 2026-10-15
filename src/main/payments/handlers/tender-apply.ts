@@ -43,7 +43,8 @@ import type {
   ValidateVoucherOutcome,
 } from '../voucher-authority-client/validate.js';
 
-import { applyVoucherLine } from './apply-voucher-line.js';
+import { applyVoucherForRequest } from './apply-voucher-line.js';
+import { priorLineOutcome } from './prior-line-outcome.js';
 
 export interface TenderApplyHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
@@ -65,6 +66,58 @@ export interface TenderApplyHandlerDeps {
 
 export type TenderApplyHandler = (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
 
+type AttemptRow = NonNullable<ReturnType<PaymentAttemptsRepository['findById']>>;
+type LineRow = ReturnType<PaymentTenderLinesRepository['findByAttempt']>[number];
+type FsmApplied = Extract<ReturnType<TenderLineFsm['apply']>, { kind: 'ok' }>;
+
+/**
+ * Rebuild the answer to a replayed `tender.apply` key from the persisted line:
+ * the original ok, the original refusal (reason stamped by the FSM), or
+ * `internal_error` when the line is gone or never reached either outcome.
+ */
+function replayResponse(prior: LineRow | undefined): TenderApplyResponse {
+  const outcome = priorLineOutcome(prior);
+  if (outcome.kind === 'applied') {
+    const response: TenderApplyResponse = {
+      kind: 'ok',
+      tender_line_id: outcome.line.tender_line_id,
+      applied_at: outcome.line.applied_at,
+    };
+    if (outcome.line.change_due_minor !== null) {
+      response.change_due_minor = outcome.line.change_due_minor;
+    }
+    return response;
+  }
+  if (outcome.kind === 'refused') return { kind: 'refused', reason: outcome.reason };
+  return { kind: 'refused', reason: 'internal_error' };
+}
+
+/** The `tender.applied` audit event for a line the FSM just applied. */
+function appliedAuditInput(ctx: {
+  req: TenderApplyRequest;
+  attempt: AttemptRow;
+  session: OperatorSessionForPayments;
+  fsmOutcome: FsmApplied;
+}): Parameters<PaymentAuditEmitter['emitTenderApplied']>[0] {
+  const { req, attempt, session, fsmOutcome } = ctx;
+  return {
+    tender_line_id: fsmOutcome.tender_line_id,
+    payment_attempt_id: req.payment_attempt_id,
+    tender_type: req.tender_type,
+    amount_applied_minor: req.amount_applied_minor,
+    ...(fsmOutcome.change_due_minor !== undefined
+      ? { change_due_minor: fsmOutcome.change_due_minor }
+      : {}),
+    ...(req.external_reference !== undefined ? { external_reference: req.external_reference } : {}),
+    applied_at: fsmOutcome.applied_at,
+    attribution_operator_id: session.operator_id,
+    tenant_id: attempt.tenant_id,
+    branch_id: attempt.branch_id,
+    originating_terminal_id: attempt.terminal_id,
+    session_id: session.operator_session_id,
+  };
+}
+
 export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderApplyHandler {
   const {
     getCurrentSession,
@@ -78,6 +131,90 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     clock,
     logger,
   } = deps;
+
+  /**
+   * Voucher branch (T263): routes to V-A `vouchers.validate` via the shared
+   * `applyVoucherLine` helper. The voucher code MUST be present (the renderer
+   * always supplies it for voucher tenders); otherwise `invalid_input`.
+   */
+  async function applyVoucher(ctx: {
+    req: TenderApplyRequest;
+    session: OperatorSessionForPayments;
+    attempt: AttemptRow;
+    tender_line_id: string;
+    now: string;
+  }): Promise<TenderApplyResponse> {
+    const { req, session, attempt, tender_line_id, now } = ctx;
+    if (validateVoucher === undefined) {
+      // Production wires this dep; refuse cleanly when it's absent
+      // (e.g., test deps yet to be updated, or pre-Wave-4 callers).
+      return { kind: 'refused', reason: 'tender_not_yet_supported' };
+    }
+    if (req.voucher_code === undefined || req.voucher_code === '') {
+      return { kind: 'refused', reason: 'invalid_input' };
+    }
+    const outcome = await applyVoucherForRequest(
+      { ...req, voucher_code: req.voucher_code },
+      {
+        session,
+        attempt,
+        tender_line_id,
+        now,
+        existingLines: linesRepo.findByAttempt(req.payment_attempt_id),
+      },
+      { validateVoucher, tenderLineFsm, auditEmitter },
+    );
+    if (outcome.kind === 'refused') {
+      return { kind: 'refused', reason: outcome.reason };
+    }
+    return {
+      kind: 'ok',
+      tender_line_id: outcome.tender_line_id,
+      applied_at: outcome.applied_at,
+    };
+  }
+
+  /** Audit / log side effects of an FSM refusal (nothing else was recorded). */
+  function recordFsmRefusal(ctx: {
+    req: TenderApplyRequest;
+    attempt: AttemptRow;
+    session: OperatorSessionForPayments;
+    tender_line_id: string;
+    now: string;
+    reason: string;
+  }): void {
+    const { req, attempt, session, tender_line_id, now, reason } = ctx;
+    // Emit `tender.refused` ONLY for non_cash_overpayment_refused (the
+    // FSM persists a refused-state line in that case). Other refusal
+    // reasons short-circuit before persistence (tender_not_yet_supported,
+    // invalid_input, attempt_terminal) — no row, no audit.
+    if (reason === 'non_cash_overpayment_refused') {
+      auditEmitter.emitTenderRefused({
+        tender_line_id,
+        payment_attempt_id: req.payment_attempt_id,
+        tender_type: req.tender_type,
+        refusal_reason: reason,
+        refused_at: now,
+        attribution_operator_id: session.operator_id,
+        tenant_id: attempt.tenant_id,
+        branch_id: attempt.branch_id,
+        originating_terminal_id: attempt.terminal_id,
+        session_id: session.operator_session_id,
+      });
+    }
+    // RT-437 (D-F2) — nothing was recorded, so there is no tender event to
+    // audit (owner decision 4). One log line, with the attempt id and never
+    // the amount.
+    if (reason === 'cash_amount_out_of_range') {
+      logger?.warn(
+        {
+          event: 'tender.apply.cash_out_of_range',
+          payment_attempt_id: req.payment_attempt_id,
+        },
+        'tender.apply refused: cash amount out of range',
+      );
+    }
+  }
 
   return async function tenderApply(req): Promise<TenderApplyResponse> {
     const session = getCurrentSession();
@@ -140,30 +277,7 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
       // `applied_at` is never cleared, so it still marks a line that applied.
       const lines = linesRepo.findByAttempt(req.payment_attempt_id);
       const prior = lines.find((l) => l.tender_line_id === reservation.tender_line_id);
-      if (prior !== undefined && prior.state !== 'refused' && prior.applied_at !== null) {
-        const response: TenderApplyResponse = {
-          kind: 'ok',
-          tender_line_id: prior.tender_line_id,
-          applied_at: prior.applied_at,
-        };
-        if (prior.change_due_minor !== null) {
-          response.change_due_minor = prior.change_due_minor;
-        }
-        return await Promise.resolve(response);
-      }
-      // Replay of a refused-line attempt: the original outcome was a refusal;
-      // reconstruct via the persisted refusal_reason (which the FSM stamped).
-      if (prior !== undefined && prior.state === 'refused' && prior.refusal_reason !== null) {
-        return await Promise.resolve({
-          kind: 'refused',
-          // refusal_reason column is a string-typed CHECK; the FSM only writes
-          // RefusalReason values into it.
-          reason: prior.refusal_reason as TenderApplyResponse extends { reason: infer R }
-            ? R
-            : never,
-        });
-      }
-      return await Promise.resolve({ kind: 'refused', reason: 'internal_error' });
+      return await Promise.resolve(replayResponse(prior));
     }
 
     // Wave 4 — voucher branch (T263). Slice 3 returned
@@ -172,47 +286,7 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     // helper. Voucher_code MUST be present (renderer always supplies
     // it for voucher tenders); refuse `invalid_input` otherwise.
     if (req.tender_type === 'internal_voucher') {
-      if (validateVoucher === undefined) {
-        // Production wires this dep; refuse cleanly when it's absent
-        // (e.g., test deps yet to be updated, or pre-Wave-4 callers).
-        return { kind: 'refused', reason: 'tender_not_yet_supported' };
-      }
-      if (req.voucher_code === undefined || req.voucher_code === '') {
-        return { kind: 'refused', reason: 'invalid_input' };
-      }
-      // Compute remaining_balance_minor main-side (R-7).
-      const existing = linesRepo.findByAttempt(req.payment_attempt_id);
-      let appliedNetSum = 0;
-      for (const line of existing) {
-        if (line.state !== 'applied') continue;
-        appliedNetSum += line.amount_applied_minor - (line.change_due_minor ?? 0);
-      }
-      const remaining_balance_minor = attempt.envelope_subtotal_minor - appliedNetSum;
-      const outcome = await applyVoucherLine(
-        {
-          session,
-          attempt,
-          tender_line_id,
-          voucher_code: req.voucher_code,
-          amount_applied_minor: req.amount_applied_minor,
-          remaining_balance_minor,
-          applied_at: now,
-          action_id: req.idempotency_key,
-        },
-        {
-          validateVoucher,
-          tenderLineFsm,
-          auditEmitter,
-        },
-      );
-      if (outcome.kind === 'refused') {
-        return { kind: 'refused', reason: outcome.reason };
-      }
-      return {
-        kind: 'ok',
-        tender_line_id: outcome.tender_line_id,
-        applied_at: outcome.applied_at,
-      };
+      return applyVoucher({ req, session, attempt, tender_line_id, now });
     }
 
     // Fresh path — invoke the FSM. The FSM stamps the line row + outbox row
@@ -234,57 +308,11 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     });
 
     if (fsmOutcome.kind === 'refused') {
-      // Emit `tender.refused` ONLY for non_cash_overpayment_refused (the
-      // FSM persists a refused-state line in that case). Other refusal
-      // reasons short-circuit before persistence (tender_not_yet_supported,
-      // invalid_input, attempt_terminal) — no row, no audit.
-      if (fsmOutcome.reason === 'non_cash_overpayment_refused') {
-        auditEmitter.emitTenderRefused({
-          tender_line_id,
-          payment_attempt_id: req.payment_attempt_id,
-          tender_type: req.tender_type,
-          refusal_reason: fsmOutcome.reason,
-          refused_at: now,
-          attribution_operator_id: session.operator_id,
-          tenant_id: attempt.tenant_id,
-          branch_id: attempt.branch_id,
-          originating_terminal_id: attempt.terminal_id,
-          session_id: session.operator_session_id,
-        });
-      }
-      // RT-437 (D-F2) — nothing was recorded, so there is no tender event to
-      // audit (owner decision 4). One log line, with the attempt id and never
-      // the amount.
-      if (fsmOutcome.reason === 'cash_amount_out_of_range') {
-        logger?.warn(
-          {
-            event: 'tender.apply.cash_out_of_range',
-            payment_attempt_id: req.payment_attempt_id,
-          },
-          'tender.apply refused: cash amount out of range',
-        );
-      }
+      recordFsmRefusal({ req, attempt, session, tender_line_id, now, reason: fsmOutcome.reason });
       return await Promise.resolve({ kind: 'refused', reason: fsmOutcome.reason });
     }
 
-    auditEmitter.emitTenderApplied({
-      tender_line_id: fsmOutcome.tender_line_id,
-      payment_attempt_id: req.payment_attempt_id,
-      tender_type: req.tender_type,
-      amount_applied_minor: req.amount_applied_minor,
-      ...(fsmOutcome.change_due_minor !== undefined
-        ? { change_due_minor: fsmOutcome.change_due_minor }
-        : {}),
-      ...(req.external_reference !== undefined
-        ? { external_reference: req.external_reference }
-        : {}),
-      applied_at: fsmOutcome.applied_at,
-      attribution_operator_id: session.operator_id,
-      tenant_id: attempt.tenant_id,
-      branch_id: attempt.branch_id,
-      originating_terminal_id: attempt.terminal_id,
-      session_id: session.operator_session_id,
-    });
+    auditEmitter.emitTenderApplied(appliedAuditInput({ req, attempt, session, fsmOutcome }));
 
     const response: TenderApplyResponse = {
       kind: 'ok',

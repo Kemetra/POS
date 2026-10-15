@@ -426,11 +426,77 @@ function voidRefusal(cart: LockableCart): CartRefusalReason | null {
 
 type StoredCart = NonNullable<ReturnType<CartStore['getCart']>>;
 
+interface CancelPostHandoffRequest {
+  cart_id: string;
+  handoff_action_id: string;
+  idempotency_key: string;
+  approval_id?: string;
+}
+
 /** Successful shared-gate payload for a mutating cart handler. */
 interface MutableCartContext {
   session: OperatorSessionRecord;
   store: CartStore;
   cart: StoredCart;
+}
+
+/** Role, tenant-isolation and ownership gate every cart handler applies (no mutability check). */
+function ownershipRefusal(
+  session: OperatorSessionRecord,
+  cart: StoredCart,
+): CartRefusalReason | null {
+  const gate = requireOperatorSession({
+    session,
+    allowedRoles: ['cashier', 'manager', 'admin'],
+    cart: {
+      operator_session_id: cart.operator_session_id,
+      tenant_id: cart.tenant_id,
+      branch_id: cart.branch_id,
+      state: cart.state as CartState,
+    },
+  });
+  return gate.kind === 'ok' ? null : gate.reason;
+}
+
+/** The answer to a replayed `cart.handoff` key: the persisted envelope, or a refusal. */
+function handoffReplayResponse(
+  store: CartStore,
+  cartId: string,
+  replay: NonNullable<ReturnType<CartStore['getOutboxRow']>>,
+): CartHandoffResponse {
+  if (replay.action_kind !== 'cart.handoff_to_payment') {
+    return refuse('idempotency_payload_mismatch');
+  }
+  const persistedJson = store.getCart(cartId)?.handoff_envelope_json;
+  if (persistedJson !== null && persistedJson !== undefined) {
+    const parsed = JSON.parse(persistedJson) as Parameters<typeof freezeEnvelope>[0];
+    return { kind: 'ok', envelope: rendererEnvelope(parsed) };
+  }
+  /* v8 ignore next — outbox row written but envelope_json null: impossible under atomic tx */
+  return refuse('not_implemented');
+}
+
+/** True when any line the cashier saw was removed or has moved on since. */
+function hasStaleLineVersion(
+  store: CartStore,
+  cartId: string,
+  perLineVersions: CartHandoffRequest['per_line_versions'],
+): boolean {
+  return perLineVersions.some(({ line_id, version }) => {
+    const line = store.getLine(cartId, line_id);
+    return line === undefined || line.removed_at !== null || line.version !== version;
+  });
+}
+
+/** `computeLineSubtotal`, with an unsafe-integer subtotal reported as `null` (other errors propagate). */
+function subtotalOrNull(quantity: number, unitPriceMinor: number): number | null {
+  try {
+    return computeLineSubtotal(quantity, unitPriceMinor);
+  } catch (err) {
+    if (err instanceof LineSubtotalError) return null;
+    /* v8 ignore next */
+    throw err;
+  }
 }
 
 /**
@@ -780,15 +846,8 @@ export class CartBridgeHandlers {
     const { session, store } = gated;
 
     // Idempotency replay (mirrors linesAdd).
-    const replay = store.getOutboxRow(req.idempotency_key);
-    if (replay !== undefined) {
-      if (!isOrdinaryReplayOf(replay, ['cart.line.update', 'cart.line.remove'])) {
-        return refuse('idempotency_payload_mismatch');
-      }
-      const replayLine = store.getLine(req.cart_id, req.line_id);
-      if (replayLine === undefined) return refuse('idempotency_payload_mismatch');
-      return { kind: 'ok', version: replayLine.version };
-    }
+    const replayed = this.lineUpdateReplay(store, req);
+    if (replayed !== undefined) return replayed;
 
     const line = store.getLine(req.cart_id, req.line_id);
     if (line === undefined) return refuse('wrong_owner');
@@ -804,14 +863,8 @@ export class CartBridgeHandlers {
       return { kind: 'ok', version: line.version + 1 };
     }
 
-    let newSubtotal: number;
-    try {
-      newSubtotal = computeLineSubtotal(qty.newQuantity, line.unit_price_minor);
-    } catch (err) {
-      if (err instanceof LineSubtotalError) return refuse('stale_version');
-      /* v8 ignore next */
-      throw err;
-    }
+    const newSubtotal = subtotalOrNull(qty.newQuantity, line.unit_price_minor);
+    if (newSubtotal === null) return refuse('stale_version');
 
     const now = this.clock().toISOString();
     store.updateLineQuantityAndOutbox(
@@ -837,6 +890,21 @@ export class CartBridgeHandlers {
       },
     );
     return { kind: 'ok', version: line.version + 1 };
+  }
+
+  /** The answer to a replayed `cart.lines.update` key, or `undefined` when the key is new. */
+  private lineUpdateReplay(
+    store: CartStore,
+    req: CartLinesUpdateRequest,
+  ): CartLinesUpdateResponse | undefined {
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay === undefined) return undefined;
+    if (!isOrdinaryReplayOf(replay, ['cart.line.update', 'cart.line.remove'])) {
+      return refuse('idempotency_payload_mismatch');
+    }
+    const replayLine = store.getLine(req.cart_id, req.line_id);
+    if (replayLine === undefined) return refuse('idempotency_payload_mismatch');
+    return { kind: 'ok', version: replayLine.version };
   }
 
   // ── cart.lines.remove ───────────────────────────────────────────────
@@ -1148,34 +1216,38 @@ export class CartBridgeHandlers {
   // ── cart.void ───────────────────────────────────────────────────────
 
   /**
+   * The gate shared by the void and handoff handlers: a signed-in session, a
+   * cart store (or the in-memory guard's answer), an existing cart, and the
+   * role / tenant-isolation / ownership check — in that order.
+   */
+  private resolveOwnedCart(
+    cartId: string,
+  ):
+    | { kind: 'ok'; session: OperatorSessionRecord; store: CartStore; cart: StoredCart }
+    | { kind: 'refused'; reason: CartRefusalReason } {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    const store = this.deps.cartStore;
+    if (store === undefined) return this.gateMutatingInMem(cartId) ?? refuse('not_implemented');
+
+    const cart = store.getCart(cartId);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const denied = ownershipRefusal(session, cart);
+    if (denied !== null) return refuse(denied);
+    return { kind: 'ok', session, store, cart };
+  }
+
+  /**
    * T067 — Pre-handoff void (any role, no audit).
    * Post-handoff cancel is `cancelPostHandoff` below.
    */
   // eslint-disable-next-line @typescript-eslint/require-await
   async void(req: CartVoidRequest): Promise<CartVoidResponse> {
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
+    const owned = this.resolveOwnedCart(req.cart_id);
+    if (owned.kind !== 'ok') return owned;
+    const { session, store, cart } = owned;
 
     // Idempotency check before terminal state — replaying after cancel succeeds.
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -1222,12 +1294,9 @@ export class CartBridgeHandlers {
    * cancellation (FR-031/FR-033). The cart must be in `frozen_handed_off`.
    */
   // eslint-disable-next-line @typescript-eslint/require-await
-  async cancelPostHandoff(req: {
-    cart_id: string;
-    handoff_action_id: string;
-    idempotency_key: string;
-    approval_id?: string;
-  }): Promise<{ kind: 'ok' } | { kind: 'refused'; reason: CartRefusalReason }> {
+  async cancelPostHandoff(
+    req: CancelPostHandoffRequest,
+  ): Promise<{ kind: 'ok' } | { kind: 'refused'; reason: CartRefusalReason }> {
     const session = this.deps.getCurrentSession();
     if (session === null) return refuse('no_session');
 
@@ -1237,17 +1306,8 @@ export class CartBridgeHandlers {
     const cart = store.getCart(req.cart_id);
     if (cart === undefined) return refuse('wrong_owner');
 
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
+    const denied = ownershipRefusal(session, cart);
+    if (denied !== null) return refuse(denied);
 
     // A manager / admin cancels directly (RT-114 C6); a cashier needs a
     // main-verified manager approval (RT-443), consumed in the transaction.
@@ -1257,12 +1317,6 @@ export class CartBridgeHandlers {
     if (!isManager && (approvals === undefined || approvalId === undefined)) {
       return refuse('manager_attribution_required');
     }
-    // The approver is recorded by users.id, the identity a consumed approval
-    // carries; a manager session without one keeps its operator id.
-    let approvingSupervisorId: string | null = isManager
-      ? (session.manager_user_id?.toLowerCase() ?? session.operator_id)
-      : null;
-
     // Without the payments record main cannot tell a paid sale from an unpaid
     // handoff, so refuse rather than guess.
     const paymentStatus = this.deps.cartPaymentStatus;
@@ -1314,40 +1368,7 @@ export class CartBridgeHandlers {
         // closes the sale to cancellation.
         () => paymentStatus(req.cart_id) === 'none',
         () => {
-          if (!isManager && approvals !== undefined && approvalId !== undefined) {
-            // RT-443: consume against the cart as it stood before this cancel
-            // (`cart`, read above; the conditional UPDATE proved it was still
-            // frozen). A refusal throws and rolls the whole cancel back.
-            const consumed = approvals.consume({
-              approvalId,
-              actionKind: 'cart.cancel_post_handoff',
-              subjectRef: req.cart_id,
-              subject: postHandoffApprovalSubject(cart, session) ?? {
-                version: '',
-                amountMinor: null,
-              },
-              session,
-            });
-            if (consumed.kind === 'refused') throw new CancelApprovalRefused(consumed.reason);
-            approvingSupervisorId = consumed.approverUserId;
-          }
-          this.deps.auditEmitter?.emit({
-            event_id,
-            tenant_id: cart.tenant_id,
-            branch_id: cart.branch_id,
-            originating_terminal_id: cart.terminal_id,
-            acting_operator_id: cart.owning_operator_id,
-            session_id: session.id,
-            shift_id: null,
-            action_category: 'cart.cancel.post_handoff',
-            created_at: now,
-            approving_supervisor_id: approvingSupervisorId,
-            payload: {
-              cart_id: req.cart_id,
-              handoff_action_id: req.handoff_action_id,
-              ...(isManager || approvalId === undefined ? {} : { approval_id: approvalId }),
-            },
-          });
+          this.consumeApprovalAndAuditCancel({ cart, session, req, isManager, event_id, now });
         },
       );
     } catch (err) {
@@ -1356,6 +1377,63 @@ export class CartBridgeHandlers {
       throw err;
     }
     return cancelled ? { kind: 'ok' } : refuse('closed');
+  }
+
+  /**
+   * Inside the post-handoff cancel transaction: consume the cashier's manager
+   * approval (RT-443) and emit the `cart.cancel.post_handoff` audit event.
+   * A refused approval throws `CancelApprovalRefused`, rolling the cancel back.
+   */
+  private consumeApprovalAndAuditCancel(ctx: {
+    cart: StoredCart;
+    session: OperatorSessionRecord;
+    req: CancelPostHandoffRequest;
+    isManager: boolean;
+    event_id: string;
+    now: string;
+  }): void {
+    const { cart, session, req, isManager, event_id, now } = ctx;
+    const approvals = this.deps.approvals;
+    const approvalId = req.approval_id;
+    // The approver is recorded by users.id, the identity a consumed approval
+    // carries; a manager session without one keeps its operator id.
+    let approvingSupervisorId: string | null = isManager
+      ? (session.manager_user_id?.toLowerCase() ?? session.operator_id)
+      : null;
+    if (!isManager && approvals !== undefined && approvalId !== undefined) {
+      // RT-443: consume against the cart as it stood before this cancel
+      // (`cart`, read by the caller; the conditional UPDATE proved it was still
+      // frozen). A refusal throws and rolls the whole cancel back.
+      const consumed = approvals.consume({
+        approvalId,
+        actionKind: 'cart.cancel_post_handoff',
+        subjectRef: req.cart_id,
+        subject: postHandoffApprovalSubject(cart, session) ?? {
+          version: '',
+          amountMinor: null,
+        },
+        session,
+      });
+      if (consumed.kind === 'refused') throw new CancelApprovalRefused(consumed.reason);
+      approvingSupervisorId = consumed.approverUserId;
+    }
+    this.deps.auditEmitter?.emit({
+      event_id,
+      tenant_id: cart.tenant_id,
+      branch_id: cart.branch_id,
+      originating_terminal_id: cart.terminal_id,
+      acting_operator_id: cart.owning_operator_id,
+      session_id: session.id,
+      shift_id: null,
+      action_category: 'cart.cancel.post_handoff',
+      created_at: now,
+      approving_supervisor_id: approvingSupervisorId,
+      payload: {
+        cart_id: req.cart_id,
+        handoff_action_id: req.handoff_action_id,
+        ...(isManager || approvalId === undefined ? {} : { approval_id: approvalId }),
+      },
+    });
   }
 
   // ── cart.returnToSale (RT-26) ───────────────────────────────────────
@@ -1508,17 +1586,8 @@ export class CartBridgeHandlers {
     const cart = store.getCart(cart_id);
     if (cart === undefined) return refuse('wrong_owner');
 
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
+    const denied = ownershipRefusal(session, cart);
+    if (denied !== null) return refuse(denied);
     return { kind: 'ok', session, store, cart };
   }
 
@@ -1542,47 +1611,16 @@ export class CartBridgeHandlers {
    */
   // eslint-disable-next-line @typescript-eslint/require-await
   async handoff(req: CartHandoffRequest): Promise<CartHandoffResponse> {
-    // Step 1 — session gate.
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    // Step 2 — ownership, role, tenant isolation (without requireMutable — idempotency
-    // replay must be allowed even for already-frozen carts, so we defer the mutable guard).
-    const ownershipGate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-    });
-    if (ownershipGate.kind !== 'ok') return refuse(ownershipGate.reason);
+    // Steps 1-2 — session gate, then ownership, role and tenant isolation (without
+    // requireMutable — idempotency replay must be allowed even for already-frozen
+    // carts, so the mutable guard is deferred).
+    const owned = this.resolveOwnedCart(req.cart_id);
+    if (owned.kind !== 'ok') return owned;
+    const { session, store, cart } = owned;
 
     // Step 3 — idempotency replay (before mutable guard so frozen carts can replay).
     const replay = store.getOutboxRow(req.idempotency_key);
-    if (replay !== undefined) {
-      if (replay.action_kind !== 'cart.handoff_to_payment') {
-        return refuse('idempotency_payload_mismatch');
-      }
-      const persistedJson = store.getCart(req.cart_id)?.handoff_envelope_json;
-      if (persistedJson !== null && persistedJson !== undefined) {
-        const parsed = JSON.parse(persistedJson) as Parameters<typeof freezeEnvelope>[0];
-        return { kind: 'ok', envelope: rendererEnvelope(parsed) };
-      }
-      /* v8 ignore next — outbox row written but envelope_json null: impossible under atomic tx */
-      return refuse('not_implemented');
-    }
+    if (replay !== undefined) return handoffReplayResponse(store, req.cart_id, replay);
 
     // Step 4 — mutable-state guard (after idempotency, so replay always works).
     const mutabilityGate = requireOperatorSession({
@@ -1604,10 +1642,8 @@ export class CartBridgeHandlers {
     if (locked !== null) return refuse(locked);
 
     // Step 5 — per_line_versions staleness check.
-    for (const { line_id, version } of req.per_line_versions) {
-      const line = store.getLine(req.cart_id, line_id);
-      if (line === undefined || line.removed_at !== null) return refuse('stale_version');
-      if (line.version !== version) return refuse('stale_version');
+    if (hasStaleLineVersion(store, req.cart_id, req.per_line_versions)) {
+      return refuse('stale_version');
     }
 
     const now = this.clock().toISOString();

@@ -163,7 +163,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // Pairing-bypass guard (T007) stays green: unpaired/invalid terminals
   // still route to /pairing and cannot reach /app/* directly.
   // 004-operator-session T032: `/sign-in` mounts above `/app/*`. The
-  // shell is wrapped in `<OperatorRouteGuard>` (no `allow` filter at
+  // app is wrapped in `<OperatorRouteGuard>` (no `allow` filter at
   // S1 — any signed-in role passes; per-route role gating lands with
   // the manager-only surfaces in S4 / S5). Any deep-link to `/app/*`
   // without an operator session redirects to `/sign-in` (FR-005).
@@ -183,8 +183,8 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
     );
 
   // 023 Slice G — one operator guard for all of /app. RT-498 (VN-S10 S10-1):
-  // under it, one layout — the v5 frame — for every /app screen. The legacy
-  // AppShell is no longer routed; it stays in the tree until S10-Z deletes it.
+  // under it, one layout — the v5 frame — for every /app screen. RT-504
+  // (S10-Z) deleted the legacy AppShell; `shell-retirement.test.ts` keeps it gone.
   const guardedApp =
     props.operator !== undefined ? (
       <OperatorRouteGuard>
@@ -261,9 +261,9 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
                 </OperatorRouteGuard>
               ),
             },
-            // RT-498 (VN-S10 S10-1, D-10-1) — the screens below sat in the
-            // legacy AppShell until now. They render in the same v5 frame with
-            // their content unchanged; S10-2 … S10-6 recompose each surface.
+            // RT-498 (VN-S10 S10-1, D-10-1) — the screens below rendered in the
+            // legacy shell until then. They render in the same v5 frame with
+            // their content unchanged; S10-2 … S10-6 recomposed each surface.
             //
             // 022 US1 / FR-44 — role-aware landing. A cashier lands on the till
             // (/app/cart) instead of /app/dashboard, which rejects the cashier

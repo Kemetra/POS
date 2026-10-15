@@ -31,19 +31,9 @@ describe('prefers-reduced-motion guard (T041)', () => {
     expect(cssText).toMatch(/prefers-reduced-motion\s*:\s*reduce/);
   });
 
-  it('reduce block disables Toast fade transition', () => {
-    // Toast animations: transition on the .toast element or role=alert/status
-    expect(reduceBlocks).toMatch(/\.toast|role.*alert|role.*status/);
-  });
-
   it('reduce block disables Dialog fade-in animation', () => {
-    // Dialog overlay or panel animation
+    // Dialog overlay or panel animation (the inactivity lock still uses them)
     expect(reduceBlocks).toMatch(/\.dialog|dialog-panel|dialog-overlay|\[role.*dialog\]/);
-  });
-
-  it('reduce block disables LoadingState skeleton pulse', () => {
-    // Skeleton shimmer animation
-    expect(reduceBlocks).toMatch(/skeleton|loading-state|pulse/i);
   });
 
   it('reduce block disables StatusBanner syncing pulse', () => {
@@ -63,22 +53,6 @@ describe('prefers-reduced-motion guard (T041)', () => {
     render(<StatusBanner state="syncing" message="Syncing..." />);
     const banner = screen.getByRole('status');
     expect(banner).toHaveAttribute('data-state', 'syncing');
-    cleanup();
-  });
-
-  it('LoadingState skeleton: carries role="status" (CSS animation hook)', async () => {
-    const { LoadingState } = await import('../states/LoadingState');
-    render(<LoadingState variant="skeleton" />);
-    // skeleton variant should still be reachable via an accessible role
-    const el = document.querySelector('[data-variant="skeleton"]');
-    expect(el).toBeInTheDocument();
-    cleanup();
-  });
-
-  it('LoadingState centerStage: carries role="status" (CSS animation hook)', async () => {
-    const { LoadingState } = await import('../states/LoadingState');
-    render(<LoadingState variant="centerStage" message="Connecting..." />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
     cleanup();
   });
 });

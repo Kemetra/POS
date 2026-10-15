@@ -13,6 +13,7 @@
 
 import type { AuditEvent, Fr025MandatoryAttribute } from '../../shared/audit/event-shape.js';
 import { FR025_MANDATORY_ATTRIBUTES } from '../../shared/audit/event-shape.js';
+import { findForbiddenKey } from './find-forbidden-key.js';
 import {
   FORBIDDEN_PAYLOAD_KEYS,
   type ForbiddenPayloadKey,
@@ -63,35 +64,6 @@ export class ForbiddenPayloadKeyError extends Error {
 }
 
 // ─── Internal helpers ──────────────────────────────────────────────────────
-
-/**
- * Recursively walks a plain-object tree and returns the first forbidden key
- * found, or `null` if the payload is clean.
- *
- * Arrays are iterated as collections of values; their numeric indices are
- * never themselves forbidden keys. Only string object keys are checked.
- */
-function findForbiddenKey(node: unknown): string | null {
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const hit = findForbiddenKey(item);
-      if (hit !== null) return hit;
-    }
-    return null;
-  }
-
-  if (node !== null && typeof node === 'object') {
-    for (const key of Object.keys(node)) {
-      if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) {
-        return key;
-      }
-      const hit = findForbiddenKey((node as Record<string, unknown>)[key]);
-      if (hit !== null) return hit;
-    }
-  }
-
-  return null;
-}
 
 // ─── Emitter ───────────────────────────────────────────────────────────────
 

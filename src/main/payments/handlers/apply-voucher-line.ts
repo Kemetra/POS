@@ -38,6 +38,7 @@ import type { OperatorSessionForPayments } from '../require-operator-session.js'
 import type { TenderLineFsm } from '../fsm/tender-line-fsm.js';
 import type { PaymentAuditEmitter } from '../audit-emitter.js';
 import type { PaymentAttemptRow } from '../repositories/payment-attempts.repository.js';
+import type { PaymentTenderLineRow } from '../repositories/payment-tender-lines.repository.js';
 import type {
   ValidateVoucherInput,
   ValidateVoucherOutcome,
@@ -81,6 +82,62 @@ export type ApplyVoucherLineOutcome =
         | 'dependency_unavailable'
         | 'internal_error';
     };
+
+/** What a handler knows about the voucher tender request it is serving. */
+export interface VoucherTenderRequest {
+  payment_attempt_id: string;
+  voucher_code: string;
+  amount_applied_minor: number;
+  idempotency_key: string;
+}
+
+/**
+ * Remaining balance computed main-side (R-7): the envelope subtotal less the net
+ * (amount minus change) of every line already applied. Cap enforcement is V-A's
+ * job — POS sends its local view so V-A can refuse `non_cash_overpayment_refused`
+ * when the input exceeds either the voucher balance or what the attempt still owes.
+ */
+function remainingBalanceMinor(
+  attempt: PaymentAttemptRow,
+  existing: readonly PaymentTenderLineRow[],
+): number {
+  let appliedNetSum = 0;
+  for (const line of existing) {
+    if (line.state !== 'applied') continue;
+    appliedNetSum += line.amount_applied_minor - (line.change_due_minor ?? 0);
+  }
+  return attempt.envelope_subtotal_minor - appliedNetSum;
+}
+
+/**
+ * `applyVoucherLine` for a request already gated by its handler: computes the
+ * remaining balance from the attempt's existing lines, then runs the V-A flow.
+ */
+export function applyVoucherForRequest(
+  req: VoucherTenderRequest,
+  ctx: {
+    session: OperatorSessionForPayments;
+    attempt: PaymentAttemptRow;
+    tender_line_id: string;
+    now: string;
+    existingLines: readonly PaymentTenderLineRow[];
+  },
+  deps: ApplyVoucherLineDeps,
+): Promise<ApplyVoucherLineOutcome> {
+  return applyVoucherLine(
+    {
+      session: ctx.session,
+      attempt: ctx.attempt,
+      tender_line_id: ctx.tender_line_id,
+      voucher_code: req.voucher_code,
+      amount_applied_minor: req.amount_applied_minor,
+      remaining_balance_minor: remainingBalanceMinor(ctx.attempt, ctx.existingLines),
+      applied_at: ctx.now,
+      action_id: req.idempotency_key,
+    },
+    deps,
+  );
+}
 
 /**
  * Run the V-A validate + persist-line flow. The caller owns
