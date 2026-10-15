@@ -53,7 +53,7 @@ export function LockScreen({
   unlock,
   onUnlocked,
   onSwitchOperator,
-}: LockScreenProps): JSX.Element {
+}: Readonly<LockScreenProps>): JSX.Element {
   const titleId = useId();
   const descId = useId();
   const errId = useId();

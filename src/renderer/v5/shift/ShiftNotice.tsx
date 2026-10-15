@@ -49,10 +49,12 @@ function isNoticeShown(input: {
 }
 
 /** Flag on, signed in: the notice for this screen (none on the shift screens). */
-function RoutedShiftNotice(props: {
-  bridge: ShiftCashupBridgeAPI;
-  role: Role;
-}): JSX.Element | null {
+function RoutedShiftNotice(
+  props: Readonly<{
+    bridge: ShiftCashupBridgeAPI;
+    role: Role;
+  }>,
+): JSX.Element | null {
   const { pathname } = useLocation();
   if (pathname.startsWith(SHIFT_PATH)) return null;
   if (props.role !== 'cashier') {
@@ -67,10 +69,12 @@ function RoutedShiftNotice(props: {
 
 type Gate = 'unknown' | 'none' | 'open';
 
-function CashierShiftNotice(props: {
-  bridge: ShiftCashupBridgeAPI;
-  pathname: string;
-}): JSX.Element | null {
+function CashierShiftNotice(
+  props: Readonly<{
+    bridge: ShiftCashupBridgeAPI;
+    pathname: string;
+  }>,
+): JSX.Element | null {
   const [gate, setGate] = useState<Gate>('unknown');
   const { bridge, pathname } = props;
 

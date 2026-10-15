@@ -6,7 +6,10 @@ interface ShiftClosedBannerProps {
   onDismiss: () => void;
 }
 
-export function ShiftClosedBanner({ closedAt, onDismiss }: ShiftClosedBannerProps): JSX.Element {
+export function ShiftClosedBanner({
+  closedAt,
+  onDismiss,
+}: Readonly<ShiftClosedBannerProps>): JSX.Element {
   const formatted = formatHumanDateTime(closedAt, { withYear: true, withTime: false }) ?? closedAt;
   return (
     <div

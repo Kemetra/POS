@@ -50,7 +50,7 @@ function settleRowFocus(event: MouseEvent<HTMLButtonElement>, keyboardPlan?: () 
  * «حذف» sits in its own column at the far end, never next to the stepper's +.
  * The row itself takes focus for ↑ / ↓ (tabIndex −1: not an extra Tab stop).
  */
-export function CartLineRow(props: LineProps): JSX.Element {
+export function CartLineRow(props: Readonly<LineProps>): JSX.Element {
   const { line } = props;
   return (
     <li
@@ -107,7 +107,7 @@ export function CartLineRow(props: LineProps): JSX.Element {
   );
 }
 
-function QuantityControl(props: LineProps): JSX.Element {
+function QuantityControl(props: Readonly<LineProps>): JSX.Element {
   const { line } = props;
   // Legacy stepper parity: at one, a note-less line is removed; a noted line decrements.
   function decrement(event: MouseEvent<HTMLButtonElement>): void {
@@ -152,7 +152,7 @@ function QuantityControl(props: LineProps): JSX.Element {
 }
 
 /** Void entry point + its confirmation; a refused void keeps the dialog open (legacy parity). */
-export function VoidControl({ onVoid }: { onVoid: () => Promise<boolean> }): JSX.Element {
+export function VoidControl({ onVoid }: Readonly<{ onVoid: () => Promise<boolean> }>): JSX.Element {
   const [open, setOpen] = useState(false);
   const close = (): void => {
     setOpen(false);
@@ -188,11 +188,13 @@ export function VoidControl({ onVoid }: { onVoid: () => Promise<boolean> }): JSX
   );
 }
 
-export function NoteDialog(props: {
-  line: CartLineItem;
-  onClose: () => void;
-  onSave: (line: CartLineItem, note: string | null) => Promise<boolean>;
-}): JSX.Element {
+export function NoteDialog(
+  props: Readonly<{
+    line: CartLineItem;
+    onClose: () => void;
+    onSave: (line: CartLineItem, note: string | null) => Promise<boolean>;
+  }>,
+): JSX.Element {
   const { line } = props;
   const [text, setText] = useState(line.note ?? '');
   const [failed, setFailed] = useState(false);

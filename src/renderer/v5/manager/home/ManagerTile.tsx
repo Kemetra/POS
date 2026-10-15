@@ -24,7 +24,7 @@ export function ManagerTile({
   title,
   description,
   testId,
-}: ManagerTileProps): JSX.Element {
+}: Readonly<ManagerTileProps>): JSX.Element {
   const id = useId();
   return (
     <li>

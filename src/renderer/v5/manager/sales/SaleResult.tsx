@@ -21,7 +21,7 @@ interface SaleResultProps {
   receipts?: ReceiptsBridgeAPI;
 }
 
-export function SaleResult({ sale, receipts }: SaleResultProps): JSX.Element {
+export function SaleResult({ sale, receipts }: Readonly<SaleResultProps>): JSX.Element {
   const [previewing, setPreviewing] = useState(false);
   // Conditional spreads: exactOptionalPropertyTypes rejects an explicit `undefined`.
   const reprintBridge = receipts !== undefined ? { _testReceiptsBridge: receipts } : {};

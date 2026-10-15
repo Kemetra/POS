@@ -114,7 +114,7 @@ export function usePairingPushRelay(pairing: PairingBridgeAPI): PairingPushRelay
   return current;
 }
 
-export function PairingRecoveryListener(props: { relay: PairingPushRelay }): JSX.Element {
+export function PairingRecoveryListener(props: Readonly<{ relay: PairingPushRelay }>): JSX.Element {
   const navigate = useNavigate();
   const { relay } = props;
   useEffect(

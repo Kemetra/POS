@@ -13,7 +13,7 @@ export function Card({
   children,
   'aria-labelledby': ariaLabelledBy,
   ...aria
-}: CardProps): JSX.Element {
+}: Readonly<CardProps>): JSX.Element {
   if (ariaLabelledBy) {
     return (
       <section className={`card card--${variant}`} aria-labelledby={ariaLabelledBy} {...aria}>

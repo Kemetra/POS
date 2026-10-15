@@ -2,7 +2,7 @@ import { useEffect, useRef, type JSX } from 'react';
 import type { ViewportShortfall } from '../../viewport/useViewportTier';
 
 /** The digits of a copy string: Western, as an isolated LTR run inside the Arabic. */
-function Ltr({ children }: { children: string }): JSX.Element {
+function Ltr({ children }: Readonly<{ children: string }>): JSX.Element {
   return <bdi dir="ltr">{children}</bdi>;
 }
 
@@ -53,7 +53,9 @@ interface ScreenTooSmallProps {
  * display. Focus goes to the heading on entry, and again when the variant
  * changes, so the new message is announced.
  */
-export function ScreenTooSmall({ shortfall = 'width' }: ScreenTooSmallProps): JSX.Element {
+export function ScreenTooSmall({
+  shortfall = 'width',
+}: Readonly<ScreenTooSmallProps>): JSX.Element {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {

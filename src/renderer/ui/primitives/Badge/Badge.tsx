@@ -7,7 +7,7 @@ interface BadgeProps extends AriaAttributes {
   children: ReactNode;
 }
 
-export function Badge({ intent, children, ...aria }: BadgeProps): JSX.Element {
+export function Badge({ intent, children, ...aria }: Readonly<BadgeProps>): JSX.Element {
   return (
     <span data-intent={intent} className={`badge badge--${intent}`} {...aria}>
       {children}

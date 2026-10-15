@@ -25,7 +25,7 @@ const HEADING: Readonly<Record<FitSurface, string>> = {
 };
 
 /** The digits of a copy string: Western, as an isolated LTR run inside the Arabic. */
-function Ltr({ children }: { children: string }): JSX.Element {
+function Ltr({ children }: Readonly<{ children: string }>): JSX.Element {
   return <bdi dir="ltr">{children}</bdi>;
 }
 
@@ -290,7 +290,7 @@ interface FitGuardProps {
  * RT-407 composition it relies on) is unchanged; the notice is positioned over
  * <main>.
  */
-export function FitGuard({ surface, children }: FitGuardProps): JSX.Element {
+export function FitGuard({ surface, children }: Readonly<FitGuardProps>): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const noticeRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);

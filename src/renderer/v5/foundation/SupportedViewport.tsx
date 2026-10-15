@@ -16,7 +16,7 @@ import './route-states.css';
  * through a loading state (Ready) replaces its <main>, which would drop focus
  * back to <body>.
  */
-export function SupportedViewport({ children }: { children: ReactNode }): JSX.Element {
+export function SupportedViewport({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
   const shortfall = viewportShortfall(useViewportTier());
   const boxRef = useRef<HTMLDivElement>(null);
   useFocusOnReturn(shortfall !== null, () => boxRef.current);

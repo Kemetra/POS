@@ -44,7 +44,7 @@ export function TopBar({
   branchId,
   terminalLabel,
   connectionState,
-}: TopBarProps): JSX.Element {
+}: Readonly<TopBarProps>): JSX.Element {
   return (
     <>
       <header role="banner" className="top-bar">

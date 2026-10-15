@@ -15,10 +15,10 @@ type SummaryState = Extract<FlowState, { step: 'summary' }>;
 export function RefundSummary({
   flow,
   state,
-}: {
+}: Readonly<{
   flow: ReturnFlow;
   state: SummaryState;
-}): JSX.Element {
+}>): JSX.Element {
   const heading = useFocusOnMount<HTMLHeadingElement>();
   const busy = flow.busy === 'submit';
   const { quote, sale } = state;

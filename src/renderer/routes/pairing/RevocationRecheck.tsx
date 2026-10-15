@@ -39,7 +39,7 @@ async function outcomeOf(pairing: PairingBridgeAPI): Promise<PairingRecheckOutco
   }
 }
 
-export function RevocationRecheck(props: { pairing: PairingBridgeAPI }): JSX.Element {
+export function RevocationRecheck(props: Readonly<{ pairing: PairingBridgeAPI }>): JSX.Element {
   const { pairing } = props;
   const navigate = useNavigate();
   const [checking, setChecking] = useState(false);

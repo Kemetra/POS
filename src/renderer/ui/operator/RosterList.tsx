@@ -42,7 +42,7 @@ export interface RosterListProps {
   disabled?: boolean;
 }
 
-export function RosterList(props: RosterListProps): JSX.Element {
+export function RosterList(props: Readonly<RosterListProps>): JSX.Element {
   const { cashiers, inert, onSelect, selectedId, disabled = false } = props;
 
   if (inert === true || cashiers.length === 0) {

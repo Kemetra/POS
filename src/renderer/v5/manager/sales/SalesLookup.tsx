@@ -43,7 +43,7 @@ type LookupState =
 export function SalesLookup({
   _testSalesBridge,
   _testReceiptsBridge,
-}: SalesLookupProps): JSX.Element {
+}: Readonly<SalesLookupProps>): JSX.Element {
   const headingId = useId();
   const inputId = useId();
   const inFlight = useRef(false);

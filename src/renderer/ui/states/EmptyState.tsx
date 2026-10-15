@@ -6,7 +6,11 @@ interface EmptyStateProps {
   action?: { label: string; onClick: () => void };
 }
 
-export function EmptyState({ heading, description, action }: EmptyStateProps): JSX.Element {
+export function EmptyState({
+  heading,
+  description,
+  action,
+}: Readonly<EmptyStateProps>): JSX.Element {
   return (
     <div className="empty-state">
       <h2 className="empty-state__heading">{heading}</h2>

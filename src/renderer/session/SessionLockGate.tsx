@@ -47,7 +47,10 @@ export interface SessionLockGateProps {
   children: ReactNode;
 }
 
-export function SessionLockGate({ operator, children }: SessionLockGateProps): JSX.Element {
+export function SessionLockGate({
+  operator,
+  children,
+}: Readonly<SessionLockGateProps>): JSX.Element {
   const [lockView, setLockView] = useState<LockStateView | null>(null);
   const [switching, setSwitching] = useState(false);
   const switchingRef = useRef(false);

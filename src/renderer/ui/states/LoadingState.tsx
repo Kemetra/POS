@@ -22,7 +22,7 @@ function SkeletonRows(): JSX.Element {
   );
 }
 
-function CenterStage({ message }: { message: string }): JSX.Element {
+function CenterStage({ message }: Readonly<{ message: string }>): JSX.Element {
   return (
     <div
       role="status"
@@ -42,7 +42,10 @@ function CenterStage({ message }: { message: string }): JSX.Element {
   );
 }
 
-export function LoadingState({ message = 'Loading…', variant }: LoadingStateProps): JSX.Element {
+export function LoadingState({
+  message = 'Loading…',
+  variant,
+}: Readonly<LoadingStateProps>): JSX.Element {
   if (variant === 'skeleton') {
     return <SkeletonRows />;
   }

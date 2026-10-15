@@ -30,7 +30,7 @@ export function Button({
   type = 'button',
   onClick,
   ...aria
-}: ButtonProps): JSX.Element {
+}: Readonly<ButtonProps>): JSX.Element {
   const isDisabled = disabled || loading;
   return (
     <button

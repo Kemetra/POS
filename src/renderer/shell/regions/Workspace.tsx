@@ -15,7 +15,7 @@ interface WorkspaceProps {
  *
  * Layout implemented via .workspace CSS in tailwind.css.
  */
-export function Workspace({ title, banner, children }: WorkspaceProps): JSX.Element {
+export function Workspace({ title, banner, children }: Readonly<WorkspaceProps>): JSX.Element {
   return (
     <div data-testid="workspace" className="workspace">
       {title && (

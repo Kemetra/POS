@@ -10,7 +10,7 @@ export function IdentityStrip({
   tenantId,
   branchId,
   terminalLabel,
-}: IdentityStripProps): JSX.Element {
+}: Readonly<IdentityStripProps>): JSX.Element {
   const tenant = tenantId || '—';
   const branch = branchId || '—';
   const label = terminalLabel || '—';

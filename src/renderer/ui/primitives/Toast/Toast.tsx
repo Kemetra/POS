@@ -16,7 +16,7 @@ export function Toast({
   description,
   durationMs = 5000,
   onDismiss,
-}: ToastProps): JSX.Element {
+}: Readonly<ToastProps>): JSX.Element {
   const isUrgent = intent === 'warning' || intent === 'danger';
 
   useEffect(() => {

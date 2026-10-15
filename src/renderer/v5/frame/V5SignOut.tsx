@@ -99,7 +99,7 @@ function useSignOutFlow(): SignOutFlow {
   };
 }
 
-function SignOutButton({ flow }: { flow: SignOutFlow }): JSX.Element {
+function SignOutButton({ flow }: Readonly<{ flow: SignOutFlow }>): JSX.Element {
   const block = usePaymentStore(signOutBlock);
   const paymentOpen = block !== null;
   return (
@@ -122,7 +122,7 @@ function SignOutButton({ flow }: { flow: SignOutFlow }): JSX.Element {
   );
 }
 
-function SignOutConfirm({ flow }: { flow: SignOutFlow }): JSX.Element {
+function SignOutConfirm({ flow }: Readonly<{ flow: SignOutFlow }>): JSX.Element {
   return (
     <div
       className="v5-frame__sign-out v5-frame__sign-out--confirming"

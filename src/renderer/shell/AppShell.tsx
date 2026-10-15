@@ -32,7 +32,7 @@ interface AppShellProps {
  * production builds. useDevToggles is imported lazily inside the effect
  * for the same reason.
  */
-export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
+export function AppShell({ pairedStatus }: Readonly<AppShellProps>): JSX.Element {
   const shortfall = viewportShortfall(useViewportTier());
   const contentRef = useRef<HTMLElement>(null);
   useFocusOnReturn(shortfall !== null, () => contentRef.current);

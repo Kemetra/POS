@@ -63,7 +63,7 @@ export function ExternalCardTerminalEntry({
   paymentAttemptId,
   tenderApply,
   onApplied,
-}: ExternalCardTerminalEntryProps): JSX.Element {
+}: Readonly<ExternalCardTerminalEntryProps>): JSX.Element {
   const [referenceInput, setReferenceInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);

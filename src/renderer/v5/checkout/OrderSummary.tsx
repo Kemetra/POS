@@ -32,7 +32,7 @@ function unitCount(envelope: Readonly<PaymentIntentEnvelope>): number {
   return envelope.lines.reduce((sum, line) => sum + line.quantity, 0);
 }
 
-export function OrderSummary({ envelope }: OrderSummaryProps): JSX.Element {
+export function OrderSummary({ envelope }: Readonly<OrderSummaryProps>): JSX.Element {
   const [open, setOpen] = useState(false);
   const listId = useId();
 

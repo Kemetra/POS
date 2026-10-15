@@ -94,7 +94,10 @@ function LineRow({ line, currencyCode, quantity, locked, onPick }: LineRowProps)
   );
 }
 
-export function LinePicker({ flow, state }: { flow: ReturnFlow; state: SelectState }): JSX.Element {
+export function LinePicker({
+  flow,
+  state,
+}: Readonly<{ flow: ReturnFlow; state: SelectState }>): JSX.Element {
   const heading = useFocusOnMount<HTMLHeadingElement>();
   const busy = flow.busy === 'quote';
   const nothingPicked = pickedLines(state.sale, state.picked).length === 0;

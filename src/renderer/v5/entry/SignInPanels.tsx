@@ -35,14 +35,14 @@ export function RosterPanel({
   managerMode,
   onManagerEntry,
   disabled = false,
-}: {
+}: Readonly<{
   state: RosterState;
   roster: ReactNode;
   managerMode: boolean;
   onManagerEntry: () => void;
   /** True while a sign-in is in flight: the column must not switch. */
   disabled?: boolean;
-}): JSX.Element {
+}>): JSX.Element {
   const notice = ROSTER_NOTICE[state];
   return (
     <section className="v5-entry__panel" aria-labelledby="signin-roster-heading">
@@ -86,10 +86,10 @@ export function RosterPanel({
 export function AuthPanel({
   head,
   children,
-}: {
+}: Readonly<{
   head: ReactNode;
   children: ReactNode;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <aside
       className="v5-entry__panel v5-entry__auth"
@@ -102,7 +102,7 @@ export function AuthPanel({
   );
 }
 
-export function AuthHeading({ children }: { children: ReactNode }): JSX.Element {
+export function AuthHeading({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
   return (
     <h2 className="v5-entry__panel-title" id="signin-auth-heading">
       {children}
@@ -114,11 +114,11 @@ export function BackButton({
   onClick,
   disabled = false,
   testId,
-}: {
+}: Readonly<{
   onClick: () => void;
   disabled?: boolean;
   testId: string;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <button
       type="button"
@@ -134,7 +134,7 @@ export function BackButton({
 }
 
 /** The picked cashier: badge, name and role, in the PIN column's head. */
-export function PickedCashier({ name }: { name: string }): JSX.Element {
+export function PickedCashier({ name }: Readonly<{ name: string }>): JSX.Element {
   return (
     <div className="v5-entry__auth-who">
       <span className="v5-entry__badge" aria-hidden="true">

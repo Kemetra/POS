@@ -23,7 +23,7 @@ const COPY: Readonly<Record<ScanStatusKind, string>> = {
   unavailable: 'المسح غير متاح',
 };
 
-export function ScanStatus(props: { available: boolean }): JSX.Element {
+export function ScanStatus(props: Readonly<{ available: boolean }>): JSX.Element {
   const dialogOpen = useModalDialogOpen();
   let kind: ScanStatusKind = 'ready';
   if (!props.available) kind = 'unavailable';

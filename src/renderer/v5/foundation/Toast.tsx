@@ -20,7 +20,7 @@ export function Toast({
   message,
   onDismiss,
   durationMs = DEFAULT_DURATION_MS,
-}: ToastProps): JSX.Element {
+}: Readonly<ToastProps>): JSX.Element {
   useEffect(() => {
     const timer = setTimeout(onDismiss, durationMs);
     return () => {

@@ -4,9 +4,9 @@ import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-s
 /** Display-only awareness badges; each carries its own text so meaning never rests on colour. */
 export function SaleProductFlags({
   product,
-}: {
+}: Readonly<{
   product: Pick<ProductSnapshotDisplay, 'controlled_substance' | 'prescription_required'>;
-}): JSX.Element | null {
+}>): JSX.Element | null {
   if (!product.controlled_substance && !product.prescription_required) return null;
   return (
     <span className="v5-live-flags">

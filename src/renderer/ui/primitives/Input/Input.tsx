@@ -28,7 +28,7 @@ export function Input({
   value,
   defaultValue,
   onChange,
-}: InputProps): JSX.Element {
+}: Readonly<InputProps>): JSX.Element {
   const id = useId();
   const descId = description ? `${id}-desc` : undefined;
   const errId = errorMessage ? `${id}-err` : undefined;

@@ -87,7 +87,7 @@ export interface PairingFormProps {
 
 const STATUS_ID = 'pairing-status';
 
-export function PairingForm(props: PairingFormProps): JSX.Element {
+export function PairingForm(props: Readonly<PairingFormProps>): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);

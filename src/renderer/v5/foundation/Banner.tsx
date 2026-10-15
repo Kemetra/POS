@@ -15,7 +15,7 @@ interface BannerProps {
  * area (freeze 15 §4 `Banner`). It never auto-dismisses: it leaves when the
  * state it reports is over, or when its own action resolves it.
  */
-export function Banner({ tone, children, actions, testId }: BannerProps): JSX.Element {
+export function Banner({ tone, children, actions, testId }: Readonly<BannerProps>): JSX.Element {
   return (
     <div
       role={toneRole(tone)}

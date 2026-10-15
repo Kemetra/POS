@@ -6,7 +6,11 @@ interface ErrorStateProps {
   action?: { label: string; onClick: () => void };
 }
 
-export function ErrorState({ heading, description, action }: ErrorStateProps): JSX.Element {
+export function ErrorState({
+  heading,
+  description,
+  action,
+}: Readonly<ErrorStateProps>): JSX.Element {
   return (
     <div className="error-state">
       <div className="error-state__icon" aria-hidden="true">

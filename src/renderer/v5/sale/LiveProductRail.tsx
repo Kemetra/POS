@@ -73,7 +73,7 @@ function resultsOpen(state: CatalogueSearchState): boolean {
  * over the cart. A pick adds at once (D-C1): the dropdown closes and the typed
  * query, having done its job, is cleared.
  */
-export function LiveProductRail(props: Props): JSX.Element {
+export function LiveProductRail(props: Readonly<Props>): JSX.Element {
   const [query, setQuery] = useState('');
   // Owned here, not in the field, so Esc can drop a keystroke still inside the
   // debounce window; otherwise it would reopen the results after dismissal.
@@ -122,7 +122,7 @@ export function LiveProductRail(props: Props): JSX.Element {
   );
 }
 
-function ResultsDropdown(props: Props): JSX.Element {
+function ResultsDropdown(props: Readonly<Props>): JSX.Element {
   const count = props.state.kind === 'results' ? props.state.items.length : 0;
   return (
     <div className="v5-sale-dropdown">
@@ -145,7 +145,7 @@ function ResultsDropdown(props: Props): JSX.Element {
 }
 
 /** The scan owner's focus anchor: unmistakably the scanner's, not a second search box. */
-function ScanField(props: { onScan: (barcode: string) => void }): JSX.Element {
+function ScanField(props: Readonly<{ onScan: (barcode: string) => void }>): JSX.Element {
   const [barcode, setBarcode] = useState('');
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
     if (event.key !== 'Enter') return;
@@ -182,13 +182,15 @@ function ScanField(props: { onScan: (barcode: string) => void }): JSX.Element {
   );
 }
 
-function SearchField(props: {
-  query: string;
-  setQuery: (value: string) => void;
-  search: DebouncedSearch;
-  onRecover: () => void;
-  searchRef: RefObject<HTMLInputElement | null>;
-}): JSX.Element {
+function SearchField(
+  props: Readonly<{
+    query: string;
+    setQuery: (value: string) => void;
+    search: DebouncedSearch;
+    onRecover: () => void;
+    searchRef: RefObject<HTMLInputElement | null>;
+  }>,
+): JSX.Element {
   const { search } = props;
   function handleChange(event: ChangeEvent<HTMLInputElement>): void {
     const value = event.target.value;
@@ -228,7 +230,7 @@ function SearchField(props: {
   );
 }
 
-function FreshnessBar(props: Props): JSX.Element {
+function FreshnessBar(props: Readonly<Props>): JSX.Element {
   const stamp = props.lastSuccessAt === null ? '' : formatStamp(props.lastSuccessAt);
   const feedback = FEEDBACK_COPY[props.feedback];
   return (

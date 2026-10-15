@@ -12,7 +12,7 @@ interface CenterStageProps {
  *
  * Layout implemented via .center-stage CSS in tailwind.css.
  */
-export function CenterStage({ children }: CenterStageProps): JSX.Element {
+export function CenterStage({ children }: Readonly<CenterStageProps>): JSX.Element {
   return (
     <div data-testid="center-stage" className="center-stage">
       {children}

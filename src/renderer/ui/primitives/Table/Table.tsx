@@ -20,7 +20,7 @@ export function Table<Row extends Record<string, unknown>>({
   state = 'data',
   emptyMessage = 'No data',
   errorMessage = 'Failed to load',
-}: TableProps<Row>): JSX.Element {
+}: Readonly<TableProps<Row>>): JSX.Element {
   return (
     <table className="data-table">
       <thead>

@@ -37,7 +37,7 @@ export function ConfirmDialog({
   busy = false,
   error = null,
   restoreFocus = true,
-}: ConfirmDialogProps): JSX.Element {
+}: Readonly<ConfirmDialogProps>): JSX.Element {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const bodyId = useId();
   const confirmClass = tone === 'danger' ? 'v5-live-btn--danger' : 'v5-live-btn--primary';

@@ -102,7 +102,7 @@ export function PrinterFailureBanner({
   _testReceiptsBridge,
   _testSalesBridge,
   _idempotencyKeyFactory,
-}: PrinterFailureBannerProps): JSX.Element | null {
+}: Readonly<PrinterFailureBannerProps>): JSX.Element | null {
   const messageId = useId();
   const [mutationPhase, setMutationPhase] = useState<MutationPhase>('idle');
   const keyFactory = _idempotencyKeyFactory ?? defaultKeyFactory;

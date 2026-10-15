@@ -40,7 +40,7 @@ export interface PairingScreenProps {
   pairing?: PairingBridgeAPI;
 }
 
-export function PairingScreen(props: PairingScreenProps): JSX.Element {
+export function PairingScreen(props: Readonly<PairingScreenProps>): JSX.Element {
   // Only set the data attribute when defined — exactOptionalPropertyTypes
   // forbids `attribute: undefined`.
   const reasonAttr =

@@ -38,7 +38,7 @@ export const PrimarySlotContext = createContext<PrimarySlot>({
  * only be a dead, disabled second commit beside «تأكيد الدفع»). Rendered on its
  * own (no bar: unit tests, Slice-2 mode) it stays in place, unchanged.
  */
-export function PinnedPrimary(props: { children: ReactNode }): JSX.Element | null {
+export function PinnedPrimary(props: Readonly<{ children: ReactNode }>): JSX.Element | null {
   const { node, entryOwnsPrimary } = useContext(PrimarySlotContext);
   if (node === null) return <>{props.children}</>;
   return entryOwnsPrimary ? createPortal(props.children, node) : null;
@@ -57,7 +57,7 @@ interface CheckoutActionBarProps {
   endSlotRef: (node: HTMLElement | null) => void;
 }
 
-export function CheckoutActionBar(props: CheckoutActionBarProps): JSX.Element {
+export function CheckoutActionBar(props: Readonly<CheckoutActionBarProps>): JSX.Element {
   return (
     <div className="checkout-actions" data-testid="payment-surface-actions">
       {props.notices}

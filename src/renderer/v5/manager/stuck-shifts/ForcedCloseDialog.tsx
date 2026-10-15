@@ -59,7 +59,7 @@ export function ForcedCloseForm({
   refusal = null,
   firstReasonRef,
   cancelRef,
-}: ForcedCloseFormProps): JSX.Element {
+}: Readonly<ForcedCloseFormProps>): JSX.Element {
   const noteId = useId();
   const [reason, setReason] = useState<ForcedCloseReason | null>(null);
   const [annotation, setAnnotation] = useState('');
@@ -154,7 +154,7 @@ export function ForcedCloseDialog({
   refusal,
   onSubmit,
   onCancel,
-}: ForcedCloseDialogProps): JSX.Element {
+}: Readonly<ForcedCloseDialogProps>): JSX.Element {
   const firstReasonRef = useRef<HTMLInputElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
 

@@ -80,7 +80,7 @@ function readBridge(): DiagnosticsBridge {
   };
 }
 
-export function CatalogueDiagnostics(props: CatalogueDiagnosticsProps): JSX.Element {
+export function CatalogueDiagnostics(props: Readonly<CatalogueDiagnosticsProps>): JSX.Element {
   // Local handle is intentionally NOT named `bridge`: the T007b no-backend guard
   // forbids any `bridge.<namespace>` identifier access in renderer route/ui code
   // (only `pairing` is allowlisted). These are already narrowed flat method refs.

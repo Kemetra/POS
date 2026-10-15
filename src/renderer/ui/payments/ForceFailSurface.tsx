@@ -77,7 +77,7 @@ export function ForceFailSurface({
   idempotency_key,
   payments,
   onForceFailed,
-}: ForceFailSurfaceProps): JSX.Element {
+}: Readonly<ForceFailSurfaceProps>): JSX.Element {
   const [state, setState] = useState<SurfaceState>({ kind: 'idle' });
 
   const handleClick = useCallback(() => {

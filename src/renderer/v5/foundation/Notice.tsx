@@ -26,7 +26,7 @@ export function Notice({
   action,
   announce = true,
   testId,
-}: NoticeProps): JSX.Element {
+}: Readonly<NoticeProps>): JSX.Element {
   return (
     <div
       role={announce ? toneRole(tone) : undefined}

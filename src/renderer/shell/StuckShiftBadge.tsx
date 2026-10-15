@@ -19,7 +19,7 @@ interface Props {
  *
  * S4 ships count=0 (placeholder); S5 wires the live count feed.
  */
-export function StuckShiftBadge({ count }: Props): JSX.Element | null {
+export function StuckShiftBadge({ count }: Readonly<Props>): JSX.Element | null {
   const state = useOperatorSessionStore((s) => s.state);
   const { tier } = useViewportTier();
 

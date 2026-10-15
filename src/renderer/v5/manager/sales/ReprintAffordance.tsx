@@ -60,7 +60,7 @@ export function ReprintAffordance({
   sale,
   _testReceiptsBridge,
   _idempotencyKeyFactory,
-}: ReprintAffordanceProps): JSX.Element | null {
+}: Readonly<ReprintAffordanceProps>): JSX.Element | null {
   const [reprinting, setReprinting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const inFlight = useRef(false);

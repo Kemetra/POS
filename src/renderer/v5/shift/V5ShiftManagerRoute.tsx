@@ -40,7 +40,7 @@ export function V5ShiftManagerRoute({ bridge }: Props): JSX.Element | null {
   );
 }
 
-function ShiftStatusPanel({ bridge }: { bridge: ShiftCashupBridgeAPI }): JSX.Element {
+function ShiftStatusPanel({ bridge }: Readonly<{ bridge: ShiftCashupBridgeAPI }>): JSX.Element {
   const { state, reload } = useShiftStatus(bridge);
   if (state.kind === 'loading') {
     return <p className="v5-shift-message">{SHIFT_COPY.loading}</p>;
@@ -80,7 +80,7 @@ function hasStranded({ stranded }: ShiftStatusView): boolean {
   return stranded.unsyncedFacts > 0 || stranded.openShifts > 0;
 }
 
-function OpenShiftFacts({ status }: { status: ShiftStatusView }): JSX.Element {
+function OpenShiftFacts({ status }: Readonly<{ status: ShiftStatusView }>): JSX.Element {
   const open = status.openShift;
   if (open === null) return <p className="v5-shift-message">{SHIFT_COPY.noOpenShift}</p>;
   const money = (minor: number): JSX.Element => (
@@ -125,7 +125,7 @@ const probeRows = ({ probeRefusals }: ShiftStatusView): Row[] => [
   [SHIFT_COPY.probeApprover, probeRefusals.approverFailure],
 ];
 
-function Counts({ heading, rows }: { heading: string; rows: Row[] }): JSX.Element {
+function Counts({ heading, rows }: Readonly<{ heading: string; rows: Row[] }>): JSX.Element {
   return (
     <>
       <h3>{heading}</h3>

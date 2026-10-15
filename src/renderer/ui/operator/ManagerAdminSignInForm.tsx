@@ -42,7 +42,7 @@ export interface ManagerAdminSignInFormProps {
   onBack?: () => void;
 }
 
-export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.Element {
+export function ManagerAdminSignInForm(props: Readonly<ManagerAdminSignInFormProps>): JSX.Element {
   const { onBack } = props;
   const identifierId = useId();
   const passwordId = useId();

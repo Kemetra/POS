@@ -115,10 +115,12 @@ function useReleaseWhenGone(
 }
 
 /** The polite live region: the last cart action, and whether it can be undone. */
-function LastActionAnnouncement(props: {
-  announcement: CartAnnouncement | null;
-  offer: UndoOffer | null;
-}): JSX.Element {
+function LastActionAnnouncement(
+  props: Readonly<{
+    announcement: CartAnnouncement | null;
+    offer: UndoOffer | null;
+  }>,
+): JSX.Element {
   return (
     <p className="v5-sale-last-add" role="status" aria-live="polite">
       {props.announcement !== null && announcementText(props.announcement)}
@@ -136,12 +138,14 @@ function LastActionAnnouncement(props: {
  * the button itself sits beside it, outside the live region, so it is never
  * re-read. No button without a bridge that can undo (fail closed).
  */
-export function CartStatusLine(props: {
-  announcement: CartAnnouncement | null;
-  offer: UndoOffer | null;
-  canUndo: boolean;
-  onUndo: () => void;
-}): JSX.Element {
+export function CartStatusLine(
+  props: Readonly<{
+    announcement: CartAnnouncement | null;
+    offer: UndoOffer | null;
+    canUndo: boolean;
+    onUndo: () => void;
+  }>,
+): JSX.Element {
   const offer = props.canUndo ? props.offer : null;
   const attention = useAttentionPause();
   const visible = useOfferLifetime(offer?.seq ?? null, attention.paused);

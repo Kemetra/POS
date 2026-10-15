@@ -6,7 +6,7 @@ interface StatusBannerProps {
   message?: string;
 }
 
-export function StatusBanner({ state, message }: StatusBannerProps): JSX.Element {
+export function StatusBanner({ state, message }: Readonly<StatusBannerProps>): JSX.Element {
   if (state === 'online') {
     return <div aria-live="polite" aria-hidden="true" aria-label="Connection status" />;
   }

@@ -51,7 +51,10 @@ const ACTION_LABEL: Readonly<Record<Exclude<RowAction, null>, string>> = {
   reprint: PAYOUT_COPY.historyReprint,
 };
 
-function RowActionButton({ row, actions }: { row: ReturnJournalView; actions: HistoryActions }) {
+function RowActionButton({
+  row,
+  actions,
+}: Readonly<{ row: ReturnJournalView; actions: HistoryActions }>) {
   const action = rowAction(row);
   if (action === null) return null;
   const { reprint } = actions;
@@ -74,7 +77,10 @@ function RowActionButton({ row, actions }: { row: ReturnJournalView; actions: Hi
   );
 }
 
-function Row({ row, actions }: { row: ReturnJournalView; actions: HistoryActions }): JSX.Element {
+function Row({
+  row,
+  actions,
+}: Readonly<{ row: ReturnJournalView; actions: HistoryActions }>): JSX.Element {
   return (
     <tr data-state={row.state}>
       <td>
@@ -105,10 +111,10 @@ function Row({ row, actions }: { row: ReturnJournalView; actions: HistoryActions
 function Rows({
   rows,
   actions,
-}: {
+}: Readonly<{
   rows: readonly ReturnJournalView[];
   actions: HistoryActions;
-}): JSX.Element {
+}>): JSX.Element {
   if (rows.length === 0) return <p className="rt-returns__meta">{OUTCOME_COPY.historyEmpty}</p>;
   return (
     <table className="rt-table" aria-labelledby="rt-returns-history">
@@ -132,7 +138,7 @@ function Rows({
 }
 
 /** H4: a list main did not give is never a dead end. */
-function Reload({ history }: { history: ReturnHistory }): JSX.Element | null {
+function Reload({ history }: Readonly<{ history: ReturnHistory }>): JSX.Element | null {
   const { status } = history.state;
   if (status !== 'failed' && status !== 'refused') return null;
   return (
@@ -146,7 +152,10 @@ function Reload({ history }: { history: ReturnHistory }): JSX.Element | null {
   );
 }
 
-function Body({ state, actions }: { state: HistoryState; actions: HistoryActions }): JSX.Element {
+function Body({
+  state,
+  actions,
+}: Readonly<{ state: HistoryState; actions: HistoryActions }>): JSX.Element {
   switch (state.status) {
     case 'loading':
       return <p className="rt-returns__meta">جارٍ تحميل السجل…</p>;
@@ -164,7 +173,7 @@ function hasUnresolved(state: HistoryState): boolean {
 }
 
 /** The last journal reprint's result, announced politely. */
-function ReprintNotice({ reprint }: { reprint: HistoryReprint }): JSX.Element | null {
+function ReprintNotice({ reprint }: Readonly<{ reprint: HistoryReprint }>): JSX.Element | null {
   if (reprint.result === null) return null;
   const printed = reprint.result.kind === 'printed';
   return (
@@ -177,10 +186,10 @@ function ReprintNotice({ reprint }: { reprint: HistoryReprint }): JSX.Element | 
 export function ReturnsHistory({
   history,
   actions,
-}: {
+}: Readonly<{
   history: ReturnHistory;
   actions: HistoryActions;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <section className="rt-returns__panel" aria-labelledby="rt-returns-history">
       <div className="rt-returns__bar">

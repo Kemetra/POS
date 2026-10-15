@@ -37,7 +37,8 @@ function resolveBridge(injected?: ReceiptsBridgeAPI): ReceiptsBridgeAPI | null {
   return api?.receipts ?? null;
 }
 
-export function ReceiptPreview({ saleId, onClose, _testBridge }: ReceiptPreviewProps): JSX.Element {
+export function ReceiptPreview(props: Readonly<ReceiptPreviewProps>): JSX.Element {
+  const { saleId, onClose, _testBridge } = props;
   const titleId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [state, setState] = useState<LoadState>({ phase: 'loading' });

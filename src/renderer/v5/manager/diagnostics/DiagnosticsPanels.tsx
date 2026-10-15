@@ -22,7 +22,9 @@ import '../manager.css';
  * token or secret is a prop here, so none can reach the DOM.
  */
 
-function Panel(props: { heading: string; testId: string; children: ReactNode }): JSX.Element {
+function Panel(
+  props: Readonly<{ heading: string; testId: string; children: ReactNode }>,
+): JSX.Element {
   const headingId = useId();
   return (
     <section className="v5-manager-panel" aria-labelledby={headingId} data-testid={props.testId}>
@@ -35,7 +37,7 @@ function Panel(props: { heading: string; testId: string; children: ReactNode }):
 }
 
 /** A count with Western digits, isolated left-to-right. */
-function Num({ children }: { children: ReactNode }): JSX.Element {
+function Num({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
   return <span className="v5-manager-num">{children}</span>;
 }
 
@@ -55,7 +57,7 @@ export interface DevicePanelProps {
   } | null;
 }
 
-export function DevicePanel({ paired }: DevicePanelProps): JSX.Element {
+export function DevicePanel({ paired }: Readonly<DevicePanelProps>): JSX.Element {
   const copy = DIAGNOSTICS_COPY.device;
   return (
     <Panel heading={copy.heading} testId="diagnostics-pairing">
@@ -79,7 +81,7 @@ export function DevicePanel({ paired }: DevicePanelProps): JSX.Element {
   );
 }
 
-function SyncState({ view }: { view: FreshnessView }): JSX.Element {
+function SyncState({ view }: Readonly<{ view: FreshnessView }>): JSX.Element {
   const text = freshnessText(view);
   const at = view.kind === 'synced' || view.kind === 'empty' ? view.at : null;
   return (
@@ -97,7 +99,7 @@ export interface SyncPanelProps {
   onRefresh: () => void;
 }
 
-export function SyncPanel(props: SyncPanelProps): JSX.Element {
+export function SyncPanel(props: Readonly<SyncPanelProps>): JSX.Element {
   const copy = DIAGNOSTICS_COPY.sync;
   return (
     <Panel heading={copy.heading} testId="diagnostics-sync">
@@ -124,7 +126,9 @@ export function SyncPanel(props: SyncPanelProps): JSX.Element {
   );
 }
 
-export function CountsPanel({ counts }: { counts: CatalogueCountsResponse | null }): JSX.Element {
+export function CountsPanel({
+  counts,
+}: Readonly<{ counts: CatalogueCountsResponse | null }>): JSX.Element {
   const copy = DIAGNOSTICS_COPY.counts;
   let body: JSX.Element;
   if (counts === null) {
@@ -155,7 +159,7 @@ export interface SearchPanelProps {
   message: string | null;
 }
 
-export function SearchPanel(props: SearchPanelProps): JSX.Element {
+export function SearchPanel(props: Readonly<SearchPanelProps>): JSX.Element {
   const inputId = useId();
   const copy = DIAGNOSTICS_COPY.search;
   return (

@@ -9,7 +9,7 @@ import { V5Icon } from './V5Icon';
 export type Tone = 'info' | 'success' | 'warning' | 'danger';
 
 /** The tone's own glyph, so a tone is never told by colour alone (P8). */
-export function ToneIcon({ tone }: { tone: Tone }): JSX.Element {
+export function ToneIcon({ tone }: Readonly<{ tone: Tone }>): JSX.Element {
   return (
     <span className="v5-tone-icon" data-icon={tone}>
       <V5Icon name={`status-${tone}`} size={20} />

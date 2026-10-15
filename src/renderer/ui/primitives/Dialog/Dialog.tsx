@@ -27,7 +27,7 @@ export function Dialog({
   children,
   primaryAction,
   secondaryAction,
-}: DialogProps): JSX.Element | null {
+}: Readonly<DialogProps>): JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = `dialog-title-${useId()}`;
 

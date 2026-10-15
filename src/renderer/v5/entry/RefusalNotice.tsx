@@ -14,12 +14,12 @@ export function RefusalNotice({
   testId,
   category,
   id,
-}: {
+}: Readonly<{
   children: ReactNode;
   testId: string;
   category?: string;
   id?: string;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <span
       role="alert"

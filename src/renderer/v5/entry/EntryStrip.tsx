@@ -14,7 +14,7 @@ import { SIGN_IN_COPY } from './entry-copy';
  *   decision, deferred to a bridge-field issue).
  * - No connection pill: there is no real signal for one (A4 / X-2).
  */
-export function EntryStrip({ terminalLabel }: { terminalLabel?: string }): JSX.Element {
+export function EntryStrip({ terminalLabel }: Readonly<{ terminalLabel?: string }>): JSX.Element {
   return (
     <header className="v5-entry__bar" data-testid="entry-strip">
       <span className="v5-entry__brand">
