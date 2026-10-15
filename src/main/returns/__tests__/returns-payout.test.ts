@@ -299,8 +299,22 @@ describe('M: money', () => {
 });
 
 describe('D: drawer', () => {
-  // RT-531: `no_drawer_configured` is not here: it pays out as `no_drawer`
-  // (returns-payout-no-drawer.test.ts).
+  // RT-531: `no_drawer_configured` moved out of this table: it pays out as
+  // `no_drawer` (the case below; more in returns-payout-no-drawer.test.ts).
+  it('D1: a no_drawer_configured kick (no drawer) is paid out as no_drawer and audits the kick', async () => {
+    const returnId = await confirmedReturn(h.service);
+    h.drawer.answer = () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' });
+    const res = await h.service.payout({ returnId, action: 'start' });
+    expect(res).toMatchObject({ kind: 'paid_out', method: 'no_drawer' });
+    expect(h.repo.read(returnId)?.state).toBe('paid_out');
+    const drawer = h.audits.find((a) => a.action_category === 'sale.return.drawer_failed');
+    expect(drawer?.payload).toMatchObject({
+      failure_reason: 'no_drawer_configured',
+      kick_outcome: 'failed_before_send',
+    });
+    expect(h.printer.printed).toHaveLength(1);
+  });
+
   it.each(['printer_dk_failure', 'os_error'] as const)(
     'D1: a %s kick records no paid_out and audits why',
     async (failure_reason) => {

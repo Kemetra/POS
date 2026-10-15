@@ -5,6 +5,8 @@
  *   expected = opening float
  *            + Σ net cash tenders of this terminal's sales finalized in the window
  *            − Σ completed drawer refund payouts of this terminal in the window
+ *              (whatever their method: `drawer`, `manual` or, RT-531, `no_drawer`
+ *              — the cash left this till either way)
  *            + pay-ins − pay-outs
  *
  * Sources (read by `shift-cashup-sources.ts`):

@@ -10,7 +10,10 @@
  *     server-confirmed amount (`return_total_minor`), its server reference
  *     (`return_ref`) and its currency. `drawer` and `manual` payouts both
  *     count: either way the cash left this drawer (RT-15 S4: `manual` = the
- *     operator opened the drawer by hand). A started payout that never
+ *     operator opened the drawer by hand). So does `no_drawer` (RT-531: the
+ *     terminal has no cash drawer, the payout completed without an attestation):
+ *     the query never filters on `method`, and a test pins that every method
+ *     is counted the same. A started payout that never
  *     completed has no `paid_at` and matches no window.
  *
  * Windows never overlap (review P2-1). A window is [from, to] (both ends
