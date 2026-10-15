@@ -42,6 +42,7 @@ import {
   makePaymentAttemptFsmDouble,
   makeSession,
   makeSessionSource,
+  makeSettlementDeps,
 } from './__fixtures__/bridge-handler-deps.js';
 import type { PaymentsConfirmRequest } from '../../../../src/shared/bridge-api.js';
 
@@ -65,6 +66,7 @@ function setup(opts: { attemptRow?: ReturnType<typeof makeAttemptRow> } = {}) {
   const auditEmitter = makeAuditEmitterDouble();
   const clock = vi.fn<() => Date>(() => new Date('2026-05-23T11:00:05.000Z'));
   const handler = createPaymentsConfirmHandler({
+    ...makeSettlementDeps(fsm, auditEmitter),
     getCurrentSession: sessionSource.getCurrentSession,
     attemptsRepo,
     linesRepo,
@@ -91,6 +93,7 @@ describe('T101 — payments.confirm bridge handler', () => {
 
   it('refuses no_session when there is no active session', async () => {
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(makePaymentAttemptFsmDouble(), makeAuditEmitterDouble()),
       getCurrentSession: makeSessionSource(null).getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble(),
       linesRepo: makeLinesRepoDouble(),
@@ -135,6 +138,7 @@ describe('T101 — payments.confirm bridge handler', () => {
     // No row in the repo.
     const sessionSource = makeSessionSource(makeSession());
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(makePaymentAttemptFsmDouble(), makeAuditEmitterDouble()),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([]),
       linesRepo: makeLinesRepoDouble(),
@@ -162,6 +166,7 @@ describe('T101 — payments.confirm bridge handler', () => {
     const attemptsRepo = makeAttemptsRepoDouble([persistedRow]);
     const fsm = makePaymentAttemptFsmDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, makeAuditEmitterDouble()),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo,
       linesRepo: makeLinesRepoDouble(),
@@ -179,6 +184,7 @@ describe('T101 — payments.confirm bridge handler', () => {
     const sessionSource = makeSessionSource(makeSession());
     const fsm = makePaymentAttemptFsmDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, makeAuditEmitterDouble()),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo: makeLinesRepoDouble(),
@@ -239,6 +245,7 @@ describe('T101 — payments.confirm bridge handler', () => {
     const fsm = makePaymentAttemptFsmDouble();
     const auditEmitter = makeAuditEmitterDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, auditEmitter),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo,
       linesRepo,

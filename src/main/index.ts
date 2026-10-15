@@ -79,6 +79,8 @@ import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
 import { createTenderReverseHandler } from './payments/handlers/tender-reverse.js';
 import { createTenderReadHandler } from './payments/handlers/tender-read.js';
 import { createDeferredReversalResolver } from './payments/deferred-reversal-resolver.js';
+import { createSettlementCommitter } from './payments/settlement-commit.js';
+import { createSettledAuditReconciler } from './payments/settled-audit-reconciler.js';
 import {
   reverseVoucher,
   type ReverseVoucherInput,
@@ -1367,6 +1369,15 @@ singleInstanceReady
     const paymentAuditEmitter = createPaymentAuditEmitter({
       sink: { write: forwardAuditEvent },
     });
+    // RT-496 — heals (or holds for manual review) settled attempts stranded
+    // without their `payment.settled` audit. Run at startup before the
+    // finalize listener, and on a same-key `payments.confirm` replay.
+    const settledAuditReconciler = createSettledAuditReconciler({
+      db,
+      linesRepo: paymentsLinesRepo,
+      auditEmitter: paymentAuditEmitter,
+      now: () => new Date().toISOString(),
+    });
 
     // RT-26 — Checkout Back: the payments record decides whether a handed-off
     // cart may return to the Sale (no tender, no settled / force-failed payment)
@@ -1555,8 +1566,21 @@ singleInstanceReady
       // §A4: never discard another cart's attempt while it holds tender.
       attemptHasLiveTender: bindAttemptHasLiveTender(db),
     });
+    // RT-496 — the settle and its `payment.settled` audit commit in one
+    // transaction (the audit sink writes to this same `db`, synchronously);
+    // the reconciler heals or holds settlements stranded before that fix.
+    const paymentsSettleDeps = {
+      settlement: createSettlementCommitter({
+        db,
+        paymentAttemptFsm,
+        attemptsRepo: paymentsAttemptsRepo,
+        auditEmitter: paymentAuditEmitter,
+      }),
+      settledAuditReconciler,
+    };
     const paymentsConfirm = createPaymentsConfirmHandler({
       ...paymentsWriteDeps,
+      ...paymentsSettleDeps,
       paymentAttemptFsm,
     });
     const paymentsCancel = createPaymentsCancelHandler({
@@ -1614,7 +1638,11 @@ singleInstanceReady
             uuid: paymentsUuid,
             logger: mainLogger,
           }),
-          confirm: createPaymentsConfirmHandler({ ...scoped, paymentAttemptFsm }),
+          confirm: createPaymentsConfirmHandler({
+            ...scoped,
+            ...paymentsSettleDeps,
+            paymentAttemptFsm,
+          }),
           cancel: createPaymentsCancelHandler({ ...scoped, paymentAttemptFsm }),
         };
       }),
@@ -1955,6 +1983,33 @@ singleInstanceReady
           tickIntervalMs: 200,
           now: () => new Date().toISOString(),
         });
+
+        // RT-496 — before the first tick: re-emit the missing `payment.settled`
+        // audit of any attributable strand so the listener finalizes it; an
+        // unattributable one stays held (it blocks the cash-up close) and is
+        // reported for manual review. A failure here is logged, never fatal:
+        // every strand it leaves is still counted by the cash-up hold.
+        try {
+          const reconciled = settledAuditReconciler.reconcile({
+            tenant_id: pairingStatus.tenant_id,
+            branch_id: pairingStatus.branch_id,
+            terminal_id: payments006TerminalId,
+          });
+          if (reconciled.healed.length > 0) {
+            mainLogger.warn(
+              { payment_attempt_ids: reconciled.healed },
+              'settlement_reconciler:healed_stranded_settlements',
+            );
+          }
+          if (reconciled.unattributable.length > 0) {
+            mainLogger.error(
+              { payment_attempt_ids: reconciled.unattributable },
+              'settlement_reconciler:unattributable_strand_needs_manual_review',
+            );
+          }
+        } catch (err) {
+          mainLogger.error({ err }, 'settlement_reconciler:failed');
+        }
 
         // Recovery scan first (re-fires any settled-but-unfinalized rows from
         // a prior crash), then install the steady-state tick driver.

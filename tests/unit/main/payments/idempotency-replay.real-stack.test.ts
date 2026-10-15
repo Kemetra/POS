@@ -28,6 +28,7 @@ import { createTenderLineFsm } from '../../../../src/main/payments/fsm/tender-li
 import { createIdempotencyHelper } from '../../../../src/main/payments/idempotency.js';
 import { createPaymentsStartHandler } from '../../../../src/main/payments/handlers/payments-start.js';
 import { createPaymentsConfirmHandler } from '../../../../src/main/payments/handlers/payments-confirm.js';
+import { realSettlementDeps } from './__fixtures__/real-settlement-deps.js';
 import { createPaymentsCancelHandler } from '../../../../src/main/payments/handlers/payments-cancel.js';
 import { createPaymentsForceFailHandler } from '../../../../src/main/payments/handlers/payments-force-fail.js';
 import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
@@ -142,7 +143,12 @@ function build(options: StackOptions = {}) {
       tenderLineFsm,
       ...(reverseVoucher !== undefined ? { reverseVoucher } : {}),
     }),
-    confirm: createPaymentsConfirmHandler({ ...shared, linesRepo: lines, paymentAttemptFsm }),
+    confirm: createPaymentsConfirmHandler({
+      ...shared,
+      ...realSettlementDeps({ db: handle, paymentAttemptFsm, attempts, lines, auditEmitter }),
+      linesRepo: lines,
+      paymentAttemptFsm,
+    }),
     cancel: createPaymentsCancelHandler({ ...shared, linesRepo: lines, paymentAttemptFsm }),
     forceFail: createPaymentsForceFailHandler({ ...shared, paymentAttemptFsm }),
   };

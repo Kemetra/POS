@@ -35,6 +35,7 @@ import {
   makePaymentAttemptFsmDouble,
   makeSession,
   makeSessionSource,
+  makeSettlementDeps,
 } from './__fixtures__/bridge-handler-deps.js';
 
 const USER = '0190a3c4-0000-7000-8000-00000000000a';
@@ -79,6 +80,7 @@ function confirmWith(
 ) {
   const auditEmitter = makeAuditEmitterDouble();
   const handler = createPaymentsConfirmHandler({
+    ...makeSettlementDeps(makePaymentAttemptFsmDouble(), auditEmitter),
     getCurrentSession: () => makeSessionSource(session).getCurrentSession(),
     attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow({ acting_operator_id: actingOperator })]),
     linesRepo: makeLinesRepoDouble([

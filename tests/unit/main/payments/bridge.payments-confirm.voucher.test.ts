@@ -44,6 +44,7 @@ import {
   makePaymentAttemptFsmDouble,
   makeSession,
   makeSessionSource,
+  makeSettlementDeps,
   makeTenderLineFsmDouble,
 } from './__fixtures__/bridge-handler-deps.js';
 import type { PaymentsConfirmRequest } from '../../../../src/shared/bridge-api.js';
@@ -116,6 +117,7 @@ describe('T221 — payments.confirm voucher path', () => {
       redemption_id: 'redemption-ABC',
     });
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, auditEmitter),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo,
@@ -153,6 +155,7 @@ describe('T221 — payments.confirm voucher path', () => {
     const fsm = makePaymentAttemptFsmDouble();
     const redeemVoucher = makeRedeemVoucherDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, makeAuditEmitterDouble()),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo,
@@ -194,6 +197,7 @@ describe('T221 — payments.confirm voucher path', () => {
     const redeemVoucher = makeRedeemVoucherDouble({ kind: 'authority_unreachable' });
     const reverseVoucher = makeReverseVoucherDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, auditEmitter),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo,
@@ -236,6 +240,7 @@ describe('T221 — payments.confirm voucher path', () => {
     });
     const auditEmitter = makeAuditEmitterDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(makePaymentAttemptFsmDouble(), auditEmitter),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo: makeLinesRepoDouble([voucherLine]),
@@ -267,6 +272,7 @@ describe('T221 — payments.confirm voucher path', () => {
     const fsm = makePaymentAttemptFsmDouble();
     const auditEmitter = makeAuditEmitterDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, auditEmitter),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo: makeLinesRepoDouble([voucherLine]),
@@ -300,6 +306,7 @@ describe('T221 — payments.confirm voucher path', () => {
     });
     const fsm = makePaymentAttemptFsmDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, makeAuditEmitterDouble()),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo: makeLinesRepoDouble([voucherLine]),
@@ -325,7 +332,6 @@ describe('T221 — payments.confirm voucher path', () => {
     //   • fsm.reverse driven for line 1 → tender.reversed audit emitted.
     //   • Line 2 stays applied — no compensating-reverse, no markReversalPending.
     //   • Attempt → failed (dependency_unavailable); payment.failed emitted.
-    const sessionSource = makeSessionSource(makeSession());
     const row = makeAttemptRow({ envelope_subtotal_minor: 2000 });
     const voucherLine1 = makeLineRow({
       tender_line_id: 'tl-v-1',
@@ -363,7 +369,8 @@ describe('T221 — payments.confirm voucher path', () => {
       reversed_at: '2026-05-25T10:00:06.000Z',
     });
     const handler = createPaymentsConfirmHandler({
-      getCurrentSession: sessionSource.getCurrentSession,
+      ...makeSettlementDeps(fsm, auditEmitter),
+      getCurrentSession: makeSessionSource(makeSession()).getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo,
       paymentAttemptFsm: fsm,
@@ -419,7 +426,6 @@ describe('T221 — payments.confirm voucher path', () => {
     // CR-3 then falls back to markReversalPending for line 1; the
     // Wave-5 deferred resolver picks it up later. Line 2 still stays
     // applied — never redeemed → no V-A redemption to reverse.
-    const sessionSource = makeSessionSource(makeSession());
     const row = makeAttemptRow({ envelope_subtotal_minor: 2000 });
     const linesRepo = makeLinesRepoDouble([
       makeLineRow({
@@ -453,7 +459,8 @@ describe('T221 — payments.confirm voucher path', () => {
     );
     const reverseVoucher = makeReverseVoucherDouble({ kind: 'authority_unreachable' });
     const handler = createPaymentsConfirmHandler({
-      getCurrentSession: sessionSource.getCurrentSession,
+      ...makeSettlementDeps(fsm, auditEmitter),
+      getCurrentSession: makeSessionSource(makeSession()).getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo,
       paymentAttemptFsm: fsm,
@@ -534,6 +541,7 @@ describe('T221 — payments.confirm voucher path', () => {
     );
     const reverseVoucher = makeReverseVoucherDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, auditEmitter),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo,
@@ -570,6 +578,7 @@ describe('T221 — payments.confirm voucher path', () => {
     });
     const auditEmitter = makeAuditEmitterDouble();
     const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(makePaymentAttemptFsmDouble(), auditEmitter),
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo: makeLinesRepoDouble([voucherLine]),
@@ -593,5 +602,126 @@ describe('T221 — payments.confirm voucher path', () => {
       expect(JSON.stringify(evt)).not.toContain('TOKEN-SECRET-LEAK-TEST');
       expect(JSON.stringify(evt)).not.toContain('voucher_redemption_intent_token');
     }
+  });
+});
+
+// ── RT-496 — the settle transaction fails after a successful V-A redeem ─────
+
+describe('RT-496 — voucher compensation when the settle transaction fails', () => {
+  function voucherSetup(opts: { reverse?: ReverseVoucherOutcome; failThrows?: boolean } = {}) {
+    const row = makeAttemptRow({ envelope_subtotal_minor: 1500 });
+    const linesRepo = makeLinesRepoDouble([
+      makeLineRow({
+        tender_line_id: 'tl-voucher-1',
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1500,
+        voucher_redemption_intent_token: 'TOKEN-SECRET',
+      }),
+    ]);
+    const fsm = makePaymentAttemptFsmDouble();
+    if (opts.failThrows === true) {
+      fsm.fail.mockImplementation(() => {
+        throw new Error('INJECTED: database unavailable');
+      });
+    }
+    const tenderFsm = makeTenderLineFsmDouble();
+    const auditEmitter = makeAuditEmitterDouble();
+    const reverseVoucher = makeReverseVoucherDouble(
+      opts.reverse ?? {
+        kind: 'reversed',
+        already_reversed: false,
+        redemption_id: 'redemption-ABC',
+        reversed_at: '2026-05-25T10:00:06.000Z',
+      },
+    );
+    const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, auditEmitter),
+      settlement: {
+        commit: () => {
+          throw new Error('INJECTED: audit insert failed at the settle boundary');
+        },
+      },
+      getCurrentSession: makeSessionSource(makeSession()).getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo,
+      paymentAttemptFsm: fsm,
+      tenderLineFsm: tenderFsm,
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter,
+      redeemVoucher: makeRedeemVoucherDouble({
+        kind: 'redeemed',
+        idempotent_replayed: false,
+        redeemed_at: '2026-05-25T10:00:05.000Z',
+        redemption_id: 'redemption-ABC',
+      }),
+      reverseVoucher,
+      uuid: () => 'uuid-confirm-v',
+      clock: () => new Date('2026-05-25T10:00:05.000Z'),
+    });
+    return { handler, fsm, tenderFsm, auditEmitter, reverseVoucher };
+  }
+
+  it('fails the attempt with internal_error and reverses the redeemed voucher, then rethrows', async () => {
+    const { handler, fsm, tenderFsm, auditEmitter, reverseVoucher } = voucherSetup();
+    await expect(handler(validRequest())).rejects.toThrow(/INJECTED: audit insert/);
+
+    expect(fsm.fail).toHaveBeenCalledWith(
+      expect.objectContaining({ payment_attempt_id: 'pa-1', failure_reason: 'internal_error' }),
+    );
+    expect(reverseVoucher).toHaveBeenCalledWith({ redemption_id: 'redemption-ABC' });
+    expect(tenderFsm.reverse).toHaveBeenCalledWith(
+      expect.objectContaining({ tender_line_id: 'tl-voucher-1', payment_attempt_id: 'pa-1' }),
+    );
+    const categories = auditEmitter.captured.map((e) => e.action_category);
+    expect(categories).toEqual(['payment.failed', 'tender.reversed']);
+    expect(auditEmitter.captured[0]?.payload).toMatchObject({ failure_reason: 'internal_error' });
+  });
+
+  it('marks the voucher reversal_pending when V-A cannot be reached for the reverse', async () => {
+    const { handler, tenderFsm, auditEmitter } = voucherSetup({
+      reverse: { kind: 'authority_unreachable' },
+    });
+    await expect(handler(validRequest())).rejects.toThrow(/INJECTED/);
+    expect(tenderFsm.markReversalPending).toHaveBeenCalledWith(
+      expect.objectContaining({ tender_line_id: 'tl-voucher-1' }),
+    );
+    expect(tenderFsm.reverse).not.toHaveBeenCalled();
+    expect(auditEmitter.captured.map((e) => e.action_category)).toEqual([
+      'payment.failed',
+      'tender.reversal_pending',
+    ]);
+  });
+
+  it('still reverses the voucher at V-A when the local fail itself throws', async () => {
+    const { handler, reverseVoucher } = voucherSetup({ failThrows: true });
+    await expect(handler(validRequest())).rejects.toThrow(/INJECTED: database unavailable/);
+    expect(reverseVoucher).toHaveBeenCalledWith({ redemption_id: 'redemption-ABC' });
+  });
+
+  it('a cash-only attempt rethrows with nothing compensated (it stays started)', async () => {
+    const fsm = makePaymentAttemptFsmDouble();
+    const reverseVoucher = makeReverseVoucherDouble();
+    const handler = createPaymentsConfirmHandler({
+      ...makeSettlementDeps(fsm, makeAuditEmitterDouble()),
+      settlement: {
+        commit: () => {
+          throw new Error('INJECTED');
+        },
+      },
+      getCurrentSession: makeSessionSource(makeSession()).getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
+      linesRepo: makeLinesRepoDouble([makeLineRow({ tender_type: 'cash' })]),
+      paymentAttemptFsm: fsm,
+      tenderLineFsm: makeTenderLineFsmDouble(),
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter: makeAuditEmitterDouble(),
+      redeemVoucher: makeRedeemVoucherDouble(),
+      reverseVoucher,
+      uuid: () => 'uuid-confirm-v',
+      clock: () => new Date('2026-05-25T10:00:05.000Z'),
+    });
+    await expect(handler(validRequest())).rejects.toThrow(/INJECTED/);
+    expect(fsm.fail).not.toHaveBeenCalled();
+    expect(reverseVoucher).not.toHaveBeenCalled();
   });
 });
