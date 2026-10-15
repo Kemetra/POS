@@ -284,11 +284,11 @@ The cashier path is **already fenced server-side** (F7). Two gaps remain.
 ### D-B9 — Recovery and handback
 
 The ordered handback:
-0. **End continuity before counting.** The phone locks selling locally, in the same step as "end continuity", and ends its own cashier admission on the server with the existing admission `end`. A closed shift alone does not stop selling, because the current client treats a missing open shift as advisory. A phone sale after this point is blocked locally. Server-side it is refused once beyond the 120 s grace (F6), so no sale can land after the pouch is counted.
+0. **Lock selling before counting.** "End continuity" first locks selling on the phone locally. A closed shift alone does not stop selling, because the current client treats a missing open shift as advisory. The phone **keeps its admission live** for now: a device-path shift close is valid only while `closedAt` is inside the cashier's admission window (`pos-shifts.openapi.yaml`, same 120 s rule as F6). Ending the admission first would strand the shift open whenever the count takes longer than 120 s.
 1. On the phone: blind-count the pouch and **close the phone's shift with that count**, as in any normal close. Variance = counted − expected is recorded faithfully, whether it is short or over.
 2. **No pay-out on the phone.** A pay-out of the counted amount would be refused whenever the pouch is over (`pay_out_exceeds_drawer_cash`, `src/main/shift-cashup/shift-cashup-service.ts`). A pay-out of the expected amount would hide the overage.
 3. Physically move the counted cash to the till. Removing cash from a closed location is the same situation as a closed drawer emptied to the safe today. The paired out/in record is the deferred internal-transfer capability, so the interim record is the till-side pay-in (step 6).
-4. The cashier signs in on the till with `takeover: true`. The phone gets `active_elsewhere` on its next heartbeat.
+4. Only after the close: the phone ends its cashier admission with the existing admission `end`. Alternatively, the cashier's takeover on the till ends it. The cashier signs in on the till with `takeover: true`, and the phone gets `active_elsewhere` on its next heartbeat. A phone sale after this point is refused server-side once beyond the 120 s grace (F6).
 5. The till discards any dead draft cart.
 6. On the till's open shift, record a pay-in of the counted amount, with a structured reason that names the closed continuity session (C9).
 7. The till drains its outbox.
@@ -348,7 +348,7 @@ sequenceDiagram
     T->>T: Unclean-boot rule: no offline-grant use until online reconcile (D-B3)
     T->>BC: drain outbox. Pre-takeover sales are inside T's window and accepted, if within the 7-day cap (F6)
     T->>BC: a cashier sale stamped more than 120 s after the takeover: 403 cashier_claim_refused, dead-letter (F7). Inside the grace it is accepted
-    C->>P: End continuity: lock selling and end P's admission, then blind count of the pouch, close P's shift with that count (variance recorded)
+    C->>P: End continuity: lock selling locally (admission stays live), blind count of the pouch, close P's shift with that count (variance recorded), then end P's admission
     C->>T: Sign in (PIN), admission takeover=true
     BC-->>P: next heartbeat returns active_elsewhere, P locks
     C->>T: Discard dead draft cart. Pay-in of the counted pouch amount, with a reason naming P's closed session, on T's open shift. Continue or close T's shift
