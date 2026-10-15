@@ -33,16 +33,27 @@ function row(overrides: Partial<SellableCatalogRow> = {}): SellableCatalogRow {
 }
 
 describe('T015a — mapSellableRow GAP-1 money (decimal string → integer minor units)', () => {
-  it('converts an EGP decimal string to integer minor units (exponent 2)', () => {
-    const r = mapSellableRow(row({ price: { amount: '9.99', currency_code: 'EGP' } }));
+  it.each([
+    {
+      name: 'converts an EGP decimal string to integer minor units (exponent 2)',
+      amount: '9.99',
+      expected: 999,
+    },
+    {
+      name: 'handles a whole-number amount with no fractional part',
+      amount: '10',
+      expected: 1000,
+    },
+    {
+      // 0.1 + 0.2 in float === 0.30000000000000004; string math must give 30.
+      name: 'produces an exact integer (never via a JS float) for a tricky decimal',
+      amount: '0.30',
+      expected: 30,
+    },
+  ])('$name', ({ amount, expected }) => {
+    const r = mapSellableRow(row({ price: { amount, currency_code: 'EGP' } }));
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.product.price_minor).toBe(999);
-  });
-
-  it('handles a whole-number amount with no fractional part', () => {
-    const r = mapSellableRow(row({ price: { amount: '10', currency_code: 'EGP' } }));
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.product.price_minor).toBe(1000);
+    if (r.ok) expect(r.value.product.price_minor).toBe(expected);
   });
 
   it('handles zero and a single fractional digit', () => {
@@ -54,13 +65,6 @@ describe('T015a — mapSellableRow GAP-1 money (decimal string → integer minor
       ok: true,
       value: { product: { price_minor: 990 } },
     });
-  });
-
-  it('produces an exact integer (never via a JS float) for a tricky decimal', () => {
-    // 0.1 + 0.2 in float === 0.30000000000000004; string math must give 30.
-    const r = mapSellableRow(row({ price: { amount: '0.30', currency_code: 'EGP' } }));
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.product.price_minor).toBe(30);
   });
 
   it('rejects an amount with MORE fractional digits than the currency exponent', () => {

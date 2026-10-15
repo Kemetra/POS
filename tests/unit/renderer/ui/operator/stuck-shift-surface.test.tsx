@@ -242,33 +242,15 @@ describe('StuckShiftSurface — duration formatting', () => {
     await waitFor(() => screen.getByText('Test'));
   }
 
-  it('formats duration < 1 as «أقل من دقيقة»', async () => {
-    await renderWithDuration(0);
-    expect(screen.getByText('مفتوحة منذ أقل من دقيقة')).toBeInTheDocument();
-    cleanup();
-  });
-
-  it('formats duration 47 as «47 دقيقة»', async () => {
-    await renderWithDuration(47);
-    expect(screen.getByText('مفتوحة منذ 47 دقيقة')).toBeInTheDocument();
-    cleanup();
-  });
-
-  it('formats duration 60 as «ساعة»', async () => {
-    await renderWithDuration(60);
-    expect(screen.getByText('مفتوحة منذ ساعة')).toBeInTheDocument();
-    cleanup();
-  });
-
-  it('formats duration 90 as «ساعة و30 دقيقة»', async () => {
-    await renderWithDuration(90);
-    expect(screen.getByText('مفتوحة منذ ساعة و30 دقيقة')).toBeInTheDocument();
-    cleanup();
-  });
-
-  it('formats duration 125 as «ساعتين و5 دقائق»', async () => {
-    await renderWithDuration(125);
-    expect(screen.getByText('مفتوحة منذ ساعتين و5 دقائق')).toBeInTheDocument();
+  it.each([
+    { minutes: 0, label: 'أقل من دقيقة', text: 'مفتوحة منذ أقل من دقيقة' },
+    { minutes: 47, label: '47 دقيقة', text: 'مفتوحة منذ 47 دقيقة' },
+    { minutes: 60, label: 'ساعة', text: 'مفتوحة منذ ساعة' },
+    { minutes: 90, label: 'ساعة و30 دقيقة', text: 'مفتوحة منذ ساعة و30 دقيقة' },
+    { minutes: 125, label: 'ساعتين و5 دقائق', text: 'مفتوحة منذ ساعتين و5 دقائق' },
+  ])('formats duration $minutes as «$label»', async ({ minutes, text }) => {
+    await renderWithDuration(minutes);
+    expect(screen.getByText(text)).toBeInTheDocument();
     cleanup();
   });
 });

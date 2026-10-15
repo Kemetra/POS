@@ -61,22 +61,28 @@ function renderShell(path = '/app/dashboard') {
 
 describe('AppShell layout — T047 (BEM class assertions)', () => {
   // Top bar: .top-bar carries block-size: 64px in CSS
-  it('top bar carries .top-bar class (maps to block-size: 64px in CSS)', () => {
-    const { container } = renderShell();
-    expect(container.querySelector('.top-bar')).toBeInTheDocument();
-  });
-
   // NavRail: at >=1280px carries .nav-rail with inline-size:248px rule
-  it('nav rail carries .nav-rail class (maps to inline-size: 248px at >=1280px)', () => {
-    const { container } = renderShell();
-    expect(container.querySelector('.nav-rail')).toBeInTheDocument();
-  });
-
   // NavRail icon-only: at 1024–1279px the label is clipped (CSS rule), rail is 84px
-  it('nav rail carries .nav-rail class at icon-only viewport (maps to inline-size: 84px)', () => {
-    mockMatchMedia(1024);
+  it.each([
+    {
+      name: 'top bar carries .top-bar class (maps to block-size: 64px in CSS)',
+      selector: '.top-bar',
+      width: undefined,
+    },
+    {
+      name: 'nav rail carries .nav-rail class (maps to inline-size: 248px at >=1280px)',
+      selector: '.nav-rail',
+      width: undefined,
+    },
+    {
+      name: 'nav rail carries .nav-rail class at icon-only viewport (maps to inline-size: 84px)',
+      selector: '.nav-rail',
+      width: 1024,
+    },
+  ])('$name', ({ selector, width }) => {
+    if (width !== undefined) mockMatchMedia(width);
     const { container } = renderShell();
-    expect(container.querySelector('.nav-rail')).toBeInTheDocument();
+    expect(container.querySelector(selector)).toBeInTheDocument();
   });
 
   // NavRail hidden below 1024px — component returns null, no .nav-rail in DOM

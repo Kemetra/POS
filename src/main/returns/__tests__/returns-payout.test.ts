@@ -429,7 +429,7 @@ describe('Z: shutdown', () => {
     const before = h.audits.length;
     print.resolve({ ok: true, render_path: 'os_print' });
     expect(await pending).toMatchObject({ kind: 'paid_out', slip: 'printed' });
-    expect(h.audits.length).toBe(before);
+    expect(h.audits).toHaveLength(before);
     expect(h.repo.read(returnId)?.state).toBe('paid_out');
     // The DB closes at stop: the session (read through it) is not rechecked.
     expect(h.lives.sessionReadsAfterStop).toBe(0);
@@ -464,7 +464,7 @@ describe('Z: shutdown', () => {
     const before = h.audits.length;
     print.resolve({ ok: true, render_path: 'os_print' });
     expect(await pending).toEqual({ kind: 'printed' });
-    expect(h.audits.length).toBe(before);
+    expect(h.audits).toHaveLength(before);
     expect(h.lives.sessionReadsAfterStop).toBe(0);
   });
 });

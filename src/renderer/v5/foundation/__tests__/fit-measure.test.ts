@@ -59,29 +59,20 @@ afterEach(() => {
 });
 
 describe('pinned elements', () => {
-  it('fit when the clipping ancestor holds them whole', () => {
-    const { main, root, row } = ledger(400);
-    box(row, 300, 100);
-    expect(surfaceFits(root, main)).toBe(true);
-  });
-
-  it('fail when a clipping ancestor cuts them (the RT-407 cancel slot, 44px under the ledger)', () => {
-    const { main, root, row } = ledger(400);
-    box(row, 344, 100);
-    expect(surfaceFits(root, main)).toBe(false);
-  });
-
-  it('allow one pixel of rounding at a fractional scale', () => {
-    const { main, root, row } = ledger(400);
-    box(row, 301, 100);
-    expect(surfaceFits(root, main)).toBe(true);
-  });
-
-  it('ignore ancestors that do not clip', () => {
-    const { main, root, row } = ledger(400);
+  it.each([
+    { name: 'fit when the clipping ancestor holds them whole', rowTop: 300, fits: true },
+    {
+      name: 'fail when a clipping ancestor cuts them (the RT-407 cancel slot, 44px under the ledger)',
+      rowTop: 344,
+      fits: false,
+    },
+    { name: 'allow one pixel of rounding at a fractional scale', rowTop: 301, fits: true },
     // `.plain` has an empty box but overflow visible: it never limits the row.
-    box(row, 200, 100);
-    expect(surfaceFits(root, main)).toBe(true);
+    { name: 'ignore ancestors that do not clip', rowTop: 200, fits: true },
+  ])('$name', ({ rowTop, fits }) => {
+    const { main, root, row } = ledger(400);
+    box(row, rowTop, 100);
+    expect(surfaceFits(root, main)).toBe(fits);
   });
 
   it('are skipped when not rendered (no client rects)', () => {

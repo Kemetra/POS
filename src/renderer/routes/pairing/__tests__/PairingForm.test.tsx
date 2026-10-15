@@ -209,30 +209,19 @@ describe('PairingForm — wedge scanner (T028)', () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
-  it('does NOT submit on partial input (no Enter, just keystrokes)', async () => {
+  it.each([
+    // no {Enter}
+    { name: 'does NOT submit on partial input (no Enter, just keystrokes)', keys: 'PARTIAL' },
+    // empty input
+    { name: 'empty Enter is a no-op (no bridge call)', keys: '{Enter}' },
+    // whitespace then enter
+    { name: 'whitespace-only Enter is a no-op (trimmed to empty)', keys: '   {Enter}' },
+  ])('$name', async ({ keys }) => {
     const user = userEvent.setup();
     const { bridge, submit } = makeBridge();
     renderInRouter(bridge);
 
-    await user.keyboard('PARTIAL'); // no {Enter}
-    expect(submit).not.toHaveBeenCalled();
-  });
-
-  it('empty Enter is a no-op (no bridge call)', async () => {
-    const user = userEvent.setup();
-    const { bridge, submit } = makeBridge();
-    renderInRouter(bridge);
-
-    await user.keyboard('{Enter}'); // empty input
-    expect(submit).not.toHaveBeenCalled();
-  });
-
-  it('whitespace-only Enter is a no-op (trimmed to empty)', async () => {
-    const user = userEvent.setup();
-    const { bridge, submit } = makeBridge();
-    renderInRouter(bridge);
-
-    await user.keyboard('   {Enter}'); // whitespace then enter
+    await user.keyboard(keys);
     expect(submit).not.toHaveBeenCalled();
   });
 
@@ -401,39 +390,34 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
   // for branch_mismatch (US4), rate_limited (US5), or the generic
   // network_error / unknown_error categories (T074 / Phase Final).
 
-  it('on outcome=invalid_code: renders the INVALID_CODE message via role="status"', async () => {
+  it.each([
+    {
+      name: 'on outcome=invalid_code: renders the INVALID_CODE message via role="status"',
+      outcome: 'invalid_code' as const,
+      code: 'BADCODE',
+      message: INVALID_CODE_MESSAGE,
+    },
+    {
+      name: 'on outcome=expired_code: renders the EXPIRED_CODE message',
+      outcome: 'expired_code' as const,
+      code: 'OLDCODE',
+      message: EXPIRED_CODE_MESSAGE,
+    },
+    {
+      name: 'on outcome=already_paired: renders the ALREADY_PAIRED message',
+      outcome: 'already_paired' as const,
+      code: 'USEDCODE',
+      message: ALREADY_PAIRED_MESSAGE,
+    },
+  ])('$name', async ({ outcome, code, message }) => {
     const user = userEvent.setup();
-    const { bridge } = makeBridge({ result: { outcome: 'invalid_code' } });
+    const { bridge } = makeBridge({ result: { outcome } });
     renderInRouter(bridge);
 
-    await user.type(screen.getByRole('textbox'), 'BADCODE{Enter}');
+    await user.type(screen.getByRole('textbox'), `${code}{Enter}`);
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(INVALID_CODE_MESSAGE);
-    });
-  });
-
-  it('on outcome=expired_code: renders the EXPIRED_CODE message', async () => {
-    const user = userEvent.setup();
-    const { bridge } = makeBridge({ result: { outcome: 'expired_code' } });
-    renderInRouter(bridge);
-
-    await user.type(screen.getByRole('textbox'), 'OLDCODE{Enter}');
-
-    await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(EXPIRED_CODE_MESSAGE);
-    });
-  });
-
-  it('on outcome=already_paired: renders the ALREADY_PAIRED message', async () => {
-    const user = userEvent.setup();
-    const { bridge } = makeBridge({ result: { outcome: 'already_paired' } });
-    renderInRouter(bridge);
-
-    await user.type(screen.getByRole('textbox'), 'USEDCODE{Enter}');
-
-    await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(ALREADY_PAIRED_MESSAGE);
+      expect(screen.getByRole('status')).toHaveTextContent(message);
     });
   });
 

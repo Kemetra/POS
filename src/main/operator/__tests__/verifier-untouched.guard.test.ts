@@ -23,25 +23,25 @@ import { verifyPinWithWindow, unlockPinRow, rowMatchesScope } from '../pin-locko
 
 describe('019 T024 — PIN verifier never keys on identity (FR-8)', () => {
   it('verifyPin takes exactly (pin, row) — no identity parameter', () => {
-    expect(verifyPin.length).toBe(2);
+    expect(verifyPin).toHaveLength(2);
   });
 
   it('verifyPinWithWindow takes exactly (pin, row) — no identity parameter', () => {
-    expect(verifyPinWithWindow.length).toBe(2);
+    expect(verifyPinWithWindow).toHaveLength(2);
   });
 
   it('unlockPinRow takes exactly (row) — operates on the row, not an identity', () => {
-    expect(unlockPinRow.length).toBe(1);
+    expect(unlockPinRow).toHaveLength(1);
   });
 
   it('hashPin takes exactly (pin) — hashing is identity-free', () => {
-    expect(hashPin.length).toBe(1);
+    expect(hashPin).toHaveLength(1);
   });
 
   it('rowMatchesScope keys on the composite SCOPE, not the cashier principal type', () => {
     // The scope guard intentionally DOES compare cashier_clerk_user_id (the
     // current PK column) — but that is per-terminal scope matching, not an
     // identity argument to the verifier. It takes (row, scope), 2 params.
-    expect(rowMatchesScope.length).toBe(2);
+    expect(rowMatchesScope).toHaveLength(2);
   });
 });

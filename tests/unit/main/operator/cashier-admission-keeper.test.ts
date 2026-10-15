@@ -388,7 +388,7 @@ describe('heartbeat outcomes', () => {
     expect(h.ends).toEqual([]);
     // RT-113 OD5 + Codex P1 4183383053: EVERY heartbeat device 401 invalidates
     // every grant (fail closed) — one notification per 401, none skipped.
-    expect(h.fake.invalidated.length).toBe(h.fake.admitCalls.length);
+    expect(h.fake.invalidated).toHaveLength(h.fake.admitCalls.length);
     expect(new Set(h.fake.invalidated.map((i) => i.reason))).toEqual(
       new Set(['device_unauthorized']),
     );

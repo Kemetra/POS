@@ -614,7 +614,7 @@ describe('T230 — deferred-reversal resolver', () => {
     // After stop, firing the signal MUST NOT re-trigger findReversalPendingLines.
     const callsBefore = linesRepo.findReversalPendingLines.mock.calls.length;
     await networkRestoreSignal.fire();
-    expect(linesRepo.findReversalPendingLines.mock.calls.length).toBe(callsBefore);
+    expect(linesRepo.findReversalPendingLines.mock.calls).toHaveLength(callsBefore);
   });
 
   // ── CR-2: per-line throw isolation ───────────────────────────────────────

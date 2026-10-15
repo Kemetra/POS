@@ -61,43 +61,34 @@ describe('NavRail responsive (T046)', () => {
     );
   });
 
-  it('<1024px: navigation is NOT in DOM (too-small)', () => {
-    mockMatchMedia(1023);
+  it.each([
+    {
+      name: '<1024px: navigation is NOT in DOM (too-small)',
+      width: 1023,
+      selector: 'nav',
+    },
+    {
+      name: 'no data-testid="hamburger" at ≥1280px',
+      width: 1920,
+      selector: '[data-testid="hamburger"]',
+    },
+    {
+      name: 'no data-testid="hamburger" at 1024–1279px',
+      width: 1200,
+      selector: '[data-testid="hamburger"]',
+    },
+    {
+      name: 'no data-testid="hamburger" at <1024px',
+      width: 800,
+      selector: '[data-testid="hamburger"]',
+    },
+  ])('$name', ({ width, selector }) => {
+    mockMatchMedia(width);
     const { container } = render(
       <MemoryRouter>
         <NavRail />
       </MemoryRouter>,
     );
-    expect(container.querySelector('nav')).not.toBeInTheDocument();
-  });
-
-  it('no data-testid="hamburger" at ≥1280px', () => {
-    mockMatchMedia(1920);
-    const { container } = render(
-      <MemoryRouter>
-        <NavRail />
-      </MemoryRouter>,
-    );
-    expect(container.querySelector('[data-testid="hamburger"]')).not.toBeInTheDocument();
-  });
-
-  it('no data-testid="hamburger" at 1024–1279px', () => {
-    mockMatchMedia(1200);
-    const { container } = render(
-      <MemoryRouter>
-        <NavRail />
-      </MemoryRouter>,
-    );
-    expect(container.querySelector('[data-testid="hamburger"]')).not.toBeInTheDocument();
-  });
-
-  it('no data-testid="hamburger" at <1024px', () => {
-    mockMatchMedia(800);
-    const { container } = render(
-      <MemoryRouter>
-        <NavRail />
-      </MemoryRouter>,
-    );
-    expect(container.querySelector('[data-testid="hamburger"]')).not.toBeInTheDocument();
+    expect(container.querySelector(selector)).not.toBeInTheDocument();
   });
 });
