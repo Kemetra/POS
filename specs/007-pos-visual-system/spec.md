@@ -717,10 +717,19 @@ Clarifications session 2026-05-10)*
   source-scope guard inherited from `003` (forbidden allowlist)
   MUST hold.
 - **NFR-012 (Windows display scaling)**: The recovered visuals
-  MUST render correctly at Windows display scaling 100 %, 125 %,
-  and 150 % across the two designed viewport bands (≥ 1280 px
-  and 1024–1279 px). No clipped characters, no missing focus
-  rings, no off-grid border rounding.
+  MUST render correctly at Windows display scaling 100 % and
+  125 % across the two designed viewport bands (≥ 1280 px and
+  1024–1279 px), and at 150 % **only where the effective CSS
+  viewport is at least 1024 × 600**; below that floor the
+  width or height notice applies instead. No clipped
+  characters, no missing focus rings, no off-grid border
+  rounding. *Amended 2026-10-15 (Jira RT-312 D15, owner-approved
+  2026-10-12): a 1920 × 1080 panel at 150 % yields about
+  1280 × 623 CSS px, so "150 % must work" could not hold
+  unconditionally. The display/scaling policy is recorded in
+  constitution v1.7.0 § Hardware (Display row) and the
+  Confluence page "POS display and scaling support policy
+  (RT-312)".*
 - **NFR-013 (test-first preservation)**: The visual recovery MUST
   preserve the `003` ≥ 90 % coverage gate on `src/renderer/ui/`
   and `src/renderer/shell/`. Any primitive amended by the
