@@ -221,9 +221,17 @@ export function createSaleHistoryReprint(input: SaleHistoryReprintDeps): {
       isAuthorizationFor(authorized, request) &&
       coversMarks(authorized.marks, detailMarks(prepared.detail));
     if (!fits) return refuse('unavailable');
-    // Print the union with this terminal's own live void (never weaker than the record).
-    const marks = printedMarks(authorized.marks, prepared.localVoid);
-    return { reprint: { ...authorized, marks } };
+    return { reprint: authorized };
+  }
+
+  /**
+   * The authorization with the marks to print. The void journal is re-read:
+   * a void made while the authorization was in flight still forbids a duplicate
+   * and marks the record (never weaker than the record).
+   */
+  function withLiveMarks(prepared: Prepared, reprint: WireReprint): WireReprint {
+    const localVoid = prepared.localVoid || hasLocalVoid(prepared.detail);
+    return { ...reprint, marks: printedMarks(reprint.marks, localVoid) };
   }
 
   async function run(
@@ -235,7 +243,11 @@ export function createSaleHistoryReprint(input: SaleHistoryReprintDeps): {
     const printedAt = now();
     const answer = await authorize(admitted, request, prepared, printedAt);
     if (!('reprint' in answer)) return answer;
-    const authorized = answer.reprint;
+    const authorized = withLiveMarks(prepared, answer.reprint);
+    if (request.kind === 'duplicate' && authorized.marks.includes('voided')) {
+      audit(admitted, authorized, 'unprintable', printedAt);
+      return refuse('duplicate_unavailable');
+    }
     const bands = slipBands(authorized, prepared.detail, prepared.source, printedAt);
     if (bands === null) {
       // The server already spent this copy number: record that nothing printed.

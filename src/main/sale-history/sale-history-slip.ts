@@ -144,6 +144,8 @@ export function duplicateFromDetail(
   const facts = recordedFacts(detail);
   const lines = receiptLines(detail);
   if (facts === null || lines === null) return null;
+  // The VAT block is a receipt fact: never print a duplicate over unrecorded tax.
+  if (detail.lines.some((line) => line.tax_minor === null)) return null;
   const subtotal = detail.summary.total_minor;
   // Fail closed: the printed lines must add up to the recorded total.
   if (lines.reduce((sum, line) => sum + line.line_subtotal_minor, 0) !== subtotal) return null;

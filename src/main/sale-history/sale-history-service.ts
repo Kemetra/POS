@@ -42,6 +42,7 @@ import {
   createSaleHistoryAccess,
   type Admitted,
   type ResolvedCredential,
+  type SaleHistoryAccess,
 } from './sale-history-access.js';
 import type { ListOutcome, SaleHistoryClient } from './sale-history-client.js';
 import {
@@ -141,6 +142,26 @@ function pageFitsCredential(
   if (page.from_day !== run.from || page.to_day !== run.to) return false;
   if (resolved.cashierUserId === null) return true;
   return page.operator_refs.every((ref) => ref === resolved.cashierUserId);
+}
+
+/**
+ * A cashier page naming another operator's sale is refused whole; the first
+ * such row is recorded through the RT-546 policy (`sale.access.refused`,
+ * `not_owner`), as on the detail and reprint paths.
+ */
+function auditForeignRow(
+  access: SaleHistoryAccess,
+  run: ListRun,
+  resolved: ResolvedCredential,
+  page: WireHistoryPage,
+): void {
+  const index = page.operator_refs.findIndex((ref) => ref !== resolved.cashierUserId);
+  const row = page.rows[index];
+  if (resolved.cashierUserId === null || row === undefined) return;
+  access.owns(run.admitted, resolved, {
+    saleRef: row.sale_ref,
+    operatorRef: page.operator_refs[index] ?? null,
+  });
 }
 
 function unsyncedOf(deps: SaleHistoryServiceDeps, run: ListRun) {
@@ -244,7 +265,10 @@ export function createSaleHistoryService(deps: SaleHistoryServiceDeps): SaleHist
     const outcome = await deps.client.list(query, resolved.credential);
     if (!access.stillCurrent(admitted)) return refused('session_changed');
     if (outcome.kind !== 'ok') return failedListAnswer(deps, run, outcome.kind);
-    if (!pageFitsCredential(outcome.page, run, resolved)) return refused('unavailable');
+    if (!pageFitsCredential(outcome.page, run, resolved)) {
+      auditForeignRow(access, run, resolved, outcome.page);
+      return refused('unavailable');
+    }
     return serverPage(deps, run, outcome.page);
   }
 

@@ -80,6 +80,12 @@ describe('RT-542 saleHistory.list — role matrix (OD-534-1)', () => {
       kind: 'refused',
       reason: 'unavailable',
     });
+    expect(h.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action_category: 'sale.access.refused',
+        payload: { action: 'saleHistory.list', reason: 'not_owner', sale_id: SALE_REF },
+      }),
+    );
   });
 
   it('fails closed on a visibility that does not match the credential', async () => {

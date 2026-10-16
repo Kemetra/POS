@@ -120,12 +120,32 @@ function failureOf(status: number): Failure {
   return FAILURE_BY_STATUS[status] ?? SERVER_ERROR;
 }
 
+/**
+ * The body as text, read incrementally and abandoned (the stream cancelled) as
+ * soon as it passes the cap, whatever Content-Length says; null when too large.
+ */
+async function boundedText(response: Response): Promise<string | null> {
+  if (response.body === null) return '';
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) return text + decoder.decode();
+    text += decoder.decode(chunk.value, { stream: true });
+    if (text.length > SALE_HISTORY_MAX_BODY_CHARS) {
+      await reader.cancel();
+      return null;
+    }
+  }
+}
+
 /** The parsed body, or undefined when it is too large to read. */
 async function boundedJson(response: Response): Promise<unknown> {
   const declared = Number(response.headers.get('content-length') ?? '0');
   if (declared > SALE_HISTORY_MAX_BODY_CHARS) return undefined;
-  const text = await response.text();
-  return text.length > SALE_HISTORY_MAX_BODY_CHARS ? undefined : parseJsonBody(text);
+  const text = await boundedText(response);
+  return text === null ? undefined : parseJsonBody(text);
 }
 
 /** The auth headers of a usable credential, or null (→ no request). */

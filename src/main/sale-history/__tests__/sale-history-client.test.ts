@@ -91,6 +91,21 @@ describe('RT-542 sale-history client — list', () => {
     },
   );
 
+  it('stops reading a streamed body past the cap (no Content-Length)', async () => {
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(new TextEncoder().encode('x'.repeat(1_000_000)));
+        if (pulled > 10) controller.close();
+      },
+    });
+    const fetch = vi.fn(() => Promise.resolve(new Response(stream, { status: 200 })));
+    const client = createSaleHistoryClient({ baseUrl: BASE, fetch });
+    expect(await client.list(QUERY, ENVELOPE)).toEqual({ kind: 'unreadable' });
+    expect(pulled).toBeLessThanOrEqual(4);
+  });
+
   it('treats an oversized body as unreadable', async () => {
     const fetch = vi.fn(() =>
       Promise.resolve(new Response('x'.repeat(2_000_001), { status: 200 })),

@@ -389,6 +389,43 @@ describe('RT-542 review fixes — marks never weaker than the record (OD-534-8)'
     });
   });
 
+  it('re-checks the local void after the authorization (a void made meanwhile)', async () => {
+    const h = harness(MANAGER);
+    ownLocalSale(h);
+    h.client.authorizeReprint.mockImplementation(() => {
+      h.localVoided.add('sale-local-1');
+      return Promise.resolve(okReprint());
+    });
+    expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
+      kind: 'refused',
+      reason: 'duplicate_unavailable',
+    });
+    expect(h.printed).toHaveLength(0);
+    expect(h.audit.mock.calls.at(-1)?.[0]).toMatchObject({ payload: { outcome: 'unprintable' } });
+  });
+
+  it('marks a sale record VOIDED for a local void made during the authorization', async () => {
+    const h = harness(MANAGER);
+    ownLocalSale(h);
+    h.client.authorizeReprint.mockImplementation(() => {
+      h.localVoided.add('sale-local-1');
+      return Promise.resolve(okReprint({ kind: 'sale_record', copyNumber: 1 }));
+    });
+    expect(await createSaleHistoryService(h.deps).reprint(RECORD)).toMatchObject({
+      kind: 'ok',
+      marks: ['voided'],
+    });
+  });
+
+  it('builds no duplicate from server facts whose line tax is not recorded', async () => {
+    const h = harness(MANAGER);
+    h.client.read.mockResolvedValue(okDetail({ lines: [lineWithName('Panadol')] }));
+    expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
+      kind: 'refused',
+      reason: 'duplicate_unavailable',
+    });
+  });
+
   it('a cashier never prints another operator’s local record', async () => {
     const h = harness(CASHIER);
     ownLocalSale(h);

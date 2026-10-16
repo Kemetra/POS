@@ -56,7 +56,7 @@ export function wireLine(overrides: Body = {}): Body {
     currencyCode: 'EGP',
     quantity: '2',
     lineAmount: '25.50',
-    taxAmount: null,
+    taxAmount: '0.00',
     unit: 'box',
     returnedQuantity: '0',
     ...overrides,

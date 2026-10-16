@@ -97,7 +97,7 @@ describe('RT-542 readHistoryDetail', () => {
             unit_price_minor: 1275,
             quantity: '2',
             line_minor: 2550,
-            tax_minor: null,
+            tax_minor: 0,
             unit: 'box',
             returned_quantity: '0',
           },
