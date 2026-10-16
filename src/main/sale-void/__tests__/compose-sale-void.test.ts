@@ -176,9 +176,9 @@ async function monaRequestsVoid(saleId = 'sale-1') {
   return domain.service.request({ sale_id: saleId, approval_id: granted.approvalId });
 }
 
-function markSaleSynced(): void {
+function markSaleSynced(saleId = 'sale-1'): void {
   createSaleSyncStateRepo(handleFor(raw)).markSynced({
-    saleId: 'sale-1',
+    saleId,
     tenantId: SCOPE.tenantId,
     branchId: SCOPE.branchId,
     now: T0,
@@ -477,9 +477,14 @@ describe.each(['UTC', 'America/New_York', 'Africa/Cairo'])(
       // Summer: finalized 00:30 Cairo on 06-08 (21:30Z on 06-07), voided 10 minutes later.
       const saleId = saleFinalizedAt('2026-06-07T21:30:00.000Z');
       clock = '2026-06-07T21:40:00.000Z';
+      markSaleSynced(saleId);
       await expect(monaRequestsVoid(saleId)).resolves.toMatchObject({ kind: 'requested' });
       const requested = audit.find((e) => e.action_category === 'sale.void.requested');
       expect(requested?.payload).toMatchObject({ business_date: '2026-06-08' });
+      // The same day goes out on the wire to Backend-Core.
+      await domain.sync.tick();
+      expect(posted).toHaveLength(1);
+      expect(posted[0]?.body).toMatchObject({ businessDate: '2026-06-08' });
     });
   },
 );
