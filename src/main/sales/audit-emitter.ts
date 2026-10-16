@@ -33,6 +33,7 @@
 import { findForbiddenKey } from '../audit/find-forbidden-key.js';
 import { redactTenderLine } from './redact-tender-line.js';
 import type { SalesTenderType, SaleFinalizationRefusalReason } from '../../shared/sales/types.js';
+import { SYSTEM_DEVICE_ACTOR_ID } from '../../shared/audit/event-shape.js';
 
 // ─── 008 audit category unions ──────────────────────────────────────────────
 //
@@ -63,16 +64,19 @@ export type SaleAuditCategory =
   | 'sale.drawer.suppressed'
   | 'sale.drawer.failed'
   // RT-546 — a sales/receipts bridge call refused by the role gate.
-  | 'sale.access.refused';
+  | 'sale.access.refused'
+  // RT-551 — the terminal's first sale numbered by the store business day.
+  | 'sale.number_day_rule.switched';
 
 export type SaleRawAuditCategory = Exclude<
   SaleAuditCategory,
-  'sale.finalized' | 'sale.finalization_refused'
+  'sale.finalized' | 'sale.finalization_refused' | 'sale.number_day_rule.switched'
 >;
 
 const EMIT_RAW_FORBIDDEN_CATEGORIES = new Set<SaleAuditCategory>([
   'sale.finalized',
   'sale.finalization_refused',
+  'sale.number_day_rule.switched',
 ]);
 
 // ─── Emitter input shapes (closed-set typed payloads) ───────────────────────
@@ -114,6 +118,21 @@ export interface EmitSaleFinalizationRefusedInput extends BaseAuditContext {
   envelope_handoff_action_id: string;
   refused_at: string;
   refusal_reason: SaleFinalizationRefusalReason;
+}
+
+/**
+ * RT-551 — the terminal's first sale under the store business-day rule. A
+ * system event: no operator performs it, so the actor is the device sentinel.
+ */
+export interface EmitSaleNumberDayRuleSwitchedInput {
+  tenant_id: string;
+  branch_id: string;
+  terminal_id: string;
+  sale_id: string;
+  sale_number: string;
+  finalized_at: string;
+  business_day: string;
+  time_zone: string;
 }
 
 // ─── Emitter event shape (sink-facing) ──────────────────────────────────────
@@ -204,15 +223,18 @@ export class EmitRawForbiddenCategoryError extends Error {
 export interface SaleAuditEmitter {
   emitSaleFinalized(input: EmitSaleFinalizedInput): void;
   emitSaleFinalizationRefused(input: EmitSaleFinalizationRefusedInput): void;
+  /** RT-551 — only the finalize transaction emits it, once per terminal. */
+  emitSaleNumberDayRuleSwitched(input: EmitSaleNumberDayRuleSwitchedInput): void;
   /**
    * Escape hatch for future 008 emit methods (S2/S3/S4) and for negative
    * tests. Refuses any payload whose tree contains a forbidden field name
    * at any nesting depth — combines 004's shared `FORBIDDEN_PAYLOAD_KEYS`
    * with the 008-local `SALES_FORBIDDEN_KEYS` set above.
    *
-   * Categories `sale.finalized` and `sale.finalization_refused` are
-   * REFUSED here (both at compile time via `SaleRawAuditCategory` and at
-   * runtime via `EMIT_RAW_FORBIDDEN_CATEGORIES`) — their only valid emit
+   * Categories `sale.finalized`, `sale.finalization_refused` and
+   * `sale.number_day_rule.switched` are REFUSED here (both at compile time
+   * via `SaleRawAuditCategory` and at runtime via
+   * `EMIT_RAW_FORBIDDEN_CATEGORIES`) — their only valid emit
    * path is through the typed entry points above so the inline
    * `external_reference` redaction and closed-set refusal-reason routing
    * cannot be bypassed.
@@ -269,6 +291,26 @@ export function createSaleAuditEmitter(deps: SaleAuditEmitterDependencies): Sale
           refused_at: input.refused_at,
           refusal_reason: input.refusal_reason,
           attribution_operator_id: input.attribution_operator_id,
+        },
+      });
+    },
+
+    emitSaleNumberDayRuleSwitched(input: EmitSaleNumberDayRuleSwitchedInput): void {
+      emit({
+        action_category: 'sale.number_day_rule.switched',
+        attribution_operator_id: SYSTEM_DEVICE_ACTOR_ID,
+        tenant_id: input.tenant_id,
+        branch_id: input.branch_id,
+        originating_terminal_id: input.terminal_id,
+        session_id: null,
+        created_at: input.finalized_at,
+        payload: {
+          terminal_id: input.terminal_id,
+          sale_id: input.sale_id,
+          sale_number: input.sale_number,
+          finalized_at: input.finalized_at,
+          business_day: input.business_day,
+          time_zone: input.time_zone,
         },
       });
     },

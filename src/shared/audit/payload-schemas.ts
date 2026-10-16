@@ -620,6 +620,22 @@ export interface SaleAccessRefusedPayload {
   sale_id?: string;
 }
 
+// ─── RT-551 — sale-number day rule ────────────────────────────────────────
+
+/**
+ * `sale.number_day_rule.switched` — the terminal's first sale numbered by the
+ * store business day of `finalized_at` (Option A cutover). Written once per
+ * terminal; the actor is the device sentinel.
+ */
+export interface SaleNumberDayRuleSwitchedPayload {
+  terminal_id: string;
+  sale_id: string;
+  sale_number: string;
+  finalized_at: string;
+  business_day: string;
+  time_zone: string;
+}
+
 /** `manager_approval.refused` — what was asked; never why (C3), never a PIN. */
 export interface ManagerApprovalRefusedPayload {
   action_kind: string;
@@ -712,6 +728,8 @@ export type AuditPayloadMap = {
   'sale.void.refused': SaleVoidRefusedPayload;
   // RT-546
   'sale.access.refused': SaleAccessRefusedPayload;
+  // RT-551
+  'sale.number_day_rule.switched': SaleNumberDayRuleSwitchedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

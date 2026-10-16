@@ -44,6 +44,8 @@ import { makeSqlJsHandle } from '../../unit/main/cart/__helpers__/sql-js-handle.
 const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..');
 const MIGRATIONS = [
+  // RT-551 — the once-per-terminal switch marker is read from audit_events.
+  '0004_audit_events.sql',
   '0012_create_payment_attempts.sql',
   '0013_payment_attempts_partial_unique_started.sql',
   '0014_create_payment_tender_lines.sql',
@@ -112,7 +114,6 @@ function buildInput() {
     tenant_tax_registration_id: 'TRN-123',
     branch_name: 'Maadi',
     branch_address: '12 Road 9',
-    local_calendar_day: '2026-05-28',
     lines: [
       {
         line_id: 'line-1',

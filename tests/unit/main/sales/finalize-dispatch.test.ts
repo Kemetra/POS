@@ -305,12 +305,12 @@ describe('T094b — buildFinalizeInput happy path', () => {
     expect(result.input.total_tax_minor).toBe(0);
   });
 
-  it('derives local_calendar_day from the settled_at date (UTC default)', () => {
+  it('derives no sale-number day: finalize dates the sale from finalized_at (RT-551)', () => {
     seedAll();
     const result = build();
     if (result.kind !== 'ok') throw new Error('expected ok');
-    // settled_at 2026-05-27T22:30Z → calendar day 2026-05-27 (UTC).
-    expect(result.input.local_calendar_day).toBe('2026-05-27');
+    // The old UTC-of-settled_at day must not survive here as a second rule.
+    expect(Object.keys(result.input)).not.toContain('local_calendar_day');
   });
 });
 
@@ -415,17 +415,6 @@ describe('T094b — missing-row refusals', () => {
     expect(result.kind).toBe('refused');
     if (result.kind !== 'refused') return;
     expect(result.reason).toBe('cart_envelope_not_found');
-  });
-
-  it('accepts an injected localCalendarDayFor seam (terminal-TZ shift)', () => {
-    seedAll();
-    const result = buildFinalizeInput({
-      db: makeSqlJsHandle(db),
-      handoff_action_id: 'handoff-1',
-      localCalendarDayFor: (settled) => `TZ:${settled.slice(0, 10)}`,
-    });
-    if (result.kind !== 'ok') throw new Error('expected ok');
-    expect(result.input.local_calendar_day).toBe('TZ:2026-05-27');
   });
 });
 
