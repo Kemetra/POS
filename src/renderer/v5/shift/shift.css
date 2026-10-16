@@ -15,13 +15,13 @@
   align-items: center;
   min-block-size: 44px;
   padding-inline: var(--space-4);
-  background: var(--color-surface);
+  background: var(--color-surface-elevated);
   border-block-end: 1px solid var(--color-border);
 }
 
 .v5-shift-titlebar h1 {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-snug);
 }
@@ -143,10 +143,19 @@
   cursor: pointer;
 }
 
+.v5-shift-btn:hover:not(:disabled) {
+  background: var(--color-surface-elevated);
+}
+
 .v5-shift-btn--primary {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: var(--color-primary-on);
+}
+
+.v5-shift-btn--primary:hover:not(:disabled) {
+  border-color: var(--color-primary-emphasis);
+  background: var(--color-primary-emphasis);
 }
 
 .v5-shift-btn:disabled {
@@ -219,4 +228,253 @@
 .v5-shift-notice a {
   color: var(--color-primary-emphasis);
   font-weight: var(--font-weight-semibold);
+}
+
+/*
+ * The manager's shift status screen: status on the inline start, the PIN
+ * form in a narrower column on the inline end; one column when the
+ * workspace is narrow. Zero counts read quiet, any other count stands out
+ * in a neutral badge (no severity colour is implied).
+ */
+.v5-shift-manager-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
+  gap: var(--space-4);
+  inline-size: 100%;
+  max-inline-size: 1280px;
+  margin-inline: auto;
+  padding: var(--space-5);
+  box-sizing: border-box;
+}
+
+@container v5-screen (max-width: 1120px) {
+  .v5-shift-manager-screen {
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+}
+
+@container v5-screen (max-width: 760px) {
+  .v5-shift-manager-screen {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.v5-shift-mgr-banner {
+  grid-column: 1 / -1;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  line-height: var(--line-height-relaxed);
+}
+
+.v5-shift-mgr-banner .v5-icon {
+  margin-block-start: 2px;
+  color: var(--color-warning);
+}
+
+.v5-shift-mgr-panel {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.v5-shift-mgr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: 56px;
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-shift-mgr-head--lead {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.v5-shift-mgr-head h2 {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.4;
+}
+
+.v5-shift-mgr-head .v5-shift-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+}
+
+.v5-shift-mgr-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+.v5-shift-mgr-body {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-4);
+}
+
+.v5-shift-mgr-reload {
+  flex: none;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+}
+
+/* No open shift: one quiet line in a raised band. */
+.v5-shift-mgr-closed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The open shift: four facts side by side in raised-band cells. */
+.v5-shift-mgr-open {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+@container v5-screen (max-width: 1120px) {
+  .v5-shift-mgr-open {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.v5-shift-mgr-open > div {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-elevated);
+}
+
+.v5-shift-mgr-open dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.v5-shift-mgr-open dd {
+  margin: 0;
+  justify-self: start;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-shift-mgr-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4) var(--space-5);
+}
+
+.v5-shift-mgr-group {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.v5-shift-mgr-group h3 {
+  margin: 0;
+  padding-block-end: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.5;
+}
+
+.v5-shift-mgr-counts {
+  margin: 0;
+}
+
+.v5-shift-mgr-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: 40px;
+  border-block-start: 1px solid var(--color-border-soft);
+}
+
+.v5-shift-mgr-count dd {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 32px;
+  block-size: 24px;
+  margin: 0;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-shift-mgr-count dd[data-zero] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The PIN form. */
+.v5-shift-mgr-fields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.v5-shift-mgr-field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.v5-shift-mgr-field label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-shift-mgr-pin {
+  inline-size: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-family-mono);
+  letter-spacing: 0.3em;
+}
+
+.v5-shift-mgr-commit {
+  inline-size: 100%;
+  min-block-size: 48px;
+}
+
+.v5-shift-mgr-commit:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  opacity: 1;
 }

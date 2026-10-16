@@ -4,23 +4,132 @@
  * logical properties only.
  */
 
+/* Payment on the inline start, the held list fills the rest. */
+.v5-recovery-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+  inline-size: 100%;
+  max-inline-size: 1280px;
+  margin-inline: auto;
+  padding: var(--space-5);
+  box-sizing: border-box;
+}
+
+@container v5-screen (max-width: 1120px) {
+  .v5-recovery-grid {
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+}
+
+@container v5-screen (max-width: 760px) {
+  .v5-recovery-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.v5-recovery-wide {
+  grid-column: 1 / -1;
+}
+
+.v5-recovery-grid > .v5-shift-message {
+  margin: 0;
+}
+
+/* Recovery mode: the session can do nothing else here (info, persistent). */
 .v5-recovery-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  border: 1px solid var(--color-info);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius-control);
+  background: var(--color-info-soft);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-relaxed);
+}
+
+.v5-recovery-mode .v5-icon {
+  margin-block-start: 2px;
+  color: var(--color-info);
+}
+
+.v5-recovery-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* The stuck payment: raised-band cells, the amount still due set largest. */
+.v5-recovery-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.v5-recovery-fact {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-elevated);
+}
+
+.v5-recovery-fact--lead,
+.v5-recovery-fact--due {
+  grid-column: 1 / -1;
+}
+
+.v5-recovery-fact dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.v5-recovery-fact dd {
+  margin: 0;
+  justify-self: start;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-md);
+  font-variant-numeric: tabular-nums;
   font-weight: var(--font-weight-semibold);
 }
 
-/* A name in the facts list: the body face, so Arabic letters stay joined. */
-.v5-shift-facts .v5-recovery-text {
+/* A name: the body face, so Arabic letters stay joined. */
+.v5-recovery-fact .v5-recovery-text {
   font-family: inherit;
   font-variant-numeric: normal;
 }
 
-.v5-recovery-list {
+.v5-recovery-fact--due {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+.v5-recovery-fact--due dd {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+}
+
+.v5-recovery-actions {
   display: grid;
-  gap: var(--space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.v5-recovery-actions .v5-shift-btn {
+  min-block-size: 48px;
+}
+
+/* The held sales: one hairline row each, the cancel button on the inline end. */
+.v5-recovery-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -28,32 +137,67 @@
 
 .v5-recovery-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-3);
-  padding-block: var(--space-2);
-  border-block-end: 1px solid var(--color-border);
+  min-block-size: 64px;
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-recovery-row:last-child {
+  border-block-end: 0;
+}
+
+.v5-recovery-initial {
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold);
 }
 
 .v5-recovery-row__who {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.v5-recovery-row__who strong {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.v5-recovery-tags {
   display: flex;
   flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.v5-recovery-tag {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  min-block-size: 22px;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 
 .v5-recovery-row__sum {
   display: grid;
   justify-items: end;
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
 }
 
-.v5-recovery-tag {
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  color: var(--color-text-muted);
+.v5-recovery-row__sum .v5-shift-money {
+  color: var(--color-text);
   font-size: var(--font-size-sm);
 }
 
@@ -70,4 +214,8 @@
   align-items: center;
   gap: var(--space-2);
   min-block-size: 44px;
+}
+
+.v5-recovery-head {
+  justify-content: flex-start;
 }
