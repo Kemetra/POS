@@ -100,8 +100,60 @@ describe('T121 — byte-stability', () => {
   it('does not embed wall-clock time (renders only from payload timestamps)', () => {
     const out = renderReceipt(payload());
     const text = new TextDecoder().decode(out.escpos) + out.html;
-    // The payload's stored UTC date appears; no other date should.
+    // The payload's stored date (in the store zone) appears; no other date should.
     expect(text).toContain('2026-05-27');
+  });
+});
+
+describe('RT-249 N-S5 — the sale stamp is the store-zone (Africa/Cairo) time', () => {
+  const textOf = (out: ReturnType<typeof renderReceipt>): string =>
+    new TextDecoder().decode(out.escpos) + out.html;
+
+  it('prints settled_at as Cairo local YYYY-MM-DD HH:MM (the plan golden)', () => {
+    // 2026-10-06T22:53Z is 01:53 on 2026-10-07 in Cairo (summer time).
+    const text = textOf(renderReceipt(payload({ settled_at: '2026-10-06T22:53:00.000Z' })));
+    expect(text).toContain('2026-10-07 01:53');
+    expect(text).not.toContain('2026-10-06 22:53');
+  });
+
+  it('prints the winter Cairo time between 00:00 and 02:00 on the Cairo day', () => {
+    const text = textOf(renderReceipt(payload({ settled_at: '2026-01-14T22:05:00.000Z' })));
+    expect(text).toContain('2026-01-15 00:05');
+  });
+
+  it('renders the same Cairo stamp whatever the process zone is', () => {
+    const saved = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      const text = textOf(renderReceipt(payload({ settled_at: '2026-10-06T22:53:00.000Z' })));
+      expect(text).toContain('2026-10-07 01:53');
+    } finally {
+      if (saved === undefined) delete process.env.TZ;
+      else process.env.TZ = saved;
+    }
+  });
+
+  it('still renders (as the old UTC stamp) when settled_at is not a valid instant', () => {
+    // A receipt must never fail to render over its stamp; settled_at is engine-written.
+    const text = textOf(renderReceipt(payload({ settled_at: '2026-05-27T08:42:18' })));
+    expect(text).toContain('2026-05-27 08:42:18 UTC');
+  });
+
+  it('no longer labels the sale stamp UTC; the reprint line is unchanged', () => {
+    const first = textOf(renderReceipt(payload({ settled_at: '2026-10-06T22:53:00.000Z' })));
+    expect(first).not.toContain('UTC');
+    const duplicate = textOf(
+      renderReceipt(
+        payload({
+          settled_at: '2026-10-06T22:53:00.000Z',
+          variant: 'reprint_duplicate',
+          duplicate_copy_sequence_number: 1,
+          reprinted_at: '2026-10-06T23:10:00.000Z',
+        }),
+      ),
+    );
+    expect(duplicate).toContain('2026-10-07 01:53');
+    expect(duplicate).toContain('Reprinted: 2026-10-06 23:10:00 UTC');
   });
 });
 

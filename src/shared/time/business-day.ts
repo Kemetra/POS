@@ -40,6 +40,20 @@ const STORE_DAY = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 });
 
+/**
+ * RT-249 N-S5 — the store-zone wall clock. `hourCycle: 'h23'` (not
+ * `hour12: false`, which some ICU builds render as `24:05` after midnight).
+ */
+const STORE_DATE_TIME = new Intl.DateTimeFormat('en-CA', {
+  timeZone: STORE_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
 function invalid(detail: string): BusinessDayError {
   return new BusinessDayError('invalid_instant', `Invalid instant: ${detail}`);
 }
@@ -54,17 +68,24 @@ function invalid(detail: string): BusinessDayError {
 const MIN_INSTANT_MS = Date.UTC(1000, 0, 2);
 const MAX_INSTANT_MS = Date.UTC(9999, 11, 30);
 
+type StorePart = 'year' | 'month' | 'day' | 'hour' | 'minute';
+
 /**
- * Assembles `YYYY-MM-DD` from the formatter's parts, so the result does not
- * rely on a locale's field order or separators.
+ * Picks named fields from a formatter's parts, so a result never relies on a
+ * locale's field order or separators.
  */
-function dayFromParts(date: Date): string {
-  const parts = new Map(STORE_DAY.formatToParts(date).map((part) => [part.type, part.value]));
-  const pick = (type: 'year' | 'month' | 'day'): string => {
+function partsOf(formatter: Intl.DateTimeFormat, date: Date): (type: StorePart) => string {
+  const parts = new Map(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+  return (type) => {
     const value = parts.get(type);
     if (value === undefined) throw invalid(`the formatter returned no ${type}`);
     return value;
   };
+}
+
+/** Assembles `YYYY-MM-DD` in the store zone. */
+function dayFromParts(date: Date): string {
+  const pick = partsOf(STORE_DAY, date);
   return `${pick('year')}-${pick('month')}-${pick('day')}`;
 }
 
@@ -104,13 +125,30 @@ function toDate(instant: string | Date): Date {
  *   valid instant — never coerced to a day.
  */
 export function businessDayOf(instant: string | Date): string {
+  return dayFromParts(supportedInstant(instant));
+}
+
+/** A valid instant in the supported years, or a {@link BusinessDayError}. */
+function supportedInstant(instant: string | Date): Date {
   const date = toDate(instant);
   if (Number.isNaN(date.getTime())) throw invalid('not a valid date');
   const time = date.getTime();
   if (time < MIN_INSTANT_MS || time > MAX_INSTANT_MS) {
     throw invalid('outside the supported year range (1000-9999)');
   }
-  return dayFromParts(date);
+  return date;
+}
+
+/**
+ * RT-249 N-S5 — the store-zone date and time of an instant,
+ * `YYYY-MM-DD HH:MM` (24-hour, {@link STORE_TIME_ZONE}; seconds dropped).
+ * Its date part is always {@link businessDayOf} of the same instant.
+ *
+ * @throws {BusinessDayError} `invalid_instant`, exactly as `businessDayOf`.
+ */
+export function businessDateTimeOf(instant: string | Date): string {
+  const pick = partsOf(STORE_DATE_TIME, supportedInstant(instant));
+  return `${pick('year')}-${pick('month')}-${pick('day')} ${pick('hour')}:${pick('minute')}`;
 }
 
 // ─── RT-541 — business-day ranges ────────────────────────────────────────────
