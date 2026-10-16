@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type JSX, type ReactNode, type SyntheticEvent } from 'react';
+import { useId, useState, type JSX, type ReactNode, type SyntheticEvent } from 'react';
 
 import type {
   ReceiptsBridgeAPI,
@@ -8,6 +8,7 @@ import type {
 import { format as formatMoney, of as moneyOf } from '../../../../../shared/money';
 import type {
   SaleHistoryBridgeAPI,
+  SaleHistoryLocalPage,
   SaleHistoryRow,
   SaleHistoryUnsyncedRow,
 } from '../../../../../shared/sale-history/types';
@@ -69,6 +70,12 @@ function dayBefore(day: string): string {
   return date.toISOString().slice(0, 10);
 }
 
+const OFFLINE_COPY: Readonly<Record<SaleHistoryLocalPage['offline_reason'], string>> = {
+  no_connection: C.offlineNoConnection,
+  no_credential: C.offlineNoCredential,
+  server_unavailable: C.offlineServerUnavailable,
+};
+
 function StatusNotice({ view }: { view: HistoryView }): JSX.Element | null {
   if (view.phase === 'server') {
     return (
@@ -79,10 +86,9 @@ function StatusNotice({ view }: { view: HistoryView }): JSX.Element | null {
     );
   }
   if (view.phase === 'local') {
-    const why = view.reason === 'no_connection' ? C.offlineNoConnection : C.offlineNoCredential;
     return (
       <Notice tone="warning" testId="history-coverage">
-        {C.deviceOnly} {why}
+        {C.deviceOnly} {OFFLINE_COPY[view.reason]}
       </Notice>
     );
   }
@@ -307,16 +313,18 @@ function DayField({
 }
 
 function RangeForm({
-  today,
+  currentDay,
   busy,
   onRun,
 }: {
-  today: string;
+  /** Read at render and at click time, so "today" moves past Cairo midnight. */
+  currentDay: () => string;
   busy: boolean;
   onRun: (range: Range) => void;
 }): JSX.Element {
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
+  const [from, setFrom] = useState(currentDay);
+  const [to, setTo] = useState(currentDay);
+  const today = currentDay();
   const run = (range: Range): void => {
     setFrom(range.from_day);
     setTo(range.to_day);
@@ -326,7 +334,6 @@ function RangeForm({
     event.preventDefault();
     run({ from_day: from, to_day: to });
   };
-  const yesterday = dayBefore(today);
   return (
     <form className="v5-sales-lookup" onSubmit={onSubmit} noValidate>
       <DayField label={C.from} value={from} max={today} onChange={setFrom} />
@@ -339,7 +346,8 @@ function RangeForm({
         className="v5-sales-btn"
         disabled={busy}
         onClick={() => {
-          run({ from_day: today, to_day: today });
+          const day = currentDay();
+          run({ from_day: day, to_day: day });
         }}
       >
         {C.today}
@@ -349,7 +357,8 @@ function RangeForm({
         className="v5-sales-btn"
         disabled={busy}
         onClick={() => {
-          run({ from_day: yesterday, to_day: yesterday });
+          const day = dayBefore(currentDay());
+          run({ from_day: day, to_day: day });
         }}
       >
         {C.yesterday}
@@ -372,7 +381,15 @@ function SelectedDetail({
   onClose: () => void;
 }): JSX.Element | null {
   if (selected?.kind === 'server' && bridge !== null) {
-    return <HistoryDetail saleRef={selected.saleRef} bridge={bridge} onClose={onClose} />;
+    // Keyed by sale: an in-flight reprint of one sale never reports on another.
+    return (
+      <HistoryDetail
+        key={selected.saleRef}
+        saleRef={selected.saleRef}
+        bridge={bridge}
+        onClose={onClose}
+      />
+    );
   }
   if (selected?.kind !== 'local' || sales === null) return null;
   return (
@@ -395,7 +412,7 @@ export function SalesHistory({
   const api = windowApi();
   const bridge = _testBridge ?? api.saleHistory ?? null;
   const sales = _testSalesBridge ?? api.sales ?? null;
-  const today = useMemo(() => businessDayOf(_now === undefined ? new Date() : _now()), [_now]);
+  const currentDay = (): string => businessDayOf(_now === undefined ? new Date() : _now());
   const [selected, setSelected] = useState<Selection>(null);
   const history = useSaleHistory(bridge);
   const loading = history.view.phase === 'loading';
@@ -407,7 +424,7 @@ export function SalesHistory({
       </div>
       <div className="v5-sales-panel-body">
         <RangeForm
-          today={today}
+          currentDay={currentDay}
           busy={loading || bridge === null}
           onRun={(range) => {
             setSelected(null);

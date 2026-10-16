@@ -329,3 +329,73 @@ describe('RT-542 saleHistory.reprint — authority, audit and limits', () => {
     });
   });
 });
+
+describe('RT-542 review fixes — marks never weaker than the record (OD-534-8)', () => {
+  function ownLocalSale(h: ReturnType<typeof harness>): void {
+    h.localIds.set(SALE_REF, 'sale-local-1');
+    h.localSales.set('sale-local-1', localSaleRow());
+    h.successfulPrints.add('sale-local-1');
+  }
+
+  it('refuses a duplicate of this terminal’s sale with a live local void the server does not know yet', async () => {
+    const h = harness(MANAGER);
+    ownLocalSale(h);
+    h.localVoided.add('sale-local-1');
+    expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
+      kind: 'refused',
+      reason: 'duplicate_unavailable',
+    });
+    expect(h.client.authorizeReprint).not.toHaveBeenCalled();
+  });
+
+  it('marks the sale record VOIDED for a live local void', async () => {
+    const h = harness(MANAGER);
+    ownLocalSale(h);
+    h.localVoided.add('sale-local-1');
+    h.client.authorizeReprint.mockResolvedValue(okReprint({ kind: 'sale_record', copyNumber: 1 }));
+    const res = await createSaleHistoryService(h.deps).reprint(RECORD);
+    expect(res).toMatchObject({ kind: 'ok', marks: ['voided'] });
+    expect(h.printed[0]).toContain('VOIDED');
+  });
+
+  it('refuses a duplicate when the detail itself says voided, whatever the eligibility says', async () => {
+    const h = harness(MANAGER);
+    h.client.read.mockResolvedValue(okDetail({}, { voided: true }));
+    expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
+      kind: 'refused',
+      reason: 'duplicate_unavailable',
+    });
+  });
+
+  it('prints nothing when the authorization drops a mark the detail implies', async () => {
+    const h = harness(MANAGER);
+    h.client.read.mockResolvedValue(
+      okDetail({ returns: [wireReturn()] }, { returnState: 'partial' }),
+    );
+    h.client.authorizeReprint.mockResolvedValue(okReprint({ marks: [] }));
+    expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
+      kind: 'refused',
+      reason: 'unavailable',
+    });
+    expect(h.printed).toHaveLength(0);
+  });
+
+  it('builds no duplicate from server lines that do not add up to the total', async () => {
+    const h = harness(MANAGER);
+    h.client.read.mockResolvedValue(okDetail({}, { posTotal: '99.00' }));
+    expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
+      kind: 'refused',
+      reason: 'duplicate_unavailable',
+    });
+  });
+
+  it('a cashier never prints another operator’s local record', async () => {
+    const h = harness(CASHIER);
+    ownLocalSale(h);
+    h.localSales.set('sale-local-1', localSaleRow({ selling_operator_id: 'op-other' }));
+    expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
+      kind: 'refused',
+      reason: 'sale_not_found',
+    });
+  });
+});

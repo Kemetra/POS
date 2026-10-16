@@ -148,7 +148,7 @@ export interface SaleHistoryLocalPage {
   source: 'local';
   coverage: 'this_device_only';
   /** Why the server was not used. */
-  offline_reason: 'no_connection' | 'no_credential';
+  offline_reason: 'no_connection' | 'no_credential' | 'server_unavailable';
   rows: SaleListItem[];
   next_cursor: string | null;
 }

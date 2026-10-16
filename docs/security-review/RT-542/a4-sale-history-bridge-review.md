@@ -16,7 +16,7 @@ Written with the implementation, before merge.
 | Contract | Backend-Core `sale-history.yaml` (RT-537), vendored in `contracts/backend-core/` and checked by the RT-217 conformance suite. Runtime RT-539 (`1d26d28`). |
 | Baseline | `origin/main` at `c94660b8` |
 | Prepared by | The implementation agent (Claude Code), 2026-10-16, with an agent security review. **Not an independent human review.** |
-| Verdict | See §4. |
+| Verdict | **Agent-assessed PASS after fixes.** The agent security review found one HIGH (H1) and one MEDIUM (M1) in the reprint path; both were fixed before merge (§4). No CRITICAL. |
 
 ## 2. Code under review
 
@@ -53,12 +53,28 @@ Written with the implementation, before merge.
 
 ## 4. Findings and their disposition
 
-To be completed from the agent security review before merge.
+From the agent security review (opus) and the agent code review (sonnet) of `4b314e68`.
+
+| Severity | Finding | Disposition |
+| :-- | :-- | :-- |
+| HIGH (H1) | `saleHistory.reprint` did not read this terminal's void journal: a sale with a live local void (pending / unknown) that the server did not know yet could print an unmarked duplicate from the local record (OD-534-8 B). | **Fixed.** `isSaleVoided` (`saleVoidReads.liveForSale`) is injected; a live local void refuses a duplicate and adds VOIDED to the sale record. Tests. |
+| MEDIUM (M1) | Printed marks came only from the authorization: an authorization dropping `returned` / `voided` would print a slip weaker than the record. | **Fixed.** `sale-history-marks.ts`: the authorization must carry every mark the detail implies (void summary, `voided`, recorded returns, `returnState`), else nothing prints; the printed marks are the union with the local void; a duplicate is refused if any source says voided. Tests. |
+| MEDIUM (M2) | No `record`-mode queue: a local `receipts.reprint` numbers copies locally (`countReprints + 1`) while a store-history reprint prints the server's `copyNumber`, so two slips of one sale can carry the same copy number, and local reprints are not in the server trail. | **Accepted for owner sign-off** (needs a local migration RT-542 does not authorize; follow-up). The contract already states a number can repeat across terminals and the server trail is the authority (Q-5). |
+| MEDIUM (code review) | One off-contract money value blanked a whole page: return pricing yields amounts in 10⁻⁴. | **Fixed.** Display-only amounts (line tax, return totals and lines) are rounded half away from zero to the piastre; sale totals, line amounts, unit prices, tenders and change stay exact. Tests. |
+| MEDIUM (code review) | "Today" was computed once at mount; a reprint result could land on another sale's detail; "more" could fire twice. | **Fixed.** Day read at click time; the detail is keyed by sale; an in-flight guard on "more". Tests. |
+| LOW (L1) | Format characters (U+200E/200F/061C, zero-width, BOM) were not stripped; server text reached the renderer as is. | **Fixed.** The wire reader strips `\p{Cc}` and `\p{Cf}` from every shown string (screen and slip). Test. |
+| LOW (L2) | Unbounded body and arrays. | **Fixed.** 2 MB body cap; lines ≤ 500, tenders ≤ 20, returns ≤ 100. Test. |
+| LOW (L3) | A duplicate from server facts did not check that lines add up to the total. | **Fixed.** Fails closed. Test. |
+| LOW (L4) | An authorized but unprintable slip was not audited. | **Fixed.** Audited `unprintable`. |
+| LOW (L5) | The local record was printed without re-checking its seller against a cashier. | **Fixed.** `sale_not_found` (defence in depth). Test. |
+| LOW (code review) | A 429 / 5xx on page one read as "no connection"; a refused local cursor offered a retry that could not work. | **Fixed.** `server_unavailable` offline reason and copy; the walk ends. Tests. |
+| LOW (L6) | No reprint throttle beyond one-at-a-time per sale. | Accepted: every reprint is authorized and audited by Backend-Core; a rate policy is an owner decision. |
+| LOW | A sale received by the server whose local ack was lost shows in both lists until the next sync. | Accepted: transient and labelled as unsent on this device. |
 
 ## 5. Out of scope, reported only
 
 - `record`-mode reprints (a local reprint reported to Backend-Core after the fact) need a durable queue, which needs a local migration that RT-542 does not authorize. Local reprints stay audited locally only.
-- A device-path 401 from these routes is not fed to the RT-215 device-revocation detector (the routes are shared with the envelope path, and tagging them would widen the detector's sources).
+- A device-path 401 from these routes is not fed to the RT-215 device-revocation detector (the routes are shared with the envelope path, and tagging them would widen the detector's sources). The security review judged this LOW and acceptable: a 401 fails closed, and the sendable device-token read already returns null for a known-revoked device.
 - `sale-void:lookup` and `returns:lookup` are not role-gated (RT-546 hand-over).
 
 ## 6. Sign-off

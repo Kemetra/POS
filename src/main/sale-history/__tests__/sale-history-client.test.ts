@@ -83,9 +83,20 @@ describe('RT-542 sale-history client — list', () => {
     expect(await client.list(QUERY, ENVELOPE)).toEqual({ kind });
   });
 
-  it.each([429, 500, 503])('treats %i as unreachable', async (status) => {
-    const client = createSaleHistoryClient({ baseUrl: BASE, fetch: respond(status, {}) });
-    expect(await client.list(QUERY, ENVELOPE)).toEqual({ kind: 'unreachable' });
+  it.each([409, 429, 500, 503])(
+    'reports %i as a server error, not as no connection',
+    async (status) => {
+      const client = createSaleHistoryClient({ baseUrl: BASE, fetch: respond(status, {}) });
+      expect(await client.list(QUERY, ENVELOPE)).toEqual({ kind: 'server_error' });
+    },
+  );
+
+  it('treats an oversized body as unreadable', async () => {
+    const fetch = vi.fn(() =>
+      Promise.resolve(new Response('x'.repeat(2_000_001), { status: 200 })),
+    );
+    const client = createSaleHistoryClient({ baseUrl: BASE, fetch });
+    expect(await client.list(QUERY, ENVELOPE)).toEqual({ kind: 'unreadable' });
   });
 
   it('treats a network failure as unreachable and an off-contract 200 as unreadable', async () => {

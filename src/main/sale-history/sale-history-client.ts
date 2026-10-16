@@ -25,7 +25,9 @@
  *   200 / 201 off-contract → unreadable
  *   400 → invalid · 401 / 403 → unauthorized · 404 → not_found
  *   422 → duplicate_unavailable (reprint only)
- *   429 / 5xx / other / network / timeout / no credential → unreachable
+ *   429 / 5xx / any other status → server_error (the server answered)
+ *   network / timeout / no credential → unreachable
+ *   a body over 2 MB → unreadable (bounded memory on an untrusted answer)
  * Never throws.
  */
 
@@ -56,6 +58,7 @@ type Failure =
   | { readonly kind: 'unauthorized' }
   | { readonly kind: 'not_found' }
   | { readonly kind: 'unreadable' }
+  | { readonly kind: 'server_error' }
   | { readonly kind: 'unreachable' };
 
 export type ListOutcome = { readonly kind: 'ok'; readonly page: WireHistoryPage } | Failure;
@@ -108,9 +111,21 @@ const FAILURE_BY_STATUS: Readonly<Record<number, Failure>> = {
 };
 
 const UNREACHABLE: Failure = { kind: 'unreachable' };
+const SERVER_ERROR: Failure = { kind: 'server_error' };
+
+/** The largest answer body read, in characters. */
+export const SALE_HISTORY_MAX_BODY_CHARS = 2_000_000;
 
 function failureOf(status: number): Failure {
-  return FAILURE_BY_STATUS[status] ?? UNREACHABLE;
+  return FAILURE_BY_STATUS[status] ?? SERVER_ERROR;
+}
+
+/** The parsed body, or undefined when it is too large to read. */
+async function boundedJson(response: Response): Promise<unknown> {
+  const declared = Number(response.headers.get('content-length') ?? '0');
+  if (declared > SALE_HISTORY_MAX_BODY_CHARS) return undefined;
+  const text = await response.text();
+  return text.length > SALE_HISTORY_MAX_BODY_CHARS ? undefined : parseJsonBody(text);
 }
 
 /** The auth headers of a usable credential, or null (→ no request). */
@@ -164,7 +179,7 @@ export function createSaleHistoryClient(deps: CreateSaleHistoryClientDeps): Sale
         headers: { ...request.headers, ...auth },
         signal: AbortSignal.timeout(timeoutMs),
       });
-      return { status: response.status, json: parseJsonBody(await response.text()) };
+      return { status: response.status, json: await boundedJson(response) };
     } catch {
       return null;
     }

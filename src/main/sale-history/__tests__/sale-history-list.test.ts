@@ -191,6 +191,19 @@ describe('RT-542 saleHistory.list — pagination, offline and refusals', () => {
     });
   });
 
+  it('falls back to this device only, saying the server failed, on a 5xx / 429', async () => {
+    const h = harness(MANAGER);
+    h.client.list.mockResolvedValue({ kind: 'server_error' });
+    const res = await createSaleHistoryService(h.deps).list(RANGE);
+    expect(res).toMatchObject({
+      kind: 'ok',
+      source: 'local',
+      offline_reason: 'server_unavailable',
+    });
+    const cursorOf = await createSaleHistoryService(h.deps).list({ ...RANGE, cursor: 's.n1' });
+    expect(cursorOf).toEqual({ kind: 'refused', reason: 'continuation_failed' });
+  });
+
   it('falls back to this device only without a credential (no request)', async () => {
     const h = harness(CASHIER);
     h.credential.value = null;

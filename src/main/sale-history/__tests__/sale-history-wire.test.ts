@@ -213,3 +213,57 @@ describe('RT-542 isServerCursor', () => {
     expect(isServerCursor('x'.repeat(513))).toBe(false);
   });
 });
+
+describe('RT-542 review fixes — display-only values', () => {
+  it('rounds fractional return and tax amounts to the piastre instead of blanking the detail', () => {
+    const parsed = readHistoryDetail(
+      wireDetail({
+        lines: [wireLine({ taxAmount: '1.005' })],
+        returns: [
+          wireReturn({
+            returnTotal: '3.3333',
+            lines: [
+              {
+                lineRef: '0190a3c4-0000-4000-8000-0000000000e1',
+                quantity: '1',
+                lineAmount: '3.3333',
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(parsed?.detail.lines[0]?.tax_minor).toBe(101);
+    expect(parsed?.detail.returns[0]?.total_minor).toBe(333);
+    expect(parsed?.detail.returns[0]?.lines[0]?.line_minor).toBe(333);
+  });
+
+  it('keeps sale money exact: a fractional line amount is still off-contract', () => {
+    expect(
+      readHistoryDetail(wireDetail({ lines: [wireLine({ lineAmount: '25.505' })] })),
+    ).toBeNull();
+  });
+
+  it('normalizes quantities and strips format characters from shown text', () => {
+    const parsed = readHistoryDetail(
+      wireDetail(
+        {
+          lines: [
+            wireLine({ quantity: '2.000000', returnedQuantity: '1.500', lineName: 'Pana‏dol﻿' }),
+          ],
+        },
+        { saleNumber: 'T1‎-0001' },
+      ),
+    );
+    expect(parsed?.detail.lines[0]?.quantity).toBe('2');
+    expect(parsed?.detail.lines[0]?.returned_quantity).toBe('1.5');
+    expect(parsed?.detail.lines[0]?.name).toBe('Panadol');
+    expect(parsed?.detail.summary.sale_number).toBe('T1-0001');
+  });
+
+  it('bounds the detail arrays', () => {
+    expect(
+      readHistoryDetail(wireDetail({ lines: Array.from({ length: 501 }, () => wireLine()) })),
+    ).toBeNull();
+  });
+});

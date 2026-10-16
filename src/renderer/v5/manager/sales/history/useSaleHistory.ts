@@ -126,17 +126,27 @@ function moreRequest(range: Range | null, view: HistoryView): SaleHistoryListReq
   return range === null || cursor === null ? null : { ...range, cursor };
 }
 
-/** The view after a "more" answer: a rejected cursor ends the walk. */
+/** Refusals after which the same cursor can never succeed: the walk ends. */
+const WALK_ENDING: ReadonlySet<SaleHistoryRefusalReason> = new Set([
+  'cursor_rejected',
+  'invalid_request',
+]);
+
+function endsWalk(res: SaleHistoryListResponse): boolean {
+  return res.kind === 'refused' && WALK_ENDING.has(res.reason);
+}
+
+/** The view after a "more" answer: a cursor that cannot succeed ends the walk. */
 function afterMore(latest: HistoryView, res: SaleHistoryListResponse): HistoryView {
-  if (res.kind === 'refused' && res.reason === 'cursor_rejected') {
-    return { phase: 'refused', reason: 'cursor_rejected' };
-  }
+  if (endsWalk(res)) return { phase: 'refused', reason: 'cursor_rejected' };
   return appended(latest, res);
 }
 
 export function useSaleHistory(bridge: SaleHistoryBridgeAPI | null): SaleHistoryState {
   const [view, setView] = useState<HistoryView>({ phase: 'idle' });
   const walk = useRef(0);
+  // One "more" at a time, even before the loading state re-renders.
+  const moreInFlight = useRef(false);
   const range = useRef<Range | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -155,12 +165,15 @@ export function useSaleHistory(bridge: SaleHistoryBridgeAPI | null): SaleHistory
   );
 
   const loadMore = useCallback(async (): Promise<void> => {
+    if (bridge === null || moreInFlight.current) return;
     const current = viewRef.current;
     const req = moreRequest(range.current, current);
-    if (bridge === null || req === null) return;
+    if (req === null) return;
+    moreInFlight.current = true;
     const mine = walk.current;
     setView({ ...current, more: { kind: 'loading' } } as HistoryView);
     const res = await listOr(bridge, req, 'continuation_failed');
+    moreInFlight.current = false;
     if (walk.current === mine) setView((latest) => afterMore(latest, res));
   }, [bridge]);
 

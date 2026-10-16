@@ -125,9 +125,29 @@ function dayOrNull(value: unknown): string | null {
   return value === null ? null : day(value);
 }
 
+/** An exact decimal quantity without trailing zeros: "2.000000" → "2", "1.500" → "1.5". */
 function quantity(value: unknown): string {
   const text = str(value);
-  return DECIMAL_QUANTITY.test(text) ? text : fail();
+  if (!DECIMAL_QUANTITY.test(text)) return fail();
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text;
+}
+
+/** Control and format characters (bidi marks, zero-width, BOM) never reach a screen or slip. */
+const HIDDEN = /[\p{Cc}\p{Cf}]/gu;
+
+/** Server text as shown: hidden characters removed, trimmed. */
+function shown(value: unknown): string {
+  return str(value).replace(HIDDEN, '').trim();
+}
+
+function shownOrNull(value: unknown): string | null {
+  return value === null ? null : shown(value);
+}
+
+/** An array of at most `max` items (bounded work on an untrusted answer). */
+function bounded(value: unknown, max: number): unknown[] {
+  const items = arr(value);
+  return items.length <= max ? items : fail();
 }
 
 function positiveIntOrNull(value: unknown): number | null {
@@ -148,6 +168,23 @@ function minor(value: unknown): number {
 
 function minorOrNull(value: unknown): number | null {
   return value === null ? null : minor(value);
+}
+
+/**
+ * A DISPLAY-only amount (line tax, return totals): exact to 10⁻⁴ on the wire
+ * (return pricing yields fractions of a piastre), shown rounded half away from
+ * zero to EGP minor units. Never used for a payout or a sale total.
+ */
+function shownMinor(value: unknown): number {
+  const amount4 = parseAmount4(str(value));
+  if (amount4 === null) return fail();
+  const rounded = (amount4 + 50n) / 100n;
+  const minorUnits = Number(rounded);
+  return Number.isSafeInteger(minorUnits) ? minorUnits : fail();
+}
+
+function shownMinorOrNull(value: unknown): number | null {
+  return value === null ? null : shownMinor(value);
 }
 
 function currency(value: unknown): void {
@@ -177,13 +214,13 @@ function readItem(value: unknown): {
     operatorRef: uuidOrNull(operator['userRef']),
     row: {
       sale_ref: uuid(item['saleRef']),
-      sale_number: strOrNull(item['saleNumber']),
+      sale_number: shownOrNull(item['saleNumber']),
       business_day: day(item['businessDate']),
       occurred_at: instant(item['occurredAt']),
       received_at: instant(item['receivedAt']),
-      device_label: strOrNull(device['label']),
+      device_label: shownOrNull(device['label']),
       device_label_source: oneOf(device['labelSource'], NAME_SOURCES),
-      operator_display_name: strOrNull(operator['displayName']),
+      operator_display_name: shownOrNull(operator['displayName']),
       operator_name_source: oneOf(operator['nameSource'], NAME_SOURCES),
       total_minor: minor(item['posTotal']),
       sync_status: oneOf(item['syncStatus'], SYNC_STATUSES),
@@ -220,12 +257,12 @@ function readLine(value: unknown): SaleHistoryLine {
   return {
     line_ref: uuid(line['lineRef']),
     sequence: positiveIntOrNull(line['sequence']),
-    name: str(line['lineName']),
+    name: shown(line['lineName']),
     unit_price_minor: minor(line['unitPrice']),
     quantity: quantity(line['quantity']),
     line_minor: minor(line['lineAmount']),
-    tax_minor: minorOrNull(line['taxAmount']),
-    unit: str(line['unit']),
+    tax_minor: shownMinorOrNull(line['taxAmount']),
+    unit: shown(line['unit']),
     returned_quantity: quantity(line['returnedQuantity']),
   };
 }
@@ -235,7 +272,7 @@ function readTender(value: unknown): SaleHistoryTender {
   return {
     method: oneOf(tender['method'], ['cash', 'card_external'] as const),
     amount_minor: minor(tender['amount']),
-    reference: strOrNull(tender['reference']),
+    reference: shownOrNull(tender['reference']),
     sequence: positiveIntOrNull(tender['sequence']),
   };
 }
@@ -246,13 +283,13 @@ function readReturn(value: unknown): SaleHistoryReturn {
     return_ref: uuid(entry['returnRef']),
     recorded_at: instant(entry['recordedAt']),
     business_day: day(entry['businessDate']),
-    total_minor: minor(entry['returnTotal']),
-    lines: arr(entry['lines']).map((raw) => {
+    total_minor: shownMinor(entry['returnTotal']),
+    lines: bounded(entry['lines'], 500).map((raw) => {
       const line = obj(raw);
       return {
         line_ref: uuid(line['lineRef']),
         quantity: quantity(line['quantity']),
-        line_minor: minor(line['lineAmount']),
+        line_minor: shownMinor(line['lineAmount']),
       };
     }),
   };
@@ -262,9 +299,9 @@ function readHeader(value: unknown): SaleHistoryDetail['receipt_header'] {
   if (value === null) return null;
   const header = obj(value);
   return {
-    branch_name: str(header['branchName']),
-    branch_address: str(header['branchAddress']),
-    tax_registration_id: str(header['taxRegistrationId']),
+    branch_name: shown(header['branchName']),
+    branch_address: shown(header['branchAddress']),
+    tax_registration_id: shown(header['taxRegistrationId']),
   };
 }
 
@@ -286,9 +323,9 @@ function readErp(value: unknown): SaleHistoryDetail['erp'] {
   const reversal = erp['reversal'];
   return {
     sale: oneOf(erp['sale'], ERP_STATES),
-    sale_document_ref: strOrNull(erp['saleDocumentRef']),
+    sale_document_ref: shownOrNull(erp['saleDocumentRef']),
     reversal: reversal === null ? null : oneOf(reversal, ERP_STATES),
-    reversal_document_ref: strOrNull(erp['reversalDocumentRef']),
+    reversal_document_ref: shownOrNull(erp['reversalDocumentRef']),
   };
 }
 
@@ -312,16 +349,16 @@ function readDetail(json: unknown): WireHistoryDetail {
     operator_ref: summary.operatorRef,
     detail: {
       summary: summary.row,
-      lines: arr(body['lines']).map(readLine),
+      lines: bounded(body['lines'], 500).map(readLine),
       line_order: oneOf(body['lineOrder'], ['recorded', 'not_recorded'] as const),
       tender_state: oneOf(body['tenderState'], ['recorded', 'unknown'] as const),
-      tenders: arr(body['tenders']).map(readTender),
+      tenders: bounded(body['tenders'], 20).map(readTender),
       change_minor: minorOrNull(body['changeGiven']),
       settled_at: instantOrNull(body['settledAt']),
-      receipt_number: strOrNull(body['receiptNumber']),
+      receipt_number: shownOrNull(body['receiptNumber']),
       receipt_header: readHeader(body['receiptHeader']),
       void: readVoid(body['void']),
-      returns: arr(body['returns']).map(readReturn),
+      returns: bounded(body['returns'], 100).map(readReturn),
       erp: readErp(body['erpPosting']),
       receipt_facts: oneOf(body['receiptFacts'], ['complete', 'partial'] as const),
       reprint: readEligibility(body['reprint']),

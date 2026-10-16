@@ -145,6 +145,8 @@ export function duplicateFromDetail(
   const lines = receiptLines(detail);
   if (facts === null || lines === null) return null;
   const subtotal = detail.summary.total_minor;
+  // Fail closed: the printed lines must add up to the recorded total.
+  if (lines.reduce((sum, line) => sum + line.line_subtotal_minor, 0) !== subtotal) return null;
   const tax = detail.lines.reduce((sum, line) => sum + (line.tax_minor ?? 0), 0);
   return {
     variant: 'reprint_duplicate',

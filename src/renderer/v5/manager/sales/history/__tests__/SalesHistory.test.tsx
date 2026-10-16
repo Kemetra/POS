@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
@@ -102,11 +102,16 @@ function detail(over: Partial<SaleHistoryDetail> = {}): SaleHistoryDetail {
 function bridgeWith(
   list: SaleHistoryListResponse | ((req: unknown) => Promise<SaleHistoryListResponse>),
   read: SaleHistoryDetail = detail(),
-): SaleHistoryBridgeAPI & { list: ReturnType<typeof vi.fn>; reprint: ReturnType<typeof vi.fn> } {
+): SaleHistoryBridgeAPI & {
+  list: Mock<SaleHistoryBridgeAPI['list']>;
+  reprint: Mock<SaleHistoryBridgeAPI['reprint']>;
+} {
   return {
-    list: vi.fn(typeof list === 'function' ? list : () => Promise.resolve(list)),
+    list: vi.fn<SaleHistoryBridgeAPI['list']>(
+      typeof list === 'function' ? list : () => Promise.resolve(list),
+    ),
     read: vi.fn(() => Promise.resolve({ kind: 'ok' as const, detail: read })),
-    reprint: vi.fn(() =>
+    reprint: vi.fn<SaleHistoryBridgeAPI['reprint']>(() =>
       Promise.resolve({
         kind: 'ok' as const,
         printed: 'duplicate' as const,
@@ -355,5 +360,106 @@ describe('RT-542 SalesHistory — detail and reprint', () => {
     await userEvent.click(await screen.findByRole('button', { name: C.open }));
     expect(await screen.findByTestId('history-local-detail')).toBeInTheDocument();
     expect(read).toHaveBeenCalledWith({ sale_id: 'local-1' });
+  });
+});
+
+describe('RT-542 review fixes — renderer', () => {
+  it('says the server is not answering, distinct from no connection', async () => {
+    await show(
+      bridgeWith({
+        kind: 'ok',
+        source: 'local',
+        coverage: 'this_device_only',
+        offline_reason: 'server_unavailable',
+        rows: [],
+        next_cursor: null,
+      }),
+    );
+    const coverage = await screen.findByTestId('history-coverage');
+    expect(coverage).toHaveTextContent(C.offlineServerUnavailable);
+    expect(coverage).not.toHaveTextContent(C.offlineNoConnection);
+  });
+
+  it('takes "today" from the clock at click time, not at mount', async () => {
+    let now = new Date('2026-10-16T20:30:00.000Z'); // 23:30 in Cairo
+    const bridge = bridgeWith(page());
+    render(<SalesHistory _testBridge={bridge} _now={() => now} />);
+    now = new Date('2026-10-16T21:30:00.000Z'); // 00:30 on the 17th in Cairo
+    await userEvent.click(screen.getByRole('button', { name: C.today }));
+    expect(bridge.list).toHaveBeenLastCalledWith({ from_day: '2026-10-17', to_day: '2026-10-17' });
+  });
+
+  it('loads the next page once on a double click', async () => {
+    let release: (value: SaleHistoryListResponse) => void = () => undefined;
+    const bridge = bridgeWith((req) =>
+      (req as { cursor?: string }).cursor === undefined
+        ? Promise.resolve(page({ next_cursor: 's.n1' }))
+        : new Promise<SaleHistoryListResponse>((resolve) => {
+            release = resolve;
+          }),
+    );
+    await show(bridge);
+    const more = await screen.findByRole('button', { name: C.loadMore });
+    more.click();
+    more.click();
+    release(page({ rows: [] }));
+    await waitFor(() => {
+      expect(bridge.list).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('ends a walk whose local cursor is refused, instead of offering a retry that cannot work', async () => {
+    const bridge = bridgeWith((req) =>
+      Promise.resolve(
+        (req as { cursor?: string }).cursor === undefined
+          ? ({
+              kind: 'ok',
+              source: 'local',
+              coverage: 'this_device_only',
+              offline_reason: 'no_connection',
+              rows: [],
+              next_cursor: 'n.bad',
+            } as const)
+          : ({ kind: 'refused', reason: 'invalid_request' } as const),
+      ),
+    );
+    await show(bridge);
+    await userEvent.click(await screen.findByRole('button', { name: C.loadMore }));
+    expect(await screen.findByTestId('history-refused')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: C.retry })).toBeNull();
+  });
+
+  it('never shows one sale’s reprint result on another sale', async () => {
+    const second = '0190a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6c';
+    let finish: () => void = () => undefined;
+    const bridge = bridgeWith(
+      page({ rows: [row(), row({ sale_ref: second, sale_number: 'SECOND' })] }),
+    );
+    bridge.reprint.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => {
+            resolve({
+              kind: 'ok',
+              printed: 'duplicate',
+              copy_number: 9,
+              marks: [],
+              printed_at: 'x',
+            });
+          };
+        }),
+    );
+    await show(bridge);
+    const opens = await screen.findAllByRole('button', { name: C.open });
+    await userEvent.click(opens[0] as HTMLElement);
+    let panel = await screen.findByTestId('history-detail');
+    await within(panel).findByTestId('history-erp');
+    await userEvent.click(within(panel).getByRole('button', { name: C.reprintDuplicate }));
+    await userEvent.click(opens[1] as HTMLElement);
+    finish();
+    panel = await screen.findByTestId('history-detail');
+    await within(panel).findByTestId('history-erp');
+    expect(within(panel).queryByText(C.sent(9))).toBeNull();
+    expect(within(panel).getByRole('button', { name: C.reprintDuplicate })).toBeEnabled();
   });
 });

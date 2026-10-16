@@ -1,8 +1,9 @@
 /**
  * RT-542 — the bridge cursor of a history walk. One walk keeps one source, and
  * the cursor names it: `s.<Backend-Core cursor>` for the server walk,
- * `n.` / `c.` + the RT-541 local cursor for the offline walk (no connection /
- * no credential), so a later page never mixes sources. Opaque to the renderer;
+ * `n.` / `c.` / `u.` + the RT-541 local cursor for the offline walk (no
+ * connection / no credential / server unavailable), so a later page never
+ * mixes sources. Opaque to the renderer;
  * parsed strictly here (the server part against the contract charset, the
  * local part by RT-541's own codec in `planSalesList`).
  */
@@ -21,12 +22,18 @@ const SERVER_PREFIX = 's.';
 const LOCAL_PREFIX: Readonly<Record<OfflineReason, string>> = {
   no_connection: 'n.',
   no_credential: 'c.',
+  server_unavailable: 'u.',
 };
 
 const DECODERS: Readonly<Record<string, (cursor: string) => Position | null>> = {
   [SERVER_PREFIX]: (cursor) => (isServerCursor(cursor) ? { kind: 'server', cursor } : null),
   [LOCAL_PREFIX.no_connection]: (cursor) => ({ kind: 'local', reason: 'no_connection', cursor }),
   [LOCAL_PREFIX.no_credential]: (cursor) => ({ kind: 'local', reason: 'no_credential', cursor }),
+  [LOCAL_PREFIX.server_unavailable]: (cursor) => ({
+    kind: 'local',
+    reason: 'server_unavailable',
+    cursor,
+  }),
 };
 
 /** The walk position of a request cursor, or null when it is malformed. */

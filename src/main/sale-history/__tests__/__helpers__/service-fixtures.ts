@@ -131,6 +131,7 @@ export interface Harness {
   localIds: Map<string, string>;
   localSales: Map<string, SaleRow>;
   successfulPrints: Set<string>;
+  localVoided: Set<string>;
   localList: Mock<SalesRepository['listByFinalizedRange']>;
   credential: { value: 'auto' | null };
 }
@@ -177,6 +178,7 @@ export function harness(session: OperatorSessionForSales | null = MANAGER): Harn
   const localIds = new Map<string, string>();
   const localSales = new Map<string, SaleRow>();
   const successfulPrints = new Set<string>();
+  const localVoided = new Set<string>();
   const client = {
     list: vi.fn<SaleHistoryClient['list']>(() => Promise.resolve(okPage())),
     read: vi.fn<SaleHistoryClient['read']>(() => Promise.resolve(okDetail())),
@@ -203,6 +205,7 @@ export function harness(session: OperatorSessionForSales | null = MANAGER): Harn
       readById: (id: string) => localSales.get(id) ?? null,
     },
     printEventsRepo: { hasSuccessfulPrint: (id: string) => successfulPrints.has(id) },
+    isSaleVoided: (id: string) => localVoided.has(id),
     printer: fakePrinter(printed, printResult),
     now: () => '2026-10-16T11:00:00.000Z',
     newIdempotencyKey: () => 'pos-pulse-reprint:0190a3c4-0000-4000-8000-000000000001',
@@ -218,6 +221,7 @@ export function harness(session: OperatorSessionForSales | null = MANAGER): Harn
     localIds,
     localSales,
     successfulPrints,
+    localVoided,
     localList,
     credential,
   };

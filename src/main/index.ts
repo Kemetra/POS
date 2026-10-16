@@ -1941,6 +1941,8 @@ singleInstanceReady
           local: createSaleHistoryLocalReads(db),
           salesRepo,
           printEventsRepo,
+          // OD-534-8 B: a live local void forbids a duplicate and marks the record.
+          isSaleVoided: (saleId) => saleVoidReads.liveForSale(saleId) !== null,
           printer: printPipeline,
           now: receiptsClock,
           newIdempotencyKey: () => `pos-pulse-reprint:${randomUUID()}`,

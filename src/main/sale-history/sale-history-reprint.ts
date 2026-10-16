@@ -16,8 +16,10 @@
  *      and its own record is printed;
  *   5. `authorize` with a fresh Idempotency-Key — each call is one audited
  *      authorization, so a retry after a printer fault is a new copy number;
- *   6. print exactly the kind, sale and marks the server authorized, through
- *      the receipt pipeline; audit the outcome.
+ *   6. print exactly the kind and sale the server authorized, through the
+ *      receipt pipeline, with marks never weaker than the record (the
+ *      authorization must carry every mark the detail implies; a live local
+ *      void adds VOIDED; `sale-history-marks.ts`); audit the outcome.
  *
  * A reprint never kicks the drawer and changes no sale, return, void or
  * payment fact.
@@ -34,7 +36,9 @@ import { isUuid } from '../returns/returns-wire.js';
 import type { ReceiptPayload } from '../../shared/receipts/types.js';
 import type { Admitted, ResolvedCredential, SaleHistoryAccess } from './sale-history-access.js';
 import type { WireReprint } from './sale-history-wire.js';
+import type { SaleRow } from '../sales/repositories/sales.repository.js';
 import type { DetailReader } from './sale-history-detail.js';
+import { coversMarks, detailMarks, printedMarks } from './sale-history-marks.js';
 import type { SaleHistoryServiceDeps } from './sale-history-service.js';
 import {
   duplicateBands,
@@ -75,6 +79,8 @@ interface Prepared {
   readonly detail: SaleHistoryDetail;
   readonly resolved: ResolvedCredential;
   readonly source: DuplicateSource | null;
+  /** This terminal's own record has a live void the server may not know yet. */
+  readonly localVoid: boolean;
 }
 
 /** The server authorized exactly the sale and kind asked for, before printing. */
@@ -84,6 +90,12 @@ function isAuthorizationFor(authorized: WireReprint, request: ReprintRequest): b
     authorized.kind === request.kind &&
     authorized.mode === 'authorize'
   );
+}
+
+/** OD-534-3/8: the detail allows a duplicate and no source says voided. */
+function isDuplicateAllowed(detail: SaleHistoryDetail, localVoid: boolean): boolean {
+  if (detail.reprint.duplicate !== 'allowed') return false;
+  return !localVoid && !detailMarks(detail).has('voided');
 }
 
 function readRequest(req: unknown): ReprintRequest | null {
@@ -102,16 +114,33 @@ export function createSaleHistoryReprint(input: SaleHistoryReprintDeps): {
   const now = deps.now ?? ((): string => new Date().toISOString());
   const running = new Set<string>();
 
-  /** The duplicate source, or why a duplicate cannot be printed. */
-  function duplicateSource(detail: SaleHistoryDetail): DuplicateSource | Refusal {
-    if (detail.reprint.duplicate !== 'allowed') return refuse('duplicate_unavailable');
+  /** True when this terminal's void journal holds a live void of its own record. */
+  function hasLocalVoid(detail: SaleHistoryDetail): boolean {
+    const localId = detail.summary.local_sale_id;
+    return localId !== null && deps.isSaleVoided?.(localId) === true;
+  }
+
+  /** This terminal's own record as a duplicate source, or why not (OD-534-1/2, Q-6). */
+  function localSource(admitted: Admitted, row: SaleRow): DuplicateSource | Refusal {
+    // Defence in depth: a cashier never prints another operator's record.
+    if (admitted.owner !== null && row.selling_operator_id !== admitted.owner) {
+      return refuse('sale_not_found');
+    }
+    if (!deps.printEventsRepo.hasSuccessfulPrint(row.sale_id)) return refuse('not_yet_printed');
+    if (duplicateFromLocal(row, 1, now()) === null) return refuse('duplicate_unavailable');
+    return (copy, at) => duplicateFromLocal(row, copy, at);
+  }
+
+  /** The duplicate source, or why a duplicate cannot be printed (OD-534-3/8). */
+  function duplicateSource(
+    admitted: Admitted,
+    detail: SaleHistoryDetail,
+    localVoid: boolean,
+  ): DuplicateSource | Refusal {
+    if (!isDuplicateAllowed(detail, localVoid)) return refuse('duplicate_unavailable');
     const localId = detail.summary.local_sale_id;
     const row = localId === null ? null : deps.salesRepo.readById(localId);
-    if (row !== null) {
-      if (!deps.printEventsRepo.hasSuccessfulPrint(row.sale_id)) return refuse('not_yet_printed');
-      if (duplicateFromLocal(row, 1, now()) === null) return refuse('duplicate_unavailable');
-      return (copy, at) => duplicateFromLocal(row, copy, at);
-    }
+    if (row !== null) return localSource(admitted, row);
     if (duplicateFromDetail(detail, 1, now()) === null) return refuse('duplicate_unavailable');
     return (copy, at) => duplicateFromDetail(detail, copy, at);
   }
@@ -165,28 +194,35 @@ export function createSaleHistoryReprint(input: SaleHistoryReprintDeps): {
   ): Promise<Prepared | Refusal> {
     const fetched = await details.fetchDetail(admitted, saleRef);
     if (!fetched.ok) return refuse(fetched.reason);
-    const source = kind === 'duplicate' ? duplicateSource(fetched.detail) : null;
+    const { detail } = fetched;
+    const localVoid = hasLocalVoid(detail);
+    const source = kind === 'duplicate' ? duplicateSource(admitted, detail, localVoid) : null;
     if (source !== null && 'kind' in source) return source;
-    return { detail: fetched.detail, resolved: fetched.resolved, source };
+    return { detail, resolved: fetched.resolved, source, localVoid };
   }
 
   /** Backend-Core's authorization of exactly this sale and kind, or why not. */
   async function authorize(
     admitted: Admitted,
     request: ReprintRequest,
-    resolved: ResolvedCredential,
+    prepared: Prepared,
     printedAt: string,
   ): Promise<{ readonly reprint: WireReprint } | Refusal> {
     const { saleRef, kind } = request;
     const outcome = await deps.client.authorizeReprint(
       { saleRef, kind, printedAt, idempotencyKey: deps.newIdempotencyKey() },
-      resolved.credential,
+      prepared.resolved.credential,
     );
     if (!access.stillCurrent(admitted)) return refuse('session_changed');
     if (outcome.kind !== 'ok') return refuse(AUTHORIZE_FAILURE[outcome.kind] ?? 'unavailable');
-    return isAuthorizationFor(outcome.reprint, request)
-      ? { reprint: outcome.reprint }
-      : refuse('unavailable');
+    const authorized = outcome.reprint;
+    const fits =
+      isAuthorizationFor(authorized, request) &&
+      coversMarks(authorized.marks, detailMarks(prepared.detail));
+    if (!fits) return refuse('unavailable');
+    // Print the union with this terminal's own live void (never weaker than the record).
+    const marks = printedMarks(authorized.marks, prepared.localVoid);
+    return { reprint: { ...authorized, marks } };
   }
 
   async function run(
@@ -196,11 +232,15 @@ export function createSaleHistoryReprint(input: SaleHistoryReprintDeps): {
     const prepared = await prepare(admitted, request.saleRef, request.kind);
     if ('kind' in prepared) return prepared;
     const printedAt = now();
-    const answer = await authorize(admitted, request, prepared.resolved, printedAt);
+    const answer = await authorize(admitted, request, prepared, printedAt);
     if (!('reprint' in answer)) return answer;
     const authorized = answer.reprint;
     const bands = slipBands(authorized, prepared.detail, prepared.source, printedAt);
-    if (bands === null) return refuse('unavailable');
+    if (bands === null) {
+      // The server already spent this copy number: record that nothing printed.
+      audit(admitted, authorized, 'unprintable', printedAt);
+      return refuse('unavailable');
+    }
     const printed = await deps.printer.printRendered(renderBands(bands));
     audit(admitted, authorized, printed.ok ? 'printed' : 'print_failed', printedAt);
     if (!printed.ok) return refuse('printer_unavailable');

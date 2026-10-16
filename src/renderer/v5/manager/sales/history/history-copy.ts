@@ -27,6 +27,7 @@ export const HISTORY_COPY = Object.freeze({
   deviceOnly: 'مبيعات هذا الجهاز فقط — عرض غير مكتمل لمبيعات المتجر.',
   offlineNoConnection: 'الخادم غير متاح الآن.',
   offlineNoCredential: 'هذا الدخول لا يتيح قراءة سجل المتجر من الخادم.',
+  offlineServerUnavailable: 'الخادم لا يستجيب الآن.',
   unsyncedHeading: 'مبيعات على هذا الجهاز لم تصل إلى الخادم بعد',
   unsyncedTruncated: 'وتوجد مبيعات أخرى لم تُرسل بعد.',
   empty: 'لا توجد مبيعات في هذه الفترة.',

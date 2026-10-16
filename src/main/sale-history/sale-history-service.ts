@@ -72,6 +72,11 @@ export interface SaleHistoryServiceDeps {
   local: SaleHistoryLocalReads;
   salesRepo: Pick<SalesRepository, 'listByFinalizedRange' | 'readById'>;
   printEventsRepo: Pick<PrintEventsRepository, 'hasSuccessfulPrint'>;
+  /**
+   * True when this terminal's void journal holds a live void (pending, unknown
+   * or confirmed) of the sale (OD-534-8 B). Absent: never voided.
+   */
+  isSaleVoided?: (saleId: string) => boolean;
   printer: Pick<PrintPipeline, 'printRendered'>;
   now?: () => string;
   newIdempotencyKey: () => string;
@@ -188,6 +193,7 @@ function failedListAnswer(
     return refused(CONTINUATION_FAILURE[failure] ?? 'continuation_failed');
   }
   if (failure === 'unreachable') return localPage(deps, run, 'no_connection');
+  if (failure === 'server_error') return localPage(deps, run, 'server_unavailable');
   return refused(FIRST_PAGE_FAILURE[failure] ?? 'unavailable');
 }
 
