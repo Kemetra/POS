@@ -145,6 +145,9 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'payment.recovery_cancelled',
   // RT-546 — emitted only by the sales/receipts role gate (sale-access-policy).
   'sale.access.refused',
+  // RT-551 — the sale-number day-rule switch, written only by the finalize
+  // transaction. A forged row would also suppress the genuine one.
+  'sale.number_day_rule.switched',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {

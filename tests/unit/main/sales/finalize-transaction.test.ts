@@ -33,6 +33,8 @@ const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
 const MIGRATIONS = [
   // 006 schema needed for the refusal-guard fixtures.
+  // RT-551 — the once-per-terminal switch marker is read from audit_events.
+  '0004_audit_events.sql',
   '0012_create_payment_attempts.sql',
   '0013_payment_attempts_partial_unique_started.sql',
   '0014_create_payment_tender_lines.sql',
@@ -172,7 +174,6 @@ function buildInput(
     tenant_tax_registration_id: 'TRN-123',
     branch_name: 'Maadi Branch',
     branch_address: '12 Road 9, Maadi',
-    local_calendar_day: '2026-05-27',
     lines: [
       {
         line_id: 'line-1',
@@ -213,9 +214,11 @@ describe('T050 — AD-2 atomic finalize transaction', () => {
     const outboxRow = db.exec("SELECT state FROM sale_sync_outbox WHERE sale_id = 'sale-uuid-1'");
     expect(outboxRow[0]?.values[0]?.[0]).toBe('pending');
 
-    // audit row emitted.
-    expect(captured).toHaveLength(1);
-    expect(captured[0]?.action_category).toBe('sale.finalized');
+    // audit rows emitted: the sale, then this terminal's one-time RT-551 switch.
+    expect(captured.map((e) => e.action_category)).toEqual([
+      'sale.finalized',
+      'sale.number_day_rule.switched',
+    ]);
   });
 
   it('writes all four rows inside one SQLite transaction (forensic check)', () => {
@@ -231,7 +234,10 @@ describe('T050 — AD-2 atomic finalize transaction', () => {
     expect(sales[0]?.values[0]?.[0]).toBe(1);
     expect(outbox[0]?.values[0]?.[0]).toBe(1);
     expect(seq[0]?.values[0]?.[0]).toBe(1);
-    expect(captured).toHaveLength(1);
+    expect(captured.map((e) => e.action_category)).toEqual([
+      'sale.finalized',
+      'sale.number_day_rule.switched',
+    ]);
   });
 
   it('persists the redacted tender_lines_summary_json in the sales row', () => {
@@ -349,12 +355,16 @@ describe('T051 — duplicate finalize on the same envelope_handoff_action_id is 
     if (first.kind !== 'finalized') return;
     expect(second.sale_id).toBe(first.sale_id);
 
-    // Exactly one row in each downstream table; exactly one audit event.
+    // Exactly one row in each downstream table; one sale.finalized (plus the
+    // first-sale RT-551 switch), nothing from the replay.
     const sales = db.exec('SELECT COUNT(*) FROM sales');
     const outbox = db.exec('SELECT COUNT(*) FROM sale_sync_outbox');
     expect(sales[0]?.values[0]?.[0]).toBe(1);
     expect(outbox[0]?.values[0]?.[0]).toBe(1);
-    expect(captured).toHaveLength(1);
+    expect(captured.map((e) => e.action_category)).toEqual([
+      'sale.finalized',
+      'sale.number_day_rule.switched',
+    ]);
   });
 
   it('in-transaction TOCTOU re-check fires when the fast-path read sees no row but a concurrent INSERT wins the race', () => {

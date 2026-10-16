@@ -129,6 +129,12 @@ export const AUDIT_ACTION_CATEGORIES = [
   // Payload: the handler, the closed reason and the opaque sale id only. Open-set
   // at the SQL layer (0004: no CHECK); no migration.
   'sale.access.refused',
+  // RT-551 (RT-545 S2) — the terminal's first sale numbered by the store
+  // business day (Africa/Cairo) of `finalized_at` instead of the UTC date of
+  // `settled_at`: the Option A cutover, written once per terminal by the
+  // finalize transaction. Payload: terminal, sale id and number, instant, day
+  // and zone only. Open-set at the SQL layer (0004: no CHECK); no migration.
+  'sale.number_day_rule.switched',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 
@@ -142,7 +148,8 @@ export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
  * It cannot collide with a real operator id: those are provider subjects
  * (Clerk `user_<base62>`) or `users.id` UUIDs, neither of which can contain a
  * `:`. Used by the `pairing.device_revoked*` categories, and (RT-438) as the
- * fallback actor of a `manager_credential.*` event with no live session.
+ * fallback actor of a `manager_credential.*` event with no live session, and
+ * (RT-551) by `sale.number_day_rule.switched`.
  */
 export const SYSTEM_DEVICE_ACTOR_ID = 'system:device' as const;
 

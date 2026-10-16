@@ -22,10 +22,13 @@
  *   3. Forbidden-field scan on `tender_lines_summary` (FR-070..FR-074 +
  *      CR3 from PR #261). Emits `sale.finalization_refused` with
  *      refusal_reason='forbidden_field_in_tender_summary' on hit.
- *   4. Allocate `sale_number` via the AD-7 allocator (T085).
+ *   4. Take `finalized_at`, derive the sale-number day from it (RT-551:
+ *      the Africa/Cairo business day), then allocate `sale_number` via the
+ *      AD-7 allocator (T085).
  *   5. INSERT the `sales` row.
  *   6. INSERT the `sale_sync_outbox` row with state='pending'.
- *   7. Emit the `sale.finalized` audit event.
+ *   7. Emit the `sale.finalized` audit event, and — once per terminal —
+ *      `sale.number_day_rule.switched` (RT-551 Option A cutover).
  *
  * Steps 4-7 run inside `db.transaction(...)` so a failure between
  * (4) and (7) rolls back the allocator's sequence increment too — the
@@ -40,7 +43,7 @@
  */
 
 import type { DatabaseHandle } from '../db/client.js';
-import type { SalesRepository } from './repositories/sales.repository.js';
+import type { SaleRow, SalesRepository } from './repositories/sales.repository.js';
 import type { SaleSyncOutboxRepository } from '../sync-outbox/sale-sync-outbox.repository.js';
 import type { SaleNumberAllocator } from './sale-number-allocator.js';
 import type { SaleAuditEmitter } from './audit-emitter.js';
@@ -48,6 +51,7 @@ import type { SalesTenderType, SaleFinalizationRefusalReason } from '../../share
 import type { LineSnapshot } from '../../shared/cart/handoff-envelope.js';
 import { findForbiddenKey } from '../audit/find-forbidden-key.js';
 import { redactTenderLine } from './redact-tender-line.js';
+import { bindSaleNumberDayRuleSwitch, saleNumberDayOf } from './sale-number-day-rule.js';
 
 // ─── Narrow better-sqlite3 surface (mirrors repositories) ───────────────────
 
@@ -97,7 +101,6 @@ export interface FinalizeInput {
   tenant_tax_registration_id: string;
   branch_name: string;
   branch_address: string;
-  local_calendar_day: string;
   /**
    * Frozen snapshot of the cart's item lines from the source
    * `PaymentIntentEnvelope`. Persisted verbatim (JSON) onto the Sale row
@@ -199,6 +202,42 @@ function buildRedactedTenderLinesSummary(input: FinalizeInput): Array<Record<str
   }));
 }
 
+/** What the finalize transaction issued for a sale: identity, number, instant and day. */
+interface IssuedSale {
+  sale_id: string;
+  sale_number: string;
+  finalized_at: string;
+  /** RT-551 — the business day of `finalized_at`: the counter key and the number's date. */
+  local_calendar_day: string;
+}
+
+/** The append-only `sales` row for an issued sale (receipt_number === sale_number, 008 v1). */
+function saleRowFor(input: FinalizeInput, issued: IssuedSale): SaleRow {
+  return {
+    ...issued,
+    receipt_number: issued.sale_number,
+    envelope_handoff_action_id: input.envelope_handoff_action_id,
+    payment_attempt_id: input.payment_attempt_id,
+    envelope_cart_id: input.envelope_cart_id,
+    tenant_id: input.tenant_id,
+    branch_id: input.branch_id,
+    terminal_id: input.terminal_id,
+    terminal_label: input.terminal_label,
+    selling_operator_id: input.selling_operator_id,
+    selling_operator_display_name: input.selling_operator_display_name,
+    selling_operator_session_id: input.selling_operator_session_id,
+    subtotal_minor: input.subtotal_minor,
+    total_tax_minor: input.total_tax_minor,
+    total_change_due_minor: input.total_change_due_minor,
+    tender_lines_summary_json: JSON.stringify(buildRedactedTenderLinesSummary(input)),
+    settled_at: input.settled_at,
+    tenant_tax_registration_id: input.tenant_tax_registration_id,
+    branch_name: input.branch_name,
+    branch_address: input.branch_address,
+    lines_json: JSON.stringify(input.lines),
+  };
+}
+
 // ─── 006 read shapes (narrow projections used by the refusal guard) ────────
 
 interface PaymentAttemptProjection {
@@ -239,6 +278,8 @@ export function bindFinalizeTransaction(
     `SELECT state FROM payment_attempts WHERE payment_attempt_id = ?`,
   ) as PrepareGet<PaymentAttemptProjection>;
 
+  const dayRuleSwitch = bindSaleNumberDayRuleSwitch({ db, auditEmitter });
+
   const readTenderStatesStmt = db.prepare(
     `SELECT state FROM payment_tender_lines WHERE payment_attempt_id = ?`,
   ) as PrepareAll<TenderLineStateProjection>;
@@ -278,50 +319,26 @@ export function bindFinalizeTransaction(
   }
 
   /**
-   * Inside the finalize transaction: re-check idempotency, allocate the sale
-   * number, then write the sale row, its sync-outbox row and the audit event.
+   * Inside the finalize transaction: re-check idempotency, take `finalized_at`
+   * and its business day (RT-551), allocate the sale number under that day,
+   * then write the sale row, its sync-outbox row and the audit events.
    */
   function insertSaleOutboxAndAudit(input: FinalizeInput): TxnResult {
     const concurrent = salesRepo.findByHandoffActionId(input.envelope_handoff_action_id);
     if (concurrent !== null) {
       return { kind: 'duplicate_detected_in_txn', existing_sale_id: concurrent.sale_id };
     }
+    const finalized_at = now();
+    const local_calendar_day = saleNumberDayOf(finalized_at);
     const sale_number = allocator.allocate({
       terminal_id: input.terminal_id,
       terminal_label: input.terminal_label,
-      local_calendar_day: input.local_calendar_day,
+      local_calendar_day,
     });
     const sale_id = saleIdGenerator();
-    const finalized_at = now();
     const receipt_number = sale_number; // 008 v1: receipt_number === sale_number (data-model.md).
-    const tenderLinesJson = JSON.stringify(buildRedactedTenderLinesSummary(input));
 
-    salesRepo.insert({
-      sale_id,
-      sale_number,
-      receipt_number,
-      envelope_handoff_action_id: input.envelope_handoff_action_id,
-      payment_attempt_id: input.payment_attempt_id,
-      envelope_cart_id: input.envelope_cart_id,
-      tenant_id: input.tenant_id,
-      branch_id: input.branch_id,
-      terminal_id: input.terminal_id,
-      terminal_label: input.terminal_label,
-      selling_operator_id: input.selling_operator_id,
-      selling_operator_display_name: input.selling_operator_display_name,
-      selling_operator_session_id: input.selling_operator_session_id,
-      subtotal_minor: input.subtotal_minor,
-      total_tax_minor: input.total_tax_minor,
-      total_change_due_minor: input.total_change_due_minor,
-      tender_lines_summary_json: tenderLinesJson,
-      settled_at: input.settled_at,
-      finalized_at,
-      tenant_tax_registration_id: input.tenant_tax_registration_id,
-      branch_name: input.branch_name,
-      branch_address: input.branch_address,
-      local_calendar_day: input.local_calendar_day,
-      lines_json: JSON.stringify(input.lines),
-    });
+    salesRepo.insert(saleRowFor(input, { sale_id, sale_number, finalized_at, local_calendar_day }));
 
     outboxRepo.insert({
       outbox_row_id: outboxRowIdGenerator(),
@@ -348,6 +365,16 @@ export function bindFinalizeTransaction(
       subtotal_minor: input.subtotal_minor,
       total_tax_minor: input.total_tax_minor,
       tender_lines_summary: input.tender_lines_summary,
+    });
+
+    dayRuleSwitch.recordIfFirst({
+      tenant_id: input.tenant_id,
+      branch_id: input.branch_id,
+      terminal_id: input.terminal_id,
+      sale_id,
+      sale_number,
+      finalized_at,
+      business_day: local_calendar_day,
     });
 
     return {
@@ -415,6 +442,7 @@ export function bindFinalizeTransaction(
           receipt_number: existing.receipt_number,
         };
       }
+      dayRuleSwitch.noteCommitted(input.tenant_id, input.terminal_id);
       return {
         kind: 'finalized',
         sale_id: result.sale_id,
