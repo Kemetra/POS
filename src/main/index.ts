@@ -122,7 +122,7 @@ import {
   withPairedNotification,
   type PairedWorkers,
 } from './app/paired-workers.js';
-import { parseTendersSince } from './sales-sync/capture-payload.js';
+import { parseReceiptSince, parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { SALE_SYNC_DRAIN_TIMEOUT_MS, scheduleSaleSync } from './sales-sync/schedule-sale-sync.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
@@ -2104,6 +2104,20 @@ singleInstanceReady
         ) {
           mainLogger.warn('sale_sync:tenders_since_unparseable_tenders_off');
         }
+        // RT-540 rollout gate (same rule as the tenders gate above): unset = never send the
+        // `receipt` snapshot (default). Ops MUST choose a FUTURE instant, later than BOTH the
+        // Backend-Core RT-539 deploy and the restart that loads it here, so no sale at/after
+        // the cutoff can already have been sent without it (a changed body under the same
+        // Idempotency-Key is a 409). Unparseable = off + warning.
+        const receiptSinceRaw = process.env['POS_PULSE_FEATURE_SALE_RECEIPT_SINCE'];
+        const receiptSince = parseReceiptSince(receiptSinceRaw);
+        if (
+          receiptSinceRaw !== undefined &&
+          receiptSinceRaw.trim() !== '' &&
+          receiptSince === null
+        ) {
+          mainLogger.warn('sale_sync:receipt_since_unparseable_receipt_off');
+        }
         // RT-221: the drain (and the pending / held counts) is scoped to the
         // CURRENT pairing's terminal_id, read live from the pairing status each
         // tick. After a re-pair, the earlier pairing's queued sales are held —
@@ -2136,6 +2150,7 @@ singleInstanceReady
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
           tendersSince,
+          receiptSince,
           stateRepo: saleSyncStateRepo,
           salesRepo,
           tenantId: pairingStatus.tenant_id,

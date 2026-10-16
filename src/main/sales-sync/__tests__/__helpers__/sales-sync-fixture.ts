@@ -67,6 +67,8 @@ export interface SeedSaleInput {
   settled_at?: string;
   lines_json?: string;
   tender_lines_summary_json?: string;
+  /** RT-540: the receipt header address; defaults to a fixed value (older rows can be ''). */
+  branch_address?: string;
 }
 
 /** Insert a durable `sales` row (the payload source). Unique sale_number per id. */
@@ -127,7 +129,7 @@ export function seedSale(db: SqlJsDatabase, o: SeedSaleInput = {}): string {
       row.finalized_at,
       'TRN-123',
       'Main Branch',
-      '1 Cairo St',
+      o.branch_address ?? '1 Cairo St',
       '2026-06-07',
       row.lines_json,
     ] as never[],

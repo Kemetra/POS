@@ -337,3 +337,47 @@ describe('RT-79 — tenders through the engine', () => {
     h.db.close();
   });
 });
+
+describe('RT-540 — receipt snapshot through the engine', () => {
+  const SINCE = '2026-06-01T00:00:00.000Z';
+
+  async function drained(receiptSince: string | null | undefined, branchAddress?: string) {
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
+    seedSale(h.db, {
+      sale_id: 'sale-1',
+      ...(branchAddress === undefined ? {} : { branch_address: branchAddress }),
+    });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    await runOnce({ ...h.deps, receiptSince });
+    const client = h.deps.client as ReturnType<typeof createFakeSaleSyncClient>;
+    return { h, client };
+  }
+
+  it('cutoff configured + post-cutoff sale -> the client receives the receipt, sale synced', async () => {
+    const { h, client } = await drained(SINCE);
+    expect(client.calls[0]?.receipt).toMatchObject({
+      saleNumber: 'SN-sale-1',
+      terminalLabel: 'Till 1',
+      branchAddress: '1 Cairo St',
+      taxRegistrationId: 'TRN-123',
+    });
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('synced');
+    h.db.close();
+  });
+
+  it('no cutoff configured (default) -> the client receives NO receipt', async () => {
+    const { h, client } = await drained(undefined);
+    expect(client.calls).toHaveLength(1);
+    expect('receipt' in (client.calls[0] ?? {})).toBe(false);
+    h.db.close();
+  });
+
+  it("a sale with an unsendable fact (older row, '' address) still syncs, without a receipt", async () => {
+    const { h, client } = await drained(SINCE, '');
+    expect(client.calls).toHaveLength(1);
+    expect('receipt' in (client.calls[0] ?? {})).toBe(false);
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('synced');
+    expect(h.deadLetters).toEqual([]);
+    h.db.close();
+  });
+});
