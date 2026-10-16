@@ -97,6 +97,7 @@ start the POS.
 | `POS_PULSE_FEATURE_SALE_VOID` | **Off (unset) until the Backend-Core void approval (RT-530, `sales.yaml` 1.8.0-draft, migration `0046_sale_void_approval`) is deployed.** Then `1` turns on «إلغاء بيع» (`/app/void`): a finalized sale is voided only the same business day, with another manager's RT-114 PIN (never the requester, never the sale's selling operator). The void is queued and sent under the requester's own operator envelope once the sale has synced and the requester is signed in online; Backend-Core may still refuse it, and a refusal stays visible until acknowledged. The terminal's clock and timezone must match the store's timezone (Backend-Core compares the sale's business day in the store timezone). | Not a secret. |
 | `POS_PULSE_FEATURE_SHIFT_CASHUP` | **Off (unset) on every pilot terminal until the owner accepts the RT-17 evidence.** Then `1` turns on the shift cash-up: open a shift with a float, record pay-ins and pay-outs, close with a blind count. It needs Backend-Core `481eb26` or later with migration `0036_shift_cash_up` and both domain-grant scripts applied first (the Backend-Core deploy runbook, `deploy/README.md`). See §7 for the rule when a terminal is revoked, re-paired or moved. | Not a secret. |
 | `POS_PULSE_FEATURE_SALE_TENDERS_SINCE` | Set **only** as the RT-79 tender rollout instructs: a future ISO instant with an explicit zone. Unparseable means tenders are off, with a warning. | Not a secret. |
+| `POS_PULSE_FEATURE_SALE_RECEIPT_SINCE` | Set **only** as the RT-540 receipt-snapshot rollout instructs: a future ISO instant with an explicit zone, later than both the Backend-Core RT-539 deploy and the restart that loads it. Sales finalized at or after it send the optional `receipt` (sale number, terminal label, operator name, branch header, change given). A sale with a missing or oversized fact, or an operator name containing `@`, still syncs, without it. Once set, never move, unset or clear it while sales are queued (a retry would then send a different body under the same key, a 409): drain the outbox first. Do not set it earlier than `POS_PULSE_FEATURE_SALE_TENDERS_SINCE`, so the change given always pairs with a cash tender. Unparseable means off, with a warning. | Not a secret. |
 | `POS_PULSE_RECEIPT_WEBSITE` | Optional receipt footer text. | Not a secret. |
 | `POS_PULSE_SUPPORT_RESET_CASHIER_CLAIM_REFUSED` | **Support only, normally unset.** `1` re-queues, once per start, this terminal's sales dead-lettered as `cashier_claim_refused` (RT-225). See §7. Any other value does nothing. | Not a secret. |
 
@@ -165,7 +166,7 @@ removes the reason for choosing it. The §6.1 check fails on such an account.
      'POS_PULSE_FEATURE_VOUCHER_TENDER'    = '0'
      'VITE_API_BASE_URL'                   = '<pilot Backend-Core base URL>'
      'CLERK_PUBLISHABLE_KEY'               = '<pilot Clerk publishable key>'
-     # Optional, only when instructed: SENTRY_DSN, POS_PULSE_FEATURE_SALE_TENDERS_SINCE,
+     # Optional, only when instructed: SENTRY_DSN, POS_PULSE_FEATURE_SALE_TENDERS_SINCE, POS_PULSE_FEATURE_SALE_RECEIPT_SINCE,
      # POS_PULSE_RECEIPT_WEBSITE
    }
    foreach ($k in $machine.Keys) { [Environment]::SetEnvironmentVariable($k, $machine[$k], 'Machine') }

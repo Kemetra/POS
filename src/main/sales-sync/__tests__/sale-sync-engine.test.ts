@@ -337,3 +337,70 @@ describe('RT-79 — tenders through the engine', () => {
     h.db.close();
   });
 });
+
+describe('RT-540 — receipt snapshot through the engine', () => {
+  const SINCE = '2026-06-01T00:00:00.000Z';
+
+  async function drained(receiptSince: string | null | undefined, branchAddress?: string) {
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
+    seedSale(h.db, {
+      sale_id: 'sale-1',
+      ...(branchAddress === undefined ? {} : { branch_address: branchAddress }),
+    });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    await runOnce({ ...h.deps, receiptSince });
+    const client = h.deps.client as ReturnType<typeof createFakeSaleSyncClient>;
+    return { h, client };
+  }
+
+  it('cutoff configured + post-cutoff sale -> the client receives the receipt, sale synced', async () => {
+    const { h, client } = await drained(SINCE);
+    expect(client.calls[0]?.receipt).toMatchObject({
+      saleNumber: 'SN-sale-1',
+      terminalLabel: 'Till 1',
+      branchAddress: '1 Cairo St',
+      taxRegistrationId: 'TRN-123',
+    });
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('synced');
+    h.db.close();
+  });
+
+  it('no cutoff configured (default) -> the client receives NO receipt', async () => {
+    const { h, client } = await drained(undefined);
+    expect(client.calls).toHaveLength(1);
+    expect('receipt' in (client.calls[0] ?? {})).toBe(false);
+    h.db.close();
+  });
+
+  it('no receipt value reaches the dead-letter notification or the stored state (no PII)', async () => {
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
+    seedSale(h.db, {
+      sale_id: 'sale-1',
+      tender_lines_summary_json: JSON.stringify([
+        { tender_type: 'internal_voucher', amount_applied_minor: 1500 },
+      ]),
+    });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    const seen: unknown[] = [];
+    await runOnce({
+      ...h.deps,
+      tendersSince: SINCE,
+      receiptSince: SINCE,
+      onDeadLetter: (...args) => seen.push(args),
+    });
+    const text = JSON.stringify([seen, h.stateRepo.read('sale-1')]);
+    for (const value of ['Operator One', '1 Cairo St', 'TRN-123', 'SN-sale-1', 'Main Branch']) {
+      expect(text).not.toContain(value);
+    }
+    h.db.close();
+  });
+
+  it("a sale with an unsendable fact (older row, '' address) still syncs, without a receipt", async () => {
+    const { h, client } = await drained(SINCE, '');
+    expect(client.calls).toHaveLength(1);
+    expect('receipt' in (client.calls[0] ?? {})).toBe(false);
+    expect(nn(h.stateRepo.read('sale-1')).sync_status).toBe('synced');
+    expect(h.deadLetters).toEqual([]);
+    h.db.close();
+  });
+});

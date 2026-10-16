@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Data-Pulse-2 POS Sales — Transaction Capture API
-  version: "1.6.0-draft"
+  version: "1.9.0-draft"
   description: >
     Spec 008 Sales / Transaction Capture contract surface. Defines the first
     sale fact the SaaS owns: an immutable `sales` header + frozen `sale_lines`
@@ -143,6 +143,72 @@ info:
     response, security requirement, operation or migration changes. A client
     that does not send `admissionCheckAt` sees no difference.
 
+    RT-359 (1.7.0-draft; [GATED] approval Jira RT-359, owner, 2026-10-11;
+    decisions RT-264 D1–D4, Sales & Returns 1002–1013): TENDER-LINE IDENTITY.
+    `SaleTender` gains an OPTIONAL `tenderRef` (uuid), the tender line's own
+    stable identity, and an OPTIONAL `sequence` (integer >= 1), its position in
+    the order the lines were applied. Tender method is no longer tender
+    identity: a sale may carry more than one entry with the same `method` (a
+    same-method split tender), each its own line. The `tenderRef` is minted by
+    the producer (the POS) when the tender line is created and is part of the
+    payload hash, so it never changes on a retry. A tender recorded without a
+    `tenderRef` (every tender captured before this version) is a legacy tender:
+    it was written under the one-entry-per-method rule, so it stays addressed
+    by `(sale, method)`. Its ref is never backfilled or derived. ROLLOUT ORDER:
+    the server accepts `tenderRef` and `sequence` from RT-360, and until then
+    the strict capture DTO rejects them (400), so the POS MUST NOT send
+    `tenderRef` or `sequence` before RT-360 is deployed. The server keeps at
+    most one entry per `method` until RT-360's same-method deploy flag is on,
+    which waits for the Connector's same-method settlement check (RT-361, see
+    `erpnext-connector/posting-feed.yaml`). Both fields are OPTIONAL on `Sale`
+    as well, but `Sale` is `additionalProperties: false`, so a client that
+    validates responses strictly must re-pin this version before RT-360
+    deploys. A producer that sends neither field sees no difference.
+
+    RT-530 (1.8.0-draft; [GATED] approval Jira RT-530 comment 11988, owner,
+    2026-10-15): MANAGER-APPROVED VOID. `RecordVoidRequest` gains an OPTIONAL
+    `approval` (`VoidApproval`: the bound RT-114 manager-approval evidence) and
+    an OPTIONAL `businessDate` (the device-side business day of the void), and
+    `recordVoid` gains the 403 `VoidForbidden` and 422 `VoidUnprocessable`
+    responses. The change is additive in SHAPE: both fields are optional, no
+    existing field moves, and a client that does not send them sees the same
+    request schema. It is NOT additive in BEHAVIOUR: a void with no valid
+    approval is now refused (403 `void_approval_required`), because the
+    operator envelope alone, a cashier's included, could void before. The
+    approval must come from an `owner`, `tenant_admin` or `store_manager` of
+    the tenant with an active membership and access to the sale's store, who is
+    neither the requester nor the sale's selling operator, on the sale's own
+    business day. The server cannot prove that the approver's PIN was typed:
+    that check runs on the terminal and the PIN never leaves it, so the server
+    re-validates every CLAIM of the evidence (binding, roles, store access,
+    four-eyes, day) and a forged approval naming a real manager is not
+    detectable server-side (the same posture as the RT-17 shift-variance
+    approver). The `operatorAuthorization` envelope stays the only credential
+    of this route; a void queued by a cashier is sent under a manager or admin
+    envelope when one is held. ROLLOUT ORDER: a POS that sends no approval gets
+    403, so the POS change ships after this one.
+
+    RT-537 (1.9.0-draft; [GATED] approval Jira RT-537 comment 12057, owner,
+    2026-10-16; RT-534 S1): RECEIPT SNAPSHOT. `CaptureSaleRequest` gains an
+    OPTIONAL `receipt` (`CaptureSaleReceipt`): the facts the original receipt
+    printed that are not otherwise sale facts (sale number, terminal label,
+    operator display name, settled time, branch header, change given). They
+    feed the store-wide history and the cross-terminal duplicate receipt in
+    `pos-sales/sale-history.yaml`. The change is additive: one optional
+    request field. No response, security requirement, operation or existing
+    field changes, and the `Sale` projection is untouched. A client that does
+    not send `receipt` sees no difference. The snapshot is NOT part of the
+    sale `payload_hash`, so the posting feed and the provenance-divergence rule
+    are unchanged. Line order (behaviour, no new field): from the RT-539
+    deploy the server persists each line's 1-based position in `lines[]` as
+    its receipt sequence, so a producer sends `lines` in receipt order (the POS
+    already does). ROLLOUT ORDER: the server accepts `receipt` from RT-539;
+    until then the strict capture DTO rejects the unknown field (400). Because
+    the POS Idempotency-Key is the sale's `externalId`, adding the field to a
+    sale already sent without it would be a 409, so the POS sends `receipt`
+    only for sales finalized at or after a configured cutoff that is later than
+    both the RT-539 deploy and the POS upgrade (the RT-79 pattern).
+
     Money: every monetary field is an exact-decimal string (`numeric(19,4)` at
     rest) paired with an ISO-4217 `currency_code` (gate A.1/A.6). No float ever
     appears on the wire. Timestamps are RFC 3339 / `date-time` in UTC (FR-021).
@@ -204,7 +270,8 @@ paths:
 
         Tender (RT-10 D1, from RT-77): the optional `tenders` list records how
         the sale was paid. Each `amount` is NET of change (cash = tendered −
-        change), there is at most one entry per `method` (else 400), and the
+        change), each entry is one tender line (RT-359: `tenderRef` /
+        `sequence`; see the `tenders` field for the per-sale rules), and the
         amounts MUST sum to `posTotal` exactly (else 422
         `sale_tender_mismatch`); nothing is recorded on either failure. The
         tender list is hashed into the payload, so a replay that adds, drops or
@@ -245,6 +312,11 @@ paths:
         `admissionCheckAt`, which then replaces `occurredAt` in the
         admission-window comparison only (see the field). Sent without
         `operatorUserId`, it is a 400.
+
+        Receipt snapshot (RT-537): the body may carry the optional `receipt`
+        (see `CaptureSaleReceipt`). The server stores it first-write-wins and
+        keeps it out of the `payload_hash`. From RT-539 the order of `lines`
+        is stored as the receipt line order.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -351,6 +423,37 @@ paths:
         void excludes returns. A second, different void of an already-voided
         sale, or a void of a sale that has any return, is 409
         `already_reversed` (see `ReversalConflict`); nothing is recorded.
+
+        Manager approval (RT-530): a void is recorded only with a bound
+        manager approval (`approval`) and the void's `businessDate`. Checks run
+        in this order, after the sale resolves (404), a provenance replay
+        (200) and reversal exclusivity (409):
+        1. `approval` present, else 403 `void_approval_required`;
+        2. `approval.action` is `sale.void`, `approval.saleRef` is the path's
+           sale, `approval.amount` equals the sale's `posTotal` as an exact
+           decimal, and `approval.approvedAt` is not in the future beyond
+           120 s, else 422 `void_approval_invalid`;
+        3. `businessDate` equals the sale's `businessDate`, else 422
+           `void_outside_business_day` (after that day a return is used);
+        4. `approval.requesterUserId` is the authenticated operator of the
+           envelope (the `users.id` the server resolved; a body id is never
+           trusted), else 403 `void_requester_mismatch`. A queued void is
+           therefore sent under the original requester envelope;
+        5. the approver is neither `approval.requesterUserId` nor the user
+           who captured the sale, else 403 `void_self_approval`;
+        6. the requester is a user of the tenant with an active membership
+           and access to the sale's store, else 403
+           `void_requester_not_eligible`;
+        7. the approver holds `owner`, `tenant_admin` or `store_manager` in the
+           tenant, with an active membership and access to the sale's store,
+           else 403 `void_approver_not_eligible`.
+        A replay (the same `(sourceSystem, externalId)`) answers before these
+        checks and never re-runs them. An offline-queued void is checked on
+        arrival with the same rules and may be refused; the approval age is
+        not compared with the server clock. The approval `approvalId` is
+        single-use within a tenant. `sale_voids` records the approver and the
+        evidence, and the `sale.voided` audit event carries the approver,
+        requester, approval id and policy version.
       parameters:
         - $ref: "#/components/parameters/SaleRef"
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -393,12 +496,14 @@ paths:
           $ref: "#/components/responses/ValidationFailure"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/VoidForbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/ReversalConflict"
         "422":
-          $ref: "#/components/responses/AlreadyApplied"
+          $ref: "#/components/responses/VoidUnprocessable"
         "500":
           $ref: "#/components/responses/SystemFailure"
   /api/pos/v1/sales/{saleRef}/refund:
@@ -823,11 +928,17 @@ components:
           items:
             $ref: "#/components/schemas/SaleTender"
           description: >
-            OPTIONAL (RT-10 D1) — how the sale was paid. Net of change, at most
-            one entry per method, and summing to `posTotal` exactly (else 422
+            OPTIONAL (RT-10 D1) — how the sale was paid, one entry per tender
+            line. Net of change, and summing to `posTotal` exactly (else 422
             `sale_tender_mismatch`). Absent = a tender-unknown sale (RT-10 D8).
             Accepted from RT-77; do not send before then (see the versioning
-            note).
+            note). Per-sale rules (RT-359), each a 400 `validation_error`:
+            `tenderRef` is unique within the sale; `sequence` is unique within
+            the sale; more than one entry with the same `method` is accepted
+            only when EVERY entry carries a `tenderRef`, and only once RT-360's
+            same-method flag is on (until then at most one entry per method).
+            `tenderRef` / `sequence`: Accepted from RT-360; do not send before
+            then.
         operatorUserId:
           type: string
           format: uuid
@@ -913,6 +1024,98 @@ components:
             does not diverge. Like any body field it is part of the idempotency fingerprint:
             re-sending under the same `Idempotency-Key` with the field added or
             changed is a 409 `idempotency_key_conflict`.
+        receipt:
+          $ref: "#/components/schemas/CaptureSaleReceipt"
+    CaptureSaleReceipt:
+      type: object
+      additionalProperties: false
+      required:
+        - saleNumber
+        - terminalLabel
+        - operatorDisplayName
+        - settledAt
+        - branchName
+        - branchAddress
+        - taxRegistrationId
+      description: >
+        OPTIONAL (RT-537; [GATED] approval Jira RT-537 comment 12057). The facts
+        the original receipt printed that are not otherwise sale facts, so a
+        duplicate printed on another terminal of the store can match the
+        original (RT-534 OD-534-3, RT-537 Q-3). Accepted from RT-539; do not
+        send before then (see the versioning note).
+
+        It is NOT part of the sale `payload_hash`: it is presentation, not a
+        posting fact, so the posting feed and the provenance-divergence rule
+        are unchanged. Like any body field it IS part of the idempotency
+        fingerprint, so re-sending under the same `Idempotency-Key` with the
+        field added or changed is a 409 `idempotency_key_conflict`; the POS
+        therefore sends it only for sales finalized at or after a configured
+        cutoff (the RT-79 pattern). First write wins: a provenance replay
+        never rewrites a stored snapshot.
+
+        The values are asserted by the producer and are used for PRESENTATION
+        ONLY (the history detail and a duplicate receipt). They are never used
+        for authorization, attribution, scope or any money rule: the
+        authenticated actor (`created_by`), the resolved tenant / store /
+        device and the sale facts stay authoritative (FR-061 is unchanged).
+
+        A sale captured without it has no snapshot. Its history detail shows
+        those facts as not recorded, and it can be reprinted on another
+        terminal only as a labelled sale record, never as a duplicate of the
+        original receipt.
+      properties:
+        saleNumber:
+          type: string
+          minLength: 1
+          maxLength: 96
+          description: >
+            The sale number printed on the receipt (`Sale #`). The pairing
+            format `<terminal_label>-<YYYY-MM-DD>-<NNNNNN>` with a 64-character
+            `terminal_label` (`pos-terminal-pairing.openapi.yaml`) is at most
+            82 characters; the bound leaves room above that.
+        receiptNumber:
+          type: string
+          minLength: 1
+          maxLength: 96
+          description: The receipt number printed on the receipt, when it differs from `saleNumber`; omit it otherwise.
+        terminalLabel:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The terminal label printed on the receipt (the pairing `terminal_label`, at most 64 characters).
+        operatorDisplayName:
+          type: string
+          minLength: 1
+          description: >
+            The selling operator's display name as printed. Never an email
+            address. No length bound of its own: the source,
+            `users.display_name` (`text`, unbounded in the cashier-admission
+            and operator contracts), has none, so any valid name is accepted
+            (only the request body limit applies).
+        settledAt:
+          type: string
+          format: date-time
+          description: The settled time printed on the receipt. Not a sale fact; `occurredAt` stays the sale time.
+        branchName:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: The branch name printed in the header (the pairing `branch_name`, at most 256 characters).
+        branchAddress:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: The branch address printed in the header (the pairing `branch_address`, at most 512 characters).
+        taxRegistrationId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The tax registration id printed in the header and footer (the pairing `tenant_tax_registration_id`, at most 64 characters).
+        changeGiven:
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+          description: >
+            Cash change given, in the sale currency. Absent means none. The
+            cash handed over is the cash tender's net `amount` plus this.
     CaptureSaleLine:
       type: object
       additionalProperties: false
@@ -985,6 +1188,82 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        businessDate:
+          type: string
+          format: date
+          description: >
+            RT-530. The device-side business day of the void (store-timezone
+            calendar date). It must equal the sale businessDate; a queued
+            void carries the day it was captured, not the day it is sent. The
+            server recording day stays `sale_voids.business_date`.
+            Optional in shape; a void without it is refused 422
+            `void_outside_business_day`.
+        approval:
+          $ref: "#/components/schemas/VoidApproval"
+    VoidApproval:
+      type: object
+      additionalProperties: false
+      required:
+        - approvalId
+        - action
+        - saleRef
+        - amount
+        - requesterUserId
+        - approverUserId
+        - policyVersion
+        - approvedAt
+      description: >
+        RT-530. The bound manager-approval evidence of a void, modelled on the
+        RT-114 C7 approval record. The PIN is checked on the terminal and never
+        sent; this is the evidence of that check, and the server re-validates
+        its claims (see `recordVoid`). `requesterUserId` and `approverUserId`
+        are provider-neutral `users.id` values, as on the POS operator
+        response (RT-33).
+      properties:
+        approvalId:
+          type: string
+          format: uuid
+          description: The terminal approval id; single-use within a tenant.
+        action:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: >
+            The approved action. Only `sale.void` binds a void; any other value
+            is 422 `void_approval_invalid`.
+        saleRef:
+          type: string
+          format: uuid
+          description: The sale the approval was bound to; must be the path sale.
+        amount:
+          # The sale total the approval was bound to. Compared with `posTotal`
+          # as an exact decimal (12.5 equals 12.5000), never as a float.
+          $ref: "#/components/schemas/NonNegativeDecimalAmount"
+        requesterUserId:
+          type: string
+          format: uuid
+          description: >
+            The operator who asked for the void. Must be the authenticated
+            operator of the envelope (`void_requester_mismatch` otherwise) and
+            a user of the tenant with access to the sale's store.
+        approverUserId:
+          type: string
+          format: uuid
+          description: >
+            The manager whose PIN approved it. Must differ from
+            `requesterUserId` and from the user who captured the sale.
+        policyVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The RT-114 policy version the approval was checked against.
+        approvedAt:
+          type: string
+          format: date-time
+          description: >
+            When the terminal recorded the approval (device clock). Recorded;
+            not compared with the server clock beyond a 120 s future cap,
+            because a queued void is sent later.
     RecordRefundRequest:
       type: object
       additionalProperties: false
@@ -1121,6 +1400,25 @@ components:
             OPTIONAL, `card_external` only (else 400): the short reference the
             card terminal printed, as keyed by the cashier. NEVER a card number
             or any other card data.
+        tenderRef:
+          type: string
+          format: uuid
+          description: >
+            OPTIONAL (RT-359) — the tender line's own stable identity, minted
+            by the producer when the tender line is created (the POS tender
+            line id), and part of the payload hash, so it never changes on a
+            retry. Tender method is not tender identity (Sales & Returns
+            1004): refunds, card-outcome recovery and settlement address a
+            tender by `tenderRef`. Absent = a legacy tender, addressed by
+            `(sale, method)`. External evidence such as `reference` augments it
+            and never replaces it.
+        sequence:
+          type: integer
+          minimum: 1
+          description: >
+            OPTIONAL (RT-359) — the line's 1-based position among the sale's
+            tender lines, in the order they were applied. Unique within the
+            sale. Gives a deterministic order to tenders that share a `method`.
 
     # -----------------------------------------------------------------------
     # Response projections (toBody) — NOT the DB row shape (§IV)
@@ -1489,6 +1787,35 @@ components:
         FR-101 `already-applied` — a re-delivered terminal event whose effect is
         already recorded (e.g. a sale already voided). Deterministic, no
         duplicate record (FR-013).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    VoidForbidden:
+      description: >
+        403 on `recordVoid` (RT-530). `error.code` is one of:
+        `void_approval_required` - no `approval` accompanied the void;
+        `void_requester_mismatch` - the stated requester is not the
+        authenticated operator of the envelope;
+        `void_self_approval` - the approver is the requester or the user who
+        captured the sale; `void_requester_not_eligible` - the requester is
+        not a user of the tenant with access to the sale's store; `void_approver_not_eligible` - the approver is not
+        an `owner`, `tenant_admin` or `store_manager` of the tenant with an
+        active membership and access to the sale store (a user of another
+        tenant, an unknown user and a revoked membership are all this).
+        Deterministic; nothing is recorded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    VoidUnprocessable:
+      description: >
+        422 on `recordVoid` (RT-530). `error.code` is one of:
+        `void_approval_invalid` - the approval is not bound to action
+        `sale.void`, to this sale or to the exact sale total, is future-dated,
+        or its `approvalId` was already used; `void_outside_business_day` - the
+        void `businessDate` is missing or is not the sale business day (use
+        a return). Deterministic; nothing is recorded.
       content:
         application/json:
           schema:
