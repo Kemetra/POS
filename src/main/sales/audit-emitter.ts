@@ -61,7 +61,9 @@ export type SaleAuditCategory =
   | 'sale.receipt.manual_override'
   | 'sale.drawer.opened'
   | 'sale.drawer.suppressed'
-  | 'sale.drawer.failed';
+  | 'sale.drawer.failed'
+  // RT-546 — a sales/receipts bridge call refused by the role gate.
+  | 'sale.access.refused';
 
 export type SaleRawAuditCategory = Exclude<
   SaleAuditCategory,

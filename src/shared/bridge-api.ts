@@ -1423,9 +1423,10 @@ export type ReceiptsRetryPrintResponse =
 // TWO-way response (success | refused) — NOT three-way like retryPrint. A
 // reprint is repeatable by design (the n-th reprint gets
 // duplicate_copy_sequence_number=n), so a print FAILURE refuses with
-// `printer_unavailable` rather than returning an ok+failure outcome. Reprint is
-// cashier-permitted (AD-10): gated only on requireOperatorSession, no role
-// restriction. It renders the `reprint_duplicate` template variant (bilingual
+// `printer_unavailable` rather than returning an ok+failure outcome. RT-546
+// (OD-534-2, supersedes AD-10's "any operator"): a cashier reprints only their
+// own sale; a manager or admin any sale in scope; another cashier's sale
+// refuses as `sale_not_found`. It renders the `reprint_duplicate` template variant (bilingual
 // duplicate-copy marker) and NEVER kicks the drawer (FR-030).
 
 export interface ReceiptsReprintRequest {

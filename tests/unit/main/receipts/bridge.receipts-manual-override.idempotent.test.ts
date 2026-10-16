@@ -50,7 +50,8 @@ beforeAll(async () => {
 });
 
 const SESSION: OperatorSessionForSales = {
-  role: 'cashier',
+  // RT-546: acting on another operator's sale is a manager's (OD-534-1/2).
+  role: 'manager',
   tenant_id: 'tenant-1',
   branch_id: 'branch-1',
   terminal_id: 'terminal-1',

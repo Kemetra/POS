@@ -1820,8 +1820,17 @@ singleInstanceReady
           operatorSessionManager.getCurrent(),
           pairingStore.getCurrentTerminalId(),
         );
+      // RT-546 — the sales/receipts role gate refuses a locked session and
+      // audits a refusal (`sale.access.refused`). Hoisted so both bridges get it.
+      const isSalesSessionLocked = (): boolean =>
+        operatorSessionManager.getCurrent()?.lock_state === 'locked';
+      const saleAuditEmitter = createSaleAuditEmitter({
+        sink: { write: forwardAuditEvent },
+      });
       const salesBridge = createSalesBridge({
         getCurrentSession: getCurrentSalesSession,
+        isSessionLocked: isSalesSessionLocked,
+        auditEmitter: saleAuditEmitter,
         salesRepo,
         printEventsRepo,
         drawerEventsRepo,
@@ -1840,9 +1849,6 @@ singleInstanceReady
       // relaunch. The dispatcher needs only the DB + repos + audit sink, none
       // of which are pairing-specific; the paired branch reuses it for the
       // finalize-listener wiring.
-      const saleAuditEmitter = createSaleAuditEmitter({
-        sink: { write: forwardAuditEvent },
-      });
       // Shared clock for the print dispatcher + receipts bridge so a reprint's
       // rendered slip time (bridge) matches the print_events.printed_at the
       // dispatcher writes for the same logical event (one clock read per event).
@@ -1880,6 +1886,7 @@ singleInstanceReady
       // (mutating; gated server-side). Registered unconditionally (T094c).
       const receiptsBridge = createReceiptsBridge({
         getCurrentSession: getCurrentSalesSession,
+        isSessionLocked: isSalesSessionLocked,
         salesRepo,
         printEventsRepo,
         printDispatcher,

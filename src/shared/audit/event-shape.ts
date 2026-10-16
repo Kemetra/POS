@@ -123,6 +123,12 @@ export const AUDIT_ACTION_CATEGORIES = [
   'sale.void.requested',
   'sale.void.confirmed',
   'sale.void.refused',
+  // RT-546 (RT-534 F3, OD-534-1/2/7) — a `sales.*` / `receipts.*` bridge call
+  // refused by the main-process role gate (`sale-access-policy.ts`): a role
+  // outside the allowlist, or a cashier asking for another operator's sale.
+  // Payload: the handler, the closed reason and the opaque sale id only. Open-set
+  // at the SQL layer (0004: no CHECK); no migration.
+  'sale.access.refused',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 

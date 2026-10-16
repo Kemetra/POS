@@ -607,6 +607,19 @@ export interface SaleVoidRefusedPayload {
   policy_version: string;
 }
 
+// ─── RT-546 — sales/receipts role gate ────────────────────────────────────
+
+/**
+ * `sale.access.refused` — the main-process role gate refused a `sales.*` /
+ * `receipts.*` call. The actor is the envelope's `acting_operator_id`. No sale
+ * content; `sale_id` only when the refusal was about a specific sale.
+ */
+export interface SaleAccessRefusedPayload {
+  action: string;
+  reason: 'role_denied' | 'not_owner';
+  sale_id?: string;
+}
+
 /** `manager_approval.refused` — what was asked; never why (C3), never a PIN. */
 export interface ManagerApprovalRefusedPayload {
   action_kind: string;
@@ -697,6 +710,8 @@ export type AuditPayloadMap = {
   'sale.void.requested': SaleVoidRequestedPayload;
   'sale.void.confirmed': SaleVoidConfirmedPayload;
   'sale.void.refused': SaleVoidRefusedPayload;
+  // RT-546
+  'sale.access.refused': SaleAccessRefusedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.
