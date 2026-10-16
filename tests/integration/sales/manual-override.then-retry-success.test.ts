@@ -51,7 +51,7 @@ beforeAll(async () => {
 });
 
 const SESSION: OperatorSessionForSales = {
-  role: 'cashier',
+  role: 'manager',
   tenant_id: 'tenant-1',
   branch_id: 'branch-1',
   terminal_id: 'terminal-1',

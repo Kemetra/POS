@@ -41,6 +41,11 @@ export interface BannerStateScope {
   tenant_id: string;
   branch_id: string;
   terminal_id: string;
+  /**
+   * RT-546 (OD-534-1) — when set, only this operator's sales are projected (a
+   * cashier's own sales). Absent or null: every sale in the terminal scope.
+   */
+  selling_operator_id?: string | null;
 }
 
 export interface BannerStateProjector {
@@ -81,6 +86,7 @@ export function bindBannerStateProjector(db: DatabaseHandle): BannerStateProject
        JOIN sales s ON s.sale_id = pe.sale_id
       WHERE pe.outcome = 'failure'
         AND s.tenant_id = ? AND s.branch_id = ? AND s.terminal_id = ?
+        AND (? IS NULL OR s.selling_operator_id = ?)
         AND NOT EXISTS (
           SELECT 1 FROM print_events later
            WHERE later.sale_id = pe.sale_id
@@ -119,6 +125,7 @@ export function bindBannerStateProjector(db: DatabaseHandle): BannerStateProject
       WHERE de.outcome = 'failed'
         AND de.failure_reason IS NOT 'no_drawer_configured'
         AND s.tenant_id = ? AND s.branch_id = ? AND s.terminal_id = ?
+        AND (? IS NULL OR s.selling_operator_id = ?)
         AND NOT EXISTS (
           SELECT 1 FROM drawer_events rec
            WHERE rec.terminal_id = de.terminal_id
@@ -137,13 +144,21 @@ export function bindBannerStateProjector(db: DatabaseHandle): BannerStateProject
     `SELECT sale_id, sale_number, finalized_at
        FROM sales
       WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ?
+        AND (? IS NULL OR selling_operator_id = ?)
       ORDER BY finalized_at DESC
       LIMIT 1`,
   ) as PrepareGet<RecentSaleRow>;
 
+  // Bind parameters for one scoped statement: the terminal triple, then the
+  // optional owner filter twice (`? IS NULL OR selling_operator_id = ?`).
+  const params = (scope: BannerStateScope): unknown[] => {
+    const owner = scope.selling_operator_id ?? null;
+    return [scope.tenant_id, scope.branch_id, scope.terminal_id, owner, owner];
+  };
+
   return {
     projectRecentSale(scope: BannerStateScope): RecentSaleSummary | null {
-      const row = recentSaleStmt.get(scope.tenant_id, scope.branch_id, scope.terminal_id);
+      const row = recentSaleStmt.get(...params(scope));
       if (row === undefined) return null;
       return {
         sale_id: row.sale_id,
@@ -156,12 +171,8 @@ export function bindBannerStateProjector(db: DatabaseHandle): BannerStateProject
       // Each failure class is projected independently — no early return — so a
       // printer failure cannot silently hide a concurrent drawer failure
       // (coexistence; Slice 4 decision).
-      const printerRow = printerFailureStmt.get(
-        scope.tenant_id,
-        scope.branch_id,
-        scope.terminal_id,
-      );
-      const drawerRow = drawerFailureStmt.get(scope.tenant_id, scope.branch_id, scope.terminal_id);
+      const printerRow = printerFailureStmt.get(...params(scope));
+      const drawerRow = drawerFailureStmt.get(...params(scope));
 
       return {
         printer_failure:

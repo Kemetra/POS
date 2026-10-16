@@ -6,8 +6,8 @@
  *        the audit payload carries BOTH operator ids (FR-024 / AD-10).
  *   T411 tenant isolation — a cross-scope sale refuses with `sale_not_found`
  *        (NOT `tenant_isolation`, per §A4 #6 information-leak rule).
- *   T412 cashier-permitted — gated only on requireOperatorSession, no role
- *        restriction; cashier / manager / admin can all invoke (AD-10).
+ *   T412 RT-546 / OD-534-2 (supersedes AD-10's "no role restriction"): a
+ *        cashier reprints only their own sale; manager / admin any sale in scope.
  */
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -107,8 +107,9 @@ function makeBridge(
   });
 }
 
+// RT-546: a reprint by someone other than the seller is a manager's (OD-534-2).
 const REPRINTER: OperatorSessionForSales = {
-  role: 'cashier',
+  role: 'manager',
   tenant_id: 'tenant-1',
   branch_id: 'branch-1',
   terminal_id: 'terminal-1',
@@ -177,7 +178,7 @@ describe('T411 — receipts.reprint tenant isolation', () => {
   });
 });
 
-describe('T412 — receipts.reprint is cashier-permitted (no role restriction)', () => {
+describe('T412 — receipts.reprint role rule (RT-546 / OD-534-2)', () => {
   let db: SqlJsDatabase;
   beforeEach(() => {
     db = new SQL.Database();
@@ -187,12 +188,37 @@ describe('T412 — receipts.reprint is cashier-permitted (no role restriction)',
     seedSuccessfulFirstPrint(db, 'pe-first-1');
   });
 
-  it.each(['cashier', 'manager', 'admin'] as const)('role %s can reprint', async (role) => {
+  it.each(['manager', 'admin'] as const)('role %s can reprint any sale', async (role) => {
     const events: SaleAuditEvent[] = [];
     const bridge = makeBridge(db, events, { ...REPRINTER, role });
 
     const res = await bridge.reprint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'idem-1' });
 
     expect(res.kind).toBe('ok');
+  });
+
+  it('a cashier can reprint their own sale', async () => {
+    const events: SaleAuditEvent[] = [];
+    const seller: OperatorSessionForSales = {
+      ...REPRINTER,
+      role: 'cashier',
+      operator_id: 'op-selling',
+    };
+    const bridge = makeBridge(db, events, seller);
+
+    const res = await bridge.reprint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'idem-1' });
+
+    expect(res.kind).toBe('ok');
+  });
+
+  it("a cashier cannot reprint another operator's sale (sale_not_found, no print)", async () => {
+    const events: SaleAuditEvent[] = [];
+    const bridge = makeBridge(db, events, { ...REPRINTER, role: 'cashier' });
+
+    const res = await bridge.reprint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'idem-1' });
+
+    expect(res).toEqual({ kind: 'refused', reason: 'sale_not_found' });
+    const rows = bindPrintEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1');
+    expect(rows.filter((r) => r.purpose === 'reprint')).toEqual([]);
   });
 });

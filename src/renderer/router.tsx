@@ -73,19 +73,35 @@ import type { PairingStatus } from '../shared/pairing-types';
  */
 
 /**
- * The /app screens with no role guard of their own: Sales, Inventory (and its
+ * The /app screens with no role guard of their own: Inventory (and its
  * diagnostics), Settings and — RT-530 — «إلغاء بيع», a void of a finalized sale
  * with another manager's PIN. Any signed-in operator reaches the last one; the
  * route leaves for /app while POS_PULSE_FEATURE_SALE_VOID is off, and main
  * re-checks the flag and the session on every call.
  */
 const SECONDARY_ROUTES: RouteObject[] = [
-  { path: 'sales', element: <SalesWorkspace /> },
   { path: 'inventory', element: <InventoryPlaceholder /> },
   { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
   { path: 'settings', element: <SettingsHelpPlaceholder /> },
   { path: 'void', element: <VoidRoute /> },
 ];
+
+/**
+ * RT-546 (RT-534 F3, OD-534-1) — «المبيعات» admits cashier, manager and admin
+ * only. Secondary UX defence: main gates every sales.* / receipts.* call on role
+ * and, for a cashier, on sale ownership (sale-access-policy.ts, AD-1).
+ */
+const SALES_ROUTE: RouteObject = {
+  path: 'sales',
+  element: (
+    <OperatorRouteGuard allow={['cashier', 'manager', 'admin']}>
+      <SalesWorkspace />
+    </OperatorRouteGuard>
+  ),
+};
+
+/** «المبيعات» (guarded) first, then the unguarded secondary screens. */
+const SALES_AND_SECONDARY_ROUTES: RouteObject[] = [SALES_ROUTE, ...SECONDARY_ROUTES];
 
 export interface AppRouterProps {
   pairing: PairingBridgeAPI;
@@ -288,7 +304,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             // every allow list and every flag are untouched (FR-45/FR-47).
             { index: true, element: <AppIndexRedirect /> },
             { path: 'dashboard', element: <DashboardRoute /> },
-            ...SECONDARY_ROUTES,
+            ...SALES_AND_SECONDARY_ROUTES,
             // PR #434 FIX 1 — gate BOTH to manager/admin (owner decision). The
             // role-visibility-matrix marks the Audit surface ⛔ cashier, and a
             // signed-in cashier must NOT reach either. Same nested guard

@@ -17,6 +17,11 @@
  *
  * Per contracts/bridge-api.md (§A4 CLEARED 2026-05-26):
  *   • Every handler is gated by an active session (`no_session` refusal).
+ *   • RT-546 (OD-534-1): every handler then runs the main-process role gate
+ *     (`sale-access-policy.ts`): a locked session refuses as `no_session`, a
+ *     role outside the allowlist as `role_denied`, and a cashier sees only
+ *     their own sales — another operator's sale refuses as `sale_not_found`;
+ *     `subscribe` projects only the cashier's own sales.
  *   • Cross-tenant misses on `findByNumber` refuse with `sale_not_found`
  *     NOT `tenant_isolation` (§A4 #6 — no information leak).
  *   • Main-only fields (envelope_handoff_action_id, payment_attempt_id,
@@ -54,6 +59,8 @@ import type {
 } from '../../shared/bridge-api.js';
 import type { SaleId, SaleNumber, TenderLineSummary } from '../../shared/sales/types.js';
 import type { BannerStateProjector } from './banner-state-projector.js';
+import type { SaleAuditEmitter } from './audit-emitter.js';
+import { createSaleAccessPolicy } from './sale-access-policy.js';
 
 // ─── Session shape (mirrors 006's OperatorSessionForPayments) ──────────────
 //
@@ -103,6 +110,10 @@ export interface SalesBridgeDependencies {
   bannerStateProjector?: BannerStateProjector;
   /** Injected token generator for subscribe (symmetry with unsubscribe). */
   newSubscriptionToken?: () => string;
+  /** RT-546: true while the operator session is locked (refused as no_session). */
+  isSessionLocked?: () => boolean;
+  /** RT-546: records `sale.access.refused` for a role-gate refusal. */
+  auditEmitter?: Pick<SaleAuditEmitter, 'emitRaw'>;
 }
 
 // ─── Forbidden-field-in-request scan ────────────────────────────────────────
@@ -237,7 +248,8 @@ function projectSaleForRenderer(
 // ─── Factory ────────────────────────────────────────────────────────────────
 
 export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
-  const { getCurrentSession, salesRepo, printEventsRepo, drawerEventsRepo } = deps;
+  const { salesRepo, printEventsRepo, drawerEventsRepo } = deps;
+  const access = createSaleAccessPolicy(deps);
   // Per-bridge monotonic fallback token source (snapshot mode — the token is
   // vestigial for unsubscribe symmetry; uniqueness avoids two subscriptions
   // sharing a token). Overridable via deps.newSubscriptionToken.
@@ -247,6 +259,18 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       ? deps.newSubscriptionToken()
       : `sub-${String((subscriptionSeq += 1))}`;
 
+  // The admitted sale with its latest print / drawer projections.
+  const okSale = (
+    saleRow: Parameters<typeof projectSaleForRenderer>[0],
+  ): { kind: 'ok'; sale: SaleSummary } => ({
+    kind: 'ok',
+    sale: projectSaleForRenderer(
+      saleRow,
+      printEventsRepo.readBySale(saleRow.sale_id),
+      drawerEventsRepo.readBySale(saleRow.sale_id),
+    ),
+  });
+
   return {
     async read(req: SalesReadRequest): Promise<SalesReadResponse> {
       // Defensive forbidden-field-in-request guard FIRST (§A4 #2).
@@ -255,10 +279,11 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
         return await Promise.resolve({ kind: 'refused', reason: 'forbidden_field_in_request' });
       }
 
-      const session = getCurrentSession();
-      if (session === null) {
-        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      const admitted = access.admitSession('sales.read');
+      if (!admitted.ok) {
+        return await Promise.resolve({ kind: 'refused', reason: admitted.reason });
       }
+      const { session } = admitted;
 
       const saleRow = salesRepo.readById(req.sale_id);
       if (saleRow === null) {
@@ -273,13 +298,12 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       ) {
         return await Promise.resolve({ kind: 'refused', reason: 'tenant_isolation' });
       }
+      // OD-534-1: a cashier reads only their own sale (non-disclosing refusal).
+      if (!access.admitSale('sales.read', session, saleRow)) {
+        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
+      }
 
-      const printEvents = printEventsRepo.readBySale(saleRow.sale_id);
-      const drawerEvent = drawerEventsRepo.readBySale(saleRow.sale_id);
-      return await Promise.resolve({
-        kind: 'ok',
-        sale: projectSaleForRenderer(saleRow, printEvents, drawerEvent),
-      });
+      return await Promise.resolve(okSale(saleRow));
     },
 
     async findByNumber(req: SalesFindByNumberRequest): Promise<SalesFindByNumberResponse> {
@@ -288,10 +312,11 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
         return await Promise.resolve({ kind: 'refused', reason: 'forbidden_field_in_request' });
       }
 
-      const session = getCurrentSession();
-      if (session === null) {
-        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      const admitted = access.admitSession('sales.findByNumber');
+      if (!admitted.ok) {
+        return await Promise.resolve({ kind: 'refused', reason: admitted.reason });
       }
+      const { session } = admitted;
 
       // Scope to the session's (tenant, branch, terminal). Cross-scope misses
       // refuse with sale_not_found NOT tenant_isolation (§A4 #6 — no
@@ -305,13 +330,13 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       if (saleRow === null) {
         return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
       }
+      // OD-534-1: sale numbers are sequential, so another operator's sale
+      // refuses exactly like a missing one (no existence leak).
+      if (!access.admitSale('sales.findByNumber', session, saleRow)) {
+        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
+      }
 
-      const printEvents = printEventsRepo.readBySale(saleRow.sale_id);
-      const drawerEvent = drawerEventsRepo.readBySale(saleRow.sale_id);
-      return await Promise.resolve({
-        kind: 'ok',
-        sale: projectSaleForRenderer(saleRow, printEvents, drawerEvent),
-      });
+      return await Promise.resolve(okSale(saleRow));
     },
 
     async subscribe(req: SalesSubscribeRequest): Promise<SalesSubscribeResponse> {
@@ -322,10 +347,11 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       if (forbidden !== null) {
         return await Promise.resolve({ kind: 'refused', reason: 'forbidden_field_in_request' });
       }
-      const session = getCurrentSession();
-      if (session === null) {
-        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      const admitted = access.admitSession('sales.subscribe');
+      if (!admitted.ok) {
+        return await Promise.resolve({ kind: 'refused', reason: admitted.reason });
       }
+      const { session } = admitted;
       // Snapshot-subscribe (008 follow-up slice): return the current projection
       // for the topic; the renderer POLLS this (no push channel) — consistent
       // with the poll-based AD-2 finalize design. See coordination §S3c
@@ -335,10 +361,13 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       if (projector === undefined) {
         return await Promise.resolve({ kind: 'refused', reason: 'not_implemented' });
       }
+      // OD-534-1: a cashier's snapshot covers only their own sales, so the
+      // banner never offers a recovery action main would then refuse.
       const scope = {
         tenant_id: session.tenant_id,
         branch_id: session.branch_id,
         terminal_id: session.terminal_id,
+        selling_operator_id: access.ownerFilter(session),
       };
       const subscription_token = nextToken();
       if (req.topic === 'banner_state') {

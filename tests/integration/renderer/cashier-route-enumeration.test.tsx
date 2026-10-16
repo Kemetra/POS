@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import { AppRouter } from '../../../src/renderer/router.js';
+import { SALES_COPY } from '../../../src/renderer/v5/manager/sales/sales-copy.js';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../../../src/shared/bridge-api.js';
 import type { PairingStatus } from '../../../src/shared/pairing-types.js';
 import {
@@ -573,5 +574,55 @@ describe('SC-003 path 32 — /app/audit (✅ admin)', () => {
       expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
       expect(screen.getByText('سجل المراجعة لا يُعرض على هذا الجهاز.')).toBeInTheDocument();
     });
+  });
+});
+
+// ── RT-546 (RT-534 F3) — /app/sales has its own role guard ────────────────
+//
+// «المبيعات» admits cashier, manager and admin only (OD-534-1). Main is the
+// trust boundary (`sale-access-policy.ts`); this guard is the secondary UX
+// defence. A role outside the allowlist, or no session, never sees the screen.
+
+describe('RT-546 path 33 — /app/sales (⛔ role outside the allowlist)', () => {
+  it('redirects an unknown role to /sign-in without rendering the sales screen', async () => {
+    await renderAsSession(
+      { ...MANAGER_SESSION, id: 'sess-unknown', role: 'auditor' as never },
+      '/app/sales',
+    );
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
+    expect(screen.queryByRole('heading', { name: SALES_COPY.findHeading })).not.toBeInTheDocument();
+  });
+});
+
+describe('RT-546 path 34 — /app/sales signed out', () => {
+  it('redirects to /sign-in', async () => {
+    watchSignInRoute();
+    render(
+      <AppRouter
+        pairing={pairedBridge()}
+        operator={makeOperatorBridge()}
+        initialEntry="/app/sales"
+      />,
+    );
+    await waitFor(() => {
+      expect(signInRouteReached()).toBe(true);
+    });
+    expect(screen.queryByRole('heading', { name: SALES_COPY.findHeading })).not.toBeInTheDocument();
+  });
+});
+
+describe('RT-546 path 35 — /app/sales renders for cashier, manager and admin', () => {
+  it.each([
+    ['cashier', CASHIER_SESSION],
+    ['manager', MANAGER_SESSION],
+    ['admin', { ...MANAGER_SESSION, id: 'sess-admin', role: 'admin' as const }],
+  ])('%s sees the sales screen', async (_label, who) => {
+    await renderAsSession(who, '/app/sales');
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: SALES_COPY.findHeading })).toBeInTheDocument();
+    });
+    expect(signInRouteReached()).toBe(false);
   });
 });

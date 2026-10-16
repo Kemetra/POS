@@ -498,6 +498,20 @@ describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', 
     expect(emit).not.toHaveBeenCalled();
   });
 
+  it('RT-546: refuses a renderer-forged sale.access.refused (a main-side role-gate refusal)', async () => {
+    const emit = vi.fn();
+    const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });
+
+    const res = await emitAuditEvent(FAKE_EVENT, {
+      ...VALID_REQUEST,
+      action_category: 'sale.access.refused',
+      payload: { action: 'sales.read', reason: 'not_owner', sale_id: 'sale-1' },
+    });
+
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(emit).not.toHaveBeenCalled();
+  });
+
   it.each(['pairing.device_revoked', 'pairing.device_revoked_cleared'])(
     'RT-215: refuses a renderer-forged %s (a main-side pairing state change) and never emits it',
     async (action_category) => {
