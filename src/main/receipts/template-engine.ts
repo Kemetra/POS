@@ -10,9 +10,12 @@
  * Determinism (FR-016 byte-stability — load-bearing for all later slices):
  *   • timestamps are formatted from the payload's stored ISO strings, never
  *     `new Date()`;
- *   • NO `toLocaleString` / `Intl` (locale-dependent output would break
- *     byte-stability across machines/CI) — the UTC date is sliced from the ISO
- *     string directly (local-timezone rendering is a documented v2 item);
+ *   • NO `toLocaleString` and no machine locale or zone (that would break
+ *     byte-stability across machines/CI). RT-249 N-S5: the sale stamp is the
+ *     store-zone (Africa/Cairo) time of `settled_at`, from the shared fixed-zone
+ *     formatter `businessDateTimeOf`; a reprint of an older sale prints the
+ *     same instant in Cairo time instead of UTC (accepted, RT-545 §4). The
+ *     `Reprinted:` line keeps its explicit UTC stamp;
  *   • money is formatted only through `src/shared/money.ts`;
  *   • iteration is over arrays (stable order), never object-key maps.
  *
@@ -29,6 +32,7 @@
  */
 
 import { format as formatMoney, of as moneyOf } from '../../shared/money.js';
+import { businessDateTimeOf } from '../../shared/time/business-day.js';
 import type { ReceiptPayload, ReceiptLineItem } from '../../shared/receipts/types.js';
 import type { TenderLineSummary, SalesTenderType } from '../../shared/sales/types.js';
 
@@ -142,7 +146,7 @@ function compose(payload: ReceiptPayload): Band[] {
   text(`Terminal: ${payload.terminal_label}`, 'ltr');
   text(`Cashier: ${payload.selling_operator_display_name}`, 'rtl');
   // v1: no shift line (slice2-mapping-pass.md Gap 3).
-  text(utcStamp(payload.settled_at), 'ltr');
+  text(businessDateTimeOf(payload.settled_at), 'ltr');
   if (payload.variant === 'reprint_duplicate' && payload.reprinted_at !== undefined) {
     text(`Reprinted: ${utcStamp(payload.reprinted_at)}`, 'ltr');
   }
