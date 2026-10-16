@@ -1,0 +1,119 @@
+/**
+ * RT-550 (RT-545 S1) — the shared store business-day rule. The store zone is a
+ * build constant (Africa/Cairo for the pilot); the day of an instant must not
+ * depend on the process `TZ` or the Windows zone. Egypt observes summer time
+ * (UTC+3) from the last Friday of April to the last Thursday of October, else
+ * UTC+2.
+ */
+import { describe, expect, it } from 'vitest';
+
+import { BusinessDayError, STORE_TIME_ZONE, businessDayOf } from '../business-day.js';
+
+describe('STORE_TIME_ZONE', () => {
+  it('is Africa/Cairo for the pilot', () => {
+    expect(STORE_TIME_ZONE).toBe('Africa/Cairo');
+  });
+});
+
+describe('businessDayOf', () => {
+  it.each<[string, string, string]>([
+    // [label, instant, expected Cairo day]
+    ['N-10: UTC day behind Cairo (summer, 01:53 local)', '2026-10-06T22:53:00Z', '2026-10-07'],
+    ['winter: just before Cairo midnight (UTC+2)', '2026-01-14T21:59:59.999Z', '2026-01-14'],
+    ['winter: Cairo midnight exactly (UTC+2)', '2026-01-14T22:00:00Z', '2026-01-15'],
+    ['summer: just before Cairo midnight (UTC+3)', '2026-07-14T20:59:59.999Z', '2026-07-14'],
+    ['summer: Cairo midnight exactly (UTC+3)', '2026-07-14T21:00:00Z', '2026-07-15'],
+    ['UTC midnight is 02:00 Cairo in winter, same day', '2026-01-15T00:00:00Z', '2026-01-15'],
+    ['UTC 22:30 is the next Cairo day in winter', '2026-01-14T22:30:00Z', '2026-01-15'],
+    ['explicit +02:00 offset is the same instant', '2026-01-15T00:00:00+02:00', '2026-01-15'],
+    ['explicit -05:00 offset converts first', '2026-01-14T18:00:00-05:00', '2026-01-15'],
+    ['year end rolls the year', '2026-12-31T22:00:00Z', '2027-01-01'],
+    ['leap day (Cairo winter)', '2028-02-28T22:00:00Z', '2028-02-29'],
+  ])('%s', (_label, instant, expected) => {
+    expect(businessDayOf(instant)).toBe(expected);
+  });
+
+  describe('summer-time end, Thu 2026-10-29 (23:00-24:00 local repeats)', () => {
+    // 2026-10-29 00:00 +03:00 = 2026-10-28T21:00Z. At 24:00 summer time the
+    // clocks go back to 23:00, so local 23:00-24:00 occurs twice.
+    it.each<[string, string, string]>([
+      ['first 23:30 (UTC+3)', '2026-10-29T20:30:00Z', '2026-10-29'],
+      ['second 23:30 (UTC+2)', '2026-10-29T21:30:00Z', '2026-10-29'],
+      ['last instant of the day (UTC+2)', '2026-10-29T21:59:59.999Z', '2026-10-29'],
+      ['first instant of the next day', '2026-10-29T22:00:00Z', '2026-10-30'],
+      ['first instant of the day', '2026-10-28T21:00:00Z', '2026-10-29'],
+      ['just before the day starts', '2026-10-28T20:59:59.999Z', '2026-10-28'],
+    ])('%s', (_label, instant, expected) => {
+      expect(businessDayOf(instant)).toBe(expected);
+    });
+  });
+
+  describe('summer-time start, Fri 2026-04-24 (00:00-01:00 local is skipped)', () => {
+    it.each<[string, string, string]>([
+      ['last winter instant (23:59:59.999 local)', '2026-04-23T21:59:59.999Z', '2026-04-23'],
+      ['first summer instant (01:00 local)', '2026-04-23T22:00:00Z', '2026-04-24'],
+      ['the day after, midnight (UTC+3)', '2026-04-24T21:00:00Z', '2026-04-25'],
+      ['the day after, just before midnight', '2026-04-24T20:59:59.999Z', '2026-04-24'],
+    ])('%s', (_label, instant, expected) => {
+      expect(businessDayOf(instant)).toBe(expected);
+    });
+  });
+
+  describe('Date input', () => {
+    it('accepts a Date and agrees with the equivalent ISO string', () => {
+      const iso = '2026-10-06T22:53:00.000Z';
+      expect(businessDayOf(new Date(iso))).toBe(businessDayOf(iso));
+      expect(businessDayOf(new Date(iso))).toBe('2026-10-07');
+    });
+  });
+
+  describe('UTC and Cairo disagree', () => {
+    it.each<[string, string, string]>([
+      ['winter, 22:00-23:59 UTC', '2026-01-14T23:59:59Z', '2026-01-15'],
+      ['summer, 21:00-23:59 UTC', '2026-07-14T23:59:59Z', '2026-07-15'],
+    ])('%s: Cairo is ahead of the UTC date', (_label, instant, expected) => {
+      expect(instant.slice(0, 10)).not.toBe(expected);
+      expect(businessDayOf(instant)).toBe(expected);
+    });
+  });
+
+  describe('invalid input', () => {
+    it.each<[string, unknown]>([
+      ['not-a-date string', 'not-a-date'],
+      ['empty string', ''],
+      ['whitespace string', '   '],
+      ['invalid Date', new Date(Number.NaN)],
+      ['calendar date without time', '2026-10-06'],
+      ['local time without an offset (zone-dependent)', '2026-10-06T22:53:00'],
+      ['non-ISO date text', 'October 6, 2026 22:53 UTC'],
+      ['month 13', '2026-13-01T00:00:00Z'],
+      ['day 32', '2026-01-32T00:00:00Z'],
+      ['hour 25', '2026-01-01T25:00:00Z'],
+      ['impossible calendar day', '2026-02-30T00:00:00Z'],
+      ['number', 1_790_000_000_000],
+      ['null', null],
+      ['undefined', undefined],
+      ['object', {}],
+    ])('refuses %s with a typed error', (_label, input) => {
+      expect(() => businessDayOf(input as string)).toThrow(BusinessDayError);
+    });
+
+    it('carries a stable error name and code', () => {
+      try {
+        businessDayOf('not-a-date');
+        expect.unreachable('should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as BusinessDayError).name).toBe('BusinessDayError');
+        expect((error as BusinessDayError).code).toBe('invalid_instant');
+      }
+    });
+  });
+
+  it('never mutates its Date argument', () => {
+    const date = new Date('2026-10-06T22:53:00.000Z');
+    const before = date.getTime();
+    businessDayOf(date);
+    expect(date.getTime()).toBe(before);
+  });
+});

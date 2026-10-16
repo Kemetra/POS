@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 
 import { PARK_LABEL_MAX_LENGTH, PARK_STALE_AFTER_MS } from '../../../shared/cart/park-types.js';
+import { businessDayOf } from '../../../shared/time/business-day.js';
 
 /** Control and line-separator characters: a label is one line of plain text. */
 const NOT_PLAIN_TEXT = /[\p{Cc}\p{Zl}\p{Zp}]/u;
@@ -24,16 +25,12 @@ export function normalizeLabel(label: string | undefined): NormalizedLabel {
   return plain && sized ? { ok: true, label: trimmed } : { ok: false, label: null };
 }
 
-const CAIRO_DAY = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Africa/Cairo',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-
-/** The Africa/Cairo calendar day of an instant, as `YYYY-MM-DD`. */
+/**
+ * The Africa/Cairo calendar day of an instant, as `YYYY-MM-DD`. RT-550: the
+ * zone and the conversion live in the shared business-day module.
+ */
 export function cairoBusinessDay(instant: Date): string {
-  return CAIRO_DAY.format(instant);
+  return businessDayOf(instant);
 }
 
 /**
