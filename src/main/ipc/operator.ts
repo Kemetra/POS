@@ -143,6 +143,8 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'cart.held_cancelled_by_manager',
   'payment.recovery_completed',
   'payment.recovery_cancelled',
+  // RT-546 — emitted only by the sales/receipts role gate (sale-access-policy).
+  'sale.access.refused',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {
