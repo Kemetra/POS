@@ -45,18 +45,27 @@ function invalid(detail: string): BusinessDayError {
 }
 
 /**
- * Assembles `YYYY-MM-DD` from the formatter's parts, so the result does not
- * rely on a locale's field order or separators. Null when a part is missing
- * or out of the 4-digit year range (the formatter does not pad such years).
+ * The supported instants: years 1000-9999 in the store zone. Outside it the
+ * formatter does not pad the year (or drops the era for BCE dates), so such an
+ * instant is refused rather than turned into a plausible but wrong day. The
+ * bounds keep a day of margin so the zone offset can never push a supported
+ * instant out of four-digit years.
  */
-function dayFromParts(date: Date): string | null {
+const MIN_INSTANT_MS = Date.UTC(1000, 0, 2);
+const MAX_INSTANT_MS = Date.UTC(9999, 11, 30);
+
+/**
+ * Assembles `YYYY-MM-DD` from the formatter's parts, so the result does not
+ * rely on a locale's field order or separators.
+ */
+function dayFromParts(date: Date): string {
   const parts = new Map(STORE_DAY.formatToParts(date).map((part) => [part.type, part.value]));
-  const year = parts.get('year');
-  const month = parts.get('month');
-  const day = parts.get('day');
-  if (year === undefined || month === undefined || day === undefined) return null;
-  const complete = /^\d{4}$/.test(year) && /^\d{2}$/.test(month) && /^\d{2}$/.test(day);
-  return complete ? `${year}-${month}-${day}` : null;
+  const pick = (type: 'year' | 'month' | 'day'): string => {
+    const value = parts.get(type);
+    if (value === undefined) throw invalid(`the formatter returned no ${type}`);
+    return value;
+  };
+  return `${pick('year')}-${pick('month')}-${pick('day')}`;
 }
 
 /** True when `year-month-day` is a real calendar date (no V8 roll-over). */
@@ -97,7 +106,9 @@ function toDate(instant: string | Date): Date {
 export function businessDayOf(instant: string | Date): string {
   const date = toDate(instant);
   if (Number.isNaN(date.getTime())) throw invalid('not a valid date');
-  const day = dayFromParts(date);
-  if (day === null) throw invalid('outside the supported year range');
-  return day;
+  const time = date.getTime();
+  if (time < MIN_INSTANT_MS || time > MAX_INSTANT_MS) {
+    throw invalid('outside the supported year range (1000-9999)');
+  }
+  return dayFromParts(date);
 }

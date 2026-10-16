@@ -165,6 +165,12 @@ describe('businessDayOf', () => {
       expect(() => businessDayOf(instant)).toThrow(BusinessDayError);
     });
 
+    it('refuses a BCE Date instead of returning a false CE day', () => {
+      const bce = new Date(0);
+      bce.setUTCFullYear(-999, 0, 1);
+      expect(() => businessDayOf(bce)).toThrow(BusinessDayError);
+    });
+
     it('refuses an extreme Date outside the formattable range', () => {
       expect(() => businessDayOf(new Date(8.64e15))).toThrow(BusinessDayError);
     });
