@@ -9,6 +9,13 @@ import { describe, expect, it } from 'vitest';
 
 import { BusinessDayError, STORE_TIME_ZONE, businessDayOf } from '../business-day.js';
 
+/** One test per [label, instant, expected Cairo day] row. */
+function expectDays(rows: ReadonlyArray<readonly [string, string, string]>): void {
+  it.each(rows)('%s', (_label, instant, expected) => {
+    expect(businessDayOf(instant)).toBe(expected);
+  });
+}
+
 describe('STORE_TIME_ZONE', () => {
   it('is Africa/Cairo for the pilot', () => {
     expect(STORE_TIME_ZONE).toBe('Africa/Cairo');
@@ -16,7 +23,7 @@ describe('STORE_TIME_ZONE', () => {
 });
 
 describe('businessDayOf', () => {
-  it.each<[string, string, string]>([
+  expectDays([
     // [label, instant, expected Cairo day]
     ['N-10: UTC day behind Cairo (summer, 01:53 local)', '2026-10-06T22:53:00Z', '2026-10-07'],
     ['winter: just before Cairo midnight (UTC+2)', '2026-01-14T21:59:59.999Z', '2026-01-14'],
@@ -29,34 +36,28 @@ describe('businessDayOf', () => {
     ['explicit -05:00 offset converts first', '2026-01-14T18:00:00-05:00', '2026-01-15'],
     ['year end rolls the year', '2026-12-31T22:00:00Z', '2027-01-01'],
     ['leap day (Cairo winter)', '2028-02-28T22:00:00Z', '2028-02-29'],
-  ])('%s', (_label, instant, expected) => {
-    expect(businessDayOf(instant)).toBe(expected);
-  });
+  ]);
 
   describe('summer-time end, Thu 2026-10-29 (23:00-24:00 local repeats)', () => {
     // 2026-10-29 00:00 +03:00 = 2026-10-28T21:00Z. At 24:00 summer time the
     // clocks go back to 23:00, so local 23:00-24:00 occurs twice.
-    it.each<[string, string, string]>([
+    expectDays([
       ['first 23:30 (UTC+3)', '2026-10-29T20:30:00Z', '2026-10-29'],
       ['second 23:30 (UTC+2)', '2026-10-29T21:30:00Z', '2026-10-29'],
       ['last instant of the day (UTC+2)', '2026-10-29T21:59:59.999Z', '2026-10-29'],
       ['first instant of the next day', '2026-10-29T22:00:00Z', '2026-10-30'],
       ['first instant of the day', '2026-10-28T21:00:00Z', '2026-10-29'],
       ['just before the day starts', '2026-10-28T20:59:59.999Z', '2026-10-28'],
-    ])('%s', (_label, instant, expected) => {
-      expect(businessDayOf(instant)).toBe(expected);
-    });
+    ]);
   });
 
   describe('summer-time start, Fri 2026-04-24 (00:00-01:00 local is skipped)', () => {
-    it.each<[string, string, string]>([
+    expectDays([
       ['last winter instant (23:59:59.999 local)', '2026-04-23T21:59:59.999Z', '2026-04-23'],
       ['first summer instant (01:00 local)', '2026-04-23T22:00:00Z', '2026-04-24'],
       ['the day after, midnight (UTC+3)', '2026-04-24T21:00:00Z', '2026-04-25'],
       ['the day after, just before midnight', '2026-04-24T20:59:59.999Z', '2026-04-24'],
-    ])('%s', (_label, instant, expected) => {
-      expect(businessDayOf(instant)).toBe(expected);
-    });
+    ]);
   });
 
   describe('Date input', () => {
@@ -138,7 +139,7 @@ describe('businessDayOf', () => {
   });
 
   describe('accepted ISO shapes', () => {
-    it.each<[string, string, string]>([
+    expectDays([
       [
         'fractional seconds longer than 3 digits truncate',
         '2026-01-14T21:59:59.999999Z',
@@ -147,9 +148,7 @@ describe('businessDayOf', () => {
       ['no seconds', '2026-01-14T22:00Z', '2026-01-15'],
       ['extreme positive offset +23:59', '2026-01-15T23:00:00+23:59', '2026-01-15'],
       ['-00:00 is UTC', '2026-01-14T22:00:00-00:00', '2026-01-15'],
-    ])('%s', (_label, instant, expected) => {
-      expect(businessDayOf(instant)).toBe(expected);
-    });
+    ]);
   });
 
   describe('refused shapes and years', () => {
