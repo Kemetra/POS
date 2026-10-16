@@ -150,6 +150,14 @@ function historyBridge(over: Partial<SaleHistoryBridgeAPI> = {}): SaleHistoryBri
     reprint: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, reason: 'printer_unavailable' as const }),
     ),
+    zoneStatus: vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok' as const,
+        status: 'unknown' as const,
+        expected: 'Africa/Cairo',
+        reported: null,
+      }),
+    ),
     ...over,
   };
 }

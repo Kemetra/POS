@@ -155,6 +155,7 @@ import { createSaleHistoryClient } from './sale-history/sale-history-client.js';
 import { createSaleHistoryCredentialResolver } from './sale-history/sale-history-credential.js';
 import { createSaleHistoryLocalReads } from './sale-history/sale-history-local.js';
 import { createSaleHistoryService } from './sale-history/sale-history-service.js';
+import { createStoreZoneMonitor } from './sale-history/store-zone-monitor.js';
 import { registerSaleHistoryHandlers } from './ipc/sale-history.js';
 import { createSaleVoidRepository } from './sale-void/sale-void-repository.js';
 import { registerReceiptsHandlers } from './ipc/receipts.js';
@@ -1946,6 +1947,8 @@ singleInstanceReady
           printer: printPipeline,
           now: receiptsClock,
           newIdempotencyKey: () => `pos-pulse-reprint:${randomUUID()}`,
+          // RT-553: warns (once) and flags when the store zone is not Africa/Cairo.
+          storeZone: createStoreZoneMonitor({ logger: mainLogger }),
         }),
         logger: mainLogger,
       });

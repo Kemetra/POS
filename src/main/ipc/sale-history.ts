@@ -15,6 +15,7 @@ import {
   type SaleHistoryReadRequest,
   type SaleHistoryRefused,
   type SaleHistoryReprintRequest,
+  type SaleHistoryZoneStatusRequest,
 } from '../../shared/sale-history/types.js';
 import type { SaleHistoryService } from '../sale-history/sale-history-service.js';
 
@@ -59,6 +60,12 @@ export function registerSaleHistoryHandlers(
   ipcMain.handle(SALE_HISTORY_IPC_CHANNELS.REPRINT, (_event, request: unknown) =>
     isPlainObject(request)
       ? run('reprint', () => service.reprint(request as unknown as SaleHistoryReprintRequest))
+      : INVALID,
+  );
+  // RT-553 — the service refuses any field: the request must be an empty object.
+  ipcMain.handle(SALE_HISTORY_IPC_CHANNELS.ZONE_STATUS, (_event, request: unknown) =>
+    isPlainObject(request)
+      ? run('zoneStatus', () => service.zoneStatus(request as SaleHistoryZoneStatusRequest))
       : INVALID,
   );
 }

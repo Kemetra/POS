@@ -17,6 +17,7 @@ import type {
   SaleHistoryClient,
 } from '../../sale-history-client.js';
 import type { SaleHistoryServiceDeps } from '../../sale-history-service.js';
+import { createStoreZoneMonitor, type StoreZoneMonitor } from '../../store-zone-monitor.js';
 import type { SaleHistoryLocalReads } from '../../sale-history-local.js';
 import { readHistoryDetail, readHistoryPage, readReprintBody } from '../../sale-history-wire.js';
 import { CASHIER_USER, wireDetail, wirePage, wireReprint } from './wire-fixtures.js';
@@ -134,6 +135,9 @@ export interface Harness {
   localVoided: Set<string>;
   localList: Mock<SalesRepository['listByFinalizedRange']>;
   credential: { value: 'auto' | null };
+  /** RT-553: the real monitor the service feeds, and its warning log. */
+  zone: StoreZoneMonitor;
+  zoneWarn: Mock;
 }
 
 /** The role's credential, or none while `credential.value` is null. */
@@ -189,6 +193,8 @@ export function harness(session: OperatorSessionForSales | null = MANAGER): Harn
   const unsynced = vi.fn<SaleHistoryLocalReads['unsynced']>(() => []);
   const localList = vi.fn<SalesRepository['listByFinalizedRange']>(() => [localRow()]);
   const audit: Mock = vi.fn();
+  const zoneWarn: Mock = vi.fn();
+  const zone = createStoreZoneMonitor({ logger: { warn: zoneWarn } });
   const deps: SaleHistoryServiceDeps = {
     getCurrentSession: () => state.current,
     isSessionLocked: () => state.locked,
@@ -209,6 +215,7 @@ export function harness(session: OperatorSessionForSales | null = MANAGER): Harn
     printer: fakePrinter(printed, printResult),
     now: () => '2026-10-16T11:00:00.000Z',
     newIdempotencyKey: () => 'pos-pulse-reprint:0190a3c4-0000-4000-8000-000000000001',
+    storeZone: zone,
   };
   return {
     deps,
@@ -224,5 +231,7 @@ export function harness(session: OperatorSessionForSales | null = MANAGER): Harn
     localVoided,
     localList,
     credential,
+    zone,
+    zoneWarn,
   };
 }

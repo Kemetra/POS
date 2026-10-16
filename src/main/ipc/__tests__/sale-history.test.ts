@@ -19,6 +19,7 @@ function setup(service: Partial<SaleHistoryService> = {}) {
     list: vi.fn(refusedNoSession),
     read: vi.fn(refusedNoSession),
     reprint: vi.fn(refusedNoSession),
+    zoneStatus: vi.fn(refusedNoSession),
   };
   const full: SaleHistoryService = { ...calls, ...service };
   const logger = { warn: vi.fn() };
@@ -27,7 +28,7 @@ function setup(service: Partial<SaleHistoryService> = {}) {
 }
 
 describe('RT-542 saleHistory IPC', () => {
-  it('registers exactly the three channels', () => {
+  it('registers exactly the four channels', () => {
     const { handlers } = setup();
     expect([...handlers.keys()].sort()).toEqual(
       Object.values(SALE_HISTORY_IPC_CHANNELS).slice().sort(),
@@ -47,6 +48,7 @@ describe('RT-542 saleHistory IPC', () => {
       expect(calls.list).not.toHaveBeenCalled();
       expect(calls.read).not.toHaveBeenCalled();
       expect(calls.reprint).not.toHaveBeenCalled();
+      expect(calls.zoneStatus).not.toHaveBeenCalled();
     },
   );
 
@@ -56,18 +58,27 @@ describe('RT-542 saleHistory IPC', () => {
     expect(calls.list).toHaveBeenCalledWith({ from_day: 'a', to_day: 'b' });
   });
 
-  it('answers unavailable on a thrown fault and logs its name only', async () => {
-    const { handlers, logger } = setup({
-      reprint: () => Promise.reject(new RangeError('secret detail')),
-    });
-    expect(await handlers.get(SALE_HISTORY_IPC_CHANNELS.REPRINT)?.({}, {})).toEqual({
-      kind: 'refused',
-      reason: 'unavailable',
-    });
-    expect(logger.warn).toHaveBeenCalledWith(
-      { op: 'reprint', error: 'RangeError' },
-      'sale_history:failed',
-    );
-    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('secret detail');
+  it('RT-553: delegates the empty zone-status request to the service', async () => {
+    const { handlers, calls } = setup();
+    await handlers.get(SALE_HISTORY_IPC_CHANNELS.ZONE_STATUS)?.({}, {});
+    expect(calls.zoneStatus).toHaveBeenCalledWith({});
   });
+
+  it.each([
+    ['reprint', SALE_HISTORY_IPC_CHANNELS.REPRINT],
+    ['zoneStatus', SALE_HISTORY_IPC_CHANNELS.ZONE_STATUS],
+  ] as const)(
+    'answers unavailable when %s faults, logging the error name only',
+    async (op, channel) => {
+      const { handlers, logger } = setup({
+        [op]: () => Promise.reject(new RangeError('secret detail')),
+      });
+      expect(await handlers.get(channel)?.({}, {})).toEqual({
+        kind: 'refused',
+        reason: 'unavailable',
+      });
+      expect(logger.warn).toHaveBeenCalledWith({ op, error: 'RangeError' }, 'sale_history:failed');
+      expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('secret detail');
+    },
+  );
 });

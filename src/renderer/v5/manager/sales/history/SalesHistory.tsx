@@ -20,6 +20,7 @@ import { NameCell, StatusCell, stamp } from './history-cells';
 import { HistoryDetail } from './HistoryDetail';
 import { LocalSaleDetail } from './LocalSaleDetail';
 import { useSaleHistory, type HistoryView } from './useSaleHistory';
+import { ZoneMismatchNotice } from './ZoneMismatchNotice';
 
 /**
  * RT-542 (RT-534 S6) — «سجل مبيعات المتجر»: the store's sales by business day
@@ -432,6 +433,7 @@ export function SalesHistory({
         />
         {loading && <output>{C.loading}</output>}
         <StatusNotice view={history.view} />
+        <ZoneMismatchNotice bridge={bridge} view={history.view} />
         <Results view={history.view} onSelect={setSelected} />
         <MoreControl view={history.view} onMore={() => void history.loadMore()} />
         <SelectedDetail

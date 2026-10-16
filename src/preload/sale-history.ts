@@ -6,6 +6,7 @@ import {
   type SaleHistoryListResponse,
   type SaleHistoryReadResponse,
   type SaleHistoryReprintResponse,
+  type SaleHistoryZoneStatusResponse,
 } from '../shared/sale-history/types.js';
 
 /**
@@ -23,4 +24,10 @@ export const saleHistory: SaleHistoryBridgeAPI = {
       SALE_HISTORY_IPC_CHANNELS.REPRINT,
       req,
     ) as Promise<SaleHistoryReprintResponse>,
+  // RT-553 — main decides whether the store zone differs from the fixed one.
+  zoneStatus: (req) =>
+    ipcRenderer.invoke(
+      SALE_HISTORY_IPC_CHANNELS.ZONE_STATUS,
+      req,
+    ) as Promise<SaleHistoryZoneStatusResponse>,
 };
