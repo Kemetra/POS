@@ -17,4 +17,9 @@ export const SALES_COPY = Object.freeze({
   reprinting: 'جارٍ إعادة الطباعة…',
   reprintSent: 'أُرسل الإيصال للطابعة.',
   reprintFailed: 'تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.',
+  // RT-541 / RT-534 comment 12023: every local history answer is this
+  // device's sales only (`coverage: 'this_device_only'`); never "the store".
+  deviceOnlyHistory: 'مبيعات هذا الجهاز فقط — عرض غير مكتمل لمبيعات المتجر.',
+  // RT-541 lines state for a sale finalized before lines were recorded.
+  linesNotRecorded: 'لم تُسجَّل أصناف هذا البيع.',
 });

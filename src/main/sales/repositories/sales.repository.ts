@@ -14,6 +14,8 @@
  * Tenant-isolation invariant: every read path that takes a sale_number
  * (renderer-facing identifier) is scoped to (tenant_id, branch_id,
  * terminal_id) per Constitution §P17 and §A4 checklist item 6.
+ * RT-541 `listByFinalizedRange` is scoped the same way, and optionally to one
+ * selling operator (the RT-546 own-sales filter).
  * `readById` and `findByHandoffActionId` are main-process-only paths
  * (AD-2 listener, finalize transaction) and do not require external
  * scoping — the calling transaction is the security boundary.
@@ -29,6 +31,10 @@ interface PrepareRun {
 
 interface PrepareGet<Row> {
   get(...params: unknown[]): Row | undefined;
+}
+
+interface PrepareAll<Row> {
+  all(...params: unknown[]): Row[];
 }
 
 // ── Persisted row shape (mirrors migrations/0020_create_sales.sql) ──────────
@@ -75,6 +81,59 @@ export interface TenantScope {
   terminal_id: string;
 }
 
+/** RT-541: the keyset position after which the next page starts. */
+export interface SaleListCursor {
+  finalized_at: string;
+  sale_id: string;
+}
+
+/** RT-541: one range read, newest first. Bounds use `Date#toISOString` format. */
+export interface SaleListQuery {
+  scope: TenantScope;
+  /** Only this operator's sales (a cashier), or null for the whole scope. */
+  selling_operator_id: string | null;
+  start_inclusive: string;
+  end_exclusive: string;
+  /** Rows strictly after this position in the order, or null for page one. */
+  after: SaleListCursor | null;
+  limit: number;
+}
+
+/** RT-541: the columns a history list row needs; no lines, no main-only fields. */
+export type SaleListRow = Pick<
+  SaleRow,
+  | 'sale_id'
+  | 'sale_number'
+  | 'terminal_label'
+  | 'selling_operator_display_name'
+  | 'subtotal_minor'
+  | 'total_tax_minor'
+  | 'finalized_at'
+>;
+
+const SALES_LIST_SELECT = `SELECT sale_id, sale_number, terminal_label, selling_operator_display_name,
+       subtotal_minor, total_tax_minor, finalized_at
+  FROM sales
+ WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ?
+   AND (? IS NULL OR selling_operator_id = ?)
+   AND finalized_at >= ? AND finalized_at < ?`;
+const SALES_LIST_ORDER = `ORDER BY finalized_at DESC, sale_id DESC LIMIT ?`;
+
+/**
+ * RT-541: the first page of a range read. Exported so tests can check the
+ * query plan uses `idx_sales_tenant_branch_finalized_at` (migration 0055).
+ */
+export const SALES_LIST_SQL = `${SALES_LIST_SELECT}
+ ${SALES_LIST_ORDER}`;
+
+/**
+ * RT-541: a later page. `finalized_at <= ?` keeps the index range tight, so a
+ * deep page does not re-read the rows of earlier pages.
+ */
+export const SALES_LIST_AFTER_SQL = `${SALES_LIST_SELECT}
+   AND finalized_at <= ? AND (finalized_at < ? OR sale_id < ?)
+ ${SALES_LIST_ORDER}`;
+
 export interface SalesRepository {
   insert(row: InsertSaleRowInput): void;
   readById(sale_id: string): SaleRow | null;
@@ -87,6 +146,11 @@ export interface SalesRepository {
    * existing sale_id to the caller.
    */
   findByHandoffActionId(envelope_handoff_action_id: string): SaleRow | null;
+  /**
+   * RT-541: the sales finalized in `[start_inclusive, end_exclusive)` within
+   * the scope, ordered `finalized_at DESC, sale_id DESC`, at most `limit`.
+   */
+  listByFinalizedRange(query: SaleListQuery): SaleListRow[];
 }
 
 export function bindSalesRepository(db: DatabaseHandle): SalesRepository {
@@ -121,6 +185,9 @@ export function bindSalesRepository(db: DatabaseHandle): SalesRepository {
   const findByHandoffStmt = db.prepare(
     `SELECT * FROM sales WHERE envelope_handoff_action_id = ?`,
   ) as PrepareGet<SaleRow>;
+
+  const listStmt = db.prepare(SALES_LIST_SQL) as PrepareAll<SaleListRow>;
+  const listAfterStmt = db.prepare(SALES_LIST_AFTER_SQL) as PrepareAll<SaleListRow>;
 
   return {
     insert(row: InsertSaleRowInput): void {
@@ -170,6 +237,27 @@ export function bindSalesRepository(db: DatabaseHandle): SalesRepository {
     findByHandoffActionId(envelope_handoff_action_id: string): SaleRow | null {
       const row = findByHandoffStmt.get(envelope_handoff_action_id);
       return row ?? null;
+    },
+
+    listByFinalizedRange(query: SaleListQuery): SaleListRow[] {
+      const { scope, selling_operator_id: operator, after } = query;
+      const head = [
+        scope.tenant_id,
+        scope.branch_id,
+        scope.terminal_id,
+        operator,
+        operator,
+        query.start_inclusive,
+        query.end_exclusive,
+      ];
+      if (after === null) return listStmt.all(...head, query.limit);
+      return listAfterStmt.all(
+        ...head,
+        after.finalized_at,
+        after.finalized_at,
+        after.sale_id,
+        query.limit,
+      );
     },
   };
 }

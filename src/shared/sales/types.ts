@@ -168,6 +168,50 @@ export interface RecentSaleSummary {
   finalized_at: string;
 }
 
+// ── Sale lines (RT-541 detail projection) ────────────────────────────────────
+
+/**
+ * One recorded line of a sale, from the frozen `sales.lines_json` snapshot
+ * (008 T028a). Display fields only; snapshot bookkeeping (line_id, version,
+ * last_action_id) stays main-side. Money is integer minor units.
+ */
+export interface SaleLineView {
+  item_ref: string;
+  display_name: string;
+  quantity: number;
+  unit_price_minor: number;
+  line_subtotal_minor: number;
+  note: string | null;
+}
+
+/**
+ * The lines of a sale, or why they cannot be shown (RT-541):
+ *   • `recorded`     — the snapshot finalize wrote;
+ *   • `not_recorded` — a sale finalized before migration 0028, whose column
+ *     holds the default '[]': show "lines not recorded", never an empty sale;
+ *   • `unreadable`   — the snapshot is present but malformed; nothing is guessed.
+ */
+export type SaleLinesView =
+  | { state: 'recorded'; items: SaleLineView[] }
+  | { state: 'not_recorded' }
+  | { state: 'unreadable' };
+
+// ── Local sales history (RT-541 `sales.list`) ────────────────────────────────
+
+/** OD-534-4: at most 31 inclusive business days per query; wider is refused. */
+export const SALES_LIST_MAX_SPAN_DAYS = 31;
+/** OD-534-4: rows per page by default. */
+export const SALES_LIST_DEFAULT_PAGE_SIZE = 50;
+/** OD-534-4: the page-size cap. */
+export const SALES_LIST_MAX_PAGE_SIZE = 100;
+
+/**
+ * What a history answer covers. The local SQLite holds this device's sales
+ * only, so a local answer is always `this_device_only`: the screen must say
+ * "this device only / incomplete store view" (RT-534 comment 12023).
+ */
+export type SalesHistoryCoverage = 'this_device_only';
+
 // ── Refusal reason (closed enum — contract §"Refusal envelope") ──────────────
 
 /**
@@ -193,6 +237,11 @@ export const SALES_REFUSAL_REASONS = [
   // implemented; subscribe refuses with this reason until a follow-up
   // task lands the webContents.send + token registry.
   'not_implemented',
+  // RT-541 `sales.list`: a malformed day, page size, cursor or key, or
+  // to_day before from_day.
+  'invalid_request',
+  // RT-541 `sales.list`: more than SALES_LIST_MAX_SPAN_DAYS days (OD-534-4).
+  'range_too_wide',
 ] as const;
 export type SalesRefusalReason = (typeof SALES_REFUSAL_REASONS)[number];
 

@@ -47,6 +47,7 @@ export type SaleAccessAction =
   | 'sales.read'
   | 'sales.findByNumber'
   | 'sales.subscribe'
+  | 'sales.list'
   | 'receipts.preview'
   | 'receipts.retryPrint'
   | 'receipts.reprint'
@@ -87,6 +88,15 @@ export interface SaleAccessPolicyDeps {
   now?: () => string;
 }
 
+/**
+ * True when the session names its operator. An own-sales filter built from a
+ * missing id would read as "no filter", so such a session is refused rather
+ * than given the whole scope (RT-541 hardening; fail closed).
+ */
+function hasOperatorId(session: OperatorSessionForSales): boolean {
+  return typeof session.operator_id === 'string' && session.operator_id.length > 0;
+}
+
 /** True iff this session may see only its own sales (OD-534-1/2). */
 function isOwnSalesOnly(session: OperatorSessionForSales): boolean {
   // A closed allowlist upstream means this is exactly 'cashier'; anything not
@@ -125,6 +135,7 @@ export function createSaleAccessPolicy(deps: SaleAccessPolicyDeps): SaleAccessPo
       const session = deps.getCurrentSession();
       if (session === null) return { ok: false, reason: 'no_session' };
       if (deps.isSessionLocked?.() === true) return { ok: false, reason: 'no_session' };
+      if (!hasOperatorId(session)) return { ok: false, reason: 'no_session' };
       if (!SALE_ACCESS_ROLES.includes(session.role)) {
         audit(action, session, 'role_denied', null);
         return { ok: false, reason: 'role_denied' };

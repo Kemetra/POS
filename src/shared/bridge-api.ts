@@ -42,6 +42,8 @@ import type {
   SalesRefusalReason,
   BannerState,
   RecentSaleSummary,
+  SaleLinesView,
+  SalesHistoryCoverage,
 } from './sales/types.js';
 import type {
   CartCreateRequest,
@@ -1253,6 +1255,12 @@ export interface SaleSummary {
   latest_print_event?: PrintEventSummary;
   /** Latest DrawerEvent projection (drives the drawer-failure banner). */
   latest_drawer_event?: DrawerEventSummary;
+  /**
+   * RT-541: the sale's recorded lines, or why they cannot be shown. Always set
+   * by main; optional in the type only so older consumers and fixtures that
+   * never read it keep compiling.
+   */
+  lines?: SaleLinesView;
 }
 
 // ── sales.read ──────────────────────────────────────────────────────────────
@@ -1310,6 +1318,52 @@ export interface SalesUnsubscribeRequest {
 
 export type SalesUnsubscribeResponse = { kind: 'ok' };
 
+// ── sales.list (RT-541) ─────────────────────────────────────────────────────
+
+/**
+ * This device's sales over a range of store business days (Africa/Cairo),
+ * newest first. A sale's day is its `finalized_at` in the store zone, never
+ * the stored `local_calendar_day`. Tenant, branch, terminal and (for a
+ * cashier, OD-534-1) the selling operator always come from the session.
+ */
+export interface SalesListRequest {
+  /** First business day, `YYYY-MM-DD`, inclusive. */
+  from_day: string;
+  /** Last business day, `YYYY-MM-DD`, inclusive; at most 31 days after from. */
+  to_day: string;
+  /** 1-100; 50 when absent. */
+  page_size?: number;
+  /** `next_cursor` from the previous page; absent or null for page one. */
+  cursor?: string | null;
+}
+
+/** One history row. Lines and tenders stay on the detail read. */
+export interface SaleListItem {
+  sale_id: SaleId;
+  sale_number: SaleNumber;
+  /**
+   * The store business day of `finalized_at` (`YYYY-MM-DD`), or null when the
+   * stored time cannot be read (shown as unknown, never guessed).
+   */
+  business_day: string | null;
+  finalized_at: string;
+  terminal_label: string;
+  selling_operator_display_name: string;
+  subtotal_minor: number;
+  total_tax_minor: number;
+}
+
+export type SalesListResponse =
+  | {
+      kind: 'ok';
+      sales: SaleListItem[];
+      /** Opaque; null when this is the last page. */
+      next_cursor: string | null;
+      /** Always `this_device_only` for the local read. */
+      coverage: SalesHistoryCoverage;
+    }
+  | { kind: 'refused'; reason: SalesRefusalReason };
+
 // ── SalesBridgeAPI surface ──────────────────────────────────────────────────
 
 /**
@@ -1329,6 +1383,8 @@ export interface SalesBridgeAPI {
   subscribe(req: SalesSubscribeRequest): Promise<SalesSubscribeResponse>;
   /** Detach a previously-acquired subscription. */
   unsubscribe(req: SalesUnsubscribeRequest): Promise<SalesUnsubscribeResponse>;
+  /** RT-541: this device's sales over a range of store business days. */
+  list(req: SalesListRequest): Promise<SalesListResponse>;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
