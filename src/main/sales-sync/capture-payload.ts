@@ -26,6 +26,12 @@
  *     is fixed when the sale is first queued and every retry under the same
  *     Idempotency-Key sends the same body (adding it on a retry would be a 409).
  *     Only the device-path wire body carries it (`toCashierWireBody`).
+ *   • RT-540 (`sales.yaml` 1.9.0-draft, RT-537): the optional `receipt` snapshot — the
+ *     facts the original receipt printed — sent from the durable Sale only, and only
+ *     for a sale finalized at/after the rollout cutoff (`receiptSince`, the RT-79
+ *     pattern: a body that changes under one Idempotency-Key is a 409). Sent whole or
+ *     not at all (`deriveReceipt`); line order is the order of `lines[]`. The sale
+ *     number is sent as stored — its generation is not touched here.
  */
 
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
@@ -65,11 +71,33 @@ export interface CaptureSalePayload {
    * check only (`deriveAdmissionCheckAt`). Sent on the device path only.
    */
   admissionCheckAt?: string;
+  /** RT-540: the receipt snapshot; present only for a post-cutoff sale whose facts are all sendable. */
+  receipt?: CaptureSaleReceipt;
+}
+
+/**
+ * RT-540: the facts the original receipt printed that are not otherwise sale facts
+ * (`CaptureSaleReceipt`). Presentation only — never an authorization, scope or money
+ * input. `changeGivenMinor` is integer minor units, present only when change was given.
+ */
+export interface CaptureSaleReceipt {
+  saleNumber: string;
+  /** Only when it differs from `saleNumber`. */
+  receiptNumber?: string;
+  terminalLabel: string;
+  operatorDisplayName: string;
+  settledAt: string;
+  branchName: string;
+  branchAddress: string;
+  taxRegistrationId: string;
+  changeGivenMinor?: number;
 }
 
 export interface BuildCapturePayloadOptions {
   /** ISO instant; sales finalized at/after it carry `tenders`. null/undefined = off. */
   tendersSince?: string | null | undefined;
+  /** RT-540: ISO instant; sales finalized at/after it carry `receipt`. null/undefined = off. */
+  receiptSince?: string | null | undefined;
 }
 
 /**
@@ -153,6 +181,15 @@ export function parseTendersSince(raw: string | undefined): string | null {
   return ms === null ? null : new Date(ms).toISOString();
 }
 
+/**
+ * RT-540: parse `POS_PULSE_FEATURE_SALE_RECEIPT_SINCE` — the same explicit-zone grammar
+ * and fail-safe as the tenders cutoff, but a separate switch: the receipt rollout is tied
+ * to the Backend-Core RT-539 deploy, not to the tender switch.
+ */
+export function parseReceiptSince(raw: string | undefined): string | null {
+  return parseTendersSince(raw);
+}
+
 function isSafeNonNegativeInt(n: unknown): n is number {
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
 }
@@ -205,10 +242,86 @@ function buildTenders(sale: SaleRow): CaptureSaleTender[] {
     }));
 }
 
-function tendersApply(sale: SaleRow, tendersSince: string | null | undefined): boolean {
-  if (tendersSince === null || tendersSince === undefined) return false;
+/** A rollout cutoff is on and the sale was finalized at/after it. */
+function finalizedAtOrAfter(sale: SaleRow, cutoff: string | null | undefined): boolean {
+  if (cutoff === null || cutoff === undefined) return false;
   const finalized = Date.parse(sale.finalized_at);
-  return !Number.isNaN(finalized) && finalized >= Date.parse(tendersSince);
+  return !Number.isNaN(finalized) && finalized >= Date.parse(cutoff);
+}
+
+/**
+ * The required text facts of a `CaptureSaleReceipt` and their `sales.yaml` 1.9.0-draft
+ * bounds: sendable text is 1..max characters (UTF-16 length is never below the contract's
+ * code-point length, so a value within these bounds is within the contract's).
+ */
+const RECEIPT_TEXT_FACTS = [
+  { column: 'sale_number', max: 96 },
+  { column: 'terminal_label', max: 64 },
+  { column: 'branch_name', max: 256 },
+  { column: 'branch_address', max: 512 },
+  { column: 'tenant_tax_registration_id', max: 64 },
+] as const;
+const RECEIPT_NUMBER_MAX = 96;
+
+/**
+ * The contract says the operator name is never an email address (OD-534-6) but not how the
+ * server tells; any '@' is dropped rather than risk a 400 on an email-shaped name.
+ */
+function looksLikeEmail(name: string): boolean {
+  return name.includes('@');
+}
+
+function withinBound(value: string, max: number): boolean {
+  return value.trim() !== '' && value.length <= max;
+}
+
+/** The receipt number to send: only when it differs from the sale number (else omitted). */
+function distinctReceiptNumber(sale: SaleRow): string | undefined {
+  return sale.receipt_number !== '' && sale.receipt_number !== sale.sale_number
+    ? sale.receipt_number
+    : undefined;
+}
+
+/** Every fact the receipt needs is present and inside the contract's bounds. */
+function receiptFactsSendable(sale: SaleRow): boolean {
+  const operatorName = sale.selling_operator_display_name.trim();
+  const receiptNumber = distinctReceiptNumber(sale);
+  return (
+    RECEIPT_TEXT_FACTS.every(({ column, max }) => withinBound(sale[column], max)) &&
+    operatorName !== '' &&
+    !looksLikeEmail(operatorName) &&
+    instantMs(sale.settled_at) !== null &&
+    (receiptNumber === undefined || withinBound(receiptNumber, RECEIPT_NUMBER_MAX)) &&
+    isSafeNonNegativeInt(sale.total_change_due_minor)
+  );
+}
+
+/**
+ * RT-540: the sale's `receipt` snapshot, or undefined when the rollout cutoff is off, the
+ * sale is older than it, or ANY required fact is missing or outside the contract's bounds
+ * (an older row can carry '' for the address or tax id). The whole receipt or none: a
+ * value the contract would refuse is a 400 — a dead-lettered sale — so it is never sent;
+ * the sale itself still captures as today. Pure, from the immutable Sale row only, so
+ * every retry under the same Idempotency-Key sends the same body.
+ */
+function deriveReceipt(
+  sale: SaleRow,
+  receiptSince: string | null | undefined,
+): CaptureSaleReceipt | undefined {
+  if (!finalizedAtOrAfter(sale, receiptSince) || !receiptFactsSendable(sale)) return undefined;
+  const receiptNumber = distinctReceiptNumber(sale);
+  const change = sale.total_change_due_minor;
+  return {
+    saleNumber: sale.sale_number,
+    ...(receiptNumber === undefined ? {} : { receiptNumber }),
+    terminalLabel: sale.terminal_label,
+    operatorDisplayName: sale.selling_operator_display_name,
+    settledAt: sale.settled_at,
+    branchName: sale.branch_name,
+    branchAddress: sale.branch_address,
+    taxRegistrationId: sale.tenant_tax_registration_id,
+    ...(change > 0 ? { changeGivenMinor: change } : {}),
+  };
 }
 
 /** RT-225: `admissionCheckAt` is sent only when the finalize lag is MORE than this. */
@@ -266,8 +379,9 @@ export function buildCapturePayload(
     lineAmountMinor: s.line_subtotal_minor,
   }));
 
-  const tenders = tendersApply(sale, options.tendersSince) ? buildTenders(sale) : [];
+  const tenders = finalizedAtOrAfter(sale, options.tendersSince) ? buildTenders(sale) : [];
   const admissionCheckAt = deriveAdmissionCheckAt(sale);
+  const receipt = deriveReceipt(sale, options.receiptSince);
 
   return {
     externalId: deriveExternalId(sale),
@@ -281,5 +395,6 @@ export function buildCapturePayload(
     lines,
     ...(tenders.length > 0 ? { tenders } : {}),
     ...(admissionCheckAt === null ? {} : { admissionCheckAt }),
+    ...(receipt === undefined ? {} : { receipt }),
   };
 }

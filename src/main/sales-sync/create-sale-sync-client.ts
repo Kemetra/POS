@@ -95,7 +95,7 @@
  * (→ dead-letter, observable). Currency is single-store EGP in v1.
  */
 
-import type { CaptureSalePayload } from './capture-payload.js';
+import type { CaptureSalePayload, CaptureSaleReceipt } from './capture-payload.js';
 import { parseRetryAfterMs } from './retry-after.js';
 import type {
   CaptureConflictCode,
@@ -282,7 +282,14 @@ interface CaptureSaleWireBody {
   lines: CaptureSaleLineWire[];
   /** RT-79: only when the payload carries tenders. No `reference` (D-A). */
   tenders?: CaptureSaleTenderWire[];
+  /** RT-540 (`sales.yaml` 1.9.0-draft): only when the payload carries a receipt snapshot. */
+  receipt?: CaptureSaleReceiptWire;
 }
+
+/** The DP-2 `CaptureSaleReceipt` wire shape (RT-537). `changeGiven` is an exact-decimal string. */
+type CaptureSaleReceiptWire = Omit<CaptureSaleReceipt, 'changeGivenMinor'> & {
+  changeGiven?: string;
+};
 
 /** The DP-2 `SaleTender` wire shape (RT-10 D1) — `reference` is deliberately never sent. */
 interface CaptureSaleTenderWire {
@@ -312,6 +319,7 @@ export function toWireBody(payload: CaptureSalePayload, currencyCode: string): C
     }
   }
   const tenders = tendersWire(payload, exponent);
+  const receipt = receiptWire(payload.receipt, exponent);
   return {
     sourceSystem: payload.sourceSystem,
     externalId: payload.externalId,
@@ -328,6 +336,26 @@ export function toWireBody(payload: CaptureSalePayload, currencyCode: string): C
       ...tenantProductRefFor(line.productRef),
     })),
     ...(tenders === undefined ? {} : { tenders }),
+    ...(receipt === undefined ? {} : { receipt }),
+  };
+}
+
+/**
+ * RT-540: the receipt snapshot, with the change in the same exponent as `posTotal`.
+ * `minorUnitsToDecimalString` rejects a non-safe amount, which `postSale` maps to
+ * `permanent` like any other corrupt money value.
+ */
+function receiptWire(
+  receipt: CaptureSaleReceipt | undefined,
+  exponent: number,
+): CaptureSaleReceiptWire | undefined {
+  if (receipt === undefined) return undefined;
+  const { changeGivenMinor, ...facts } = receipt;
+  return {
+    ...facts,
+    ...(changeGivenMinor === undefined
+      ? {}
+      : { changeGiven: minorUnitsToDecimalString(changeGivenMinor, exponent) }),
   };
 }
 

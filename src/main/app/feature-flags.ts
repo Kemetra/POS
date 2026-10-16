@@ -18,8 +18,8 @@ import type { AppConfig } from '../../shared/app-config.js';
  * rather than take money it cannot record. The decision is pure here; the
  * composition root logs it, shows a native dialog and exits.
  *
- * Deliberately NOT here: `SENTRY_DSN`, `POS_PULSE_FEATURE_SALE_TENDERS_SINCE`
- * (an ISO instant with its own parser in `sales-sync`), and the dev-only
+ * Deliberately NOT here: `SENTRY_DSN`, `POS_PULSE_FEATURE_SALE_TENDERS_SINCE` and
+ * `POS_PULSE_FEATURE_SALE_RECEIPT_SINCE` (ISO instants with their own parsers in `sales-sync`), and the dev-only
  * `POS_PULSE_DEV_*` bypasses (each owns its own packaged-build guard).
  */
 
