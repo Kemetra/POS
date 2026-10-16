@@ -236,7 +236,7 @@
  * workspace is narrow. Zero counts read quiet, any other count stands out
  * in a neutral badge (no severity colour is implied).
  */
-.v5-shift-manager {
+.v5-shift-manager-screen {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   align-items: start;
@@ -249,14 +249,14 @@
 }
 
 @container v5-screen (max-width: 1120px) {
-  .v5-shift-manager {
+  .v5-shift-manager-screen {
     gap: var(--space-3);
     padding: var(--space-4);
   }
 }
 
 @container v5-screen (max-width: 760px) {
-  .v5-shift-manager {
+  .v5-shift-manager-screen {
     grid-template-columns: minmax(0, 1fr);
   }
 }

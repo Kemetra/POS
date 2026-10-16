@@ -32,7 +32,7 @@ export function V5ShiftManagerRoute({ bridge }: Props): JSX.Element | null {
       allow={MANAGER_ROLES}
     >
       {(api) => (
-        <div className="v5-shift-manager">
+        <div className="v5-shift-manager-screen">
           <ShiftStatusPanel bridge={api} />
           <ManagerPinEnrollment bridge={api} />
         </div>
