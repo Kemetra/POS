@@ -45,19 +45,27 @@ beforeAll(async () => {
 
 const SCOPE = { tenant_id: 'tenant-1', branch_id: 'branch-1', terminal_id: 'terminal-1' };
 
-function session(role: string, operatorId: string): OperatorSessionForSales {
-  return {
+/** One signed-in operator per role; `auditor` is outside the RT-546 allowlist. */
+const [CASHIER_A, MANAGER, ADMIN, UNKNOWN_ROLE] = (
+  [
+    ['cashier', 'op-cashier-a'],
+    ['manager', 'op-manager'],
+    ['admin', 'op-admin'],
+    ['auditor', 'op-auditor'],
+  ] as const
+).map(
+  ([role, operator_id]): OperatorSessionForSales => ({
     ...SCOPE,
     role: role as OperatorSessionForSales['role'],
-    operator_id: operatorId,
-    operator_session_id: `sess-${operatorId}`,
-  };
-}
-
-const CASHIER_A = session('cashier', 'op-cashier-a');
-const MANAGER = session('manager', 'op-manager');
-const ADMIN = session('admin', 'op-admin');
-const UNKNOWN_ROLE = session('auditor', 'op-auditor');
+    operator_id,
+    operator_session_id: `sess-${operator_id}`,
+  }),
+) as [
+  OperatorSessionForSales,
+  OperatorSessionForSales,
+  OperatorSessionForSales,
+  OperatorSessionForSales,
+];
 
 let db: SqlJsDatabase;
 let seq = 0;

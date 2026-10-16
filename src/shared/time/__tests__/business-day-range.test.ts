@@ -61,52 +61,31 @@ describe('businessDaySpan', () => {
 });
 
 describe('businessDayBounds', () => {
-  const window = (startInclusive: string, endExclusive: string) => ({
-    startInclusive,
-    endExclusive,
-  });
-  const days = (from: string, to: string) => ({ from, to });
+  /** `<day>T<hour>` → the full `Date#toISOString` instant at that UTC hour. */
+  const at = (dayHour: string): string => `${dayHour}:00:00.000Z`;
+
   it.each([
-    // [label, range, expected half-open window]
-    [
-      'winter day (UTC+2)',
-      days('2026-01-15', '2026-01-15'),
-      window('2026-01-14T22:00:00.000Z', '2026-01-15T22:00:00.000Z'),
-    ],
-    [
-      'summer day (UTC+3)',
-      days('2026-07-15', '2026-07-15'),
-      window('2026-07-14T21:00:00.000Z', '2026-07-15T21:00:00.000Z'),
-    ],
-    [
-      'N-10 day',
-      days('2026-10-07', '2026-10-07'),
-      window('2026-10-06T21:00:00.000Z', '2026-10-07T21:00:00.000Z'),
-    ],
+    // [label, day, UTC hour it starts, UTC hour the next day starts]
+    ['winter day (UTC+2)', '2026-01-15', '2026-01-14T22', '2026-01-15T22'],
+    ['summer day (UTC+3)', '2026-07-15', '2026-07-14T21', '2026-07-15T21'],
+    ['N-10 day', '2026-10-07', '2026-10-06T21', '2026-10-07T21'],
     // 25 hours: local 23:00-24:00 repeats at the end of summer time.
-    [
-      'fall-back day 2026-10-29',
-      days('2026-10-29', '2026-10-29'),
-      window('2026-10-28T21:00:00.000Z', '2026-10-29T22:00:00.000Z'),
-    ],
+    ['fall-back day', '2026-10-29', '2026-10-28T21', '2026-10-29T22'],
     // 23 hours: local 00:00-01:00 is skipped at the start of summer time.
-    [
-      'spring-forward day 2026-04-24',
-      days('2026-04-24', '2026-04-24'),
-      window('2026-04-23T22:00:00.000Z', '2026-04-24T21:00:00.000Z'),
-    ],
-    [
-      'a multi-day range',
-      days('2026-10-01', '2026-10-31'),
-      window('2026-09-30T21:00:00.000Z', '2026-10-31T22:00:00.000Z'),
-    ],
-    [
-      'year end',
-      days('2026-12-31', '2026-12-31'),
-      window('2026-12-30T22:00:00.000Z', '2026-12-31T22:00:00.000Z'),
-    ],
-  ])('%s', (_label, range, expected) => {
-    expect(businessDayBounds(range)).toEqual(expected);
+    ['spring-forward day', '2026-04-24', '2026-04-23T22', '2026-04-24T21'],
+    ['year end', '2026-12-31', '2026-12-30T22', '2026-12-31T22'],
+  ])('%s', (_label, day, start, end) => {
+    expect(businessDayBounds({ from: day, to: day })).toEqual({
+      startInclusive: at(start),
+      endExclusive: at(end),
+    });
+  });
+
+  it('spans a multi-day range from the first start to the last end', () => {
+    expect(businessDayBounds({ from: '2026-10-01', to: '2026-10-31' })).toEqual({
+      startInclusive: at('2026-09-30T21'),
+      endExclusive: at('2026-10-31T22'),
+    });
   });
 
   it.each([
