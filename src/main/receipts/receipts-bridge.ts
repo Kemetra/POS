@@ -118,6 +118,12 @@ export interface ReceiptsBridgeDependencies {
   auditEmitter?: Pick<SaleAuditEmitter, 'emitRaw'>;
   /** RT-546: true while the operator session is locked (refused as no_session). */
   isSessionLocked?: () => boolean;
+  /**
+   * RT-542 (OD-534-8 B): true when the sale has a live void (pending, unknown
+   * or confirmed). A voided sale gets no unmarked duplicate: `reprint` refuses
+   * it with `sale_voided`. Absent → never voided (pre-RT-542 construction).
+   */
+  isSaleVoided?: (saleId: string) => boolean;
   /** S6 manualOverride: id generator for the override print_events PK. */
   newPrintEventId?: () => string;
   /**
@@ -148,6 +154,15 @@ export interface ReceiptsBridgeDependencies {
 type ScopedSale =
   | { ok: true; row: SaleRow; session: OperatorSessionForSales }
   | { ok: false; reason: 'no_session' | 'role_denied' | 'sale_not_found' };
+
+/** Why a reprint may not run yet (FR-028, RT-542 OD-534-8 B), or null. */
+function reprintPrecondition(
+  deps: Pick<ReceiptsBridgeDependencies, 'printEventsRepo' | 'isSaleVoided'>,
+  saleId: string,
+): 'not_yet_printed' | 'sale_voided' | null {
+  if (!deps.printEventsRepo.hasSuccessfulPrint(saleId)) return 'not_yet_printed';
+  return deps.isSaleVoided?.(saleId) === true ? 'sale_voided' : null;
+}
 
 export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): ReceiptsBridge {
   const { salesRepo, printEventsRepo, printDispatcher, drawerKickDispatcher, auditEmitter } = deps;
@@ -372,9 +387,10 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
       // row, which is a safe superset of "first_print OR retry_after_failure
       // success" — a success row can only carry one of those purposes (a reprint
       // success itself requires a prior success, so it can never be the first).
-      if (!printEventsRepo.hasSuccessfulPrint(req.sale_id)) {
-        return { kind: 'refused', reason: 'not_yet_printed' };
-      }
+      // RT-542 / OD-534-8 B: nor may a voided sale get an unmarked duplicate;
+      // its VOIDED sale record prints from the store history (saleHistory.reprint).
+      const precondition = reprintPrecondition(deps, row.sale_id);
+      if (precondition !== null) return { kind: 'refused', reason: precondition };
 
       // The n-th reprint gets duplicate_copy_sequence_number=n. countReprints
       // counts ONLY successful reprints, so before the first reprint it is 0 → 1.

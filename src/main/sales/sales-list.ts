@@ -146,7 +146,8 @@ function businessDayOrNull(finalizedAt: string): string | null {
   }
 }
 
-function toListItem(row: SaleListRow): SaleListItem {
+/** One local row as the bridge shows it (shared with the RT-542 unsent-sales list). */
+export function toListItem(row: SaleListRow): SaleListItem {
   return {
     sale_id: row.sale_id as SaleId,
     sale_number: row.sale_number as SaleNumber,

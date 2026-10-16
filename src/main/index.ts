@@ -151,6 +151,12 @@ import { createFinalizeListener } from './sales/finalize-listener.js';
 import { createSalesBridge, type OperatorSessionForSales } from './sales/sales-bridge.js';
 import { bindBannerStateProjector } from './sales/banner-state-projector.js';
 import { createReceiptsBridge } from './receipts/receipts-bridge.js';
+import { createSaleHistoryClient } from './sale-history/sale-history-client.js';
+import { createSaleHistoryCredentialResolver } from './sale-history/sale-history-credential.js';
+import { createSaleHistoryLocalReads } from './sale-history/sale-history-local.js';
+import { createSaleHistoryService } from './sale-history/sale-history-service.js';
+import { registerSaleHistoryHandlers } from './ipc/sale-history.js';
+import { createSaleVoidRepository } from './sale-void/sale-void-repository.js';
 import { registerReceiptsHandlers } from './ipc/receipts.js';
 import { createPrintPipeline } from './receipts/print-pipeline.js';
 import { createEscposAdapter } from './receipts/escpos-adapter.js';
@@ -1802,6 +1808,8 @@ singleInstanceReady
       const salesRepo = bindSalesRepository(db);
       const printEventsRepo = bindPrintEventsRepository(db);
       const drawerEventsRepo = bindDrawerEventsRepository(db);
+      // RT-542: read-only use of the void journal (the OD-534-8 reprint guard).
+      const saleVoidReads = createSaleVoidRepository(db);
 
       // Read-only `sales.*` + `receipts.preview` bridges for the renderer.
       // Registered UNCONDITIONALLY whenever the flag is on — NOT gated on
@@ -1901,8 +1909,46 @@ singleInstanceReady
         // emits sale.receipt.manual_override (no slip rendered → no dispatcher).
         auditEmitter: saleAuditEmitter,
         newPrintEventId: () => randomUUID(),
+        // RT-542 (OD-534-8 B): a sale with a live void gets no unmarked duplicate.
+        isSaleVoided: (saleId) => saleVoidReads.liveForSale(saleId) !== null,
       });
       registerReceiptsHandlers(guardedIpcMain, { receiptsBridge });
+
+      // RT-542 (RT-534 S6) — the store-wide sales history, sale detail and
+      // reprint through Backend-Core (sale-history.yaml). The RT-546 gate and
+      // OD-534-1/2 run in main; the credential follows the role (the envelope
+      // for a manager/admin, the device token + the session's own cashier
+      // admission for a cashier) and never crosses the bridge. Offline, or with
+      // no credential, it answers this device's sales only (the RT-541 read).
+      registerSaleHistoryHandlers(guardedIpcMain, {
+        service: createSaleHistoryService({
+          getCurrentSession: getCurrentSalesSession,
+          isSessionLocked: isSalesSessionLocked,
+          auditEmitter: saleAuditEmitter,
+          resolveCredential: createSaleHistoryCredentialResolver({
+            getSessionRecord: () => operatorSessionManager.getCurrent(),
+            getEnvelope: (backendSessionId) => operatorEnvelopeHolder.get(backendSessionId),
+            readDeviceToken: createSendableDeviceTokenRead({
+              pairingStore,
+              secretStore,
+              deviceTokenKey: DEVICE_TOKEN_KEY,
+            }),
+          }),
+          client: createSaleHistoryClient({
+            baseUrl: resolveApiBaseUrl(),
+            fetch: globalThis.fetch.bind(globalThis),
+          }),
+          local: createSaleHistoryLocalReads(db),
+          salesRepo,
+          printEventsRepo,
+          // OD-534-8 B: a live local void forbids a duplicate and marks the record.
+          isSaleVoided: (saleId) => saleVoidReads.liveForSale(saleId) !== null,
+          printer: printPipeline,
+          now: receiptsClock,
+          newIdempotencyKey: () => `pos-pulse-reprint:${randomUUID()}`,
+        }),
+        logger: mainLogger,
+      });
 
       // The AD-2 finalize WORKER, by contrast, IS terminal-scoped and only
       // starts for a paired terminal — it needs the pairing row's scope to

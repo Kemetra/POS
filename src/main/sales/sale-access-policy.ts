@@ -51,7 +51,11 @@ export type SaleAccessAction =
   | 'receipts.preview'
   | 'receipts.retryPrint'
   | 'receipts.reprint'
-  | 'receipts.manualOverride';
+  | 'receipts.manualOverride'
+  // RT-542 — the store-wide history through Backend-Core.
+  | 'saleHistory.list'
+  | 'saleHistory.read'
+  | 'saleHistory.reprint';
 
 /** Why access was refused, as recorded in the `sale.access.refused` audit event. */
 export type SaleAccessAuditReason = 'role_denied' | 'not_owner';

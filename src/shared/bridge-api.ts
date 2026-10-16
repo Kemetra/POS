@@ -16,6 +16,7 @@ import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
 import type { ManagerApprovalBridgeAPI } from './operator/manager-approval.js';
 import type { RecoveryBridgeAPI } from './operator/recovery.js';
 import type { SaleVoidBridgeAPI } from './sale-void/types.js';
+import type { SaleHistoryBridgeAPI } from './sale-history/types.js';
 
 export type {
   ReturnJournalView,
@@ -866,6 +867,11 @@ export interface PreloadBridgeAPI {
    * Backend-Core refused). Totals, ids and closed codes only.
    */
   saleVoid?: SaleVoidBridgeAPI;
+  /**
+   * RT-542: the store-wide sales history, sale detail and reprint through
+   * Backend-Core (`saleHistory.*`). OD-534-1/2 enforced in main.
+   */
+  saleHistory?: SaleHistoryBridgeAPI;
 }
 
 /**

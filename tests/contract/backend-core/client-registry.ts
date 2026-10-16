@@ -26,6 +26,10 @@ import { createSaleSyncClient } from '../../../src/main/sales-sync/create-sale-s
 import type { CaptureSalePayload } from '../../../src/main/sales-sync/capture-payload.js';
 import { createReturnsClient } from '../../../src/main/returns/returns-client.js';
 import { createSaleVoidClient } from '../../../src/main/sale-void/sale-void-client.js';
+import {
+  createSaleHistoryClient,
+  type SaleHistoryCredential,
+} from '../../../src/main/sale-history/sale-history-client.js';
 import type { QueuedShiftFact } from '../../../src/main/shift-cashup/shift-cashup-repo.js';
 import type { ShiftFactKind } from '../../../src/main/shift-cashup/shift-wire.js';
 import { createShiftSyncClient } from '../../../src/main/shift-cashup/shift-sync-client.js';
@@ -128,6 +132,21 @@ const returnsClient = (fetch: FetchLike): ReturnType<typeof createReturnsClient>
   createReturnsClient({ baseUrl: BASE_URL, fetch });
 const saleVoidClient = (fetch: FetchLike): ReturnType<typeof createSaleVoidClient> =>
   createSaleVoidClient({ baseUrl: BASE_URL, fetch });
+const saleHistoryClient = (fetch: FetchLike): ReturnType<typeof createSaleHistoryClient> =>
+  createSaleHistoryClient({ baseUrl: BASE_URL, fetch });
+/** RT-542: both credential paths of every sale-history call (OD-534-1). */
+const SALE_HISTORY_CREDENTIALS: readonly SaleHistoryCredential[] = [
+  { kind: 'envelope', token: SENTINEL['operator-envelope'] },
+  { kind: 'device', token: SENTINEL.device, admissionId: UUID },
+];
+const SALE_HISTORY_MODULE = 'src/main/sale-history/sale-history-client.ts';
+const SALE_HISTORY_WIRING =
+  'sale-history-credential.ts: manager/admin = the session envelope (operatorEnvelopeHolder); cashier = createSendableDeviceTokenRead + the session own X-Cashier-Admission';
+async function eachSaleHistoryCredential(
+  call: (credential: SaleHistoryCredential) => Promise<unknown>,
+): Promise<void> {
+  await Promise.all(SALE_HISTORY_CREDENTIALS.map((credential) => call(credential)));
+}
 const readDownClient = (fetch: FetchLike): ReturnType<typeof createReadDownClient> =>
   createReadDownClient({
     baseUrl: BASE_URL,
@@ -187,6 +206,8 @@ export const CLIENT_MODULES: readonly ClientModule[] = [
   { module: 'src/main/returns/returns-client.ts', fetchCallSites: 1, surface: returnsClient },
   // RT-530: the sale void, under the requester's own operator envelope only.
   { module: 'src/main/sale-void/sale-void-client.ts', fetchCallSites: 1, surface: saleVoidClient },
+  // RT-542: the store-wide sales history (envelope or device + cashier admission).
+  { module: SALE_HISTORY_MODULE, fetchCallSites: 1, surface: saleHistoryClient },
   { module: SHIFT_SYNC_CLIENT, fetchCallSites: 1, surface: shiftSyncClient },
   { module: `${VOUCHER_DIR}/validate.ts`, fetchCallSites: 1 },
   { module: `${VOUCHER_DIR}/redeem.ts`, fetchCallSites: 1 },
@@ -381,6 +402,51 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
           idempotencyKey: 'pos-pulse-void:contract-conformance',
         },
         SENTINEL['operator-envelope'],
+      ),
+  },
+  // RT-542: the store-wide sales history, detail and reprint authorization.
+  {
+    id: 'saleHistoryClient.list',
+    module: SALE_HISTORY_MODULE,
+    method: 'get',
+    pathTemplate: '/api/pos/v1/sale-history',
+    wiring: SALE_HISTORY_WIRING,
+    invoke: (fetch) =>
+      eachSaleHistoryCredential((credential) =>
+        saleHistoryClient(fetch).list(
+          { from: '2026-10-01', to: '2026-10-16', pageSize: 50, cursor: null },
+          credential,
+        ),
+      ),
+  },
+  {
+    id: 'saleHistoryClient.read',
+    module: SALE_HISTORY_MODULE,
+    method: 'get',
+    pathTemplate: '/api/pos/v1/sale-history/{saleRef}',
+    wiring: SALE_HISTORY_WIRING,
+    invoke: (fetch) =>
+      eachSaleHistoryCredential((credential) =>
+        saleHistoryClient(fetch).read(SALE_REF, credential),
+      ),
+  },
+  {
+    id: 'saleHistoryClient.authorizeReprint',
+    module: SALE_HISTORY_MODULE,
+    method: 'post',
+    pathTemplate: '/api/pos/v1/sale-history/{saleRef}/reprints',
+    wiring: SALE_HISTORY_WIRING,
+    invoke: (fetch) =>
+      eachSaleHistoryCredential((credential) =>
+        saleHistoryClient(fetch).authorizeReprint(
+          {
+            saleRef: SALE_REF,
+            kind: 'duplicate',
+            printedAt: '2026-10-16T11:00:00.000Z',
+            idempotencyKey: 'pos-pulse-reprint:contract-conformance',
+          },
+          credential,
+        ),
       ),
   },
   // RT-17 slice 3 part 2: the shift outbox drain, device bearer + the stored

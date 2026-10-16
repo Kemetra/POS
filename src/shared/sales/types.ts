@@ -242,6 +242,9 @@ export const SALES_REFUSAL_REASONS = [
   'invalid_request',
   // RT-541 `sales.list`: more than SALES_LIST_MAX_SPAN_DAYS days (OD-534-4).
   'range_too_wide',
+  // RT-542 `receipts.reprint`: the sale has a live void; OD-534-8 B allows no
+  // unmarked duplicate of it.
+  'sale_voided',
 ] as const;
 export type SalesRefusalReason = (typeof SALES_REFUSAL_REASONS)[number];
 

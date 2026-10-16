@@ -183,3 +183,72 @@
     color: GrayText;
   }
 }
+
+/* ── RT-542: the store-wide history ─────────────────────────────── */
+.v5-history-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.v5-history-table th,
+.v5-history-table td {
+  padding: var(--space-2);
+  border-block-end: 1px solid var(--color-border-soft);
+  text-align: start;
+  vertical-align: middle;
+}
+
+.v5-history-table th {
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-history-detail {
+  display: grid;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pane);
+  background: var(--color-surface);
+}
+
+.v5-history-detail-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.v5-history-detail h3,
+.v5-history-detail h4 {
+  margin: 0;
+}
+
+.v5-history-lines {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-history-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.v5-history-total {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+  text-align: end;
+}
+
+.v5-history-note {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.v5-history-mark {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+}
