@@ -87,7 +87,7 @@ export interface PaymentLedgerProps {
   readonly testIds?: PaymentLedgerTestIds;
 }
 
-function DraftPreview(props: { draft: CashDraft }): JSX.Element {
+function DraftPreview(props: Readonly<{ draft: CashDraft }>): JSX.Element {
   const { draft } = props;
   return (
     <div className="v5-ledger-draft" data-testid="payment-ledger-draft">
@@ -111,7 +111,9 @@ function DraftPreview(props: { draft: CashDraft }): JSX.Element {
   );
 }
 
-function RecordedMoney(props: { lines: readonly TenderLineRendererView[] }): JSX.Element | null {
+function RecordedMoney(
+  props: Readonly<{ lines: readonly TenderLineRendererView[] }>,
+): JSX.Element | null {
   if (props.lines.length === 0) return null;
   return (
     <div
@@ -138,7 +140,7 @@ function RecordedMoney(props: { lines: readonly TenderLineRendererView[] }): JSX
 }
 
 /** Main's change over the recorded lines (M-P5), in its pinned row under the amount due. */
-function RecordedChange(props: { changeDueMinor: number }): JSX.Element {
+function RecordedChange(props: Readonly<{ changeDueMinor: number }>): JSX.Element {
   return (
     <div className="v5-ledger__change" data-fit="pinned">
       <p className="v5-ledger-row v5-ledger-row--change" data-testid="payment-ledger-change">
@@ -156,7 +158,7 @@ function RecordedChange(props: { changeDueMinor: number }): JSX.Element {
  * sit one step smaller and the figure keeps its size in a 296–320px column. The
  * text stays `1,250.00 EGP` (one LTR run, isolated); the formatter is unchanged.
  */
-function HeroAmount(props: { minor: number; testId?: string | undefined }): JSX.Element {
+function HeroAmount(props: Readonly<{ minor: number; testId?: string | undefined }>): JSX.Element {
   const text = formatHumanMoney(props.minor);
   const split = text.lastIndexOf(' ');
   return (

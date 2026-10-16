@@ -133,12 +133,14 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
   );
 }
 
-function ManagerChoice(props: {
-  managers: Managers;
-  name: string;
-  selected: string | null;
-  onSelect: (managerRef: string) => void;
-}): JSX.Element {
+function ManagerChoice(
+  props: Readonly<{
+    managers: Managers;
+    name: string;
+    selected: string | null;
+    onSelect: (managerRef: string) => void;
+  }>,
+): JSX.Element {
   const { managers } = props;
   if (managers.kind === 'loading') return <output>{SHIFT_COPY.loadingManagers}</output>;
   if (managers.kind === 'refused') return <ShiftAlert message={managers.message} />;

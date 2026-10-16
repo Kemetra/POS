@@ -30,7 +30,7 @@ export interface OperatorRouteGuardProps {
   children: ReactNode;
 }
 
-export function OperatorRouteGuard(props: OperatorRouteGuardProps): JSX.Element {
+export function OperatorRouteGuard(props: Readonly<OperatorRouteGuardProps>): JSX.Element {
   const state = useOperatorSessionStore((s) => s.state);
   const redirectTo = props.redirectTo ?? '/sign-in';
 

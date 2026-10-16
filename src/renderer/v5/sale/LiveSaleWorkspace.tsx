@@ -33,7 +33,7 @@ interface Props {
  * would not fit (stacked banners in the 600–767px band). The cart marks them;
  * the states without a cart mark nothing, so they never block.
  */
-export function LiveSaleWorkspace(props: Props): JSX.Element {
+export function LiveSaleWorkspace(props: Readonly<Props>): JSX.Element {
   return (
     <FitGuard surface="sale">
       <LiveSaleScreen {...props} />
@@ -42,7 +42,7 @@ export function LiveSaleWorkspace(props: Props): JSX.Element {
 }
 
 /** Guarded route adapter. One cart controller instance owns all bridge-confirmed line display state. */
-function LiveSaleScreen(props: Props): JSX.Element {
+function LiveSaleScreen(props: Readonly<Props>): JSX.Element {
   const cartEnabled = useFeatureFlagsStore((state) => state.cart);
   const productSearchEnabled = useFeatureFlagsStore((state) => state.productSearch);
   const session = useOperatorSessionStore((state) => state.state);
@@ -107,11 +107,13 @@ const SALE_TITLE_ID = 'v5-sale-title';
  * no command bar (catalogue off, or the cart still being read) the scan status
  * keeps its own slim strip so it is never missing.
  */
-function SaleTitle(props: {
-  scanAvailable: boolean;
-  withStatus: boolean;
-  lastAction?: ReactNode;
-}): JSX.Element {
+function SaleTitle(
+  props: Readonly<{
+    scanAvailable: boolean;
+    withStatus: boolean;
+    lastAction?: ReactNode;
+  }>,
+): JSX.Element {
   return (
     <div className={props.withStatus ? 'v5-live-titlebar' : undefined}>
       <h1 id={SALE_TITLE_ID} className="v5-visually-hidden">
@@ -124,7 +126,9 @@ function SaleTitle(props: {
 }
 
 /** Generic, recoverable: never names a refusal reason. */
-function CartHydrationState(props: { failed: boolean; onRetry: () => void }): JSX.Element {
+function CartHydrationState(
+  props: Readonly<{ failed: boolean; onRetry: () => void }>,
+): JSX.Element {
   if (!props.failed) {
     return (
       <div className="v5-live-state">

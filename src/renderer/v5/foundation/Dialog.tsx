@@ -42,7 +42,7 @@ const DialogHostContext = createContext<HTMLElement | null>(null);
  * attached in a layout effect, so it is in the document before any dialog's
  * mount effect moves focus into it.
  */
-export function DialogHost({ children }: { children: ReactNode }): JSX.Element {
+export function DialogHost({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
   const anchorRef = useRef<HTMLDivElement>(null);
   const [host] = useState(() => {
     const node = document.createElement('div');

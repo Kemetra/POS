@@ -71,7 +71,7 @@ export function VoucherEntry({
   paymentAttemptId,
   tenderApply,
   onApplied,
-}: VoucherEntryProps): JSX.Element {
+}: Readonly<VoucherEntryProps>): JSX.Element {
   const [voucherCode, setVoucherCode] = useState<string>('');
   const [rawAmountInput, setRawAmountInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);

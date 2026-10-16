@@ -61,7 +61,7 @@ export interface PinPadProps {
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 
-export function PinPad(props: PinPadProps): JSX.Element {
+export function PinPad(props: Readonly<PinPadProps>): JSX.Element {
   const {
     value,
     onChange,
@@ -183,11 +183,11 @@ function DigitKey({
   digit,
   disabled,
   onPress,
-}: {
+}: Readonly<{
   digit: string;
   disabled: boolean;
   onPress: (digit: string) => void;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <button
       type="button"
@@ -215,12 +215,12 @@ function PinDots({
   error,
   describedBy,
   autoFocus,
-}: {
+}: Readonly<{
   filled: number;
   error: boolean;
   describedBy?: string | undefined;
   autoFocus: boolean;
-}): JSX.Element {
+}>): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (autoFocus) ref.current?.focus();
@@ -258,10 +258,10 @@ function PinDots({
 export function PinPadPreview({
   prompt,
   submitLabel = 'دخول',
-}: {
+}: Readonly<{
   prompt: string;
   submitLabel?: string;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <div className="v5-entry__pin" data-testid="pin-pad-preview">
       <p className="v5-entry__prompt" data-testid="pin-awaiting-selection">

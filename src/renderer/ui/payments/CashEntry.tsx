@@ -79,7 +79,7 @@ export function CashEntry({
   onApplied,
   onDraftChange,
   onNothingOwed,
-}: CashEntryProps): JSX.Element {
+}: Readonly<CashEntryProps>): JSX.Element {
   const [rawInput, setRawInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [nothingOwed, setNothingOwed] = useState<boolean>(false);

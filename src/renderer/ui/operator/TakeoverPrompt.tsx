@@ -36,7 +36,7 @@ export interface TakeoverPromptProps {
 export function TakeoverPrompt({
   operator,
   pending_takeover_id,
-}: TakeoverPromptProps): JSX.Element {
+}: Readonly<TakeoverPromptProps>): JSX.Element {
   const cancelRef = useRef<HTMLButtonElement | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [retryError, setRetryError] = useState<string | undefined>(undefined);

@@ -92,7 +92,7 @@ function useExclusive(): {
   return { pending, run };
 }
 
-export function CashiersScreen({ operator, pairing }: Props): JSX.Element {
+export function CashiersScreen({ operator, pairing }: Readonly<Props>): JSX.Element {
   const terminalLabel = useTerminalLabel(pairing);
   const { list, reading, landed, reload } = useCashierList(operator);
   const { pending, run } = useExclusive();
@@ -222,7 +222,9 @@ export function CashiersScreen({ operator, pairing }: Props): JSX.Element {
   );
 }
 
-function ScreenHead({ terminalLabel }: { terminalLabel: string | undefined }): JSX.Element {
+function ScreenHead({
+  terminalLabel,
+}: Readonly<{ terminalLabel: string | undefined }>): JSX.Element {
   return (
     <div className="v5-cashiers-head">
       <h1 id="v5-cashiers-title">{CASHIERS_COPY.title}</h1>
@@ -242,11 +244,11 @@ function OutcomeNotice({
   outcome,
   pending,
   onSignIn,
-}: {
+}: Readonly<{
   outcome: Outcome;
   pending: boolean;
   onSignIn: () => void;
-}): JSX.Element | null {
+}>): JSX.Element | null {
   switch (outcome.kind) {
     case 'done':
       return (
@@ -273,7 +275,7 @@ function OutcomeNotice({
 }
 
 /** M6 — the shipped M-A3 copy with its one action, «تسجيل الدخول». */
-function ReauthNotice({ onSignIn }: { onSignIn: () => void }): JSX.Element {
+function ReauthNotice({ onSignIn }: Readonly<{ onSignIn: () => void }>): JSX.Element {
   return (
     <Notice
       tone="warning"
@@ -310,7 +312,7 @@ function ListPanel({
   rowRef,
   onAction,
   onRetry,
-}: ListPanelProps): JSX.Element {
+}: Readonly<ListPanelProps>): JSX.Element {
   return (
     <section className="v5-cashiers-panel" aria-labelledby="v5-cashiers-list-heading">
       <div className="v5-cashiers-panel-head">
@@ -332,7 +334,7 @@ function ListBody({
   rowRef,
   onAction,
   onRetry,
-}: Omit<ListPanelProps, 'headingRef'>): JSX.Element {
+}: Readonly<Omit<ListPanelProps, 'headingRef'>>): JSX.Element {
   if (list.kind === 'loading') {
     return (
       <PanelState>
@@ -370,7 +372,7 @@ function ListBody({
   return <CashierRows cashiers={list.cashiers} busy={busy} onAction={onAction} rowRef={rowRef} />;
 }
 
-function PanelState({ children }: { children: ReactNode }): JSX.Element {
+function PanelState({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
   return <div className="v5-cashiers-panel-state">{children}</div>;
 }
 

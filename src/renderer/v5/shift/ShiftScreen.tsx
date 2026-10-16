@@ -51,7 +51,7 @@ export function ShiftScreen(props: Props): JSX.Element | null {
 }
 
 /** A refusal (or rejected call) in the region that caused it. */
-export function ShiftAlert({ message }: { message: string | null }): JSX.Element | null {
+export function ShiftAlert({ message }: Readonly<{ message: string | null }>): JSX.Element | null {
   if (message === null) return null;
   return (
     <p className="v5-shift-alert" role="alert">

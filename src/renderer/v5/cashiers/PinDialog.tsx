@@ -54,7 +54,13 @@ export interface PinDialogProps {
   onCancel: () => void;
 }
 
-export function PinDialog({ mode, name, pending, onSave, onCancel }: PinDialogProps): JSX.Element {
+export function PinDialog({
+  mode,
+  name,
+  pending,
+  onSave,
+  onCancel,
+}: Readonly<PinDialogProps>): JSX.Element {
   const ids = { title: useId(), hint: useId(), msg: useId(), first: useId(), second: useId() };
   const firstRef = useRef<HTMLInputElement>(null);
   const mounted = useMounted();

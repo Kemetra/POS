@@ -29,7 +29,7 @@ interface InvalidStateBannerProps {
  * RT-244 — the v5 warning notice inside the pairing card, in the owner-approved
  * Arabic (2026-10-12).
  */
-export function InvalidStateBanner({ reason }: InvalidStateBannerProps): JSX.Element {
+export function InvalidStateBanner({ reason }: Readonly<InvalidStateBannerProps>): JSX.Element {
   return (
     <div role="alert" className="v5-notice" data-tone="warning" data-testid="invalid-state-banner">
       <ToneIcon tone="warning" />

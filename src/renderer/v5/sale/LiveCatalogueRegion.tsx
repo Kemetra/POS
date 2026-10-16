@@ -39,7 +39,7 @@ function notifyScan(message: string): void {
  * D-C1): a resolved scan or a picked result adds at once, with no confirm
  * dialog. Mounted only when the productSearch flag is on.
  */
-export function LiveCatalogueRegion(props: Props): JSX.Element {
+export function LiveCatalogueRegion(props: Readonly<Props>): JSX.Element {
   const searchRef = useRef<HTMLInputElement>(null);
   const catalogue = useSaleCatalogueController({
     ...(props.cartBridge ? { cartBridge: props.cartBridge } : {}),

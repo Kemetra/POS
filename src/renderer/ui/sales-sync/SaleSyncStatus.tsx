@@ -117,7 +117,7 @@ const STATE_ICON: Record<Exclude<SyncState, 'loading'>, string> = {
   unavailable: '⛔',
 };
 
-export function SaleSyncStatus({ bridge }: SaleSyncStatusProps): JSX.Element {
+export function SaleSyncStatus({ bridge }: Readonly<SaleSyncStatusProps>): JSX.Element {
   const [state, setState] = useState<SyncState>('loading');
   const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
   const [pending, setPending] = useState(0);

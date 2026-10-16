@@ -428,7 +428,7 @@ function Row({
   positive,
   ariaLive,
   coverageNote,
-}: RowProps): JSX.Element {
+}: Readonly<RowProps>): JSX.Element {
   const valueColor = rowValueColor({ success, muted, positive });
   return (
     <div

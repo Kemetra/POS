@@ -47,7 +47,7 @@ interface Props {
  * money column the full height: the total and the commit are never scrolled
  * away, however long the cart.
  */
-export function LiveSaleCart(props: Props): JSX.Element {
+export function LiveSaleCart(props: Readonly<Props>): JSX.Element {
   return (
     <>
       <CartRegion {...props} />
@@ -56,7 +56,7 @@ export function LiveSaleCart(props: Props): JSX.Element {
   );
 }
 
-function CartRegion(props: Props): JSX.Element {
+function CartRegion(props: Readonly<Props>): JSX.Element {
   const [noteLineId, setNoteLineId] = useState<string | null>(null);
   const editingLine = props.lines.find((item) => item.lineId === noteLineId) ?? null;
   const editable = props.frozenSubtotalMinor === null && !props.cancelled;
@@ -122,7 +122,7 @@ function CartRegion(props: Props): JSX.Element {
 }
 
 /** The inline-end money column: totals and the commit at the foot, the void apart below them. */
-function MoneyColumn(props: Props): JSX.Element {
+function MoneyColumn(props: Readonly<Props>): JSX.Element {
   return (
     // A labelled region, not <aside>: a complementary landmark may not nest inside <main>.
     <section className="v5-sale-money" aria-labelledby="v5-live-money-title">
@@ -195,7 +195,7 @@ function cartState(props: Props): { label: string; tone: StateTone } | null {
   return null;
 }
 
-function CartStateLabel(props: Props): JSX.Element | null {
+function CartStateLabel(props: Readonly<Props>): JSX.Element | null {
   const state = cartState(props);
   if (state === null) return null;
   return (
@@ -205,7 +205,7 @@ function CartStateLabel(props: Props): JSX.Element | null {
   );
 }
 
-function CartTotals(props: Props): JSX.Element {
+function CartTotals(props: Readonly<Props>): JSX.Element {
   const frozen = props.frozenSubtotalMinor !== null;
   // Before any line exists the total is a placeholder, never a fabricated 0.00.
   const shown =
@@ -230,7 +230,7 @@ function CartTotals(props: Props): JSX.Element {
   );
 }
 
-function CartActions(props: Props): JSX.Element {
+function CartActions(props: Readonly<Props>): JSX.Element {
   return (
     <div className="v5-sale-actions">
       {props.handoffError && (
@@ -244,7 +244,7 @@ function CartActions(props: Props): JSX.Element {
   );
 }
 
-function PrimaryAction(props: Props): JSX.Element {
+function PrimaryAction(props: Readonly<Props>): JSX.Element {
   if (props.paid === true)
     return (
       <>

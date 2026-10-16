@@ -16,7 +16,7 @@ interface HonestNoticeProps {
  * else to show (G-6): a neutral Notice, with an optional way out. The page
  * wraps it in `.v5-honest-state`, which gives it its neutral look.
  */
-export function HonestNotice({ notice, action, testId }: HonestNoticeProps): JSX.Element {
+export function HonestNotice({ notice, action, testId }: Readonly<HonestNoticeProps>): JSX.Element {
   return (
     <Notice
       tone="info"

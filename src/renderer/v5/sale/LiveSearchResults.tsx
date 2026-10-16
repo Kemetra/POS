@@ -11,7 +11,11 @@ interface Props {
 }
 
 /** Renders the search FSM: one honest message per terminal state, or the real result listbox. */
-export function LiveSearchResults({ state, onSelect, onRecover }: Props): JSX.Element | null {
+export function LiveSearchResults({
+  state,
+  onSelect,
+  onRecover,
+}: Readonly<Props>): JSX.Element | null {
   switch (state.kind) {
     case 'searching':
       return (
@@ -46,11 +50,13 @@ export function LiveSearchResults({ state, onSelect, onRecover }: Props): JSX.El
   }
 }
 
-function RecoverMessage(props: {
-  copy: string;
-  action: string;
-  onRecover: () => void;
-}): JSX.Element {
+function RecoverMessage(
+  props: Readonly<{
+    copy: string;
+    action: string;
+    onRecover: () => void;
+  }>,
+): JSX.Element {
   return (
     <output className="v5-live-message">
       {props.copy}{' '}
@@ -61,11 +67,13 @@ function RecoverMessage(props: {
   );
 }
 
-function ResultsList(props: {
-  items: readonly ProductSnapshotDisplay[];
-  truncated: boolean;
-  onSelect: (product: ProductSnapshotDisplay) => void;
-}): JSX.Element {
+function ResultsList(
+  props: Readonly<{
+    items: readonly ProductSnapshotDisplay[];
+    truncated: boolean;
+    onSelect: (product: ProductSnapshotDisplay) => void;
+  }>,
+): JSX.Element {
   const { items, onSelect } = props;
   const [activeIndex, setActiveIndex] = useState(0);
   useEffect(() => {
@@ -109,7 +117,9 @@ function ResultsList(props: {
   );
 }
 
-function ProductMeta({ product }: { product: ProductSnapshotDisplay }): JSX.Element | null {
+function ProductMeta({
+  product,
+}: Readonly<{ product: ProductSnapshotDisplay }>): JSX.Element | null {
   if (!(product.unit_pack_label ?? product.selling_barcode ?? product.sku)) return null;
   return (
     <span className="v5-sale-product-meta">
@@ -125,12 +135,14 @@ function ProductMeta({ product }: { product: ProductSnapshotDisplay }): JSX.Elem
  * listbox). Nothing inside it is focusable — a nested button was the axe
  * `nested-interactive` violation. The «اختيار» cue is visual only.
  */
-function ProductRow(props: {
-  product: ProductSnapshotDisplay;
-  index: number;
-  active: boolean;
-  onSelect: (product: ProductSnapshotDisplay) => void;
-}): JSX.Element {
+function ProductRow(
+  props: Readonly<{
+    product: ProductSnapshotDisplay;
+    index: number;
+    active: boolean;
+    onSelect: (product: ProductSnapshotDisplay) => void;
+  }>,
+): JSX.Element {
   const { product } = props;
   return (
     <li

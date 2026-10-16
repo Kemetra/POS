@@ -41,7 +41,7 @@ function errorName(error: unknown): string {
 export function ErrorScreen({
   logger = defaultLogger,
   onReload = reloadRenderer,
-}: ErrorScreenProps): JSX.Element {
+}: Readonly<ErrorScreenProps>): JSX.Element {
   const error = useRouteError();
   const [ref] = useState(newSupportRef);
   const actionRef = useRef<HTMLButtonElement>(null);

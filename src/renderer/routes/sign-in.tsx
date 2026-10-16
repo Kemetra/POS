@@ -58,7 +58,7 @@ export interface SignInRouteProps {
 
 type Mode = 'cashier' | 'manager';
 
-export function SignInRoute(props: SignInRouteProps): JSX.Element {
+export function SignInRoute(props: Readonly<SignInRouteProps>): JSX.Element {
   const { operator } = props;
   const fsm = useOperatorSessionStore((s) => s.state);
   const navigate = useNavigate();

@@ -23,7 +23,7 @@ import './stuck-shifts.css';
  */
 
 /** The page: the sub-line, then whichever state the surface is in. */
-export function StuckShiftsPage({ children }: { children: ReactNode }): JSX.Element {
+export function StuckShiftsPage({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
   return (
     <div className="v5-stuck" data-testid="stuck-shift-surface">
       <p className="v5-stuck-sub">{COPY.subtitle}</p>
@@ -36,10 +36,10 @@ export function StuckShiftsPage({ children }: { children: ReactNode }): JSX.Elem
 export function StuckShiftsState({
   children,
   stateRef,
-}: {
+}: Readonly<{
   children: ReactNode;
   stateRef?: (el: HTMLDivElement | null) => void;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <div className="v5-stuck-state" ref={stateRef} tabIndex={stateRef ? -1 : undefined}>
       {children}
@@ -57,7 +57,7 @@ export function StuckShiftsLoading(): JSX.Element {
   );
 }
 
-export function StuckShiftsEmpty({ focus }: { focus: StuckShiftFocus }): JSX.Element {
+export function StuckShiftsEmpty({ focus }: Readonly<{ focus: StuckShiftFocus }>): JSX.Element {
   return (
     <StuckShiftsState stateRef={focus.stateRef}>
       <div className="v5-stuck-neutral">
@@ -69,7 +69,9 @@ export function StuckShiftsEmpty({ focus }: { focus: StuckShiftFocus }): JSX.Ele
   );
 }
 
-export function StuckShiftsUnreachable({ onRetry }: { onRetry: () => void }): JSX.Element {
+export function StuckShiftsUnreachable({
+  onRetry,
+}: Readonly<{ onRetry: () => void }>): JSX.Element {
   return (
     <StuckShiftsState>
       <Notice
@@ -94,7 +96,11 @@ export interface StuckShiftListProps {
   focus: StuckShiftFocus;
 }
 
-export function StuckShiftList({ shifts, onClose, focus }: StuckShiftListProps): JSX.Element {
+export function StuckShiftList({
+  shifts,
+  onClose,
+  focus,
+}: Readonly<StuckShiftListProps>): JSX.Element {
   const headingId = useId();
   return (
     <section className="v5-stuck-panel" aria-labelledby={headingId} data-testid="stuck-shift-list">
@@ -116,11 +122,11 @@ function StuckShiftRow({
   shift,
   onClose,
   focus,
-}: {
+}: Readonly<{
   shift: StuckShiftSummary;
   onClose: (shift: StuckShiftSummary) => void;
   focus: StuckShiftFocus;
-}): JSX.Element {
+}>): JSX.Element {
   const nameId = useId();
   const name = displayNameOf(shift.cashier_display_name);
   return (

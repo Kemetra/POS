@@ -71,7 +71,7 @@ export function TenderPicker({
   onTenderSelect,
   selectedTender = null,
   voucherEnabled = false,
-}: TenderPickerProps): JSX.Element | null {
+}: Readonly<TenderPickerProps>): JSX.Element | null {
   // Route guard: no envelope, nothing to pay.
   if (envelope === null) return null;
 

@@ -47,7 +47,7 @@ export function ForcedCloseSurface({
   terminal_label,
   opened_at,
   duration_minutes,
-}: ForcedCloseSurfaceProps): JSX.Element {
+}: Readonly<ForcedCloseSurfaceProps>): JSX.Element {
   return (
     <div data-testid="forced-close-surface">
       <div data-testid="fcs-cashier-name">{cashier_display_name}</div>
@@ -122,7 +122,7 @@ type DialogState =
  * FR-024 blind-close discipline: no financial fields rendered.
  * FR-013 minimum-disclosure: only display-safe shift fields shown.
  */
-export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Element {
+export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>): JSX.Element {
   const [surface, setSurface] = useState<SurfaceState>({ kind: 'loading' });
   const [dialog, setDialog] = useState<DialogState>({ kind: 'idle' });
   const focus = useStuckShiftFocus(surface.kind !== 'loading');

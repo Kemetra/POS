@@ -418,7 +418,9 @@ function useEscapeKey(enabled: boolean, onEscape: () => void): void {
 }
 
 /** RT-26 — Back to the same sale (Esc). Rendered only while offered. */
-function BackToSaleButton(props: { back: BackControl; onBack: () => void }): JSX.Element | null {
+function BackToSaleButton(
+  props: Readonly<{ back: BackControl; onBack: () => void }>,
+): JSX.Element | null {
   if (!props.back.offered) return null;
   return (
     <button
@@ -437,7 +439,7 @@ function BackToSaleButton(props: { back: BackControl; onBack: () => void }): JSX
 }
 
 /** Why Back is disabled: money recorded, money reversed, or an entry is open. */
-function BackBlockedReason(props: { back: BackControl }): JSX.Element | null {
+function BackBlockedReason(props: Readonly<{ back: BackControl }>): JSX.Element | null {
   if (!props.back.showReason || props.back.reason === null) return null;
   const tone = props.back.reason === 'card_void' ? 'danger' : 'info';
   // RT-243 W1-C: the V5 Notice treatment (tone border, tint, tone icon), so the

@@ -56,7 +56,10 @@ const PATHS = {
 
 export type V5IconName = keyof typeof PATHS;
 
-export function V5Icon({ name, size = 20 }: { name: V5IconName; size?: number }): JSX.Element {
+export function V5Icon({
+  name,
+  size = 20,
+}: Readonly<{ name: V5IconName; size?: number }>): JSX.Element {
   return (
     <svg
       className="v5-icon"

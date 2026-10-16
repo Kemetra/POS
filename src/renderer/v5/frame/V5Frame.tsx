@@ -61,7 +61,7 @@ function useDevConnectionToggle(setConnectionState: (state: ConnectionState) => 
   }, []);
 }
 
-export function V5Frame({ notices, children }: V5FrameProps): JSX.Element {
+export function V5Frame({ notices, children }: Readonly<V5FrameProps>): JSX.Element {
   const shortfall = viewportShortfall(useViewportTier());
   const { state: connectionState, setState: setConnectionState } = useConnectionState();
   useDevConnectionToggle(setConnectionState);

@@ -16,10 +16,10 @@ import './entry.css';
 export function EntryCardScreen({
   children,
   rootProps,
-}: {
+}: Readonly<{
   children: ReactNode;
   rootProps: Readonly<Record<string, string>>;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <main className="v5-entry" dir="rtl" lang="ar" {...rootProps}>
       <EntryStrip />
@@ -29,7 +29,7 @@ export function EntryCardScreen({
 }
 
 /** The card's leading glyph: decorative, the heading beside it carries the meaning. */
-export function EntryCardIcon({ name }: { name: V5IconName }): JSX.Element {
+export function EntryCardIcon({ name }: Readonly<{ name: V5IconName }>): JSX.Element {
   return (
     <span className="v5-entry__card-icon" aria-hidden="true">
       <V5Icon name={name} size={26} />

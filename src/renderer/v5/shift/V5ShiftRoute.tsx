@@ -48,7 +48,7 @@ type Outcome =
   | { kind: 'recorded'; movement: MovementKind }
   | { kind: 'closed'; closed: ShiftClosed };
 
-function CashierShift({ bridge }: { bridge: ShiftCashupBridgeAPI }): JSX.Element {
+function CashierShift({ bridge }: Readonly<{ bridge: ShiftCashupBridgeAPI }>): JSX.Element {
   const { state, reload } = useShiftStatus(bridge);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const done = (next: Outcome): void => {
@@ -94,11 +94,13 @@ function CashierShift({ bridge }: { bridge: ShiftCashupBridgeAPI }): JSX.Element
  * (an approved close's variance is only in its answer); the failed refresh is
  * then a generic line beside it, never the refusal or any error text.
  */
-function StatusUnavailable(props: {
-  outcome: Outcome | null;
-  reason: ShiftCashupRefusal;
-  onRetry: () => void;
-}): JSX.Element {
+function StatusUnavailable(
+  props: Readonly<{
+    outcome: Outcome | null;
+    reason: ShiftCashupRefusal;
+    onRetry: () => void;
+  }>,
+): JSX.Element {
   const { outcome } = props;
   const message = outcome === null ? shiftRefusalMessage(props.reason) : SHIFT_COPY.refreshFailed;
   return (
@@ -114,7 +116,7 @@ function StatusUnavailable(props: {
   );
 }
 
-function ShiftOutcome({ outcome }: { outcome: Outcome }): JSX.Element {
+function ShiftOutcome({ outcome }: Readonly<{ outcome: Outcome }>): JSX.Element {
   if (outcome.kind === 'opened') {
     return (
       <div className="v5-shift-outcome" role="status">
@@ -143,10 +145,12 @@ function ShiftOutcome({ outcome }: { outcome: Outcome }): JSX.Element {
   );
 }
 
-function OpenShiftPanel(props: {
-  bridge: ShiftCashupBridgeAPI;
-  onOpened: () => void;
-}): JSX.Element {
+function OpenShiftPanel(
+  props: Readonly<{
+    bridge: ShiftCashupBridgeAPI;
+    onOpened: () => void;
+  }>,
+): JSX.Element {
   const inputId = useId();
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -193,12 +197,14 @@ function OpenShiftPanel(props: {
   );
 }
 
-function OpenShift(props: {
-  bridge: ShiftCashupBridgeAPI;
-  open: ShiftOpenShiftView;
-  onRecorded: (movement: MovementKind) => void;
-  onClosed: (closed: ShiftClosed) => void;
-}): JSX.Element {
+function OpenShift(
+  props: Readonly<{
+    bridge: ShiftCashupBridgeAPI;
+    open: ShiftOpenShiftView;
+    onRecorded: (movement: MovementKind) => void;
+    onClosed: (closed: ShiftClosed) => void;
+  }>,
+): JSX.Element {
   const { open } = props;
   const [movement, setMovement] = useState<MovementKind | null>(null);
   const money = (minor: number): JSX.Element => (

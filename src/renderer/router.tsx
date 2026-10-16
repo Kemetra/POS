@@ -129,7 +129,7 @@ type BootStatus =
       invalidReason?: Extract<PairingStatus, { kind: 'invalid' }>['reason'];
     };
 
-export function AppRouter(props: AppRouterProps): JSX.Element {
+export function AppRouter(props: Readonly<AppRouterProps>): JSX.Element {
   const [boot, setBoot] = useState<BootStatus>({ phase: 'loading' });
   // RT-215 / Codex P2 4186254473: the one pairing-push subscription. Its
   // effect is declared BEFORE the boot read's, so it is registered first and
@@ -437,10 +437,12 @@ function ManagerForceFailRoutePlaceholder(): JSX.Element {
  * via `replaceState` whenever it changes. Keeps the router test
  * DOM-based without coupling to memory-router internals.
  */
-function PathMirrorBridge(props: {
-  router: ReturnType<typeof createMemoryRouter>;
-  children: ReactNode;
-}): JSX.Element {
+function PathMirrorBridge(
+  props: Readonly<{
+    router: ReturnType<typeof createMemoryRouter>;
+    children: ReactNode;
+  }>,
+): JSX.Element {
   useEffect(() => {
     const sync = (): void => {
       const current = props.router.state.location.pathname;

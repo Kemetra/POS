@@ -47,7 +47,10 @@ function retOf(outcome: Outcome): ReturnJournalView | null {
   return outcome.kind === 'failed' ? null : outcome.ret;
 }
 
-function Facts({ ret, confirmed }: { ret: ReturnJournalView; confirmed: boolean }): JSX.Element {
+function Facts({
+  ret,
+  confirmed,
+}: Readonly<{ ret: ReturnJournalView; confirmed: boolean }>): JSX.Element {
   const amount = confirmed ? ret.returnTotalMinor : ret.quotedTotalMinor;
   return (
     <dl className="rt-facts">
@@ -73,7 +76,7 @@ function Facts({ ret, confirmed }: { ret: ReturnJournalView; confirmed: boolean 
   );
 }
 
-function CheckAgain({ flow, outcome }: { flow: ReturnFlow; outcome: Outcome }) {
+function CheckAgain({ flow, outcome }: Readonly<{ flow: ReturnFlow; outcome: Outcome }>) {
   if (outcome.kind !== 'unconfirmed') return null;
   const busy = flow.busy === 'check';
   return (
@@ -97,7 +100,7 @@ function CheckAgain({ flow, outcome }: { flow: ReturnFlow; outcome: Outcome }) {
  * assistive tech announces the outcome (a region inserted already filled is
  * often not read). Focus still moves to the step heading.
  */
-function Announcement({ outcome }: { outcome: Outcome }): JSX.Element {
+function Announcement({ outcome }: Readonly<{ outcome: Outcome }>): JSX.Element {
   const [shown, setShown] = useState<Outcome | null>(null);
   useEffect(() => {
     setShown(outcome);
@@ -124,11 +127,11 @@ export function ReturnOutcome({
   flow,
   outcome,
   payout,
-}: {
+}: Readonly<{
   flow: ReturnFlow;
   outcome: Outcome;
   payout: PayoutDeps;
-}) {
+}>) {
   const heading = useFocusOnMount<HTMLHeadingElement>();
   const confirmed = outcome.kind === 'confirmed';
   const ret = retOf(outcome);

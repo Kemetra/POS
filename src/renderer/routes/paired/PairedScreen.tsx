@@ -44,7 +44,7 @@ type ScreenState =
   | { phase: 'paired'; status: Extract<PairingStatus, { kind: 'paired' }> }
   | { phase: 'redirect-to-pairing' };
 
-export function PairedScreen(props: PairedScreenProps): JSX.Element {
+export function PairedScreen(props: Readonly<PairedScreenProps>): JSX.Element {
   const [state, setState] = useState<ScreenState>({ phase: 'loading' });
   const pairing = props.pairing ?? readBridge();
   const navigate = useNavigate();

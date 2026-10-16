@@ -39,7 +39,9 @@ type Result = { kind: 'enrolled' } | { kind: 'error'; message: string } | null;
  * typed PINs and shows the closed-set answer. Every PIN field is masked and
  * cleared on the press; no PIN is kept, shown or logged.
  */
-export function ManagerPinEnrollment({ bridge }: { bridge: ShiftCashupBridgeAPI }): JSX.Element {
+export function ManagerPinEnrollment({
+  bridge,
+}: Readonly<{ bridge: ShiftCashupBridgeAPI }>): JSX.Element {
   const ids = { pin: useId(), confirm: useId(), current: useId() };
   const [fields, setFields] = useState<PinFields>(EMPTY);
   const [result, setResult] = useState<Result>(null);

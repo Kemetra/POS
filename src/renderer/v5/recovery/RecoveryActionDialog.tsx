@@ -111,11 +111,13 @@ function useRecoverySubmit(props: Props): {
   return { busy, error, submit };
 }
 
-function CashField(props: {
-  stuck: RecoveryStuckAttemptView;
-  value: string;
-  onChange: (value: string) => void;
-}): JSX.Element {
+function CashField(
+  props: Readonly<{
+    stuck: RecoveryStuckAttemptView;
+    value: string;
+    onChange: (value: string) => void;
+  }>,
+): JSX.Element {
   const cashId = useId();
   return (
     <div className="v5-shift-fields">
@@ -138,11 +140,13 @@ function CashField(props: {
   );
 }
 
-function Confirm(props: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  children: ReactNode;
-}): JSX.Element {
+function Confirm(
+  props: Readonly<{
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    children: ReactNode;
+  }>,
+): JSX.Element {
   return (
     <label>
       <input
@@ -159,11 +163,13 @@ function Confirm(props: {
 }
 
 /** §5.2: live cash and card tender each need their confirmation first. */
-function TenderConfirms(props: {
-  stuck: RecoveryStuckAttemptView;
-  extras: RecoveryExtras;
-  onChange: (extras: RecoveryExtras) => void;
-}): JSX.Element {
+function TenderConfirms(
+  props: Readonly<{
+    stuck: RecoveryStuckAttemptView;
+    extras: RecoveryExtras;
+    onChange: (extras: RecoveryExtras) => void;
+  }>,
+): JSX.Element {
   const { stuck, extras } = props;
   return (
     <fieldset className="v5-recovery-confirms">
@@ -191,11 +197,13 @@ function TenderConfirms(props: {
   );
 }
 
-function ActionExtras(props: {
-  action: RecoveryAction;
-  extras: RecoveryExtras;
-  onChange: (extras: RecoveryExtras) => void;
-}): JSX.Element | null {
+function ActionExtras(
+  props: Readonly<{
+    action: RecoveryAction;
+    extras: RecoveryExtras;
+    onChange: (extras: RecoveryExtras) => void;
+  }>,
+): JSX.Element | null {
   const { action, extras } = props;
   if (action.kind === 'complete' && action.stuck.remaining_minor > 0) {
     return (
@@ -215,11 +223,13 @@ function ActionExtras(props: {
 }
 
 /** The manager's own PIN: masked, held only until the press, never stored or logged. */
-function PinField(props: {
-  approver: ManagerApprover;
-  value: string;
-  onChange: (value: string) => void;
-}): JSX.Element {
+function PinField(
+  props: Readonly<{
+    approver: ManagerApprover;
+    value: string;
+    onChange: (value: string) => void;
+  }>,
+): JSX.Element {
   const pinId = useId();
   return (
     <div className="v5-shift-fields">
@@ -243,7 +253,7 @@ function PinField(props: {
   );
 }
 
-function ApproverState({ state }: { state: Approver }): JSX.Element | null {
+function ApproverState({ state }: Readonly<{ state: Approver }>): JSX.Element | null {
   if (state.kind === 'loading') return <output>{RECOVERY_COPY.loading}</output>;
   if (state.kind === 'refused') return <ShiftAlert message={state.message} />;
   if (state.approver === null) return <ShiftAlert message={RECOVERY_COPY.noPin} />;
@@ -255,7 +265,7 @@ function ApproverState({ state }: { state: Approver }): JSX.Element | null {
  * PIN (RT-114: an approval bound to this subject and its amount, consumed by
  * the action in main).
  */
-export function RecoveryActionDialog(props: Props): JSX.Element {
+export function RecoveryActionDialog(props: Readonly<Props>): JSX.Element {
   const { action } = props;
   const state = useRecoveryApprover(props.bridges, RECOVERY_ACTION_KIND[action.kind]);
   const { busy, error, submit } = useRecoverySubmit(props);

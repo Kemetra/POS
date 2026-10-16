@@ -25,7 +25,9 @@ import '../../v5/shift/shift.css';
  * reaches the renderer.
  */
 
-export function ReauthRequiredNotice({ onSignIn }: { onSignIn: () => void }): JSX.Element {
+export function ReauthRequiredNotice({
+  onSignIn,
+}: Readonly<{ onSignIn: () => void }>): JSX.Element {
   return (
     <div data-testid="reauth-required" role="alert" dir="rtl" lang="ar">
       <p>{SIGN_IN_REFUSAL_COPY.reauth_required}</p>
@@ -164,10 +166,10 @@ export function ReauthDialog({
 function ReauthFeedback({
   submitting,
   feedback,
-}: {
+}: Readonly<{
   submitting: boolean;
   feedback: Feedback;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <div role="status" aria-live="polite">
       {submitting && <span>{REAUTH_COPY.submitting}</span>}

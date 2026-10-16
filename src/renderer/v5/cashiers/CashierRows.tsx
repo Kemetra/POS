@@ -28,7 +28,12 @@ export interface CashierRowsProps {
   rowRef: (id: string, el: HTMLLIElement | null) => void;
 }
 
-export function CashierRows({ cashiers, busy, onAction, rowRef }: CashierRowsProps): JSX.Element {
+export function CashierRows({
+  cashiers,
+  busy,
+  onAction,
+  rowRef,
+}: Readonly<CashierRowsProps>): JSX.Element {
   return (
     <ul className="v5-cashiers-rows" aria-labelledby="v5-cashiers-list-heading">
       {cashiers.map((cashier) => (
@@ -73,7 +78,7 @@ function CashierRow({
   );
 }
 
-function PinBadge({ cashier }: { cashier: CashierPinStatus }): JSX.Element {
+function PinBadge({ cashier }: Readonly<{ cashier: CashierPinStatus }>): JSX.Element {
   const until = cashier.pin === 'locked' ? lockTime(cashier.locked_until) : null;
   return (
     <span className="v5-cashiers-badge" data-pin={cashier.pin} data-testid="cashier-pin-badge">
@@ -104,7 +109,7 @@ interface ButtonContext {
   describedBy: string;
 }
 
-function RowButtons(ctx: ButtonContext): JSX.Element {
+function RowButtons(ctx: Readonly<ButtonContext>): JSX.Element {
   const { primary, secondary } = rowActions(ctx.cashier.pin);
   return (
     <div className="v5-cashiers-actions">
@@ -122,11 +127,11 @@ function ActionButton({
   action,
   ctx,
   ghost = false,
-}: {
+}: Readonly<{
   action: RowAction;
   ctx: ButtonContext;
   ghost?: boolean;
-}): JSX.Element {
+}>): JSX.Element {
   const { cashier, busy, onAction, describedBy } = ctx;
   return (
     <button

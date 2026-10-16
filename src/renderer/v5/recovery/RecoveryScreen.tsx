@@ -93,7 +93,7 @@ function useRosterNames(list: RecoveryBridges['listRoster']): ReadonlyMap<string
   return names;
 }
 
-export function RecoveryScreen({ bridges }: { bridges: RecoveryBridges }): JSX.Element {
+export function RecoveryScreen({ bridges }: Readonly<{ bridges: RecoveryBridges }>): JSX.Element {
   const { held, reload } = useHeld(bridges.recovery);
   const names = useRosterNames(bridges.listRoster);
   const [action, setAction] = useState<RecoveryAction | null>(null);
@@ -130,11 +130,13 @@ export function RecoveryScreen({ bridges }: { bridges: RecoveryBridges }): JSX.E
   );
 }
 
-function HeldBody(props: {
-  held: Held;
-  nameOf: (id: string) => string;
-  onAction: (action: RecoveryAction) => void;
-}): JSX.Element {
+function HeldBody(
+  props: Readonly<{
+    held: Held;
+    nameOf: (id: string) => string;
+    onAction: (action: RecoveryAction) => void;
+  }>,
+): JSX.Element {
   const { held } = props;
   if (held.kind === 'loading') {
     return <output className="v5-shift-message">{RECOVERY_COPY.loading}</output>;
@@ -162,7 +164,7 @@ function HeldBody(props: {
 }
 
 /** One fact; `text` sets a word (a name) in the body face, not the tabular one. */
-function Fact(props: { label: string; value: string; text?: boolean }): JSX.Element {
+function Fact(props: Readonly<{ label: string; value: string; text?: boolean }>): JSX.Element {
   const { label, value } = props;
   return (
     <div className="v5-shift-fact">
@@ -174,11 +176,13 @@ function Fact(props: { label: string; value: string; text?: boolean }): JSX.Elem
   );
 }
 
-function StuckPanel(props: {
-  stuck: RecoveryStuckAttemptView | null;
-  nameOf: (id: string) => string;
-  onAction: (action: RecoveryAction) => void;
-}): JSX.Element {
+function StuckPanel(
+  props: Readonly<{
+    stuck: RecoveryStuckAttemptView | null;
+    nameOf: (id: string) => string;
+    onAction: (action: RecoveryAction) => void;
+  }>,
+): JSX.Element {
   const { stuck } = props;
   return (
     <section className="v5-shift-panel" aria-labelledby="recovery-stuck">
@@ -234,11 +238,13 @@ function StuckPanel(props: {
   );
 }
 
-function HeldPanel(props: {
-  held: RecoveryHeldCartView[];
-  nameOf: (id: string) => string;
-  onAction: (action: RecoveryAction) => void;
-}): JSX.Element {
+function HeldPanel(
+  props: Readonly<{
+    held: RecoveryHeldCartView[];
+    nameOf: (id: string) => string;
+    onAction: (action: RecoveryAction) => void;
+  }>,
+): JSX.Element {
   return (
     <section className="v5-shift-panel" aria-labelledby="recovery-held">
       <h2 id="recovery-held">{RECOVERY_COPY.heldTitle}</h2>

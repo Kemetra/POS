@@ -22,7 +22,7 @@ export interface OperatorBadgeProps {
   role: Role;
 }
 
-export function OperatorBadge(props: OperatorBadgeProps): JSX.Element {
+export function OperatorBadge(props: Readonly<OperatorBadgeProps>): JSX.Element {
   const initials = props.display_name.slice(0, 2).toUpperCase();
   return (
     <div data-testid="operator-badge" className="operator-badge">

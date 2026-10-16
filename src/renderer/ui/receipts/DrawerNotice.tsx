@@ -40,7 +40,7 @@ interface DrawerNoticeBannerProps {
 export function DrawerNoticeBanner({
   now,
   onManualOverride,
-}: DrawerNoticeBannerProps): JSX.Element | null {
+}: Readonly<DrawerNoticeBannerProps>): JSX.Element | null {
   const notice = useDrawerNoticeStore((s) => s.active);
   if (notice === null) return null;
 
