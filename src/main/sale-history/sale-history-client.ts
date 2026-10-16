@@ -113,8 +113,8 @@ const FAILURE_BY_STATUS: Readonly<Record<number, Failure>> = {
 const UNREACHABLE: Failure = { kind: 'unreachable' };
 const SERVER_ERROR: Failure = { kind: 'server_error' };
 
-/** The largest answer body read, in characters. */
-export const SALE_HISTORY_MAX_BODY_CHARS = 2_000_000;
+/** The largest answer body read, in bytes (UTF-8 on the wire). */
+export const SALE_HISTORY_MAX_BODY_BYTES = 2_000_000;
 
 function failureOf(status: number): Failure {
   return FAILURE_BY_STATUS[status] ?? SERVER_ERROR;
@@ -129,21 +129,23 @@ async function boundedText(response: Response): Promise<string | null> {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let text = '';
+  let bytes = 0;
   for (;;) {
     const chunk = await reader.read();
     if (chunk.done) return text + decoder.decode();
-    text += decoder.decode(chunk.value, { stream: true });
-    if (text.length > SALE_HISTORY_MAX_BODY_CHARS) {
+    bytes += chunk.value.byteLength;
+    if (bytes > SALE_HISTORY_MAX_BODY_BYTES) {
       await reader.cancel();
       return null;
     }
+    text += decoder.decode(chunk.value, { stream: true });
   }
 }
 
 /** The parsed body, or undefined when it is too large to read. */
 async function boundedJson(response: Response): Promise<unknown> {
   const declared = Number(response.headers.get('content-length') ?? '0');
-  if (declared > SALE_HISTORY_MAX_BODY_CHARS) return undefined;
+  if (declared > SALE_HISTORY_MAX_BODY_BYTES) return undefined;
   const text = await boundedText(response);
   return text === null ? undefined : parseJsonBody(text);
 }

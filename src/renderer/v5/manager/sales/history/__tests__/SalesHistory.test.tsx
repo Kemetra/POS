@@ -429,6 +429,41 @@ describe('RT-542 review fixes — renderer', () => {
     expect(screen.queryByRole('button', { name: C.retry })).toBeNull();
   });
 
+  it('never shows one unsent sale while another is loading', async () => {
+    const unsent = (saleId: string, saleNumber: string) => ({
+      sale_id: saleId as SaleId,
+      sale_number: saleNumber,
+      business_day: '2026-10-16',
+      finalized_at: '2026-10-16T07:40:00.000Z',
+      terminal_label: 'Till 1',
+      selling_operator_display_name: 'منى',
+      subtotal_minor: 1000,
+      total_tax_minor: 0,
+      sync: 'pending' as const,
+    });
+    const read = vi.fn((req: { sale_id: string }) =>
+      req.sale_id === 'local-1'
+        ? Promise.resolve({
+            kind: 'ok' as const,
+            sale: { sale_id: 'local-1', sale_number: 'FIRST', latest_print_event: null },
+          })
+        : new Promise<never>(() => undefined),
+    );
+    const sales = { read } as unknown as SalesBridgeAPI;
+    const bridge = bridgeWith(
+      page({ rows: [], unsynced: [unsent('local-1', 'FIRST'), unsent('local-2', 'SECOND')] }),
+    );
+    render(<SalesHistory _testBridge={bridge} _testSalesBridge={sales} _now={NOW} />);
+    await userEvent.click(screen.getByRole('button', { name: C.show }));
+    const opens = await screen.findAllByRole('button', { name: C.open });
+    await userEvent.click(opens[0] as HTMLElement);
+    expect(await screen.findByTestId('sale-result')).toHaveTextContent('FIRST');
+    await userEvent.click(opens[1] as HTMLElement);
+    const panel = await screen.findByTestId('history-local-detail');
+    expect(within(panel).queryByTestId('sale-result')).toBeNull();
+    expect(within(panel).getByText(C.loading)).toBeInTheDocument();
+  });
+
   it('never shows one sale’s reprint result on another sale', async () => {
     const second = '0190a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6c';
     let finish: () => void = () => undefined;

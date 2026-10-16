@@ -114,6 +114,16 @@ describe('RT-542 sale-history client — list', () => {
     expect(await client.list(QUERY, ENVELOPE)).toEqual({ kind: 'unreadable' });
   });
 
+  it('caps a streamed body in bytes, not characters (Arabic text is 2 bytes a letter)', async () => {
+    // 1.1 M letters: under 2 M characters, but 2.2 MB on the wire.
+    const body = new TextEncoder().encode('م'.repeat(1_100_000));
+    const fetch = vi.fn(() =>
+      Promise.resolve(new Response(new Blob([body]).stream(), { status: 200 })),
+    );
+    const client = createSaleHistoryClient({ baseUrl: BASE, fetch });
+    expect(await client.list(QUERY, ENVELOPE)).toEqual({ kind: 'unreadable' });
+  });
+
   it('treats a network failure as unreachable and an off-contract 200 as unreadable', async () => {
     const down = createSaleHistoryClient({
       baseUrl: BASE,

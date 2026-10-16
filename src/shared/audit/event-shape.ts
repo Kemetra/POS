@@ -135,6 +135,12 @@ export const AUDIT_ACTION_CATEGORIES = [
   // finalize transaction. Payload: terminal, sale id and number, instant, day
   // and zone only. Open-set at the SQL layer (0004: no CHECK); no migration.
   'sale.number_day_rule.switched',
+  // RT-542 (RT-534 S6, OD-534-3/8) — a store-history reprint (duplicate or sale
+  // record) after Backend-Core authorized it. Attributed to the signed-in
+  // operator. Payload: the server sale ref, the kind, the server copy number,
+  // the closed marks and the print outcome only; never a token or receipt
+  // content. Main-only. Open-set at the SQL layer (0004: no CHECK); no migration.
+  'sale.history.reprinted',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 

@@ -392,6 +392,7 @@ function SelectedDetail({
   if (selected?.kind !== 'local' || sales === null) return null;
   return (
     <LocalSaleDetail
+      key={selected.saleId}
       saleId={selected.saleId}
       sales={sales}
       {...(receipts === undefined ? {} : { receipts })}

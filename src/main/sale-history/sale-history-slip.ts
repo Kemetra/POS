@@ -100,12 +100,24 @@ function receiptLines(detail: SaleHistoryDetail): ReceiptLineItem[] | null {
   return lines;
 }
 
-function receiptTenders(detail: SaleHistoryDetail, changeMinor: number): TenderLineSummary[] {
+/**
+ * The tenders as the original receipt printed them, or null when they cannot be
+ * rebuilt. Backend-Core records each tender net of change (`capture-payload`
+ * sends `applied − change`), while the receipt printed the cash handed over:
+ * the change goes back onto the last cash tender. Change with no cash tender
+ * to carry it cannot be reproduced, so no duplicate is built.
+ */
+function receiptTenders(
+  detail: SaleHistoryDetail,
+  changeMinor: number,
+): TenderLineSummary[] | null {
   const ordered = [...detail.tenders].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
   const lastCash = ordered.map((t) => t.method).lastIndexOf('cash');
+  if (lastCash === -1 && changeMinor > 0) return null;
   return ordered.map((tender, index) => ({
     tender_type: tender.method === 'cash' ? 'cash' : 'external_card_terminal',
-    amount_applied_minor: tender.amount_minor,
+    amount_applied_minor:
+      index === lastCash ? tender.amount_minor + changeMinor : tender.amount_minor,
     ...(index === lastCash ? { change_due_minor: changeMinor } : {}),
     ...(tender.reference === null ? {} : { external_reference: lineName(tender.reference) }),
   }));
@@ -144,6 +156,8 @@ export function duplicateFromDetail(
   const facts = recordedFacts(detail);
   const lines = receiptLines(detail);
   if (facts === null || lines === null) return null;
+  const tenders = receiptTenders(detail, facts.change);
+  if (tenders === null) return null;
   // The VAT block is a receipt fact: never print a duplicate over unrecorded tax.
   if (detail.lines.some((line) => line.tax_minor === null)) return null;
   const subtotal = detail.summary.total_minor;
@@ -166,7 +180,7 @@ export function duplicateFromDetail(
     total_tax_minor: tax,
     total_change_due_minor: facts.change,
     lines,
-    tender_lines_summary: receiptTenders(detail, facts.change),
+    tender_lines_summary: tenders,
     settled_at: facts.settledAt,
     finalized_at: detail.summary.occurred_at,
     local_calendar_day: detail.summary.business_day,

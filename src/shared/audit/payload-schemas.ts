@@ -636,6 +636,21 @@ export interface SaleNumberDayRuleSwitchedPayload {
   time_zone: string;
 }
 
+// ─── RT-542 — store-history reprint ───────────────────────────────────────
+
+/**
+ * `sale.history.reprinted` — a store-history reprint Backend-Core authorized.
+ * The actor is the signed-in operator. `sale_ref` is Backend-Core's opaque sale
+ * id; `copy_number` the server's; `outcome` the local print result.
+ */
+export interface SaleHistoryReprintedPayload {
+  sale_ref: string;
+  kind: 'duplicate' | 'sale_record';
+  copy_number: number;
+  marks: ('voided' | 'returned')[];
+  outcome: string;
+}
+
 /** `manager_approval.refused` — what was asked; never why (C3), never a PIN. */
 export interface ManagerApprovalRefusedPayload {
   action_kind: string;
@@ -730,6 +745,8 @@ export type AuditPayloadMap = {
   'sale.access.refused': SaleAccessRefusedPayload;
   // RT-551
   'sale.number_day_rule.switched': SaleNumberDayRuleSwitchedPayload;
+  // RT-542
+  'sale.history.reprinted': SaleHistoryReprintedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

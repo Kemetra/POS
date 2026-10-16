@@ -25,7 +25,7 @@ export const HISTORY_COPY = Object.freeze({
     `ما استلمه الخادم حتى ${time}. قد توجد مبيعات لم تصل بعد من أجهزة أخرى.`,
   ownSalesOnly: 'مبيعاتك أنت فقط، من كل أجهزة المتجر.',
   deviceOnly: 'مبيعات هذا الجهاز فقط — عرض غير مكتمل لمبيعات المتجر.',
-  offlineNoConnection: 'الخادم غير متاح الآن.',
+  offlineNoConnection: 'لا يوجد اتصال بالشبكة الآن.',
   offlineNoCredential: 'هذا الدخول لا يتيح قراءة سجل المتجر من الخادم.',
   offlineServerUnavailable: 'الخادم لا يستجيب الآن.',
   unsyncedHeading: 'مبيعات على هذا الجهاز لم تصل إلى الخادم بعد',
