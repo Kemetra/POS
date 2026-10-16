@@ -21,7 +21,7 @@ import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import { createSellingUserIdResolver } from '../sales-sync/selling-user-id.js';
 import { DRAIN_MARGIN_MS } from '../sales-sync/settled-within.js';
 import { uuidv7 } from '../returns/uuidv7.js';
-import { businessDayOf } from '../../shared/time/business-day.js';
+import { BusinessDayError, businessDayOf } from '../../shared/time/business-day.js';
 import { createSaleVoidAudit, type SaleVoidAuditSink } from './sale-void-audit.js';
 import {
   SALE_VOID_REQUEST_TIMEOUT_MS,
@@ -83,15 +83,16 @@ export interface ComposedSaleVoid {
  * an ISO instant, through the shared RT-550 module: never the Windows or
  * process zone. Backend-Core refuses a void whose `businessDate` is not the
  * sale's `business_date` (422 `void_outside_business_day`), which it computes
- * in the store zone. An unreadable instant (`businessDayOf` throws only its
- * `BusinessDayError`) is marked so it never matches a real day, instead of
- * throwing out of the same-day check.
+ * in the store zone. An unreadable instant (`BusinessDayError`) is marked so
+ * it never matches a real day; any other fault surfaces instead of being
+ * masked as a silent `not_same_day` refusal.
  */
 export function voidBusinessDay(iso: string): string {
   try {
     return businessDayOf(iso);
-  } catch {
-    return `invalid:${iso}`;
+  } catch (error) {
+    if (error instanceof BusinessDayError) return `invalid:${iso}`;
+    throw error;
   }
 }
 
