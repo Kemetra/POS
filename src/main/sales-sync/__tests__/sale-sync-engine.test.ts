@@ -372,6 +372,29 @@ describe('RT-540 — receipt snapshot through the engine', () => {
     h.db.close();
   });
 
+  it('no receipt value reaches the dead-letter notification or the stored state (no PII)', async () => {
+    const h = harness({ script: [{ kind: 'ok', saleRef: null }] });
+    seedSale(h.db, {
+      sale_id: 'sale-1',
+      tender_lines_summary_json: JSON.stringify([
+        { tender_type: 'internal_voucher', amount_applied_minor: 1500 },
+      ]),
+    });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    const seen: unknown[] = [];
+    await runOnce({
+      ...h.deps,
+      tendersSince: SINCE,
+      receiptSince: SINCE,
+      onDeadLetter: (...args) => seen.push(args),
+    });
+    const text = JSON.stringify([seen, h.stateRepo.read('sale-1')]);
+    for (const value of ['Operator One', '1 Cairo St', 'TRN-123', 'SN-sale-1', 'Main Branch']) {
+      expect(text).not.toContain(value);
+    }
+    h.db.close();
+  });
+
   it("a sale with an unsendable fact (older row, '' address) still syncs, without a receipt", async () => {
     const { h, client } = await drained(SINCE, '');
     expect(client.calls).toHaveLength(1);
