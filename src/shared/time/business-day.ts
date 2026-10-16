@@ -33,8 +33,6 @@ export class BusinessDayError extends Error {
 const ISO_INSTANT =
   /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
-const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
 const STORE_DAY = new Intl.DateTimeFormat('en-CA', {
   timeZone: STORE_TIME_ZONE,
   year: 'numeric',
@@ -44,6 +42,21 @@ const STORE_DAY = new Intl.DateTimeFormat('en-CA', {
 
 function invalid(detail: string): BusinessDayError {
   return new BusinessDayError('invalid_instant', `Invalid instant: ${detail}`);
+}
+
+/**
+ * Assembles `YYYY-MM-DD` from the formatter's parts, so the result does not
+ * rely on a locale's field order or separators. Null when a part is missing
+ * or out of the 4-digit year range (the formatter does not pad such years).
+ */
+function dayFromParts(date: Date): string | null {
+  const parts = new Map(STORE_DAY.formatToParts(date).map((part) => [part.type, part.value]));
+  const year = parts.get('year');
+  const month = parts.get('month');
+  const day = parts.get('day');
+  if (year === undefined || month === undefined || day === undefined) return null;
+  const complete = /^\d{4}$/.test(year) && /^\d{2}$/.test(month) && /^\d{2}$/.test(day);
+  return complete ? `${year}-${month}-${day}` : null;
 }
 
 /** True when `year-month-day` is a real calendar date (no V8 roll-over). */
@@ -84,7 +97,7 @@ function toDate(instant: string | Date): Date {
 export function businessDayOf(instant: string | Date): string {
   const date = toDate(instant);
   if (Number.isNaN(date.getTime())) throw invalid('not a valid date');
-  const day = STORE_DAY.format(date);
-  if (!DAY_PATTERN.test(day)) throw invalid('outside the supported year range');
+  const day = dayFromParts(date);
+  if (day === null) throw invalid('outside the supported year range');
   return day;
 }
