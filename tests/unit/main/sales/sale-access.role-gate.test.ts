@@ -16,7 +16,6 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 import {
   createSalesBridge,
@@ -32,15 +31,15 @@ import type { PrintDispatcher } from '../../../../src/main/receipts/print-dispat
 import type { SaleId, SaleNumber } from '../../../../src/shared/sales/types.js';
 import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
 
-const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
+// Vitest runs from the repository root.
+const MIGRATIONS_DIR = path.join(process.cwd(), 'migrations');
 const MIGRATIONS = [
   '0020_create_sales.sql',
   '0021_sales_append_only_trigger.sql',
   '0022_create_print_events.sql',
   '0023_create_drawer_events.sql',
   '0028_extend_sales_with_lines_json.sql',
-].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
+].map((f) => readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8'));
 
 let SQL: SqlJsStatic;
 beforeAll(async () => {

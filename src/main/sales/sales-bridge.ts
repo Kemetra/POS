@@ -259,6 +259,18 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       ? deps.newSubscriptionToken()
       : `sub-${String((subscriptionSeq += 1))}`;
 
+  // The admitted sale with its latest print / drawer projections.
+  const okSale = (
+    saleRow: Parameters<typeof projectSaleForRenderer>[0],
+  ): { kind: 'ok'; sale: SaleSummary } => ({
+    kind: 'ok',
+    sale: projectSaleForRenderer(
+      saleRow,
+      printEventsRepo.readBySale(saleRow.sale_id),
+      drawerEventsRepo.readBySale(saleRow.sale_id),
+    ),
+  });
+
   return {
     async read(req: SalesReadRequest): Promise<SalesReadResponse> {
       // Defensive forbidden-field-in-request guard FIRST (§A4 #2).
@@ -291,12 +303,7 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
         return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
       }
 
-      const printEvents = printEventsRepo.readBySale(saleRow.sale_id);
-      const drawerEvent = drawerEventsRepo.readBySale(saleRow.sale_id);
-      return await Promise.resolve({
-        kind: 'ok',
-        sale: projectSaleForRenderer(saleRow, printEvents, drawerEvent),
-      });
+      return await Promise.resolve(okSale(saleRow));
     },
 
     async findByNumber(req: SalesFindByNumberRequest): Promise<SalesFindByNumberResponse> {
@@ -329,12 +336,7 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
         return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
       }
 
-      const printEvents = printEventsRepo.readBySale(saleRow.sale_id);
-      const drawerEvent = drawerEventsRepo.readBySale(saleRow.sale_id);
-      return await Promise.resolve({
-        kind: 'ok',
-        sale: projectSaleForRenderer(saleRow, printEvents, drawerEvent),
-      });
+      return await Promise.resolve(okSale(saleRow));
     },
 
     async subscribe(req: SalesSubscribeRequest): Promise<SalesSubscribeResponse> {
