@@ -176,11 +176,11 @@ describe('RT-542 saleHistory.reprint — sale record (OD-534-3/8)', () => {
 
   it('strips bidi overrides from server text before printing', async () => {
     const h = harness(MANAGER);
-    h.client.read.mockResolvedValue(okDetail({ lines: [{ ...lineWithName('Pana‮dol') }] }));
+    h.client.read.mockResolvedValue(okDetail({ lines: [{ ...lineWithName('Pana\u202Edol') }] }));
     h.client.authorizeReprint.mockResolvedValue(okReprint({ kind: 'sale_record' }));
     await createSaleHistoryService(h.deps).reprint(RECORD);
     expect(h.printed[0]).toContain('Panadol');
-    expect(h.printed[0]).not.toContain('‮');
+    expect(h.printed[0]).not.toContain('\u202E');
   });
 });
 

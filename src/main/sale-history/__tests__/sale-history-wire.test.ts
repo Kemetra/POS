@@ -249,10 +249,14 @@ describe('RT-542 review fixes — display-only values', () => {
       wireDetail(
         {
           lines: [
-            wireLine({ quantity: '2.000000', returnedQuantity: '1.500', lineName: 'Pana‏dol﻿' }),
+            wireLine({
+              quantity: '2.000000',
+              returnedQuantity: '1.500',
+              lineName: 'Pana\u200Fdol\uFEFF',
+            }),
           ],
         },
-        { saleNumber: 'T1‎-0001' },
+        { saleNumber: 'T1\u200E-0001' },
       ),
     );
     expect(parsed?.detail.lines[0]?.quantity).toBe('2');

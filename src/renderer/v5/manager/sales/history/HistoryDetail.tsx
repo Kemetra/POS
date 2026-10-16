@@ -42,7 +42,7 @@ function egp(minor: number): string {
   return formatMoney(moneyOf(minor, 'EGP'));
 }
 
-function Lines({ detail }: { detail: SaleHistoryDetail }): JSX.Element {
+function Lines({ detail }: Readonly<{ detail: SaleHistoryDetail }>): JSX.Element {
   return (
     <section aria-label={C.lines}>
       <h4>{C.lines}</h4>
@@ -64,7 +64,7 @@ function Lines({ detail }: { detail: SaleHistoryDetail }): JSX.Element {
   );
 }
 
-function Tenders({ detail }: { detail: SaleHistoryDetail }): JSX.Element {
+function Tenders({ detail }: Readonly<{ detail: SaleHistoryDetail }>): JSX.Element {
   return (
     <section aria-label={C.tenders}>
       <h4>{C.tenders}</h4>
@@ -90,7 +90,7 @@ function Tenders({ detail }: { detail: SaleHistoryDetail }): JSX.Element {
   );
 }
 
-function Reversals({ detail }: { detail: SaleHistoryDetail }): JSX.Element | null {
+function Reversals({ detail }: Readonly<{ detail: SaleHistoryDetail }>): JSX.Element | null {
   if (detail.void === null && detail.returns.length === 0) return null;
   return (
     <section aria-label={C.returns}>
@@ -116,7 +116,7 @@ function Reversals({ detail }: { detail: SaleHistoryDetail }): JSX.Element | nul
   );
 }
 
-function Erp({ detail }: { detail: SaleHistoryDetail }): JSX.Element {
+function Erp({ detail }: Readonly<{ detail: SaleHistoryDetail }>): JSX.Element {
   const ref = detail.erp.sale === 'posted' ? detail.erp.sale_document_ref : null;
   return (
     <section aria-label={C.erpHeading}>
@@ -145,12 +145,12 @@ function PrintButton({
   primary,
   busy,
   onClick,
-}: {
+}: Readonly<{
   label: string;
   primary: boolean;
   busy: boolean;
   onClick: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   const className = primary ? 'v5-sales-btn v5-sales-btn--primary' : 'v5-sales-btn';
   return (
     <button type="button" className={className} disabled={busy} onClick={onClick}>
@@ -159,8 +159,8 @@ function PrintButton({
   );
 }
 
-function PrintResult({ print }: { print: Print }): JSX.Element | null {
-  if (print.phase === 'printing') return <p role="status">{C.printing}</p>;
+function PrintResult({ print }: Readonly<{ print: Print }>): JSX.Element | null {
+  if (print.phase === 'printing') return <output>{C.printing}</output>;
   if (print.phase !== 'done') return null;
   const { res } = print;
   return (
@@ -174,11 +174,11 @@ function ReprintControls({
   detail,
   print,
   onPrint,
-}: {
+}: Readonly<{
   detail: SaleHistoryDetail;
   print: Print;
   onPrint: (kind: SaleHistoryReprintKind) => void;
-}): JSX.Element {
+}>): JSX.Element {
   const busy = print.phase === 'printing';
   const duplicate = detail.reprint.duplicate;
   const note = DUPLICATE_NOTE[duplicate];
@@ -209,7 +209,7 @@ function ReprintControls({
   );
 }
 
-function SaleHeader({ detail }: { detail: SaleHistoryDetail }): JSX.Element {
+function SaleHeader({ detail }: Readonly<{ detail: SaleHistoryDetail }>): JSX.Element {
   const { summary } = detail;
   return (
     <>
@@ -226,8 +226,8 @@ function SaleHeader({ detail }: { detail: SaleHistoryDetail }): JSX.Element {
   );
 }
 
-function LoadState({ load }: { load: Load }): JSX.Element | null {
-  if (load.phase === 'loading') return <p role="status">{C.loading}</p>;
+function LoadState({ load }: Readonly<{ load: Load }>): JSX.Element | null {
+  if (load.phase === 'loading') return <output>{C.loading}</output>;
   if (load.phase !== 'refused') return null;
   return (
     <Notice tone="warning" testId="history-detail-refused">
@@ -254,7 +254,11 @@ async function reprintOrRefusal(
   }
 }
 
-export function HistoryDetail({ saleRef, bridge, onClose }: HistoryDetailProps): JSX.Element {
+export function HistoryDetail({
+  saleRef,
+  bridge,
+  onClose,
+}: Readonly<HistoryDetailProps>): JSX.Element {
   const headingId = useId();
   const [load, setLoad] = useState<Load>({ phase: 'loading' });
   const [print, setPrint] = useState<Print>({ phase: 'idle' });

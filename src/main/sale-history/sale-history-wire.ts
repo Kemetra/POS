@@ -125,11 +125,19 @@ function dayOrNull(value: unknown): string | null {
   return value === null ? null : day(value);
 }
 
+/** "2.000000" → "2", "1.500" → "1.5" (a decimal with a fraction part). */
+function withoutTrailingZeros(text: string): string {
+  let end = text.length;
+  while (text[end - 1] === '0') end -= 1;
+  if (text[end - 1] === '.') end -= 1;
+  return text.slice(0, end);
+}
+
 /** An exact decimal quantity without trailing zeros: "2.000000" → "2", "1.500" → "1.5". */
 function quantity(value: unknown): string {
   const text = str(value);
   if (!DECIMAL_QUANTITY.test(text)) return fail();
-  return text.includes('.') ? text.replace(/\.?0+$/, '') : text;
+  return text.includes('.') ? withoutTrailingZeros(text) : text;
 }
 
 /** Control and format characters (bidi marks, zero-width, BOM) never reach a screen or slip. */
@@ -211,7 +219,8 @@ function readItem(value: unknown): {
   const operator = obj(item['operator']);
   currency(item['currencyCode']);
   return {
-    operatorRef: uuidOrNull(operator['userRef']),
+    // Lower-cased, as the session's cashier user id is (OD-534-1 cross-check).
+    operatorRef: uuidOrNull(operator['userRef'])?.toLowerCase() ?? null,
     row: {
       sale_ref: uuid(item['saleRef']),
       sale_number: shownOrNull(item['saleNumber']),

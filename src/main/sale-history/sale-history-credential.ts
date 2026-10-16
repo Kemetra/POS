@@ -58,7 +58,8 @@ async function cashierCredential(
   if (!present(admissionId) || !present(userId)) return null;
   const token = await readTokenOrNull(deps);
   if (!present(token)) return null;
-  return { credential: { kind: 'device', token, admissionId }, cashierUserId: userId };
+  const cashierUserId = userId.toLowerCase();
+  return { credential: { kind: 'device', token, admissionId }, cashierUserId };
 }
 
 export function createSaleHistoryCredentialResolver(

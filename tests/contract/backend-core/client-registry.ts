@@ -145,7 +145,7 @@ const SALE_HISTORY_WIRING =
 async function eachSaleHistoryCredential(
   call: (credential: SaleHistoryCredential) => Promise<unknown>,
 ): Promise<void> {
-  for (const credential of SALE_HISTORY_CREDENTIALS) await call(credential);
+  await Promise.all(SALE_HISTORY_CREDENTIALS.map((credential) => call(credential)));
 }
 const readDownClient = (fetch: FetchLike): ReturnType<typeof createReadDownClient> =>
   createReadDownClient({

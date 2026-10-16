@@ -76,7 +76,7 @@ const OFFLINE_COPY: Readonly<Record<SaleHistoryLocalPage['offline_reason'], stri
   server_unavailable: C.offlineServerUnavailable,
 };
 
-function StatusNotice({ view }: { view: HistoryView }): JSX.Element | null {
+function StatusNotice({ view }: Readonly<{ view: HistoryView }>): JSX.Element | null {
   if (view.phase === 'server') {
     return (
       <Notice tone="info" testId="history-coverage">
@@ -100,29 +100,27 @@ function StatusNotice({ view }: { view: HistoryView }): JSX.Element | null {
   );
 }
 
-const serverCells = (row: SaleHistoryRow): ReactNode[] => [
-  <bdi key="n" dir="ltr">
-    {row.sale_number ?? C.notRecorded}
-  </bdi>,
-  stamp(row.occurred_at),
-  <NameCell key="o" value={row.operator_display_name} source={row.operator_name_source} />,
-  <NameCell key="d" value={row.device_label} source={row.device_label_source} />,
-  egp(row.total_minor),
-  <StatusCell key="s" row={row} />,
-];
+const COLUMNS = ['number', 'time', 'operator', 'device', 'total', 'status'] as const;
 
-const localCells = (row: LocalRow): ReactNode[] => [
-  <bdi key="n" dir="ltr">
-    {row.sale_number}
-  </bdi>,
-  stamp(row.finalized_at),
-  <bdi key="o">{row.selling_operator_display_name}</bdi>,
-  <bdi key="d" dir="ltr">
-    {row.terminal_label}
-  </bdi>,
-  egp(row.subtotal_minor),
-  'sync' in row ? syncCopy(row.sync) : '',
-];
+type Cells = Readonly<Record<(typeof COLUMNS)[number], ReactNode>>;
+
+const serverCells = (row: SaleHistoryRow): Cells => ({
+  number: <bdi dir="ltr">{row.sale_number ?? C.notRecorded}</bdi>,
+  time: stamp(row.occurred_at),
+  operator: <NameCell value={row.operator_display_name} source={row.operator_name_source} />,
+  device: <NameCell value={row.device_label} source={row.device_label_source} />,
+  total: egp(row.total_minor),
+  status: <StatusCell row={row} />,
+});
+
+const localCells = (row: LocalRow): Cells => ({
+  number: <bdi dir="ltr">{row.sale_number}</bdi>,
+  time: stamp(row.finalized_at),
+  operator: <bdi>{row.selling_operator_display_name}</bdi>,
+  device: <bdi dir="ltr">{row.terminal_label}</bdi>,
+  total: egp(row.subtotal_minor),
+  status: 'sync' in row ? syncCopy(row.sync) : '',
+});
 
 const HEADS = [
   C.columns.number,
@@ -141,13 +139,13 @@ function HistoryTable<T>({
   cells,
   onOpen,
   testId,
-}: {
+}: Readonly<{
   rows: T[];
   keyOf: (row: T) => string;
-  cells: (row: T) => ReactNode[];
+  cells: (row: T) => Cells;
   onOpen: (row: T) => void;
   testId?: string;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <table className="v5-history-table" data-testid={testId}>
       <thead>
@@ -162,8 +160,8 @@ function HistoryTable<T>({
       <tbody>
         {rows.map((row) => (
           <tr key={keyOf(row)}>
-            {cells(row).map((cell, index) => (
-              <td key={String(index)}>{cell}</td>
+            {COLUMNS.map((column) => (
+              <td key={column}>{cells(row)[column]}</td>
             ))}
             <td>
               <button
@@ -186,10 +184,10 @@ function HistoryTable<T>({
 function MoreControl({
   view,
   onMore,
-}: {
+}: Readonly<{
   view: HistoryView;
   onMore: () => void;
-}): JSX.Element | null {
+}>): JSX.Element | null {
   if (view.phase !== 'server' && view.phase !== 'local') return null;
   if (view.more.kind === 'failed') {
     return (
@@ -216,11 +214,11 @@ function Unsynced({
   rows,
   truncated,
   onOpen,
-}: {
+}: Readonly<{
   rows: SaleHistoryUnsyncedRow[];
   truncated: boolean;
   onOpen: (row: LocalRow) => void;
-}): JSX.Element | null {
+}>): JSX.Element | null {
   if (rows.length === 0) return null;
   return (
     <section aria-label={C.unsyncedHeading} data-testid="history-unsynced">
@@ -242,10 +240,10 @@ function EmptyNotice(): JSX.Element {
 function Results({
   view,
   onSelect,
-}: {
+}: Readonly<{
   view: HistoryView;
   onSelect: (s: Selection) => void;
-}): JSX.Element | null {
+}>): JSX.Element | null {
   const openLocal = (row: LocalRow): void => {
     onSelect({ kind: 'local', saleId: row.sale_id });
   };
@@ -287,12 +285,12 @@ function DayField({
   value,
   max,
   onChange,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   max: string;
   onChange: (value: string) => void;
-}): JSX.Element {
+}>): JSX.Element {
   const id = useId();
   return (
     <div className="v5-sales-field">
@@ -316,12 +314,12 @@ function RangeForm({
   currentDay,
   busy,
   onRun,
-}: {
+}: Readonly<{
   /** Read at render and at click time, so "today" moves past Cairo midnight. */
   currentDay: () => string;
   busy: boolean;
   onRun: (range: Range) => void;
-}): JSX.Element {
+}>): JSX.Element {
   const [from, setFrom] = useState(currentDay);
   const [to, setTo] = useState(currentDay);
   const today = currentDay();
@@ -373,13 +371,13 @@ function SelectedDetail({
   sales,
   receipts,
   onClose,
-}: {
+}: Readonly<{
   selected: Selection;
   bridge: SaleHistoryBridgeAPI | null;
   sales: SalesBridgeAPI | null;
   receipts: ReceiptsBridgeAPI | undefined;
   onClose: () => void;
-}): JSX.Element | null {
+}>): JSX.Element | null {
   if (selected?.kind === 'server' && bridge !== null) {
     // Keyed by sale: an in-flight reprint of one sale never reports on another.
     return (
@@ -407,7 +405,7 @@ export function SalesHistory({
   _testSalesBridge,
   _testReceiptsBridge,
   _now,
-}: SalesHistoryProps): JSX.Element {
+}: Readonly<SalesHistoryProps>): JSX.Element {
   const headingId = useId();
   const api = windowApi();
   const bridge = _testBridge ?? api.saleHistory ?? null;
@@ -431,7 +429,7 @@ export function SalesHistory({
             void history.search(range);
           }}
         />
-        {loading && <p role="status">{C.loading}</p>}
+        {loading && <output>{C.loading}</output>}
         <StatusNotice view={history.view} />
         <Results view={history.view} onSelect={setSelected} />
         <MoreControl view={history.view} onMore={() => void history.loadMore()} />

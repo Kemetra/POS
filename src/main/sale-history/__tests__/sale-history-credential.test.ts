@@ -55,6 +55,11 @@ describe('RT-542 sale-history credential (OD-534-1)', () => {
     });
   });
 
+  it('lower-cases the cashier user id it proves', async () => {
+    const resolved = await resolver({ ...cashierRecord, user_id: USER.toUpperCase() })(CASHIER);
+    expect(resolved?.cashierUserId).toBe(USER);
+  });
+
   it('a cashier without an online admission holds no credential', async () => {
     const base = {
       id: CASHIER.operator_session_id,

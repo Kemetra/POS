@@ -11,7 +11,7 @@ import {
   localRow,
   okPage,
 } from './__helpers__/service-fixtures.js';
-import { OTHER_USER, SALE_REF, wireItem } from './__helpers__/wire-fixtures.js';
+import { CASHIER_USER, OTHER_USER, SALE_REF, wireItem } from './__helpers__/wire-fixtures.js';
 
 const RANGE = { from_day: '2026-10-01', to_day: '2026-10-16' };
 
@@ -47,6 +47,22 @@ describe('RT-542 saleHistory.list — role matrix (OD-534-1)', () => {
       admissionId: ADMISSION_ID,
     });
     expect(res).toMatchObject({ kind: 'ok', source: 'server', visibility: 'own_sales' });
+  });
+
+  it('matches the cashier’s own sales whatever the case of the server’s user ref', async () => {
+    const h = harness(CASHIER);
+    const upper = {
+      userRef: CASHIER_USER.toUpperCase(),
+      displayName: 'Mona',
+      nameSource: 'snapshot',
+    };
+    h.client.list.mockResolvedValue(
+      okPage({ visibility: 'own_sales', items: [wireItem({ operator: upper })] }),
+    );
+    expect(await createSaleHistoryService(h.deps).list(RANGE)).toMatchObject({
+      kind: 'ok',
+      source: 'server',
+    });
   });
 
   it('fails closed when the server gives a cashier another operator’s sale', async () => {

@@ -128,7 +128,7 @@ function recordedFacts(detail: SaleHistoryDetail) {
     settledAt: detail.settled_at,
     change: detail.change_minor,
   };
-  if (!complete || Object.values(values).some((v) => v === null)) return null;
+  if (!complete || Object.values(values).includes(null)) return null;
   return values as { [K in keyof typeof values]: NonNullable<(typeof values)[K]> };
 }
 

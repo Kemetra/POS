@@ -107,6 +107,24 @@ function readRequest(req: unknown): ReprintRequest | null {
   return { saleRef, kind: kind as SaleHistoryReprintKind };
 }
 
+/** The slip's bands for an authorized reprint, or null when it cannot be built. */
+function slipBands(
+  authorized: WireReprint,
+  detail: SaleHistoryDetail,
+  source: DuplicateSource | null,
+  printedAt: string,
+): Band[] | null {
+  const ctx: SlipContext = {
+    detail,
+    copyNumber: authorized.copy_number,
+    marks: authorized.marks,
+    printedAt,
+  };
+  if (source === null) return saleRecordBands(ctx);
+  const payload = source(authorized.copy_number, printedAt);
+  return payload === null ? null : duplicateBands(payload, ctx);
+}
+
 export function createSaleHistoryReprint(input: SaleHistoryReprintDeps): {
   reprint(req: SaleHistoryReprintRequest): Promise<SaleHistoryReprintResponse>;
 } {
@@ -143,23 +161,6 @@ export function createSaleHistoryReprint(input: SaleHistoryReprintDeps): {
     if (row !== null) return localSource(admitted, row);
     if (duplicateFromDetail(detail, 1, now()) === null) return refuse('duplicate_unavailable');
     return (copy, at) => duplicateFromDetail(detail, copy, at);
-  }
-
-  function slipBands(
-    authorized: WireReprint,
-    detail: SaleHistoryDetail,
-    source: DuplicateSource | null,
-    printedAt: string,
-  ): Band[] | null {
-    const ctx: SlipContext = {
-      detail,
-      copyNumber: authorized.copy_number,
-      marks: authorized.marks,
-      printedAt,
-    };
-    if (source === null) return saleRecordBands(ctx);
-    const payload = source(authorized.copy_number, printedAt);
-    return payload === null ? null : duplicateBands(payload, ctx);
   }
 
   function audit(admitted: Admitted, authorized: WireReprint, outcome: string, at: string): void {

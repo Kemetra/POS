@@ -217,7 +217,7 @@ describe('RT-542 SalesHistory — states', () => {
   it('has no axe violations online', async () => {
     const { container } = render(<SalesHistory _testBridge={bridgeWith(page())} _now={NOW} />);
     await userEvent.click(screen.getByRole('button', { name: C.show }));
-    await screen.findByTestId('history-rows');
+    expect(await screen.findByTestId('history-rows')).toBeInTheDocument();
     await expectNoAxeViolations(container);
   });
 });

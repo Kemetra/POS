@@ -21,12 +21,12 @@ export function LocalSaleDetail({
   sales,
   receipts,
   onClose,
-}: {
+}: Readonly<{
   saleId: SaleId;
   sales: SalesBridgeAPI;
   receipts?: ReceiptsBridgeAPI;
   onClose: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   const [sale, setSale] = useState<SaleSummary | null | 'missing'>(null);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export function LocalSaleDetail({
           {C.close}
         </button>
       </div>
-      {sale === null && <p role="status">{C.loading}</p>}
+      {sale === null && <output>{C.loading}</output>}
       {sale === 'missing' && <Notice tone="warning">{C.notRecorded}</Notice>}
       {sale !== null && sale !== 'missing' && (
         <SaleResult sale={sale} {...(receipts === undefined ? {} : { receipts })} />

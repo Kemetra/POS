@@ -23,10 +23,10 @@ export function stamp(instant: string): string {
 export function NameCell({
   value,
   source,
-}: {
+}: Readonly<{
   value: string | null;
   source: SaleHistoryNameSource;
-}): JSX.Element {
+}>): JSX.Element {
   if (value === null || source === 'unavailable') return <span>{C.notRecorded}</span>;
   return (
     <span>
@@ -37,7 +37,7 @@ export function NameCell({
 }
 
 /** The reversal marks and the operational ERP state of a server row. */
-export function StatusCell({ row }: { row: SaleHistoryRow }): JSX.Element {
+export function StatusCell({ row }: Readonly<{ row: SaleHistoryRow }>): JSX.Element {
   const marks: string[] = [];
   if (row.voided) marks.push(C.voided);
   if (row.return_state === 'partial') marks.push(C.returnedPartial);
