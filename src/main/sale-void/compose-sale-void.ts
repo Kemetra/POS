@@ -21,6 +21,7 @@ import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import { createSellingUserIdResolver } from '../sales-sync/selling-user-id.js';
 import { DRAIN_MARGIN_MS } from '../sales-sync/settled-within.js';
 import { uuidv7 } from '../returns/uuidv7.js';
+import { BusinessDayError, businessDayOf } from '../../shared/time/business-day.js';
 import { createSaleVoidAudit, type SaleVoidAuditSink } from './sale-void-audit.js';
 import {
   SALE_VOID_REQUEST_TIMEOUT_MS,
@@ -58,7 +59,10 @@ export interface ComposeSaleVoidDeps {
   readonly now: () => string;
   /** The terminal's capture currency (the sale-sync capture's own source). */
   readonly captureCurrencyCode?: string;
-  /** The device-local calendar day of an instant; tests pin a timezone. */
+  /**
+   * The business day of an instant; defaults to {@link voidBusinessDay}, the
+   * store business day. Tests may pin a simpler day function.
+   */
   readonly localDayOf?: (iso: string) => string;
 }
 
@@ -74,13 +78,22 @@ export interface ComposedSaleVoid {
   readonly stop: () => void;
 }
 
-/** The device-local calendar day (`YYYY-MM-DD`) of an ISO instant (system timezone). */
-export function deviceLocalDay(iso: string): string {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return `invalid:${iso}`;
-  const month = String(at.getMonth() + 1).padStart(2, '0');
-  const day = String(at.getDate()).padStart(2, '0');
-  return `${String(at.getFullYear())}-${month}-${day}`;
+/**
+ * RT-552 (RT-545 S3) — the store business day (`YYYY-MM-DD`, Africa/Cairo) of
+ * an ISO instant, through the shared RT-550 module: never the Windows or
+ * process zone. Backend-Core refuses a void whose `businessDate` is not the
+ * sale's `business_date` (422 `void_outside_business_day`), which it computes
+ * in the store zone. An unreadable instant (`BusinessDayError`) is marked so
+ * it never matches a real day; any other fault surfaces instead of being
+ * masked as a silent `not_same_day` refusal.
+ */
+export function voidBusinessDay(iso: string): string {
+  try {
+    return businessDayOf(iso);
+  } catch (error) {
+    if (error instanceof BusinessDayError) return `invalid:${iso}`;
+    throw error;
+  }
 }
 
 interface Row1 {
@@ -151,7 +164,7 @@ export function composeSaleVoid(deps: ComposeSaleVoidDeps): ComposedSaleVoid {
     now,
     newVoidId: randomUUID,
     newExternalId: () => `pos-pulse-void:${uuidv7()}`,
-    localDayOf: deps.localDayOf ?? deviceLocalDay,
+    localDayOf: deps.localDayOf ?? voidBusinessDay,
     captureCurrencyCode: deps.captureCurrencyCode ?? DEFAULT_CURRENCY_CODE,
     isStopped,
   });

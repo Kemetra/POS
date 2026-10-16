@@ -9,8 +9,8 @@
  * the send engine posts it later under the requester's own envelope.
  *
  * Eligibility (owner decisions, Jira RT-530 comment 11988): the sale's
- * business day is today's (the device-local day), it has no live void and no
- * return. The approval is four-eyes (the approval service refuses the
+ * business day is today's (the store business day, RT-552), it has no live
+ * void and no return. The approval is four-eyes (the approval service refuses the
  * requester and the sale's selling operator as approver; Backend-Core checks
  * both again). A session that could never send the void is refused up front: a
  * cashier needs an operator envelope, a manager or admin signs in with one.
@@ -83,7 +83,10 @@ export interface SaleVoidServiceDeps {
   readonly newVoidId: () => string;
   /** `pos-pulse-void:<uuid>`. */
   readonly newExternalId: () => string;
-  /** The device-local calendar day (`YYYY-MM-DD`) of an ISO instant. */
+  /**
+   * The store business day (`YYYY-MM-DD`) of an ISO instant (RT-552). The
+   * same-day check and the `businessDate` sent both use it, so they agree.
+   */
   readonly localDayOf: (iso: string) => string;
   readonly captureCurrencyCode: string;
   readonly isStopped: () => boolean;

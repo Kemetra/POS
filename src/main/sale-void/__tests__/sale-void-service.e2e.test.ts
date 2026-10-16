@@ -364,7 +364,7 @@ describe('the approval is bound to this sale and spent once', () => {
 });
 
 describe('who and when', () => {
-  it('only the same business day (the device-local day) can be voided', async () => {
+  it('only the same business day (the pinned test day) can be voided', async () => {
     const id = await approvedId();
     clock = '2026-06-08T00:10:00.000Z';
     await expect(request('sale-1', id)).resolves.toEqual({

@@ -23,10 +23,11 @@ import {
 import type { OperatorSessionRecord } from '../../operator/session-manager.js';
 import { createSaleSyncStateRepo } from '../../sales-sync/sale-sync-state-repo.js';
 import type { AuditEvent } from '../../../shared/audit/event-shape.js';
+import { businessDayOf } from '../../../shared/time/business-day.js';
 import {
   composeSaleVoid,
-  deviceLocalDay,
   scheduleSaleVoidSync,
+  voidBusinessDay,
   type ComposedSaleVoid,
   type ComposeSaleVoidDeps,
 } from '../compose-sale-void.js';
@@ -162,22 +163,22 @@ function managerRef(name: string): string {
   );
 }
 
-/** Mona requests the void of sale-1 with Omar's approval. */
-async function monaRequestsVoid() {
+/** Mona requests the void of a sale (sale-1 by default) with Omar's approval. */
+async function monaRequestsVoid(saleId = 'sale-1') {
   const granted = await approvals.request({
     action_kind: 'sale.void',
-    subject_ref: 'sale-1',
+    subject_ref: saleId,
     reason_code: 'sale_void',
     approver_ref: managerRef('Omar'),
     pin: OMAR.pin,
   });
   if (granted.kind !== 'approved') throw new Error(`not approved: ${granted.reason}`);
-  return domain.service.request({ sale_id: 'sale-1', approval_id: granted.approvalId });
+  return domain.service.request({ sale_id: saleId, approval_id: granted.approvalId });
 }
 
-function markSaleSynced(): void {
+function markSaleSynced(saleId = 'sale-1'): void {
   createSaleSyncStateRepo(handleFor(raw)).markSynced({
-    saleId: 'sale-1',
+    saleId,
     tenantId: SCOPE.tenantId,
     branchId: SCOPE.branchId,
     now: T0,
@@ -318,7 +319,7 @@ describe('a void flows from the approval to Backend-Core under the requester env
 });
 
 describe('the composition defaults and failure paths', () => {
-  it('dates the void on the device-local day and the default currency when none is given', async () => {
+  it('dates the void on the store business day and the default currency when none is given', async () => {
     const { localDayOf: pinnedDay, ...defaults } = deps;
     expect(pinnedDay).toBeDefined(); // the other tests pin a day; this one drops it
     domain = composeSaleVoid(defaults);
@@ -327,7 +328,7 @@ describe('the composition defaults and failure paths', () => {
     await expect(monaRequestsVoid()).resolves.toMatchObject({ kind: 'requested' });
     const requested = audit.find((e) => e.action_category === 'sale.void.requested');
     expect(requested?.payload).toMatchObject({
-      business_date: deviceLocalDay(T0),
+      business_date: businessDayOf(T0),
       currency_code: 'EGP',
     });
   });
@@ -366,16 +367,127 @@ describe('the composition defaults and failure paths', () => {
   });
 });
 
-describe('deviceLocalDay', () => {
-  it('is the calendar day of the instant in the device timezone', () => {
-    expect(deviceLocalDay(new Date(2026, 5, 7, 23, 30).toISOString())).toBe('2026-06-07');
-    expect(deviceLocalDay(new Date(2026, 11, 31, 0, 5).toISOString())).toBe('2026-12-31');
+describe('voidBusinessDay', () => {
+  it('is the store business day (Africa/Cairo) of the instant', () => {
+    // Summer time (UTC+3): 21:30Z is 00:30 the next day in Cairo.
+    expect(voidBusinessDay('2026-06-07T21:30:00.000Z')).toBe('2026-06-08');
+    expect(voidBusinessDay('2026-12-31T21:59:59.000Z')).toBe('2026-12-31');
   });
 
   it('marks an unreadable instant so it never matches a real day', () => {
-    expect(deviceLocalDay('not-a-date')).toBe('invalid:not-a-date');
+    expect(voidBusinessDay('not-a-date')).toBe('invalid:not-a-date');
   });
 });
+
+// RT-552 (RT-545 S3) — the void day is the store business day of
+// `finalized_at`, whatever the process or Windows zone: Backend-Core refuses a
+// void whose `businessDate` is not the sale's `business_date` (422
+// `void_outside_business_day`).
+describe.each(['UTC', 'America/New_York', 'Africa/Cairo'])(
+  'RT-552 — the void business day under TZ=%s',
+  (zone) => {
+    let savedTz: string | undefined;
+    let n = 0;
+
+    beforeEach(() => {
+      savedTz = process.env.TZ;
+      process.env.TZ = zone;
+      const { localDayOf: pinned, ...defaults } = deps;
+      expect(pinned).toBeDefined(); // the other tests pin a day; these use the default
+      domain = composeSaleVoid(defaults);
+      ref.domain = domain;
+    });
+
+    afterEach(() => {
+      if (savedTz === undefined) delete process.env.TZ;
+      else process.env.TZ = savedTz;
+    });
+
+    /** Seeds a sale finalized at `finalized_at`; returns its id. */
+    function saleFinalizedAt(finalized_at: string): string {
+      n += 1;
+      const sale_id = `sale-tz-${String(n)}`;
+      seedSale(raw, { sale_id, finalized_at, tender_lines_summary_json: TENDERS });
+      return sale_id;
+    }
+
+    async function ineligibleAt(finalized_at: string, now: string): Promise<unknown> {
+      const saleId = saleFinalizedAt(finalized_at);
+      clock = now;
+      const found = await domain.service.lookup({ sale_number: `SN-${saleId}` });
+      return found.kind === 'sale' ? found.sale.ineligible : found;
+    }
+
+    it('really runs in that process zone', () => {
+      // 2026-01-15T23:30Z is the 15th in New York, the 16th in Cairo, the 15th in UTC.
+      const local = new Date('2026-01-15T23:30:00.000Z').getDate();
+      expect(local).toBe(zone === 'Africa/Cairo' ? 16 : 15);
+    });
+
+    it.each([
+      // [case, finalized_at, now, expected]
+      [
+        'winter: across Cairo midnight',
+        '2026-01-15T21:59:59.000Z',
+        '2026-01-15T22:00:00.000Z',
+        'not_same_day',
+      ],
+      [
+        'winter: just before Cairo midnight',
+        '2026-01-15T21:30:00.000Z',
+        '2026-01-15T21:59:59.000Z',
+        null,
+      ],
+      [
+        'winter: just after Cairo midnight',
+        '2026-01-15T22:00:00.000Z',
+        '2026-01-15T22:30:00.000Z',
+        null,
+      ],
+      [
+        'summer: across Cairo midnight',
+        '2026-07-15T20:59:59.000Z',
+        '2026-07-15T21:00:00.000Z',
+        'not_same_day',
+      ],
+      [
+        'summer: just before Cairo midnight',
+        '2026-07-15T20:30:00.000Z',
+        '2026-07-15T20:59:59.000Z',
+        null,
+      ],
+      // 23:30Z on D-1 is Cairo 01:30 on D: voidable on Cairo D, not on D+1.
+      [
+        '23:30Z on D-1, on Cairo day D',
+        '2026-01-14T23:30:00.000Z',
+        '2026-01-15T10:00:00.000Z',
+        null,
+      ],
+      [
+        '23:30Z on D-1, on Cairo day D+1',
+        '2026-01-14T23:30:00.000Z',
+        '2026-01-15T22:30:00.000Z',
+        'not_same_day',
+      ],
+    ])('%s', async (_case, finalized_at, now, expected) => {
+      await expect(ineligibleAt(finalized_at, now)).resolves.toBe(expected);
+    });
+
+    it('sends the Cairo business day of finalized_at near midnight', async () => {
+      // Summer: finalized 00:30 Cairo on 06-08 (21:30Z on 06-07), voided 10 minutes later.
+      const saleId = saleFinalizedAt('2026-06-07T21:30:00.000Z');
+      clock = '2026-06-07T21:40:00.000Z';
+      markSaleSynced(saleId);
+      await expect(monaRequestsVoid(saleId)).resolves.toMatchObject({ kind: 'requested' });
+      const requested = audit.find((e) => e.action_category === 'sale.void.requested');
+      expect(requested?.payload).toMatchObject({ business_date: '2026-06-08' });
+      // The same day goes out on the wire to Backend-Core.
+      await domain.sync.tick();
+      expect(posted).toHaveLength(1);
+      expect(posted[0]?.body).toMatchObject({ businessDate: '2026-06-08' });
+    });
+  },
+);
 
 describe('the domain gates and shutdown', () => {
   it('refuses every call with the flag off', async () => {
@@ -384,6 +496,18 @@ describe('the domain gates and shutdown', () => {
       kind: 'refused',
       reason: 'feature_disabled',
     });
+  });
+
+  it('an unpaired terminal (no terminal id) has no session and sends nothing', async () => {
+    markSaleSynced();
+    await monaRequestsVoid();
+    domain = composeSaleVoid({ ...deps, getTerminalId: () => null });
+    await expect(domain.service.list()).resolves.toEqual({
+      kind: 'refused',
+      reason: 'no_session',
+    });
+    await domain.sync.tick();
+    expect(posted).toHaveLength(0);
   });
 
   it('after stop, calls answer void_unavailable and no send starts', async () => {
