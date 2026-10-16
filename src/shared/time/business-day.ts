@@ -48,7 +48,9 @@ function invalid(detail: string): BusinessDayError {
 
 /** True when `year-month-day` is a real calendar date (no V8 roll-over). */
 function isRealCalendarDate(year: number, month: number, day: number): boolean {
-  const probe = new Date(Date.UTC(year, month - 1, day));
+  // `Date.UTC` maps years 0-99 to 1900-1999, so set the full year explicitly.
+  const probe = new Date(0);
+  probe.setUTCFullYear(year, month - 1, day);
   return (
     probe.getUTCFullYear() === year &&
     probe.getUTCMonth() === month - 1 &&

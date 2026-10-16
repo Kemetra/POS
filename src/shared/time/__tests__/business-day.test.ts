@@ -110,6 +110,67 @@ describe('businessDayOf', () => {
     });
   });
 
+  describe('independent of the process time zone', () => {
+    const CASES: ReadonlyArray<readonly [string, string]> = [
+      ['2026-10-06T22:53:00Z', '2026-10-07'],
+      ['2026-01-14T21:59:59.999Z', '2026-01-14'],
+      ['2026-01-14T22:00:00Z', '2026-01-15'],
+      ['2026-10-29T21:30:00Z', '2026-10-29'],
+      ['2026-04-23T22:00:00Z', '2026-04-24'],
+    ];
+
+    it.each(['UTC', 'America/New_York', 'America/Los_Angeles', 'Pacific/Kiritimati'])(
+      'gives the same days under TZ=%s',
+      (zone) => {
+        const previous = process.env.TZ;
+        process.env.TZ = zone;
+        try {
+          for (const [instant, expected] of CASES) {
+            expect(businessDayOf(instant)).toBe(expected);
+            expect(businessDayOf(new Date(instant))).toBe(expected);
+          }
+        } finally {
+          if (previous === undefined) delete process.env.TZ;
+          else process.env.TZ = previous;
+        }
+      },
+    );
+  });
+
+  describe('accepted ISO shapes', () => {
+    it.each<[string, string, string]>([
+      [
+        'fractional seconds longer than 3 digits truncate',
+        '2026-01-14T21:59:59.999999Z',
+        '2026-01-14',
+      ],
+      ['no seconds', '2026-01-14T22:00Z', '2026-01-15'],
+      ['extreme positive offset +23:59', '2026-01-15T23:00:00+23:59', '2026-01-15'],
+      ['-00:00 is UTC', '2026-01-14T22:00:00-00:00', '2026-01-15'],
+    ])('%s', (_label, instant, expected) => {
+      expect(businessDayOf(instant)).toBe(expected);
+    });
+  });
+
+  describe('refused shapes and years', () => {
+    it.each<[string, string]>([
+      ['lowercase t/z', '2026-01-14t22:00:00z'],
+      ['offset without a colon', '2026-01-14T22:00:00+0200'],
+      ['leap second', '2026-06-30T23:59:60Z'],
+      ['hour 24', '2026-01-14T24:00:00Z'],
+      ['trailing newline', '2026-01-14T22:00:00Z\n'],
+      ['year 0050 (not 1950)', '0050-01-01T12:00:00Z'],
+      ['year 0999 (unpadded output)', '0999-01-01T12:00:00Z'],
+      ['year 10000 after conversion', '9999-12-31T23:00:00Z'],
+    ])('refuses %s', (_label, instant) => {
+      expect(() => businessDayOf(instant)).toThrow(BusinessDayError);
+    });
+
+    it('refuses an extreme Date outside the formattable range', () => {
+      expect(() => businessDayOf(new Date(8.64e15))).toThrow(BusinessDayError);
+    });
+  });
+
   it('never mutates its Date argument', () => {
     const date = new Date('2026-10-06T22:53:00.000Z');
     const before = date.getTime();
