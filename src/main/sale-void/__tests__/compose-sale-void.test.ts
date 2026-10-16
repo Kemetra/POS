@@ -493,6 +493,18 @@ describe('the domain gates and shutdown', () => {
     });
   });
 
+  it('an unpaired terminal (no terminal id) has no session and sends nothing', async () => {
+    markSaleSynced();
+    await monaRequestsVoid();
+    domain = composeSaleVoid({ ...deps, getTerminalId: () => null });
+    await expect(domain.service.list()).resolves.toEqual({
+      kind: 'refused',
+      reason: 'no_session',
+    });
+    await domain.sync.tick();
+    expect(posted).toHaveLength(0);
+  });
+
   it('after stop, calls answer void_unavailable and no send starts', async () => {
     markSaleSynced();
     await monaRequestsVoid();
