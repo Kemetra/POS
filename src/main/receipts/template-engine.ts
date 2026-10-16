@@ -32,7 +32,7 @@
  */
 
 import { format as formatMoney, of as moneyOf } from '../../shared/money.js';
-import { businessDateTimeOf } from '../../shared/time/business-day.js';
+import { BusinessDayError, businessDateTimeOf } from '../../shared/time/business-day.js';
 import type { ReceiptPayload, ReceiptLineItem } from '../../shared/receipts/types.js';
 import type { TenderLineSummary, SalesTenderType } from '../../shared/sales/types.js';
 
@@ -88,6 +88,20 @@ export function utcStamp(iso: string): string {
   const date = iso.slice(0, 10);
   const time = iso.slice(11, 19);
   return `${date} ${time} UTC`;
+}
+
+/**
+ * RT-249 N-S5 — the sale stamp: the store-zone (Africa/Cairo) time of an
+ * instant. A receipt never fails to render over its stamp, so an instant the
+ * shared formatter refuses falls back to the old UTC slice.
+ */
+export function storeStamp(iso: string): string {
+  try {
+    return businessDateTimeOf(iso);
+  } catch (error) {
+    if (error instanceof BusinessDayError) return utcStamp(iso);
+    throw error;
+  }
 }
 
 /** Word-wrap to 42 columns with a 4-column hanging indent on continuations. */
@@ -146,7 +160,7 @@ function compose(payload: ReceiptPayload): Band[] {
   text(`Terminal: ${payload.terminal_label}`, 'ltr');
   text(`Cashier: ${payload.selling_operator_display_name}`, 'rtl');
   // v1: no shift line (slice2-mapping-pass.md Gap 3).
-  text(businessDateTimeOf(payload.settled_at), 'ltr');
+  text(storeStamp(payload.settled_at), 'ltr');
   if (payload.variant === 'reprint_duplicate' && payload.reprinted_at !== undefined) {
     text(`Reprinted: ${utcStamp(payload.reprinted_at)}`, 'ltr');
   }

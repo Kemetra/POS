@@ -121,6 +121,24 @@ describe('RT-249 N-S5 — the sale stamp is the store-zone (Africa/Cairo) time',
     expect(text).toContain('2026-01-15 00:05');
   });
 
+  it('renders the same Cairo stamp whatever the process zone is', () => {
+    const saved = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      const text = textOf(renderReceipt(payload({ settled_at: '2026-10-06T22:53:00.000Z' })));
+      expect(text).toContain('2026-10-07 01:53');
+    } finally {
+      if (saved === undefined) delete process.env.TZ;
+      else process.env.TZ = saved;
+    }
+  });
+
+  it('still renders (as the old UTC stamp) when settled_at is not a valid instant', () => {
+    // A receipt must never fail to render over its stamp; settled_at is engine-written.
+    const text = textOf(renderReceipt(payload({ settled_at: '2026-05-27T08:42:18' })));
+    expect(text).toContain('2026-05-27 08:42:18 UTC');
+  });
+
   it('no longer labels the sale stamp UTC; the reprint line is unchanged', () => {
     const first = textOf(renderReceipt(payload({ settled_at: '2026-10-06T22:53:00.000Z' })));
     expect(first).not.toContain('UTC');
