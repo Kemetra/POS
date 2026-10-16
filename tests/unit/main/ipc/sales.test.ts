@@ -52,11 +52,20 @@ function makeBridgeSpy(): SalesBridge {
       () => Promise.resolve({ kind: 'refused', reason: 'not_implemented' }) as never,
     ),
     unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' }) as never),
+    list: vi.fn(
+      () =>
+        Promise.resolve({
+          kind: 'ok',
+          sales: [],
+          next_cursor: null,
+          coverage: 'this_device_only',
+        }) as never,
+    ),
   };
 }
 
 describe('T094c — registerSalesHandlers', () => {
-  it('registers all four sales.* channels', () => {
+  it('registers all five sales.* channels', () => {
     const fake = makeFakeIpcMain();
     registerSalesHandlers(fake.ipcMain, { salesBridge: makeBridgeSpy() });
     const channels = fake.channels();
@@ -64,7 +73,30 @@ describe('T094c — registerSalesHandlers', () => {
     expect(channels).toContain(SALES_IPC_CHANNELS.FIND_BY_NUMBER);
     expect(channels).toContain(SALES_IPC_CHANNELS.SUBSCRIBE);
     expect(channels).toContain(SALES_IPC_CHANNELS.UNSUBSCRIBE);
+    expect(channels).toContain(SALES_IPC_CHANNELS.LIST);
+    expect(SALES_IPC_CHANNELS.LIST).toBe('sales:list');
   });
+
+  it('RT-541: delegates sales.list to the bridge with the request payload', async () => {
+    const fake = makeFakeIpcMain();
+    const bridge = makeBridgeSpy();
+    registerSalesHandlers(fake.ipcMain, { salesBridge: bridge });
+    const req = { from_day: '2026-10-16', to_day: '2026-10-16' };
+    await fake.invoke(SALES_IPC_CHANNELS.LIST, req);
+    expect(bridge.list).toHaveBeenCalledWith(req);
+  });
+
+  it.each([null, undefined, 42, 'x', ['2026-10-16']])(
+    'RT-541: refuses a non-object sales.list request (%j) as invalid_request without calling the bridge',
+    async (request) => {
+      const fake = makeFakeIpcMain();
+      const bridge = makeBridgeSpy();
+      registerSalesHandlers(fake.ipcMain, { salesBridge: bridge });
+      const res = await fake.invoke(SALES_IPC_CHANNELS.LIST, request);
+      expect(res).toEqual({ kind: 'refused', reason: 'invalid_request' });
+      expect(bridge.list).not.toHaveBeenCalled();
+    },
+  );
 
   it('delegates sales.read to the bridge with the request payload', async () => {
     const fake = makeFakeIpcMain();

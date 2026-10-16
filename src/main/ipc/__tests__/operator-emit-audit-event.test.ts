@@ -445,28 +445,26 @@ describe('operator:emit-audit-event — generic error handling', () => {
 });
 
 describe('operator:emit-audit-event — security invariants', () => {
-  it('success response does not contain Clerk JWT fields', async () => {
+  it.each([
+    {
+      name: 'success response does not contain Clerk JWT fields',
+      forbidden: ['clerk_jwt', 'clerk_session_token'],
+    },
+    {
+      name: 'success response does not contain device_token fields',
+      forbidden: ['device_token', 'device_token_attestation'],
+    },
+    {
+      name: 'success response does not contain the session backend_session_id',
+      forbidden: ['backend_session_id', 'be-sess-1'],
+    },
+  ])('$name', async ({ forbidden }) => {
     const { emitAuditEvent } = setup();
     const res = await emitAuditEvent(FAKE_EVENT, VALID_REQUEST);
     const serialized = JSON.stringify(res);
-    expect(serialized).not.toContain('clerk_jwt');
-    expect(serialized).not.toContain('clerk_session_token');
-  });
-
-  it('success response does not contain device_token fields', async () => {
-    const { emitAuditEvent } = setup();
-    const res = await emitAuditEvent(FAKE_EVENT, VALID_REQUEST);
-    const serialized = JSON.stringify(res);
-    expect(serialized).not.toContain('device_token');
-    expect(serialized).not.toContain('device_token_attestation');
-  });
-
-  it('success response does not contain the session backend_session_id', async () => {
-    const { emitAuditEvent } = setup();
-    const res = await emitAuditEvent(FAKE_EVENT, VALID_REQUEST);
-    const serialized = JSON.stringify(res);
-    expect(serialized).not.toContain('backend_session_id');
-    expect(serialized).not.toContain('be-sess-1');
+    for (const field of forbidden) {
+      expect(serialized).not.toContain(field);
+    }
   });
 });
 
@@ -486,6 +484,8 @@ describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', 
     'operator.session.locked',
     'operator.session.unlocked',
     'operator.offline_grant.invalidated',
+    // RT-551: the sale-number day-rule switch is written only by finalize.
+    'sale.number_day_rule.switched',
   ])('refuses a renderer-forged %s and never emits it', async (action_category) => {
     const emit = vi.fn();
     const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });
@@ -494,6 +494,20 @@ describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', 
       ...VALID_REQUEST,
       action_category,
       payload: { lock_cause: 'inactivity' },
+    });
+
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('RT-546: refuses a renderer-forged sale.access.refused (a main-side role-gate refusal)', async () => {
+    const emit = vi.fn();
+    const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });
+
+    const res = await emitAuditEvent(FAKE_EVENT, {
+      ...VALID_REQUEST,
+      action_category: 'sale.access.refused',
+      payload: { action: 'sales.read', reason: 'not_owner', sale_id: 'sale-1' },
     });
 
     expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });

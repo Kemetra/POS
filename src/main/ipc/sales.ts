@@ -16,6 +16,10 @@
  * layer only guards against a non-object payload (which cannot carry the
  * required id/number field) and maps it to the same terminal refusal the
  * bridge would produce, without invoking the handler.
+ *
+ * RT-541 `sales.list` takes a range, so its vocabulary has `invalid_request`:
+ * anything but a plain object refuses with it here, and the bridge validates
+ * every field (`sales-list.ts`).
  */
 
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
@@ -31,6 +35,8 @@ import type {
   SalesSubscribeResponse,
   SalesUnsubscribeRequest,
   SalesUnsubscribeResponse,
+  SalesListRequest,
+  SalesListResponse,
 } from '../../shared/bridge-api.js';
 
 export interface SalesIpcDeps {
@@ -39,6 +45,10 @@ export interface SalesIpcDeps {
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object';
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return isObject(v) && !Array.isArray(v);
 }
 
 export function registerSalesHandlers(ipcMain: IpcMain, deps: SalesIpcDeps): void {
@@ -77,6 +87,14 @@ export function registerSalesHandlers(ipcMain: IpcMain, deps: SalesIpcDeps): voi
       // same no-op ok the bridge would return.
       if (!isObject(request)) return { kind: 'ok' };
       return salesBridge.unsubscribe(request as unknown as SalesUnsubscribeRequest);
+    },
+  );
+
+  ipcMain.handle(
+    SALES_IPC_CHANNELS.LIST,
+    async (_event: IpcMainInvokeEvent, request: unknown): Promise<SalesListResponse> => {
+      if (!isPlainObject(request)) return { kind: 'refused', reason: 'invalid_request' };
+      return salesBridge.list(request as unknown as SalesListRequest);
     },
   );
 }

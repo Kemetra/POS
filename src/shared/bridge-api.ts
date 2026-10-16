@@ -15,6 +15,8 @@ import type { ReturnsBridgeAPI } from './returns/types.js';
 import type { ShiftCashupBridgeAPI } from './shift-cashup/types.js';
 import type { ManagerApprovalBridgeAPI } from './operator/manager-approval.js';
 import type { RecoveryBridgeAPI } from './operator/recovery.js';
+import type { SaleVoidBridgeAPI } from './sale-void/types.js';
+import type { SaleHistoryBridgeAPI } from './sale-history/types.js';
 
 export type {
   ReturnJournalView,
@@ -41,6 +43,8 @@ import type {
   SalesRefusalReason,
   BannerState,
   RecentSaleSummary,
+  SaleLinesView,
+  SalesHistoryCoverage,
 } from './sales/types.js';
 import type {
   CartCreateRequest,
@@ -857,6 +861,17 @@ export interface PreloadBridgeAPI {
    * only, each action with its own approval; totals and opaque ids only.
    */
   recovery?: RecoveryBridgeAPI;
+  /**
+   * RT-530: manager-approved sale void (`saleVoid.*`) — find a finalized sale,
+   * void it with a bound manager approval, and see the queued voids (and any
+   * Backend-Core refused). Totals, ids and closed codes only.
+   */
+  saleVoid?: SaleVoidBridgeAPI;
+  /**
+   * RT-542: the store-wide sales history, sale detail and reprint through
+   * Backend-Core (`saleHistory.*`). OD-534-1/2 enforced in main.
+   */
+  saleHistory?: SaleHistoryBridgeAPI;
 }
 
 /**
@@ -1246,6 +1261,12 @@ export interface SaleSummary {
   latest_print_event?: PrintEventSummary;
   /** Latest DrawerEvent projection (drives the drawer-failure banner). */
   latest_drawer_event?: DrawerEventSummary;
+  /**
+   * RT-541: the sale's recorded lines, or why they cannot be shown. Always set
+   * by main; optional in the type only so older consumers and fixtures that
+   * never read it keep compiling.
+   */
+  lines?: SaleLinesView;
 }
 
 // ── sales.read ──────────────────────────────────────────────────────────────
@@ -1303,6 +1324,52 @@ export interface SalesUnsubscribeRequest {
 
 export type SalesUnsubscribeResponse = { kind: 'ok' };
 
+// ── sales.list (RT-541) ─────────────────────────────────────────────────────
+
+/**
+ * This device's sales over a range of store business days (Africa/Cairo),
+ * newest first. A sale's day is its `finalized_at` in the store zone, never
+ * the stored `local_calendar_day`. Tenant, branch, terminal and (for a
+ * cashier, OD-534-1) the selling operator always come from the session.
+ */
+export interface SalesListRequest {
+  /** First business day, `YYYY-MM-DD`, inclusive. */
+  from_day: string;
+  /** Last business day, `YYYY-MM-DD`, inclusive; at most 31 days after from. */
+  to_day: string;
+  /** 1-100; 50 when absent. */
+  page_size?: number;
+  /** `next_cursor` from the previous page; absent or null for page one. */
+  cursor?: string | null;
+}
+
+/** One history row. Lines and tenders stay on the detail read. */
+export interface SaleListItem {
+  sale_id: SaleId;
+  sale_number: SaleNumber;
+  /**
+   * The store business day of `finalized_at` (`YYYY-MM-DD`), or null when the
+   * stored time cannot be read (shown as unknown, never guessed).
+   */
+  business_day: string | null;
+  finalized_at: string;
+  terminal_label: string;
+  selling_operator_display_name: string;
+  subtotal_minor: number;
+  total_tax_minor: number;
+}
+
+export type SalesListResponse =
+  | {
+      kind: 'ok';
+      sales: SaleListItem[];
+      /** Opaque; null when this is the last page. */
+      next_cursor: string | null;
+      /** Always `this_device_only` for the local read. */
+      coverage: SalesHistoryCoverage;
+    }
+  | { kind: 'refused'; reason: SalesRefusalReason };
+
 // ── SalesBridgeAPI surface ──────────────────────────────────────────────────
 
 /**
@@ -1322,6 +1389,8 @@ export interface SalesBridgeAPI {
   subscribe(req: SalesSubscribeRequest): Promise<SalesSubscribeResponse>;
   /** Detach a previously-acquired subscription. */
   unsubscribe(req: SalesUnsubscribeRequest): Promise<SalesUnsubscribeResponse>;
+  /** RT-541: this device's sales over a range of store business days. */
+  list(req: SalesListRequest): Promise<SalesListResponse>;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1416,9 +1485,10 @@ export type ReceiptsRetryPrintResponse =
 // TWO-way response (success | refused) — NOT three-way like retryPrint. A
 // reprint is repeatable by design (the n-th reprint gets
 // duplicate_copy_sequence_number=n), so a print FAILURE refuses with
-// `printer_unavailable` rather than returning an ok+failure outcome. Reprint is
-// cashier-permitted (AD-10): gated only on requireOperatorSession, no role
-// restriction. It renders the `reprint_duplicate` template variant (bilingual
+// `printer_unavailable` rather than returning an ok+failure outcome. RT-546
+// (OD-534-2, supersedes AD-10's "any operator"): a cashier reprints only their
+// own sale; a manager or admin any sale in scope; another cashier's sale
+// refuses as `sale_not_found`. It renders the `reprint_duplicate` template variant (bilingual
 // duplicate-copy marker) and NEVER kicks the drawer (FR-030).
 
 export interface ReceiptsReprintRequest {

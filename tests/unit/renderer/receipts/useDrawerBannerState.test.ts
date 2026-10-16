@@ -143,7 +143,7 @@ describe('useDrawerBannerState', () => {
     const callsBefore = (bridge.subscribe as ReturnType<typeof vi.fn>).mock.calls.length;
     unmount();
     await vi.advanceTimersByTimeAsync(5000);
-    expect((bridge.subscribe as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore);
+    expect((bridge.subscribe as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(callsBefore);
   });
 
   it('returns null when no sales bridge is available (no crash)', async () => {

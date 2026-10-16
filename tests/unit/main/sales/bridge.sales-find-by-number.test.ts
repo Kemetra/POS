@@ -75,7 +75,7 @@ function seedSale(overrides: Record<string, string> = {}): void {
        '${String(defaults.sale_id)}', '${String(defaults.sale_number)}', '${String(defaults.sale_number)}',
        'handoff-${String(defaults.sale_id)}', 'pa-1',
        'cart-1', '${String(defaults.tenant_id)}', '${String(defaults.branch_id)}', '${String(defaults.terminal_id)}', 'TERM-01',
-       'op-abc', 'Ahmed', 'sess-1',
+       'op-clerk-user-abc', 'Ahmed', 'sess-1',
        1500, 0, 0, '[]',
        '2026-05-28T10:00:00.000Z', '2026-05-28T10:00:00.500Z', 'TRN', 'B', 'A',
        '2026-05-28'

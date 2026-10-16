@@ -10,7 +10,10 @@
  *     server-confirmed amount (`return_total_minor`), its server reference
  *     (`return_ref`) and its currency. `drawer` and `manual` payouts both
  *     count: either way the cash left this drawer (RT-15 S4: `manual` = the
- *     operator opened the drawer by hand). A started payout that never
+ *     operator opened the drawer by hand). So does `no_drawer` (RT-531: the
+ *     terminal has no cash drawer, the payout completed without an attestation):
+ *     the query never filters on `method`, and a test pins that every method
+ *     is counted the same. A started payout that never
  *     completed has no `paid_at` and matches no window.
  *
  * Windows never overlap (review P2-1). A window is [from, to] (both ends
@@ -23,6 +26,10 @@
  * `cashRefundReturnRefs` is never offered again (compared in lower case, as
  * the close stores it): Backend-Core refuses a ref another shift's close
  * claimed (422 `refund_ref_invalid`).
+ *
+ * Voids (RT-530): `sale_void_journal` rows whose `requested_at` is in the window
+ * and whose state is live, joined to the voided sale for its tender summary.
+ * A refused void counts nothing.
  *
  * `pendingDrawerActivity` (review P2-2) counts the scope's drawer cash still
  * in flight, which the cash-up cannot read yet:
@@ -69,6 +76,12 @@ export interface PendingDrawerActivity {
 export interface ShiftCashupSources {
   salesIn(query: CashupSourceQuery): CashupSale[];
   refundsIn(query: CashupSourceQuery): CashupRefund[];
+  /**
+   * RT-530: the tender summaries of the scope's sales whose void was REQUESTED
+   * in the window and is live (pending, unknown or confirmed: the cash went
+   * back to the customer). A refused void is not counted.
+   */
+  voidsIn(query: CashupSourceQuery): CashupSale[];
   /** The `closedAt` of the scope's latest local close; null when none. */
   lastClosedAt(scope: ShiftScope): string | null;
   pendingDrawerActivity(scope: ShiftScope): PendingDrawerActivity;
@@ -116,6 +129,14 @@ const REFUNDS_SQL = `
       SELECT 1 FROM shift_cashup_closes c, json_each(c.cash_refund_return_refs_json) claimed
       WHERE claimed.value = lower(j.return_ref))
   ORDER BY p.paid_at, j.return_id`;
+
+const VOIDS_SQL = `
+  SELECT s.tender_lines_summary_json AS tenderLinesSummaryJson
+  FROM sale_void_journal v JOIN sales s ON s.sale_id = v.sale_id
+  WHERE v.tenant_id = ? AND v.branch_id = ? AND v.terminal_id = ?
+    AND v.state IN ('pending', 'unknown', 'confirmed')
+    AND ${inWindow('v.requested_at')}
+  ORDER BY v.requested_at, v.void_id`;
 
 const LAST_CLOSED_AT_SQL = `
   SELECT c.closed_at AS closedAt
@@ -167,6 +188,7 @@ export function createShiftCashupSources(db: DatabaseHandle): ShiftCashupSources
   return {
     salesIn: (query) => read<CashupSale>(SALES_SQL, query),
     refundsIn: (query) => read<CashupRefund>(REFUNDS_SQL, query),
+    voidsIn: (query) => read<CashupSale>(VOIDS_SQL, query),
     lastClosedAt,
     pendingDrawerActivity: (scope) => ({
       refundPayouts: count(PENDING_PAYOUTS_SQL, scopeParams(scope)),

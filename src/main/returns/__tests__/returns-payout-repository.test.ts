@@ -175,6 +175,39 @@ describe('return payouts repository', () => {
     expect(journal.read('r1')?.state).toBe('paid_out');
   });
 
+  it('RT-531: completes as no_drawer only after a kick that provably never left', () => {
+    confirm();
+    payouts.start(START);
+    // Never kicked, or a kick that may have opened the drawer: not a no-drawer payout.
+    expect(payouts.complete({ ...COMPLETE, method: 'no_drawer' })).toBe('drawer_not_opened');
+    payouts.markSending({ returnId: 'r1', now: 'k1' });
+    payouts.recordKick({ returnId: 'r1', outcome: 'unknown' });
+    expect(payouts.complete({ ...COMPLETE, method: 'no_drawer' })).toBe('drawer_not_opened');
+    expect(journal.read('r1')?.state).toBe('confirmed');
+  });
+
+  it('RT-531: a no_drawer completion after failed_before_send pays out and moves the header', () => {
+    confirm();
+    payouts.start(START);
+    payouts.markSending({ returnId: 'r1', now: 'k1' });
+    payouts.recordKick({ returnId: 'r1', outcome: 'failed_before_send' });
+    expect(payouts.complete({ ...COMPLETE, method: 'no_drawer' })).toBe('completed');
+    expect(payouts.read('r1')).toMatchObject({
+      method: 'no_drawer',
+      kickOutcome: 'failed_before_send',
+      paidOperatorId: 'op-a',
+    });
+    expect(journal.read('r1')?.state).toBe('paid_out');
+  });
+
+  it('RT-531: drawer still needs an opened kick (a never-left kick is not a drawer payout)', () => {
+    confirm();
+    payouts.start(START);
+    payouts.markSending({ returnId: 'r1', now: 'k1' });
+    payouts.recordKick({ returnId: 'r1', outcome: 'failed_before_send' });
+    expect(payouts.complete({ ...COMPLETE, method: 'drawer' })).toBe('drawer_not_opened');
+  });
+
   it('fails closed (throws) if the header did not move with the payout', () => {
     confirm();
     payouts.start(START);

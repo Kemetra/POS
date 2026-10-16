@@ -85,18 +85,12 @@ afterEach(() => {
 describe('axe baseline smoke — S5 operator surfaces (T080)', () => {
   // ── PinPad ────────────────────────────────────────────────────────────────
 
-  it('PinPad empty: no axe violations', async () => {
-    const { container } = render(<PinPad value="" onChange={vi.fn()} onSubmit={vi.fn()} />);
-    await expectNoAxeViolations(container);
-  });
-
-  it('PinPad partial (3 digits): no axe violations', async () => {
-    const { container } = render(<PinPad value="123" onChange={vi.fn()} onSubmit={vi.fn()} />);
-    await expectNoAxeViolations(container);
-  });
-
-  it('PinPad full (6 digits): no axe violations', async () => {
-    const { container } = render(<PinPad value="123456" onChange={vi.fn()} onSubmit={vi.fn()} />);
+  it.each([
+    { name: 'PinPad empty: no axe violations', value: '' },
+    { name: 'PinPad partial (3 digits): no axe violations', value: '123' },
+    { name: 'PinPad full (6 digits): no axe violations', value: '123456' },
+  ])('$name', async ({ value }) => {
+    const { container } = render(<PinPad value={value} onChange={vi.fn()} onSubmit={vi.fn()} />);
     await expectNoAxeViolations(container);
   });
 

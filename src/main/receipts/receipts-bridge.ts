@@ -11,6 +11,12 @@
  *   • cross-tenant misses refuse with `sale_not_found` (no information leak,
  *     §A4 #6) — same posture as `sales.read`;
  *   • a defensive forbidden-field-in-request guard runs FIRST (§A4 #2).
+ *
+ * RT-546 (OD-534-2): every handler runs the main-process role gate
+ * (`sale-access-policy.ts`) after the forbidden-field guard. A locked session
+ * refuses as `no_session`, a role outside the allowlist as `role_denied`, and a
+ * cashier acts only on their own sales — another operator's sale refuses as
+ * `sale_not_found` before anything renders or prints.
  */
 
 import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
@@ -33,6 +39,7 @@ import { deriveReceiptPayload } from './receipts-payload.js';
 import { renderReceipt } from './template-engine.js';
 import type { PrintDispatcher, PrintDispatchContext } from './print-dispatcher.js';
 import type { DrawerKickDispatcher } from '../drawer/drawer-kick.js';
+import { createSaleAccessPolicy, type SaleAccessAction } from '../sales/sale-access-policy.js';
 
 /** 80 mm Font A column width — the v1 printed-slip dimension (§(a) layout). */
 const PREVIEW_WIDTH_CHARS = 42;
@@ -105,9 +112,18 @@ export interface ReceiptsBridgeDependencies {
   /**
    * S6 manualOverride: emits the `sale.receipt.manual_override` audit event via
    * `emitRaw` + writes the override print_events row directly (no dispatcher —
-   * no slip is rendered). Optional — absent in S2/S3/S5-era construction.
+   * no slip is rendered). RT-546: also records `sale.access.refused` for a
+   * role-gate refusal. Optional — absent in S2/S3/S5-era construction.
    */
   auditEmitter?: Pick<SaleAuditEmitter, 'emitRaw'>;
+  /** RT-546: true while the operator session is locked (refused as no_session). */
+  isSessionLocked?: () => boolean;
+  /**
+   * RT-542 (OD-534-8 B): true when the sale has a live void (pending, unknown
+   * or confirmed). A voided sale gets no unmarked duplicate: `reprint` refuses
+   * it with `sale_voided`. Absent → never voided (pre-RT-542 construction).
+   */
+  isSaleVoided?: (saleId: string) => boolean;
   /** S6 manualOverride: id generator for the override print_events PK. */
   newPrintEventId?: () => string;
   /**
@@ -130,28 +146,33 @@ export interface ReceiptsBridgeDependencies {
 }
 
 /**
- * Tenant-isolation gate shared by the mutating handlers: returns the scoped
- * Sale row, or a refusal reason. A cross-scope or missing row refuses as
- * `sale_not_found` (no existence-distinguishing leak; §A4 #6).
+ * Session + role + tenant-isolation + ownership gate shared by every handler:
+ * returns the scoped Sale row, or a refusal reason. A cross-scope, missing or
+ * (for a cashier) another operator's row refuses as `sale_not_found` (no
+ * existence-distinguishing leak; §A4 #6, RT-546).
  */
 type ScopedSale =
   | { ok: true; row: SaleRow; session: OperatorSessionForSales }
-  | { ok: false; reason: 'no_session' | 'sale_not_found' };
+  | { ok: false; reason: 'no_session' | 'role_denied' | 'sale_not_found' };
+
+/** Why a reprint may not run yet (FR-028, RT-542 OD-534-8 B), or null. */
+function reprintPrecondition(
+  deps: Pick<ReceiptsBridgeDependencies, 'printEventsRepo' | 'isSaleVoided'>,
+  saleId: string,
+): 'not_yet_printed' | 'sale_voided' | null {
+  if (!deps.printEventsRepo.hasSuccessfulPrint(saleId)) return 'not_yet_printed';
+  return deps.isSaleVoided?.(saleId) === true ? 'sale_voided' : null;
+}
 
 export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): ReceiptsBridge {
-  const {
-    getCurrentSession,
-    salesRepo,
-    printEventsRepo,
-    printDispatcher,
-    drawerKickDispatcher,
-    auditEmitter,
-  } = deps;
+  const { salesRepo, printEventsRepo, printDispatcher, drawerKickDispatcher, auditEmitter } = deps;
   const now = deps.now ?? ((): string => new Date().toISOString());
+  const access = createSaleAccessPolicy(deps);
 
-  function scopedSale(sale_id: string): ScopedSale {
-    const session = getCurrentSession();
-    if (session === null) return { ok: false, reason: 'no_session' };
+  function scopedSale(action: SaleAccessAction, sale_id: string): ScopedSale {
+    const admitted = access.admitSession(action);
+    if (!admitted.ok) return admitted;
+    const { session } = admitted;
     const row = salesRepo.readById(sale_id);
     if (
       row === null ||
@@ -159,6 +180,10 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
       row.branch_id !== session.branch_id ||
       row.terminal_id !== session.terminal_id
     ) {
+      return { ok: false, reason: 'sale_not_found' };
+    }
+    // OD-534-1/2: a cashier acts only on their own sale.
+    if (!access.admitSale(action, session, row)) {
       return { ok: false, reason: 'sale_not_found' };
     }
     return { ok: true, row, session };
@@ -172,24 +197,13 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
         return await Promise.resolve({ kind: 'refused', reason: 'forbidden_field_in_request' });
       }
 
-      const session = getCurrentSession();
-      if (session === null) {
-        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      // Session, role, tenant isolation and (RT-546) ownership — a cross-scope
+      // or another cashier's sale refuses as sale_not_found (§A4 #6).
+      const scoped = scopedSale('receipts.preview', req.sale_id);
+      if (!scoped.ok) {
+        return await Promise.resolve({ kind: 'refused', reason: scoped.reason });
       }
-
-      const row = salesRepo.readById(req.sale_id);
-      if (row === null) {
-        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
-      }
-      // Tenant isolation — a cross-scope hit refuses as sale_not_found (no
-      // existence-distinguishing leak; §A4 #6).
-      if (
-        row.tenant_id !== session.tenant_id ||
-        row.branch_id !== session.branch_id ||
-        row.terminal_id !== session.terminal_id
-      ) {
-        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
-      }
+      const { row } = scoped;
 
       // S2: preview always renders the `preview` variant (byte-equal to
       // first_print content per AD-6). The reprint_duplicate preview lands with
@@ -224,7 +238,7 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
         return { kind: 'refused', reason: 'forbidden_field_in_request' };
       }
 
-      const scoped = scopedSale(req.sale_id);
+      const scoped = scopedSale('receipts.retryPrint', req.sale_id);
       if (!scoped.ok) {
         return { kind: 'refused', reason: scoped.reason };
       }
@@ -358,10 +372,11 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
         return { kind: 'refused', reason: 'forbidden_field_in_request' };
       }
 
-      // Cashier-permitted (AD-10): scopedSale gates only on an active session +
-      // tenant/branch/terminal isolation — NO role restriction. A cross-scope or
-      // missing sale refuses as `sale_not_found` (no information leak; §A4 #6).
-      const scoped = scopedSale(req.sale_id);
+      // RT-546 / OD-534-2 (supersedes AD-10's "any operator"): a cashier
+      // reprints only their own sale; a manager or admin any sale in scope. A
+      // cross-scope, missing or another cashier's sale refuses as
+      // `sale_not_found` (no information leak; §A4 #6).
+      const scoped = scopedSale('receipts.reprint', req.sale_id);
       if (!scoped.ok) {
         return { kind: 'refused', reason: scoped.reason };
       }
@@ -372,9 +387,10 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
       // row, which is a safe superset of "first_print OR retry_after_failure
       // success" — a success row can only carry one of those purposes (a reprint
       // success itself requires a prior success, so it can never be the first).
-      if (!printEventsRepo.hasSuccessfulPrint(req.sale_id)) {
-        return { kind: 'refused', reason: 'not_yet_printed' };
-      }
+      // RT-542 / OD-534-8 B: nor may a voided sale get an unmarked duplicate;
+      // its VOIDED sale record prints from the store history (saleHistory.reprint).
+      const precondition = reprintPrecondition(deps, row.sale_id);
+      if (precondition !== null) return { kind: 'refused', reason: precondition };
 
       // The n-th reprint gets duplicate_copy_sequence_number=n. countReprints
       // counts ONLY successful reprints, so before the first reprint it is 0 → 1.
@@ -454,7 +470,7 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
       return { kind: 'refused', reason: 'forbidden_field_in_request' };
     }
 
-    const scoped = scopedSale(req.sale_id);
+    const scoped = scopedSale('receipts.manualOverride', req.sale_id);
     if (!scoped.ok) {
       return { kind: 'refused', reason: scoped.reason };
     }

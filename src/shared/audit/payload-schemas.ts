@@ -481,8 +481,11 @@ export interface SaleReturnDrawerOpenedPayload {
 
 /**
  * `sale.return.drawer_failed` — the drawer did not report opened; nothing was
- * paid out. `kick_outcome` says what is known: `failed_before_send` (provably
- * never reached the drawer) or `unknown` (timeout / fault: may have opened).
+ * paid out by the kick. `kick_outcome` says what is known: `failed_before_send`
+ * (provably never reached the drawer) or `unknown` (timeout / fault: may have
+ * opened). RT-531: with `failure_reason: 'no_drawer_configured'` the terminal has
+ * no drawer; the payout is then completed as `no_drawer` (`sale.return.paid_out`
+ * follows) and the kick outcome recorded here is the audit of that answer.
  */
 export interface SaleReturnDrawerFailedPayload {
   return_id: string;
@@ -499,7 +502,8 @@ export interface SaleReturnPaidOutPayload {
   return_ref: string;
   payout_minor: number;
   currency_code: string;
-  method: 'drawer' | 'manual';
+  /** RT-531: `no_drawer` = paid on a terminal with no cash drawer (no attestation). */
+  method: 'drawer' | 'manual' | 'no_drawer';
   tender: 'cash';
 }
 
@@ -560,6 +564,91 @@ export interface ManagerApprovalGrantedPayload {
   action_kind: string;
   subject_ref: string;
   reason_code: string;
+}
+
+// ─── RT-530 — manager-approved sale void ──────────────────────────────────
+//
+// The requesting operator is the envelope's `acting_operator_id`, the terminal
+// its `originating_terminal_id`, the approving manager its
+// `approving_supervisor_id` (users.id). Payloads carry the sale, the bound
+// amount, the approval and policy and closed codes; never a PIN or envelope.
+
+/** `sale.void.requested` — the approval was consumed and the void journaled. */
+export interface SaleVoidRequestedPayload {
+  void_id: string;
+  sale_id: string;
+  amount_minor: number;
+  currency_code: string;
+  business_date: string;
+  approval_id: string;
+  policy_version: string;
+  approved_at: string;
+  requester_user_id: string;
+}
+
+/** `sale.void.confirmed` — Backend-Core recorded the void (a replay counts). */
+export interface SaleVoidConfirmedPayload {
+  void_id: string;
+  sale_id: string;
+  void_ref: string;
+  amount_minor: number;
+  currency_code: string;
+  replayed: boolean;
+}
+
+/** `sale.void.refused` — Backend-Core refused the void; terminal, visible to staff. */
+export interface SaleVoidRefusedPayload {
+  void_id: string;
+  sale_id: string;
+  reason: string;
+  amount_minor: number;
+  currency_code: string;
+  approval_id: string;
+  policy_version: string;
+}
+
+// ─── RT-546 — sales/receipts role gate ────────────────────────────────────
+
+/**
+ * `sale.access.refused` — the main-process role gate refused a `sales.*` /
+ * `receipts.*` call. The actor is the envelope's `acting_operator_id`. No sale
+ * content; `sale_id` only when the refusal was about a specific sale.
+ */
+export interface SaleAccessRefusedPayload {
+  action: string;
+  reason: 'role_denied' | 'not_owner';
+  sale_id?: string;
+}
+
+// ─── RT-551 — sale-number day rule ────────────────────────────────────────
+
+/**
+ * `sale.number_day_rule.switched` — the terminal's first sale numbered by the
+ * store business day of `finalized_at` (Option A cutover). Written once per
+ * terminal; the actor is the device sentinel.
+ */
+export interface SaleNumberDayRuleSwitchedPayload {
+  terminal_id: string;
+  sale_id: string;
+  sale_number: string;
+  finalized_at: string;
+  business_day: string;
+  time_zone: string;
+}
+
+// ─── RT-542 — store-history reprint ───────────────────────────────────────
+
+/**
+ * `sale.history.reprinted` — a store-history reprint Backend-Core authorized.
+ * The actor is the signed-in operator. `sale_ref` is Backend-Core's opaque sale
+ * id; `copy_number` the server's; `outcome` the local print result.
+ */
+export interface SaleHistoryReprintedPayload {
+  sale_ref: string;
+  kind: 'duplicate' | 'sale_record';
+  copy_number: number;
+  marks: ('voided' | 'returned')[];
+  outcome: string;
 }
 
 /** `manager_approval.refused` — what was asked; never why (C3), never a PIN. */
@@ -648,6 +737,16 @@ export type AuditPayloadMap = {
   // RT-443
   'manager_approval.granted': ManagerApprovalGrantedPayload;
   'manager_approval.refused': ManagerApprovalRefusedPayload;
+  // RT-530
+  'sale.void.requested': SaleVoidRequestedPayload;
+  'sale.void.confirmed': SaleVoidConfirmedPayload;
+  'sale.void.refused': SaleVoidRefusedPayload;
+  // RT-546
+  'sale.access.refused': SaleAccessRefusedPayload;
+  // RT-551
+  'sale.number_day_rule.switched': SaleNumberDayRuleSwitchedPayload;
+  // RT-542
+  'sale.history.reprinted': SaleHistoryReprintedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.

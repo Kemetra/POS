@@ -15,6 +15,8 @@ export const SALES_IPC_CHANNELS = {
   FIND_BY_NUMBER: 'sales:findByNumber',
   SUBSCRIBE: 'sales:subscribe',
   UNSUBSCRIBE: 'sales:unsubscribe',
+  /** RT-541: this device's sales over a range of store business days. */
+  LIST: 'sales:list',
 } as const;
 
 export type SalesIpcChannel = (typeof SALES_IPC_CHANNELS)[keyof typeof SALES_IPC_CHANNELS];

@@ -206,9 +206,7 @@ export function PrinterFailureBanner({
           disabled={mutationPhase !== 'idle'}
           aria-busy={mutationPhase === 'retrying' ? 'true' : undefined}
         >
-          {mutationPhase === 'retrying' && (
-            <span className="btn__spinner" role="status" aria-hidden="true" />
-          )}
+          {mutationPhase === 'retrying' && <output className="btn__spinner" aria-hidden="true" />}
           <span lang="ar">إعادة المحاولة</span>
         </button>
         <button
@@ -230,7 +228,7 @@ export function PrinterFailureBanner({
           aria-busy={mutationPhase === 'manual_override' ? 'true' : undefined}
         >
           {mutationPhase === 'manual_override' && (
-            <span className="btn__spinner" role="status" aria-hidden="true" />
+            <output className="btn__spinner" aria-hidden="true" />
           )}
           <span lang="ar">إيصال يدوي</span>
         </button>

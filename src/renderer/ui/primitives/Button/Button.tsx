@@ -16,7 +16,7 @@ interface ButtonProps extends AriaAttributes {
 }
 
 function Spinner(): JSX.Element {
-  return <span role="status" aria-label="Loading" className="btn__spinner" aria-hidden="false" />;
+  return <output aria-label="Loading" className="btn__spinner" aria-hidden="false" />;
 }
 
 export function Button({

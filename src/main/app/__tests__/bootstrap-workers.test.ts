@@ -216,6 +216,27 @@ describe('RT-17 — worker registry: the shift-sync interval', () => {
   });
 });
 
+describe('RT-530 — worker registry: the sale-void sender', () => {
+  it('stops the sale-void sender after the returns resolver, before the heartbeat', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('cashier admission heartbeat', () =>
+      order.push('cashier admission heartbeat'),
+    );
+    registry.register('sale-void interval', () => order.push('sale-void interval'));
+    registry.register('returns resolver', () => order.push('returns resolver'));
+
+    registry.stopAll();
+
+    expect(order).toEqual([
+      'returns resolver',
+      'sale-void interval',
+      'cashier admission heartbeat',
+    ]);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});
+
 describe('RT-113 P2 — worker registry: the cashier admission heartbeat', () => {
   it('stops the cashier admission heartbeat last, still before the DB closes', () => {
     const order: string[] = [];

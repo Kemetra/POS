@@ -27,6 +27,9 @@ import { CALL_FAILED } from './returns-bridge.js';
  *   drawer_failed the drawer did not open just now; nothing was recorded.
  *   confirm_manual the explicit second step before recording a manual payout.
  *   paid          main recorded the payout (`slip` null when not known here).
+ *                 RT-531: with no cash drawer on the terminal main pays out from
+ *                 the first action (method `no_drawer`): there is no attestation
+ *                 step to show; the panel only reports how the cash left.
  *   refused       main refused; nothing was done.
  *   unknown       the call was rejected: the result is not known.
  */
@@ -191,6 +194,9 @@ export function afterPayout(
         reprint: null,
       };
     case 'drawer_failed': {
+      // Only a kick that provably never left is retryable. Main completes a
+      // `no_drawer_configured` answer as `no_drawer` (RT-531) and does not send
+      // it here; the check stays for a main that does (the closed reason set).
       const retryable = res.reason === 'no_drawer_configured';
       return {
         ret: res.ret,

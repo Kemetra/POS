@@ -106,6 +106,39 @@ describe('scope (X1, A1 through window.api)', () => {
   });
 });
 
+describe('RT-531: a refund on a terminal with no drawer', () => {
+  it('pays out without any attestation control and has no axe violations', async () => {
+    const bridge = fakeBridge();
+    const user = userEvent.setup();
+    const { container } = renderReturns({ bridge });
+    await submitReturn(user);
+    await screen.findByRole('heading', { name: 'صرف النقد' });
+    bridge.payout.mockResolvedValueOnce({
+      kind: 'paid_out',
+      ret: journal({
+        state: 'paid_out',
+        payout: {
+          startedAt: '2026-10-04T09:06:00.000Z',
+          paidAt: '2026-10-04T09:06:05.000Z',
+          method: 'no_drawer',
+          kick: 'failed_before_send',
+          kickCount: 1,
+          kickPending: false,
+        },
+      }),
+      method: 'no_drawer',
+      slip: 'printed',
+    });
+    await user.click(screen.getByRole('button', { name: 'افتح الدرج واصرف النقد' }));
+    await screen.findByText('لا يوجد درج نقود موصول بهذا الجهاز: سلّم العميل المبلغ.');
+    for (const attest of ['صرفتُ المبلغ يدويًا', 'نعم، سجّل الصرف']) {
+      expect(screen.queryByRole('button', { name: attest })).toBeNull();
+    }
+    expect(bridge.payout).toHaveBeenCalledTimes(1);
+    await expectNoAxeViolations(container);
+  });
+});
+
 describe('admin role', () => {
   it('lets an admin run the flow like a manager (D-b)', async () => {
     const user = userEvent.setup();

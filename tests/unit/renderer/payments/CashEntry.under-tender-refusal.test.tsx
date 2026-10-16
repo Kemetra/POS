@@ -47,7 +47,7 @@ describe('<CashEntry> — under-tender refusal', () => {
   it('hides the refusal copy when amount becomes sufficient again', () => {
     const { input } = setup(12550);
     fireEvent.change(input, { target: { value: '100.00' } });
-    expect(screen.queryByTestId('cash-entry-refusal')).not.toBeNull();
+    expect(screen.getByTestId('cash-entry-refusal')).toBeInTheDocument();
     fireEvent.change(input, { target: { value: '125.50' } });
     expect(screen.queryByTestId('cash-entry-refusal')).toBeNull();
   });

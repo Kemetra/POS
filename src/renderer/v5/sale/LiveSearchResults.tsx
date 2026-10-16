@@ -19,9 +19,9 @@ export function LiveSearchResults({
   switch (state.kind) {
     case 'searching':
       return (
-        <p className="v5-live-message" role="status" aria-busy="true">
+        <output className="v5-live-message" aria-busy="true">
           جارٍ البحث…
-        </p>
+        </output>
       );
     case 'idle':
       return <p className="v5-live-message">ابحث عن صنف لعرض المنتجات المتاحة.</p>;
@@ -58,12 +58,12 @@ function RecoverMessage(
   }>,
 ): JSX.Element {
   return (
-    <p className="v5-live-message" role="status">
+    <output className="v5-live-message">
       {props.copy}{' '}
       <button type="button" onClick={props.onRecover}>
         {props.action}
       </button>
-    </p>
+    </output>
   );
 }
 

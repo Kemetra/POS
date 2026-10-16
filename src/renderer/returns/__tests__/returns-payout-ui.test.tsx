@@ -78,6 +78,55 @@ describe('pay out from the confirmed outcome', () => {
     );
   });
 
+  it('RT-531: with no drawer main pays out at once; no drawer notice, no attestation step', async () => {
+    const bridge = fakeBridge();
+    bridge.payout.mockResolvedValueOnce({
+      kind: 'paid_out',
+      ret: journal({
+        state: 'paid_out',
+        payout: {
+          ...STARTED,
+          paidAt: '2026-10-04T09:06:05.000Z',
+          method: 'no_drawer' as const,
+        },
+      }),
+      method: 'no_drawer',
+      slip: 'printed',
+    });
+    const user = await confirmedOutcome(bridge);
+    await user.click(screen.getByRole('button', { name: START_NAME }));
+    expect(await screen.findByText(PAYOUT_COPY.paid)).toBeInTheDocument();
+    // Truthful: it never says the drawer is open, and never asks for a manual attestation.
+    expect(screen.getByText(PAYOUT_COPY.paidNoDrawer)).toBeInTheDocument();
+    expect(screen.queryByText(PAYOUT_COPY.paidDrawer)).toBeNull();
+    expect(screen.queryByText(PAYOUT_COPY.paidManual)).toBeNull();
+    expect(screen.queryByRole('button', { name: PAYOUT_COPY.manual })).toBeNull();
+    expect(screen.queryByText(PAYOUT_COPY.confirmManual)).toBeNull();
+    expect(screen.queryByRole('button', { name: PAYOUT_COPY.confirmManualYes })).toBeNull();
+    expect(screen.queryByText(PAYOUT_COPY.drawerFailed)).toBeNull();
+    expect(screen.queryByText(PAYOUT_COPY.drawerUnknown)).toBeNull();
+    // One call: the whole payout was the single «pay out» action.
+    expect(bridge.payout).toHaveBeenCalledTimes(1);
+    expect(bridge.payout).toHaveBeenCalledWith({ returnId: 'ret-1', action: 'start' });
+    expect(payoutRegion().querySelector('.rt-outcome--success')).not.toBeNull();
+  });
+
+  it('RT-531: a configured drawer that fails still warns and keeps the manual attestation', async () => {
+    const bridge = fakeBridge();
+    bridge.payout.mockResolvedValueOnce({
+      kind: 'drawer_failed',
+      ret: journal({ payout: { ...STARTED, kick: 'unknown' as const } }),
+      reason: 'printer_dk_failure',
+    });
+    const user = await confirmedOutcome(bridge);
+    await user.click(screen.getByRole('button', { name: START_NAME }));
+    expect(await screen.findByText(PAYOUT_COPY.drawerUnknown)).toBeInTheDocument();
+    expect(screen.getByText(drawerFailureMessage('printer_dk_failure'))).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: PAYOUT_COPY.manual }));
+    expect(screen.getByText(PAYOUT_COPY.confirmManual)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: PAYOUT_COPY.confirmManualYes })).toBeInTheDocument();
+  });
+
   it('R6: shows main’s confirmed amount and pays out with only the return id and an action', async () => {
     const bridge = fakeBridge();
     bridge.payout.mockResolvedValueOnce(PAID_BY_DRAWER);

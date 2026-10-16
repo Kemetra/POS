@@ -239,9 +239,7 @@ export function VoucherEntry({
           SECURITY: this is a FORMAT error only, NOT a validity signal.
           The bridge is the only authority on voucher validity (F-A4B-003). */}
       {voucherCode.length > 0 && !codeIsWellFormed && (
-        <p className="voucher-error" role="status">
-          رمز القسيمة غير صالح — يجب ألا يقل عن ٣ أحرف.
-        </p>
+        <output className="voucher-error">رمز القسيمة غير صالح — يجب ألا يقل عن ٣ أحرف.</output>
       )}
 
       {/* Voucher hint: generic input guidance, no demo codes (SECURITY). */}

@@ -13,9 +13,10 @@
  *     having validated the label against `^[A-Z0-9-]{1,16}$` at terminal-
  *     pairing time (002). No runtime regex check here — trust internal
  *     code, validate at boundaries (Constitution + CLAUDE.md).
- *   • `<YYYY-MM-DD>` is passed in by the caller (AD-2 finalize derives it
- *     from the terminal's local timezone at finalize-commit time per R-7
- *     midnight-roll-boundary rule).
+ *   • `<YYYY-MM-DD>` is passed in by the caller. RT-551: AD-2 finalize
+ *     derives it as the store business day (Africa/Cairo) of `finalized_at`
+ *     (`sale-number-day-rule.ts`). It is also the counter key, so a sale
+ *     number's date always equals its counter row's day.
  *   • `<NNNNNN>` is the per-terminal per-day monotonic counter, zero-
  *     padded to 6 digits.
  *
@@ -46,7 +47,7 @@ export interface AllocateSaleNumberInput {
   terminal_id: string;
   /** Human-readable label, embedded verbatim into the sale_number string. */
   terminal_label: string;
-  /** Local calendar day, format `YYYY-MM-DD`, anchored on the terminal's local timezone. */
+  /** Sale-number day, `YYYY-MM-DD`: the counter key and the embedded date (RT-551). */
   local_calendar_day: string;
 }
 

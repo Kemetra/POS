@@ -59,9 +59,7 @@ export function ReturnsRoute({ bridge, sessionEvents }: ReturnsRouteProps): JSX.
     <ScreenSection title="المرتجعات">
       <div className="rt-returns">
         {blocked !== null || api === null ? (
-          <p className="rt-returns__policy" role="status">
-            {blocked}
-          </p>
+          <output className="rt-returns__policy">{blocked}</output>
         ) : (
           <ReturnsScreen key={session.id} bridge={api} sessionEvents={events} />
         )}

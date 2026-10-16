@@ -93,9 +93,7 @@ export function ManagerPinEnrollment({
         {field('current', SHIFT_COPY.currentPinLabel)}
       </div>
       {result?.kind === 'enrolled' && (
-        <p className="v5-shift-outcome" role="status">
-          {SHIFT_COPY.enrolled}
-        </p>
+        <output className="v5-shift-outcome">{SHIFT_COPY.enrolled}</output>
       )}
       <ShiftAlert message={result?.kind === 'error' ? result.message : null} />
       <button

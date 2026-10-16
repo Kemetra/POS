@@ -37,6 +37,12 @@ export interface FeatureFlagsState {
    * registers no shift handler and refuses every call on its own read too.
    */
   shiftCashup: boolean;
+  /**
+   * RT-530: shows the sale void screen (`/app/void`) and the queued-void
+   * notices. Fail-closed default: false — with it off nothing renders and no
+   * `saleVoid.*` call is made. Main refuses every call on its own read too.
+   */
+  saleVoid: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
@@ -50,6 +56,7 @@ export interface FeatureFlagsStore extends FeatureFlagsState {
     voucherTender?: boolean;
     returns?: boolean;
     shiftCashup?: boolean;
+    saleVoid?: boolean;
   }): void;
   reset(): void;
 }
@@ -62,6 +69,7 @@ const INITIAL: FeatureFlagsState = {
   voucherTender: false,
   returns: false,
   shiftCashup: false,
+  saleVoid: false,
   hydrated: false,
 };
 
@@ -76,6 +84,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
       voucherTender: flags.voucherTender === true,
       returns: flags.returns === true,
       shiftCashup: flags.shiftCashup === true,
+      saleVoid: flags.saleVoid === true,
       hydrated: true,
     });
   },

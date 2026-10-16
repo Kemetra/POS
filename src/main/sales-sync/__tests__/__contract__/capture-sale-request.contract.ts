@@ -1,18 +1,19 @@
 // VENDORED CONTRACT TYPE — DO NOT EDIT BY HAND.
 //
 // Source of truth: Backend-Core (ex Data-Pulse-2) `packages/contracts/openapi/pos-sales/sales.yaml`
-//   version          : 1.6.0-draft
-//   Backend-Core main: 352b86ad3862452eb7300bf9e13d81dd771266bf (RT-225, #710)
-//   sales.yaml blob  : acb4e5b0c894fd03b232e99daf236501cf491867
+//   version          : 1.9.0-draft
+//   Backend-Core main: 2b03ad2de5394f54bae296b726ed6fc76ac8af4e (RT-537, #772)
+//   sales.yaml blob  : 8e4b76862504121130efadbf24ddc6309aea5fa7
 //                      (= contracts/backend-core/openapi/pos-sales/sales.yaml, PIN)
 //   generated with   : openapi-typescript 7.13.0  (already a POS devDep)
-//   refreshed        : 2026-10-06 (RT-225 step 2) — `npx openapi-typescript
+//   refreshed        : 2026-10-16 (RT-540; was 2026-10-06 RT-225 step 2) — `npx openapi-typescript
 //                      contracts/backend-core/openapi/pos-sales/sales.yaml`; the
 //                      `CaptureSaleRequest` / `CaptureSaleLine` / `SaleTender` members below
 //                      match the generated `components["schemas"]` field-for-field
 //                      (names, optionality, enum, money alias). 1.5.0-draft added the
 //                      optional `operatorUserId` (device scheme); 1.6.0-draft adds only the
-//                      optional `admissionCheckAt` (device scheme only).
+//                      optional `admissionCheckAt` (device scheme only). 1.9.0-draft adds the
+//                      optional `receipt` (`CaptureSaleReceipt`, RT-537).
 //
 // This is the `CaptureSaleRequest` / `CaptureSaleLine` slice of the binding DP-2
 // contract, generated from the SHARED `sales.yaml` that BOTH sides realize (the
@@ -70,6 +71,34 @@ export interface ContractCaptureSaleRequest {
    * (else 400). Not part of `payload_hash`, but part of the idempotency fingerprint.
    */
   admissionCheckAt?: string;
+  /**
+   * OPTIONAL (RT-537, 1.9.0-draft): the facts the original receipt printed that are not
+   * otherwise sale facts. Presentation only; not part of `payload_hash`, but part of the
+   * idempotency fingerprint. Accepted from RT-539.
+   */
+  receipt?: ContractCaptureSaleReceipt;
+}
+
+/** The binding `CaptureSaleReceipt` (`additionalProperties: false`). */
+export interface ContractCaptureSaleReceipt {
+  /** minLength 1, maxLength 96. */
+  saleNumber: string;
+  /** minLength 1, maxLength 96. Omit when it equals `saleNumber`. */
+  receiptNumber?: string;
+  /** minLength 1, maxLength 64. */
+  terminalLabel: string;
+  /** minLength 1. Never an email address. */
+  operatorDisplayName: string;
+  /** Format: date-time. */
+  settledAt: string;
+  /** minLength 1, maxLength 256. */
+  branchName: string;
+  /** minLength 1, maxLength 512. */
+  branchAddress: string;
+  /** minLength 1, maxLength 64. */
+  taxRegistrationId: string;
+  /** Cash change given; absent means none. */
+  changeGiven?: NonNegativeDecimalAmount;
 }
 
 /** The binding `SaleTender` (`additionalProperties: false`). */

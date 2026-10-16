@@ -9,6 +9,11 @@
  * unit-testable without hardware (same DI posture as `EscposTransport` and the
  * `DatabaseHandle` → sql.js test adapter).
  *
+ * `no_drawer_configured` is how a terminal with NO drawer answers (RT-531: the
+ * cash drawer is optional): the sale dispatcher records it as a suppressed
+ * drawer event and a return payout completes as `no_drawer`; neither warns.
+ * Every other failure reason is a configured drawer that failed, and still warns.
+ *
  * The real implementation (constructed only at the main entry point) wraps
  * `node-thermal-printer`'s `openCashDrawer()` in an isolated
  * `clear() → openCashDrawer() → execute()` sequence so the pulse cannot ride

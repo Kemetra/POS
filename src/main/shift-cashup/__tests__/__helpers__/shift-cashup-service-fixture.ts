@@ -187,13 +187,19 @@ export interface SeedRefundInput {
   paidAt: string | null;
   scope?: ShiftScope;
   currencyCode?: string;
+  /**
+   * How the cash left the drawer (RT-15 S4 / RT-531): `manual` (default, no
+   * kick), `drawer` (the kick opened) or `no_drawer` (a terminal with no
+   * drawer: the kick never reached hardware).
+   */
+  method?: 'manual' | 'drawer' | 'no_drawer';
 }
 
 const SERVER_SALE_REF = '0192f5a2-3b4c-7d8e-9f01-5a1e00000001';
 
 /**
  * A confirmed return of a seeded sale, with its payout started and — unless
- * `paidAt` is null — completed (`manual`) and the journal `paid_out`, as the
+ * `paidAt` is null — completed (`manual` by default; see `method`) and the journal `paid_out`, as the
  * RT-15 payout writes them.
  */
 export function seedRefund(db: SqlJsDatabase, input: SeedRefundInput): void {
@@ -231,10 +237,24 @@ export function seedRefund(db: SqlJsDatabase, input: SeedRefundInput): void {
     [input.returnId, at],
   );
   if (input.paidAt === null) return;
+  const method = input.method ?? 'manual';
+  if (method !== 'manual') {
+    // The kick the method needs (0040 / 0053): sent, then answered.
+    const answered = method === 'drawer' ? 'opened' : 'failed_before_send';
+    db.run(
+      `UPDATE return_payouts SET kick_outcome = 'sending', kick_count = 1, kicked_at = ?
+        WHERE return_id = ?`,
+      [at, input.returnId],
+    );
+    db.run(`UPDATE return_payouts SET kick_outcome = ? WHERE return_id = ?`, [
+      answered,
+      input.returnId,
+    ]);
+  }
   db.run(
     `UPDATE return_payouts SET paid_operator_id = 'op-1', paid_operator_name = 'Op',
-       paid_session_id = 'sess-1', paid_at = ?, method = 'manual' WHERE return_id = ?`,
-    [input.paidAt, input.returnId],
+       paid_session_id = 'sess-1', paid_at = ?, method = ? WHERE return_id = ?`,
+    [input.paidAt, method, input.returnId],
   );
   db.run(`UPDATE return_journal SET state = 'paid_out', paid_out_at = ? WHERE return_id = ?`, [
     input.paidAt,

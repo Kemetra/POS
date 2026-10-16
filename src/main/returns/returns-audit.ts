@@ -28,7 +28,11 @@ export interface ReturnActor {
   readonly operatorSessionId: string;
 }
 
-/** What the drawer kick of a payout did, and what that proves about the drawer. */
+/**
+ * What the drawer kick of a payout did, and what that proves about the drawer.
+ * RT-531: `no_drawer_configured` (a terminal with no drawer) is recorded with
+ * its kick outcome like any other answer; the payout then completes as `no_drawer`.
+ */
 export type DrawerAuditOutcome =
   | { readonly ok: true }
   | {

@@ -209,6 +209,13 @@ export interface SaleSyncEngineDeps {
    */
   tendersSince?: string | null | undefined;
   /**
+   * RT-540 rollout gate (`POS_PULSE_FEATURE_SALE_RECEIPT_SINCE`, an ISO instant).
+   * Unset/null = never send `receipt`. Set = only sales finalized at/after it carry it.
+   * It must be a FUTURE instant, later than both the Backend-Core RT-539 deploy and the
+   * POS restart that loads it (see index.ts).
+   */
+  receiptSince?: string | null | undefined;
+  /**
    * Called once when a sale is dead-lettered (non-blocking operator notification).
    * `reason` is set when the POS itself refused to send the sale (RT-79: a tender it
    * cannot send faithfully); it carries no PII, card data or token.
@@ -352,7 +359,10 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
 
     let payload: CaptureSalePayload;
     try {
-      payload = buildCapturePayload(sale, { tendersSince: deps.tendersSince });
+      payload = buildCapturePayload(sale, {
+        tendersSince: deps.tendersSince,
+        receiptSince: deps.receiptSince,
+      });
     } catch (err) {
       if (!(err instanceof TenderNotSendableError)) throw err;
       // RT-10 D2: a sale whose tenders cannot be sent faithfully (voucher, unknown

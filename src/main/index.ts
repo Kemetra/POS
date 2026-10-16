@@ -6,6 +6,13 @@ import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
 import { createRecoveryModeGuardedIpcMain } from './ipc/recovery-mode-guard.js';
 import { registerRecoveryHandlers } from './ipc/recovery.js';
+import { registerSaleVoidHandlers } from './ipc/sale-void.js';
+import {
+  composeSaleVoid,
+  SALE_VOID_DRAIN_TIMEOUT_MS,
+  scheduleSaleVoidSync,
+  type ComposedSaleVoid,
+} from './sale-void/compose-sale-void.js';
 import {
   createManagerRecovery,
   createRecoveryPaymentPort,
@@ -115,7 +122,7 @@ import {
   withPairedNotification,
   type PairedWorkers,
 } from './app/paired-workers.js';
-import { parseTendersSince } from './sales-sync/capture-payload.js';
+import { parseReceiptSince, parseTendersSince } from './sales-sync/capture-payload.js';
 import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
 import { SALE_SYNC_DRAIN_TIMEOUT_MS, scheduleSaleSync } from './sales-sync/schedule-sale-sync.js';
 import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
@@ -144,6 +151,13 @@ import { createFinalizeListener } from './sales/finalize-listener.js';
 import { createSalesBridge, type OperatorSessionForSales } from './sales/sales-bridge.js';
 import { bindBannerStateProjector } from './sales/banner-state-projector.js';
 import { createReceiptsBridge } from './receipts/receipts-bridge.js';
+import { createSaleHistoryClient } from './sale-history/sale-history-client.js';
+import { createSaleHistoryCredentialResolver } from './sale-history/sale-history-credential.js';
+import { createSaleHistoryLocalReads } from './sale-history/sale-history-local.js';
+import { createSaleHistoryService } from './sale-history/sale-history-service.js';
+import { createStoreZoneMonitor } from './sale-history/store-zone-monitor.js';
+import { registerSaleHistoryHandlers } from './ipc/sale-history.js';
+import { createSaleVoidRepository } from './sale-void/sale-void-repository.js';
 import { registerReceiptsHandlers } from './ipc/receipts.js';
 import { createPrintPipeline } from './receipts/print-pipeline.js';
 import { createEscposAdapter } from './receipts/escpos-adapter.js';
@@ -983,6 +997,8 @@ singleInstanceReady
       }),
     });
     const recoveryRef: { current: ManagerRecovery | null } = { current: null };
+    // RT-530 — the sale void's approval subject, bound below once the domain exists.
+    const saleVoidRef: { current: ComposedSaleVoid | null } = { current: null };
     const managerApprovals = createManagerApprovalService({
       db,
       getSession: () => operatorSessionManager.getCurrent(),
@@ -991,6 +1007,8 @@ singleInstanceReady
       managerPins,
       resolvers: {
         'cart.cancel_post_handoff': postHandoffCancelApprovalResolver(bindCartStore(db)),
+        // RT-530 — a finalized sale's void: bound to the sale, its total and its requester.
+        'sale.void': (input) => saleVoidRef.current?.service.approvalSubject(input) ?? null,
         // RT-441 — manager recovery (bound below, once the payment path exists).
         'recovery.complete_attempt': (input) =>
           recoveryRef.current?.resolvers.completeAttempt(input) ?? null,
@@ -1764,10 +1782,13 @@ singleInstanceReady
     // 008 Slice 4 drawer port, hoisted (RT-15 S4) so the sale drawer-kick
     // dispatcher and the return payout share ONE drawer transport. The real
     // DK1/DK2 transport is the §A3 hardware bring-up (T200), deferred: until
-    // then this honest STUB reports `no_drawer_configured` — a cash sale
-    // records a `failed` drawer row, and a return payout answers
-    // `drawer_failed` (nothing paid is recorded; the manager may then attest a
-    // manual payout). Never a faked "opened" (PRODUCT.md Principle 3).
+    // then this honest STUB reports `no_drawer_configured`. RT-531 (owner
+    // decision 2026-10-15): the cash drawer is optional, and that answer means
+    // "this terminal has no drawer" — a cash sale records a `suppressed` drawer
+    // row (no notice) and a return payout completes as `no_drawer` (no manual
+    // attestation). Never a faked "opened" (PRODUCT.md Principle 3). A real
+    // transport that answers `printer_dk_failure` / `os_error` / `timeout` is a
+    // configured drawer that failed: it still warns and keeps the attestation.
     const drawerKickTransport: DrawerKickTransport = {
       kick: () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' }),
     };
@@ -1788,6 +1809,8 @@ singleInstanceReady
       const salesRepo = bindSalesRepository(db);
       const printEventsRepo = bindPrintEventsRepository(db);
       const drawerEventsRepo = bindDrawerEventsRepository(db);
+      // RT-542: read-only use of the void journal (the OD-534-8 reprint guard).
+      const saleVoidReads = createSaleVoidRepository(db);
 
       // Read-only `sales.*` + `receipts.preview` bridges for the renderer.
       // Registered UNCONDITIONALLY whenever the flag is on — NOT gated on
@@ -1806,8 +1829,17 @@ singleInstanceReady
           operatorSessionManager.getCurrent(),
           pairingStore.getCurrentTerminalId(),
         );
+      // RT-546 — the sales/receipts role gate refuses a locked session and
+      // audits a refusal (`sale.access.refused`). Hoisted so both bridges get it.
+      const isSalesSessionLocked = (): boolean =>
+        operatorSessionManager.getCurrent()?.lock_state === 'locked';
+      const saleAuditEmitter = createSaleAuditEmitter({
+        sink: { write: forwardAuditEvent },
+      });
       const salesBridge = createSalesBridge({
         getCurrentSession: getCurrentSalesSession,
+        isSessionLocked: isSalesSessionLocked,
+        auditEmitter: saleAuditEmitter,
         salesRepo,
         printEventsRepo,
         drawerEventsRepo,
@@ -1826,9 +1858,6 @@ singleInstanceReady
       // relaunch. The dispatcher needs only the DB + repos + audit sink, none
       // of which are pairing-specific; the paired branch reuses it for the
       // finalize-listener wiring.
-      const saleAuditEmitter = createSaleAuditEmitter({
-        sink: { write: forwardAuditEvent },
-      });
       // Shared clock for the print dispatcher + receipts bridge so a reprint's
       // rendered slip time (bridge) matches the print_events.printed_at the
       // dispatcher writes for the same logical event (one clock read per event).
@@ -1847,10 +1876,10 @@ singleInstanceReady
       // DK1/DK2 transport (node-thermal-printer `openCashDrawer` ↔ the Epson's
       // DRAWER port driving the APG VBS320) is the §A3 HARDWARE bring-up (T200),
       // deferred — same posture as the print transport above. Until then an
-      // honest STUB reports `no_drawer_configured`, so a cash sale records a
-      // clean `failed` drawer row + raises the drawer-failure banner while the
-      // Sale stays durable — no fake "opened" is recorded (PRODUCT.md
-      // Principle 3). T200 swaps the shared `drawerKickTransport` (hoisted above,
+      // honest STUB reports `no_drawer_configured`, which (RT-531) the
+      // dispatcher records as a `suppressed` drawer row — no drawer-failure
+      // notice — while the Sale stays durable; no fake "opened" is recorded
+      // (PRODUCT.md Principle 3). T200 swaps the shared `drawerKickTransport` (hoisted above,
       // also used by the RT-15 S4 return payout) for the real one; nothing else
       // changes.
       const drawerKickDispatcher = createDrawerKickDispatcher({
@@ -1866,6 +1895,7 @@ singleInstanceReady
       // (mutating; gated server-side). Registered unconditionally (T094c).
       const receiptsBridge = createReceiptsBridge({
         getCurrentSession: getCurrentSalesSession,
+        isSessionLocked: isSalesSessionLocked,
         salesRepo,
         printEventsRepo,
         printDispatcher,
@@ -1880,8 +1910,48 @@ singleInstanceReady
         // emits sale.receipt.manual_override (no slip rendered → no dispatcher).
         auditEmitter: saleAuditEmitter,
         newPrintEventId: () => randomUUID(),
+        // RT-542 (OD-534-8 B): a sale with a live void gets no unmarked duplicate.
+        isSaleVoided: (saleId) => saleVoidReads.liveForSale(saleId) !== null,
       });
       registerReceiptsHandlers(guardedIpcMain, { receiptsBridge });
+
+      // RT-542 (RT-534 S6) — the store-wide sales history, sale detail and
+      // reprint through Backend-Core (sale-history.yaml). The RT-546 gate and
+      // OD-534-1/2 run in main; the credential follows the role (the envelope
+      // for a manager/admin, the device token + the session's own cashier
+      // admission for a cashier) and never crosses the bridge. Offline, or with
+      // no credential, it answers this device's sales only (the RT-541 read).
+      registerSaleHistoryHandlers(guardedIpcMain, {
+        service: createSaleHistoryService({
+          getCurrentSession: getCurrentSalesSession,
+          isSessionLocked: isSalesSessionLocked,
+          auditEmitter: saleAuditEmitter,
+          resolveCredential: createSaleHistoryCredentialResolver({
+            getSessionRecord: () => operatorSessionManager.getCurrent(),
+            getEnvelope: (backendSessionId) => operatorEnvelopeHolder.get(backendSessionId),
+            readDeviceToken: createSendableDeviceTokenRead({
+              pairingStore,
+              secretStore,
+              deviceTokenKey: DEVICE_TOKEN_KEY,
+            }),
+          }),
+          client: createSaleHistoryClient({
+            baseUrl: resolveApiBaseUrl(),
+            fetch: globalThis.fetch.bind(globalThis),
+          }),
+          local: createSaleHistoryLocalReads(db),
+          salesRepo,
+          printEventsRepo,
+          // OD-534-8 B: a live local void forbids a duplicate and marks the record.
+          isSaleVoided: (saleId) => saleVoidReads.liveForSale(saleId) !== null,
+          printer: printPipeline,
+          now: receiptsClock,
+          newIdempotencyKey: () => `pos-pulse-reprint:${randomUUID()}`,
+          // RT-553: warns (once) and flags when the store zone is not Africa/Cairo.
+          storeZone: createStoreZoneMonitor({ logger: mainLogger }),
+        }),
+        logger: mainLogger,
+      });
 
       // The AD-2 finalize WORKER, by contrast, IS terminal-scoped and only
       // starts for a paired terminal — it needs the pairing row's scope to
@@ -2083,6 +2153,20 @@ singleInstanceReady
         ) {
           mainLogger.warn('sale_sync:tenders_since_unparseable_tenders_off');
         }
+        // RT-540 rollout gate (same rule as the tenders gate above): unset = never send the
+        // `receipt` snapshot (default). Ops MUST choose a FUTURE instant, later than BOTH the
+        // Backend-Core RT-539 deploy and the restart that loads it here, so no sale at/after
+        // the cutoff can already have been sent without it (a changed body under the same
+        // Idempotency-Key is a 409). Unparseable = off + warning.
+        const receiptSinceRaw = process.env['POS_PULSE_FEATURE_SALE_RECEIPT_SINCE'];
+        const receiptSince = parseReceiptSince(receiptSinceRaw);
+        if (
+          receiptSinceRaw !== undefined &&
+          receiptSinceRaw.trim() !== '' &&
+          receiptSince === null
+        ) {
+          mainLogger.warn('sale_sync:receipt_since_unparseable_receipt_off');
+        }
         // RT-221: the drain (and the pending / held counts) is scoped to the
         // CURRENT pairing's terminal_id, read live from the pairing status each
         // tick. After a re-pair, the earlier pairing's queued sales are held —
@@ -2115,6 +2199,7 @@ singleInstanceReady
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
           tendersSince,
+          receiptSince,
           stateRepo: saleSyncStateRepo,
           salesRepo,
           tenantId: pairingStatus.tenant_id,
@@ -2205,6 +2290,55 @@ singleInstanceReady
     // (startup + interval) re-sends `pending` / `unknown` returns with the
     // identical request; it is scheduled with the flag on and resolves pairing +
     // operator live on every tick.
+    // ── RT-530 — manager-approved void of a finalized sale ──
+    //
+    // The `saleVoid:*` handlers are registered UNCONDITIONALLY (the renderer
+    // gets a typed `feature_disabled` refusal, never "no handler"); the service
+    // re-reads `POS_PULSE_FEATURE_SALE_VOID` per call (default off). A request
+    // spends a single-use RT-114 manager approval and journals the void; the
+    // send engine posts it later under the REQUESTER's own operator envelope
+    // only (the same in-process envelope reader sale sync uses), once the sale
+    // has synced. No device bearer is involved.
+    const saleVoidDomain = composeSaleVoid({
+      db,
+      http: {
+        baseUrl: resolveApiBaseUrl(),
+        fetch: globalThis.fetch.bind(globalThis),
+      },
+      getOperatorEnvelope: createSaleSyncTokenReader(
+        operatorSessionManager,
+        operatorEnvelopeHolder,
+      ),
+      getSession: () => operatorSessionManager.getCurrent(),
+      getTerminalId: () => pairingStore.getCurrentTerminalId(),
+      isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
+      isEnabled: () => parseFeatureFlags(process.env).saleVoid,
+      approvals: managerApprovals,
+      auditSink: auditEmitter,
+      logger: mainLogger,
+      now: () => new Date().toISOString(),
+    });
+    saleVoidRef.current = saleVoidDomain;
+    registerSaleVoidHandlers(guardedIpcMain, {
+      service: saleVoidDomain.service,
+      logger: mainLogger,
+    });
+    if (parseFeatureFlags(process.env).saleVoid) {
+      // Each pass resolves its sender live (the signed-in operator and their
+      // envelope), so a requester who signs in later is picked up without a restart.
+      const SALE_VOID_SEND_INTERVAL_MS = 5_000;
+      const stopSaleVoidSync = scheduleSaleVoidSync({
+        sync: saleVoidDomain.sync,
+        stopDomain: saleVoidDomain.stop,
+        intervalMs: SALE_VOID_SEND_INTERVAL_MS,
+        drainTimeoutMs: SALE_VOID_DRAIN_TIMEOUT_MS,
+        logger: mainLogger,
+      });
+      workerRegistry.register('sale-void interval', () => {
+        void stopSaleVoidSync();
+      });
+    }
+
     const returnsDomain = composeReturns({
       db,
       http: {

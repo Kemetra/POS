@@ -74,6 +74,13 @@ export interface ReturnsServiceDeps {
   readonly authorizer: ReturnsAuthorizer;
   readonly sales: Pick<SalesRepository, 'findByNumber'>;
   readonly saleRefs: Pick<SaleSyncStateRepo, 'findServerSaleRefBySaleId'>;
+  /**
+   * RT-530: a sale with a live void (requested, sent or confirmed) is not
+   * returnable here, whatever Backend-Core has recorded so far: a return would
+   * make the void a 409. Absent: no void guard (the server's own `voided` still
+   * refuses a confirmed one).
+   */
+  readonly voids?: { readonly blocksReturn: (saleId: string) => boolean };
   readonly client: Pick<ReturnsClient, 'readSale'>;
   readonly repo: ReturnsRepository;
   readonly dispatcher: ReturnsDispatcher;
@@ -199,6 +206,8 @@ class ReturnsService implements ReturnsCoreAPI {
       terminal_id: terminalId,
     });
     if (row === null) return 'sale_not_found';
+    // RT-530: a live void takes the sale out of the return flow before any network call.
+    if (this.deps.voids?.blocksReturn(row.sale_id) === true) return 'sale_voided';
     // D-c: a contradicting local tender refuses before any network call.
     if (localTenderEvidence(row) === 'non_cash') return 'card_tender_blocked';
     return row;
@@ -307,9 +316,12 @@ class ReturnsService implements ReturnsCoreAPI {
     if (lost !== null) return { ...lost, ret: null };
     if (priced.kind !== 'ok') return { ...priced, ret: null };
     const saleId = priced.sale.row.sale_id;
-    if (this.deps.repo.hasUnresolvedForSale(saleId)) {
+    // Re-checked synchronously right before the journal insert: a void or a
+    // return journaled while the sale was being read wins, with nothing written.
+    const conflict = this.journalConflict(saleId);
+    if (conflict !== null) {
       const ids: Ids = { saleId, saleRef: priced.sale.saleRef };
-      return { ...this.refuse(actor, 'submit', 'unresolved_return_exists', ids), ret: null };
+      return { ...this.refuse(actor, 'submit', conflict, ids), ret: null };
     }
     const entry = this.journal(actor, priced.sale, priced.quote, req.lines);
     // Choke point (b) runs inside the dispatcher, immediately before the POST.
@@ -330,6 +342,13 @@ class ReturnsService implements ReturnsCoreAPI {
     const lost = latchedRecheck(this.deps, actor);
     if (lost === null) return toSubmitResponse(outcome);
     return { kind: 'refused', reason: lost, ret: null } as const;
+  }
+
+  /** Why the sale cannot take a new return right now (RT-530 void, AC8 unresolved return). */
+  private journalConflict(saleId: string): ReturnsRefusalReason | null {
+    if (this.deps.voids?.blocksReturn(saleId) === true) return 'sale_voided';
+    if (this.deps.repo.hasUnresolvedForSale(saleId)) return 'unresolved_return_exists';
+    return null;
   }
 
   /**

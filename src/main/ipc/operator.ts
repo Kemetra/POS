@@ -143,6 +143,13 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'cart.held_cancelled_by_manager',
   'payment.recovery_completed',
   'payment.recovery_cancelled',
+  // RT-546 — emitted only by the sales/receipts role gate (sale-access-policy).
+  'sale.access.refused',
+  // RT-551 — the sale-number day-rule switch, written only by the finalize
+  // transaction. A forged row would also suppress the genuine one.
+  'sale.number_day_rule.switched',
+  // RT-542 — emitted only by the store-history reprint (sale-history-reprint).
+  'sale.history.reprinted',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {

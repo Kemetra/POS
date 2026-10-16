@@ -71,37 +71,15 @@ describe('<ExternalCardTerminalEntry> — reference field accepts valid input', 
 });
 
 describe('<ExternalCardTerminalEntry> — reference field rejects invalid input', () => {
-  it('rejects 7+ characters (length cap is 6)', () => {
+  it.each([
+    { title: 'rejects 7+ characters (length cap is 6)', typed: 'ABCDEFG' },
+    { title: 'rejects lowercase input', typed: 'abc' },
+    { title: 'rejects special characters', typed: 'AB-CD' },
+    { title: 'rejects whitespace', typed: 'AB CD' },
+    { title: 'rejects a PAN-shaped value (16 digits)', typed: '4111111111111111' },
+  ])('$title', ({ typed }) => {
     const { refInput, confirm } = setup();
-    fireEvent.change(refInput, { target: { value: 'ABCDEFG' } });
-    expect(screen.getByTestId('external-card-reference-error')).toBeInTheDocument();
-    expect(confirm).toBeDisabled();
-  });
-
-  it('rejects lowercase input', () => {
-    const { refInput, confirm } = setup();
-    fireEvent.change(refInput, { target: { value: 'abc' } });
-    expect(screen.getByTestId('external-card-reference-error')).toBeInTheDocument();
-    expect(confirm).toBeDisabled();
-  });
-
-  it('rejects special characters', () => {
-    const { refInput, confirm } = setup();
-    fireEvent.change(refInput, { target: { value: 'AB-CD' } });
-    expect(screen.getByTestId('external-card-reference-error')).toBeInTheDocument();
-    expect(confirm).toBeDisabled();
-  });
-
-  it('rejects whitespace', () => {
-    const { refInput, confirm } = setup();
-    fireEvent.change(refInput, { target: { value: 'AB CD' } });
-    expect(screen.getByTestId('external-card-reference-error')).toBeInTheDocument();
-    expect(confirm).toBeDisabled();
-  });
-
-  it('rejects a PAN-shaped value (16 digits)', () => {
-    const { refInput, confirm } = setup();
-    fireEvent.change(refInput, { target: { value: '4111111111111111' } });
+    fireEvent.change(refInput, { target: { value: typed } });
     expect(screen.getByTestId('external-card-reference-error')).toBeInTheDocument();
     expect(confirm).toBeDisabled();
   });
@@ -117,7 +95,7 @@ describe('<ExternalCardTerminalEntry> — reference field rejects invalid input'
   it('clears the error once the reference becomes valid again', () => {
     const { refInput } = setup();
     fireEvent.change(refInput, { target: { value: 'abc' } });
-    expect(screen.queryByTestId('external-card-reference-error')).not.toBeNull();
+    expect(screen.getByTestId('external-card-reference-error')).toBeInTheDocument();
     fireEvent.change(refInput, { target: { value: 'ABC' } });
     expect(screen.queryByTestId('external-card-reference-error')).toBeNull();
   });

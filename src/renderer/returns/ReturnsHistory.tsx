@@ -177,9 +177,9 @@ function ReprintNotice({ reprint }: Readonly<{ reprint: HistoryReprint }>): JSX.
   if (reprint.result === null) return null;
   const printed = reprint.result.kind === 'printed';
   return (
-    <p className={printed ? 'rt-returns__meta' : 'rt-returns__notice'} role="status">
+    <output className={printed ? 'rt-returns__meta' : 'rt-returns__notice'}>
       {reprintMessage(reprint.result)}
-    </p>
+    </output>
   );
 }
 

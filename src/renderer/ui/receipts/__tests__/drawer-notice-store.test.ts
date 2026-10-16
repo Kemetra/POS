@@ -130,3 +130,23 @@ describe('sign-out resets the notice (no persistence across sessions)', () => {
     expect(store().active?.sale_id).toBe('s1');
   });
 });
+
+describe('RT-531: a sale on a terminal with no drawer', () => {
+  // Main records it as a suppressed drawer event and projects no failure, so
+  // the store only ever sees clean reads: nothing is shown, nothing to clear.
+  it('clean reads (no projected failure) keep the store empty across many sales', () => {
+    store().observe(null);
+    for (let i = 0; i < 5; i += 1) {
+      store().observe(null);
+      expect(store().active).toBeNull();
+    }
+    expect(store().acknowledged).toEqual([]);
+  });
+
+  it('a configured drawer failing later is still shown (the failure path is unchanged)', () => {
+    store().observe(null);
+    store().observe(null);
+    store().observe(failure('s-configured'));
+    expect(store().active?.sale_id).toBe('s-configured');
+  });
+});

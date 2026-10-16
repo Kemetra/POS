@@ -60,13 +60,6 @@ export type BuildFinalizeInputResult =
 export interface BuildFinalizeInputDeps {
   db: DatabaseHandle;
   handoff_action_id: string;
-  /**
-   * Maps an ISO-8601 settled_at instant to the terminal's local calendar day
-   * (`YYYY-MM-DD`) for the AD-7 sale-number anchor. Injected for testability;
-   * defaults to the UTC date portion. A future PR can resolve the terminal's
-   * IANA timezone from config and shift accordingly (research §R-7).
-   */
-  localCalendarDayFor?: (settled_at: string) => string;
 }
 
 // ── Read-shape projections ───────────────────────────────────────────────────
@@ -120,19 +113,12 @@ function finalizableEnvelopeJson(row: CartEnvelopeRow | undefined): string | nul
   return row?.state === 'frozen_handed_off' ? row.handoff_envelope_json : null;
 }
 
-function defaultLocalCalendarDay(settled_at: string): string {
-  // ISO-8601 instants are `YYYY-MM-DDT…`; the date portion is the first 10
-  // chars in UTC. Terminal-timezone shifting is deferred (see deps doc).
-  return settled_at.slice(0, 10);
-}
-
 function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object';
 }
 
 export function buildFinalizeInput(deps: BuildFinalizeInputDeps): BuildFinalizeInputResult {
   const { db, handoff_action_id } = deps;
-  const localCalendarDayFor = deps.localCalendarDayFor ?? defaultLocalCalendarDay;
 
   // 1 — the payment.settled audit row (json_extract on the payload). Mirrors
   // the finalize-listener scan column reference.
@@ -275,7 +261,6 @@ export function buildFinalizeInput(deps: BuildFinalizeInputDeps): BuildFinalizeI
     tenant_tax_registration_id: assignment.tenant_tax_registration_id,
     branch_name: assignment.branch_name,
     branch_address: assignment.branch_address,
-    local_calendar_day: localCalendarDayFor(settled_at),
     lines,
   };
 

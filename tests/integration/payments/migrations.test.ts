@@ -290,23 +290,14 @@ function insertOutbox(
 
 describe('T066 — 006 Slice 3a migrations', () => {
   describe('schema presence', () => {
-    it('creates payment_attempts table', () => {
-      const db = freshDb();
-      expect(tableExists(db, 'payment_attempts')).toBe(true);
-      db.close();
-    });
-
-    it('creates payment_tender_lines table', () => {
-      const db = freshDb();
-      expect(tableExists(db, 'payment_tender_lines')).toBe(true);
-      db.close();
-    });
-
-    it('creates payment_action_outbox table', () => {
-      const db = freshDb();
-      expect(tableExists(db, 'payment_action_outbox')).toBe(true);
-      db.close();
-    });
+    it.each(['payment_attempts', 'payment_tender_lines', 'payment_action_outbox'])(
+      'creates %s table',
+      (table) => {
+        const db = freshDb();
+        expect(tableExists(db, table)).toBe(true);
+        db.close();
+      },
+    );
 
     it('payment_attempts has the expected columns', () => {
       const db = freshDb();

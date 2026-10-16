@@ -9,6 +9,8 @@ import { returns } from './returns.js';
 import { shiftCashup } from './shift-cashup.js';
 import { approval } from './manager-approval.js';
 import { recovery } from './recovery.js';
+import { saleVoid } from './sale-void.js';
+import { saleHistory } from './sale-history.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -208,6 +210,13 @@ const api: PreloadBridgeAPI = {
   approval,
   // RT-441 (RT-116 §5) — recovery.* (manager / admin; each action approved).
   recovery,
+  // RT-530 — saleVoid.* (lookup / request / list / acknowledge). Gated in main on
+  // the feature flag and the session; the request spends a manager approval.
+  saleVoid,
+  // RT-542 — saleHistory.* (list / read / reprint): the store-wide history via
+  // Backend-Core. Main runs the RT-546 gate and OD-534-1/2; no scope or credential
+  // crosses the bridge.
+  saleHistory,
 };
 
 contextBridge.exposeInMainWorld('api', api);

@@ -7,6 +7,7 @@ import { PrinterFailureBanner } from '../../ui/receipts/PrinterFailureBanner';
 import { useBannerState } from '../../ui/receipts/useBannerState';
 import { DrawerNoticeBanner, useDrawerNoticeFeed } from '../../ui/receipts/DrawerNotice';
 import { ShiftNotice } from '../shift/ShiftNotice';
+import { SaleVoidNotice } from '../void/SaleVoidNotice';
 
 type RecoveryAction = 'reprint' | 'manualOverride';
 
@@ -77,6 +78,7 @@ export function V5OperationalNotices(): JSX.Element {
       <PrinterFailureBanner printFailure={printFailure} onReprint={reprint} />
       <DrawerNoticeBanner now={new Date().toISOString()} onManualOverride={manualOverride} />
       <ShiftNotice />
+      <SaleVoidNotice />
     </>
   );
 }

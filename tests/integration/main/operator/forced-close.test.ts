@@ -361,7 +361,7 @@ describe('T085 — forced-close handler audit event shape', () => {
       event_id: eventId,
     });
     expect(result1.kind).toBe('forced_closed');
-    expect(captured.length).toBe(1);
+    expect(captured).toHaveLength(1);
 
     // Retry with the SAME event_id → idempotent success, no duplicate audit
     const result2 = await handler.forceCloseShift({
@@ -373,7 +373,7 @@ describe('T085 — forced-close handler audit event shape', () => {
     if (result2.kind === 'forced_closed') {
       expect(result2.audit_event_id).toBe(eventId);
     }
-    expect(captured.length).toBe(1);
+    expect(captured).toHaveLength(1);
     db.close();
   });
 
@@ -390,7 +390,7 @@ describe('T085 — forced-close handler audit event shape', () => {
       event_id: randomUUID(),
     });
     expect(result1.kind).toBe('forced_closed');
-    expect(captured.length).toBe(1);
+    expect(captured).toHaveLength(1);
 
     // Second call with a DIFFERENT event_id — shift already closed_forced → state_invalid
     const result2 = await handler.forceCloseShift({
@@ -402,7 +402,7 @@ describe('T085 — forced-close handler audit event shape', () => {
     if (isOperatorRefusal(result2)) {
       expect(result2.category).toBe('state_invalid');
     }
-    expect(captured.length).toBe(1);
+    expect(captured).toHaveLength(1);
     db.close();
   });
 

@@ -12,16 +12,23 @@ export type ReturnState = (typeof RETURN_STATES)[number];
 
 /**
  * RT-15 S4 — how a confirmed return's cash left the till: `drawer` (the
- * drawer kick reported opened) or `manual` (the operator opened the drawer by
- * hand and attested the payout).
+ * drawer kick reported opened), `manual` (the operator opened the drawer by
+ * hand and attested the payout) or, RT-531, `no_drawer` (this terminal has no
+ * cash drawer: the kick answered `no_drawer_configured`, so the payout completes
+ * without an attestation, and the explicit value is what is recorded).
  */
-export const RETURN_PAYOUT_METHODS = ['drawer', 'manual'] as const;
+export const RETURN_PAYOUT_METHODS = ['drawer', 'manual', 'no_drawer'] as const;
 export type ReturnPayoutMethod = (typeof RETURN_PAYOUT_METHODS)[number];
 
 /**
  * RT-15 S4 — why the drawer did not open for a payout: the sale drawer's own
  * failure reasons (no drawer configured, the printer's drawer port failed, an
  * OS fault), plus `timeout` when the drawer did not answer in time.
+ *
+ * RT-531: `no_drawer_configured` is the transport's answer inside the main
+ * process, not a failure the renderer is told about: main completes the payout
+ * as `no_drawer`. It stays in the closed set because the kick wrapper validates
+ * the transport's answer against it.
  */
 export const RETURN_DRAWER_FAILURES = [
   'no_drawer_configured',
@@ -162,7 +169,9 @@ export interface ReturnPayoutView {
   readonly method: ReturnPayoutMethod | null;
   /**
    * What is known about this payout's drawer kick: `none` (never kicked),
-   * `failed_before_send` (provably never reached the drawer: may be retried),
+   * `failed_before_send` (provably never reached the drawer: may be retried;
+   * RT-531: with no drawer configured main completes the payout as `no_drawer`
+   * right after, so this stays visible only when that completion was lost),
    * `opened`, or `unknown` (may have opened: complete it manually only).
    */
   readonly kick: ReturnPayoutKick;

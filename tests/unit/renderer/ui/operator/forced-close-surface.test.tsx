@@ -30,19 +30,13 @@ afterEach(() => {
 });
 
 describe('ForcedCloseSurface — rendering', () => {
-  it('renders cashier display name', () => {
+  it.each([
+    { title: 'renders cashier display name', text: 'Nour Al-Hassan' },
+    { title: 'renders terminal label', text: 'Terminal 3 — Pharmacy' },
+    { title: 'renders opened_at timestamp', text: '2026-05-12T08:30:00.000Z' },
+  ])('$title', ({ text }) => {
     render(<ForcedCloseSurface {...SAMPLE_SHIFT} />);
-    expect(screen.getByText('Nour Al-Hassan')).toBeInTheDocument();
-  });
-
-  it('renders terminal label', () => {
-    render(<ForcedCloseSurface {...SAMPLE_SHIFT} />);
-    expect(screen.getByText('Terminal 3 — Pharmacy')).toBeInTheDocument();
-  });
-
-  it('renders opened_at timestamp', () => {
-    render(<ForcedCloseSurface {...SAMPLE_SHIFT} />);
-    expect(screen.getByText('2026-05-12T08:30:00.000Z')).toBeInTheDocument();
+    expect(screen.getByText(text)).toBeInTheDocument();
   });
 
   it('renders duration_minutes', () => {

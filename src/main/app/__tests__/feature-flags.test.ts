@@ -57,6 +57,7 @@ describe('parseFeatureFlags', () => {
       voucherTender: 'POS_PULSE_FEATURE_VOUCHER_TENDER',
       returns: 'POS_PULSE_FEATURE_RETURNS',
       shiftCashup: 'POS_PULSE_FEATURE_SHIFT_CASHUP',
+      saleVoid: 'POS_PULSE_FEATURE_SALE_VOID',
     });
   });
 
@@ -69,10 +70,11 @@ describe('parseFeatureFlags', () => {
       voucherTender: false,
       returns: false,
       shiftCashup: false,
+      saleVoid: false,
     });
   });
 
-  it('always returns all seven keys as booleans', () => {
+  it('always returns all eight keys as booleans', () => {
     const flags = parseFeatureFlags({ POS_PULSE_FEATURE_CART: 'nonsense' });
     expect(Object.keys(flags).sort()).toEqual(
       [
@@ -81,6 +83,7 @@ describe('parseFeatureFlags', () => {
         'productSearch',
         'returns',
         'saleFinalization',
+        'saleVoid',
         'shiftCashup',
         'voucherTender',
       ].sort(),
@@ -116,6 +119,7 @@ describe('parseFeatureFlags', () => {
       voucherTender: false,
       returns: false,
       shiftCashup: false,
+      saleVoid: false,
     });
   });
 
@@ -131,6 +135,12 @@ describe('parseFeatureFlags', () => {
     expect(parseFeatureFlags({ POS_PULSE_FEATURE_SHIFT_CASHUP: 'on' }).shiftCashup).toBe(true);
   });
 
+  it('RT-530: saleVoid is off by default and on only via POS_PULSE_FEATURE_SALE_VOID', () => {
+    expect(parseFeatureFlags({}).saleVoid).toBe(false);
+    expect(parseFeatureFlags({ POS_PULSE_FEATURE_SALE_VOID: 'off' }).saleVoid).toBe(false);
+    expect(parseFeatureFlags({ POS_PULSE_FEATURE_SALE_VOID: 'on' }).saleVoid).toBe(true);
+  });
+
   it('ignores unrelated env vars', () => {
     expect(
       parseFeatureFlags({ POS_PULSE_FEATURE_SALE_TENDERS_SINCE: '1', CART: '1', PAYMENTS: '1' }),
@@ -138,7 +148,7 @@ describe('parseFeatureFlags', () => {
   });
 });
 
-/** Every one of the 128 combinations of the seven boolean flags. */
+/** Every one of the 256 combinations of the eight boolean flags. */
 function allFlagCombinations(): FeatureFlags[] {
   const keys = Object.keys(FEATURE_FLAG_ENV) as (keyof FeatureFlags)[];
   const out: FeatureFlags[] = [];
@@ -161,6 +171,7 @@ const PILOT_PROFILE: FeatureFlags = {
   voucherTender: false,
   returns: false,
   shiftCashup: false,
+  saleVoid: false,
 };
 
 describe('assessCashierProfile (D-1: fail closed on the money combination)', () => {
@@ -185,11 +196,11 @@ describe('assessCashierProfile (D-1: fail closed on the money combination)', () 
     expect(assessCashierProfile(flags)).toEqual(expected);
   });
 
-  it('rejects exactly the 32 of 128 combinations with payments on and finalization off', () => {
+  it('rejects exactly the 64 of 256 combinations with payments on and finalization off', () => {
     const combos = allFlagCombinations();
-    expect(combos).toHaveLength(128);
+    expect(combos).toHaveLength(256);
     const rejected = combos.filter((flags) => !assessCashierProfile(flags).ok);
-    expect(rejected).toHaveLength(32);
+    expect(rejected).toHaveLength(64);
     for (const flags of combos) {
       const expectedOk = !(flags.payments && !flags.saleFinalization);
       expect(assessCashierProfile(flags).ok).toBe(expectedOk);

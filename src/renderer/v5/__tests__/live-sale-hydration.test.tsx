@@ -358,7 +358,8 @@ describe('V5 active cart read failure', () => {
     );
     const view = renderSale(b);
     // The scan status is a status region too, so find the loading message by its text.
-    expect(screen.getByText('جارٍ تحميل السلة الحالية…')).toHaveAttribute('role', 'status');
+    // <output> carries the implicit status role (RT-515).
+    expect(screen.getByText('جارٍ تحميل السلة الحالية…').tagName).toBe('OUTPUT');
     view.unmount();
     await act(async () => {
       resolve({ kind: 'ok', snapshot: snapshot() });

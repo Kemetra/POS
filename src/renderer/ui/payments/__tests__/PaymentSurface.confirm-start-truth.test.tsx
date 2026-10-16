@@ -293,7 +293,7 @@ describe('RT-340 — a refused or lost confirm follows main', () => {
       expect(refusalText()).toContain(copy);
       expect(refusalText()).not.toContain(TRY_AGAIN);
       expect(screen.queryByTestId('payment-surface-reread')).not.toBeInTheDocument();
-      expect(h.read.mock.calls.length).toBe(readsBefore);
+      expect(h.read.mock.calls).toHaveLength(readsBefore);
     },
   );
 
