@@ -148,6 +148,8 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   // RT-551 — the sale-number day-rule switch, written only by the finalize
   // transaction. A forged row would also suppress the genuine one.
   'sale.number_day_rule.switched',
+  // RT-542 — emitted only by the store-history reprint (sale-history-reprint).
+  'sale.history.reprinted',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {

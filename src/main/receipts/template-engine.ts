@@ -314,6 +314,15 @@ export function renderBands(bands: Band[]): ReceiptRenderOutput {
   return { escpos: toEscPos(bands), html: toHtml(bands) };
 }
 
+/**
+ * RT-542 — the receipt's bands, for a slip that adds bands after the receipt
+ * (a returned sale's duplicate lists its returns) and serialises with
+ * {@link renderBands}. Same composition as {@link renderReceipt}.
+ */
+export function composeReceiptBands(payload: ReceiptPayload): Band[] {
+  return compose(payload);
+}
+
 export function renderReceipt(payload: ReceiptPayload): ReceiptRenderOutput {
   return renderBands(compose(payload));
 }

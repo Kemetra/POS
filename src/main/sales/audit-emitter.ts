@@ -66,7 +66,9 @@ export type SaleAuditCategory =
   // RT-546 — a sales/receipts bridge call refused by the role gate.
   | 'sale.access.refused'
   // RT-551 — the terminal's first sale numbered by the store business day.
-  | 'sale.number_day_rule.switched';
+  | 'sale.number_day_rule.switched'
+  // RT-542 — a store-history reprint printed from Backend-Core's record.
+  | 'sale.history.reprinted';
 
 export type SaleRawAuditCategory = Exclude<
   SaleAuditCategory,

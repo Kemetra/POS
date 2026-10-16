@@ -79,7 +79,11 @@ function seedFailedPrint(db: SqlJsDatabase, id: string): void {
   );
 }
 
-function makeBridge(db: SqlJsDatabase, events: SaleAuditEvent[]) {
+function makeBridge(
+  db: SqlJsDatabase,
+  events: SaleAuditEvent[],
+  isSaleVoided?: (saleId: string) => boolean,
+) {
   const handle = makeSqlJsHandle(db);
   const pipeline = createPrintPipeline({
     escposAdapter: {
@@ -105,6 +109,7 @@ function makeBridge(db: SqlJsDatabase, events: SaleAuditEvent[]) {
     salesRepo: bindSalesRepository(handle),
     printEventsRepo: bindPrintEventsRepository(handle),
     printDispatcher,
+    ...(isSaleVoided === undefined ? {} : { isSaleVoided }),
   });
 }
 
@@ -139,5 +144,38 @@ describe('T401 — receipts.reprint precondition: not_yet_printed', () => {
 
     expect(res.kind).toBe('refused');
     if (res.kind === 'refused') expect(res.reason).toBe('not_yet_printed');
+  });
+});
+
+describe('RT-542 — receipts.reprint refuses a voided sale (OD-534-8 B)', () => {
+  let db: SqlJsDatabase;
+  beforeEach(() => {
+    db = new SQL.Database();
+    db.exec('PRAGMA foreign_keys = ON;');
+    for (const sql of MIGRATIONS) db.exec(sql);
+    seedSale(db);
+    db.run(
+      `INSERT INTO print_events (
+         print_event_id, sale_id, outcome, purpose, render_path,
+         acting_operator_id, acting_operator_session_id, duplicate_copy_sequence_number,
+         failure_reason, previous_failed_print_event_ids, printed_at
+       ) VALUES ('pe-first', 'sale-1', 'success', 'first_print', 'escpos_direct',
+         'op-abc', 'sess-1', NULL, NULL, NULL, '2026-05-27T10:00:07.000Z')`,
+    );
+  });
+
+  it('prints no unmarked duplicate of a voided sale and audits nothing', async () => {
+    const events: SaleAuditEvent[] = [];
+    const bridge = makeBridge(db, events, (id) => id === 'sale-1');
+    const res = await bridge.reprint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'idem-v' });
+    expect(res).toEqual({ kind: 'refused', reason: 'sale_voided' });
+    expect(bindPrintEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1')).toHaveLength(1);
+    expect(events.find((e) => e.action_category === 'sale.receipt.reprinted')).toBeUndefined();
+  });
+
+  it('still reprints a sale that is not voided', async () => {
+    const bridge = makeBridge(db, [], () => false);
+    const res = await bridge.reprint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'idem-n' });
+    expect(res.kind).toBe('ok');
   });
 });
