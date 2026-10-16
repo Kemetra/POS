@@ -442,6 +442,7 @@ export function bindFinalizeTransaction(
           receipt_number: existing.receipt_number,
         };
       }
+      dayRuleSwitch.noteCommitted(input.tenant_id, input.terminal_id);
       return {
         kind: 'finalized',
         sale_id: result.sale_id,

@@ -456,7 +456,7 @@ describe('RT-551 — sale.number_day_rule.switched is written once per terminal'
     expect(switchEvents()).toHaveLength(1);
   });
 
-  it('on one binding, queries the marker until it is committed, then remembers it', () => {
+  it('on one binding, scans for the marker once, then remembers the committed switch', () => {
     let markerQueries = 0;
     const counting: DatabaseHandle = {
       ...handle,
@@ -483,8 +483,9 @@ describe('RT-551 — sale.number_day_rule.switched is written once per terminal'
       expectFinalized(txn.finalize(inputFor(seedSettled(at))));
     }
     expect(switchEvents()).toHaveLength(1);
-    // Sale 1 finds no marker and writes it; sale 2 finds it committed; sale 3 uses the memo.
-    expect(markerQueries).toBe(2);
+    // Sale 1 finds no marker and writes it; once that commits, sales 2 and 3
+    // use the memo: the audit_events scan runs once per terminal per process.
+    expect(markerQueries).toBe(1);
   });
 
   it('does not count a row from another actor or a session as the switch', () => {

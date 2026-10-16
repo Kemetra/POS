@@ -53,6 +53,12 @@ export interface SaleNumberDayRuleSwitch {
    * `sale.number_day_rule.switched` when this terminal has none yet.
    */
   recordIfFirst(sale: DayRuleSwitchSale): void;
+  /**
+   * After the finalize transaction committed a sale for this terminal: its
+   * switch row is committed too (found or written), so later finalizes of this
+   * process skip the `audit_events` lookup.
+   */
+  noteCommitted(tenant_id: string, terminal_id: string): void;
 }
 
 export interface SaleNumberDayRuleSwitchDeps {
@@ -64,17 +70,22 @@ export function bindSaleNumberDayRuleSwitch(
   deps: SaleNumberDayRuleSwitchDeps,
 ): SaleNumberDayRuleSwitch {
   const { db, auditEmitter } = deps;
-  // Terminals whose switch row is known to be committed. Only a row the query
-  // finds is remembered, never one this call writes: that one can still roll
-  // back with its sale, and the next finalize would then have to write it.
-  // This relies on the finalize transaction being top-level (no outer
-  // transaction or savepoint), so a row the query finds is already committed.
+  // Terminals whose switch row is known to be committed. A row written inside
+  // the transaction is remembered only after the commit (`noteCommitted`): it
+  // can still roll back with its sale, and the next finalize must rewrite it.
+  // A row the query finds is already committed, because the finalize
+  // transaction is top-level (no outer transaction or savepoint).
   const committed = new Set<string>();
-  // Prepared on first use; with the memo it runs about once per terminal per process.
+  // `audit_events` has no index on the category (0004) and RT-551 adds no
+  // migration, so the lookup scans the table (about 5 ms per 50k rows under
+  // sql.js). With the memo it runs once per terminal per process, on its
+  // first sale.
   let findStmt: PrepareGet<{ found: number }> | null = null;
+  const keyOf = (tenant_id: string, terminal_id: string): string =>
+    `${tenant_id}\u0000${terminal_id}`;
 
   function hasSwitched(tenant_id: string, terminal_id: string): boolean {
-    const key = `${tenant_id}\u0000${terminal_id}`;
+    const key = keyOf(tenant_id, terminal_id);
     if (committed.has(key)) return true;
     findStmt ??= db.prepare(
       `SELECT 1 AS found FROM audit_events
@@ -100,6 +111,9 @@ export function bindSaleNumberDayRuleSwitch(
         ...sale,
         time_zone: STORE_TIME_ZONE,
       });
+    },
+    noteCommitted(tenant_id: string, terminal_id: string): void {
+      committed.add(keyOf(tenant_id, terminal_id));
     },
   };
 }
