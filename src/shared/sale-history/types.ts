@@ -24,6 +24,8 @@ export const SALE_HISTORY_IPC_CHANNELS = {
   LIST: 'saleHistory:list',
   READ: 'saleHistory:read',
   REPRINT: 'saleHistory:reprint',
+  /** RT-553 — the store-zone vs. fixed-zone status, decided in main. */
+  ZONE_STATUS: 'saleHistory:zoneStatus',
 } as const;
 
 export type SaleHistoryIpcChannel =
@@ -131,7 +133,7 @@ export interface SaleHistoryServerPage {
   rows: SaleHistoryRow[];
   next_cursor: string | null;
   as_of: string;
-  /** IANA zone of the store's business days (RT-553 will compare it). */
+  /** IANA zone of the store's business days (RT-553 compares it in main). */
   store_timezone: string;
   visibility: 'store' | 'own_sales';
   from_day: string;
@@ -247,6 +249,30 @@ export type SaleHistoryReprintResponse =
     }
   | SaleHistoryRefused;
 
+/** RT-553: `zoneStatus` takes no fields; the renderer names nothing. */
+export type SaleHistoryZoneStatusRequest = Record<string, never>;
+
+/**
+ * RT-553 (RT-545 S4) — whether Backend-Core's store zone equals the zone this
+ * build fixes for every business day. Main decides; the renderer only shows it.
+ *   • `unknown`  — no server page has been read yet (e.g. offline), or none has
+ *     carried a zone: nothing is claimed.
+ *   • `match`    — the last page named the fixed zone.
+ *   • `mismatch` — the last page named another (or an unreadable) zone. The zone
+ *     in use does NOT change and selling is never blocked.
+ * `reported` is the server's zone only when it is a valid IANA name, else null.
+ * In memory only: it never survives a restart.
+ */
+export interface SaleHistoryZoneStatus {
+  kind: 'ok';
+  status: 'unknown' | 'match' | 'mismatch';
+  /** The zone this terminal uses (a build constant). */
+  expected: string;
+  reported: string | null;
+}
+
+export type SaleHistoryZoneStatusResponse = SaleHistoryZoneStatus | SaleHistoryRefused;
+
 /**
  * Every handler runs the main-process gate first (session, lock, the RT-546
  * role allowlist); scope and credential never come from the renderer.
@@ -255,4 +281,5 @@ export interface SaleHistoryBridgeAPI {
   list(req: SaleHistoryListRequest): Promise<SaleHistoryListResponse>;
   read(req: SaleHistoryReadRequest): Promise<SaleHistoryReadResponse>;
   reprint(req: SaleHistoryReprintRequest): Promise<SaleHistoryReprintResponse>;
+  zoneStatus(req: SaleHistoryZoneStatusRequest): Promise<SaleHistoryZoneStatusResponse>;
 }

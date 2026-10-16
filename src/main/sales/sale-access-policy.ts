@@ -55,7 +55,9 @@ export type SaleAccessAction =
   // RT-542 — the store-wide history through Backend-Core.
   | 'saleHistory.list'
   | 'saleHistory.read'
-  | 'saleHistory.reprint';
+  | 'saleHistory.reprint'
+  // RT-553 — the store-zone vs. fixed-zone status (read-only, no sale data).
+  | 'saleHistory.zoneStatus';
 
 /** Why access was refused, as recorded in the `sale.access.refused` audit event. */
 export type SaleAccessAuditReason = 'role_denied' | 'not_owner';

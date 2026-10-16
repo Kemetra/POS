@@ -31,6 +31,13 @@ export const HISTORY_COPY = Object.freeze({
   unsyncedHeading: 'مبيعات على هذا الجهاز لم تصل إلى الخادم بعد',
   unsyncedTruncated: 'وتوجد مبيعات أخرى لم تُرسل بعد.',
   empty: 'لا توجد مبيعات في هذه الفترة.',
+  // RT-553 — the store zone differs from this terminal's fixed zone; selling goes on.
+  zoneMismatchTitle: 'منطقة التوقيت للمتجر تختلف عن منطقة هذا الجهاز.',
+  zoneStore: 'منطقة المتجر في الخادم:',
+  zoneTerminal: 'منطقة هذا الجهاز:',
+  zoneUnreadable: 'غير مقروءة',
+  zoneMismatchBody:
+    'قد تختلف أيام البيع وأرقام الإيصالات على هذا الجهاز عن أيام الخادم. يمكنك متابعة البيع كالمعتاد، وأبلغ الدعم الفني لتصحيح الإعداد.',
   columns: {
     number: 'رقم البيع',
     time: 'الوقت',

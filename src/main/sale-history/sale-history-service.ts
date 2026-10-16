@@ -56,12 +56,15 @@ import { createDetailReader } from './sale-history-detail.js';
 import type { SaleHistoryLocalReads } from './sale-history-local.js';
 import { createSaleHistoryReprint } from './sale-history-reprint.js';
 import type { WireHistoryPage } from './sale-history-wire.js';
+import type { StoreZoneMonitor } from './store-zone-monitor.js';
 
 /** Unsent sales shown on page one; one more is read to know if there are others. */
 export const UNSYNCED_SHOWN_MAX = 100;
 
 const LIST_KEYS: ReadonlySet<string> = new Set(['from_day', 'to_day', 'page_size', 'cursor']);
 const READ_KEYS: ReadonlySet<string> = new Set(['sale_ref']);
+/** RT-553: `zoneStatus` takes an empty request. */
+const NO_KEYS: ReadonlySet<string> = new Set();
 
 export interface SaleHistoryServiceDeps {
   getCurrentSession: () => OperatorSessionForSales | null;
@@ -81,6 +84,8 @@ export interface SaleHistoryServiceDeps {
   printer: Pick<PrintPipeline, 'printRendered'>;
   now?: () => string;
   newIdempotencyKey: () => string;
+  /** RT-553: fed the store zone of every validated server page; only reports. */
+  storeZone: StoreZoneMonitor;
 }
 
 export type SaleHistoryService = SaleHistoryBridgeAPI;
@@ -269,6 +274,8 @@ export function createSaleHistoryService(deps: SaleHistoryServiceDeps): SaleHist
       auditForeignRow(access, run, resolved, outcome.page);
       return refused('unavailable');
     }
+    // RT-553: report-only; the zone in use and the page are never changed.
+    deps.storeZone.observe(outcome.page.store_timezone);
     return serverPage(deps, run, outcome.page);
   }
 
@@ -290,5 +297,11 @@ export function createSaleHistoryService(deps: SaleHistoryServiceDeps): SaleHist
     },
 
     reprint: (req) => reprint.reprint(req),
+
+    zoneStatus(req) {
+      const gate = access.admit('saleHistory.zoneStatus', req, NO_KEYS);
+      if (!gate.ok) return Promise.resolve(refused(gate.reason));
+      return Promise.resolve({ kind: 'ok', ...deps.storeZone.status() });
+    },
   };
 }

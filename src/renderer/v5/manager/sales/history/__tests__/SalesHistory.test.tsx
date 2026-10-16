@@ -120,6 +120,14 @@ function bridgeWith(
         printed_at: '2026-10-16T08:00:00.000Z',
       }),
     ),
+    zoneStatus: vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok' as const,
+        status: 'unknown' as const,
+        expected: 'Africa/Cairo',
+        reported: null,
+      }),
+    ),
   };
 }
 

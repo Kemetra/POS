@@ -34,12 +34,23 @@ describe('preload saleHistory bridge', () => {
     });
   });
 
+  it('RT-553: zoneStatus invokes its channel with the empty request', async () => {
+    const { saleHistory } = await import('../sale-history');
+    await saleHistory.zoneStatus({});
+    expect(ipcRendererInvoke).toHaveBeenLastCalledWith(SALE_HISTORY_IPC_CHANNELS.ZONE_STATUS, {});
+  });
+
   it('is exposed on window.api.saleHistory', async () => {
     vi.resetModules();
     await import('../index');
     const api = exposeInMainWorld.mock.calls.at(-1)?.[1] as {
       saleHistory?: Record<string, unknown>;
     };
-    expect(Object.keys(api.saleHistory ?? {}).sort()).toEqual(['list', 'read', 'reprint']);
+    expect(Object.keys(api.saleHistory ?? {}).sort()).toEqual([
+      'list',
+      'read',
+      'reprint',
+      'zoneStatus',
+    ]);
   });
 });
