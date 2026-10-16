@@ -12,7 +12,7 @@
 /** The pilot store's IANA zone. One constant; no env or settings lookup. */
 export const STORE_TIME_ZONE = 'Africa/Cairo';
 
-export type BusinessDayErrorCode = 'invalid_instant';
+export type BusinessDayErrorCode = 'invalid_instant' | 'invalid_day';
 
 /** Thrown for an instant that is not a valid, unambiguous point in time. */
 export class BusinessDayError extends Error {
@@ -111,4 +111,105 @@ export function businessDayOf(instant: string | Date): string {
     throw invalid('outside the supported year range (1000-9999)');
   }
   return dayFromParts(date);
+}
+
+// ─── RT-541 — business-day ranges ────────────────────────────────────────────
+
+const BUSINESS_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const DAY_MS = 86_400_000;
+
+function invalidDay(detail: string): BusinessDayError {
+  return new BusinessDayError('invalid_day', `Invalid business day: ${detail}`);
+}
+
+/** True when `value` is a `YYYY-MM-DD` string naming a real calendar date. */
+export function isBusinessDay(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const match = BUSINESS_DAY.exec(value);
+  return match !== null && isRealCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]));
+}
+
+/** Midnight UTC of a calendar date, as epoch ms (zone-free day arithmetic). */
+function calendarMs(day: string): number {
+  if (!isBusinessDay(day)) throw invalidDay('expected YYYY-MM-DD naming a real date');
+  const probe = new Date(0);
+  probe.setUTCFullYear(
+    Number(day.slice(0, 4)),
+    Number(day.slice(5, 7)) - 1,
+    Number(day.slice(8, 10)),
+  );
+  return probe.getTime();
+}
+
+/** A range of business days, `YYYY-MM-DD`, both ends inclusive. */
+export interface BusinessDayRange {
+  readonly from: string;
+  readonly to: string;
+}
+
+/**
+ * The number of business days in a range, both ends inclusive (zero or less
+ * when `to` is before `from`). Calendar arithmetic only: a business day is a
+ * calendar date, whatever its length in hours.
+ */
+export function businessDaySpan(range: BusinessDayRange): number {
+  return Math.round((calendarMs(range.to) - calendarMs(range.from)) / DAY_MS) + 1;
+}
+
+/**
+ * The window around a date's midnight UTC that holds its business-day start
+ * for any real zone offset (UTC-12 to UTC+14), with margin.
+ */
+const START_SEARCH_MARGIN_MS = 15 * 3_600_000;
+
+/**
+ * The first instant (epoch ms) whose business day is `day`. Found by bisection
+ * over {@link businessDayOf}, which is monotonic in the instant, so the day
+ * rule stays in one place and summer-time days of 23 or 25 hours come out
+ * right without any fixed offset.
+ */
+function businessDayStartMs(day: string): number {
+  const midnightUtc = calendarMs(day);
+  let before = midnightUtc - START_SEARCH_MARGIN_MS; // business day < `day`
+  let atOrAfter = midnightUtc + START_SEARCH_MARGIN_MS; // business day >= `day`
+  const reached = (ms: number): boolean => businessDayOf(new Date(ms)) >= day;
+  if (reached(before) || !reached(atOrAfter)) throw invalidDay(`no start found for ${day}`);
+  while (atOrAfter - before > 1) {
+    const mid = before + Math.floor((atOrAfter - before) / 2);
+    if (reached(mid)) atOrAfter = mid;
+    else before = mid;
+  }
+  return atOrAfter;
+}
+
+/** Half-open window of instants covering a range of business days. */
+export interface BusinessDayBounds {
+  /** First instant of `from`, `Date#toISOString` format. */
+  readonly startInclusive: string;
+  /** First instant of the day after `to`, `Date#toISOString` format. */
+  readonly endExclusive: string;
+}
+
+/**
+ * The instants of a range of business days, both ends inclusive, as
+ * `[startInclusive, endExclusive)`. Both bounds use the `Date#toISOString`
+ * format, so they compare lexically with instants stored in that format.
+ *
+ * @throws {BusinessDayError} `invalid_day` for a malformed day, `to` before
+ *   `from`, or a day outside the supported years.
+ */
+export function businessDayBounds(range: BusinessDayRange): BusinessDayBounds {
+  if (businessDaySpan(range) < 1) throw invalidDay('to is before from');
+  const dayAfterTo = new Date(calendarMs(range.to) + DAY_MS).toISOString().slice(0, 10);
+  try {
+    return {
+      startInclusive: new Date(businessDayStartMs(range.from)).toISOString(),
+      endExclusive: new Date(businessDayStartMs(dayAfterTo)).toISOString(),
+    };
+  } catch (error) {
+    if (error instanceof BusinessDayError && error.code === 'invalid_instant') {
+      throw invalidDay('outside the supported year range');
+    }
+    throw error;
+  }
 }

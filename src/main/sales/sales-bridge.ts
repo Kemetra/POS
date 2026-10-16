@@ -33,6 +33,10 @@
  *   • `sales.read` includes projected `latest_print_event` and
  *     `latest_drawer_event` — populated when rows exist (post-S2/S3),
  *     omitted otherwise.
+ *   • RT-541: `sales.read` / `sales.findByNumber` carry the sale's recorded
+ *     `lines` (`sale-lines.ts`); `sales.list` reads this device's sales over a
+ *     range of store business days (`sales-list.ts`) behind the same gate,
+ *     with a cashier limited to their own sales by `ownerFilter`.
  */
 
 import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
@@ -55,12 +59,16 @@ import type {
   SalesSubscribeResponse,
   SalesUnsubscribeRequest,
   SalesUnsubscribeResponse,
+  SalesListRequest,
+  SalesListResponse,
   SaleSummary,
 } from '../../shared/bridge-api.js';
 import type { SaleId, SaleNumber, TenderLineSummary } from '../../shared/sales/types.js';
 import type { BannerStateProjector } from './banner-state-projector.js';
 import type { SaleAuditEmitter } from './audit-emitter.js';
 import { createSaleAccessPolicy } from './sale-access-policy.js';
+import { projectSaleLines } from './sale-lines.js';
+import { planSalesList, runSalesList } from './sales-list.js';
 
 // ─── Session shape (mirrors 006's OperatorSessionForPayments) ──────────────
 //
@@ -90,7 +98,7 @@ export interface SalesBridgeDependencies {
   getCurrentSession: () => OperatorSessionForSales | null;
   salesRepo: Pick<
     SalesRepository,
-    'readById' | 'findByNumber' | 'findByHandoffActionId' | 'insert'
+    'readById' | 'findByNumber' | 'findByHandoffActionId' | 'insert' | 'listByFinalizedRange'
   >;
   printEventsRepo: Pick<
     PrintEventsRepository,
@@ -218,6 +226,7 @@ function projectSaleForRenderer(
     total_change_due_minor: number;
     tender_lines_summary_json: string;
     finalized_at: string;
+    lines_json: string;
   },
   printEvents: PrintEventRow[],
   drawerEvent: DrawerEventRow | null,
@@ -237,6 +246,7 @@ function projectSaleForRenderer(
     total_change_due_minor: saleRow.total_change_due_minor,
     tender_lines_summary: JSON.parse(saleRow.tender_lines_summary_json) as TenderLineSummary[],
     finalized_at: saleRow.finalized_at,
+    lines: projectSaleLines(saleRow.lines_json),
   };
   const latestPrint = projectLatestPrintEvent(printEvents);
   if (latestPrint !== undefined) view.latest_print_event = latestPrint;
@@ -390,6 +400,29 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
         subscription_token,
         recent: projector.projectRecentSale(scope),
       });
+    },
+
+    async list(req: SalesListRequest): Promise<SalesListResponse> {
+      const forbidden = findForbiddenKey(req);
+      if (forbidden !== null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'forbidden_field_in_request' });
+      }
+      const admitted = access.admitSession('sales.list');
+      if (!admitted.ok) {
+        return await Promise.resolve({ kind: 'refused', reason: admitted.reason });
+      }
+      const { session } = admitted;
+      const planned = planSalesList(req as unknown as Record<string, unknown>);
+      if (!planned.ok) return await Promise.resolve(planned.refusal);
+      // Scope and the OD-534-1 own-sales filter come from the session only.
+      const scope = {
+        tenant_id: session.tenant_id,
+        branch_id: session.branch_id,
+        terminal_id: session.terminal_id,
+      };
+      return await Promise.resolve(
+        runSalesList(salesRepo, scope, access.ownerFilter(session), planned.plan),
+      );
     },
 
     async unsubscribe(req: SalesUnsubscribeRequest): Promise<SalesUnsubscribeResponse> {

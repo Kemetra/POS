@@ -18,6 +18,8 @@
  */
 
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
+// The shape of one `lines_json` element, shared with the sale detail (RT-541).
+import type { LineSnapshotJson } from '../sales/sale-lines.js';
 import type {
   ReceiptPayload,
   ReceiptLineItem,
@@ -31,21 +33,6 @@ export interface DeriveReceiptPayloadOptions {
   duplicate_copy_sequence_number?: number;
   /** Required when `variant === 'reprint_duplicate'`. ISO-8601 UTC. */
   reprinted_at?: string;
-}
-
-/**
- * Shape of one element in the Sale row's `lines_json` (mirrors
- * `LineSnapshot` from the cart handoff envelope). Only the non-sensitive
- * display fields are projected onto the receipt; snapshot bookkeeping
- * (line_id, version, last_action_id) is dropped.
- */
-interface LineSnapshotJson {
-  item_ref: string;
-  display_name: string;
-  quantity: number;
-  unit_price_minor: number;
-  line_subtotal_minor: number;
-  note: string | null;
 }
 
 /**
