@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import { AppRouter } from '../router';
@@ -35,6 +35,15 @@ const getStatus = vi.fn().mockResolvedValue({
   terminal_label: 'POS-001',
   paired_at: 1_735_689_600,
 });
+vi.mock('../routes/app/SalesWorkspace', () => ({
+  SalesWorkspace: () => <div data-testid="screen-sales" />,
+}));
+// Without an operator bridge a guard miss falls through /sign-in to the start
+// path, so this stub is where a turned-away operator lands.
+vi.mock('../routes/paired/PairedScreen', () => ({
+  PairedScreen: () => <div data-testid="screen-redirected" />,
+}));
+
 const pairing: PairingBridgeAPI = { getStatus, submit: vi.fn() };
 
 function signInAs(role: Role): void {
@@ -73,10 +82,7 @@ describe('RT-597 — cashier route enumeration', () => {
   it.each(GUARDED)('redirects a cashier away from %s', async (path, testId) => {
     signInAs('cashier');
     render(<AppRouter pairing={pairing} initialEntry={path} />);
-    await waitFor(() => {
-      expect(getStatus).toHaveBeenCalled();
-    });
-    await screen.findByRole('main');
+    expect(await screen.findByTestId('screen-redirected')).toBeInTheDocument();
     expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
   });
 
@@ -95,7 +101,7 @@ describe('RT-597 — cashier route enumeration', () => {
   it('keeps /app/sales reachable for a cashier (RT-546)', async () => {
     signInAs('cashier');
     render(<AppRouter pairing={pairing} initialEntry="/app/sales" />);
-    await screen.findByRole('main');
-    expect(screen.queryByTestId('screen-inventory')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('screen-sales')).toBeInTheDocument();
+    expect(screen.queryByTestId('screen-redirected')).not.toBeInTheDocument();
   });
 });
