@@ -106,6 +106,11 @@ with cart surfaces:
    screen is a Cashier-Forbidden Information catalogue question**, not a
    cart-layer decision. 005's S0 (visual direction) MUST show the prompt
    in a way that allows either policy.
+   **Owner decision O2 (2026-10-17, RT-28 comment 12278):** manager-approval
+   surfaces show the approver's display name, from the RT-114 approval
+   bridge (`approval.listApprovers`, C2), as the shipped V5 void and
+   recovery dialogs do. The approver's role and `users.id` are never shown,
+   and refusals stay generic (C3).
 3. **Audit-event payloads** — cart-emitted audit events (FR-026) carry
    the cashier and (where applicable) the manager identity. Whether a
    cashier can read audit events for their own actions is a 004 matrix

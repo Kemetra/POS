@@ -283,7 +283,8 @@ no cashier-only path.
   - **Offline (C5):** the approval works offline while the approver's
     credential is inside its C4 validity window (24 h after that manager's
     last revalidation on this terminal; at most 90 days after the PIN was
-    set). This replaces D1a's "fails closed offline".
+    set). This replaces D1a's "fails closed offline" (owner decision O3,
+    2026-10-17: discounts follow RT-114 C5, like void and recovery).
   - **Backend-Core:** no authentication-only manager verification contract
     is needed. Approver-eligibility revalidation belongs to RT-114 (MA-BC1
     RT-492, MA-3), not to RT-28.
@@ -329,8 +330,10 @@ How that intent maps onto MA-2's `subject_ref` / subject version / amount is
 fixed by the RT-28 Implementation issue under a §A4 bridge-security review,
 by adding a `cart.discount.manual` subject resolver. RT-114 §3 also lists the
 discount amount as bound, but the cart layer computes no discount amount
-(FR-022). Binding that amount is an open owner decision for the
-Implementation issue; this contract does not invent one.
+(FR-022). **Owner decision O1 (2026-10-17, RT-28 comment 12278):** the
+approval binds the intent only, with `amount_minor = null` until discount
+math exists. No amount is invented; when discount math lands, the amount
+joins the binding.
 
 `cart.discountPlaceholders.add` consumes the approval inside the add's own
 SQLite transaction (C7 step 4): the consume, the placeholder row, the outbox
