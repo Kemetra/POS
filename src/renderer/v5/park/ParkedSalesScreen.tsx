@@ -86,7 +86,7 @@ function ParkedSalesFlow(
     reloadList: props.reload,
   });
   if (flow.view.kind !== 'list') return <ResumeReview flow={flow} />;
-  const items = props.list.kind === 'parked_sales' ? props.list.items : null;
+  const items = itemsOf(props.list);
   return (
     <ListFrame count={items === null ? null : items.length} onBack={props.onBackToSale}>
       <ParkedList
@@ -128,17 +128,20 @@ function ListFrame(
   );
 }
 
-function ParkedList(
-  props: Readonly<{
-    list: ListState;
-    refused: boolean;
-    pendingCartId: string | null;
-    onResume: (sale: ParkedSaleView) => void;
-  }>,
-): JSX.Element {
+interface ListProps {
+  readonly list: ListState;
+  readonly refused: boolean;
+  readonly pendingCartId: string | null;
+  readonly onResume: (sale: ParkedSaleView) => void;
+}
+
+function itemsOf(list: ListState): readonly ParkedSaleView[] | null {
+  return list.kind === 'parked_sales' ? list.items : null;
+}
+
+function ParkedList(props: Readonly<ListProps>): JSX.Element {
   const panelRef = useRef<HTMLElement>(null);
-  const items = props.list.kind === 'parked_sales' ? props.list.items : null;
-  const failed = props.list.kind === 'refused' || props.list.kind === 'unreachable';
+  const items = itemsOf(props.list);
   useArrivalFocus(panelRef, items);
   return (
     <section
@@ -149,22 +152,28 @@ function ParkedList(
     >
       <div className="v5-park-panel__head">
         <h2 id="v5-park-list-heading">{PARK_COPY.listHeading}</h2>
-        {items !== null && (
-          <span className="v5-park-muted">
-            {items.length === 0 ? '0' : `${String(items.length)} من مبيعاتك`}
-          </span>
-        )}
+        {items !== null && <ListCount count={items.length} />}
       </div>
-      {(props.refused || failed) && (
-        <div className="v5-park-panel__state">
-          <Notice tone="warning">{PARK_COPY.generic}</Notice>
-        </div>
-      )}
-      {items?.length === 0 && (
-        <div className="v5-park-panel__state">
-          <Notice tone="info">{PARK_COPY.listEmpty}</Notice>
-        </div>
-      )}
+      <ListBody {...props} items={items} />
+    </section>
+  );
+}
+
+/** «5 من مبيعاتك», or «0» when there is none. */
+function ListCount({ count }: Readonly<{ count: number }>): JSX.Element {
+  return <span className="v5-park-muted">{count === 0 ? '0' : `${String(count)} من مبيعاتك`}</span>;
+}
+
+/** The generic refusal (OD-9) and the empty state above the rows, then the rows and their foot. */
+function ListBody(
+  props: Readonly<ListProps & { items: readonly ParkedSaleView[] | null }>,
+): JSX.Element {
+  const failed = props.list.kind === 'refused' || props.list.kind === 'unreachable';
+  const { items } = props;
+  return (
+    <>
+      {(props.refused || failed) && <PanelNotice tone="warning" text={PARK_COPY.generic} />}
+      {items?.length === 0 && <PanelNotice tone="info" text={PARK_COPY.listEmpty} />}
       {items !== null && items.length > 0 && (
         <>
           <ul className="v5-park-list" aria-labelledby="v5-park-list-heading">
@@ -181,7 +190,15 @@ function ParkedList(
           <p className="v5-park-panel__foot">{PARK_COPY.listFoot}</p>
         </>
       )}
-    </section>
+    </>
+  );
+}
+
+function PanelNotice(props: Readonly<{ tone: 'warning' | 'info'; text: string }>): JSX.Element {
+  return (
+    <div className="v5-park-panel__state">
+      <Notice tone={props.tone}>{props.text}</Notice>
+    </div>
   );
 }
 

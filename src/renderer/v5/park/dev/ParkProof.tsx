@@ -77,30 +77,33 @@ function ago(ms: number): string {
   return new Date(Date.now() - ms).toISOString();
 }
 
-function sale(
-  id: string,
-  label: string | null,
-  lines: number,
-  total: number,
-  at: number,
-  stale = false,
-): ParkedSaleView {
+/** [cart id, label, line count, total minor, parked ms ago, stale?] */
+type SaleRow = readonly [string, string | null, number, number, number, boolean?];
+
+function sale([id, label, lines, total, at, stale = false]: SaleRow): ParkedSaleView {
   return { cart_id: id, label, line_count: lines, total_minor: total, parked_at: ago(at), stale };
 }
 
 const FIVE: ParkedSaleView[] = [
-  sale('p1', null, 1, 4500, 5 * MIN),
-  sale('p2', 'ينتظر الروشتة', 4, 21200, 19 * MIN),
-  sale('p3', 'طلب التوصيل', 5, 64025, 110 * MIN),
-  sale('p4', 'عميل الصف الثاني', 2, 11850, 148 * MIN),
-  sale('p5', 'ينتظر وصول الروشتة الأصلية من المريض', 4, 9600, 235 * MIN),
+  sale(['p1', null, 1, 4500, 5 * MIN]),
+  sale(['p2', 'ينتظر الروشتة', 4, 21200, 19 * MIN]),
+  sale(['p3', 'طلب التوصيل', 5, 64025, 110 * MIN]),
+  sale(['p4', 'عميل الصف الثاني', 2, 11850, 148 * MIN]),
+  sale(['p5', 'ينتظر وصول الروشتة الأصلية من المريض', 4, 9600, 235 * MIN]),
 ];
 
 const STALE: ParkedSaleView[] = [
-  sale('p2', 'ينتظر الروشتة', 4, 21200, 19 * MIN),
-  sale('p3', 'طلب التوصيل', 5, 64025, DAY + 3 * 60 * MIN, true),
-  sale('p4', 'عميل الصف الثاني', 2, 11850, DAY + 10 * 60 * MIN, true),
+  sale(['p2', 'ينتظر الروشتة', 4, 21200, 19 * MIN]),
+  sale(['p3', 'طلب التوصيل', 5, 64025, DAY + 3 * 60 * MIN, true]),
+  sale(['p4', 'عميل الصف الثاني', 2, 11850, DAY + 10 * 60 * MIN, true]),
 ];
+
+const REVIEW_STATES = ['Review', 'Conflict', 'Ref'] as const;
+
+/** The states reached from the list's «استئناف البيع». */
+function opensReview(state: ParkProofState): boolean {
+  return REVIEW_STATES.some((prefix) => state.startsWith(prefix));
+}
 
 function listFor(state: ParkProofState): ParkedSaleView[] {
   if (state === 'ListEmpty') return [];
@@ -108,8 +111,7 @@ function listFor(state: ParkProofState): ParkedSaleView[] {
   if (state === 'ListStale') return STALE;
   if (state.startsWith('List')) return FIVE;
   // The review states open «ينتظر الروشتة» from a one-row list.
-  if (state.startsWith('Review') || state.startsWith('Conflict') || state.startsWith('Ref'))
-    return [FIVE[1] as ParkedSaleView];
+  if (opensReview(state)) return [FIVE[1] as ParkedSaleView];
   return FIVE.slice(0, state === 'ParkLimit' ? 4 : 2);
 }
 
@@ -179,7 +181,8 @@ function currentFor(state: ParkProofState): { lines: number; state: CartState } 
   if (state === 'SaleEmpty' || state.startsWith('List')) return null;
   if (state.startsWith('Conflict')) return { lines: 2, state: CartState.editing };
   if (state === 'RefCheckout') return { lines: 4, state: CartState.frozen_handed_off };
-  if (state.startsWith('Review') || state.startsWith('Ref')) return null;
+  // Conflict and RefCheckout returned above; the other review states have no current sale.
+  if (opensReview(state)) return null;
   return { lines: 4, state: CartState.editing };
 }
 
@@ -211,7 +214,7 @@ function cartBridge(state: ParkProofState): CartBridgeAPI {
     park: (req) =>
       parkFor(state)().then((answer) => {
         if (answer.kind === 'parked')
-          items = [sale('new', req.label ?? null, 4, 37500, 0), ...items];
+          items = [sale(['new', req.label ?? null, 4, 37500, 0]), ...items];
         return answer;
       }),
     listParked: () => Promise.resolve({ kind: 'parked_sales', items }),
@@ -266,8 +269,7 @@ function shiftBridge(): ShiftCashupBridgeAPI {
 
 function pathFor(state: ParkProofState): string {
   if (state === 'ShiftClose') return '/app/shift';
-  if (state.startsWith('List') || state.startsWith('Review')) return '/app/cart/parked';
-  if (state.startsWith('Conflict') || state.startsWith('Ref')) return '/app/cart/parked';
+  if (state.startsWith('List') || opensReview(state)) return '/app/cart/parked';
   return '/app/cart';
 }
 
