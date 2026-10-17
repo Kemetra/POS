@@ -10,7 +10,12 @@ import '@testing-library/jest-dom/vitest';
 
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
-import { VOID_PROOF_STATES, VoidProof, readVoidProofState } from '../dev/VoidProof';
+import {
+  VOID_PROOF_STATES,
+  VoidProof,
+  readVoidProofEntry,
+  readVoidProofState,
+} from '../dev/VoidProof';
 import { VOID_COPY, voidRefusalMessage } from '../void-copy';
 
 function at(state: string): void {
@@ -54,7 +59,27 @@ describe('readVoidProofState', () => {
   });
 });
 
+describe('readVoidProofEntry', () => {
+  it('starts on the void screen, or on the dashboard with from=dashboard', () => {
+    at('RefServer');
+    expect(readVoidProofEntry()).toBe('/app/void');
+    window.location.hash = '#/dev/void-proof?state=RefServer&from=dashboard';
+    expect(readVoidProofEntry()).toBe('/app/dashboard');
+    window.location.hash = '#/dev/void-proof?from=elsewhere';
+    expect(readVoidProofEntry()).toBe('/app/void');
+  });
+});
+
 describe('VoidProof', () => {
+  it('RefServer from=dashboard: the frame shows the void attention banner (RT-670)', async () => {
+    window.location.hash = '#/dev/void-proof?state=RefServer&from=dashboard';
+    render(<VoidProof />);
+    const banner = await screen.findByTestId('void-attention-banner');
+    expect(
+      within(banner).getByRole('link', { name: VOID_COPY.attentionAction }),
+    ).toBeInTheDocument();
+  });
+
   it('Lookup: the void screen in the frame, with an empty journal', async () => {
     at('Lookup');
     render(<VoidProof />);

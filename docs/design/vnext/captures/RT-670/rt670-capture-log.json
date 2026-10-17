@@ -1,0 +1,74 @@
+[
+  {
+    "label": "before",
+    "viewport": "1024x768",
+    "file": "rt670-void-banner-before-1024x768.png",
+    "banner": {
+      "width": 868,
+      "height": 48
+    },
+    "link": {
+      "className": "v5-live-btn v5-live-btn--primary",
+      "text": "عرض",
+      "display": "block",
+      "width": 67,
+      "height": 23
+    },
+    "axe": [],
+    "errors": []
+  },
+  {
+    "label": "before",
+    "viewport": "1280x800",
+    "file": "rt670-void-banner-before-1280x800.png",
+    "banner": {
+      "width": 1048,
+      "height": 48
+    },
+    "link": {
+      "className": "v5-live-btn v5-live-btn--primary",
+      "text": "عرض",
+      "display": "block",
+      "width": 67,
+      "height": 23
+    },
+    "axe": [],
+    "errors": []
+  },
+  {
+    "label": "after",
+    "viewport": "1024x768",
+    "file": "rt670-void-banner-after-1024x768.png",
+    "banner": {
+      "width": 868,
+      "height": 69
+    },
+    "link": {
+      "className": "v5-live-btn v5-live-btn--primary",
+      "text": "عرض",
+      "display": "flex",
+      "width": 67,
+      "height": 44
+    },
+    "axe": [],
+    "errors": []
+  },
+  {
+    "label": "after",
+    "viewport": "1280x800",
+    "file": "rt670-void-banner-after-1280x800.png",
+    "banner": {
+      "width": 1048,
+      "height": 69
+    },
+    "link": {
+      "className": "v5-live-btn v5-live-btn--primary",
+      "text": "عرض",
+      "display": "flex",
+      "width": 67,
+      "height": 44
+    },
+    "axe": [],
+    "errors": []
+  }
+]

@@ -37,6 +37,10 @@ import {
  * by the capture script pressing the same visible controls a manager presses.
  * The data is fictional, as in the references; times carry the Cairo offset,
  * so the capture runs with `timezoneId: 'Africa/Cairo'`.
+ *
+ * RT-670 adds `from=dashboard`: the router starts on the manager dashboard
+ * instead, so the frame's void attention banner (hidden on the void screen)
+ * shows with `state=RefServer`.
  */
 
 export const VOID_PROOF_STATES = [
@@ -58,6 +62,14 @@ export type VoidProofState = (typeof VOID_PROOF_STATES)[number];
 export function readVoidProofState(): VoidProofState {
   const raw = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('state');
   return VOID_PROOF_STATES.find((s) => s === raw) ?? 'Lookup';
+}
+
+const VOID_ENTRY = '/app/void';
+
+/** Where the router starts: the void screen, or the dashboard with `from=dashboard`. */
+export function readVoidProofEntry(): string {
+  const from = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('from');
+  return from === 'dashboard' ? '/app/dashboard' : VOID_ENTRY;
 }
 
 const MANAGER = 'سارة عبد الحميد';
@@ -188,7 +200,8 @@ function approvalBridge(state: VoidProofState): ManagerApprovalBridgeAPI {
 
 export function VoidProof(): JSX.Element {
   const state = readVoidProofState();
-  const params = { ...readOneFrameProofParams(), path: '/app/void', role: 'manager' as const };
+  const entry = readVoidProofEntry();
+  const params = { ...readOneFrameProofParams(), path: entry, role: 'manager' as const };
   installWindowApi(params, { saleVoid: saleVoidBridge(state), approval: approvalBridge(state) });
   useFeatureFlagsStore.getState().hydrate({
     cart: true,
@@ -206,6 +219,6 @@ export function VoidProof(): JSX.Element {
     started_at: '2026-10-17T08:00:00+03:00',
   });
   return (
-    <AppRouter pairing={pairingBridge} operator={operatorBridge(params)} initialEntry="/app/void" />
+    <AppRouter pairing={pairingBridge} operator={operatorBridge(params)} initialEntry={entry} />
   );
 }
