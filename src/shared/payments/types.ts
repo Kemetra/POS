@@ -85,6 +85,9 @@ export const REFUSAL_REASONS = [
   // RT-441 (RT-116 §5.2): force-fail refused — the attempt holds live tender;
   // manager recovery reverses or completes it instead.
   'recovery_required',
+  // RT-614 (RT-28 step 3b): the persisted envelope holds a manual-discount
+  // placeholder no manager authorised — `cart-payment-eligibility.ts`.
+  'unauthorized_discount',
   'internal_error',
   // Idempotency (R-10).
   'idempotency_payload_mismatch',

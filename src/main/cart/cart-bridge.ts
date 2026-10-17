@@ -420,6 +420,24 @@ function returnToSaleRefusal(
   return isPersistedHandoff(cart, req.handoff_action_id) ? null : 'stale_version';
 }
 
+/**
+ * RT-614 — does the cart hold a discount placeholder that no
+ * `cart.discount.manager_authorized` audit row names? The same placeholder
+ * set the envelope builder snapshots.
+ */
+function hasUntrustedDiscountPlaceholder(store: CartStore, cart: StoredCart): boolean {
+  return store.getDiscountPlaceholdersForCart(cart.cart_id).some(
+    (placeholder) =>
+      !store.isDiscountPlaceholderTrusted({
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        cart_id: cart.cart_id,
+        line_id: placeholder.line_id,
+        placeholder_id: placeholder.placeholder_id,
+      }),
+  );
+}
+
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
   return { kind: 'refused', reason };
 }
@@ -1733,6 +1751,10 @@ export class CartBridgeHandlers {
     if (hasStaleLineVersion(store, req.cart_id, req.per_line_versions)) {
       return refuse('stale_version');
     }
+
+    // Step 5a — RT-614 (envelope step 3a): every discount placeholder the
+    // envelope would carry must be manager-authorised (`discount-trust.ts`).
+    if (hasUntrustedDiscountPlaceholder(store, cart)) return refuse('unauthorized_discount');
 
     const now = this.clock().toISOString();
     const handoff_action_id = req.idempotency_key;

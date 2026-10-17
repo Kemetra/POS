@@ -6,6 +6,10 @@
  * tenant and branch, the request matches that cart's persisted envelope, and
  * the cart has no settled payment. This is what stops a cancelled cart, or an
  * already-paid cart, from being paid through the bridge.
+ *
+ * RT-614 (RT-28 step 3b): an unpaid frozen envelope holding a manual-discount
+ * placeholder that no `cart.discount.manager_authorized` audit row names is
+ * refused `unauthorized_discount`; the recovery is the manager post-handoff cancel.
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
@@ -21,6 +25,7 @@ import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
 const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
 const MIGRATIONS = [
+  '0004_audit_events.sql',
   '0008_carts.sql',
   '0012_create_payment_attempts.sql',
   '0013_payment_attempts_partial_unique_started.sql',
@@ -189,6 +194,82 @@ describe('bindCartPaymentEligibility', () => {
     ])('admits a new payment when it holds %s (no money was taken)', (_label, tenderState) => {
       forceFailedAttemptWithTender(tenderState);
       expect(check()).toEqual({ kind: 'ok' });
+    });
+  });
+
+  describe('manual-discount placeholders in the envelope (RT-614 step 3b)', () => {
+    const PLACEHOLDER = {
+      placeholder_id: 'dp-1',
+      line_id: 'line-1',
+      placeholder_kind: 'percent_1',
+      requires_manager_attribution: true,
+      attribution_operator_id: 'mgr-1',
+    };
+
+    function seedWithPlaceholders(placeholders: object[]): void {
+      seedCart('frozen_handed_off', { ...ENVELOPE, discount_placeholders: placeholders });
+    }
+
+    function authorize(payload: Record<string, unknown> = {}): void {
+      db.run(
+        `INSERT INTO audit_events (event_id, tenant_id, branch_id, originating_terminal_id,
+           acting_operator_id, session_id, shift_id, action_category, created_at,
+           approving_supervisor_id, payload)
+         VALUES (?, 'tenant-1', 'branch-1', 'terminal-1', 'op-1', 'sess-1', NULL,
+           'cart.discount.manager_authorized', '2026-09-25T08:59:00.000Z', 'mgr-1', ?)`,
+        [
+          `evt-${String(Math.random())}`,
+          JSON.stringify({
+            cart_id: 'cart-1',
+            cart_line_id: 'line-1',
+            placeholder_id: 'dp-1',
+            ...payload,
+          }),
+        ],
+      );
+    }
+
+    it('admits an envelope whose placeholder a manager authorised', () => {
+      seedWithPlaceholders([PLACEHOLDER]);
+      authorize();
+      expect(check()).toEqual({ kind: 'ok' });
+    });
+
+    it('admits an envelope with no placeholders', () => {
+      seedWithPlaceholders([]);
+      expect(check()).toEqual({ kind: 'ok' });
+    });
+
+    it('refuses a placeholder with no audit row (a pre-upgrade frozen envelope)', () => {
+      seedWithPlaceholders([PLACEHOLDER]);
+      expect(check()).toEqual({ kind: 'refused', reason: 'unauthorized_discount' });
+    });
+
+    it('refuses when the audit row names a different placeholder_id', () => {
+      seedWithPlaceholders([PLACEHOLDER]);
+      authorize({ placeholder_id: 'dp-other' });
+      expect(check()).toEqual({ kind: 'refused', reason: 'unauthorized_discount' });
+    });
+
+    it('refuses a placeholder whose authorisation belongs to another cart', () => {
+      seedWithPlaceholders([PLACEHOLDER]);
+      authorize({ cart_id: 'cart-other' });
+      expect(check()).toEqual({ kind: 'refused', reason: 'unauthorized_discount' });
+    });
+
+    it('refuses when any one placeholder is untrusted', () => {
+      seedWithPlaceholders([PLACEHOLDER, { ...PLACEHOLDER, placeholder_id: 'dp-legacy' }]);
+      authorize();
+      expect(check()).toEqual({ kind: 'refused', reason: 'unauthorized_discount' });
+    });
+
+    it.each([
+      ['not an array', { oops: true }],
+      ['an entry without ids', [{ placeholder_kind: 'percent_1' }]],
+    ])('refuses when discount_placeholders is %s', (_label, placeholders) => {
+      seedCart('frozen_handed_off', { ...ENVELOPE, discount_placeholders: placeholders });
+      authorize();
+      expect(check()).toEqual({ kind: 'refused', reason: 'unauthorized_discount' });
     });
   });
 });

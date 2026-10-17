@@ -22,6 +22,7 @@ import {
   type ParkWorld,
 } from './__helpers__/park-world.js';
 import type { CartResumeRequest } from '../../../../src/shared/cart/park-types.js';
+import { seedManagerAuthorizedDiscount } from '../../../unit/main/cart/__helpers__/manager-authorized-discount.js';
 
 let w: ParkWorld;
 
@@ -285,6 +286,11 @@ describe('cart.resume — price changes and unavailable lines need acceptance', 
       `SELECT line_id FROM cart_lines WHERE cart_id = ? AND item_ref = ?`,
       [cart, PARA],
     )?.line_id;
+    const scope = row<{ tenant_id: string; branch_id: string }>(
+      w,
+      `SELECT tenant_id, branch_id FROM carts WHERE cart_id = ?`,
+      [cart],
+    );
     for (const [id, line] of [
       ['ph-gone', gone],
       ['ph-kept', kept],
@@ -295,6 +301,14 @@ describe('cart.resume — price changes and unavailable lines need acceptance', 
          VALUES (?, ?, ?, 'percent_5', 0, NULL, ?)`,
         [id ?? '', cart, line ?? '', T0],
       );
+      // RT-614: the audit row RT-608's add writes makes the placeholder trusted.
+      seedManagerAuthorizedDiscount(w.raw, {
+        tenant_id: scope?.tenant_id ?? '',
+        branch_id: scope?.branch_id ?? '',
+        cart_id: cart,
+        line_id: line ?? '',
+        placeholder_id: id ?? '',
+      });
     }
     w.catalogue.set(IBUP, { kind: 'gone' });
     const req = resumeReq(cart, { accept_changes: true });
