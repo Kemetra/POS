@@ -443,41 +443,6 @@ body {
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-danger) 18%, transparent);
   }
 
-  /* ── Status Banner ───────────────────────────────────────────────────── */
-  /*
-   * Component emits <aside role="status" data-state={state}>.
-   */
-
-  aside[role='status'] {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    min-block-size: 38px;
-    padding-inline: var(--space-5);
-    font-size: 0.8125rem; /* 13px */
-    font-weight: var(--font-weight-semibold);
-    border-block-end: 1px solid transparent;
-    flex-shrink: 0;
-  }
-
-  aside[role='status'][data-state='degraded'] {
-    background-color: var(--color-warning-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
-    color: var(--color-warning);
-  }
-
-  aside[role='status'][data-state='offline'] {
-    background-color: var(--color-danger-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
-    color: var(--color-danger);
-  }
-
-  aside[role='status'][data-state='syncing'] {
-    background-color: var(--color-info-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-info) 25%, transparent);
-    color: var(--color-info);
-  }
-
   /* ── Screen Too Small ────────────────────────────────────────────────── */
 
   /* RT-313: the notice now shows on short viewports (height < 600px). It grows
@@ -1350,57 +1315,6 @@ body {
   .operator-badge__role[data-role='admin'] {
     background-color: var(--color-warning-soft);
     color: var(--color-warning);
-  }
-
-  /* 011-sale-sync-capture-up — read-only ambient sync-status indicator. Mirrors
-   * .catalogue-freshness: icon + text (never colour-only; the label always
-   * carries the meaning so it survives a greyscale render). No button (read-only),
-   * no side-stripe border (DESIGN.md absolute ban). The icon colour is driven by
-   * data-state, deliberately QUIET: pending = info (in motion, normal offline),
-   * attention = warning (accountability, NOT danger-red panic), all-synced = success. */
-  .sale-sync-status {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    min-block-size: 44px;
-    padding-inline: var(--space-2);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-  }
-
-  .sale-sync-status__icon {
-    font-size: 0.75rem;
-    line-height: 1;
-    color: var(--color-text-muted);
-  }
-
-  .sale-sync-status[data-state='all-synced'] .sale-sync-status__icon {
-    color: var(--color-success);
-  }
-
-  .sale-sync-status[data-state='pending'] .sale-sync-status__icon {
-    color: var(--color-info);
-  }
-
-  .sale-sync-status[data-state='attention'] .sale-sync-status__icon {
-    color: var(--color-warning);
-  }
-
-  .sale-sync-status[data-state='unavailable'] .sale-sync-status__icon {
-    color: var(--color-danger);
-  }
-
-  .sale-sync-status__label {
-    color: var(--color-text);
-  }
-
-  .sale-sync-status[data-state='loading'] .sale-sync-status__label,
-  .sale-sync-status[data-state='unavailable'] .sale-sync-status__label {
-    color: var(--color-text-muted);
-  }
-
-  .sale-sync-status__label time {
-    font-variant-numeric: tabular-nums;
   }
 
   /* === POS v3.5 prototype port (Phase 0 Task 1) — tender/account/held classes from docs/design/pos-v3.5/design-reference/kit.css === */

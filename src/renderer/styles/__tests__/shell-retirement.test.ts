@@ -52,8 +52,9 @@ const RETIRED_PREFIXES = [
   'placeholder-pane',
   'dashboard-card',
   'settings-section',
-  // RT-606: the 007 StatusBanner.
+  // RT-606: the 007 StatusBanner and the unmounted SaleSyncStatus.
   'status-banner',
+  'sale-sync-status',
 ];
 
 /** The manager surfaces whose copy must stay honest (no «Coming soon»). */
@@ -207,6 +208,10 @@ describe('007 retirement guard (RT-606, VN-S6 S6-5)', () => {
       .filter((file) => conn.test(stripComments(readFileSync(file, 'utf-8'))))
       .map((file) => relative(REPO, file));
     expect(offenders).toEqual([]);
+  });
+
+  it('the stylesheet keeps no global aside[role=status] rule of the retired StatusBanner', () => {
+    expect(readFileSync(STYLESHEET, 'utf-8')).not.toMatch(/aside\[role=['"]status['"]\]/);
   });
 
   it('the stylesheet keeps no pulse-dot keyframes for the retired syncing dot', () => {
