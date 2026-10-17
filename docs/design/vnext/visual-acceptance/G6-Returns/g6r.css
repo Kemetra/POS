@@ -1,0 +1,249 @@
+/*
+ * RT-660 — G-6 Returns content references (visual DRAFT, pending owner approval).
+ * The frozen, owner-approved G-6 sheet is imported unchanged: frame, nav, panel, button, input,
+ * notice, status pill, facts and dialog are the shared G-6 controls. This file adds only what the
+ * Returns content needs and G-6 did not draw: a quantity stepper, a data table, the refund total,
+ * the danger/pending status pills and the outcome/payout layout.
+ */
+@import url('../G6-Manager/g6.css');
+
+/* A focused step heading (useFocusOnMount) draws the shared focus ring. */
+.focus-head .panel-head h2 {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.panel-body.slim {
+  padding-block-end: 0;
+}
+.meta {
+  color: var(--text-muted);
+}
+.num.code {
+  font-size: 13px;
+}
+.notice .notice-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+}
+
+/* Actions sit at the inline end in a row, like the dialog actions. */
+.flow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.flow-actions.start {
+  justify-content: flex-start;
+}
+.btn-primary:disabled {
+  border-color: var(--border);
+}
+
+/* ── the journal panel fills what is left; its table scrolls ────── */
+.journal-panel {
+  flex: 1 1 auto;
+  min-block-size: 120px;
+}
+.table-scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+}
+.tbl {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+.tbl th {
+  position: sticky;
+  inset-block-start: 0;
+  padding: 6px 12px;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: start;
+  white-space: nowrap;
+}
+.tbl td {
+  padding: 8px 12px;
+  border-block-end: 1px solid var(--border-soft);
+  vertical-align: middle;
+}
+/* Codes, amounts and times never break: only the refusal reason wraps. */
+.tbl td > .num,
+.tbl td > time {
+  white-space: nowrap;
+}
+.tbl tr:last-child td {
+  border-block-end: 0;
+}
+.journal td:last-child {
+  inline-size: 1%;
+  white-space: nowrap;
+}
+.journal .state .reason {
+  display: block;
+  max-inline-size: 260px;
+  margin-block-start: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.w1024 .tbl th,
+.w1024 .tbl td {
+  padding-inline: 8px;
+}
+.w1024 .journal .state .reason {
+  max-inline-size: 200px;
+}
+.quote {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+.quote td:not(:first-child),
+.quote th:not(:first-child) {
+  inline-size: 1%;
+  white-space: nowrap;
+}
+
+/* ── state pills: the G-6 pill, one glyph per state ─────────────── */
+.status-ok {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+.status-pending {
+  border-color: var(--border-strong);
+  background: var(--surface-elevated);
+  color: var(--text);
+}
+.status-danger {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ── line selection: name + facts, then the stepper ─────────────── */
+.lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  list-style: none;
+}
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-block-size: var(--row);
+  padding: 8px 12px;
+  border-block-end: 1px solid var(--border-soft);
+}
+.line:last-child {
+  border-block-end: 0;
+}
+.line-text {
+  display: grid;
+  gap: 2px;
+}
+.line .meta {
+  font-size: 13px;
+}
+.stepper {
+  display: inline-grid;
+  grid-template-columns: 44px 52px 44px;
+  align-items: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.stepper .step {
+  min-block-size: var(--target);
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.stepper .step:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.stepper .qty {
+  display: grid;
+  place-items: center;
+  border-inline: 1px solid var(--border);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ── refund total: the amount is the largest figure on the step ── */
+.total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  font-weight: 600;
+}
+.total .amount {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.w1024 .total .amount {
+  font-size: 22px;
+}
+
+/* ── outcome: announcement and facts beside the payout ──────────── */
+.outcome-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+.outcome-grid .col {
+  display: grid;
+  gap: 12px;
+}
+.payout {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.payout h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+@media (forced-colors: active) {
+  .lines,
+  .stepper,
+  .payout,
+  .quote,
+  .total {
+    border: 1px solid CanvasText;
+  }
+  .stepper .qty {
+    border-inline: 1px solid CanvasText;
+  }
+  .stepper .step:disabled {
+    color: GrayText;
+  }
+  .status-danger {
+    border: 2px solid CanvasText;
+  }
+  .focus-head .panel-head h2 {
+    outline-color: Highlight;
+  }
+}
