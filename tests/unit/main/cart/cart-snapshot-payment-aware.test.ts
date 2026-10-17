@@ -23,10 +23,12 @@ import { bindCartStore } from '../../../../src/main/cart/cart-store.js';
 import type { CartPaymentStatus } from '../../../../src/main/payments/repositories/payment-attempts.repository.js';
 import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
 import { makeSqlJsHandle } from './__helpers__/sql-js-handle.js';
+import { seedManagerAuthorizedDiscount } from './__helpers__/manager-authorized-discount.js';
 
 const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
 const MIGRATIONS = [
+  '0004_audit_events.sql',
   '0008_carts.sql',
   '0009_cart_action_outbox.sql',
   '0010_cart_lines.sql',
@@ -84,7 +86,10 @@ async function cartWithLine(
   return { cartId: c.cart_id, lineId: a.line_id };
 }
 
-/** A manager-attributed discount placeholder: the attribution is manager identity. */
+/**
+ * A manager-attributed discount placeholder: the attribution is manager
+ * identity, and (RT-614) the authorising audit row makes it trusted.
+ */
 function seedManagerDiscount(db: SqlJsDatabase, cartId: string, lineId: string): void {
   db.run(
     `INSERT INTO cart_line_discount_placeholders
@@ -93,6 +98,13 @@ function seedManagerDiscount(db: SqlJsDatabase, cartId: string, lineId: string):
      VALUES ('dp-1', ?, ?, 'percent_above_threshold', 1, ?, '2026-09-25T10:00:30.000Z')`,
     [cartId, lineId, MANAGER_SECRET],
   );
+  seedManagerAuthorizedDiscount(db, {
+    tenant_id: 'tenant-1',
+    branch_id: 'branch-1',
+    cart_id: cartId,
+    line_id: lineId,
+    placeholder_id: 'dp-1',
+  });
 }
 
 async function handedOff(status: CartPaymentStatus | null): Promise<{

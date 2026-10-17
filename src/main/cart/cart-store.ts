@@ -20,6 +20,7 @@
  */
 
 import type { DatabaseHandle } from '../db/client.js';
+import { bindDiscountPlaceholderTrust, type DiscountPlaceholderRef } from './discount-trust.js';
 
 // ── Narrow better-sqlite3 surfaces (R1: no native binding required at test time) ──
 
@@ -333,6 +334,11 @@ export interface CartStore {
   getActiveLines(cart_id: string): CartLineRow[];
   /** Returns all discount placeholders for the given cart. */
   getDiscountPlaceholdersForCart(cart_id: string): DiscountPlaceholderRow[];
+  /**
+   * RT-614 — true only when a `cart.discount.manager_authorized` audit row
+   * names this placeholder, cart and line in this scope (`discount-trust.ts`).
+   */
+  isDiscountPlaceholderTrusted(ref: DiscountPlaceholderRef): boolean;
   getCart(cart_id: string): CartRow | undefined;
   getLine(cart_id: string, line_id: string): CartLineRow | undefined;
   findActiveLineByItemRef(cart_id: string, item_ref: string): CartLineRow | undefined;
@@ -783,6 +789,8 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
     getDiscountPlaceholdersForCart(cart_id): DiscountPlaceholderRow[] {
       return getDiscountPlaceholdersForCartStmt.all(cart_id);
     },
+
+    isDiscountPlaceholderTrusted: bindDiscountPlaceholderTrust(db),
 
     findLatestHandoffActionId(cart_id): string | undefined {
       return findLatestHandoffStmt.get(cart_id)?.action_id;

@@ -18,11 +18,14 @@ import { bindCartStore } from '../../../../src/main/cart/cart-store.js';
 import { buildPaymentIntentEnvelope } from '../../../../src/main/cart/handoff-envelope-builder.js';
 import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
 import type { CartStore } from '../../../../src/main/cart/cart-store.js';
+import { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
+import { bindAuditEventsStoreDb } from '../../../../src/main/audit/audit-events-store.js';
 import { makeSqlJsHandle } from './__helpers__/sql-js-handle.js';
 
 const __dirname0 = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname0, '..', '..', '..', '..');
 const MIGRATIONS = [
+  '0004_audit_events.sql',
   '0008_carts.sql',
   '0009_cart_action_outbox.sql',
   '0010_cart_lines.sql',
@@ -281,6 +284,8 @@ describe('buildPaymentIntentEnvelope with discount placeholders', () => {
       getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
+      // RT-614: the add's audit row is what makes the placeholder trusted.
+      auditEmitter: new AuditEmitter(bindAuditEventsStoreDb(makeSqlJsHandle(db))),
     });
 
     const c = await handlers.create({ idempotency_key: 'dph-c' });

@@ -36,7 +36,14 @@ export type CartRefusalReason =
    * RT-440 (spec 024 K5) — the cart is parked: it changes only through
    * `cart.resume`. Every other cart mutation refuses it.
    */
-  | 'cart_parked';
+  | 'cart_parked'
+  /**
+   * RT-614 (RT-28, envelope step 3a) — `cart.handoff`: the cart holds a
+   * manual-discount placeholder no manager authorised (no
+   * `cart.discount.manager_authorized` audit row names it). Remove it, or
+   * re-add it with manager authority, then hand off again.
+   */
+  | 'unauthorized_discount';
 
 export interface CartRefusal {
   readonly kind: 'refused';
