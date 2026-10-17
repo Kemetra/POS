@@ -175,6 +175,11 @@ export interface SaleSyncStateRepo {
   eligible(scope: DrainScope, now: string): EligibleSale[];
   /** Tenant-scoped counts for the read-only status surface (pending per terminal). */
   readSyncStatus(scope: DrainScope): SaleSyncStatusCounts;
+  /**
+   * RT-601: the earliest outbox `enqueued_at` of the CURRENT terminal's unsent
+   * sales (the set `readSyncStatus` counts as `pending`), else null. A read.
+   */
+  readOldestPendingAt(scope: DrainScope): string | null;
   markSynced(input: MarkSyncedInput): MarkSyncedResult;
   markDeadLetter(input: MarkDeadLetterInput): void;
   recordTransient(input: RecordTransientInput): void;
@@ -355,6 +360,21 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     };
   }
 
+  function readOldestPendingAt(scope: DrainScope): string | null {
+    // RT-601: the same unsent set as `pending` above (outbox LEFT JOIN state, the
+    // current terminal only). The OUTBOX enqueue time, because a fresh sale has
+    // no state row yet. A null terminal matches nothing.
+    if (scope.terminalId === null) return null;
+    const stmt = db.prepare(
+      `SELECT MIN(o.enqueued_at) AS t
+       FROM sale_sync_outbox o
+       LEFT JOIN sale_sync_state s ON s.sale_id = o.sale_id
+       WHERE o.tenant_id = ? AND o.branch_id = ? AND o.terminal_id = ?
+         AND (s.sale_id IS NULL OR s.sync_status = 'pending')`,
+    ) as PrepareGet<{ t: string | null }>;
+    return stmt.get(scope.tenantId, scope.branchId, scope.terminalId)?.t ?? null;
+  }
+
   function recordTransient(input: RecordTransientInput): void {
     upsert({
       tenantId: input.tenantId,
@@ -409,6 +429,7 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     read,
     eligible,
     readSyncStatus,
+    readOldestPendingAt,
     markSynced,
     markDeadLetter,
     recordTransient,
