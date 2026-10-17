@@ -1,0 +1,522 @@
+[
+  {
+    "walk": "cashierStatus",
+    "width": 1024,
+    "pass": true,
+    "order": [
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إيداع نقدي",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "سحب نقدي",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "text",
+        "name": "النقد المعدود في الدرج",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "تسجيل العدّ وإغلاق الوردية",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "a",
+        "type": "",
+        "name": "نقطة البيع",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "تسجيل الخروج",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إيداع نقدي",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "سحب نقدي",
+        "inDialog": false,
+        "ring": true
+      }
+    ],
+    "opened": {
+      "tag": "input",
+      "type": "text",
+      "name": "المبلغ",
+      "inDialog": true,
+      "ring": true
+    },
+    "inside": [
+      {
+        "tag": "select",
+        "type": "select-one",
+        "name": "السبب",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "textarea",
+        "type": "textarea",
+        "name": "ملاحظة (اختياري، دون بيانات شخصية)",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إلغاء",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "تسجيل",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "text",
+        "name": "المبلغ",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "select",
+        "type": "select-one",
+        "name": "السبب",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "textarea",
+        "type": "textarea",
+        "name": "ملاحظة (اختياري، دون بيانات شخصية)",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إلغاء",
+        "inDialog": true,
+        "ring": true
+      }
+    ],
+    "back": {
+      "tag": "button",
+      "type": "button",
+      "name": "إيداع نقدي",
+      "inDialog": false,
+      "ring": true
+    }
+  },
+  {
+    "walk": "cashierStatus",
+    "width": 1280,
+    "pass": true,
+    "order": [
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إيداع نقدي",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "سحب نقدي",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "text",
+        "name": "النقد المعدود في الدرج",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "تسجيل العدّ وإغلاق الوردية",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "a",
+        "type": "",
+        "name": "نقطة البيع",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "تسجيل الخروج",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إيداع نقدي",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "سحب نقدي",
+        "inDialog": false,
+        "ring": true
+      }
+    ],
+    "opened": {
+      "tag": "input",
+      "type": "text",
+      "name": "المبلغ",
+      "inDialog": true,
+      "ring": true
+    },
+    "inside": [
+      {
+        "tag": "select",
+        "type": "select-one",
+        "name": "السبب",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "textarea",
+        "type": "textarea",
+        "name": "ملاحظة (اختياري، دون بيانات شخصية)",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إلغاء",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "تسجيل",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "text",
+        "name": "المبلغ",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "select",
+        "type": "select-one",
+        "name": "السبب",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "textarea",
+        "type": "textarea",
+        "name": "ملاحظة (اختياري، دون بيانات شخصية)",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إلغاء",
+        "inDialog": true,
+        "ring": true
+      }
+    ],
+    "back": {
+      "tag": "button",
+      "type": "button",
+      "name": "إيداع نقدي",
+      "inDialog": false,
+      "ring": true
+    }
+  },
+  {
+    "walk": "cashierClose",
+    "width": 1024,
+    "pass": true,
+    "commit": {
+      "tag": "button",
+      "type": "button",
+      "name": "تسجيل العدّ وإغلاق الوردية",
+      "inDialog": false,
+      "ring": true
+    },
+    "opened": {
+      "tag": "button",
+      "type": "button",
+      "name": "إلغاء",
+      "inDialog": true,
+      "ring": true
+    },
+    "inside": [
+      {
+        "tag": "input",
+        "type": "radio",
+        "name": "سارة عبد الحميد",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "الرقم السري للمدير",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إلغاء",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "radio",
+        "name": "سارة عبد الحميد",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "الرقم السري للمدير",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إلغاء",
+        "inDialog": true,
+        "ring": true
+      }
+    ],
+    "back": {
+      "tag": "button",
+      "type": "button",
+      "name": "تسجيل العدّ وإغلاق الوردية",
+      "inDialog": false,
+      "ring": true
+    }
+  },
+  {
+    "walk": "cashierClose",
+    "width": 1280,
+    "pass": true,
+    "commit": {
+      "tag": "button",
+      "type": "button",
+      "name": "تسجيل العدّ وإغلاق الوردية",
+      "inDialog": false,
+      "ring": true
+    },
+    "opened": {
+      "tag": "button",
+      "type": "button",
+      "name": "إلغاء",
+      "inDialog": true,
+      "ring": true
+    },
+    "inside": [
+      {
+        "tag": "input",
+        "type": "radio",
+        "name": "سارة عبد الحميد",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "الرقم السري للمدير",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إلغاء",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "radio",
+        "name": "سارة عبد الحميد",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "الرقم السري للمدير",
+        "inDialog": true,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "إلغاء",
+        "inDialog": true,
+        "ring": true
+      }
+    ],
+    "back": {
+      "tag": "button",
+      "type": "button",
+      "name": "تسجيل العدّ وإغلاق الوردية",
+      "inDialog": false,
+      "ring": true
+    }
+  },
+  {
+    "walk": "cashierOpen",
+    "width": 1024,
+    "pass": true,
+    "field": {
+      "tag": "input",
+      "type": "text",
+      "name": "مبلغ الافتتاح في الدرج",
+      "inDialog": false,
+      "ring": true
+    },
+    "invalid": "true"
+  },
+  {
+    "walk": "cashierOpen",
+    "width": 1280,
+    "pass": true,
+    "field": {
+      "tag": "input",
+      "type": "text",
+      "name": "مبلغ الافتتاح في الدرج",
+      "inDialog": false,
+      "ring": true
+    },
+    "invalid": "true"
+  },
+  {
+    "walk": "managerPage",
+    "width": 1024,
+    "pass": true,
+    "refresh": {
+      "tag": "button",
+      "type": "button",
+      "name": "تحديث",
+      "inDialog": false,
+      "ring": true
+    },
+    "after": [
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "الرقم السري الجديد (6 إلى 8 أرقام)",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "تأكيد الرقم السري",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "الرقم السري الحالي (عند التغيير فقط)",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "حفظ الرقم السري",
+        "inDialog": false,
+        "ring": true
+      }
+    ]
+  },
+  {
+    "walk": "managerPage",
+    "width": 1280,
+    "pass": true,
+    "refresh": {
+      "tag": "button",
+      "type": "button",
+      "name": "تحديث",
+      "inDialog": false,
+      "ring": true
+    },
+    "after": [
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "الرقم السري الجديد (6 إلى 8 أرقام)",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "تأكيد الرقم السري",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "input",
+        "type": "password",
+        "name": "الرقم السري الحالي (عند التغيير فقط)",
+        "inDialog": false,
+        "ring": true
+      },
+      {
+        "tag": "button",
+        "type": "button",
+        "name": "حفظ الرقم السري",
+        "inDialog": false,
+        "ring": true
+      }
+    ]
+  }
+]

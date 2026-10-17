@@ -5,11 +5,12 @@ import {
   type ShiftCashupBridgeAPI,
   type ShiftManagerPinEnrollRequest,
 } from '../../../shared/shift-cashup/types';
+import { Notice } from '../foundation/Notice';
 import { V5Icon } from '../foundation/V5Icon';
 import { callShift, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { normalizeDigits } from './shift-format';
-import { ShiftAlert } from './ShiftScreen';
+import { ShiftRefusal } from './ShiftParts';
 
 interface PinFields {
   pin: string;
@@ -43,17 +44,19 @@ type Result = { kind: 'enrolled' } | { kind: 'error'; message: string } | null;
 export function ManagerPinEnrollment({
   bridge,
 }: Readonly<{ bridge: ShiftCashupBridgeAPI }>): JSX.Element {
+  const headingId = useId();
   const ids = { pin: useId(), confirm: useId(), current: useId() };
   const [fields, setFields] = useState<PinFields>(EMPTY);
   const [result, setResult] = useState<Result>(null);
   const { busy, run } = useSingleFlight();
 
   const field = (key: keyof PinFields, label: string): JSX.Element => (
-    <div className="v5-shift-mgr-field">
+    <div className="v5-shift-field">
       <label htmlFor={ids[key]}>{label}</label>
       <input
         id={ids[key]}
-        className="v5-shift-input v5-shift-mgr-pin v5-ltr"
+        className="v5-shift-pin"
+        dir="ltr"
         type="password"
         inputMode="numeric"
         autoComplete="off"
@@ -86,37 +89,35 @@ export function ManagerPinEnrollment({
 
   return (
     <section
-      className="v5-shift-mgr-panel"
-      aria-labelledby="v5-shift-mgr-enroll"
+      className="v5-shift-card"
+      aria-labelledby={headingId}
       data-testid="manager-pin-enrollment"
     >
-      <header className="v5-shift-mgr-head v5-shift-mgr-head--lead">
-        <span className="v5-shift-mgr-glyph">
+      <div className="v5-shift-lead">
+        <span className="v5-shift-glyph" aria-hidden="true">
           <V5Icon name="lock" />
         </span>
         <div>
-          <h2 id="v5-shift-mgr-enroll">{SHIFT_COPY.enrollHeading}</h2>
+          <h2 id={headingId}>{SHIFT_COPY.enrollHeading}</h2>
           <p className="v5-shift-hint">{SHIFT_COPY.enrollHint}</p>
         </div>
-      </header>
-      <div className="v5-shift-mgr-body">
-        <div className="v5-shift-mgr-fields">
-          {field('pin', SHIFT_COPY.newPinLabel)}
-          {field('confirm', SHIFT_COPY.confirmPinLabel)}
-          {field('current', SHIFT_COPY.currentPinLabel)}
+      </div>
+      <div className="v5-shift-card__body">
+        {field('pin', SHIFT_COPY.newPinLabel)}
+        {field('confirm', SHIFT_COPY.confirmPinLabel)}
+        {field('current', SHIFT_COPY.currentPinLabel)}
+        {result?.kind === 'enrolled' && <Notice tone="success">{SHIFT_COPY.enrolled}</Notice>}
+        <ShiftRefusal message={result?.kind === 'error' ? result.message : null} />
+        <div className="v5-shift-commit">
+          <button
+            type="button"
+            className="v5-shift-btn v5-shift-btn--primary"
+            disabled={busy}
+            onClick={submit}
+          >
+            {SHIFT_COPY.enrollCommit}
+          </button>
         </div>
-        {result?.kind === 'enrolled' && (
-          <output className="v5-shift-outcome">{SHIFT_COPY.enrolled}</output>
-        )}
-        <ShiftAlert message={result?.kind === 'error' ? result.message : null} />
-        <button
-          type="button"
-          className="v5-shift-btn v5-shift-btn--primary v5-shift-mgr-commit"
-          disabled={busy}
-          onClick={submit}
-        >
-          {SHIFT_COPY.enrollCommit}
-        </button>
       </div>
     </section>
   );

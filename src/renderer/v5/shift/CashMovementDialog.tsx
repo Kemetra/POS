@@ -11,7 +11,13 @@ import { Dialog } from '../foundation/Dialog';
 import { callShift, dismissUnlessBusy, useSingleFlight } from './shift-bridge';
 import { MOVEMENT_REASON_LABELS, SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { parseShiftAmount } from './shift-format';
-import { ShiftAlert } from './ShiftScreen';
+import {
+  invalidEntry,
+  refusedCall,
+  ShiftAmountField,
+  ShiftRefusal,
+  type FieldError,
+} from './ShiftParts';
 import '../sale/live-sale.css';
 
 export type MovementKind = 'payIn' | 'payOut';
@@ -42,12 +48,12 @@ function movementOf(input: {
  * the hidden expected cash can be read from it).
  */
 export function CashMovementDialog(props: Props): JSX.Element {
-  const ids = { amount: useId(), reason: useId(), note: useId() };
+  const ids = { reason: useId(), note: useId() };
   const amountRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState('');
   const [reasonCode, setReasonCode] = useState<ShiftMovementReasonCode>('bank_drop');
   const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FieldError | null>(null);
   const { busy, run } = useSingleFlight();
   const title = SHIFT_COPY[props.kind];
   const dismiss = dismissUnlessBusy(busy, props.onDismiss);
@@ -55,7 +61,7 @@ export function CashMovementDialog(props: Props): JSX.Element {
   const submit = (): void => {
     const request = movementOf({ amount, reasonCode, note });
     if (request === null) {
-      setError(SHIFT_COPY.invalidAmount);
+      setError(invalidEntry(SHIFT_COPY.invalidAmount));
       return;
     }
     setError(null);
@@ -65,53 +71,55 @@ export function CashMovementDialog(props: Props): JSX.Element {
         kind === 'payIn' ? bridge.payIn(request) : bridge.payOut(request),
       );
       if (answer.kind === 'recorded') props.onRecorded();
-      else setError(shiftRefusalMessage(answer.reason));
+      else setError(refusedCall(shiftRefusalMessage(answer.reason)));
     });
   };
 
   return (
     <Dialog label={title} onCancel={dismiss} initialFocusRef={amountRef}>
-      <h2 className="v5-live-dialog-title">{title}</h2>
-      <div className="v5-shift-fields">
-        <label htmlFor={ids.amount}>{SHIFT_COPY.amountLabel}</label>
-        <input
-          id={ids.amount}
-          ref={amountRef}
-          className="v5-shift-input v5-ltr"
-          inputMode="decimal"
-          autoComplete="off"
+      <h2 className="v5-shift-dialog-title">{title}</h2>
+      <div className="v5-shift-form">
+        <ShiftAmountField
+          label={SHIFT_COPY.amountLabel}
           value={amount}
-          onChange={(event) => {
-            setAmount(event.target.value);
-          }}
+          onChange={setAmount}
+          error={error?.invalid === true ? error : null}
+          inputRef={amountRef}
         />
-        <label htmlFor={ids.reason}>{SHIFT_COPY.reasonLabel}</label>
-        <select
-          id={ids.reason}
-          className="v5-shift-input"
-          value={reasonCode}
-          onChange={(event) => {
-            setReasonCode(event.target.value as ShiftMovementReasonCode);
-          }}
-        >
-          {SHIFT_MOVEMENT_REASON_CODES.map((code) => (
-            <option key={code} value={code}>
-              {MOVEMENT_REASON_LABELS[code]}
-            </option>
-          ))}
-        </select>
-        <label htmlFor={ids.note}>{SHIFT_COPY.noteLabel}</label>
-        <textarea
-          id={ids.note}
-          maxLength={SHIFT_NOTE_MAX_LENGTH}
-          value={note}
-          onChange={(event) => {
-            setNote(event.target.value);
-          }}
-        />
+        <div className="v5-shift-field">
+          <label htmlFor={ids.reason}>{SHIFT_COPY.reasonLabel}</label>
+          <select
+            id={ids.reason}
+            className="v5-shift-select"
+            value={reasonCode}
+            onChange={(event) => {
+              setReasonCode(event.target.value as ShiftMovementReasonCode);
+            }}
+          >
+            {SHIFT_MOVEMENT_REASON_CODES.map((code) => (
+              <option key={code} value={code}>
+                {MOVEMENT_REASON_LABELS[code]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="v5-shift-field">
+          <label htmlFor={ids.note}>{SHIFT_COPY.noteLabel}</label>
+          <textarea
+            id={ids.note}
+            className="v5-shift-textarea"
+            maxLength={SHIFT_NOTE_MAX_LENGTH}
+            value={note}
+            onChange={(event) => {
+              setNote(event.target.value);
+            }}
+          />
+        </div>
       </div>
-      <ShiftAlert message={error} />
-      <div>
+      <div className="v5-shift-slot">
+        <ShiftRefusal message={error?.invalid === false ? error.message : null} />
+      </div>
+      <div className="v5-shift-dialog-actions">
         <button type="button" className="v5-live-btn" disabled={busy} onClick={dismiss}>
           {SHIFT_COPY.cancel}
         </button>

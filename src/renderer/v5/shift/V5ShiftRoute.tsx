@@ -1,4 +1,4 @@
-import { useId, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { Role } from '../../../shared/operator/role';
@@ -11,8 +11,19 @@ import { CashMovementDialog, type MovementKind } from './CashMovementDialog';
 import { CloseShiftPanel, type ShiftClosed } from './CloseShiftPanel';
 import { callShift, useShiftStatus, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
-import { formatShiftMoney, formatShiftTime, parseShiftAmount } from './shift-format';
-import { ShiftAlert, ShiftScreen } from './ShiftScreen';
+import { parseShiftAmount } from './shift-format';
+import {
+  invalidEntry,
+  refusedCall,
+  ShiftAmountField,
+  ShiftCard,
+  ShiftMoney,
+  ShiftTime,
+  type FieldError,
+} from './ShiftParts';
+import { ShiftScreen } from './ShiftScreen';
+import { Notice } from '../foundation/Notice';
+import { V5Icon } from '../foundation/V5Icon';
 
 interface Props {
   /** Tests inject a bridge (null = none); production reads `window.api`. */
@@ -32,12 +43,7 @@ const CASHIER_ROLES: ReadonlyArray<Role> = ['cashier'];
  */
 export function V5ShiftRoute({ bridge }: Props): JSX.Element | null {
   return (
-    <ShiftScreen
-      title={SHIFT_COPY.title}
-      titleId="v5-shift-title"
-      bridge={bridge}
-      allow={CASHIER_ROLES}
-    >
+    <ShiftScreen title={SHIFT_COPY.title} bridge={bridge} allow={CASHIER_ROLES}>
       {(api) => <CashierShift bridge={api} />}
     </ShiftScreen>
   );
@@ -57,34 +63,44 @@ function CashierShift({ bridge }: Readonly<{ bridge: ShiftCashupBridgeAPI }>): J
   };
 
   if (state.kind === 'loading') {
-    return <p className="v5-shift-message">{SHIFT_COPY.loading}</p>;
+    return (
+      <output className="v5-shift-muted" aria-busy="true">
+        {SHIFT_COPY.loading}
+      </output>
+    );
   }
   if (state.kind === 'refused') {
     return <StatusUnavailable outcome={outcome} reason={state.reason} onRetry={reload} />;
   }
   const open = state.status.openShift;
-  return (
-    <>
-      {outcome !== null && <ShiftOutcome outcome={outcome} />}
-      {open === null ? (
+  const notice = outcome !== null && <ShiftOutcome outcome={outcome} />;
+  if (open === null) {
+    // G-2 Closed: the outcome and the opening form share one narrow column.
+    return (
+      <div className="v5-shift-state">
+        {notice}
         <OpenShiftPanel
           bridge={bridge}
           onOpened={() => {
             done({ kind: 'opened' });
           }}
         />
-      ) : (
-        <OpenShift
-          bridge={bridge}
-          open={open}
-          onRecorded={(movement) => {
-            done({ kind: 'recorded', movement });
-          }}
-          onClosed={(closed) => {
-            done({ kind: 'closed', closed });
-          }}
-        />
-      )}
+      </div>
+    );
+  }
+  return (
+    <>
+      {notice}
+      <OpenShift
+        bridge={bridge}
+        open={open}
+        onRecorded={(movement) => {
+          done({ kind: 'recorded', movement });
+        }}
+        onClosed={(closed) => {
+          done({ kind: 'closed', closed });
+        }}
+      />
     </>
   );
 }
@@ -104,44 +120,53 @@ function StatusUnavailable(
   const { outcome } = props;
   const message = outcome === null ? shiftRefusalMessage(props.reason) : SHIFT_COPY.refreshFailed;
   return (
-    <>
+    <div className="v5-shift-state">
       {outcome !== null && <ShiftOutcome outcome={outcome} />}
-      <div className="v5-shift-panel">
-        <p className="v5-shift-message">{message}</p>
-        <button type="button" className="v5-shift-btn" onClick={props.onRetry}>
-          {SHIFT_COPY.retry}
-        </button>
-      </div>
-    </>
+      <Notice
+        tone="warning"
+        action={
+          <button type="button" className="v5-shift-btn" onClick={props.onRetry}>
+            <V5Icon name="retry" size={18} />
+            {SHIFT_COPY.retry}
+          </button>
+        }
+      >
+        {message}
+      </Notice>
+    </div>
   );
 }
 
 function ShiftOutcome({ outcome }: Readonly<{ outcome: Outcome }>): JSX.Element {
   if (outcome.kind === 'opened') {
     return (
-      <div className="v5-shift-outcome" role="status">
-        <p>{SHIFT_COPY.opened}</p>
-        <Link to="/app/cart">{SHIFT_COPY.goToSale}</Link>
-      </div>
+      <Notice
+        tone="success"
+        action={
+          <Link className="v5-shift-btn" to="/app/cart">
+            {SHIFT_COPY.goToSale}
+          </Link>
+        }
+      >
+        {SHIFT_COPY.opened}
+      </Notice>
     );
   }
   if (outcome.kind === 'recorded') {
     const text = outcome.movement === 'payIn' ? SHIFT_COPY.recordedIn : SHIFT_COPY.recordedOut;
-    return <output className="v5-shift-outcome">{text}</output>;
+    return <Notice tone="success">{text}</Notice>;
   }
   const { varianceMinor, currencyCode } = outcome.closed;
   return (
-    <div className="v5-shift-outcome" role="status" data-testid="shift-closed-outcome">
+    <Notice tone="success" testId="shift-closed-outcome">
       <p>{SHIFT_COPY.closed}</p>
       {varianceMinor !== undefined && (
         <p data-testid="shift-variance">
           {SHIFT_COPY.varianceLabel}:{' '}
-          <span className="v5-ltr v5-shift-money">
-            {formatShiftMoney(varianceMinor, currencyCode)}
-          </span>
+          <ShiftMoney minor={varianceMinor} currencyCode={currencyCode} />
         </p>
       )}
-    </div>
+    </Notice>
   );
 }
 
@@ -151,49 +176,43 @@ function OpenShiftPanel(
     onOpened: () => void;
   }>,
 ): JSX.Element {
-  const inputId = useId();
   const [value, setValue] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FieldError | null>(null);
   const { busy, run } = useSingleFlight();
 
   const submit = (): void => {
     const openingFloatMinor = parseShiftAmount(value);
     if (openingFloatMinor === null) {
-      setError(SHIFT_COPY.invalidAmount);
+      setError(invalidEntry(SHIFT_COPY.invalidAmount));
       return;
     }
     setError(null);
     run(async () => {
       const answer = await callShift(() => props.bridge.open({ openingFloatMinor }));
       if (answer.kind === 'opened') props.onOpened();
-      else setError(shiftRefusalMessage(answer.reason));
+      else setError(refusedCall(shiftRefusalMessage(answer.reason)));
     });
   };
 
   return (
-    <div className="v5-shift-panel">
-      <h2>{SHIFT_COPY.openHeading}</h2>
-      <label htmlFor={inputId}>{SHIFT_COPY.floatLabel}</label>
-      <input
-        id={inputId}
-        className="v5-shift-input v5-ltr"
-        inputMode="decimal"
-        autoComplete="off"
+    <ShiftCard heading={SHIFT_COPY.openHeading}>
+      <ShiftAmountField
+        label={SHIFT_COPY.floatLabel}
         value={value}
-        onChange={(event) => {
-          setValue(event.target.value);
-        }}
+        onChange={setValue}
+        error={error}
       />
-      <ShiftAlert message={error} />
-      <button
-        type="button"
-        className="v5-shift-btn v5-shift-btn--primary"
-        disabled={busy}
-        onClick={submit}
-      >
-        {SHIFT_COPY.openCommit}
-      </button>
-    </div>
+      <div className="v5-shift-commit">
+        <button
+          type="button"
+          className="v5-shift-btn v5-shift-btn--primary"
+          disabled={busy}
+          onClick={submit}
+        >
+          {SHIFT_COPY.openCommit}
+        </button>
+      </div>
+    </ShiftCard>
   );
 }
 
@@ -208,24 +227,34 @@ function OpenShift(
   const { open } = props;
   const [movement, setMovement] = useState<MovementKind | null>(null);
   const money = (minor: number): JSX.Element => (
-    <span className="v5-ltr v5-shift-money">{formatShiftMoney(minor, open.currencyCode)}</span>
+    <ShiftMoney minor={minor} currencyCode={open.currencyCode} />
   );
 
   return (
-    <div className="v5-shift-columns">
-      <div className="v5-shift-panel" data-testid="shift-summary">
-        <h2>
-          {SHIFT_COPY.openSince} <span className="v5-ltr">{formatShiftTime(open.openedAt)}</span>
-        </h2>
-        <dl className="v5-shift-facts">
-          <dt>{SHIFT_COPY.floatRow}</dt>
-          <dd>{money(open.openingFloatMinor)}</dd>
-          <dt>{SHIFT_COPY.payInsRow}</dt>
-          <dd>{money(open.payInTotalMinor)}</dd>
-          <dt>{SHIFT_COPY.payOutsRow}</dt>
-          <dd>{money(open.payOutTotalMinor)}</dd>
+    <div className="v5-shift-grid">
+      <ShiftCard
+        testId="shift-summary"
+        heading={
+          <>
+            {SHIFT_COPY.openSince} <ShiftTime iso={open.openedAt} />
+          </>
+        }
+      >
+        <dl className="v5-shift-ledger">
+          <div>
+            <dt>{SHIFT_COPY.floatRow}</dt>
+            <dd>{money(open.openingFloatMinor)}</dd>
+          </div>
+          <div>
+            <dt>{SHIFT_COPY.payInsRow}</dt>
+            <dd>{money(open.payInTotalMinor)}</dd>
+          </div>
+          <div>
+            <dt>{SHIFT_COPY.payOutsRow}</dt>
+            <dd>{money(open.payOutTotalMinor)}</dd>
+          </div>
         </dl>
-        <div className="v5-shift-actions" data-testid="shift-actions">
+        <div className="v5-shift-commit" data-testid="shift-actions">
           <button
             type="button"
             className="v5-shift-btn"
@@ -245,7 +274,7 @@ function OpenShift(
             {SHIFT_COPY.payOut}
           </button>
         </div>
-      </div>
+      </ShiftCard>
       <CloseShiftPanel
         bridge={props.bridge}
         currencyCode={open.currencyCode}
