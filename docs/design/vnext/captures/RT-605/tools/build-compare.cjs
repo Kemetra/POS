@@ -13,7 +13,7 @@ const DESC = {
   Attention24h: 'online, 2 pending, oldest 26 h old, no dead letter (D-6-5) → M-O3 danger with n = 2',
   OfflineAttention: 'offline, 1 dead letter + 2 fresh pending → M-O3 (n = 1) above M-O1',
   OfflineAttentionPrinter: 'as OfflineAttention, plus the printer-failure banner (now a V5 warning Banner) below M-O1',
-  ShiftClosed: 'forced shift close while away: V5 info banner, M-W4 copy (pending owner approval) with «إخفاء»',
+  ShiftClosed: 'forced shift close while away: V5 info banner, M-W4 copy (owner-approved 2026-10-17) with «إخفاء»',
   PrinterFailed: 'last print failed: V5 warning banner, printer glyph, copy and actions unchanged',
   FullStack: 'M-O3, shift closed (M-W4), M-O1, printer failure: the whole §4.3 order',
 };
