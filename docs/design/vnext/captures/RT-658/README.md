@@ -49,7 +49,7 @@ The walk found one keyboard defect, which already exists on main:
 
 ## The shared `shift.css`
 
-`src/renderer/v5/shift/shift.css` is shared with the void screen (RT-654), the recovery page (RT-656), the lock screen, the re-auth dialog and the frame's shift notice. When this PR opened, I grepped every rule against `origin/main` (`44465f0`).
+`src/renderer/v5/shift/shift.css` is shared with the void screen (RT-654), the recovery page (RT-656), the lock screen, the re-auth dialog and the frame's shift notice. When this PR opened, I grepped every rule against `origin/main` (`826e3d9`).
 
 **Retired: 15 rules.** On main these were used only by the shift code this PR rewrites:
 
