@@ -997,3 +997,12 @@ body {
 .review p {
   margin: 0;
 }
+.prow .lbl {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prow .name {
+  min-inline-size: 0;
+}

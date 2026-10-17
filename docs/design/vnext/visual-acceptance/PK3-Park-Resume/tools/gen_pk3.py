@@ -16,7 +16,8 @@ from pathlib import Path
 
 OPERATOR = "منى عادل"
 
-NAV = ["لوحة المتابعة", "نقطة البيع", "المبيعات", "المخزون", "الإعدادات"]
+# OD-6 (VN-S10) and RT-597: the cashier frame carries the Sale only.
+NAV = ["نقطة البيع"]
 
 ICONS = {
     "pause": '<rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/>',
@@ -247,7 +248,7 @@ PARKED_5 = [
     ("ينتظر الروشتة", 4, 21200, "13:41", False),
     ("طلب التوصيل", 5, 64025, "12:10", False),
     ("عميل الصف الثاني", 2, 11850, "11:32", False),
-    ("ينتظر المحفظة", 4, 9600, "10:05", False),
+    ("ينتظر وصول الروشتة الأصلية من المريض", 4, 9600, "10:05", False),
 ]
 PARKED_STALE = [
     ("ينتظر الروشتة", 4, 21200, "13:41", False),
@@ -266,7 +267,7 @@ def list_head(count_text: str) -> str:
 
 def prow(item: tuple, focus: bool = False) -> str:
     label, lines, total, at, stale = item
-    shown = f"<bdi>{label}</bdi>" if label else '<span class="muted">بدون اسم</span>'
+    shown = f'<span class="lbl"><bdi>{label}</bdi></span>' if label else '<span class="muted">بدون اسم</span>'
     tag = f'<span class="tag-stale">{icon("clock")}قديم</span>' if stale else ""
     f = " focus" if focus else ""
     return (
@@ -417,7 +418,7 @@ def s_park_label(w: int) -> str:
 
 
 def s_park_invalid(w: int) -> str:
-    return screen(sale_head(2), sale_body(), View(inert=True)) + park_dialog(Park(label="   ", phase="invalid"))
+    return screen(sale_head(2), sale_body(), View(inert=True)) + park_dialog(Park(label="ينتظر المحفظة", phase="invalid"))
 
 
 def s_park_saving(w: int) -> str:
@@ -519,7 +520,8 @@ def s_shift_close(w: int) -> str:
         '<div class="notice notice-warning" role="alert">'
         f'{icon("warn")}<div class="grow-text"><p>توجد مبيعات معلّقة على هذا الجهاز. '
         "استأنفها أو اطلب من المدير إلغاءها ثم أغلق الوردية.</p>"
-        '<p><span class="chip-count">3 مبيعات معلّقة على هذا الجهاز</span></p></div></div>'
+        '<p><span class="chip-count">3 مبيعات معلّقة على هذا الجهاز</span></p>'
+        '<p><button type="button" class="btn">عرض مبيعاتي المعلّقة</button></p></div></div>'
     )
     panel = (
         '<section class="panel" aria-labelledby="sh-h"><div class="shift-panel">'
