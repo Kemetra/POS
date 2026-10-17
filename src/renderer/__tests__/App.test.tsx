@@ -28,6 +28,7 @@ function stubBridge(status: PairingStatus): PreloadBridgeAPI {
     appVersion: vi.fn(() => Promise.resolve('0.0.0-test')),
     log: vi.fn(() => Promise.resolve()),
     appConfig: vi.fn(() => Promise.resolve({})),
+    reportError: vi.fn(() => Promise.resolve()),
     pairing: {
       getStatus: vi.fn(() => Promise.resolve(status)),
       submit: vi.fn(() => Promise.reject(new Error('submit not used in US1'))),

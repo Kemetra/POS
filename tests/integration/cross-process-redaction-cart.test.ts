@@ -616,6 +616,9 @@ describe('cross-process redaction (cart final pass) — T097 / SC-009 / NFR-006'
     it(`sentry: '${fixture.name}' — credential sentinels stripped by scrubEvent`, () => {
       const event = asEvent({
         message: `cart:${fixture.name}`,
+        // RT-634: the allowlist drops exception-less events, so carry one to
+        // prove the bags are removed from an event that IS sent.
+        exception: { values: [{ type: 'Error', value: `cart:${fixture.name}` }] },
         extra: {
           bridgeCall: fixture.payload,
         },
@@ -627,7 +630,8 @@ describe('cross-process redaction (cart final pass) — T097 / SC-009 / NFR-006'
         },
       });
       const cleaned = scrubEvent(event);
-      const serialised = cleaned === null ? '' : JSON.stringify(cleaned);
+      expect(cleaned).not.toBeNull();
+      const serialised = JSON.stringify(cleaned);
       assertNoSentinels(serialised, `sentry[${fixture.name}]`, SENTRY_CREDENTIAL_SENTINELS);
     });
   }
@@ -654,6 +658,7 @@ describe('cross-process redaction (cart final pass) — T097 / SC-009 / NFR-006'
       const cleaned = scrubEvent(
         asEvent({
           message: `sweep:${fixture.name}`,
+          exception: { values: [{ type: 'Error', value: `sweep:${fixture.name}` }] },
           extra: { bridgeCall: fixture.payload },
           contexts: {
             cart: { request: fixture.payload },
@@ -664,6 +669,19 @@ describe('cross-process redaction (cart final pass) — T097 / SC-009 / NFR-006'
       sentryDumps.push(cleaned === null ? '' : JSON.stringify(cleaned));
     }
     assertNoSentinels(sentryDumps.join('\n'), 'combined-sweep-sentry', SENTRY_CREDENTIAL_SENTINELS);
+  });
+
+  it('RT-634 closes GAP-2: the Sentry allowlist drops cart-allowlist keys with extra/contexts', () => {
+    const cleaned = scrubEvent(
+      asEvent({
+        exception: { values: [{ type: 'Error', value: 'cart:gap2' }] },
+        extra: { note: SENTINEL_NOTE },
+        contexts: { cart: { attribution_operator_id: SENTINEL_ATTRIBUTION_OPERATOR } },
+      }),
+    );
+    expect(cleaned).not.toBeNull();
+    expect(JSON.stringify(cleaned)).not.toContain(SENTINEL_NOTE);
+    expect(JSON.stringify(cleaned)).not.toContain(SENTINEL_ATTRIBUTION_OPERATOR);
   });
 
   /**
@@ -705,10 +723,10 @@ describe('cross-process redaction (cart final pass) — T097 / SC-009 / NFR-006'
  *     `src/main/logging/logger.ts` to add `*.*.*.*.key` and/or use
  *     pino's recursive wildcard if available.
  *
- *   GAP-2 (Sentry): `note` / `attribution_operator_id` / `payload_json`
- *     key names do NOT match `DENYLIST_PATTERN` in
- *     `src/main/observability/sentry-main.ts`. Future improvement:
- *     extend the pattern with `|note|attribution|payload_json`.
+ *   GAP-2 (Sentry): CLOSED by RT-634 — the denylist became an allowlist
+ *     rebuild that drops `extra`/`contexts` wholesale (active test above).
+ *     The skipped case below is kept as history: its message-only event is
+ *     now dropped entirely.
  *
  *   GAP-3 (Sentry): `device_token` / `device_token_attestation` /
  *     `pairing_code` substrings WOULD be caught by `DENYLIST_PATTERN`
