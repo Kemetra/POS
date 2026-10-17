@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { countedParts } from '../../terminal-status/counted-copy';
 import { BANNER_COPY } from '../../terminal-status/status-copy';
 import { mapStatusBanners, type StatusBanners } from '../../terminal-status/status-mapping';
 import { useTerminalStatusStore } from '../../terminal-status/terminal-status-store';
@@ -20,17 +21,22 @@ export function useStatusBanners(): StatusBanners {
   return mapStatusBanners(snapshot, Date.now());
 }
 
-/** M-O3 (U2), danger: a dead letter, or a pending sale older than 24 h. */
+/**
+ * M-O3 (U2), danger: a dead letter, or a pending sale older than 24 h. The
+ * sentence follows the count (RT-646); 1 and 2 are words, with no number run.
+ */
 export function SyncAttentionBanner({ count }: Readonly<{ count: number }>): JSX.Element {
-  const { before, after } = BANNER_COPY.syncAttention;
+  const parts = countedParts(count, BANNER_COPY.syncAttention);
   return (
     <Banner tone="danger" testId="v5-sync-attention-banner">
       <p>
-        {before}
-        <span className="v5-status__num" dir="ltr">
-          {String(count)}
-        </span>
-        {after}
+        {parts.before}
+        {parts.count !== null && (
+          <span className="v5-status__num" dir="ltr">
+            {String(parts.count)}
+          </span>
+        )}
+        {parts.after}
       </p>
     </Banner>
   );

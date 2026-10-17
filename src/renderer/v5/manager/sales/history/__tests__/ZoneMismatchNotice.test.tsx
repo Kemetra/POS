@@ -7,7 +7,7 @@ import type {
   SaleHistoryBridgeAPI,
   SaleHistoryZoneStatusResponse,
 } from '../../../../../../shared/sale-history/types';
-import { expectNoAxeViolations } from '../../../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../../../test-utils/axe-config';
 import { SalesHistory } from '../SalesHistory';
 import { HISTORY_COPY as C } from '../history-copy';
 

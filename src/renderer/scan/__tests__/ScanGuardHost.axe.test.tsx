@@ -6,7 +6,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../test-utils/axe-config.js';
 import { ScanGuardHost, resetScanGuardForTests } from '../ScanGuardHost.js';
 import { SCAN_REFUSED_MESSAGE } from '../scan-messages.js';
 import { useScanNoticeStore } from '../scan-notice-store.js';

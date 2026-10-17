@@ -13,7 +13,7 @@ import type {
 } from '../../../../shared/bridge-api.js';
 import type { PairingStatus } from '../../../../shared/pairing-types';
 import { formatHumanDateTime } from '../../../ui/format/human-format';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 
 /**
  * 010 diagnostics, RT-503 (VN-S10 S10-6, G-6 state 12) — the read-only

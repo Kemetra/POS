@@ -1,0 +1,1090 @@
+[
+  {
+    "name": "Typical",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-Typical-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقالموظ",
+    "errors": []
+  },
+  {
+    "name": "Typical",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-Typical-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقالموظ",
+    "errors": []
+  },
+  {
+    "name": "Typical",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-Typical-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقالموظ",
+    "errors": []
+  },
+  {
+    "name": "Typical",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-Typical-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقالموظ",
+    "errors": []
+  },
+  {
+    "name": "RecoveryMode",
+    "query": "view=recovery",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-RecoveryMode-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدخلت لإنهاء دف",
+    "errors": []
+  },
+  {
+    "name": "RecoveryMode",
+    "query": "view=recovery",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-RecoveryMode-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدخلت لإنهاء دف",
+    "errors": []
+  },
+  {
+    "name": "RecoveryMode",
+    "query": "view=recovery",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-RecoveryMode-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدخلت لإنهاء دف",
+    "errors": []
+  },
+  {
+    "name": "RecoveryMode",
+    "query": "view=recovery",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-RecoveryMode-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدخلت لإنهاء دف",
+    "errors": []
+  },
+  {
+    "name": "Long",
+    "query": "view=long",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-Long-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقلا يو",
+    "errors": []
+  },
+  {
+    "name": "Long",
+    "query": "view=long",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-Long-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقلا يو",
+    "errors": []
+  },
+  {
+    "name": "Long",
+    "query": "view=long",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-Long-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقلا يو",
+    "errors": []
+  },
+  {
+    "name": "Long",
+    "query": "view=long",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-Long-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقلا يو",
+    "errors": []
+  },
+  {
+    "name": "Empty",
+    "query": "view=empty",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-Empty-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقلا يو",
+    "errors": []
+  },
+  {
+    "name": "Empty",
+    "query": "view=empty",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-Empty-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقلا يو",
+    "errors": []
+  },
+  {
+    "name": "Empty",
+    "query": "view=empty",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-Empty-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقلا يو",
+    "errors": []
+  },
+  {
+    "name": "Empty",
+    "query": "view=empty",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-Empty-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةدفع معلّقلا يو",
+    "errors": []
+  },
+  {
+    "name": "Refused",
+    "query": "view=refused",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-Refused-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةهذه الشاشة للم",
+    "errors": []
+  },
+  {
+    "name": "Refused",
+    "query": "view=refused",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-Refused-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةهذه الشاشة للم",
+    "errors": []
+  },
+  {
+    "name": "Refused",
+    "query": "view=refused",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-Refused-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةهذه الشاشة للم",
+    "errors": []
+  },
+  {
+    "name": "Refused",
+    "query": "view=refused",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-Refused-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةهذه الشاشة للم",
+    "errors": []
+  },
+  {
+    "name": "Complete",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-Complete-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "Complete",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-Complete-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "Complete",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-Complete-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "Complete",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-Complete-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "CompleteReady",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-CompleteReady-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "CompleteReady",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-CompleteReady-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "CompleteReady",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-CompleteReady-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "CompleteReady",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-CompleteReady-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "CancelPayment",
+    "query": "view=recovery",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-CancelPayment-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "CancelPayment",
+    "query": "view=recovery",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-CancelPayment-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "CancelPayment",
+    "query": "view=recovery",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-CancelPayment-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "CancelPayment",
+    "query": "view=recovery",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-CancelPayment-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "CancelPaymentReady",
+    "query": "view=recovery",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-CancelPaymentReady-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "CancelPaymentReady",
+    "query": "view=recovery",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-CancelPaymentReady-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "CancelPaymentReady",
+    "query": "view=recovery",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-CancelPaymentReady-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "CancelPaymentReady",
+    "query": "view=recovery",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-CancelPaymentReady-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "CancelSale",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-CancelSale-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "CancelSale",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-CancelSale-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "CancelSale",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-CancelSale-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "CancelSale",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-CancelSale-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "WrongPin",
+    "query": "view=typical&approval=wrong_pin",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-WrongPin-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "WrongPin",
+    "query": "view=typical&approval=wrong_pin",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-WrongPin-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "WrongPin",
+    "query": "view=typical&approval=wrong_pin",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-WrongPin-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "WrongPin",
+    "query": "view=typical&approval=wrong_pin",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-WrongPin-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "INPUT",
+    "errors": []
+  },
+  {
+    "name": "NoPin",
+    "query": "view=typical&approver=none",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-NoPin-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "NoPin",
+    "query": "view=typical&approver=none",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-NoPin-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "NoPin",
+    "query": "view=typical&approver=none",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-NoPin-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "NoPin",
+    "query": "view=typical&approver=none",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-NoPin-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "ApproverLocked",
+    "query": "view=typical&approver=locked",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-ApproverLocked-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "ApproverLocked",
+    "query": "view=typical&approver=locked",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-ApproverLocked-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "ApproverLocked",
+    "query": "view=typical&approver=locked",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-ApproverLocked-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "ApproverLocked",
+    "query": "view=typical&approver=locked",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-ApproverLocked-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "رجوع",
+    "errors": []
+  },
+  {
+    "name": "Completed",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-Completed-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةاكتمل البيع. ا",
+    "errors": []
+  },
+  {
+    "name": "Completed",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-Completed-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةاكتمل البيع. ا",
+    "errors": []
+  },
+  {
+    "name": "Completed",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-Completed-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةاكتمل البيع. ا",
+    "errors": []
+  },
+  {
+    "name": "Completed",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-Completed-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةاكتمل البيع. ا",
+    "errors": []
+  },
+  {
+    "name": "CancelledPayment",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-CancelledPayment-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةأُلغي الدفع وس",
+    "errors": []
+  },
+  {
+    "name": "CancelledPayment",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-CancelledPayment-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةأُلغي الدفع وس",
+    "errors": []
+  },
+  {
+    "name": "CancelledPayment",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-CancelledPayment-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةأُلغي الدفع وس",
+    "errors": []
+  },
+  {
+    "name": "CancelledPayment",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-CancelledPayment-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةأُلغي الدفع وس",
+    "errors": []
+  },
+  {
+    "name": "CancelledSale",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt656-CancelledSale-1024x768.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةأُلغي البيع ال",
+    "errors": []
+  },
+  {
+    "name": "CancelledSale",
+    "query": "view=typical",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt656-CancelledSale-1024x768-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةأُلغي البيع ال",
+    "errors": []
+  },
+  {
+    "name": "CancelledSale",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt656-CancelledSale-1280x800.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةأُلغي البيع ال",
+    "errors": []
+  },
+  {
+    "name": "CancelledSale",
+    "query": "view=typical",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt656-CancelledSale-1280x800-forced.png",
+    "axe": [],
+    "legacy": 0,
+    "h1": [
+      "المبيعات المعلقة"
+    ],
+    "small": 0,
+    "targets": 0,
+    "overflowX": false,
+    "focused": "المبيعات المعلقةأُلغي البيع ال",
+    "errors": []
+  }
+]

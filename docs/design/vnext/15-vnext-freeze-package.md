@@ -107,7 +107,7 @@ Reference IDs: pack `I2-*` / `I3-*`, older `VN-R*`, re-audit `K*`.
 | S13 | Finalizing / finalization failed | — / retry finalization | everything financial | info «جارٍ حفظ البيع…» / danger | retry after SETTLED only | RT-24 §19 ✅ | VN-28/29 | no success colour before persistence |
 | S14 | Completion (+ receipt sent / failed) | «بيع جديد» | edits | proof list: payment ✓, sale no. (only if proven), receipt **sent** to printer / failed, sync pending / done; **change to hand back** | reprint, manual receipt | I-5, I-7 ✅; sale no. ⏳ D-N1 | I3-Receipt, VN-R5 | change shown equals DB; no «طُبع» unless proven |
 | S15 | Offline while selling | (continue selling) | Checkout tenders per RT-113 | status «غير متصل — البيع محفوظ على الجهاز» | — | **RT-113 In Review** ⏳ (copy conditional) | I3-Offline | real API stop: indicator flips within 30 s |
-| S16 | Reconnected / sync pending | — | — | «جارٍ إرسال N عملية…» → healthy | — | sync engine ✅; selling through reconnect ⏳ RT-113 | I3-Syncing | queue drains; indicator returns to healthy |
+| S16 | Reconnected / sync pending | — | — | «جارٍ إرسال N عملية…» (count-aware forms in §5.1, RT-646, pending owner approval) → healthy | — | sync engine ✅; selling through reconnect ⏳ RT-113 | I3-Syncing | queue drains; indicator returns to healthy |
 | S17 | Manager approval required | «طلب موافقة» | the gated action | panel with action, amount, reason | approved → exact prior state; denied → prior state | **RT-114 To Do** ⏳ | I3-Manager | not implementation-safe |
 | S18 | Locked / restored | unlock (same cashier PIN) | everything behind the lock | **nothing of the sale visible** (privacy) | takeover by another operator | RT-116 ✅, RT-161 In Review; see §2.1 | I3-Locked, I3-Restored | lock hides lines and amounts |
 | S19 | Live tender after restart | «متابعة الدفع المفتوح» | new sale until resolved | «يوجد دفع مفتوح من قبل إعادة التشغيل» | complete or cancel it | **RT-116 S5** ⏳ | — | re-attach proven on packaged |
@@ -337,8 +337,8 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-C5 | Drawer last-opened relative time (shipped, RT-240; plural grammar follows RT-258) | «الآن» / «منذ ‹n› ‹unit›» / «أمس» / «غير معروف» | neutral |
 | **Offline and sync** ⏳ RT-113 | | | |
 | M-O1 | Offline | «غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.» | warning |
-| M-O2 | Sync pending | «‹n› عمليات بانتظار الإرسال» | info |
-| M-O3 | Sync needs attention (manager) | «تعذّر إرسال ‹n› عمليات. راجع المدير.» | danger |
+| M-O2 | Sync pending | Count-aware, one form per plural category: see §5.1 (RT-646) — **pending owner approval**. The frozen single form was «‹n› عمليات بانتظار الإرسال» | info |
+| M-O3 | Sync needs attention (manager) | Count-aware, one form per plural category: see §5.1 (RT-646) — **pending owner approval**. The frozen single form was «تعذّر إرسال ‹n› عمليات. راجع المدير.» | danger |
 | M-O4 | Healthy indicator | «متصل» (only from a real signal; never hard-coded) | success |
 | **Manager approval** ⏳ RT-114 | | | |
 | M-A1 | Approval needed | «هذا الإجراء يحتاج موافقة المدير.» | info |
@@ -366,6 +366,37 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-F1 | Ready after restart (replaces English) | «الجهاز مرتبط وجاهز.» · «متابعة» | neutral |
 | M-F2 | Screen too small. Three variants (RT-313; owner-approved as RT-312 D5, 2026-10-08): **width** when the effective viewport is narrower than 1024 CSS px, **height** when it is shorter than 600 CSS px, **both** when it is under both floors (the width heading with the height action). `1024×768`, `100%` and `125%` are Western digits in `<bdi dir="ltr">` runs | width: «الشاشة أصغر من 1024×768. كبّر النافذة أو استخدم شاشة أكبر.» · height: «ارتفاع الشاشة أقل من الحد المدعوم. كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.» · both: «الشاشة أصغر من 1024×768. كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.» | warning |
 | M-F3 | Screen cannot show a must-see element (RT-412; owner-approved as RT-412 D2, 2026-10-12): inside the 600–767 compact-height band, Sale or Checkout would clip the total / amount due, change, commit, cancel or void, or show fewer than 4 cart rows. Covers the screen only; banners and nav stay. With a frame banner showing, the action starts with it; with none, it is the M-F2 height action. `100%` and `125%` are Western digits in `<bdi dir="ltr">` runs | heading: Checkout «لا تتّسع الشاشة لعرض الدفع كاملًا.» · Sale «لا تتّسع الشاشة لعرض البيع كاملًا.» · action with a banner: «تعامل مع أحد التنبيهات أعلاه، أو كبّر النافذة، أو اضبط مقياس العرض في Windows على 100% أو 125%.» · action with none: the M-F2 height action | warning |
+
+### 5.1 Count-aware sync counts (RT-646) — pending owner approval
+
+M-O2, S16 and M-O3 were frozen with one noun form for every count, so the grammar did not follow
+the number («1 عمليات بانتظار الإرسال», «جارٍ إرسال 3 عملية…», «تعذّر إرسال 1 عمليات.»). Each is
+now a full sentence per Arabic plural category, the model RT-258 set for «عملية» in
+`SaleSyncStatus` («عملية واحدة بحاجة إلى مراجعة» / «عمليتان …» / «‹n› عمليات …» / «‹n› عملية …»).
+
+**Rules:**
+1. **Style (recommended):** words for 1 and 2 (no digit), a Western digit and the counted noun
+   from 3 up. This is standard Modern Standard Arabic and matches the shipped RT-258 copy.
+2. **Digits:** Western digits; the count is an isolated LTR run (`<span dir="ltr">`) with
+   punctuation outside it, as in §5 rule 2.
+3. **Category:** the ICU `ar` plural rules (`Intl.PluralRules('ar')`, through the RT-258 helper
+   `shared/formatters/arabic-plural.ts`). Above 99 the last two digits decide: 100–102 take the
+   11+ form («100 عملية»), 103–110 the 3–10 form («103 عمليات»), 111–199 the 11+ form.
+4. **Case of the dual:** nominative «عمليتان» where the count is the subject (M-O2); genitive
+   «عمليتين» after «إرسال» (S16, M-O3).
+5. **Zero cannot occur.** M-O2 and S16 show only while `pending > 0`; M-O3 shows only while U2
+   holds (a dead letter, or pending sales whose oldest is older than 24 h), so its count is at
+   least 1. No zero form is defined.
+
+| ID | 1 | 2 | 3–10 | 11+ |
+|---|---|---|---|---|
+| M-O2 | «عملية واحدة بانتظار الإرسال» | «عمليتان بانتظار الإرسال» | «‹n› عمليات بانتظار الإرسال» | «‹n› عملية بانتظار الإرسال» |
+| S16 | «جارٍ إرسال عملية واحدة…» | «جارٍ إرسال عمليتين…» | «جارٍ إرسال ‹n› عمليات…» | «جارٍ إرسال ‹n› عملية…» |
+| M-O3 | «تعذّر إرسال عملية واحدة. راجع المدير.» | «تعذّر إرسال عمليتين. راجع المدير.» | «تعذّر إرسال ‹n› عمليات. راجع المدير.» | «تعذّر إرسال ‹n› عملية. راجع المدير.» |
+
+**Alternative, not recommended:** a digit for every count, so the number is always scannable:
+«1 عملية بانتظار الإرسال» is acceptable, but a digit before the dual («2 عمليتان») is not
+standard, so 2 would still need the word form and the style would be mixed anyway.
 
 ---
 

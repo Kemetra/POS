@@ -13,7 +13,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Role } from '../../../shared/operator/role';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../test-utils/axe-config';
 import { V5Frame } from '../frame/V5Frame';
 import { isActiveSaleRoute } from '../frame/nav-model';
 

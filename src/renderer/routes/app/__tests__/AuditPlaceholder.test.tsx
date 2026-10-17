@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import { AuditPlaceholder } from '../AuditPlaceholder';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 
 /**
  * RT-503 (VN-S10 S10-6, G-6 state 10) — the Audit nav entry says, honestly and

@@ -16,7 +16,7 @@ import { usePaymentStore } from '../../stores/payment-store';
 import { useScanNoticeStore } from '../../scan/scan-notice-store';
 import { SALE_ADD_FAILED_MESSAGE } from '../../scan/scan-messages';
 import { LiveSaleWorkspace } from '../sale/LiveSaleWorkspace';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../test-utils/axe-config';
 
 afterEach(() => {
   cleanup();

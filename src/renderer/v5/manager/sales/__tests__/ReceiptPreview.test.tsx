@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import type { ReceiptsBridgeAPI, ReceiptsPreviewResponse } from '../../../../../shared/bridge-api';
-import { expectNoAxeViolations } from '../../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../../test-utils/axe-config';
 import { ReceiptPreview } from '../ReceiptPreview';
 import { SALES_COPY as C } from '../sales-copy';
 

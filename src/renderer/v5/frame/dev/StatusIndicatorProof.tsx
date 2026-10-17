@@ -24,6 +24,11 @@ import { OneFrameProof, readOneFrameProofParams } from './OneFrameProof';
  * states also drive the M-O1 / M-O3 banner captures. `Attention24h` reaches
  * attention through the 24 h line alone (no dead letter); `OfflineAttention`
  * shows both banners. `banner=printer` combines with any state.
+ *
+ * RT-646: `count=<n>` (a positive integer) replaces the state's own count —
+ * the pending sales for OfflinePending / Sending / Paused / Attention24h, the
+ * dead letters for Attention / OfflineAttention — so the count-aware copy can
+ * be captured at 1, 2, 3 and 11. Without it each state keeps its count.
  */
 
 export const STATUS_PROOF_STATES = [
@@ -69,7 +74,7 @@ function pending(n: number): Partial<TerminalStatusSync> {
   return { pending: n, oldestPendingAt: new Date(Date.now() - 20 * 60 * 1000).toISOString() };
 }
 
-function snapshotFor(state: StatusProofState): TerminalStatusSnapshot {
+function snapshotFor(state: StatusProofState, count: number | null): TerminalStatusSnapshot {
   switch (state) {
     case 'Checking':
       return snapshot('checking');
@@ -78,32 +83,42 @@ function snapshotFor(state: StatusProofState): TerminalStatusSnapshot {
     case 'Degraded':
       return snapshot('degraded');
     case 'OfflinePending':
-      return snapshot('offline', pending(3));
+      return snapshot('offline', pending(count ?? 3));
     case 'Sending':
-      return snapshot('online', pending(3));
+      return snapshot('online', pending(count ?? 3));
     case 'Paused':
-      return snapshot('online', { ...pending(2), paused: 'no_operator_credential' });
+      return snapshot('online', { ...pending(count ?? 2), paused: 'no_operator_credential' });
     case 'Attention':
-      return snapshot('online', { ...pending(1), deadLetter: 2 });
+      return snapshot('online', { ...pending(1), deadLetter: count ?? 2 });
     case 'Attention24h':
       return snapshot('online', {
-        pending: 2,
+        pending: count ?? 2,
         oldestPendingAt: new Date(Date.now() - 26 * HOUR).toISOString(),
       });
     case 'OfflineAttention':
-      return snapshot('offline', { ...pending(2), deadLetter: 1 });
+      return snapshot('offline', { ...pending(2), deadLetter: count ?? 1 });
     default:
       return snapshot('online');
   }
 }
 
+function hashParam(key: string): string | null {
+  return new URLSearchParams(window.location.hash.split('?')[1] ?? '').get(key);
+}
+
 export function readStatusProofState(): StatusProofState {
-  const raw = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('state');
+  const raw = hashParam('state');
   return STATUS_PROOF_STATES.find((s) => s === raw) ?? 'Connected';
 }
 
+/** RT-646: the `count` override, or null unless it is a positive integer. */
+export function readStatusProofCount(): number | null {
+  const raw = hashParam('count');
+  return raw !== null && /^[1-9]\d*$/.test(raw) ? Number(raw) : null;
+}
+
 function statusBridge(state: StatusProofState): TerminalStatusBridgeAPI {
-  const answer = snapshotFor(state);
+  const answer = snapshotFor(state, readStatusProofCount());
   return {
     get: () => Promise.resolve(answer),
     onChanged: () => () => undefined,

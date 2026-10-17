@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import type { ReturnJournalView } from '../../../shared/returns/types.js';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../test-utils/axe-config.js';
 import { PAYOUT_COPY, refusalMessage } from '../returns-messages.js';
 import { usePayout } from '../usePayout.js';
 import { useReturnHistory } from '../useReturnHistory.js';

@@ -10,7 +10,7 @@ import type {
   SaleSummary,
   SalesFindByNumberResponse,
 } from '../../../../../shared/bridge-api';
-import { expectNoAxeViolations } from '../../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../../test-utils/axe-config';
 import { SalesLookup } from '../SalesLookup';
 import { SALES_COPY as C } from '../sales-copy';
 

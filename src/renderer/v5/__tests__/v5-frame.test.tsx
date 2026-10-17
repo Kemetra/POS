@@ -6,14 +6,13 @@ import axe from 'axe-core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom/vitest';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../test-utils/axe-config';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import type { Role } from '../../../shared/operator/role';
 import { V5Frame } from '../frame/V5Frame';
 import { Dialog } from '../foundation/Dialog';
 import { V5_SALE_PATH, v5NavEntries } from '../frame/nav-model';
 import { V5OperationalNotices } from '../frame/V5OperationalNotices';
-import { useConnectionStateStore } from '../../connection/connection-state';
 import { useDrawerNoticeStore } from '../../ui/receipts/drawer-notice-store';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 
@@ -21,7 +20,6 @@ afterEach(() => {
   cleanup();
   useDrawerNoticeStore.getState().reset();
   useOperatorSessionStore.getState().reset();
-  useConnectionStateStore.getState().setState('online');
   useFeatureFlagsStore.getState().reset();
   vi.unstubAllGlobals();
 });
@@ -495,25 +493,13 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
     expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
   });
 
-  // RT-605 (VN-S6 S6-4): the connection banner moved into the notices stack
-  // (M-O1, fed by the real terminal signal). The legacy store, still alive
-  // until S6-5, no longer renders anything in the frame.
-  it.each(['offline', 'degraded', 'syncing'] as const)(
-    'renders no 007 connection banner for the legacy %s state (moved to the notices stack)',
-    (state) => {
-      signIn('cashier');
-      useConnectionStateStore.getState().setState(state);
-      renderFrame();
-      expect(connectionBanners()).toHaveLength(0);
-      expect(document.querySelector('[data-state]')).toBeNull();
-      expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
-    },
-  );
-
-  it('shows no connection banner while online', () => {
+  // RT-605/RT-606 (VN-S6): the connection banner lives in the notices stack
+  // (M-O1, fed by the real terminal signal); the frame renders none itself.
+  it('renders no connection banner of its own', () => {
     signIn('cashier');
     renderFrame();
     expect(connectionBanners()).toHaveLength(0);
+    expect(document.querySelector('[data-state]')).toBeNull();
   });
 
   // RT-504: ported from `AppShell.layout.test.tsx` (RT-240, I-7). Nothing
