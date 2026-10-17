@@ -7,41 +7,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type {
-  ConnectionStateCode,
-  TerminalStatusSnapshot,
-  TerminalStatusSync,
-} from '../../../shared/terminal-status/types';
+import type { TerminalStatusSync } from '../../../shared/terminal-status/types';
+import { STATUS_NOW as NOW, iso, snap } from './__helpers__/snapshot';
 import { SYNC_ATTENTION_AGE_MS, mapStatusBanners, mapTerminalStatus } from '../status-mapping';
 import { BANNER_COPY } from '../status-copy';
 
-const NOW = Date.parse('2026-10-17T12:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
-
-function iso(ms: number): string {
-  return new Date(ms).toISOString();
-}
-
-function snap(
-  connection: ConnectionStateCode,
-  sync: Partial<TerminalStatusSync> = {},
-): TerminalStatusSnapshot {
-  return {
-    v: 1,
-    connection,
-    connectionSince: iso(NOW - 60_000),
-    lastContactAt: null,
-    sync: {
-      pending: 0,
-      heldPreviousPairing: 0,
-      deadLetter: 0,
-      oldestPendingAt: null,
-      paused: null,
-      lastSuccessAt: null,
-      ...sync,
-    },
-  };
-}
 
 const aged = (n: number): Partial<TerminalStatusSync> => ({
   pending: n,

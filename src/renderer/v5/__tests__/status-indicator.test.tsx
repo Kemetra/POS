@@ -6,110 +6,32 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TerminalStatusBridgeAPI } from '../../../shared/bridge-api';
-import type {
-  ConnectionStateCode,
-  TerminalStatusSnapshot,
-  TerminalStatusSync,
-} from '../../../shared/terminal-status/types';
-import { useOperatorSessionStore } from '../../stores/operator-session-store';
+import type { TerminalStatusSnapshot } from '../../../shared/terminal-status/types';
+import { STATUS_NOW as NOW, snap } from '../../terminal-status/__tests__/__helpers__/snapshot';
 import { SYNC_ATTENTION_AGE_MS } from '../../terminal-status/status-mapping';
-import { useTerminalStatusStore } from '../../terminal-status/terminal-status-store';
 import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
-import { V5Frame } from '../frame/V5Frame';
+import {
+  installStatusApi,
+  renderStatusFrame,
+  resetStatusKit,
+  signInCashier,
+  useStatusClock,
+  type StatusApi,
+} from './__helpers__/terminal-status-kit';
 
-const NOW = Date.parse('2026-10-17T12:00:00.000Z');
-
-function snap(
-  connection: ConnectionStateCode,
-  sync: Partial<TerminalStatusSync> = {},
-): TerminalStatusSnapshot {
-  return {
-    v: 1,
-    connection,
-    connectionSince: '2026-10-17T11:59:00.000Z',
-    lastContactAt: null,
-    sync: {
-      pending: 0,
-      heldPreviousPairing: 0,
-      deadLetter: 0,
-      oldestPendingAt: null,
-      paused: null,
-      lastSuccessAt: null,
-      ...sync,
-    },
-  };
-}
-
-let push: (s: TerminalStatusSnapshot) => void = () => undefined;
-let getStatus: ReturnType<typeof vi.fn>;
-let unsubscribe: ReturnType<typeof vi.fn>;
+let api: StatusApi;
 let printFailed = false;
 
 function installApi(first: TerminalStatusSnapshot | 'reject'): void {
-  unsubscribe = vi.fn();
-  getStatus = vi.fn(() =>
-    first === 'reject' ? Promise.reject(new Error('unavailable')) : Promise.resolve(first),
-  );
-  const bridge: TerminalStatusBridgeAPI = {
-    get: getStatus as TerminalStatusBridgeAPI['get'],
-    onChanged: (cb) => {
-      push = cb;
-      return unsubscribe as () => void;
-    },
-  };
-  (window as unknown as { api?: unknown }).api = {
-    terminalStatus: bridge,
-    sales: {
-      subscribe: vi.fn(() =>
-        Promise.resolve({
-          kind: 'ok',
-          subscription_token: 't',
-          banner_state: {
-            printer_failure: printFailed
-              ? { sale_id: 's-1', failure_reason: 'printer_offline', has_successful_print: false }
-              : null,
-            drawer_failure: null,
-          },
-        }),
-      ),
-      unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' })),
-    },
-  };
+  api = installStatusApi(first, { printFailed });
 }
 
-function signIn(): void {
-  useOperatorSessionStore.getState().hydrateSignedIn({
-    id: 'session-1',
-    operator_id: 'op-1',
-    display_name: 'د. سارة',
-    role: 'cashier',
-    tenant_id: 'tenant-1',
-    branch_id: 'branch-1',
-    started_at: '2026-10-17T09:00:00Z',
-  });
-}
-
-async function renderAt(path = '/app/dashboard'): Promise<ReturnType<typeof render>> {
-  signIn();
-  let result!: ReturnType<typeof render>;
-  await act(async () => {
-    result = render(
-      <MemoryRouter initialEntries={[path]}>
-        <V5Frame>
-          <section aria-labelledby="t">
-            <h1 id="t">شاشة</h1>
-          </section>
-        </V5Frame>
-      </MemoryRouter>,
-    );
-    await Promise.resolve();
-  });
-  return result;
+async function renderAt(path = '/app/dashboard'): ReturnType<typeof renderStatusFrame> {
+  signInCashier();
+  return renderStatusFrame(path);
 }
 
 function indicator(): HTMLElement {
@@ -121,24 +43,17 @@ function row(name: 'connection' | 'sync' | 'printer'): HTMLElement | null {
 }
 
 async function pushNow(s: TerminalStatusSnapshot): Promise<void> {
-  await act(async () => {
-    push(s);
-    await Promise.resolve();
-  });
+  await api.push(s);
 }
 
 beforeEach(() => {
-  vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date', 'setTimeout', 'clearTimeout'] });
-  vi.setSystemTime(NOW);
+  useStatusClock();
   printFailed = false;
 });
 
 afterEach(() => {
   cleanup();
-  vi.useRealTimers();
-  useOperatorSessionStore.getState().reset();
-  useTerminalStatusStore.setState({ snapshot: null });
-  delete (window as unknown as { api?: unknown }).api;
+  resetStatusKit();
 });
 
 describe('StatusIndicator — placement', () => {
@@ -256,7 +171,7 @@ describe('StatusIndicator — sync row', () => {
       await Promise.resolve();
     });
     expect(row('sync')).toHaveTextContent('تحتاج مراجعة');
-    expect(getStatus).toHaveBeenCalledTimes(1);
+    expect(api.getStatus).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -293,7 +208,7 @@ describe('StatusIndicator — slim rail and lifetime', () => {
     installApi(snap('online'));
     const { unmount } = await renderAt();
     unmount();
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(api.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it('is axe-clean in the labelled panel and the slim rail', async () => {

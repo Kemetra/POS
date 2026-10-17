@@ -6,7 +6,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || '/opt/node-tools/node_modules/playwright-core');
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
   const dir = path.resolve('docs/design/vnext/visual-acceptance/B3-Critical-states-iteration-3');
   for (const [w, h] of [[1024, 768], [1280, 800]]) {
     const p = await b.newPage({ viewport: { width: w, height: h } });

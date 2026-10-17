@@ -9,13 +9,15 @@
 const fs = require('fs');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || '/opt/node-tools/node_modules/playwright-core');
 const [outFile, base = 'http://localhost:5173'] = process.argv.slice(2);
+// CHROMIUM_PATH overrides the cloud-session browser (no Playwright dependency is declared).
+const CHROMIUM = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const STATUS = '[data-testid=v5-offline-banner], [data-testid=v5-sync-attention-banner]';
 
 async function walk(browser, name, query, route) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await page.goto(`${base}/#/dev/status-proof?${query}&path=${route}`);
   await page.waitForSelector('[data-testid=v5-status-indicator]');
-  await page.waitForTimeout(1200);
+  await page.waitForSelector(query.includes('closed=shift') ? '[data-testid=shift-closed-banner]' : STATUS);
   const stops = [];
   let signOutSeen = 0;
   for (let i = 0; i < 120; i += 1) {
@@ -40,7 +42,8 @@ async function walk(browser, name, query, route) {
       inAside: !!b.closest('aside[aria-label]'),
     })), STATUS);
   await page.close();
-  const reachedSignOut = stops.some((s) => s.text === 'تسجيل الخروج');
+  // A full Tab cycle: sign-out must be reached twice, not once before the Tab limit.
+  const reachedSignOut = signOutSeen === 2;
   const stopInStatusBanner = stops.some((s) => s.inStatusBanner);
   const printerStops = stops.filter((s) => s.inPrinter).map((s) => s.text);
   const expectPrinter = query.includes('banner=printer');
@@ -53,7 +56,7 @@ async function walk(browser, name, query, route) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await chromium.launch({ executablePath: CHROMIUM });
   const log = [];
   const cases = [
     ['Offline', 'state=Offline'],
@@ -72,4 +75,5 @@ async function walk(browser, name, query, route) {
   }
   fs.writeFileSync(outFile, `${JSON.stringify(log, null, 2)}\n`);
   await browser.close();
+  if (log.some((r) => !r.pass)) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });

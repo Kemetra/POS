@@ -31,14 +31,14 @@ Copy is verbatim from doc 15 §M-O: M-O1 «غير متصل — البيع محف
 
 ## Automated checks ([`rt605-capture-log.json`](rt605-capture-log.json))
 
-These ran on every capture, through [`tools/capture-rt605.cjs`](tools/capture-rt605.cjs):
+These ran on every capture, through [`tools/capture-rt605.cjs`](tools/capture-rt605.cjs). Each case waits (retrying) for its expected banner stack, and the tool exits non-zero if any capture shows a different stack, a legacy class, an axe violation or a page error:
 
 | Check | Result |
 |---|---|
 | axe-core, whole document (light) | **0 violations** in all 36 light captures |
 | Stack order (DOM) | attention → shift closed → offline → printer in every capture that has them (doc 24 §4.3) |
 | Legacy classes (`.shift-closed-banner`, `.printer-failure-banner`, `.v4-row`, `.btn` in the printer banner) | none, in all 72 |
-| «غير متصل —» shown once | exactly 1 element in every offline capture, and no 007 `StatusBanner` (`[data-state]`) anywhere |
+| «غير متصل —» shown once | exactly 1 element in every offline capture, and no 007 `StatusBanner` (`.status-banner`) anywhere |
 | Banner text under 12px | none |
 | Horizontal page overflow | none |
 | `<main>` still visible | ≥ 534 px of 768 with all four banners at 1024 (604 px with three, 674 px with two) |
@@ -46,7 +46,7 @@ These ran on every capture, through [`tools/capture-rt605.cjs`](tools/capture-rt
 
 ## Keyboard-only walk ([`rt605-walk-log.json`](rt605-walk-log.json))
 
-[`tools/walk-rt605.cjs`](tools/walk-rt605.cjs), no mouse after load, one full Tab cycle, for Offline, AttentionDeadLetter, OfflineAttention, OfflineAttentionPrinter, ShiftClosed and FullStack, in the panel and the slim rail. **12 / 12 pass:**
+[`tools/walk-rt605.cjs`](tools/walk-rt605.cjs), no mouse after load, one full Tab cycle (sign-out reached twice; the tool exits non-zero on any failure), for Offline, AttentionDeadLetter, OfflineAttention, OfflineAttentionPrinter, ShiftClosed and FullStack, in the panel and the slim rail. **12 / 12 pass:**
 
 * M-O1 and M-O3 add no control, so Tab never stops inside them.
 * The shift-closed banner's «إخفاء» is reachable.
@@ -75,7 +75,7 @@ The jsdom suite (`src/renderer/v5/__tests__/status-banners.test.tsx`) also runs 
 
 ## Re-running
 
-With `npm run dev:vite` running, from the repo root:
+With `npm run dev:vite` running, from the repo root. The tools default to the cloud session's Chromium and `playwright-core`; elsewhere set `CHROMIUM_PATH` (and `PLAYWRIGHT_CORE`) to a local install. The repo declares no Playwright dependency, and adding one is out of scope (CLAUDE.md §10).
 
 ```bash
 node docs/design/vnext/captures/RT-605/tools/capture-rt605.cjs docs/design/vnext/captures/RT-605

@@ -154,7 +154,7 @@
     "small": 0,
     "mainVisible": 721,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -186,7 +186,7 @@
     "small": 0,
     "mainVisible": 721,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -218,7 +218,7 @@
     "small": 0,
     "mainVisible": 749,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -250,7 +250,7 @@
     "small": 0,
     "mainVisible": 749,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -410,7 +410,7 @@
     "small": 0,
     "mainVisible": 721,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -442,7 +442,7 @@
     "small": 0,
     "mainVisible": 721,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -474,7 +474,7 @@
     "small": 0,
     "mainVisible": 749,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -506,7 +506,7 @@
     "small": 0,
     "mainVisible": 749,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -666,7 +666,7 @@
     "small": 0,
     "mainVisible": 721,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -698,7 +698,7 @@
     "small": 0,
     "mainVisible": 721,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -730,7 +730,7 @@
     "small": 0,
     "mainVisible": 749,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -762,7 +762,7 @@
     "small": 0,
     "mainVisible": 749,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -922,7 +922,7 @@
     "small": 0,
     "mainVisible": 721,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -954,7 +954,7 @@
     "small": 0,
     "mainVisible": 721,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -986,7 +986,7 @@
     "small": 0,
     "mainVisible": 749,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1018,7 +1018,7 @@
     "small": 0,
     "mainVisible": 749,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1218,7 +1218,7 @@
     "small": 0,
     "mainVisible": 674,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1258,7 +1258,7 @@
     "small": 0,
     "mainVisible": 674,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1298,7 +1298,7 @@
     "small": 0,
     "mainVisible": 702,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1338,7 +1338,7 @@
     "small": 0,
     "mainVisible": 702,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1578,7 +1578,7 @@
     "small": 0,
     "mainVisible": 604,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1626,7 +1626,7 @@
     "small": 0,
     "mainVisible": 604,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1674,7 +1674,7 @@
     "small": 0,
     "mainVisible": 632,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1722,7 +1722,7 @@
     "small": 0,
     "mainVisible": 632,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1882,7 +1882,7 @@
     "small": 0,
     "mainVisible": 698,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1914,7 +1914,7 @@
     "small": 0,
     "mainVisible": 698,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1946,7 +1946,7 @@
     "small": 0,
     "mainVisible": 726,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -1978,7 +1978,7 @@
     "small": 0,
     "mainVisible": 726,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -2138,7 +2138,7 @@
     "small": 0,
     "mainVisible": 698,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -2170,7 +2170,7 @@
     "small": 0,
     "mainVisible": 698,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -2202,7 +2202,7 @@
     "small": 0,
     "mainVisible": 726,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -2234,7 +2234,7 @@
     "small": 0,
     "mainVisible": 726,
     "offlineTexts": 0,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -2514,7 +2514,7 @@
     "small": 0,
     "mainVisible": 534,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -2570,7 +2570,7 @@
     "small": 0,
     "mainVisible": 534,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -2626,7 +2626,7 @@
     "small": 0,
     "mainVisible": 562,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []
@@ -2682,7 +2682,7 @@
     "small": 0,
     "mainVisible": 562,
     "offlineTexts": 1,
-    "legacy007": true,
+    "legacy007": false,
     "legacyClasses": false,
     "overflowX": false,
     "errors": []

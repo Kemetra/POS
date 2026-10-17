@@ -6,115 +6,36 @@
  * rule. The connection banner has moved out of the frame's 007 StatusBanner,
  * so offline is never shown twice.
  */
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TerminalStatusBridgeAPI } from '../../../shared/bridge-api';
-import type {
-  ConnectionStateCode,
-  TerminalStatusSnapshot,
-  TerminalStatusSync,
-} from '../../../shared/terminal-status/types';
+import type { TerminalStatusSnapshot } from '../../../shared/terminal-status/types';
 import { useConnectionStateStore } from '../../connection/connection-state';
-import { useOperatorSessionStore } from '../../stores/operator-session-store';
+import { STATUS_NOW as NOW, snap } from '../../terminal-status/__tests__/__helpers__/snapshot';
 import { SYNC_ATTENTION_AGE_MS } from '../../terminal-status/status-mapping';
-import { useTerminalStatusStore } from '../../terminal-status/terminal-status-store';
 import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
-import { V5Frame } from '../frame/V5Frame';
 import { V5OperationalNotices } from '../frame/V5OperationalNotices';
+import {
+  installStatusApi,
+  renderStatusFrame,
+  resetStatusKit,
+  signInCashier,
+  useStatusClock,
+  type StatusApi,
+} from './__helpers__/terminal-status-kit';
 
-const NOW = Date.parse('2026-10-17T12:00:00.000Z');
 const M_O1 = 'غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.';
 
-function snap(
-  connection: ConnectionStateCode,
-  sync: Partial<TerminalStatusSync> = {},
-): TerminalStatusSnapshot {
-  return {
-    v: 1,
-    connection,
-    connectionSince: '2026-10-17T11:59:00.000Z',
-    lastContactAt: null,
-    sync: {
-      pending: 0,
-      heldPreviousPairing: 0,
-      deadLetter: 0,
-      oldestPendingAt: null,
-      paused: null,
-      lastSuccessAt: null,
-      ...sync,
-    },
-  };
-}
-
-let push: (s: TerminalStatusSnapshot) => void = () => undefined;
-let getStatus: ReturnType<typeof vi.fn>;
-let onChanged: ReturnType<typeof vi.fn>;
+let api: StatusApi;
 let printFailed = false;
 
 function installApi(first: TerminalStatusSnapshot): void {
-  getStatus = vi.fn(() => Promise.resolve(first));
-  onChanged = vi.fn((cb: (s: TerminalStatusSnapshot) => void) => {
-    push = cb;
-    return () => undefined;
-  });
-  const bridge: TerminalStatusBridgeAPI = {
-    get: getStatus as TerminalStatusBridgeAPI['get'],
-    onChanged: onChanged as TerminalStatusBridgeAPI['onChanged'],
-  };
-  (window as unknown as { api?: unknown }).api = {
-    terminalStatus: bridge,
-    sales: {
-      subscribe: vi.fn(() =>
-        Promise.resolve({
-          kind: 'ok',
-          subscription_token: 't',
-          banner_state: {
-            printer_failure: printFailed
-              ? { sale_id: 's-1', failure_reason: 'printer_offline', has_successful_print: false }
-              : null,
-            drawer_failure: null,
-          },
-        }),
-      ),
-      unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' })),
-    },
-  };
-}
-
-function signIn(forcedClose = false): void {
-  useOperatorSessionStore.setState({
-    state: {
-      kind: 'signedIn',
-      session: {
-        id: 'session-1',
-        operator_id: 'op-1',
-        display_name: 'د. سارة',
-        role: 'cashier',
-        tenant_id: 'tenant-1',
-        branch_id: 'branch-1',
-        started_at: '2026-10-17T09:00:00Z',
-      },
-      ...(forcedClose ? { forced_close_notice: { closed_at: '2026-10-17T08:00:00Z' } } : {}),
-    },
-  });
+  api = installStatusApi(first, { printFailed });
 }
 
 async function renderAt(path = '/app/dashboard', forcedClose = false): Promise<void> {
-  signIn(forcedClose);
-  await act(async () => {
-    render(
-      <MemoryRouter initialEntries={[path]}>
-        <V5Frame notices={<V5OperationalNotices />}>
-          <section aria-labelledby="t">
-            <h1 id="t">شاشة</h1>
-          </section>
-        </V5Frame>
-      </MemoryRouter>,
-    );
-    await Promise.resolve();
-  });
+  signInCashier(forcedClose);
+  await renderStatusFrame(path, <V5OperationalNotices />);
 }
 
 function notices(): HTMLElement {
@@ -129,26 +50,15 @@ function attentionBanner(): HTMLElement | null {
   return screen.queryByTestId('v5-sync-attention-banner');
 }
 
-async function pushNow(s: TerminalStatusSnapshot): Promise<void> {
-  await act(async () => {
-    push(s);
-    await Promise.resolve();
-  });
-}
-
 beforeEach(() => {
-  vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date', 'setTimeout', 'clearTimeout'] });
-  vi.setSystemTime(NOW);
+  useStatusClock();
   printFailed = false;
 });
 
 afterEach(() => {
   cleanup();
-  vi.useRealTimers();
-  useOperatorSessionStore.getState().reset();
-  useTerminalStatusStore.setState({ snapshot: null });
+  resetStatusKit();
   useConnectionStateStore.getState().setState('online');
-  delete (window as unknown as { api?: unknown }).api;
 });
 
 describe('offline banner M-O1 (U3)', () => {
@@ -176,7 +86,7 @@ describe('offline banner M-O1 (U3)', () => {
 
   it('shows nothing before the first snapshot (never a guess)', async () => {
     installApi(snap('offline'));
-    getStatus.mockReturnValue(new Promise(() => undefined));
+    api.getStatus.mockReturnValue(new Promise(() => undefined));
     await renderAt();
     expect(offlineBanner()).toBeNull();
   });
@@ -185,9 +95,9 @@ describe('offline banner M-O1 (U3)', () => {
     installApi(snap('online'));
     await renderAt();
     expect(offlineBanner()).toBeNull();
-    await pushNow(snap('offline'));
+    await api.push(snap('offline'));
     expect(offlineBanner()).toHaveTextContent(M_O1);
-    await pushNow(snap('online'));
+    await api.push(snap('online'));
     expect(offlineBanner()).toBeNull();
   });
 
@@ -236,7 +146,7 @@ describe('sync-attention banner M-O3 (U2)', () => {
       await Promise.resolve();
     });
     expect(attentionBanner()).toHaveTextContent('تعذّر إرسال 1 عمليات. راجع المدير.');
-    expect(getStatus).toHaveBeenCalledTimes(1);
+    expect(api.getStatus).toHaveBeenCalledTimes(1);
   });
 
   it('shows nothing for pending sales younger than 24 h, or for a paused queue', async () => {
@@ -285,8 +195,8 @@ describe('the stack (doc 24 §4.3)', () => {
     await renderAt();
     expect(offlineBanner()).not.toBeNull();
     expect(attentionBanner()).not.toBeNull();
-    expect(getStatus).toHaveBeenCalledTimes(1);
-    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(api.getStatus).toHaveBeenCalledTimes(1);
+    expect(api.onChanged).toHaveBeenCalledTimes(1);
   });
 
   it.each(['/app/dashboard', '/app/cart'])(
