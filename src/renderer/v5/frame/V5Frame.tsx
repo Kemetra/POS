@@ -1,7 +1,6 @@
 import { useEffect, useRef, type JSX, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { CONNECTION_BANNER_MESSAGES, useConnectionState } from '../../connection/connection-state';
-import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
+import { useConnectionState } from '../../connection/connection-state';
 import type { ConnectionState } from '../../ui/tokens/connection-state';
 import { ScreenTooSmall } from '../../ui/states/ScreenTooSmall';
 import { useFocusOnReturn } from '../../viewport/useFocusOnReturn';
@@ -32,8 +31,7 @@ interface V5FrameProps {
  * the lock's inert, concealed subtree.
  *
  * AppShell parity (023 G0): below the 1024px floor only the too-small notice
- * renders, so the screen (and its bridge calls) never mounts; a non-online
- * connection state shows the same persistent banner as the legacy TopBar.
+ * renders, so the screen (and its bridge calls) never mounts.
  *
  * RT-313 (RT-312 D1/D2/D6): the same applies below the 600px height floor,
  * with the notice's height copy. The screen unmounts and remounts as before.
@@ -49,9 +47,13 @@ interface V5FrameProps {
  * not a navigation region, and it keeps axe's `region` rule clean.
  *
  * RT-498 (VN-S10 S10-1, D-10-7): the `?conn=` dev toggle the legacy AppShell
- * carried lives here now, so the connection banner stays exercisable until a
- * real signal exists (VN-S6). Dev builds only; the module is imported lazily
- * so a production build never ships it.
+ * carried lives here. Dev builds only; the module is imported lazily so a
+ * production build never ships it.
+ *
+ * RT-605 (VN-S6 S6-4): the connection banner has moved into the notices stack
+ * (M-O1, from the real terminal signal), so the frame no longer renders the
+ * 007 StatusBanner and offline is never shown twice. The toggle, the legacy
+ * store and the 007 component are retired in S6-5 (RT-606).
  */
 function useDevConnectionToggle(setConnectionState: (state: ConnectionState) => void): void {
   useEffect(() => {
@@ -67,7 +69,7 @@ function useDevConnectionToggle(setConnectionState: (state: ConnectionState) => 
 
 export function V5Frame({ notices, children }: Readonly<V5FrameProps>): JSX.Element {
   const shortfall = viewportShortfall(useViewportTier());
-  const { state: connectionState, setState: setConnectionState } = useConnectionState();
+  const { setState: setConnectionState } = useConnectionState();
   useDevConnectionToggle(setConnectionState);
   const { pathname } = useLocation();
   const nav = isActiveSaleRoute(pathname) ? 'slim' : 'panel';
@@ -86,12 +88,6 @@ export function V5Frame({ notices, children }: Readonly<V5FrameProps>): JSX.Elem
     <div className="v5-frame" data-testid="v5-frame" data-nav={nav} dir="rtl" lang="ar">
       <DialogHost>
         <div className="v5-frame__body">
-          {connectionState !== 'online' && (
-            <StatusBanner
-              state={connectionState}
-              message={CONNECTION_BANNER_MESSAGES[connectionState]}
-            />
-          )}
           {notices !== undefined && (
             <aside
               className="v5-frame__notices"

@@ -1,7 +1,8 @@
-import { useEffect, useId, useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 
 import type { ReceiptsBridgeAPI, SalesBridgeAPI } from '../../../shared/bridge-api.js';
 import type { SaleId } from '../../../shared/sales/types.js';
+import { Banner } from '../../v5/foundation/Banner';
 
 /**
  * T290 — `<PrinterFailureBanner>` (008 Slice 3, /impeccable craft against §A1 §(f)).
@@ -41,6 +42,12 @@ import type { SaleId } from '../../../shared/sales/types.js';
  * (preflight §4.2: a craft marker against green tests is a violation; polish is
  * the post-merge marker). Spinner is `aria-hidden` — `aria-busy` is the SR
  * signal — and is reduced-motion-neutralised by the global `.btn__spinner` rule.
+ *
+ * RT-605 (owner scope extension, 2026-10-17): restyled onto the V5 warning
+ * `Banner` in the notices stack, with V5 banner buttons and its own printer
+ * glyph (never the offline banner's triangle). The spinner is now
+ * `.v5-banner__spinner`. Copy, actions, reprint gating, `aria-busy` and the
+ * `banner_state` feed are unchanged.
  */
 
 /** The projected banner state: which sale's print failed + whether reprint is eligible. */
@@ -103,7 +110,6 @@ export function PrinterFailureBanner({
   _testSalesBridge,
   _idempotencyKeyFactory,
 }: Readonly<PrinterFailureBannerProps>): JSX.Element | null {
-  const messageId = useId();
   const [mutationPhase, setMutationPhase] = useState<MutationPhase>('idle');
   const keyFactory = _idempotencyKeyFactory ?? defaultKeyFactory;
 
@@ -181,94 +187,53 @@ export function PrinterFailureBanner({
   };
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      aria-describedby={messageId}
-      className="v4-row printer-failure-banner"
-      data-testid="printer-failure-banner"
-      dir="rtl"
+    <Banner
+      tone="warning"
+      icon="printer"
+      testId="printer-failure-banner"
+      actions={
+        <>
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={mutationPhase !== 'idle'}
+            aria-busy={mutationPhase === 'retrying' ? 'true' : undefined}
+          >
+            {mutationPhase === 'retrying' && <BusySpinner />}
+            <span lang="ar">إعادة المحاولة</span>
+          </button>
+          <button
+            type="button"
+            disabled={!reprintEnabled || mutationPhase !== 'idle'}
+            onClick={() => {
+              onReprint(printFailure.sale_id);
+            }}
+            title={reprintEnabled ? undefined : 'تتوفر النسخة بعد نجاح الطباعة الأولى'}
+          >
+            <span lang="ar">نسخة</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleManualOverride}
+            disabled={mutationPhase !== 'idle'}
+            aria-busy={mutationPhase === 'manual_override' ? 'true' : undefined}
+          >
+            {mutationPhase === 'manual_override' && <BusySpinner />}
+            <span lang="ar">إيصال يدوي</span>
+          </button>
+        </>
+      }
     >
-      <PrinterWarningIcon />
-      <p id={messageId} className="printer-failure-banner__message">
+      <p>
         <span lang="ar">فشل طباعة الإيصال</span>
-        <span className="printer-failure-banner__hint">
-          {' · '}
-          <span lang="ar">جرّب مرة أخرى أو حوّل للوضع اليدوي</span>
-        </span>
+        {' · '}
+        <span lang="ar">جرّب مرة أخرى أو حوّل للوضع اليدوي</span>
       </p>
-      <div className="v4-row printer-failure-banner__actions">
-        <button
-          type="button"
-          className="btn btn--md btn--primary"
-          onClick={handleRetry}
-          disabled={mutationPhase !== 'idle'}
-          aria-busy={mutationPhase === 'retrying' ? 'true' : undefined}
-        >
-          {mutationPhase === 'retrying' && <output className="btn__spinner" aria-hidden="true" />}
-          <span lang="ar">إعادة المحاولة</span>
-        </button>
-        <button
-          type="button"
-          className="btn btn--md btn--secondary"
-          disabled={!reprintEnabled || mutationPhase !== 'idle'}
-          onClick={() => {
-            onReprint(printFailure.sale_id);
-          }}
-          title={reprintEnabled ? undefined : 'تتوفر النسخة بعد نجاح الطباعة الأولى'}
-        >
-          <span lang="ar">نسخة</span>
-        </button>
-        <button
-          type="button"
-          className="btn btn--md btn--ghost"
-          onClick={handleManualOverride}
-          disabled={mutationPhase !== 'idle'}
-          aria-busy={mutationPhase === 'manual_override' ? 'true' : undefined}
-        >
-          {mutationPhase === 'manual_override' && (
-            <output className="btn__spinner" aria-hidden="true" />
-          )}
-          <span lang="ar">إيصال يدوي</span>
-        </button>
-      </div>
-    </div>
+    </Banner>
   );
 }
 
-/**
- * Printer-with-warning composite — NOT a generic alert triangle (per §A1 brief:
- * the iconography must make the source instantly recognizable so the banner is
- * never confused with the offline banner). Decorative; the message text carries
- * the meaning (color is never the sole signal — FR-068).
- */
-function PrinterWarningIcon(): JSX.Element {
-  return (
-    <svg
-      className="printer-failure-banner__icon"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {/* printer body */}
-      <path
-        d="M6 9V4h12v5M6 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1M6 15h12v5H6z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* warning mark on the slip */}
-      <path
-        d="M12 16.5v1.2M12 19.4v.05"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+/** The running action's spinner; `aria-busy` on its button is the SR signal. */
+function BusySpinner(): JSX.Element {
+  return <span className="v5-banner__spinner" aria-hidden="true" />;
 }

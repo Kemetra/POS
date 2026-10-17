@@ -135,3 +135,43 @@
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
+
+.v5-banner__actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.v5-banner__actions button:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* RT-605 — a running banner action's spinner; `aria-busy` is the SR signal. */
+.v5-banner__spinner {
+  inline-size: 16px;
+  block-size: 16px;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: v5-banner-spin 800ms linear infinite;
+}
+
+@keyframes v5-banner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v5-banner__spinner {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .v5-banner__actions button:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+}

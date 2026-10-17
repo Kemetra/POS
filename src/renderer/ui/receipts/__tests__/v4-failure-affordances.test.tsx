@@ -27,7 +27,8 @@ describe('022 US4 — operational failure affordances', () => {
     );
 
     const banner = screen.getByTestId('printer-failure-banner');
-    expect(banner).toHaveClass('v4-row');
+    // RT-605: a V5 warning banner (was the v4 row).
+    expect(banner).toHaveClass('v5-banner');
     expect(banner).toHaveTextContent('فشل طباعة الإيصال');
     expect(within(banner).getByRole('button', { name: 'نسخة' })).toBeDisabled();
     fireEvent.click(within(banner).getByRole('button', { name: 'إعادة المحاولة' }));

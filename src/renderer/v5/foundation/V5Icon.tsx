@@ -44,6 +44,10 @@ const PATHS = {
   // RT-424 — Manager → Cashiers (G-3): the «بدون رقم سري» badge and «إعادة المحاولة».
   dash: 'M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.5 12h7',
   retry: 'M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5',
+  // RT-605 — the printer-failure banner's own glyph (a printer with a warning
+  // mark on the slip), so it is never mistaken for the offline banner.
+  printer:
+    'M6 9V4h12v5M6 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1M6 15h12v5H6zM12 16.5v1.2M12 19.4v.05',
   // RT-499 — the manager home cards (G-6); the title beside each carries the meaning.
   'manager-shift': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
   'manager-cashiers':

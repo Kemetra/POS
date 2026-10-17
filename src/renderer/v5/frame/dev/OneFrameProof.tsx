@@ -51,6 +51,10 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store'
  * `payments` = on | off (the payments feature flag, so `/app/checkout`
  * can show its flag-off notice; default on); `search` = none | results (what
  * the diagnostics search answers: not found, or twelve items; default none).
+ *
+ * RT-605 adds `closed` = none | shift (`shift` signs in through the real
+ * store path with a forced-close notice, so the shift-closed banner shows
+ * until it is dismissed; default none).
  */
 
 export interface OneFrameProofParams {
@@ -66,6 +70,7 @@ export interface OneFrameProofParams {
   close: 'refused' | 'state_invalid' | 'ok';
   payments: 'on' | 'off';
   search: 'none' | 'results';
+  closed: 'none' | 'shift';
 }
 
 function oneOf<T extends string>(raw: string | null, allowed: readonly T[], fallback: T): T {
@@ -88,6 +93,7 @@ export function readOneFrameProofParams(): OneFrameProofParams {
     close: oneOf(params.get('close'), ['refused', 'state_invalid', 'ok'], 'refused'),
     payments: oneOf(params.get('payments'), ['on', 'off'], 'on'),
     search: oneOf(params.get('search'), ['none', 'results'], 'none'),
+    closed: oneOf(params.get('closed'), ['none', 'shift'], 'none'),
   };
 }
 
@@ -305,6 +311,33 @@ interface OneFrameProofProps {
   extraApi?: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * Signs the proof operator in once. With `closed=shift` it goes through the
+ * real sign-in transition carrying a forced-close notice; a later render finds
+ * the store signed in and changes nothing, so dismiss sticks.
+ */
+function signInProof(params: OneFrameProofParams): void {
+  const store = useOperatorSessionStore.getState();
+  if (store.state.kind !== 'signedOut') return;
+  const session = {
+    id: `proof-${params.role}`,
+    operator_id: `op-${params.role}`,
+    display_name: 'سارة عبد الحميد',
+    role: params.role,
+    tenant_id: PAIRED.tenant_id,
+    branch_id: PAIRED.branch_id,
+    started_at: '2026-10-15T07:00:00Z',
+  };
+  if (params.closed === 'none') {
+    store.hydrateSignedIn(session);
+    return;
+  }
+  store.beginSignIn();
+  useOperatorSessionStore
+    .getState()
+    .resolveSignedIn(session, { closed_at: '2026-10-16T18:30:00Z' });
+}
+
 export function OneFrameProof(props: Readonly<OneFrameProofProps> = {}): JSX.Element {
   const params = props.params ?? readOneFrameProofParams();
   installWindowApi(params, props.extraApi);
@@ -315,15 +348,7 @@ export function OneFrameProof(props: Readonly<OneFrameProofProps> = {}): JSX.Ele
     returns: params.returns === 'on',
     ...(params.shift === 'on' ? { shiftCashup: true } : {}),
   });
-  useOperatorSessionStore.getState().hydrateSignedIn({
-    id: `proof-${params.role}`,
-    operator_id: `op-${params.role}`,
-    display_name: 'سارة عبد الحميد',
-    role: params.role,
-    tenant_id: PAIRED.tenant_id,
-    branch_id: PAIRED.branch_id,
-    started_at: '2026-10-15T07:00:00Z',
-  });
+  signInProof(params);
   return (
     <AppRouter
       pairing={pairingBridge}

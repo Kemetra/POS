@@ -2,6 +2,9 @@
  * RT-604 (VN-S6 S6-3) — the DEV-only status indicator harness: each capture
  * state reaches the REAL indicator through the in-memory `terminalStatus`
  * bridge (never by writing the store), inside the real frame.
+ *
+ * RT-605 (VN-S6 S6-4): the same harness drives the notices-stack banners
+ * (M-O1, M-O3) for their captures, with two more states.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
@@ -37,7 +40,24 @@ const EXPECTED: Record<(typeof STATUS_PROOF_STATES)[number], [string, string | n
   Sending: ['متصل', 'جارٍ إرسال 3 عملية…'],
   Paused: ['متصل', '2 عمليات بانتظار الإرسال'],
   Attention: ['متصل', 'تحتاج مراجعة'],
+  Attention24h: ['متصل', 'تحتاج مراجعة'],
+  OfflineAttention: ['غير متصل', 'تحتاج مراجعة'],
   PrinterFailed: ['متصل', null],
+};
+
+/** RT-605: the notices-stack banners each state shows (M-O3 text, M-O1). */
+const BANNERS: Record<(typeof STATUS_PROOF_STATES)[number], [string | null, boolean]> = {
+  Connected: [null, false],
+  Checking: [null, false],
+  Offline: [null, true],
+  Degraded: [null, true],
+  OfflinePending: [null, true],
+  Sending: [null, false],
+  Paused: [null, false],
+  Attention: ['تعذّر إرسال 2 عمليات. راجع المدير.', false],
+  Attention24h: ['تعذّر إرسال 2 عمليات. راجع المدير.', false],
+  OfflineAttention: ['تعذّر إرسال 1 عمليات. راجع المدير.', true],
+  PrinterFailed: [null, false],
 };
 
 describe('StatusIndicatorProof', () => {
@@ -66,5 +86,25 @@ describe('StatusIndicatorProof', () => {
         expect(indicator.querySelector('[data-row="printer"]')).toHaveTextContent('فشل آخر إيصال');
       });
     }
+  });
+
+  it.each(STATUS_PROOF_STATES)('%s shows its notices-stack banners (RT-605)', async (state) => {
+    window.location.hash = `#/dev/status-proof?state=${state}`;
+    render(<StatusIndicatorProof />);
+    await screen.findByTestId('v5-status-indicator');
+    const [attention, offline] = BANNERS[state];
+    await waitFor(() => {
+      expect(useTerminalStatusStore.getState().snapshot).not.toBeNull();
+    });
+    const attentionBanner = screen.queryByTestId('v5-sync-attention-banner');
+    if (attention === null) expect(attentionBanner).toBeNull();
+    else expect(attentionBanner).toHaveTextContent(attention);
+    expect(screen.queryByTestId('v5-offline-banner') !== null).toBe(offline);
+  });
+
+  it('offers the RT-605 banner states: attention via 24 h, and offline + attention', () => {
+    expect(STATUS_PROOF_STATES).toEqual(
+      expect.arrayContaining(['Attention24h', 'OfflineAttention']),
+    );
   });
 });

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RT-659 G-6 addendum · معاينة الإيصال · مرجع</title>
+<style>
+  :root { --primary:#0f766e; --text:#0f1d2e; --muted:#53647a; --border:#d8dfe7; --bg:#f7f9fa; --surface:#fff; }
+  body { margin:0; padding:32px; background:var(--bg); color:var(--text); font-family:'Dubai','Segoe UI',Tahoma,Arial,sans-serif; font-size:15px; line-height:1.7; }
+  main { max-inline-size:1180px; margin-inline:auto; display:grid; gap:28px; }
+  h1 { margin:0; font-size:26px; } h2 { margin:0 0 8px; font-size:19px; }
+  .status { display:inline-block; padding:2px 12px; border:1px solid #a35a00; border-radius:999px; background:#fdf1e0; color:#7a4300; font-weight:700; }
+  section { padding:20px 24px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+  table { inline-size:100%; border-collapse:collapse; }
+  th, td { padding:8px 10px; border-block-end:1px solid var(--border); text-align:start; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .ltr { direction:ltr; unicode-bidi:isolate; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:13px; direction:ltr; unicode-bidi:isolate; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; }
+  figure { margin:0; display:grid; gap:6px; }
+  figure img { inline-size:100%; border:1px solid var(--border); border-radius:8px; }
+  figcaption { color:var(--muted); font-size:13px; }
+  ul { margin:0; padding-inline-start:20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>معاينة الإيصال في «المبيعات»: ملحق G-6 (نافذة V5)</h1>
+    <p><span class="status">مسودة · بانتظار قرار المالك</span> · Jira <span class="ltr">RT-659</span> · ملحق لـ G-6 (<span class="ltr">RT-478</span>، PR <span class="ltr">#670</span>)</p>
+    <p><b>المطلوب من المالك:</b> اعتماد الشكل، واختيار (أ) أو (ب) لزر «طباعة». لا تغيير في محتوى الإيصال، ولا في ناقل الطباعة، ولا في صلاحيات البيع، ولا في main.</p>
+  </header>
+  <section>
+    <h2>«طباعة»: خياران للمالك</h2>
+    
+    <table><thead><tr><th>الخيار</th><th>ما يتغيّر</th><th>ما لا يتغيّر</th><th>الحالات المرسومة</th></tr></thead><tbody>
+    <tr><td><b>(أ) حذف الزر</b></td><td>النافذة للمعاينة فقط: «إغلاق» وحده. إعادة الطباعة تبقى في سطر النتيجة كما هي.</td>
+      <td>كل سلوك الطباعة.</td><td>A-Ready (والتحميل والتعذّر)</td></tr>
+    <tr><td><b>(ب) ربطه بمسار إعادة الطباعة</b></td><td>يظهر في النافذة نفس عنصر <code>ReprintAffordance</code>: نفس النداء ونفس الشرط ونفس النصوص. يغيب بلا طباعة ناجحة فتبدو النافذة مثل (أ). تبقى النافذة مفتوحة بعد النتيجة.</td>
+      <td>النداء، والصلاحيات (main)، والشرط، والمحتوى المطبوع، والناقل. لا نداء جديد ولا تغيير في الجسر.</td><td>B-Ready، B-Reprinting، B-Sent، B-Failed (والتحميل والتعذّر)</td></tr>
+    </tbody></table>
+    <p>(ب) ممكن اليوم بلا تغيير في main. ثمنه زر إعادة طباعة ثانٍ لنفس البيع (في السطر وفي النافذة)، ونسخة مطبوعة تختلف عن المعروضة بعلامة «نسخة طبق الأصل»، لذا التلميح.</p>
+    <p><b>التوصية: (أ).</b> المعاينة قراءة فقط، والإجراء موجود بجانبها بنفس الشرط، فلا يتكرر الزر ولا تُطبع ورقة تختلف عمّا يُعرض. القرار للمالك.</p>
+
+  </section>
+  <section>
+    <h2>مسار إعادة الطباعة الموجود (main@87238bc)</h2>
+    <table><thead><tr><th></th><th>أين</th><th>ما وُجد</th></tr></thead><tbody><tr><td>المسار</td><td><code>receipts.reprint</code> → <code>main/ipc/receipts.ts</code> → <code>receipts-bridge.ts reprint()</code></td><td>الواجهة تستعمله اليوم من <code>ReprintAffordance.tsx</code> بجانب «معاينة الإيصال» في نتيجة البحث وفي تفاصيل البيع المحلي (<code>SaleResult</code>). كل نقرة مفتاح idempotency جديد؛ نداء واحد في كل مرة.</td></tr><tr><td>من يحق له</td><td><code>sale-access-policy.ts</code> (RT-546، OD-534-2)</td><td>يُفحص في main: الكاشير يعيد طباعة بيعه فقط، والمدير والمسؤول أي بيع في نطاق الجهاز. غير ذلك يُرفض <code>sale_not_found</code> بلا تسريب. تنقّل الكاشير يعرض «نقطة البيع» وحدها (OD-6)، فيصل إلى «المبيعات» المدير والمسؤول عمليًا.</td></tr><tr><td>الشرط</td><td><code>reprintPrecondition</code></td><td>لا إعادة طباعة قبل طباعة ناجحة (<code>not_yet_printed</code>)، ولا لبيع ملغى (<code>sale_voided</code>، يُطبع من سجل المتجر). في الواجهة يغيب الزر بلا طباعة ناجحة (<code>latest_print_event.outcome === 'success'</code>)، لا يُعطَّل.</td></tr><tr><td>ما يُطبع</td><td><code>reprint_duplicate</code></td><td>نسخة عليها «نسخة طبق الأصل / DUPLICATE COPY» ورقمها. لا يُفتح الدُّرج (FR-030). النتيجة ذات وجهين: <code>ok</code> أو رفض <code>printer_unavailable</code>.</td></tr><tr><td>ما تعرضه المعاينة</td><td><code>receipts.preview</code></td><td>قراءة فقط بنسخة <code>preview</code> (محتوى الطباعة الأولى بلا علامة). لا طباعة ولا أثر جانبي.</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>الحالات (7 حالة × 1024×768 و1280×800)</h2>
+    <div class="grid"><figure><img src="captures/G6P-Loading-1280-light.png" alt=""><figcaption>جارٍ تحضير المعاينة (الخياران) · 1280</figcaption></figure><figure><img src="captures/G6P-Loading-1024-light.png" alt=""><figcaption>جارٍ تحضير المعاينة (الخياران) · 1024</figcaption></figure><figure><img src="captures/G6P-Failed-1280-light.png" alt=""><figcaption>تعذّرت المعاينة (الخياران) · 1280</figcaption></figure><figure><img src="captures/G6P-Failed-1024-light.png" alt=""><figcaption>تعذّرت المعاينة (الخياران) · 1024</figcaption></figure><figure><img src="captures/G6P-A-Ready-1280-light.png" alt=""><figcaption>الخيار (أ): المعاينة بلا طباعة · 1280</figcaption></figure><figure><img src="captures/G6P-A-Ready-1024-light.png" alt=""><figcaption>الخيار (أ): المعاينة بلا طباعة · 1024</figcaption></figure><figure><img src="captures/G6P-B-Ready-1280-light.png" alt=""><figcaption>الخيار (ب): المعاينة مع إعادة الطباعة · 1280</figcaption></figure><figure><img src="captures/G6P-B-Ready-1024-light.png" alt=""><figcaption>الخيار (ب): المعاينة مع إعادة الطباعة · 1024</figcaption></figure><figure><img src="captures/G6P-B-Reprinting-1280-light.png" alt=""><figcaption>الخيار (ب): جارٍ إعادة الطباعة · 1280</figcaption></figure><figure><img src="captures/G6P-B-Reprinting-1024-light.png" alt=""><figcaption>الخيار (ب): جارٍ إعادة الطباعة · 1024</figcaption></figure><figure><img src="captures/G6P-B-Sent-1280-light.png" alt=""><figcaption>الخيار (ب): أُرسل الإيصال للطابعة · 1280</figcaption></figure><figure><img src="captures/G6P-B-Sent-1024-light.png" alt=""><figcaption>الخيار (ب): أُرسل الإيصال للطابعة · 1024</figcaption></figure><figure><img src="captures/G6P-B-Failed-1280-light.png" alt=""><figcaption>الخيار (ب): تعذّرت إعادة الطباعة · 1280</figcaption></figure><figure><img src="captures/G6P-B-Failed-1024-light.png" alt=""><figcaption>الخيار (ب): تعذّرت إعادة الطباعة · 1024</figcaption></figure></div><p>لكل حالة ملفان <code>G6P-&lt;State&gt;-1024.html</code> و<code>-1280.html</code>، والصور في <code>captures/</code> (فاتح وتباين عالٍ لكل عرض).</p><div class="grid"><figure><img src="captures/G6P-Failed-1280-forced.png" alt=""><figcaption>تعذّرت المعاينة (الخياران) · تباين عالٍ</figcaption></figure><figure><img src="captures/G6P-A-Ready-1280-forced.png" alt=""><figcaption>الخيار (أ): المعاينة بلا طباعة · تباين عالٍ</figcaption></figure><figure><img src="captures/G6P-B-Sent-1280-forced.png" alt=""><figcaption>الخيار (ب): أُرسل الإيصال للطابعة · تباين عالٍ</figcaption></figure></div>
+  </section>
+  <section>
+    <h2>ما رُسم وما التزم به</h2>
+    <ul>
+      <li><b>نافذة V5 واحدة</b> (<code>v5/foundation/Dialog.tsx</code>): <code>aria-modal</code>، الشاشة خلفها inert، Esc يغلق، والتركيز يعود إلى «معاينة الإيصال».</li>
+      <li><b>التركيز الأول على «إغلاق»</b>: العنصر الآمن (DESIGN.md). الترتيب بـ Tab: الإيصال (منطقة قابلة للتمرير، <code>tabindex=0</code>) ← (ب) «إعادة طباعة الإيصال» ← «إغلاق».</li>
+      <li><b>حُذف:</b> زر ✕ المكرر، و«زر التكبير»، و«طباعة» المعطّل دائمًا. الإيصال بعرض 80 مم: 42 عمودًا بخط ثابت 12 بكسل، وهو الحد الأدنى، فلا حاجة للتكبير (اليوم 0.7rem ≈ 11 بكسل).</li>
+      <li><b>الإيصال كما يخرج من المحرّك</b> (<code>tools/slip-preview.html</code>، نسخة <code>preview</code> من <code>template-engine.ts</code> على <span class="ltr">main@87238bc</span> ببيانات عيّنة). لا تغيير في المحتوى أو الشكل.</li>
+      <li><b>الإيصال على حامل غائر</b> (surface-sunken) ويُمرَّر وحده؛ العنوان والأزرار ثابتة في 1024×768 و1280×800.</li>
+      <li><b>الشاشة خلف النافذة</b> هي حالة G-6 «SalesFound» نفسها من <code>gen_g6.py</code>.</li>
+</ul>
+  </section>
+  <section>
+    <h2>النصوص</h2>
+    <table><thead><tr><th>المكان</th><th>النص</th><th>الأساس</th><th>الحالة</th></tr></thead><tbody><tr><td>عنوان النافذة</td><td>«معاينة الإيصال»</td><td><code>ReceiptPreview.tsx</code> و<code>SALES_COPY.preview</code></td><td>مأخوذ من main</td></tr><tr><td>تحت العنوان</td><td>رقم البيع بخط ثابت (<span class='ltr'>TERM-01-…</span>)</td><td><code>sale.sale_number</code>، موجود في <code>SaleResult</code></td><td>مقترح</td></tr><tr><td>التحميل</td><td>«جارٍ التحضير»</td><td><code>ReceiptPreview.tsx</code></td><td>مأخوذ من main</td></tr><tr><td>تعذّر المعاينة</td><td>«تعذّرت معاينة الإيصال»</td><td><code>ReceiptPreview.tsx</code> (<code>role=alert</code>)</td><td>مأخوذ من main</td></tr><tr><td>زر الإغلاق</td><td>«إغلاق»</td><td><code>ReceiptPreview.tsx</code>؛ يُحذف زر ✕ المكرر</td><td>مأخوذ من main</td></tr><tr><td>(ب) زر الطباعة</td><td>«إعادة طباعة الإيصال» / «جارٍ إعادة الطباعة…»</td><td><code>SALES_COPY.reprint</code> و<code>reprinting</code>. لا «طباعة»: المسار يطبع نسخة مكررة لا الإيصال الأول</td><td>مأخوذ من main</td></tr><tr><td>(ب) تلميح</td><td>«تُطبع نسخة عليها «نسخة طبق الأصل».»</td><td>علامة <code>reprint_duplicate</code> في <code>template-engine.ts</code>؛ المعاينة تعرض <code>preview</code> بلا العلامة</td><td>مقترح</td></tr><tr><td>(ب) أُرسل</td><td>«أُرسل الإيصال للطابعة.» (محايد، لا «طُبع»)</td><td><code>SALES_COPY.reprintSent</code> (N-09)</td><td>مأخوذ من main</td></tr><tr><td>(ب) تعذّر</td><td>«تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.»</td><td><code>SALES_COPY.reprintFailed</code></td><td>مأخوذ من main</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>التباين العالي</h2>
+    <ul>
+      <li>حد النافذة والحامل والإيصال بلون النص؛ حلقة التركيز <code>Highlight</code>؛ الزر المعطّل <code>GrayText</code> (أنماط G-6).</li>
+      <li>المعنى لا يعتمد على اللون: الإشعارات برمزها ونصها.</li>
+</ul>
+  </section>
+  <section>
+    <h2>الفحوص المنفّذة على الملفات</h2>
+    
+    <p>أُنتجت الصور وفُحصت بـ<code>tools/capture_g6p.cjs</code> (أداة <code>../tools/capture-refs.cjs</code> المشتركة، نفس فحوص G-6 وPK-3): الاحتواء داخل الإطار،
+      لا نص أصغر من 12 بكسل، لا هدف أصغر من 44×44، لا عنصر قابل للتركيز خلف النافذة، وaxe-core بلا مخالفات. تُولَّد الملفات من
+      <code>tools/gen_g6p.py</code> وهذه الصفحة من <code>tools/gen_g6p_spec.py</code>.</p>
+
+  </section>
+</main>
+</body>
+</html>

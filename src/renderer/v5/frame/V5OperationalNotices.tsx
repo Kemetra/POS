@@ -8,6 +8,7 @@ import { useBannerState } from '../../ui/receipts/useBannerState';
 import { DrawerNoticeBanner, useDrawerNoticeFeed } from '../../ui/receipts/DrawerNotice';
 import { ShiftNotice } from '../shift/ShiftNotice';
 import { SaleVoidNotice } from '../void/SaleVoidNotice';
+import { OfflineBanner, SyncAttentionBanner, useStatusBanners } from './StatusBanners';
 
 type RecoveryAction = 'reprint' | 'manualOverride';
 
@@ -53,8 +54,13 @@ function useRecoveryAction(action: RecoveryAction): (saleId: string) => void {
  * banner, or the way to the shift screens) — nothing while the shift flag is
  * off.
  *
- * The legacy connection pill is deliberately NOT carried: it has no live data
- * source yet, and an always-"Online" indicator would be a fabricated state.
+ * The legacy connection pill is deliberately NOT carried: an always-"Online"
+ * indicator would be a fabricated state.
+ *
+ * RT-605 (VN-S6 S6-4, doc 24 §4.3): the status banners from the real terminal
+ * signal join the stack, danger first: sync attention (M-O3), shift closed,
+ * offline (M-O1, moved here from the frame's 007 banner), then printer,
+ * drawer, shift and void as before.
  */
 export function V5OperationalNotices(): JSX.Element {
   const sessionState = useOperatorSessionStore((s) => s.state);
@@ -64,9 +70,11 @@ export function V5OperationalNotices(): JSX.Element {
   const reprint = useRecoveryAction('reprint');
   const manualOverride = useRecoveryAction('manualOverride');
   const notice = sessionState.kind === 'signedIn' ? sessionState.forced_close_notice : undefined;
+  const status = useStatusBanners();
 
   return (
     <>
+      {status.attention !== null && <SyncAttentionBanner count={status.attention} />}
       {notice !== undefined && (
         <ShiftClosedBanner
           closedAt={notice.closed_at}
@@ -75,6 +83,7 @@ export function V5OperationalNotices(): JSX.Element {
           }}
         />
       )}
+      {status.offline && <OfflineBanner />}
       <PrinterFailureBanner printFailure={printFailure} onReprint={reprint} />
       <DrawerNoticeBanner now={new Date().toISOString()} onManualOverride={manualOverride} />
       <ShiftNotice />

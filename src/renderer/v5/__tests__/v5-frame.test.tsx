@@ -319,7 +319,7 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
         idempotency_key: expect.any(String) as string,
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
+      fireEvent.click(screen.getByRole('button', { name: 'إخفاء' }));
       const state = useOperatorSessionStore.getState().state;
       expect(state.kind === 'signedIn' && state.forced_close_notice).toBeFalsy();
       expect(subscribe).toHaveBeenCalledWith({ topic: 'banner_state' });
@@ -495,20 +495,20 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
     expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
   });
 
-  it.each([
-    ['offline', 'غير متصل — البيع من قائمة الانتظار المحلية'],
-    ['degraded', 'الاتصال بطيء'],
-    ['syncing', 'جارٍ المزامنة…'],
-  ] as const)('shows a persistent %s connection banner (never a toast)', (state, message) => {
-    signIn('cashier');
-    useConnectionStateStore.getState().setState(state);
-    renderFrame();
-    const [banner] = connectionBanners();
-    expect(connectionBanners()).toHaveLength(1);
-    expect(banner).toHaveTextContent(message);
-    expect(banner).toHaveAttribute('data-state', state);
-    expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
-  });
+  // RT-605 (VN-S6 S6-4): the connection banner moved into the notices stack
+  // (M-O1, fed by the real terminal signal). The legacy store, still alive
+  // until S6-5, no longer renders anything in the frame.
+  it.each(['offline', 'degraded', 'syncing'] as const)(
+    'renders no 007 connection banner for the legacy %s state (moved to the notices stack)',
+    (state) => {
+      signIn('cashier');
+      useConnectionStateStore.getState().setState(state);
+      renderFrame();
+      expect(connectionBanners()).toHaveLength(0);
+      expect(document.querySelector('[data-state]')).toBeNull();
+      expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
+    },
+  );
 
   it('shows no connection banner while online', () => {
     signIn('cashier');
