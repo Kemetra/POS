@@ -26,7 +26,8 @@ export interface TerminalStatusHandlerDeps {
 
 /** A plain object with no own keys — nothing else is a valid request. */
 function isEmptyObject(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  if (typeof value !== 'object' || value === null) return false;
+  // An array's prototype is Array.prototype, so the check below refuses it too.
   const proto: unknown = Object.getPrototypeOf(value);
   if (proto !== Object.prototype && proto !== null) return false;
   return Reflect.ownKeys(value).length === 0;

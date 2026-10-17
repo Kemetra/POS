@@ -64,7 +64,8 @@ function parseSync(value: unknown): TerminalStatusSync | null {
   if (!isRecord(value)) return null;
   const { pending, heldPreviousPairing, deadLetter, oldestPendingAt, paused, lastSuccessAt } =
     value;
-  if (!isCount(pending) || !isCount(heldPreviousPairing) || !isCount(deadLetter)) return null;
+  if (!isCount(pending) || !isCount(heldPreviousPairing)) return null;
+  if (!isCount(deadLetter)) return null;
   if (!isIsoOrNull(oldestPendingAt) || !isIsoOrNull(lastSuccessAt)) return null;
   if (!isPausedOrNull(paused)) return null;
   return { pending, heldPreviousPairing, deadLetter, oldestPendingAt, paused, lastSuccessAt };
