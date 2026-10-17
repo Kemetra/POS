@@ -41,6 +41,8 @@ export const LOCKED_ALLOWED_CHANNELS: ReadonlySet<string> = new Set<string>([
   'app:version',
   'app:log',
   'app:config',
+  // RT-634 — renderer crash reports stay reportable while locked.
+  'app:report-error',
 ]);
 
 /** Thrown for a refused call while locked. Generic: never names the channel. */

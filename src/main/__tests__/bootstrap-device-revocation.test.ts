@@ -54,14 +54,18 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
   });
 
   it('RT-601: backendFetch is the reachability seam only, never the device-401 detector', () => {
+    // RT-634: the base fetch carries X-Request-Id; the observation layers sit above it.
     expect(source).toMatch(
-      /const backendFetch = terminalStatus\.observeFetch\(globalThis\.fetch\.bind\(globalThis\)\);/,
+      /const backendFetch = terminalStatus\.observeFetch\(backendBaseFetch\);/,
+    );
+    expect(source).toMatch(
+      /const backendBaseFetch = withRequestId\(globalThis\.fetch\.bind\(globalThis\), \{\s*logger: mainLogger,\s*\}\);/,
     );
   });
 
   it('RT-602: the liveness probe uses the UNOBSERVED fetch, net.isOnline and powerMonitor', () => {
     expect(source).toMatch(
-      /composeTerminalStatus\(\{\s*logger: mainLogger,\s*probe: \{\s*baseUrl: apiBaseUrl,\s*fetch: globalThis\.fetch\.bind\(globalThis\),\s*isInterfaceOnline: \(\) => net\.isOnline\(\),\s*powerMonitor,\s*\},\s*\}\);/,
+      /composeTerminalStatus\(\{\s*logger: mainLogger,\s*probe: \{\s*baseUrl: apiBaseUrl,\s*(?:\/\/[^\n]*\s*)?fetch: withRequestId\(globalThis\.fetch\.bind\(globalThis\), \{\s*logger: mainLogger,\s*quiet: true,\s*\}\),\s*isInterfaceOnline: \(\) => net\.isOnline\(\),\s*powerMonitor,\s*\},\s*\}\);/,
     );
     expect(source).toMatch(
       /workerRegistry\.register\('terminal status tick', \(\) => \{\s*terminalStatus\.stop\(\);/,

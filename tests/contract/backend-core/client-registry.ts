@@ -261,6 +261,12 @@ export const TRANSPORT_DECORATORS: ReadonlyArray<{
     reason:
       'RT-602 trackInFlight wraps the same observed fetch and only counts the request as in flight (no liveness probe meanwhile); request and response pass through untouched.',
   },
+  {
+    module: 'src/main/observability/request-id.ts',
+    fetchCallSites: 1,
+    reason:
+      'RT-634 withRequestId wraps the base fetch of every Backend-Core client and the liveness probe: it adds a fresh UUID X-Request-Id header (OBS-1 contract §2; not declared in the pinned OpenAPI — Backend-Core honours it globally) and logs id, method, path and status; other headers, body and response pass through untouched.',
+  },
 ];
 
 export const CLIENT_CALLS: readonly ClientCall[] = [

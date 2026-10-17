@@ -1,0 +1,254 @@
+/**
+ * RT-634 (OBS-5) — the OBS-1 privacy baseline for POS Sentry events
+ * (Confluence "Observability contract", RT-629 §3). Pure and SDK-free.
+ *
+ * Ported from the Backend-Core reference (`packages/shared/src/observability/
+ * sentry.ts`, RT-609) so every surface masks the same way:
+ *
+ *   - §3.1 allowlist: the outgoing event is REBUILT from a short list of safe
+ *     fields. `request`, `user`, `extra`, `contexts`, breadcrumbs,
+ *     `transaction`, frame `vars` and source context lines are dropped
+ *     wholesale, whatever their keys are.
+ *   - §3.2 masking inside exception messages: JWTs, URL userinfo/query/
+ *     fragment, emails and Postgres row detail. Input is capped at 2,000 chars
+ *     before scanning and the output at 300; index scans only, no backtracking
+ *     regex on library input.
+ *
+ * POS deviations from the reference, both stricter:
+ *   - `server_name` is dropped: on a till it is the Windows machine name,
+ *     which often carries a person's name.
+ *   - Frame `filename` loses its install/checkout prefix (`C:\Users\<name>\…`):
+ *     with the SDK's path-normalising integration off, the raw path would
+ *     otherwise leave the device.
+ */
+
+/** Max length of an exception message that leaves the process. */
+const MAX_MESSAGE_LENGTH = 300;
+/** Bounds the work done on untrusted input before any scanning runs. */
+const MAX_SCAN_LENGTH = 2000;
+/** Bounds the other free-text strings kept (exception type, frame function/module). */
+const MAX_LABEL_LENGTH = 200;
+
+export interface SentryFrameLike {
+  filename?: string;
+  function?: string;
+  lineno?: number;
+  colno?: number;
+  module?: string;
+  in_app?: boolean;
+  [key: string]: unknown;
+}
+
+export interface SentryExceptionValueLike {
+  type?: string;
+  value?: string;
+  mechanism?: { type?: string; handled?: boolean; [key: string]: unknown };
+  stacktrace?: { frames?: SentryFrameLike[]; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** Structural subset of a Sentry event; only what the scrubber reads or emits. */
+export interface SentryEventLike {
+  event_id?: string;
+  timestamp?: number;
+  platform?: string;
+  level?: string;
+  environment?: string;
+  release?: string;
+  tags?: Record<string, unknown>;
+  exception?: { values?: SentryExceptionValueLike[] };
+  [key: string]: unknown;
+}
+
+/** The release configuration stamped on every event (contract §1). */
+export interface ObservabilityStamp {
+  readonly environment: string;
+  readonly release: string;
+}
+
+/** Contract §1 `service` value for the cashier terminal. */
+export const POS_SERVICE_TAG = 'pos';
+
+const SAFE_TOP_LEVEL = [
+  'event_id',
+  'timestamp',
+  'platform',
+  'level',
+  'environment',
+  'release',
+] as const;
+const FRAME_LOCATION_KEYS = ['lineno', 'colno', 'in_app'] as const;
+const MECHANISM_KEYS = ['type', 'handled'] as const;
+
+// Postgres echoes row values after these markers ("Key (email)=(a@b.c) already
+// exists.", "Failing row contains (1, a@b.c, ...)"). Values may contain
+// parentheses, so everything from the marker on is masked (indexOf, no regex).
+const POSTGRES_ROW_MARKERS = [
+  { marker: 'Key (', mask: 'Key (...)=(...)' },
+  { marker: 'Failing row contains (', mask: 'Failing row contains (...)' },
+] as const;
+const SCHEME_CHAR = /^[a-z0-9+.-]$/i;
+const TRAILING_PUNCTUATION: ReadonlySet<string> = new Set([`"`, "'", ')', ']', ',', ';', '.', '>']);
+// Path markers after which a frame filename is app-relative. Checked in order.
+const APP_PATH_MARKERS = ['/app.asar/', '/dist/'] as const;
+
+/** Copy only the listed keys whose value is defined. */
+function pickDefined<K extends string>(
+  source: Partial<Record<K, unknown>>,
+  keys: readonly K[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
+}
+
+/** A string field capped to `MAX_LABEL_LENGTH`, or `undefined` when not a string. */
+function label(value: unknown): string | undefined {
+  return typeof value === 'string' ? value.slice(0, MAX_LABEL_LENGTH) : undefined;
+}
+
+function maskPostgresRowValues(value: string): string {
+  let out = value;
+  for (const { marker, mask } of POSTGRES_ROW_MARKERS) {
+    const at = out.indexOf(marker);
+    if (at !== -1) out = `${out.slice(0, at)}${mask}`;
+  }
+  return out;
+}
+
+/**
+ * One whitespace-delimited token of an exception message. Secrets are masked
+ * wherever they sit in it (`token=eyJ…`, `"https://u:p@host/x?api_key=…"`):
+ * URLs first (userinfo and query), then JWTs, then emails. Index scans only,
+ * so the work stays linear on untrusted input.
+ */
+class MessageToken {
+  private readonly text: string;
+
+  constructor(text: string) {
+    this.text = text;
+  }
+
+  scrubbed(): string {
+    const masked = this.withoutUrl().withoutJwt();
+    return masked.isEmailLike() ? '[email]' : masked.text;
+  }
+
+  /** Keep scheme + host + path; drop userinfo, query, fragment. Unparsable -> `[url]`. */
+  private withoutUrl(): MessageToken {
+    const sep = this.text.indexOf('://');
+    const start = sep > 0 ? this.schemeStart(sep) : sep;
+    if (start < 0 || start === sep) return this;
+    const raw = this.text.slice(start);
+    const end = new MessageToken(raw).bodyLength();
+    let safe = '[url]';
+    try {
+      const url = new URL(raw.slice(0, end));
+      safe = `${url.protocol}//${url.host}${url.pathname}`;
+    } catch {
+      // Unparsable: keep the `[url]` placeholder.
+    }
+    return new MessageToken(`${this.text.slice(0, start)}${safe}${raw.slice(end)}`);
+  }
+
+  /** Mask a JWT (operator envelope, Clerk token) and everything after it. */
+  private withoutJwt(): MessageToken {
+    const at = this.text.indexOf('eyJ');
+    if (at === -1 || this.text.slice(at).split('.').length < 3) return this;
+    return new MessageToken(`${this.text.slice(0, at)}[jwt]`);
+  }
+
+  private isEmailLike(): boolean {
+    const at = this.text.indexOf('@');
+    return at > 0 && this.text.includes('.', at);
+  }
+
+  /** Index where the URL scheme ending at `sep` (the `://`) starts. */
+  private schemeStart(sep: number): number {
+    let start = sep;
+    while (start > 0 && SCHEME_CHAR.test(this.text.charAt(start - 1))) start--;
+    return start;
+  }
+
+  /** Length without trailing quotes/brackets/punctuation. */
+  private bodyLength(): number {
+    let end = this.text.length;
+    while (end > 0 && TRAILING_PUNCTUATION.has(this.text.charAt(end - 1))) end--;
+    return end;
+  }
+}
+
+/** Contract §3.2: cap, mask secrets anywhere in the text, truncate. */
+export function sanitizeMessage(value: string): string {
+  const cleaned = maskPostgresRowValues(value.slice(0, MAX_SCAN_LENGTH))
+    .split(/(\s+)/)
+    .map((token) => new MessageToken(token).scrubbed())
+    .join('');
+  return cleaned.length > MAX_MESSAGE_LENGTH
+    ? `${cleaned.slice(0, MAX_MESSAGE_LENGTH - 3)}...`
+    : cleaned;
+}
+
+/**
+ * App-relative frame filename. A path under the packaged asar or the `dist/`
+ * build output becomes `app:///dist/…`; any other absolute path keeps only its
+ * basename; scheme-less module ids (`node:internal/…`) pass through.
+ */
+export function relativeFrameFilename(filename: string): string {
+  const path = filename.replaceAll('\\', '/');
+  for (const marker of APP_PATH_MARKERS) {
+    const at = path.lastIndexOf(marker);
+    if (at === -1) continue;
+    const rest = path.slice(at + marker.length);
+    return marker === '/dist/' ? `app:///dist/${rest}` : `app:///${rest}`;
+  }
+  if (path.startsWith('app:///')) return path;
+  const isAbsolute = path.startsWith('/') || path.startsWith('file:') || path.charAt(1) === ':';
+  return isAbsolute ? path.slice(path.lastIndexOf('/') + 1) : path.slice(0, MAX_LABEL_LENGTH);
+}
+
+function scrubFrame(frame: SentryFrameLike): Record<string, unknown> {
+  const out = pickDefined(frame, FRAME_LOCATION_KEYS);
+  if (typeof frame.filename === 'string') out['filename'] = relativeFrameFilename(frame.filename);
+  const fn = label(frame.function);
+  if (fn !== undefined) out['function'] = fn;
+  const mod = label(frame.module);
+  if (mod !== undefined) out['module'] = mod;
+  return out;
+}
+
+function scrubException(entry: SentryExceptionValueLike): SentryExceptionValueLike {
+  const out: SentryExceptionValueLike = {};
+  const type = label(entry.type);
+  if (type !== undefined) out.type = type;
+  if (typeof entry.value === 'string') out.value = sanitizeMessage(entry.value);
+  if (entry.mechanism !== undefined) out.mechanism = pickDefined(entry.mechanism, MECHANISM_KEYS);
+  const frames = entry.stacktrace?.frames;
+  if (Array.isArray(frames)) out.stacktrace = { frames: frames.map(scrubFrame) };
+  return out;
+}
+
+/**
+ * `beforeSend` core: rebuild the event from allowlisted fields only, or return
+ * `null` (drop) when it carries no exception. With a `stamp`, environment and
+ * release are overwritten and the tags are exactly `service`/`env`/`version`;
+ * without one, no tag leaves the process. Pure; does not mutate its input.
+ */
+export function scrubSentryEvent(
+  event: SentryEventLike,
+  stamp?: ObservabilityStamp,
+): SentryEventLike | null {
+  const values = event.exception?.values;
+  if (!Array.isArray(values) || values.length === 0) return null;
+
+  const out: SentryEventLike = pickDefined(event, SAFE_TOP_LEVEL);
+  if (stamp !== undefined) {
+    out.environment = stamp.environment;
+    out.release = stamp.release;
+    out.tags = { service: POS_SERVICE_TAG, env: stamp.environment, version: stamp.release };
+  }
+  out.exception = { values: values.map(scrubException) };
+  return out;
+}

@@ -1,40 +1,53 @@
-import type { ElectronMainOptions, ErrorEvent, EventHint } from '@sentry/electron/main';
+import type { ElectronMainOptions, ErrorEvent, EventHint, IPCMode } from '@sentry/electron/main';
 
-import { isForbiddenSentryKey } from '../../shared/audit/forbidden-keys.js';
+import { resolveObservabilityConfig } from './config.js';
+import { scrubSentryEvent, type ObservabilityStamp, type SentryEventLike } from './scrub.js';
 
 /**
- * Phase 9 / US7 — main-process Sentry init.
+ * Phase 9 / US7, reworked by RT-634 (OBS-5) — main-process Sentry init.
  *
- * Posture (D1): Sentry ships data over the network to a remote service,
- * so the no-secrets/no-PII rule MUST be enforced at `init` time, not
- * deferred. The init options below are the only safe baseline:
+ * Conforms to the OBS-1 observability contract (Confluence, RT-629):
+ * errors only, default-inert, allowlisted fields only, never blocking.
  *
- *   - `sendDefaultPii: false`         → Sentry's own opt-in for PII.
- *   - `integrations: []`              → no auto-instrumentation. Each
- *                                       integration that captures DOM
- *                                       events / fetch / xhr / console
- *                                       must be reviewed individually
- *                                       before enablement.
- *   - `tracesSampleRate: 0`           → no perf sampling in 001.
- *   - `beforeSend: scrubEvent`        → strips request, user, and any
- *                                       extra/contexts key matching the
- *                                       denylist regex.
+ *   - DSN / env / release come from `resolveObservabilityConfig` (runtime env
+ *     of the launched exe, main only). No valid DSN → no `sentryInit` call
+ *     and no egress (AC1).
+ *   - `defaultIntegrations: false` + an explicit, reviewed list. NOTE:
+ *     `integrations: []` alone does NOT disable the SDK defaults — the SDK
+ *     merges `[...defaults, ...integrations]`, which would turn on native
+ *     minidumps (raw process memory), main-process sessions, Electron/net/
+ *     console breadcrumbs, local variables, context lines and screenshots.
+ *     Minidumps and sessions are sent as their own envelopes and never pass
+ *     through `beforeSend`, so they cannot be scrubbed: they stay off. A
+ *     "crash" here is a JavaScript exception, not a native dump.
+ *   - `ipcMode: Classic`. Main init runs inside `whenReady` (it needs the
+ *     logger), and the SDK's default Protocol mode throws once the app is
+ *     ready — it previously left a half-initialised client behind a
+ *     swallowed warning. Classic registers listeners only; nothing in the
+ *     preload exposes them, so the renderer reaches Sentry solely through the
+ *     typed `app:report-error` bridge channel (see `renderer-error-report.ts`).
+ *   - `maxBreadcrumbs: 0`, `sendDefaultPii: false`, no `tracesSampleRate`
+ *     (contract §4: errors only), no client reports.
+ *   - Offline (contract §5): the SDK's default Electron transport persists an
+ *     envelope that fails to send and retries it later. The queue is bounded
+ *     (`maxQueueSize` envelopes, `maxAgeDays`). `beforeSend` runs BEFORE the
+ *     transport, so only allowlisted fields ever reach that disk queue.
+ *     Capture is fire-and-forget: nothing on the sale path awaits Sentry.
  *
- * R9 DI seam: `sentryInit` defaults to `Sentry.init` in production but
- * is injectable so unit tests can pass `vi.fn()` and assert WHEN/WITH
- * WHAT it is called. Same pattern as `DatabaseFactory` (Phase 4),
- * `SafeStorageLike` (Phase 5), and `pinoRollFactory` (Phase 8).
- *
- * R4 mitigation (Phase 8 lesson + spec.md:132): if `sentryInit` itself
- * throws (e.g., DSN is set but malformed), the error is caught, logged
- * once via the main logger, and the app continues. Sentry being broken
- * MUST NOT be a launch-halt.
- *
- * SECURITY: callers MUST NOT supply a logger that writes elsewhere than
- * the local pino sink. The error string from a thrown init may contain
- * the DSN — we deliberately drop the underlying `err` before logging
- * (see `try/catch` below) so a forged DSN cannot leak to disk.
+ * R9 DI seam: `sentryInit` and `integrations` are injected so tests never
+ * touch the real SDK. R4: a throwing init logs one stable warning (never the
+ * error text, which can echo the DSN) and the app continues.
  */
+
+/** Contract §5 offline buffer bounds. */
+export const OFFLINE_MAX_QUEUE_SIZE = 30;
+export const OFFLINE_MAX_AGE_DAYS = 7;
+
+/** The SDK's integration type (not exported by name from `@sentry/electron/main`). */
+export type Integration = Extract<ElectronMainOptions['integrations'], unknown[]>[number];
+
+/** `IPCMode.Classic`. The enum's runtime module loads `electron`, so it is typed only. */
+const IPC_MODE_CLASSIC = 1 as IPCMode;
 
 export interface SentryInitFn {
   (options: ElectronMainOptions): void;
@@ -44,161 +57,91 @@ export interface InitSentryMainLogger {
   warn(fields: Record<string, unknown>, msg: string): void;
 }
 
-export interface InitSentryMainOptions {
-  /** R9 DI seam — defaults to `Sentry.init`. */
-  sentryInit: SentryInitFn;
-  /** Main-process logger; only `warn` is used. Phase 8's pino instance fits. */
-  logger: InitSentryMainLogger;
-  /**
-   * Environment-variable bag. In production the caller passes
-   * `process.env`; in tests we pass a plain object so the test never
-   * mutates the real environment.
-   */
-  env: Record<string, string | undefined>;
-  /** Stamped into the Sentry `release` field. */
-  appVersion: string;
+/** The SDK integration factories the reviewed list is built from. */
+export interface MainIntegrationFactories {
+  onUncaughtExceptionIntegration(): Integration;
+  onUnhandledRejectionIntegration(options: { mode: 'warn' }): Integration;
+  linkedErrorsIntegration(): Integration;
+  dedupeIntegration(): Integration;
 }
 
+export interface InitSentryMainOptions {
+  /** R9 DI seam — `Sentry.init` in production. */
+  sentryInit: SentryInitFn;
+  /** The reviewed integration list; production passes `() => mainIntegrations(Sentry)`. */
+  integrations: () => Integration[];
+  /** Main-process logger; only `warn` is used. */
+  logger: InitSentryMainLogger;
+  /** `process.env` in production, a plain object in tests. */
+  env: Record<string, string | undefined>;
+}
+
+export type SentryMainResult =
+  | { readonly kind: 'disabled' }
+  | { readonly kind: 'failed' }
+  | { readonly kind: 'initialized'; readonly stamp: ObservabilityStamp };
+
 /**
- * Initialise Sentry in the main process.
- *
- * - Empty / missing / whitespace-only DSN → no-op (never calls
- *   `sentryInit`). The app launches cleanly with crash reporting
- *   inert. This is the default state: `SENTRY_DSN=` in `.env.example`.
- * - Non-empty DSN → call `sentryInit` with the locked-down option set
- *   and a `beforeSend` scrubber. If `sentryInit` throws, log a single
- *   warn line and continue.
+ * The ONLY integrations main runs: capture of uncaught exceptions and
+ * unhandled rejections (Electron's default behaviour is kept: a dialog for an
+ * uncaught exception, a console warning for a rejection), cause chains, and
+ * duplicate suppression. None of them reads requests, the DOM or the console.
  */
-export function initSentryMain(opts: InitSentryMainOptions): void {
-  const dsn = opts.env['SENTRY_DSN'];
-  if (typeof dsn !== 'string' || dsn.trim().length === 0) {
-    return;
+export function mainIntegrations(factories: MainIntegrationFactories): Integration[] {
+  return [
+    factories.onUncaughtExceptionIntegration(),
+    factories.onUnhandledRejectionIntegration({ mode: 'warn' }),
+    factories.linkedErrorsIntegration(),
+    factories.dedupeIntegration(),
+  ];
+}
+
+/** Initialise main-process Sentry. Never throws; never blocks boot. */
+export function initSentryMain(opts: InitSentryMainOptions): SentryMainResult {
+  const config = resolveObservabilityConfig(opts.env);
+  if (config.kind === 'disabled') {
+    if (config.reason !== 'unset') {
+      opts.logger.warn({ reason: config.reason }, 'sentry:disabled');
+    }
+    return { kind: 'disabled' };
+  }
+  if (config.warnings.length > 0) {
+    opts.logger.warn({ warnings: config.warnings }, 'sentry:stamp-defaulted');
   }
 
+  const { stamp } = config;
   try {
     opts.sentryInit({
-      dsn,
-      release: opts.appVersion,
+      dsn: config.dsn,
+      environment: stamp.environment,
+      release: stamp.release,
+      // Deprecated in @sentry/electron 7.20 in favour of dataCollection, but
+      // still the shipped, honoured setting.
       sendDefaultPii: false,
-      integrations: [],
-      tracesSampleRate: 0,
-      beforeSend: scrubEvent,
+      defaultIntegrations: false,
+      integrations: opts.integrations(),
+      ipcMode: IPC_MODE_CLASSIC,
+      maxBreadcrumbs: 0,
+      sendClientReports: false,
+      transportOptions: { maxQueueSize: OFFLINE_MAX_QUEUE_SIZE, maxAgeDays: OFFLINE_MAX_AGE_DAYS },
+      beforeSend: (event) =>
+        scrubSentryEvent(event as unknown as SentryEventLike, stamp) as ErrorEvent | null,
     });
   } catch {
     // Deliberately do NOT pass the underlying error to the logger — its
-    // message can echo the DSN, which would land in `main-YYYYMMDD.log`
-    // on disk. A stable identifier is enough for triage.
+    // message can echo the DSN, which would land in the on-disk log.
     opts.logger.warn({ reason: 'init-threw' }, 'sentry:init-failed');
+    return { kind: 'failed' };
   }
+  return { kind: 'initialized', stamp };
 }
 
 /**
- * Key denylist for Sentry scrubbing lives in the shared single source of
- * truth: `isForbiddenSentryKey` (exact-key over `FORBIDDEN_PAYLOAD_KEYS` ∪ the
- * frozen curated substring supplement). See `shared/audit/forbidden-keys.ts`.
- *
- * Keys are removed from `event.extra` and from every per-context bag in
- * `event.contexts`, recursively at any depth (T050). The exact-key half covers
- * every named AD-9 forbidden field (T522); the substring supplement preserves
- * the prior breadth (`ApiToken`, `userPassword`, `cardReaderId`, `customerPhone`,
- * etc.) so this layer is purely additive vs the prior hand-maintained regex.
- */
-
-/**
- * Sentry `beforeSend` hook. Returns `null` to drop the event entirely
- * (Sentry treats null as "do not send"); otherwise returns a scrubbed
- * copy. Exported for unit tests.
- *
- * The scrubber is intentionally conservative:
- *   - drops `event.request` entirely (URLs, headers, query params, body)
- *   - drops `event.user` entirely (id, email, ip_address, username)
- *   - removes denylisted keys from `event.extra`
- *   - removes denylisted keys from every nested object in `event.contexts`
- *
- * What it does NOT touch:
- *   - `event.exception` (the actual stack trace — needed for triage)
- *   - `event.message` (the human-readable summary)
- *   - non-denylisted keys in extra/contexts
- *   - `event.tags`        ← guaranteed-empty in 001 because no caller
- *                            uses `Sentry.setTag()`. If a future feature
- *                            starts tagging events, extend this scrubber.
- *   - `event.breadcrumbs` ← guaranteed-empty in 001 because
- *                            `integrations: []` disables every
- *                            auto-breadcrumb source AND no caller uses
- *                            `Sentry.addBreadcrumb()`. Same proviso.
- *   - `event.transaction` ← guaranteed-empty in 001: no perf sampling.
- *   - `event.fingerprint` ← never set by any caller in 001.
- *
- * The no-PII guarantee depends on TWO preconditions holding:
- *   (a) `integrations: []` stays in the init options (D1).
- *   (b) callers never invoke `Sentry.setTag()`, `Sentry.setUser()`,
- *       `Sentry.setContext()`, or `Sentry.addBreadcrumb()` with PII.
- * Reviewers MUST flag any future caller that violates (b) and either
- * extend this scrubber or stop the call.
+ * The allowlist scrubber without a release stamp (no tags leave the
+ * process). Kept for the cross-process redaction suites; production's
+ * `beforeSend` is the stamped closure inside `initSentryMain`.
  */
 export function scrubEvent(event: ErrorEvent, _hint?: EventHint): ErrorEvent | null {
   void _hint;
-  // Work on a shallow copy so we never mutate Sentry's internal object.
-  const cleaned: ErrorEvent = { ...event };
-  delete cleaned.request;
-  delete cleaned.user;
-
-  if (cleaned.extra !== undefined) {
-    cleaned.extra = stripDenylistedKeys(cleaned.extra) as Record<string, unknown>;
-  }
-
-  if (cleaned.contexts !== undefined) {
-    const cleanedContexts: Record<string, Record<string, unknown>> = {};
-    for (const [ctxName, ctxValue] of Object.entries(cleaned.contexts)) {
-      if (typeof ctxValue === 'object') {
-        cleanedContexts[ctxName] = stripDenylistedKeys(ctxValue) as Record<string, unknown>;
-      }
-    }
-    // After scrubbing we hold a plain string-keyed bag; Sentry's
-    // Contexts type is structurally compatible.
-    cleaned.contexts = cleanedContexts;
-  }
-
-  // After scrubbing, if the event has nothing left worth shipping
-  // (no message, no exception, no breadcrumbs), drop it.
-  const hasPayload =
-    typeof cleaned.message === 'string' ||
-    cleaned.exception !== undefined ||
-    (Array.isArray(cleaned.breadcrumbs) && cleaned.breadcrumbs.length > 0);
-  return hasPayload ? cleaned : null;
-}
-
-/**
- * Recursively strip denylisted keys from a nested object tree.
- *
- * 004-operator-session T050: prior shape was shallow — only top-level
- * keys of `extra` / each `contexts[name]` bag were inspected. Audit-event
- * payloads (data-model.md § "Entity 5 — AuditEvent") are nested objects;
- * a `Sentry.setContext('audit', { event: { payload: { password_hash: 'x' } } })`
- * call would pass straight through under the old behaviour. The recursive
- * walk closes that gap.
- *
- * Behaviour:
- *   - Plain objects are walked; denylisted keys at any depth are dropped.
- *   - Arrays are walked element-by-element; non-object elements pass
- *     through untouched.
- *   - Primitives (string, number, boolean, null, undefined) pass through.
- *   - Cycles are not expected in Sentry payloads (they're JSON-serialised
- *     by the Sentry SDK before transport). If one slipped in, the walk
- *     would recurse indefinitely; we accept that as a non-issue because
- *     Sentry's own serializer would have failed first.
- */
-function stripDenylistedKeys(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => stripDenylistedKeys(item));
-  }
-  if (value !== null && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      if (isForbiddenSentryKey(key)) continue;
-      out[key] = stripDenylistedKeys(child);
-    }
-    return out;
-  }
-  return value;
+  return scrubSentryEvent(event as unknown as SentryEventLike) as ErrorEvent | null;
 }

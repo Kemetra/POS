@@ -204,7 +204,10 @@ import { bindVacuumInto } from './db/pre-migration-snapshot.js';
 import { runStartupMigrations } from './app/startup-migrations.js';
 import { createSecretStore } from './secrets/index.js';
 import { createLogger, waitForLogDrain } from './logging/logger.js';
-import { initSentryMain } from './observability/sentry-main.js';
+import { initSentryMain, mainIntegrations } from './observability/sentry-main.js';
+import { createRendererErrorReporter } from './observability/renderer-error-report.js';
+import { withRequestId } from './observability/request-id.js';
+import { registerReportErrorHandler } from './ipc/report-error.js';
 import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
 import { applyDevSkipPairingIfRequested } from './pairing/dev-skip-pairing.js';
 import { applyDevSkipOperatorSignInIfRequested } from './operator/dev-skip-operator-signin.js';
@@ -541,11 +544,14 @@ singleInstanceReady
     // line via `mainLogger` and the app continues. With `SENTRY_DSN`
     // unset (the default in `.env.example`), Sentry stays inert — no
     // network calls, no crashes (AS-8).
-    initSentryMain({
+    // RT-634 (OBS-5) — OBS-1 contract: DSN / DEPLOYMENT_ENVIRONMENT /
+    // POS_PULSE_RELEASE from the launch env (main only), reviewed
+    // integrations only, allowlist beforeSend, bounded offline queue.
+    const sentryMain = initSentryMain({
       sentryInit: Sentry.init,
+      integrations: () => mainIntegrations(Sentry),
       logger: mainLogger,
       env: process.env,
-      appVersion,
     });
 
     // RT-162 (RT-160 FU-1 / owner decision D-1) — fail-closed cashier profile.
@@ -705,8 +711,15 @@ singleInstanceReady
     // + a schema-restricted pairingLog. Resolve-on-reachable, reject-only-
     // on-transport network contract is locked from PR #17. The IPC
     // handler below routes `pairing:submit` here.
+    // RT-634 (OBS-5) — every Backend-Core call carries a fresh UUID
+    // `X-Request-Id` (OBS-1 contract §2), logged locally with method, path
+    // and status. ONE wrapper on the base fetch; all Backend-Core clients
+    // below are built on it. Clerk (resolveClerkExchanger) is not wrapped.
+    const backendBaseFetch = withRequestId(globalThis.fetch.bind(globalThis), {
+      logger: mainLogger,
+    });
     const pairingNetwork = createNetwork({
-      fetch: globalThis.fetch.bind(globalThis),
+      fetch: backendBaseFetch,
       baseUrl: resolveApiBaseUrl(),
     });
     // RT-202 — pairing happens in the renderer WITHOUT a process relaunch, so the
@@ -790,17 +803,22 @@ singleInstanceReady
     registerPingHandler(guardedIpcMain);
     registerAppVersionHandler(guardedIpcMain);
     registerLogHandler(guardedIpcMain, rendererLogger);
-    // T067 + D3 — renderer pulls its DSN over the bridge; never via
-    // `import.meta.env.VITE_*` (which would inline it into the
-    // renderer bundle at build time). The closure resolves the DSN
-    // per-call, so a future restart-free DSN rotation works without
-    // re-architecting the handler.
+    // RT-634 (OBS-5) — the renderer runs no Sentry SDK and never sees the
+    // DSN: an uncaught renderer error arrives here, is validated, capped and
+    // rate-limited, then captured in MAIN (same allowlist + offline queue).
+    registerReportErrorHandler(
+      guardedIpcMain,
+      createRendererErrorReporter({
+        captureException: (error, hint) => Sentry.captureException(error, hint),
+        isEnabled: () => sentryMain.kind === 'initialized',
+        logger: rendererLogger,
+      }),
+    );
+    // T067 + D3 — renderer runtime config crosses the typed bridge; never
+    // via `import.meta.env.VITE_*` (which would inline it into the
+    // renderer bundle at build time).
     const getAppConfig = (): AppConfig => {
       const cfg: AppConfig = {};
-      const dsn = process.env['SENTRY_DSN'];
-      if (typeof dsn === 'string' && dsn.trim().length > 0) {
-        cfg.sentryDsn = dsn;
-      }
       // 005 cart / 006 payments / 008 saleFinalization / 009 productSearch /
       // RT-103 voucherTender / RT-15 returns — all six flags default false (fail-closed).
       // RT-162: parsing lives in `app/feature-flags.ts` (one truthy parser,
@@ -877,7 +895,11 @@ singleInstanceReady
       logger: mainLogger,
       probe: {
         baseUrl: apiBaseUrl,
-        fetch: globalThis.fetch.bind(globalThis),
+        // Quiet: the idle probe runs every 10 s, so its ids log at debug.
+        fetch: withRequestId(globalThis.fetch.bind(globalThis), {
+          logger: mainLogger,
+          quiet: true,
+        }),
         isInterfaceOnline: () => net.isOnline(),
         powerMonitor,
       },
@@ -918,7 +940,7 @@ singleInstanceReady
     registerTerminalStatusHandlers(guardedIpcMain, {
       read: () => terminalStatusPublisher.read(),
     });
-    const backendFetch = terminalStatus.observeFetch(globalThis.fetch.bind(globalThis));
+    const backendFetch = terminalStatus.observeFetch(backendBaseFetch);
     const operatorBackend = createBackendClient({
       baseUrl: apiBaseUrl,
       fetch: backendFetch,

@@ -50,6 +50,7 @@ import { invokePairingRecheck } from './pairing-recheck.js';
 import type { OperatorRefusal } from '../shared/audit/event-shape';
 import type { LogRecord } from '../shared/log-record';
 import type { AppConfig } from '../shared/app-config';
+import type { RendererErrorReport } from '../shared/renderer-error-report';
 import {
   PAIRING_IPC_CHANNELS,
   type PairingStatus,
@@ -179,6 +180,9 @@ const api: PreloadBridgeAPI = {
   appVersion: () => ipcRenderer.invoke('app:version') as Promise<string>,
   log: (record: LogRecord) => ipcRenderer.invoke('app:log', record) as Promise<void>,
   appConfig: () => ipcRenderer.invoke('app:config') as Promise<AppConfig>,
+  // RT-634 (OBS-5) — renderer crash reports; main validates, scrubs, sends.
+  reportError: (report: RendererErrorReport) =>
+    ipcRenderer.invoke('app:report-error', report) as Promise<void>,
   pairing,
   operator,
   cart,

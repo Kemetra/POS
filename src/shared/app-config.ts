@@ -3,7 +3,9 @@
  *
  * The renderer cannot read `process.env` safely under sandbox. The
  * preload bridge calls `app:config` once at startup to learn its
- * runtime configuration, currently just the Sentry DSN.
+ * runtime configuration (the feature flags). RT-634: the Sentry DSN is
+ * no longer part of it — renderer errors go to main over
+ * `app:report-error`, and only main holds the DSN.
  *
  * SECURITY: this shape is deliberately narrow. Only values the
  * renderer genuinely needs at runtime cross the bridge — never raw
@@ -13,12 +15,6 @@
  */
 
 export interface AppConfig {
-  /**
-   * Sentry DSN. Optional — when absent, Sentry stays inert in the
-   * renderer (no `Sentry.init` call, no network traffic). Sourced
-   * from `process.env.SENTRY_DSN` in main; never read in renderer.
-   */
-  sentryDsn?: string;
   /**
    * 005-sales-cart T001 — per-feature flag map.
    *

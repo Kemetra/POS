@@ -2,6 +2,7 @@
 // is a planning snapshot and is NOT re-synced after this file exists.
 import type { LogRecord } from './log-record.js';
 import type { AppConfig } from './app-config.js';
+import type { RendererErrorReport } from './renderer-error-report.js';
 import type {
   PairingStatus,
   PairingRecheckResult,
@@ -752,13 +753,19 @@ export interface PreloadBridgeAPI {
   log(record: LogRecord): Promise<void>;
   /**
    * Phase 9 / US7: pull renderer-relevant runtime configuration from
-   * main. Currently the only field is `sentryDsn` — used to decide
-   * whether to initialise renderer-side Sentry. Sandboxed renderers
-   * cannot read `process.env`, and `import.meta.env.VITE_*` would
-   * inline the DSN into the bundle at build time — neither is
-   * acceptable, so config crosses the typed bridge instead (D3).
+   * main (the feature flags). Sandboxed renderers cannot read
+   * `process.env`, and `import.meta.env.VITE_*` would inline values into
+   * the bundle at build time, so config crosses the typed bridge (D3).
+   * RT-634: the Sentry DSN no longer crosses it at all.
    */
   appConfig(): Promise<AppConfig>;
+  /**
+   * RT-634 (OBS-5): report an uncaught renderer error or unhandled
+   * rejection to main (`app:report-error`). Main validates, caps,
+   * rate-limits and scrubs it (OBS-1 allowlist) before Sentry, or drops it
+   * when Sentry is not configured. Fire-and-forget: always resolves.
+   */
+  reportError(report: RendererErrorReport): Promise<void>;
   /**
    * 002-terminal-pairing: terminal-pairing namespace. Interface-only at
    * the foundational layer; the preload stub throws "not implemented"

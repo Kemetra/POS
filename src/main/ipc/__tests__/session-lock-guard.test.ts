@@ -128,6 +128,8 @@ describe('RT-117 createSessionLockGuardedIpcMain', () => {
         'app:version',
         'app:log',
         'app:config',
+        // RT-634 — renderer crash reports.
+        'app:report-error',
         OPERATOR_IPC_CHANNELS.SIGN_IN,
         OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM,
         OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL,

@@ -1,6 +1,7 @@
 import { describe, it, expectTypeOf } from 'vitest';
 import type { PreloadBridgeAPI } from '../shared/bridge-api';
 import type { AppConfig } from '../shared/app-config';
+import type { RendererErrorReport } from '../shared/renderer-error-report';
 
 // Side-effect import keeps the global Window augmentation in scope for this file.
 import '../shared/bridge-api';
@@ -29,5 +30,12 @@ describe('window.api typing matches PreloadBridgeAPI', () => {
 
   it('PreloadBridgeAPI.appConfig returns Promise<AppConfig>', () => {
     expectTypeOf<PreloadBridgeAPI['appConfig']>().returns.resolves.toEqualTypeOf<AppConfig>();
+  });
+
+  it('PreloadBridgeAPI.reportError takes a RendererErrorReport (RT-634)', () => {
+    expectTypeOf<PreloadBridgeAPI['reportError']>().parameters.toEqualTypeOf<
+      [RendererErrorReport]
+    >();
+    expectTypeOf<PreloadBridgeAPI['reportError']>().returns.toEqualTypeOf<Promise<void>>();
   });
 });

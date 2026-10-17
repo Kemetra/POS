@@ -10,7 +10,7 @@ type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
  * Phase 9 / US7 — `app:config` IPC handler tests.
  *
  * The handler is the one-way path the renderer uses to learn its
- * runtime config (currently just the Sentry DSN). It MUST NOT pull
+ * runtime config (feature flags). It MUST NOT pull
  * config from `process.env` directly — the closure is injected by
  * `src/main/index.ts` so unit tests stay free of the real environment.
  */
@@ -30,7 +30,7 @@ describe('registerAppConfigHandler', () => {
   it('returns the config produced by the injected getter', async () => {
     const handle = vi.fn<(channel: string, fn: IpcHandler) => void>();
     const ipcMain = { handle } as unknown as IpcMain;
-    const config: AppConfig = { sentryDsn: 'https://example@o0.ingest.sentry.io/0' };
+    const config: AppConfig = { features: { cart: true } };
 
     registerAppConfigHandler(ipcMain, () => config);
 
@@ -40,7 +40,7 @@ describe('registerAppConfigHandler', () => {
     expect(result).toEqual(config);
   });
 
-  it('returns an empty config when sentryDsn is not configured', async () => {
+  it('returns an empty config when nothing is configured', async () => {
     const handle = vi.fn<(channel: string, fn: IpcHandler) => void>();
     const ipcMain = { handle } as unknown as IpcMain;
 
