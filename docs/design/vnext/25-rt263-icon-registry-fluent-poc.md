@@ -29,7 +29,7 @@
 - **Inventory.** Neither repository depends on an icon library today. Both use one closed,
   hand-drawn set of inline-SVG stroke glyphs (24 grid, 1.75 stroke, `currentColor`):
   - **POS:** `V5Icon` has 39 glyphs and 32 consumer files. There are also one stray `SearchGlyph`
-    component and two text glyphs.
+    component and three live text glyphs. A DEV-only static proof has four more.
   - **Admin:** `Icon` has 17 glyphs. There are also two one-off inline SVGs and three text glyphs.
   - Each repository also has one brand mark.
 - **Fit.** Fluent System Icons has a glyph for every concept in use today and for the six
@@ -39,13 +39,15 @@
     The registry has to own mirroring (§4.2).
   - Weight: Fluent Regular is a lighter line than today's set, about 1.0px against 1.46px at 20px
     (§4.3). That is the main visual question.
-- **Bundle (§6).** For the 47 distinct Fluent glyphs in use:
+- **Bundle (§6).** For the 47 distinct Fluent glyphs in use, at one size (20 Regular):
   - Vendored path data: **5.9 KB gzip**.
   - The library's headless per-icon ESM imports: **7.1 KB + 1.1 KB CSS**.
   - The default Griffel API: **9.6 KB**, because it pulls a CSS-in-JS runtime.
   - Icon fonts: **382–817 KB per face**, with no tree-shaking.
 
-  Today's set is 1.5 KB. The npm package is **174 MB unpacked**.
+  That 20-Regular set is the **floor**. The complete registry as proposed has every Regular grid
+  (16/20/24) plus Filled 20/24 for the seven slim-rail entries. It costs **17.8 KB gzip** vendored,
+  against **19.1 KB** headless. Today's set is 1.5 KB. The npm package is **174 MB unpacked**.
 - **Recommendation.** Adopt Fluent Regular as the single glyph source. Ship it as **vendored path
   data inside a semantic registry module in each repository**, with the MIT notice. Add **no npm
   dependency**, so no dependency decision is needed.
@@ -60,7 +62,8 @@
 |---|---|---|
 | `v5/foundation/V5Icon.tsx` | Closed map `PATHS` → one `<path>`, 24 grid, stroke 1.75 (`cross` uses 3), `currentColor`, always `aria-hidden` | **39 glyphs**, used in **32 files**: 19 keys with literal `name="…"`, the rest through typed maps (`NAV_ICON`, `MARK`, `BADGE_GLYPH`, `STATE_ICON`, tender tiles, manager tiles, `ToneIcon`'s `status-${tone}`) |
 | `v5/manager/honest/SearchGlyph.tsx` | A second magnifier, drawn differently from `V5Icon` `search` | 1 |
-| Text glyphs | `v5/checkout/CashKeypad.tsx:80` `⌫`; `v5/sale/SaleCart.tsx:97` `←`; legacy `ui/payments/VoucherEntry.tsx:204` `✓` | 3 |
+| Text glyphs (live) | `v5/checkout/CashKeypad.tsx:80` `⌫`; `scan/ScanGuardHost.tsx:101` `!` (the scan-notice warning mark, mounted on every route by `App.tsx`); legacy `ui/payments/VoucherEntry.tsx:204` `✓` | 3 |
+| Text glyphs (DEV-only static proof) | `v5/sale/SaleCart.tsx` `−` `＋` `←`; `v5/sale/ProductRail.tsx` `＋` `⌕`; `v5/sale/SaleScreen.tsx` `✚` (brand). Reached only via `#/dev/sale-proof`, which Vite strips from builds (`main.tsx:24-37`) | 6 (not shipped) |
 | Brand | `V5Icon` `cross`: the pharmacy cross in the nav and the entry strip | 1 (brand, not an icon) |
 | Library dependency | none | 0 |
 
@@ -91,6 +94,7 @@ Two tests and styles depend on the current shape:
 | `components/Icon.tsx` | Closed map → fragments, 24 grid, stroke 1.75, decorative unless `title` (then `role="img"` + `<title>`) | **17 glyphs**: `overview`, `tenants`, `stores`, `operators`, `audit`, `catalog`, `unknown`, `stock`, `cash`, `connection`, `device`, `receipt`, `search`, `bell`, `help`, `sign-out`, `chevron`. Used in 3 files (the `AppShell` nav maps, `AuditFilters`, `UnknownItemList`) |
 | Inline one-offs | `auth/NoAccess.tsx` (a lock, stroke 1.5), `shell/ScopeHeader.tsx` (the scope caret) | 2 |
 | Text glyphs | `components/BackArrow.tsx` `←` (CSS-mirrored, used in 7 files); `components/Drawer.tsx` `✕`; `shell/ScopeHeader.tsx` `✓` | 3 |
+| Typography, not icons | `shell/ScopeHeader.tsx` `›` breadcrumb separator (Bidi_Mirrored, RT-266 §2.1); quantity `×` in POS rows | stays text |
 | Brand | `components/TowerMark.tsx` | 1 (brand, not an icon) |
 | Library dependency | none (`package.json` has no icon package) | 0 |
 
@@ -185,7 +189,7 @@ assets, and the registry chooses one by direction.
 | `icon.backspace` | `backspace`, CashKeypad `⌫` | — | Backspace | never | keypads stay LTR (DESIGN.md) |
 | `icon.retry` | `retry` | — | Arrow Clockwise | never | upstream has no `directionType` |
 | `icon.park` | `pause` | — | Pause | never | |
-| `icon.print` | `printer` | — | Print | never | today's glyph adds a warning mark; the banner's tone glyph carries that instead (no composite glyph) |
+| `icon.print` | `printer` | — | Print | never | today's glyph adds a warning mark. That mark moves to the Banner's tone glyph, which IC-2 renders **beside** the source glyph (§4.1) |
 | `icon.lock` | `lock` | NoAccess inline | Lock Closed | never | |
 | `icon.key` | `key` | — | Key | never | |
 | `icon.pair` | `link` | — | Link | never | |
@@ -252,8 +256,14 @@ pharmacy domain, Pill and Heart Pulse exist if a future screen needs them.
 
 There are two weak metaphors. Neither is a coverage gap:
 
-- **printer-with-warning:** no Fluent asset. Rule 2 forbids composites. The Banner's tone glyph
-  already says "warning", and its text names the printer.
+- **printer-with-warning:** no Fluent asset, and rule 2 forbids composites. Today
+  `PrinterFailureBanner` passes `icon="printer"`. `Banner.tsx:37-43` then renders that source
+  glyph **instead of** `ToneIcon`, so the warning shape exists only inside the bespoke printer
+  glyph. A plain Print glyph would therefore lose the warning shape. IC-2 changes `Banner` so that
+  a source `icon` renders **next to** the tone glyph, with the tone glyph first, and does not
+  replace it. The banner then shows △ + printer: the tone keeps its shape (P8), and the source
+  stays distinguishable from the offline banner (RT-605). The `[data-icon="printer"]` hook stays
+  on the source glyph. The pair layout needs visual sign-off.
 - **stuck shift:** Clock Pause. It always sits beside its title.
 
 ### 4.2 Arabic / RTL behaviour
@@ -359,7 +369,7 @@ There are two weak metaphors. Neither is a coverage gap:
 - Build: `esbuild --bundle --minify --format=esm` with React external, then `gzip -9`.
 - The baseline is today's POS `V5Icon.tsx` bundled the same way.
 
-| Option | 1 glyph raw / gz | 47 glyphs raw / gz | Extra | Tree-shakes? |
+| Option | 1 glyph raw / gz | 47 glyphs, 20 Regular only (floor) raw / gz | Extra | Tree-shakes? |
 |---|---|---|---|---|
 | **Today** (POS `V5Icon`, 39 stroke glyphs) | — | 3.2 KB / **1.5 KB** | — | n/a (closed map) |
 | **A. `@fluentui/react-icons`, default (Griffel) API**, named imports from the barrel | 7.4 / 3.4 KB | 25.6 / **9.6 KB** | pulls the `@griffel/react` CSS-in-JS runtime (most of the 1-glyph floor) and injects styles at runtime | yes: barrel and `/svg/<name>` atoms give identical output |
@@ -375,11 +385,27 @@ There are two weak metaphors. Neither is a coverage gap:
 - `@fluentui/svg-icons` is 12.8 MB.
 - Both release roughly weekly (both at x.y.**344**).
 
+**The complete registry.** The table measures one 20-Regular asset per name. That is a floor,
+because the proposed `REGISTRY` is a closed map indexed by name at runtime. Every variant it
+declares ships, whatever the call sites use. Measured the same way for all 47 in-use names:
+
+| Registry content | Vendored (C) raw / gz | Headless atoms (B) raw / gz |
+|---|---|---|
+| 20 Regular only (floor, above) | 17.2 / 5.9 KB | 20.0 / 7.1 KB (+ 1.1 KB CSS) |
+| 20 Regular + Filled 20/24 for the 7 slim-rail nav names | 23.2 / 7.5 KB | — |
+| Regular 16 + 20 + 24, all names | 52.2 / 16.5 KB | — |
+| **Full proposal:** Regular 16 + 20 + 24 + Filled 20/24 for the 7 nav names | 58.1 / **17.8 KB** | 63.5 / **19.1 KB** (+ 1.1 KB CSS) |
+
+So IC-1 declares, **per name, only the grids that a call site uses** (most names need one or two),
+and Filled only for the slim-rail nav. From IC-2 on, once consumers have moved, a registry test
+fails on any declared variant that no call site uses. The realistic cost is between the floor and the full figure: about 8–12 KB gzip. The
+ranking of the options does not change.
+
 **Reading the numbers.**
 
 - **Per glyph.** Fluent glyphs are outline fills (two contours per stroke), so each costs about 3×
-  a stroke path. Every option except E adds roughly **4.5–8 KB gzip** to a renderer bundle. That is
-  negligible next to the renderer and fonts.
+  a stroke path. Every option except E adds roughly **6–19 KB gzip** to a renderer bundle, depending on how many
+  variants the registry declares. That is still small next to the renderer and fonts.
 - **Size does not decide this.** What decides it:
   - control over the glyph set and its review;
   - supply chain and install footprint;
@@ -395,7 +421,7 @@ visual sign-off before IC-2 / IC-3 ship pixels.
 | ID | Question | Options | Selected |
 |---|---|---|---|
 | D-263-1 | Icon family | Fluent System Icons Regular (+ Filled for selection) · keep the bespoke sets · another family | **Fluent System Icons**, as UX-03 leads. _Visual_: confirm the lighter weight (§4.3) |
-| D-263-2 | Packaging | A Griffel API · B headless per-icon ESM · **C vendored path data** · D sprite · E icon font | **C: vendored path data in a semantic registry module per repository.** Smallest (5.9 KB gz). No runtime engine. No 174 MB dependency. Each glyph is reviewed and has provenance. Matches both repos' existing "closed, hand-picked map" contract. E is rejected (size, no tree-shaking). A is rejected (runtime CSS-in-JS in a cashier renderer). |
+| D-263-2 | Packaging | A Griffel API · B headless per-icon ESM · **C vendored path data** · D sprite · E icon font | **C: vendored path data in a semantic registry module per repository.** Smallest of the options at every variant count (5.9 KB gz floor, 17.8 KB gz full proposal; §6). No runtime engine. No 174 MB dependency. Each glyph is reviewed and has provenance. Matches both repos' existing "closed, hand-picked map" contract. E is rejected (size, no tree-shaking). A is rejected (runtime CSS-in-JS in a cashier renderer). |
 | D-263-3 | Add an npm dependency? | add `@fluentui/react-icons` or `@fluentui/svg-icons` · **add none** | **None.** Glyphs are vendored by a one-off extraction outside the repository. The source version is recorded per glyph. An update is a reviewed diff, not a version bump. |
 | D-263-4 | Who decides RTL mirroring | vendor `directionType` / `IconDirectionContext` · **the registry, per semantic name** | **The registry** (§4.2), applied with `:dir(rtl)` |
 | D-263-5 | Sizes | free px · **16 / 20 / 24 native grids** | **`sm` 16, `md` 20, `lg` 24**, no scaling between grids. _Visual_: the 20px line is 1.0px against today's 1.46px |
@@ -413,8 +439,8 @@ own evidence.
 
 | Slice | Repo | Scope | Visual change | Evidence | Depends on |
 |---|---|---|---|---|---|
-| **IC-1** POS registry module | POS | Add `src/renderer/icons/`: the vendored §3 glyphs with provenance, `Icon` with `name` / `size` / `selected`, the mirror class with `:dir(rtl)`, the MIT notice file, and the `NOTICE` entry. Unit tests: every name renders at every declared size; `aria-hidden` / `focusable`; mirror rules per name; no `forced-color-adjust`; a registry-completeness test. **No consumer moves; `V5Icon` untouched.** | none | tests, typecheck, lint, CodeScene | this doc merged |
-| **IC-2** POS consumers onto the registry | POS | Move the 32 `V5Icon` consumer files to semantic names. Remove `SearchGlyph` and the text glyphs `⌫` (`CashKeypad`) and `←` (`SaleCart`). Keep `data-icon` and `.v5-icon` hooks, or move them with their tests. Delete `V5Icon` except the brand `cross` (→ brand component). Add a test that forbids a raw `<svg` in `src/renderer/**` outside `icons/` and brand components. Legacy `ui/payments/VoucherEntry` `✓` only if that surface is still live. | **yes** | VA captures at 1024 and 1280, light and forced colours, for nav (rail and panel), Sale, Checkout tenders, Banner tones, manager home, entry screens; axe | IC-1; owner visual sign-off on D-263-1/5/8 |
+| **IC-1** POS registry module | POS | Add `src/renderer/icons/`: the vendored §3 glyphs with provenance, `Icon` with `name` / `size` / `selected`, the mirror class with `:dir(rtl)`, the MIT notice file, and the `NOTICE` entry. IC-1 declares the grids each name's current `V5Icon` call sites use (§6, complete registry). Unit tests: every name renders at every declared size; `aria-hidden` / `focusable`; mirror rules per name; no `forced-color-adjust`; a registry-completeness test. **No consumer moves; `V5Icon` untouched.** | none | tests, typecheck, lint, CodeScene | this doc merged |
+| **IC-2** POS consumers onto the registry | POS | Move the 32 `V5Icon` consumer files to semantic names. Remove `SearchGlyph` and the live text glyphs `⌫` (`CashKeypad`) and `!` (`ScanGuardHost` → `icon.status.warning`). Change `Banner` so that a source `icon` renders beside the tone glyph, not instead of it (§4.1, printer banner). Keep `data-icon` and `.v5-icon` hooks, or move them with their tests. The DEV-only `#/dev/sale-proof` text glyphs move too, or the proof is retired. Delete `V5Icon` except the brand `cross` (→ brand component). Add a test that forbids a raw `<svg` in `src/renderer/**` outside `icons/` and brand components. Legacy `ui/payments/VoucherEntry` `✓` only if that surface is still live. | **yes** | VA captures at 1024 and 1280, light and forced colours, for nav (rail and panel), Sale, Checkout tenders, Banner tones, manager home, entry screens; axe | IC-1; owner visual sign-off on D-263-1/5/8 |
 | **IC-3** Admin registry + consumers | Admin-Console | Same module under `src/components/icons/` (same names, Admin subset), MIT notice, `NOTICE`. Migrate `Icon` (17), NoAccess lock, ScopeHeader caret, `BackArrow` (7 files), Drawer `✕`, ScopeHeader `✓`. Retire the `title` prop (D-263-6). Update Admin `DESIGN.md` §4 from "pending RT-263" to the decided rules. | **yes** | Admin unit tests + Playwright/axe, forced-colours capture of shell and nav | this doc; owner visual sign-off |
 | **IC-4** Record the decision | Confluence | Update UX-03 (page 22839299) and the RETAIL Decisions page: packaging C, no dependency, the registry rules, the mirror ownership. Update POS `docs/DESIGN.md` iconography line to point at doc 25. | none | page versions | owner sign-off (or after IC-2) |
 
