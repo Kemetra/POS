@@ -319,8 +319,10 @@ main-only, **single-use** `approval_id` that expires 120 s after issue
 (RT-114 C7 default). The approval is bound to action kind
 `cart.discount.manual`, its `subject_ref`, the subject version and amount
 that main computes from its own state, the requesting session and the
-terminal (C7). The approver is recorded main-side only. The renderer never
-learns who approved (C2).
+terminal (C7). The approver's identity is recorded main-side only. The
+renderer knows only the opaque `approver_ref` and display name it picked
+from `approval.listApprovers` (C2; shown on the sheet per owner decision
+O2), never the approver's `users.id`.
 
 The discount's bound intent stays the one this contract already required:
 `cart_id`, `line_id`, `placeholder_kind` and the line's current `version`,
