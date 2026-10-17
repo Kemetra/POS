@@ -15,6 +15,20 @@ import { CartState } from '../../shared/cart/cart-state.js';
 import { parseDiscountApprovalSubjectRef } from '../../shared/cart/discount-approval.js';
 import type { CartLineRow, CartRow, CartStore } from './cart-store.js';
 
+/** The session's own cart, in its scope, still editable (not frozen, not parked). */
+function isApprovableCart(
+  cart: CartRow,
+  session: Pick<OperatorSessionRecord, 'id' | 'tenant_id' | 'branch_id'>,
+): boolean {
+  return [
+    cart.operator_session_id === session.id,
+    cart.tenant_id === session.tenant_id,
+    cart.branch_id === session.branch_id,
+    (cart.state as CartState) === CartState.editing,
+    cart.parked_at === undefined || cart.parked_at === null,
+  ].every(Boolean);
+}
+
 /** The discount's subject for this session, or null when not approvable. */
 export function manualDiscountApprovalSubject(
   cart: CartRow | undefined,
@@ -22,11 +36,7 @@ export function manualDiscountApprovalSubject(
   placeholderKind: string,
   session: Pick<OperatorSessionRecord, 'id' | 'tenant_id' | 'branch_id'>,
 ): ApprovalSubject | null {
-  if (cart === undefined || line === undefined) return null;
-  if (cart.operator_session_id !== session.id) return null;
-  if (cart.tenant_id !== session.tenant_id || cart.branch_id !== session.branch_id) return null;
-  if ((cart.state as CartState) !== CartState.editing) return null;
-  if (cart.parked_at !== undefined && cart.parked_at !== null) return null;
+  if (cart === undefined || line === undefined || !isApprovableCart(cart, session)) return null;
   if (line.cart_id !== cart.cart_id || line.removed_at !== null) return null;
   return {
     version: [

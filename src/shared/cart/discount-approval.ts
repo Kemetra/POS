@@ -27,12 +27,8 @@ export function discountApprovalSubjectRef(intent: DiscountApprovalIntent): stri
 
 /** The intent a ref names, or null when it is not a well-formed discount ref. */
 export function parseDiscountApprovalSubjectRef(ref: string): DiscountApprovalIntent | null {
-  const first = ref.indexOf(SEPARATOR);
-  const second = first < 0 ? -1 : ref.indexOf(SEPARATOR, first + 1);
-  if (first <= 0 || second <= first + 1 || second === ref.length - 1) return null;
-  return {
-    cart_id: ref.slice(0, first),
-    line_id: ref.slice(first + 1, second),
-    placeholder_kind: ref.slice(second + 1),
-  };
+  const [cart_id = '', line_id = '', ...kindParts] = ref.split(SEPARATOR);
+  const placeholder_kind = kindParts.join(SEPARATOR);
+  if ([cart_id, line_id, placeholder_kind].includes('')) return null;
+  return { cart_id, line_id, placeholder_kind };
 }

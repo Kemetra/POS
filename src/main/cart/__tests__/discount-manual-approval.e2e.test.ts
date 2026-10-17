@@ -236,17 +236,22 @@ describe('cart.discount.manual resolver', () => {
   const resolve = (ref: string, s = current) =>
     manualDiscountApprovalResolver(store)({ subjectRef: ref, session: s as OperatorSessionRecord });
 
+  /** The subject's version for a ref that must resolve. */
+  const versionOf = (ref: string): string => {
+    const subject = resolve(ref);
+    if (subject === null) throw new Error(`not approvable: ${ref}`);
+    return subject.version;
+  };
+
   it('binds cart, line, kind, line version and scope, with no amount (O1)', () => {
-    const subject = resolve(subjectRef());
-    expect(subject?.amountMinor).toBeNull();
-    expect(subject?.version).toContain(cartId);
-    expect(subject?.version).toContain(lineId);
-    expect(subject?.version).toContain('percent_1');
-    expect(subject?.version).toContain(SCOPE.tenantId);
-    expect(subject?.version).toContain(SCOPE.branchId);
-    // The line version is part of it: another line or kind differs.
-    expect(resolve(subjectRef(line2Id))?.version).not.toBe(subject?.version);
-    expect(resolve(subjectRef(lineId, 'percent_2'))?.version).not.toBe(subject?.version);
+    expect(resolve(subjectRef())).toMatchObject({ amountMinor: null });
+    const version = versionOf(subjectRef());
+    for (const part of [cartId, lineId, 'percent_1', SCOPE.tenantId, SCOPE.branchId]) {
+      expect(version).toContain(part);
+    }
+    // Another line or kind is another subject.
+    expect(versionOf(subjectRef(line2Id))).not.toBe(version);
+    expect(versionOf(subjectRef(lineId, 'percent_2'))).not.toBe(version);
   });
 
   it('moves with the line version', async () => {
