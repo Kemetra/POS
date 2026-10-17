@@ -62,7 +62,17 @@ reviews:
         Flag any float arithmetic, parseFloat/toFixed on amounts, implicit rounding, unchecked
         overflow, or a rounding rule that changes tender, change due or settled totals.
         Changes need matching tests.
-    - path: 'src/main/{sync-outbox,sales-sync}/**'
+    - path: 'src/main/sync-outbox/**'
+      instructions: |
+        Offline sync and outbox. Check for:
+        - Idempotency: a retry or replay must never create a second sale, payment, void or
+          return upstream; external ids and idempotency keys are deterministic and stable.
+        - Durability: a sale is committed locally before it is enqueued, and an outbox row is
+          only marked synced after a confirmed upstream response (duplicate counts as synced).
+        - Failure handling: transient errors back off and retry, permanent errors dead-letter
+          visibly, and nothing is silently dropped or reordered (FIFO per terminal).
+        - Credentials are read in-process and never logged or bridged to the renderer.
+    - path: 'src/main/sales-sync/**'
       instructions: |
         Offline sync and outbox. Check for:
         - Idempotency: a retry or replay must never create a second sale, payment, void or
