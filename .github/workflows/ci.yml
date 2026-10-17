@@ -5,8 +5,11 @@
 #
 #   changes ──┬── static   (ubuntu)  contract conformance, codegen drift,
 #             │                      renderer build, typecheck, lint
-#             ├── test     (ubuntu)  vitest suite (minus the contract subset that
-#             │                      `static` already ran) + coverage thresholds
+#             ├── test-shard (ubuntu x3)  vitest --shard=i/3 (minus the contract
+#             │     │                     subset `static` already ran); coverage
+#             │     │                     collected per shard, NOT gated
+#             │     └── test (ubuntu)     merges the shard blobs; coverage
+#             │                           thresholds evaluated ONCE here (RT-588)
 #             ├── package  (windows) build + package:dir (+ main-only upload);
 #             │                      PRs: only when `needs_package` (RT-585)
 #             └── docs     (ubuntu)  docs-only PRs: Prettier on changed .md/.json
@@ -68,6 +71,11 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # RT-588 — number of vitest shards; must equal the `test-shard` matrix size
+  # (checked at run time in both the shard and the merge job).
+  TEST_SHARD_COUNT: 3
 
 # A new push to a PR cancels that PR's in-flight run. Pushes to main get a
 # per-commit group, so every merged commit is still fully validated (and
@@ -182,8 +190,66 @@ jobs:
       - name: Lint
         run: npm run lint
 
-  test:
+  # RT-588 — the vitest suite is split across TEST_SHARD_COUNT parallel
+  # runners (`vitest --shard=i/N`, a deterministic partition by test file, so
+  # every file runs on exactly one shard). Shards only COLLECT coverage into a
+  # blob report (vitest.shard.config.ts drops the thresholds); the thresholds
+  # are evaluated once, on the merged coverage, by the `test` job below.
+  test-shard:
     needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+
+      # Guard: the matrix and TEST_SHARD_COUNT must agree, or the merge job's
+      # blob-count check would be comparing against the wrong number.
+      - name: Check matrix size matches TEST_SHARD_COUNT
+        shell: bash
+        run: |
+          if [ "${{ strategy.job-total }}" != "$TEST_SHARD_COUNT" ]; then
+            echo "::error::matrix has ${{ strategy.job-total }} shards but TEST_SHARD_COUNT=$TEST_SHARD_COUNT"; exit 1
+          fi
+
+      # RT-585: tests/contract/backend-core already ran (blocking) in `static`.
+      - name: Test shard ${{ matrix.shard }}/${{ strategy.job-total }} (coverage collected, not gated)
+        run: >-
+          npm test -- --coverage
+          --config vitest.shard.config.ts
+          --exclude 'tests/contract/backend-core/**'
+          --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+          --reporter=default --reporter=blob
+
+      - name: Upload vitest blob report
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          path: .vitest-reports/
+          # upload-artifact@v4 skips dot-directories unless told otherwise;
+          # without this the blob dir uploads as "no files found".
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # Required-by-`ci` merge job. Keeps the job name `test`. It is skipped (so
+  # `ci` fails) unless EVERY shard succeeded — the default `success()` guard.
+  test:
+    needs: [changes, test-shard]
     if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -200,9 +266,31 @@ jobs:
       - name: Install dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts
 
-      # RT-585: tests/contract/backend-core already ran (blocking) in `static`.
-      - name: Test with coverage
-        run: npm test -- --coverage --exclude 'tests/contract/backend-core/**'
+      - name: Download shard blob reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vitest-blob-*
+          merge-multiple: true
+          path: .vitest-reports
+
+      # A missing blob would silently drop a slice of the suite from the
+      # merged report; fail loudly instead.
+      - name: Check every shard blob is present
+        shell: bash
+        run: |
+          count="$(find .vitest-reports -maxdepth 1 -name 'blob-*.json' | wc -l)"
+          echo "blob reports: $count (expected $TEST_SHARD_COUNT)"
+          ls -la .vitest-reports
+          if [ "$count" != "$TEST_SHARD_COUNT" ]; then
+            echo "::error::expected $TEST_SHARD_COUNT shard blob reports, found $count"; exit 1
+          fi
+
+      # The ONLY place coverage thresholds are evaluated: the unmodified
+      # vitest.config.ts (per-file 80%, money.ts 95%, per-glob overrides)
+      # applied to coverage merged across all shards. Also writes the merged
+      # coverage/lcov.info used below and prints the whole-suite test totals.
+      - name: Merge shard reports + coverage thresholds
+        run: npm test -- --merge-reports --coverage
 
       # RT-462 — non-blocking Codecov upload of the lcov report the step above
       # already produced (no second test run). Informational only: this step
@@ -315,7 +403,7 @@ jobs:
   # for `package`, on the RT-585 needs_package decision: a package job that
   # was needed but skipped/failed/cancelled FAILS `ci`.
   ci:
-    needs: [changes, static, test, package, docs]
+    needs: [changes, static, test-shard, test, package, docs]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -327,18 +415,19 @@ jobs:
           NEEDS_PACKAGE: ${{ needs.changes.outputs.needs_package }}
           CHANGES: ${{ needs.changes.result }}
           STATIC: ${{ needs.static.result }}
+          TEST_SHARD: ${{ needs.test-shard.result }}
           TEST: ${{ needs.test.result }}
           PACKAGE: ${{ needs.package.result }}
           DOCS: ${{ needs.docs.result }}
         run: |
-          echo "changes=$CHANGES docs_only=$DOCS_ONLY needs_package=$NEEDS_PACKAGE static=$STATIC test=$TEST package=$PACKAGE docs=$DOCS"
+          echo "changes=$CHANGES docs_only=$DOCS_ONLY needs_package=$NEEDS_PACKAGE static=$STATIC test-shard=$TEST_SHARD test=$TEST package=$PACKAGE docs=$DOCS"
           if [ "$CHANGES" != "success" ]; then
             echo "::error::changes job did not succeed ($CHANGES)"; exit 1
           fi
           if [ "$DOCS_ONLY" = "true" ]; then
             required="DOCS"
           else
-            required="STATIC TEST"
+            required="STATIC TEST_SHARD TEST"
           fi
           # Anything other than an explicit 'false' means package is needed,
           # also for docs-only PRs whose paths are not package-irrelevant.
