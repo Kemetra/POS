@@ -421,8 +421,8 @@ its states at **1024×768 and 1280×800**, light and `forced-colors`, and compar
 
 **Gaps (no reference exists; new acceptance references needed before those slices):**
 - ~~**G-1** Sign-in and PIN (VN-03/04), the F-14 recompose, **plus the Ready (M-F1) and pairing (VN-02) screens**. All four need accepted references at 1024 and 1280 before W1-D.~~ **Closed by RT-246**: the references are in [`visual-acceptance/G1-Entry-screens/`](visual-acceptance/G1-Entry-screens/G1-Spec.html) (owner-approved 2026-10-11).
-- **G-2** Shift open / close / status (RT-17 shipped V5 screens, which are the de-facto
-  reference: K28/K29).
+- ~~**G-2** Shift open / close / status (RT-17 shipped V5 screens, which are the de-facto
+  reference: K28/K29).~~ **Closed by RT-658**: the references and copy are in [`visual-acceptance/G2-Shift/`](visual-acceptance/G2-Shift/G2-Spec.html) (merged on `main` as owner-approved in #736, `0725cfa`, 2026-10-17): the cashier's open / status / cash in and out / blind-count close / approval / closed result / parked-blocked close and the manager's shift status page, on the G-6 page header and cards. Behaviour stays as on `main`; the recompose and its captures are RT-658 PR 2 ([`captures/RT-658/`](captures/RT-658/README.md)).
 - ~~**G-3** Manager → Cashiers (M1–M6). This also needs a **PIN-status read** (D-M1) to show «بدون رقم سري» truthfully.~~ **Closed by RT-251**: the read contract, the state → action matrix and the copy are in [19](19-d-m1-cashier-pin-status.md), and the references are in [`visual-acceptance/G3-Cashiers/`](visual-acceptance/G3-Cashiers/G3-Spec.html) (owner-approved 2026-10-12). Behaviour stays PENDING the implementation slice.
 - **G-4** Restart re-attach (S19).
 - **G-5** Undo notice (A1).

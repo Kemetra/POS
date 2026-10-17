@@ -2,11 +2,12 @@ import type { JSX } from 'react';
 
 import type { Role } from '../../../shared/operator/role';
 import type { ShiftCashupBridgeAPI, ShiftStatusView } from '../../../shared/shift-cashup/types';
+import { Notice } from '../foundation/Notice';
 import { V5Icon } from '../foundation/V5Icon';
 import { ManagerPinEnrollment } from './ManagerPinEnrollment';
 import { useShiftStatus } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
-import { formatShiftMoney, formatShiftTime } from './shift-format';
+import { ShiftCard, ShiftMoney, ShiftTime } from './ShiftParts';
 import { ShiftScreen } from './ShiftScreen';
 
 interface Props {
@@ -25,69 +26,72 @@ const MANAGER_ROLES: ReadonlyArray<Role> = ['manager', 'admin'];
  */
 export function V5ShiftManagerRoute({ bridge }: Props): JSX.Element | null {
   return (
-    <ShiftScreen
-      title={SHIFT_COPY.managerTitle}
-      titleId="v5-shift-manager-title"
-      bridge={bridge}
-      allow={MANAGER_ROLES}
-    >
-      {(api) => (
-        <div className="v5-shift-manager-screen">
-          <ShiftStatusPanel bridge={api} />
-          <ManagerPinEnrollment bridge={api} />
-        </div>
-      )}
+    <ShiftScreen title={SHIFT_COPY.managerTitle} bridge={bridge} allow={MANAGER_ROLES}>
+      {(api) => <ManagerShift bridge={api} />}
     </ShiftScreen>
   );
 }
 
-function ShiftStatusPanel({ bridge }: Readonly<{ bridge: ShiftCashupBridgeAPI }>): JSX.Element {
+/** RT-658 (G-2): the stranded warning above two cards, the status and the PIN. */
+function ManagerShift({ bridge }: Readonly<{ bridge: ShiftCashupBridgeAPI }>): JSX.Element {
   const { state, reload } = useShiftStatus(bridge);
+  return (
+    <>
+      {state.kind === 'status' && hasStranded(state.status) && (
+        <div role="alert" data-testid="shift-stranded-warning">
+          <Notice tone="warning" announce={false}>
+            {SHIFT_COPY.strandedWarning}
+          </Notice>
+        </div>
+      )}
+      <div className="v5-shift-mgr-grid">
+        <ShiftStatusCard state={state} onReload={reload} />
+        <ManagerPinEnrollment bridge={bridge} />
+      </div>
+    </>
+  );
+}
+
+type StatusState = ReturnType<typeof useShiftStatus>['state'];
+
+function ShiftStatusCard(
+  props: Readonly<{ state: StatusState; onReload: () => void }>,
+): JSX.Element {
+  const { state } = props;
   if (state.kind === 'loading') {
     return (
-      <div className="v5-shift-mgr-panel">
-        <p className="v5-shift-mgr-body v5-shift-message">{SHIFT_COPY.loading}</p>
-      </div>
+      <ShiftCard heading={SHIFT_COPY.statusHeading}>
+        <output className="v5-shift-muted" aria-busy="true">
+          {SHIFT_COPY.loading}
+        </output>
+      </ShiftCard>
     );
   }
   if (state.kind === 'refused') {
     return (
-      <div className="v5-shift-mgr-panel">
-        <div className="v5-shift-mgr-body">
-          <p className="v5-shift-message">{shiftRefusalMessage(state.reason)}</p>
-          <ReloadButton label={SHIFT_COPY.retry} onClick={reload} />
-        </div>
-      </div>
+      <ShiftCard heading={SHIFT_COPY.statusHeading}>
+        <Notice
+          tone="warning"
+          action={<ReloadButton label={SHIFT_COPY.retry} onClick={props.onReload} />}
+        >
+          {shiftRefusalMessage(state.reason)}
+        </Notice>
+      </ShiftCard>
     );
   }
   return (
-    <>
-      {hasStranded(state.status) ? (
-        <div
-          className="v5-shift-banner v5-shift-mgr-banner"
-          role="alert"
-          data-testid="shift-stranded-warning"
-        >
-          <V5Icon name="status-warning" />
-          <p>{SHIFT_COPY.strandedWarning}</p>
-        </div>
-      ) : null}
-      <section className="v5-shift-mgr-panel" aria-labelledby="v5-shift-mgr-status">
-        <header className="v5-shift-mgr-head">
-          <h2 id="v5-shift-mgr-status">{SHIFT_COPY.statusHeading}</h2>
-          <ReloadButton label={SHIFT_COPY.refresh} onClick={reload} />
-        </header>
-        <div className="v5-shift-mgr-body">
-          <OpenShiftFacts status={state.status} />
-          <div className="v5-shift-mgr-groups">
-            <Counts heading={SHIFT_COPY.queueHeading} rows={queueRows(state.status)} />
-            <Counts heading={SHIFT_COPY.strandedHeading} rows={strandedRows(state.status)} />
-            <Counts heading={SHIFT_COPY.pendingHeading} rows={pendingRows(state.status)} />
-            <Counts heading={SHIFT_COPY.probeHeading} rows={probeRows(state.status)} />
-          </div>
-        </div>
-      </section>
-    </>
+    <ShiftCard
+      heading={SHIFT_COPY.statusHeading}
+      action={<ReloadButton label={SHIFT_COPY.refresh} onClick={props.onReload} />}
+    >
+      <OpenShiftFacts status={state.status} />
+      <div className="v5-shift-groups">
+        <Counts heading={SHIFT_COPY.queueHeading} rows={queueRows(state.status)} />
+        <Counts heading={SHIFT_COPY.strandedHeading} rows={strandedRows(state.status)} />
+        <Counts heading={SHIFT_COPY.pendingHeading} rows={pendingRows(state.status)} />
+        <Counts heading={SHIFT_COPY.probeHeading} rows={probeRows(state.status)} />
+      </div>
+    </ShiftCard>
   );
 }
 
@@ -96,7 +100,7 @@ function ReloadButton({
   onClick,
 }: Readonly<{ label: string; onClick: () => void }>): JSX.Element {
   return (
-    <button type="button" className="v5-shift-btn v5-shift-mgr-reload" onClick={onClick}>
+    <button type="button" className="v5-shift-btn" onClick={onClick}>
       <V5Icon name="retry" size={18} />
       {label}
     </button>
@@ -112,20 +116,22 @@ function OpenShiftFacts({ status }: Readonly<{ status: ShiftStatusView }>): JSX.
   const open = status.openShift;
   if (open === null) {
     return (
-      <p className="v5-shift-mgr-closed">
+      <p className="v5-shift-no-shift">
         <V5Icon name="manager-shift" />
         {SHIFT_COPY.noOpenShift}
       </p>
     );
   }
   const money = (minor: number): JSX.Element => (
-    <span className="v5-ltr v5-shift-money">{formatShiftMoney(minor, open.currencyCode)}</span>
+    <ShiftMoney minor={minor} currencyCode={open.currencyCode} />
   );
   return (
-    <dl className="v5-shift-mgr-open" data-testid="shift-status-open">
+    <dl className="v5-shift-figures" data-testid="shift-status-open">
       <div>
         <dt>{SHIFT_COPY.openSince}</dt>
-        <dd className="v5-ltr">{formatShiftTime(open.openedAt)}</dd>
+        <dd>
+          <ShiftTime iso={open.openedAt} />
+        </dd>
       </div>
       <div>
         <dt>{SHIFT_COPY.floatRow}</dt>
@@ -168,14 +174,14 @@ const probeRows = ({ probeRefusals }: ShiftStatusView): Row[] => [
   [SHIFT_COPY.probeApprover, probeRefusals.approverFailure],
 ];
 
-/** A count group: zero reads quiet, anything else stands out in a neutral badge. */
+/** A count group: zero reads quiet, anything else stands out in a framed badge. */
 function Counts({ heading, rows }: Readonly<{ heading: string; rows: Row[] }>): JSX.Element {
   return (
-    <div className="v5-shift-mgr-group">
+    <div className="v5-shift-group">
       <h3>{heading}</h3>
-      <dl className="v5-shift-mgr-counts">
+      <dl className="v5-shift-counts">
         {rows.map(([label, count]) => (
-          <div key={label} className="v5-shift-mgr-count">
+          <div key={label}>
             <dt>{label}</dt>
             <dd className="v5-ltr" data-zero={count === 0 ? 'true' : undefined}>
               {count}

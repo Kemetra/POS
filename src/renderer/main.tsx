@@ -139,6 +139,20 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-658 (G-2): the shift harness, same DEV-only contract (the real AppRouter —
+  // the cashier's /app/shift and the manager's /app/shift/manager — against an
+  // in-memory shiftCashup bridge).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/shift-proof')
+) {
+  void import('./v5/shift/dev/ShiftProof').then(({ ShiftProof }) => {
+    root.render(
+      <React.StrictMode>
+        <ShiftProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();
