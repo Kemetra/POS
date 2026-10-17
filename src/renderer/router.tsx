@@ -73,16 +73,39 @@ import type { PairingStatus } from '../shared/pairing-types';
  */
 
 /**
- * The /app screens with no role guard of their own: Inventory (and its
- * diagnostics), Settings and — RT-530 — «إلغاء بيع», a void of a finalized sale
- * with another manager's PIN. Any signed-in operator reaches the last one; the
- * route leaves for /app while POS_PULSE_FEATURE_SALE_VOID is off, and main
- * re-checks the flag and the session on every call.
+ * The /app screens outside the per-surface guards: Inventory (and its
+ * diagnostics) and Settings admit manager and admin only (RT-597, RT-505 O1,
+ * OD-6: a cashier sees the Sale, so a typed URL leaves the screen too). And —
+ * RT-530 — «إلغاء بيع», a void of a finalized sale with another manager's PIN.
+ * Any signed-in operator reaches the last one; the route leaves for /app while
+ * POS_PULSE_FEATURE_SALE_VOID is off, and main re-checks the flag and the
+ * session on every call.
  */
 const SECONDARY_ROUTES: RouteObject[] = [
-  { path: 'inventory', element: <InventoryPlaceholder /> },
-  { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
-  { path: 'settings', element: <SettingsHelpPlaceholder /> },
+  {
+    path: 'inventory',
+    element: (
+      <OperatorRouteGuard allow={['manager', 'admin']}>
+        <InventoryPlaceholder />
+      </OperatorRouteGuard>
+    ),
+  },
+  {
+    path: 'inventory/diagnostics',
+    element: (
+      <OperatorRouteGuard allow={['manager', 'admin']}>
+        <CatalogueDiagnostics />
+      </OperatorRouteGuard>
+    ),
+  },
+  {
+    path: 'settings',
+    element: (
+      <OperatorRouteGuard allow={['manager', 'admin']}>
+        <SettingsHelpPlaceholder />
+      </OperatorRouteGuard>
+    ),
+  },
   { path: 'void', element: <VoidRoute /> },
 ];
 
