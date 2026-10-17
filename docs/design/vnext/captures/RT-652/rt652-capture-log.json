@@ -1,0 +1,26 @@
+[
+  {
+    "label": "before",
+    "file": "rt652-reauth-notice-before-1280x800.png",
+    "button": {
+      "className": "btn btn--primary btn--md",
+      "text": "تسجيل الدخول",
+      "width": 115,
+      "height": 44
+    },
+    "axe": [],
+    "errors": []
+  },
+  {
+    "label": "after",
+    "file": "rt652-reauth-notice-after-1280x800.png",
+    "button": {
+      "className": "v5-shift-btn v5-shift-btn--primary",
+      "text": "تسجيل الدخول",
+      "width": 119,
+      "height": 44
+    },
+    "axe": [],
+    "errors": []
+  }
+]

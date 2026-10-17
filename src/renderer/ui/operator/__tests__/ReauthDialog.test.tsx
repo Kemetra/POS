@@ -57,6 +57,14 @@ describe('RT-358 ReauthRequiredNotice', () => {
     await userEvent.setup().click(buttons[0] as HTMLElement);
     expect(onSignIn).toHaveBeenCalledTimes(1);
   });
+
+  it('RT-652: «تسجيل الدخول» is a V5 primary button, with none of the 007 .btn classes', () => {
+    render(<ReauthRequiredNotice onSignIn={() => undefined} />);
+    const button = screen.getByRole('button', { name: REAUTH_COPY.action });
+    expect(button).toHaveClass('v5-shift-btn', 'v5-shift-btn--primary');
+    const legacy = Array.from(button.classList).filter((c) => /^btn(?:$|--|__)/.test(c));
+    expect(legacy).toEqual([]);
+  });
 });
 
 describe('RT-358 ReauthDialog', () => {

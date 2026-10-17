@@ -218,3 +218,38 @@ describe('007 retirement guard (RT-606, VN-S6 S6-5)', () => {
     expect(readFileSync(STYLESHEET, 'utf-8')).not.toMatch(/pulse-dot/);
   });
 });
+
+/** Every string and template-literal piece in the code, split into class-like words. */
+function stringWords(source: string): string[] {
+  const words: string[] = [];
+  for (const match of stripComments(source).matchAll(/(['"`])((?:\\.|(?!\1)[^\\])*?)\1/g)) {
+    words.push(...(match[2] ?? '').split(/[\s${}]+/));
+  }
+  return words;
+}
+
+/** The 007 `.btn` primitive: `btn`, `btn--<modifier>`, `btn__<element>`. */
+const LEGACY_BTN_WORD = /^btn(?:--[\w-]+|__[\w-]+)?$/;
+const LEGACY_BTN_RULE = /\.btn(?:--[\w-]+|__[\w-]+)?(?![\w-])/;
+
+describe('007 .btn retirement guard (RT-652)', () => {
+  it('no production .tsx names a btn, btn--* or btn__* class', () => {
+    const offenders = PRODUCTION_TSX.flatMap((file) =>
+      stringWords(readFileSync(file, 'utf-8'))
+        .filter((word) => LEGACY_BTN_WORD.test(word))
+        .map((word) => `${relative(REPO, file)} → ${word}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('no renderer stylesheet defines .btn, .btn--* or .btn__*', () => {
+    const offenders = walk(RENDERER, (p) => extname(p) === '.css').filter((file) =>
+      LEGACY_BTN_RULE.test(readFileSync(file, 'utf-8').replace(/\/\*[\s\S]*?\*\//g, '')),
+    );
+    expect(offenders.map((file) => relative(REPO, file))).toEqual([]);
+  });
+
+  it('the word scan sees a class token inside a template literal', () => {
+    expect(stringWords('const c = `btn btn--primary ${x}`;')).toContain('btn--primary');
+  });
+});
