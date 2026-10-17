@@ -388,3 +388,35 @@ describe('RT-601 transition logging (A4-8, no PII)', () => {
     ]);
   });
 });
+
+describe('RT-601 TerminalStatusMonitor — wall-clock steps never drive durations', () => {
+  function twoClocks() {
+    const wall = { t: T0 };
+    const mono = { t: 1_000 };
+    const monitor = createTerminalStatusMonitor({ now: () => wall.t, monotonicNow: () => mono.t });
+    monitor.observe(OK);
+    return { monitor, wall, mono };
+  }
+
+  it('a backward wall-clock step cannot keep a stale online alive', () => {
+    const { monitor, wall, mono } = twoClocks();
+    wall.t -= 60 * 60_000;
+    mono.t += 30_000;
+    expect(monitor.snapshot().connection).toBe('checking');
+  });
+
+  it('a forward wall-clock step cannot expire a fresh online', () => {
+    const { monitor, wall, mono } = twoClocks();
+    wall.t += 60 * 60_000;
+    mono.t += 1_000;
+    expect(monitor.snapshot().connection).toBe('online');
+  });
+
+  it('the snapshot still reports wall-clock ISO times', () => {
+    const { monitor } = twoClocks();
+    expect(monitor.snapshot()).toMatchObject({
+      connectionSince: '2026-10-17T12:00:00.000Z',
+      lastContactAt: '2026-10-17T12:00:00.000Z',
+    });
+  });
+});

@@ -26,6 +26,8 @@ interface TimerHandle {
 export interface ComposeTerminalStatusDeps {
   logger: { info(obj: Record<string, unknown>, msg: string): void };
   now?: () => number;
+  /** Monotonic clock for durations; defaults to `now` when injected, else `performance.now`. */
+  monotonicNow?: () => number;
   setInterval?: (fn: () => void, ms: number) => TimerHandle;
   clearInterval?: (handle: TimerHandle) => void;
 }
@@ -40,6 +42,8 @@ export interface TerminalStatusComposition {
 export function composeTerminalStatus(deps: ComposeTerminalStatusDeps): TerminalStatusComposition {
   const monitor = createTerminalStatusMonitor({
     now: deps.now ?? Date.now,
+    // An injected wall clock (tests) also drives durations unless a monotonic one is given.
+    monotonicNow: deps.monotonicNow ?? deps.now ?? (() => performance.now()),
     onTransition: (transition) => {
       logTerminalStatusTransition(deps.logger, transition);
     },

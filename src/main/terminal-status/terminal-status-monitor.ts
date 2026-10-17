@@ -63,8 +63,14 @@ export const TERMINAL_STATUS_DEFAULTS: TerminalStatusTiming = {
 };
 
 export interface TerminalStatusMonitorDeps {
-  /** Epoch milliseconds. */
+  /** Epoch milliseconds: the ISO timestamps in the snapshot only. */
   now: () => number;
+  /**
+   * Monotonic milliseconds for every duration (hold, `W`), so a wall-clock step
+   * (NTP, a manual change) can neither keep a stale `online` alive nor expire a
+   * fresh one. Defaults to `now` (tests drive both from one fake clock).
+   */
+  monotonicNow?: () => number;
   /** Called once per state change. A throwing listener never breaks the monitor. */
   onTransition?: (transition: ConnectionTransition) => void;
   timing?: Partial<TerminalStatusTiming>;
@@ -88,8 +94,12 @@ export function createTerminalStatusMonitor(
 ): TerminalStatusMonitor {
   const timing: TerminalStatusTiming = { ...TERMINAL_STATUS_DEFAULTS, ...deps.timing };
 
+  const elapsedClock = deps.monotonicNow ?? deps.now;
   let connection: ConnectionStateCode = 'checking';
-  let since = deps.now();
+  /** Wall-clock times, reported only. */
+  let sinceWall = deps.now();
+  let lastContactWall: number | null = null;
+  /** Monotonic times, used for every duration. */
   let lastContactAt: number | null = null;
   /** Last observation of any kind that counted as evidence. */
   let lastEvidenceAt: number | null = null;
@@ -97,11 +107,11 @@ export function createTerminalStatusMonitor(
   /** Start of a running recovery hold (offline/degraded → online), else null. */
   let holdStartedAt: number | null = null;
 
-  function moveTo(next: ConnectionStateCode, at: number): void {
+  function moveTo(next: ConnectionStateCode): void {
     if (next === connection) return;
     const transition: ConnectionTransition = { from: connection, to: next };
     connection = next;
-    since = at;
+    sinceWall = deps.now();
     try {
       deps.onTransition?.(transition);
     } catch {
@@ -115,25 +125,26 @@ export function createTerminalStatusMonitor(
 
   function onReachable(at: number): void {
     lastContactAt = at;
+    lastContactWall = deps.now();
     badStreak = 0;
     if (!isBad()) {
-      moveTo('online', at);
+      moveTo('online');
       return;
     }
     holdStartedAt ??= at;
     applyHold(at);
   }
 
-  function onBad(next: BadState, at: number): void {
+  function onBad(next: BadState): void {
     holdStartedAt = null;
     badStreak += 1;
-    if (isBad() || badStreak >= timing.badStreakToLeave) moveTo(next, at);
+    if (isBad() || badStreak >= timing.badStreakToLeave) moveTo(next);
   }
 
   function applyHold(at: number): void {
     if (holdStartedAt === null || at - holdStartedAt < timing.recoveryHoldMs) return;
     holdStartedAt = null;
-    moveTo('online', at);
+    moveTo('online');
   }
 
   function applyFreshness(at: number): void {
@@ -143,11 +154,11 @@ export function createTerminalStatusMonitor(
     if (at - basis < timing.freshnessWindowMs) return;
     badStreak = 0;
     holdStartedAt = null;
-    moveTo('checking', at);
+    moveTo('checking');
   }
 
   function tick(): void {
-    const at = deps.now();
+    const at = elapsedClock();
     applyHold(at);
     applyFreshness(at);
   }
@@ -156,26 +167,25 @@ export function createTerminalStatusMonitor(
     observe(observation) {
       const kind = classifyObservation(observation);
       if (kind === 'ignored') return;
-      const at = deps.now();
+      const at = elapsedClock();
       lastEvidenceAt = at;
       if (kind === 'reachable') onReachable(at);
-      else onBad(kind === 'transport_fault' ? 'offline' : 'degraded', at);
+      else onBad(kind === 'transport_fault' ? 'offline' : 'degraded');
     },
 
     observeInterface(up) {
       if (up) return;
-      const at = deps.now();
-      lastEvidenceAt = at;
+      lastEvidenceAt = elapsedClock();
       holdStartedAt = null;
       badStreak = Math.max(badStreak, timing.badStreakToLeave);
-      moveTo('offline', at);
+      moveTo('offline');
     },
 
     resume() {
       badStreak = 0;
       holdStartedAt = null;
       lastEvidenceAt = null;
-      moveTo('checking', deps.now());
+      moveTo('checking');
     },
 
     tick,
@@ -184,8 +194,8 @@ export function createTerminalStatusMonitor(
       tick();
       return {
         connection,
-        connectionSince: new Date(since).toISOString(),
-        lastContactAt: lastContactAt === null ? null : new Date(lastContactAt).toISOString(),
+        connectionSince: new Date(sinceWall).toISOString(),
+        lastContactAt: lastContactWall === null ? null : new Date(lastContactWall).toISOString(),
       };
     },
   };

@@ -53,6 +53,16 @@ async function observeOnce(
   return { seen, outcome };
 }
 
+/** Assert the call settled with exactly this object (identity, not structure). */
+function expectSettledWith(
+  outcome: PromiseSettledResult<Response>,
+  status: 'fulfilled' | 'rejected',
+  value: unknown,
+): void {
+  expect(outcome.status).toBe(status);
+  expect(outcome.status === 'fulfilled' ? outcome.value : outcome.reason).toBe(value);
+}
+
 const throwingObserver = (): void => {
   throw new Error('observer boom');
 };
@@ -65,7 +75,7 @@ describe('RT-601 withReachabilityObservation — observe only', () => {
 
     const { seen, outcome } = await observeOnce(inner, undefined, init);
 
-    expect(outcome).toEqual({ status: 'fulfilled', value: response });
+    expectSettledWith(outcome, 'fulfilled', response);
     expect(response.bodyUsed).toBe(false);
     expect(inner).toHaveBeenCalledWith('https://backend.example/x', init);
     expect(seen).toEqual([{ kind: 'answer', status: 201 }]);
@@ -76,20 +86,20 @@ describe('RT-601 withReachabilityObservation — observe only', () => {
     ['a timeout abort', new DOMException('aborted due to timeout', 'TimeoutError')],
   ])('%s: rethrows the very same rejection and reports a transport fault', async (_n, err) => {
     const { seen, outcome } = await observeOnce(() => Promise.reject(err));
-    expect(outcome).toEqual({ status: 'rejected', reason: err });
+    expectSettledWith(outcome, 'rejected', err);
     expect(seen).toEqual([{ kind: 'transport_fault' }]);
   });
 
   it('a throwing observer never breaks an answered call', async () => {
     const response = new Response(null, { status: 200 });
     const { outcome } = await observeOnce(() => Promise.resolve(response), throwingObserver);
-    expect(outcome).toEqual({ status: 'fulfilled', value: response });
+    expectSettledWith(outcome, 'fulfilled', response);
   });
 
   it('a throwing observer never replaces the transport rejection', async () => {
     const boom = new TypeError('fetch failed');
     const { outcome } = await observeOnce(() => Promise.reject(boom), throwingObserver);
-    expect(outcome).toEqual({ status: 'rejected', reason: boom });
+    expectSettledWith(outcome, 'rejected', boom);
   });
 
   it('reports nothing about the request: no URL, host or header reaches the observer', async () => {
