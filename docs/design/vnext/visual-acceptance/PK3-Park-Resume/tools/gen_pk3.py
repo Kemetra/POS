@@ -11,6 +11,7 @@ Usage: python -I gen_pk3.py <PK3-Park-Resume folder>
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 OPERATOR = "منى عادل"
@@ -98,9 +99,18 @@ def notice(kind: str, text: str, action: str = "") -> str:
     return f'<div class="notice notice-{kind}" role="{role}">{icon(glyph)}<p>{text}</p>{action}</div>'
 
 
-def screen(head: str, content: str, notice_html: str = "", inert: bool = False, current: str | None = "نقطة البيع") -> str:
-    i = " inert" if inert else ""
-    return f'<main class="screen"{i}>{head}{notice_html}{content}</main>{nav(inert, current)}'
+@dataclass(frozen=True)
+class View:
+    """What surrounds a screen's content: a notice above it, whether it sits behind a dialog, the current nav entry."""
+
+    notice_html: str = ""
+    inert: bool = False
+    current: str | None = "نقطة البيع"
+
+
+def screen(head: str, content: str, view: View = View()) -> str:
+    i = " inert" if view.inert else ""
+    return f'<main class="screen"{i}>{head}{view.notice_html}{content}</main>{nav(view.inert, view.current)}'
 
 
 # ── the Sale screen ─────────────────────────────────────────────────
@@ -177,13 +187,18 @@ def sale_body(empty: bool = False, park_focus: bool = False, locked: bool = Fals
 PII = "لا تكتب اسم العميل أو رقم هاتفه أو أي بيانات شخصية."
 
 
-def park_dialog(
-    label: str = "",
-    phase: str = "typing",
-    notice_html: str = "",
-    primary_disabled: bool = False,
-    secondary: str = "",
-) -> str:
+@dataclass(frozen=True)
+class Park:
+    label: str = ""
+    phase: str = "typing"
+    notice_html: str = ""
+    primary_disabled: bool = False
+    secondary: str = ""
+
+
+def park_dialog(park: Park = Park()) -> str:
+    label, phase, notice_html, secondary = park.label, park.phase, park.notice_html, park.secondary
+    primary_disabled = park.primary_disabled
     busy = phase == "saving"
     invalid = phase == "invalid"
     dis_all = " disabled" if busy else ""
@@ -343,34 +358,39 @@ def conflict_block(lines: int = 2, total: int = 9500) -> str:
     )
 
 
-def review_panel(
-    label: str | None,
-    price: bool = False,
-    removed: bool = False,
-    conflict: bool = False,
-    top_notice: str = "",
-    primary: str | None = None,
-    secondary: str | None = None,
-    show_summary: bool = True,
-) -> str:
-    parts = []
-    if top_notice:
-        parts.append(top_notice)
-    if conflict:
-        parts.append(conflict_block())
-    if show_summary and (price or removed):
-        parts.append('<p class="lead">لن يتغيّر شيء في البيع قبل أن تقبل التغييرات.</p>')
-    if price:
-        parts.append("<h3>تغيّر سعر الصنف منذ التعليق</h3>" + change_table())
-    if removed:
-        parts.append("<h3>لم تعد في الكتالوج، وستُحذف من البيع عند الاستئناف</h3>" + removed_table())
-    actions = ""
-    if primary is not None or secondary is not None:
-        p = f'<button type="button" class="btn btn-primary focus">{primary}</button>' if primary else ""
-        s = f'<button type="button" class="btn">{secondary}</button>' if secondary else ""
-        actions = f'<div class="review-actions">{p}{s}</div>'
-    parts.append(actions)
-    body = "".join(parts)
+@dataclass(frozen=True)
+class Review:
+    price: bool = False
+    removed: bool = False
+    conflict: bool = False
+    top_notice: str = ""
+    primary: str | None = None
+    secondary: str | None = None
+
+
+def review_actions(primary: str | None, secondary: str | None) -> str:
+    if primary is None and secondary is None:
+        return ""
+    p = f'<button type="button" class="btn btn-primary focus">{primary}</button>' if primary else ""
+    s = f'<button type="button" class="btn">{secondary}</button>' if secondary else ""
+    return f'<div class="review-actions">{p}{s}</div>'
+
+
+def review_parts(r: Review) -> list[str]:
+    """The review's blocks in reading order; a block that does not apply is an empty string."""
+    changes = r.price or r.removed
+    return [
+        r.top_notice,
+        conflict_block() if r.conflict else "",
+        '<p class="lead">لن يتغيّر شيء في البيع قبل أن تقبل التغييرات.</p>' if changes else "",
+        "<h3>تغيّر سعر الصنف منذ التعليق</h3>" + change_table() if r.price else "",
+        "<h3>لم تعد في الكتالوج، وستُحذف من البيع عند الاستئناف</h3>" + removed_table() if r.removed else "",
+        review_actions(r.primary, r.secondary),
+    ]
+
+
+def review_panel(r: Review) -> str:
+    body = "".join(review_parts(r))
     return (
         '<section class="panel" aria-labelledby="rv-h">'
         '<div class="panel-head"><h2 id="rv-h">مراجعة البيع قبل الاستئناف</h2>'
@@ -389,19 +409,19 @@ def s_sale_empty(w: int) -> str:
 
 
 def s_park_dialog(w: int) -> str:
-    return screen(sale_head(2), sale_body(), inert=True) + park_dialog()
+    return screen(sale_head(2), sale_body(), View(inert=True)) + park_dialog()
 
 
 def s_park_label(w: int) -> str:
-    return screen(sale_head(2), sale_body(), inert=True) + park_dialog(label="ينتظر المحفظة")
+    return screen(sale_head(2), sale_body(), View(inert=True)) + park_dialog(Park(label="ينتظر المحفظة"))
 
 
 def s_park_invalid(w: int) -> str:
-    return screen(sale_head(2), sale_body(), inert=True) + park_dialog(label="   ", phase="invalid")
+    return screen(sale_head(2), sale_body(), View(inert=True)) + park_dialog(Park(label="   ", phase="invalid"))
 
 
 def s_park_saving(w: int) -> str:
-    return screen(sale_head(2), sale_body(), inert=True) + park_dialog(label="ينتظر المحفظة", phase="saving")
+    return screen(sale_head(2), sale_body(), View(inert=True)) + park_dialog(Park(label="ينتظر المحفظة", phase="saving"))
 
 
 def s_park_limit(w: int) -> str:
@@ -410,18 +430,18 @@ def s_park_limit(w: int) -> str:
         "وصل هذا الجهاز إلى الحد الأقصى: 5 مبيعات معلّقة. استأنف بيعًا معلّقًا أو اطلب من المدير إلغاءه.",
     )
     sec = '<button type="button" class="btn focus">عرض المبيعات المعلّقة</button>'
-    return screen(sale_head(4), sale_body(), inert=True) + park_dialog(
-        label="ينتظر المحفظة", notice_html=n, primary_disabled=True, secondary=sec
+    return screen(sale_head(4), sale_body(), View(inert=True)) + park_dialog(
+        Park(label="ينتظر المحفظة", notice_html=n, primary_disabled=True, secondary=sec)
     )
 
 
 def s_parked(w: int) -> str:
     done = notice("success", "عُلِّق البيع <bdi>ينتظر المحفظة</bdi>.")
-    return screen(sale_head(3), sale_body(empty=True), notice_html=done)
+    return screen(sale_head(3), sale_body(empty=True), View(notice_html=done))
 
 
 def s_list_empty(w: int) -> str:
-    return screen(list_head("لا شيء"), list_empty_panel(), current="نقطة البيع")
+    return screen(list_head("لا شيء"), list_empty_panel())
 
 
 def s_list_one(w: int) -> str:
@@ -436,56 +456,42 @@ def s_list_stale(w: int) -> str:
     return screen(list_head("3"), list_panel(PARKED_STALE))
 
 
+SALE = "ينتظر الروشتة"
+ACCEPT = "قبول التغييرات واستئناف البيع"
+BACK = "رجوع"
+
+
+def review_state(r: Review) -> str:
+    return screen(review_head(SALE), review_panel(r))
+
+
 def s_review_price(w: int) -> str:
-    return screen(
-        review_head("ينتظر الروشتة"),
-        review_panel("ينتظر الروشتة", price=True, primary="قبول التغييرات واستئناف البيع", secondary="رجوع"),
-    )
+    return review_state(Review(price=True, primary=ACCEPT, secondary=BACK))
 
 
 def s_review_removed(w: int) -> str:
-    return screen(
-        review_head("ينتظر الروشتة"),
-        review_panel("ينتظر الروشتة", removed=True, primary="قبول الحذف واستئناف البيع", secondary="رجوع"),
-    )
+    return review_state(Review(removed=True, primary="قبول الحذف واستئناف البيع", secondary=BACK))
 
 
 def s_review_mixed(w: int) -> str:
-    return screen(
-        review_head("ينتظر الروشتة"),
-        review_panel(
-            "ينتظر الروشتة",
-            price=True,
-            removed=True,
-            primary="قبول التغييرات واستئناف البيع",
-            secondary="رجوع",
-        ),
-    )
+    return review_state(Review(price=True, removed=True, primary=ACCEPT, secondary=BACK))
 
 
 def s_conflict_clean(w: int) -> str:
-    return screen(
-        review_head("ينتظر الروشتة"),
-        review_panel(
-            "ينتظر الروشتة",
-            conflict=True,
-            primary="علّق البيع الحالي واستأنف المحدد",
-            secondary="أبقِ البيع الحالي",
-        ),
+    return review_state(
+        Review(conflict=True, primary="علّق البيع الحالي واستأنف المحدد", secondary="أبقِ البيع الحالي")
     )
 
 
 def s_conflict_changes(w: int) -> str:
-    return screen(
-        review_head("ينتظر الروشتة"),
-        review_panel(
-            "ينتظر الروشتة",
+    return review_state(
+        Review(
             conflict=True,
             price=True,
             removed=True,
             primary="علّق الحالي، اقبل التغييرات واستأنف",
             secondary="أبقِ البيع الحالي",
-        ),
+        )
     )
 
 
@@ -494,32 +500,17 @@ def s_ref_catalogue(w: int) -> str:
         "warning",
         "تعذّرت مراجعة الأسعار لأن الكتالوج غير متاح على هذا الجهاز. بقي البيع معلّقًا ولم يتغيّر شيء.",
     )
-    return screen(
-        review_head("ينتظر الروشتة"),
-        review_panel("ينتظر الروشتة", top_notice=n, secondary="رجوع"),
-    )
+    return review_state(Review(top_notice=n, secondary=BACK))
 
 
 def s_ref_changed(w: int) -> str:
     n = notice("warning", "تغيّرت الأسعار منذ عرضها. راجع التغييرات الجديدة قبل الاستئناف.")
-    return screen(
-        review_head("ينتظر الروشتة"),
-        review_panel(
-            "ينتظر الروشتة",
-            top_notice=n,
-            price=True,
-            primary="قبول التغييرات واستئناف البيع",
-            secondary="رجوع",
-        ),
-    )
+    return review_state(Review(top_notice=n, price=True, primary=ACCEPT, secondary=BACK))
 
 
 def s_ref_checkout(w: int) -> str:
     n = notice("warning", "البيع الحالي في مرحلة الدفع. أكمله أو ارجع إليه قبل أن تستأنف بيعًا معلّقًا.")
-    return screen(
-        review_head("ينتظر الروشتة"),
-        review_panel("ينتظر الروشتة", top_notice=n, conflict=False, secondary="رجوع"),
-    )
+    return review_state(Review(top_notice=n, secondary=BACK))
 
 
 def s_shift_close(w: int) -> str:
@@ -540,7 +531,7 @@ def s_shift_close(w: int) -> str:
         '<div><button type="button" class="btn btn-primary focus">تسجيل العدّ وإغلاق الوردية</button></div>'
         "</div></section>"
     )
-    return screen(head, panel, current=None)
+    return screen(head, panel, View(current=None))
 
 
 STATES = [
