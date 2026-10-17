@@ -9,7 +9,7 @@
  * never counts as passive traffic), `powerMonitor` resume → `checking`, and the
  * `net.isOnline()` edge on each tick. `stop` ends all of it.
  *
- * Nothing reads the snapshot outside main yet: the bridge is S6-2.
+ * RT-603 (S6-2) bridges the snapshot: `terminal-status-publisher.ts`.
  */
 import { LIVENESS_PROBE_DEFAULTS, runLivenessProbe } from './liveness-probe.js';
 import {

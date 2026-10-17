@@ -44,6 +44,9 @@ const STOP_ORDER = [
   'finalize listener',
   'read-down driver',
   'sale-sync interval',
+  // RT-603 — the terminal status push (1 s refresh). Its sync read uses the DB,
+  // so it stops with the sale-sync drain it reads, before the DB closes.
+  'terminal status push',
   // RT-17 slice 3 — the shift sync interval (the shift outbox drain, flag-gated).
   // Stopped right after the sale-sync interval, like it, before the DB closes.
   'shift-sync interval',
