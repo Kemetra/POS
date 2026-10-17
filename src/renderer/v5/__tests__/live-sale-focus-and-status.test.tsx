@@ -13,7 +13,7 @@ import { useCatalogueSearchStore } from '../../stores/catalogueSearchStore';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { usePaymentStore } from '../../stores/payment-store';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../test-utils/axe-config';
 import { makeBridges, renderSale, saleWithLines, signIn } from './__helpers__/live-sale-harness';
 
 afterEach(() => {

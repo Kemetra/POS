@@ -9,7 +9,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { RECOVERY_PATH } from '../../../../routes/app/RecoveryLink';
 import { DashboardRoute } from '../../../../routes/app/DashboardRoute';
-import { expectNoAxeViolations } from '../../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../../test-utils/axe-config';
 import {
   fakeBridges,
   heldView,

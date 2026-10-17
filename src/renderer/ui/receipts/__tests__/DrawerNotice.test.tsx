@@ -4,7 +4,7 @@ import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
-import { expectNoAxeViolations } from '../../primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 import { DrawerNoticeBanner, DrawerNoticeInline, useDrawerNoticeFeed } from '../DrawerNotice';
 import { useDrawerNoticeStore } from '../drawer-notice-store';
 

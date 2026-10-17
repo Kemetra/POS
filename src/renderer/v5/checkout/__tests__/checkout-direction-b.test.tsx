@@ -22,7 +22,7 @@ import type {
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
 import { usePaymentStore } from '../../../stores/payment-store';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 import { PaymentSurface } from '../../../ui/payments/PaymentSurface';
 import { OrderSummary } from '../OrderSummary';
 import { PaymentLedger } from '../PaymentLedger';

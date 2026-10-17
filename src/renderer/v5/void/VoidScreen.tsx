@@ -1,18 +1,29 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type JSX,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import type {
   SaleVoidJournalView,
   SaleVoidListResponse,
   SaleVoidSaleView,
+  SaleVoidState,
 } from '../../../shared/sale-void/types';
-import { formatCheckoutMoney } from '../../ui/payments/format-checkout-money';
+import { Notice } from '../foundation/Notice';
+import { ScreenSection } from '../foundation/ScreenSection';
+import { V5Icon, type V5IconName } from '../foundation/V5Icon';
 import { useSingleFlight } from '../shift/shift-bridge';
 import { formatShiftTime } from '../shift/shift-format';
-import { ShiftAlert } from '../shift/ShiftScreen';
 import { VOID_COPY, voidRefusalMessage, voidStateLabel, voidWaitingMessage } from './void-copy';
 import type { VoidBridges } from './void-bridges';
 import { VoidActionDialog } from './VoidActionDialog';
-import '../shift/shift.css';
+import { VoidAlert, VoidCode, VoidMoney } from './void-parts';
 import './void.css';
 
 /**
@@ -21,6 +32,12 @@ import './void.css';
  * voids. A void waits (visibly) for its sale to sync and for the operator who
  * requested it to be signed in online; a refusal by Backend-Core stays on the
  * list, flagged, until someone acknowledges it. Nothing is ever dropped.
+ *
+ * RT-654 — composed on the G-6 vocabulary (frozen references VD-Void,
+ * owner-approved OD-1…OD-8): the ScreenSection page header, the lookup and the
+ * void journal as two panels, 44px V5 buttons, refusals as V5 notices. Arabic
+ * (times, names) stays in the text face; only the sale number and amounts are
+ * LTR tabular runs.
  */
 export interface VoidScreenProps {
   readonly bridges: VoidBridges;
@@ -69,24 +86,33 @@ export function VoidScreen({ bridges, refreshMs = 10_000 }: VoidScreenProps): JS
   const [found, setFound] = useState<Found>({ kind: 'idle' });
   const [voiding, setVoiding] = useState<SaleVoidSaleView | null>(null);
   const [outcome, setOutcome] = useState<SaleVoidJournalView | null>(null);
+  // The void button that opened the dialog is gone once the sale is cleared, so
+  // the screen sends focus back to the sale number field after a request.
+  const lookupRef = useRef<HTMLInputElement>(null);
+  const [refocus, setRefocus] = useState(false);
+  useEffect(() => {
+    if (!refocus) return;
+    lookupRef.current?.focus();
+    setRefocus(false);
+  }, [refocus]);
 
   return (
-    <section className="v5-shift v5-void" dir="rtl" lang="ar" aria-labelledby="void-title">
-      <div className="v5-shift-titlebar">
-        <h1 id="void-title">{VOID_COPY.title}</h1>
-      </div>
-      {outcome !== null && <RequestedNotice entry={outcome} />}
-      <div className="v5-shift-columns">
-        <LookupPanel
-          bridges={bridges}
-          found={found}
-          onFound={(next) => {
-            setOutcome(null);
-            setFound(next);
-          }}
-          onVoid={setVoiding}
-        />
-        <HistoryPanel listed={listed} bridges={bridges} onChanged={reload} />
+    <ScreenSection title={VOID_COPY.title}>
+      <div className="v5-void" dir="rtl" lang="ar">
+        {outcome !== null && <RequestedNotice entry={outcome} />}
+        <div className="v5-void-cols">
+          <LookupPanel
+            inputRef={lookupRef}
+            bridges={bridges}
+            found={found}
+            onFound={(next) => {
+              setOutcome(null);
+              setFound(next);
+            }}
+            onVoid={setVoiding}
+          />
+          <HistoryPanel listed={listed} bridges={bridges} onChanged={reload} />
+        </div>
       </div>
       {voiding !== null && (
         <VoidActionDialog
@@ -99,26 +125,43 @@ export function VoidScreen({ bridges, refreshMs = 10_000 }: VoidScreenProps): JS
             setVoiding(null);
             setFound({ kind: 'idle' });
             setOutcome(entry);
+            setRefocus(true);
             reload();
           }}
         />
       )}
-    </section>
+    </ScreenSection>
   );
 }
 
 function RequestedNotice({ entry }: { entry: SaleVoidJournalView }): JSX.Element {
   return (
-    <output className="v5-shift-outcome" data-testid="void-requested">
+    <Notice tone="success" testId="void-requested">
       {VOID_COPY.requested}
       {entry.waiting_for !== null && (
         <> {voidWaitingMessage(entry.waiting_for, entry.requester_display_name)}</>
       )}
-    </output>
+    </Notice>
+  );
+}
+
+function Panel(props: { title: string; hug?: boolean; children: ReactNode }): JSX.Element {
+  const headingId = useId();
+  return (
+    <section
+      className={props.hug === true ? 'v5-void-panel v5-void-panel--hug' : 'v5-void-panel'}
+      aria-labelledby={headingId}
+    >
+      <div className="v5-void-panel-head">
+        <h2 id={headingId}>{props.title}</h2>
+      </div>
+      {props.children}
+    </section>
   );
 }
 
 function LookupPanel(props: {
+  inputRef: RefObject<HTMLInputElement | null>;
   bridges: VoidBridges;
   found: Found;
   onFound: (found: Found) => void;
@@ -143,79 +186,96 @@ function LookupPanel(props: {
     });
   };
   return (
-    <section className="v5-shift-panel" aria-labelledby="void-lookup">
-      <h2 id="void-lookup">{VOID_COPY.lookupHeading}</h2>
-      <form
-        className="v5-shift-fields"
-        onSubmit={(event) => {
-          event.preventDefault();
-          search();
-        }}
-      >
-        <label htmlFor="void-sale-number">{VOID_COPY.numberLabel}</label>
-        <input
-          id="void-sale-number"
-          className="v5-shift-input v5-ltr"
-          dir="ltr"
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={64}
-          value={value}
-          onChange={(event) => {
-            setValue(event.target.value);
+    <Panel title={VOID_COPY.lookupHeading} hug>
+      <div className="v5-void-panel-body">
+        <form
+          className="v5-void-lookup"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            search();
           }}
-        />
-        <button type="submit" className="v5-live-btn v5-live-btn--primary" disabled={busy}>
-          {VOID_COPY.search}
-        </button>
-      </form>
-      <FoundSale found={props.found} onVoid={props.onVoid} />
-    </section>
+        >
+          <div className="v5-void-field">
+            <label htmlFor="void-sale-number">{VOID_COPY.numberLabel}</label>
+            <input
+              ref={props.inputRef}
+              id="void-sale-number"
+              className="v5-void-input v5-void-input--code"
+              dir="ltr"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={64}
+              value={value}
+              onChange={(event) => {
+                setValue(event.target.value);
+              }}
+            />
+          </div>
+          <button type="submit" className="v5-void-btn v5-void-btn--primary" disabled={busy}>
+            {VOID_COPY.search}
+          </button>
+        </form>
+        <FoundSale found={props.found} onVoid={props.onVoid} />
+      </div>
+    </Panel>
   );
 }
 
-function FoundSale(props: {
-  found: Found;
-  onVoid: (sale: SaleVoidSaleView) => void;
-}): JSX.Element | null {
+function FoundSale(props: { found: Found; onVoid: (sale: SaleVoidSaleView) => void }): JSX.Element {
   const { found } = props;
-  if (found.kind === 'idle') return <p className="v5-shift-hint">{VOID_COPY.sameDayHint}</p>;
-  if (found.kind === 'refused') return <ShiftAlert message={found.message} />;
+  if (found.kind === 'idle') return <p className="v5-void-hint">{VOID_COPY.sameDayHint}</p>;
+  if (found.kind === 'refused') return <VoidAlert message={found.message} />;
   const { sale } = found;
   return (
-    <div data-testid="void-sale">
-      <dl className="v5-shift-facts">
-        <Fact label={VOID_COPY.saleNumber} value={sale.sale_number} />
-        <Fact label={VOID_COPY.soldAt} value={formatShiftTime(sale.finalized_at)} />
-        <Fact label={VOID_COPY.seller} value={sale.selling_operator_display_name} text />
-        <Fact label={VOID_COPY.total} value={formatCheckoutMoney(sale.total_minor)} />
-        <Fact label={VOID_COPY.cash} value={formatCheckoutMoney(sale.cash_minor)} />
+    <div className="v5-void-result" data-testid="void-sale">
+      <dl className="v5-void-facts">
+        <dt>{VOID_COPY.saleNumber}</dt>
+        <dd>
+          <VoidCode value={sale.sale_number} />
+        </dd>
+        <dt>{VOID_COPY.soldAt}</dt>
+        <dd>
+          <VoidTime iso={sale.finalized_at} />
+        </dd>
+        <dt>{VOID_COPY.seller}</dt>
+        <dd>
+          <bdi>{sale.selling_operator_display_name}</bdi>
+        </dd>
+        <dt>{VOID_COPY.total}</dt>
+        <dd>
+          <VoidMoney minor={sale.total_minor} />
+        </dd>
+        <dt>{VOID_COPY.cash}</dt>
+        <dd>
+          <VoidMoney minor={sale.cash_minor} />
+        </dd>
       </dl>
       {sale.ineligible === null ? (
-        <button
-          type="button"
-          className="v5-live-btn v5-live-btn--primary"
-          onClick={() => {
-            props.onVoid(sale);
-          }}
-        >
-          {VOID_COPY.voidAction}
-        </button>
+        <div className="v5-void-actions">
+          <button
+            type="button"
+            className="v5-void-btn v5-void-btn--danger"
+            onClick={() => {
+              props.onVoid(sale);
+            }}
+          >
+            {VOID_COPY.voidAction}
+          </button>
+        </div>
       ) : (
-        <ShiftAlert message={voidRefusalMessage(sale.ineligible)} />
+        <VoidAlert message={voidRefusalMessage(sale.ineligible)} />
       )}
     </div>
   );
 }
 
-function Fact(props: { label: string; value: string; text?: boolean }): JSX.Element {
+/** An absolute Arabic date and time: the text face with tabular digits (never monospace). */
+function VoidTime({ iso }: { iso: string }): JSX.Element {
   return (
-    <div className="v5-shift-fact">
-      <dt>{props.label}</dt>
-      <dd className={props.text === true ? 'v5-void-text' : undefined}>
-        <bdi>{props.value}</bdi>
-      </dd>
-    </div>
+    <time className="v5-void-when" dateTime={iso}>
+      {formatShiftTime(iso)}
+    </time>
   );
 }
 
@@ -224,28 +284,70 @@ function HistoryPanel(props: {
   bridges: VoidBridges;
   onChanged: () => void;
 }): JSX.Element {
-  const { listed } = props;
   return (
-    <section className="v5-shift-panel" aria-labelledby="void-history">
-      <h2 id="void-history">{VOID_COPY.historyTitle}</h2>
-      {listed.kind === 'loading' && <output>{VOID_COPY.loading}</output>}
-      {listed.kind === 'refused' && <ShiftAlert message={voidRefusalMessage(listed.reason)} />}
-      {listed.kind === 'list' && listed.voids.length === 0 && (
-        <p className="v5-shift-hint">{VOID_COPY.noHistory}</p>
-      )}
-      {listed.kind === 'list' && listed.voids.length > 0 && (
-        <ul className="v5-void-list">
-          {listed.voids.map((entry) => (
-            <HistoryRow
-              key={entry.void_id}
-              entry={entry}
-              bridges={props.bridges}
-              onChanged={props.onChanged}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
+    <Panel title={VOID_COPY.historyTitle}>
+      <HistoryBody {...props} />
+    </Panel>
+  );
+}
+
+function HistoryBody(props: {
+  listed: Listed;
+  bridges: VoidBridges;
+  onChanged: () => void;
+}): JSX.Element {
+  const { listed } = props;
+  if (listed.kind === 'loading')
+    return (
+      <div className="v5-void-panel-state">
+        <output>{VOID_COPY.loading}</output>
+      </div>
+    );
+  if (listed.kind === 'refused')
+    return (
+      <div className="v5-void-panel-state">
+        <VoidAlert message={voidRefusalMessage(listed.reason)} />
+      </div>
+    );
+  if (listed.voids.length === 0)
+    return (
+      <div className="v5-void-panel-state v5-void-neutral">
+        <Notice tone="info">{VOID_COPY.noHistory}</Notice>
+      </div>
+    );
+  return (
+    // A scroll region with no control in it must still take focus (axe scrollable-region-focusable, OD-5).
+    <ul className="v5-void-rows" tabIndex={0} aria-label={VOID_COPY.historyTitle}>
+      {listed.voids.map((entry) => (
+        <HistoryRow
+          key={entry.void_id}
+          entry={entry}
+          bridges={props.bridges}
+          onChanged={props.onChanged}
+        />
+      ))}
+    </ul>
+  );
+}
+
+/** Each state has its own tone and glyph, so it never rests on colour alone (OD-3). */
+const STATE_LOOK: Readonly<
+  Record<SaleVoidState, { tone: 'neutral' | 'success' | 'danger'; icon: V5IconName }>
+> = {
+  // The clock glyph (the same path as the manager-home shift card).
+  pending: { tone: 'neutral', icon: 'manager-shift' },
+  unknown: { tone: 'neutral', icon: 'retry' },
+  confirmed: { tone: 'success', icon: 'status-success' },
+  refused: { tone: 'danger', icon: 'status-warning' },
+};
+
+function StatePill({ state }: { state: SaleVoidState }): JSX.Element {
+  const look = STATE_LOOK[state];
+  return (
+    <span className="v5-void-state" data-tone={look.tone}>
+      <V5Icon name={look.icon} size={16} />
+      {voidStateLabel(state)}
+    </span>
   );
 }
 
@@ -272,25 +374,31 @@ function HistoryRow(props: {
       data-attention={entry.needs_attention ? 'true' : 'false'}
       data-testid="void-row"
     >
-      <p className="v5-void-row__head">
-        <bdi>{entry.sale_number}</bdi> — <bdi>{formatCheckoutMoney(entry.total_minor)}</bdi>
-      </p>
-      <p className="v5-void-row__state">{voidStateLabel(entry.state)}</p>
-      <p className="v5-void-row__time">
-        {VOID_COPY.requestedAt}: <bdi>{formatShiftTime(entry.requested_at)}</bdi>
+      <VoidCode value={entry.sale_number} className="v5-void-row__ref" />
+      <VoidMoney minor={entry.total_minor} className="v5-void-row__amount" />
+      <div className="v5-void-row__full">
+        <StatePill state={entry.state} />
+      </div>
+      <p className="v5-void-row__full v5-void-row__meta">
+        {VOID_COPY.requestedAt}: <VoidTime iso={entry.requested_at} />
       </p>
       {entry.waiting_for !== null && (
-        <output className="v5-void-row__waiting">
-          {voidWaitingMessage(entry.waiting_for, entry.requester_display_name)}
+        <output className="v5-void-row__full v5-void-row__waiting">
+          <V5Icon name="manager-shift" size={16} />
+          <span>{voidWaitingMessage(entry.waiting_for, entry.requester_display_name)}</span>
         </output>
       )}
       {entry.refusal_reason !== null && (
-        <ShiftAlert message={voidRefusalMessage(entry.refusal_reason)} />
+        <div className="v5-void-row__full">
+          <VoidAlert message={voidRefusalMessage(entry.refusal_reason)} />
+        </div>
       )}
       {entry.needs_attention && (
-        <button type="button" className="v5-live-btn" disabled={busy} onClick={acknowledge}>
-          {VOID_COPY.acknowledge}
-        </button>
+        <div className="v5-void-row__full">
+          <button type="button" className="v5-void-btn" disabled={busy} onClick={acknowledge}>
+            {VOID_COPY.acknowledge}
+          </button>
+        </div>
       )}
     </li>
   );

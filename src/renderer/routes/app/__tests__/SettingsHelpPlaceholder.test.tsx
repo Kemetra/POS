@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { SettingsHelpPlaceholder } from '../SettingsHelpPlaceholder';
 import { useThemeStore, DEFAULT_THEME } from '../../../stores/theme-store';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 
 /**
  * RT-503 (VN-S10 S10-6, G-6 state 13) — Settings: an honest Arabic notice that

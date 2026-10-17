@@ -26,7 +26,7 @@ import type { PaymentsBridgeAPI, TenderBridgeAPI } from '../../../../shared/brid
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store.js';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../../stores/payment-store.js';
-import { expectNoAxeViolations } from '../../primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config.js';
 import { PaymentSurface } from '../PaymentSurface.js';
 
 const ENVELOPE: PaymentIntentEnvelope = {

@@ -13,6 +13,12 @@ export const SALES_COPY = Object.freeze({
   searching: 'جارٍ البحث…',
   notFound: 'لم يُعثر على بيع بهذا الرقم.',
   preview: 'معاينة الإيصال',
+  // RT-659 — the preview dialog (G6P-Receipt-Preview, owner option A, 2026-10-17).
+  // Loading and failed are the 008 preview's own words; «الإيصال» names the slip region.
+  previewSlip: 'الإيصال',
+  previewLoading: 'جارٍ التحضير',
+  previewFailed: 'تعذّرت معاينة الإيصال',
+  previewClose: 'إغلاق',
   reprint: 'إعادة طباعة الإيصال',
   reprinting: 'جارٍ إعادة الطباعة…',
   reprintSent: 'أُرسل الإيصال للطابعة.',

@@ -11,7 +11,7 @@ import type {
 } from '../../../../shared/bridge-api';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
 import { REAUTH_COPY, SIGN_IN_REFUSAL_COPY } from '../../../ui/operator/messages';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 import { DialogHost } from '../../foundation/Dialog';
 import { CASHIERS_COPY as C } from '../cashiers-copy';
 import { CashiersScreen } from '../CashiersScreen';

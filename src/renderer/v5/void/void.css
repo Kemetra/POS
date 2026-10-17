@@ -1,48 +1,431 @@
 /*
- * RT-530 — the v5 sale void screen and notices. Tokens only (DESIGN.md): the
- * list rows share the shift panels hairline surface, status colour only on the
- * refused row and the banner, logical properties only.
+ * RT-530 — the v5 sale void screen and notices. Tokens only (DESIGN.md),
+ * logical properties only.
+ *
+ * RT-654 — the screen on the frozen VD-Void references
+ * (docs/design/vnext/visual-acceptance/VD-Void/vd.css, owner-approved
+ * OD-1…OD-8), in v5 tokens: two panels under the ScreenSection header, 44px
+ * controls, the journal as card-rows with a toned state pill, the confirm
+ * dialog's summary band, manager lines and danger commit. Two tiers like the
+ * frame: comfortable at 1280+, the floor tier below 1280. The void screen no
+ * longer uses shift.css; the shift and recovery screens keep it as it is.
  */
 
+/* The ScreenSection body grows, so the journal panel can take the rest of the
+   height and its rows scroll inside it (VD-Void: the panel reaches the foot). */
+.v5-screen-section__body:has(> .v5-void) {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
 .v5-void {
+  --void-btn-pad: var(--space-4);
+
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+@media (max-width: 1279px) {
+  .v5-void {
+    --void-btn-pad: var(--space-3);
+  }
+}
+
+/* Two columns, as before (OD-1): the lookup hugs its content, the journal fills the height. */
+.v5-void-cols {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-block-size: 0;
+}
+
+.v5-void-panel {
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  min-inline-size: 0;
+  min-block-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pane);
+  background: var(--color-surface);
 }
 
-.v5-void-text {
-  font-family: inherit;
+.v5-void-panel--hug {
+  align-self: start;
 }
 
-.v5-void-list {
+.v5-void-panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-block-size: 52px;
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-void-panel-head h2 {
+  margin: 0;
+  font-size: var(--type-section);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-void-panel-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.v5-void-panel-state {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: center;
+  justify-items: center;
+  padding: var(--space-5);
+}
+
+.v5-void-panel-state > * {
+  inline-size: min(520px, 100%);
+}
+
+/* VD-Void draws "no voids" as a neutral notice: the info glyph, muted, no tone colour. */
+.v5-void-neutral .v5-notice {
+  --tone-ink: var(--color-text-muted);
+  --tone-soft: var(--color-surface-elevated);
+
+  border-color: var(--color-border);
+}
+
+.v5-void p {
+  margin: 0;
+}
+
+.v5-void-hint {
+  color: var(--color-text-muted);
+}
+
+/* ── the lookup ─────────────────────────────────────────────────── */
+.v5-void-lookup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.v5-void-lookup .v5-void-field {
+  flex: 1 1 200px;
+}
+
+.v5-void-field {
+  display: grid;
+  gap: 6px;
+}
+
+.v5-void-field label {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-void-input {
+  block-size: 48px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-md);
+}
+
+.v5-void-input--code,
+.v5-void-input--pin {
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-family-mono);
+}
+
+.v5-void-input--pin {
+  letter-spacing: 0.3em;
+}
+
+/* ── the found sale ─────────────────────────────────────────────── */
+.v5-void-result {
   display: grid;
   gap: var(--space-2);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-soft);
+}
+
+.v5-void-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px var(--space-4);
+  margin: 0;
+}
+
+.v5-void-facts dt {
+  color: var(--color-text-muted);
+}
+
+.v5-void-facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.v5-void-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.v5-void-actions .v5-void-btn {
+  min-inline-size: 160px;
+}
+
+/* The sale number and amounts only: LTR, tabular, monospace (DESIGN.md numerals). */
+.v5-void-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Arabic dates stay in the text face (Dubai); only their digits are tabular. */
+.v5-void-when {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the void journal: one card-row per queued void ─────────────── */
+.v5-void-rows {
+  flex: 1 1 auto;
+  min-block-size: 0;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
   list-style: none;
+}
+
+.v5-void-rows:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: -3px;
 }
 
 .v5-void-row {
   display: grid;
-  gap: var(--space-1);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
 }
 
+.v5-void-row:last-child {
+  border-block-end: 0;
+}
+
+/* A refused void nobody has acknowledged: a danger edge on the reading side, plus its glyph
+   and its words, so the state never rests on colour alone (OD-3). */
 .v5-void-row[data-attention='true'] {
-  border-color: var(--color-danger, currentColor);
+  border-inline-start: 4px solid var(--color-danger);
 }
 
-.v5-void-row p {
+.v5-void-row__full {
+  grid-column: 1 / -1;
+}
+
+.v5-void-row__ref {
+  justify-self: start;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.v5-void-row__amount {
+  justify-self: end;
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-void-row__meta,
+.v5-void-row__waiting {
+  color: var(--color-text-muted);
+}
+
+.v5-void-row__waiting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.v5-void-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 30px;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-void-state[data-tone='success'] {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.v5-void-state[data-tone='danger'] {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+/* ── buttons ────────────────────────────────────────────────────── */
+.v5-void-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--v5-target, 44px);
+  min-inline-size: 44px;
+  padding-inline: var(--void-btn-pad, var(--space-4));
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-void-btn:focus-visible,
+.v5-void-input:focus-visible,
+.v5-void-choice input:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.v5-void-btn:disabled {
+  cursor: not-allowed;
+}
+
+.v5-void-btn:not(.v5-void-btn--primary, .v5-void-btn--danger):disabled {
+  opacity: 0.55;
+}
+
+.v5-void-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-void-btn--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-danger-on);
+}
+
+/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
+.v5-void-btn--primary:disabled,
+.v5-void-btn--danger:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
+/* ── the confirm dialog (inside the one v5 Dialog panel) ────────── */
+.v5-dialog:has(.v5-void-form) {
+  inline-size: min(480px, calc(100% - var(--space-5)));
+  gap: var(--space-4);
+}
+
+.v5-void-dialog-title {
   margin: 0;
-}
-
-.v5-void-row__head {
+  font-size: var(--font-size-lg, 18px);
   font-weight: var(--font-weight-bold);
+  line-height: 1.375;
 }
 
+.v5-void-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px var(--space-3);
+  padding: 10px var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-elevated);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-void-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.v5-void-choices {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.v5-void-choices legend {
+  margin-block-end: 6px;
+  padding: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The whole line is the target (44px), not only the radio. */
+.v5-void-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: var(--v5-target, 44px);
+  margin: 0;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  font-weight: var(--font-weight-regular);
+  cursor: pointer;
+}
+
+.v5-void-choice input {
+  flex: none;
+  inline-size: 20px;
+  block-size: 20px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.v5-void-choice:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+/* Always mounted, so the layout does not jump when a refusal arrives. */
+.v5-void-slot {
+  min-block-size: 40px;
+}
+
+.v5-void-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.v5-void-dialog-actions .v5-void-btn {
+  min-inline-size: 104px;
+}
+
+/* ── the frame banner and link (SaleVoidNotice, unchanged) ──────── */
 .v5-void-banner {
   display: flex;
   align-items: center;
@@ -60,4 +443,39 @@
 .v5-void-link {
   margin: 0;
   padding-inline: var(--space-4);
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .v5-void-panel,
+  .v5-void-btn,
+  .v5-void-input,
+  .v5-void-choice,
+  .v5-void-state,
+  .v5-void-summary {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-void-btn--primary,
+  .v5-void-btn--danger {
+    border: 2px solid ButtonText;
+  }
+
+  .v5-void-btn--primary:disabled,
+  .v5-void-btn--danger:disabled {
+    border: 1px solid GrayText;
+    color: GrayText;
+  }
+
+  .v5-void-state[data-tone='danger'] {
+    border: 2px solid CanvasText;
+  }
+
+  .v5-void-row[data-attention='true'] {
+    border-inline-start: 4px solid CanvasText;
+  }
+
+  .v5-void-choice:has(input:checked) {
+    border: 2px solid Highlight;
+  }
 }

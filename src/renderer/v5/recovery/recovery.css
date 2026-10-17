@@ -1,61 +1,118 @@
 /*
- * RT-441 — Manager → المبيعات المعلقة. Built on the shift screen's panels
- * (tokens only, DESIGN.md): a hairline list of held sales, one tag per state,
- * logical properties only.
+ * RT-441 — Manager → المبيعات المعلقة. RT-656 — on the owner-approved RC
+ * references (docs/design/vnext/visual-acceptance/RC-Recovery/rc.css, which
+ * is the G-6 sheet plus RC additions), in v5 tokens. The route's ScreenSection
+ * draws the G-6 page header; this file owns everything under it, and no
+ * longer leans on the shift screen's sheet. Two tiers like the frame:
+ * comfortable at 1280+, the floor tier below.
  */
 
-/* Payment on the inline start, the held list fills the rest. */
+/* The ScreenSection body grows, so the held list can take the rest of the
+   height and its rows scroll inside the panel (the panel reaches the foot). */
+.v5-screen-section__body:has(> .v5-recovery) {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.v5-recovery {
+  --recovery-stuck-col: 360px;
+  --recovery-row: 60px;
+  --recovery-initial: 34px;
+  --recovery-btn-pad: var(--space-4);
+
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+@media (max-width: 1279px) {
+  .v5-recovery {
+    --recovery-stuck-col: 300px;
+    --recovery-row: 56px;
+    --recovery-initial: 30px;
+    --recovery-btn-pad: var(--space-3);
+  }
+}
+
+/* ── notices: loading and recovery mode are neutral (G-6), refusals warn ── */
+.v5-recovery-state {
+  display: grid;
+  align-content: start;
+}
+
+.v5-recovery-state .v5-notice {
+  inline-size: min(560px, 100%);
+}
+
+.v5-recovery-neutral .v5-notice {
+  --tone-ink: var(--color-text-muted);
+  --tone-soft: var(--color-surface-elevated);
+
+  border-color: var(--color-border);
+}
+
+.v5-recovery-muted {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* ── the stuck payment on the inline start, the held sales fill the rest ── */
 .v5-recovery-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-4);
-  inline-size: 100%;
-  max-inline-size: 1280px;
-  margin-inline: auto;
-  padding: var(--space-5);
-  box-sizing: border-box;
+  flex: 1 1 auto;
+  grid-template-columns: var(--recovery-stuck-col) minmax(0, 1fr);
+  gap: var(--space-3);
+  min-block-size: 0;
 }
 
-@container v5-screen (max-width: 1120px) {
-  .v5-recovery-grid {
-    gap: var(--space-3);
-    padding: var(--space-4);
-  }
-}
-
-@container v5-screen (max-width: 760px) {
-  .v5-recovery-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.v5-recovery-wide {
-  grid-column: 1 / -1;
-}
-
-.v5-recovery-grid > .v5-shift-message {
-  margin: 0;
-}
-
-/* Recovery mode: the session can do nothing else here (info, persistent). */
-.v5-recovery-mode {
+.v5-recovery-panel {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-info);
-  border-inline-start-width: 4px;
-  border-radius: var(--radius-control);
-  background: var(--color-info-soft);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-relaxed);
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pane);
+  background: var(--color-surface);
 }
 
-.v5-recovery-mode .v5-icon {
-  margin-block-start: 2px;
-  color: var(--color-info);
+.v5-recovery-panel--stuck {
+  align-self: start;
+}
+
+.v5-recovery-panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 52px;
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-recovery-panel-head h2 {
+  margin: 0;
+  font-size: var(--type-section);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-recovery-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-emphasis);
+}
+
+.v5-recovery-panel-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
 }
 
 .v5-recovery-empty {
@@ -66,7 +123,16 @@
   color: var(--color-text-muted);
 }
 
-/* The stuck payment: raised-band cells, the amount still due set largest. */
+/* An amount or a count: Western digits, LTR, tabular (DESIGN.md OD-3). */
+.v5-recovery-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── the stuck payment: raised-band cells, the amount still due set largest ── */
 .v5-recovery-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -76,8 +142,8 @@
 
 .v5-recovery-fact {
   display: grid;
-  gap: var(--space-1);
-  padding: var(--space-3);
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-control);
   background: var(--color-surface-elevated);
 }
@@ -89,22 +155,19 @@
 
 .v5-recovery-fact dt {
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  font-size: 13px;
 }
 
 .v5-recovery-fact dd {
   margin: 0;
   justify-self: start;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-md);
-  font-variant-numeric: tabular-nums;
+  font-size: 16px;
   font-weight: var(--font-weight-semibold);
 }
 
-/* A name: the body face, so Arabic letters stay joined. */
+/* A name: the body face, so Arabic letters stay joined; it wraps, never cut. */
 .v5-recovery-fact .v5-recovery-text {
-  font-family: inherit;
-  font-variant-numeric: normal;
+  overflow-wrap: anywhere;
 }
 
 .v5-recovery-fact--due {
@@ -113,25 +176,24 @@
 }
 
 .v5-recovery-fact--due dd {
-  font-size: var(--font-size-2xl);
+  font-size: 24px;
   font-weight: var(--font-weight-bold);
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .v5-recovery-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
+  gap: var(--space-2);
 }
 
-.v5-recovery-actions .v5-shift-btn {
-  min-block-size: 48px;
-}
-
-/* The held sales: one hairline row each, the cancel button on the inline end. */
-.v5-recovery-list {
+/* ── the held sales: initial · name and tags · total and lines · cancel ── */
+.v5-recovery-rows {
+  flex: 1 1 auto;
+  min-block-size: 0;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
   list-style: none;
 }
 
@@ -140,7 +202,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-3);
-  min-block-size: 64px;
+  min-block-size: var(--recovery-row);
   padding: var(--space-2) var(--space-4);
   border-block-end: 1px solid var(--color-border-soft);
 }
@@ -152,8 +214,8 @@
 .v5-recovery-initial {
   display: grid;
   place-items: center;
-  inline-size: 34px;
-  block-size: 34px;
+  inline-size: var(--recovery-initial);
+  block-size: var(--recovery-initial);
   border-radius: 50%;
   background: var(--color-surface-elevated);
   color: var(--color-text-muted);
@@ -166,9 +228,18 @@
   min-inline-size: 0;
 }
 
-.v5-recovery-row__who strong {
+/* A name wraps and the row grows; it is never cut, so two operators cannot look alike. */
+.v5-recovery-name {
+  font-size: 15px;
   font-weight: var(--font-weight-semibold);
+  line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 1279px) {
+  .v5-recovery-name {
+    font-size: 14px;
+  }
 }
 
 .v5-recovery-tags {
@@ -177,45 +248,197 @@
   gap: var(--space-1);
 }
 
+/* A state is a word in a pill, never colour alone. */
 .v5-recovery-tag {
   display: inline-flex;
   align-items: center;
-  min-block-size: 22px;
-  padding-inline: var(--space-2);
+  min-block-size: 24px;
+  padding-inline: 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   background: var(--color-surface-elevated);
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
 }
 
 .v5-recovery-row__sum {
   display: grid;
   justify-items: end;
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  font-size: 13px;
 }
 
-.v5-recovery-row__sum .v5-shift-money {
+.v5-recovery-row__sum > .v5-recovery-num {
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ── buttons ────────────────────────────────────────────────────── */
+.v5-recovery-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--v5-target, 44px);
+  min-inline-size: 44px;
+  padding-inline: var(--recovery-btn-pad, var(--space-4));
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v5-recovery-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
+.v5-recovery-btn:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.v5-recovery-btn:focus-visible,
+.v5-recovery-input:focus-visible,
+.v5-recovery-choice input:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── the action dialog (inside the one v5 Dialog panel) ─────────── */
+.v5-recovery-dialog-title {
+  margin: 0;
+  font-size: var(--font-size-lg, 18px);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.375;
+}
+
+.v5-recovery-fields {
+  display: grid;
+  gap: 6px;
+}
+
+.v5-recovery-fields p {
+  margin: 0;
+}
+
+.v5-recovery-fields label {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-recovery-input {
+  block-size: 48px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.v5-recovery-input--code,
+.v5-recovery-input--pin {
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-family-mono);
+}
+
+.v5-recovery-input--pin {
+  font-size: 22px;
+  letter-spacing: 0.3em;
 }
 
 .v5-recovery-confirms {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
+  min-inline-size: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-.v5-recovery-confirms label {
+/* The whole line is the target (44px), not only the box; the base `label`
+   rule adds a foot margin and semibold weight, G-6 has neither. */
+.v5-recovery-choice {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-block-size: 44px;
+  gap: 10px;
+  min-block-size: var(--v5-target, 44px);
+  margin: 0;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  font-weight: var(--font-weight-regular);
+  line-height: 1.4;
+  cursor: pointer;
 }
 
-.v5-recovery-head {
-  justify-content: flex-start;
+.v5-recovery-choice input {
+  flex: none;
+  inline-size: 20px;
+  block-size: 20px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.v5-recovery-choice:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+/* Always mounted, so a refusal announces and the layout does not jump. */
+.v5-recovery-slot {
+  min-block-size: 40px;
+}
+
+.v5-recovery-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.v5-recovery-dialog-actions .v5-recovery-btn {
+  min-inline-size: 104px;
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .v5-recovery-panel,
+  .v5-recovery-btn,
+  .v5-recovery-input,
+  .v5-recovery-initial,
+  .v5-recovery-tag,
+  .v5-recovery-fact,
+  .v5-recovery-glyph,
+  .v5-recovery-choice {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-recovery-btn--primary,
+  .v5-recovery-fact--due {
+    border: 2px solid ButtonText;
+  }
+
+  .v5-recovery-btn:disabled {
+    border: 1px solid GrayText;
+    color: GrayText;
+  }
+
+  .v5-recovery-choice:has(input:checked) {
+    border: 2px solid Highlight;
+  }
 }

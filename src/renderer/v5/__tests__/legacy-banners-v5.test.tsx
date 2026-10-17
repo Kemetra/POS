@@ -19,7 +19,7 @@ import type { ReceiptsBridgeAPI } from '../../../shared/bridge-api';
 import { formatHumanDateTime } from '../../ui/format/human-format';
 import { SHIFT_CLOSED_COPY, ShiftClosedBanner } from '../../ui/operator/ShiftClosedBanner';
 import { PrinterFailureBanner } from '../../ui/receipts/PrinterFailureBanner';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../test-utils/axe-config';
 
 afterEach(cleanup);
 

@@ -4,7 +4,7 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import type { ReturnsPayoutResponse } from '../../../shared/returns/types.js';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../test-utils/axe-config.js';
 import { PAYOUT_COPY, drawerFailureMessage, refusalMessage } from '../returns-messages.js';
 import {
   deferred,

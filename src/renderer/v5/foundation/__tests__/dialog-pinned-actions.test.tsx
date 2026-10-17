@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { ReauthDialog } from '../../../ui/operator/ReauthDialog';
 import { REAUTH_COPY } from '../../../ui/operator/messages';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { DialogHost } from '../Dialog';

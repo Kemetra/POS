@@ -7,7 +7,7 @@ import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../test-utils/axe-config';
 import { LiveSearchResults } from '../sale/LiveSearchResults';
 
 afterEach(cleanup);

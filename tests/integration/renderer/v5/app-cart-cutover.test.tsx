@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
-import { expectNoAxeViolations } from '../../../../src/renderer/ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../../../src/renderer/test-utils/axe-config.js';
 
 import { AppRouter } from '../../../../src/renderer/router.js';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../../../../src/shared/bridge-api.js';

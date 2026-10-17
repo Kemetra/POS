@@ -10,7 +10,7 @@ import { Dialog } from '../foundation/Dialog';
 import { callShift, dismissUnlessBusy, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { normalizeDigits } from './shift-format';
-import { ShiftAlert } from './ShiftScreen';
+import { ShiftRefusal } from './ShiftParts';
 import '../sale/live-sale.css';
 
 type Closed = Extract<ShiftCloseResponse, { kind: 'closed' }>;
@@ -86,31 +86,36 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
 
   return (
     <Dialog label={SHIFT_COPY.approvalTitle} onCancel={dismiss} initialFocusRef={cancelRef}>
-      <h2 className="v5-live-dialog-title">{SHIFT_COPY.approvalTitle}</h2>
-      <p>{SHIFT_COPY.approvalBody}</p>
-      <ManagerChoice
-        managers={managers}
-        name={groupName}
-        selected={selected}
-        onSelect={setSelected}
-      />
-      <div className="v5-shift-fields">
-        <label htmlFor={pinId}>{SHIFT_COPY.pinLabel}</label>
-        <input
-          id={pinId}
-          className="v5-shift-input v5-ltr"
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          maxLength={8}
-          value={pin}
-          onChange={(event) => {
-            setPin(event.target.value);
-          }}
+      <h2 className="v5-shift-dialog-title">{SHIFT_COPY.approvalTitle}</h2>
+      <p className="v5-shift-hint">{SHIFT_COPY.approvalBody}</p>
+      <div className="v5-shift-form">
+        <ManagerChoice
+          managers={managers}
+          name={groupName}
+          selected={selected}
+          onSelect={setSelected}
         />
+        <div className="v5-shift-field">
+          <label htmlFor={pinId}>{SHIFT_COPY.pinLabel}</label>
+          <input
+            id={pinId}
+            className="v5-shift-pin"
+            dir="ltr"
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={8}
+            value={pin}
+            onChange={(event) => {
+              setPin(event.target.value);
+            }}
+          />
+        </div>
       </div>
-      <ShiftAlert message={error} />
-      <div>
+      <div className="v5-shift-slot">
+        <ShiftRefusal message={error} />
+      </div>
+      <div className="v5-shift-dialog-actions">
         <button
           ref={cancelRef}
           type="button"
@@ -142,14 +147,16 @@ function ManagerChoice(
   }>,
 ): JSX.Element {
   const { managers } = props;
-  if (managers.kind === 'loading') return <output>{SHIFT_COPY.loadingManagers}</output>;
-  if (managers.kind === 'refused') return <ShiftAlert message={managers.message} />;
-  if (managers.managers.length === 0) return <p>{SHIFT_COPY.noManagers}</p>;
+  if (managers.kind === 'loading')
+    return <output className="v5-shift-muted">{SHIFT_COPY.loadingManagers}</output>;
+  if (managers.kind === 'refused') return <ShiftRefusal message={managers.message} />;
+  if (managers.managers.length === 0)
+    return <p className="v5-shift-hint">{SHIFT_COPY.noManagers}</p>;
   return (
-    <fieldset className="v5-shift-managers">
+    <fieldset className="v5-shift-choices">
       <legend>{SHIFT_COPY.managerLegend}</legend>
       {managers.managers.map((manager) => (
-        <label key={manager.managerRef} className="v5-shift-manager">
+        <label key={manager.managerRef} className="v5-shift-choice">
           <input
             type="radio"
             name={props.name}
