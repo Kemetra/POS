@@ -31,9 +31,9 @@ function pageChecks(selectors) {
     if (!n.childNodes.length || ![...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())) return false;
     return parseFloat(getComputedStyle(n).fontSize) < 12;
   }).length;
-  // A radio's target is its whole label row, so measure the label.
+  // A radio's or checkbox's target is its whole label row, so measure the label.
   const targets = [...document.querySelectorAll('.rt button, .rt input, .rt a')].filter((n) => {
-    const box = n.type === 'radio' && n.closest('label') ? n.closest('label') : n;
+    const box = (n.type === 'radio' || n.type === 'checkbox') && n.closest('label') ? n.closest('label') : n;
     const r = box.getBoundingClientRect();
     return r.width > 0 && (r.height < 44 || r.width < 44);
   }).length;
