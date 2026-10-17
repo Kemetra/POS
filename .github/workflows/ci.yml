@@ -4,9 +4,11 @@
 # Job graph (every job below `changes` starts in parallel):
 #
 #   changes ──┬── static   (ubuntu)  contract conformance, codegen drift,
-#             │                      typecheck, lint
-#             ├── test     (ubuntu)  full vitest suite + coverage thresholds
-#             ├── package  (windows) build + package:dir (+ main-only upload)
+#             │                      renderer build, typecheck, lint
+#             ├── test     (ubuntu)  vitest suite (minus the contract subset that
+#             │                      `static` already ran) + coverage thresholds
+#             ├── package  (windows) build + package:dir (+ main-only upload);
+#             │                      PRs: only when `needs_package` (RT-585)
 #             └── docs     (ubuntu)  docs-only PRs: Prettier on changed .md/.json
 #   ci  ← aggregate of all of the above. `ci` is the ONLY required status
 #         check on `main` (ruleset `protect-main`), so its name must not change.
@@ -47,6 +49,15 @@
 #        skipped and the `docs` job Prettier-checks changed .md/.json files
 #        instead. The required `ci` job still completes successfully. Pushes
 #        to main always run the full stack.
+#   D4 — RT-585 risk-tiered Windows package: on pull_request events the
+#        Windows `package` job runs UNLESS every changed path is on the
+#        package-irrelevant allowlist (src/renderer/**, tests/**, docs).
+#        It is an ALLOWLIST OF SKIPS, not a list of triggers: any path that
+#        matches no rule (src/main, src/preload, src/shared, migrations/,
+#        package.json, the lockfile, electron-builder.yml, vite/tsconfig,
+#        build/scripts, .github/**, ...) needs the Windows job. Pushes to main
+#        always package. The `ci` aggregate FAILS if `package` was needed but
+#        did not succeed (skipped, failed or cancelled).
 
 name: ci
 
@@ -71,6 +82,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       docs_only: ${{ steps.docs-check.outputs.docs_only }}
+      needs_package: ${{ steps.package-check.outputs.needs_package }}
     steps:
       # pull_request checks out the synthetic merge commit; depth 2 makes its
       # first parent (the base-branch tip) available, so HEAD^1..HEAD is
@@ -99,6 +111,31 @@ jobs:
           echo "docs_only=$docs_only"
           echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
 
+      # RT-585 — does this change need the Windows packaging job? Fail-safe
+      # direction: only a change made EXCLUSIVELY of package-irrelevant paths
+      # (renderer sources, tests, docs/specs, root-level markdown, agent/spec
+      # tooling dirs; .github/** is never on the list, even for markdown)
+      # skips it. Everything else, including paths no rule names, needs it.
+      # --no-renames: a move out of src/main into src/renderer must list the
+      # deleted src/main path too, not only the new renderer one.
+      - name: Detect whether the Windows package job is needed
+        id: package-check
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Not a pull_request event: package needed."
+            echo "needs_package=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          skip_re='^(src/renderer|tests|docs|specs|\.impeccable|\.specify|\.claude)/|^[^/]*\.md$'
+          changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
+          needs="$(printf '%s\n' "$changed" | grep -v '^$' | grep -Ev "$skip_re" || true)"
+          if [ -z "$changed" ] || [ -n "$needs" ]; then needs_package=true; else needs_package=false; fi
+          echo "Paths that require the package job:"
+          printf '  %s\n' "${needs:-<none>}"
+          echo "needs_package=$needs_package"
+          echo "needs_package=$needs_package" >> "$GITHUB_OUTPUT"
+
   static:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
@@ -119,8 +156,11 @@ jobs:
 
       # RT-217 PR B lands the Backend-Core contract-conformance suite under
       # tests/contract/backend-core/. It runs first so a cross-repo contract
-      # break fails within the first minute. It also runs in the `test` job
-      # as part of the full suite, so this step can never be the only gate.
+      # break fails within the first minute. RT-585: this is the ONE blocking
+      # run of the subset: the `test` job excludes it (verified: every
+      # per-file coverage threshold still passes without it; it is ~3 s).
+      # Kept here rather than in `test` because it fails fast and keeps the
+      # longest job (`test`) shorter.
       # `npm test` is `vitest run --passWithNoTests` from the locked devDependency,
       # so nothing is fetched on demand (RT-506, Sonar S6505/S8543).
       - name: Backend-Core contract conformance
@@ -128,6 +168,13 @@ jobs:
 
       - name: Verify OpenAPI codegen drift
         run: npm run codegen:verify
+
+      # RT-585 — compensating control for the package-skip path: a
+      # renderer-only PR does not reach the Windows job, so the Vite renderer
+      # build (the one packaged-output step that can break without a type or
+      # test failure) is still proven here on ubuntu.
+      - name: Build renderer (vite)
+        run: npm run build:renderer
 
       - name: Typecheck
         run: npm run typecheck
@@ -153,8 +200,9 @@ jobs:
       - name: Install dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts
 
+      # RT-585: tests/contract/backend-core already ran (blocking) in `static`.
       - name: Test with coverage
-        run: npm test -- --coverage
+        run: npm test -- --coverage --exclude 'tests/contract/backend-core/**'
 
       # RT-462 — non-blocking Codecov upload of the lcov report the step above
       # already produced (no second test run). Informational only: this step
@@ -183,7 +231,11 @@ jobs:
 
   package:
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    # `!= 'false'` fails safe: an empty/missing output still packages.
+    # Independent of docs_only: a markdown-only PR outside the skip allowlist
+    # (e.g. .github/README.md, src/main/README.md) is docs_only but still
+    # needs_package, and must still be packaged.
+    if: needs.changes.outputs.needs_package != 'false'
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -259,7 +311,9 @@ jobs:
   # Aggregate gate. Keeps the required check name `ci`. `if: always()` makes
   # it run (and FAIL) when a needed job failed or was cancelled — without it
   # a failed dependency would leave `ci` "skipped", which GitHub counts as
-  # passing. Which jobs must succeed depends on the docs-only decision.
+  # passing. Which jobs must succeed depends on the docs-only decision and,
+  # for `package`, on the RT-585 needs_package decision: a package job that
+  # was needed but skipped/failed/cancelled FAILS `ci`.
   ci:
     needs: [changes, static, test, package, docs]
     if: always()
@@ -270,20 +324,28 @@ jobs:
         shell: bash
         env:
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          NEEDS_PACKAGE: ${{ needs.changes.outputs.needs_package }}
           CHANGES: ${{ needs.changes.result }}
           STATIC: ${{ needs.static.result }}
           TEST: ${{ needs.test.result }}
           PACKAGE: ${{ needs.package.result }}
           DOCS: ${{ needs.docs.result }}
         run: |
-          echo "changes=$CHANGES docs_only=$DOCS_ONLY static=$STATIC test=$TEST package=$PACKAGE docs=$DOCS"
+          echo "changes=$CHANGES docs_only=$DOCS_ONLY needs_package=$NEEDS_PACKAGE static=$STATIC test=$TEST package=$PACKAGE docs=$DOCS"
           if [ "$CHANGES" != "success" ]; then
             echo "::error::changes job did not succeed ($CHANGES)"; exit 1
           fi
           if [ "$DOCS_ONLY" = "true" ]; then
             required="DOCS"
           else
-            required="STATIC TEST PACKAGE"
+            required="STATIC TEST"
+          fi
+          # Anything other than an explicit 'false' means package is needed,
+          # also for docs-only PRs whose paths are not package-irrelevant.
+          if [ "$NEEDS_PACKAGE" != "false" ]; then
+            required="$required PACKAGE"
+          elif [ "$PACKAGE" = "failure" ] || [ "$PACKAGE" = "cancelled" ]; then
+            echo "::error::package job result is '$PACKAGE'"; exit 1
           fi
           failed=0
           for job in $required; do
