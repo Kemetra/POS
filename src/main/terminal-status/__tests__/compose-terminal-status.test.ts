@@ -3,7 +3,7 @@
  * passive feeder wraps a fetch, transitions are logged as `{ from, to }` only,
  * and a tick timer applies the time rules until it is stopped.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TERMINAL_STATUS_TICK_MS, composeTerminalStatus } from '../compose-terminal-status.js';
 import { TERMINAL_STATUS_TRANSITION_LOG } from '../terminal-status-monitor.js';
@@ -70,5 +70,37 @@ describe('RT-601 composeTerminalStatus', () => {
     status.stop();
     status.stop();
     expect(cleared).toEqual([handle]);
+  });
+});
+
+describe('RT-601 composeTerminalStatus — default clock and timers', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('ticks on the real interval, uses Date.now, and stop clears the interval', async () => {
+    vi.useFakeTimers({ now: T0 });
+    const lines: Array<Record<string, unknown>> = [];
+    const status = composeTerminalStatus({
+      logger: {
+        info: (obj) => {
+          lines.push(obj);
+        },
+      },
+    });
+    expect(vi.getTimerCount()).toBe(1);
+
+    const fetch = status.observeFetch(() => Promise.resolve(new Response(null, { status: 200 })));
+    await fetch('https://backend.example/x');
+    expect(status.monitor.snapshot().connectionSince).toBe('2026-10-17T12:00:00.000Z');
+
+    vi.advanceTimersByTime(30_000);
+    expect(lines).toEqual([
+      { from: 'checking', to: 'online' },
+      { from: 'online', to: 'checking' },
+    ]);
+
+    status.stop();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
