@@ -1,4 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  net,
+  powerMonitor,
+  safeStorage,
+  session,
+} from 'electron';
 import * as Sentry from '@sentry/electron/main';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -853,8 +862,22 @@ singleInstanceReady
     // Backend-Core device and operator fetch below is built on `backendFetch`,
     // which only OBSERVES the transport outcome (an HTTP status or a fault) and
     // passes request and response through untouched. Transitions are logged as
-    // `{ from, to }`. Not bridged yet (S6-2); no probe yet (S6-1b).
-    const terminalStatus = composeTerminalStatus({ logger: mainLogger });
+    // `{ from, to }`. Not bridged yet (S6-2).
+    // RT-602 (VN-S6 S6-1b) — the active feeder: a credential-free GET of
+    // Backend-Core's public liveness endpoint, only while the passive feeder is
+    // idle (§2.5 cadence). It uses the UNOBSERVED fetch: the probe reports its
+    // own outcome and must not count as passive traffic. `powerMonitor` resume
+    // → checking; a `net.isOnline()` drop → offline. The worker's stop ends the
+    // probe and removes the resume listener.
+    const terminalStatus = composeTerminalStatus({
+      logger: mainLogger,
+      probe: {
+        baseUrl: apiBaseUrl,
+        fetch: globalThis.fetch.bind(globalThis),
+        isInterfaceOnline: () => net.isOnline(),
+        powerMonitor,
+      },
+    });
     workerRegistry.register('terminal status tick', () => {
       terminalStatus.stop();
     });

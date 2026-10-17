@@ -59,6 +59,15 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
     );
   });
 
+  it('RT-602: the liveness probe uses the UNOBSERVED fetch, net.isOnline and powerMonitor', () => {
+    expect(source).toMatch(
+      /composeTerminalStatus\(\{\s*logger: mainLogger,\s*probe: \{\s*baseUrl: apiBaseUrl,\s*fetch: globalThis\.fetch\.bind\(globalThis\),\s*isInterfaceOnline: \(\) => net\.isOnline\(\),\s*powerMonitor,\s*\},\s*\}\);/,
+    );
+    expect(source).toMatch(
+      /workerRegistry\.register\('terminal status tick', \(\) => \{\s*terminalStatus\.stop\(\);/,
+    );
+  });
+
   it('the confirmation call uses an UNOBSERVED admission client', () => {
     expect(source).toMatch(
       /probe: createRosterConfirmationProbe\(\s*createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: backendFetch,/,
