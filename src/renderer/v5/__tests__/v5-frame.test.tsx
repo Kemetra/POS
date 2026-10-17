@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createRef } from 'react';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import axe from 'axe-core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom/vitest';
@@ -14,12 +15,14 @@ import { V5_SALE_PATH, v5NavEntries } from '../frame/nav-model';
 import { V5OperationalNotices } from '../frame/V5OperationalNotices';
 import { useConnectionStateStore } from '../../connection/connection-state';
 import { useDrawerNoticeStore } from '../../ui/receipts/drawer-notice-store';
+import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 
 afterEach(() => {
   cleanup();
   useDrawerNoticeStore.getState().reset();
   useOperatorSessionStore.getState().reset();
   useConnectionStateStore.getState().setState('online');
+  useFeatureFlagsStore.getState().reset();
   vi.unstubAllGlobals();
 });
 
@@ -174,6 +177,60 @@ describe('V5Frame — the one application frame for v5 screens', () => {
     signIn('manager');
     const { container } = renderFrame();
     await expectNoAxeViolations(container);
+  });
+});
+
+describe('V5Frame — the notices strip is a labelled landmark (RT-595, RT-505 F1)', () => {
+  function renderWithShiftAndVoidLinks(): ReturnType<typeof render> {
+    useFeatureFlagsStore.getState().hydrate({ shiftCashup: true, saleVoid: true });
+    vi.stubGlobal('window', Object.assign(window, {}));
+    (window as unknown as { api: unknown }).api = {
+      shiftCashup: {},
+      saleVoid: { list: () => Promise.resolve({ kind: 'list', voids: [] }) },
+    };
+    signIn('manager');
+    return render(
+      <MemoryRouter initialEntries={[V5_SALE_PATH]}>
+        <V5Frame notices={<V5OperationalNotices />}>
+          <p>محتوى</p>
+        </V5Frame>
+      </MemoryRouter>,
+    );
+  }
+
+  afterEach(() => {
+    delete (window as unknown as { api?: unknown }).api;
+  });
+
+  it('puts the shift and void links inside a labelled complementary landmark, before <main>', () => {
+    renderWithShiftAndVoidLinks();
+    const notices = screen.getByTestId('v5-frame-notices');
+    expect(notices.tagName).toBe('ASIDE');
+    expect(notices).toHaveAccessibleName('إشعارات التشغيل');
+    const landmark = screen.getByRole('complementary', { name: 'إشعارات التشغيل' });
+    expect(landmark).toBe(notices);
+    expect(within(landmark).getByRole('link', { name: 'حالة الوردية' })).toBeInTheDocument();
+    expect(within(landmark).getByRole('link', { name: 'إلغاء بيع' })).toBeInTheDocument();
+    expect(notices.compareDocumentPosition(screen.getByRole('main'))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('keeps keyboard order: notice links, then the screen, then the navigation', () => {
+    renderWithShiftAndVoidLinks();
+    const links = screen.getAllByRole('link');
+    const shift = screen.getByRole('link', { name: 'حالة الوردية' });
+    const voidLink = screen.getByRole('link', { name: 'إلغاء بيع' });
+    const nav = screen.getByRole('navigation');
+    expect(links.indexOf(shift)).toBeLessThan(links.indexOf(voidLink));
+    expect(voidLink.compareDocumentPosition(nav)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('has no axe `region` violation with shiftCashup and saleVoid on', async () => {
+    renderWithShiftAndVoidLinks();
+    // Page-level run: `region` is only evaluated against the whole document.
+    const results = await axe.run(document, { runOnly: ['region'] });
+    expect(results.violations.map((v) => v.id)).toEqual([]);
   });
 });
 
