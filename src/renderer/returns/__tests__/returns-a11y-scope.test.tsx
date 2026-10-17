@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../test-utils/axe-config.js';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store.js';
 import { ReturnsRoute } from '../ReturnsRoute.js';
 import {

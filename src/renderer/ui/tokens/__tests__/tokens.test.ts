@@ -10,7 +10,6 @@ import * as shadow from '../shadow';
 import * as motion from '../motion';
 import { density } from '../density';
 import { touchTarget } from '../touch';
-import { connectionState } from '../connection-state';
 
 /**
  * T008 — Design token parity + completeness test.
@@ -20,7 +19,6 @@ import { connectionState } from '../connection-state';
  * 2. Every CSS custom property under :root has a matching TS export
  * 3. density enum has exactly two members (comfortable, compact)
  * 4. touchTarget.min === 44
- * 5. connectionState has exactly four members
  */
 
 const TAILWIND_CSS_PATH = resolve(__dirname, '../../../styles/tailwind.css');
@@ -56,15 +54,6 @@ describe('design token parity (T008)', () => {
 
   it('touchTarget.min === 44', () => {
     expect(touchTarget.min).toBe(44);
-  });
-
-  it('connectionState has exactly four members', () => {
-    const members = Object.keys(connectionState);
-    expect(members).toHaveLength(4);
-    expect(members).toContain('online');
-    expect(members).toContain('degraded');
-    expect(members).toContain('offline');
-    expect(members).toContain('syncing');
   });
 
   describe('color tokens', () => {

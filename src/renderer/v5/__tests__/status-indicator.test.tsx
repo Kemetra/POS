@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalStatusSnapshot } from '../../../shared/terminal-status/types';
 import { STATUS_NOW as NOW, snap } from '../../terminal-status/__tests__/__helpers__/snapshot';
 import { SYNC_ATTENTION_AGE_MS } from '../../terminal-status/status-mapping';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../test-utils/axe-config';
 import {
   installStatusApi,
   renderStatusFrame,
