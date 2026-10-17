@@ -232,7 +232,10 @@ jobs:
   package:
     needs: changes
     # `!= 'false'` fails safe: an empty/missing output still packages.
-    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.needs_package != 'false'
+    # Independent of docs_only: a markdown-only PR outside the skip allowlist
+    # (e.g. .github/README.md, src/main/README.md) is docs_only but still
+    # needs_package, and must still be packaged.
+    if: needs.changes.outputs.needs_package != 'false'
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -336,12 +339,13 @@ jobs:
             required="DOCS"
           else
             required="STATIC TEST"
-            # Anything other than an explicit 'false' means package is needed.
-            if [ "$NEEDS_PACKAGE" != "false" ]; then
-              required="$required PACKAGE"
-            elif [ "$PACKAGE" = "failure" ] || [ "$PACKAGE" = "cancelled" ]; then
-              echo "::error::package job result is '$PACKAGE'"; exit 1
-            fi
+          fi
+          # Anything other than an explicit 'false' means package is needed,
+          # also for docs-only PRs whose paths are not package-irrelevant.
+          if [ "$NEEDS_PACKAGE" != "false" ]; then
+            required="$required PACKAGE"
+          elif [ "$PACKAGE" = "failure" ] || [ "$PACKAGE" = "cancelled" ]; then
+            echo "::error::package job result is '$PACKAGE'"; exit 1
           fi
           failed=0
           for job in $required; do
