@@ -27,3 +27,4 @@ export default function App(): JSX.Element {
     </>
   );
 }
+// RT-585 probe: renderer-only
