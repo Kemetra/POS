@@ -115,6 +115,7 @@ import {
   SALE_SYNC_BACKOFF_POLICY,
 } from './sales-sync/sale-sync-engine.js';
 import { createSaleSyncStatusReader } from './sales-sync/sale-sync-status-reader.js';
+import { composeTerminalStatus } from './terminal-status/compose-terminal-status.js';
 import { composeSaleSyncDevicePath } from './sales-sync/compose-device-path.js';
 import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
 import {
@@ -848,9 +849,19 @@ singleInstanceReady
       logger: mainLogger,
     });
     const apiBaseUrl = resolveApiBaseUrl();
+    // RT-601 (VN-S6 S6-1a) — the connection monitor's passive feeder. Every
+    // Backend-Core device and operator fetch below is built on `backendFetch`,
+    // which only OBSERVES the transport outcome (an HTTP status or a fault) and
+    // passes request and response through untouched. Transitions are logged as
+    // `{ from, to }`. Not bridged yet (S6-2); no probe yet (S6-1b).
+    const terminalStatus = composeTerminalStatus({ logger: mainLogger });
+    workerRegistry.register('terminal status tick', () => {
+      terminalStatus.stop();
+    });
+    const backendFetch = terminalStatus.observeFetch(globalThis.fetch.bind(globalThis));
     const operatorBackend = createBackendClient({
       baseUrl: apiBaseUrl,
-      fetch: globalThis.fetch.bind(globalThis),
+      fetch: backendFetch,
     });
     const operatorProtoStore = new ProtoSessionStore();
     const clerkExchanger = resolveClerkExchanger(mainLogger);
@@ -885,7 +896,7 @@ singleInstanceReady
       probe: createRosterConfirmationProbe(
         createCashierAdmissionClient({
           baseUrl: apiBaseUrl,
-          fetch: globalThis.fetch.bind(globalThis),
+          fetch: backendFetch,
           getDeviceToken: readSendableDeviceToken,
         }),
       ),
@@ -903,11 +914,10 @@ singleInstanceReady
     });
     // Review F5: each device-bearer client gets its OWN observed fetch, tagged
     // with its route family and base URL (a path-prefixed base still matches).
-    const admissionsFetch = withDeviceAuthObservation(
-      globalThis.fetch.bind(globalThis),
-      deviceAuthDetector,
-      { source: 'cashier_admissions', baseUrl: apiBaseUrl },
-    );
+    const admissionsFetch = withDeviceAuthObservation(backendFetch, deviceAuthDetector, {
+      source: 'cashier_admissions',
+      baseUrl: apiBaseUrl,
+    });
 
     // RT-113 P2 (10763 D2/D11, owner decision 10844; fixes RT-182) — the
     // cashier path's server authority: the device-authenticated Backend-Core
@@ -1227,7 +1237,7 @@ singleInstanceReady
       probe: createRosterConfirmationProbe(
         createCashierAdmissionClient({
           baseUrl: apiBaseUrl,
-          fetch: globalThis.fetch.bind(globalThis),
+          fetch: backendFetch,
           getDeviceToken: createRevocationRecheckTokenRead({
             pairingStore,
             secretStore,
@@ -1521,7 +1531,7 @@ singleInstanceReady
       const readDownClient = createReadDownClient({
         baseUrl: catalogueApiBaseUrl,
         // RT-215: observed by the device-401 detector (a read-down 401 counts).
-        fetch: withDeviceAuthObservation(globalThis.fetch.bind(globalThis), deviceAuthDetector, {
+        fetch: withDeviceAuthObservation(backendFetch, deviceAuthDetector, {
           source: 'read_down',
           baseUrl: catalogueApiBaseUrl,
         }),
@@ -1701,7 +1711,7 @@ singleInstanceReady
     ): Promise<ReverseVoucherOutcome> => {
       return await reverseVoucher(input, {
         baseUrl: apiBaseUrl,
-        fetch: globalThis.fetch.bind(globalThis),
+        fetch: backendFetch,
         logger: {
           info: (payload, msg): void => {
             mainLogger.info(payload, msg);
@@ -1940,7 +1950,7 @@ singleInstanceReady
           }),
           client: createSaleHistoryClient({
             baseUrl: resolveApiBaseUrl(),
-            fetch: globalThis.fetch.bind(globalThis),
+            fetch: backendFetch,
           }),
           local: createSaleHistoryLocalReads(db),
           salesRepo,
@@ -2123,12 +2133,12 @@ singleInstanceReady
             deviceTokenKey: DEVICE_TOKEN_KEY,
           }),
           currentTerminalId: () => pairingStore.getCurrentTerminalId(),
-          deviceAuth: { fetch: globalThis.fetch.bind(globalThis), detector: deviceAuthDetector },
+          deviceAuth: { fetch: backendFetch, detector: deviceAuthDetector },
           logger: mainLogger,
         });
         const saleSyncClient = createSaleSyncClient({
           baseUrl: resolveApiBaseUrl(),
-          fetch: globalThis.fetch.bind(globalThis),
+          fetch: backendFetch,
           getOperatorToken: createSaleSyncTokenReader(
             operatorSessionManager,
             operatorEnvelopeHolder,
@@ -2306,7 +2316,7 @@ singleInstanceReady
       db,
       http: {
         baseUrl: resolveApiBaseUrl(),
-        fetch: globalThis.fetch.bind(globalThis),
+        fetch: backendFetch,
       },
       getOperatorEnvelope: createSaleSyncTokenReader(
         operatorSessionManager,
@@ -2346,7 +2356,7 @@ singleInstanceReady
       db,
       http: {
         baseUrl: resolveApiBaseUrl(),
-        fetch: globalThis.fetch.bind(globalThis),
+        fetch: backendFetch,
       },
       // RT-197 A5: read only into the authorization snapshot (and at a
       // recheck); every send carries the snapshot's envelope explicitly.
@@ -2409,7 +2419,7 @@ singleInstanceReady
           terminal,
           client: {
             baseUrl: resolveApiBaseUrl(),
-            fetch: globalThis.fetch.bind(globalThis),
+            fetch: backendFetch,
             detector: deviceAuthDetector,
             getDeviceToken: readSendableDeviceToken,
             currentTerminalId: () => pairingStore.getCurrentTerminalId(),

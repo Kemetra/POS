@@ -38,26 +38,30 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
 
   it('builds exactly the two device-bearer clients on a fetch tagged with their own route + base (review F5)', () => {
     expect(source).toMatch(
-      /const admissionsFetch = withDeviceAuthObservation\(\s*globalThis\.fetch\.bind\(globalThis\),\s*deviceAuthDetector,\s*\{ source: 'cashier_admissions', baseUrl: apiBaseUrl \},\s*\)/,
+      /const admissionsFetch = withDeviceAuthObservation\(\s*backendFetch,\s*deviceAuthDetector,\s*\{\s*source: 'cashier_admissions',\s*baseUrl: apiBaseUrl,?\s*\},?\s*\)/,
     );
     expect(count(/withDeviceAuthObservation\(/g)).toBe(2);
     // RT-215 × RT-224: the sale-sync DEVICE path is tagged at its own fetch (the
     // capture route is shared with the envelope path; the URL table is not widened).
-    expect(source).toMatch(
-      /deviceAuth: \{ fetch: globalThis\.fetch\.bind\(globalThis\), detector: deviceAuthDetector \},/,
-    );
+    expect(source).toMatch(/deviceAuth: \{ fetch: backendFetch, detector: deviceAuthDetector \},/);
     expect(count(/fetch: admissionsFetch/g)).toBe(1);
     expect(source).toMatch(
       /createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: admissionsFetch,/,
     );
     expect(source).toMatch(
-      /createReadDownClient\(\{\s*baseUrl: catalogueApiBaseUrl,\s*\/\/[^\n]*\n\s*fetch: withDeviceAuthObservation\(globalThis\.fetch\.bind\(globalThis\), deviceAuthDetector, \{\s*source: 'read_down',\s*baseUrl: catalogueApiBaseUrl,\s*\}\),/,
+      /createReadDownClient\(\{\s*baseUrl: catalogueApiBaseUrl,\s*\/\/[^\n]*\n\s*fetch: withDeviceAuthObservation\(backendFetch, deviceAuthDetector, \{\s*source: 'read_down',\s*baseUrl: catalogueApiBaseUrl,\s*\}\),/,
+    );
+  });
+
+  it('RT-601: backendFetch is the reachability seam only, never the device-401 detector', () => {
+    expect(source).toMatch(
+      /const backendFetch = terminalStatus\.observeFetch\(globalThis\.fetch\.bind\(globalThis\)\);/,
     );
   });
 
   it('the confirmation call uses an UNOBSERVED admission client', () => {
     expect(source).toMatch(
-      /probe: createRosterConfirmationProbe\(\s*createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: globalThis\.fetch\.bind\(globalThis\),/,
+      /probe: createRosterConfirmationProbe\(\s*createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: backendFetch,/,
     );
   });
 
@@ -120,7 +124,7 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
     expect(count(/secretStore\.get\(\s*DEVICE_TOKEN_KEY\s*\)/g)).toBe(0);
     expect(count(/createRevocationRecheckTokenRead\(/g)).toBe(1);
     expect(source).toMatch(
-      /createRevocationRecheck\(\{\s*probe: createRosterConfirmationProbe\(\s*createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: globalThis\.fetch\.bind\(globalThis\),\s*getDeviceToken: createRevocationRecheckTokenRead\(\{\s*pairingStore,\s*secretStore,\s*deviceTokenKey: DEVICE_TOKEN_KEY,\s*\}\),/,
+      /createRevocationRecheck\(\{\s*probe: createRosterConfirmationProbe\(\s*createCashierAdmissionClient\(\{\s*baseUrl: apiBaseUrl,\s*fetch: backendFetch,\s*getDeviceToken: createRevocationRecheckTokenRead\(\{\s*pairingStore,\s*secretStore,\s*deviceTokenKey: DEVICE_TOKEN_KEY,\s*\}\),/,
     );
     // The default send paths are unchanged (the counts above still hold).
     expect(count(/getDeviceToken: readSendableDeviceToken/g)).toBe(4);

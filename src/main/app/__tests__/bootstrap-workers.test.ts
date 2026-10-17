@@ -268,3 +268,17 @@ describe('RT-113 P1.2 — worker registry: the offline grant clock tick', () => 
     expect(registry.hasRegistered()).toBe(false);
   });
 });
+
+describe('RT-601 — worker registry: the terminal status tick', () => {
+  it('stops the terminal status tick last (it never touches the DB)', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('terminal status tick', () => order.push('terminal status tick'));
+    registry.register('offline grant clock tick', () => order.push('offline grant clock tick'));
+
+    registry.stopAll();
+
+    expect(order).toEqual(['offline grant clock tick', 'terminal status tick']);
+    expect(registry.hasRegistered()).toBe(false);
+  });
+});
