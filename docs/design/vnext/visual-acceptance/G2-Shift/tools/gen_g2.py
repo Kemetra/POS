@@ -130,9 +130,10 @@ def panel(title: str, body: str, hid: str, head_extra: str = "") -> str:
     )
 
 
-def btn(label: str, kind: str = "", focus: bool = False, disabled: bool = False, glyph: str = "") -> str:
-    cls = "btn" + (f" btn-{kind}" if kind else "") + (" focus" if focus else "")
-    d = " disabled" if disabled else ""
+def btn(label: str, kind: str = "", glyph: str = "", state: str = "") -> str:
+    """A button; `state` is "", "focus" (drawn with the focus ring) or "disabled"."""
+    cls = "btn" + (f" btn-{kind}" if kind else "") + (" focus" if state == "focus" else "")
+    d = " disabled" if state == "disabled" else ""
     g = icon(glyph) if glyph else ""
     return f'<button type="button" class="{cls}"{d}>{g}{label}</button>'
 
@@ -215,7 +216,7 @@ def close_panel(c: Close = Close()) -> str:
         f'<p class="hint">{BLIND}</p>'
         + amount_field("count", "النقد المعدود في الدرج", Amount(c.count))
         + (parked_block() if c.parked else "")
-        + f'<div class="commit">{btn("تسجيل العدّ وإغلاق الوردية", "primary", focus=c.focus_commit)}</div>'
+        + f'<div class="commit">{btn("تسجيل العدّ وإغلاق الوردية", "primary", state="focus" if c.focus_commit else "")}</div>'
     )
     return panel("إغلاق الوردية", body, "close-h")
 
@@ -332,7 +333,7 @@ def approval_dialog() -> str:
         '<input id="ap-pin" class="input pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></div>'
         '<div class="slot" role="status" aria-live="polite"></div>'
         '<div class="dialog-actions">'
-        f'{btn("إلغاء", focus=True)}'
+        f'{btn("إلغاء", state="focus")}'
         '<button type="submit" class="btn btn-primary" disabled>اعتماد وإغلاق</button>'
         "</div></form></div></div>"
     )
@@ -362,7 +363,7 @@ def s_parked_blocked(w: int) -> str:
 
 
 def s_unavailable(w: int) -> str:
-    retry = btn("إعادة المحاولة", focus=True, glyph="retry")
+    retry = btn("إعادة المحاولة", glyph="retry", state="focus")
     return cashier(
         f'<div class="page-state">{notice("warning", "تعذّر تنفيذ الطلب على هذا الجهاز. حاول مرة أخرى.", retry)}</div>'
     )
