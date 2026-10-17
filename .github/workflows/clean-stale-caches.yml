@@ -17,6 +17,7 @@ permissions:
 jobs:
   clean:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Cache usage (before)
         id: before
@@ -30,7 +31,66 @@ jobs:
           gb=$(awk "BEGIN{printf \"%.2f\", $bytes/1073741824}")
           echo "Before: count=$count  size=$bytes B ($gb GB)"
 
+      # CodeQL default setup writes one ~200 MB `codeql-overlay-base-database-*`
+      # cache per main commit (RT-585). The later stale-cache step only prunes non-main refs,
+      # so keep the newest N of these on main and delete the rest. Only keys with
+      # that exact prefix are ever touched - npm caches on main are never deleted.
+      - name: Prune CodeQL overlay caches on main (keep newest N)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          KEEP: '5'
+        run: |
+          set -euo pipefail
+          REPO="$GITHUB_REPOSITORY"
+          PREFIX="codeql-overlay-base-database-"
+          [[ "$KEEP" =~ ^[0-9]+$ ]] || { echo "Invalid KEEP: $KEEP" >&2; exit 1; }
+
+          # Newest first by created_at (ISO-8601 sorts lexicographically).
+          overlay=$(
+            gh api "repos/$REPO/actions/caches?ref=refs/heads/main&per_page=100" --paginate \
+              --jq '.actions_caches[]' \
+            | jq -s -r --arg p "$PREFIX" '
+                map(select(.ref == "refs/heads/main" and (.key | startswith($p))))
+                | sort_by(.created_at) | reverse
+                | .[] | [.id, .size_in_bytes, .created_at, .key] | @tsv'
+          )
+
+          total=0; [ -z "$overlay" ] || total=$(wc -l <<< "$overlay")
+          echo "CodeQL overlay caches on main: $total (keeping newest $KEEP)"
+
+          deleted=0; failed=0; freed=0; n=0
+          if [ -n "$overlay" ]; then
+            while IFS=$'\t' read -r id size created key; do
+              n=$((n + 1))
+              if (( n <= KEEP )); then
+                echo "KEEP   id=$id size=$size created=$created key=$key"
+                continue
+              fi
+              if [[ "$DRY_RUN" == "true" ]]; then
+                echo "WOULD DELETE id=$id size=$size created=$created key=$key"
+                deleted=$((deleted + 1)); freed=$((freed + size))
+              elif gh api -X DELETE "repos/$REPO/actions/caches/$id" --silent; then
+                echo "DELETED id=$id size=$size created=$created key=$key"
+                deleted=$((deleted + 1)); freed=$((freed + size))
+              else
+                echo "FAILED  id=$id key=$key" >&2
+                failed=$((failed + 1))
+              fi
+            done <<< "$overlay"
+          fi
+
+          tag=$([ "$DRY_RUN" = "true" ] && echo " [DRY RUN - no deletions performed]" || echo "")
+          echo ""
+          echo "=== CodeQL overlay prune${tag} ==="
+          printf "Found   : %d\n" "$total"
+          printf "Kept    : %d\n" "$(( total < KEEP ? total : KEEP ))"
+          printf "Deleted : %d (%.3f GB)\n" "$deleted" "$(awk "BEGIN{printf \"%.3f\", $freed/1073741824}")"
+          printf "Failed  : %d\n" "$failed"
+          [ "$failed" -eq 0 ] || exit 1
+
       - name: Clean stale caches
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
@@ -124,6 +184,7 @@ jobs:
           fi
 
       - name: Cache usage (after)
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BEFORE_BYTES: ${{ steps.before.outputs.before_bytes }}
