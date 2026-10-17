@@ -189,8 +189,10 @@ export function previewResume(
   const { changes, unavailable, diff_token } = result.diff;
   return {
     kind: 'preview',
-    changes: changes.map(({ line_id, old_unit_minor, new_unit_minor }) => ({
+    changes: changes.map(({ line_id, display_name, quantity, old_unit_minor, new_unit_minor }) => ({
       line_id,
+      display_name,
+      quantity,
       old_unit_minor,
       new_unit_minor,
     })),
