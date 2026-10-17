@@ -208,4 +208,19 @@ describe('RT-602 liveness probe — outcome → observation', () => {
     controller.abort();
     await expect(result).resolves.toBeNull();
   });
+
+  it('an already-aborted signal makes no request', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImpl = vi.fn<FetchLike>();
+    await expect(
+      runLivenessProbe({
+        fetch: fetchImpl,
+        baseUrl: BASE,
+        timeoutMs: 4_000,
+        signal: controller.signal,
+      }),
+    ).resolves.toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });

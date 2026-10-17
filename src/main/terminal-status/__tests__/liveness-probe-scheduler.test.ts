@@ -307,4 +307,25 @@ describe('RT-602 probe scheduler — stop', () => {
     await flush();
     expect(calls).toBe(2);
   });
+
+  it('a probe runner that throws synchronously is no evidence either', async () => {
+    const clock = { t: T0 };
+    const monitor = createTerminalStatusMonitor({ now: () => clock.t });
+    let calls = 0;
+    const scheduler = createLivenessProbeScheduler({
+      monitor,
+      monotonicNow: () => clock.t,
+      runProbe: () => {
+        calls += 1;
+        throw new Error('boom');
+      },
+    });
+    scheduler.tick();
+    expect(calls).toBe(1);
+    await flush();
+    expect(monitor.snapshot().connection).toBe('checking');
+    clock.t += LIVENESS_PROBE_DEFAULTS.intervalMs;
+    scheduler.tick();
+    expect(calls).toBe(2);
+  });
 });

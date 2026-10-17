@@ -85,12 +85,11 @@ export function createLivenessProbeScheduler(
   function start(): void {
     const controller = new AbortController();
     open = controller;
-    let pending: Promise<ReachabilityObservation | null>;
-    try {
-      pending = deps.runProbe(controller.signal);
-    } catch {
-      pending = Promise.resolve(null);
-    }
+    // The executor runs synchronously, so the probe starts now; a synchronous
+    // throw becomes a rejection, handled below like a failed probe.
+    const pending = new Promise<ReachabilityObservation | null>((resolve) => {
+      resolve(deps.runProbe(controller.signal));
+    });
     pending.then(
       (result) => {
         settle(controller, result);
