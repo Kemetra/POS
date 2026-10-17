@@ -2490,3 +2490,4 @@ app.on('window-all-closed', () => {
 app.on('quit', () => {
   closeDbHandle();
 });
+// RT-585 probe: src/main
