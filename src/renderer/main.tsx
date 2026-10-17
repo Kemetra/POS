@@ -126,6 +126,19 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-654: the void screen harness, same DEV-only contract (the real AppRouter
+  // at /app/void against in-memory saleVoid / approval bridges).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/void-proof')
+) {
+  void import('./v5/void/dev/VoidProof').then(({ VoidProof }) => {
+    root.render(
+      <React.StrictMode>
+        <VoidProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();
