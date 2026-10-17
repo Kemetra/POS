@@ -22,16 +22,21 @@ import { describe, it, expect } from 'vitest';
 
 const css = readFileSync(resolve(__dirname, '../tailwind.css'), 'utf-8');
 const scrubbed = css.replace(/\/\*[\s\S]*?\*\//g, '');
+// RT-593: the lock's own rules moved with the V5 recomposition.
+const lockCss = readFileSync(resolve(__dirname, '../../session/lock-screen.css'), 'utf-8');
+const lockScrubbed = lockCss.replace(/\/\*[\s\S]*?\*\//g, '');
 
-function ruleBody(selector: string): string {
+function ruleBody(selector: string, source = scrubbed): string {
   const escaped = selector.replace(/[.\\>[\]'()]/g, '\\$&').replace(/\s+/g, '\\s*');
-  const rule = new RegExp(`(?:^|[};])\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(scrubbed);
+  const rule = new RegExp(`(?:^|[};])\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(source);
   if (rule === null) throw new Error(`rule ${selector} not found`);
   return rule[1] ?? '';
 }
 
-function declaration(selector: string, property: string): string {
-  const decl = new RegExp(`(?:^|;|\\n)\\s*${property}:\\s*([^;]+)`).exec(ruleBody(selector));
+function declaration(selector: string, property: string, source = scrubbed): string {
+  const decl = new RegExp(`(?:^|;|\\n)\\s*${property}:\\s*([^;]+)`).exec(
+    ruleBody(selector, source),
+  );
   if (decl === null) throw new Error(`${selector} declares no ${property}`);
   return (decl[1] ?? '').trim();
 }
@@ -51,7 +56,7 @@ describe('RT-161 lock conceals the preserved sale', () => {
   });
 
   it('gives the lock an opaque backdrop in both themes', () => {
-    const backdrop = declaration('.session-lock > .dialog-overlay', 'background');
+    const backdrop = declaration('.session-lock .v5-dialog-backdrop', 'background', lockScrubbed);
     const token = /^var\(\s*--([\w-]+)\s*\)$/.exec(backdrop)?.[1];
     expect(token, `lock backdrop must be a single colour token, got "${backdrop}"`).toBeDefined();
     for (const block of [lightBlock, darkBlock]) {

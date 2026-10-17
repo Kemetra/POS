@@ -21,7 +21,7 @@ afterEach(cleanup);
  *     already locked);
  *   • keeps the sale mounted underneath (made inert), so the exact cashier
  *     state is preserved;
- *   • shows the preserved TOTALS only — no credentials, no ids;
+ *   • shows nothing of the sale (RT-593, L3) — no totals, no credentials, no ids;
  *   • unlocks the same session through `unlockSession`; Esc never closes it.
  */
 
@@ -109,7 +109,7 @@ describe('RT-117 SessionLockGate', () => {
     op.setView(LOCKED_CASHIER);
     op.push({ state: 'locked' });
 
-    expect(await screen.findByRole('dialog', { name: 'الجهاز مقفل' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'الطرفية مقفلة' })).toBeInTheDocument();
     // The sale underneath keeps its state and is inert while locked.
     const app = screen.getByTestId('session-lock-app');
     expect(app).toHaveAttribute('inert');
@@ -125,10 +125,11 @@ describe('RT-117 SessionLockGate', () => {
         <Counter />
       </SessionLockGate>,
     );
-    expect(await screen.findByRole('dialog', { name: 'الجهاز مقفل' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'الطرفية مقفلة' })).toBeInTheDocument();
   });
 
-  it('shows the preserved totals only', async () => {
+  // RT-593 (owner decision L3): the sale is preserved but nothing of it shows.
+  it('shows nothing of the preserved sale', async () => {
     const op = fakeOperator(LOCKED_CASHIER);
     render(
       <SessionLockGate operator={op.api}>
@@ -136,11 +137,12 @@ describe('RT-117 SessionLockGate', () => {
       </SessionLockGate>,
     );
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('لم يُفقد شيء');
-    expect(dialog).toHaveTextContent('3');
-    expect(dialog).toHaveTextContent('52.75');
-    expect(dialog).toHaveTextContent('10.00');
+    expect(dialog).toHaveTextContent('أدخل الرقم السري للمتابعة.');
     expect(dialog).toHaveTextContent('Cashier One');
+    expect(dialog).not.toHaveTextContent('52.75');
+    expect(dialog).not.toHaveTextContent('10.00');
+    expect(dialog).not.toHaveTextContent('مدفوع حتى الآن');
+    expect(dialog).not.toHaveTextContent('عدد الأصناف');
   });
 
   it('unlocks a cashier with the PIN and resumes the same sale', async () => {
@@ -291,7 +293,7 @@ describe('RT-117 SessionLockGate', () => {
     );
     op.setView(LOCKED_CASHIER);
     op.push({ state: 'locked' });
-    await screen.findByRole('dialog', { name: 'الجهاز مقفل' });
+    await screen.findByRole('dialog', { name: 'الطرفية مقفلة' });
     expect(screen.getByLabelText('scan')).not.toHaveFocus();
     op.push({ state: 'active' });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
