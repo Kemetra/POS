@@ -30,7 +30,7 @@
   hand-drawn set of inline-SVG stroke glyphs (24 grid, 1.75 stroke, `currentColor`):
   - **POS:** `V5Icon` has 39 glyphs and 32 consumer files. There are also one stray `SearchGlyph`
     component and two text glyphs.
-  - **Admin:** `Icon` has 17 glyphs. There are also three one-off inline SVGs and three text glyphs.
+  - **Admin:** `Icon` has 17 glyphs. There are also two one-off inline SVGs and three text glyphs.
   - Each repository also has one brand mark.
 - **Fit.** Fluent System Icons has a glyph for every concept in use today and for the six
   concepts that UX-03 names. The registry has 53 names (§3).
