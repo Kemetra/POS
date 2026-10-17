@@ -1,4 +1,5 @@
 import { useId, useState, type JSX } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import type { ShiftCashupBridgeAPI, ShiftCloseResponse } from '../../../shared/shift-cashup/types';
 import { ManagerApprovalDialog } from './ManagerApprovalDialog';
@@ -6,6 +7,9 @@ import { callShift, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { parseShiftAmount } from './shift-format';
 import { ShiftAlert } from './ShiftScreen';
+import { PARKED_SALES_PATH } from '../park/ParkedSalesRoute';
+import { PARK_COPY, terminalParkedCount } from '../park/park-copy';
+import { V5Icon } from '../foundation/V5Icon';
 
 /** A recorded close: its variance only when main returned one (an approved close). */
 export interface ShiftClosed {
@@ -33,6 +37,8 @@ export function CloseShiftPanel(props: Props): JSX.Element {
   const inputId = useId();
   const [count, setCount] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // RT-445 (K4 / OP-2, OD-13): parked sales block the close; how many, terminal-wide.
+  const [parked, setParked] = useState<{ count: number | null } | null>(null);
   const [approving, setApproving] = useState<number | null>(null);
   const { busy, run } = useSingleFlight();
 
@@ -50,10 +56,13 @@ export function CloseShiftPanel(props: Props): JSX.Element {
       return;
     }
     setError(null);
+    setParked(null);
     run(async () => {
       const answer = await callShift(() => props.bridge.close({ countedCashMinor }));
       if (answer.kind === 'closed') closed(answer);
       else if (answer.reason === 'variance_approval_required') setApproving(countedCashMinor);
+      else if (answer.reason === 'parked_sales_present')
+        setParked({ count: answer.parkedCount ?? null });
       else setError(shiftRefusalMessage(answer.reason));
     });
   };
@@ -74,6 +83,7 @@ export function CloseShiftPanel(props: Props): JSX.Element {
         }}
       />
       <ShiftAlert message={error} />
+      {parked !== null && <ParkedSalesBlock count={parked.count} />}
       <button
         type="button"
         className="v5-shift-btn v5-shift-btn--primary"
@@ -100,6 +110,40 @@ export function CloseShiftPanel(props: Props): JSX.Element {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * RT-445 (PK3-ShiftClose) — the close is refused while any parked sale exists
+ * on this terminal (spec 024 K4). The line is `SHIFT_COPY` verbatim; the count
+ * is terminal-wide and a count only (OD-13); the button opens the cashier's
+ * own list.
+ */
+function ParkedSalesBlock({ count }: Readonly<{ count: number | null }>): JSX.Element {
+  const navigate = useNavigate();
+  return (
+    <div className="v5-park-shift-alert" role="alert" data-testid="shift-parked-block">
+      <V5Icon name="status-warning" />
+      <div className="v5-park-shift-alert__text">
+        <p>{shiftRefusalMessage('parked_sales_present')}</p>
+        {count !== null && (
+          <p>
+            <span className="v5-park-chip">{terminalParkedCount(count)}</span>
+          </p>
+        )}
+        <p>
+          <button
+            type="button"
+            className="v5-shift-btn"
+            onClick={() => {
+              void navigate(PARKED_SALES_PATH);
+            }}
+          >
+            {PARK_COPY.showMyParked}
+          </button>
+        </p>
+      </div>
     </div>
   );
 }

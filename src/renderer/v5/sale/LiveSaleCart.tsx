@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useState, type JSX, type ReactNode } from 'react';
 import type { CartLineItem, DiscountPlaceholderSeed } from '../../sale/useSaleCartController';
 import { formatHumanCount } from '../../ui/format/human-format';
 import { V5Icon } from '../foundation/V5Icon';
@@ -38,6 +38,8 @@ interface Props {
   onContinue: () => void;
   onVoid: () => Promise<boolean>;
   onNewSale?: () => void;
+  /** RT-445: «تعليق البيع», beside «إلغاء البيع» and apart from it (I-2). */
+  parkControl?: ReactNode;
 }
 
 /**
@@ -143,9 +145,13 @@ function MoneyColumn(props: Readonly<Props>): JSX.Element {
         <CartTotals {...props} />
         <CartActions {...props} />
       </div>
-      {props.canVoid && (
+      {(props.canVoid || props.parkControl) && (
         <div className="v5-sale-money-secondary" data-fit="pinned">
-          <VoidControl onVoid={props.onVoid} />
+          {props.parkControl}
+          {props.parkControl && props.canVoid && (
+            <span className="v5-park-sep" aria-hidden="true" />
+          )}
+          {props.canVoid && <VoidControl onVoid={props.onVoid} />}
         </div>
       )}
     </section>

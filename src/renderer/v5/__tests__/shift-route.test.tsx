@@ -10,6 +10,8 @@ import '@testing-library/jest-dom/vitest';
 import type { ShiftCloseResponse, ShiftStatusResponse } from '../../../shared/shift-cashup/types';
 import { V5ShiftRoute } from '../shift/V5ShiftRoute';
 import { SHIFT_COPY, shiftRefusalMessage } from '../shift/shift-copy';
+import { PARKED_SALES_PATH } from '../park/ParkedSalesRoute';
+import { PARK_COPY, terminalParkedCount } from '../park/park-copy';
 import {
   MANAGERS,
   MONEY_TEXT,
@@ -382,6 +384,45 @@ describe('V5ShiftRoute — the blind-count close', () => {
       shiftRefusalMessage('drawer_activity_pending'),
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('V5ShiftRoute — parked sales block the close (RT-445, OD-13)', () => {
+  it('shows the line verbatim, the terminal-wide count and «عرض مبيعاتي المعلّقة»', async () => {
+    signIn('cashier');
+    enableShiftFlag();
+    const bridge = openBridge();
+    bridge.close.mockResolvedValue({
+      kind: 'refused',
+      reason: 'parked_sales_present',
+      parkedCount: 3,
+    });
+    renderRoute(bridge);
+    const panel = await screen.findByTestId('shift-close-panel');
+    type(SHIFT_COPY.countLabel, '515');
+    press(SHIFT_COPY.closeCommit, panel);
+    const block = await within(panel).findByTestId('shift-parked-block');
+    expect(block).toHaveAttribute('role', 'alert');
+    expect(block).toHaveTextContent(shiftRefusalMessage('parked_sales_present'));
+    expect(block).toHaveTextContent(terminalParkedCount(3));
+    // A count only: no owner, label or amount.
+    expect(block.textContent).not.toMatch(MONEY_TEXT);
+    press(PARK_COPY.showMyParked, block);
+    expect(await screen.findByTestId('where')).toHaveTextContent(PARKED_SALES_PATH);
+  });
+
+  it('without a count, the line and the button still show', async () => {
+    signIn('cashier');
+    enableShiftFlag();
+    const bridge = openBridge();
+    bridge.close.mockResolvedValue({ kind: 'refused', reason: 'parked_sales_present' });
+    renderRoute(bridge);
+    const panel = await screen.findByTestId('shift-close-panel');
+    type(SHIFT_COPY.countLabel, '515');
+    press(SHIFT_COPY.closeCommit, panel);
+    const block = await within(panel).findByTestId('shift-parked-block');
+    expect(block.querySelector('.v5-park-chip')).toBeNull();
+    expect(within(block).getByRole('button', { name: PARK_COPY.showMyParked })).toBeVisible();
   });
 });
 

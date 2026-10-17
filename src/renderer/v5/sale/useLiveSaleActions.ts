@@ -45,6 +45,8 @@ export function useLiveSaleActions(
   lane: AddLane,
 ) {
   const [voided, setVoided] = useState(false);
+  // RT-445: the sale just parked (its label, if any); acknowledged until the next line lands.
+  const [parked, setParked] = useState<{ label: string | null } | null>(null);
   const [lastAdd, setLastAdd] = useState<LastAdd | null>(null);
   const removalsRef = useRef(new Set<string>());
   const undo = useSaleUndo({
@@ -67,6 +69,7 @@ export function useLiveSaleActions(
   return {
     undo,
     voided,
+    parked,
     lastAdd,
     acceptAddedLine: (
       line: AddedLineResult,
@@ -75,6 +78,7 @@ export function useLiveSaleActions(
       ticket: number,
     ): void => {
       setVoided(false);
+      setParked(null);
       cart.acceptAddedLine(line);
       // 15 §3.1 rule 6: after an add the next scan is the next thing the cashier does.
       focusScanOwner();
@@ -140,12 +144,23 @@ export function useLiveSaleActions(
       const ok = await cart.voidCart().catch(() => false);
       if (ok) {
         endSale();
+        setParked(null);
         setVoided(true);
       }
       return ok;
     },
+    // RT-445 (I-13): main answered `parked`, so the sale is durable; only now is it cleared.
+    // Focus returns to the scan owner once the park dialog has closed.
+    onParked: (label: string | null): void => {
+      undo.dismiss();
+      endSale();
+      setVoided(false);
+      setParked({ label });
+      setTimeout(focusScanOwner, 0);
+    },
     onNewSale: (): void => {
       endSale();
+      setParked(null);
       // RT-241 (D-B1): «بيع جديد» acknowledges the drawer notice.
       acknowledgeDrawerNotice();
     },

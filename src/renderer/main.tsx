@@ -108,6 +108,19 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-445 (PK-3): the park / resume harness, same DEV-only contract (the real
+  // AppRouter — Sale, parked list, review, shift close — against in-memory bridges).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/park-proof')
+) {
+  void import('./v5/park/dev/ParkProof').then(({ ParkProof }) => {
+    root.render(
+      <React.StrictMode>
+        <ParkProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();
