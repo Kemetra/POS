@@ -196,3 +196,17 @@ export function format(value: Money): string {
   const minorStr = String(minor).padStart(2, '0');
   return `${sign}${String(major)}.${minorStr} ${value.currency}`;
 }
+
+// RT-588 PROBE ONLY — deliberately untested code; the money.ts 95% gate must fail.
+export function probeUncovered(value: Money): string {
+  if (value.amount > 1000) {
+    return 'big';
+  }
+  if (value.amount < -1000) {
+    return 'small';
+  }
+  if (value.amount === 0) {
+    return 'zero';
+  }
+  return 'other';
+}
