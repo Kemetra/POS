@@ -380,6 +380,58 @@ describe('RT-603 terminal status publisher — sync read failure', () => {
   });
 });
 
+describe('RT-603 terminal status publisher — gate read failure', () => {
+  it('a throwing gate read fails closed to checking and never rejects', async () => {
+    const h = harness({
+      isDeviceGated: () => {
+        throw new Error('SQLITE_BUSY');
+      },
+    });
+    await expect(h.publisher.refresh()).resolves.toBeUndefined();
+    const snap = await h.publisher.read();
+    expect(snap.connection).toBe('checking');
+    expect(h.sent[0]?.connection).toBe('checking');
+  });
+
+  it('keeps the last known gate when a later read throws', async () => {
+    let fail = false;
+    const h = harness({
+      isDeviceGated: () => {
+        if (fail) throw new Error('SQLITE_BUSY');
+        return false;
+      },
+    });
+    expect((await h.publisher.read()).connection).toBe('online');
+    fail = true;
+    expect((await h.publisher.read()).connection).toBe('online');
+  });
+
+  it('the timer-driven refresh never leaves a rejection unhandled', async () => {
+    let tick: (() => void) | null = null;
+    const h = harness({
+      readConnection: () => {
+        throw new Error('boom');
+      },
+      setInterval: (fn) => {
+        tick = fn;
+        return {};
+      },
+      clearInterval: () => undefined,
+    });
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      h.publisher.start();
+      (tick as (() => void) | null)?.();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+      h.publisher.stop();
+    }
+  });
+});
+
 describe('RT-603 terminal status publisher — lifecycle', () => {
   it('start schedules a 1 s refresh (unref) and stop clears it', () => {
     const handle = { unref: vi.fn() };

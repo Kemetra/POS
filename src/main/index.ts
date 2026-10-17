@@ -896,9 +896,15 @@ singleInstanceReady
       readConnection: () => terminalStatus.monitor.snapshot(),
       isDeviceGated: () =>
         pairingStore.getCurrentTerminalId() === null || pairingStore.isDeviceRevoked(),
+      // Each window independently: a closing one must not starve the others.
       send: (snapshot) => {
         for (const win of BrowserWindow.getAllWindows()) {
-          win.webContents.send(TERMINAL_STATUS_IPC_CHANNELS.CHANGED, snapshot);
+          if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
+          try {
+            win.webContents.send(TERMINAL_STATUS_IPC_CHANNELS.CHANGED, snapshot);
+          } catch {
+            // Skip it; the next change reaches the windows still open.
+          }
         }
       },
       now: Date.now,

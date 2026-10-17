@@ -176,8 +176,17 @@ export function createTerminalStatusPublisher(
   let stopped = false;
   let timer: TimerHandle | null = null;
 
+  /** A failing read keeps the last known gate, else fails closed to `checking`. */
+  function readGate(): boolean {
+    try {
+      return deps.isDeviceGated();
+    } catch {
+      return gated ?? true;
+    }
+  }
+
   function connectionAxis(): ConnectionAxis {
-    const nowGated = deps.isDeviceGated();
+    const nowGated = readGate();
     // A first reading counts as a change only when it is gated.
     if (gated === null ? nowGated : nowGated !== gated) gateChangedAt = deps.now();
     gated = nowGated;
@@ -242,7 +251,8 @@ export function createTerminalStatusPublisher(
     start() {
       if (timer !== null || stopped) return;
       timer = schedule(() => {
-        void refresh();
+        // A failed step is retried on the next tick; never an unhandled rejection.
+        refresh().catch(() => undefined);
       }, TERMINAL_STATUS_REFRESH_MS);
       timer.unref?.();
     },
