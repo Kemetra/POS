@@ -1,6 +1,6 @@
 # RT-646: count-aware sync counts — capture evidence
 
-The copy is in doc 15 §5.1 and is **pending owner approval**.
+The copy is in doc 15 §5.1 and is **owner-approved (2026-10-17)**.
 
 * **Captures:** 3 messages × counts 1, 2, 3 and 11 × 1024×768 and 1280×800, light, in the labelled nav panel (`/app/dashboard`). That makes 24 PNGs, named `rt646-<Message>-n<count>-<W>x<H>.png`.
 * **Source:** the RT-604 / RT-605 DEV-only harness `#/dev/status-proof?state=<State>&count=<n>` (`src/renderer/v5/frame/dev/StatusIndicatorProof.tsx`). RT-646 adds only the `count` override. The real frame, the real `StatusIndicator` and the real notices stack read one fixed snapshot through the in-memory `window.api.terminalStatus` bridge. Vite drops the harness from production builds.

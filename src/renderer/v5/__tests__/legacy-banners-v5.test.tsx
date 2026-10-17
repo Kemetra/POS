@@ -3,7 +3,7 @@
  * move onto the V5 `Banner` in the `V5OperationalNotices` stack:
  *
  * - ShiftClosedBanner: a V5 info banner with Arabic copy (doc 15 M-W4,
- *   pending owner approval); show-once and dismiss unchanged.
+ *   owner-approved 2026-10-17); show-once and dismiss unchanged.
  * - PrinterFailureBanner: a V5 warning banner with V5 buttons; copy, actions,
  *   reprint gating, aria-busy and the banner_state feed unchanged.
  *
@@ -155,16 +155,17 @@ describe('legacy banner CSS retired from tailwind.css', () => {
   });
 });
 
-describe('doc 15 — M-W4 recorded as pending owner approval', () => {
+describe('doc 15 — M-W4 recorded as owner-approved', () => {
   const doc15 = readFileSync(
     resolve(__dirname, '../../../../docs/design/vnext/15-vnext-freeze-package.md'),
     'utf8',
   );
 
-  it('carries the drafted copy and dismiss label verbatim, marked pending', () => {
+  it('carries the copy and dismiss label verbatim, marked approved', () => {
     const row = doc15.split('\n').find((line) => line.startsWith('| M-W4 |')) ?? '';
     expect(row).toContain(`«${SHIFT_CLOSED_COPY.before}‹date›${SHIFT_CLOSED_COPY.after}»`);
     expect(row).toContain(`«${SHIFT_CLOSED_COPY.dismiss}»`);
-    expect(row).toContain('pending owner approval');
+    expect(row).toContain('owner-approved 2026-10-17');
+    expect(row).not.toContain('pending owner approval');
   });
 });
