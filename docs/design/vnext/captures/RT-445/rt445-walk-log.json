@@ -1,0 +1,116 @@
+[
+  {
+    "walk": "keyboard",
+    "what": "Tab reaches «تعليق البيع»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "Enter opens the dialog, focus on the label field",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "scanner",
+    "what": "a burst in the park dialog is refused (M-S6) and leaves the label as it was",
+    "ok": true,
+    "detail": "notice=!أغلق النافذة أولاً ثم امسح الصنف. value=\"\""
+  },
+  {
+    "walk": "keyboard",
+    "what": "Tab cycles inside the dialog (رجوع → تعليق البيع → field …)",
+    "ok": true,
+    "detail": "رجوع → تعليق البيع → INPUT → رجوع"
+  },
+  {
+    "walk": "keyboard",
+    "what": "Enter in the field parks; dialog closes; sale cleared; notice shown",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "focus returns to the scan field",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "Esc closes the dialog; focus back on «تعليق البيع»; sale kept",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "F4 / F3 do nothing (D-K1)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "Tab reaches «المبيعات المعلّقة»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "the list opens with focus on the newest «استئناف البيع»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "scanner",
+    "what": "a burst on the list is refused with «المسح متوقف — نافذة مفتوحة» (OD-15)",
+    "ok": true,
+    "detail": "!المسح متوقف — نافذة مفتوحة"
+  },
+  {
+    "walk": "keyboard",
+    "what": "Enter on «استئناف البيع» opens the review with focus on the accept",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "scanner",
+    "what": "a burst while the accept has focus is refused and resumes nothing",
+    "ok": true,
+    "detail": "!المسح متوقف — نافذة مفتوحة"
+  },
+  {
+    "walk": "keyboard",
+    "what": "Tab moves to «رجوع»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "«رجوع» returns to the list (no call)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "accept resumes and returns to the Sale with the resumed cart",
+    "ok": true,
+    "detail": "http://localhost:5173/app/cart"
+  },
+  {
+    "walk": "keyboard",
+    "what": "the close refusal shows the count",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "Tab reaches «عرض مبيعاتي المعلّقة»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "keyboard",
+    "what": "Enter opens the cashier’s parked list",
+    "ok": true,
+    "detail": ""
+  }
+]

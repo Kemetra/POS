@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { SCAN_PAUSED_DIALOG_STATUS } from '../../scan/scan-messages';
 import { useModalDialogOpen } from '../../scan/useModalDialogOpen';
 import { V5Icon } from '../foundation/V5Icon';
 
@@ -19,7 +20,7 @@ export type ScanStatusKind = 'ready' | 'dialog' | 'unavailable';
 
 const COPY: Readonly<Record<ScanStatusKind, string>> = {
   ready: 'جاهز للمسح',
-  dialog: 'المسح متوقف — نافذة مفتوحة',
+  dialog: SCAN_PAUSED_DIALOG_STATUS,
   unavailable: 'المسح غير متاح',
 };
 

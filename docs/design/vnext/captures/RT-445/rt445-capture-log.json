@@ -1,0 +1,1434 @@
+[
+  {
+    "state": "SaleReady",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-SaleReady-1024x768.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "تعليق البيع",
+    "errors": []
+  },
+  {
+    "state": "SaleReady",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-SaleReady-1024x768-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "تعليق البيع",
+    "errors": []
+  },
+  {
+    "state": "SaleReady",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-SaleReady-1280x800.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "تعليق البيع",
+    "errors": []
+  },
+  {
+    "state": "SaleReady",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-SaleReady-1280x800-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "تعليق البيع",
+    "errors": []
+  },
+  {
+    "state": "SaleEmpty",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-SaleEmpty-1024x768.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "SaleEmpty",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-SaleEmpty-1024x768-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "SaleEmpty",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-SaleEmpty-1280x800.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "SaleEmpty",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-SaleEmpty-1280x800-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkDialog",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ParkDialog-1024x768.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkDialog",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ParkDialog-1024x768-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkDialog",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ParkDialog-1280x800.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkDialog",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ParkDialog-1280x800-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkLabel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ParkLabel-1024x768.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkLabel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ParkLabel-1024x768-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkLabel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ParkLabel-1280x800.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkLabel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ParkLabel-1280x800-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkInvalid",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ParkInvalid-1024x768.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkInvalid",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ParkInvalid-1024x768-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkInvalid",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ParkInvalid-1280x800.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkInvalid",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ParkInvalid-1280x800-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkSaving",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ParkSaving-1024x768.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkSaving",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ParkSaving-1024x768-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkSaving",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ParkSaving-1280x800.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkSaving",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ParkSaving-1280x800-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ParkLimit",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ParkLimit-1024x768.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "عرض المبيعات المعلّقة",
+    "errors": []
+  },
+  {
+    "state": "ParkLimit",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ParkLimit-1024x768-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "عرض المبيعات المعلّقة",
+    "errors": []
+  },
+  {
+    "state": "ParkLimit",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ParkLimit-1280x800.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "عرض المبيعات المعلّقة",
+    "errors": []
+  },
+  {
+    "state": "ParkLimit",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ParkLimit-1280x800-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": true,
+    "focus": "عرض المبيعات المعلّقة",
+    "errors": []
+  },
+  {
+    "state": "Parked",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-Parked-1024x768.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "Parked",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-Parked-1024x768-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "Parked",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-Parked-1280x800.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "Parked",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-Parked-1280x800-forced.png",
+    "axe": [],
+    "small": [
+      "التقاط مسح الباركود",
+      "البحث بالاسم أو الباركود"
+    ],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "INPUT",
+    "errors": []
+  },
+  {
+    "state": "ListEmpty",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ListEmpty-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع إلى البيع",
+    "errors": []
+  },
+  {
+    "state": "ListEmpty",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ListEmpty-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع إلى البيع",
+    "errors": []
+  },
+  {
+    "state": "ListEmpty",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ListEmpty-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع إلى البيع",
+    "errors": []
+  },
+  {
+    "state": "ListEmpty",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ListEmpty-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع إلى البيع",
+    "errors": []
+  },
+  {
+    "state": "ListOne",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ListOne-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListOne",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ListOne-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListOne",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ListOne-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListOne",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ListOne-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListFive",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ListFive-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListFive",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ListFive-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListFive",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ListFive-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListFive",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ListFive-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListStale",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ListStale-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListStale",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ListStale-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListStale",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ListStale-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ListStale",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ListStale-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "استئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewPrice",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ReviewPrice-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewPrice",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ReviewPrice-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewPrice",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ReviewPrice-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewPrice",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ReviewPrice-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewRemoved",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ReviewRemoved-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول الحذف واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewRemoved",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ReviewRemoved-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول الحذف واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewRemoved",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ReviewRemoved-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول الحذف واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewRemoved",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ReviewRemoved-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول الحذف واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewMixed",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ReviewMixed-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewMixed",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ReviewMixed-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewMixed",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ReviewMixed-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ReviewMixed",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ReviewMixed-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "ConflictClean",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ConflictClean-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "علّق البيع الحالي واستأنف المح",
+    "errors": []
+  },
+  {
+    "state": "ConflictClean",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ConflictClean-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "علّق البيع الحالي واستأنف المح",
+    "errors": []
+  },
+  {
+    "state": "ConflictClean",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ConflictClean-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "علّق البيع الحالي واستأنف المح",
+    "errors": []
+  },
+  {
+    "state": "ConflictClean",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ConflictClean-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "علّق البيع الحالي واستأنف المح",
+    "errors": []
+  },
+  {
+    "state": "ConflictChanges",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ConflictChanges-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "علّق الحالي، اقبل التغييرات وا",
+    "errors": []
+  },
+  {
+    "state": "ConflictChanges",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ConflictChanges-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "علّق الحالي، اقبل التغييرات وا",
+    "errors": []
+  },
+  {
+    "state": "ConflictChanges",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ConflictChanges-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "علّق الحالي، اقبل التغييرات وا",
+    "errors": []
+  },
+  {
+    "state": "ConflictChanges",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ConflictChanges-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "علّق الحالي، اقبل التغييرات وا",
+    "errors": []
+  },
+  {
+    "state": "RefCatalogue",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-RefCatalogue-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع",
+    "errors": []
+  },
+  {
+    "state": "RefCatalogue",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-RefCatalogue-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع",
+    "errors": []
+  },
+  {
+    "state": "RefCatalogue",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-RefCatalogue-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع",
+    "errors": []
+  },
+  {
+    "state": "RefCatalogue",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-RefCatalogue-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع",
+    "errors": []
+  },
+  {
+    "state": "RefChanged",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-RefChanged-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "RefChanged",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-RefChanged-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "RefChanged",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-RefChanged-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "RefChanged",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-RefChanged-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "قبول التغييرات واستئناف البيع",
+    "errors": []
+  },
+  {
+    "state": "RefCheckout",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-RefCheckout-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع",
+    "errors": []
+  },
+  {
+    "state": "RefCheckout",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-RefCheckout-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع",
+    "errors": []
+  },
+  {
+    "state": "RefCheckout",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-RefCheckout-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع",
+    "errors": []
+  },
+  {
+    "state": "RefCheckout",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-RefCheckout-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [
+      "إدارة الوردية:71x17"
+    ],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "رجوع",
+    "errors": []
+  },
+  {
+    "state": "ShiftClose",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt445-ShiftClose-1024x768.png",
+    "axe": [],
+    "small": [],
+    "targets": [],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "تسجيل العدّ وإغلاق الوردية",
+    "errors": []
+  },
+  {
+    "state": "ShiftClose",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt445-ShiftClose-1024x768-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "تسجيل العدّ وإغلاق الوردية",
+    "errors": []
+  },
+  {
+    "state": "ShiftClose",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt445-ShiftClose-1280x800.png",
+    "axe": [],
+    "small": [],
+    "targets": [],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "تسجيل العدّ وإغلاق الوردية",
+    "errors": []
+  },
+  {
+    "state": "ShiftClose",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt445-ShiftClose-1280x800-forced.png",
+    "axe": [],
+    "small": [],
+    "targets": [],
+    "overflowX": false,
+    "offscreen": [],
+    "dialogOpen": false,
+    "focus": "تسجيل العدّ وإغلاق الوردية",
+    "errors": []
+  }
+]

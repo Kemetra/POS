@@ -24,7 +24,8 @@ export const RECOVERY_COPY = Object.freeze({
   remaining: 'المتبقي',
   draft: 'مسودة',
   handedOff: 'في الدفع',
-  parked: 'مؤجلة',
+  // RT-471 OD-2: the term is «معلّق» everywhere.
+  parked: 'معلّقة',
   complete: 'إكمال البيع',
   cancelPayment: 'إلغاء الدفع',
   cancelSale: 'إلغاء البيع',

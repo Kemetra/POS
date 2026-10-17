@@ -15,6 +15,13 @@ export const SCAN_REFUSED_MESSAGE: Readonly<Record<RefuseKind, string>> = {
   reference: 'لا يُقبل المسح في حقل المرجع. اكتب المرجع من إيصال جهاز البطاقات.',
 };
 
+/**
+ * M-S1 (paused, dialog) — the scan-owner status while a modal is open. RT-445
+ * (OD-15) reuses it as the refusal of a scan while the parked list or the
+ * resume review is open: no new copy.
+ */
+export const SCAN_PAUSED_DIALOG_STATUS = 'المسح متوقف — نافذة مفتوحة';
+
 /** M-S6 — a scan arrived while a dialog was open. */
 export const SCAN_DIALOG_OPEN_MESSAGE = 'أغلق النافذة أولاً ثم امسح الصنف.';
 

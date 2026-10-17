@@ -17,6 +17,8 @@ import { ScanStatus } from './ScanStatus';
 import { CartStatusLine } from './CartStatusLine';
 import { useLiveSaleActions } from './useLiveSaleActions';
 import { FitGuard } from '../foundation/FitGuard';
+import { ParkAction, ParkedNotice, ParkedSalesButton, useParkedCount } from '../park/ParkControls';
+import { parkBridgeOf, windowCartBridge } from '../park/park-bridge';
 import './sale-screen.css';
 import './live-sale.css';
 import './sale-direction-b.css';
@@ -25,6 +27,8 @@ interface Props {
   cartBridge?: CartBridgeAPI;
   catalogueBridge?: CatalogueBridgeAPI;
   onPaymentContinue: () => void;
+  /** RT-445: open the parked list (`/app/cart/parked`). Without it, no park controls show. */
+  onShowParked?: () => void;
 }
 
 /**
@@ -165,6 +169,8 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
   });
   const lane = useAddLane();
   const actions = useLiveSaleActions(cart, props.cartBridge, lane);
+  const park = parkBridgeOf(props.cartBridge ?? windowCartBridge());
+  const parkedCount = useParkedCount(park);
   const frozen = cartState === CartState.frozen_handed_off;
   // Frozen alone is not "paid": only a settled attempt for THIS cart is —
   // known to the renderer, or reported by main when the cart was reopened.
@@ -188,14 +194,37 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
     );
   }
 
+  const parkedButton =
+    park !== null && props.onShowParked !== undefined ? (
+      <ParkedSalesButton count={parkedCount.count} onOpen={props.onShowParked} />
+    ) : null;
   const lastAction = (
-    <CartStatusLine
-      announcement={actions.undo.announcement}
-      offer={actions.undo.offer}
-      canUndo={actions.undo.canUndo}
-      onUndo={() => void actions.undo.undo()}
-    />
+    <>
+      <CartStatusLine
+        announcement={actions.undo.announcement}
+        offer={actions.undo.offer}
+        canUndo={actions.undo.canUndo}
+        onUndo={() => void actions.undo.undo()}
+      />
+      {parkedButton}
+    </>
   );
+  const parkControl =
+    park !== null && props.onShowParked !== undefined ? (
+      <ParkAction
+        bridge={park}
+        cartId={cartId}
+        enabled={cartState === CartState.editing && cart.lines.length > 0 && !lane.busy}
+        lineCount={cart.lines.length}
+        totalMinor={cart.subtotalMinor}
+        onParked={(label) => {
+          actions.onParked(label);
+          parkedCount.reload();
+        }}
+        onShowParked={props.onShowParked}
+        onRefused={parkedCount.reload}
+      />
+    ) : null;
   return (
     <section className="v5-sale v5-live-sale" dir="rtl" lang="ar" aria-labelledby={SALE_TITLE_ID}>
       <SaleTitle
@@ -203,6 +232,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
         withStatus={!props.catalogueEnabled}
         lastAction={lastAction}
       />
+      {actions.parked !== null && <ParkedNotice label={actions.parked.label} />}
       <div className="v5-sale-workstation" data-catalogue={String(props.catalogueEnabled)}>
         {props.catalogueEnabled && (
           <LiveCatalogueRegion
@@ -248,6 +278,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
           }}
           onVoid={actions.onVoid}
           onNewSale={actions.onNewSale}
+          parkControl={parkControl}
         />
       </div>
     </section>

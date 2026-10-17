@@ -32,6 +32,7 @@ import { OperatorRouteGuard } from './routes/operator-route-guard';
 import { V5AppLayout } from './v5/frame/V5AppLayout';
 import { V5SaleRoute } from './v5/sale/V5SaleRoute';
 import { V5ShiftRoute } from './v5/shift/V5ShiftRoute';
+import { ParkedSalesRoute } from './v5/park/ParkedSalesRoute';
 import { V5ShiftManagerRoute } from './v5/shift/V5ShiftManagerRoute';
 import { ErrorScreen } from './v5/foundation/ErrorScreen';
 import { RouteLoading } from './v5/foundation/RouteLoading';
@@ -269,6 +270,10 @@ export function AppRouter(props: Readonly<AppRouterProps>): JSX.Element {
           element: <V5AppLayout />,
           children: [
             { path: 'cart', element: <V5SaleRoute /> },
+            // RT-445 (PK-3) — the operator's own parked sales and the resume
+            // review, inside the Sale entry. Main scopes every call to the
+            // session's operator (spec 024 K3).
+            { path: 'cart/parked', element: <ParkedSalesRoute /> },
             { path: 'checkout', element: <CheckoutRoute /> },
             // RT-17 slice 4 part 3 — the shift cash-up screens. Each leaves for
             // /app (before any call) while POS_PULSE_FEATURE_SHIFT_CASHUP is
