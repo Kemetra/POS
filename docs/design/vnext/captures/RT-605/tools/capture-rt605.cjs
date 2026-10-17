@@ -17,13 +17,18 @@ const CASES = [
   ['Attention24h', 'Attention24h', ''],
   ['OfflineAttention', 'OfflineAttention', ''],
   ['OfflineAttentionPrinter', 'OfflineAttention', '&banner=printer'],
+  // Owner scope extension (2026-10-17): the two legacy banners on the V5 Banner.
+  ['ShiftClosed', 'Connected', '&closed=shift'],
+  ['PrinterFailed', 'PrinterFailed', ''],
+  ['FullStack', 'OfflineAttention', '&banner=printer&closed=shift'],
 ];
 const NAVS = { panel: '/app/dashboard', slim: '/app/cart' };
 
 function checks() {
   const aside = document.querySelector('[data-testid=v5-frame-notices]');
   const main = document.querySelector('main');
-  const ids = { attention: 'v5-sync-attention-banner', offline: 'v5-offline-banner', printer: 'printer-failure-banner' };
+  const ids = { attention: 'v5-sync-attention-banner', shiftClosed: 'shift-closed-banner',
+    offline: 'v5-offline-banner', printer: 'printer-failure-banner' };
   const banners = Object.fromEntries(Object.entries(ids).map(([k, id]) => {
     const el = document.querySelector(`[data-testid=${id}]`);
     if (!el) return [k, null];
@@ -45,8 +50,9 @@ function checks() {
   const offlineTexts = [...document.querySelectorAll('body *')].filter((el) =>
     [...el.childNodes].some((c) => c.nodeType === 3 && c.textContent.includes('غير متصل —'))).length;
   const legacy007 = !!document.querySelector('[data-state]');
+  const legacyClasses = !!document.querySelector('.shift-closed-banner, .printer-failure-banner, .v4-row, [data-testid=printer-failure-banner] .btn');
   const overflowX = document.documentElement.scrollWidth > window.innerWidth + 1;
-  return { banners, order, small, mainVisible: Math.round(mainVisible), offlineTexts, legacy007, overflowX };
+  return { banners, order, small, mainVisible: Math.round(mainVisible), offlineTexts, legacy007, legacyClasses, overflowX };
 }
 
 (async () => {
@@ -74,7 +80,7 @@ function checks() {
           }
           const c = await page.evaluate(checks);
           log.push({ name, state, nav, width: +w, mode, file, axe, ...c, errors });
-          console.log(name, nav, w, mode, JSON.stringify({ axe, order: c.order, main: c.mainVisible, off: c.offlineTexts, s: c.small, x: c.overflowX, e: errors }));
+          console.log(name, nav, w, mode, JSON.stringify({ axe, order: c.order, lc: c.legacyClasses, main: c.mainVisible, off: c.offlineTexts, s: c.small, x: c.overflowX, e: errors }));
           await page.close();
         }
       }

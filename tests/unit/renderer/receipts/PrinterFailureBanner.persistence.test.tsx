@@ -81,10 +81,10 @@ describe('T260 — PrinterFailureBanner mounts on failure + carries 3 affordance
     for (const name of ['إعادة المحاولة', 'نسخة', 'إيصال يدوي']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toBeInTheDocument();
-      // The 44×44 floor is enforced via the shared `.btn--md` size modifier
-      // (block-size: 44px in tailwind.css). happy-dom has no layout engine, so
-      // assert the class marker rather than computed height.
-      expect(btn.className).toMatch(/btn--md/);
+      // RT-605: the 44×44 floor comes from the V5 banner action rule
+      // (`.v5-banner__actions button`, min 44px in messages.css). happy-dom has
+      // no layout engine, so assert the container marker, not computed size.
+      expect(btn.closest('.v5-banner__actions')).not.toBeNull();
     }
   });
 

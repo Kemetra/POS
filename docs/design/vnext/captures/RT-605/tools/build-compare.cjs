@@ -12,11 +12,20 @@ const DESC = {
   AttentionDeadLetter: 'online, 2 dead letters → M-O3 danger «تعذّر إرسال 2 عمليات. راجع المدير.»',
   Attention24h: 'online, 2 pending, oldest 26 h old, no dead letter (D-6-5) → M-O3 danger with n = 2',
   OfflineAttention: 'offline, 1 dead letter + 2 fresh pending → M-O3 (n = 1) above M-O1',
-  OfflineAttentionPrinter: 'as OfflineAttention, plus the existing printer-failure banner below M-O1',
+  OfflineAttentionPrinter: 'as OfflineAttention, plus the printer-failure banner (now a V5 warning Banner) below M-O1',
+  ShiftClosed: 'forced shift close while away: V5 info banner, M-W4 copy (pending owner approval) with «إخفاء»',
+  PrinterFailed: 'last print failed: V5 warning banner, printer glyph, copy and actions unchanged',
+  FullStack: 'M-O3, shift closed (M-W4), M-O1, printer failure: the whole §4.3 order',
 };
 const offlineLike = (n) => n.startsWith('Offline') || n === 'Degraded';
+const printerLike = (n) => n === 'PrinterFailed';
 function refs(name, width) {
-  if (!offlineLike(name)) return [];
+  if (printerLike(name)) {
+    const r = [[`references/I3-Receipt-${width}.png`, `I3-Receipt ${width} (doc 15 B3 iteration 3, frozen; completion surface, M-C3)`]];
+    if (width === 1280) r.push(['../../references/VN-R5-complete-print-failed-1280.png', 'VN-R5 print failed 1280 (RT-104)']);
+    return r;
+  }
+  if (!offlineLike(name) || name === 'FullStack') return [];
   const r = [[`../RT-604/references/I3-Offline-${width}.png`, `I3-Offline ${width} (doc 15 B3 iteration 3, frozen)`]];
   if (width === 1024) r.push(['../../references/VN-R7-offline-selling-1024.png', 'VN-R7 offline selling 1024 (RT-104)']);
   return r;
@@ -53,8 +62,8 @@ img { width:100%; height:auto; border:1px solid var(--line); }
 </head>
 <body>
 <header>
-<strong>RT-605 status banners (M-O1, M-O3): implementation vs frozen references</strong><br>
-<span class="d">The I3-Offline / VN-R7 references draw the pre-V5 frame and older copy; the implementation follows doc 24 §4.3 with the frozen doc 15 M-O1 / M-O3 copy. No frozen reference exists for M-O3. See README.</span><br>
+<strong>RT-605 notices stack (M-O1, M-O3, shift closed, printer failure): implementation vs frozen references</strong><br>
+<span class="d">The I3-Offline / VN-R7 references draw the pre-V5 frame and older copy; the implementation follows doc 24 §4.3 with the frozen doc 15 M-O1 / M-O3 copy. I3-Receipt / VN-R5 show the receipt failure on the completion surface, not the frame banner. No frozen reference exists for M-O3, the shift-closed banner or the full stack. See README.</span><br>
 <label>Width <select id="w"><option value="all">all</option><option>1024</option><option>1280</option></select></label>
 <label>Mode <select id="m"><option value="all">all</option><option value="light">light</option><option value="forced">forced colours</option></select></label>
 <label>Nav <select id="n"><option value="all">all</option><option value="panel">labelled panel</option><option value="slim">slim rail</option></select></label>

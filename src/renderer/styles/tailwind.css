@@ -310,17 +310,6 @@
   }
 }
 
-@keyframes banner-slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* ─── Base ──────────────────────────────────────────────────────────────── */
 
 *,
@@ -797,76 +786,6 @@ body {
     animation: pulse-dot 1.6s ease-in-out infinite;
   }
 
-  /* ── Printer-failure banner (008 T290) ───────────────────────────────────
-     A persistent, non-modal, non-dismissable banner. Amber (workflow-degrading,
-     recoverable) NOT red — the sale is already finalized; the cashier can
-     retry / reprint / hand over a manual receipt. Stacks below the connection
-     StatusBanner in AppShell. §A1 brief (f). */
-
-  .printer-failure-banner {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    min-block-size: 56px;
-    padding-block: var(--space-4);
-    padding-inline: var(--space-5);
-    background-color: var(--color-warning-soft);
-    border-block-end: 1px solid color-mix(in srgb, var(--color-warning) 100%, transparent);
-    color: var(--color-warning-emphasis);
-    flex-shrink: 0;
-    animation: printer-failure-banner-enter 160ms cubic-bezier(0.22, 1, 0.36, 1);
-    /* Print failures remain persistent, distinct, and actionable. */
-    flex-wrap: wrap;
-    border-inline-start: var(--space-1) solid var(--color-warning);
-    border-block-end-color: var(--color-border);
-  }
-
-  .printer-failure-banner__icon {
-    flex-shrink: 0;
-    color: var(--color-warning);
-  }
-
-  .printer-failure-banner__message {
-    margin: 0;
-    flex: 1 1 auto;
-    font-size: var(--font-size-md);
-    font-weight: var(--font-weight-regular);
-    line-height: 1.4;
-  }
-
-  .printer-failure-banner__sep {
-    color: color-mix(in srgb, var(--color-warning-emphasis) 60%, transparent);
-  }
-
-  /* RT-240 (axe color-contrast): full warning ink, as on the drawer banner. */
-  .printer-failure-banner__hint {
-    color: var(--color-warning-emphasis);
-  }
-
-  .printer-failure-banner__actions {
-    display: flex;
-    gap: var(--space-2);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-  }
-
-  @keyframes printer-failure-banner-enter {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .printer-failure-banner {
-      animation: none;
-    }
-  }
-
   /* RT-241 (D-B1): the drawer-failure banner is retired; the drawer notice is
      a v5 Banner/Notice (v5/foundation/messages.css). */
 
@@ -1046,55 +965,6 @@ body {
       border: 2px dashed GrayText;
       color: GrayText;
     }
-  }
-
-  /* ── ShiftClosedBanner (T091) ──────────────────────────────────────────── */
-
-  .shift-closed-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    background-color: var(--color-info-soft);
-    border: 1px solid color-mix(in srgb, var(--color-info) 35%, transparent);
-    border-radius: var(--radius-control);
-    font-size: var(--font-size-sm);
-    color: var(--color-info-emphasis);
-    flex-shrink: 0;
-    animation: banner-slide-in var(--duration-2) var(--ease-out) both;
-  }
-
-  .shift-closed-banner__message {
-    flex: 1;
-    line-height: var(--line-height-snug);
-  }
-
-  .shift-closed-banner__dismiss {
-    flex-shrink: 0;
-    padding-inline: var(--space-3);
-    padding-block: var(--space-1);
-    border: 1px solid var(--color-info);
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--color-info-emphasis);
-    font-family: var(--font-family-sans);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition:
-      background-color var(--duration-1) var(--ease-out),
-      color var(--duration-1) var(--ease-out);
-  }
-
-  .shift-closed-banner__dismiss:hover {
-    background-color: var(--color-info);
-    color: var(--color-info-on);
-  }
-
-  .shift-closed-banner__dismiss:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
   }
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -2135,16 +2005,6 @@ body {
     gap: var(--space-5);
   }
 
-  .v4-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .v4-row--between {
-    justify-content: space-between;
-  }
-
   /* ── v4 definition row — label/value pairs (summaries, totals) ──────────
    * The reference's summary panels are label/value rows, not tables. Money and
    * identifiers re-isolate to LTR inside the value slot via `.v4-def__value--ltr`
@@ -2360,9 +2220,5 @@ body {
   .v4-feedback__error {
     color: var(--color-danger-emphasis);
     font-weight: var(--font-weight-medium);
-  }
-
-  .printer-failure-banner__actions .btn {
-    min-block-size: 44px;
   }
 }

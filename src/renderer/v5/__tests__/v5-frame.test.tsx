@@ -319,7 +319,7 @@ describe('V5OperationalNotices — the same operational banners the app frame mu
         idempotency_key: expect.any(String) as string,
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
+      fireEvent.click(screen.getByRole('button', { name: 'إخفاء' }));
       const state = useOperatorSessionStore.getState().state;
       expect(state.kind === 'signedIn' && state.forced_close_notice).toBeFalsy();
       expect(subscribe).toHaveBeenCalledWith({ topic: 'banner_state' });

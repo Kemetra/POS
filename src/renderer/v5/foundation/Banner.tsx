@@ -1,5 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 import { ToneIcon, toneRole, type Tone } from './ToneIcon';
+import { V5Icon, type V5IconName } from './V5Icon';
 import './messages.css';
 
 interface BannerProps {
@@ -8,6 +9,8 @@ interface BannerProps {
   /** Actions that belong to this state (acknowledge, recover). */
   actions?: ReactNode;
   testId?: string;
+  /** A source glyph in place of the tone's, when the source must be told apart. */
+  icon?: V5IconName;
 }
 
 /**
@@ -15,7 +18,13 @@ interface BannerProps {
  * area (freeze 15 §4 `Banner`). It never auto-dismisses: it leaves when the
  * state it reports is over, or when its own action resolves it.
  */
-export function Banner({ tone, children, actions, testId }: Readonly<BannerProps>): JSX.Element {
+export function Banner({
+  tone,
+  children,
+  actions,
+  testId,
+  icon,
+}: Readonly<BannerProps>): JSX.Element {
   return (
     <div
       role={toneRole(tone)}
@@ -25,7 +34,13 @@ export function Banner({ tone, children, actions, testId }: Readonly<BannerProps
       data-tone={tone}
       data-testid={testId}
     >
-      <ToneIcon tone={tone} />
+      {icon === undefined ? (
+        <ToneIcon tone={tone} />
+      ) : (
+        <span className="v5-tone-icon" data-icon={icon}>
+          <V5Icon name={icon} size={20} />
+        </span>
+      )}
       <div className="v5-banner__text">{children}</div>
       {actions !== undefined && <div className="v5-banner__actions">{actions}</div>}
     </div>

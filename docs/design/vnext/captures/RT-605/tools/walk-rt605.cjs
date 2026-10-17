@@ -26,6 +26,7 @@ async function walk(browser, name, query, route) {
         text: (a.getAttribute('aria-label') || a.textContent || a.tagName).trim().slice(0, 30),
         inStatusBanner: !!a.closest(sel),
         inPrinter: !!a.closest('[data-testid=printer-failure-banner]'),
+        inShiftClosed: !!a.closest('[data-testid=shift-closed-banner]'),
       };
     }, STATUS);
     stops.push(s);
@@ -43,9 +44,12 @@ async function walk(browser, name, query, route) {
   const stopInStatusBanner = stops.some((s) => s.inStatusBanner);
   const printerStops = stops.filter((s) => s.inPrinter).map((s) => s.text);
   const expectPrinter = query.includes('banner=printer');
+  const shiftClosedStops = stops.filter((s) => s.inShiftClosed).map((s) => s.text);
+  const expectShiftClosed = query.includes('closed=shift');
   const pass = reachedSignOut && !stopInStatusBanner && (!expectPrinter || printerStops.length > 0)
-    && tree.length > 0 && tree.every((b) => !b.hidden && b.inAside && b.text.length > 0);
-  return { name, route, reachedSignOut, stopInStatusBanner, printerStops, tree, pass };
+    && (!expectShiftClosed || shiftClosedStops.includes('إخفاء'))
+    && (tree.length > 0 || expectShiftClosed) && tree.every((b) => !b.hidden && b.inAside && b.text.length > 0);
+  return { name, route, reachedSignOut, stopInStatusBanner, printerStops, shiftClosedStops, tree, pass };
 }
 
 (async () => {
@@ -56,12 +60,14 @@ async function walk(browser, name, query, route) {
     ['AttentionDeadLetter', 'state=Attention'],
     ['OfflineAttention', 'state=OfflineAttention'],
     ['OfflineAttentionPrinter', 'state=OfflineAttention&banner=printer'],
+    ['ShiftClosed', 'state=Connected&closed=shift'],
+    ['FullStack', 'state=OfflineAttention&banner=printer&closed=shift'],
   ];
   for (const [name, query] of cases) {
     for (const route of ['/app/dashboard', '/app/cart']) {
       const r = await walk(browser, name, query, route);
       log.push(r);
-      console.log(r.pass ? 'PASS' : 'FAIL', name, route, JSON.stringify(r.printerStops), JSON.stringify(r.tree.map((t) => `${t.role}/${t.live}`)));
+      console.log(r.pass ? 'PASS' : 'FAIL', name, route, JSON.stringify(r.printerStops), JSON.stringify(r.shiftClosedStops), JSON.stringify(r.tree.map((t) => `${t.role}/${t.live}`)));
     }
   }
   fs.writeFileSync(outFile, `${JSON.stringify(log, null, 2)}\n`);
