@@ -2,6 +2,8 @@
 
 > 🔁 **RT-28 amendment (2026-09-27):** `cart.discountPlaceholders.add` / `.remove` below are revised to the manager-only rule (spec.md Amendment + FR-023 revised). There is no threshold. `cart.discount.above_threshold` is historical only.
 
+> 🔁 **RT-114 amendment (2026-10-17, RT-28 comment 11979):** the cashier-session credential for `cart.discountPlaceholders.add` is the terminal-enrolled **Manager Approval PIN** (RT-114 C1, MA-1 RT-438) and a main-only, single-use **`approval_id`** bound to action kind `cart.discount.manual` (RT-114 C7 and §3, MA-2 RT-443). It replaces D1a's identifier + password through an authentication-only seam and `manager_approval_ref`, which are struck through below.
+
 
 **Feature ID:** 005-sales-cart
 **Plan:** [../plan.md](../plan.md)
@@ -263,42 +265,36 @@ Adds a discount placeholder to a line.
 for every placeholder with a positive magnitude.** There is no threshold and
 no cashier-only path.
 
-- **Cashier session:** the call MUST carry a `manager_approval_ref` that main
-  issued after verifying the manager credential on the operator bridge (see
-  the note below). It is checked before anything is written (D1). A
-  renderer-supplied approver identifier MUST be refused. The credential is
+- **Cashier session (RT-114 amendment, 2026-10-17):** the call MUST carry an
+  `approval_id` that main issued for action kind **`cart.discount.manual`**
+  (RT-114 §3) through the approval bridge (`approval.listApprovers` /
+  `approval.request`, `src/shared/operator/manager-approval.ts`, RT-443 MA-2).
+  Main issues it only after verifying the approving manager's
+  **terminal-enrolled Manager Approval PIN** (RT-114 C1, RT-438 MA-1) in the
+  main process (C2), under C3 lockout and C4 validity. A renderer-supplied
+  approver identifier MUST be ignored and is never authority (C10). The PIN is
   verified and discarded in main, never crosses the `cart.*` bridge, and is
   never persisted, logged, echoed or placed in the outbox or audit payload.
-  **Credential (RT-28 D1a, option a):** the manager re-enters their
-  identifier + password. No manager PIN is introduced; PINs stay cashier-only.
-  The step-up authorises only this one discount.
-  **Authentication-only verification (required):** the existing manager
-  sign-in flow MUST NOT be reused as-is. `SignInHandler.signIn` creates a
-  backend operator session (or returns `takeover_required`) and
-  `SessionManager.create` replaces the local cashier session. The step-up
-  MUST use a verification seam that:
-  1. confirms the credential and that the identity holds the `manager` or
-     `admin` role *as resolved by the backend* (Clerk metadata is not
-     authoritative for role);
-  2. creates **no** backend operator session, no takeover and no local
-     session, and leaves the cashier's operator session unchanged;
-  3. **binds the approver to the cart's scope:** the approving operator
-     MUST be authorised for the cart's `tenant_id` and `branch_id` (004's
-     branch-scoped supervisor authority). Either the backend seam enforces
-     this against the scope it is given, or it returns authoritative scope
-     data that main compares before applying the discount. A valid manager
-     from another tenant or branch MUST be refused generically;
-  4. returns only the approving manager's identity (and, if used, the scope
-     data for that comparison) for the audit record.
+  - **Four-eyes (C6):** the approver is never the requesting cashier.
+  - **Scope:** the approver is bound to the cart's tenant and branch because
+    the credential is keyed `(tenant, branch, terminal, user_id)` and
+    consumption re-checks tenant, branch and terminal. A manager enrolled on
+    another tenant, branch or terminal cannot approve.
+  - **Offline (C5):** the approval works offline while the approver's
+    credential is inside its C4 validity window (24 h after that manager's
+    last revalidation on this terminal; at most 90 days after the PIN was
+    set). This replaces D1a's "fails closed offline" (owner decision O3,
+    2026-10-17: discounts follow RT-114 C5, like void and recovery).
+  - **Backend-Core:** no authentication-only manager verification contract
+    is needed. Approver-eligibility revalidation belongs to RT-114 (MA-BC1
+    RT-492, MA-3), not to RT-28.
 
-  **Cross-repo dependency:** role resolution lives in Backend-Core, so this
-  seam needs a Backend-Core authentication-only verification contract
-  (endpoint semantics, no session side effects, rate limiting and lockout).
-  That contract is **not defined here** and MUST be approved before the
-  RT-28 Implementation issue can build the cashier step-up path. Until it
-  exists, only manager or admin sessions can apply discounts (D2).
-  When the terminal is offline the step-up cannot complete and the add is
-  refused generically (fail closed).
+  *Superseded D1a text (RT-28 comment 10200), kept for audit trail:*
+
+  > ~~**Cashier session:** the call MUST carry a `manager_approval_ref` that main issued after verifying the manager credential on the operator bridge (see the note below). It is checked before anything is written (D1). A renderer-supplied approver identifier MUST be refused. The credential is verified and discarded in main, never crosses the `cart.*` bridge, and is never persisted, logged, echoed or placed in the outbox or audit payload. **Credential (RT-28 D1a, option a):** the manager re-enters their identifier + password. No manager PIN is introduced; PINs stay cashier-only. The step-up authorises only this one discount. **Authentication-only verification (required):** the existing manager sign-in flow MUST NOT be reused as-is. `SignInHandler.signIn` creates a backend operator session (or returns `takeover_required`) and `SessionManager.create` replaces the local cashier session. The step-up MUST use a verification seam that: 1. confirms the credential and that the identity holds the `manager` or `admin` role *as resolved by the backend* (Clerk metadata is not authoritative for role); 2. creates **no** backend operator session, no takeover and no local session, and leaves the cashier's operator session unchanged; 3. **binds the approver to the cart's scope:** the approving operator MUST be authorised for the cart's `tenant_id` and `branch_id` (004's branch-scoped supervisor authority). Either the backend seam enforces this against the scope it is given, or it returns authoritative scope data that main compares before applying the discount. A valid manager from another tenant or branch MUST be refused generically; 4. returns only the approving manager's identity (and, if used, the scope data for that comparison) for the audit record.~~
+  >
+  > ~~**Cross-repo dependency:** role resolution lives in Backend-Core, so this seam needs a Backend-Core authentication-only verification contract (endpoint semantics, no session side effects, rate limiting and lockout). That contract is **not defined here** and MUST be approved before the RT-28 Implementation issue can build the cashier step-up path. Until it exists, only manager or admin sessions can apply discounts (D2). When the terminal is offline the step-up cannot complete and the add is refused generically (fail closed).~~
+
 - **Manager or admin session:** applies directly. The acting operator is
   recorded as the approver (D2).
 
@@ -309,35 +305,57 @@ no cashier-only path.
   cart_id: UUID v4,
   line_id: UUID v4,
   placeholder_kind: string,                 // opaque token (FR-024)
-  manager_approval_ref?: opaque string,     // required on a cashier session
+  approval_id?: opaque string,              // RT-114: required on a cashier session
   idempotency_key: UUID v4,
 }
 ```
 
 *Note:* **no credential ever crosses the `cart.*` bridge** (NFR-006 and the
-`src/preload/cart.ts` no-secrets contract stay unchanged). The manager
-identifier + password go only through a dedicated **operator-bridge** step-up
-call, under the same one-time credential exception and 004 PR-1 redaction
-as `bridge.operator.signIn`. Main verifies them through the
-authentication-only seam and issues `manager_approval_ref`, an opaque,
-main-held, **single-use**, short-lived handle. It is bound to the **complete
-approved intent**: `cart_id`, `line_id`, `placeholder_kind`, the add's
-`idempotency_key` and the line's current `version`, plus the cart's
-tenant/branch scope. It records the approving manager main-side. The step-up
-call states that intent before approval, so the manager approves one specific
-discount. `cart.discountPlaceholders.add` consumes it. **Order of checks:** the outbox idempotency replay check runs **first**. An
+`src/preload/cart.ts` no-secrets contract stay unchanged). *RT-114
+amendment (2026-10-17):* the manager's PIN goes only through the approval
+bridge (`approval.request`, the one inward credential path RT-443 defines).
+Main verifies it against the MA-1 credential and answers an opaque,
+main-only, **single-use** `approval_id` that expires 120 s after issue
+(RT-114 C7 default). The approval is bound to action kind
+`cart.discount.manual`, its `subject_ref`, the subject version and amount
+that main computes from its own state, the requesting session and the
+terminal (C7). The approver's identity is recorded main-side only. The
+renderer knows only the opaque `approver_ref` and display name it picked
+from `approval.listApprovers` (C2; shown on the sheet per owner decision
+O2), never the approver's `users.id`.
+
+The discount's bound intent stays the one this contract already required:
+`cart_id`, `line_id`, `placeholder_kind` and the line's current `version`,
+plus the cart's tenant/branch scope. The manager approves one specific
+discount, and an approval for one line or kind cannot be spent on another.
+How that intent maps onto MA-2's `subject_ref` / subject version / amount is
+fixed by the RT-28 Implementation issue under a §A4 bridge-security review,
+by adding a `cart.discount.manual` subject resolver. RT-114 §3 also lists the
+discount amount as bound, but the cart layer computes no discount amount
+(FR-022). **Owner decision O1 (2026-10-17, RT-28 comment 12278):** the
+approval binds the intent only, with `amount_minor = null` until discount
+math exists. No amount is invented; when discount math lands, the amount
+joins the binding.
+
+`cart.discountPlaceholders.add` consumes the approval inside the add's own
+SQLite transaction (C7 step 4): the consume, the placeholder row, the outbox
+row and the audit row commit together or not at all. **Order of checks:** the outbox idempotency replay check runs **first**. An
 exact replay (same `idempotency_key` and payload) of an add that already
 committed returns the original outcome and does not re-validate, re-consume or
-reject its already-consumed reference, so a lost response never triggers a
-second approval. Only for a new add is the reference then validated: a missing,
-expired or reused reference, or one whose bound intent does not match the add
-request field-for-field (for example a different `placeholder_kind`), is
-refused generically
-(`manager_attribution_required`). The renderer never learns the approver
-identity. The operator-bridge call's name and shape, and the reference
-lifetime, are fixed by the RT-28 Implementation issue under a §A4
-bridge-security review. This contract fixes
-the rule: authority is established in main, never asserted by the renderer.
+reject its already-consumed approval, so a lost response never triggers a
+second approval. Only for a new add is the approval then consumed. A missing
+`approval_id` on a cashier session is refused `manager_attribution_required`.
+An unknown, expired, already-consumed, wrong-kind, wrong-subject,
+wrong-terminal or wrong-requester approval is refused `approval_invalid`, and
+a subject that changed since approval is refused `approval_stale` (the MA-2
+consume outcomes). Nothing is written on any refusal. The cart call's exact
+field name and refusal set are confirmed by the Implementation issue's §A4
+review. This contract fixes the rule: authority is established in main, never
+asserted by the renderer.
+
+*Superseded D1a note, kept for audit trail:*
+
+> ~~*Note:* **no credential ever crosses the `cart.*` bridge** (NFR-006 and the `src/preload/cart.ts` no-secrets contract stay unchanged). The manager identifier + password go only through a dedicated **operator-bridge** step-up call, under the same one-time credential exception and 004 PR-1 redaction as `bridge.operator.signIn`. Main verifies them through the authentication-only seam and issues `manager_approval_ref`, an opaque, main-held, **single-use**, short-lived handle. It is bound to the **complete approved intent**: `cart_id`, `line_id`, `placeholder_kind`, the add's `idempotency_key` and the line's current `version`, plus the cart's tenant/branch scope. It records the approving manager main-side. The step-up call states that intent before approval, so the manager approves one specific discount. `cart.discountPlaceholders.add` consumes it. **Order of checks:** the outbox idempotency replay check runs **first**. An exact replay (same `idempotency_key` and payload) of an add that already committed returns the original outcome and does not re-validate, re-consume or reject its already-consumed reference, so a lost response never triggers a second approval. Only for a new add is the reference then validated: a missing, expired or reused reference, or one whose bound intent does not match the add request field-for-field (for example a different `placeholder_kind`), is refused generically (`manager_attribution_required`). The renderer never learns the approver identity. The operator-bridge call's name and shape, and the reference lifetime, are fixed by the RT-28 Implementation issue under a §A4 bridge-security review. This contract fixes the rule: authority is established in main, never asserted by the renderer.~~
 
 **Response:**
 
@@ -347,11 +365,12 @@ the rule: authority is established in main, never asserted by the renderer.
 ```
 
 Refusals stay generic. They MUST NOT reveal whether a manager identity
-exists or which part of the step-up failed.
+exists or which part of the approval failed (RT-114 C3).
 
 **Effects:** writes a row to `cart_line_discount_placeholders` with
 `requires_manager_attribution = true` and `attribution_operator_id` = the
-verified approving manager (D5: no schema change). Writes a
+approving manager from the consumed approval, or the acting manager/admin
+under D2 (D5: no schema change). Writes a
 `cart_action_outbox` row with `action_kind = cart.discount_placeholder.add`.
 ALSO emits an `audit_events` row with `action_category =
 cart.discount.manager_authorized` (sensitive per FR-023 revised, FR-026). The
@@ -549,7 +568,7 @@ cover, for every handler in this contract:
 - **Frozen-cart refusal** for every mutating handler when state is `frozen_handed_off` (FR-035).
 - **Q4 merge path** for `cart.lines.add` (existing line for the same `item_ref` → merge).
 - **Note length cap** (Q1, 200 chars) and **forbidden-pattern refusal** for `cart.lines.setNote`.
-- **Manager authority required** for every positive discount placeholder add (RT-28: manager step-up verified main-side on a cashier session, manager identifier + password per D1a, fails closed offline; a renderer-supplied approver id alone is refused) and for post-handoff void. Discount placeholder remove needs no manager (RT-28 D4).
+- **Manager authority required** for every positive discount placeholder add (RT-28 as amended by RT-114: on a cashier session, a main-verified Manager Approval PIN approval for `cart.discount.manual`, consumed once by `approval_id`; expired, consumed, wrong-kind, wrong-subject, stale and approver-is-requester approvals are refused; a renderer-supplied approver id is ignored. ~~manager identifier + password per D1a, fails closed offline~~) and for post-handoff void. Discount placeholder remove needs no manager (RT-28 D4).
 - **Cross-process redaction smoke** (NFR-006): `note` content, forbidden patterns, and credential fragments must NOT appear in logs / Sentry / support bundles.
 
 Coverage gate: ≥ 95 % on the bridge-side gate (NFR-004 + plan Test

@@ -77,7 +77,7 @@ no authority to decide them.
 | `cart.lines.update` (own cart) | allowed | allowed | allowed |
 | `cart.lines.remove` (own cart) | allowed | allowed | allowed |
 | `cart.lines.setNote` (own cart) | allowed | allowed | allowed |
-| `cart.discountPlaceholders.add` any positive manual discount (own cart) — *RT-28* | prompt_required (manager re-enters identifier + password, verified main-side; refused offline — RT-28 D1a) | allowed (recorded as approver) | allowed (recorded as approver) |
+| `cart.discountPlaceholders.add` any positive manual discount (own cart) — *RT-28* | prompt_required (manager approves with their terminal-enrolled Manager Approval PIN, verified main-side; the add consumes a single-use `approval_id` for `cart.discount.manual` — RT-114 C1/C7, MA-1/MA-2; ~~manager re-enters identifier + password, verified main-side; refused offline — RT-28 D1a~~) | allowed (recorded as approver) | allowed (recorded as approver) |
 | `cart.discountPlaceholders.remove` (own cart) — *RT-28 D4* | allowed (audited) | allowed (audited) | allowed (audited) |
 | ~~`cart.discountPlaceholders.add` below / above threshold~~ | *superseded by RT-28 — no threshold* | | |
 | `cart.void` (own cart, pre-handoff) | allowed | allowed | allowed |
@@ -106,6 +106,11 @@ with cart surfaces:
    screen is a Cashier-Forbidden Information catalogue question**, not a
    cart-layer decision. 005's S0 (visual direction) MUST show the prompt
    in a way that allows either policy.
+   **Owner decision O2 (2026-10-17, RT-28 comment 12278):** manager-approval
+   surfaces show the approver's display name, from the RT-114 approval
+   bridge (`approval.listApprovers`, C2), as the shipped V5 void and
+   recovery dialogs do. The approver's role and `users.id` are never shown,
+   and refusals stay generic (C3).
 3. **Audit-event payloads** — cart-emitted audit events (FR-026) carry
    the cashier and (where applicable) the manager identity. Whether a
    cashier can read audit events for their own actions is a 004 matrix

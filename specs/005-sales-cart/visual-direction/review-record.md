@@ -8,7 +8,7 @@
 **Contact sheet:** `specs/005-sales-cart/visual-direction/contact-sheet.md`
 **Constitution version pinned:** v1.5.1
 
-> 🔁 **RT-28 amendment (2026-09-27):** the sign-off below predates the manager-only discount rule. Surface 6 now triggers for every positive manual discount and uses the manager's identifier + password (D1a); see `contact-sheet.md` Surface 6 and `../spec.md` FR-023 (revised). The generic-copy policy recorded here still stands.
+> 🔁 **RT-28 amendment (2026-09-27):** the sign-off below predates the manager-only discount rule. Surface 6 now triggers for every positive manual discount and uses the manager's terminal-enrolled Manager Approval PIN (RT-114, amended 2026-10-17; ~~identifier + password, D1a~~); see `contact-sheet.md` Surface 6 and `../spec.md` FR-023 (revised). The generic-copy policy recorded here still stands, except that manager-approval surfaces now show the approver's display name (owner decision O2, 2026-10-17, RT-28 comment 12278; amends the "Manager identity on attribution prompt" row below).
 
 ---
 
