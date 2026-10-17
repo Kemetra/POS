@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import re
 import sys
+
+sys.dont_write_bytecode = True
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -36,6 +38,13 @@ ARABIC = re.compile(r"[؀-ۿ]")
 DATE = re.compile(r"^\d{1,2} [؀-ۿ]+ \d{4}، \d{2}:\d{2}$")
 
 
+SKIPPED = ("title", "style", "bdi", "time", "output")  # titles, styles and LTR data runs
+
+
+def is_arabic(text: str | None) -> bool:
+    return bool(text) and ARABIC.search(text) is not None
+
+
 class Texts(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -43,19 +52,18 @@ class Texts(HTMLParser):
         self._skip = 0
 
     def handle_starttag(self, tag, attrs) -> None:
-        if tag in ("title", "style", "bdi", "time", "output"):
+        if tag in SKIPPED:
             self._skip += 1
-        for name, value in attrs:
-            if name == "aria-label" and value and ARABIC.search(value):
-                self.runs.append(value)
+        labels = [value for name, value in attrs if name == "aria-label"]
+        self.runs.extend(label for label in labels if is_arabic(label))
 
     def handle_endtag(self, tag) -> None:
-        if tag in ("title", "style", "bdi", "time", "output"):
+        if tag in SKIPPED:
             self._skip -= 1
 
     def handle_data(self, data) -> None:
         text = data.strip()
-        if text and not self._skip and ARABIC.search(text):
+        if self._skip == 0 and is_arabic(text):
             self.runs.append(text)
 
 
@@ -79,20 +87,19 @@ def allowed(piece: str, src: str) -> bool:
     )
 
 
+def file_pieces(html: Path) -> list[str]:
+    parser = Texts()
+    parser.feed(html.read_text(encoding="utf-8"))
+    return [piece for run in parser.runs for piece in pieces(run)]
+
+
 def main() -> None:
     if len(sys.argv) != 1:
         sys.exit("usage: python -I check_g6r_copy.py")
     src = source_text()
-    missing: set[str] = set()
-    count = 0
-    for html in sorted(PACK.glob("G6R-*-*.html")):
-        parser = Texts()
-        parser.feed(html.read_text(encoding="utf-8"))
-        for run in parser.runs:
-            for piece in pieces(run):
-                count += 1
-                if not allowed(piece, src):
-                    missing.add(piece)
+    checked = [piece for html in sorted(PACK.glob("G6R-*-*.html")) for piece in file_pieces(html)]
+    missing = {piece for piece in checked if not allowed(piece, src)}
+    count = len(checked)
     for piece in sorted(missing):
         print(f"[NOT FOUND] {piece}")
     print(f"[{'FAIL' if missing else 'OK'}] {count} string runs checked, {len(missing)} not found in the shipped sources")
