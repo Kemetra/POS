@@ -1,0 +1,346 @@
+[
+  {
+    "preview": "ok",
+    "width": 1024,
+    "reachedOpener": true,
+    "initial": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "stops": [
+      {
+        "text": "الإيصال",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "الإيصال",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "الإيصال",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "الإيصال",
+        "inDialog": true
+      }
+    ],
+    "stopTexts": [
+      "إغلاق",
+      "الإيصال"
+    ],
+    "escaped": true,
+    "afterEsc": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "reopenedOn": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "closedByEnter": true,
+    "afterClose": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "pass": true
+  },
+  {
+    "preview": "ok",
+    "width": 1280,
+    "reachedOpener": true,
+    "initial": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "stops": [
+      {
+        "text": "الإيصال",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "الإيصال",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "الإيصال",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "الإيصال",
+        "inDialog": true
+      }
+    ],
+    "stopTexts": [
+      "إغلاق",
+      "الإيصال"
+    ],
+    "escaped": true,
+    "afterEsc": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "reopenedOn": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "closedByEnter": true,
+    "afterClose": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "pass": true
+  },
+  {
+    "preview": "pending",
+    "width": 1024,
+    "reachedOpener": true,
+    "initial": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "stops": [
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      }
+    ],
+    "stopTexts": [
+      "إغلاق"
+    ],
+    "escaped": true,
+    "afterEsc": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "reopenedOn": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "closedByEnter": true,
+    "afterClose": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "pass": true
+  },
+  {
+    "preview": "pending",
+    "width": 1280,
+    "reachedOpener": true,
+    "initial": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "stops": [
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      }
+    ],
+    "stopTexts": [
+      "إغلاق"
+    ],
+    "escaped": true,
+    "afterEsc": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "reopenedOn": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "closedByEnter": true,
+    "afterClose": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "pass": true
+  },
+  {
+    "preview": "fail",
+    "width": 1024,
+    "reachedOpener": true,
+    "initial": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "stops": [
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      }
+    ],
+    "stopTexts": [
+      "إغلاق"
+    ],
+    "escaped": true,
+    "afterEsc": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "reopenedOn": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "closedByEnter": true,
+    "afterClose": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "pass": true
+  },
+  {
+    "preview": "fail",
+    "width": 1280,
+    "reachedOpener": true,
+    "initial": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "stops": [
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      },
+      {
+        "text": "إغلاق",
+        "inDialog": true
+      }
+    ],
+    "stopTexts": [
+      "إغلاق"
+    ],
+    "escaped": true,
+    "afterEsc": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "reopenedOn": {
+      "text": "إغلاق",
+      "inDialog": true
+    },
+    "closedByEnter": true,
+    "afterClose": {
+      "text": "معاينة الإيصال",
+      "inDialog": false
+    },
+    "pass": true
+  }
+]

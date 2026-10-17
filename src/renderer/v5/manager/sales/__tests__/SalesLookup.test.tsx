@@ -315,7 +315,10 @@ describe('SalesLookup — a found sale (G6-SalesFound)', () => {
   });
 });
 
-describe('SalesLookup — the receipt preview', () => {
+describe('SalesLookup — the receipt preview (RT-659, G6P option A)', () => {
+  const previewDialog = (): Promise<HTMLElement> =>
+    screen.findByRole('dialog', { name: C.preview });
+
   it('opens the preview for the found sale, reading receipts.preview', async () => {
     const receipts = receiptsBridge();
     const answer: SalesFindByNumberResponse = {
@@ -326,51 +329,84 @@ describe('SalesLookup — the receipt preview', () => {
       salesBridge(() => Promise.resolve(answer)),
       receipts,
     );
-    expect(screen.queryByTestId('receipt-preview')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     search();
     fireEvent.click(await screen.findByRole('button', { name: C.preview }));
-    const dialog = await screen.findByTestId('receipt-preview');
-    expect(within(dialog).getByRole('heading', { name: 'معاينة الإيصال' })).toBeVisible();
-    expect(await screen.findByRole('img', { name: /sale-99/ })).toBeInTheDocument();
+    const dialog = await previewDialog();
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(within(dialog).getByRole('heading', { name: C.preview })).toBeVisible();
+    expect(dialog).toHaveAccessibleDescription(NUMBER);
+    expect(await screen.findByRole('region', { name: C.previewSlip })).toHaveTextContent('slip');
     expect(receipts.preview).toHaveBeenCalledWith(expect.objectContaining({ sale_id: 'sale-99' }));
   });
 
-  it('closes with «إغلاق المعاينة»', async () => {
+  it('closes with «إغلاق» and returns focus to «معاينة الإيصال»', async () => {
+    renderLookup(salesBridge(), receiptsBridge());
+    search();
+    const opener = await screen.findByRole('button', { name: C.preview });
+    await userEvent.click(opener);
+    const dialog = await previewDialog();
+    await userEvent.click(within(dialog).getByRole('button', { name: C.previewClose }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(opener).toHaveFocus();
+  });
+
+  it('closes on Esc and returns focus to «معاينة الإيصال»', async () => {
+    renderLookup(salesBridge(), receiptsBridge());
+    search();
+    const opener = await screen.findByRole('button', { name: C.preview });
+    await userEvent.click(opener);
+    await previewDialog();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(opener).toHaveFocus();
+  });
+
+  it('keeps reprint on the result row, not in the dialog', async () => {
     renderLookup(salesBridge(), receiptsBridge());
     search();
     fireEvent.click(await screen.findByRole('button', { name: C.preview }));
-    await screen.findByTestId('receipt-preview');
-    fireEvent.click(screen.getByRole('button', { name: 'إغلاق المعاينة' }));
-    await waitFor(() => {
-      expect(screen.queryByTestId('receipt-preview')).not.toBeInTheDocument();
-    });
+    const dialog = await previewDialog();
+    expect(within(dialog).queryByRole('button', { name: C.reprint })).not.toBeInTheDocument();
+    expect(within(dialog).getAllByRole('button')).toHaveLength(1);
   });
 
   it('a new lookup closes an open preview', async () => {
     renderLookup(salesBridge(), receiptsBridge());
     search();
     fireEvent.click(await screen.findByRole('button', { name: C.preview }));
-    await screen.findByTestId('receipt-preview');
+    await previewDialog();
     fireEvent.click(searchButton());
     await screen.findByTestId('sale-result');
-    expect(screen.queryByTestId('receipt-preview')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('shows no English anywhere in the open preview', async () => {
+  it('shows no English in the open preview beyond the sale number and the slip', async () => {
     renderLookup(salesBridge(), receiptsBridge());
     search();
     fireEvent.click(await screen.findByRole('button', { name: C.preview }));
-    const dialog = await screen.findByTestId('receipt-preview');
-    await screen.findByRole('img');
+    const dialog = await previewDialog();
+    await screen.findByRole('region', { name: C.previewSlip });
     const text = [
       dialog.textContent,
       ...Array.from(dialog.querySelectorAll('[aria-label],[title]')).map(
         (el) => `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('title') ?? ''}`,
       ),
     ].join(' ');
-    // The slip is the engine's HTML (`<p>slip</p>`) and the slip's label still
-    // carries the sale id (unchanged behaviour); nothing else is Latin.
-    expect(text.replace('slip', '').replace('sale-1', '')).not.toMatch(/[A-Za-z]/);
+    // The slip is the engine's HTML (`<p>slip</p>`); the sale number is an LTR code.
+    expect(text.replace('slip', '').replace(NUMBER, '')).not.toMatch(/[A-Za-z]/);
+  });
+
+  it('has no axe violations with the preview open', async () => {
+    renderLookup(salesBridge(), receiptsBridge());
+    search();
+    fireEvent.click(await screen.findByRole('button', { name: C.preview }));
+    await screen.findByRole('region', { name: C.previewSlip });
+    await expectNoAxeViolations(document.body);
   });
 });
 

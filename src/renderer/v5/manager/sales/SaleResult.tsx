@@ -1,7 +1,7 @@
 import { useState, type JSX } from 'react';
 
 import type { ReceiptsBridgeAPI, SaleSummary } from '../../../../shared/bridge-api';
-import { ReceiptPreview } from '../../../ui/receipts/ReceiptPreview';
+import { ReceiptPreview } from './ReceiptPreview';
 import { ReprintAffordance } from './ReprintAffordance';
 import { SALES_COPY } from './sales-copy';
 
@@ -56,6 +56,7 @@ export function SaleResult({ sale, receipts }: Readonly<SaleResultProps>): JSX.E
       {previewing && (
         <ReceiptPreview
           saleId={sale.sale_id}
+          saleNumber={sale.sale_number}
           onClose={() => {
             setPreviewing(false);
           }}

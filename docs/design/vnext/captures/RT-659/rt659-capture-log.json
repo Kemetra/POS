@@ -1,0 +1,362 @@
+[
+  {
+    "name": "Ready",
+    "preview": "ok",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt659-Ready-1024x768.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 292,
+      "y": 8,
+      "w": 440,
+      "h": 752
+    },
+    "wellScrolls": true,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Ready",
+    "preview": "ok",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt659-Ready-1024x768-forced.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 292,
+      "y": 8,
+      "w": 440,
+      "h": 752
+    },
+    "wellScrolls": true,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Ready",
+    "preview": "ok",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt659-Ready-1280x800.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 420,
+      "y": 12,
+      "w": 440,
+      "h": 776
+    },
+    "wellScrolls": true,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Ready",
+    "preview": "ok",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt659-Ready-1280x800-forced.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 420,
+      "y": 12,
+      "w": 440,
+      "h": 776
+    },
+    "wellScrolls": true,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Loading",
+    "preview": "pending",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt659-Loading-1024x768.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 292,
+      "y": 217,
+      "w": 440,
+      "h": 334
+    },
+    "wellScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Loading",
+    "preview": "pending",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt659-Loading-1024x768-forced.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 292,
+      "y": 216,
+      "w": 440,
+      "h": 336
+    },
+    "wellScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Loading",
+    "preview": "pending",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt659-Loading-1280x800.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 420,
+      "y": 233,
+      "w": 440,
+      "h": 334
+    },
+    "wellScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Loading",
+    "preview": "pending",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt659-Loading-1280x800-forced.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 420,
+      "y": 232,
+      "w": 440,
+      "h": 336
+    },
+    "wellScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Failed",
+    "preview": "fail",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt659-Failed-1024x768.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 292,
+      "y": 217,
+      "w": 440,
+      "h": 334
+    },
+    "wellScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Failed",
+    "preview": "fail",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt659-Failed-1024x768-forced.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 292,
+      "y": 216,
+      "w": 440,
+      "h": 336
+    },
+    "wellScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Failed",
+    "preview": "fail",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt659-Failed-1280x800.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 420,
+      "y": 233,
+      "w": 440,
+      "h": 334
+    },
+    "wellScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  },
+  {
+    "name": "Failed",
+    "preview": "fail",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt659-Failed-1280x800-forced.png",
+    "axe": [],
+    "dialogs": 1,
+    "modal": "true",
+    "dialogName": "معاينة الإيصال",
+    "description": "TERM-01-2026-10-15-000042",
+    "buttons": [
+      "إغلاق"
+    ],
+    "focused": "إغلاق",
+    "legacy": false,
+    "inlineStyles": 0,
+    "inViewport": true,
+    "dialog": {
+      "x": 420,
+      "y": 232,
+      "w": 440,
+      "h": 336
+    },
+    "wellScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": [],
+    "ok": true
+  }
+]

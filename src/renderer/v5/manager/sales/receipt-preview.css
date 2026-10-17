@@ -1,0 +1,117 @@
+/*
+ * RT-659 — the receipt preview inside the one v5 Dialog panel, on the G-6
+ * addendum (docs/design/vnext/visual-acceptance/G6P-Receipt-Preview/g6p.css:
+ * .dialog.preview, .preview-head, .well, .slip), in v5 tokens. Owner option A:
+ * «إغلاق» only.
+ */
+
+/* The panel holds the head, the slip well and the action row; only the well
+   scrolls, so the title and «إغلاق» never leave the screen. */
+.v5-dialog:has(> .v5-receipt-head) {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.v5-receipt-head {
+  display: grid;
+  gap: 2px;
+}
+
+.v5-receipt-head h2,
+.v5-receipt-head p {
+  margin: 0;
+}
+
+.v5-receipt-head h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.375;
+}
+
+/* The sale number is a code: mono, muted, isolated LTR (the <bdi>). */
+.v5-receipt-head p {
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+}
+
+/* The slip sits on a sunken holder (DESIGN.md: flat, borders before shadows). */
+.v5-receipt-well {
+  min-block-size: 160px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+}
+
+.v5-receipt-well:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.v5-receipt-well--message {
+  display: grid;
+  place-items: center;
+}
+
+.v5-receipt-well--message .v5-notice {
+  inline-size: 100%;
+}
+
+.v5-receipt-loading {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* 80mm thermal slip: 42 columns of 12px mono, the type floor, so no zoom. */
+.v5-receipt-slip {
+  inline-size: max-content;
+  max-inline-size: 100%;
+  margin-inline: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1.375;
+}
+
+/* The engine's bands keep their own spacing; its rules are one unbroken line. */
+.v5-receipt-slip .band {
+  white-space: pre-wrap;
+}
+
+.v5-receipt-slip .rule {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  white-space: pre;
+}
+
+.v5-receipt-slip .receipt-emph {
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-receipt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.v5-receipt-actions .v5-sales-btn {
+  min-inline-size: 104px;
+}
+
+/* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
+@media (forced-colors: active) {
+  .v5-receipt-well,
+  .v5-receipt-slip {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-receipt-well:focus-visible {
+    outline-color: Highlight;
+  }
+}
