@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RT-656 · المبيعات المعلقة · مرجع</title>
+<style>
+  :root { --primary:#0f766e; --text:#0f1d2e; --muted:#53647a; --border:#d8dfe7; --bg:#f7f9fa; --surface:#fff; }
+  body { margin:0; padding:32px; background:var(--bg); color:var(--text); font-family:'Dubai','Segoe UI',Tahoma,Arial,sans-serif; font-size:15px; line-height:1.7; }
+  main { max-inline-size:1180px; margin-inline:auto; display:grid; gap:28px; }
+  h1 { margin:0; font-size:26px; } h2 { margin:0 0 8px; font-size:19px; }
+  .status { display:inline-block; padding:2px 12px; border:1px solid #a35a00; border-radius:999px; background:#fdf1e0; color:#7a4300; font-weight:700; }
+  section { padding:20px 24px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+  table { inline-size:100%; border-collapse:collapse; }
+  th, td { padding:8px 10px; border-block-end:1px solid var(--border); text-align:start; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .ltr { direction:ltr; unicode-bidi:isolate; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:13px; direction:ltr; unicode-bidi:isolate; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; }
+  figure { margin:0; display:grid; gap:6px; }
+  figure img { inline-size:100%; border:1px solid var(--border); border-radius:8px; }
+  figcaption { color:var(--muted); font-size:13px; }
+  ul { margin:0; padding-inline-start:20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>المبيعات المعلقة للمدير: مراجع الصفحة على رأس G-6</h1>
+    <p><span class="status">مسودة · بانتظار موافقة المالك</span> · Jira <span class="ltr">RT-656</span> · السلوك من <span class="ltr">RT-441</span></p>
+    <p><b>التصنيف:</b> مراجع شكل فقط. السلوك كما على <code>main</code> (<code>src/renderer/v5/recovery/</code>)، والبيانات من الأداة <code>#/dev/recovery-proof</code>. الإطار ورأس الصفحة واللوحات والأزرار من G-6 (<span class="ltr">RT-478</span>). كل نص مأخوذ حرفيًا؛ <b>لا نص جديد</b>.</p>
+    <p>خارج النطاق: سلوك الاستعادة، وجسر الاستعادة، والعملية الرئيسية.</p>
+  </header>
+  <section>
+    <h2>الحالات (18 حالة × 1024×768 و1280×800)</h2>
+    <div class="grid"><figure><img src="captures/RC-Typical-1280-light.png" alt=""><figcaption>1 · دفع معلّق ومبيعات محفوظة</figcaption></figure><figure><img src="captures/RC-RecoveryMode-1024-light.png" alt=""><figcaption>2 · وضع الاستعادة</figcaption></figure><figure><img src="captures/RC-Long-1280-light.png" alt=""><figcaption>3 · قائمة طويلة وأسماء طويلة</figcaption></figure><figure><img src="captures/RC-Empty-1024-light.png" alt=""><figcaption>4 · لا شيء معلّق</figcaption></figure><figure><img src="captures/RC-Loading-1280-light.png" alt=""><figcaption>5 · جارٍ التحميل</figcaption></figure><figure><img src="captures/RC-Refused-1024-light.png" alt=""><figcaption>6 · مرفوض: ليست شاشة المدير</figcaption></figure><figure><img src="captures/RC-Unavailable-1280-light.png" alt=""><figcaption>7 · تعذّر تحميل القائمة</figcaption></figure><figure><img src="captures/RC-Complete-1024-light.png" alt=""><figcaption>8 · إكمال البيع: النافذة</figcaption></figure><figure><img src="captures/RC-CompleteReady-1280-light.png" alt=""><figcaption>9 · إكمال البيع: جاهز للتأكيد</figcaption></figure><figure><img src="captures/RC-CancelPayment-1024-light.png" alt=""><figcaption>10 · إلغاء الدفع: النافذة</figcaption></figure><figure><img src="captures/RC-CancelPaymentReady-1280-light.png" alt=""><figcaption>11 · إلغاء الدفع: جاهز للتأكيد</figcaption></figure><figure><img src="captures/RC-CancelSale-1024-light.png" alt=""><figcaption>12 · إلغاء بيع محفوظ: النافذة</figcaption></figure><figure><img src="captures/RC-WrongPin-1280-light.png" alt=""><figcaption>13 · رقم سري غير صحيح</figcaption></figure><figure><img src="captures/RC-NoPin-1024-light.png" alt=""><figcaption>14 · لا يوجد رقم سري مدير</figcaption></figure><figure><img src="captures/RC-ApproverLocked-1280-light.png" alt=""><figcaption>15 · الجهاز مقفل أثناء التأكيد</figcaption></figure><figure><img src="captures/RC-Completed-1024-light.png" alt=""><figcaption>16 · اكتمل البيع</figcaption></figure><figure><img src="captures/RC-CancelledPayment-1280-light.png" alt=""><figcaption>17 · أُلغي الدفع</figcaption></figure><figure><img src="captures/RC-CancelledSale-1024-light.png" alt=""><figcaption>18 · أُلغي البيع المحفوظ</figcaption></figure></div><p>الصور تتناوب بين 1280 و1024 للاختصار. لكل حالة ملفان <code>RC-&lt;State&gt;-1024.html</code> و<code>-1280.html</code> والصور في <code>captures/</code> (فاتح وتباين عالٍ لكل عرض).</p><div class="grid"><figure><img src="captures/RC-Typical-1280-forced.png" alt=""><figcaption>دفع معلّق ومبيعات محفوظة · تباين عالٍ</figcaption></figure><figure><img src="captures/RC-CancelPayment-1280-forced.png" alt=""><figcaption>إلغاء الدفع: النافذة · تباين عالٍ</figcaption></figure><figure><img src="captures/RC-Completed-1280-forced.png" alt=""><figcaption>اكتمل البيع · تباين عالٍ</figcaption></figure></div>
+  </section>
+  <section>
+    <h2>ما رُسم وما التزم به</h2>
+    <ul>
+      <li><b>رأس G-6:</b> العنوان «المبيعات المعلقة» في <code>screen-head</code> بدل شريط الوردية <code>v5-shift-mgr-head</code>، واللوحتان بشكل <code>panel</code> / <code>panel-head</code> من G-6.</li>
+      <li><b>الدفع المعلّق</b> على البداية بعرض 360 (300 في 1024)، و«المتبقي» أكبر رقم في الصفحة؛ والمبيعات المحفوظة تملأ الباقي وتُمرَّر.</li>
+      <li><b>الإجماليات فقط:</b> لا بنود، ولا اسم تعليق، ولا معرّف موظف؛ الموظف غير المعروف «موظف آخر». سطر دفع صفري لا يظهر.</li>
+      <li><b>الحالات وسوم بنص</b> («مسودة»، «في الدفع»، «معلّقة») لا بلون وحده.</li>
+      <li><b>النافذة</b> تركيزها الأول على «رجوع» كما على main، و«تأكيد» معطّل حتى يكتمل المطلوب؛ كل ما خلفها خامل.</li>
+      <li><b>الخط Dubai</b> لكل نص عربي، و<b>الأرقام غربية LTR جدولية</b> للمبالغ والأعداد فقط (<code>1,284.50 EGP</code>). لا تاريخ في الشاشة (OD-2).</li>
+      <li><b>لم يُرسم:</b> تحميل الموافِق داخل النافذة («جارٍ التحميل…» في نفس المكان)، وانتظار الإرسال (الأزرار معطّلة).</li>
+</ul>
+  </section>
+  <section>
+    <h2>خريطة أسباب الرفض</h2>
+    <table><thead><tr><th>السبب</th><th>الحالة</th></tr></thead><tbody><tr><td><code>listHeld</code>: <code>role_mismatch</code></td><td>رُسمت (Refused): «هذه الشاشة للمدير فقط.»</td></tr><tr><td><code>listHeld</code> رُفض أو تعذّر</td><td>رُسمت (Unavailable): «تعذّر تنفيذ الإجراء. حاول مرة أخرى.» (OD-3)</td></tr><tr><td><code>listApprovers</code>: <code>approvers: []</code></td><td>رُسمت (NoPin)</td></tr><tr><td><code>listApprovers</code>: <code>session_locked</code></td><td>رُسمت (ApproverLocked): «الجهاز مقفل.»</td></tr><tr><td><code>request</code>: <code>approval_unavailable</code></td><td>رُسمت (WrongPin)</td></tr><tr><td>سائر الأسباب (<code>not_found</code>، <code>approval_stale</code>، <code>cash_insufficient</code>، …)</td><td>نصها من <code>recoveryRefusalMessage</code> في نفس مكان الخطأ في النافذة (كما WrongPin)، بلا حالة منفصلة</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>النصوص (كلها مأخوذة، لا نص جديد)</h2>
+    <table><thead><tr><th>المكان</th><th>النص</th><th>المصدر</th></tr></thead><tbody><tr><td>عنوان الصفحة (h1)</td><td>«المبيعات المعلقة»</td><td><code>RECOVERY_COPY.title</code></td></tr><tr><td>وضع الاستعادة</td><td>«دخلت لإنهاء دفع معلّق على هذه الطرفية. لا يمكن البيع حتى يُكمَل الدفع أو يُلغى.»</td><td><code>recoveryMode</code></td></tr><tr><td>التحميل</td><td>«جارٍ التحميل…»</td><td><code>loading</code></td></tr><tr><td>لوحة الدفع</td><td>«دفع معلّق» · فارغة: «لا يوجد دفع معلّق على هذه الطرفية.»</td><td><code>stuckTitle</code> · <code>noneStuck</code></td></tr><tr><td>حقائق الدفع</td><td>«الموظف» · «عدد الأصناف» · «الإجمالي» · «نقدي مدفوع» · «بطاقة مدفوعة» · «قسيمة مستخدمة» · «المتبقي»</td><td><code>owner</code> … <code>remaining</code>؛ سطر الدفع الصفري لا يظهر</td></tr><tr><td>أزرار الدفع</td><td>«إكمال البيع» · «إلغاء الدفع»</td><td><code>complete</code> · <code>cancelPayment</code></td></tr><tr><td>لوحة المبيعات</td><td>«مبيعات محفوظة لموظفين آخرين» · فارغة: «لا توجد مبيعات محفوظة لموظفين آخرين.»</td><td><code>heldTitle</code> · <code>noneHeld</code></td></tr><tr><td>سطر البيع</td><td>الاسم أو «موظف آخر» · «مسودة» / «في الدفع» · «معلّقة» · الإجمالي · «عدد الأصناف ‹n›» · «إلغاء البيع»</td><td><code>someoneElse</code> · <code>draft</code> · <code>handedOff</code> · <code>parked</code> · <code>cancelSale</code></td></tr><tr><td>نافذة الإجراء</td><td>العنوان = اسم الإجراء · «رجوع» · «تأكيد»</td><td><code>RECOVERY_ACTION_TITLE</code> · <code>back</code> · <code>approve</code></td></tr><tr><td>النقدية</td><td>«المتبقي: ‹مبلغ›» · «النقدية المستلمة للمتبقي»</td><td><code>remaining</code> · <code>cashReceived</code></td></tr><tr><td>تأكيدات الإلغاء</td><td>«أرجعتُ النقدية المدفوعة للعميل (‹مبلغ›)» · «ألغيتُ دفع البطاقة على جهاز البطاقة»</td><td><code>confirmCash</code> · <code>confirmCard</code></td></tr><tr><td>الرقم السري</td><td>«أدخل رقمك السري لتأكيد هذا الإجراء.» · «الرقم السري — ‹اسم المدير›»</td><td><code>approvalBody</code> · <code>pinLabel</code></td></tr><tr><td>لا رقم سري</td><td>«لا يوجد لك رقم سري مدير مفعّل على هذه الطرفية. سجّله من شاشة الوردية، ثم عُد.»</td><td><code>noPin</code></td></tr><tr><td>النتائج</td><td>«اكتمل البيع. الباقي للعميل: ‹مبلغ›» · «أُلغي الدفع وسُجّل الإرجاع.» · «أُلغي البيع المحفوظ.»</td><td><code>completed</code> + <code>change</code> · <code>cancelledPayment</code> · <code>cancelledSale</code></td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>قرارات المالك (بانتظار قرار المالك)</h2>
+    <table><thead><tr><th>#</th><th>النقطة</th><th>المقترح</th></tr></thead><tbody><tr><td>OD-1</td><td>رأس الصفحة والتنقل</td><td>رأس G-6: «المبيعات المعلقة» وحده بلا سطر فرعي (لا نص جديد)، والعنصر الحالي في التنقل «لوحة المتابعة» لأن الصفحة تُفتح من بطاقتها، كما رسم G-6 «الورديات العالقة». بديل: سطر فرعي بنص البطاقة الموجود «دفع معلّق، أو مبيعات محفوظة لموظفين آخرين.». <b>التوصية:</b> بلا سطر فرعي.</td></tr><tr><td>OD-2</td><td>التاريخ والوقت</td><td>الشاشة على <code>main</code> لا تعرض <code>started_at</code> ولا <code>updated_at</code>، فلا تاريخ في المراجع. إن أراد المالك وقتًا لكل سطر فهو نص جديد وتغيير عرض يُقرَّر منفصلًا، ويُكتب بخط Dubai وأرقام غربية (<code>ar-EG-u-nu-latn</code>). <b>التوصية:</b> كما على main، بلا وقت.</td></tr><tr><td>OD-3</td><td>تعذّر تحميل القائمة</td><td>النص الحالي «تعذّر تنفيذ الإجراء. حاول مرة أخرى.» يتكلم عن إجراء لا عن تحميل، ولا زر لإعادة المحاولة. رُسم كما هو. نص مخصص أو زر إعادة محاولة سلوك جديد خارج RT-656. <b>التوصية:</b> كما رُسم الآن، ومتابعة النص في عمل منفصل إن أراد المالك.</td></tr><tr><td>OD-4</td><td>التركيز بعد رفض الرقم السري</td><td>على main يُمسح الرقم السري ويتعطل «تأكيد» فيضيع التركيز. المرجع WrongPin يضع التركيز في حقل الرقم السري. هذا نقل تركيز فقط بلا تغيير في السلوك. <b>التوصية:</b> اعتماده ضمن تنفيذ RT-656.</td></tr><tr><td>OD-5</td><td>زرا الإلغاء</td><td>«إلغاء الدفع» و«إلغاء البيع» زران محايدان كما على main، لا بلون الخطر؛ كل منهما يفتح نافذة تأكيد برقم المدير السري. <b>التوصية:</b> محايدان.</td></tr><tr><td>OD-6</td><td>التحميل</td><td>على main نص عادي؛ المرجع يرسمه إشعارًا محايدًا (نفس النص) كبقية صفحات G-6. <b>التوصية:</b> كما رُسم.</td></tr><tr><td>OD-7</td><td>نافذة «إلغاء البيع» لا تسمّي البيع</td><td>كما على main: العنوان والرقم السري فقط. إضافة اسم الموظف والإجمالي في النافذة تغيير عرض بلا نص جديد. <b>التوصية:</b> كما على main، ويمكن إضافتها لاحقًا.</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>التباين العالي</h2>
+    <ul>
+      <li>كل لوحة وزر وحقل ووسم وإشعار حدّه بلون النص؛ «المتبقي» والتحذير بحد 2 بكسل.</li>
+      <li>العنصر الحالي في التنقل <code>Highlight</code>، والزر المعطّل <code>GrayText</code>، وحلقة التركيز <code>Highlight</code>.</li>
+</ul>
+  </section>
+  <section>
+    <h2>الفحوص المنفّذة على الملفات</h2>
+    
+    <p>أُنتجت الصور وفُحصت بـ<code>tools/capture_rc.cjs</code> (فحوص G-3 وG-6 وPK-3 المشتركة في <code>../tools/capture-refs.cjs</code>): الاحتواء داخل الإطار، لا تدفق أفقي، لا نص أصغر من 12 بكسل،
+      لا هدف أصغر من 44×44 (هدف خانة الاختيار سطرها كله كالراديو)، لا اسم مقصوص، لا عنصر قابل للتركيز خلف النافذة، وaxe-core بلا مخالفات. 36 ملفًا، صفر إخفاق.
+      الملفات من <code>tools/gen_rc.py</code> وهذه الصفحة من <code>tools/gen_rc_spec.py</code>.</p>
+
+  </section>
+</main>
+</body>
+</html>
