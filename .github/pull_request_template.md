@@ -52,6 +52,18 @@ explain in one line each how this PR upholds them.
 
 - **<Principle>** — <one-line justification>
 
+## CodeRabbit review
+
+<!--
+CodeRabbit's plan allows about one review per hour and `.coderabbit.yaml` turns off
+incremental review (RT-590), so pushes do not re-trigger it. Add the label
+`skip-coderabbit` to opt a trivial PR out. For a High-tier PR, post the single
+comment "@coderabbitai review" (as a PR comment, not in this description) on the
+final head.
+-->
+
+- [ ] **High-tier PR (RT-582 tiers):** one manual CodeRabbit review requested on the final head, after the last push.
+
 ## Active spec
 
 Refs [specs/001-foundation/spec.md](../specs/001-foundation/spec.md). Update this link when feature 002 lands.

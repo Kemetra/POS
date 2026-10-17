@@ -1,0 +1,86 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# RT-590 (RT-586 follow-up): CodeRabbit is the primary AI reviewer but its plan allows about
+# one review per hour, so coverage is partial by design. Incremental review is off so pushes
+# do not spend the allowance; High-tier PRs (RT-582) get a manual `@coderabbitai review` on the
+# final head (see .github/pull_request_template.md).
+language: 'en-US'
+reviews:
+  profile: 'assertive'
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  poem: false
+  in_progress_fortune: false
+  suggested_reviewers: false
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: false
+    ignore_usernames:
+      - 'dependabot[bot]'
+      - 'renovate[bot]'
+    labels:
+      - '!skip-coderabbit'
+  path_filters:
+    - '!**/dist/**'
+    - '!**/coverage/**'
+    - '!**/node_modules/**'
+    - '!**/*.png'
+    - '!**/*.svg'
+    - '!**/*.snap'
+    - '!package-lock.json'
+    - '!release/**'
+  path_instructions:
+    - path: 'src/main/**'
+      instructions: |
+        Electron main process. Check that:
+        - Renderer-supplied data is untrusted: every IPC handler validates its payload and never
+          trusts a renderer-provided identity, tenant, store, terminal or role.
+        - Secrets (device token, operator JWT/envelope, PINs) stay in the main process and are
+          never returned over IPC, logged, or put in error messages. PII and card data never
+          reach logs.
+        - POS/Admin never call ERPNext/Frappe directly; the only upstream is Backend-Core.
+        - SQLite writes that must be atomic run inside one transaction; migrations are
+          forward-only and idempotent.
+    - path: 'src/preload/**'
+      instructions: |
+        Preload bridge (contextIsolation: true, nodeIntegration: false, sandbox: true).
+        - Expose only narrow, typed functions via contextBridge; never expose ipcRenderer, a raw
+          `invoke`/`send`/`on`, or arbitrary channel names.
+        - Every channel is on an explicit allowlist and matches src/shared/bridge-api.ts.
+        - No Node built-ins, filesystem, or secret access reachable from the renderer.
+    - path: 'src/shared/money.ts'
+      instructions: |
+        Money math. Money is integer minor units only, guarded with Number.isSafeInteger.
+        Flag any float arithmetic, parseFloat/toFixed on amounts, implicit rounding, unchecked
+        overflow, or a rounding rule that changes the totals the customer sees or the ledger
+        receives. Changes need matching tests.
+    - path: 'src/shared/payments/money-math.ts'
+      instructions: |
+        Money math. Money is integer minor units only, guarded with Number.isSafeInteger.
+        Flag any float arithmetic, parseFloat/toFixed on amounts, implicit rounding, unchecked
+        overflow, or a rounding rule that changes tender, change due or settled totals.
+        Changes need matching tests.
+    - path: 'src/main/sync-outbox/**'
+      instructions: |
+        Offline sync and outbox. Check for:
+        - Idempotency: a retry or replay must never create a second sale, payment, void or
+          return upstream; external ids and idempotency keys are deterministic and stable.
+        - Durability: a sale is committed locally before it is enqueued, and an outbox row is
+          only marked synced after a confirmed upstream response (duplicate counts as synced).
+        - Failure handling: transient errors back off and retry, permanent errors dead-letter
+          visibly, and nothing is silently dropped or reordered (FIFO per terminal).
+        - Credentials are read in-process and never logged or bridged to the renderer.
+    - path: 'src/main/sales-sync/**'
+      instructions: |
+        Offline sync and outbox. Check for:
+        - Idempotency: a retry or replay must never create a second sale, payment, void or
+          return upstream; external ids and idempotency keys are deterministic and stable.
+        - Durability: a sale is committed locally before it is enqueued, and an outbox row is
+          only marked synced after a confirmed upstream response (duplicate counts as synced).
+        - Failure handling: transient errors back off and retry, permanent errors dead-letter
+          visibly, and nothing is silently dropped or reordered (FIFO per terminal).
+        - Credentials are read in-process and never logged or bridged to the renderer.
+chat:
+  auto_reply: true
