@@ -244,6 +244,12 @@ export const TRANSPORT_DECORATORS: ReadonlyArray<{
     reason:
       'withDeviceAuthObservation wraps the fetch of the device-bearer clients (cashier admissions, read-down) and only reads the response status for the RT-215 device-401 detector.',
   },
+  {
+    module: 'src/main/terminal-status/reachability-observation.ts',
+    fetchCallSites: 1,
+    reason:
+      'RT-601 withReachabilityObservation wraps the fetch of the Backend-Core device and operator clients and only reports the response status, or that the request rejected, to the connection monitor; request and response pass through untouched.',
+  },
 ];
 
 export const CLIENT_CALLS: readonly ClientCall[] = [

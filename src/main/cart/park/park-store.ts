@@ -39,6 +39,7 @@ export interface ParkedListRow {
 export interface ParkLineRow {
   line_id: string;
   item_ref: string;
+  display_name: string;
   quantity: number;
   unit_price_minor: number;
 }
@@ -196,7 +197,7 @@ export function bindParkStore(db: DatabaseHandle): ParkStore {
     parkedLines: (cart_id) =>
       (
         db.prepare(
-          `SELECT line_id, item_ref, quantity, unit_price_minor FROM cart_lines
+          `SELECT line_id, item_ref, display_name, quantity, unit_price_minor FROM cart_lines
             WHERE cart_id = ? AND removed_at IS NULL ORDER BY created_at ASC`,
         ) as All<ParkLineRow>
       ).all(cart_id),

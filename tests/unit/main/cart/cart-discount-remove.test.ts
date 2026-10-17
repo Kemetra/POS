@@ -282,3 +282,35 @@ describe('cart.discountPlaceholders.remove — S3 contract (RED until T069)', ()
     expect(res.kind).toBe('ok');
   });
 });
+
+// ── RT-615 (RT-608 §A4 F-3): the placeholder must belong to req.cart_id ──
+
+describe('cart.discountPlaceholders.remove — placeholder owned by another cart (RT-615)', () => {
+  it('refuses wrong_owner and leaves the other cart’s placeholder in place', async () => {
+    const f = await newCartWithPlaceholder();
+    const foreignId = 'ph-rt615-other-cart';
+    f.db.run(
+      `INSERT INTO cart_line_discount_placeholders
+         (placeholder_id, cart_id, line_id, placeholder_kind,
+          requires_manager_attribution, attribution_operator_id, created_at)
+       VALUES (?, 'cart-other', 'line-other', 'percent_5', 0, NULL, '2026-05-16T10:02:00.000Z')`,
+      [foreignId],
+    );
+
+    const res = await f.handlers.discountPlaceholdersRemove({
+      cart_id: f.cart_id,
+      placeholder_id: foreignId,
+      idempotency_key: 'dp-rem-rt615',
+    });
+
+    expect(res.kind).toBe('refused');
+    if (res.kind === 'refused') expect(res.reason).toBe('wrong_owner');
+    const left = f.db.exec(
+      'SELECT cart_id FROM cart_line_discount_placeholders WHERE placeholder_id = ?',
+      [foreignId],
+    );
+    expect(left[0]?.values).toEqual([['cart-other']]);
+    expect(readOutboxKinds(f.db, f.cart_id).some((k) => k.startsWith('cart.discount'))).toBe(false);
+    expect(readOutboxKinds(f.db, 'cart-other')).toEqual([]);
+  });
+});

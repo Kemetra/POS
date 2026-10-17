@@ -75,9 +75,11 @@ RT-608 item 4 asks the audit to carry `mode`. MA-2 (RT-443) records no grant mod
 
 Envelope steps 3a (`unauthorized_discount` at handoff) and 3b (006 payment-eligibility refusal) are held for owner authorisation (see the PR body for options). Until then, a placeholder written before RT-608 is not refused at handoff or payment. This is the pre-existing state, not a regression: no shipped UI has ever called `add`, so none is expected in the field. RT-608 itself writes only authorised rows.
 
-### F-3 — `discountPlaceholders.remove` does not scope the placeholder to the cart (pre-existing)
+### F-3 — `discountPlaceholders.remove` does not scope the placeholder to the cart (pre-existing) — CLOSED by RT-615
 
 `discountPlaceholdersRemove` gates on `req.cart_id`, then deletes by `placeholder_id` alone (`getDiscountPlaceholder` / `DELETE … WHERE placeholder_id = ?`). It never checks that the placeholder belongs to that cart. A caller who knows another cart's placeholder id could remove it through their own cart. The snapshot only shows a session its own placeholders, so the id is hard to learn. Removing a discount can only raise a total (D4). This is outside RT-608's scope and is **not changed here**. **Recommended:** a one-line follow-up that refuses `wrong_owner` when `placeholder.cart_id !== req.cart_id`.
+
+**Closed (2026-10-17, RT-615).** `discountPlaceholdersRemove` now refuses `wrong_owner` when `placeholder.cart_id !== req.cart_id`, before any write, so the placeholder stays in place and no outbox row is written. Test: `tests/unit/main/cart/cart-discount-remove.test.ts` › "refuses wrong_owner and leaves the other cart’s placeholder in place".
 
 ### F-4 — A replay after the cart was frozen answers `frozen`, not `ok` (pre-existing)
 

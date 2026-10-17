@@ -63,6 +63,9 @@ const STOP_ORDER = [
   // so it stops before the handle closes; after the heartbeat, whose last
   // outcome may still reach the grant seam.
   'offline grant clock tick',
+  // RT-601 — the terminal status tick (applies the monitor's recovery hold and
+  // freshness window, logs transitions). It never touches the DB; stopped last.
+  'terminal status tick',
 ] as const;
 
 export type WorkerName = (typeof STOP_ORDER)[number];
