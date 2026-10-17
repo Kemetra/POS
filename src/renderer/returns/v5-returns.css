@@ -1,0 +1,374 @@
+/*
+ * RT-660 — the RT-15 Returns content on the shared v5 controls, as the
+ * owner-approved G6R references draw it
+ * (docs/design/vnext/visual-acceptance/G6-Returns/g6r.css, RD-1…RD-10).
+ *
+ * Panels, buttons, fields, facts and numbers are the shared manager controls
+ * (v5/manager/manager.css); notices are the foundation Notice. This file adds
+ * only what Returns needs beyond them: the quantity stepper, the tables, the
+ * refund total, the state pills and the outcome/payout layout. Two tiers like
+ * the frame: comfortable at 1280+, the floor tier below 1280.
+ *
+ * RT-501: ScreenSection owns the screen's padding, <h1> and scrolling. RD-3:
+ * the journal takes the rest of the height and only its table scrolls.
+ */
+
+/* The route's ScreenSection body grows, so the journal can reach the foot. */
+.v5-screen-section__body:has(> .v5-returns) {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.v5-returns {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+.v5-returns > .v5-manager-panel {
+  flex: none;
+}
+
+/* A step's heading takes focus on mount; it shows the shared ring. */
+.v5-returns :focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.v5-returns .v5-manager-panel__head {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.v5-returns .v5-manager-panel__head h2 {
+  border-radius: 4px;
+}
+
+.v5-returns-meta {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.v5-returns .v5-manager-num {
+  white-space: nowrap;
+}
+
+.v5-returns-code {
+  font-size: 13px;
+}
+
+/* A neutral notice (an empty journal, a payout that is ready): grey rule, muted glyph. */
+.v5-returns .v5-notice[data-tone='neutral'] {
+  --tone-ink: var(--color-border);
+  --tone-soft: var(--color-surface-elevated);
+}
+
+.v5-returns .v5-notice[data-tone='neutral'] .v5-tone-icon {
+  color: var(--color-text-muted);
+}
+
+.v5-returns .v5-notice__text {
+  display: grid;
+  gap: 2px;
+}
+
+/* Actions sit at the inline end in a row; the payout's at the start. */
+.v5-returns-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.v5-returns-actions--start {
+  justify-content: flex-start;
+}
+
+/* ── lookup ──────────────────────────────────────────────────────── */
+.v5-returns-lookup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.v5-returns-lookup .v5-manager-field {
+  flex: 0 1 320px;
+}
+
+/* ── line selection: name + facts, then the stepper ─────────────── */
+.v5-returns-lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  list-style: none;
+}
+
+.v5-returns-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 60px;
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--color-border-soft);
+}
+
+.v5-returns-line:last-child {
+  border-block-end: 0;
+}
+
+.v5-returns-line__text {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.v5-returns-line__name {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.v5-returns-line__meta {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.v5-returns-stepper {
+  display: inline-grid;
+  grid-template-columns: 44px 52px 44px;
+  align-items: stretch;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.v5-returns-step {
+  min-block-size: 44px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 20px;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.v5-returns-step:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.v5-returns-qty {
+  display: grid;
+  place-items: center;
+  border-inline: 1px solid var(--color-border);
+  font-size: 16px;
+  font-weight: var(--font-weight-bold);
+}
+
+/* ── state pills: one glyph per state, so a state never rests on colour ── */
+.v5-returns-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  min-block-size: 30px;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.v5-returns-state svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.v5-returns-state[data-state='pending'] {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.v5-returns-state[data-state='confirmed'],
+.v5-returns-state[data-state='paid_out'] {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success-emphasis);
+}
+
+.v5-returns-state[data-state='refused'],
+.v5-returns-state[data-state='unknown'] {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-emphasis);
+}
+
+.v5-returns-state__reason {
+  display: block;
+  max-inline-size: 260px;
+  margin-block-start: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* ── tables (the quote, the journal) ─────────────────────────────── */
+.v5-returns-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.v5-returns-table th {
+  position: sticky;
+  inset-block-start: 0;
+  padding: 6px var(--space-3);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.v5-returns-table td {
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--color-border-soft);
+  vertical-align: middle;
+}
+
+.v5-returns-table tr:last-child td {
+  border-block-end: 0;
+}
+
+/* Codes, amounts and times never break: only the refusal reason wraps. */
+.v5-returns-table td > .v5-manager-num,
+.v5-returns-table td > time {
+  white-space: nowrap;
+}
+
+.v5-returns-table--quote {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.v5-returns-table--quote td:not(:first-child),
+.v5-returns-table--quote th:not(:first-child),
+.v5-returns-table--journal td:last-child {
+  inline-size: 1%;
+  white-space: nowrap;
+}
+
+/* ── the journal fills what is left; its table scrolls (RD-3) ───── */
+.v5-returns > .v5-returns-journal {
+  flex: 1 1 auto;
+  min-block-size: 160px;
+}
+
+.v5-returns-journal__notices {
+  padding-block-end: 0;
+}
+
+.v5-returns-table-scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+}
+
+/* ── the refund total: the largest figure on the step ───────────── */
+.v5-returns-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-elevated);
+  font-weight: var(--font-weight-semibold);
+}
+
+.v5-returns-total__amount {
+  font-size: 24px;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+}
+
+/* ── the outcome: announcement and facts beside the payout ──────── */
+.v5-returns-outcome {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.v5-returns-outcome__col {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.v5-returns-payout {
+  display: grid;
+  gap: 10px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.v5-returns-payout h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: var(--font-weight-bold);
+}
+
+@media (max-width: 1279px) {
+  .v5-returns-table th,
+  .v5-returns-table td {
+    padding-inline: var(--space-2);
+  }
+
+  .v5-returns-state__reason {
+    max-inline-size: 200px;
+  }
+
+  .v5-returns-total__amount {
+    font-size: 22px;
+  }
+}
+
+@media (forced-colors: active) {
+  .v5-returns-lines,
+  .v5-returns-stepper,
+  .v5-returns-payout,
+  .v5-returns-table--quote,
+  .v5-returns-total,
+  .v5-returns-state {
+    border: 1px solid CanvasText;
+  }
+
+  .v5-returns-qty {
+    border-inline: 1px solid CanvasText;
+  }
+
+  .v5-returns-step:disabled {
+    color: GrayText;
+  }
+
+  .v5-returns-state[data-state='refused'],
+  .v5-returns-state[data-state='unknown'] {
+    border: 2px solid CanvasText;
+  }
+
+  .v5-returns :focus-visible {
+    outline-color: Highlight;
+  }
+}

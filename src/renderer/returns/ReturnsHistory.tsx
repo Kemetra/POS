@@ -1,7 +1,10 @@
 import type { JSX } from 'react';
 
 import type { ReturnJournalView } from '../../shared/returns/types.js';
+import { ToneIcon } from '../v5/foundation/ToneIcon';
+import type { V5IconName } from '../v5/foundation/V5Icon';
 import { ReturnNotice } from './ReturnNotice';
+import { ReturnsPanel, StatePill } from './ReturnsPanel';
 import { formatReturnMoney, formatReturnTime } from './returns-format.js';
 import {
   OUTCOME_COPY,
@@ -23,7 +26,18 @@ import type { HistoryState, ReturnHistory } from './useReturnHistory.js';
  * confirmed return "pay out", a started-but-unpaid payout "complete" (never a
  * fresh start), a paid-out return "print a copy" of its slip.
  */
+const HEADING_ID = 'v5-returns-history';
+
 const UNRESOLVED: ReadonlySet<ReturnJournalView['state']> = new Set(['pending', 'unknown']);
+
+/** RD-5: one glyph per state, so a state never rests on colour alone. */
+const STATE_ICON: Readonly<Record<ReturnJournalView['state'], V5IconName>> = {
+  pending: 'manager-shift',
+  confirmed: 'status-success',
+  paid_out: 'tender-cash',
+  refused: 'status-danger',
+  unknown: 'status-unknown',
+};
 
 function amountOf(row: ReturnJournalView): string {
   const minor = row.returnTotalMinor ?? row.quotedTotalMinor;
@@ -66,7 +80,7 @@ function RowActionButton({
   return (
     <button
       type="button"
-      className="rt-btn"
+      className="v5-manager-btn"
       aria-label={`${ACTION_LABEL[action]} ${row.saleNumber}`}
       disabled={reprint.printing !== null && action === 'reprint'}
       aria-busy={printing}
@@ -84,22 +98,24 @@ function Row({
   return (
     <tr data-state={row.state}>
       <td>
-        <bdi className="rt-num">{row.saleNumber}</bdi>
+        <bdi className="v5-manager-num v5-returns-code">{row.saleNumber}</bdi>
       </td>
       <td>
         <time dateTime={row.createdAt}>{formatReturnTime(row.createdAt)}</time>
       </td>
       <td>
-        <span className={`rt-state rt-state--${row.state}`}>{stateLabel(row.state)}</span>
+        <StatePill state={row.state} icon={STATE_ICON[row.state]}>
+          {stateLabel(row.state)}
+        </StatePill>
         {row.refusalReason !== null && (
-          <span className="rt-state__reason">{refusalMessage(row.refusalReason)}</span>
+          <span className="v5-returns-state__reason">{refusalMessage(row.refusalReason)}</span>
         )}
       </td>
       <td>
-        <bdi className="rt-num">{amountOf(row)}</bdi>
+        <bdi className="v5-manager-num">{amountOf(row)}</bdi>
       </td>
       <td>
-        <bdi className="rt-num rt-ref">{row.returnRef ?? '—'}</bdi>
+        <bdi className="v5-manager-num v5-returns-code">{row.returnRef ?? '—'}</bdi>
       </td>
       <td>
         <RowActionButton row={row} actions={actions} />
@@ -115,9 +131,16 @@ function Rows({
   rows: readonly ReturnJournalView[];
   actions: HistoryActions;
 }>): JSX.Element {
-  if (rows.length === 0) return <p className="rt-returns__meta">{OUTCOME_COPY.historyEmpty}</p>;
+  if (rows.length === 0) {
+    return (
+      <div className="v5-notice" data-tone="neutral">
+        <ToneIcon tone="info" />
+        <p className="v5-notice__text">{OUTCOME_COPY.historyEmpty}</p>
+      </div>
+    );
+  }
   return (
-    <table className="rt-table" aria-labelledby="rt-returns-history">
+    <table className="v5-returns-table v5-returns-table--journal" aria-labelledby={HEADING_ID}>
       <thead>
         <tr>
           <th scope="col">رقم البيع</th>
@@ -142,11 +165,7 @@ function Reload({ history }: Readonly<{ history: ReturnHistory }>): JSX.Element 
   const { status } = history.state;
   if (status !== 'failed' && status !== 'refused') return null;
   return (
-    <button
-      type="button"
-      className="rt-btn rt-btn--secondary"
-      onClick={() => void history.reload()}
-    >
+    <button type="button" className="v5-manager-btn" onClick={() => void history.reload()}>
       إعادة تحميل السجل
     </button>
   );
@@ -158,7 +177,7 @@ function Body({
 }: Readonly<{ state: HistoryState; actions: HistoryActions }>): JSX.Element {
   switch (state.status) {
     case 'loading':
-      return <p className="rt-returns__meta">جارٍ تحميل السجل…</p>;
+      return <p className="v5-returns-meta">جارٍ تحميل السجل…</p>;
     case 'ok':
       return <Rows rows={state.rows} actions={actions} />;
     case 'refused':
@@ -175,12 +194,19 @@ function hasUnresolved(state: HistoryState): boolean {
 /** The last journal reprint's result, announced politely. */
 function ReprintNotice({ reprint }: Readonly<{ reprint: HistoryReprint }>): JSX.Element | null {
   if (reprint.result === null) return null;
-  const printed = reprint.result.kind === 'printed';
+  if (reprint.result.kind === 'printed') {
+    return <output className="v5-returns-meta">{reprintMessage(reprint.result)}</output>;
+  }
   return (
-    <output className={printed ? 'rt-returns__meta' : 'rt-returns__notice'}>
-      {reprintMessage(reprint.result)}
+    <output className="v5-notice" data-tone="danger">
+      <ToneIcon tone="danger" />
+      <span className="v5-notice__text">{reprintMessage(reprint.result)}</span>
     </output>
   );
+}
+
+function hasNotice(history: ReturnHistory, actions: HistoryActions): boolean {
+  return history.checkNotice !== null || actions.reprint.result !== null;
 }
 
 export function ReturnsHistory({
@@ -190,28 +216,37 @@ export function ReturnsHistory({
   history: ReturnHistory;
   actions: HistoryActions;
 }>): JSX.Element {
+  const { state } = history;
+  const bar = hasUnresolved(state) ? (
+    <button
+      type="button"
+      className="v5-manager-btn"
+      disabled={history.checking}
+      aria-busy={history.checking}
+      onClick={() => void history.checkUnresolved()}
+    >
+      تحقّق من غير المؤكدة
+    </button>
+  ) : null;
   return (
-    <section className="rt-returns__panel" aria-labelledby="rt-returns-history">
-      <div className="rt-returns__bar">
-        <h2 id="rt-returns-history" className="rt-returns__heading">
-          سجل المرتجعات على هذا الجهاز
-        </h2>
-        {hasUnresolved(history.state) && (
-          <button
-            type="button"
-            className="rt-btn rt-btn--secondary"
-            disabled={history.checking}
-            aria-busy={history.checking}
-            onClick={() => void history.checkUnresolved()}
-          >
-            تحقّق من غير المؤكدة
-          </button>
-        )}
-      </div>
-      <ReturnNotice notice={history.checkNotice} />
-      <ReprintNotice reprint={actions.reprint} />
-      <Body state={history.state} actions={actions} />
-      <Reload history={history} />
-    </section>
+    <ReturnsPanel id={HEADING_ID} title="سجل المرتجعات على هذا الجهاز" bar={bar} journal>
+      {hasNotice(history, actions) && (
+        <div className="v5-manager-panel__body v5-returns-journal__notices">
+          <ReturnNotice notice={history.checkNotice} />
+          <ReprintNotice reprint={actions.reprint} />
+        </div>
+      )}
+      {state.status === 'ok' && state.rows.length > 0 ? (
+        // RD-3: the journal reaches the foot of the screen and only its table scrolls.
+        <div className="v5-returns-table-scroll">
+          <Rows rows={state.rows} actions={actions} />
+        </div>
+      ) : (
+        <div className="v5-manager-panel__body">
+          <Body state={state} actions={actions} />
+          <Reload history={history} />
+        </div>
+      )}
+    </ReturnsPanel>
   );
 }

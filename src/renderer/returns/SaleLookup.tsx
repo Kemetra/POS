@@ -1,6 +1,7 @@
-import { useState, type JSX } from 'react';
+import { useId, useState, type JSX } from 'react';
 
 import { ReturnNotice } from './ReturnNotice';
+import { ReturnsPanel } from './ReturnsPanel';
 import type { FlowNotice } from './return-flow-state.js';
 import { useFocusOnMount } from './useFocusOnMount.js';
 import type { ReturnFlow } from './useReturnFlow.js';
@@ -16,40 +17,47 @@ export interface SaleLookupProps {
 
 export function SaleLookup({ flow, notice }: SaleLookupProps): JSX.Element {
   const [value, setValue] = useState('');
+  const inputId = useId();
   const input = useFocusOnMount<HTMLInputElement>();
   const busy = flow.busy === 'lookup';
 
   return (
-    <section className="rt-returns__panel" aria-labelledby="rt-returns-lookup">
-      <h2 id="rt-returns-lookup" className="rt-returns__heading">
-        البحث عن بيع
-      </h2>
-      <form
-        className="rt-returns__lookup"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void flow.lookup(value);
-        }}
-      >
-        <label className="rt-returns__field">
-          <span>رقم البيع</span>
-          <input
-            ref={input}
-            value={value}
-            dir="ltr"
-            maxLength={64}
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(e) => {
-              setValue(e.target.value);
-            }}
-          />
-        </label>
-        <button type="submit" className="rt-btn rt-btn--primary" disabled={busy} aria-busy={busy}>
-          بحث
-        </button>
-      </form>
-      <ReturnNotice notice={notice} />
-    </section>
+    <ReturnsPanel id="v5-returns-lookup" title="البحث عن بيع">
+      <div className="v5-manager-panel__body">
+        <form
+          className="v5-returns-lookup"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void flow.lookup(value);
+          }}
+        >
+          <div className="v5-manager-field">
+            <label htmlFor={inputId}>رقم البيع</label>
+            <input
+              id={inputId}
+              ref={input}
+              className="v5-manager-input v5-manager-input--code"
+              value={value}
+              dir="ltr"
+              maxLength={64}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => {
+                setValue(e.target.value);
+              }}
+            />
+          </div>
+          <button
+            type="submit"
+            className="v5-manager-btn v5-manager-btn--primary"
+            disabled={busy}
+            aria-busy={busy}
+          >
+            بحث
+          </button>
+        </form>
+        <ReturnNotice notice={notice} />
+      </div>
+    </ReturnsPanel>
   );
 }

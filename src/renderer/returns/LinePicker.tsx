@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import type { ReturnableLineView } from '../../shared/returns/types.js';
 import { ReturnNotice } from './ReturnNotice';
+import { ReturnsPanel, SaleNumberMeta, StatePill } from './ReturnsPanel';
 import { formatReturnMoney } from './returns-format.js';
 import { pickedLines, type FlowState } from './return-flow-state.js';
 import { useFocusOnMount } from './useFocusOnMount.js';
@@ -23,10 +24,10 @@ interface StepperProps {
 
 function Stepper({ line, quantity, locked, onPick }: StepperProps): JSX.Element {
   return (
-    <div className="rt-stepper">
+    <div className="v5-returns-stepper">
       <button
         type="button"
-        className="rt-btn rt-btn--secondary rt-stepper__btn"
+        className="v5-returns-step"
         aria-label={`إنقاص ${line.lineName}`}
         disabled={locked || quantity <= 0}
         onClick={() => {
@@ -36,7 +37,7 @@ function Stepper({ line, quantity, locked, onPick }: StepperProps): JSX.Element 
         −
       </button>
       <output
-        className="rt-stepper__value rt-num"
+        className="v5-returns-qty v5-manager-num"
         aria-label={`كمية ${line.lineName}`}
         data-testid={`qty-${line.lineRef}`}
       >
@@ -44,7 +45,7 @@ function Stepper({ line, quantity, locked, onPick }: StepperProps): JSX.Element 
       </output>
       <button
         type="button"
-        className="rt-btn rt-btn--secondary rt-stepper__btn"
+        className="v5-returns-step"
         aria-label={`زيادة ${line.lineName}`}
         disabled={locked || quantity >= line.returnableQuantity}
         onClick={() => {
@@ -69,13 +70,13 @@ function LineRow({ line, currencyCode, quantity, locked, onPick }: LineRowProps)
   const unit =
     line.unitPriceMinor === null ? '—' : formatReturnMoney(line.unitPriceMinor, currencyCode);
   return (
-    <li className="rt-line" data-returnable={line.returnableQuantity > 0}>
-      <div className="rt-line__text">
-        <span className="rt-line__name">{line.lineName}</span>
-        <span className="rt-line__meta">
-          مباع <bdi className="rt-num">{line.soldQuantity}</bdi> · مُرجع سابقًا{' '}
-          <bdi className="rt-num">{line.returnedQuantity}</bdi> · سعر الوحدة{' '}
-          <bdi className="rt-num">{unit}</bdi>
+    <li className="v5-returns-line" data-returnable={line.returnableQuantity > 0}>
+      <div className="v5-returns-line__text">
+        <span className="v5-returns-line__name">{line.lineName}</span>
+        <span className="v5-returns-line__meta">
+          مباع <bdi className="v5-manager-num">{line.soldQuantity}</bdi> · مُرجع سابقًا{' '}
+          <bdi className="v5-manager-num">{line.returnedQuantity}</bdi> · سعر الوحدة{' '}
+          <bdi className="v5-manager-num">{unit}</bdi>
         </span>
       </div>
       {line.returnableQuantity > 0 ? (
@@ -88,7 +89,9 @@ function LineRow({ line, currencyCode, quantity, locked, onPick }: LineRowProps)
           }}
         />
       ) : (
-        <span className="rt-line__done">أُرجع بالكامل</span>
+        <StatePill state="done" icon="status-success">
+          أُرجع بالكامل
+        </StatePill>
       )}
     </li>
   );
@@ -103,45 +106,42 @@ export function LinePicker({
   const nothingPicked = pickedLines(state.sale, state.picked).length === 0;
 
   return (
-    <section className="rt-returns__panel" aria-labelledby="rt-returns-select">
-      <h2 id="rt-returns-select" ref={heading} tabIndex={-1} className="rt-returns__heading">
-        اختر الأصناف المرتجعة
-      </h2>
-      <p className="rt-returns__meta">
-        بيع رقم <bdi className="rt-num">{state.saleNumber}</bdi>
-      </p>
-      <ul className="rt-lines">
-        {state.sale.lines.map((line) => (
-          <LineRow
-            key={line.lineRef}
-            line={line}
-            currencyCode={state.sale.currencyCode}
-            quantity={state.picked[line.lineRef] ?? 0}
-            locked={busy}
-            onPick={flow.pick}
-          />
-        ))}
-      </ul>
-      <ReturnNotice notice={state.notice} />
-      <div className="rt-returns__actions">
-        <button
-          type="button"
-          className="rt-btn rt-btn--ghost"
-          disabled={busy}
-          onClick={flow.startOver}
-        >
-          بحث عن بيع آخر
-        </button>
-        <button
-          type="button"
-          className="rt-btn rt-btn--primary"
-          disabled={nothingPicked || busy}
-          aria-busy={busy}
-          onClick={() => void flow.getQuote()}
-        >
-          احسب مبلغ الاسترداد
-        </button>
+    <ReturnsPanel id="v5-returns-select" title="اختر الأصناف المرتجعة" headingRef={heading}>
+      <div className="v5-manager-panel__body">
+        <SaleNumberMeta saleNumber={state.saleNumber} />
+        <ul className="v5-returns-lines">
+          {state.sale.lines.map((line) => (
+            <LineRow
+              key={line.lineRef}
+              line={line}
+              currencyCode={state.sale.currencyCode}
+              quantity={state.picked[line.lineRef] ?? 0}
+              locked={busy}
+              onPick={flow.pick}
+            />
+          ))}
+        </ul>
+        <ReturnNotice notice={state.notice} />
+        <div className="v5-returns-actions">
+          <button
+            type="button"
+            className="v5-manager-btn v5-manager-btn--ghost"
+            disabled={busy}
+            onClick={flow.startOver}
+          >
+            بحث عن بيع آخر
+          </button>
+          <button
+            type="button"
+            className="v5-manager-btn v5-manager-btn--primary"
+            disabled={nothingPicked || busy}
+            aria-busy={busy}
+            onClick={() => void flow.getQuote()}
+          >
+            احسب مبلغ الاسترداد
+          </button>
+        </div>
       </div>
-    </section>
+    </ReturnsPanel>
   );
 }

@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 
+import { Notice } from '../v5/foundation/Notice';
 import { OUTCOME_COPY, refusalMessage } from './returns-messages.js';
 import type { FlowNotice } from './return-flow-state.js';
 
@@ -9,16 +10,12 @@ export function noticeMessage(notice: FlowNotice): string {
   return notice.kind === 'empty' ? 'أدخل رقم البيع.' : OUTCOME_COPY.callFailed;
 }
 
-/** Announced at once (role=alert): it stops the operator's next step. */
+/** Announced at once (a danger Notice is role=alert): it stops the operator's next step. */
 export function ReturnNotice({
   notice,
 }: {
   readonly notice: FlowNotice | null;
 }): JSX.Element | null {
   if (notice === null) return null;
-  return (
-    <p className="rt-returns__notice" role="alert">
-      {noticeMessage(notice)}
-    </p>
-  );
+  return <Notice tone="danger">{noticeMessage(notice)}</Notice>;
 }
