@@ -18,7 +18,6 @@ import type { PaymentIntentEnvelope } from '../../../../shared/cart/handoff-enve
 import type { ReceiptsBridgeAPI } from '../../../../shared/bridge-api.js';
 import { MemoryRouter } from 'react-router-dom';
 import { V5Frame } from '../../../v5/frame/V5Frame.js';
-import { useConnectionStateStore } from '../../../connection/connection-state.js';
 import { OperatorBadge } from '../../operator/OperatorBadge.js';
 import { DrawerNoticeBanner, DrawerNoticeInline } from '../../receipts/DrawerNotice.js';
 import { useDrawerNoticeStore } from '../../receipts/drawer-notice-store.js';
@@ -221,7 +220,6 @@ describe('RT-240 — no fabricated connection or theme claims (I-7)', () => {
   // RT-504: the legacy top bar is retired; the same claim is pinned on the one
   // V5 frame, which the whole `/app` surface now renders in.
   it('the V5 frame shows no «Online» pill and no «Dark» toggle while online', () => {
-    useConnectionStateStore.getState().setState('online');
     render(
       <MemoryRouter initialEntries={['/app/cart']}>
         <V5Frame>

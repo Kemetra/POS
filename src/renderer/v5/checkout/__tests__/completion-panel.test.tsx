@@ -14,7 +14,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CompletionPanel, type CompletionPanelProps } from '../CompletionPanel';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config.js';
 
 const IDS = {
   root: 'root',

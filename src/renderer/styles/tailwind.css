@@ -289,18 +289,6 @@
 
 /* ─── Keyframes ─────────────────────────────────────────────────────────── */
 
-@keyframes pulse-dot {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.4);
-    opacity: 0.55;
-  }
-}
-
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -453,41 +441,6 @@ body {
 
   .btn--destructive:focus-visible {
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-danger) 18%, transparent);
-  }
-
-  /* ── Status Banner ───────────────────────────────────────────────────── */
-  /*
-   * Component emits <aside role="status" data-state={state}>.
-   */
-
-  aside[role='status'] {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    min-block-size: 38px;
-    padding-inline: var(--space-5);
-    font-size: 0.8125rem; /* 13px */
-    font-weight: var(--font-weight-semibold);
-    border-block-end: 1px solid transparent;
-    flex-shrink: 0;
-  }
-
-  aside[role='status'][data-state='degraded'] {
-    background-color: var(--color-warning-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
-    color: var(--color-warning);
-  }
-
-  aside[role='status'][data-state='offline'] {
-    background-color: var(--color-danger-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
-    color: var(--color-danger);
-  }
-
-  aside[role='status'][data-state='syncing'] {
-    background-color: var(--color-info-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-info) 25%, transparent);
-    color: var(--color-info);
   }
 
   /* ── Screen Too Small ────────────────────────────────────────────────── */
@@ -743,49 +696,6 @@ body {
     margin-block-end: var(--space-5);
   }
 
-  /* ── Status Banner (T034) ────────────────────────────────────────────── */
-
-  .status-banner {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    block-size: 48px;
-    padding-inline: var(--space-5);
-    font-size: 0.8125rem;
-    font-weight: var(--font-weight-semibold);
-    border-block-end: 1px solid transparent;
-    flex-shrink: 0;
-  }
-
-  .status-banner[data-state='degraded'] {
-    background-color: var(--color-warning-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
-    color: var(--color-warning);
-  }
-
-  .status-banner[data-state='offline'] {
-    background-color: var(--color-danger-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
-    color: var(--color-danger);
-  }
-
-  .status-banner[data-state='syncing'] {
-    background-color: var(--color-info-soft);
-    border-block-end-color: color-mix(in srgb, var(--color-info) 25%, transparent);
-    color: var(--color-info);
-  }
-
-  .status-banner[data-state='syncing']::before {
-    content: '';
-    display: inline-block;
-    inline-size: 8px;
-    block-size: 8px;
-    border-radius: var(--radius-pill);
-    background-color: var(--color-info);
-    flex-shrink: 0;
-    animation: pulse-dot 1.6s ease-in-out infinite;
-  }
-
   /* RT-241 (D-B1): the drawer-failure banner is retired; the drawer notice is
      a v5 Banner/Notice (v5/foundation/messages.css). */
 
@@ -994,11 +904,6 @@ body {
   /* prefers-reduced-motion: reduce.                                             */
 
   @media (prefers-reduced-motion: reduce) {
-    /* StatusBanner syncing pulse dot */
-    .status-banner[data-state='syncing']::before {
-      animation: none;
-    }
-
     /* Dialog fade-in */
     .dialog-panel,
     .dialog-overlay {
@@ -1410,57 +1315,6 @@ body {
   .operator-badge__role[data-role='admin'] {
     background-color: var(--color-warning-soft);
     color: var(--color-warning);
-  }
-
-  /* 011-sale-sync-capture-up — read-only ambient sync-status indicator. Mirrors
-   * .catalogue-freshness: icon + text (never colour-only; the label always
-   * carries the meaning so it survives a greyscale render). No button (read-only),
-   * no side-stripe border (DESIGN.md absolute ban). The icon colour is driven by
-   * data-state, deliberately QUIET: pending = info (in motion, normal offline),
-   * attention = warning (accountability, NOT danger-red panic), all-synced = success. */
-  .sale-sync-status {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    min-block-size: 44px;
-    padding-inline: var(--space-2);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-  }
-
-  .sale-sync-status__icon {
-    font-size: 0.75rem;
-    line-height: 1;
-    color: var(--color-text-muted);
-  }
-
-  .sale-sync-status[data-state='all-synced'] .sale-sync-status__icon {
-    color: var(--color-success);
-  }
-
-  .sale-sync-status[data-state='pending'] .sale-sync-status__icon {
-    color: var(--color-info);
-  }
-
-  .sale-sync-status[data-state='attention'] .sale-sync-status__icon {
-    color: var(--color-warning);
-  }
-
-  .sale-sync-status[data-state='unavailable'] .sale-sync-status__icon {
-    color: var(--color-danger);
-  }
-
-  .sale-sync-status__label {
-    color: var(--color-text);
-  }
-
-  .sale-sync-status[data-state='loading'] .sale-sync-status__label,
-  .sale-sync-status[data-state='unavailable'] .sale-sync-status__label {
-    color: var(--color-text-muted);
-  }
-
-  .sale-sync-status__label time {
-    font-variant-numeric: tabular-nums;
   }
 
   /* === POS v3.5 prototype port (Phase 0 Task 1) — tender/account/held classes from docs/design/pos-v3.5/design-reference/kit.css === */

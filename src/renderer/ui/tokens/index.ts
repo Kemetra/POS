@@ -5,5 +5,4 @@ export * from './radius';
 export * from './shadow';
 export * from './density';
 export * from './touch';
-export * from './connection-state';
 export * as motion from './motion';

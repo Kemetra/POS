@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
-import { expectNoAxeViolations } from '../../primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config.js';
 import { PinPad } from '../PinPad.js';
 import { RosterList, type RosterEntry } from '../RosterList.js';
 import { OperatorBadge } from '../OperatorBadge.js';

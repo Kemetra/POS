@@ -17,7 +17,7 @@ import type { JSX } from 'react';
 import { getScanGuard, resetScanGuardForTests } from '../../../scan/ScanGuardHost';
 import { SCAN_UNAVAILABLE_MESSAGE } from '../../../scan/scan-messages';
 import { useScanNoticeStore } from '../../../scan/scan-notice-store';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 import { installViewport, resizeTo, settleTier } from '../../__tests__/__helpers__/viewport-bands';
 import { FitGuard } from '../FitGuard';
 

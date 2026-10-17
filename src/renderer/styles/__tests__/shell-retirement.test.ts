@@ -15,6 +15,11 @@ import { describe, expect, it } from 'vitest';
  *  4. a retired class prefix appears in production `.tsx` or in `tailwind.css`;
  *  5. a manager surface's visible copy says «Coming soon».
  * It also pins that the retired files are gone from disk.
+ *
+ * RT-606 (VN-S6 S6-5) extends it to the last 007 pieces: the `ui/primitives`
+ * folder (StatusBanner, Button, index), the renderer `connection/` store with
+ * `CONNECTION_BANNER_MESSAGES` and the `?conn=` dev toggle, the unmounted
+ * `SaleSyncStatus`, the four-state connection token and `hooks/useTheme`.
  */
 
 const REPO = resolve(__dirname, '../../../..');
@@ -28,6 +33,12 @@ const RETIRED_PATHS = [
   'src/renderer/shell/connection',
   'src/renderer/shell/viewport',
   'src/renderer/shell/dev',
+  // RT-606 (VN-S6 S6-5)
+  'src/renderer/ui/primitives',
+  'src/renderer/connection',
+  'src/renderer/ui/sales-sync/SaleSyncStatus.tsx',
+  'src/renderer/ui/tokens/connection-state.ts',
+  'src/renderer/hooks/useTheme.ts',
 ];
 
 /** Class prefixes that belonged to the legacy shell and the v3.5 placeholders. */
@@ -41,6 +52,9 @@ const RETIRED_PREFIXES = [
   'placeholder-pane',
   'dashboard-card',
   'settings-section',
+  // RT-606: the 007 StatusBanner and the unmounted SaleSyncStatus.
+  'status-banner',
+  'sale-sync-status',
 ];
 
 /** The manager surfaces whose copy must stay honest (no «Coming soon»). */
@@ -81,6 +95,26 @@ function specifiers(source: string): string[] {
 }
 
 const LEGACY_SHELL_IMPORT = /(?:^|\/)shell\/(?:AppShell|regions\/)/;
+
+/** RT-606: module specifiers of the retired 007 / connection-store modules. */
+const RETIRED_007_IMPORTS: readonly RegExp[] = [
+  /(?:^|\/)ui\/primitives(?:\/|$)|(?:^|\/)primitives\/(?:Button|StatusBanner|__tests__|index)/,
+  /(?:^|\/)connection\/(?:connection-state|dev-toggles)(?:\.js)?$/,
+  /(?:^|\/)tokens\/connection-state(?:\.js)?$/,
+  /(?:^|\/)SaleSyncStatus(?:\.js)?$/,
+  /(?:^|\/)hooks\/useTheme(?:\.js)?$/,
+];
+
+/** RT-606: identifiers of the retired modules, matched in code (comments stripped). */
+const RETIRED_007_IDENTIFIERS = [
+  'StatusBanner',
+  'CONNECTION_BANNER_MESSAGES',
+  'useConnectionState',
+  'useConnectionStateStore',
+  'getDevToggles',
+  'useDevToggles',
+  'useTheme',
+];
 
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
@@ -144,5 +178,43 @@ describe('shell retirement guard (RT-504, VN-S10 S10-Z)', () => {
     const source = stripComments(readFileSync(join(RENDERER, file), 'utf-8'));
     expect(source).not.toMatch(/coming soon/i);
     expect(source).not.toMatch(/قريبًا|قريباً/);
+  });
+});
+
+describe('007 retirement guard (RT-606, VN-S6 S6-5)', () => {
+  it('nothing imports ui/primitives, the connection store, ?conn= toggles, SaleSyncStatus or useTheme', () => {
+    const offenders = SOURCES.flatMap((file) =>
+      specifiers(readFileSync(file, 'utf-8'))
+        .filter((spec) => RETIRED_007_IMPORTS.some((pattern) => pattern.test(spec)))
+        .map((spec) => `${relative(REPO, file)} → ${spec}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it.each(RETIRED_007_IDENTIFIERS)('%s is named nowhere in src/ or tests/ code', (name) => {
+    const pattern = new RegExp(`\\b${name}\\b`);
+    const offenders = SOURCES.filter(
+      (file) =>
+        !file.endsWith('shell-retirement.test.ts') &&
+        pattern.test(stripComments(readFileSync(file, 'utf-8'))),
+    ).map((file) => relative(REPO, file));
+    expect(offenders).toEqual([]);
+  });
+
+  it('no renderer code reads a ?conn= URL parameter', () => {
+    const conn = /[?&]conn=|\.get\(\s*['"]conn['"]\s*\)/;
+    const offenders = walk(RENDERER, isSource)
+      .filter((file) => !file.endsWith('shell-retirement.test.ts'))
+      .filter((file) => conn.test(stripComments(readFileSync(file, 'utf-8'))))
+      .map((file) => relative(REPO, file));
+    expect(offenders).toEqual([]);
+  });
+
+  it('the stylesheet keeps no global aside[role=status] rule of the retired StatusBanner', () => {
+    expect(readFileSync(STYLESHEET, 'utf-8')).not.toMatch(/aside\[role=['"]status['"]\]/);
+  });
+
+  it('the stylesheet keeps no pulse-dot keyframes for the retired syncing dot', () => {
+    expect(readFileSync(STYLESHEET, 'utf-8')).not.toMatch(/pulse-dot/);
   });
 });
