@@ -29,6 +29,11 @@ function isApprovableCart(
   ].every(Boolean);
 }
 
+/** A line of this cart that has not been removed. */
+function isLiveLineOf(line: CartLineRow, cart: CartRow): boolean {
+  return line.cart_id === cart.cart_id && line.removed_at === null;
+}
+
 /** The discount's subject for this session, or null when not approvable. */
 export function manualDiscountApprovalSubject(
   cart: CartRow | undefined,
@@ -36,8 +41,8 @@ export function manualDiscountApprovalSubject(
   placeholderKind: string,
   session: Pick<OperatorSessionRecord, 'id' | 'tenant_id' | 'branch_id'>,
 ): ApprovalSubject | null {
-  if (cart === undefined || line === undefined || !isApprovableCart(cart, session)) return null;
-  if (line.cart_id !== cart.cart_id || line.removed_at !== null) return null;
+  if (cart === undefined || line === undefined) return null;
+  if (!isApprovableCart(cart, session) || !isLiveLineOf(line, cart)) return null;
   return {
     version: [
       'discount',
