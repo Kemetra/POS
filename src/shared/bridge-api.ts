@@ -17,6 +17,7 @@ import type { ManagerApprovalBridgeAPI } from './operator/manager-approval.js';
 import type { RecoveryBridgeAPI } from './operator/recovery.js';
 import type { SaleVoidBridgeAPI } from './sale-void/types.js';
 import type { SaleHistoryBridgeAPI } from './sale-history/types.js';
+import type { TerminalStatusSnapshot } from './terminal-status/types.js';
 
 export type {
   ReturnJournalView,
@@ -872,6 +873,25 @@ export interface PreloadBridgeAPI {
    * Backend-Core (`saleHistory.*`). OD-534-1/2 enforced in main.
    */
   saleHistory?: SaleHistoryBridgeAPI;
+
+  /**
+   * RT-603 (VN-S6 S6-2): the terminal's connection and sale-sync status
+   * (`terminalStatus:get` + the `terminalStatus:changed` push). Read-only;
+   * closed-set codes, counts and ISO times only. Answered while unpaired, not
+   * session-gated, refused while the session is locked (D-6-10).
+   */
+  terminalStatus?: TerminalStatusBridgeAPI;
+}
+
+/**
+ * RT-603 (VN-S6 S6-2): typed read-only `terminalStatus.*` namespace. No write
+ * channel exists. Both members deliver only a preload-validated snapshot.
+ */
+export interface TerminalStatusBridgeAPI {
+  /** Rejects (`terminal_status_unavailable`) on a refusal or malformed answer. */
+  get(): Promise<TerminalStatusSnapshot>;
+  /** Subscribe to the coalesced push (≤ 1/s); returns the unsubscribe. */
+  onChanged(cb: (snapshot: TerminalStatusSnapshot) => void): () => void;
 }
 
 /**

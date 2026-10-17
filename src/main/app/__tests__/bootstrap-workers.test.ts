@@ -282,3 +282,17 @@ describe('RT-601 — worker registry: the terminal status tick', () => {
     expect(registry.hasRegistered()).toBe(false);
   });
 });
+
+describe('RT-603 — worker registry: the terminal status push', () => {
+  it('stops the push right after the sale-sync interval (its sync read uses the DB)', () => {
+    const order: string[] = [];
+    const registry = createWorkerRegistry({ logger: createRecordingLogger() });
+    registry.register('shift-sync interval', () => order.push('shift-sync interval'));
+    registry.register('terminal status push', () => order.push('terminal status push'));
+    registry.register('sale-sync interval', () => order.push('sale-sync interval'));
+
+    registry.stopAll();
+
+    expect(order).toEqual(['sale-sync interval', 'terminal status push', 'shift-sync interval']);
+  });
+});

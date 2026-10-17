@@ -125,6 +125,10 @@ import {
 } from './sales-sync/sale-sync-engine.js';
 import { createSaleSyncStatusReader } from './sales-sync/sale-sync-status-reader.js';
 import { composeTerminalStatus } from './terminal-status/compose-terminal-status.js';
+import { createTerminalStatusPublisher } from './terminal-status/terminal-status-publisher.js';
+import { createTerminalSyncAggregateReader } from './terminal-status/sync-aggregate.js';
+import { registerTerminalStatusHandlers } from './ipc/terminal-status.js';
+import { TERMINAL_STATUS_IPC_CHANNELS } from '../shared/terminal-status/types.js';
 import { composeSaleSyncDevicePath } from './sales-sync/compose-device-path.js';
 import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
 import {
@@ -862,7 +866,7 @@ singleInstanceReady
     // Backend-Core device and operator fetch below is built on `backendFetch`,
     // which only OBSERVES the transport outcome (an HTTP status or a fault) and
     // passes request and response through untouched. Transitions are logged as
-    // `{ from, to }`. Not bridged yet (S6-2).
+    // `{ from, to }`. Bridged by RT-603 (S6-2) below.
     // RT-602 (VN-S6 S6-1b) — the active feeder: a credential-free GET of
     // Backend-Core's public liveness endpoint, only while the passive feeder is
     // idle (§2.5 cadence). It uses the UNOBSERVED fetch: the probe reports its
@@ -880,6 +884,39 @@ singleInstanceReady
     });
     workerRegistry.register('terminal status tick', () => {
       terminalStatus.stop();
+    });
+    // RT-603 (VN-S6 S6-2) — the terminal status bridge. `terminalStatus:get` is
+    // registered HERE, at app start on the guarded ipcMain (sender guard; not
+    // session-gated; not on the locked allowlist, D-6-10), so an unpaired
+    // terminal is answered `checking` rather than refused. The push goes to the
+    // app windows only, on change and at most once a second. Unpaired or revoked
+    // → `checking`; the sync axis stays empty until the paired sale-sync starter
+    // binds its reader below. Closed-set codes, counts and ISO times only.
+    const terminalStatusPublisher = createTerminalStatusPublisher({
+      readConnection: () => terminalStatus.monitor.snapshot(),
+      isDeviceGated: () =>
+        pairingStore.getCurrentTerminalId() === null || pairingStore.isDeviceRevoked(),
+      // Each window independently: a closing one must not starve the others.
+      send: (snapshot) => {
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
+          try {
+            win.webContents.send(TERMINAL_STATUS_IPC_CHANNELS.CHANGED, snapshot);
+          } catch {
+            // Skip it; the next change reaches the windows still open.
+          }
+        }
+      },
+      now: Date.now,
+      monotonicNow: () => performance.now(),
+      logger: mainLogger,
+    });
+    terminalStatusPublisher.start();
+    workerRegistry.register('terminal status push', () => {
+      terminalStatusPublisher.stop();
+    });
+    registerTerminalStatusHandlers(guardedIpcMain, {
+      read: () => terminalStatusPublisher.read(),
     });
     const backendFetch = terminalStatus.observeFetch(globalThis.fetch.bind(globalThis));
     const operatorBackend = createBackendClient({
@@ -2288,6 +2325,18 @@ singleInstanceReady
             pausedReason: () => saleSyncEngine.pausedReason(),
           }),
         });
+        // RT-603 — the terminal status sync axis reads the same queue (sales only,
+        // D-6-4). The publisher's stop (before the DB closes) unbinds it, so a late
+        // `terminalStatus:get` reads the empty axis rather than a closed DB.
+        terminalStatusPublisher.setSyncReader(
+          createTerminalSyncAggregateReader({
+            stateRepo: saleSyncStateRepo,
+            tenantId: pairingStatus.tenant_id,
+            branchId: pairingStatus.branch_id,
+            resolveTerminalId: resolveSaleSyncTerminalId,
+            pausedReason: () => saleSyncEngine.pausedReason(),
+          }),
+        );
 
         // Background drain on an interval. Single-flight in the engine coalesces
         // overlapping ticks; the interval is cleared and the engine latched stopped
