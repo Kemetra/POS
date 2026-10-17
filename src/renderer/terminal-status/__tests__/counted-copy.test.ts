@@ -107,7 +107,7 @@ describe('the RT-646 sync-count copy matches doc 15 §5.1', () => {
     expect(doc15).toContain(row(id, forms));
   });
 
-  it('records the forms as pending owner approval', () => {
-    expect(doc15).toContain('### 5.1 Count-aware sync counts (RT-646) — pending owner approval');
+  it('records the forms as owner-approved', () => {
+    expect(doc15).toContain('### 5.1 Count-aware sync counts (RT-646) — owner-approved 2026-10-17');
   });
 });

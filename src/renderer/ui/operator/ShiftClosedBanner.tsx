@@ -3,8 +3,8 @@ import { Banner } from '../../v5/foundation/Banner';
 import { formatHumanDateTime } from '../format/human-format';
 
 /**
- * RT-605 (owner scope extension, 2026-10-17) — doc 15 M-W4, drafted and
- * pending owner approval: «أُغلقت ورديتك السابقة في ‹date› أثناء غيابك.» with
+ * RT-605 (owner scope extension, 2026-10-17) — doc 15 M-W4, owner-approved
+ * 2026-10-17: «أُغلقت ورديتك السابقة في ‹date› أثناء غيابك.» with
  * the dismiss action «إخفاء». The date is the absolute-date formatter's
  * output (Arabic month, Western digits), bidi-isolated but not forced LTR, so
  * «16 أكتوبر 2026» keeps its Arabic order.
