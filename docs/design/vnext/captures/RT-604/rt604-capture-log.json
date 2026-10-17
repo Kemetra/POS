@@ -1,0 +1,1714 @@
+[
+  {
+    "state": "Connected",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Connected-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Connected",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Connected-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Connected",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Connected-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Connected",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Connected-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Connected",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Connected-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Connected",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Connected-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Connected",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Connected-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Connected",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Connected-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Checking",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Checking-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "neutral",
+        "text": "جارٍ التحقق من الاتصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Checking",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Checking-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "neutral",
+        "text": "جارٍ التحقق من الاتصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Checking",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Checking-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "neutral",
+        "text": "جارٍ التحقق من الاتصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Checking",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Checking-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "neutral",
+        "text": "جارٍ التحقق من الاتصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Checking",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Checking-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "neutral",
+        "text": "جارٍ التحقق من الاتصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Checking",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Checking-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "neutral",
+        "text": "جارٍ التحقق من الاتصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Checking",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Checking-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "neutral",
+        "text": "جارٍ التحقق من الاتصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Checking",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Checking-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "neutral",
+        "text": "جارٍ التحقق من الاتصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Offline",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Offline-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Offline",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Offline-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Offline",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Offline-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Offline",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Offline-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Offline",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Offline-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Offline",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Offline-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Offline",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Offline-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Offline",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Offline-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Degraded",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Degraded-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Degraded",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Degraded-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Degraded",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Degraded-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Degraded",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Degraded-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Degraded",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Degraded-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Degraded",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Degraded-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Degraded",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Degraded-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Degraded",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Degraded-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "OfflinePending",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-OfflinePending-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "3 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "OfflinePending",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-OfflinePending-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "3 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "OfflinePending",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-OfflinePending-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "3 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "OfflinePending",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-OfflinePending-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "3 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "OfflinePending",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-OfflinePending-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "3 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "OfflinePending",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-OfflinePending-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "3 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "OfflinePending",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-OfflinePending-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "3 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "OfflinePending",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-OfflinePending-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "warning",
+        "text": "غير متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "3 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Sending",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Sending-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "جارٍ إرسال 3 عملية…"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Sending",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Sending-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "جارٍ إرسال 3 عملية…"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Sending",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Sending-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "جارٍ إرسال 3 عملية…"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Sending",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Sending-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "جارٍ إرسال 3 عملية…"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Sending",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Sending-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "جارٍ إرسال 3 عملية…"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Sending",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Sending-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "جارٍ إرسال 3 عملية…"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Sending",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Sending-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "جارٍ إرسال 3 عملية…"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Sending",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Sending-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "جارٍ إرسال 3 عملية…"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Paused",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Paused-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "2 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Paused",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Paused-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "2 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Paused",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Paused-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "2 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Paused",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Paused-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "2 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Paused",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Paused-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "2 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Paused",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Paused-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "2 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Paused",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Paused-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "2 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Paused",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Paused-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "info",
+        "text": "2 عمليات بانتظار الإرسال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Attention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Attention-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "danger",
+        "text": "تحتاج مراجعة"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Attention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Attention-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "danger",
+        "text": "تحتاج مراجعة"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Attention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Attention-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "danger",
+        "text": "تحتاج مراجعة"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Attention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Attention-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "danger",
+        "text": "تحتاج مراجعة"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Attention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-Attention-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "danger",
+        "text": "تحتاج مراجعة"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Attention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-Attention-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "danger",
+        "text": "تحتاج مراجعة"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Attention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-Attention-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "danger",
+        "text": "تحتاج مراجعة"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "Attention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-Attention-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "sync",
+        "tone": "danger",
+        "text": "تحتاج مراجعة"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "PrinterFailed",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-PrinterFailed-panel-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "printer",
+        "tone": "warning",
+        "text": "فشل آخر إيصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "PrinterFailed",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-PrinterFailed-panel-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "printer",
+        "tone": "warning",
+        "text": "فشل آخر إيصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "PrinterFailed",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-PrinterFailed-panel-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "printer",
+        "tone": "warning",
+        "text": "فشل آخر إيصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "PrinterFailed",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-PrinterFailed-panel-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "printer",
+        "tone": "warning",
+        "text": "فشل آخر إيصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "PrinterFailed",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt604-PrinterFailed-slim-1024x768.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "printer",
+        "tone": "warning",
+        "text": "فشل آخر إيصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "PrinterFailed",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt604-PrinterFailed-slim-1024x768-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "printer",
+        "tone": "warning",
+        "text": "فشل آخر إيصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "PrinterFailed",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt604-PrinterFailed-slim-1280x800.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "printer",
+        "tone": "warning",
+        "text": "فشل آخر إيصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "state": "PrinterFailed",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt604-PrinterFailed-slim-1280x800-forced.png",
+    "axe": [],
+    "rows": [
+      {
+        "row": "connection",
+        "tone": "success",
+        "text": "متصل"
+      },
+      {
+        "row": "printer",
+        "tone": "warning",
+        "text": "فشل آخر إيصال"
+      }
+    ],
+    "inView": true,
+    "inNav": true,
+    "navScrolls": false,
+    "small": 0,
+    "overflowX": false,
+    "errors": []
+  }
+]

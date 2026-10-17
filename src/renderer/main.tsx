@@ -121,6 +121,19 @@ if (
       </React.StrictMode>,
     );
   });
+} else if (
+  // RT-604 (VN-S6 S6-3): the status indicator harness, same DEV-only contract
+  // (the real frame and indicator against an in-memory terminalStatus bridge).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/status-proof')
+) {
+  void import('./v5/frame/dev/StatusIndicatorProof').then(({ StatusIndicatorProof }) => {
+    root.render(
+      <React.StrictMode>
+        <StatusIndicatorProof />
+      </React.StrictMode>,
+    );
+  });
 } else {
   // POS v3.5 Phase 1 (ADR-0004) — reconcile the persisted theme before mount.
   initTheme();

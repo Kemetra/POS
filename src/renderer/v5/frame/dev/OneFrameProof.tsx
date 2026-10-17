@@ -268,8 +268,12 @@ function catalogueSearch(search: OneFrameProofParams['search']): unknown {
 }
 
 /** The read-only bridges the moved screens touch on mount, in memory. */
-export function installWindowApi(params: OneFrameProofParams): void {
+export function installWindowApi(
+  params: OneFrameProofParams,
+  extraApi: Readonly<Record<string, unknown>> = {},
+): void {
   (window as unknown as { api?: unknown }).api = {
+    ...extraApi,
     pairing: pairingBridge,
     ...(params.returns === 'on' ? { returns: returnsBridge } : {}),
     catalogue: {
@@ -294,9 +298,16 @@ export function installWindowApi(params: OneFrameProofParams): void {
   };
 }
 
-export function OneFrameProof(): JSX.Element {
-  const params = readOneFrameProofParams();
-  installWindowApi(params);
+interface OneFrameProofProps {
+  /** RT-604: a harness built on this one may pass its own params. */
+  params?: OneFrameProofParams;
+  /** RT-604: extra in-memory bridges (e.g. `terminalStatus`). */
+  extraApi?: Readonly<Record<string, unknown>>;
+}
+
+export function OneFrameProof(props: Readonly<OneFrameProofProps> = {}): JSX.Element {
+  const params = props.params ?? readOneFrameProofParams();
+  installWindowApi(params, props.extraApi);
   useFeatureFlagsStore.getState().hydrate({
     cart: true,
     payments: params.payments === 'on',

@@ -1,0 +1,252 @@
+[
+  {
+    "state": "Offline",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInIndicator": false,
+    "navStops": [
+      "لوحة المتابعة",
+      "نقطة البيع",
+      "المبيعات",
+      "المرتجعات",
+      "سجل المراجعة",
+      "المخزون",
+      "الإعدادات",
+      "تسجيل الخروج"
+    ],
+    "tree": [
+      {
+        "row": "connection",
+        "text": "غير متصل",
+        "live": "polite",
+        "role": "status",
+        "hidden": false
+      }
+    ],
+    "pass": true
+  },
+  {
+    "state": "Offline",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInIndicator": false,
+    "navStops": [
+      "لوحة المتابعة",
+      "نقطة البيع",
+      "المبيعات",
+      "المرتجعات",
+      "سجل المراجعة",
+      "المخزون",
+      "الإعدادات",
+      "تسجيل الخروج"
+    ],
+    "tree": [
+      {
+        "row": "connection",
+        "text": "غير متصل",
+        "live": "polite",
+        "role": "status",
+        "hidden": false
+      }
+    ],
+    "pass": true
+  },
+  {
+    "state": "Sending",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInIndicator": false,
+    "navStops": [
+      "لوحة المتابعة",
+      "نقطة البيع",
+      "المبيعات",
+      "المرتجعات",
+      "سجل المراجعة",
+      "المخزون",
+      "الإعدادات",
+      "تسجيل الخروج"
+    ],
+    "tree": [
+      {
+        "row": "connection",
+        "text": "متصل",
+        "live": "polite",
+        "role": "status",
+        "hidden": false
+      },
+      {
+        "row": "sync",
+        "text": "جارٍ إرسال 3 عملية…",
+        "live": null,
+        "role": null,
+        "hidden": false
+      }
+    ],
+    "pass": true
+  },
+  {
+    "state": "Sending",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInIndicator": false,
+    "navStops": [
+      "لوحة المتابعة",
+      "نقطة البيع",
+      "المبيعات",
+      "المرتجعات",
+      "سجل المراجعة",
+      "المخزون",
+      "الإعدادات",
+      "تسجيل الخروج"
+    ],
+    "tree": [
+      {
+        "row": "connection",
+        "text": "متصل",
+        "live": "polite",
+        "role": "status",
+        "hidden": false
+      },
+      {
+        "row": "sync",
+        "text": "جارٍ إرسال 3 عملية…",
+        "live": null,
+        "role": null,
+        "hidden": false
+      }
+    ],
+    "pass": true
+  },
+  {
+    "state": "Attention",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInIndicator": false,
+    "navStops": [
+      "لوحة المتابعة",
+      "نقطة البيع",
+      "المبيعات",
+      "المرتجعات",
+      "سجل المراجعة",
+      "المخزون",
+      "الإعدادات",
+      "تسجيل الخروج"
+    ],
+    "tree": [
+      {
+        "row": "connection",
+        "text": "متصل",
+        "live": "polite",
+        "role": "status",
+        "hidden": false
+      },
+      {
+        "row": "sync",
+        "text": "تحتاج مراجعة",
+        "live": null,
+        "role": null,
+        "hidden": false
+      }
+    ],
+    "pass": true
+  },
+  {
+    "state": "Attention",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInIndicator": false,
+    "navStops": [
+      "لوحة المتابعة",
+      "نقطة البيع",
+      "المبيعات",
+      "المرتجعات",
+      "سجل المراجعة",
+      "المخزون",
+      "الإعدادات",
+      "تسجيل الخروج"
+    ],
+    "tree": [
+      {
+        "row": "connection",
+        "text": "متصل",
+        "live": "polite",
+        "role": "status",
+        "hidden": false
+      },
+      {
+        "row": "sync",
+        "text": "تحتاج مراجعة",
+        "live": null,
+        "role": null,
+        "hidden": false
+      }
+    ],
+    "pass": true
+  },
+  {
+    "state": "PrinterFailed",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInIndicator": false,
+    "navStops": [
+      "لوحة المتابعة",
+      "نقطة البيع",
+      "المبيعات",
+      "المرتجعات",
+      "سجل المراجعة",
+      "المخزون",
+      "الإعدادات",
+      "تسجيل الخروج"
+    ],
+    "tree": [
+      {
+        "row": "connection",
+        "text": "متصل",
+        "live": "polite",
+        "role": "status",
+        "hidden": false
+      },
+      {
+        "row": "printer",
+        "text": "فشل آخر إيصال",
+        "live": null,
+        "role": null,
+        "hidden": false
+      }
+    ],
+    "pass": true
+  },
+  {
+    "state": "PrinterFailed",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInIndicator": false,
+    "navStops": [
+      "لوحة المتابعة",
+      "نقطة البيع",
+      "المبيعات",
+      "المرتجعات",
+      "سجل المراجعة",
+      "المخزون",
+      "الإعدادات",
+      "تسجيل الخروج"
+    ],
+    "tree": [
+      {
+        "row": "connection",
+        "text": "متصل",
+        "live": "polite",
+        "role": "status",
+        "hidden": false
+      },
+      {
+        "row": "printer",
+        "text": "فشل آخر إيصال",
+        "live": null,
+        "role": null,
+        "hidden": false
+      }
+    ],
+    "pass": true
+  }
+]

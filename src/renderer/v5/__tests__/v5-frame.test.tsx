@@ -462,6 +462,16 @@ describe('v5 foundation CSS stays scoped to the v5 frame', () => {
   });
 });
 
+/**
+ * RT-604: the nav's status indicator has its own live connection row, so the
+ * legacy banner (retired in S6-5) is found as a status region outside it.
+ */
+function connectionBanners(): HTMLElement[] {
+  return screen
+    .queryAllByRole('status')
+    .filter((el) => el.closest('[data-testid="v5-status-indicator"]') === null);
+}
+
 describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
   it('below 1024px shows only the too-small notice: no nav, and the screen never mounts', () => {
     signIn('cashier');
@@ -493,7 +503,8 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
     signIn('cashier');
     useConnectionStateStore.getState().setState(state);
     renderFrame();
-    const banner = screen.getByRole('status');
+    const [banner] = connectionBanners();
+    expect(connectionBanners()).toHaveLength(1);
     expect(banner).toHaveTextContent(message);
     expect(banner).toHaveAttribute('data-state', state);
     expect(screen.getByRole('heading', { name: 'مساحة البيع' })).toBeInTheDocument();
@@ -502,7 +513,7 @@ describe('V5Frame — AppShell parity before the /app cutover (023 G0)', () => {
   it('shows no connection banner while online', () => {
     signIn('cashier');
     renderFrame();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(connectionBanners()).toHaveLength(0);
   });
 
   // RT-504: ported from `AppShell.layout.test.tsx` (RT-240, I-7). Nothing
