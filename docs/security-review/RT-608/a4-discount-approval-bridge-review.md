@@ -71,9 +71,11 @@ PR branch, with code-line evidence. Docs only.
 
 RT-608 item 4 asks the audit to carry `mode`. MA-2 (RT-443) records no grant mode: `manager_approvals` has no `mode` column, and no consumer on `main` (post-handoff cancel, sale void, recovery) emits one. Recording it truthfully needs either a `manager_approvals` column (a schema change, excluded by D5 / item 7) or a main-process connectivity signal at grant time, which does not exist today. Inventing a value would be a false audit fact, so the field is **left out**. The approval is always PIN-verified locally (OFF-1), so nothing about authority depends on it. **Recommended:** add the grant mode for every approval kind under RT-114 MA-3 (C9 offline review needs it anyway), then add it to this payload.
 
-### F-2 — Item 6 is not implemented: legacy placeholders still hand off
+### F-2 — Item 6 is not implemented: legacy placeholders still hand off — CLOSED by RT-614
 
 Envelope steps 3a (`unauthorized_discount` at handoff) and 3b (006 payment-eligibility refusal) are held for owner authorisation (see the PR body for options). Until then, a placeholder written before RT-608 is not refused at handoff or payment. This is the pre-existing state, not a regression: no shipped UI has ever called `add`, so none is expected in the field. RT-608 itself writes only authorised rows.
+
+**Closed (2026-10-17, RT-614, owner option B).** A placeholder is trusted only if a `cart.discount.manager_authorized` audit row names its `placeholder_id`, cart, line, tenant and branch (`src/main/cart/discount-trust.ts`). `cart.handoff` refuses `unauthorized_discount` while the cart holds an untrusted placeholder (step 3a). Payment eligibility refuses `unauthorized_discount` for a persisted envelope that holds one (step 3b). No schema change. Re-check: [`../RT-614/a4-discount-trust-recheck.md`](../RT-614/a4-discount-trust-recheck.md).
 
 ### F-3 — `discountPlaceholders.remove` does not scope the placeholder to the cart (pre-existing) — CLOSED by RT-615
 

@@ -68,4 +68,4 @@ Envelope steps 3a and 3b are in spec 005 (`contracts/handoff-envelope.md`) and F
 ## 5. Residuals
 
 - **The audit row is the provenance marker.** A main-process path that wrote a placeholder without RT-608's add would also have to forge an append-only audit row. Main code does that nowhere: the only writers are RT-608's add and the park and resume removal, and removal deletes rows.
-- **F-1** (`mode`) stays deferred to MA-3. **F-3** (the `remove` owner check) is tracked in RT-615. Neither is touched here.
+- **F-1** (`mode`) stays deferred to MA-3. **F-3** (the `remove` owner check) was closed separately by RT-615 (#728). Neither is touched here.
