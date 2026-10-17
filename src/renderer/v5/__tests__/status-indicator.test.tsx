@@ -124,19 +124,19 @@ describe('StatusIndicator — sync row', () => {
     expect(row('sync')).toBeNull();
   });
 
-  it('shows S16 «جارٍ إرسال ‹n› عملية…» while online and sending', async () => {
+  it('shows S16 «جارٍ إرسال ‹n› عمليات…» while online and sending', async () => {
     installApi(snap('online', { pending: 3, oldestPendingAt: oldest }));
     await renderAt();
-    expect(row('sync')).toHaveTextContent('جارٍ إرسال 3 عملية…');
+    expect(row('sync')).toHaveTextContent('جارٍ إرسال 3 عمليات…');
     expect(row('sync')).toHaveAttribute('data-tone', 'info');
   });
 
-  it('shows M-O2 «‹n› عمليات بانتظار الإرسال» while paused — never «sending» (D-6-6)', async () => {
+  it('shows M-O2 «عمليتان بانتظار الإرسال» while paused — never «sending» (D-6-6)', async () => {
     installApi(
       snap('online', { pending: 2, oldestPendingAt: oldest, paused: 'no_operator_credential' }),
     );
     await renderAt();
-    expect(row('sync')).toHaveTextContent('2 عمليات بانتظار الإرسال');
+    expect(row('sync')).toHaveTextContent('عمليتان بانتظار الإرسال');
     expect(row('sync')).not.toHaveTextContent('جارٍ إرسال');
   });
 
@@ -165,7 +165,7 @@ describe('StatusIndicator — sync row', () => {
     const since = NOW - SYNC_ATTENTION_AGE_MS + 60_000;
     installApi(snap('online', { pending: 1, oldestPendingAt: new Date(since).toISOString() }));
     await renderAt();
-    expect(row('sync')).toHaveTextContent('جارٍ إرسال 1 عملية…');
+    expect(row('sync')).toHaveTextContent('جارٍ إرسال عملية واحدة…');
     await act(async () => {
       vi.advanceTimersByTime(60_001);
       await Promise.resolve();
@@ -201,7 +201,7 @@ describe('StatusIndicator — slim rail and lifetime', () => {
     await renderAt('/app/cart');
     expect(screen.getByTestId('v5-frame')).toHaveAttribute('data-nav', 'slim');
     expect(row('connection')).toHaveTextContent('غير متصل');
-    expect(row('sync')).toHaveTextContent('2 عمليات بانتظار الإرسال');
+    expect(row('sync')).toHaveTextContent('عمليتان بانتظار الإرسال');
   });
 
   it('unsubscribes from the push on unmount', async () => {

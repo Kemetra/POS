@@ -73,7 +73,7 @@ describe('mapStatusBanners — doc 24 §4.3', () => {
   });
 });
 
-describe('banner copy — verbatim from doc 15 (D-6-11)', () => {
+describe('banner copy — from doc 15 (D-6-11; M-O3 count-aware, RT-646)', () => {
   const doc15 = readFileSync(
     resolve(__dirname, '../../../../docs/design/vnext/15-vnext-freeze-package.md'),
     'utf8',
@@ -83,10 +83,8 @@ describe('banner copy — verbatim from doc 15 (D-6-11)', () => {
     expect(doc15).toContain(`| M-O1 | Offline | «${BANNER_COPY.offline}» | warning |`);
   });
 
-  it('M-O3 matches doc 15, around the count', () => {
-    expect(doc15).toContain(
-      `| M-O3 | Sync needs attention (manager) | «${BANNER_COPY.syncAttention.before}‹n›${BANNER_COPY.syncAttention.after}» | danger |`,
-    );
+  it('M-O3 points at its count-aware forms in doc 15 §5.1 (checked in counted-copy)', () => {
+    expect(doc15).toContain('| M-O3 | Sync needs attention (manager) | Count-aware');
   });
 
   it('adds no list of online-only actions (D-6-9)', () => {
