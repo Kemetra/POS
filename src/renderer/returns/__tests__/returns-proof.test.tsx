@@ -10,7 +10,13 @@ import '@testing-library/jest-dom/vitest';
 
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
-import { RETURNS_PROOF_STATES, ReturnsProof, readReturnsProofState } from '../dev/ReturnsProof';
+import {
+  RETURNS_PROOF_STATES,
+  ReturnsProof,
+  readReturnsProofState,
+  returnsProofBridge,
+  type ReturnsProofState,
+} from '../dev/ReturnsProof';
 import { PROOF_SALE_NUMBER } from '../dev/returns-proof-data';
 import { PAYOUT_COPY } from '../returns-messages';
 
@@ -84,5 +90,78 @@ describe('ReturnsProof', () => {
     await confirm(user);
     expect(await screen.findByText(PAYOUT_COPY.interrupted)).toBeVisible();
     expect(screen.queryByRole('button', { name: PAYOUT_COPY.start })).toBeNull();
+  });
+});
+
+/** What a bridge call settles to: its kind (and refusal reason), a rejection, or nothing yet. */
+async function outcomeOf(call: Promise<unknown>): Promise<string> {
+  const PENDING = Symbol('pending');
+  const settled = await Promise.race([
+    call.then(
+      (res) => {
+        const r = res as { kind: string; reason?: string };
+        return r.reason === undefined ? r.kind : `${r.kind}:${r.reason}`;
+      },
+      () => 'rejected',
+    ),
+    new Promise((resolve) => setTimeout(resolve, 0, PENDING)),
+  ]);
+  return settled === PENDING ? 'pending' : (settled as string);
+}
+
+const LOOKUP: Partial<Record<ReturnsProofState, string>> = {
+  LookupNotFound: 'refused:sale_not_found',
+  LookupRefused: 'refused:card_tender_blocked',
+  LookupOffline: 'refused:offline',
+};
+const QUOTE: Partial<Record<ReturnsProofState, string>> = {
+  SelectQuoting: 'pending',
+  SelectRefused: 'refused:quantity_out_of_range',
+};
+const SUBMIT: Partial<Record<ReturnsProofState, string>> = {
+  OutcomeUnconfirmed: 'unconfirmed',
+  OutcomeRefused: 'refused:over_return',
+  OutcomeFailed: 'rejected',
+  OutcomeMayBeRecorded: 'refused:session_changed',
+};
+const PAYOUT: Partial<Record<ReturnsProofState, string>> = {
+  PayoutPaid: 'paid_out',
+  PayoutNoDrawer: 'paid_out',
+  PayoutSlipFailed: 'paid_out',
+  PayoutReprintFailed: 'paid_out',
+  PayoutDrawerFailed: 'drawer_failed:no_drawer_configured',
+  PayoutConfirmManual: 'drawer_failed:no_drawer_configured',
+  PayoutDrawerUnknown: 'drawer_failed:timeout',
+  PayoutWait: 'refused:another_payout_in_progress',
+  PayoutRefused: 'refused:already_paid_out',
+  PayoutUnknown: 'rejected',
+};
+const REPRINT: Partial<Record<ReturnsProofState, string>> = {
+  PayoutReprintFailed: 'print_failed',
+  HistoryReprintFailed: 'print_failed',
+};
+
+describe('returnsProofBridge: what main answers in each G6R state', () => {
+  it.each(RETURNS_PROOF_STATES)('%s', async (state) => {
+    const bridge = returnsProofBridge(state);
+    const answers = {
+      lookup: await outcomeOf(bridge.lookup({ saleNumber: PROOF_SALE_NUMBER })),
+      quote: await outcomeOf(bridge.quote({ saleNumber: PROOF_SALE_NUMBER, lines: [] })),
+      submit: await outcomeOf(bridge.submit({ saleNumber: PROOF_SALE_NUMBER, lines: [] })),
+      resolve: await outcomeOf(bridge.resolve()),
+      list: await outcomeOf(bridge.list()),
+      payout: await outcomeOf(bridge.payout({ returnId: 'r', action: 'start' })),
+      reprint: await outcomeOf(bridge.reprintSlip({ returnId: 'r' })),
+    };
+    expect(answers).toEqual({
+      lookup: LOOKUP[state] ?? 'ok',
+      quote: QUOTE[state] ?? 'ok',
+      submit: SUBMIT[state] ?? 'confirmed',
+      resolve: 'ok',
+      list: state === 'HistoryFailed' ? 'rejected' : 'ok',
+      // Without a scripted answer the payout never settles: the harness never offers one.
+      payout: PAYOUT[state] ?? 'pending',
+      reprint: REPRINT[state] ?? 'printed',
+    });
   });
 });

@@ -69,7 +69,7 @@ The walk used [`tools/walk-rt660.cjs`](tools/walk-rt660.cjs), with no mouse afte
 * **Updated, not weakened:**
   * `returns-frame-css.test.ts` now reads `v5-returns.css` and allows exactly one scroll container, the journal table (RD-3).
   * Five assertions now read the v5 classes instead of the `rt-*` ones.
-* **Commands:** `npm run typecheck` and `npm run lint` (eslint and prettier) are clean. The full `npx vitest run` passes: **844 / 844 files, 12,829 tests** (4 skipped, as on `main`).
+* **Commands:** `npm run typecheck` and `npm run lint` (eslint and prettier) are clean. The full `npx vitest run` passes: **841 / 841 files, 12,910 tests** (4 skipped, as on `main`), and the coverage gate (`npx vitest run --coverage`, per-file thresholds) passes.
 
 ## Reproduce
 

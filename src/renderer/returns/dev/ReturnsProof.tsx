@@ -165,7 +165,8 @@ function journalFor(state: ReturnsProofState): readonly ReturnJournalView[] {
 
 const LIST: ByState<ReturnsListResponse> = { HistoryFailed: fails };
 
-function returnsBridge(state: ReturnsProofState): ReturnsBridgeAPI {
+/** The returns namespace the harness installs for `state` (exported for its tests). */
+export function returnsProofBridge(state: ReturnsProofState): ReturnsBridgeAPI {
   return {
     lookup: () => (LOOKUP[state] ?? (() => Promise.resolve({ kind: 'ok', sale: PROOF_SALE })))(),
     quote: () => (QUOTE[state] ?? (() => Promise.resolve({ kind: 'ok', quote: PROOF_QUOTE })))(),
@@ -187,7 +188,7 @@ export function ReturnsProof(): JSX.Element {
   const params = { ...readOneFrameProofParams(), role: 'manager' as const, path: '/app/returns' };
   installWindowApi({ ...params, returns: 'off' });
   if (state !== 'Disabled') {
-    (window as unknown as { api: Record<string, unknown> }).api.returns = returnsBridge(state);
+    (window as unknown as { api: Record<string, unknown> }).api.returns = returnsProofBridge(state);
   }
   useFeatureFlagsStore.getState().hydrate({
     cart: true,
