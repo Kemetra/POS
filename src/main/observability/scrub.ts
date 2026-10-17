@@ -197,7 +197,7 @@ export function sanitizeMessage(value: string): string {
  * basename; scheme-less module ids (`node:internal/…`) pass through.
  */
 export function relativeFrameFilename(filename: string): string {
-  const path = filename.replace(/\\/g, '/');
+  const path = filename.replaceAll('\\', '/');
   for (const marker of APP_PATH_MARKERS) {
     const at = path.lastIndexOf(marker);
     if (at === -1) continue;

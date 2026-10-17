@@ -63,7 +63,7 @@ describe('sanitizeMessage — contract §3.2 patterns', () => {
 
   it('truncates output to 300 chars', () => {
     const out = sanitizeMessage('a'.repeat(1000));
-    expect(out.length).toBe(300);
+    expect(out).toHaveLength(300);
     expect(out.endsWith('...')).toBe(true);
   });
 

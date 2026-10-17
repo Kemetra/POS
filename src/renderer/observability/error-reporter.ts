@@ -34,11 +34,12 @@ function fromRejection(event: Event): RendererErrorReport {
 }
 
 function forward(send: Send, report: RendererErrorReport): void {
-  try {
-    void send(report).catch(() => undefined);
-  } catch {
-    // Bridge missing or broken: reporting is best-effort.
-  }
+  // The executor runs synchronously, so `send` is called at once; a
+  // synchronous throw (bridge missing) becomes a rejection like an IPC
+  // failure, and both are swallowed: reporting is best-effort.
+  void new Promise<void>((resolve) => {
+    resolve(send(report));
+  }).catch(() => undefined);
 }
 
 /** Install the listeners on `target` (the window). Returns an uninstaller. */

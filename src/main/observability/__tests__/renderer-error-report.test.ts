@@ -79,7 +79,7 @@ describe('createRendererErrorReporter', () => {
     });
     const [error] = h.captureException.mock.calls[0] as [Error];
     expect(error.name).toBe('Error');
-    expect(error.message.length).toBe(2000);
+    expect(error.message).toHaveLength(2000);
     expect(error.stack?.length).toBe(8000);
   });
 

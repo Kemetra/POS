@@ -49,7 +49,7 @@ type EnvBag = Record<string, string | undefined>;
 
 function trimmed(env: EnvBag, key: string): string | undefined {
   const value = env[key]?.trim();
-  return value ? value : undefined;
+  return value || undefined;
 }
 
 function parseUrl(value: string): URL | null {
